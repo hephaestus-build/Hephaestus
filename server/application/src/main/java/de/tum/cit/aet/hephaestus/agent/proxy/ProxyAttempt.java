@@ -6,11 +6,11 @@ import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 
 /**
- * The attempt whose model calls the gateway routes and bills: a review job's or a Heph turn's. An attempt token names
+ * The attempt whose model calls the gateway routes and bills: a review job's or a Hephaestus turn's. An attempt token names
  * it, and so does a sandbox's run through its kind ({@code SandboxRunKind#attempt}). The attempt's row holds everything
  * else, so a caller cannot claim more.
  *
- * @param id the {@code review_job} id, or the {@code mentor_turn} id
+ * @param id the {@code review_job} id, or the {@code conversation_turn} id
  * @param epoch the claim of the run that the attempt holds ({@code lease_epoch})
  * @param runId the attempt's run: a review job's, or a turn's
  * @param workDeadline when a review attempt's work ends; null for a turn

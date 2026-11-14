@@ -16,14 +16,12 @@ public final class WorkspaceAuditSnapshots {
 
     public record FeaturesSnapshot(
             @Nullable Boolean practicesEnabled,
-            @Nullable Boolean practiceReviewAutoTriggerEnabled,
-            @Nullable Boolean practiceReviewManualTriggerEnabled)
+            @Nullable Boolean practiceReviewEventEnabled,
+            @Nullable Boolean practiceReviewRequestEnabled)
             implements ConfigAuditSnapshot {
         public static FeaturesSnapshot of(WorkspaceFeatures f) {
             return new FeaturesSnapshot(
-                    f.getPracticesEnabled(),
-                    f.getPracticeReviewAutoTriggerEnabled(),
-                    f.getPracticeReviewManualTriggerEnabled());
+                    f.getPracticesEnabled(), f.getPracticeReviewEventEnabled(), f.getPracticeReviewRequestEnabled());
         }
     }
 

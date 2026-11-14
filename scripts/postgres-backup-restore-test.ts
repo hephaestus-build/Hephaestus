@@ -5,7 +5,7 @@ import path from "node:path";
 import { parseArgs } from "node:util";
 
 import { databaseMigration } from "./lib/database-migration.ts";
-import { hephBindingsEnabled, seedRestoreProbe } from "./lib/restore-probe.ts";
+import { conversationBindingsEnabled, seedRestoreProbe } from "./lib/restore-probe.ts";
 
 const { values } = parseArgs({ options: { "target-image": { type: "string" } } });
 const targetImage = values["target-image"];
@@ -242,7 +242,7 @@ try {
 	}
 	const restoredPolicy = sql(
 		target,
-		`SELECT practice_delivery_status || ':' || practice_rollout_revision || ':' || practice_review_auto_trigger_enabled || ':' || practice_review_manual_trigger_enabled || ':' || ${hephBindingsEnabled} FROM workspace WHERE slug = 'restore-probe'`,
+		`SELECT practice_delivery_status || ':' || practice_rollout_revision || ':' || practice_review_event_enabled || ':' || practice_review_request_enabled || ':' || ${conversationBindingsEnabled} FROM workspace WHERE slug = 'restore-probe'`,
 	);
 	if (restoredPolicy !== "PAUSED:1:false:false:false") {
 		throw new Error(`restored workspace did not pause all feedback paths: ${restoredPolicy}`);

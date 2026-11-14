@@ -18,7 +18,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
 import de.tum.cit.aet.hephaestus.testconfig.TestUserFactory;
 import de.tum.cit.aet.hephaestus.testconfig.WithAdminUser;
-import de.tum.cit.aet.hephaestus.testconfig.WithMentorUser;
+import de.tum.cit.aet.hephaestus.testconfig.WithConversationUser;
 import de.tum.cit.aet.hephaestus.workspace.Membership.WorkspaceRole;
 import de.tum.cit.aet.hephaestus.workspace.dto.AssignRoleRequestDTO;
 import de.tum.cit.aet.hephaestus.workspace.dto.SetMemberHiddenRequestDTO;
@@ -85,7 +85,7 @@ class MembershipControllerIntegrationTest extends AbstractWorkspaceIntegrationTe
         User answered = persistUser("public-answer-answered");
         User unanswered = persistUser("public-answer-unanswered");
         User former = persistUser("public-answer-former");
-        User reader = persistUser("mentor");
+        User reader = persistUser("conversation");
         for (User member : List.of(answered, unanswered, former, reader)) {
             ensureMembership(workspace, member, WorkspaceRole.MEMBER);
         }
@@ -111,8 +111,8 @@ class MembershipControllerIntegrationTest extends AbstractWorkspaceIntegrationTe
         assertThat(asAdmin.get(Long.toString(accountId(former)))).isNull();
 
         // A member does not learn who answered.
-        var asMember =
-                publicActivityAnswered(workspace, headers -> headers.setBearerAuth("mock-jwt-token-for-mentor-user"));
+        var asMember = publicActivityAnswered(
+                workspace, headers -> headers.setBearerAuth("mock-jwt-token-for-conversation-user"));
         assertThat(asMember.get(Long.toString(accountId(answered)))).isNull();
         assertThat(asMember.get(Long.toString(accountId(unanswered)))).isNull();
     }
@@ -424,13 +424,13 @@ class MembershipControllerIntegrationTest extends AbstractWorkspaceIntegrationTe
     }
 
     @Test
-    @WithMentorUser
+    @WithConversationUser
     void adminCanAssignRoleToMember() {
         User owner = persistUser("membership-owner-2");
         Workspace workspace =
                 createWorkspace("membership-space-2", "Membership Space 2", "membership2", AccountType.ORG, owner);
 
-        User admin = persistUser("mentor");
+        User admin = persistUser("conversation");
         ensureMembership(workspace, admin, WorkspaceRole.ADMIN);
 
         User targetUser = persistUser("target-user");
@@ -462,11 +462,11 @@ class MembershipControllerIntegrationTest extends AbstractWorkspaceIntegrationTe
     }
 
     @Test
-    @WithMentorUser
+    @WithConversationUser
     void shouldKeepAPersonsRoleThroughProviderSyncUntilItFollowsTheProviderAgain() {
         User owner = persistUser("role-source-owner");
         Workspace workspace = createWorkspace("role-source", "Role source", "role-source", AccountType.ORG, owner);
-        ensureMembership(workspace, persistUser("mentor"), WorkspaceRole.ADMIN);
+        ensureMembership(workspace, persistUser("conversation"), WorkspaceRole.ADMIN);
         User member = persistUser("role-source-member");
         workspaceMembershipService.applyProviderGrant(workspace, member.getId(), WorkspaceRole.MEMBER);
         long accountId = accountId(member);
@@ -521,9 +521,9 @@ class MembershipControllerIntegrationTest extends AbstractWorkspaceIntegrationTe
     }
 
     @Test
-    @WithMentorUser
+    @WithConversationUser
     void shouldRefuseToLetTheLastOwnersRoleFollowTheProvider() {
-        User owner = persistUser("mentor");
+        User owner = persistUser("conversation");
         Workspace workspace = createWorkspace("owner-follows", "Owner follows", "owner", AccountType.ORG, owner);
         long accountId = accountId(owner);
         assertThat(roleSource(workspace, accountId)).isEqualTo(Membership.RoleSource.PERSON);
@@ -549,11 +549,11 @@ class MembershipControllerIntegrationTest extends AbstractWorkspaceIntegrationTe
     }
 
     @Test
-    @WithMentorUser
+    @WithConversationUser
     void shouldRejectDemotionAndRemovalOfOwnerWhenCallerIsWorkspaceAdmin() {
         User owner = persistUser("protected-owner");
         Workspace workspace = createWorkspace("protected-owner", "Owner", "owner", AccountType.ORG, owner);
-        ensureMembership(workspace, persistUser("mentor"), WorkspaceRole.ADMIN);
+        ensureMembership(workspace, persistUser("conversation"), WorkspaceRole.ADMIN);
 
         webTestClient
                 .post()
@@ -583,9 +583,9 @@ class MembershipControllerIntegrationTest extends AbstractWorkspaceIntegrationTe
     }
 
     @Test
-    @WithMentorUser
+    @WithConversationUser
     void shouldRejectDemotionAndRemovalWhenCallerIsTheLastOwner() {
-        User owner = persistUser("mentor");
+        User owner = persistUser("conversation");
         Workspace workspace = createWorkspace("last-owner", "Last owner", "owner", AccountType.ORG, owner);
 
         webTestClient
@@ -617,9 +617,9 @@ class MembershipControllerIntegrationTest extends AbstractWorkspaceIntegrationTe
 
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
-    @WithMentorUser
+    @WithConversationUser
     void shouldAllowOwnerToLeaveOwnershipWhenAnotherOwnerHasBeenAssigned(boolean remove) {
-        User owner = persistUser("mentor");
+        User owner = persistUser("conversation");
         Workspace workspace = createWorkspace("owner-transfer", "Transfer", "owner", AccountType.ORG, owner);
         User successor = persistUser("successor");
         ensureMembership(workspace, successor, WorkspaceRole.MEMBER);
@@ -820,10 +820,10 @@ class MembershipControllerIntegrationTest extends AbstractWorkspaceIntegrationTe
     }
 
     @Test
-    @WithMentorUser
+    @WithConversationUser
     void shouldAnswerNotFoundWhenNonMemberCallsMembershipEndpoints() {
 
-        persistUser("mentor");
+        persistUser("conversation");
 
         User owner = persistUser("membership-owner-3");
         Workspace workspace =

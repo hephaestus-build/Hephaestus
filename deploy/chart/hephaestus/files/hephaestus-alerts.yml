@@ -735,9 +735,9 @@ groups:
       # A failed or lost turn leaves a developer without an answer. A turn that the developer stopped is no failure.
       - alert: HephaestusConversationTurnsFailing
         expr: >-
-          sum(increase(mentor_turn_completed_total{job="hephaestus",outcome=~"failed|lease_expired"}[1h]))
-            / sum(increase(mentor_turn_completed_total{job="hephaestus"}[1h])) > 0.2
-          and sum(increase(mentor_turn_completed_total{job="hephaestus"}[1h])) >= 5
+          sum(increase(conversation_turn_completed_total{job="hephaestus",outcome=~"failed|lease_expired"}[1h]))
+            / sum(increase(conversation_turn_completed_total{job="hephaestus"}[1h])) > 0.2
+          and sum(increase(conversation_turn_completed_total{job="hephaestus"}[1h])) >= 5
         for: 10m
         labels:
           severity: warning

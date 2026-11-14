@@ -1,4 +1,4 @@
-// turn.ts — one Heph turn: it rebuilds the turn's Pi session from the ledger, runs it, and ends it with its entries.
+// turn.ts — one Hephaestus turn: it rebuilds the turn's Pi session from the ledger, runs it, and ends it with its entries.
 // Nothing about a conversation outlives its turn here. docs/contributor/unified-pi-runtime.mdx § Turn lifecycle has the
 // protocol.
 
@@ -30,13 +30,12 @@ import {
 } from "@earendil-works/pi-coding-agent";
 
 import { ContextFolder, type FolderServer, type LoadedArchive } from "./context-folder.ts";
-import type { KindRunner, RunContext } from "./driver.ts";
 import {
 	asLoadAbout,
 	asLoadAnswer,
 	CONTEXT_FOLDER_TOOL_NAMES,
 	type FailureDetail,
-	HEPH_TOOL_NAMES,
+	CONVERSATION_TOOL_NAMES,
 	isLinkTool,
 	isRecord,
 	LINK_TOOLS,
@@ -49,7 +48,8 @@ import {
 	type TurnContext,
 	type TurnEnd,
 	type TurnModel,
-} from "./heph-host-protocol.ts";
+} from "./conversation-host-protocol.ts";
+import type { KindRunner, RunContext } from "./driver.ts";
 import {
 	SANDBOX_RESOURCE_LOADER_OPTIONS,
 	SANDBOX_SETTINGS_MANAGER_OPTIONS,
@@ -69,7 +69,7 @@ type AssistantMessage = Extract<PiMessage, { role: "assistant" }>;
 type ToolResultMessage = Extract<PiMessage, { role: "toolResult" }>;
 
 /** A conversation is compacted by Pi past this many tokens, when the model's window allows it. */
-const MENTOR_WORKING_TOKENS = 49_152;
+const CONVERSATION_WORKING_TOKENS = 49_152;
 
 /** How often the partial answer may reach the worker. */
 const PARTIAL_INTERVAL_MS = 250;
@@ -95,7 +95,7 @@ const MAX_TURN_MODEL_CALLS = 40;
 const RETRY_DELAYS_MS = [1000, 2000, 4000];
 
 /** Pi requires a type for a custom message; the cache breakpoint finds the situation by its `<situation>` text. */
-const SITUATION_TYPE = "heph-situation";
+const SITUATION_TYPE = "turn-situation";
 
 /** The stage label when no tool runs, and for a tool no label names. */
 export const THINKING_STAGE = "Thinking…";
@@ -159,7 +159,7 @@ export function log(...parts: unknown[]) {
 	const line = parts
 		.map((part) => (typeof part === "string" ? part : failureSummary(part)))
 		.join(" ");
-	process.stderr.write(`[heph-host ${new Date().toISOString()}] ${line}\n`);
+	process.stderr.write(`[conversation-host ${new Date().toISOString()}] ${line}\n`);
 }
 
 /** The cause of a failure because the worker answered that this attempt no longer holds its lease (`409`). */
@@ -621,16 +621,16 @@ function modelsWith(
 }
 
 /**
- * The mentor's working policy in Pi's own terms, for a model whose real window is `window`. Pi compacts once the
+ * The conversation's working policy in Pi's own terms, for a model whose real window is `window`. Pi compacts once the
  * context passes `window - reserveTokens`, so the reserve sets the trigger; it also caps Pi's summary output, which
  * the model's own output limit caps in turn. The window itself is never changed.
  *
  * `keepRecentTokens` is Pi's native target for recent messages kept unsummarised, not a bound: Pi cuts at a message
  * boundary, keeps a tool call with its results, and may split a long active turn. Every share scales with the window
- * down to the smallest one Heph takes (32,768 tokens): a quarter for the reserve and at most a sixth for the recent
+ * down to the smallest one Hephaestus takes (32,768 tokens): a quarter for the reserve and at most a sixth for the recent
  * messages, so the fixed prompt, a summary and the recent messages leave room to answer.
  */
-function mentorCompaction(
+function conversationCompaction(
 	window: number,
 	nativeReserve = DEFAULT_COMPACTION_SETTINGS.reserveTokens,
 	nativeKeepRecent = DEFAULT_COMPACTION_SETTINGS.keepRecentTokens,
@@ -639,7 +639,7 @@ function mentorCompaction(
 		throw new Error(`the model's context window is not a usable size: ${window}`);
 	}
 	const minimumReserve = Math.min(nativeReserve, Math.floor(window / 4));
-	const trigger = Math.min(MENTOR_WORKING_TOKENS, window - minimumReserve);
+	const trigger = Math.min(CONVERSATION_WORKING_TOKENS, window - minimumReserve);
 	return {
 		reserveTokens: window - trigger,
 		keepRecentTokens: Math.min(nativeKeepRecent, Math.floor(trigger / 2), Math.floor(window / 6)),
@@ -1017,7 +1017,7 @@ function turnTools(
 	];
 }
 
-/** The situation (MentorSituation) as a Pi custom message. */
+/** The situation (ConversationSituation) as a Pi custom message. */
 function situationMessage(situation: string) {
 	return {
 		role: "custom" as const,
@@ -1086,7 +1086,7 @@ export function breakpointBeforeSituation(payload: unknown): unknown {
 /**
  * Only the latest completed turn's `read`, `bash` and `load_context` results stay verbatim. Every result among the
  * first `stored` entries, the ones stored before this turn, that no edit replaced yet becomes a note of what was read
- * and when, so Heph reads current data instead of trusting an old read. Each turn has a new context folder, so a
+ * and when, so Hephaestus reads current data instead of trusting an old read. Each turn has a new context folder, so a
  * repository loaded in an earlier turn is not there any more. `link_result`, `link_problem`, `show_feedback` and
  * `search_conversation` results stay: they record what was shown and found.
  */
@@ -1309,7 +1309,7 @@ export function partialUpdates(wholeEveryMs = PARTIAL_WHOLE_EVERY_MS) {
 	};
 }
 
-// The indices are UTF-16 code units, as Java's `String` counts them in `MentorTurnProgress`.
+// The indices are UTF-16 code units, as Java's `String` counts them in `ConversationTurnProgress`.
 /* oxlint-disable unicorn/prefer-code-point -- a code unit, not a code point, is what both sides index */
 function commonPrefix(a: string, b: string): number {
 	const max = Math.min(a.length, b.length);
@@ -1431,7 +1431,7 @@ export function partialStream(
 
 	function set(snapshot: PartialSnapshot) {
 		// A tool's stage wins the window it started in: a fast read is followed at once by "Thinking…", and the
-		// developer would never see what Heph read.
+		// developer would never see what Hephaestus read.
 		if (snapshot.activity === "tool") {
 			heldStage = snapshot.stage;
 		}
@@ -1553,7 +1553,7 @@ export async function runTurn(
 	// Whether the worker took the turn's end: a turn abandoned to a lost lease is the reaper's to end.
 	let ended = false;
 	let partials: PartialStream | null = null;
-	// The only write of the turn's entries (MentorTurnService.end).
+	// The only write of the turn's entries (ConversationTurnService.end).
 	const end: Ending = async (outcome, reason, detail, failure) => {
 		const turnEntries =
 			appended === null ? [] : withoutOmitted(appended.manager.getEntries().slice(appended.stored));
@@ -1596,7 +1596,7 @@ export async function runTurn(
 		const sessionManager = SessionManager.inMemory(options.cwd, { id: context.sessionId }, entries);
 		const settingsManager = SettingsManager.inMemory(
 			{
-				compaction: { enabled: true, ...mentorCompaction(model.contextWindow) },
+				compaction: { enabled: true, ...conversationCompaction(model.contextWindow) },
 				// As a practice review repeats (PiRuntimeFactory); the turn's deadline still bounds them.
 				retry: { enabled: true, maxRetries: 5, baseDelayMs: 4000 },
 			},
@@ -1647,7 +1647,10 @@ export async function runTurn(
 				context.contextFolder ? options.cwd : null,
 				context.documents,
 			),
-			tools: [...(context.contextFolder ? CONTEXT_FOLDER_TOOL_NAMES : []), ...HEPH_TOOL_NAMES],
+			tools: [
+				...(context.contextFolder ? CONTEXT_FOLDER_TOOL_NAMES : []),
+				...CONVERSATION_TOOL_NAMES,
+			],
 		});
 		state.session = agent;
 		appended = { manager: sessionManager, stored };
@@ -1681,7 +1684,7 @@ export async function runTurn(
 			}
 			// A tool call that a stop left without its result needs nothing here: Pi's transformMessages
 			// answers it in this attempt, and later turns read the answer without it
-			// (MentorContextPathBuilder.keepCutOffAnswer).
+			// (ConversationContextPathBuilder.keepCutOffAnswer).
 			await agent.waitForIdle();
 			partials.stop();
 			await partials.settled();
@@ -1796,7 +1799,7 @@ type Ending = (
 ) => Promise<void>;
 
 /**
- * A stop by the developer keeps what Heph wrote; a deadline, a silent model or too many model calls fail the turn; a
+ * A stop by the developer keeps what Hephaestus wrote; a deadline, a silent model or too many model calls fail the turn; a
  * lost lease says nothing. The call limit is not a time limit: the turn fails as an error, so the developer does not
  * read that Hephaestus ran out of time.
  */

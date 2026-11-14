@@ -4,7 +4,7 @@ import { AlertCircle } from "lucide-react";
 import { useState } from "react";
 import { z } from "zod";
 import type {
-	AgentBinding,
+	ModelAssignment,
 	PracticeReviewSettings as PracticeReviewSettingsData,
 	UpdatePracticeReviewSettingsRequest,
 	UpdateWorkspaceFeaturesRequest,
@@ -31,7 +31,7 @@ import { reviewModelRunnable } from "./review/review-readiness";
 export type PracticeReviewField = NonNullable<UpdatePracticeReviewSettingsRequest["reset"]>[number];
 export type PracticeReviewWorkspaceUpdate = Pick<
 	UpdateWorkspaceFeaturesRequest,
-	"practicesEnabled" | "practiceReviewAutoTriggerEnabled" | "practiceReviewManualTriggerEnabled"
+	"practicesEnabled" | "practiceReviewEventEnabled" | "practiceReviewRequestEnabled"
 >;
 
 export interface PracticeReviewSettingsProps {
@@ -39,7 +39,7 @@ export interface PracticeReviewSettingsProps {
 	model:
 		| { status: "loading" }
 		| { status: "error"; onRetry: () => void }
-		| { status: "ready"; binding?: AgentBinding };
+		| { status: "ready"; binding?: ModelAssignment };
 	workspace: {
 		enabled: boolean;
 		startsFromActivity: boolean;
@@ -221,9 +221,7 @@ function ReviewTimingSection({
 					id="start-from-activity"
 					checked={workspace.startsFromActivity}
 					disabled={workspace.isSaving}
-					onCheckedChange={(checked) =>
-						workspace.onUpdate({ practiceReviewAutoTriggerEnabled: checked })
-					}
+					onCheckedChange={(checked) => workspace.onUpdate({ practiceReviewEventEnabled: checked })}
 				/>
 			</Field>
 			<Field orientation="horizontal">
@@ -240,7 +238,7 @@ function ReviewTimingSection({
 					checked={workspace.startsOnRequest}
 					disabled={workspace.isSaving}
 					onCheckedChange={(checked) =>
-						workspace.onUpdate({ practiceReviewManualTriggerEnabled: checked })
+						workspace.onUpdate({ practiceReviewRequestEnabled: checked })
 					}
 				/>
 			</Field>

@@ -42,7 +42,7 @@ export const FEEDBACK_COPY_KIND_DEFS: StatusDefs<FeedbackCopyKind> = {
 		label: "Conversation answer",
 		icon: BotMessageSquareIcon,
 		badgeVariant: "outline",
-		description: "Raised by Hephaestus in a turn of the developer’s conversation.",
+		description: "Raised by Hephaestus in an answer in the developer’s conversation.",
 	},
 };
 
@@ -112,7 +112,7 @@ const KIND_NOUNS: Record<FeedbackCopyKind, [singular: string, plural: string]> =
 	SUMMARY: ["summary", "summaries"],
 	LINE_NOTE: ["line note", "line notes"],
 	FILE_NOTE: ["file note", "file notes"],
-	CHAT_TURN: ["conversation turn", "conversation turns"],
+	CHAT_TURN: ["conversation answer", "conversation answers"],
 };
 
 export function copyKindsPhrase(copies: readonly Pick<FeedbackCopy, "kind">[]): string {

@@ -105,7 +105,7 @@ function fixture(
 await test("a lag snapshot recovers terminal status through owner entries without periodic polling", async (context) => {
 	const { abort, counts } = fixture(context, "resync");
 	const result = await runCapacityChat({
-		base: "http://fixture/mentor",
+		base: "http://fixture/conversation",
 		tokens: ["synthetic"],
 		signal: abort.signal,
 		thinkMs: 0,
@@ -121,7 +121,7 @@ await test("a lag snapshot recovers terminal status through owner entries withou
 await test("an accepted POST with no response ID is found and cancelled through its owner", async (context) => {
 	const { abort, active, counts } = fixture(context, "abort-post");
 	const result = await runCapacityChat({
-		base: "http://fixture/mentor",
+		base: "http://fixture/conversation",
 		tokens: ["synthetic"],
 		signal: abort.signal,
 		onEvent: () => undefined,
@@ -136,7 +136,7 @@ await test("an accepted POST with no response ID is found and cancelled through 
 await test("cleanup failure retains measurements and censors a timed-out turn", async (context) => {
 	const { abort } = fixture(context, "cleanup-fails");
 	const result = await runCapacityChat({
-		base: "http://fixture/mentor",
+		base: "http://fixture/conversation",
 		tokens: ["synthetic"],
 		signal: abort.signal,
 		turnTimeoutMs: 20,
@@ -147,13 +147,13 @@ await test("cleanup failure retains measurements and censors a timed-out turn", 
 	assert.equal(result.measurements.length, 1);
 	assert.equal(result.cleanup.failures, 1);
 	assert.equal(result.cleanup.remaining, 1);
-	assert.equal(result.metrics.heph_turn_duration.values.count, 0);
+	assert.equal(result.metrics.conversation_turn_duration.values.count, 0);
 });
 
 await test("no arrivals start when stream readiness fails", async (context) => {
 	const { abort, counts } = fixture(context, "no-snapshot");
 	const result = await runCapacityChat({
-		base: "http://fixture/mentor",
+		base: "http://fixture/conversation",
 		tokens: ["synthetic"],
 		signal: abort.signal,
 		readyTimeoutMs: 20,

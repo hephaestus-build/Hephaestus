@@ -30,13 +30,13 @@ import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmAuthMode;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmConnectionHealth;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
-import de.tum.cit.aet.hephaestus.agent.config.AgentBindingLimits;
+import de.tum.cit.aet.hephaestus.agent.config.ModelAssignmentLimits;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunBand;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRecorder;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
-import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
+import de.tum.cit.aet.hephaestus.conversation.ConversationTurn;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
@@ -168,7 +168,7 @@ class LlmProxyServiceTest extends BaseUnitTest {
                 new ProxyCallsInFlight(12),
                 new LlmConnectionHealth(CircuitBreakerRegistry.ofDefaults()),
                 admittingPermits(),
-                new HephCallProperties(HEPH_FIRST_BYTE, HEPH_IDLE));
+                new ConversationCallProperties(CONVERSATION_FIRST_BYTE, CONVERSATION_IDLE));
     }
 
     @Test
@@ -472,7 +472,7 @@ class LlmProxyServiceTest extends BaseUnitTest {
                     new ProxyCallsInFlight(12),
                     new LlmConnectionHealth(CircuitBreakerRegistry.ofDefaults()),
                     admittingPermits(),
-                    new HephCallProperties(HEPH_FIRST_BYTE, HEPH_IDLE));
+                    new ConversationCallProperties(CONVERSATION_FIRST_BYTE, CONVERSATION_IDLE));
             var routing = routing("openai-completions");
             authenticate(routing);
             when(resolver.resolveProxyCredential(any()))
@@ -548,10 +548,11 @@ class LlmProxyServiceTest extends BaseUnitTest {
         }
 
         private LlmProxyService controllerWith(WebClient client, Tracer tracer) {
-            return controllerWith(client, tracer, new HephCallProperties(HEPH_FIRST_BYTE, HEPH_IDLE));
+            return controllerWith(
+                    client, tracer, new ConversationCallProperties(CONVERSATION_FIRST_BYTE, CONVERSATION_IDLE));
         }
 
-        private LlmProxyService controllerWith(WebClient client, Tracer tracer, HephCallProperties silence) {
+        private LlmProxyService controllerWith(WebClient client, Tracer tracer, ConversationCallProperties silence) {
             return new LlmProxyService(
                     tracer,
                     client,
@@ -627,23 +628,23 @@ class LlmProxyServiceTest extends BaseUnitTest {
                     "{\"stream\":true,\"messages\":[]}".getBytes(StandardCharsets.UTF_8));
         }
 
-        private ProxyRouting hephTurnRouting(String baseUrl) {
+        private ProxyRouting conversationTurnRouting(String baseUrl) {
             return new ProxyRouting(
-                    "mentor-turn:stream",
+                    "conversation-turn:stream",
                     "openai-completions",
                     baseUrl,
                     UsageFundingSource.INSTANCE,
                     7L,
                     8L,
                     9L,
-                    new ProxyRouting.BilledAttempt(UsageSourceType.MENTOR_TURN, UUID.randomUUID(), 1, LEASE),
+                    new ProxyRouting.BilledAttempt(UsageSourceType.CONVERSATION_TURN, UUID.randomUUID(), 1, LEASE),
                     null,
                     4096L);
         }
 
-        /** A conversation turn's call to {@code baseUrl}, which the proxy cuts after {@link #HEPH_IDLE} without a byte. */
-        private MockHttpServletResponse proxyHephTurn(String baseUrl) {
-            ProxyRouting routing = hephTurnRouting(baseUrl);
+        /** A conversation turn's call to {@code baseUrl}, which the proxy cuts after {@link #CONVERSATION_IDLE} without a byte. */
+        private MockHttpServletResponse proxyConversationTurn(String baseUrl) {
+            ProxyRouting routing = conversationTurnRouting(baseUrl);
             authenticate(routing);
             stubCredential(
                     routing,
@@ -654,14 +655,14 @@ class LlmProxyServiceTest extends BaseUnitTest {
             return response;
         }
 
-        private MockHttpServletResponse proxyHephTurn(MockResponse answer) {
+        private MockHttpServletResponse proxyConversationTurn(MockResponse answer) {
             upstream.enqueue(answer);
-            return proxyHephTurn(upstream.url("/v1").toString());
+            return proxyConversationTurn(upstream.url("/v1").toString());
         }
 
         @Test
         @DisplayName("keep-alive comments keep a slow Hephaestus call alive past the idle bound until it answers")
-        void keepAliveCommentsKeepASlowHephCallAlive() throws Exception {
+        void keepAliveCommentsKeepASlowConversationCallAlive() throws Exception {
             // A gateway that schedules the answer: comments for about 1.5 seconds, nearly 4 idle bounds, then the
             // whole answer at once.
             com.sun.net.httpserver.HttpServer gateway = com.sun.net.httpserver.HttpServer.create(
@@ -685,8 +686,8 @@ class LlmProxyServiceTest extends BaseUnitTest {
             });
             gateway.start();
             try {
-                MockHttpServletResponse response =
-                        proxyHephTurn("http://127.0.0.1:" + gateway.getAddress().getPort() + "/v1");
+                MockHttpServletResponse response = proxyConversationTurn(
+                        "http://127.0.0.1:" + gateway.getAddress().getPort() + "/v1");
 
                 assertThat(response.getContentAsString())
                         .contains("late answer")
@@ -787,8 +788,8 @@ class LlmProxyServiceTest extends BaseUnitTest {
         @Test
         @DisplayName(
                 "a provider that queues a Hephaestus call past the idle bound still answers within the first-byte bound")
-        void aQueuedHephCallAnswersWithinTheFirstByteBound() throws Exception {
-            MockHttpServletResponse response = proxyHephTurn(new MockResponse.Builder()
+        void aQueuedConversationCallAnswersWithinTheFirstByteBound() throws Exception {
+            MockHttpServletResponse response = proxyConversationTurn(new MockResponse.Builder()
                     .code(200)
                     .addHeader("Content-Type", "text/event-stream")
                     .headersDelay(800, TimeUnit.MILLISECONDS)
@@ -1102,8 +1103,8 @@ class LlmProxyServiceTest extends BaseUnitTest {
 
         @Test
         @DisplayName("a Hephaestus call whose provider goes silent after its headers ends with a stall error event")
-        void aSilentHephCallEndsWithAStallErrorEvent() throws Exception {
-            MockHttpServletResponse response = proxyHephTurn(new MockResponse.Builder()
+        void aSilentConversationCallEndsWithAStallErrorEvent() throws Exception {
+            MockHttpServletResponse response = proxyConversationTurn(new MockResponse.Builder()
                     .code(200)
                     .addHeader("Content-Type", "text/event-stream")
                     .body("data: {\"choices\":[{\"delta\":{\"content\":\"Let me\"}}]}\n\n")
@@ -1149,8 +1150,8 @@ class LlmProxyServiceTest extends BaseUnitTest {
             });
             gateway.start();
             try {
-                MockHttpServletResponse response =
-                        proxyHephTurn("http://127.0.0.1:" + gateway.getAddress().getPort() + "/v1");
+                MockHttpServletResponse response = proxyConversationTurn(
+                        "http://127.0.0.1:" + gateway.getAddress().getPort() + "/v1");
 
                 List<String> events = List.of(response.getContentAsString().split("\n\n"));
                 assertThat(events).hasSize(2);
@@ -1192,7 +1193,7 @@ class LlmProxyServiceTest extends BaseUnitTest {
             });
             gateway.start();
             try {
-                String relayed = proxyHephTurn(
+                String relayed = proxyConversationTurn(
                                 "http://127.0.0.1:" + gateway.getAddress().getPort() + "/v1")
                         .getContentAsString();
 
@@ -1205,14 +1206,14 @@ class LlmProxyServiceTest extends BaseUnitTest {
 
         @Test
         @DisplayName("a Hephaestus call whose provider sends no headers gets a gateway timeout the host can name")
-        void aHephCallWithoutHeadersGetsAGatewayTimeout() throws Exception {
+        void aConversationCallWithoutHeadersGetsAGatewayTimeout() throws Exception {
             upstream.enqueue(new MockResponse.Builder()
                     .code(200)
                     .addHeader("Content-Type", "text/event-stream")
                     .headersDelay(3, TimeUnit.SECONDS)
                     .body("data: [DONE]\n\n")
                     .build());
-            ProxyRouting routing = hephTurnRouting(upstream.url("/v1").toString());
+            ProxyRouting routing = conversationTurnRouting(upstream.url("/v1").toString());
             authenticate(routing);
             stubCredential(
                     routing,
@@ -1243,13 +1244,13 @@ class LlmProxyServiceTest extends BaseUnitTest {
                             any(),
                             eq(CALL),
                             any(),
-                            eq(new MentorTurn.FailedCall(LlmProxyService.UPSTREAM_STALLED, null)));
+                            eq(new ConversationTurn.FailedCall(LlmProxyService.UPSTREAM_STALLED, null)));
         }
 
         @Test
         @DisplayName("a conversation turn records each failed model call by kind and status")
-        void aHephAttemptRecordsEachFailedModelCall() throws Exception {
-            ProxyRouting routing = hephTurnRouting(upstream.url("/v1").toString());
+        void aConversationAttemptRecordsEachFailedModelCall() throws Exception {
+            ProxyRouting routing = conversationTurnRouting(upstream.url("/v1").toString());
             authenticate(routing);
             stubCredential(
                     routing,
@@ -1280,19 +1281,20 @@ class LlmProxyServiceTest extends BaseUnitTest {
                     .build());
             controllerProxy(new MockHttpServletResponse());
 
-            ArgumentCaptor<MentorTurn.FailedCall> failures = ArgumentCaptor.forClass(MentorTurn.FailedCall.class);
+            ArgumentCaptor<ConversationTurn.FailedCall> failures =
+                    ArgumentCaptor.forClass(ConversationTurn.FailedCall.class);
             verify(callLedger, times(3)).complete(any(), eq(CALL), any(), failures.capture());
             assertThat(failures.getAllValues())
                     .containsExactly(
-                            new MentorTurn.FailedCall(LlmProxyService.UPSTREAM_STATUS, 503),
-                            new MentorTurn.FailedCall(LlmProxyService.UPSTREAM_STATUS, 503),
-                            new MentorTurn.FailedCall("upstream_idle", 200));
+                            new ConversationTurn.FailedCall(LlmProxyService.UPSTREAM_STATUS, 503),
+                            new ConversationTurn.FailedCall(LlmProxyService.UPSTREAM_STATUS, 503),
+                            new ConversationTurn.FailedCall("upstream_idle", 200));
         }
 
         @Test
         @DisplayName("a call that fails before it reaches the provider leaves nothing in flight for the turn's end")
         void aCallThatFailsBeforeTheProviderLeavesNothingInFlight() {
-            ProxyRouting routing = hephTurnRouting(upstream.url("/v1").toString());
+            ProxyRouting routing = conversationTurnRouting(upstream.url("/v1").toString());
             authenticate(routing);
             Tracer broken = mock(Tracer.class);
             when(broken.spanBuilder()).thenThrow(new IllegalStateException("tracing is down"));
@@ -1314,7 +1316,7 @@ class LlmProxyServiceTest extends BaseUnitTest {
         @Test
         @DisplayName("AI choice refuses a conversation before an upstream or billed call opens")
         void shouldRefuseAiChoiceBeforeOpeningAnUpstreamOrBilledCall() {
-            ProxyRouting routing = hephTurnRouting(upstream.url("/v1").toString());
+            ProxyRouting routing = conversationTurnRouting(upstream.url("/v1").toString());
             authenticate(routing);
             when(requestPolicy.allows(any())).thenReturn(false);
 
@@ -1356,7 +1358,7 @@ class LlmProxyServiceTest extends BaseUnitTest {
                             any(),
                             eq(CALL),
                             any(),
-                            eq(new MentorTurn.FailedCall(LlmProxyService.UPSTREAM_STATUS, 503)));
+                            eq(new ConversationTurn.FailedCall(LlmProxyService.UPSTREAM_STATUS, 503)));
         }
 
         @Test
@@ -1534,7 +1536,7 @@ class LlmProxyServiceTest extends BaseUnitTest {
                     calls,
                     new LlmConnectionHealth(CircuitBreakerRegistry.ofDefaults()),
                     admittingPermits(),
-                    new HephCallProperties(HEPH_FIRST_BYTE, HEPH_IDLE));
+                    new ConversationCallProperties(CONVERSATION_FIRST_BYTE, CONVERSATION_IDLE));
             upstream.enqueue(new MockResponse.Builder()
                     .code(200)
                     .addHeader("Content-Type", "text/event-stream")
@@ -1661,7 +1663,7 @@ class LlmProxyServiceTest extends BaseUnitTest {
                             any(),
                             eq(CALL),
                             eq(LlmUsageRecorder.CallUsage.NONE),
-                            eq(new MentorTurn.FailedCall("refused_ai_choice", 403)));
+                            eq(new ConversationTurn.FailedCall("refused_ai_choice", 403)));
         }
 
         @Test
@@ -2088,10 +2090,11 @@ class LlmProxyServiceTest extends BaseUnitTest {
             }
         }
 
-        @ParameterizedTest(name = "mentor={0}")
+        @ParameterizedTest(name = "conversation={0}")
         @ValueSource(booleans = {false, true})
-        @DisplayName("the actual service lets a review stream cross 600 seconds while a mentor keeps its body limit")
-        void shouldApplyTheBodyLimitOnlyToTheMentorStream(boolean mentor) throws Exception {
+        @DisplayName(
+                "the actual service lets a review stream cross 600 seconds while a conversation keeps its body limit")
+        void shouldApplyTheBodyLimitOnlyToTheConversationStream(boolean conversation) throws Exception {
             var executor = Executors.newSingleThreadExecutor();
             // Created before virtual time: the blocking MVC request must have a real owning thread.
             var requestScheduler = Schedulers.fromExecutorService(executor);
@@ -2121,11 +2124,11 @@ class LlmProxyServiceTest extends BaseUnitTest {
                     return output;
                 }
             };
-            var billed = mentor
-                    ? new ProxyRouting.BilledAttempt(UsageSourceType.MENTOR_TURN, UUID.randomUUID(), 0, null)
+            var billed = conversation
+                    ? new ProxyRouting.BilledAttempt(UsageSourceType.CONVERSATION_TURN, UUID.randomUUID(), 0, null)
                     : ATTEMPT;
             var routing = new ProxyRouting(
-                    mentor ? "mentor-session:body-limit" : "job:body-limit",
+                    conversation ? "conversation-session:body-limit" : "job:body-limit",
                     "openai-completions",
                     upstream.url("/v1").toString(),
                     UsageFundingSource.INSTANCE,
@@ -2133,7 +2136,7 @@ class LlmProxyServiceTest extends BaseUnitTest {
                     8L,
                     9L,
                     billed,
-                    mentor ? null : Instant.now().plus(Duration.ofHours(3)),
+                    conversation ? null : Instant.now().plus(Duration.ofHours(3)),
                     4096L);
             stubStreamCredential(routing);
             try {
@@ -2158,9 +2161,10 @@ class LlmProxyServiceTest extends BaseUnitTest {
                                             tailArmed.countDown();
                                         });
                                     });
-                                    // The review's stream is silent for 600 seconds, so only the mentor keeps its idle
+                                    // The review's stream is silent for 600 seconds, so only the conversation keeps its
+                                    // idle
                                     // bound.
-                                    var service = mentor
+                                    var service = conversation
                                             ? controllerWith(answering(requests, body), tracer)
                                             : controllerWith(answering(requests, body), tracer, SILENCE_NEVER_REACHED);
                                     authenticate(routing);
@@ -2191,7 +2195,7 @@ class LlmProxyServiceTest extends BaseUnitTest {
                         // A conversation turn's stream ends at its idle bound, long before the body limit, with the
                         // stall
                         // event.
-                        .expectNextMatches(content -> mentor
+                        .expectNextMatches(content -> conversation
                                 ? content.startsWith(USAGE_FRAME)
                                         && content.contains(LlmProxyService.UPSTREAM_STALLED)
                                         && !content.contains("after 600 seconds")
@@ -2201,8 +2205,8 @@ class LlmProxyServiceTest extends BaseUnitTest {
                 assertThat(response.getStatus()).isEqualTo(200);
                 assertThat(response.isCommitted()).isTrue();
                 assertThat(requests).hasValue(1);
-                assertThat(errors()).isEqualTo(mentor ? 1.0 : 0.0);
-                verify(span).tag("hephaestus.stream.outcome", mentor ? "UPSTREAM_IDLE" : "COMPLETED");
+                assertThat(errors()).isEqualTo(conversation ? 1.0 : 0.0);
+                verify(span).tag("hephaestus.stream.outcome", conversation ? "UPSTREAM_IDLE" : "COMPLETED");
                 ArgumentCaptor<LlmUsageRecorder.CallUsage> usage =
                         ArgumentCaptor.forClass(LlmUsageRecorder.CallUsage.class);
                 verify(callLedger).complete(any(), eq(CALL), usage.capture(), any());
@@ -2240,7 +2244,7 @@ class LlmProxyServiceTest extends BaseUnitTest {
     @Test
     @DisplayName("a conversation call outlasts its turn's deadline stop, so the turn ends as a deadline")
     void shouldBoundAConversationCallPastTheTurnCeilingAndItsStopGrace() {
-        Duration turnCeiling = Duration.ofSeconds(AgentBindingLimits.MAX_HEPH_TURN_SECONDS);
+        Duration turnCeiling = Duration.ofSeconds(ModelAssignmentLimits.MAX_CONVERSATION_TURN_SECONDS);
         // The dispatcher's tick (5 s) and the host's stop grace (30 s) end the turn before the call's own bound.
         Duration stopped = turnCeiling.plusSeconds(5).plusSeconds(30);
 
@@ -2335,14 +2339,14 @@ class LlmProxyServiceTest extends BaseUnitTest {
     }
 
     // How long a conversation turn's or a review stream's provider may take to its first byte in these tests.
-    private static final Duration HEPH_FIRST_BYTE = Duration.ofMillis(1500);
+    private static final Duration CONVERSATION_FIRST_BYTE = Duration.ofMillis(1500);
 
     // How long a conversation turn's stream, or a review's stream, may send no byte in these tests.
-    private static final Duration HEPH_IDLE = Duration.ofMillis(400);
+    private static final Duration CONVERSATION_IDLE = Duration.ofMillis(400);
 
     // Silence bounds that no test reaches, for a test of another bound.
-    private static final HephCallProperties SILENCE_NEVER_REACHED =
-            new HephCallProperties(Duration.ofHours(1), Duration.ofHours(1));
+    private static final ConversationCallProperties SILENCE_NEVER_REACHED =
+            new ConversationCallProperties(Duration.ofHours(1), Duration.ofHours(1));
 
     // The review cap at practice concurrency 3: 2 × (3 + 1) + 4.
     private static final int REVIEW_CALLS_AT_THREE = 12;

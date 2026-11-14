@@ -76,7 +76,7 @@ umlDiagram(showComponentKeyword = false) {
     p5 -- `Sandbox gateway` with {
         over = start(0.75).line(end(0.2083))
     }
-    mcs = `Conversation`.provides("MentorConversationService", 0.6806, dist = 92, namePos = [112, 32])
+    mcs = `Conversation`.provides("ConversationService", 0.6806, dist = 92, namePos = [112, 32])
     `Web API`.requires(0.3194, mcs)
     slack = `Integration adapters`.requires(0.3558, dist = 30)
     slack dependsOn mcs with {

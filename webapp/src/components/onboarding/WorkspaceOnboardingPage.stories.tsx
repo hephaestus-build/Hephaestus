@@ -44,7 +44,7 @@ const allCovered = [
 	{
 		choice: "IN_HOUSE_ONLY",
 		practiceReviewsReady: true,
-		mentorReady: true,
+		conversationReady: true,
 		models: [
 			{
 				name: "Qwen3.5",
@@ -57,7 +57,7 @@ const allCovered = [
 	{
 		choice: "CLOUD",
 		practiceReviewsReady: true,
-		mentorReady: true,
+		conversationReady: true,
 		models: [
 			{ name: "GPT-5", brand: "OPENAI", connectionPlatform: "AZURE", dataHandlingTier: "CLOUD" },
 		],
@@ -247,7 +247,7 @@ export const WorkspaceModels: Story = {
 					{
 						choice: "IN_HOUSE_ONLY",
 						practiceReviewsReady: true,
-						mentorReady: true,
+						conversationReady: true,
 						models: [
 							{
 								name: "Qwen3",
@@ -260,7 +260,7 @@ export const WorkspaceModels: Story = {
 					{
 						choice: "CLOUD",
 						practiceReviewsReady: true,
-						mentorReady: true,
+						conversationReady: true,
 						models: [
 							{
 								name: "Qwen3",
@@ -320,13 +320,13 @@ export const SameModelUnderBothAnswers: Story = {
 					{
 						choice: "IN_HOUSE_ONLY",
 						practiceReviewsReady: true,
-						mentorReady: true,
+						conversationReady: true,
 						models: [SHARED_IN_HOUSE_MODEL],
 					},
 					{
 						choice: "CLOUD",
 						practiceReviewsReady: true,
-						mentorReady: true,
+						conversationReady: true,
 						models: [SHARED_IN_HOUSE_MODEL],
 					},
 				],
@@ -362,11 +362,16 @@ export const ProviderOperatedLogos: Story = {
 				links: [],
 				aiChoice: "CLOUD",
 				aiOptions: [
-					{ choice: "IN_HOUSE_ONLY", practiceReviewsReady: false, mentorReady: false, models: [] },
+					{
+						choice: "IN_HOUSE_ONLY",
+						practiceReviewsReady: false,
+						conversationReady: false,
+						models: [],
+					},
 					{
 						choice: "CLOUD",
 						practiceReviewsReady: true,
-						mentorReady: true,
+						conversationReady: true,
 						models: [
 							{
 								name: "Qwen3",
@@ -470,8 +475,13 @@ export const OptionUncovered: Story = {
 			data: {
 				...welcome,
 				aiOptions: [
-					{ choice: "IN_HOUSE_ONLY", practiceReviewsReady: false, mentorReady: false, models: [] },
-					{ choice: "CLOUD", practiceReviewsReady: true, mentorReady: true, models: [] },
+					{
+						choice: "IN_HOUSE_ONLY",
+						practiceReviewsReady: false,
+						conversationReady: false,
+						models: [],
+					},
+					{ choice: "CLOUD", practiceReviewsReady: true, conversationReady: true, models: [] },
 				],
 				links: [],
 			},
@@ -508,8 +518,13 @@ export const ConversationNotCovered: Story = {
 				...welcome,
 				aiChoice: "IN_HOUSE_ONLY",
 				aiOptions: [
-					{ choice: "IN_HOUSE_ONLY", practiceReviewsReady: true, mentorReady: false, models: [] },
-					{ choice: "CLOUD", practiceReviewsReady: false, mentorReady: true, models: [] },
+					{
+						choice: "IN_HOUSE_ONLY",
+						practiceReviewsReady: true,
+						conversationReady: false,
+						models: [],
+					},
+					{ choice: "CLOUD", practiceReviewsReady: false, conversationReady: true, models: [] },
 				],
 			},
 		},
@@ -545,7 +560,7 @@ export const PracticeReviewsOnly: Story = {
 			data: {
 				...welcome,
 				links: [],
-				aiOptions: allCovered.map((option) => ({ ...option, mentorReady: false })),
+				aiOptions: allCovered.map((option) => ({ ...option, conversationReady: false })),
 			},
 		},
 	},
@@ -590,7 +605,7 @@ export const NothingSetUp: Story = {
 				aiOptions: allCovered.map((option) => ({
 					...option,
 					practiceReviewsReady: false,
-					mentorReady: false,
+					conversationReady: false,
 					models: [],
 				})),
 			},
@@ -611,8 +626,13 @@ export const SavedChoiceUncovered: Story = {
 				needsSetup: false,
 				aiChoice: "CLOUD",
 				aiOptions: [
-					{ choice: "IN_HOUSE_ONLY", practiceReviewsReady: true, mentorReady: true, models: [] },
-					{ choice: "CLOUD", practiceReviewsReady: false, mentorReady: false, models: [] },
+					{
+						choice: "IN_HOUSE_ONLY",
+						practiceReviewsReady: true,
+						conversationReady: true,
+						models: [],
+					},
+					{ choice: "CLOUD", practiceReviewsReady: false, conversationReady: false, models: [] },
 				],
 				links: [],
 			},

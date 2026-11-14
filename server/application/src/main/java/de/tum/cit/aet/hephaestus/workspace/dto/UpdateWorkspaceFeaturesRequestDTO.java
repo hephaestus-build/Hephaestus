@@ -13,7 +13,7 @@ public record UpdateWorkspaceFeaturesRequestDTO(
         Boolean practicesEnabled,
 
         @Schema(description = "Enable automatic practice reviews triggered by PR events") @Nullable
-        Boolean practiceReviewAutoTriggerEnabled,
+        Boolean practiceReviewEventEnabled,
 
         @Schema(description = "Enable manual practice reviews triggered through a bot command") @Nullable
-        Boolean practiceReviewManualTriggerEnabled) {}
+        Boolean practiceReviewRequestEnabled) {}

@@ -79,8 +79,8 @@ class MemberReviewReadinessServiceTest extends BaseUnitTest {
         workspace.setId(WORKSPACE);
         workspace.resume();
         workspace.getFeatures().setPracticesEnabled(true);
-        workspace.getFeatures().setPracticeReviewAutoTriggerEnabled(true);
-        workspace.getFeatures().setPracticeReviewManualTriggerEnabled(true);
+        workspace.getFeatures().setPracticeReviewEventEnabled(true);
+        workspace.getFeatures().setPracticeReviewRequestEnabled(true);
         lenient().when(workspaces.findById(WORKSPACE)).thenReturn(Optional.of(workspace));
         lenient().when(practices.findByWorkspaceId(WORKSPACE)).thenReturn(stored);
         lenient().when(coverage.scope(any())).thenReturn(WorkspaceReviewScope.ALL);
@@ -114,22 +114,22 @@ class MemberReviewReadinessServiceTest extends BaseUnitTest {
 
     @Test
     void shouldReportReviewsOffWhenNeitherActivityNorRequestsStartAReview() {
-        workspace.getFeatures().setPracticeReviewAutoTriggerEnabled(false);
-        workspace.getFeatures().setPracticeReviewManualTriggerEnabled(false);
+        workspace.getFeatures().setPracticeReviewEventEnabled(false);
+        workspace.getFeatures().setPracticeReviewRequestEnabled(false);
 
         assertThat(blocker()).isEqualTo(ReviewReadinessBlocker.REVIEWS_OFF);
     }
 
     @Test
     void shouldReportOnRequestOnlyWhenOnlyRequestsStartAReview() {
-        workspace.getFeatures().setPracticeReviewAutoTriggerEnabled(false);
+        workspace.getFeatures().setPracticeReviewEventEnabled(false);
 
         assertThat(blocker()).isEqualTo(ReviewReadinessBlocker.ON_REQUEST_ONLY);
     }
 
     @Test
     void shouldReportTheMembersNoAiBeforeOnRequestOnlyBecauseARequestWouldBeRefusedToo() {
-        workspace.getFeatures().setPracticeReviewAutoTriggerEnabled(false);
+        workspace.getFeatures().setPracticeReviewEventEnabled(false);
         refuseEveryMemberRule(AiRefusalReason.NO_AI);
 
         assertThat(blocker()).isEqualTo(ReviewReadinessBlocker.NO_AI);

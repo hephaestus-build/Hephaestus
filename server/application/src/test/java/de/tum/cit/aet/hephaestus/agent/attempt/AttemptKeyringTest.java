@@ -5,7 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.auth0.jwt.JWT;
 import com.auth0.jwt.algorithms.Algorithm;
-import de.tum.cit.aet.hephaestus.agent.config.AgentBindingLimits;
+import de.tum.cit.aet.hephaestus.agent.config.ModelAssignmentLimits;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.integration.core.sync.MutableClock;
@@ -198,7 +198,7 @@ class AttemptKeyringTest extends BaseUnitTest {
     @Test
     void shouldKeepAKeyLongerThanAReviewAtItsLongestTimeout() {
         assertThat(AttemptKeyring.KEPT_FOR)
-                .isGreaterThan(Duration.ofSeconds(AgentBindingLimits.MAX_TIMEOUT_SECONDS)
+                .isGreaterThan(Duration.ofSeconds(ModelAssignmentLimits.MAX_TIMEOUT_SECONDS)
                         .plus(SandboxLayout.RESULT_UPLOAD_GRACE));
     }
 

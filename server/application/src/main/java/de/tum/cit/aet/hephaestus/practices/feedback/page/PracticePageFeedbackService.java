@@ -49,7 +49,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.JsonNode;
 
-/** The weekly digest that Heph reads counts waiting Practice page feedback. */
+/** The weekly digest that Hephaestus reads counts waiting Practice page feedback. */
 @Service
 @RequiredArgsConstructor
 @ConditionalOnServerRole

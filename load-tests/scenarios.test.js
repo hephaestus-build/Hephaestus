@@ -1,7 +1,7 @@
 import { check } from "k6";
 import { Counter } from "k6/metrics";
-import { mentorPaths, options as mixed, setup } from "./detection-mentor.js";
-import { hephPaths, options as heph } from "./heph.js";
+import { conversationPaths, options as conversation } from "./conversation.js";
+import { detectionConversationPaths, options as mixed, setup } from "./detection-conversation.js";
 import { integer, jsonField } from "./lib/config.js";
 import { signedDelivery, webhookAccepted } from "./webhook-burst.js";
 
@@ -11,7 +11,7 @@ const completed = new Counter("contract_tests_completed");
 const reviewJobsFinished = new Counter("review_jobs_finished");
 const unfinished = __ENV.TEST_CASE === "unfinished";
 const unanswered = __ENV.TEST_CASE === "unanswered";
-const hephTurnsFinished = new Counter("heph_turns_finished");
+const conversationTurnsFinished = new Counter("conversation_turns_finished");
 // The syntax task mounts the server's generated spec here.
 const openapi = open("/openapi.yaml");
 export const options = {
@@ -19,7 +19,9 @@ export const options = {
 	iterations: 1,
 	thresholds: {
 		...(unfinished ? { review_jobs_finished: mixed.thresholds.review_jobs_finished } : {}),
-		...(unanswered ? { heph_turns_finished: heph.thresholds.heph_turns_finished } : {}),
+		...(unanswered
+			? { conversation_turns_finished: conversation.thresholds.conversation_turns_finished }
+			: {}),
 		...(!unfinished && !unanswered
 			? { checks: ["rate==1"], contract_tests_completed: ["count==1"] }
 			: {}),
@@ -51,7 +53,7 @@ function rejects(fn, message) {
 
 export default function contracts() {
 	if (unanswered) {
-		hephTurnsFinished.add(0);
+		conversationTurnsFinished.add(0);
 		return;
 	}
 	if (unfinished) {
@@ -89,7 +91,10 @@ export default function contracts() {
 	const delivery = signedDelivery();
 	assert(uuid.test(delivery.id), "Webhook delivery carries a unique id");
 	assert(/^[0-9a-f]{64}$/u.test(delivery.signature), "Webhook delivery carries an HMAC signature");
-	for (const path of [...Object.values(mentorPaths), ...Object.values(hephPaths)]) {
+	for (const path of [
+		...Object.values(detectionConversationPaths),
+		...Object.values(conversationPaths),
+	]) {
 		assert(openapi.includes(`\n  ${path}:\n`), `The server serves ${path}`);
 	}
 	__ENV.ARTIFACT_IDS = "1,2";

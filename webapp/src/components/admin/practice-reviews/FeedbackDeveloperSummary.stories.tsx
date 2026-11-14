@@ -17,7 +17,7 @@ const LOCATION_COUNTS: [FeedbackLocation, number][] = [
 	["GITHUB", 4],
 	["GITLAB", 2],
 	["OTHER_WORK", 1],
-	["HEPH", 2],
+	["APP", 2],
 	["SLACK", 1],
 	["NEXT_CONVERSATION", 2],
 	["PRACTICE_PAGES", 3],

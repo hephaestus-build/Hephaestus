@@ -56,12 +56,12 @@ interface AgentRunRepository extends JpaRepository<AgentRun, UUID> {
             CASE WHEN r.kind='TURN' AND s.kind='DIGEST' THEN FALSE
                  WHEN r.kind='DIGEST' AND s.kind='TURN' THEN TRUE
                  ELSE COALESCE((SELECT earlier.seq < question.seq
-                        FROM mentor_turn earlier_turn
-                        JOIN mentor_entry earlier ON earlier.turn_id = earlier_turn.id
+                        FROM conversation_turn earlier_turn
+                        JOIN conversation_entry earlier ON earlier.turn_id = earlier_turn.id
                             AND earlier.workspace_id = earlier_turn.workspace_id AND earlier.kind IN ('USER','DIGEST')
-                        JOIN mentor_turn current_turn ON current_turn.run_id = r.id
+                        JOIN conversation_turn current_turn ON current_turn.run_id = r.id
                             AND current_turn.workspace_id = r.workspace_id
-                        JOIN mentor_entry question ON question.turn_id = current_turn.id
+                        JOIN conversation_entry question ON question.turn_id = current_turn.id
                             AND question.workspace_id = current_turn.workspace_id AND question.kind IN ('USER','DIGEST')
                        WHERE earlier_turn.run_id = s.id AND earlier_turn.workspace_id = s.workspace_id),
                      (s.created_at, s.id) < (r.created_at, r.id)) END

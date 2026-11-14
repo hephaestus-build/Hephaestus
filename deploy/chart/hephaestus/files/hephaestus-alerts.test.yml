@@ -460,7 +460,7 @@ tests:
     input_series:
       - series: 'llm_budget_blocked_total{job="hephaestus",instance="server:9090",surface="model_call",cap="instance"}'
         values: "0+1x30"
-      - series: 'llm_budget_blocked_total{job="hephaestus",instance="server:9090",surface="mentor"}'
+      - series: 'llm_budget_blocked_total{job="hephaestus",instance="server:9090",surface="conversation"}'
         values: "0 0 1x30"
     alert_rule_test:
       - eval_time: 10m
@@ -1899,9 +1899,9 @@ tests:
         values: "0+100x80"
       - series: 'http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="GET",uri="/workspaces",status="200",le="2.0"}'
         values: "0+100x80"
-      - series: 'http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="GET",uri="/workspaces/{workspaceSlug}/mentor/events",status="200",le="+Inf"}'
+      - series: 'http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="GET",uri="/workspaces/{workspaceSlug}/conversation/events",status="200",le="+Inf"}'
         values: "0+100x80"
-      - series: 'http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="GET",uri="/workspaces/{workspaceSlug}/mentor/events",status="200",le="2.0"}'
+      - series: 'http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="GET",uri="/workspaces/{workspaceSlug}/conversation/events",status="200",le="2.0"}'
         values: "0x80"
       - series: 'http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="GET",uri="/user/exports/{id}/download",status="200",le="+Inf"}'
         values: "0+100x80"
@@ -2474,9 +2474,9 @@ tests:
   - name: failing conversation turns fire, stopped turns do not
     interval: 1m
     input_series:
-      - series: 'mentor_turn_completed_total{job="hephaestus",instance="server-b:9090",runtime_role="server",outcome="failed"}'
+      - series: 'conversation_turn_completed_total{job="hephaestus",instance="server-b:9090",runtime_role="server",outcome="failed"}'
         values: "0+1x60"
-      - series: 'mentor_turn_completed_total{job="hephaestus",instance="server-b:9090",runtime_role="server",outcome="success"}'
+      - series: 'conversation_turn_completed_total{job="hephaestus",instance="server-b:9090",runtime_role="server",outcome="success"}'
         values: "0+1x60"
     alert_rule_test:
       - eval_time: 5m
@@ -2494,9 +2494,9 @@ tests:
   - name: turns that the developer stopped do not fire
     interval: 1m
     input_series:
-      - series: 'mentor_turn_completed_total{job="hephaestus",instance="server-b:9090",runtime_role="server",outcome="stopped"}'
+      - series: 'conversation_turn_completed_total{job="hephaestus",instance="server-b:9090",runtime_role="server",outcome="stopped"}'
         values: "0+1x60"
-      - series: 'mentor_turn_completed_total{job="hephaestus",instance="server-b:9090",runtime_role="server",outcome="success"}'
+      - series: 'conversation_turn_completed_total{job="hephaestus",instance="server-b:9090",runtime_role="server",outcome="success"}'
         values: "0+1x60"
     alert_rule_test:
       - eval_time: 50m
@@ -2506,7 +2506,7 @@ tests:
   - name: one failed turn in a quiet hour does not fire
     interval: 1m
     input_series:
-      - series: 'mentor_turn_completed_total{job="hephaestus",instance="server-b:9090",runtime_role="server",outcome="failed"}'
+      - series: 'conversation_turn_completed_total{job="hephaestus",instance="server-b:9090",runtime_role="server",outcome="failed"}'
         values: "0x30 1x30"
     alert_rule_test:
       - eval_time: 50m

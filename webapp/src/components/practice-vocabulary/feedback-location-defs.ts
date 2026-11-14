@@ -29,17 +29,17 @@ export const FEEDBACK_LOCATION_DEFS: StatusDefs<FeedbackLocation> = {
 		description:
 			"Posted on the work the feedback is about, at a provider the record does not name as GitHub or GitLab.",
 	},
-	HEPH: {
+	APP: {
 		label: "In conversation in the app",
 		icon: HephaestusMarkIcon,
 		badgeVariant: "outline",
-		description: "Raised in a turn of the developer’s conversation in the app.",
+		description: "Raised in an answer in the developer’s conversation in the app.",
 	},
 	SLACK: {
 		label: "In conversation in Slack",
 		icon: SlackIcon,
 		badgeVariant: "outline",
-		description: "Raised in a turn of the developer’s conversation in a Slack direct message.",
+		description: "Raised in an answer in the developer’s conversation in a Slack direct message.",
 	},
 	NEXT_CONVERSATION: {
 		// The destination's own word and mark, so the Destination filter and the destination tag agree.
@@ -47,7 +47,7 @@ export const FEEDBACK_LOCATION_DEFS: StatusDefs<FeedbackLocation> = {
 		icon: FEEDBACK_DESTINATION_DEFS.CONVERSATION.icon,
 		badgeVariant: "outline",
 		description:
-			"For the developer’s conversation with Hephaestus. No turn raised it yet, or the turn that raised it is gone.",
+			"For the developer’s conversation with Hephaestus. No answer raised it yet, or the answer that raised it is gone.",
 	},
 	PRACTICE_PAGES: {
 		// The destination's own word and mark, so the Destination filter and the destination tag agree.
@@ -79,7 +79,7 @@ export function feedbackLocationSentence(
 		case "OTHER_WORK": {
 			return work === undefined ? "Comment on the work" : `Comment on ${lowerFirst(work)}`;
 		}
-		case "HEPH": {
+		case "APP": {
 			return "Conversation in the app";
 		}
 		case "SLACK": {

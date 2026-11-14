@@ -252,7 +252,7 @@
                   "evidenceSummary",
                   "inConversationLearning"
                 ],
-                "description": "CONVERSATION only. Notes TO the mentor, which composes the whole turn itself, later, with the live conversation in front of it. Write what it needs to know, never a sentence for it to say: anything phrased as a line of dialogue will be spoken, and will sound like a script. Aim for at most 300 characters per field, or 600 for evidenceSummary. No headings or internal labels in field contents; each field adds its own fact.",
+                "description": "CONVERSATION only. Notes TO the conversation, which composes the whole turn itself, later, with the live conversation in front of it. Write what it needs to know, never a sentence for it to say: anything phrased as a line of dialogue will be spoken, and will sound like a script. Aim for at most 300 characters per field, or 600 for evidenceSummary. No headings or internal labels in field contents; each field adds its own fact.",
                 "properties": {
                   "situation": {
                     "type": "string",
@@ -267,7 +267,7 @@
                   "evidenceSummary": {
                     "type": "string",
                     "maxLength": 1200,
-                    "description": "Where the concern occurred, compactly: each supporting work and problem located once. Summarise rather than inventing a quote; the original result evidence is staged separately for the mentor to inspect."
+                    "description": "Where the concern occurred, compactly: each supporting work and problem located once. Summarise rather than inventing a quote; the original result evidence is staged separately for the conversation to inspect."
                   },
                   "inConversationLearning": {
                     "type": "string",
@@ -347,7 +347,7 @@
                   "evidenceSummary",
                   "inConversationLearning"
                 ],
-                "description": "CONVERSATION only. Notes TO the mentor, which composes the whole turn itself, later, with the live conversation in front of it. Write what it needs to know, never a sentence for it to say: anything phrased as a line of dialogue will be spoken, and will sound like a script. Aim for at most 300 characters per field, or 600 for evidenceSummary. No headings or internal labels in field contents; each field adds its own fact.",
+                "description": "CONVERSATION only. Notes TO the conversation, which composes the whole turn itself, later, with the live conversation in front of it. Write what it needs to know, never a sentence for it to say: anything phrased as a line of dialogue will be spoken, and will sound like a script. Aim for at most 300 characters per field, or 600 for evidenceSummary. No headings or internal labels in field contents; each field adds its own fact.",
                 "properties": {
                   "situation": {
                     "type": "string",
@@ -362,7 +362,7 @@
                   "evidenceSummary": {
                     "type": "string",
                     "maxLength": 1200,
-                    "description": "Where the concern occurred, compactly: each supporting work and problem located once. Summarise rather than inventing a quote; the original result evidence is staged separately for the mentor to inspect."
+                    "description": "Where the concern occurred, compactly: each supporting work and problem located once. Summarise rather than inventing a quote; the original result evidence is staged separately for the conversation to inspect."
                   },
                   "inConversationLearning": {
                     "type": "string",

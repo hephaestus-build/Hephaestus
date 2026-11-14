@@ -12,7 +12,7 @@ import static org.mockito.Mockito.verify;
 
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemIndexService;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
-import de.tum.cit.aet.hephaestus.integration.slack.SlackConversationTestSupport;
+import de.tum.cit.aet.hephaestus.integration.slack.SlackThreadTestSupport;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackChannelConsentEventRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMessageRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannel;
@@ -31,7 +31,7 @@ import de.tum.cit.aet.hephaestus.practices.review.ReviewPracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewRepository;
 import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
 import de.tum.cit.aet.hephaestus.testconfig.WithAdminUser;
-import de.tum.cit.aet.hephaestus.testconfig.WithMentorUser;
+import de.tum.cit.aet.hephaestus.testconfig.WithConversationUser;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Membership.WorkspaceRole;
@@ -163,11 +163,11 @@ class SlackChannelAdminControllerIntegrationTest extends AbstractWorkspaceIntegr
     }
 
     @Test
-    @WithMentorUser
+    @WithConversationUser
     @DisplayName("non-admin cannot activate a channel → 403, state unchanged")
     void activate_asNonAdmin_forbidden() {
-        User mentor = persistUser("mentor");
-        ensureMembership(workspace, mentor, WorkspaceRole.MEMBER);
+        User conversation = persistUser("conversation");
+        ensureMembership(workspace, conversation, WorkspaceRole.MEMBER);
         seedChannel(workspace.getId(), "C1", ConsentState.PENDING, null);
 
         patchConsent("C1", ConsentState.ACTIVE, null)
@@ -211,7 +211,7 @@ class SlackChannelAdminControllerIntegrationTest extends AbstractWorkspaceIntegr
         messageRepository.insertIfAbsent(workspace.getId(), "T1", "C1", "100.1", null, "U1", null, "hello");
         long threadId = seedThread(workspace.getId(), "C1", "100.1");
         // Derived chat.thread result + feedback anchored to the thread id.
-        SlackConversationTestSupport.BoundConversation conv = seedBoundConversation(threadId);
+        SlackThreadTestSupport.BoundConversation conv = seedBoundConversation(threadId);
         UUID practiceResultId = conv.resultId();
         UUID feedbackId = conv.feedbackId();
 
@@ -347,9 +347,9 @@ class SlackChannelAdminControllerIntegrationTest extends AbstractWorkspaceIntegr
         return threadRepository.save(thread).getId();
     }
 
-    private SlackConversationTestSupport.BoundConversation seedBoundConversation(long threadId) {
-        Practice practice = SlackConversationTestSupport.newPractice(practiceVersions, workspace, "chan-practice");
-        return SlackConversationTestSupport.seedBoundConversation(
+    private SlackThreadTestSupport.BoundConversation seedBoundConversation(long threadId) {
+        Practice practice = SlackThreadTestSupport.newPractice(practiceVersions, workspace, "chan-practice");
+        return SlackThreadTestSupport.seedBoundConversation(
                 reviews,
                 assignments,
                 reviewItems,

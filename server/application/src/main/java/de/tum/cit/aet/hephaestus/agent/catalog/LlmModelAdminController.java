@@ -129,7 +129,7 @@ public class LlmModelAdminController {
             content = @Content(schema = @Schema(hidden = true)))
     @ApiResponse(
             responseCode = "409",
-            description = "Cannot delete a model still bound to an agent configuration",
+            description = "Cannot delete a model still assigned to a purpose",
             content = @Content(schema = @Schema(hidden = true)))
     @Audited(ledger = AuditLedger.AUTH_EVENT, type = "LLM_MODEL_DELETED")
     public ResponseEntity<Void> delete(@PathVariable Long id) {

@@ -4,7 +4,7 @@ import { readFile } from "node:fs/promises";
 import { stopSyntheticTurns } from "./lib/capacity-stop.ts";
 import { asStringArray, parseJson } from "./lib/json.ts";
 
-const base = "http://127.0.0.1:8080/workspaces/capacity-bench-course/mentor";
+const base = "http://127.0.0.1:8080/workspaces/capacity-bench-course/conversation";
 const tokens = asStringArray(
 	parseJson(await readFile("/bench/auth-tokens.json", "utf8")),
 	"sessions",

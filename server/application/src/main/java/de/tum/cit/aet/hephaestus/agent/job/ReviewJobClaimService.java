@@ -3,7 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.job;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelUnavailableException;
 import de.tum.cit.aet.hephaestus.agent.composer.CompositionStop;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
-import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBinding;
+import de.tum.cit.aet.hephaestus.agent.config.WorkspaceModelAssignment;
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobPreparationException;
 import de.tum.cit.aet.hephaestus.agent.proxy.LlmCallPermits;
@@ -261,7 +261,7 @@ public class ReviewJobClaimService {
         // Live-revalidate the catalog binding immediately before RUNNING. Submit-time behaviour
         // stays frozen; only availability/grants and the price are refreshed, and a changed binding
         // is refused rather than silently switching the queued job to another model.
-        WorkspaceAgentBinding binding = memberAiPolicy.binding(job).orElse(null);
+        WorkspaceModelAssignment binding = memberAiPolicy.binding(job).orElse(null);
         if (binding == null) {
             return composing || retained
                     ? claimToWithhold(job, fence, CompositionStop.MODEL_UNAVAILABLE)
@@ -320,7 +320,7 @@ public class ReviewJobClaimService {
     }
 
     private @Nullable ConfigSnapshot admitModels(
-            ReviewJob job, WorkspaceAgentBinding binding, List<ReviewAssignmentSnapshot> assigned) {
+            ReviewJob job, WorkspaceModelAssignment binding, List<ReviewAssignmentSnapshot> assigned) {
         ConfigSnapshot snapshot;
         try {
             ConfigSnapshot submitted = ConfigSnapshot.fromJson(job.getConfigSnapshot(), objectMapper);
@@ -399,7 +399,7 @@ public class ReviewJobClaimService {
     private @Nullable UsageFundingSource claimedFundingSource(ReviewJob job) {
         return memberAiPolicy
                 .binding(job)
-                .map(WorkspaceAgentBinding::getFundingSource)
+                .map(WorkspaceModelAssignment::getFundingSource)
                 .orElse(null);
     }
 }

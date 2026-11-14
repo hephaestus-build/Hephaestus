@@ -1,6 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.catalog;
 
-import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
+import de.tum.cit.aet.hephaestus.agent.config.ModelPurpose;
 import de.tum.cit.aet.hephaestus.workspace.spi.LlmConnectionPlatform;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
@@ -32,7 +32,7 @@ public record WorkspaceLlmConnectionDTO(
         LlmApiProtocol apiProtocol,
 
         @NonNull @Schema(description = "The purposes a model on this connection can serve, from its protocol")
-        List<AgentPurpose> purposes,
+        List<ModelPurpose> purposes,
 
         @NonNull @Schema(description = "Credential shape") LlmAuthMode authMode,
 
@@ -60,7 +60,7 @@ public record WorkspaceLlmConnectionDTO(
                 connection.getConnectionPlatform(),
                 connection.getBaseUrl(),
                 connection.getApiProtocol(),
-                AgentPurpose.servedBy(connection.getApiProtocol()),
+                ModelPurpose.servedBy(connection.getApiProtocol()),
                 connection.getAuthMode(),
                 hasKey,
                 last4,

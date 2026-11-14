@@ -56,7 +56,7 @@ class AccountContentExportIntegrationTest extends BaseIntegrationTest {
         var other = data.member(workspace);
         UUID conversation = conversation(workspace, account);
         entry(conversation, "USER", "How do I split this pull request?", null);
-        entry(conversation, "HEPH", "Split it by the two features.", null);
+        entry(conversation, "ANSWER", "Split it by the two features.", null);
         entry(conversation, "TOOL_RESULT", "A tool read someone else's work.", null);
         entry(conversation, "USER", "A message that was redacted.", AT);
         entry(
@@ -91,7 +91,7 @@ class AccountContentExportIntegrationTest extends BaseIntegrationTest {
                 .extracting(AccountConversationExport.Message::author, AccountConversationExport.Message::text)
                 .containsExactly(
                         tuple("USER", "How do I split this pull request?"),
-                        tuple("HEPH", "Split it by the two features."));
+                        tuple("ANSWER", "Split it by the two features."));
         assertThat(bundle.conversationMessages().getFirst().workspace())
                 .isEqualTo(scenario.workspace().getWorkspaceSlug());
         assertThat(bundle.feedbackReceived())
@@ -130,7 +130,7 @@ class AccountContentExportIntegrationTest extends BaseIntegrationTest {
     private UUID conversation(long workspace, long account) {
         UUID id = UUID.randomUUID();
         jdbc.sql("""
-            INSERT INTO mentor_conversation(id,workspace_id,account_id,created_at,last_activity_at)
+            INSERT INTO conversation(id,workspace_id,account_id,created_at,last_activity_at)
             VALUES(:id,:ws,:account,:at,:at)
             """)
                 .param("id", id)
@@ -142,7 +142,7 @@ class AccountContentExportIntegrationTest extends BaseIntegrationTest {
     }
 
     private long workspaceOf(UUID conversation) {
-        return jdbc.sql("SELECT workspace_id FROM mentor_conversation WHERE id=:id")
+        return jdbc.sql("SELECT workspace_id FROM conversation WHERE id=:id")
                 .param("id", conversation)
                 .query(Long.class)
                 .single();
@@ -151,11 +151,11 @@ class AccountContentExportIntegrationTest extends BaseIntegrationTest {
     private void entry(UUID conversation, String kind, String text, @Nullable Instant redactedAt) {
         UUID id = UUID.randomUUID();
         jdbc.sql("""
-            INSERT INTO mentor_entry (id, workspace_id, conversation_id, seq, kind, surface, text, payload,
+            INSERT INTO conversation_entry (id, workspace_id, conversation_id, seq, kind, surface, text, payload,
                                       created_at, redacted_at)
             VALUES (:id, :ws, :conversation, :seq, :kind, 'APP', :text,
                     jsonb_build_object('type', 'message', 'id', 'pi-' || :id, 'message',
-                        jsonb_build_object('role', CASE :kind WHEN 'USER' THEN 'user' WHEN 'HEPH' THEN 'assistant'
+                        jsonb_build_object('role', CASE :kind WHEN 'USER' THEN 'user' WHEN 'ANSWER' THEN 'assistant'
                             ELSE 'toolResult' END, 'toolName', 'read', 'toolCallId', 'call-' || :id,
                             'content', jsonb_build_array(jsonb_build_object('type', 'text', 'text', :text)))),
                     :at, :redacted)

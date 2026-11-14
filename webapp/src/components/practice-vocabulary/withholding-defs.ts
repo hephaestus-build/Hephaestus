@@ -53,7 +53,7 @@ export const WITHHOLDING_FAMILY_DEFS: StatusDefs<WithholdingFamily> = {
 		icon: BrushCleaningIcon,
 		badgeVariant: "outline",
 		description:
-			"The pipeline dropped it: a duplicate, an empty body, a chat that never came, or feedback it could not write or confirm.",
+			"The pipeline dropped it: a duplicate, an empty body, a conversation that never came, or feedback it could not write or confirm.",
 	},
 };
 
@@ -129,7 +129,7 @@ export const WITHHOLDING_REASON_DEFS: Record<WithholdingReason, string> = {
 	PUBLIC_SUBJECT_INELIGIBLE: "This destination gets only feedback about the author’s own work.",
 	APPROVAL_STALE: "The approved copies no longer match the content or destination being sent.",
 	APPROVAL_NO_LONGER_ELIGIBLE: "The practices behind this feedback no longer require approval.",
-	NO_AI: "The developer has not agreed to AI feedback.",
+	NO_AI: "The developer has not agreed to practice feedback.",
 	DELIVERY_OFF: "The developer turned this kind of delivery off.",
 	PERSON_SUPPRESSED: "Feedback to this person is turned off in this workspace.",
 	RECIPIENT_UNAVAILABLE: "The developer could not receive feedback.",

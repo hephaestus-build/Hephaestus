@@ -17,7 +17,7 @@ const env = {
 	SANDBOX_API_MAX_REQUEST_BYTES: "1048576",
 	SANDBOX_API_REQUESTS_PER_MINUTE: "120",
 };
-const mentorEnv = { ...env, WORKSPACE_SLUG: "capacity-test", ARTIFACT_IDS: "1,2" };
+const detectionEnv = { ...env, WORKSPACE_SLUG: "capacity-test", ARTIFACT_IDS: "1,2" };
 const template = await readFile(
 	new URL("../load-tests/baseline-template.md", import.meta.url),
 	"utf8",
@@ -32,7 +32,10 @@ const metadata = {
 	exitCode: 0,
 	options,
 };
-const mentorMetadata = { ...metadata, ...configuration("detection-mentor", mentorEnv) };
+const conversationMetadata = {
+	...metadata,
+	...configuration("detection-conversation", detectionEnv),
+};
 const summary = {
 	metrics: {
 		http_req_duration: {
@@ -51,16 +54,19 @@ const summary = {
 };
 
 await test("runner records the inputs a scenario ran under and never records secrets", () => {
-	assert.ok(!JSON.stringify(mentorMetadata).includes("do-not-record"));
-	assert.ok(!JSON.stringify(mentorMetadata).includes("also-secret"));
+	assert.ok(!JSON.stringify(conversationMetadata).includes("do-not-record"));
+	assert.ok(!JSON.stringify(conversationMetadata).includes("also-secret"));
 	assert.deepEqual(Object.keys(configuration("webhook-burst", env).inputs), ["BASE_URL"]);
-	assert.deepEqual(Object.keys(configuration("detection-mentor", mentorEnv).inputs).toSorted(), [
-		"ARTIFACT_IDS",
-		"BASE_URL",
-		"SANDBOX_API_MAX_REQUEST_BYTES",
-		"SANDBOX_API_REQUESTS_PER_MINUTE",
-		"WORKSPACE_SLUG",
-	]);
+	assert.deepEqual(
+		Object.keys(configuration("detection-conversation", detectionEnv).inputs).toSorted(),
+		[
+			"ARTIFACT_IDS",
+			"BASE_URL",
+			"SANDBOX_API_MAX_REQUEST_BYTES",
+			"SANDBOX_API_REQUESTS_PER_MINUTE",
+			"WORKSPACE_SLUG",
+		],
+	);
 	for (const key of ["BASE_URL", "WEBHOOK_SECRET"]) {
 		assert.throws(
 			() => configuration("webhook-burst", { ...env, [key]: "" }),
@@ -69,7 +75,7 @@ await test("runner records the inputs a scenario ran under and never records sec
 	}
 	for (const key of ["SANDBOX_API_MAX_REQUEST_BYTES", "SANDBOX_API_REQUESTS_PER_MINUTE"]) {
 		assert.throws(
-			() => configuration("detection-mentor", { ...mentorEnv, [key]: "" }),
+			() => configuration("detection-conversation", { ...detectionEnv, [key]: "" }),
 			new RegExp(key, "u"),
 		);
 	}
@@ -77,21 +83,24 @@ await test("runner records the inputs a scenario ran under and never records sec
 		assert.throws(() => configuration("webhook-burst", { ...env, BASE_URL }));
 	}
 	assert.throws(() => configuration("unknown", env));
-	assert.throws(() => configuration("detection-mentor", env), /WORKSPACE_SLUG/u);
+	assert.throws(() => configuration("detection-conversation", env), /WORKSPACE_SLUG/u);
 	assert.throws(() =>
-		configuration("detection-mentor", { ...mentorEnv, SANDBOX_API_REQUESTS_PER_MINUTE: "0" }),
+		configuration("detection-conversation", {
+			...detectionEnv,
+			SANDBOX_API_REQUESTS_PER_MINUTE: "0",
+		}),
 	);
 });
 
-await test("the Heph scenario takes one token or one per developer and records neither", () => {
-	const hephEnv = {
+await test("the Hephaestus scenario takes one token or one per developer and records neither", () => {
+	const conversationEnv = {
 		BASE_URL: "http://127.0.0.1:8080",
 		API_PREFIX: "",
 		WORKSPACE_SLUG: "e2e",
 		AUTH_TOKENS: "first-secret,second-secret",
 		STAGES: "1:1m,2:1m",
 	};
-	const recorded = configuration("heph", hephEnv);
+	const recorded = configuration("conversation", conversationEnv);
 	assert.ok(!JSON.stringify(recorded).includes("secret"));
 	assert.deepEqual(Object.keys(recorded.inputs).toSorted(), [
 		"API_PREFIX",
@@ -100,11 +109,18 @@ await test("the Heph scenario takes one token or one per developer and records n
 		"WORKSPACE_SLUG",
 	]);
 	assert.equal(
-		configuration("heph", { ...hephEnv, AUTH_TOKENS: undefined, AUTH_TOKEN: "one" }).scenario,
-		"heph",
+		configuration("conversation", { ...conversationEnv, AUTH_TOKENS: undefined, AUTH_TOKEN: "one" })
+			.scenario,
+		"conversation",
 	);
-	assert.throws(() => configuration("heph", { ...hephEnv, AUTH_TOKENS: "" }), /AUTH_TOKEN/u);
-	assert.throws(() => configuration("heph", { ...hephEnv, WORKSPACE_SLUG: "" }), /WORKSPACE_SLUG/u);
+	assert.throws(
+		() => configuration("conversation", { ...conversationEnv, AUTH_TOKENS: "" }),
+		/AUTH_TOKEN/u,
+	);
+	assert.throws(
+		() => configuration("conversation", { ...conversationEnv, WORKSPACE_SLUG: "" }),
+		/WORKSPACE_SLUG/u,
+	);
 });
 
 await test("k6 joins a named Docker network only when asked", () => {
@@ -122,7 +138,7 @@ await test("renders k6 threshold verdicts without claiming host qualification", 
 	assert.ok(!report.includes("{{"));
 	assert.ok(!report.includes("SANDBOX_API"));
 	assert.match(
-		renderBaseline(summary, mentorMetadata, template),
+		renderBaseline(summary, conversationMetadata, template),
 		/SANDBOX_API_REQUESTS_PER_MINUTE \| 120/u,
 	);
 	assert.match(
@@ -213,11 +229,16 @@ await test("rejects incomplete threshold evidence, malformed values and invalid 
 		assert.throws(() => renderBaseline(summary, { ...metadata, ...change }, template));
 	}
 	for (const change of [
-		{ inputs: { ...mentorMetadata.inputs, SANDBOX_API_REQUESTS_PER_MINUTE: "9007199254740992" } },
+		{
+			inputs: {
+				...conversationMetadata.inputs,
+				SANDBOX_API_REQUESTS_PER_MINUTE: "9007199254740992",
+			},
+		},
 		{ inputs: { BASE_URL: env.BASE_URL } },
 	]) {
 		assert.throws(
-			() => renderBaseline(summary, { ...mentorMetadata, ...change }, template),
+			() => renderBaseline(summary, { ...conversationMetadata, ...change }, template),
 			/gateway limit/u,
 		);
 	}
@@ -304,8 +325,8 @@ await test("load tasks stay uncached and outside automatic quality and verificat
 	const tasks = await loadTasks();
 	for (const name of [
 		"test:load:webhook-burst",
-		"test:load:detection-mentor",
-		"test:load:heph",
+		"test:load:detection-conversation",
+		"test:load:conversation",
 		"report:load:baseline",
 	]) {
 		assert.equal(asRecord(tasks[name], name).cache, false);

@@ -21,7 +21,7 @@ class WorkspaceAdminControllerIntegrationTest extends AbstractWorkspaceIntegrati
     }
 
     private static final String ADMIN_TOKEN = "mock-jwt-token-for-admin-user";
-    private static final String MENTOR_TOKEN = "mock-jwt-token-for-mentor-user";
+    private static final String CONVERSATION_TOKEN = "mock-jwt-token-for-conversation-user";
 
     @Autowired
     private WebTestClient webTestClient;
@@ -59,7 +59,7 @@ class WorkspaceAdminControllerIntegrationTest extends AbstractWorkspaceIntegrati
         webTestClient
                 .get()
                 .uri("/admin/workspaces")
-                .headers(h -> h.setBearerAuth(MENTOR_TOKEN))
+                .headers(h -> h.setBearerAuth(CONVERSATION_TOKEN))
                 .exchange()
                 .expectStatus()
                 .isForbidden()

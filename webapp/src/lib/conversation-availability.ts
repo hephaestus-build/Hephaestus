@@ -3,7 +3,7 @@ import type { WorkspaceOnboarding } from "@/api/types.gen";
 type MemberAiChoice = NonNullable<WorkspaceOnboarding["aiChoice"]>;
 
 /**
- * Why Hephaestus will not answer, as the server decides it (`WorkspaceOnboarding.mentorRefusal`).
+ * Why Hephaestus will not answer, as the server decides it (`WorkspaceOnboarding.conversationRefusal`).
  * `unavailable` carries the saved choice so the view can name it from the registry; the words for a
  * choice live with its icon, and this layer holds no view vocabulary. `not-set-up` is the same
  * refusal for a member who has made no choice.
@@ -19,7 +19,7 @@ export type ConversationNotice =
 export function conversationNotice(
 	preference: WorkspaceOnboarding,
 ): ConversationNotice | undefined {
-	switch (preference.mentorRefusal) {
+	switch (preference.conversationRefusal) {
 		case undefined: {
 			return undefined;
 		}
@@ -46,10 +46,11 @@ export function conversationNotice(
  * was erased, or Hephaestus is unavailable to them and no AI choice has a conversation model ready either.
  */
 export function isConversationOutOfReach(preference: WorkspaceOnboarding): boolean {
-	const { mentorRefusal } = preference;
+	const { conversationRefusal } = preference;
 	return (
-		mentorRefusal === "PERSON_ERASED" ||
-		(mentorRefusal === "UNAVAILABLE" && !preference.aiOptions.some((option) => option.mentorReady))
+		conversationRefusal === "PERSON_ERASED" ||
+		(conversationRefusal === "UNAVAILABLE" &&
+			!preference.aiOptions.some((option) => option.conversationReady))
 	);
 }
 

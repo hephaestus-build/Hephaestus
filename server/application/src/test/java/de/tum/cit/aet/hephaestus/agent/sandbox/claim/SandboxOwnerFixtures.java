@@ -3,7 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.sandbox.claim;
 import de.tum.cit.aet.hephaestus.agent.adapter.ConversationSandboxCopiesAdapter;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenIssuer;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
-import de.tum.cit.aet.hephaestus.mentor.spi.ConversationSandboxCopies;
+import de.tum.cit.aet.hephaestus.conversation.spi.ConversationSandboxCopies;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.jspecify.annotations.Nullable;
 import org.mockito.Mockito;

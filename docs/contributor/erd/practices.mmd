@@ -68,10 +68,10 @@ erDiagram
         TEXT write_marker
         TEXT external_ref UK
         TEXT external_url
-        UUID mentor_entry_id FK
+        UUID conversation_entry_id FK
         TIMESTAMPTZ created_at "NOT NULL"
         TIMESTAMPTZ posted_at
-        UUID mentor_turn_id FK
+        UUID conversation_turn_id FK
         TEXT thread_ref
     }
 
@@ -332,11 +332,11 @@ erDiagram
     }
 
     Account["Account · Core"]
+    ConversationEntry["ConversationEntry · Conversation"]
+    ConversationTurn["ConversationTurn · Conversation"]
     Item["Item · Integration Identity"]
     ItemEvent["ItemEvent · Integration Identity"]
     Membership["Membership · Workspace (Tenancy)"]
-    MentorEntry["MentorEntry · Mentor"]
-    MentorTurn["MentorTurn · Mentor"]
     ReviewJob["ReviewJob · Agent"]
     Workspace["Workspace · Workspace (Tenancy)"]
 
@@ -350,9 +350,9 @@ erDiagram
     Feedback ||--o{ Feedback : references
     Review ||--o{ Feedback : has
     Workspace ||--o{ Feedback : has
+    ConversationEntry ||--o{ FeedbackCopy : has
+    ConversationTurn ||--o{ FeedbackCopy : has
     Feedback ||--o{ FeedbackCopy : has
-    MentorEntry ||--o{ FeedbackCopy : has
-    MentorTurn ||--o{ FeedbackCopy : has
     Workspace ||--o{ FeedbackCopy : has
     Account ||--o{ FeedbackDecision : has
     Feedback ||--o{ FeedbackDecision : has
@@ -419,10 +419,10 @@ erDiagram
     classDef referenceEntity stroke-dasharray:5 5
 
     class Account referenceEntity
+    class ConversationEntry referenceEntity
+    class ConversationTurn referenceEntity
     class Item referenceEntity
     class ItemEvent referenceEntity
     class Membership referenceEntity
-    class MentorEntry referenceEntity
-    class MentorTurn referenceEntity
     class ReviewJob referenceEntity
     class Workspace referenceEntity

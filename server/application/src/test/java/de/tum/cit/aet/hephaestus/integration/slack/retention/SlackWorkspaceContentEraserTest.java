@@ -4,12 +4,12 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 
+import de.tum.cit.aet.hephaestus.conversation.ConversationEntryService;
+import de.tum.cit.aet.hephaestus.conversation.ConversationService;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMessageRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannelRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackParticipantConsentRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackThreadRepository;
-import de.tum.cit.aet.hephaestus.mentor.MentorConversationService;
-import de.tum.cit.aet.hephaestus.mentor.MentorEntryService;
 import de.tum.cit.aet.hephaestus.practices.spi.ConversationFeedbackErasure;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import org.junit.jupiter.api.Tag;
@@ -30,10 +30,10 @@ class SlackWorkspaceContentEraserTest extends BaseUnitTest {
     private SlackMonitoredChannelRepository slackMonitoredChannelRepository;
 
     @Mock
-    private MentorEntryService mentorEntries;
+    private ConversationEntryService conversationEntries;
 
     @Mock
-    private MentorConversationService mentorConversations;
+    private ConversationService conversations;
 
     @Mock
     private SlackParticipantConsentRepository slackParticipantConsentRepository;
@@ -56,9 +56,9 @@ class SlackWorkspaceContentEraserTest extends BaseUnitTest {
         // Consent registrations (per-channel) + per-person opt-out records — the consent state is cleared.
         verify(slackMonitoredChannelRepository).deleteByWorkspaceId(42L);
         verify(slackParticipantConsentRepository).deleteByWorkspaceId(42L);
-        // Every Heph entry written in Slack, and the Slack DM identities of Heph conversations.
-        verify(mentorEntries).redactSlackEntries(42L);
-        verify(mentorEntries).redactCopyingToolResultsWrittenBefore(eq(42L), any(), eq(Integer.MAX_VALUE));
-        verify(mentorConversations).clearSlackIdentities(42L);
+        // Every Hephaestus entry written in Slack, and the Slack DM identities of Hephaestus conversations.
+        verify(conversationEntries).redactSlackEntries(42L);
+        verify(conversationEntries).redactCopyingToolResultsWrittenBefore(eq(42L), any(), eq(Integer.MAX_VALUE));
+        verify(conversations).clearSlackIdentities(42L);
     }
 }

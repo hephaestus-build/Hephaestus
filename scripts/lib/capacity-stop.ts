@@ -9,7 +9,7 @@ export async function stopSyntheticTurns(base: string, tokens: readonly string[]
 	async function stopAccount(token: string) {
 		const headers = { authorization: `Bearer ${token}`, "content-type": "application/json" };
 		try {
-			const response = await fetch(`${base}/conversation`, {
+			const response = await fetch(base, {
 				headers,
 				signal: AbortSignal.any([deadline, AbortSignal.timeout(5000)]),
 			});
@@ -37,7 +37,7 @@ export async function stopSyntheticTurns(base: string, tokens: readonly string[]
 					failures += 1;
 				}
 			}
-			const verified = await fetch(`${base}/conversation`, {
+			const verified = await fetch(base, {
 				headers,
 				signal: AbortSignal.any([deadline, AbortSignal.timeout(5000)]),
 			});

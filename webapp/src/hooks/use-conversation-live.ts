@@ -72,7 +72,7 @@ export function useConversationLive(workspaceSlug: string, enabled: boolean): bo
 			}
 		};
 		const close = openEventStream(
-			`${environment.serverUrl}/workspaces/${workspaceSlug}/mentor/events`,
+			`${environment.serverUrl}/workspaces/${workspaceSlug}/conversation/events`,
 			{
 				events: { snapshot: handle, turn: handle, entry: handle, read: handle },
 				onPausedChange: setPaused,

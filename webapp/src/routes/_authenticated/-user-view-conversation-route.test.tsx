@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { afterAll, afterEach, beforeAll, beforeEach, expect, it } from "vitest";
 
-import { getMentorConversationOptions } from "@/api/@tanstack/react-query.gen";
+import { getConversationOptions } from "@/api/@tanstack/react-query.gen";
 import { client } from "@/api/client.gen";
 import { problemType } from "@/lib/problem-detail";
 import { ownMembership, workspaceListItem } from "@/mocks/fixtures/workspaces";
@@ -50,7 +50,7 @@ afterAll(() => client.interceptors.request.eject(applyUserViewHeaders));
 it("opens the viewed member's conversation read-only, without a live stream", async () => {
 	const conversation = new ConversationFake("engineering");
 	const question = conversation.add({ kind: "USER", text: "What should I improve?" });
-	conversation.add({ kind: "HEPH", text: "Earlier guidance remains readable." });
+	conversation.add({ kind: "ANSWER", text: "Earlier guidance remains readable." });
 	conversation.add({ kind: "USER", text: "Which pull request?", parentEntryId: question.id });
 	const requests: Request[] = [];
 	server.events.on("request:start", ({ request }) => {
@@ -62,7 +62,7 @@ it("opens the viewed member's conversation read-only, without a live stream", as
 	await screen.findByText("Earlier guidance remains readable.", {}, ROUTE_RENDER_WAIT);
 	await screen.findByText("Which pull request?");
 	const viewedUsers = requests
-		.filter(({ url }) => new URL(url).pathname.includes("/mentor/"))
+		.filter(({ url }) => new URL(url).pathname.includes("/conversation/"))
 		.map(({ headers }) => headers.get("X-User-View-Account"));
 	expect(new Set(viewedUsers)).toStrictEqual(new Set(["11"]));
 	expect(screen.queryByRole("textbox")).toBeNull();
@@ -94,8 +94,8 @@ const stepUpRequired = () =>
 
 it("asks for a recent sign-in when a viewed read is refused for it", async () => {
 	server.use(
-		http.get("*/workspaces/:workspaceSlug/mentor/conversation", stepUpRequired),
-		http.get("*/workspaces/:workspaceSlug/mentor/entries", stepUpRequired),
+		http.get("*/workspaces/:workspaceSlug/conversation", stepUpRequired),
+		http.get("*/workspaces/:workspaceSlug/conversation/entries", stepUpRequired),
 	);
 
 	renderRouteAt("/w/engineering/conversation", queryClient);
@@ -104,8 +104,8 @@ it("asks for a recent sign-in when a viewed read is refused for it", async () =>
 
 it("asks again when a later read is refused after the first prompt was dismissed", async () => {
 	server.use(
-		http.get("*/workspaces/:workspaceSlug/mentor/conversation", stepUpRequired),
-		http.get("*/workspaces/:workspaceSlug/mentor/entries", stepUpRequired),
+		http.get("*/workspaces/:workspaceSlug/conversation", stepUpRequired),
+		http.get("*/workspaces/:workspaceSlug/conversation/entries", stepUpRequired),
 	);
 	renderRouteAt("/w/engineering/conversation", queryClient);
 	await screen.findByRole("dialog", { name: "Confirm access" }, ROUTE_RENDER_WAIT);
@@ -116,7 +116,7 @@ it("asks again when a later read is refused after the first prompt was dismissed
 	await act(async () => {
 		await expect(
 			queryClient.query({
-				...getMentorConversationOptions({ path: { workspaceSlug: "engineering" } }),
+				...getConversationOptions({ path: { workspaceSlug: "engineering" } }),
 				staleTime: 0,
 			}),
 		).rejects.toMatchObject({ type: problemType("step-up-required") });

@@ -14,7 +14,7 @@ import org.springframework.stereotype.Component;
 
 /**
  * A circuit breaker for each provider connection, on this process. A connection whose calls stall or fail with a
- * server error trips it; for {@link #OPEN_FOR}, new calls and new Heph turns on that connection fail at once instead of
+ * server error trips it; for {@link #OPEN_FOR}, new calls and new Hephaestus turns on that connection fail at once instead of
  * waiting for the provider. Then one call probes the provider, and its result closes the breaker or opens it again.
  * The shared registry publishes {@code resilience4j_circuitbreaker_*} for each breaker, named {@code llm-connection-*}.
  */

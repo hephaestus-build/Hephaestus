@@ -31,7 +31,7 @@ import tools.jackson.databind.node.JsonNodeFactory;
 import tools.jackson.databind.node.ObjectNode;
 
 /**
- * Feedback for the developer's practice pages and the mentor conversation: what it is composed from, the
+ * Feedback for the developer's practice pages and the conversation: what it is composed from, the
  * {@code check_package} tool it is stored with, and the checks that store or skip each piece.
  */
 final class PrivateFeedback {
@@ -646,7 +646,7 @@ final class PrivateFeedback {
                     + "This is an intervention, not a measurement: it takes no outcome, severity or "
                     + "confidence, and no citation you typed yourself. "
                     + "Aim for at most 600 characters in a card body, 300 in its nextStep; keep title/body/nextStep separate. "
-                    + "Mentor notes aim for 300 per field, 600 for evidenceSummary. "
+                    + "Conversation notes aim for 300 per field, 600 for evidenceSummary. "
                     + "More than twice a field's target is refused with a correction example, never truncated. "
                     + "Keep the evidence and its qualifications. No headings or internal labels in field contents. Use natural evidence references, never internal coordinates. "
                     + "Input example for a practice page: {\"feedback\":[{\"destination\":\"PRACTICE_PAGE\",\"practiceSlug\":\"<admitted practice slug>\",\"basedOn\":[\"<its NOT_MET resultId or problemId>\"],\"action\":\"NEW\",\"title\":\"Name the concern\",\"body\":\"Explain the supported concern.\",\"nextStep\":\"One action that addresses it.\"}]}. "
@@ -717,7 +717,7 @@ final class PrivateFeedback {
                 .add("inConversationLearning");
         notes.put(
                 "description",
-                "CONVERSATION only. Notes TO the mentor, which composes the whole turn itself, later, "
+                "CONVERSATION only. Notes TO the conversation, which composes the whole turn itself, later, "
                         + "with the live conversation in front of it. Write what it needs to know, never a "
                         + "sentence for it to say: anything phrased as a line of dialogue will be spoken, and "
                         + "will sound like a script. "
@@ -742,7 +742,7 @@ final class PrivateFeedback {
                         bound("evidenceSummary"),
                         "Where the concern occurred, compactly: each supporting work and problem located once. "
                                 + "Summarise rather than inventing a quote; the original result evidence is "
-                                + "staged separately for the mentor to inspect."));
+                                + "staged separately for the conversation to inspect."));
         noteProperties.set(
                 "inConversationLearning",
                 text(

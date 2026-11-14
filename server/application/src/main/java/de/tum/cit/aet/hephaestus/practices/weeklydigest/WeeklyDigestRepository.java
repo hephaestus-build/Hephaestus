@@ -46,11 +46,11 @@ interface WeeklyDigestRepository extends Repository<Feedback, UUID> {
         """, nativeQuery = true)
     boolean anythingBetween(long workspaceId, long accountId, Instant since, Instant until);
 
-    /** The Heph message each conversation feedback copy was shown in, once its receipt settled. */
+    /** The Hephaestus message each conversation feedback copy was shown in, once its receipt settled. */
     @Query(value = """
-        SELECT c.feedback_id AS feedbackId,c.mentor_entry_id AS mentorEntryId FROM feedback_copy c
+        SELECT c.feedback_id AS feedbackId,c.conversation_entry_id AS conversationEntryId FROM feedback_copy c
         WHERE c.workspace_id=:workspaceId AND c.feedback_id IN (:feedbackIds) AND c.kind='CHAT_TURN'
-          AND c.mentor_entry_id IS NOT NULL
+          AND c.conversation_entry_id IS NOT NULL
         ORDER BY c.position
         """, nativeQuery = true)
     List<ConversationCopy> conversationCopies(long workspaceId, Collection<UUID> feedbackIds);
@@ -58,6 +58,6 @@ interface WeeklyDigestRepository extends Repository<Feedback, UUID> {
     interface ConversationCopy {
         UUID getFeedbackId();
 
-        UUID getMentorEntryId();
+        UUID getConversationEntryId();
     }
 }

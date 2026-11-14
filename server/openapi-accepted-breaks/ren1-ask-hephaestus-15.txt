@@ -1,0 +1,2 @@
+# REN-1: the conversation endpoints move from /mentor to /conversation, as the 0.95 notes announced for 1.0. Stopped 1.0 cutover (ADR 0070); the extension calls none of these operations.
+in API DELETE /workspaces/{workspaceSlug}/mentor/entries/{entryId}/vote api path removed without deprecation

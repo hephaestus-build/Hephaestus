@@ -15,7 +15,7 @@ import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobTrigger;
 import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobType;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
-import de.tum.cit.aet.hephaestus.testconfig.WithMentorUser;
+import de.tum.cit.aet.hephaestus.testconfig.WithConversationUser;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Membership.WorkspaceRole;
@@ -50,10 +50,10 @@ class SyncProgressControllerIntegrationTest extends AbstractWorkspaceIntegration
     }
 
     @Test
-    @WithMentorUser
+    @WithConversationUser
     @DisplayName("a member reads that no sync runs, that one runs, and that it ended")
     void memberReadsTheFact() {
-        ensureMembership(workspace, persistUser("mentor"), WorkspaceRole.MEMBER);
+        ensureMembership(workspace, persistUser("conversation"), WorkspaceRole.MEMBER);
         assertThat(syncing(workspace)).isFalse();
 
         SyncJob job = activeJob(workspace);
@@ -65,20 +65,20 @@ class SyncProgressControllerIntegrationTest extends AbstractWorkspaceIntegration
     }
 
     @Test
-    @WithMentorUser
+    @WithConversationUser
     @DisplayName("another workspace's sync does not count")
     void anotherWorkspaceDoesNotCount() {
-        ensureMembership(workspace, persistUser("mentor"), WorkspaceRole.MEMBER);
+        ensureMembership(workspace, persistUser("conversation"), WorkspaceRole.MEMBER);
         activeJob(otherWorkspace);
 
         assertThat(syncing(workspace)).isFalse();
     }
 
     @Test
-    @WithMentorUser
+    @WithConversationUser
     @DisplayName("someone outside the workspace reads nothing")
     void shouldAnswerNotFoundWhenCallerIsOutsideTheWorkspace() {
-        persistUser("mentor");
+        persistUser("conversation");
         activeJob(otherWorkspace);
 
         request(otherWorkspace).expectStatus().isNotFound();

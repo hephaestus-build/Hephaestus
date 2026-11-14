@@ -28,22 +28,22 @@ public class WorkspaceFeatures {
 
     @NotNull
     @ColumnDefault("true")
-    @Column(name = "practice_review_auto_trigger_enabled", nullable = false)
-    private Boolean practiceReviewAutoTriggerEnabled = true;
+    @Column(name = "practice_review_event_enabled", nullable = false)
+    private Boolean practiceReviewEventEnabled = true;
 
     @NotNull
     @ColumnDefault("true")
-    @Column(name = "practice_review_manual_trigger_enabled", nullable = false)
-    private Boolean practiceReviewManualTriggerEnabled = true;
+    @Column(name = "practice_review_request_enabled", nullable = false)
+    private Boolean practiceReviewRequestEnabled = true;
 
     /** PATCH semantics: null fields are ignored, non-null fields overwrite. */
     public void applyPatch(UpdateWorkspaceFeaturesRequestDTO request) {
         if (request.practicesEnabled() != null) this.practicesEnabled = request.practicesEnabled();
-        if (request.practiceReviewAutoTriggerEnabled() != null) {
-            this.practiceReviewAutoTriggerEnabled = request.practiceReviewAutoTriggerEnabled();
+        if (request.practiceReviewEventEnabled() != null) {
+            this.practiceReviewEventEnabled = request.practiceReviewEventEnabled();
         }
-        if (request.practiceReviewManualTriggerEnabled() != null) {
-            this.practiceReviewManualTriggerEnabled = request.practiceReviewManualTriggerEnabled();
+        if (request.practiceReviewRequestEnabled() != null) {
+            this.practiceReviewRequestEnabled = request.practiceReviewRequestEnabled();
         }
     }
 }

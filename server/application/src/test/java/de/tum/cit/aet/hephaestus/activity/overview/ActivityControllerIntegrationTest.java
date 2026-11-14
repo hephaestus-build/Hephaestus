@@ -75,7 +75,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.workspace.settings.WorkspaceTea
 import de.tum.cit.aet.hephaestus.testconfig.SqlReadMeasurement;
 import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
 import de.tum.cit.aet.hephaestus.testconfig.TestUserFactory;
-import de.tum.cit.aet.hephaestus.testconfig.WithMentorUser;
+import de.tum.cit.aet.hephaestus.testconfig.WithConversationUser;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Membership.WorkspaceRole;
@@ -118,7 +118,7 @@ import org.springframework.web.util.UriComponentsBuilder;
  * The Activity read model against real rows: what counts, whose activity a scope covers, and what is open for
  * one member. Every range but the default one is pinned so a slow run cannot move an event across a boundary.
  */
-@WithMentorUser
+@WithConversationUser
 class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     private static final ParameterizedTypeReference<CursorPageDTO<ActivityWorkDTO>> WORK_PAGE =
@@ -216,7 +216,7 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
 
     @BeforeEach
     void seedWorkspace() {
-        User caller = persistUser("mentor");
+        User caller = persistUser("conversation");
         User owner = persistUser("activity-owner");
         workspace = createWorkspace("activity-workspace", "Activity", "activity-org", AccountType.ORG, owner);
         ensureMembership(workspace, caller, WorkspaceRole.MEMBER);
@@ -271,7 +271,7 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
         void shouldShowOnlyTheMemberWhoAnsweredShowOnEveryPublicSurface() {
             var shown = userRepository
                     .findByLoginAndProviderId(
-                            "mentor",
+                            "conversation",
                             Objects.requireNonNull(ensureGitHubProvider().getId()))
                     .orElseThrow();
             var hidden = persistUser("testuser");
@@ -925,7 +925,7 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
             workspaceRepository.save(second);
             var caller = userRepository
                     .findByLoginAndProviderId(
-                            "mentor",
+                            "conversation",
                             Objects.requireNonNull(ensureGitHubProvider().getId()))
                     .orElseThrow();
             ensureMembership(second, caller, WorkspaceRole.MEMBER);
@@ -2057,7 +2057,8 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
     void shouldReadOwnActivityWhenTheMemberIsHidden() {
         var caller = userRepository
                 .findByLoginAndProviderId(
-                        "mentor", Objects.requireNonNull(ensureGitHubProvider().getId()))
+                        "conversation",
+                        Objects.requireNonNull(ensureGitHubProvider().getId()))
                 .orElseThrow();
         var issue = issue(monitored, Issue.State.OPEN, caller);
         record(caller, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, issue.getId(), DAY);
@@ -2119,7 +2120,8 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
     void shouldReturnZeroCountsForOwnActivityBeforeTheFirstContribution() {
         var caller = userRepository
                 .findByLoginAndProviderId(
-                        "mentor", Objects.requireNonNull(ensureGitHubProvider().getId()))
+                        "conversation",
+                        Objects.requireNonNull(ensureGitHubProvider().getId()))
                 .orElseThrow();
         workspaceMembershipService.updateMemberVisibility(
                 workspace.getId(), workspaceMembershipService.accountIdForUser(caller.getId()), true);

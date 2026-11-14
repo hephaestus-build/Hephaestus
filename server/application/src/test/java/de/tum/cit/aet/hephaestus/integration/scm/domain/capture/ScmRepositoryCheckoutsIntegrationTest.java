@@ -23,8 +23,8 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ContextLoader;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryCheckoutException;
 import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryRefState;
-import de.tum.cit.aet.hephaestus.integration.scm.context.MentorContextQueryRepository;
-import de.tum.cit.aet.hephaestus.integration.scm.context.ScmMentorWorkQuery;
+import de.tum.cit.aet.hephaestus.integration.scm.context.ConversationContextQueryRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.context.ScmConversationWorkQuery;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
@@ -92,10 +92,10 @@ class ScmRepositoryCheckoutsIntegrationTest extends BaseIntegrationTest {
     private TeamRepository teams;
 
     @Autowired
-    private ScmMentorWorkQuery work;
+    private ScmConversationWorkQuery work;
 
     @Autowired
-    private MentorContextQueryRepository authoredWork;
+    private ConversationContextQueryRepository authoredWork;
 
     @Autowired
     private WorkspaceTeamRepositorySettingsRepository teamRepositorySettings;

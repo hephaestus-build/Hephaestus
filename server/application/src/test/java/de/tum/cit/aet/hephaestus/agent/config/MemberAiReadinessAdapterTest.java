@@ -4,8 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 
-import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorAdmission;
-import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorRefusal;
+import de.tum.cit.aet.hephaestus.agent.conversation.turn.ConversationAdmission;
+import de.tum.cit.aet.hephaestus.agent.conversation.turn.ConversationRefusal;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AiChoice;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonProcessingSuppression;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
@@ -21,7 +21,7 @@ class MemberAiReadinessAdapterTest extends BaseUnitTest {
     private static final long WORKSPACE = 1L;
     private static final long ACCOUNT = 10L;
 
-    private final MentorAdmission admission = mock(MentorAdmission.class);
+    private final ConversationAdmission admission = mock(ConversationAdmission.class);
     private final PersonProcessingSuppression suppression = mock(PersonProcessingSuppression.class);
     private final MemberAiPreferences preferences = mock(MemberAiPreferences.class);
     private final MemberAiRoutingAdapter routing = mock(MemberAiRoutingAdapter.class);
@@ -34,8 +34,8 @@ class MemberAiReadinessAdapterTest extends BaseUnitTest {
         choose(false, AiChoice.CLOUD);
         lenient()
                 .when(routing.bindingForPeople(
-                        WORKSPACE, AgentPurpose.PRACTICE_REVIEW, List.<@Nullable Long>of(ACCOUNT)))
-                .thenReturn(Optional.of(new WorkspaceAgentBinding()));
+                        WORKSPACE, ModelPurpose.PRACTICE_REVIEW, List.<@Nullable Long>of(ACCOUNT)))
+                .thenReturn(Optional.of(new WorkspaceModelAssignment()));
     }
 
     @Test
@@ -70,15 +70,17 @@ class MemberAiReadinessAdapterTest extends BaseUnitTest {
         choose(false, null);
         lenient()
                 .when(routing.bindingForPeople(
-                        WORKSPACE, AgentPurpose.PRACTICE_REVIEW, List.<@Nullable Long>of(ACCOUNT)))
+                        WORKSPACE, ModelPurpose.PRACTICE_REVIEW, List.<@Nullable Long>of(ACCOUNT)))
                 .thenReturn(Optional.empty());
 
         assertThat(adapter.practiceReviewRefusal(WORKSPACE, ACCOUNT)).contains(AiRefusalReason.UNAVAILABLE);
     }
 
     @Test
-    void shouldReportHephsOwnAdmissionWhenAskedForTheConversation() {
-        lenient().when(admission.refusal(WORKSPACE, ACCOUNT)).thenReturn(Optional.of(MentorRefusal.CHOICE_REQUIRED));
+    void shouldReportHephaestusOwnAdmissionWhenAskedForTheConversation() {
+        lenient()
+                .when(admission.refusal(WORKSPACE, ACCOUNT))
+                .thenReturn(Optional.of(ConversationRefusal.CHOICE_REQUIRED));
 
         assertThat(adapter.conversationRefusal(WORKSPACE, ACCOUNT)).contains(AiRefusalReason.CHOICE_REQUIRED);
     }

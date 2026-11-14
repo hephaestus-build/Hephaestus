@@ -131,7 +131,7 @@ public class WorkspaceLlmModelController {
             content = @Content(schema = @Schema(hidden = true)))
     @ApiResponse(
             responseCode = "409",
-            description = "Cannot delete a model still bound to an agent configuration",
+            description = "Cannot delete a model still assigned to a purpose",
             content = @Content(schema = @Schema(hidden = true)))
     @RequireAtLeastWorkspaceAdmin
     @Audited(ledger = AuditLedger.CONFIG_AUDIT, type = "WORKSPACE_LLM_MODEL")

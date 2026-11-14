@@ -56,7 +56,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * State-machine unit tests for {@link SlackChannelConsentService}. Deterministic (all collaborators mocked): each
- * test locks one edge of the mentoring-only machine and its side effect, and would fail if the guard or the side
+ * test locks one edge of the conversation-only machine and its side effect, and would fail if the guard or the side
  * effect were removed.
  */
 class SlackChannelConsentServiceTest extends BaseUnitTest {
@@ -216,7 +216,7 @@ class SlackChannelConsentServiceTest extends BaseUnitTest {
         service().transition(WS, CHANNEL, ConsentState.PAUSED, null);
 
         verify(eventPublisher, never()).publishEvent(ACTIVATION_KICK);
-        // Running Heph turns drop the channel's threads from their context folders.
+        // Running Hephaestus turns drop the channel's threads from their context folders.
         verify(eventPublisher).publishEvent(new AgentContextChangedEvent(WS));
     }
 
@@ -290,7 +290,7 @@ class SlackChannelConsentServiceTest extends BaseUnitTest {
     }
 
     /**
-     * Locks the whole mentoring-only consent state machine (16 cells) in one place. PENDING→REVOKED and
+     * Locks the whole conversation-only consent state machine (16 cells) in one place. PENDING→REVOKED and
      * PAUSED→REVOKED are legal and must erase via {@link SlackIngestService#eraseChannel}.
      */
     @ParameterizedTest(name = "{0} → {1} is {2}")

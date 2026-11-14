@@ -206,17 +206,17 @@ export { adoptPracticeMutation } from "./react-query/adoptPractice.gen.js";
 export { allowMyProductFeedbackPublicMutation } from "./react-query/allowMyProductFeedbackPublic.gen.js";
 export { answerPublicActivityOnboardingMutation } from "./react-query/answerPublicActivityOnboarding.gen.js";
 export { assignMemberRoleMutation } from "./react-query/assignMemberRole.gen.js";
+export { assignModelMutation } from "./react-query/assignModel.gen.js";
 export { bindPracticeGroupMutation } from "./react-query/bindPracticeGroup.gen.js";
 export { callbackGetOptions, callbackGetQueryKey } from "./react-query/callbackGet.gen.js";
 export { callbackPostMutation } from "./react-query/callbackPost.gen.js";
 export { cancelReviewMutation } from "./react-query/cancelReview.gen.js";
 export { checkResearchRemovalsMutation } from "./react-query/checkResearchRemovals.gen.js";
 export { claimGitHubInstallationMutation } from "./react-query/claimGitHubInstallation.gen.js";
-export { clearMentorVoteMutation } from "./react-query/clearMentorVote.gen.js";
+export { clearConversationVoteMutation } from "./react-query/clearConversationVote.gen.js";
 export { clearOwnFeedbackResponseMutation } from "./react-query/clearOwnFeedbackResponse.gen.js";
 export { closeResearchDisclosureMutation } from "./react-query/closeResearchDisclosure.gen.js";
 export { completeFirstLoginConsentMutation } from "./react-query/completeFirstLoginConsent.gen.js";
-export { configureAgentMutation } from "./react-query/configureAgent.gen.js";
 export { confirmProductFeedbackCleanupMutation } from "./react-query/confirmProductFeedbackCleanup.gen.js";
 export {
 	countReviewFeedbackByLocationOptions,
@@ -242,9 +242,8 @@ export { createReviewScheduleMutation } from "./react-query/createReviewSchedule
 export { createWorkspaceMutation } from "./react-query/createWorkspace.gen.js";
 export { declineGitHubInstallationMutation } from "./react-query/declineGitHubInstallation.gen.js";
 export { declinePracticeReleaseMutation } from "./react-query/declinePracticeRelease.gen.js";
-export { deleteAgentMutation } from "./react-query/deleteAgent.gen.js";
+export { deleteConversationEntryMutation } from "./react-query/deleteConversationEntry.gen.js";
 export { deleteCurrentUserMutation } from "./react-query/deleteCurrentUser.gen.js";
-export { deleteMentorEntryMutation } from "./react-query/deleteMentorEntry.gen.js";
 export { deleteOutlineCollectionMutation } from "./react-query/deleteOutlineCollection.gen.js";
 export { deletePracticeMutation } from "./react-query/deletePractice.gen.js";
 export { deletePracticeGroupMutation } from "./react-query/deletePracticeGroup.gen.js";
@@ -316,6 +315,16 @@ export {
 	getConsentStatusOptions,
 	getConsentStatusQueryKey,
 } from "./react-query/getConsentStatus.gen.js";
+export {
+	getConversationOptions,
+	getConversationQueryKey,
+} from "./react-query/getConversation.gen.js";
+export {
+	getConversationThreadInfiniteOptions,
+	getConversationThreadInfiniteQueryKey,
+	getConversationThreadOptions,
+	getConversationThreadQueryKey,
+} from "./react-query/getConversationThread.gen.js";
 export { getCsrfTokenOptions, getCsrfTokenQueryKey } from "./react-query/getCsrfToken.gen.js";
 export { getCurrentUserOptions, getCurrentUserQueryKey } from "./react-query/getCurrentUser.gen.js";
 export {
@@ -362,16 +371,6 @@ export {
 	getMemberOnboardingSettingsOptions,
 	getMemberOnboardingSettingsQueryKey,
 } from "./react-query/getMemberOnboardingSettings.gen.js";
-export {
-	getMentorConversationOptions,
-	getMentorConversationQueryKey,
-} from "./react-query/getMentorConversation.gen.js";
-export {
-	getMentorThreadInfiniteOptions,
-	getMentorThreadInfiniteQueryKey,
-	getMentorThreadOptions,
-	getMentorThreadQueryKey,
-} from "./react-query/getMentorThread.gen.js";
 export {
 	getNotificationPreferencesOptions,
 	getNotificationPreferencesQueryKey,
@@ -574,7 +573,6 @@ export {
 	listAdoptablePracticesOptions,
 	listAdoptablePracticesQueryKey,
 } from "./react-query/listAdoptablePractices.gen.js";
-export { listAgentsOptions, listAgentsQueryKey } from "./react-query/listAgents.gen.js";
 export {
 	listConnectionProviderRepairsInfiniteOptions,
 	listConnectionProviderRepairsInfiniteQueryKey,
@@ -597,6 +595,12 @@ export {
 	listConsumerDeadLettersOptions,
 	listConsumerDeadLettersQueryKey,
 } from "./react-query/listConsumerDeadLetters.gen.js";
+export {
+	listConversationEntriesInfiniteOptions,
+	listConversationEntriesInfiniteQueryKey,
+	listConversationEntriesOptions,
+	listConversationEntriesQueryKey,
+} from "./react-query/listConversationEntries.gen.js";
 export {
 	listFeedbackDecisionsOptions,
 	listFeedbackDecisionsQueryKey,
@@ -642,11 +646,9 @@ export {
 	listMembershipsQueryKey,
 } from "./react-query/listMemberships.gen.js";
 export {
-	listMentorEntriesInfiniteOptions,
-	listMentorEntriesInfiniteQueryKey,
-	listMentorEntriesOptions,
-	listMentorEntriesQueryKey,
-} from "./react-query/listMentorEntries.gen.js";
+	listModelAssignmentsOptions,
+	listModelAssignmentsQueryKey,
+} from "./react-query/listModelAssignments.gen.js";
 export {
 	listMyProductFeedbackOptions,
 	listMyProductFeedbackQueryKey,
@@ -799,7 +801,7 @@ export { listWorkspacesOptions, listWorkspacesQueryKey } from "./react-query/lis
 export { logoutMutation } from "./react-query/logout.gen.js";
 export { logoutClientSessionMutation } from "./react-query/logoutClientSession.gen.js";
 export { makeMyProductFeedbackPrivateMutation } from "./react-query/makeMyProductFeedbackPrivate.gen.js";
-export { markMentorConversationReadMutation } from "./react-query/markMentorConversationRead.gen.js";
+export { markConversationReadMutation } from "./react-query/markConversationRead.gen.js";
 export { moveCatalogPracticeMutation } from "./react-query/moveCatalogPractice.gen.js";
 export { movePracticeMutation } from "./react-query/movePractice.gen.js";
 export {
@@ -826,6 +828,7 @@ export { releaseOrphanProviderRepairMutation } from "./react-query/releaseOrphan
 export { releaseResearchDatasetMutation } from "./react-query/releaseResearchDataset.gen.js";
 export { removeLabelFromTeamMutation } from "./react-query/removeLabelFromTeam.gen.js";
 export { removeMemberMutation } from "./react-query/removeMember.gen.js";
+export { removeModelAssignmentMutation } from "./react-query/removeModelAssignment.gen.js";
 export { removePasskeyMutation } from "./react-query/removePasskey.gen.js";
 export { removeRepositoryToMonitorMutation } from "./react-query/removeRepositoryToMonitor.gen.js";
 export { removeResultMarkMutation } from "./react-query/removeResultMark.gen.js";
@@ -854,14 +857,14 @@ export { revokeOtherSessionsMutation } from "./react-query/revokeOtherSessions.g
 export { revokeSessionMutation } from "./react-query/revokeSession.gen.js";
 export { setCatalogGroupStatusMutation } from "./react-query/setCatalogGroupStatus.gen.js";
 export { setCatalogPracticeStatusMutation } from "./react-query/setCatalogPracticeStatus.gen.js";
+export { setConversationVoteMutation } from "./react-query/setConversationVote.gen.js";
 export { setGroupFeedbackModeMutation } from "./react-query/setGroupFeedbackMode.gen.js";
 export { setMemberHiddenMutation } from "./react-query/setMemberHidden.gen.js";
-export { setMentorVoteMutation } from "./react-query/setMentorVote.gen.js";
 export { setPracticeFeedbackModeMutation } from "./react-query/setPracticeFeedbackMode.gen.js";
 export { setReviewScheduleEnabledMutation } from "./react-query/setReviewScheduleEnabled.gen.js";
 export { startScanMutation } from "./react-query/startScan.gen.js";
+export { submitConversationTurnMutation } from "./react-query/submitConversationTurn.gen.js";
 export { submitInstanceProductFeedbackMutation } from "./react-query/submitInstanceProductFeedback.gen.js";
-export { submitMentorTurnMutation } from "./react-query/submitMentorTurn.gen.js";
 export { submitWorkspaceProductFeedbackMutation } from "./react-query/submitWorkspaceProductFeedback.gen.js";
 export { triggerSyncJobMutation } from "./react-query/triggerSyncJob.gen.js";
 export { unlinkIdentityMutation } from "./react-query/unlinkIdentity.gen.js";
@@ -873,10 +876,10 @@ export { updateCatalogGroupMutation } from "./react-query/updateCatalogGroup.gen
 export { updateCatalogPracticeMutation } from "./react-query/updateCatalogPractice.gen.js";
 export { updateConnectionStatusMutation } from "./react-query/updateConnectionStatus.gen.js";
 export { updateConnectionSyncJobMutation } from "./react-query/updateConnectionSyncJob.gen.js";
+export { updateConversationTurnStatusMutation } from "./react-query/updateConversationTurnStatus.gen.js";
 export { updateFeaturesMutation } from "./react-query/updateFeatures.gen.js";
 export { updateGitLabRepositorySelectionMutation } from "./react-query/updateGitLabRepositorySelection.gen.js";
 export { updateMemberOnboardingSettingsMutation } from "./react-query/updateMemberOnboardingSettings.gen.js";
-export { updateMentorTurnStatusMutation } from "./react-query/updateMentorTurnStatus.gen.js";
 export { updateNotificationPreferencesMutation } from "./react-query/updateNotificationPreferences.gen.js";
 export { updateOutlineCollectionStateMutation } from "./react-query/updateOutlineCollectionState.gen.js";
 export { updatePasskeyProtectionMutation } from "./react-query/updatePasskeyProtection.gen.js";

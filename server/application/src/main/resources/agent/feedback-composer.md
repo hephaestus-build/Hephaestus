@@ -47,7 +47,7 @@ can exist, so nothing in it supports `ALREADY_SAID` or `NO_MATERIAL_CHANGE`.
   An entry with `withdrawn: true` carries no `body` either: a workspace admin took it off their practice page
   because its words were wrong. Do not repeat, rebut or refer to it. The results behind it may still hold.
 - Prepared feedback — conversation feedback prepared for them and **not yet delivered** that a
-  new `CONVERSATION` piece may replace, with a `threadKey` and a `practiceSlug` for each. A `MENTOR_NOTES` body is the
+  new `CONVERSATION` piece may replace, with a `threadKey` and a `practiceSlug` for each. A `CONVERSATION_NOTES` body is the
   notes queued for the conversation.
 - `PRACTICE_PAGE` support — for `PRACTICE_PAGE` only: per NOT_MET practice, the occurrences a new
   card may cite at this read, with the work each is about. Count a card's pieces of work from it. The broad history

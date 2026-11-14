@@ -23,14 +23,14 @@ class ActivityModuleBoundaryTest extends HephaestusArchitectureTest {
     class ActivityModuleIsolationTests {
 
         @Test
-        void activityDoesNotDependOnMentor() {
+        void activityDoesNotDependOnConversation() {
             ArchRule rule = noClasses()
                     .that()
                     .resideInAPackage("..activity..")
                     .should()
                     .dependOnClassesThat()
-                    .resideInAPackage("..mentor..")
-                    .because("Activity and mentor are independent feature modules");
+                    .resideInAPackage("..conversation..")
+                    .because("Activity and conversation are independent feature modules");
             rule.check(classes);
         }
 

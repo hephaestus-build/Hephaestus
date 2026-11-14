@@ -2,18 +2,18 @@ package de.tum.cit.aet.hephaestus.agent.proxy;
 
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.config.FrozenModel;
+import de.tum.cit.aet.hephaestus.agent.conversation.turn.ConversationTurnAdmission;
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewRunKind;
-import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnAdmission;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRun;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunBand;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunRef;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
+import de.tum.cit.aet.hephaestus.conversation.ConversationTurnRepository;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
-import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewSnapshotQuery;
 import de.tum.cit.aet.hephaestus.productfeedback.drafting.ProductFeedbackDraftCalls;
 import java.time.Instant;
@@ -28,7 +28,7 @@ import tools.jackson.databind.ObjectMapper;
 @ConditionalOnAgentRuntime
 class ProxyRoutingService {
     private final ReviewJobRepository agentJobRepository;
-    private final MentorTurnRepository mentorTurns;
+    private final ConversationTurnRepository conversationTurns;
     private final ObjectMapper objectMapper;
     private final ReviewSnapshotQuery reviews;
     private final AgentRuns runs;
@@ -36,7 +36,7 @@ class ProxyRoutingService {
 
     ProxyRoutingService(
             ReviewJobRepository jobs,
-            MentorTurnRepository mentorTurns,
+            ConversationTurnRepository conversationTurns,
             ObjectMapper mapper,
             ReviewSnapshotQuery reviews,
             AgentRuns runs,
@@ -44,7 +44,7 @@ class ProxyRoutingService {
         this.drafts = drafts;
         this.agentJobRepository = jobs;
         this.runs = runs;
-        this.mentorTurns = mentorTurns;
+        this.conversationTurns = conversationTurns;
         this.objectMapper = mapper;
         this.reviews = reviews;
     }
@@ -58,7 +58,7 @@ class ProxyRoutingService {
     AgentRunBand band(ProxyRouting routing) {
         if (routing.attempt().sourceType() == UsageSourceType.PRODUCT_FEEDBACK_DRAFT
                 || routing.attempt().sourceType() == UsageSourceType.PROBE) return AgentRunBand.BACKGROUND;
-        if (routing.hephTurn()) {
+        if (routing.conversationTurn()) {
             var attempt = routing.attempt();
             if (attempt.runId() == null || routing.workspaceId() == null) throw attemptEnded();
             return runs.find(new AgentRunRef(attempt.runId(), routing.workspaceId()))
@@ -81,8 +81,8 @@ class ProxyRoutingService {
         UUID lease = attempt.runId();
         Long workspace = routing.workspaceId();
         if (lease == null || workspace == null) return false;
-        return routing.hephTurn()
-                ? mentorTurns.hasLiveLease(attempt.sourceId(), workspace, attempt.number(), lease)
+        return routing.conversationTurn()
+                ? conversationTurns.hasLiveLease(attempt.sourceId(), workspace, attempt.number(), lease)
                 : runs.isCurrent(new AgentRunRef(lease, workspace), ReviewRunKind.epoch(attempt.number()));
     }
 
@@ -114,17 +114,17 @@ class ProxyRoutingService {
      * attempt that ended or moved on gets {@code 409}, so its host stops.
      */
     private ProxyRouting turnRouting(ProxyAttempt caller) {
-        var turn = mentorTurns
+        var turn = conversationTurns
                 .findByIdAndWorkspaceId(caller.id(), caller.workspaceId())
-                .filter(found ->
-                        mentorTurns.hasLiveLease(caller.id(), caller.workspaceId(), caller.epoch(), caller.runId()))
+                .filter(found -> conversationTurns.hasLiveLease(
+                        caller.id(), caller.workspaceId(), caller.epoch(), caller.runId()))
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.CONFLICT, "This turn attempt no longer holds its lease"));
-        var admitted = MentorTurnAdmission.read(turn.getAdmission())
+        var admitted = ConversationTurnAdmission.read(turn.getAdmission())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT, "This turn attempt has no model"));
         var route = admitted.route();
         return new ProxyRouting(
-                "mentor-turn:" + turn.getId(),
+                "conversation-turn:" + turn.getId(),
                 route.apiProtocol(),
                 route.baseUrl(),
                 route.connectionScope(),
@@ -132,7 +132,7 @@ class ProxyRoutingService {
                 route.modelId(),
                 turn.getWorkspaceId(),
                 new ProxyRouting.BilledAttempt(
-                        UsageSourceType.MENTOR_TURN, turn.getId(), turn.getAttempt(), caller.runId()),
+                        UsageSourceType.CONVERSATION_TURN, turn.getId(), turn.getAttempt(), caller.runId()),
                 null,
                 ProxyRouting.outputLimitOf(admitted.contextWindow(), admitted.maxOutputTokens()));
     }

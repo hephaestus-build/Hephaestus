@@ -36,8 +36,8 @@ class ResultAdmissionControllerTest extends BaseUnitTest {
         var controller =
                 new ResultAdmissionController(mock(ResultAdmissionService.class), mock(AttemptCaptureFailures.class));
         var request = new SealResultsRequestDTO(3, UUID.randomUUID(), UUID.randomUUID(), 0);
-        assertThatThrownBy(
-                        () -> controller.admitResults(request, new TestingAuthenticationToken("mentor", "credential")))
+        assertThatThrownBy(() ->
+                        controller.admitResults(request, new TestingAuthenticationToken("conversation", "credential")))
                 .isInstanceOfSatisfying(
                         ResponseStatusException.class,
                         error -> Assertions.assertThat(error.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN));

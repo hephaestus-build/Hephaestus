@@ -1,6 +1,6 @@
 import { differenceInCalendarDays, isSameDay } from "date-fns";
 
-import type { MentorEntry, MentorTurn } from "@/api/types.gen";
+import type { ConversationEntry, ConversationTurn } from "@/api/types.gen";
 import type { PendingMessage } from "@/lib/conversation-entry";
 import { formatWeekdayDay } from "@/lib/dates";
 import { hasText } from "@/lib/text";
@@ -22,18 +22,18 @@ export type TimelineRow =
 			kind: "entry";
 			/** The local day this row opens. */
 			day?: Date;
-			entry: MentorEntry;
+			entry: ConversationEntry;
 			/** As `ConversationMessage` takes it. */
 			grouped: boolean;
 			/** The question waits for an earlier one to finish; `next` when no other waits before it. */
-			queued?: { turn: MentorTurn; next: boolean };
+			queued?: { turn: ConversationTurn; next: boolean };
 			/** How the turn this message belongs to ended, shown under its last message. */
 			outcome?: TurnOutcome;
 			/** Hephaestus's answer, to a question asked in Slack, that did not fully reach Slack; on the turn's last answer. */
 			notFullyInSlack?: boolean;
 	  })
 	| (RowIdentity & { kind: "pending"; day?: Date; message: PendingMessage; grouped: boolean })
-	| (RowIdentity & { kind: "live"; turn: MentorTurn });
+	| (RowIdentity & { kind: "live"; turn: ConversationTurn });
 
 const requestKey = (requestId: string) => `request:${requestId}`;
 const turnKey = (turnId: string) => `turn:${turnId}`;
@@ -44,16 +44,16 @@ export interface TurnOutcome {
 	/** Why it failed, in words for the developer. */
 	error?: string;
 	/** The question the turn answered, which Try again asks again. */
-	question: MentorEntry;
+	question: ConversationEntry;
 }
 
 interface TimelineInput {
-	entries: MentorEntry[];
+	entries: ConversationEntry[];
 	pending: PendingMessage[];
-	turns: MentorTurn[];
+	turns: ConversationTurn[];
 }
 
-function outcomesOf(entries: MentorEntry[]): Map<string, TurnOutcome> {
+function outcomesOf(entries: ConversationEntry[]): Map<string, TurnOutcome> {
 	const outcomes = new Map<string, TurnOutcome>();
 	for (const question of entries) {
 		const { kind, turnId, turnStatus, turnError } = question;
@@ -75,17 +75,17 @@ function outcomesOf(entries: MentorEntry[]): Map<string, TurnOutcome> {
 
 interface Speaker {
 	author: "developer" | "hephaestus" | "digest";
-	surface: MentorEntry["surface"];
+	surface: ConversationEntry["surface"];
 	createdAt: Date;
 }
 
 const AUTHORS = {
 	USER: "developer",
-	HEPH: "hephaestus",
+	ANSWER: "hephaestus",
 	DIGEST: "digest",
-} as const satisfies Record<MentorEntry["kind"], Speaker["author"]>;
+} as const satisfies Record<ConversationEntry["kind"], Speaker["author"]>;
 
-function speakerOf(entry: MentorEntry): Speaker {
+function speakerOf(entry: ConversationEntry): Speaker {
 	return { author: AUTHORS[entry.kind], surface: entry.surface, createdAt: entry.createdAt };
 }
 
@@ -103,12 +103,12 @@ function continues(previous: Speaker | undefined, next: Speaker): boolean {
  * The turn in progress in one scope: the running one. A queued turn waits under its question while
  * another runs; with nothing running, the first one is about to start, so it is in progress.
  */
-export function liveTurnOf(turns: MentorTurn[]): MentorTurn | undefined {
+export function liveTurnOf(turns: ConversationTurn[]): ConversationTurn | undefined {
 	return turns.find(({ status }) => status === "RUNNING") ?? turns[0];
 }
 
 /** The key a message keeps from the moment it shows: its request, or the turn Hephaestus answers in. */
-function keyOf(entry: MentorEntry, firstAnswer: Map<string, string>): string {
+function keyOf(entry: ConversationEntry, firstAnswer: Map<string, string>): string {
 	if (entry.kind === "USER" && entry.requestId !== undefined) {
 		return requestKey(entry.requestId);
 	}
@@ -134,7 +134,7 @@ export function timelineRows({ entries, pending, turns }: TimelineInput): Timeli
 			continue;
 		}
 		lastOfTurn.set(entry.turnId, entry.id);
-		if (entry.kind === "HEPH") {
+		if (entry.kind === "ANSWER") {
 			lastAnswer.set(entry.turnId, entry.id);
 			if (!firstAnswer.has(entry.turnId)) {
 				firstAnswer.set(entry.turnId, entry.id);

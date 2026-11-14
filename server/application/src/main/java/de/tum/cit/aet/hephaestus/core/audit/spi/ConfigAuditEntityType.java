@@ -4,11 +4,13 @@ package de.tum.cit.aet.hephaestus.core.audit.spi;
 public enum ConfigAuditEntityType {
     PROVIDER_RESOURCE_RELEASE,
     PRACTICE_REVIEW_SETTINGS,
-    /** Which model, with what limits, runs practice reviews / the mentor for a workspace. */
+    /** Which model, with what limits, runs practice reviews / the conversation for a workspace. */
+    MODEL_ASSIGNMENT,
+    /** Historical only — an earlier spelling of {@link #MODEL_ASSIGNMENT}. */
     AGENT_BINDING,
-    /** Historical only — an earlier spelling of {@link #AGENT_BINDING}. */
+    /** Historical only — an earlier spelling of {@link #MODEL_ASSIGNMENT}. */
     AGENT_CONFIG,
-    /** Historical only — an earlier spelling of {@link #AGENT_BINDING}. */
+    /** Historical only — an earlier spelling of {@link #MODEL_ASSIGNMENT}. */
     AI_CONFIG_BINDING,
     /**
      * A contributor's role or roster visibility: admin-initiated changes, plus role changes org

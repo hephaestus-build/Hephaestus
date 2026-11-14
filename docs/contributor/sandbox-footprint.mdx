@@ -88,7 +88,7 @@ The timeline input is a JSON array of metadata-only observations:
     "eligible": 128000,
     "granted": 129000
   },
-  { "id": "turn-1", "kind": "mentor", "submitted": 0, "eligible": 220000, "granted": 221000 }
+  { "id": "turn-1", "kind": "conversation", "submitted": 0, "eligible": 220000, "granted": 221000 }
 ]
 ```
 
@@ -98,13 +98,13 @@ Use a stable attempt ID. Extract phases from the round's row and trace evidence.
 
 Review eligibility starts after its readiness edge.
 Composition eligibility starts when its admitted inputs are sealed and composition can run.
-Mentor eligibility is the later of submission and the preceding turn’s end.
+Turn eligibility is the later of submission and the preceding turn’s end.
 If no predecessor exists, eligibility is submission.
 
 The report gives count, p50, p95, and maximum for each interval:
 
 - Capacity wait: eligibility to the first model grant.
-- Intentional conversation wait: submission to eligibility, only for mentor turns.
+- Intentional conversation wait: submission to eligibility, only for conversation turns.
 - Readiness wait: submission to eligibility for background work.
 - Review Pod wait: eligibility to Pod readiness.
 - Review model wait: Pod readiness to the first model grant.
@@ -165,7 +165,7 @@ The node kernel exposes no aggregate kernel counter or lifetime peak.
 | ------------------------------------ | ------------ | ----------- | ----------- |
 | Review claim and Pod readiness       | 0            | unavailable | unavailable |
 | Composition                          | 0            | unavailable | unavailable |
-| Mentor capacity and intentional wait | 0            | unavailable | unavailable |
+| Turn capacity and intentional wait   | 0            | unavailable | unavailable |
 
 The coordinator must schedule the mixed workload before these queue measurements can be published.
 

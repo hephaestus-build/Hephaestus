@@ -30,12 +30,12 @@ public record LlmUsageByJobTypeDTO(
 
         @NonNull
         @Schema(
-                description = "LLM API calls that the proxy served. Practice reviews and mentor turns both "
+                description = "LLM API calls that the proxy served. Practice reviews and conversation turns both "
                         + "include every assistant call in an internal tool loop.")
         Long totalCalls,
 
         @NonNull
         @Schema(
                 description =
-                        "Runs: job attempts and mentor turn attempts. A practice script call counts toward the run of its review.")
+                        "Runs: job attempts and conversation turn attempts. A practice script call counts toward the run of its review.")
         Long events) {}

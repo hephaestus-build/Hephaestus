@@ -567,7 +567,8 @@ class MultiTenancyArchitectureTest extends HephaestusArchitectureTest {
                                         "OutlineCollectionResumedEvent",
                                         // An account-wide choice; the listener tells each workspace of the account.
                                         "AiChoiceChangedEvent",
-                                        // MentorLedgerEvents carry workspaceId directly (Heph ledger notifications)
+                                        // ConversationLedgerEvents carry workspaceId directly (Hephaestus ledger
+                                        // notifications)
                                         "LedgerChanged",
                                         "TurnChanged",
                                         "EntryChanged");

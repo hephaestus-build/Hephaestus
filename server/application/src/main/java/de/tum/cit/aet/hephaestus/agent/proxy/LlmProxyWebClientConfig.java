@@ -15,7 +15,7 @@ import reactor.netty.resources.ConnectionProvider;
 import reactor.netty.resources.LoopResources;
 
 /**
- * WebClient configuration for the LLM proxy. Separate from the mentor WebClient — different timeout
+ * WebClient configuration for the LLM proxy. Separate from the conversation WebClient — different timeout
  * profile (LLM responses can take minutes), no base URL (varies per provider per request), and an
  * independent connection pool.
  *
@@ -53,7 +53,7 @@ class LlmProxyWebClientConfig {
      * How long a response may send nothing: the review runner's {@code STALL_MS} in {@code pi-runner.ts}, after which
      * it gives up on a silent session. A silent stream then frees its place in the attempt's cap at the same time.
      * {@code ReviewRunnerConstantsTest} pins the two. A review's streamed call ends sooner, on
-     * {@code hephaestus.mentor.turn.model-idle-timeout}.
+     * {@code hephaestus.conversation.turn.model-idle-timeout}.
      */
     static final Duration IDLE = Duration.ofMinutes(5);
 
@@ -65,7 +65,8 @@ class LlmProxyWebClientConfig {
             WebClient.Builder webClientBuilder) {
         // Two independent limits bound a response. responseTimeout is an idle limit: Reactor Netty fails the response
         // when no bytes arrive for 5 minutes, however long the response has run. The total is the caller's: the
-        // proxy ends each exchange at the attempt's work deadline, or, for a mentor turn, at its own fixed limits.
+        // proxy ends each exchange at the attempt's work deadline, or, for a conversation turn, at its own fixed
+        // limits.
         HttpClient httpClient = HttpClient.create(llmProxyConnectionProvider)
                 .runOn(llmProxyLoopResources)
                 .responseTimeout(IDLE)

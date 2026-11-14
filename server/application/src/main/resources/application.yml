@@ -388,9 +388,9 @@ hephaestus:
             export:
                 capacity: ${HEPHAESTUS_AUTH_RATE_LIMIT_EXPORT_CAPACITY:10}
                 period: ${HEPHAESTUS_AUTH_RATE_LIMIT_EXPORT_PERIOD:1h}
-            mentor-turns:
-                capacity: ${HEPHAESTUS_RATE_LIMIT_MENTOR_TURNS_CAPACITY:20}
-                period: ${HEPHAESTUS_RATE_LIMIT_MENTOR_TURNS_PERIOD:10m}
+            conversation-turns:
+                capacity: ${HEPHAESTUS_RATE_LIMIT_CONVERSATION_TURNS_CAPACITY:20}
+                period: ${HEPHAESTUS_RATE_LIMIT_CONVERSATION_TURNS_PERIOD:10m}
             review-request:
                 capacity: ${HEPHAESTUS_RATE_LIMIT_REVIEW_REQUEST_CAPACITY:10}
                 period: ${HEPHAESTUS_RATE_LIMIT_REVIEW_REQUEST_PERIOD:1h}
@@ -631,7 +631,7 @@ hephaestus:
           # A model call that waited this long for its call pool orders one band higher, never into the interactive band.
           permit-aging: 30s
           # The conversation turns that the whole installation runs at once; unset runs as many as are asked.
-          turns: ${HEPHAESTUS_MENTOR_TURN_CAPACITY:}
+          turns: ${HEPHAESTUS_CONVERSATION_TURN_CAPACITY:}
 
     # ═══════════════════════════════════════════════════════════════════════════
     # LLM GOVERNANCE
@@ -777,7 +777,7 @@ hephaestus:
             client-secret: ${HEPHAESTUS_INTEGRATION_SLACK_CLIENT_SECRET:}
             api-base: ${HEPHAESTUS_INTEGRATION_SLACK_API_BASE:https://slack.com}
             # App signing secret — verifies inbound Events API POSTs to /webhooks/slack and interactivity POSTs to /webhooks/slack/interactivity (v0 HMAC over
-            # "v0:{ts}:{rawBody}", 300s replay window). Inbound (mentor DM + channel ingest) is inert without it.
+            # "v0:{ts}:{rawBody}", 300s replay window). Inbound (conversation DM + channel ingest) is inert without it.
             signing-secret: ${HEPHAESTUS_INTEGRATION_SLACK_SIGNING_SECRET:}
             conversation-ingest:
                 # Channel/group message ingestion (the channel-ingest → conversation-review →
@@ -789,7 +789,7 @@ hephaestus:
                 enabled: ${HEPHAESTUS_INTEGRATION_SLACK_CONVERSATION_INGEST_ENABLED:true}
                 # Slack Events API ingest rides the core /webhooks/slack receiver and the provider event inbox
                 # (subjects slack.<team>.<scope>.<event>, delivery key slack-<event_id>).
-                # The mentor response stream itself is direct Slack Web API output.
+                # The conversation response stream itself is direct Slack Web API output.
         outline:
             # Master switch for the Outline documentation integration (install, sync, content projection).
             # Off by default; a workspace admin still installs per-workspace with a base URL + token.

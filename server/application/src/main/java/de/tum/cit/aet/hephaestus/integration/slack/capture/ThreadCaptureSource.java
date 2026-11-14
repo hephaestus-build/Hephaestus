@@ -10,16 +10,16 @@ import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.evidence.capture.CaptureContribution;
 import de.tum.cit.aet.hephaestus.evidence.capture.CaptureRequest;
 import de.tum.cit.aet.hephaestus.evidence.capture.CitableText;
-import de.tum.cit.aet.hephaestus.integration.chat.item.ConversationThreadProjection;
 import de.tum.cit.aet.hephaestus.integration.chat.item.ThreadEvents;
 import de.tum.cit.aet.hephaestus.integration.chat.item.ThreadItemDescriptor;
+import de.tum.cit.aet.hephaestus.integration.chat.item.ThreadProjection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureCode;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureException;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemSnapshot;
-import de.tum.cit.aet.hephaestus.integration.slack.conversation.SlackConversationProjector;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackThreadRepository;
+import de.tum.cit.aet.hephaestus.integration.slack.thread.SlackThreadProjector;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -43,13 +43,13 @@ public class ThreadCaptureSource {
     public static final SourceKind SOURCE = ThreadItemDescriptor.RECORD_SOURCE;
     public static final String OUTPUT_KEY = "inputs/context/conversation_thread.json";
     private final ObjectMapper mapper;
-    private final SlackConversationProjector projection;
+    private final SlackThreadProjector projection;
     private final SlackThreadRepository threads;
     private final ConnectionService connections;
 
     public ThreadCaptureSource(
             ObjectMapper mapper,
-            SlackConversationProjector projection,
+            SlackThreadProjector projection,
             SlackThreadRepository threads,
             ConnectionService connections) {
         this.mapper = mapper;
@@ -125,7 +125,7 @@ public class ThreadCaptureSource {
             throw new ItemCaptureException(ItemCaptureCode.VERSION_UNAVAILABLE, "Thread version changed");
         }
         if (projection.threadReadability(row.getWorkspaceId(), row.getSlackChannelId(), row.getSlackThreadTs())
-                != ConversationThreadProjection.ThreadReadability.READABLE)
+                != ThreadProjection.ThreadReadability.READABLE)
             return contribution(
                     Map.of(),
                     Map.of(),

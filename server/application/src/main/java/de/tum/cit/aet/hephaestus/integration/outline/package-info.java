@@ -7,7 +7,7 @@
             // Document authors resolve through auth SPI ports; consent reads the exported account control enums.
             "core::auth-spi",
             "core::auth-types",
-            // A paused or removed collection tells running Heph turns that their context changed.
+            // A paused or removed collection tells running Hephaestus turns that their context changed.
             "core::event",
             // Admin services throw the shared EntityNotFoundException → 404 via the global advice.
             "core::exception",
@@ -37,7 +37,7 @@
             "integration.core::webhook",
             "integration.docs::item",
             // Outline owns outline_document and projects it to the agent one-way, so no cycle forms.
-            "mentor::spi",
+            "conversation::spi",
             // A disconnect erases the results and feedback derived from documents through the practices-owned
             // DocumentFeedbackErasure port, as Slack does for its threads (ADR 0024).
             "practices::spi",

@@ -241,7 +241,7 @@ export function registerRunProvider(
 
 /**
  * True once the provider is registered, which needs a complete config and the proxy credentials. A runner that
- * holds one credential for its process names it by its variable; the Heph host passes each turn's credential as
+ * holds one credential for its process names it by its variable; the Hephaestus host passes each turn's credential as
  * `apiKey`, so one turn's calls never carry another's.
  */
 export function registerHephaestusProvider(

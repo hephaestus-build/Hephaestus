@@ -42,7 +42,9 @@ it("offers Retry, then a page load once Retry did not help, and goes when Hephae
 	const user = userEvent.setup();
 	const ready: WorkspaceOnboarding = {
 		...workspaceOnboarding(),
-		aiOptions: [{ choice: "CLOUD", mentorReady: true, practiceReviewsReady: false, models: [] }],
+		aiOptions: [
+			{ choice: "CLOUD", conversationReady: true, practiceReviewsReady: false, models: [] },
+		],
 	};
 	server.use(
 		http.get("*/workspaces", () => HttpResponse.json([workspaceListItem("acme")])),

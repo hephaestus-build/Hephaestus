@@ -11,8 +11,8 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ContextLoader;
 import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryCheckouts;
-import de.tum.cit.aet.hephaestus.integration.scm.context.MentorContextQueryRepository;
-import de.tum.cit.aet.hephaestus.integration.scm.context.ScmMentorWorkQuery;
+import de.tum.cit.aet.hephaestus.integration.scm.context.ConversationContextQueryRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.context.ScmConversationWorkQuery;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
@@ -42,8 +42,8 @@ class ScmContextLoaderTest extends BaseUnitTest {
 
     private final IdentityProvider github = new IdentityProvider(IdentityProviderType.GITHUB, "https://github.com");
     private final ReviewRepositoryPreparer preparer = mock(ReviewRepositoryPreparer.class);
-    private final ScmMentorWorkQuery work = mock(ScmMentorWorkQuery.class);
-    private final MentorContextQueryRepository authored = mock(MentorContextQueryRepository.class);
+    private final ScmConversationWorkQuery work = mock(ScmConversationWorkQuery.class);
+    private final ConversationContextQueryRepository authored = mock(ConversationContextQueryRepository.class);
     private final RepositoryCheckouts checkouts = mock(RepositoryCheckouts.class);
     private final WorkspaceTeamRepositorySettingsRepository settings =
             mock(WorkspaceTeamRepositorySettingsRepository.class);
@@ -82,7 +82,7 @@ class ScmContextLoaderTest extends BaseUnitTest {
         Repository web = repository(2, "acme/web", "master");
         Repository zeta = repository(3, "acme/zeta", "main");
         workspace(List.of(zeta, api, web));
-        when(work.actors(WS, ACCOUNT)).thenReturn(Optional.of(new ScmMentorWorkQuery.Actors(9, List.of(7L))));
+        when(work.actors(WS, ACCOUNT)).thenReturn(Optional.of(new ScmConversationWorkQuery.Actors(9, List.of(7L))));
         when(authored.findRecentAuthoredPullRequests(eq(WS), eq(9L), eq(List.of(7L)), any()))
                 .thenReturn(List.of(
                         pullRequest(web, 12, Issue.State.OPEN),

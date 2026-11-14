@@ -16,8 +16,8 @@ import de.tum.cit.aet.hephaestus.agent.usage.LlmPriceSnapshot;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRecorder;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
-import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
-import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
+import de.tum.cit.aet.hephaestus.conversation.ConversationTurn;
+import de.tum.cit.aet.hephaestus.conversation.ConversationTurnRepository;
 import de.tum.cit.aet.hephaestus.productfeedback.drafting.ProductFeedbackDraftCalls;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -44,7 +44,7 @@ class InstanceDraftLedgerTest extends BaseUnitTest {
                 recorder,
                 runs,
                 mock(ReviewJobRepository.class),
-                mock(MentorTurnRepository.class),
+                mock(ConversationTurnRepository.class),
                 mock(ProxyBudgetGate.class),
                 new ObjectMapper(),
                 new SimpleMeterRegistry(),
@@ -77,7 +77,7 @@ class InstanceDraftLedgerTest extends BaseUnitTest {
         assertThat(opened.getValue().model()).isEqualTo("draft-model");
         verifyNoInteractions(runs);
         var usage = new LlmUsageRecorder.CallUsage(10, 5, 3, 2, 0, 0);
-        var failure = new MentorTurn.FailedCall("upstream_stalled", null);
+        var failure = new ConversationTurn.FailedCall("upstream_stalled", null);
         when(recorder.complete(call, null, usage, failure)).thenReturn(true, false);
         ledger.complete(route, call, usage, failure);
         ledger.complete(route, call, usage, failure);

@@ -27,10 +27,10 @@ BEGIN
  END IF;
  IF EXISTS (SELECT FROM information_schema.tables WHERE table_schema='public'
   AND table_name IN ('chat_thread','chat_message','chat_message_vote','mentor_slack_thread')) THEN
-  RAISE EXCEPTION 'Upgrade left Heph chat tables';
+  RAISE EXCEPTION 'Upgrade left the retired chat tables';
  END IF;
- IF EXISTS (SELECT FROM feedback_copy WHERE kind='CHAT_TURN' AND (mentor_entry_id IS NOT NULL OR mentor_turn_id IS NOT NULL)) THEN
-  RAISE EXCEPTION 'Conversation copy kept a binding to dropped Heph chat history';
+ IF EXISTS (SELECT FROM feedback_copy WHERE kind='CHAT_TURN' AND (conversation_entry_id IS NOT NULL OR conversation_turn_id IS NOT NULL)) THEN
+  RAISE EXCEPTION 'Conversation copy kept a binding to dropped retired chat history';
  END IF;
  IF EXISTS (SELECT FROM pg_constraint WHERE connamespace='public'::regnamespace AND NOT convalidated) THEN
   RAISE EXCEPTION 'Cutover left an unvalidated constraint';

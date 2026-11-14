@@ -27,7 +27,7 @@ import tools.jackson.databind.ObjectMapper;
     "item_event_requester"
 })
 public class IntegrationCoreConnectionPersonDataCatalog implements PersonDataCatalog {
-    // Scan live inbox matches after source erasure, before the final mentor copy scrub records its receipt.
+    // Scan live inbox matches after source erasure, before the final conversation copy scrub records its receipt.
     private static final int INBOX_ERASURE_ORDER = Integer.MAX_VALUE - 1;
 
     private final NamedParameterJdbcTemplate jdbc;

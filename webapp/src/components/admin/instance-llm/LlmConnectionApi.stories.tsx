@@ -10,7 +10,7 @@ const meta = {
 	parameters: { layout: "padded" },
 	tags: ["autodocs"],
 	args: {
-		connection: { apiProtocol: "openai-responses", purposes: ["PRACTICE_REVIEW", "MENTOR"] },
+		connection: { apiProtocol: "openai-responses", purposes: ["PRACTICE_REVIEW", "CONVERSATION"] },
 	},
 	render: (args) => (
 		<p className="text-sm text-muted-foreground">
@@ -25,7 +25,7 @@ type Story = StoryObj<typeof meta>;
 export const ChatApi: Story = {
 	play: async ({ canvas, canvasElement }) => {
 		await expect(canvas.getByText("Responses API")).toBeVisible();
-		await expect(canvas.getByText(", for Practice reviews and Conversations")).toHaveClass(
+		await expect(canvas.getByText(", for Practice reviews and Ask Hephaestus")).toHaveClass(
 			"sr-only",
 		);
 		await expect(canvasElement.querySelectorAll("[aria-hidden] svg")).toHaveLength(2);
@@ -34,7 +34,10 @@ export const ChatApi: Story = {
 
 export const LongNameReflow: Story = {
 	args: {
-		connection: { apiProtocol: "anthropic-messages", purposes: ["PRACTICE_REVIEW", "MENTOR"] },
+		connection: {
+			apiProtocol: "anthropic-messages",
+			purposes: ["PRACTICE_REVIEW", "CONVERSATION"],
+		},
 	},
 	parameters: { viewport: { defaultViewport: "reflow" }, chromatic: { viewports: [320] } },
 	play: async ({ canvas }) => {

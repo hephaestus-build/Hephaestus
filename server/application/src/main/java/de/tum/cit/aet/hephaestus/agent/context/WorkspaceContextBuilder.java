@@ -7,7 +7,7 @@ import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import de.tum.cit.aet.hephaestus.evidence.capture.CaptureContribution;
 import de.tum.cit.aet.hephaestus.evidence.capture.CaptureRequest;
 import de.tum.cit.aet.hephaestus.evidence.capture.ContentSource;
-import de.tum.cit.aet.hephaestus.evidence.capture.MentorContextRequest;
+import de.tum.cit.aet.hephaestus.evidence.capture.ConversationContextRequest;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemSnapshot;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemSource;
 import java.util.ArrayList;
@@ -27,36 +27,36 @@ import tools.jackson.databind.JsonNode;
 @Service
 public class WorkspaceContextBuilder {
     private static final Logger log = LoggerFactory.getLogger(WorkspaceContextBuilder.class);
-    private final List<ContentSource> mentorSources;
+    private final List<ContentSource> conversationSources;
     private final List<ItemSource> itemSources;
     private final ClasspathSourceCatalogRegistry catalogs;
     private final JobFolderIndexBuilder manifests;
 
     public WorkspaceContextBuilder(
-            List<ContentSource> mentorSources,
+            List<ContentSource> conversationSources,
             List<ItemSource> itemSources,
             ClasspathSourceCatalogRegistry catalogs,
             JobFolderIndexBuilder manifests) {
-        var sorted = new ArrayList<>(mentorSources);
+        var sorted = new ArrayList<>(conversationSources);
         AnnotationAwareOrderComparator.sort(sorted);
-        this.mentorSources = List.copyOf(sorted);
+        this.conversationSources = List.copyOf(sorted);
         this.itemSources = List.copyOf(itemSources);
         this.catalogs = catalogs;
         this.manifests = manifests;
     }
 
     public Optional<JsonNode> read(long workspaceId, long accountId, String path) {
-        var values = mentorSources.stream()
+        var values = conversationSources.stream()
                 .map(source -> source.read(workspaceId, accountId, path))
                 .flatMap(Optional::stream)
                 .toList();
-        if (values.size() > 1) throw new IllegalStateException("A mentor resource has multiple owners");
+        if (values.size() > 1) throw new IllegalStateException("A conversation resource has multiple owners");
         return values.stream().findFirst();
     }
 
-    public Map<String, byte[]> build(MentorContextRequest request) {
+    public Map<String, byte[]> build(ConversationContextRequest request) {
         var files = new LinkedHashMap<String, byte[]>();
-        for (var source : mentorSources) {
+        for (var source : conversationSources) {
             if (!source.supports(request)) continue;
             var contributed = new LinkedHashMap<String, byte[]>();
             try {
@@ -64,14 +64,14 @@ public class WorkspaceContextBuilder {
             } catch (RuntimeException failure) {
                 if (source.required()) throw failure;
                 log.warn(
-                        "Mentor context source unavailable: source={}, failure={}",
+                        "Conversation context source unavailable: source={}, failure={}",
                         source.getClass().getSimpleName(),
                         failure.getClass().getSimpleName());
                 continue;
             }
             contributed.forEach((path, bytes) -> {
                 if (!source.ownsPath(path) || files.putIfAbsent(path, bytes.clone()) != null) {
-                    throw new IllegalStateException("A mentor source wrote an undeclared or duplicate path");
+                    throw new IllegalStateException("A conversation source wrote an undeclared or duplicate path");
                 }
             });
         }

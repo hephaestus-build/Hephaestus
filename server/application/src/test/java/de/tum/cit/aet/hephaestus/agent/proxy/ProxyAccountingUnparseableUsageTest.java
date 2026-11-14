@@ -51,15 +51,15 @@ class ProxyAccountingUnparseableUsageTest extends BaseUnitTest {
     @Test
     void shouldCountAServedBodyThatReportsNoUsageAsMissingNotUnparseable() {
         ProxyRouting.BilledAttempt attempt =
-                new ProxyRouting.BilledAttempt(UsageSourceType.MENTOR_TURN, UUID.randomUUID(), 1, LEASE);
+                new ProxyRouting.BilledAttempt(UsageSourceType.CONVERSATION_TURN, UUID.randomUUID(), 1, LEASE);
         byte[] body = "{\"choices\":[{\"message\":{\"content\":\"hi\"}}]}".getBytes(StandardCharsets.UTF_8);
 
         assertThat(accounting.readUsage(attempt, LlmApiProtocol.OPENAI_COMPLETIONS, body))
                 .isNull();
 
-        assertThat(missing("MENTOR_TURN")).isEqualTo(1.0);
+        assertThat(missing("CONVERSATION_TURN")).isEqualTo(1.0);
         assertThat(meterRegistry
-                        .counter("llm.proxy.usage.unparseable", "sourceType", "MENTOR_TURN")
+                        .counter("llm.proxy.usage.unparseable", "sourceType", "CONVERSATION_TURN")
                         .count())
                 .isZero();
     }

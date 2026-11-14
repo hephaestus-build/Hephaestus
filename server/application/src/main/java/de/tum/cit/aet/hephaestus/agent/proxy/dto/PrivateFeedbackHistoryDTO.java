@@ -24,11 +24,11 @@ public record PrivateFeedbackHistoryDTO(
         queued = List.copyOf(queued);
     }
 
-    /** What a body is: a practice-page card, the words Heph said in conversation, or notes queued for Heph. */
+    /** What a body is: a practice-page card, the words Hephaestus said in conversation, or notes queued for Hephaestus. */
     public enum BodyRole {
         PRACTICE_PAGE_CARD,
         CONVERSATION_WORDS,
-        MENTOR_NOTES
+        CONVERSATION_NOTES
     }
 
     /**

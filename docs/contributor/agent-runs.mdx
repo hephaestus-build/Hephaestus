@@ -184,7 +184,7 @@ No server holds a database connection while its call waits for a grant or for th
 | Such a call ended, and the limit fell in the last 10 minutes | The limit rises by 1 for each limit's worth of such calls |
 | The provider answers 429, 529, or 503 | The limit falls to 70%, and never below 2. No call starts until the provider's `Retry-After` has passed, or for 5 seconds without one |
 | Even the fastest first token of a window of calls exceeds twice the baseline plus 1 second | The limit falls in proportion to that delay, to 70% at most and never below 2. Calls continue with no pause |
-| A served stream ends with no content and no usage. The provider ended it, or sent no content for `hephaestus.mentor.turn.model-idle-timeout`, or the call waited past twice the baseline plus 1 second | The limit falls to 70%, and never below 2. Calls continue with no pause. Such a call never raises the limit |
+| A served stream ends with no content and no usage. The provider ended it, or sent no content for `hephaestus.conversation.turn.model-idle-timeout`, or the call waited past twice the baseline plus 1 second | The limit falls to 70%, and never below 2. Calls continue with no pause. Such a call never raises the limit |
 
 A model server such as vLLM queues calls by default and refuses none, so a limit that learns only from refusals keeps rising.
 The pool measures the time from each streamed call's request to its first content event: text, reasoning, or a tool call.
@@ -199,7 +199,7 @@ A failed answer gives no sample either, as it can arrive at once even behind a q
 
 A provider can also fail without an error: it sends its head, and then nothing.
 A stream without content and usage is such a call, also when it carries only an error event.
-The proxy cuts a stream whose provider sends nothing for `hephaestus.mentor.turn.model-idle-timeout`, and the limit falls then.
+The proxy cuts a stream whose provider sends nothing for `hephaestus.conversation.turn.model-idle-timeout`, and the limit falls then.
 A provider that sends only SSE comments is not cut. A call without content for that long still lowers the limit, also before the pool knows a baseline.
 A caller that ends such a call sooner lowers the limit only if the call waited longer than the baseline allows.
 
@@ -370,9 +370,9 @@ A refused call is not lost:
 The server's LLM proxy cuts a conversation model call, or a streamed model call of a practice review, whose provider stays silent too long.
 Two bounds apply:
 
-- `hephaestus.mentor.turn.model-first-byte-timeout` (default 5 minutes) bounds the wait for the response headers.
+- `hephaestus.conversation.turn.model-first-byte-timeout` (default 5 minutes) bounds the wait for the response headers.
   A provider can queue a request before it answers, so this bound is the longer one.
-- `hephaestus.mentor.turn.model-idle-timeout` (default 2 minutes) bounds each gap in the stream after the headers.
+- `hephaestus.conversation.turn.model-idle-timeout` (default 2 minutes) bounds each gap in the stream after the headers.
 
 Any byte counts, also an SSE comment that a gateway sends to keep the connection alive.
 The turn's deadline also bounds both, because the stop at the deadline cancels the call.
@@ -580,7 +580,7 @@ Custody cleanup removes the local cache entry with its folder and gateway sessio
 So one turn of a conversation runs at a time, and the conversation's questions start in order.
 A turn's attempt number is its run's epoch.
 
-The constraint trigger `mentor_turn_run_agrees` refuses a commit where a turn and its run disagree:
+The constraint trigger `conversation_turn_run_agrees` refuses a commit where a turn and its run disagree:
 a queued turn needs a queued run. A running turn needs a leased run. A stopped turn needs a leased or an ended run. An ended turn needs an ended run.
 
 - **End.** The holder's end ends the turn and its run in one transaction. A repeated end reads `EndOutcome.ALREADY_ENDED`.

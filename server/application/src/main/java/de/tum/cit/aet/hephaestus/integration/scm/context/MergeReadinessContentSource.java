@@ -1,8 +1,8 @@
 package de.tum.cit.aet.hephaestus.integration.scm.context;
 
 import de.tum.cit.aet.hephaestus.evidence.capture.ContentSource;
-import de.tum.cit.aet.hephaestus.evidence.capture.MentorContextPaths;
-import de.tum.cit.aet.hephaestus.evidence.capture.MentorContextRequest;
+import de.tum.cit.aet.hephaestus.evidence.capture.ConversationContextPaths;
+import de.tum.cit.aet.hephaestus.evidence.capture.ConversationContextRequest;
 import de.tum.cit.aet.hephaestus.integration.core.framework.IntegrationManifestRegistry;
 import de.tum.cit.aet.hephaestus.integration.core.spi.DeliveredPullRequestCommentLookup;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.Commit;
@@ -75,7 +75,7 @@ import tools.jackson.databind.node.ObjectNode;
 @RequiredArgsConstructor
 public class MergeReadinessContentSource implements ContentSource {
 
-    public static final String OUTPUT_KEY = MentorContextPaths.MERGE_READINESS;
+    public static final String OUTPUT_KEY = ConversationContextPaths.MERGE_READINESS;
 
     /** One item path, which a {@code read} of the turn's context folder stages on demand. */
     private static final Pattern ITEM_KEY = Pattern.compile("inputs/context/merge_readiness/([1-9][0-9]{0,18})\\.json");
@@ -103,8 +103,8 @@ public class MergeReadinessContentSource implements ContentSource {
     private static final int SCAN_PAGE = 50;
 
     private final WorkspaceActorSelector actorSelector;
-    private final MentorContextQueryRepository queryRepository;
-    private final ScmMentorWorkQuery work;
+    private final ConversationContextQueryRepository queryRepository;
+    private final ScmConversationWorkQuery work;
     private final PullRequestReviewRepository reviewRepository;
     private final IssueCommentRepository commentRepository;
     private final ObjectMapper objectMapper;
@@ -112,7 +112,7 @@ public class MergeReadinessContentSource implements ContentSource {
     private final DeliveredPullRequestCommentLookup deliveredComments;
 
     @Override
-    public boolean supports(MentorContextRequest request) {
+    public boolean supports(ConversationContextRequest request) {
         return true;
     }
 
@@ -123,8 +123,8 @@ public class MergeReadinessContentSource implements ContentSource {
 
     @Override
     @Transactional(readOnly = true, propagation = Propagation.REQUIRES_NEW, isolation = Isolation.REPEATABLE_READ)
-    public void contribute(MentorContextRequest request, Map<String, byte[]> files) {
-        MentorContextRequest req = request;
+    public void contribute(ConversationContextRequest request, Map<String, byte[]> files) {
+        ConversationContextRequest req = request;
         try {
             files.put(OUTPUT_KEY, objectMapper.writeValueAsBytes(buildPayload(req.workspaceId(), req.developerId())));
         } catch (JacksonException e) {
@@ -134,7 +134,7 @@ public class MergeReadinessContentSource implements ContentSource {
 
     /** The on-demand key of one pull request's detail, published as the {@code resource} of its entries. */
     public static String resourceOf(long pullRequestId) {
-        return MentorContextPaths.mergeReadiness(pullRequestId);
+        return ConversationContextPaths.mergeReadiness(pullRequestId);
     }
 
     @Override
@@ -227,7 +227,7 @@ public class MergeReadinessContentSource implements ContentSource {
                 || !(root.get("notLoaded") instanceof ArrayNode notLoaded)) {
             return root;
         }
-        while (objectMapper.writeValueAsString(root).length() > MentorContextPaths.MAX_CHARS) {
+        while (objectMapper.writeValueAsString(root).length() > ConversationContextPaths.MAX_CHARS) {
             if (!detailed.isEmpty()) {
                 JsonNode dropped = detailed.remove(detailed.size() - 1);
                 notLoaded.insert(0, indexEntry(dropped));
@@ -520,7 +520,8 @@ public class MergeReadinessContentSource implements ContentSource {
         }
         node.put("commitsTruncated", commits.size() > MAX_COMMITS);
 
-        MentorContextQueryRepository.CommitCoverage coverage = queryRepository.countCommitsOfPullRequest(pr.getId());
+        ConversationContextQueryRepository.CommitCoverage coverage =
+                queryRepository.countCommitsOfPullRequest(pr.getId());
         Map<String, ObjectNode> files = new LinkedHashMap<>();
         List<CommitFileChange> changes = coverage.getCaptured() == 0
                 ? List.of()

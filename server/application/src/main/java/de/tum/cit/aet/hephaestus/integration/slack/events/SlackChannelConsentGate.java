@@ -8,7 +8,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * The single authority on whether a monitored Slack channel may have content ingested — a channel flows to the
- * mentor substrate <strong>only</strong> when its {@link ConsentState} is {@code ACTIVE}. A channel with no
+ * conversation substrate <strong>only</strong> when its {@link ConsentState} is {@code ACTIVE}. A channel with no
  * allow-list row, or one in any pre-consent / paused / revoked state, is denied (fails closed).
  *
  * <p>The consent decision lives in exactly one place: the ingest write-path ({@link SlackIngestService}) and any

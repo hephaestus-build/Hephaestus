@@ -7,7 +7,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { chmod, link, lstat, mkdir, readdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-import type { SandboxLoadAnswer, SandboxRefusal } from "./heph-host-protocol.ts";
+import type { SandboxLoadAnswer, SandboxRefusal } from "./conversation-host-protocol.ts";
 
 /** An archive that the server streams: its bytes, its size and its SHA-256. */
 export interface Archive {

@@ -3,9 +3,9 @@ package de.tum.cit.aet.hephaestus.agent.proxy;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelUnavailableException;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
+import de.tum.cit.aet.hephaestus.agent.conversation.turn.ConversationTurnAdmission;
 import de.tum.cit.aet.hephaestus.agent.job.FrozenCharge;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
-import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnAdmission;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunFence;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
@@ -17,9 +17,9 @@ import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRecorder.CallUsage;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRecorder.OpenCall;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
+import de.tum.cit.aet.hephaestus.conversation.ConversationTurn;
+import de.tum.cit.aet.hephaestus.conversation.ConversationTurnRepository;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
-import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
-import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
 import de.tum.cit.aet.hephaestus.practices.spi.ModelKind;
 import de.tum.cit.aet.hephaestus.productfeedback.drafting.ProductFeedbackDraftCalls;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -73,7 +73,7 @@ class ProxyCallLedger {
     private final LlmUsageRecorder recorder;
     private final AgentRuns runs;
     private final ReviewJobRepository jobs;
-    private final MentorTurnRepository turns;
+    private final ConversationTurnRepository turns;
     private final ProxyBudgetGate budgetGate;
     private final ObjectMapper mapper;
     private final MeterRegistry meterRegistry;
@@ -85,7 +85,7 @@ class ProxyCallLedger {
             LlmUsageRecorder recorder,
             AgentRuns runs,
             ReviewJobRepository jobs,
-            MentorTurnRepository turns,
+            ConversationTurnRepository turns,
             ProxyBudgetGate budgetGate,
             ObjectMapper mapper,
             MeterRegistry meterRegistry,
@@ -157,7 +157,7 @@ class ProxyCallLedger {
         try {
             call = Objects.requireNonNull(ownTransaction.execute(status -> {
                 runs.requireCurrent(new AgentRunFence(runId, workspaceId, attempt.epoch()));
-                OpenCall open = attempt.sourceType() == UsageSourceType.MENTOR_TURN
+                OpenCall open = attempt.sourceType() == UsageSourceType.CONVERSATION_TURN
                         ? turnCall(attempt, workspaceId, runId, bound)
                         : reviewCall(attempt, workspaceId, runId, bound);
                 // The bound that the row stores is the one held against the cap.
@@ -212,7 +212,7 @@ class ProxyCallLedger {
 
     private OpenCall turnCall(ProxyRouting.BilledAttempt attempt, long workspaceId, UUID runId, Bound bound) {
         var admission = turns.findByIdAndWorkspaceId(attempt.sourceId(), workspaceId)
-                .flatMap(turn -> MentorTurnAdmission.read(turn.getAdmission()))
+                .flatMap(turn -> ConversationTurnAdmission.read(turn.getAdmission()))
                 .orElse(null);
         FrozenCharge charge =
                 admission == null ? FrozenCharge.UNKNOWN : new FrozenCharge(admission.model(), admission.price());
@@ -220,8 +220,8 @@ class ProxyCallLedger {
                 workspaceId,
                 runId,
                 attempt.epoch(),
-                UsageSourceType.MENTOR_TURN.name(),
-                UsageSourceType.MENTOR_TURN,
+                UsageSourceType.CONVERSATION_TURN.name(),
+                UsageSourceType.CONVERSATION_TURN,
                 attempt.sourceId(),
                 attempt.number(),
                 null,
@@ -261,7 +261,8 @@ class ProxyCallLedger {
      *
      * @param usage {@code null} when the provider reported no usage or the call ended without an answer
      */
-    void complete(ProxyRouting routing, UUID call, @Nullable CallUsage usage, MentorTurn.@Nullable FailedCall failure) {
+    void complete(
+            ProxyRouting routing, UUID call, @Nullable CallUsage usage, ConversationTurn.@Nullable FailedCall failure) {
         Long workspaceId = routing.workspaceId();
         try {
             ownTransaction.executeWithoutResult(status -> {

@@ -58,7 +58,7 @@ public interface WorkspaceQueries {
         }
     }
 
-    record ReviewFeatures(boolean practicesEnabled, boolean autoTriggerEnabled, boolean manualTriggerEnabled) {}
+    record ReviewFeatures(boolean practicesEnabled, boolean eventReviewsEnabled, boolean requestReviewsEnabled) {}
 
     record RepositorySettings(long id, List<String> generatedPaths) {
         public RepositorySettings {

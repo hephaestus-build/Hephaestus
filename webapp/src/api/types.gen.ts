@@ -221,7 +221,7 @@ export type AdminLlmUsageReport = {
 export type AdminWorkspaceLlmUsage = {
 	displayName: string;
 	/**
-	 * Runs this month, either purse: job attempts and mentor turn attempts. A practice script call counts toward the run of its review.
+	 * Runs this month, either purse: job attempts and conversation turn attempts. A practice script call counts toward the run of its review.
 	 */
 	events: number;
 	/**
@@ -287,48 +287,6 @@ export type AdminWorkspaceView = {
 	providerType?: "GITHUB" | "GITLAB" | "SLACK" | "OUTLINE";
 	status: "ACTIVE" | "SUSPENDED" | "PURGED";
 	workspaceSlug: string;
-};
-
-/**
- * A workspace's agent binding for one purpose
- */
-export type AgentBinding = {
-	dataHandlingTier: "IN_HOUSE" | "CLOUD" | "UNDECLARED";
-	enabled: boolean;
-	instanceModelId?: number;
-	purpose: "PRACTICE_REVIEW" | "MENTOR";
-	/**
-	 * True when the bound model is available to run right now
-	 */
-	ready: boolean;
-	/**
-	 * The members this binding serves now, named by the tier of their choice: IN_HOUSE and CLOUD for the members who chose them, UNDECLARED for the members who have not chosen. Empty when the binding serves no member.
-	 */
-	servedTiers: Array<"IN_HOUSE" | "CLOUD" | "UNDECLARED">;
-	timeoutSeconds?: number;
-	workspaceModelId?: number;
-};
-
-/**
- * Bind a model and execution limits to an agent purpose
- */
-export type AgentBindingRequest = {
-	/**
-	 * Whether this purpose is active (paused when false)
-	 */
-	enabled?: boolean;
-	/**
-	 * Shared (instance-catalog) model id to run this purpose on
-	 */
-	instanceModelId?: number;
-	/**
-	 * Per-run timeout in seconds (30–10800; three hours is the longest a single run may take)
-	 */
-	timeoutSeconds?: number;
-	/**
-	 * Workspace-owned model id to run this purpose on
-	 */
-	workspaceModelId?: number;
 };
 
 export type AiChoiceRequest = {
@@ -447,7 +405,7 @@ export type AvailableLlmModel = {
 	/**
 	 * The purposes a binding may assign this model to, from its connection's protocol
 	 */
-	purposes: Array<"PRACTICE_REVIEW" | "MENTOR">;
+	purposes: Array<"PRACTICE_REVIEW" | "CONVERSATION">;
 	/**
 	 * Reasoning effort requested of the model; null sends none, the provider's default applies
 	 */
@@ -757,6 +715,7 @@ export type ConfigAuditEntryView = {
 	entityType?:
 		| "PROVIDER_RESOURCE_RELEASE"
 		| "PRACTICE_REVIEW_SETTINGS"
+		| "MODEL_ASSIGNMENT"
 		| "AGENT_BINDING"
 		| "AGENT_CONFIG"
 		| "AI_CONFIG_BINDING"
@@ -979,6 +938,286 @@ export type Contributor = {
 	 * Display name of the contributor
 	 */
 	name: string;
+};
+
+/**
+ * The developer's Hephaestus conversation in a workspace at one moment
+ */
+export type Conversation = {
+	/**
+	 * Queued and running turns in the conversation and its threads, oldest first
+	 */
+	activeTurns: Array<ConversationTurn>;
+	/**
+	 * The main conversation; absent until the developer writes to Hephaestus or gets a weekly digest
+	 */
+	id?: string;
+	/**
+	 * When Hephaestus's newest shown answer in the conversation or any of its threads was written; absent before the first. Compare it with the newest answer the client has seen.
+	 */
+	lastAnswerAt?: Date;
+	/**
+	 * How far the developer read the conversation on any device; absent before the first read. Hephaestus has an unread answer when lastAnswerAt is later.
+	 */
+	lastReadAt?: Date;
+	/**
+	 * Sequence number of the newest top-level message shown; 0 when there is none
+	 */
+	latestSeq: number;
+	/**
+	 * The newest threads, latest activity first
+	 */
+	threads: Array<ConversationThreadSummary>;
+};
+
+/**
+ * One message of a Hephaestus conversation
+ */
+export type ConversationEntry = {
+	conversationId: string;
+	createdAt: Date;
+	/**
+	 * The message was deleted; its text is gone
+	 */
+	deleted: boolean;
+	/**
+	 * The weekly digest as it reads now; only on a weekly digest that was not erased
+	 */
+	digest?: WeeklyDigest;
+	/**
+	 * Set when the developer edited the message in Slack
+	 */
+	editedAt?: Date;
+	id: string;
+	kind: "USER" | "ANSWER" | "DIGEST";
+	/**
+	 * The results, problems and prepared feedback Hephaestus showed in this message, in order
+	 */
+	links: Array<ConversationLink>;
+	/**
+	 * Set when the message is in a thread: the top-level message the thread replies to
+	 */
+	parentEntryId?: string;
+	/**
+	 * The submission that wrote the message; the app matches its own optimistic message by it
+	 */
+	requestId?: string;
+	/**
+	 * Order within its conversation
+	 */
+	seq: number;
+	/**
+	 * Only on a question asked in Slack: whether Hephaestus's reply reached Slack. FAILED means Slack does not show the whole reply: it is not there, or a stream showed only part of it before Slack or Silent Mode refused the rest; the full reply is in the app. UNCERTAIN means Slack cannot tell.
+	 */
+	slackDelivery?: "PENDING" | "DELIVERED" | "UNCERTAIN" | "FAILED";
+	/**
+	 * Where the message was written; SYSTEM for a weekly digest
+	 */
+	surface: "APP" | "SLACK" | "SYSTEM";
+	/**
+	 * The developer's words or Hephaestus's answer; for a weekly digest, the note that points Hephaestus to it; empty when the message was deleted
+	 */
+	text: string;
+	/**
+	 * The thread on this message; only on top-level messages that have one
+	 */
+	thread?: ConversationThreadSummary;
+	/**
+	 * Why the turn this question asked failed, in words for the developer; only when it FAILED
+	 */
+	turnError?: string;
+	/**
+	 * The turn the message asked or answered
+	 */
+	turnId?: string;
+	/**
+	 * The status of the turn this question asked; only on the developer's messages
+	 */
+	turnStatus?: "QUEUED" | "RUNNING" | "DONE" | "FAILED" | "STOPPED";
+	/**
+	 * The developer's vote; only on Hephaestus's messages
+	 */
+	vote?: "HELPFUL" | "NOT_HELPFUL";
+};
+
+/**
+ * A practice result, problem or prepared feedback Hephaestus showed in a message
+ */
+export type ConversationLink = {
+	/**
+	 * The result, problem or feedback id, by kind
+	 */
+	id: string;
+	/**
+	 * The item (pull request, issue, conversation or document) it is about, when the developer may still read it: a problem's through its result
+	 */
+	itemId?: number;
+	kind: "RESULT" | "PROBLEM" | "FEEDBACK";
+	/**
+	 * The practice it is about: a problem's through its result, feedback's when it is about one practice; absent when the developer can no longer read it
+	 */
+	practiceSlug?: string;
+	/**
+	 * Hephaestus's words about it, shown to the developer
+	 */
+	text: string;
+};
+
+/**
+ * How far the developer read their Hephaestus conversation
+ */
+export type ConversationRead = {
+	/**
+	 * The read marker; absent when the developer has no conversation yet
+	 */
+	lastReadAt?: Date;
+};
+
+/**
+ * How far the developer read their Hephaestus conversation
+ */
+export type ConversationReadRequest = {
+	/**
+	 * The time of the newest answer the developer saw
+	 */
+	at: Date;
+};
+
+/**
+ * A stored question and the turn that answers it
+ */
+export type ConversationSubmission = {
+	question: ConversationEntry;
+	turn: ConversationTurn;
+};
+
+/**
+ * A thread: the message it replies to and one page of its replies, oldest first
+ */
+export type ConversationThread = {
+	/**
+	 * The thread's conversation; absent until the first reply opens it
+	 */
+	conversationId?: string;
+	parent: ConversationEntry;
+	replies: CursorPageDtoConversationEntry;
+};
+
+/**
+ * The thread on a top-level message
+ */
+export type ConversationThreadSummary = {
+	/**
+	 * The thread's own conversation
+	 */
+	conversationId: string;
+	lastReplyAt?: Date;
+	/**
+	 * Sequence number of the thread's newest shown message; 0 when it has none
+	 */
+	latestSeq: number;
+	/**
+	 * The message the thread replies to
+	 */
+	parentEntryId: string;
+	/**
+	 * Messages in the thread; can count a Hephaestus message without text whose feedback is no longer shown
+	 */
+	replyCount: number;
+};
+
+/**
+ * One conversation turn: a requested answer or an opted-in proactive digest
+ */
+export type ConversationTurn = {
+	/**
+	 * Attempts started so far; 0 while the turn waits for its first start. A lost lease queues the turn again with the same attempt, and the next start counts up. Thus, with the same attempt, RUNNING comes before QUEUED or an end.
+	 */
+	attempt: number;
+	conversationId: string;
+	createdAt: Date;
+	/**
+	 * Why the turn failed, worded for the developer; only on a failed turn
+	 */
+	error?: string;
+	finishedAt?: Date;
+	id: string;
+	/**
+	 * Set when the turn runs in a thread: the top-level message the thread replies to
+	 */
+	parentEntryId?: string;
+	/**
+	 * Hephaestus's answer in progress; only while the turn runs
+	 */
+	partial?: ConversationTurnPartial;
+	/**
+	 * The submission or schedule key; the stimulus entry carries the same value
+	 */
+	requestId: string;
+	status: "QUEUED" | "RUNNING" | "DONE" | "FAILED" | "STOPPED";
+	surface: "APP" | "SLACK" | "SYSTEM";
+	/**
+	 * Why a queued turn has not started. CAPACITY: a server may start it, and every conversation slot of the deployment is taken, so it starts when one is free. Absent when the turn does not wait, waits for an earlier question of its conversation, or waits for a reason that the server does not know, such as a server without a configured conversation turn capacity.
+	 */
+	waitingFor?: "CAPACITY";
+};
+
+/**
+ * What Hephaestus is doing in a running turn
+ */
+export type ConversationTurnPartial = {
+	activity: "THINKING" | "WRITING" | "TOOL";
+	/**
+	 * What Hephaestus is doing, in the developer's words, for example "Reading your practice feedback…"
+	 */
+	stage: string;
+	/**
+	 * The text Hephaestus has written in this turn so far
+	 */
+	text: string;
+	/**
+	 * The tool Hephaestus runs, while the activity is TOOL
+	 */
+	tool?: string;
+};
+
+/**
+ * A question to Hephaestus from the app
+ */
+export type ConversationTurnRequest = {
+	/**
+	 * The page the developer asks from, for example "Pull request #421 in acme/web"
+	 */
+	pageContext?: string;
+	/**
+	 * Ask in the thread on this top-level message; the first reply opens the thread
+	 */
+	parentEntryId?: string;
+	/**
+	 * Chosen by the app for each message. Sending the same id again returns the first submission, so a retried request never asks twice.
+	 */
+	requestId: string;
+	/**
+	 * The developer's words
+	 */
+	text: string;
+};
+
+/**
+ * A status change the developer asks for on a turn
+ */
+export type ConversationTurnStatusRequest = {
+	/**
+	 * STOPPED stops a queued or running turn. Hephaestus keeps what it already wrote.
+	 */
+	status: "STOPPED";
+};
+
+/**
+ * The developer's vote on one of Hephaestus's messages
+ */
+export type ConversationVoteRequest = {
+	vote: "HELPFUL" | "NOT_HELPFUL";
 };
 
 export type CoverageOmission = {
@@ -1434,8 +1673,8 @@ export type CursorPageDtoConsumerDeadLetter = {
 /**
  * One page of a list that a client reads forward with a cursor
  */
-export type CursorPageDtoGitLabProject = {
-	content: Array<GitLabProject>;
+export type CursorPageDtoConversationEntry = {
+	content: Array<ConversationEntry>;
 	/**
 	 * Pass as cursor to read the next page; absent on the last page
 	 */
@@ -1445,8 +1684,8 @@ export type CursorPageDtoGitLabProject = {
 /**
  * One page of a list that a client reads forward with a cursor
  */
-export type CursorPageDtoMentorEntry = {
-	content: Array<MentorEntry>;
+export type CursorPageDtoGitLabProject = {
+	content: Array<GitLabProject>;
 	/**
 	 * Pass as cursor to read the next page; absent on the last page
 	 */
@@ -1712,16 +1951,16 @@ export type FeedbackCheckFacts = {
 
 export type FeedbackCopy = {
 	body: string | null;
+	/**
+	 * The Hephaestus answer that showed a conversation copy
+	 */
+	conversationEntryId: string | null;
 	endLine: null | number;
 	externalRef: string | null;
 	externalUrl: string | null;
 	id: string;
 	kind: "SUMMARY" | "LINE_NOTE" | "FILE_NOTE" | "CHAT_TURN";
 	lastError: string | null;
-	/**
-	 * The Hephaestus answer that showed a conversation copy
-	 */
-	mentorEntryId: string | null;
 	path: string | null;
 	position: number;
 	postedAt: Date | null;
@@ -2648,7 +2887,7 @@ export type LlmConnection = {
 	/**
 	 * The purposes a model on this connection can serve, from its protocol
 	 */
-	purposes: Array<"PRACTICE_REVIEW" | "MENTOR">;
+	purposes: Array<"PRACTICE_REVIEW" | "CONVERSATION">;
 	/**
 	 * Unique slug
 	 */
@@ -2889,7 +3128,7 @@ export type LlmUnmeasuredUsage = {
 export type LlmUsageByDay = {
 	day: Date;
 	/**
-	 * Runs: job attempts and mentor turn attempts. A practice script call counts toward the run of its review.
+	 * Runs: job attempts and conversation turn attempts. A practice script call counts toward the run of its review.
 	 */
 	events: number;
 	/**
@@ -2913,7 +3152,7 @@ export type LlmUsageByJobType = {
 	cacheReadTokens: number;
 	cacheWriteTokens: number;
 	/**
-	 * Runs: job attempts and mentor turn attempts. A practice script call counts toward the run of its review.
+	 * Runs: job attempts and conversation turn attempts. A practice script call counts toward the run of its review.
 	 */
 	events: number;
 	inputTokens: number;
@@ -2928,7 +3167,7 @@ export type LlmUsageByJobType = {
 	 */
 	ownProviderTotalCostUsd: number;
 	/**
-	 * LLM API calls that the proxy served. Practice reviews and mentor turns both include every assistant call in an internal tool loop.
+	 * LLM API calls that the proxy served. Practice reviews and conversation turns both include every assistant call in an internal tool loop.
 	 */
 	totalCalls: number;
 	/**
@@ -2986,283 +3225,45 @@ export type MemberReviewReadiness = {
 };
 
 /**
- * The developer's Hephaestus conversation in a workspace at one moment
+ * A workspace's model assignment for one purpose
  */
-export type MentorConversation = {
+export type ModelAssignment = {
+	dataHandlingTier: "IN_HOUSE" | "CLOUD" | "UNDECLARED";
+	enabled: boolean;
+	instanceModelId?: number;
+	purpose: "PRACTICE_REVIEW" | "CONVERSATION";
 	/**
-	 * Queued and running turns in the conversation and its threads, oldest first
+	 * True when the bound model is available to run right now
 	 */
-	activeTurns: Array<MentorTurn>;
+	ready: boolean;
 	/**
-	 * The main conversation; absent until the developer writes to Hephaestus or gets a weekly digest
+	 * The members this binding serves now, named by the tier of their choice: IN_HOUSE and CLOUD for the members who chose them, UNDECLARED for the members who have not chosen. Empty when the binding serves no member.
 	 */
-	id?: string;
-	/**
-	 * When Hephaestus's newest shown answer in the conversation or any of its threads was written; absent before the first. Compare it with the newest answer the client has seen.
-	 */
-	lastAnswerAt?: Date;
-	/**
-	 * How far the developer read the conversation on any device; absent before the first read. Hephaestus has an unread answer when lastAnswerAt is later.
-	 */
-	lastReadAt?: Date;
-	/**
-	 * Sequence number of the newest top-level message shown; 0 when there is none
-	 */
-	latestSeq: number;
-	/**
-	 * The newest threads, latest activity first
-	 */
-	threads: Array<MentorThreadSummary>;
+	servedTiers: Array<"IN_HOUSE" | "CLOUD" | "UNDECLARED">;
+	timeoutSeconds?: number;
+	workspaceModelId?: number;
 };
 
 /**
- * One message of a Hephaestus conversation
+ * Bind a model and execution limits to an agent purpose
  */
-export type MentorEntry = {
-	conversationId: string;
-	createdAt: Date;
+export type ModelAssignmentRequest = {
 	/**
-	 * The message was deleted; its text is gone
+	 * Whether this purpose is active (paused when false)
 	 */
-	deleted: boolean;
+	enabled?: boolean;
 	/**
-	 * The weekly digest as it reads now; only on a weekly digest that was not erased
+	 * Shared (instance-catalog) model id to run this purpose on
 	 */
-	digest?: WeeklyDigest;
+	instanceModelId?: number;
 	/**
-	 * Set when the developer edited the message in Slack
+	 * Per-run timeout in seconds (30–10800; three hours is the longest a single run may take)
 	 */
-	editedAt?: Date;
-	id: string;
-	kind: "USER" | "HEPH" | "DIGEST";
+	timeoutSeconds?: number;
 	/**
-	 * The results, problems and prepared feedback Hephaestus showed in this message, in order
+	 * Workspace-owned model id to run this purpose on
 	 */
-	links: Array<MentorLink>;
-	/**
-	 * Set when the message is in a thread: the top-level message the thread replies to
-	 */
-	parentEntryId?: string;
-	/**
-	 * The submission that wrote the message; the app matches its own optimistic message by it
-	 */
-	requestId?: string;
-	/**
-	 * Order within its conversation
-	 */
-	seq: number;
-	/**
-	 * Only on a question asked in Slack: whether Hephaestus's reply reached Slack. FAILED means Slack does not show the whole reply: it is not there, or a stream showed only part of it before Slack or Silent Mode refused the rest; the full reply is in the app. UNCERTAIN means Slack cannot tell.
-	 */
-	slackDelivery?: "PENDING" | "DELIVERED" | "UNCERTAIN" | "FAILED";
-	/**
-	 * Where the message was written; SYSTEM for a weekly digest
-	 */
-	surface: "APP" | "SLACK" | "SYSTEM";
-	/**
-	 * The developer's words or Hephaestus's answer; for a weekly digest, the note that points Hephaestus to it; empty when the message was deleted
-	 */
-	text: string;
-	/**
-	 * The thread on this message; only on top-level messages that have one
-	 */
-	thread?: MentorThreadSummary;
-	/**
-	 * Why the turn this question asked failed, in words for the developer; only when it FAILED
-	 */
-	turnError?: string;
-	/**
-	 * The turn the message asked or answered
-	 */
-	turnId?: string;
-	/**
-	 * The status of the turn this question asked; only on the developer's messages
-	 */
-	turnStatus?: "QUEUED" | "RUNNING" | "DONE" | "FAILED" | "STOPPED";
-	/**
-	 * The developer's vote; only on Hephaestus's messages
-	 */
-	vote?: "HELPFUL" | "NOT_HELPFUL";
-};
-
-/**
- * A practice result, problem or prepared feedback Hephaestus showed in a message
- */
-export type MentorLink = {
-	/**
-	 * The result, problem or feedback id, by kind
-	 */
-	id: string;
-	/**
-	 * The item (pull request, issue, conversation or document) it is about, when the developer may still read it: a problem's through its result
-	 */
-	itemId?: number;
-	kind: "RESULT" | "PROBLEM" | "FEEDBACK";
-	/**
-	 * The practice it is about: a problem's through its result, feedback's when it is about one practice; absent when the developer can no longer read it
-	 */
-	practiceSlug?: string;
-	/**
-	 * Hephaestus's words about it, shown to the developer
-	 */
-	text: string;
-};
-
-/**
- * How far the developer read their Hephaestus conversation
- */
-export type MentorRead = {
-	/**
-	 * The read marker; absent when the developer has no conversation yet
-	 */
-	lastReadAt?: Date;
-};
-
-/**
- * How far the developer read their Hephaestus conversation
- */
-export type MentorReadRequest = {
-	/**
-	 * The time of the newest answer the developer saw
-	 */
-	at: Date;
-};
-
-/**
- * A stored question and the turn that answers it
- */
-export type MentorSubmission = {
-	question: MentorEntry;
-	turn: MentorTurn;
-};
-
-/**
- * A thread: the message it replies to and one page of its replies, oldest first
- */
-export type MentorThread = {
-	/**
-	 * The thread's conversation; absent until the first reply opens it
-	 */
-	conversationId?: string;
-	parent: MentorEntry;
-	replies: CursorPageDtoMentorEntry;
-};
-
-/**
- * The thread on a top-level message
- */
-export type MentorThreadSummary = {
-	/**
-	 * The thread's own conversation
-	 */
-	conversationId: string;
-	lastReplyAt?: Date;
-	/**
-	 * Sequence number of the thread's newest shown message; 0 when it has none
-	 */
-	latestSeq: number;
-	/**
-	 * The message the thread replies to
-	 */
-	parentEntryId: string;
-	/**
-	 * Messages in the thread; can count a Hephaestus message without text whose feedback is no longer shown
-	 */
-	replyCount: number;
-};
-
-/**
- * One conversation turn: a requested answer or an opted-in proactive digest
- */
-export type MentorTurn = {
-	/**
-	 * Attempts started so far; 0 while the turn waits for its first start. A lost lease queues the turn again with the same attempt, and the next start counts up. Thus, with the same attempt, RUNNING comes before QUEUED or an end.
-	 */
-	attempt: number;
-	conversationId: string;
-	createdAt: Date;
-	/**
-	 * Why the turn failed, worded for the developer; only on a failed turn
-	 */
-	error?: string;
-	finishedAt?: Date;
-	id: string;
-	/**
-	 * Set when the turn runs in a thread: the top-level message the thread replies to
-	 */
-	parentEntryId?: string;
-	/**
-	 * Hephaestus's answer in progress; only while the turn runs
-	 */
-	partial?: MentorTurnPartial;
-	/**
-	 * The submission or schedule key; the stimulus entry carries the same value
-	 */
-	requestId: string;
-	status: "QUEUED" | "RUNNING" | "DONE" | "FAILED" | "STOPPED";
-	surface: "APP" | "SLACK" | "SYSTEM";
-	/**
-	 * Why a queued turn has not started. FREE_HEPH: a server may start it, and every conversation slot of the deployment is taken, so it starts when one is free. Absent when the turn does not wait, waits for an earlier question of its conversation, or waits for a reason that the server does not know, such as a server without a configured conversation turn capacity.
-	 */
-	waitingFor?: "FREE_HEPH";
-};
-
-/**
- * What Hephaestus is doing in a running turn
- */
-export type MentorTurnPartial = {
-	activity: "THINKING" | "WRITING" | "TOOL";
-	/**
-	 * What Hephaestus is doing, in the developer's words, for example "Reading your practice feedback…"
-	 */
-	stage: string;
-	/**
-	 * The text Hephaestus has written in this turn so far
-	 */
-	text: string;
-	/**
-	 * The tool Hephaestus runs, while the activity is TOOL
-	 */
-	tool?: string;
-};
-
-/**
- * A question to Hephaestus from the app
- */
-export type MentorTurnRequest = {
-	/**
-	 * The page the developer asks from, for example "Pull request #421 in acme/web"
-	 */
-	pageContext?: string;
-	/**
-	 * Ask in the thread on this top-level message; the first reply opens the thread
-	 */
-	parentEntryId?: string;
-	/**
-	 * Chosen by the app for each message. Sending the same id again returns the first submission, so a retried request never asks twice.
-	 */
-	requestId: string;
-	/**
-	 * The developer's words
-	 */
-	text: string;
-};
-
-/**
- * A status change the developer asks for on a turn
- */
-export type MentorTurnStatusRequest = {
-	/**
-	 * STOPPED stops a queued or running turn. Hephaestus keeps what it already wrote.
-	 */
-	status: "STOPPED";
-};
-
-/**
- * The developer's vote on one of Hephaestus's messages
- */
-export type MentorVoteRequest = {
-	vote: "HELPFUL" | "NOT_HELPFUL";
+	workspaceModelId?: number;
 };
 
 export type MovePracticeRequest = {
@@ -5468,7 +5469,7 @@ export type ReviewFeedback = {
 		| "GITHUB"
 		| "GITLAB"
 		| "OTHER_WORK"
-		| "HEPH"
+		| "APP"
 		| "SLACK"
 		| "NEXT_CONVERSATION"
 		| "PRACTICE_PAGES";
@@ -5566,7 +5567,7 @@ export type ReviewFeedbackDetail = {
 		| "GITHUB"
 		| "GITLAB"
 		| "OTHER_WORK"
-		| "HEPH"
+		| "APP"
 		| "SLACK"
 		| "NEXT_CONVERSATION"
 		| "PRACTICE_PAGES";
@@ -7305,11 +7306,11 @@ export type UpdateWorkspaceFeaturesRequest = {
 	/**
 	 * Enable automatic practice reviews triggered by PR events
 	 */
-	practiceReviewAutoTriggerEnabled?: boolean;
+	practiceReviewEventEnabled?: boolean;
 	/**
 	 * Enable manual practice reviews triggered through a bot command
 	 */
-	practiceReviewManualTriggerEnabled?: boolean;
+	practiceReviewRequestEnabled?: boolean;
 	/**
 	 * Enable the practice review feature
 	 */
@@ -7632,6 +7633,14 @@ export type WeeklyDigest = {
  * One piece of feedback that reached the developer in the week, and where it was delivered
  */
 export type WeeklyDigestFeedback = {
+	/**
+	 * The Hephaestus message it appeared in; only for CONVERSATION, and never when withdrawn
+	 */
+	conversationEntryId?: string;
+	/**
+	 * The top-level message whose thread holds that Hephaestus message; only for CONVERSATION, and absent when the message is not in a thread
+	 */
+	conversationParentEntryId?: string;
 	deliveredAt: Date;
 	/**
 	 * Where it was delivered: on the work (ON_WORK) or in the conversation with Hephaestus (CONVERSATION). Practice page feedback is never listed; the waiting count covers it
@@ -7644,14 +7653,6 @@ export type WeeklyDigestFeedback = {
 	 * The item it was delivered on; only for ON_WORK, and never when withdrawn
 	 */
 	item?: ItemRef;
-	/**
-	 * The Hephaestus message it appeared in; only for CONVERSATION, and never when withdrawn
-	 */
-	mentorEntryId?: string;
-	/**
-	 * The top-level message whose thread holds that Hephaestus message; only for CONVERSATION, and absent when the message is not in a thread
-	 */
-	mentorParentEntryId?: string;
 	practiceName: string;
 	practiceSlug: string;
 	/**
@@ -7800,11 +7801,11 @@ export type Workspace = {
 	/**
 	 * Whether automatic practice reviews triggered by PR events are enabled
 	 */
-	practiceReviewAutoTriggerEnabled: boolean;
+	practiceReviewEventEnabled: boolean;
 	/**
 	 * Whether manual practice reviews triggered through a bot command are enabled
 	 */
-	practiceReviewManualTriggerEnabled: boolean;
+	practiceReviewRequestEnabled: boolean;
 	/**
 	 * Whether practice reviews are on
 	 */
@@ -7884,7 +7885,7 @@ export type WorkspaceAiModel = {
 
 export type WorkspaceAiOption = {
 	choice: "NO_AI" | "IN_HOUSE_ONLY" | "CLOUD";
-	mentorReady: boolean;
+	conversationReady: boolean;
 	models: Array<WorkspaceAiModel>;
 	practiceReviewsReady: boolean;
 };
@@ -8041,7 +8042,7 @@ export type WorkspaceLlmConnection = {
 	/**
 	 * The purposes a model on this connection can serve, from its protocol
 	 */
-	purposes: Array<"PRACTICE_REVIEW" | "MENTOR">;
+	purposes: Array<"PRACTICE_REVIEW" | "CONVERSATION">;
 	/**
 	 * Unique slug within the workspace
 	 */
@@ -8265,7 +8266,7 @@ export type WorkspaceLlmUsageReport = {
 	 */
 	ownProviderUnmeasured: LlmUnmeasuredUsage;
 	/**
-	 * Runs this month (job attempts and mentor turn attempts, either purse) with at least one call whose cost is unavailable because a rate is missing or the measurement is unverified, and that has no upper bound, each counted once. A capability test with unavailable cost counts once. A practice script call counts toward the run of its review. Those rows are excluded from both totals above, so a non-zero value means the real spend may be higher than shown.
+	 * Runs this month (job attempts and conversation turn attempts, either purse) with at least one call whose cost is unavailable because a rate is missing or the measurement is unverified, and that has no upper bound, each counted once. A capability test with unavailable cost counts once. A practice script call counts toward the run of its review. Those rows are excluded from both totals above, so a non-zero value means the real spend may be higher than shown.
 	 */
 	unpricedEventCount: number;
 };
@@ -8291,18 +8292,18 @@ export type WorkspaceMembership = {
 /**
  * One member's view of setup in one workspace. <code>aiChoice</code> is the account's answer, the same in
  * every workspace; <code>aiOptions</code> says what this workspace has set up under each answer, which is
- * what differs between workspaces. <code>mentorRefusal</code> is this member's own answer from Hephaestus's admission.
+ * what differs between workspaces. <code>conversationRefusal</code> is this member's own answer from Hephaestus's admission.
  */
 export type WorkspaceOnboarding = {
 	aiChoice?: "NO_AI" | "IN_HOUSE_ONLY" | "CLOUD";
 	aiChoiceRequired: boolean;
 	aiOptions: Array<WorkspaceAiOption>;
-	enabled: boolean;
-	links: Array<WorkspaceOnboardingLink>;
 	/**
 	 * Why Hephaestus declines this member here, by the rule that admits each question; null when Hephaestus can answer
 	 */
-	mentorRefusal?: "PERSON_ERASED" | "NO_AI" | "CHOICE_REQUIRED" | "UNAVAILABLE";
+	conversationRefusal?: "PERSON_ERASED" | "NO_AI" | "CHOICE_REQUIRED" | "UNAVAILABLE";
+	enabled: boolean;
+	links: Array<WorkspaceOnboardingLink>;
 	needsSetup: boolean;
 	workspaceName: string;
 };
@@ -8706,6 +8707,7 @@ export type AdminListConfigAuditEventsData = {
 		entityType?: Array<
 			| "PROVIDER_RESOURCE_RELEASE"
 			| "PRACTICE_REVIEW_SETTINGS"
+			| "MODEL_ASSIGNMENT"
 			| "AGENT_BINDING"
 			| "AGENT_CONFIG"
 			| "AI_CONFIG_BINDING"
@@ -8759,6 +8761,7 @@ export type AdminCountConfigAuditEventsData = {
 		entityType?: Array<
 			| "PROVIDER_RESOURCE_RELEASE"
 			| "PRACTICE_REVIEW_SETTINGS"
+			| "MODEL_ASSIGNMENT"
 			| "AGENT_BINDING"
 			| "AGENT_CONFIG"
 			| "AI_CONFIG_BINDING"
@@ -9308,7 +9311,7 @@ export type AdminDeleteLlmModelErrors = {
 	 */
 	404: unknown;
 	/**
-	 * Cannot delete a model still bound to an agent configuration
+	 * Cannot delete a model still assigned to a purpose
 	 */
 	409: unknown;
 };
@@ -12547,86 +12550,6 @@ export type GetActivityWorkResponses = {
 
 export type GetActivityWorkResponse = GetActivityWorkResponses[keyof GetActivityWorkResponses];
 
-export type ListAgentsData = {
-	body?: never;
-	path: {
-		/**
-		 * Workspace slug
-		 */
-		workspaceSlug: string;
-	};
-	query?: never;
-	url: "/workspaces/{workspaceSlug}/agents";
-};
-
-export type ListAgentsResponses = {
-	/**
-	 * Bindings returned
-	 */
-	200: Array<AgentBinding>;
-};
-
-export type ListAgentsResponse = ListAgentsResponses[keyof ListAgentsResponses];
-
-export type DeleteAgentData = {
-	body?: never;
-	path: {
-		/**
-		 * Workspace slug
-		 */
-		workspaceSlug: string;
-		purpose: "PRACTICE_REVIEW" | "MENTOR";
-	};
-	query?: {
-		dataHandlingTier?: "IN_HOUSE" | "CLOUD" | "UNDECLARED";
-	};
-	url: "/workspaces/{workspaceSlug}/agents/{purpose}";
-};
-
-export type DeleteAgentResponses = {
-	/**
-	 * Binding removed
-	 */
-	204: void;
-};
-
-export type DeleteAgentResponse = DeleteAgentResponses[keyof DeleteAgentResponses];
-
-export type ConfigureAgentData = {
-	body: AgentBindingRequest;
-	path: {
-		/**
-		 * Workspace slug
-		 */
-		workspaceSlug: string;
-		purpose: "PRACTICE_REVIEW" | "MENTOR";
-	};
-	query?: {
-		dataHandlingTier?: "IN_HOUSE" | "CLOUD" | "UNDECLARED";
-	};
-	url: "/workspaces/{workspaceSlug}/agents/{purpose}";
-};
-
-export type ConfigureAgentErrors = {
-	/**
-	 * Model not found
-	 */
-	404: unknown;
-	/**
-	 * The model is undeclared, or declared as another tier than this slot (problem type agent-binding-slot-mismatch, property declaredTier)
-	 */
-	409: unknown;
-};
-
-export type ConfigureAgentResponses = {
-	/**
-	 * Binding saved
-	 */
-	200: AgentBinding;
-};
-
-export type ConfigureAgentResponse = ConfigureAgentResponses[keyof ConfigureAgentResponses];
-
 export type ListWorkspaceConfigAuditEventsData = {
 	body?: never;
 	path: {
@@ -12641,6 +12564,7 @@ export type ListWorkspaceConfigAuditEventsData = {
 		entityType?: Array<
 			| "PROVIDER_RESOURCE_RELEASE"
 			| "PRACTICE_REVIEW_SETTINGS"
+			| "MODEL_ASSIGNMENT"
 			| "AGENT_BINDING"
 			| "AGENT_CONFIG"
 			| "AI_CONFIG_BINDING"
@@ -12698,6 +12622,7 @@ export type CountWorkspaceConfigAuditEventsData = {
 		entityType?: Array<
 			| "PROVIDER_RESOURCE_RELEASE"
 			| "PRACTICE_REVIEW_SETTINGS"
+			| "MODEL_ASSIGNMENT"
 			| "AGENT_BINDING"
 			| "AGENT_CONFIG"
 			| "AI_CONFIG_BINDING"
@@ -13089,6 +13014,253 @@ export type UpdateConnectionStatusResponses = {
 export type UpdateConnectionStatusResponse =
 	UpdateConnectionStatusResponses[keyof UpdateConnectionStatusResponses];
 
+export type GetConversationData = {
+	body?: never;
+	path: {
+		/**
+		 * Workspace slug
+		 */
+		workspaceSlug: string;
+	};
+	query?: never;
+	url: "/workspaces/{workspaceSlug}/conversation";
+};
+
+export type GetConversationResponses = {
+	/**
+	 * OK
+	 */
+	200: Conversation;
+};
+
+export type GetConversationResponse = GetConversationResponses[keyof GetConversationResponses];
+
+export type ListConversationEntriesData = {
+	body?: never;
+	path: {
+		/**
+		 * Workspace slug
+		 */
+		workspaceSlug: string;
+	};
+	query?: {
+		cursor?: string;
+		size?: number;
+	};
+	url: "/workspaces/{workspaceSlug}/conversation/entries";
+};
+
+export type ListConversationEntriesResponses = {
+	/**
+	 * OK
+	 */
+	200: CursorPageDtoConversationEntry;
+};
+
+export type ListConversationEntriesResponse =
+	ListConversationEntriesResponses[keyof ListConversationEntriesResponses];
+
+export type DeleteConversationEntryData = {
+	body?: never;
+	path: {
+		/**
+		 * Workspace slug
+		 */
+		workspaceSlug: string;
+		entryId: string;
+	};
+	query?: never;
+	url: "/workspaces/{workspaceSlug}/conversation/entries/{entryId}";
+};
+
+export type DeleteConversationEntryErrors = {
+	/**
+	 * Only the developer's own questions can be deleted
+	 */
+	409: ProblemDetail;
+};
+
+export type DeleteConversationEntryError =
+	DeleteConversationEntryErrors[keyof DeleteConversationEntryErrors];
+
+export type DeleteConversationEntryResponses = {
+	/**
+	 * The message is deleted
+	 */
+	204: void;
+};
+
+export type DeleteConversationEntryResponse =
+	DeleteConversationEntryResponses[keyof DeleteConversationEntryResponses];
+
+export type GetConversationThreadData = {
+	body?: never;
+	path: {
+		/**
+		 * Workspace slug
+		 */
+		workspaceSlug: string;
+		entryId: string;
+	};
+	query?: {
+		cursor?: string;
+		size?: number;
+	};
+	url: "/workspaces/{workspaceSlug}/conversation/entries/{entryId}/thread";
+};
+
+export type GetConversationThreadErrors = {
+	/**
+	 * No top-level message of the developer has this id
+	 */
+	404: ProblemDetail;
+};
+
+export type GetConversationThreadError =
+	GetConversationThreadErrors[keyof GetConversationThreadErrors];
+
+export type GetConversationThreadResponses = {
+	/**
+	 * The thread; a message without replies has no conversation
+	 */
+	200: ConversationThread;
+};
+
+export type GetConversationThreadResponse =
+	GetConversationThreadResponses[keyof GetConversationThreadResponses];
+
+export type ClearConversationVoteData = {
+	body?: never;
+	path: {
+		/**
+		 * Workspace slug
+		 */
+		workspaceSlug: string;
+		entryId: string;
+	};
+	query?: never;
+	url: "/workspaces/{workspaceSlug}/conversation/entries/{entryId}/vote";
+};
+
+export type ClearConversationVoteResponses = {
+	/**
+	 * OK
+	 */
+	200: ConversationEntry;
+};
+
+export type ClearConversationVoteResponse =
+	ClearConversationVoteResponses[keyof ClearConversationVoteResponses];
+
+export type SetConversationVoteData = {
+	body: ConversationVoteRequest;
+	path: {
+		/**
+		 * Workspace slug
+		 */
+		workspaceSlug: string;
+		entryId: string;
+	};
+	query?: never;
+	url: "/workspaces/{workspaceSlug}/conversation/entries/{entryId}/vote";
+};
+
+export type SetConversationVoteErrors = {
+	/**
+	 * The message is not one of Hephaestus's
+	 */
+	409: ProblemDetail;
+};
+
+export type SetConversationVoteError = SetConversationVoteErrors[keyof SetConversationVoteErrors];
+
+export type SetConversationVoteResponses = {
+	/**
+	 * The message with its vote
+	 */
+	200: ConversationEntry;
+};
+
+export type SetConversationVoteResponse =
+	SetConversationVoteResponses[keyof SetConversationVoteResponses];
+
+export type MarkConversationReadData = {
+	body: ConversationReadRequest;
+	path: {
+		/**
+		 * Workspace slug
+		 */
+		workspaceSlug: string;
+	};
+	query?: never;
+	url: "/workspaces/{workspaceSlug}/conversation/read";
+};
+
+export type MarkConversationReadResponses = {
+	/**
+	 * The marker after the request: this time or a later one
+	 */
+	200: ConversationRead;
+};
+
+export type MarkConversationReadResponse =
+	MarkConversationReadResponses[keyof MarkConversationReadResponses];
+
+export type SubmitConversationTurnData = {
+	body: ConversationTurnRequest;
+	path: {
+		/**
+		 * Workspace slug
+		 */
+		workspaceSlug: string;
+	};
+	query?: never;
+	url: "/workspaces/{workspaceSlug}/conversation/turns";
+};
+
+export type SubmitConversationTurnErrors = {
+	/**
+	 * Hephaestus declines the developer (conversation-refused), too many follow-ups wait, the requestId was used for another message, or the parent cannot have a thread (conversation-rejected)
+	 */
+	409: ProblemDetail;
+};
+
+export type SubmitConversationTurnError =
+	SubmitConversationTurnErrors[keyof SubmitConversationTurnErrors];
+
+export type SubmitConversationTurnResponses = {
+	/**
+	 * The stored question and its turn
+	 */
+	200: ConversationSubmission;
+};
+
+export type SubmitConversationTurnResponse =
+	SubmitConversationTurnResponses[keyof SubmitConversationTurnResponses];
+
+export type UpdateConversationTurnStatusData = {
+	body: ConversationTurnStatusRequest;
+	path: {
+		/**
+		 * Workspace slug
+		 */
+		workspaceSlug: string;
+		turnId: string;
+	};
+	query?: never;
+	url: "/workspaces/{workspaceSlug}/conversation/turns/{turnId}/status";
+};
+
+export type UpdateConversationTurnStatusResponses = {
+	/**
+	 * OK
+	 */
+	200: ConversationTurn;
+};
+
+export type UpdateConversationTurnStatusResponse =
+	UpdateConversationTurnStatusResponses[keyof UpdateConversationTurnStatusResponses];
+
 export type UpdateFeaturesData = {
 	body: UpdateWorkspaceFeaturesRequest;
 	path: {
@@ -13415,7 +13587,7 @@ export type WorkspaceDeleteLlmModelErrors = {
 	 */
 	404: unknown;
 	/**
-	 * Cannot delete a model still bound to an agent configuration
+	 * Cannot delete a model still assigned to a purpose
 	 */
 	409: unknown;
 };
@@ -13705,7 +13877,7 @@ export type FollowProviderRoleResponses = {
 export type FollowProviderRoleResponse =
 	FollowProviderRoleResponses[keyof FollowProviderRoleResponses];
 
-export type GetMentorConversationData = {
+export type ListModelAssignmentsData = {
 	body?: never;
 	path: {
 		/**
@@ -13714,237 +13886,78 @@ export type GetMentorConversationData = {
 		workspaceSlug: string;
 	};
 	query?: never;
-	url: "/workspaces/{workspaceSlug}/mentor/conversation";
+	url: "/workspaces/{workspaceSlug}/model-assignments";
 };
 
-export type GetMentorConversationResponses = {
+export type ListModelAssignmentsResponses = {
 	/**
-	 * OK
+	 * Model assignments returned
 	 */
-	200: MentorConversation;
+	200: Array<ModelAssignment>;
 };
 
-export type GetMentorConversationResponse =
-	GetMentorConversationResponses[keyof GetMentorConversationResponses];
+export type ListModelAssignmentsResponse =
+	ListModelAssignmentsResponses[keyof ListModelAssignmentsResponses];
 
-export type MarkMentorConversationReadData = {
-	body: MentorReadRequest;
-	path: {
-		/**
-		 * Workspace slug
-		 */
-		workspaceSlug: string;
-	};
-	query?: never;
-	url: "/workspaces/{workspaceSlug}/mentor/conversation/read";
-};
-
-export type MarkMentorConversationReadResponses = {
-	/**
-	 * The marker after the request: this time or a later one
-	 */
-	200: MentorRead;
-};
-
-export type MarkMentorConversationReadResponse =
-	MarkMentorConversationReadResponses[keyof MarkMentorConversationReadResponses];
-
-export type ListMentorEntriesData = {
+export type RemoveModelAssignmentData = {
 	body?: never;
 	path: {
 		/**
 		 * Workspace slug
 		 */
 		workspaceSlug: string;
+		purpose: "PRACTICE_REVIEW" | "CONVERSATION";
 	};
 	query?: {
-		cursor?: string;
-		size?: number;
+		dataHandlingTier?: "IN_HOUSE" | "CLOUD" | "UNDECLARED";
 	};
-	url: "/workspaces/{workspaceSlug}/mentor/entries";
+	url: "/workspaces/{workspaceSlug}/model-assignments/{purpose}";
 };
 
-export type ListMentorEntriesResponses = {
+export type RemoveModelAssignmentResponses = {
 	/**
-	 * OK
-	 */
-	200: CursorPageDtoMentorEntry;
-};
-
-export type ListMentorEntriesResponse =
-	ListMentorEntriesResponses[keyof ListMentorEntriesResponses];
-
-export type DeleteMentorEntryData = {
-	body?: never;
-	path: {
-		/**
-		 * Workspace slug
-		 */
-		workspaceSlug: string;
-		entryId: string;
-	};
-	query?: never;
-	url: "/workspaces/{workspaceSlug}/mentor/entries/{entryId}";
-};
-
-export type DeleteMentorEntryErrors = {
-	/**
-	 * Only the developer's own questions can be deleted
-	 */
-	409: ProblemDetail;
-};
-
-export type DeleteMentorEntryError = DeleteMentorEntryErrors[keyof DeleteMentorEntryErrors];
-
-export type DeleteMentorEntryResponses = {
-	/**
-	 * The message is deleted
+	 * Model assignment removed
 	 */
 	204: void;
 };
 
-export type DeleteMentorEntryResponse =
-	DeleteMentorEntryResponses[keyof DeleteMentorEntryResponses];
+export type RemoveModelAssignmentResponse =
+	RemoveModelAssignmentResponses[keyof RemoveModelAssignmentResponses];
 
-export type GetMentorThreadData = {
-	body?: never;
+export type AssignModelData = {
+	body: ModelAssignmentRequest;
 	path: {
 		/**
 		 * Workspace slug
 		 */
 		workspaceSlug: string;
-		entryId: string;
+		purpose: "PRACTICE_REVIEW" | "CONVERSATION";
 	};
 	query?: {
-		cursor?: string;
-		size?: number;
+		dataHandlingTier?: "IN_HOUSE" | "CLOUD" | "UNDECLARED";
 	};
-	url: "/workspaces/{workspaceSlug}/mentor/entries/{entryId}/thread";
+	url: "/workspaces/{workspaceSlug}/model-assignments/{purpose}";
 };
 
-export type GetMentorThreadErrors = {
+export type AssignModelErrors = {
 	/**
-	 * No top-level message of the developer has this id
+	 * Model not found
 	 */
-	404: ProblemDetail;
-};
-
-export type GetMentorThreadError = GetMentorThreadErrors[keyof GetMentorThreadErrors];
-
-export type GetMentorThreadResponses = {
+	404: unknown;
 	/**
-	 * The thread; a message without replies has no conversation
+	 * The model is undeclared, or declared as another tier than this slot (problem type model-assignment-slot-mismatch, property declaredTier)
 	 */
-	200: MentorThread;
+	409: unknown;
 };
 
-export type GetMentorThreadResponse = GetMentorThreadResponses[keyof GetMentorThreadResponses];
-
-export type ClearMentorVoteData = {
-	body?: never;
-	path: {
-		/**
-		 * Workspace slug
-		 */
-		workspaceSlug: string;
-		entryId: string;
-	};
-	query?: never;
-	url: "/workspaces/{workspaceSlug}/mentor/entries/{entryId}/vote";
-};
-
-export type ClearMentorVoteResponses = {
+export type AssignModelResponses = {
 	/**
-	 * OK
+	 * Model assignment saved
 	 */
-	200: MentorEntry;
+	200: ModelAssignment;
 };
 
-export type ClearMentorVoteResponse = ClearMentorVoteResponses[keyof ClearMentorVoteResponses];
-
-export type SetMentorVoteData = {
-	body: MentorVoteRequest;
-	path: {
-		/**
-		 * Workspace slug
-		 */
-		workspaceSlug: string;
-		entryId: string;
-	};
-	query?: never;
-	url: "/workspaces/{workspaceSlug}/mentor/entries/{entryId}/vote";
-};
-
-export type SetMentorVoteErrors = {
-	/**
-	 * The message is not one of Hephaestus's
-	 */
-	409: ProblemDetail;
-};
-
-export type SetMentorVoteError = SetMentorVoteErrors[keyof SetMentorVoteErrors];
-
-export type SetMentorVoteResponses = {
-	/**
-	 * The message with its vote
-	 */
-	200: MentorEntry;
-};
-
-export type SetMentorVoteResponse = SetMentorVoteResponses[keyof SetMentorVoteResponses];
-
-export type SubmitMentorTurnData = {
-	body: MentorTurnRequest;
-	path: {
-		/**
-		 * Workspace slug
-		 */
-		workspaceSlug: string;
-	};
-	query?: never;
-	url: "/workspaces/{workspaceSlug}/mentor/turns";
-};
-
-export type SubmitMentorTurnErrors = {
-	/**
-	 * Hephaestus declines the developer (mentor-refused), too many follow-ups wait, the requestId was used for another message, or the parent cannot have a thread (mentor-rejected)
-	 */
-	409: ProblemDetail;
-};
-
-export type SubmitMentorTurnError = SubmitMentorTurnErrors[keyof SubmitMentorTurnErrors];
-
-export type SubmitMentorTurnResponses = {
-	/**
-	 * The stored question and its turn
-	 */
-	200: MentorSubmission;
-};
-
-export type SubmitMentorTurnResponse = SubmitMentorTurnResponses[keyof SubmitMentorTurnResponses];
-
-export type UpdateMentorTurnStatusData = {
-	body: MentorTurnStatusRequest;
-	path: {
-		/**
-		 * Workspace slug
-		 */
-		workspaceSlug: string;
-		turnId: string;
-	};
-	query?: never;
-	url: "/workspaces/{workspaceSlug}/mentor/turns/{turnId}/status";
-};
-
-export type UpdateMentorTurnStatusResponses = {
-	/**
-	 * OK
-	 */
-	200: MentorTurn;
-};
-
-export type UpdateMentorTurnStatusResponse =
-	UpdateMentorTurnStatusResponses[keyof UpdateMentorTurnStatusResponses];
+export type AssignModelResponse = AssignModelResponses[keyof AssignModelResponses];
 
 export type GetMemberOnboardingData = {
 	body?: never;
@@ -15707,7 +15720,7 @@ export type ListReviewFeedbackData = {
 			| "GITHUB"
 			| "GITLAB"
 			| "OTHER_WORK"
-			| "HEPH"
+			| "APP"
 			| "SLACK"
 			| "NEXT_CONVERSATION"
 			| "PRACTICE_PAGES";
@@ -15804,7 +15817,7 @@ export type CountReviewFeedbackByLocationData = {
 			| "GITHUB"
 			| "GITLAB"
 			| "OTHER_WORK"
-			| "HEPH"
+			| "APP"
 			| "SLACK"
 			| "NEXT_CONVERSATION"
 			| "PRACTICE_PAGES";
@@ -15899,7 +15912,7 @@ export type CountReviewFeedbackByReasonData = {
 			| "GITHUB"
 			| "GITLAB"
 			| "OTHER_WORK"
-			| "HEPH"
+			| "APP"
 			| "SLACK"
 			| "NEXT_CONVERSATION"
 			| "PRACTICE_PAGES";

@@ -189,7 +189,7 @@ The review just finished. The criteria its NOT_MET practices were assessed again
      "outcome": "NOT_MET"
     }
    ],
-   "bodyRole": "MENTOR_NOTES",
+   "bodyRole": "CONVERSATION_NOTES",
    "body": "Situation: descriptions name changes without reasons."
   }
  ]

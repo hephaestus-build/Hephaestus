@@ -401,16 +401,16 @@ async function configureLlm(api: Api, config: Config): Promise<number> {
 }
 
 async function bindAgents(api: Api, config: Config, modelId: number): Promise<void> {
-	for (const purpose of ["PRACTICE_REVIEW", "MENTOR"]) {
-		await api("PUT", `/workspaces/${config.workspaceSlug}/agents/${purpose}`, {
+	for (const purpose of ["PRACTICE_REVIEW", "CONVERSATION"]) {
+		await api("PUT", `/workspaces/${config.workspaceSlug}/model-assignments/${purpose}`, {
 			workspaceModelId: modelId,
 			enabled: true,
-			// Heph stops an answer after 300 seconds (AgentBindingLimits.MAX_HEPH_TURN_SECONDS).
-			timeoutSeconds: purpose === "MENTOR" ? 300 : 1200,
+			// Hephaestus stops an answer after 300 seconds (ModelAssignmentLimits.MAX_CONVERSATION_TURN_SECONDS).
+			timeoutSeconds: purpose === "CONVERSATION" ? 300 : 1200,
 		});
 	}
 	const agents = array(
-		await api("GET", `/workspaces/${config.workspaceSlug}/agents`),
+		await api("GET", `/workspaces/${config.workspaceSlug}/model-assignments`),
 		"agent bindings",
 	);
 	if (agents.filter((agent) => agent.ready === true).length !== 2) {
@@ -587,8 +587,8 @@ async function main(): Promise<void> {
 		);
 		await api("PATCH", `/workspaces/${config.workspaceSlug}/features`, {
 			practicesEnabled: true,
-			practiceReviewAutoTriggerEnabled: true,
-			practiceReviewManualTriggerEnabled: true,
+			practiceReviewEventEnabled: true,
+			practiceReviewRequestEnabled: true,
 		});
 		const reviewSettingsPath = `/workspaces/${config.workspaceSlug}/practices/review-settings`;
 		const reviewSettings = object(await api("GET", reviewSettingsPath), "practice-review settings");

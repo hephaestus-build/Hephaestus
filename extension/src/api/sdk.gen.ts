@@ -150,6 +150,9 @@ import type {
 	AssignMemberRoleData,
 	AssignMemberRoleErrors,
 	AssignMemberRoleResponses,
+	AssignModelData,
+	AssignModelErrors,
+	AssignModelResponses,
 	BindPracticeGroupData,
 	BindPracticeGroupResponses,
 	CallbackGetData,
@@ -162,8 +165,8 @@ import type {
 	CheckResearchRemovalsResponses,
 	ClaimGitHubInstallationData,
 	ClaimGitHubInstallationResponses,
-	ClearMentorVoteData,
-	ClearMentorVoteResponses,
+	ClearConversationVoteData,
+	ClearConversationVoteResponses,
 	ClearOwnFeedbackResponseData,
 	ClearOwnFeedbackResponseErrors,
 	ClearOwnFeedbackResponseResponses,
@@ -171,9 +174,6 @@ import type {
 	CloseResearchDisclosureResponses,
 	CompleteFirstLoginConsentData,
 	CompleteFirstLoginConsentResponses,
-	ConfigureAgentData,
-	ConfigureAgentErrors,
-	ConfigureAgentResponses,
 	ConfirmProductFeedbackCleanupData,
 	ConfirmProductFeedbackCleanupResponses,
 	CountReviewFeedbackByLocationData,
@@ -206,14 +206,12 @@ import type {
 	DeclineGitHubInstallationResponses,
 	DeclinePracticeReleaseData,
 	DeclinePracticeReleaseResponses,
-	DeleteAgentData,
-	DeleteAgentResponses,
+	DeleteConversationEntryData,
+	DeleteConversationEntryErrors,
+	DeleteConversationEntryResponses,
 	DeleteCurrentUserData,
 	DeleteCurrentUserErrors,
 	DeleteCurrentUserResponses,
-	DeleteMentorEntryData,
-	DeleteMentorEntryErrors,
-	DeleteMentorEntryResponses,
 	DeleteOutlineCollectionData,
 	DeleteOutlineCollectionErrors,
 	DeleteOutlineCollectionResponses,
@@ -273,6 +271,11 @@ import type {
 	GetConnectionSyncStatusResponses,
 	GetConsentStatusData,
 	GetConsentStatusResponses,
+	GetConversationData,
+	GetConversationResponses,
+	GetConversationThreadData,
+	GetConversationThreadErrors,
+	GetConversationThreadResponses,
 	GetCsrfTokenData,
 	GetCsrfTokenResponses,
 	GetCurrentUserData,
@@ -305,11 +308,6 @@ import type {
 	GetMemberOnboardingResponses,
 	GetMemberOnboardingSettingsData,
 	GetMemberOnboardingSettingsResponses,
-	GetMentorConversationData,
-	GetMentorConversationResponses,
-	GetMentorThreadData,
-	GetMentorThreadErrors,
-	GetMentorThreadResponses,
 	GetNotificationPreferencesData,
 	GetNotificationPreferencesResponses,
 	GetOpenWorkData,
@@ -444,8 +442,6 @@ import type {
 	ListAdoptablePracticesData,
 	ListAdoptablePracticesErrors,
 	ListAdoptablePracticesResponses,
-	ListAgentsData,
-	ListAgentsResponses,
 	ListConnectionProviderRepairsData,
 	ListConnectionProviderRepairsResponses,
 	ListConnectionSyncJobsData,
@@ -454,6 +450,8 @@ import type {
 	ListConnectionSyncResourcesResponses,
 	ListConsumerDeadLettersData,
 	ListConsumerDeadLettersResponses,
+	ListConversationEntriesData,
+	ListConversationEntriesResponses,
 	ListData,
 	ListFeedbackDecisionsData,
 	ListFeedbackDecisionsResponses,
@@ -478,8 +476,8 @@ import type {
 	ListLinkedIdentitiesResponses,
 	ListMembershipsData,
 	ListMembershipsResponses,
-	ListMentorEntriesData,
-	ListMentorEntriesResponses,
+	ListModelAssignmentsData,
+	ListModelAssignmentsResponses,
 	ListMyProductFeedbackData,
 	ListMyProductFeedbackResponses,
 	ListOutlineCollectionCandidatesData,
@@ -555,8 +553,8 @@ import type {
 	LogoutResponses,
 	MakeMyProductFeedbackPrivateData,
 	MakeMyProductFeedbackPrivateResponses,
-	MarkMentorConversationReadData,
-	MarkMentorConversationReadResponses,
+	MarkConversationReadData,
+	MarkConversationReadResponses,
 	MoveCatalogPracticeData,
 	MoveCatalogPracticeResponses,
 	MovePracticeData,
@@ -603,6 +601,8 @@ import type {
 	RemoveMemberData,
 	RemoveMemberErrors,
 	RemoveMemberResponses,
+	RemoveModelAssignmentData,
+	RemoveModelAssignmentResponses,
 	RemovePasskeyData,
 	RemovePasskeyResponses,
 	RemoveRepositoryToMonitorData,
@@ -657,24 +657,24 @@ import type {
 	SetCatalogGroupStatusResponses,
 	SetCatalogPracticeStatusData,
 	SetCatalogPracticeStatusResponses,
+	SetConversationVoteData,
+	SetConversationVoteErrors,
+	SetConversationVoteResponses,
 	SetGroupFeedbackModeData,
 	SetGroupFeedbackModeResponses,
 	SetMemberHiddenData,
 	SetMemberHiddenResponses,
-	SetMentorVoteData,
-	SetMentorVoteErrors,
-	SetMentorVoteResponses,
 	SetPracticeFeedbackModeData,
 	SetPracticeFeedbackModeResponses,
 	SetReviewScheduleEnabledData,
 	SetReviewScheduleEnabledResponses,
 	StartScanData,
 	StartScanResponses,
+	SubmitConversationTurnData,
+	SubmitConversationTurnErrors,
+	SubmitConversationTurnResponses,
 	SubmitInstanceProductFeedbackData,
 	SubmitInstanceProductFeedbackResponses,
-	SubmitMentorTurnData,
-	SubmitMentorTurnErrors,
-	SubmitMentorTurnResponses,
 	SubmitWorkspaceProductFeedbackData,
 	SubmitWorkspaceProductFeedbackResponses,
 	TriggerSyncJobData,
@@ -701,14 +701,14 @@ import type {
 	UpdateConnectionSyncJobData,
 	UpdateConnectionSyncJobErrors,
 	UpdateConnectionSyncJobResponses,
+	UpdateConversationTurnStatusData,
+	UpdateConversationTurnStatusResponses,
 	UpdateFeaturesData,
 	UpdateFeaturesResponses,
 	UpdateGitLabRepositorySelectionData,
 	UpdateGitLabRepositorySelectionResponses,
 	UpdateMemberOnboardingSettingsData,
 	UpdateMemberOnboardingSettingsResponses,
-	UpdateMentorTurnStatusData,
-	UpdateMentorTurnStatusResponses,
 	UpdateNotificationPreferencesData,
 	UpdateNotificationPreferencesErrors,
 	UpdateNotificationPreferencesResponses,
@@ -3215,46 +3215,6 @@ export const getActivityWork = <ThrowOnError extends boolean = false>(
 	});
 
 /**
- * List the workspace's agents and how each is configured
- */
-export const listAgents = <ThrowOnError extends boolean = false>(
-	options: Options<ListAgentsData, ThrowOnError>,
-): RequestResult<ListAgentsResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<ListAgentsResponses, unknown, ThrowOnError>({
-		security: [{ scheme: "bearer", type: "http" }],
-		url: "/workspaces/{workspaceSlug}/agents",
-		...options,
-	});
-
-/**
- * Remove the agent for one purpose (turn it off)
- */
-export const deleteAgent = <ThrowOnError extends boolean = false>(
-	options: Options<DeleteAgentData, ThrowOnError>,
-): RequestResult<DeleteAgentResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).delete<DeleteAgentResponses, unknown, ThrowOnError>({
-		security: [{ scheme: "bearer", type: "http" }],
-		url: "/workspaces/{workspaceSlug}/agents/{purpose}",
-		...options,
-	});
-
-/**
- * Configure the agent for one purpose
- */
-export const configureAgent = <ThrowOnError extends boolean = false>(
-	options: Options<ConfigureAgentData, ThrowOnError>,
-): RequestResult<ConfigureAgentResponses, ConfigureAgentErrors, ThrowOnError> =>
-	(options.client ?? client).put<ConfigureAgentResponses, ConfigureAgentErrors, ThrowOnError>({
-		security: [{ scheme: "bearer", type: "http" }],
-		url: "/workspaces/{workspaceSlug}/agents/{purpose}",
-		...options,
-		headers: {
-			"Content-Type": "application/json",
-			...options.headers,
-		},
-	});
-
-/**
  * List this workspace's admin configuration changes (newest first)
  */
 export const listWorkspaceConfigAuditEvents = <ThrowOnError extends boolean = false>(
@@ -3452,6 +3412,154 @@ export const updateConnectionStatus = <ThrowOnError extends boolean = false>(
 	(options.client ?? client).patch<UpdateConnectionStatusResponses, unknown, ThrowOnError>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/connections/{id}/status",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+/**
+ * The developer's conversation: what runs now, its threads and how far it reached
+ */
+export const getConversation = <ThrowOnError extends boolean = false>(
+	options: Options<GetConversationData, ThrowOnError>,
+): RequestResult<GetConversationResponses, unknown, ThrowOnError> =>
+	(options.client ?? client).get<GetConversationResponses, unknown, ThrowOnError>({
+		security: [{ scheme: "bearer", type: "http" }],
+		url: "/workspaces/{workspaceSlug}/conversation",
+		...options,
+	});
+
+/**
+ * A page of top-level messages, oldest first; pass nextCursor as cursor for older ones
+ */
+export const listConversationEntries = <ThrowOnError extends boolean = false>(
+	options: Options<ListConversationEntriesData, ThrowOnError>,
+): RequestResult<ListConversationEntriesResponses, unknown, ThrowOnError> =>
+	(options.client ?? client).get<ListConversationEntriesResponses, unknown, ThrowOnError>({
+		security: [{ scheme: "bearer", type: "http" }],
+		url: "/workspaces/{workspaceSlug}/conversation/entries",
+		...options,
+	});
+
+/**
+ * Delete a message the developer wrote
+ *
+ * Erases its text and every summary that read it. A question Hephaestus has not answered yet is not answered.
+ */
+export const deleteConversationEntry = <ThrowOnError extends boolean = false>(
+	options: Options<DeleteConversationEntryData, ThrowOnError>,
+): RequestResult<DeleteConversationEntryResponses, DeleteConversationEntryErrors, ThrowOnError> =>
+	(options.client ?? client).delete<
+		DeleteConversationEntryResponses,
+		DeleteConversationEntryErrors,
+		ThrowOnError
+	>({
+		security: [{ scheme: "bearer", type: "http" }],
+		url: "/workspaces/{workspaceSlug}/conversation/entries/{entryId}",
+		...options,
+	});
+
+/**
+ * The thread on a top-level message: the message and a page of replies, oldest first
+ */
+export const getConversationThread = <ThrowOnError extends boolean = false>(
+	options: Options<GetConversationThreadData, ThrowOnError>,
+): RequestResult<GetConversationThreadResponses, GetConversationThreadErrors, ThrowOnError> =>
+	(options.client ?? client).get<
+		GetConversationThreadResponses,
+		GetConversationThreadErrors,
+		ThrowOnError
+	>({
+		security: [{ scheme: "bearer", type: "http" }],
+		url: "/workspaces/{workspaceSlug}/conversation/entries/{entryId}/thread",
+		...options,
+	});
+
+/**
+ * Clear the vote on one of Hephaestus's messages
+ */
+export const clearConversationVote = <ThrowOnError extends boolean = false>(
+	options: Options<ClearConversationVoteData, ThrowOnError>,
+): RequestResult<ClearConversationVoteResponses, unknown, ThrowOnError> =>
+	(options.client ?? client).delete<ClearConversationVoteResponses, unknown, ThrowOnError>({
+		security: [{ scheme: "bearer", type: "http" }],
+		url: "/workspaces/{workspaceSlug}/conversation/entries/{entryId}/vote",
+		...options,
+	});
+
+/**
+ * Rate one of Hephaestus's messages as helpful or not helpful
+ */
+export const setConversationVote = <ThrowOnError extends boolean = false>(
+	options: Options<SetConversationVoteData, ThrowOnError>,
+): RequestResult<SetConversationVoteResponses, SetConversationVoteErrors, ThrowOnError> =>
+	(options.client ?? client).put<
+		SetConversationVoteResponses,
+		SetConversationVoteErrors,
+		ThrowOnError
+	>({
+		security: [{ scheme: "bearer", type: "http" }],
+		url: "/workspaces/{workspaceSlug}/conversation/entries/{entryId}/vote",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+/**
+ * Mark the conversation read
+ *
+ * Records how far the developer read, for every device. The marker keeps the latest time: an earlier one changes nothing.
+ */
+export const markConversationRead = <ThrowOnError extends boolean = false>(
+	options: Options<MarkConversationReadData, ThrowOnError>,
+): RequestResult<MarkConversationReadResponses, unknown, ThrowOnError> =>
+	(options.client ?? client).put<MarkConversationReadResponses, unknown, ThrowOnError>({
+		security: [{ scheme: "bearer", type: "http" }],
+		url: "/workspaces/{workspaceSlug}/conversation/read",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+/**
+ * Ask Hephaestus
+ *
+ * Stores the question before anything is shown and queues a turn. A question while Hephaestus answers waits as a follow-up. Repeating a requestId returns the first submission.
+ */
+export const submitConversationTurn = <ThrowOnError extends boolean = false>(
+	options: Options<SubmitConversationTurnData, ThrowOnError>,
+): RequestResult<SubmitConversationTurnResponses, SubmitConversationTurnErrors, ThrowOnError> =>
+	(options.client ?? client).post<
+		SubmitConversationTurnResponses,
+		SubmitConversationTurnErrors,
+		ThrowOnError
+	>({
+		security: [{ scheme: "bearer", type: "http" }],
+		url: "/workspaces/{workspaceSlug}/conversation/turns",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+/**
+ * Stop a turn
+ *
+ * A queued turn never runs and keeps its question. A running turn keeps what Hephaestus already wrote. Stopping an ended turn changes nothing. A turn asked in Slack can be stopped here.
+ */
+export const updateConversationTurnStatus = <ThrowOnError extends boolean = false>(
+	options: Options<UpdateConversationTurnStatusData, ThrowOnError>,
+): RequestResult<UpdateConversationTurnStatusResponses, unknown, ThrowOnError> =>
+	(options.client ?? client).patch<UpdateConversationTurnStatusResponses, unknown, ThrowOnError>({
+		security: [{ scheme: "bearer", type: "http" }],
+		url: "/workspaces/{workspaceSlug}/conversation/turns/{turnId}/status",
 		...options,
 		headers: {
 			"Content-Type": "application/json",
@@ -3814,134 +3922,38 @@ export const followProviderRole = <ThrowOnError extends boolean = false>(
 	});
 
 /**
- * The developer's conversation: what runs now, its threads and how far it reached
+ * List the workspace's model assignments
  */
-export const getMentorConversation = <ThrowOnError extends boolean = false>(
-	options: Options<GetMentorConversationData, ThrowOnError>,
-): RequestResult<GetMentorConversationResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<GetMentorConversationResponses, unknown, ThrowOnError>({
+export const listModelAssignments = <ThrowOnError extends boolean = false>(
+	options: Options<ListModelAssignmentsData, ThrowOnError>,
+): RequestResult<ListModelAssignmentsResponses, unknown, ThrowOnError> =>
+	(options.client ?? client).get<ListModelAssignmentsResponses, unknown, ThrowOnError>({
 		security: [{ scheme: "bearer", type: "http" }],
-		url: "/workspaces/{workspaceSlug}/mentor/conversation",
+		url: "/workspaces/{workspaceSlug}/model-assignments",
 		...options,
 	});
 
 /**
- * Mark the conversation read
- *
- * Records how far the developer read, for every device. The marker keeps the latest time: an earlier one changes nothing.
+ * Remove the model assignment of one purpose (turn it off)
  */
-export const markMentorConversationRead = <ThrowOnError extends boolean = false>(
-	options: Options<MarkMentorConversationReadData, ThrowOnError>,
-): RequestResult<MarkMentorConversationReadResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).put<MarkMentorConversationReadResponses, unknown, ThrowOnError>({
+export const removeModelAssignment = <ThrowOnError extends boolean = false>(
+	options: Options<RemoveModelAssignmentData, ThrowOnError>,
+): RequestResult<RemoveModelAssignmentResponses, unknown, ThrowOnError> =>
+	(options.client ?? client).delete<RemoveModelAssignmentResponses, unknown, ThrowOnError>({
 		security: [{ scheme: "bearer", type: "http" }],
-		url: "/workspaces/{workspaceSlug}/mentor/conversation/read",
-		...options,
-		headers: {
-			"Content-Type": "application/json",
-			...options.headers,
-		},
-	});
-
-/**
- * A page of top-level messages, oldest first; pass nextCursor as cursor for older ones
- */
-export const listMentorEntries = <ThrowOnError extends boolean = false>(
-	options: Options<ListMentorEntriesData, ThrowOnError>,
-): RequestResult<ListMentorEntriesResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<ListMentorEntriesResponses, unknown, ThrowOnError>({
-		security: [{ scheme: "bearer", type: "http" }],
-		url: "/workspaces/{workspaceSlug}/mentor/entries",
+		url: "/workspaces/{workspaceSlug}/model-assignments/{purpose}",
 		...options,
 	});
 
 /**
- * Delete a message the developer wrote
- *
- * Erases its text and every summary that read it. A question Hephaestus has not answered yet is not answered.
+ * Assign a model to one purpose
  */
-export const deleteMentorEntry = <ThrowOnError extends boolean = false>(
-	options: Options<DeleteMentorEntryData, ThrowOnError>,
-): RequestResult<DeleteMentorEntryResponses, DeleteMentorEntryErrors, ThrowOnError> =>
-	(options.client ?? client).delete<
-		DeleteMentorEntryResponses,
-		DeleteMentorEntryErrors,
-		ThrowOnError
-	>({
+export const assignModel = <ThrowOnError extends boolean = false>(
+	options: Options<AssignModelData, ThrowOnError>,
+): RequestResult<AssignModelResponses, AssignModelErrors, ThrowOnError> =>
+	(options.client ?? client).put<AssignModelResponses, AssignModelErrors, ThrowOnError>({
 		security: [{ scheme: "bearer", type: "http" }],
-		url: "/workspaces/{workspaceSlug}/mentor/entries/{entryId}",
-		...options,
-	});
-
-/**
- * The thread on a top-level message: the message and a page of replies, oldest first
- */
-export const getMentorThread = <ThrowOnError extends boolean = false>(
-	options: Options<GetMentorThreadData, ThrowOnError>,
-): RequestResult<GetMentorThreadResponses, GetMentorThreadErrors, ThrowOnError> =>
-	(options.client ?? client).get<GetMentorThreadResponses, GetMentorThreadErrors, ThrowOnError>({
-		security: [{ scheme: "bearer", type: "http" }],
-		url: "/workspaces/{workspaceSlug}/mentor/entries/{entryId}/thread",
-		...options,
-	});
-
-/**
- * Clear the vote on one of Hephaestus's messages
- */
-export const clearMentorVote = <ThrowOnError extends boolean = false>(
-	options: Options<ClearMentorVoteData, ThrowOnError>,
-): RequestResult<ClearMentorVoteResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).delete<ClearMentorVoteResponses, unknown, ThrowOnError>({
-		security: [{ scheme: "bearer", type: "http" }],
-		url: "/workspaces/{workspaceSlug}/mentor/entries/{entryId}/vote",
-		...options,
-	});
-
-/**
- * Rate one of Hephaestus's messages as helpful or not helpful
- */
-export const setMentorVote = <ThrowOnError extends boolean = false>(
-	options: Options<SetMentorVoteData, ThrowOnError>,
-): RequestResult<SetMentorVoteResponses, SetMentorVoteErrors, ThrowOnError> =>
-	(options.client ?? client).put<SetMentorVoteResponses, SetMentorVoteErrors, ThrowOnError>({
-		security: [{ scheme: "bearer", type: "http" }],
-		url: "/workspaces/{workspaceSlug}/mentor/entries/{entryId}/vote",
-		...options,
-		headers: {
-			"Content-Type": "application/json",
-			...options.headers,
-		},
-	});
-
-/**
- * Ask Hephaestus
- *
- * Stores the question before anything is shown and queues a turn. A question while Hephaestus answers waits as a follow-up. Repeating a requestId returns the first submission.
- */
-export const submitMentorTurn = <ThrowOnError extends boolean = false>(
-	options: Options<SubmitMentorTurnData, ThrowOnError>,
-): RequestResult<SubmitMentorTurnResponses, SubmitMentorTurnErrors, ThrowOnError> =>
-	(options.client ?? client).post<SubmitMentorTurnResponses, SubmitMentorTurnErrors, ThrowOnError>({
-		security: [{ scheme: "bearer", type: "http" }],
-		url: "/workspaces/{workspaceSlug}/mentor/turns",
-		...options,
-		headers: {
-			"Content-Type": "application/json",
-			...options.headers,
-		},
-	});
-
-/**
- * Stop a turn
- *
- * A queued turn never runs and keeps its question. A running turn keeps what Hephaestus already wrote. Stopping an ended turn changes nothing. A turn asked in Slack can be stopped here.
- */
-export const updateMentorTurnStatus = <ThrowOnError extends boolean = false>(
-	options: Options<UpdateMentorTurnStatusData, ThrowOnError>,
-): RequestResult<UpdateMentorTurnStatusResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).patch<UpdateMentorTurnStatusResponses, unknown, ThrowOnError>({
-		security: [{ scheme: "bearer", type: "http" }],
-		url: "/workspaces/{workspaceSlug}/mentor/turns/{turnId}/status",
+		url: "/workspaces/{workspaceSlug}/model-assignments/{purpose}",
 		...options,
 		headers: {
 			"Content-Type": "application/json",

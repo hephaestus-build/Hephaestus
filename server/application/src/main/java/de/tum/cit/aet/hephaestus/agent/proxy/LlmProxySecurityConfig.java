@@ -11,12 +11,12 @@ import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxOutputArchive;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxes;
+import de.tum.cit.aet.hephaestus.conversation.ConversationTurnProgress;
 import de.tum.cit.aet.hephaestus.core.auth.ratelimit.AuthRateLimitProperties;
 import de.tum.cit.aet.hephaestus.core.auth.ratelimit.BucketResolver;
 import de.tum.cit.aet.hephaestus.core.auth.ratelimit.RateLimitResponse;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import de.tum.cit.aet.hephaestus.core.web.PayloadSizeFilter;
-import de.tum.cit.aet.hephaestus.mentor.MentorTurnProgress;
 import jakarta.servlet.DispatcherType;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -69,7 +69,7 @@ import tools.jackson.databind.ObjectMapper;
  * </ol>
  *
  * <p>Gated on the agent runtime rather than the practice-review feature flag, because disabling practice reviews must not
- * break Heph turns.
+ * break Hephaestus turns.
  */
 @Configuration
 @ConditionalOnAgentRuntime
@@ -230,7 +230,12 @@ class LlmProxySecurityConfig {
                         bounded(gatewayProperties.maxRequestBytes(), turnBodies, bodyBudget, objectMapper, accounting),
                         SandboxTokenAuthenticationFilter.class)
                 .addFilterBefore(
-                        bounded(MentorTurnProgress.MAX_UPDATE_BYTES, turnPartial, bodyBudget, objectMapper, accounting),
+                        bounded(
+                                ConversationTurnProgress.MAX_UPDATE_BYTES,
+                                turnPartial,
+                                bodyBudget,
+                                objectMapper,
+                                accounting),
                         SandboxTokenAuthenticationFilter.class);
         return http.build();
     }

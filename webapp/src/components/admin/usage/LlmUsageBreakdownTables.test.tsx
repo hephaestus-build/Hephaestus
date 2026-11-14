@@ -52,7 +52,7 @@ const report: WorkspaceLlmUsageReport = {
 			events: 10,
 		},
 		{
-			jobType: "MENTOR_TURN",
+			jobType: "CONVERSATION_TURN",
 			instanceTotalCostUsd: 4.5,
 			ownProviderTotalCostUsd: 1.5,
 			unpricedEventCount: 2,

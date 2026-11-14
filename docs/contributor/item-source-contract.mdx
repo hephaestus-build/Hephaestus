@@ -48,8 +48,8 @@ Prompts, practice files, task envelopes, runner code, model settings, and execut
 Runtime components must reference the exact contract version and catalog digest they implement.
 Inputs outside the catalog cannot satisfy a practice requirement.
 
-This contract governs automated-review evidence, not every file used by the separate Mentor conversation runtime.
-Mentor inputs remain subject to Mentor consent and integration controls and cannot support an automated practice review.
+This contract governs automated-review evidence, not every file used by the separate conversation runtime.
+Conversation inputs remain subject to conversation consent and integration controls and cannot support an automated practice review.
 Reusing one for review requires registering it as a source kind first.
 
 ## Source vocabulary
@@ -103,11 +103,15 @@ It does not authorize collection, disclosure, or model egress.
 Each catalog source references separate source-use decisions whose purposes are machine-enforced.
 Capture requires `AUTOMATED_PRACTICE_REVIEW`.
 Result persistence, delivery, and contributor evidence APIs require `PRACTICE_FEEDBACK_DELIVERY`.
-Mentor reuse requires `CONVERSATIONAL_MENTORING`.
+Conversation reuse requires `CONVERSATIONAL_MENTORING`.
 
 And workspace-admin evidence review requires `OPERATOR_EVIDENCE_REVIEW`.
 Processor, region, transfer, and model-egress controls remain separate deployment obligations.
 A source allowed in an internal mirror is not thereby allowed in an external model request.
+
+`CONVERSATIONAL_MENTORING` is the one known holdover of the retired "mentor" vocabulary.
+The frozen source-use contract 3.0.0 defines it, so it does not change in a minor release.
+The next major version of the source-use contract renames it.
 
 ## Source catalog
 
@@ -324,7 +328,7 @@ Currentness is derived:
 - changing a practice's review configuration or automated-review policy stales that practice's claims.
 - adding a source cannot silently alter existing requirements because each practice names its sources explicitly.
 - governance withdrawal disables its exact future use without rewriting historical semantics.
-  This includes collection, result persistence and delivery, mentoring reuse, or evidence disclosure.
+  This includes collection, result persistence and delivery, conversation reuse, or evidence disclosure.
 - erasure or expiry may make a claim unreplayable without making the historical result false.
 
 Semantic currentness, automated-review-validation status, governance eligibility, and replayability remain separate.
@@ -353,7 +357,7 @@ Two server paths end a result with `WORK_CHANGED`:
   It ends only results whose source reviews were ordered no later than the event.
 
 A result of a later-ordered review for the same practice, item and developer ends the earlier one with `REPLACED`.
-The mentor's result history shows `endedAt` and `endReason` of an ended result, beside its recorded outcome.
+The conversation's result history shows `endedAt` and `endReason` of an ended result, beside its recorded outcome.
 It does not name a replacing result, and its bounded sample can omit one.
 
 The history states two more facts of a result whose words it may copy:

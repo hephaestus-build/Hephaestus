@@ -1,4 +1,9 @@
-import type { MentorEntry, MentorTurn, WeeklyDigest, WeeklyDigestFeedback } from "@/api/types.gen";
+import type {
+	ConversationEntry,
+	ConversationTurn,
+	WeeklyDigest,
+	WeeklyDigestFeedback,
+} from "@/api/types.gen";
 import type { ReadyTimeline } from "@/components/conversation/ConversationTimeline";
 import { daysBefore, earlierToday, minutesBefore } from "@/stories/story-clock";
 
@@ -13,8 +18,8 @@ const CONVERSATION_ID = "0a7c4f3e-6b1d-4e25-9c8a-1f2e3d4c5b6a";
 let seq = 0;
 
 export function entry(
-	overrides: Partial<MentorEntry> & Pick<MentorEntry, "id" | "kind" | "text">,
-): MentorEntry {
+	overrides: Partial<ConversationEntry> & Pick<ConversationEntry, "id" | "kind" | "text">,
+): ConversationEntry {
 	seq += 1;
 	return {
 		conversationId: CONVERSATION_ID,
@@ -37,7 +42,7 @@ export const QUESTION = entry({
 
 export const ANSWER = entry({
 	id: "e1000000-0000-4000-8000-000000000002",
-	kind: "HEPH",
+	kind: "ANSWER",
 	text: [
 		"Your team asks for pull request descriptions that **explain significant decisions**. A reviewer can read *what* changed from the diff, but not *why* this approach won.",
 		"",
@@ -67,7 +72,7 @@ export const SLACK_QUESTION = entry({
 
 export const SLACK_ANSWER = entry({
 	id: "e1000000-0000-4000-8000-000000000004",
-	kind: "HEPH",
+	kind: "ANSWER",
 	surface: "SLACK",
 	text: [
 		"Here is one way to shape it:",
@@ -100,7 +105,7 @@ export const FOLLOW_UP = entry({
 
 export const ANSWER_WITH_FEEDBACK = entry({
 	id: "e1000000-0000-4000-8000-000000000006",
-	kind: "HEPH",
+	kind: "ANSWER",
 	text: "I looked at your latest pull request, **Cache the practice catalog**. What made you pick the time-based cache?",
 	turnId: FOLLOW_UP.turnId,
 	createdAt: earlierToday(4),
@@ -133,7 +138,7 @@ export const FOLLOW_UPS_FULL =
 	"Hephaestus is still answering. Wait for an answer before you send more messages.";
 
 /** A follow-up whose turn failed: the question carries why. */
-export const FAILED_FOLLOW_UP: MentorEntry = {
+export const FAILED_FOLLOW_UP: ConversationEntry = {
 	...FOLLOW_UP,
 	turnStatus: "FAILED",
 	turnError: "Hephaestus took too long to answer.",
@@ -214,7 +219,7 @@ const IN_THE_CONVERSATION: WeeklyDigestFeedback = {
 	practiceSlug: "share-blockers",
 	practiceName: "Share blockers early",
 	destination: "CONVERSATION",
-	mentorEntryId: ANSWER_WITH_FEEDBACK.id,
+	conversationEntryId: ANSWER_WITH_FEEDBACK.id,
 	deliveredAt: new Date("2026-10-08T10:00:00Z"),
 	withdrawn: false,
 	replaced: false,
@@ -275,7 +280,7 @@ export const DIGEST = entry({
 	digest: WEEKLY_DIGEST,
 });
 
-export const CONVERSATION: MentorEntry[] = [
+export const CONVERSATION: ConversationEntry[] = [
 	QUESTION,
 	ANSWER,
 	SLACK_QUESTION,
@@ -285,8 +290,8 @@ export const CONVERSATION: MentorEntry[] = [
 ];
 
 export function turn(
-	overrides: Partial<MentorTurn> & Pick<MentorTurn, "id" | "status">,
-): MentorTurn {
+	overrides: Partial<ConversationTurn> & Pick<ConversationTurn, "id" | "status">,
+): ConversationTurn {
 	return {
 		conversationId: CONVERSATION_ID,
 		requestId: `request-${overrides.id}`,

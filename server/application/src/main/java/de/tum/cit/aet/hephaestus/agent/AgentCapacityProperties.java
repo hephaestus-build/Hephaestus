@@ -18,7 +18,7 @@ import org.springframework.validation.annotation.Validated;
  * @param turnLeaseTtl the same for a conversation turn. A person waits for the answer, so a lost turn is taken back
  *     sooner; its holder renews every 5 s.
  * @param turns how many conversation turns run at once in the installation; zero stops new turns, and unset runs as many as are asked. The claim
- *     leases no turn beyond it, so a question waits for a free Heph instead.
+ *     leases no turn beyond it, so a question waits for a free Hephaestus instead.
  * @param leaseRenewal how often a holder renews each lease it holds, and how often each server replica reaps the
  *     expired ones. At most half the lease, so a holder survives one missed renewal.
  * @param reviewRetries how many lost leases a review job survives. A requeue that its holder does not charge, such as

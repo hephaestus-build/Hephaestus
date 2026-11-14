@@ -1011,7 +1011,7 @@ public class JobEvidenceFiles implements SandboxResultListener {
 
     /**
      * Binds the attempt the executor is launching: the job must be RUNNING as exactly this attempt. Anything else, and
-     * a mentor session, which is never bound, keeps no transcript.
+     * a conversation session, which is never bound, keeps no transcript.
      */
     @Override
     public Consumer<Map<String, byte[]>> bind(UUID jobId, int attempt, String image) {

@@ -12,7 +12,7 @@ import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceFolderPersonDataCatalog.C
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmConnectionRepository;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelRepository;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
-import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBindingRepository;
+import de.tum.cit.aet.hephaestus.agent.config.WorkspaceModelAssignmentRepository;
 import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.PreparedEvidence;
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
@@ -23,6 +23,7 @@ import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.AdmissionResponseDTO;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.PracticePageSupportDTO;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.PrivateFeedbackHistoryDTO;
+import de.tum.cit.aet.hephaestus.conversation.ConversationTurnRunRows;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonCopyIdentity;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyRecorder;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
@@ -36,7 +37,6 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemVersion;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.item.ScmItemService;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.item.ScmItemSourceAccess;
-import de.tum.cit.aet.hephaestus.mentor.MentorTurnRunRows;
 import de.tum.cit.aet.hephaestus.practices.feedback.decision.FeedbackDecision;
 import de.tum.cit.aet.hephaestus.practices.feedback.decision.FeedbackDecisionRepository;
 import de.tum.cit.aet.hephaestus.practices.model.Result;
@@ -138,7 +138,7 @@ class FeedbackPrivateHistoryIntegrationTest extends BaseIntegrationTest {
     private LlmModelResolver resolver;
 
     @Autowired
-    private WorkspaceAgentBindingRepository bindings;
+    private WorkspaceModelAssignmentRepository bindings;
 
     @Autowired
     private JobEvidenceFiles files;
@@ -207,7 +207,7 @@ class FeedbackPrivateHistoryIntegrationTest extends BaseIntegrationTest {
                 scenario.workspace().getId(),
                 scenario.practice().getId());
         AdmittedReviewJobFixtures.snapshot(scenario.workspace(), connections, models, bindings, resolver, mapper);
-        AdmittedReviewJobFixtures.mentorBinding(scenario.workspace(), bindings);
+        AdmittedReviewJobFixtures.conversationBinding(scenario.workspace(), bindings);
         provider = providers.saveAndFlush(
                 new IdentityProvider(IdentityProviderType.GITLAB, "https://private-history.example"));
     }
@@ -279,7 +279,7 @@ class FeedbackPrivateHistoryIntegrationTest extends BaseIntegrationTest {
                 assertThat(row.threadKey()).isEqualTo(queued.feedback().getId().toString());
                 assertThat(row.destination()).isEqualTo(FeedbackDestination.CONVERSATION);
                 assertThat(row.practiceSlug()).isEqualTo(scenario.practice().getSlug());
-                assertThat(row.bodyRole()).isEqualTo(PrivateFeedbackHistoryDTO.BodyRole.MENTOR_NOTES);
+                assertThat(row.bodyRole()).isEqualTo(PrivateFeedbackHistoryDTO.BodyRole.CONVERSATION_NOTES);
                 assertThat(row.body()).isEqualTo("An earlier queued concern.");
             });
             assertThat(copiedJobs(current))
@@ -634,15 +634,15 @@ class FeedbackPrivateHistoryIntegrationTest extends BaseIntegrationTest {
         var answer = UUID.randomUUID();
         var callId = "call-" + feedback.getId();
         jdbc.update(
-                "INSERT INTO mentor_conversation(id,workspace_id,account_id,created_at,last_activity_at)"
+                "INSERT INTO conversation(id,workspace_id,account_id,created_at,last_activity_at)"
                         + " VALUES (?,?,?,now(),now())",
                 conversation,
                 feedback.getWorkspaceId(),
                 feedback.getDeveloperId());
         UUID run = UUID.randomUUID();
-        jdbc.update(MentorTurnRunRows.insert(run, feedback.getWorkspaceId(), conversation, "DONE", 1));
+        jdbc.update(ConversationTurnRunRows.insert(run, feedback.getWorkspaceId(), conversation, "DONE", 1));
         jdbc.update(
-                "INSERT INTO mentor_turn(id,workspace_id,conversation_id,request_id,status,surface,attempt,run_id,"
+                "INSERT INTO conversation_turn(id,workspace_id,conversation_id,request_id,status,surface,attempt,run_id,"
                         + "created_at,finished_at) VALUES (?,?,?,?,'DONE','APP',1,?,now(),now())",
                 turn,
                 feedback.getWorkspaceId(),
@@ -659,15 +659,15 @@ class FeedbackPrivateHistoryIntegrationTest extends BaseIntegrationTest {
                 "arguments",
                 Map.of("feedbackId", feedback.getId().toString(), "text", words));
         jdbc.update(
-                "INSERT INTO mentor_entry(id,workspace_id,conversation_id,seq,turn_id,kind,surface,text,payload,"
-                        + "created_at) VALUES (?,?,?,1,?,'HEPH','APP','',?::jsonb,now())",
+                "INSERT INTO conversation_entry(id,workspace_id,conversation_id,seq,turn_id,kind,surface,text,payload,"
+                        + "created_at) VALUES (?,?,?,1,?,'ANSWER','APP','',?::jsonb,now())",
                 answer,
                 feedback.getWorkspaceId(),
                 conversation,
                 turn,
                 mapper.writeValueAsString(Map.of("message", Map.of("role", "assistant", "content", List.of(call)))));
         jdbc.update(
-                "INSERT INTO mentor_entry(id,workspace_id,conversation_id,seq,turn_id,kind,surface,text,payload,"
+                "INSERT INTO conversation_entry(id,workspace_id,conversation_id,seq,turn_id,kind,surface,text,payload,"
                         + "created_at) VALUES (?,?,?,2,?,'TOOL_RESULT','APP','',?::jsonb,now())",
                 UUID.randomUUID(),
                 feedback.getWorkspaceId(),
@@ -697,8 +697,8 @@ class FeedbackPrivateHistoryIntegrationTest extends BaseIntegrationTest {
                 .writeKey(id.toString())
                 .writeStartedAt(at)
                 .postedAt(at)
-                .mentorTurnId(turn)
-                .mentorEntryId(answer)
+                .conversationTurnId(turn)
+                .conversationEntryId(answer)
                 .createdAt(at)
                 .build());
     }

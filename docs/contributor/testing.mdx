@@ -457,8 +457,8 @@ This checks real tools and model integration. The separate Kubernetes gate check
 
 ### Hephaestus voice eval
 
-The eval in `server/application/src/test/resources/agent/heph-voice/` sends questions to a real model through the conversation runner.
-The eval composes the prompt as `HephTurnContexts` does, from `system.md` and the writing guide, and a fake server serves a small context folder.
+The eval in `server/application/src/test/resources/agent/conversation-voice/` sends questions to a real model through the conversation runner.
+The eval composes the prompt as `ConversationTurnContexts` does, from `system.md` and the writing guide, and a fake server serves a small context folder.
 Each case asserts what an answer must never do and prints one line: `eval <case> outputTokens=<n> words=<n> fieldsRead=<true|false>`.
 
 The case file names do not match `*.spec.ts`, so `vp run test:agents` and `vp run check` do not run them.
@@ -469,7 +469,7 @@ From the repository root:
 
 ```bash
 HEPHAESTUS_LIVE_LLM_BASE_URL=… HEPHAESTUS_LIVE_LLM_API_KEY=… HEPHAESTUS_LIVE_LLM_MODEL=… \
-  node --experimental-test-module-mocks --test --test-concurrency=1 'server/application/src/test/resources/agent/heph-voice/*.live.ts'
+  node --experimental-test-module-mocks --test --test-concurrency=1 'server/application/src/test/resources/agent/conversation-voice/*.live.ts'
 ```
 
 `--test-concurrency=1` runs one case file at a time.
@@ -480,7 +480,7 @@ Each case, or each group of cases for one finding, is its own `<id>.live.ts` fil
 To add a case, add a file. Do not append it to the file of another case.
 The glob in the command above finds each case file, so no list of cases needs an update.
 
-To compare another prompt, set `HEPHAESTUS_LIVE_HEPH_SYSTEM_PROMPT_FILE` to a file with the whole system prompt. It replaces `system.md` and the writing guide.
+To compare another prompt, set `HEPHAESTUS_LIVE_CONVERSATION_SYSTEM_PROMPT_FILE` to a file with the whole system prompt. It replaces `system.md` and the writing guide.
 
 ### Live practice script review
 

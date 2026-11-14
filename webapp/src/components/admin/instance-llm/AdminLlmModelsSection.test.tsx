@@ -24,7 +24,7 @@ const model: LlmModel = {
 const connection: AdminLlmModelsSectionProps["connection"] = {
 	displayName: "OpenAI",
 	apiProtocol: "openai-responses",
-	purposes: ["PRACTICE_REVIEW", "MENTOR"],
+	purposes: ["PRACTICE_REVIEW", "CONVERSATION"],
 	enabled: true,
 };
 

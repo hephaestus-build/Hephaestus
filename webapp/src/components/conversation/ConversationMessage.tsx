@@ -2,7 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { CalendarDays } from "lucide-react";
 import type { ReactNode } from "react";
 
-import type { MentorEntry, MentorLink } from "@/api/types.gen";
+import type { ConversationEntry, ConversationLink } from "@/api/types.gen";
 import { HephaestusMark } from "@/components/brand/HephaestusMark";
 import { InlineLink } from "@/components/common/InlineLink";
 import { UNTRUSTED_MARKDOWN_PROSE, UntrustedMarkdown } from "@/components/common/UntrustedMarkdown";
@@ -24,12 +24,12 @@ export interface MessageAuthor {
 
 /** What a message shows. An unsent message has no id or `seq` yet, so it is not a whole entry. */
 type ShownMessage = Pick<
-	MentorEntry,
+	ConversationEntry,
 	"kind" | "surface" | "text" | "createdAt" | "editedAt" | "deleted" | "links"
 >;
 
 /** Marks a message written in Slack, so the reader knows where the conversation happened. */
-function SurfaceMarker({ surface }: Pick<MentorEntry, "surface">) {
+function SurfaceMarker({ surface }: Pick<ConversationEntry, "surface">) {
 	if (surface !== "SLACK") {
 		return null;
 	}
@@ -49,7 +49,7 @@ function authorName(message: Pick<ShownMessage, "kind">, developer: MessageAutho
 		case "DIGEST": {
 			return "Weekly digest";
 		}
-		case "HEPH": {
+		case "ANSWER": {
 			return "Hephaestus";
 		}
 	}
@@ -121,7 +121,7 @@ function MessageBody({ message, streaming }: { message: ShownMessage; streaming:
  * A result, problem or feedback Hephaestus showed, in Hephaestus's words, as main's chat shows a shown link: a
  * bubble of its own. The work it is about links to the developer's feedback on that work.
  */
-function LinkBody({ link, workspaceSlug }: { link: MentorLink; workspaceSlug?: string }) {
+function LinkBody({ link, workspaceSlug }: { link: ConversationLink; workspaceSlug?: string }) {
 	return (
 		<>
 			<Bubble variant="ghost">
@@ -192,7 +192,7 @@ export function ConversationMessage({
 				) : (
 					<MessageHeader className="gap-2">
 						<span className="text-sm font-semibold text-foreground">{author.name}</span>
-						{message.kind === "HEPH" && <Badge variant="muted">AI</Badge>}
+						{message.kind === "ANSWER" && <Badge variant="muted">AI</Badge>}
 						<time dateTime={message.createdAt.toISOString()}>{formatTime(message.createdAt)}</time>
 						<SurfaceMarker surface={message.surface} />
 						{message.editedAt && <span className="font-normal">(edited)</span>}

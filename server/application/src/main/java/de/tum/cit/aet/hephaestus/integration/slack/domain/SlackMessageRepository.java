@@ -268,7 +268,7 @@ public interface SlackMessageRepository extends JpaRepository<SlackMessage, Long
             @Param("editedAt") Instant editedAt);
 
     /**
-     * Agent-owned {@code ConversationThreadProjection} SPI: the non-tombstoned turns of one thread (root
+     * Agent-owned {@code ThreadProjection} SPI: the non-tombstoned turns of one thread (root
      * {@code slack_ts = threadTs} + replies {@code slack_thread_ts = threadTs}), oldest first, with the author's
      * linked login/name resolved via an ad-hoc {@code LEFT JOIN} on {@code User} (no FK — {@code authorAccountId} is
      * a scalar firewall stamp). Consent-gated on the SAME read as the message fetch (not only on a prior thread
@@ -321,7 +321,7 @@ public interface SlackMessageRepository extends JpaRepository<SlackMessage, Long
             @Param("channelId") String channelId,
             @Param("threadTs") String threadTs);
 
-    /** Agent-owned {@code ConversationCandidateSource} SPI: count of non-tombstoned turns in one thread, workspace-pinned. */
+    /** Agent-owned {@code ThreadCandidateSource} SPI: count of non-tombstoned turns in one thread, workspace-pinned. */
     @Query(
             "SELECT COUNT(m) FROM SlackMessage m WHERE m.workspaceId = :workspaceId AND m.slackChannelId = :channelId AND (m.slackThreadTs = :threadTs OR m.slackTs = :threadTs) AND m.deletedAt IS NULL")
     long countLiveTurns(
@@ -330,7 +330,7 @@ public interface SlackMessageRepository extends JpaRepository<SlackMessage, Long
             @Param("threadTs") String threadTs);
 
     /**
-     * Agent-owned {@code ConversationCandidateSource} SPI: count of non-tombstoned turns in one thread whose
+     * Agent-owned {@code ThreadCandidateSource} SPI: count of non-tombstoned turns in one thread whose
      * {@code slack_ts} is strictly greater than {@code watermark} (lexicographic — the same Slack-{@code ts}
      * ordering invariant {@link SlackThreadRepository#upsertOnMessage} relies on), workspace-pinned.
      */

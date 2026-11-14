@@ -555,7 +555,7 @@ export const AdminWorkspaceLlmUsageSchema = {
 			type: "integer",
 			format: "int64",
 			description:
-				"Runs this month, either purse: job attempts and mentor turn attempts. A practice script call counts toward the run of its review.",
+				"Runs this month, either purse: job attempts and conversation turn attempts. A practice script call counts toward the run of its review.",
 		},
 		instanceBudgetVerdict: {
 			type: "string",
@@ -681,79 +681,6 @@ export const AdminWorkspaceViewSchema = {
 		"status",
 		"workspaceSlug",
 	],
-} as const;
-
-export const AgentBindingSchema = {
-	type: "object",
-	description: "A workspace's agent binding for one purpose",
-	properties: {
-		dataHandlingTier: {
-			type: "string",
-			enum: ["IN_HOUSE", "CLOUD", "UNDECLARED"],
-		},
-		enabled: {
-			type: "boolean",
-		},
-		instanceModelId: {
-			type: "integer",
-			format: "int64",
-		},
-		purpose: {
-			type: "string",
-			enum: ["PRACTICE_REVIEW", "MENTOR"],
-		},
-		ready: {
-			type: "boolean",
-			description: "True when the bound model is available to run right now",
-		},
-		servedTiers: {
-			type: "array",
-			description:
-				"The members this binding serves now, named by the tier of their choice: IN_HOUSE and CLOUD for the members who chose them, UNDECLARED for the members who have not chosen. Empty when the binding serves no member.",
-			items: {
-				type: "string",
-				enum: ["IN_HOUSE", "CLOUD", "UNDECLARED"],
-			},
-		},
-		timeoutSeconds: {
-			type: "integer",
-			format: "int32",
-		},
-		workspaceModelId: {
-			type: "integer",
-			format: "int64",
-		},
-	},
-	required: ["dataHandlingTier", "enabled", "purpose", "ready", "servedTiers"],
-} as const;
-
-export const AgentBindingRequestSchema = {
-	type: "object",
-	description: "Bind a model and execution limits to an agent purpose",
-	properties: {
-		enabled: {
-			type: "boolean",
-			description: "Whether this purpose is active (paused when false)",
-		},
-		instanceModelId: {
-			type: "integer",
-			format: "int64",
-			description: "Shared (instance-catalog) model id to run this purpose on",
-		},
-		timeoutSeconds: {
-			type: "integer",
-			format: "int32",
-			description:
-				"Per-run timeout in seconds (30–10800; three hours is the longest a single run may take)",
-			maximum: 10800,
-			minimum: 30,
-		},
-		workspaceModelId: {
-			type: "integer",
-			format: "int64",
-			description: "Workspace-owned model id to run this purpose on",
-		},
-	},
 } as const;
 
 export const AiChoiceRequestSchema = {
@@ -985,7 +912,7 @@ export const AvailableLlmModelSchema = {
 				"The purposes a binding may assign this model to, from its connection's protocol",
 			items: {
 				type: "string",
-				enum: ["PRACTICE_REVIEW", "MENTOR"],
+				enum: ["PRACTICE_REVIEW", "CONVERSATION"],
 			},
 		},
 		reasoningEffort: {
@@ -1800,6 +1727,7 @@ export const ConfigAuditEntryViewSchema = {
 			enum: [
 				"PROVIDER_RESOURCE_RELEASE",
 				"PRACTICE_REVIEW_SETTINGS",
+				"MODEL_ASSIGNMENT",
 				"AGENT_BINDING",
 				"AGENT_CONFIG",
 				"AI_CONFIG_BINDING",
@@ -2166,6 +2094,428 @@ export const ContributorSchema = {
 		},
 	},
 	required: ["avatarUrl", "htmlUrl", "id", "login", "name"],
+} as const;
+
+export const ConversationSchema = {
+	type: "object",
+	description: "The developer's Hephaestus conversation in a workspace at one moment",
+	properties: {
+		activeTurns: {
+			type: "array",
+			description: "Queued and running turns in the conversation and its threads, oldest first",
+			items: {
+				$ref: "#/components/schemas/ConversationTurn",
+			},
+		},
+		id: {
+			type: "string",
+			format: "uuid",
+			description:
+				"The main conversation; absent until the developer writes to Hephaestus or gets a weekly digest",
+		},
+		lastAnswerAt: {
+			type: "string",
+			format: "date-time",
+			description:
+				"When Hephaestus's newest shown answer in the conversation or any of its threads was written; absent before the first. Compare it with the newest answer the client has seen.",
+		},
+		lastReadAt: {
+			type: "string",
+			format: "date-time",
+			description:
+				"How far the developer read the conversation on any device; absent before the first read. Hephaestus has an unread answer when lastAnswerAt is later.",
+		},
+		latestSeq: {
+			type: "integer",
+			format: "int64",
+			description: "Sequence number of the newest top-level message shown; 0 when there is none",
+		},
+		threads: {
+			type: "array",
+			description: "The newest threads, latest activity first",
+			items: {
+				$ref: "#/components/schemas/ConversationThreadSummary",
+			},
+		},
+	},
+	required: ["activeTurns", "latestSeq", "threads"],
+} as const;
+
+export const ConversationEntrySchema = {
+	type: "object",
+	description: "One message of a Hephaestus conversation",
+	properties: {
+		conversationId: {
+			type: "string",
+			format: "uuid",
+		},
+		createdAt: {
+			type: "string",
+			format: "date-time",
+		},
+		deleted: {
+			type: "boolean",
+			description: "The message was deleted; its text is gone",
+		},
+		digest: {
+			$ref: "#/components/schemas/WeeklyDigest",
+			description: "The weekly digest as it reads now; only on a weekly digest that was not erased",
+		},
+		editedAt: {
+			type: "string",
+			format: "date-time",
+			description: "Set when the developer edited the message in Slack",
+		},
+		id: {
+			type: "string",
+			format: "uuid",
+		},
+		kind: {
+			type: "string",
+			enum: ["USER", "ANSWER", "DIGEST"],
+		},
+		links: {
+			type: "array",
+			description:
+				"The results, problems and prepared feedback Hephaestus showed in this message, in order",
+			items: {
+				$ref: "#/components/schemas/ConversationLink",
+			},
+		},
+		parentEntryId: {
+			type: "string",
+			format: "uuid",
+			description:
+				"Set when the message is in a thread: the top-level message the thread replies to",
+		},
+		requestId: {
+			type: "string",
+			description:
+				"The submission that wrote the message; the app matches its own optimistic message by it",
+		},
+		seq: {
+			type: "integer",
+			format: "int64",
+			description: "Order within its conversation",
+		},
+		slackDelivery: {
+			type: "string",
+			description:
+				"Only on a question asked in Slack: whether Hephaestus's reply reached Slack. FAILED means Slack does not show the whole reply: it is not there, or a stream showed only part of it before Slack or Silent Mode refused the rest; the full reply is in the app. UNCERTAIN means Slack cannot tell.",
+			enum: ["PENDING", "DELIVERED", "UNCERTAIN", "FAILED"],
+		},
+		surface: {
+			type: "string",
+			description: "Where the message was written; SYSTEM for a weekly digest",
+			enum: ["APP", "SLACK", "SYSTEM"],
+		},
+		text: {
+			type: "string",
+			description:
+				"The developer's words or Hephaestus's answer; for a weekly digest, the note that points Hephaestus to it; empty when the message was deleted",
+		},
+		thread: {
+			$ref: "#/components/schemas/ConversationThreadSummary",
+			description: "The thread on this message; only on top-level messages that have one",
+		},
+		turnError: {
+			type: "string",
+			description:
+				"Why the turn this question asked failed, in words for the developer; only when it FAILED",
+		},
+		turnId: {
+			type: "string",
+			format: "uuid",
+			description: "The turn the message asked or answered",
+		},
+		turnStatus: {
+			type: "string",
+			description: "The status of the turn this question asked; only on the developer's messages",
+			enum: ["QUEUED", "RUNNING", "DONE", "FAILED", "STOPPED"],
+		},
+		vote: {
+			type: "string",
+			description: "The developer's vote; only on Hephaestus's messages",
+			enum: ["HELPFUL", "NOT_HELPFUL"],
+		},
+	},
+	required: [
+		"conversationId",
+		"createdAt",
+		"deleted",
+		"id",
+		"kind",
+		"links",
+		"seq",
+		"surface",
+		"text",
+	],
+} as const;
+
+export const ConversationLinkSchema = {
+	type: "object",
+	description: "A practice result, problem or prepared feedback Hephaestus showed in a message",
+	properties: {
+		id: {
+			type: "string",
+			format: "uuid",
+			description: "The result, problem or feedback id, by kind",
+		},
+		itemId: {
+			type: "integer",
+			format: "int64",
+			description:
+				"The item (pull request, issue, conversation or document) it is about, when the developer may still read it: a problem's through its result",
+		},
+		kind: {
+			type: "string",
+			enum: ["RESULT", "PROBLEM", "FEEDBACK"],
+		},
+		practiceSlug: {
+			type: "string",
+			description:
+				"The practice it is about: a problem's through its result, feedback's when it is about one practice; absent when the developer can no longer read it",
+		},
+		text: {
+			type: "string",
+			description: "Hephaestus's words about it, shown to the developer",
+		},
+	},
+	required: ["id", "kind", "text"],
+} as const;
+
+export const ConversationReadSchema = {
+	type: "object",
+	description: "How far the developer read their Hephaestus conversation",
+	properties: {
+		lastReadAt: {
+			type: "string",
+			format: "date-time",
+			description: "The read marker; absent when the developer has no conversation yet",
+		},
+	},
+} as const;
+
+export const ConversationReadRequestSchema = {
+	type: "object",
+	description: "How far the developer read their Hephaestus conversation",
+	properties: {
+		at: {
+			type: "string",
+			format: "date-time",
+			description: "The time of the newest answer the developer saw",
+		},
+	},
+	required: ["at"],
+} as const;
+
+export const ConversationSubmissionSchema = {
+	type: "object",
+	description: "A stored question and the turn that answers it",
+	properties: {
+		question: {
+			$ref: "#/components/schemas/ConversationEntry",
+		},
+		turn: {
+			$ref: "#/components/schemas/ConversationTurn",
+		},
+	},
+	required: ["question", "turn"],
+} as const;
+
+export const ConversationThreadSchema = {
+	type: "object",
+	description: "A thread: the message it replies to and one page of its replies, oldest first",
+	properties: {
+		conversationId: {
+			type: "string",
+			format: "uuid",
+			description: "The thread's conversation; absent until the first reply opens it",
+		},
+		parent: {
+			$ref: "#/components/schemas/ConversationEntry",
+		},
+		replies: {
+			$ref: "#/components/schemas/CursorPageDTOConversationEntry",
+		},
+	},
+	required: ["parent", "replies"],
+} as const;
+
+export const ConversationThreadSummarySchema = {
+	type: "object",
+	description: "The thread on a top-level message",
+	properties: {
+		conversationId: {
+			type: "string",
+			format: "uuid",
+			description: "The thread's own conversation",
+		},
+		lastReplyAt: {
+			type: "string",
+			format: "date-time",
+		},
+		latestSeq: {
+			type: "integer",
+			format: "int64",
+			description: "Sequence number of the thread's newest shown message; 0 when it has none",
+		},
+		parentEntryId: {
+			type: "string",
+			format: "uuid",
+			description: "The message the thread replies to",
+		},
+		replyCount: {
+			type: "integer",
+			format: "int64",
+			description:
+				"Messages in the thread; can count a Hephaestus message without text whose feedback is no longer shown",
+		},
+	},
+	required: ["conversationId", "latestSeq", "parentEntryId", "replyCount"],
+} as const;
+
+export const ConversationTurnSchema = {
+	type: "object",
+	description: "One conversation turn: a requested answer or an opted-in proactive digest",
+	properties: {
+		attempt: {
+			type: "integer",
+			format: "int32",
+			description:
+				"Attempts started so far; 0 while the turn waits for its first start. A lost lease queues the turn again with the same attempt, and the next start counts up. Thus, with the same attempt, RUNNING comes before QUEUED or an end.",
+		},
+		conversationId: {
+			type: "string",
+			format: "uuid",
+		},
+		createdAt: {
+			type: "string",
+			format: "date-time",
+		},
+		error: {
+			type: "string",
+			description: "Why the turn failed, worded for the developer; only on a failed turn",
+		},
+		finishedAt: {
+			type: "string",
+			format: "date-time",
+		},
+		id: {
+			type: "string",
+			format: "uuid",
+		},
+		parentEntryId: {
+			type: "string",
+			format: "uuid",
+			description:
+				"Set when the turn runs in a thread: the top-level message the thread replies to",
+		},
+		partial: {
+			$ref: "#/components/schemas/ConversationTurnPartial",
+			description: "Hephaestus's answer in progress; only while the turn runs",
+		},
+		requestId: {
+			type: "string",
+			description: "The submission or schedule key; the stimulus entry carries the same value",
+		},
+		status: {
+			type: "string",
+			enum: ["QUEUED", "RUNNING", "DONE", "FAILED", "STOPPED"],
+		},
+		surface: {
+			type: "string",
+			enum: ["APP", "SLACK", "SYSTEM"],
+		},
+		waitingFor: {
+			type: "string",
+			description:
+				"Why a queued turn has not started. CAPACITY: a server may start it, and every conversation slot of the deployment is taken, so it starts when one is free. Absent when the turn does not wait, waits for an earlier question of its conversation, or waits for a reason that the server does not know, such as a server without a configured conversation turn capacity.",
+			enum: ["CAPACITY"],
+		},
+	},
+	required: ["attempt", "conversationId", "createdAt", "id", "requestId", "status", "surface"],
+} as const;
+
+export const ConversationTurnPartialSchema = {
+	type: "object",
+	description: "What Hephaestus is doing in a running turn",
+	properties: {
+		activity: {
+			type: "string",
+			enum: ["THINKING", "WRITING", "TOOL"],
+		},
+		stage: {
+			type: "string",
+			description:
+				'What Hephaestus is doing, in the developer\'s words, for example "Reading your practice feedback…"',
+		},
+		text: {
+			type: "string",
+			description: "The text Hephaestus has written in this turn so far",
+		},
+		tool: {
+			type: "string",
+			description: "The tool Hephaestus runs, while the activity is TOOL",
+		},
+	},
+	required: ["activity", "stage", "text"],
+} as const;
+
+export const ConversationTurnRequestSchema = {
+	type: "object",
+	description: "A question to Hephaestus from the app",
+	properties: {
+		pageContext: {
+			type: "string",
+			description: 'The page the developer asks from, for example "Pull request #421 in acme/web"',
+			maxLength: 500,
+			minLength: 0,
+		},
+		parentEntryId: {
+			type: "string",
+			format: "uuid",
+			description: "Ask in the thread on this top-level message; the first reply opens the thread",
+		},
+		requestId: {
+			type: "string",
+			format: "uuid",
+			description:
+				"Chosen by the app for each message. Sending the same id again returns the first submission, so a retried request never asks twice.",
+		},
+		text: {
+			type: "string",
+			description: "The developer's words",
+			minLength: 1,
+		},
+	},
+	required: ["requestId", "text"],
+} as const;
+
+export const ConversationTurnStatusRequestSchema = {
+	type: "object",
+	description: "A status change the developer asks for on a turn",
+	properties: {
+		status: {
+			type: "string",
+			description:
+				"STOPPED stops a queued or running turn. Hephaestus keeps what it already wrote.",
+			enum: ["STOPPED"],
+		},
+	},
+	required: ["status"],
+} as const;
+
+export const ConversationVoteRequestSchema = {
+	type: "object",
+	description: "The developer's vote on one of Hephaestus's messages",
+	properties: {
+		vote: {
+			type: "string",
+			enum: ["HELPFUL", "NOT_HELPFUL"],
+		},
+	},
+	required: ["vote"],
 } as const;
 
 export const CoverageOmissionSchema = {
@@ -2926,14 +3276,14 @@ export const CursorPageDTOConsumerDeadLetterSchema = {
 	required: ["content"],
 } as const;
 
-export const CursorPageDTOGitLabProjectSchema = {
+export const CursorPageDTOConversationEntrySchema = {
 	type: "object",
 	description: "One page of a list that a client reads forward with a cursor",
 	properties: {
 		content: {
 			type: "array",
 			items: {
-				$ref: "#/components/schemas/GitLabProject",
+				$ref: "#/components/schemas/ConversationEntry",
 			},
 		},
 		nextCursor: {
@@ -2944,14 +3294,14 @@ export const CursorPageDTOGitLabProjectSchema = {
 	required: ["content"],
 } as const;
 
-export const CursorPageDTOMentorEntrySchema = {
+export const CursorPageDTOGitLabProjectSchema = {
 	type: "object",
 	description: "One page of a list that a client reads forward with a cursor",
 	properties: {
 		content: {
 			type: "array",
 			items: {
-				$ref: "#/components/schemas/MentorEntry",
+				$ref: "#/components/schemas/GitLabProject",
 			},
 		},
 		nextCursor: {
@@ -3545,6 +3895,11 @@ export const FeedbackCopySchema = {
 		body: {
 			type: ["string", "null"],
 		},
+		conversationEntryId: {
+			type: ["string", "null"],
+			format: "uuid",
+			description: "The Hephaestus answer that showed a conversation copy",
+		},
 		endLine: {
 			type: ["null", "integer"],
 			format: "int32",
@@ -3565,11 +3920,6 @@ export const FeedbackCopySchema = {
 		},
 		lastError: {
 			type: ["string", "null"],
-		},
-		mentorEntryId: {
-			type: ["string", "null"],
-			format: "uuid",
-			description: "The Hephaestus answer that showed a conversation copy",
 		},
 		path: {
 			type: ["string", "null"],
@@ -3650,13 +4000,13 @@ export const FeedbackCopySchema = {
 	},
 	required: [
 		"body",
+		"conversationEntryId",
 		"endLine",
 		"externalRef",
 		"externalUrl",
 		"id",
 		"kind",
 		"lastError",
-		"mentorEntryId",
 		"path",
 		"position",
 		"postedAt",
@@ -5426,7 +5776,7 @@ export const LlmConnectionSchema = {
 			description: "The purposes a model on this connection can serve, from its protocol",
 			items: {
 				type: "string",
-				enum: ["PRACTICE_REVIEW", "MENTOR"],
+				enum: ["PRACTICE_REVIEW", "CONVERSATION"],
 			},
 		},
 		slug: {
@@ -5753,7 +6103,7 @@ export const LlmUsageByDaySchema = {
 			type: "integer",
 			format: "int64",
 			description:
-				"Runs: job attempts and mentor turn attempts. A practice script call counts toward the run of its review.",
+				"Runs: job attempts and conversation turn attempts. A practice script call counts toward the run of its review.",
 		},
 		instanceTotalCostUsd: {
 			type: "number",
@@ -5797,7 +6147,7 @@ export const LlmUsageByJobTypeSchema = {
 			type: "integer",
 			format: "int64",
 			description:
-				"Runs: job attempts and mentor turn attempts. A practice script call counts toward the run of its review.",
+				"Runs: job attempts and conversation turn attempts. A practice script call counts toward the run of its review.",
 		},
 		inputTokens: {
 			type: "integer",
@@ -5824,7 +6174,7 @@ export const LlmUsageByJobTypeSchema = {
 			type: "integer",
 			format: "int64",
 			description:
-				"LLM API calls that the proxy served. Practice reviews and mentor turns both include every assistant call in an internal tool loop.",
+				"LLM API calls that the proxy served. Practice reviews and conversation turns both include every assistant call in an internal tool loop.",
 		},
 		unpricedEventCount: {
 			type: "integer",
@@ -5937,426 +6287,77 @@ export const MemberReviewReadinessSchema = {
 	required: ["approvalBeforePosting", "blocker", "events"],
 } as const;
 
-export const MentorConversationSchema = {
+export const ModelAssignmentSchema = {
 	type: "object",
-	description: "The developer's Hephaestus conversation in a workspace at one moment",
+	description: "A workspace's model assignment for one purpose",
 	properties: {
-		activeTurns: {
-			type: "array",
-			description: "Queued and running turns in the conversation and its threads, oldest first",
-			items: {
-				$ref: "#/components/schemas/MentorTurn",
-			},
-		},
-		id: {
+		dataHandlingTier: {
 			type: "string",
-			format: "uuid",
-			description:
-				"The main conversation; absent until the developer writes to Hephaestus or gets a weekly digest",
+			enum: ["IN_HOUSE", "CLOUD", "UNDECLARED"],
 		},
-		lastAnswerAt: {
-			type: "string",
-			format: "date-time",
-			description:
-				"When Hephaestus's newest shown answer in the conversation or any of its threads was written; absent before the first. Compare it with the newest answer the client has seen.",
-		},
-		lastReadAt: {
-			type: "string",
-			format: "date-time",
-			description:
-				"How far the developer read the conversation on any device; absent before the first read. Hephaestus has an unread answer when lastAnswerAt is later.",
-		},
-		latestSeq: {
-			type: "integer",
-			format: "int64",
-			description: "Sequence number of the newest top-level message shown; 0 when there is none",
-		},
-		threads: {
-			type: "array",
-			description: "The newest threads, latest activity first",
-			items: {
-				$ref: "#/components/schemas/MentorThreadSummary",
-			},
-		},
-	},
-	required: ["activeTurns", "latestSeq", "threads"],
-} as const;
-
-export const MentorEntrySchema = {
-	type: "object",
-	description: "One message of a Hephaestus conversation",
-	properties: {
-		conversationId: {
-			type: "string",
-			format: "uuid",
-		},
-		createdAt: {
-			type: "string",
-			format: "date-time",
-		},
-		deleted: {
+		enabled: {
 			type: "boolean",
-			description: "The message was deleted; its text is gone",
 		},
-		digest: {
-			$ref: "#/components/schemas/WeeklyDigest",
-			description: "The weekly digest as it reads now; only on a weekly digest that was not erased",
+		instanceModelId: {
+			type: "integer",
+			format: "int64",
 		},
-		editedAt: {
+		purpose: {
 			type: "string",
-			format: "date-time",
-			description: "Set when the developer edited the message in Slack",
+			enum: ["PRACTICE_REVIEW", "CONVERSATION"],
 		},
-		id: {
-			type: "string",
-			format: "uuid",
+		ready: {
+			type: "boolean",
+			description: "True when the bound model is available to run right now",
 		},
-		kind: {
-			type: "string",
-			enum: ["USER", "HEPH", "DIGEST"],
-		},
-		links: {
+		servedTiers: {
 			type: "array",
 			description:
-				"The results, problems and prepared feedback Hephaestus showed in this message, in order",
+				"The members this binding serves now, named by the tier of their choice: IN_HOUSE and CLOUD for the members who chose them, UNDECLARED for the members who have not chosen. Empty when the binding serves no member.",
 			items: {
-				$ref: "#/components/schemas/MentorLink",
+				type: "string",
+				enum: ["IN_HOUSE", "CLOUD", "UNDECLARED"],
 			},
 		},
-		parentEntryId: {
-			type: "string",
-			format: "uuid",
-			description:
-				"Set when the message is in a thread: the top-level message the thread replies to",
+		timeoutSeconds: {
+			type: "integer",
+			format: "int32",
 		},
-		requestId: {
-			type: "string",
-			description:
-				"The submission that wrote the message; the app matches its own optimistic message by it",
-		},
-		seq: {
+		workspaceModelId: {
 			type: "integer",
 			format: "int64",
-			description: "Order within its conversation",
-		},
-		slackDelivery: {
-			type: "string",
-			description:
-				"Only on a question asked in Slack: whether Hephaestus's reply reached Slack. FAILED means Slack does not show the whole reply: it is not there, or a stream showed only part of it before Slack or Silent Mode refused the rest; the full reply is in the app. UNCERTAIN means Slack cannot tell.",
-			enum: ["PENDING", "DELIVERED", "UNCERTAIN", "FAILED"],
-		},
-		surface: {
-			type: "string",
-			description: "Where the message was written; SYSTEM for a weekly digest",
-			enum: ["APP", "SLACK", "SYSTEM"],
-		},
-		text: {
-			type: "string",
-			description:
-				"The developer's words or Hephaestus's answer; for a weekly digest, the note that points Hephaestus to it; empty when the message was deleted",
-		},
-		thread: {
-			$ref: "#/components/schemas/MentorThreadSummary",
-			description: "The thread on this message; only on top-level messages that have one",
-		},
-		turnError: {
-			type: "string",
-			description:
-				"Why the turn this question asked failed, in words for the developer; only when it FAILED",
-		},
-		turnId: {
-			type: "string",
-			format: "uuid",
-			description: "The turn the message asked or answered",
-		},
-		turnStatus: {
-			type: "string",
-			description: "The status of the turn this question asked; only on the developer's messages",
-			enum: ["QUEUED", "RUNNING", "DONE", "FAILED", "STOPPED"],
-		},
-		vote: {
-			type: "string",
-			description: "The developer's vote; only on Hephaestus's messages",
-			enum: ["HELPFUL", "NOT_HELPFUL"],
 		},
 	},
-	required: [
-		"conversationId",
-		"createdAt",
-		"deleted",
-		"id",
-		"kind",
-		"links",
-		"seq",
-		"surface",
-		"text",
-	],
+	required: ["dataHandlingTier", "enabled", "purpose", "ready", "servedTiers"],
 } as const;
 
-export const MentorLinkSchema = {
+export const ModelAssignmentRequestSchema = {
 	type: "object",
-	description: "A practice result, problem or prepared feedback Hephaestus showed in a message",
+	description: "Bind a model and execution limits to an agent purpose",
 	properties: {
-		id: {
-			type: "string",
-			format: "uuid",
-			description: "The result, problem or feedback id, by kind",
+		enabled: {
+			type: "boolean",
+			description: "Whether this purpose is active (paused when false)",
 		},
-		itemId: {
+		instanceModelId: {
 			type: "integer",
 			format: "int64",
-			description:
-				"The item (pull request, issue, conversation or document) it is about, when the developer may still read it: a problem's through its result",
+			description: "Shared (instance-catalog) model id to run this purpose on",
 		},
-		kind: {
-			type: "string",
-			enum: ["RESULT", "PROBLEM", "FEEDBACK"],
-		},
-		practiceSlug: {
-			type: "string",
-			description:
-				"The practice it is about: a problem's through its result, feedback's when it is about one practice; absent when the developer can no longer read it",
-		},
-		text: {
-			type: "string",
-			description: "Hephaestus's words about it, shown to the developer",
-		},
-	},
-	required: ["id", "kind", "text"],
-} as const;
-
-export const MentorReadSchema = {
-	type: "object",
-	description: "How far the developer read their Hephaestus conversation",
-	properties: {
-		lastReadAt: {
-			type: "string",
-			format: "date-time",
-			description: "The read marker; absent when the developer has no conversation yet",
-		},
-	},
-} as const;
-
-export const MentorReadRequestSchema = {
-	type: "object",
-	description: "How far the developer read their Hephaestus conversation",
-	properties: {
-		at: {
-			type: "string",
-			format: "date-time",
-			description: "The time of the newest answer the developer saw",
-		},
-	},
-	required: ["at"],
-} as const;
-
-export const MentorSubmissionSchema = {
-	type: "object",
-	description: "A stored question and the turn that answers it",
-	properties: {
-		question: {
-			$ref: "#/components/schemas/MentorEntry",
-		},
-		turn: {
-			$ref: "#/components/schemas/MentorTurn",
-		},
-	},
-	required: ["question", "turn"],
-} as const;
-
-export const MentorThreadSchema = {
-	type: "object",
-	description: "A thread: the message it replies to and one page of its replies, oldest first",
-	properties: {
-		conversationId: {
-			type: "string",
-			format: "uuid",
-			description: "The thread's conversation; absent until the first reply opens it",
-		},
-		parent: {
-			$ref: "#/components/schemas/MentorEntry",
-		},
-		replies: {
-			$ref: "#/components/schemas/CursorPageDTOMentorEntry",
-		},
-	},
-	required: ["parent", "replies"],
-} as const;
-
-export const MentorThreadSummarySchema = {
-	type: "object",
-	description: "The thread on a top-level message",
-	properties: {
-		conversationId: {
-			type: "string",
-			format: "uuid",
-			description: "The thread's own conversation",
-		},
-		lastReplyAt: {
-			type: "string",
-			format: "date-time",
-		},
-		latestSeq: {
-			type: "integer",
-			format: "int64",
-			description: "Sequence number of the thread's newest shown message; 0 when it has none",
-		},
-		parentEntryId: {
-			type: "string",
-			format: "uuid",
-			description: "The message the thread replies to",
-		},
-		replyCount: {
-			type: "integer",
-			format: "int64",
-			description:
-				"Messages in the thread; can count a Hephaestus message without text whose feedback is no longer shown",
-		},
-	},
-	required: ["conversationId", "latestSeq", "parentEntryId", "replyCount"],
-} as const;
-
-export const MentorTurnSchema = {
-	type: "object",
-	description: "One conversation turn: a requested answer or an opted-in proactive digest",
-	properties: {
-		attempt: {
+		timeoutSeconds: {
 			type: "integer",
 			format: "int32",
 			description:
-				"Attempts started so far; 0 while the turn waits for its first start. A lost lease queues the turn again with the same attempt, and the next start counts up. Thus, with the same attempt, RUNNING comes before QUEUED or an end.",
+				"Per-run timeout in seconds (30–10800; three hours is the longest a single run may take)",
+			maximum: 10800,
+			minimum: 30,
 		},
-		conversationId: {
-			type: "string",
-			format: "uuid",
-		},
-		createdAt: {
-			type: "string",
-			format: "date-time",
-		},
-		error: {
-			type: "string",
-			description: "Why the turn failed, worded for the developer; only on a failed turn",
-		},
-		finishedAt: {
-			type: "string",
-			format: "date-time",
-		},
-		id: {
-			type: "string",
-			format: "uuid",
-		},
-		parentEntryId: {
-			type: "string",
-			format: "uuid",
-			description:
-				"Set when the turn runs in a thread: the top-level message the thread replies to",
-		},
-		partial: {
-			$ref: "#/components/schemas/MentorTurnPartial",
-			description: "Hephaestus's answer in progress; only while the turn runs",
-		},
-		requestId: {
-			type: "string",
-			description: "The submission or schedule key; the stimulus entry carries the same value",
-		},
-		status: {
-			type: "string",
-			enum: ["QUEUED", "RUNNING", "DONE", "FAILED", "STOPPED"],
-		},
-		surface: {
-			type: "string",
-			enum: ["APP", "SLACK", "SYSTEM"],
-		},
-		waitingFor: {
-			type: "string",
-			description:
-				"Why a queued turn has not started. FREE_HEPH: a server may start it, and every conversation slot of the deployment is taken, so it starts when one is free. Absent when the turn does not wait, waits for an earlier question of its conversation, or waits for a reason that the server does not know, such as a server without a configured conversation turn capacity.",
-			enum: ["FREE_HEPH"],
+		workspaceModelId: {
+			type: "integer",
+			format: "int64",
+			description: "Workspace-owned model id to run this purpose on",
 		},
 	},
-	required: ["attempt", "conversationId", "createdAt", "id", "requestId", "status", "surface"],
-} as const;
-
-export const MentorTurnPartialSchema = {
-	type: "object",
-	description: "What Hephaestus is doing in a running turn",
-	properties: {
-		activity: {
-			type: "string",
-			enum: ["THINKING", "WRITING", "TOOL"],
-		},
-		stage: {
-			type: "string",
-			description:
-				'What Hephaestus is doing, in the developer\'s words, for example "Reading your practice feedback…"',
-		},
-		text: {
-			type: "string",
-			description: "The text Hephaestus has written in this turn so far",
-		},
-		tool: {
-			type: "string",
-			description: "The tool Hephaestus runs, while the activity is TOOL",
-		},
-	},
-	required: ["activity", "stage", "text"],
-} as const;
-
-export const MentorTurnRequestSchema = {
-	type: "object",
-	description: "A question to Hephaestus from the app",
-	properties: {
-		pageContext: {
-			type: "string",
-			description: 'The page the developer asks from, for example "Pull request #421 in acme/web"',
-			maxLength: 500,
-			minLength: 0,
-		},
-		parentEntryId: {
-			type: "string",
-			format: "uuid",
-			description: "Ask in the thread on this top-level message; the first reply opens the thread",
-		},
-		requestId: {
-			type: "string",
-			format: "uuid",
-			description:
-				"Chosen by the app for each message. Sending the same id again returns the first submission, so a retried request never asks twice.",
-		},
-		text: {
-			type: "string",
-			description: "The developer's words",
-			minLength: 1,
-		},
-	},
-	required: ["requestId", "text"],
-} as const;
-
-export const MentorTurnStatusRequestSchema = {
-	type: "object",
-	description: "A status change the developer asks for on a turn",
-	properties: {
-		status: {
-			type: "string",
-			description:
-				"STOPPED stops a queued or running turn. Hephaestus keeps what it already wrote.",
-			enum: ["STOPPED"],
-		},
-	},
-	required: ["status"],
-} as const;
-
-export const MentorVoteRequestSchema = {
-	type: "object",
-	description: "The developer's vote on one of Hephaestus's messages",
-	properties: {
-		vote: {
-			type: "string",
-			enum: ["HELPFUL", "NOT_HELPFUL"],
-		},
-	},
-	required: ["vote"],
 } as const;
 
 export const MovePracticeRequestSchema = {
@@ -11853,7 +11854,7 @@ export const ReviewFeedbackSchema = {
 				"GITHUB",
 				"GITLAB",
 				"OTHER_WORK",
-				"HEPH",
+				"APP",
 				"SLACK",
 				"NEXT_CONVERSATION",
 				"PRACTICE_PAGES",
@@ -12104,7 +12105,7 @@ export const ReviewFeedbackDetailSchema = {
 				"GITHUB",
 				"GITLAB",
 				"OTHER_WORK",
-				"HEPH",
+				"APP",
 				"SLACK",
 				"NEXT_CONVERSATION",
 				"PRACTICE_PAGES",
@@ -16298,11 +16299,11 @@ export const UpdateWorkspaceFeaturesRequestSchema = {
 	description:
 		"Request to turn practice reviews and their triggers on or off. Null fields are left unchanged.",
 	properties: {
-		practiceReviewAutoTriggerEnabled: {
+		practiceReviewEventEnabled: {
 			type: "boolean",
 			description: "Enable automatic practice reviews triggered by PR events",
 		},
-		practiceReviewManualTriggerEnabled: {
+		practiceReviewRequestEnabled: {
 			type: "boolean",
 			description: "Enable manual practice reviews triggered through a bot command",
 		},
@@ -16787,6 +16788,18 @@ export const WeeklyDigestFeedbackSchema = {
 	description:
 		"One piece of feedback that reached the developer in the week, and where it was delivered",
 	properties: {
+		conversationEntryId: {
+			type: "string",
+			format: "uuid",
+			description:
+				"The Hephaestus message it appeared in; only for CONVERSATION, and never when withdrawn",
+		},
+		conversationParentEntryId: {
+			type: "string",
+			format: "uuid",
+			description:
+				"The top-level message whose thread holds that Hephaestus message; only for CONVERSATION, and absent when the message is not in a thread",
+		},
 		deliveredAt: {
 			type: "string",
 			format: "date-time",
@@ -16810,18 +16823,6 @@ export const WeeklyDigestFeedbackSchema = {
 		item: {
 			$ref: "#/components/schemas/ItemRef",
 			description: "The item it was delivered on; only for ON_WORK, and never when withdrawn",
-		},
-		mentorEntryId: {
-			type: "string",
-			format: "uuid",
-			description:
-				"The Hephaestus message it appeared in; only for CONVERSATION, and never when withdrawn",
-		},
-		mentorParentEntryId: {
-			type: "string",
-			format: "uuid",
-			description:
-				"The top-level message whose thread holds that Hephaestus message; only for CONVERSATION, and absent when the message is not in a thread",
 		},
 		practiceName: {
 			type: "string",
@@ -17031,11 +17032,11 @@ export const WorkspaceSchema = {
 			type: "string",
 			description: "Integration kind backing this workspace (GITHUB or GITLAB)",
 		},
-		practiceReviewAutoTriggerEnabled: {
+		practiceReviewEventEnabled: {
 			type: "boolean",
 			description: "Whether automatic practice reviews triggered by PR events are enabled",
 		},
-		practiceReviewManualTriggerEnabled: {
+		practiceReviewRequestEnabled: {
 			type: "boolean",
 			description: "Whether manual practice reviews triggered through a bot command are enabled",
 		},
@@ -17091,8 +17092,8 @@ export const WorkspaceSchema = {
 		"hasPersonalAccessToken",
 		"hasSlackToken",
 		"id",
-		"practiceReviewAutoTriggerEnabled",
-		"practiceReviewManualTriggerEnabled",
+		"practiceReviewEventEnabled",
+		"practiceReviewRequestEnabled",
 		"practicesEnabled",
 		"publicActivityEnabled",
 		"status",
@@ -17163,7 +17164,7 @@ export const WorkspaceAiOptionSchema = {
 			type: "string",
 			enum: ["NO_AI", "IN_HOUSE_ONLY", "CLOUD"],
 		},
-		mentorReady: {
+		conversationReady: {
 			type: "boolean",
 		},
 		models: {
@@ -17176,7 +17177,7 @@ export const WorkspaceAiOptionSchema = {
 			type: "boolean",
 		},
 	},
-	required: ["choice", "mentorReady", "models", "practiceReviewsReady"],
+	required: ["choice", "conversationReady", "models", "practiceReviewsReady"],
 } as const;
 
 export const WorkspaceGroupSplitSchema = {
@@ -17385,7 +17386,7 @@ export const WorkspaceLlmConnectionSchema = {
 			description: "The purposes a model on this connection can serve, from its protocol",
 			items: {
 				type: "string",
-				enum: ["PRACTICE_REVIEW", "MENTOR"],
+				enum: ["PRACTICE_REVIEW", "CONVERSATION"],
 			},
 		},
 		slug: {
@@ -17696,7 +17697,7 @@ export const WorkspaceLlmUsageReportSchema = {
 			type: "integer",
 			format: "int64",
 			description:
-				"Runs this month (job attempts and mentor turn attempts, either purse) with at least one call whose cost is unavailable because a rate is missing or the measurement is unverified, and that has no upper bound, each counted once. A capability test with unavailable cost counts once. A practice script call counts toward the run of its review. Those rows are excluded from both totals above, so a non-zero value means the real spend may be higher than shown.",
+				"Runs this month (job attempts and conversation turn attempts, either purse) with at least one call whose cost is unavailable because a rate is missing or the measurement is unverified, and that has no upper bound, each counted once. A capability test with unavailable cost counts once. A practice script call counts toward the run of its review. Those rows are excluded from both totals above, so a non-zero value means the real spend may be higher than shown.",
 		},
 	},
 	required: [
@@ -17771,7 +17772,7 @@ export const WorkspaceMembershipSchema = {
 export const WorkspaceOnboardingSchema = {
 	type: "object",
 	description:
-		"One member's view of setup in one workspace. <code>aiChoice</code> is the account's answer, the same in\n every workspace; <code>aiOptions</code> says what this workspace has set up under each answer, which is\n what differs between workspaces. <code>mentorRefusal</code> is this member's own answer from Hephaestus's admission.",
+		"One member's view of setup in one workspace. <code>aiChoice</code> is the account's answer, the same in\n every workspace; <code>aiOptions</code> says what this workspace has set up under each answer, which is\n what differs between workspaces. <code>conversationRefusal</code> is this member's own answer from Hephaestus's admission.",
 	properties: {
 		aiChoice: {
 			type: "string",
@@ -17786,6 +17787,12 @@ export const WorkspaceOnboardingSchema = {
 				$ref: "#/components/schemas/WorkspaceAiOption",
 			},
 		},
+		conversationRefusal: {
+			type: "string",
+			description:
+				"Why Hephaestus declines this member here, by the rule that admits each question; null when Hephaestus can answer",
+			enum: ["PERSON_ERASED", "NO_AI", "CHOICE_REQUIRED", "UNAVAILABLE"],
+		},
 		enabled: {
 			type: "boolean",
 		},
@@ -17794,12 +17801,6 @@ export const WorkspaceOnboardingSchema = {
 			items: {
 				$ref: "#/components/schemas/WorkspaceOnboardingLink",
 			},
-		},
-		mentorRefusal: {
-			type: "string",
-			description:
-				"Why Hephaestus declines this member here, by the rule that admits each question; null when Hephaestus can answer",
-			enum: ["PERSON_ERASED", "NO_AI", "CHOICE_REQUIRED", "UNAVAILABLE"],
 		},
 		needsSetup: {
 			type: "boolean",

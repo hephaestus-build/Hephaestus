@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 
-import { isRecord, type TurnEnd } from "../../../main/resources/agent/heph-host-protocol.ts";
+import {
+	isRecord,
+	type TurnEnd,
+} from "../../../main/resources/agent/conversation-host-protocol.ts";
 import type { FakeWorker } from "./turn-worker.ts";
 
 export const CUT_ANSWER = "Here is the first half of my ans";

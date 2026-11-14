@@ -23,7 +23,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserTeamsDTO;
 import de.tum.cit.aet.hephaestus.testconfig.AuditedRequestCheck;
 import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
 import de.tum.cit.aet.hephaestus.testconfig.WithAdminUser;
-import de.tum.cit.aet.hephaestus.testconfig.WithMentorUser;
+import de.tum.cit.aet.hephaestus.testconfig.WithConversationUser;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Membership;
@@ -164,14 +164,14 @@ class WorkspaceControllerIntegrationTest extends AbstractWorkspaceIntegrationTes
     }
 
     @Test
-    @WithMentorUser
+    @WithConversationUser
     void anyAuthenticatedUserCanCreateWorkspace() {
-        persistUser("mentor");
+        persistUser("conversation");
 
         var request = new CreateWorkspaceRequestDTO(
-                "mentor-space",
-                "Mentor Space",
-                "mentor-org",
+                "conversation-space",
+                "Conversation Space",
+                "conversation-org",
                 AccountType.ORG,
                 IntegrationKind.GITHUB,
                 "ghp_dummy_token_for_test",
@@ -190,13 +190,14 @@ class WorkspaceControllerIntegrationTest extends AbstractWorkspaceIntegrationTes
                 .isCreated()
                 .expectBody(Void.class);
 
-        assertThat(workspaceRepository.findByWorkspaceSlug("mentor-space")).isPresent();
+        assertThat(workspaceRepository.findByWorkspaceSlug("conversation-space"))
+                .isPresent();
     }
 
     @Test
-    @WithMentorUser
+    @WithConversationUser
     void createWorkspaceEndpointAssignsOwnerMembershipAndListsWorkspace() {
-        User owner = persistUser("mentor");
+        User owner = persistUser("conversation");
 
         var request = new CreateWorkspaceRequestDTO(
                 "controller-space",
@@ -688,14 +689,14 @@ class WorkspaceControllerIntegrationTest extends AbstractWorkspaceIntegrationTes
     }
 
     @Test
-    @WithMentorUser
+    @WithConversationUser
     void shouldLetOnlyAWorkspaceAdminReadOrChangeTheProjectSelection() {
-        User mentor = persistUser("mentor");
+        User conversation = persistUser("conversation");
         Workspace foreign = seedActiveGitLabWorkspace("selection-foreign", 7401L);
         Workspace joined = seedActiveGitLabWorkspace("selection-member", 7402L);
-        ensureMembership(joined, mentor, Membership.WorkspaceRole.MEMBER);
+        ensureMembership(joined, conversation, Membership.WorkspaceRole.MEMBER);
         Workspace administered = seedActiveGitLabWorkspace("selection-administered", 7403L);
-        ensureMembership(administered, mentor, Membership.WorkspaceRole.ADMIN);
+        ensureMembership(administered, conversation, Membership.WorkspaceRole.ADMIN);
 
         // A non-member cannot tell the workspace exists; a member without the role is refused.
         for (Map.Entry<Workspace, HttpStatus> refusal : Map.of(
@@ -748,7 +749,7 @@ class WorkspaceControllerIntegrationTest extends AbstractWorkspaceIntegrationTes
                 .isEqualTo(RepositorySelection.SELECTED);
         assertThat(selectionChanges(administered))
                 .extracting(ConnectionAudit::getActorAccountId)
-                .containsExactly(accountId(mentor));
+                .containsExactly(accountId(conversation));
     }
 
     @Test
@@ -830,13 +831,13 @@ class WorkspaceControllerIntegrationTest extends AbstractWorkspaceIntegrationTes
     }
 
     @Test
-    @WithMentorUser
+    @WithConversationUser
     void shouldAllowListingAndRemovalOnlyWhenTheCallerAdministersTheProjectsWorkspace() {
-        User mentor = persistUser("mentor");
+        User conversation = persistUser("conversation");
         Workspace joined = seedActiveGitLabWorkspace("stopped-member", 7701L);
-        ensureMembership(joined, mentor, Membership.WorkspaceRole.MEMBER);
+        ensureMembership(joined, conversation, Membership.WorkspaceRole.MEMBER);
         Workspace administered = seedActiveGitLabWorkspace("stopped-administered", 7702L);
-        ensureMembership(administered, mentor, Membership.WorkspaceRole.ADMIN);
+        ensureMembership(administered, conversation, Membership.WorkspaceRole.ADMIN);
         long joinedRoot = stopKeptProject(joined, 7701L);
         long administeredRoot = stopKeptProject(administered, 7702L);
         UUID joinedReceipt = gitLabStoppedProjectService
@@ -911,7 +912,7 @@ class WorkspaceControllerIntegrationTest extends AbstractWorkspaceIntegrationTes
         assertThat(kept(joined, joinedRoot)).isTrue();
         assertThat(stoppedProjectRemovals(administered))
                 .extracting(ConnectionAudit::getDetail, ConnectionAudit::getActorAccountId)
-                .containsExactly(tuple("stopped-administered/kept-project", accountId(mentor)));
+                .containsExactly(tuple("stopped-administered/kept-project", accountId(conversation)));
     }
 
     @Test
@@ -1379,8 +1380,8 @@ class WorkspaceControllerIntegrationTest extends AbstractWorkspaceIntegrationTes
 
         assertThat(dto).isNotNull();
         assertThat(dto.practicesEnabled()).isFalse();
-        assertThat(dto.practiceReviewAutoTriggerEnabled()).isTrue();
-        assertThat(dto.practiceReviewManualTriggerEnabled()).isTrue();
+        assertThat(dto.practiceReviewEventEnabled()).isTrue();
+        assertThat(dto.practiceReviewRequestEnabled()).isTrue();
     }
 
     @Test
@@ -1405,8 +1406,8 @@ class WorkspaceControllerIntegrationTest extends AbstractWorkspaceIntegrationTes
 
         assertThat(patchResponse).isNotNull();
         assertThat(patchResponse.practicesEnabled()).isTrue();
-        assertThat(patchResponse.practiceReviewAutoTriggerEnabled()).isFalse();
-        assertThat(patchResponse.practiceReviewManualTriggerEnabled()).isFalse();
+        assertThat(patchResponse.practiceReviewEventEnabled()).isFalse();
+        assertThat(patchResponse.practiceReviewRequestEnabled()).isFalse();
 
         WorkspaceDTO getResponse = webTestClient
                 .get()
@@ -1421,8 +1422,8 @@ class WorkspaceControllerIntegrationTest extends AbstractWorkspaceIntegrationTes
 
         assertThat(getResponse).isNotNull();
         assertThat(getResponse.practicesEnabled()).isTrue();
-        assertThat(getResponse.practiceReviewAutoTriggerEnabled()).isFalse();
-        assertThat(getResponse.practiceReviewManualTriggerEnabled()).isFalse();
+        assertThat(getResponse.practiceReviewEventEnabled()).isFalse();
+        assertThat(getResponse.practiceReviewRequestEnabled()).isFalse();
     }
 
     @Test
@@ -1446,9 +1447,9 @@ class WorkspaceControllerIntegrationTest extends AbstractWorkspaceIntegrationTes
                 .getResponseBody();
 
         assertThat(afterFirst).isNotNull();
-        assertThat(afterFirst.practiceReviewAutoTriggerEnabled()).isFalse();
+        assertThat(afterFirst.practiceReviewEventEnabled()).isFalse();
         assertThat(afterFirst.practicesEnabled()).isFalse();
-        assertThat(afterFirst.practiceReviewManualTriggerEnabled()).isTrue();
+        assertThat(afterFirst.practiceReviewRequestEnabled()).isTrue();
 
         // Turning practice reviews on leaves automatic reviews off
         WorkspaceDTO afterSecond = webTestClient
@@ -1466,8 +1467,8 @@ class WorkspaceControllerIntegrationTest extends AbstractWorkspaceIntegrationTes
 
         assertThat(afterSecond).isNotNull();
         assertThat(afterSecond.practicesEnabled()).isTrue();
-        assertThat(afterSecond.practiceReviewAutoTriggerEnabled()).isFalse();
-        assertThat(afterSecond.practiceReviewManualTriggerEnabled()).isTrue();
+        assertThat(afterSecond.practiceReviewEventEnabled()).isFalse();
+        assertThat(afterSecond.practiceReviewRequestEnabled()).isTrue();
     }
 
     @Test
@@ -1504,8 +1505,8 @@ class WorkspaceControllerIntegrationTest extends AbstractWorkspaceIntegrationTes
 
         assertThat(afterDisable).isNotNull();
         assertThat(afterDisable.practicesEnabled()).isFalse();
-        assertThat(afterDisable.practiceReviewAutoTriggerEnabled()).isTrue();
-        assertThat(afterDisable.practiceReviewManualTriggerEnabled()).isTrue();
+        assertThat(afterDisable.practiceReviewEventEnabled()).isTrue();
+        assertThat(afterDisable.practiceReviewRequestEnabled()).isTrue();
     }
 
     @Test
@@ -1531,8 +1532,8 @@ class WorkspaceControllerIntegrationTest extends AbstractWorkspaceIntegrationTes
                 .getResponseBody();
 
         assertThat(afterDisableAuto).isNotNull();
-        assertThat(afterDisableAuto.practiceReviewAutoTriggerEnabled()).isFalse();
-        assertThat(afterDisableAuto.practiceReviewManualTriggerEnabled()).isTrue();
+        assertThat(afterDisableAuto.practiceReviewEventEnabled()).isFalse();
+        assertThat(afterDisableAuto.practiceReviewRequestEnabled()).isTrue();
 
         // Disable manual, re-enable auto
         WorkspaceDTO afterToggle = webTestClient
@@ -1549,8 +1550,8 @@ class WorkspaceControllerIntegrationTest extends AbstractWorkspaceIntegrationTes
                 .getResponseBody();
 
         assertThat(afterToggle).isNotNull();
-        assertThat(afterToggle.practiceReviewAutoTriggerEnabled()).isTrue();
-        assertThat(afterToggle.practiceReviewManualTriggerEnabled()).isFalse();
+        assertThat(afterToggle.practiceReviewEventEnabled()).isTrue();
+        assertThat(afterToggle.practiceReviewRequestEnabled()).isFalse();
 
         WorkspaceDTO getResponse = webTestClient
                 .get()
@@ -1564,18 +1565,18 @@ class WorkspaceControllerIntegrationTest extends AbstractWorkspaceIntegrationTes
                 .getResponseBody();
 
         assertThat(getResponse).isNotNull();
-        assertThat(getResponse.practiceReviewAutoTriggerEnabled()).isTrue();
-        assertThat(getResponse.practiceReviewManualTriggerEnabled()).isFalse();
+        assertThat(getResponse.practiceReviewEventEnabled()).isTrue();
+        assertThat(getResponse.practiceReviewRequestEnabled()).isFalse();
     }
 
     @Test
-    @WithMentorUser
+    @WithConversationUser
     void shouldAnswerNotFoundWhenNonMemberUpdatesFeatures() {
-        persistUser("mentor");
+        persistUser("conversation");
 
         User owner = persistUser("feature-auth-owner");
         Workspace workspace = createWorkspace("feature-auth", "Auth", "auth", AccountType.ORG, owner);
-        // Mentor is intentionally NOT added as a workspace member
+        // Conversation is intentionally NOT added as a workspace member
 
         webTestClient
                 .patch()
@@ -1590,12 +1591,12 @@ class WorkspaceControllerIntegrationTest extends AbstractWorkspaceIntegrationTes
     }
 
     @Test
-    @WithMentorUser
+    @WithConversationUser
     void shouldRefuseAMemberWithoutTheAdminRoleWhenTheyUpdateFeatures() {
-        User mentor = persistUser("mentor");
+        User conversation = persistUser("conversation");
         User owner = persistUser("feature-member-owner");
         Workspace workspace = createWorkspace("feature-member", "Member", "feature-member", AccountType.ORG, owner);
-        ensureMembership(workspace, mentor, Membership.WorkspaceRole.MEMBER);
+        ensureMembership(workspace, conversation, Membership.WorkspaceRole.MEMBER);
 
         webTestClient
                 .patch()

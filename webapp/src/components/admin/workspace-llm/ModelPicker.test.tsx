@@ -13,7 +13,7 @@ const models: AvailableLlmModel[] = [
 		scope: "SHARED",
 		displayName: "GPT-5",
 		connectionDisplayName: "Organization endpoint",
-		purposes: ["PRACTICE_REVIEW", "MENTOR"],
+		purposes: ["PRACTICE_REVIEW", "CONVERSATION"],
 		pricingMode: "PRICED",
 		per1mInputUsd: 1,
 		per1mOutputUsd: 2,
@@ -25,7 +25,7 @@ const models: AvailableLlmModel[] = [
 		scope: "WORKSPACE",
 		displayName: "GPT-5",
 		connectionDisplayName: "Workspace endpoint",
-		purposes: ["PRACTICE_REVIEW", "MENTOR"],
+		purposes: ["PRACTICE_REVIEW", "CONVERSATION"],
 		pricingMode: "NO_CHARGE",
 	},
 ];

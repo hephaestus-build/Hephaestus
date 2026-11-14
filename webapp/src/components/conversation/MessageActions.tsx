@@ -7,11 +7,11 @@ import {
 } from "lucide-react";
 import type { ReactElement, ReactNode } from "react";
 
-import type { MentorEntry } from "@/api/types.gen";
+import type { ConversationEntry } from "@/api/types.gen";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
-export type MessageVote = NonNullable<MentorEntry["vote"]>;
+export type MessageVote = NonNullable<ConversationEntry["vote"]>;
 
 export interface MessageActionsProps {
 	/** The message's subject, as `messageSubject` writes it. Each control names it, so a screen reader tells one message's controls from another's. */

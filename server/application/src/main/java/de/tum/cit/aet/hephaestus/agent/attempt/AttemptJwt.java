@@ -6,11 +6,11 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * The credential of one attempt: of a review job, or of a Heph turn. It names the work, its run, the claim of the run
+ * The credential of one attempt: of a review job, or of a Hephaestus turn. It names the work, its run, the claim of the run
  * (its epoch) and its workspace. The work's row holds everything else, such as a turn's conversation and account, so a
  * credential cannot claim them.
  *
- * @param id the {@code review_job} id, or the {@code mentor_turn} id
+ * @param id the {@code review_job} id, or the {@code conversation_turn} id
  * @param epoch the claim of the run that the attempt holds: the {@code agent_run.lease_epoch} it was issued under
  * @param runId the {@code agent_run} that the attempt holds
  * @param workDeadline when a review attempt's work ends, as its executor set it; {@code null} for a turn. The credential

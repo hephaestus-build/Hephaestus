@@ -19,7 +19,7 @@ class PracticeReviewModuleBoundaryTest {
                         BASE_PACKAGE + ".practices..",
                         BASE_PACKAGE + ".agent..",
                         BASE_PACKAGE + ".evidence..",
-                        BASE_PACKAGE + ".mentor..",
+                        BASE_PACKAGE + ".conversation..",
                         BASE_PACKAGE + ".integration.core..")
                 .should()
                 .dependOnClassesThat()

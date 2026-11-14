@@ -804,7 +804,7 @@ A fenced ``` block inside.
      "outcome": "NOT_MET"
     }
    ],
-   "bodyRole": "MENTOR_NOTES",
+   "bodyRole": "CONVERSATION_NOTES",
    "body": "Situation: descriptions name changes without reasons."
   }
  ]

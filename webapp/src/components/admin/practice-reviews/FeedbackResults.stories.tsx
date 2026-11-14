@@ -206,7 +206,7 @@ export const EveryLocation: Story = {
 					...firstFeedback,
 					id: "location-conversation",
 					destination: "CONVERSATION",
-					location: "HEPH",
+					location: "APP",
 					state: "DELIVERED",
 				},
 				{
@@ -296,7 +296,7 @@ export const WithdrawnFeedback: Story = {
 					...firstFeedback,
 					id: "withdrawn-delivered-conversation",
 					destination: "CONVERSATION",
-					location: "HEPH",
+					location: "APP",
 					state: "DELIVERED",
 					stopReason: null,
 					withdrawn: true,

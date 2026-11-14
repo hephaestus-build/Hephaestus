@@ -1,0 +1,2 @@
+# REN-1: model assignments move from /agents to /model-assignments: "agent" names only the sandboxed runtime. Stopped 1.0 cutover (ADR 0070); the extension calls none of these operations.
+in API GET /workspaces/{workspaceSlug}/agents api path removed without deprecation

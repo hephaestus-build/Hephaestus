@@ -18,7 +18,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReadNeed;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewedByKind;
 import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
 import de.tum.cit.aet.hephaestus.testconfig.WithAdminUser;
-import de.tum.cit.aet.hephaestus.testconfig.WithMentorUser;
+import de.tum.cit.aet.hephaestus.testconfig.WithConversationUser;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import java.util.List;
@@ -276,9 +276,9 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
     }
 
     @Test
-    @WithMentorUser
+    @WithConversationUser
     void shouldAnswerNotFoundWhenNonmemberReadsAdminDefinitions() {
-        persistUser("mentor");
+        persistUser("conversation");
         var owner = persistUser("wire-owner");
         var workspace = createWorkspace("wire-private", "Private", "wire-private-org", AccountType.ORG, owner);
         client.get()

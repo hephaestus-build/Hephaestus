@@ -493,7 +493,7 @@ interface FeedbackSpec {
 	id: string;
 	body?: string;
 	destination: ReviewFeedback["destination"];
-	conversation?: "HEPH" | "SLACK";
+	conversation?: "APP" | "SLACK";
 	state: FeedbackState;
 	stopReason?: StopReason;
 	composedAt: string;
@@ -1722,7 +1722,7 @@ const LOCATION_ORDER: ReviewFeedback["location"][] = [
 	"GITHUB",
 	"GITLAB",
 	"OTHER_WORK",
-	"HEPH",
+	"APP",
 	"SLACK",
 	"NEXT_CONVERSATION",
 	"PRACTICE_PAGES",
@@ -1916,7 +1916,7 @@ function locationOf(review: ReviewSpec, spec: FeedbackSpec): ReviewFeedback["loc
 		}
 		case "CONVERSATION": {
 			return spec.state === "DELIVERED" || spec.state === "UNCONFIRMED"
-				? (spec.conversation ?? "HEPH")
+				? (spec.conversation ?? "APP")
 				: "NEXT_CONVERSATION";
 		}
 	}
@@ -1988,7 +1988,7 @@ function copiesOf(review: ReviewSpec, spec: FeedbackSpec): FeedbackCopy[] {
 				posted && onWork && hasText(review.item.url)
 					? `${review.item.url}#issuecomment-${ref}`
 					: null,
-			mentorEntryId:
+			conversationEntryId:
 				copy.kind === "CHAT_TURN" && copy.state !== "PLANNED"
 					? `${spec.id.slice(0, -3)}f${String(position).padStart(2, "0")}`
 					: null,

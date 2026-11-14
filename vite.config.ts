@@ -390,8 +390,8 @@ export default defineConfig({
 			"gate:load-format": cached(`vp fmt --check ${loadSources}`),
 			"gate:load-syntax": group(["test:load:syntax"]),
 			"test:load:webhook-burst": run("node scripts/load-test.ts webhook-burst"),
-			"test:load:detection-mentor": run("node scripts/load-test.ts detection-mentor"),
-			"test:load:heph": run("node scripts/load-test.ts heph"),
+			"test:load:detection-conversation": run("node scripts/load-test.ts detection-conversation"),
+			"test:load:conversation": run("node scripts/load-test.ts conversation"),
 			"report:load:baseline": run("node scripts/load-test.ts report"),
 			"test:load:syntax": run("node scripts/load-test.ts syntax"),
 

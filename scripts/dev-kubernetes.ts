@@ -59,7 +59,7 @@ export function hostServerEnvironment(rendered: string): Record<string, string> 
 				(entry) =>
 					typeof entry.name === "string" &&
 					typeof entry.value === "string" &&
-					/^(?:AGENT_|SANDBOX_|HEPHAESTUS_(?:WORKER_|AGENT_|SANDBOX_|MENTOR_TURN_CAPACITY$))/u.test(
+					/^(?:AGENT_|SANDBOX_|HEPHAESTUS_(?:WORKER_|AGENT_|SANDBOX_|CONVERSATION_TURN_CAPACITY$))/u.test(
 						entry.name,
 					),
 			)

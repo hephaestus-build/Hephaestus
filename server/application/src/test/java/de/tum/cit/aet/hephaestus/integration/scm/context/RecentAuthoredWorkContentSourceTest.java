@@ -30,10 +30,10 @@ class RecentAuthoredWorkContentSourceTest extends BaseUnitTest {
     AccountSummaryQuery accounts;
 
     @Mock
-    MentorContextQueryRepository queryRepository;
+    ConversationContextQueryRepository queryRepository;
 
     @Mock
-    ScmMentorWorkQuery work;
+    ScmConversationWorkQuery work;
 
     @Spy
     ObjectMapper objectMapper = new ObjectMapper();
@@ -49,7 +49,7 @@ class RecentAuthoredWorkContentSourceTest extends BaseUnitTest {
 
     @Test
     void shouldPublishMergedPullRequestResourcesUsingItsSourceId() {
-        when(work.actors(1L, 2L)).thenReturn(Optional.of(new ScmMentorWorkQuery.Actors(5L, List.of(200L))));
+        when(work.actors(1L, 2L)).thenReturn(Optional.of(new ScmConversationWorkQuery.Actors(5L, List.of(200L))));
         PullRequest merged = new PullRequest();
         merged.setId(4009553323L);
         merged.setNumber(9);

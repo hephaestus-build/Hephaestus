@@ -27,7 +27,7 @@ public class TestUserConfig {
                     .orElseGet(() -> gitProviderRepository.save(
                             new IdentityProvider(IdentityProviderType.GITHUB, "https://github.com")));
             seed(userRepository, accounts, identities, "testuser", 1, provider);
-            seed(userRepository, accounts, identities, "mentor", 2, provider);
+            seed(userRepository, accounts, identities, "conversation", 2, provider);
             seed(userRepository, accounts, identities, "admin", 3, provider);
         };
     }

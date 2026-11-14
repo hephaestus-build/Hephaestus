@@ -54,7 +54,7 @@ public class ScanCallGuard {
         var attempt = route.attempt();
         Long workspace = route.workspaceId();
         if (workspace == null
-                || attempt.sourceType() == UsageSourceType.MENTOR_TURN
+                || attempt.sourceType() == UsageSourceType.CONVERSATION_TURN
                 || attempt.sourceType() == UsageSourceType.PROBE) return Optional.empty();
         var job = jobs.findByIdAndWorkspaceId(attempt.sourceId(), workspace).orElseThrow(ScanCallGuard::refused);
         var review = reviews.find(workspace, job.getReviewId()).orElseThrow(ScanCallGuard::refused);

@@ -23,7 +23,7 @@ import de.tum.cit.aet.hephaestus.practices.dto.UpdatePracticeRequestDTO;
 import de.tum.cit.aet.hephaestus.testconfig.OfflineNetwork;
 import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
 import de.tum.cit.aet.hephaestus.testconfig.WithAdminUser;
-import de.tum.cit.aet.hephaestus.testconfig.WithMentorUser;
+import de.tum.cit.aet.hephaestus.testconfig.WithConversationUser;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Membership;
@@ -355,7 +355,7 @@ class ConfigAuditIntegrationTest extends AbstractWorkspaceIntegrationTest {
     }
 
     @Test
-    @WithMentorUser
+    @WithConversationUser
     void aWorkspaceAdminIsRefusedAnotherWorkspacesTrail() {
         // Deliberately not @WithAdminUser: app_admin carries cross-workspace elevation, so that
         // user
@@ -382,7 +382,7 @@ class ConfigAuditIntegrationTest extends AbstractWorkspaceIntegrationTest {
     }
 
     @Test
-    @WithMentorUser
+    @WithConversationUser
     void aNonInstanceAdminIsRefusedTheCrossWorkspaceView() {
         webTestClient
                 .get()

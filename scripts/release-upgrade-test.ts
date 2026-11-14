@@ -792,7 +792,7 @@ function queueReview(database: string, modelId: number): void {
 			'per1mCacheReadUsd', p.per_1m_cache_read_usd, 'per1mCacheWriteUsd', p.per_1m_cache_write_usd))`;
 	const bound = `FROM llm_model m
 		JOIN llm_model_price p ON p.model_id = m.id AND p.effective_to IS NULL
-		JOIN workspace_agent_binding b ON b.instance_model_id = m.id AND b.workspace_id = 978001
+		JOIN workspace_model_assignment b ON b.instance_model_id = m.id AND b.workspace_id = 978001
 			AND b.purpose = 'PRACTICE_REVIEW'
 		WHERE m.id = ${modelId}`;
 	query(

@@ -994,7 +994,7 @@ drain. docs/admin/kubernetes.mdx § Sandbox prerequisites.
 {{- $capacity := int (include "hephaestus.conversationTurns" .) }}
 {{- if .Values.sandbox.enabled }}
 # The installation's conversation turns. Each server's claim checks this cap across all servers.
-- name: HEPHAESTUS_MENTOR_TURN_CAPACITY
+- name: HEPHAESTUS_CONVERSATION_TURN_CAPACITY
   value: {{ $capacity | quote }}
 {{- end }}
 # Also the review capacity: a server claims no more reviews than it may run sandboxes.

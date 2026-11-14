@@ -1,0 +1,2 @@
+# REN-1: the workspace review switches take the glossary origins: practiceReviewEventEnabled and practiceReviewRequestEnabled. Stopped 1.0 cutover (ADR 0070); the extension calls none of these operations.
+in API PATCH /workspaces/{workspaceSlug}/token removed the required property `practiceReviewAutoTriggerEnabled` from the response with the `200` status

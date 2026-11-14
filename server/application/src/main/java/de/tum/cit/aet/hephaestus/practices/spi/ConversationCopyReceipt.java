@@ -7,12 +7,12 @@ import org.jspecify.annotations.Nullable;
 /**
  * How a claimed conversation copy ended.
  *
- * @param mentorTurnId the Heph turn that claimed the copy
- * @param mentorEntryId the Heph answer that showed the words; required for {@code DELIVERED}
+ * @param conversationTurnId the Hephaestus turn that claimed the copy
+ * @param conversationEntryId the Hephaestus answer that showed the words; required for {@code DELIVERED}
  */
 public record ConversationCopyReceipt(
-        UUID mentorTurnId,
-        @Nullable UUID mentorEntryId,
+        UUID conversationTurnId,
+        @Nullable UUID conversationEntryId,
         ConversationCopyOutcome outcome,
         Instant at,
         @Nullable String reason) {}

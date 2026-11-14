@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect } from "storybook/test";
 
-import { AGENT_PURPOSES } from "./agent-purpose-defs";
+import { MODEL_PURPOSES } from "./model-purpose-defs";
 import { ModelKindMark } from "./ModelKindMark";
 
 const meta = {
@@ -28,7 +28,7 @@ export const EveryKind: Story = {
 		<div className="grid gap-6 sm:grid-cols-2">
 			{(["sm", "md"] as const).map((size) => (
 				<ul key={size} aria-label={`Size ${size}`} className="grid gap-3 text-sm">
-					{AGENT_PURPOSES.map((purpose) => (
+					{MODEL_PURPOSES.map((purpose) => (
 						<li key={purpose}>
 							<ModelKindMark {...args} purpose={purpose} size={size} />
 						</li>
@@ -40,17 +40,17 @@ export const EveryKind: Story = {
 	play: async ({ canvas }) => {
 		for (const size of ["sm", "md"]) {
 			const list = canvas.getByRole("list", { name: `Size ${size}` });
-			await expect(list).toHaveTextContent("Practice reviewsConversations");
+			await expect(list).toHaveTextContent("Practice reviewsAsk Hephaestus");
 		}
 	},
 };
 
 export const NameForScreenReaders: Story = {
-	args: { purpose: "MENTOR", label: "sr-only" },
+	args: { purpose: "CONVERSATION", label: "sr-only" },
 	play: async ({ canvas }) => {
-		const name = canvas.getByText("Conversations");
+		const name = canvas.getByText("Ask Hephaestus");
 		await expect(name.getBoundingClientRect().width).toBeLessThanOrEqual(1);
-		await expect(canvas.getByText("Conversations").closest("[aria-hidden]")).toBeNull();
+		await expect(canvas.getByText("Ask Hephaestus").closest("[aria-hidden]")).toBeNull();
 	},
 };
 

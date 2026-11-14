@@ -97,7 +97,7 @@ const meta = {
 		connection: {
 			displayName: "OpenAI production",
 			apiProtocol: "openai-responses",
-			purposes: ["PRACTICE_REVIEW", "MENTOR"],
+			purposes: ["PRACTICE_REVIEW", "CONVERSATION"],
 			enabled: true,
 		},
 		workspaceOptions: [

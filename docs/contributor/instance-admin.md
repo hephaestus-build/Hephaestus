@@ -30,7 +30,7 @@ This page owns authorization, routing, and persistence implementation.
 
 The admin area is a **dedicated sidebar context** (`AppSidebar` `context === "admin"`).
 It has its own "Back to app" header, with no workspace switcher, as in the GitLab/Grafana "admin area" pattern.
-It does **not** reuse the mentor context.
+It does **not** reuse the conversation context.
 The always-present sidebar footer has an `app_admin`-gated **"Instance administration"** entry.
 Thus, a newly bootstrapped admin with **zero workspaces** can reach it.
 
@@ -50,7 +50,7 @@ Instance metadata endpoints under `/admin`, all gated by `hasAuthority('app_admi
 | `DELETE /admin/users/{id}/sessions` (`adminRevokeUserSessions`) | **Force sign out**: revoke all of an account's active sessions. Audited as `JWT_REVOKED`. |
 | `GET /admin/workspaces` (`adminListWorkspaces`) | **Metadata-only** overview of every workspace (slug, status, provider, owner login, member count, created-at). Cross-tenant through `@WorkspaceAgnostic`. This endpoint itself returns **no tenant content**. Private user content is reached through [read-only user views](#read-only-user-views). |
 | `GET /admin/audit` (`adminListAuthEvents`) | Read-only viewer over the append-only `auth_event` log (logins, user views, role changes, deletions). Paged, newest-first, filterable by event type. [read-only user views](#read-only-user-views) says what a `USER_VIEW` row carries. |
-| `GET /admin/config-audit` (`adminListConfigAuditEvents`) | Read-only viewer over `config_audit_event` — who changed which workspace setting, when, and from what to what. Rows are immutable inside the retention window (DB trigger). `ConfigAuditRetentionJob` is the only way one leaves. |
+| `GET /admin/config-audit` (`adminListConfigAuditEvents`) | Read-only viewer over `config_audit_event` — who changed which workspace setting, when, and from what to what. Rows are immutable inside the retention window (DB trigger). `ConfigAuditRetentionJob` is the only way one leaves. A row keeps its `entity_type`: model assignments write `MODEL_ASSIGNMENT`, and older rows keep `AGENT_BINDING`, `AGENT_CONFIG` or `AI_CONFIG_BINDING` (`ConfigAuditEntityType`). |
 | `/admin/llm/connections*` (`adminListLlmConnections`, `adminCreateLlmConnection`, `adminUpdateLlmConnection`, `adminDeleteLlmConnection`, `adminProbeLlmConnection`, `adminProbeLlmConnectionDraft`) | The instance LLM connection catalog. Routing identity (base URL, wire API, auth mode) is immutable after create. Probe tests a saved or draft connection before anything is enabled. |
 | `/admin/llm/models*` (`adminListLlmModels`, `adminCreateLlmModel`, `adminUpdateLlmModel`, `adminDeleteLlmModel`, `adminUpdateLlmModelPrice`, `adminUpdateLlmModelSharing`) | Models under a connection, their prices (temporal supersede-on-insert into `llm_model_price`), and who may use them — public, or granted per workspace. |
 | `GET`/`PUT /admin/llm/settings` (`adminGetLlmSettings`, `adminUpdateLlmSettings`) | The instance LLM settings singleton: egress host allowlist and `allowWorkspaceConnections`, the switch that lets workspaces register their own provider connections. |

@@ -101,8 +101,12 @@ The migration guide owns each change. This table gives the names.
 | Server settings | `hephaestus.agent.max-retries` | `hephaestus.agent.capacity.review-retries`. `AGENT_MAX_RETRIES` still works. | *Stop every role before moving review leases to agent runs* |
 | Secret | `DATABASE_USERNAME`, `DATABASE_PASSWORD` | `DATABASE_ADMIN_USERNAME` and `DATABASE_ADMIN_PASSWORD` for the bundled PostgreSQL, and the new `DATABASE_OWNER_PASSWORD` and `DATABASE_APP_PASSWORD` | *Give each database purpose its own login* |
 | Secret | `HEPHAESTUS_CONVERSATION_LOOP_SECRET` | Remove the key. Each sandbox receives its own credential. | *Stop every role before moving conversation turns to sandboxes* |
-| Image outside the chart | `HEPHAESTUS_WORKER_CAPACITY_MENTOR_MAX` | `HEPHAESTUS_MENTOR_TURN_CAPACITY` on the server | *Stop every role before moving conversation turns to sandboxes* |
+| Image outside the chart | `HEPHAESTUS_WORKER_CAPACITY_MENTOR_MAX` | `HEPHAESTUS_CONVERSATION_TURN_CAPACITY` on the server | *Stop every role before moving conversation turns to sandboxes* |
 | Image outside the chart | `HEPHAESTUS_RUNTIME_WORKER_ENABLED`, the `worker` Spring profile and `HEPHAESTUS_WORKER_DRAIN_TIMEOUT` | `AGENT_ENABLED=true`, `HEPHAESTUS_AGENT_DRAIN_TIMEOUT` and the sandbox settings on the server | *Move the worker values to the server and the sandboxes* |
+| Image outside the chart | `HEPHAESTUS_MENTOR_TURN_*`, `HEPHAESTUS_RATE_LIMIT_MENTOR_TURNS_CAPACITY`, `HEPHAESTUS_RATE_LIMIT_MENTOR_TURNS_PERIOD` | `HEPHAESTUS_CONVERSATION_TURN_*`, `HEPHAESTUS_RATE_LIMIT_CONVERSATION_TURNS_CAPACITY`, `HEPHAESTUS_RATE_LIMIT_CONVERSATION_TURNS_PERIOD` | *Stop every role before Ask Hephaestus takes its names* |
+| Server settings | `hephaestus.mentor.*` | `hephaestus.conversation.*` | *Stop every role before Ask Hephaestus takes its names* |
+| Monitoring | `mentor_turn_*`, `mentor_live_streams`, `surface="mentor"`, log events `mentor.turn.ended` and `heph.turn.*` | `conversation_turn_*`, `conversation_live_streams`, `surface="conversation"`, `conversation.turn.*` | *Stop every role before Ask Hephaestus takes its names* |
+| API clients | `/api/workspaces/{slug}/mentor/…`, `/api/workspaces/{slug}/agents` | `/api/workspaces/{slug}/conversation/…`, `/api/workspaces/{slug}/model-assignments` | *Stop every role before Ask Hephaestus takes its names* |
 | Custom agent image | An image from an earlier release | An image that you rebuilt from this release | *Rebuild custom agent images* and *Rebuild a custom agent image* |
 
 The table covers the changes after the release candidate `1.0.0-rc.5`.

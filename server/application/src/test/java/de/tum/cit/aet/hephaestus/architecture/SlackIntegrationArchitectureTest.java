@@ -118,9 +118,9 @@ class SlackIntegrationArchitectureTest extends HephaestusArchitectureTest {
             "SlackThreadRepository.findPersonSourceIds",
             "SlackMessageRepository.findDistinctWorkspaceIds",
             "SlackMonitoredChannelRepository.findDistinctWorkspaceIdsByConsentState",
-            // The agent-owned ConversationCandidateSource SPI's settled-thread scan is an inherently cross-workspace
+            // The agent-owned ThreadCandidateSource SPI's settled-thread scan is an inherently cross-workspace
             // sweep (each returned candidate carries its own workspace_id); its caller chain
-            // (SlackConversationCandidateSource.settledCandidates → agent's ConversationThreadTriggerScheduler) is
+            // (SlackThreadCandidateSource.settledCandidates → agent's ConversationThreadTriggerScheduler) is
             // itself @WorkspaceAgnostic for exactly this reason, mirroring the two entries above.
             "SlackThreadRepository.findSettledCandidateRows");
 

@@ -13,11 +13,11 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRep
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
-import de.tum.cit.aet.hephaestus.integration.slack.SlackConversationTestSupport;
-import de.tum.cit.aet.hephaestus.integration.slack.conversation.SlackConversationCandidateSource;
-import de.tum.cit.aet.hephaestus.integration.slack.conversation.SlackConversationProjector;
+import de.tum.cit.aet.hephaestus.integration.slack.SlackThreadTestSupport;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMessageRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackThreadRepository;
+import de.tum.cit.aet.hephaestus.integration.slack.thread.SlackThreadCandidateSource;
+import de.tum.cit.aet.hephaestus.integration.slack.thread.SlackThreadProjector;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.Membership;
@@ -42,7 +42,7 @@ import tools.jackson.databind.node.ObjectNode;
 class SlackThreadProjectionIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
-    private SlackConversationProjector projector;
+    private SlackThreadProjector projector;
 
     @Autowired
     private JdbcTemplate jdbc;
@@ -88,7 +88,7 @@ class SlackThreadProjectionIntegrationTest extends BaseIntegrationTest {
                 .orElseGet(() -> identityProviderRepository.save(
                         new IdentityProvider(IdentityProviderType.GITHUB, "https://github.com")));
         long nativeId = USER_SEQ.incrementAndGet();
-        long accountId = SlackConversationTestSupport.accountWithIdentity(
+        long accountId = SlackThreadTestSupport.accountWithIdentity(
                 accounts, identities, provider, nativeId, login + "-" + nativeId);
         memberships.createMembership(
                 workspaceRepository.findById(workspaceId).orElseThrow(), accountId, Membership.WorkspaceRole.MEMBER);
@@ -105,11 +105,11 @@ class SlackThreadProjectionIntegrationTest extends BaseIntegrationTest {
         connections.saveAndFlush(connection);
     }
 
-    private SlackConversationTestSupport support;
+    private SlackThreadTestSupport support;
 
     @BeforeEach
     void setUpSourceFixtures() {
-        support = new SlackConversationTestSupport(jdbc);
+        support = new SlackThreadTestSupport(jdbc);
     }
 
     private void seedChannel(long workspaceId, String channelId, String consentState) {
@@ -252,7 +252,7 @@ class SlackThreadProjectionIntegrationTest extends BaseIntegrationTest {
         seedThread(first, "C1", root, root, 4, "{100}");
         seedChannel(second, "C1", "ACTIVE");
         seedThread(second, "C1", root, root, 4, "{101}");
-        var source = new SlackConversationCandidateSource(threadRepository, messageRepository);
+        var source = new SlackThreadCandidateSource(threadRepository, messageRepository);
         assertThat(source.settledCandidates(4).stream()
                         .filter(c -> c.workspaceId() == first || c.workspaceId() == second))
                 .singleElement()

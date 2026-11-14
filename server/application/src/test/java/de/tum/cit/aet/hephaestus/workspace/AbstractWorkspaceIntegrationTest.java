@@ -131,7 +131,7 @@ public abstract class AbstractWorkspaceIntegrationTest extends BaseIntegrationTe
         user.setCreatedAt(Instant.now());
         user.setUpdatedAt(Instant.now());
         user = userRepository.save(user);
-        if (Set.of("admin", "mentor", "testuser").contains(login)) {
+        if (Set.of("admin", "conversation", "testuser").contains(login)) {
             TestUserFactory.ensureAccountForUser(accountRepository, fixtureIdentities, user);
         }
         return user;

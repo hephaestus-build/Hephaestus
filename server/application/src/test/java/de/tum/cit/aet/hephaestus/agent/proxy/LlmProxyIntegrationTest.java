@@ -34,18 +34,18 @@ import de.tum.cit.aet.hephaestus.agent.catalog.WorkspaceLlmConnection;
 import de.tum.cit.aet.hephaestus.agent.catalog.WorkspaceLlmConnectionRepository;
 import de.tum.cit.aet.hephaestus.agent.catalog.WorkspaceLlmModel;
 import de.tum.cit.aet.hephaestus.agent.catalog.WorkspaceLlmModelRepository;
-import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.config.FrozenModel;
 import de.tum.cit.aet.hephaestus.agent.config.MemberAiRoutingAdapter;
-import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBinding;
-import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBindingRepository;
+import de.tum.cit.aet.hephaestus.agent.config.ModelPurpose;
+import de.tum.cit.aet.hephaestus.agent.config.WorkspaceModelAssignment;
+import de.tum.cit.aet.hephaestus.agent.config.WorkspaceModelAssignmentRepository;
+import de.tum.cit.aet.hephaestus.agent.conversation.weeklydigest.DigestAdmission;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewMemberAiPolicy;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewRunKind;
 import de.tum.cit.aet.hephaestus.agent.job.RuntimeJobTestData;
-import de.tum.cit.aet.hephaestus.agent.mentor.weeklydigest.DigestAdmission;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.productfeedback.DraftReportAdapterFixture;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunBand;
@@ -59,6 +59,7 @@ import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageEventRepository;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRecorder;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRepricingSweeper;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
+import de.tum.cit.aet.hephaestus.conversation.ConversationTurnRepository;
 import de.tum.cit.aet.hephaestus.core.action.ActionExecutor;
 import de.tum.cit.aet.hephaestus.core.action.ActionKind;
 import de.tum.cit.aet.hephaestus.core.action.ActionRequest;
@@ -70,7 +71,6 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.UsagePricingState;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
-import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
 import de.tum.cit.aet.hephaestus.practices.DefinitionTestFixtures;
 import de.tum.cit.aet.hephaestus.practices.PracticeVersionService;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
@@ -172,10 +172,10 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
     private AgentRuns agentRuns;
 
     @Autowired
-    private MentorTurnRepository turnRepository;
+    private ConversationTurnRepository turnRepository;
 
     @Autowired
-    private WorkspaceAgentBindingRepository agentBindingRepository;
+    private WorkspaceModelAssignmentRepository modelAssignmentRepository;
 
     @Autowired
     private LlmConnectionRepository connectionRepository;
@@ -303,7 +303,7 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
                     WebClient.builder().build(),
                     liveBudgetService,
                     capacity,
-                    new HephCallProperties(Duration.ofMinutes(5), Duration.ofMinutes(2)),
+                    new ConversationCallProperties(Duration.ofMinutes(5), Duration.ofMinutes(2)),
                     policy);
             var gateway = new LlmModelProbeGateway(proxy, objectMapper);
             UUID probe = UUID.randomUUID();
@@ -462,7 +462,7 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
                         WebClient.builder().build(),
                         liveBudgetService,
                         admittingPermits(),
-                        new HephCallProperties(Duration.ofMinutes(5), Duration.ofMinutes(2)),
+                        new ConversationCallProperties(Duration.ofMinutes(5), Duration.ofMinutes(2)),
                         probePolicy(),
                         health),
                 objectMapper);
@@ -1072,7 +1072,7 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 WebClient.create(),
                 mock(LlmBudgetService.class),
                 capacity,
-                new HephCallProperties(Duration.ofMinutes(5), silence));
+                new ConversationCallProperties(Duration.ofMinutes(5), silence));
         var request = new MockHttpServletRequest("POST", "/internal/llm/chat/completions");
         request.setRemoteAddr("127.0.0.1");
         request.addHeader("Authorization", "Bearer " + tokenFor(job, Duration.ofSeconds(3)));
@@ -1321,11 +1321,17 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     private LlmProxyService proxyService(WebClient client, LlmBudgetService budgetService, LlmCallPermits capacity) {
         return proxyService(
-                client, budgetService, capacity, new HephCallProperties(Duration.ofMinutes(5), Duration.ofMinutes(2)));
+                client,
+                budgetService,
+                capacity,
+                new ConversationCallProperties(Duration.ofMinutes(5), Duration.ofMinutes(2)));
     }
 
     private LlmProxyService proxyService(
-            WebClient client, LlmBudgetService budgetService, LlmCallPermits capacity, HephCallProperties silence) {
+            WebClient client,
+            LlmBudgetService budgetService,
+            LlmCallPermits capacity,
+            ConversationCallProperties silence) {
         ProxyRequestPolicy policy = mock(ProxyRequestPolicy.class);
         when(policy.allows(any())).thenReturn(true);
         return proxyService(client, budgetService, capacity, silence, policy);
@@ -1335,7 +1341,7 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
             WebClient client,
             LlmBudgetService budgetService,
             LlmCallPermits capacity,
-            HephCallProperties silence,
+            ConversationCallProperties silence,
             ProxyRequestPolicy policy) {
         return proxyService(
                 client,
@@ -1350,7 +1356,7 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
             WebClient client,
             LlmBudgetService budgetService,
             LlmCallPermits capacity,
-            HephCallProperties silence,
+            ConversationCallProperties silence,
             ProxyRequestPolicy policy,
             LlmConnectionHealth health) {
         var gate = new ProxyBudgetGate(budgetService);
@@ -1459,16 +1465,16 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
         LlmModel model = modelRepository.save(LlmCatalogTestFixtures.model(
                 connection, "model-" + System.nanoTime(), "catalog-model", ModelVisibility.PUBLIC, modelEnabled));
         // A workspace binds one model per purpose, so a second job re-points the binding it already has.
-        WorkspaceAgentBinding binding = agentBindingRepository
+        WorkspaceModelAssignment binding = modelAssignmentRepository
                 .findByWorkspaceIdAndPurposeAndDataHandlingTier(
-                        workspace.getId(), AgentPurpose.PRACTICE_REVIEW, DataHandlingTier.UNDECLARED)
-                .orElseGet(WorkspaceAgentBinding::new);
+                        workspace.getId(), ModelPurpose.PRACTICE_REVIEW, DataHandlingTier.UNDECLARED)
+                .orElseGet(WorkspaceModelAssignment::new);
         binding.setWorkspace(workspace);
-        binding.setPurpose(AgentPurpose.PRACTICE_REVIEW);
+        binding.setPurpose(ModelPurpose.PRACTICE_REVIEW);
         binding.setInstanceModel(model);
         binding.setEnabled(true);
         binding.setTimeoutSeconds(600);
-        agentBindingRepository.save(binding);
+        modelAssignmentRepository.save(binding);
 
         var snapshot = new ConfigSnapshot(
                         ConfigSnapshot.SCHEMA_VERSION,

@@ -42,17 +42,17 @@ class CrossCuttingModuleBoundaryTest extends HephaestusArchitectureTest {
         }
 
         /**
-         * Contributors module should not depend on mentor module.
+         * Contributors module should not depend on conversation module.
          */
         @Test
-        void contributorsDoesNotDependOnMentor() {
+        void contributorsDoesNotDependOnConversation() {
             ArchRule rule = noClasses()
                     .that()
                     .resideInAPackage("..contributors..")
                     .should()
                     .dependOnClassesThat()
-                    .resideInAPackage("..mentor..")
-                    .because("Contributors and mentor are independent modules");
+                    .resideInAPackage("..conversation..")
+                    .because("Contributors and conversation are independent modules");
             rule.check(classes);
         }
     }
@@ -73,7 +73,7 @@ class CrossCuttingModuleBoundaryTest extends HephaestusArchitectureTest {
                     .resideInAPackage("..account..")
                     .should()
                     .dependOnClassesThat()
-                    .resideInAnyPackage("..activity..", "..mentor..", "..notification..", "..contributors..")
+                    .resideInAnyPackage("..activity..", "..conversation..", "..notification..", "..contributors..")
                     .because("Account is a foundational module - feature modules depend on it");
             rule.check(classes);
         }
@@ -115,7 +115,7 @@ class CrossCuttingModuleBoundaryTest extends HephaestusArchitectureTest {
                     .should()
                     .dependOnClassesThat()
                     .resideInAnyPackage(
-                            "..activity..", "..mentor..", "..notification..", "..contributors..", "..workspace..")
+                            "..activity..", "..conversation..", "..notification..", "..contributors..", "..workspace..")
                     .because("Core is a foundation layer - should not depend on feature modules");
             rule.check(classes);
         }
@@ -155,7 +155,7 @@ class CrossCuttingModuleBoundaryTest extends HephaestusArchitectureTest {
                     .resideInAPackage("..workspace.validation..")
                     .should()
                     .dependOnClassesThat()
-                    .resideInAnyPackage("..activity..", "..mentor..", "..integration.scm.sync..")
+                    .resideInAnyPackage("..activity..", "..conversation..", "..integration.scm.sync..")
                     .because("Validation should be pure logic without external service dependencies");
             rule.check(classes);
         }

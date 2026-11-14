@@ -3,8 +3,8 @@ package de.tum.cit.aet.hephaestus.integration.scm.context;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.agent.handler.RetainedFeedbackTestData;
-import de.tum.cit.aet.hephaestus.evidence.capture.MentorContextPaths;
-import de.tum.cit.aet.hephaestus.evidence.capture.MentorContextRequest;
+import de.tum.cit.aet.hephaestus.evidence.capture.ConversationContextPaths;
+import de.tum.cit.aet.hephaestus.evidence.capture.ConversationContextRequest;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemIndexService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
@@ -80,7 +80,7 @@ import org.springframework.transaction.interceptor.TransactionInterceptor;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
-/** What Heph reads before merge advice, against a real schema: the staged MR !1 and its neighbours. */
+/** What Hephaestus reads before merge advice, against a real schema: the staged MR !1 and its neighbours. */
 class MergeReadinessContentSourceIntegrationTest extends AbstractWorkspaceIntegrationTest {
     private static final Instant NOW = Instant.parse("2026-10-14T10:00:00Z");
 
@@ -98,7 +98,7 @@ class MergeReadinessContentSourceIntegrationTest extends AbstractWorkspaceIntegr
     private MergeReadinessContentSource source;
 
     @Autowired
-    private ScmMentorWorkQuery work;
+    private ScmConversationWorkQuery work;
 
     @Autowired
     private ObjectMapper objectMapper;
@@ -137,7 +137,7 @@ class MergeReadinessContentSourceIntegrationTest extends AbstractWorkspaceIntegr
     private FeedbackCopyRepository placementRepository;
 
     @Autowired
-    private MentorContextQueryRepository queryRepository;
+    private ConversationContextQueryRepository queryRepository;
 
     @Autowired
     private WorkspaceActorSelector actorSelector;
@@ -444,22 +444,24 @@ class MergeReadinessContentSourceIntegrationTest extends AbstractWorkspaceIntegr
                 thread(mr, PullRequestReviewThread.State.RESOLVED, tutor, "Set up CI before merging.");
         // Reopening moves the tutor's thread ahead of the first page, past the second page's offset.
         AtomicInteger pages = new AtomicInteger();
-        MentorContextQueryRepository reopenBeforeSecondPage = (MentorContextQueryRepository) Proxy.newProxyInstance(
-                getClass().getClassLoader(),
-                new Class<?>[] {MentorContextQueryRepository.class},
-                (proxy, method, args) -> {
-                    if (method.getName().equals("findThreadCommentsUnresolvedFirst") && pages.getAndIncrement() == 1) {
-                        CompletableFuture.runAsync(() -> jdbcTemplate.update(
-                                        "UPDATE pull_request_review_thread SET state = 'UNRESOLVED' WHERE id = ?",
-                                        condition.getId()))
-                                .join();
-                    }
-                    try {
-                        return method.invoke(queryRepository, args);
-                    } catch (InvocationTargetException e) {
-                        throw e.getCause();
-                    }
-                });
+        ConversationContextQueryRepository reopenBeforeSecondPage =
+                (ConversationContextQueryRepository) Proxy.newProxyInstance(
+                        getClass().getClassLoader(),
+                        new Class<?>[] {ConversationContextQueryRepository.class},
+                        (proxy, method, args) -> {
+                            if (method.getName().equals("findThreadCommentsUnresolvedFirst")
+                                    && pages.getAndIncrement() == 1) {
+                                CompletableFuture.runAsync(() -> jdbcTemplate.update(
+                                                "UPDATE pull_request_review_thread SET state = 'UNRESOLVED' WHERE id = ?",
+                                                condition.getId()))
+                                        .join();
+                            }
+                            try {
+                                return method.invoke(queryRepository, args);
+                            } catch (InvocationTargetException e) {
+                                throw e.getCause();
+                            }
+                        });
         ProxyFactory transactional = new ProxyFactory(new MergeReadinessContentSource(
                 actorSelector,
                 reopenBeforeSecondPage,
@@ -476,7 +478,7 @@ class MergeReadinessContentSourceIntegrationTest extends AbstractWorkspaceIntegr
 
         ((MergeReadinessContentSource) transactional.getProxy())
                 .contribute(
-                        new MentorContextRequest(workspace.getId(), accountId(student), UUID.randomUUID(), null),
+                        new ConversationContextRequest(workspace.getId(), accountId(student), UUID.randomUUID(), null),
                         files);
 
         assertThat(pages.get()).isEqualTo(2);
@@ -717,7 +719,7 @@ class MergeReadinessContentSourceIntegrationTest extends AbstractWorkspaceIntegr
         JsonNode payload = payload(workspace.getId(), student.getId());
         String json = objectMapper.writeValueAsString(payload);
 
-        assertThat(json.length()).isLessThanOrEqualTo(MentorContextPaths.MAX_CHARS);
+        assertThat(json.length()).isLessThanOrEqualTo(ConversationContextPaths.MAX_CHARS);
         assertThat(objectMapper.readTree(json).path("sizeLimited").asBoolean()).isTrue();
         assertThat(payload.path("pullRequests").size()
                         + payload.path("notLoaded").size())
@@ -899,7 +901,7 @@ class MergeReadinessContentSourceIntegrationTest extends AbstractWorkspaceIntegr
     private JsonNode payload(long workspaceId, long developerId) {
         Map<String, byte[]> files = new HashMap<>();
         source.contribute(
-                new MentorContextRequest(
+                new ConversationContextRequest(
                         workspaceId, workspaceMembershipService.accountIdForUser(developerId), UUID.randomUUID(), null),
                 files);
         return objectMapper.readTree(Objects.requireNonNull(files.get(MergeReadinessContentSource.OUTPUT_KEY)));

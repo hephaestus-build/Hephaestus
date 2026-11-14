@@ -191,7 +191,7 @@ public class OutlineCollectionAdminService {
                 row.setSyncStatus(SyncStatus.PENDING);
                 eventPublisher.publishEvent(new OutlineCollectionResumedEvent(workspaceId, collectionId));
             } else {
-                // A running Heph turn may hold the collection's documents in its context folder.
+                // A running Hephaestus turn may hold the collection's documents in its context folder.
                 eventPublisher.publishEvent(new AgentContextChangedEvent(workspaceId));
             }
             row = collectionRepository.save(row);

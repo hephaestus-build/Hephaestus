@@ -16,7 +16,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.UsagePricingState;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
 import de.tum.cit.aet.hephaestus.testconfig.WithAdminUser;
-import de.tum.cit.aet.hephaestus.testconfig.WithMentorUser;
+import de.tum.cit.aet.hephaestus.testconfig.WithConversationUser;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Membership;
@@ -157,8 +157,8 @@ class LlmUsageControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
         LlmUsageEvent event = new LlmUsageEvent();
         event.setId(UUID.randomUUID());
         event.setWorkspaceId(workspace.getId());
-        event.setJobType("MENTOR_TURN");
-        event.setSourceType(UsageSourceType.MENTOR_TURN);
+        event.setJobType("CONVERSATION_TURN");
+        event.setSourceType(UsageSourceType.CONVERSATION_TURN);
         event.setSourceId(UUID.randomUUID());
         event.setModel("unmeasured-model");
         event.setCostUsd(null);
@@ -174,7 +174,7 @@ class LlmUsageControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
     }
 
     private UsageSourceType sourceType(String type) {
-        return "MENTOR_TURN".equals(type) ? UsageSourceType.MENTOR_TURN : UsageSourceType.REVIEW_JOB;
+        return "CONVERSATION_TURN".equals(type) ? UsageSourceType.CONVERSATION_TURN : UsageSourceType.REVIEW_JOB;
     }
 
     private void connectOwnProvider(Workspace workspace, boolean modelEnabled) {
@@ -234,7 +234,7 @@ class LlmUsageControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
     @WithAdminUser
     void ownProviderIsNotInUseWithoutAnEnabledModelOnAnEnabledConnectionOrAnyOwnProviderCall() {
         Workspace idle = setupWorkspaceWithAdmin("own-provider-idle");
-        seedEvent(idle, "MENTOR_TURN", "1.00", CURRENT, 1);
+        seedEvent(idle, "CONVERSATION_TURN", "1.00", CURRENT, 1);
         Workspace disabled = setupWorkspaceWithAdmin("own-provider-disabled");
         connectOwnProvider(disabled, false);
         Workspace connectionOff = setupWorkspaceWithAdmin("own-provider-connection-off");
@@ -306,7 +306,7 @@ class LlmUsageControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
         workspaceRepository.save(workspace);
         seedEvent(workspace, "PRACTICE_REVIEW", "1.25", PREVIOUS, 3);
         seedEvent(workspace, "PRACTICE_REVIEW", "0.75", PREVIOUS, 3);
-        seedEvent(workspace, "MENTOR_TURN", "0.50", PREVIOUS, 12);
+        seedEvent(workspace, "CONVERSATION_TURN", "0.50", PREVIOUS, 12);
         seedEvent(workspace, "PRACTICE_REVIEW", "9.99", CURRENT, 1);
 
         WorkspaceLlmUsageReportDTO report = webTestClient
@@ -348,7 +348,7 @@ class LlmUsageControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
         Workspace workspace = setupWorkspaceWithAdmin("usage-over");
         workspace.setMonthlyLlmBudgetUsd(new BigDecimal("1.00"));
         workspaceRepository.save(workspace);
-        seedEvent(workspace, "MENTOR_TURN", "1.00", CURRENT, 1);
+        seedEvent(workspace, "CONVERSATION_TURN", "1.00", CURRENT, 1);
 
         webTestClient
                 .get()
@@ -379,7 +379,7 @@ class LlmUsageControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
         Workspace workspace = setupWorkspaceWithAdmin("usage-unverifiable-capped");
         workspace.setMonthlyLlmBudgetUsd(new BigDecimal("100.00"));
         workspaceRepository.save(workspace);
-        seedUnpricedEvent(workspace, "MENTOR_TURN", CURRENT, 1);
+        seedUnpricedEvent(workspace, "CONVERSATION_TURN", CURRENT, 1);
 
         webTestClient
                 .get()
@@ -402,7 +402,7 @@ class LlmUsageControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
         workspace.setMonthlyLlmBudgetUsd(new BigDecimal("2.00"));
         workspace.setMonthlyByoLlmBudgetUsd(new BigDecimal("1.00"));
         workspaceRepository.save(workspace);
-        seedEvent(workspace, "MENTOR_TURN", "1.00", CURRENT, 1);
+        seedEvent(workspace, "CONVERSATION_TURN", "1.00", CURRENT, 1);
         seedUnmeasuredEvent(workspace, UsageFundingSource.INSTANCE, "0.40", CURRENT);
         seedUnmeasuredEvent(workspace, UsageFundingSource.INSTANCE, "0.10", CURRENT);
         seedUnmeasuredEvent(workspace, UsageFundingSource.WORKSPACE, "1.00", CURRENT);
@@ -433,8 +433,8 @@ class LlmUsageControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
         workspace.setMonthlyLlmBudgetUsd(new BigDecimal("100.00"));
         workspace.setMonthlyByoLlmBudgetUsd(new BigDecimal("10.00"));
         workspaceRepository.save(workspace);
-        seedEvent(workspace, "MENTOR_TURN", "1.00", CURRENT, 1);
-        seedByoEvent(workspace, "MENTOR_TURN", "10.00", CURRENT, 1);
+        seedEvent(workspace, "CONVERSATION_TURN", "1.00", CURRENT, 1);
+        seedByoEvent(workspace, "CONVERSATION_TURN", "10.00", CURRENT, 1);
 
         webTestClient
                 .get()
@@ -465,7 +465,7 @@ class LlmUsageControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
         workspace.setMonthlyLlmBudgetUsd(new BigDecimal("100.00"));
         workspace.setMonthlyByoLlmBudgetUsd(new BigDecimal("100.00"));
         workspaceRepository.save(workspace);
-        seedUnpricedByoEvent(workspace, "MENTOR_TURN", CURRENT, 1);
+        seedUnpricedByoEvent(workspace, "CONVERSATION_TURN", CURRENT, 1);
 
         webTestClient
                 .get()
@@ -493,8 +493,8 @@ class LlmUsageControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
         Workspace workspace = setupWorkspaceWithAdmin("usage-paused-past-month");
         workspace.setMonthlyLlmBudgetUsd(new BigDecimal("1.00"));
         workspaceRepository.save(workspace);
-        seedEvent(workspace, "MENTOR_TURN", "1.00", CURRENT, 1);
-        seedEvent(workspace, "MENTOR_TURN", "0.10", PREVIOUS, 1);
+        seedEvent(workspace, "CONVERSATION_TURN", "1.00", CURRENT, 1);
+        seedEvent(workspace, "CONVERSATION_TURN", "0.10", PREVIOUS, 1);
 
         webTestClient
                 .get()
@@ -532,7 +532,7 @@ class LlmUsageControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                 "usage-instance-admin-org",
                 AccountType.ORG,
                 persistUser("usage-instance-admin-owner"));
-        seedEvent(workspace, "MENTOR_TURN", "1.25", CURRENT, 1);
+        seedEvent(workspace, "CONVERSATION_TURN", "1.25", CURRENT, 1);
 
         webTestClient
                 .get()
@@ -547,9 +547,9 @@ class LlmUsageControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
     }
 
     @Test
-    @WithMentorUser
+    @WithConversationUser
     void shouldAnswerNotFoundWhenWorkspaceAdminReadsAnotherWorkspacesReport() {
-        User admin = persistUser("mentor");
+        User admin = persistUser("conversation");
         Workspace ownWorkspace =
                 createWorkspace("usage-own-admin", "Usage own admin", "usage-own-admin-org", AccountType.ORG, admin);
         ensureMembership(ownWorkspace, admin, Membership.WorkspaceRole.ADMIN);
@@ -703,9 +703,9 @@ class LlmUsageControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
     }
 
     @Test
-    @WithMentorUser
+    @WithConversationUser
     void aWorkspaceAdminCannotTouchTheInstanceCap() {
-        User admin = persistUser("mentor");
+        User admin = persistUser("conversation");
         Workspace workspace = createWorkspace(
                 "own-provider-budget-boundary",
                 "Byo budget boundary",
@@ -778,9 +778,9 @@ class LlmUsageControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
      * worst of both.
      */
     @Test
-    @WithMentorUser
+    @WithConversationUser
     void shouldAnswerNotFoundWhenWorkspaceAdminSetsAnotherWorkspacesCap() {
-        User admin = persistUser("mentor");
+        User admin = persistUser("conversation");
         Workspace ownWorkspace =
                 createWorkspace("budget-own-admin", "Budget own admin", "budget-own-admin-org", AccountType.ORG, admin);
         ensureMembership(ownWorkspace, admin, Membership.WorkspaceRole.ADMIN);
@@ -812,12 +812,12 @@ class LlmUsageControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
     }
 
     @Test
-    @WithMentorUser
+    @WithConversationUser
     void plainMemberCannotSetTheOwnProviderCap() {
         User owner = persistUser("budget-member-owner");
         Workspace workspace =
                 createWorkspace("budget-member", "Budget member", "budget-member-org", AccountType.ORG, owner);
-        User member = persistUser("mentor");
+        User member = persistUser("conversation");
         ensureMembership(workspace, member, Membership.WorkspaceRole.MEMBER);
 
         webTestClient
@@ -836,12 +836,12 @@ class LlmUsageControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
     }
 
     @Test
-    @WithMentorUser
+    @WithConversationUser
     void plainMemberIsForbidden() {
         User owner = persistUser("usage-member-owner");
         Workspace workspace =
                 createWorkspace("usage-member", "Usage member", "usage-member-org", AccountType.ORG, owner);
-        User member = persistUser("mentor");
+        User member = persistUser("conversation");
         ensureMembership(workspace, member, Membership.WorkspaceRole.MEMBER);
 
         webTestClient

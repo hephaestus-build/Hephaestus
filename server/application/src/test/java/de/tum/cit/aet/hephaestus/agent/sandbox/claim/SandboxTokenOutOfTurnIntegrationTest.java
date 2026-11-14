@@ -25,10 +25,10 @@ import de.tum.cit.aet.hephaestus.agent.run.AgentRunRef;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunState;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunStopReason;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
+import de.tum.cit.aet.hephaestus.conversation.ConversationTurnRepository;
 import de.tum.cit.aet.hephaestus.core.auth.ratelimit.BucketResolver;
 import de.tum.cit.aet.hephaestus.core.exception.GlobalControllerAdvice;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
-import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.TestEntities;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
@@ -146,7 +146,7 @@ class SandboxTokenOutOfTurnIntegrationTest extends BaseIntegrationTest {
             factory.registerSingleton("agentSandboxes", sandboxes);
             factory.registerSingleton("reviewJobRepository", jobs);
             factory.registerSingleton("agentRuns", runs);
-            factory.registerSingleton("mentorTurnRepository", mock(MentorTurnRepository.class));
+            factory.registerSingleton("conversationTurnRepository", mock(ConversationTurnRepository.class));
             factory.registerSingleton(
                     "attemptTokenVerifier",
                     new AttemptTokenVerifier(AttemptKeyFixtures.keyring(KEY), new SimpleMeterRegistry()));

@@ -4,10 +4,10 @@ import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmConnection;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModel;
 import de.tum.cit.aet.hephaestus.agent.catalog.ModelVisibility;
-import de.tum.cit.aet.hephaestus.agent.config.AgentBindingLimits;
-import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
-import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBinding;
-import de.tum.cit.aet.hephaestus.agent.mentor.MentorLlmConfig;
+import de.tum.cit.aet.hephaestus.agent.config.ModelAssignmentLimits;
+import de.tum.cit.aet.hephaestus.agent.config.ModelPurpose;
+import de.tum.cit.aet.hephaestus.agent.config.WorkspaceModelAssignment;
+import de.tum.cit.aet.hephaestus.agent.conversation.ConversationLlmConfig;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmPriceSnapshot;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
 import de.tum.cit.aet.hephaestus.integration.core.spi.UsagePricingState;
@@ -42,11 +42,11 @@ public final class LlmCatalogTestFixtures {
         return connection;
     }
 
-    /** An enabled Heph binding of {@code model} in {@code workspace}, so Heph accepts questions there. */
-    public static WorkspaceAgentBinding mentorBinding(Workspace workspace, LlmModel model) {
-        WorkspaceAgentBinding binding = new WorkspaceAgentBinding();
+    /** An enabled Hephaestus binding of {@code model} in {@code workspace}, so Hephaestus accepts questions there. */
+    public static WorkspaceModelAssignment conversationBinding(Workspace workspace, LlmModel model) {
+        WorkspaceModelAssignment binding = new WorkspaceModelAssignment();
         binding.setWorkspace(workspace);
-        binding.setPurpose(AgentPurpose.MENTOR);
+        binding.setPurpose(ModelPurpose.CONVERSATION);
         binding.setInstanceModel(model);
         binding.setEnabled(true);
         return binding;
@@ -77,8 +77,8 @@ public final class LlmCatalogTestFixtures {
      * its input-token count. There is deliberately no unpriced variant: admission refuses to start a
      * turn without a price snapshot, so one would let tests exercise an unreachable state.
      */
-    public static MentorLlmConfig admittedMentorConfig() {
-        return new MentorLlmConfig(
+    public static ConversationLlmConfig admittedConversationConfig() {
+        return new ConversationLlmConfig(
                 "openai-responses",
                 BASE_URL,
                 "test-model",
@@ -98,6 +98,6 @@ public final class LlmCatalogTestFixtures {
                         BigDecimal.ZERO,
                         BigDecimal.ZERO,
                         BigDecimal.ZERO),
-                AgentBindingLimits.MAX_HEPH_TURN_SECONDS);
+                ModelAssignmentLimits.MAX_CONVERSATION_TURN_SECONDS);
     }
 }

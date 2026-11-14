@@ -18,7 +18,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
 import de.tum.cit.aet.hephaestus.testconfig.WithAdminUser;
-import de.tum.cit.aet.hephaestus.testconfig.WithMentorUser;
+import de.tum.cit.aet.hephaestus.testconfig.WithConversationUser;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Membership.WorkspaceRole;
@@ -125,9 +125,9 @@ class SlackScopesControllerIntegrationTest extends AbstractWorkspaceIntegrationT
     }
 
     @Test
-    @WithMentorUser
+    @WithConversationUser
     void shouldRefuseAMemberWhoIsNotAnAdmin() {
-        ensureMembership(workspace, persistUser("mentor"), WorkspaceRole.MEMBER);
+        ensureMembership(workspace, persistUser("conversation"), WorkspaceRole.MEMBER);
         connectSlack();
 
         getScopes().expectStatus().isForbidden().expectBody(Void.class);

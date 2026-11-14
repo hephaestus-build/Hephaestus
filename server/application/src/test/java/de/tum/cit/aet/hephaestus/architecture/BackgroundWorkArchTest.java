@@ -63,7 +63,7 @@ class BackgroundWorkArchTest extends HephaestusArchitectureTest {
             "renews and fences the permits that this process's model calls hold, and wakes the calls that wait for one",
             "de.tum.cit.aet.hephaestus.agent.proxy.ScanCallLeases.<init>",
             "renews the scan call leases that this process's calls hold",
-            "de.tum.cit.aet.hephaestus.mentor.MentorTimeline$PartialAnswersConfiguration.mentorPartialAnswers",
+            "de.tum.cit.aet.hephaestus.conversation.ConversationTimeline$PartialAnswersConfiguration.conversationPartialAnswers",
             "keeps the partial answers of running turns, which conversation reads and live streams return");
 
     private static final Set<String> THREAD_OWNERS = Set.of(

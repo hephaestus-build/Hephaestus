@@ -2133,7 +2133,7 @@ async function sendSlackMessage(base: string, signingSecret: string): Promise<st
 /** The whole wait for the Slack reply, after the event was stored. */
 const SLACK_REPLY_MINUTES = 5;
 
-/** The request id of a Slack direct message: team, channel and message `ts` (`SlackMentorService.requestId`). */
+/** The request id of a Slack direct message: team, channel and message `ts` (`SlackConversationService.requestId`). */
 function slackRequestId(ts: string): string {
 	return `slack:${FAKE_TEAM.id}:${SLACK_DM}:${ts}`;
 }
@@ -2145,7 +2145,7 @@ function slackRequestId(ts: string): string {
 async function slackSnapshot(ts: string, signal: AbortSignal): Promise<SlackTurnState | null> {
 	return slackTurnState(
 		await psql(
-			`SELECT coalesce(json_agg(json_build_object('requestId', q.request_id, 'status', t.status, 'entries', coalesce((SELECT json_agg(json_build_object('text', e.text, 'slackTs', e.slack_ts) ORDER BY e.seq) FROM mentor_entry e WHERE e.turn_id = t.id AND e.kind = 'HEPH'), '[]'::json), 'post', (SELECT a.state || coalesce(':' || a.stop_reason, '') FROM agent_action a WHERE a.workspace_id = t.workspace_id AND a.kind = 'SLACK_POST' AND a.idempotency_key = 'slack_reply:' || q.id))), '[]'::json) FROM mentor_entry q JOIN mentor_turn t ON t.id = q.turn_id AND t.workspace_id = q.workspace_id WHERE q.workspace_id = 986600 AND q.kind = 'USER' AND q.surface = 'SLACK'`,
+			`SELECT coalesce(json_agg(json_build_object('requestId', q.request_id, 'status', t.status, 'entries', coalesce((SELECT json_agg(json_build_object('text', e.text, 'slackTs', e.slack_ts) ORDER BY e.seq) FROM conversation_entry e WHERE e.turn_id = t.id AND e.kind = 'ANSWER'), '[]'::json), 'post', (SELECT a.state || coalesce(':' || a.stop_reason, '') FROM agent_action a WHERE a.workspace_id = t.workspace_id AND a.kind = 'SLACK_POST' AND a.idempotency_key = 'slack_reply:' || q.id))), '[]'::json) FROM conversation_entry q JOIN conversation_turn t ON t.id = q.turn_id AND t.workspace_id = q.workspace_id WHERE q.workspace_id = 986600 AND q.kind = 'USER' AND q.surface = 'SLACK'`,
 			signal,
 		),
 		slackRequestId(ts),
@@ -2367,10 +2367,10 @@ export async function turnRoll(
 			syntheticApi(base, token),
 			ROLL_WORKSPACE,
 			`http://${host}:8080/v1`,
-			// The longest turn: AgentBindingLimits.MAX_HEPH_TURN_SECONDS.
+			// The longest turn: ModelAssignmentLimits.MAX_CONVERSATION_TURN_SECONDS.
 			900,
 		);
-		const submitted = await submitTurn(`${base}/workspaces/${ROLL_WORKSPACE}/mentor`, token, {
+		const submitted = await submitTurn(`${base}/workspaces/${ROLL_WORKSPACE}/conversation`, token, {
 			requestId: randomUUID(),
 			text: "Run the turn-roll command.",
 		});
@@ -2381,7 +2381,7 @@ export async function turnRoll(
 		const state = async () =>
 			turnState(
 				await psql(
-					`SELECT json_build_object('status', t.status, 'attempt', t.attempt, 'runId', t.run_id, 'epoch', r.lease_epoch, 'sandboxId', s.id, 'claim', s.claim_name) FROM mentor_turn t JOIN agent_run r ON r.id = t.run_id AND r.workspace_id = t.workspace_id LEFT JOIN agent_sandbox s ON s.workspace_id = t.workspace_id AND s.subject_key = 'conversation:' || t.conversation_id AND s.kind = 'CONVERSATION' AND s.state = 'READY' WHERE t.id = '${submitted.id}'`,
+					`SELECT json_build_object('status', t.status, 'attempt', t.attempt, 'runId', t.run_id, 'epoch', r.lease_epoch, 'sandboxId', s.id, 'claim', s.claim_name) FROM conversation_turn t JOIN agent_run r ON r.id = t.run_id AND r.workspace_id = t.workspace_id LEFT JOIN agent_sandbox s ON s.workspace_id = t.workspace_id AND s.subject_key = 'conversation:' || t.conversation_id AND s.kind = 'CONVERSATION' AND s.state = 'READY' WHERE t.id = '${submitted.id}'`,
 				),
 			);
 		const running = await until(
@@ -2464,7 +2464,7 @@ export async function turnRoll(
 		);
 		const outcome = turnOutcome(
 			await psql(
-				`SELECT json_build_object('status', t.status, 'attempt', t.attempt, 'answer', coalesce((SELECT string_agg(e.text, E'\\n' ORDER BY e.seq) FROM mentor_entry e WHERE e.turn_id = t.id AND e.kind = 'HEPH'), ''), 'bash', coalesce((SELECT json_agg(json_build_object('isError', coalesce((e.payload->'message'->>'isError')::boolean, false), 'text', coalesce((SELECT string_agg(c->>'text', '') FROM jsonb_array_elements(CASE WHEN jsonb_typeof(e.payload->'message'->'content') = 'array' THEN e.payload->'message'->'content' ELSE '[]'::jsonb END) c), '')) ORDER BY e.seq) FROM mentor_entry e WHERE e.turn_id = t.id AND e.kind = 'TOOL_RESULT' AND e.payload->'message'->>'toolName' = 'bash'), '[]'::json)) FROM mentor_turn t WHERE t.id = '${submitted.id}'`,
+				`SELECT json_build_object('status', t.status, 'attempt', t.attempt, 'answer', coalesce((SELECT string_agg(e.text, E'\\n' ORDER BY e.seq) FROM conversation_entry e WHERE e.turn_id = t.id AND e.kind = 'ANSWER'), ''), 'bash', coalesce((SELECT json_agg(json_build_object('isError', coalesce((e.payload->'message'->>'isError')::boolean, false), 'text', coalesce((SELECT string_agg(c->>'text', '') FROM jsonb_array_elements(CASE WHEN jsonb_typeof(e.payload->'message'->'content') = 'array' THEN e.payload->'message'->'content' ELSE '[]'::jsonb END) c), '')) ORDER BY e.seq) FROM conversation_entry e WHERE e.turn_id = t.id AND e.kind = 'TOOL_RESULT' AND e.payload->'message'->>'toolName' = 'bash'), '[]'::json)) FROM conversation_turn t WHERE t.id = '${submitted.id}'`,
 			),
 		);
 		report(outcomeChecks(outcome));
