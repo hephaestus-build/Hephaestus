@@ -58,30 +58,20 @@ public interface TeamRepository extends JpaRepository<Team, Long> {
     List<Team> findByOrganizationIgnoreCaseAndProviderId(String organization, Long providerId);
 
     /**
-     * Fetch teams with collections eagerly loaded for DTO conversion.
-     * Uses EntityGraph to fetch repoPermissions (with nested repository),
-     * and memberships (with users).
-     *
-     * <p>Note: Repository labels are NOT included in EntityGraph to avoid
-     * Cartesian product explosion. They are batch-fetched via @BatchSize(50)
-     * on Repository.labels when accessed.
-     *
-     * <p>Note: Team labels are managed via scope-specific settings
-     * (via consuming module) and are fetched separately.
+     * Teams with their repository permissions. A team's memberships load in a second query
+     * ({@link #findWithMembershipsByOrganizationIgnoreCaseAndProviderId}) in the same transaction: one fetch of both
+     * collections returns a row for every pair of permission and membership.
      */
-    @EntityGraph(attributePaths = {"repoPermissions", "repoPermissions.repository", "memberships", "memberships.user"})
-    List<Team> findWithCollectionsByOrganizationIgnoreCaseAndProviderId(String organization, Long providerId);
+    @EntityGraph(attributePaths = {"repoPermissions", "repoPermissions.repository"})
+    List<Team> findWithRepoPermissionsByOrganizationIgnoreCaseAndProviderId(String organization, Long providerId);
 
-    /**
-     * Fetch a single team by ID with collections eagerly loaded for DTO conversion.
-     *
-     * <p>Note: Repository labels are NOT included in EntityGraph to avoid
-     * Cartesian product explosion. They are batch-fetched via @BatchSize(50)
-     * on Repository.labels when accessed.
-     *
-     * <p>Note: Team labels are managed via scope-specific settings
-     * (via consuming module) and are fetched separately.
-     */
-    @EntityGraph(attributePaths = {"repoPermissions", "repoPermissions.repository", "memberships", "memberships.user"})
-    Optional<Team> findWithCollectionsById(Long id);
+    /** Teams with their memberships, for the teams that the permission query already loaded. */
+    @EntityGraph(attributePaths = {"memberships", "memberships.user"})
+    List<Team> findWithMembershipsByOrganizationIgnoreCaseAndProviderId(String organization, Long providerId);
+
+    @EntityGraph(attributePaths = {"repoPermissions", "repoPermissions.repository"})
+    Optional<Team> findWithRepoPermissionsById(Long id);
+
+    @EntityGraph(attributePaths = {"memberships", "memberships.user"})
+    Optional<Team> findWithMembershipsById(Long id);
 }
