@@ -1188,7 +1188,8 @@
 								"batchSize": {
 									"type": "integer",
 									"minimum": 1,
-									"description": "Most pages of issues or pull requests that one backfill cycle reads for each repository."
+									"description": "Most pages of issues or pull requests that one backfill cycle reads for each repository.",
+									"maximum": 1000
 								},
 								"rateLimitThreshold": {
 									"type": "integer",
@@ -1197,8 +1198,9 @@
 								},
 								"intervalSeconds": {
 									"type": "integer",
-									"minimum": 1,
-									"description": "Seconds between backfill cycles. A cycle holds its lock for 30 seconds, so a smaller value runs every 30 seconds."
+									"minimum": 10,
+									"description": "Seconds between backfill cycles. A cycle holds its lock for 30 seconds, so a value below 30 runs every 30 seconds.",
+									"maximum": 86400
 								}
 							}
 						}

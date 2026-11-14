@@ -148,6 +148,9 @@ spec:
               value: {{ $config.sync.backfill.rateLimitThreshold | int | quote }}
             - name: SYNC_BACKFILL_INTERVAL_SECONDS
               value: {{ $config.sync.backfill.intervalSeconds | int | quote }}
+            {{- if ge (int $config.email.rateLimit.optionalDailyCapacity) (int $config.email.rateLimit.dailyCapacity) }}
+            {{- fail "config.email.rateLimit.optionalDailyCapacity must be lower than dailyCapacity" }}
+            {{- end }}
             - name: HEPHAESTUS_EMAIL_RATE_LIMIT_DAILY_CAPACITY
               value: {{ $config.email.rateLimit.dailyCapacity | int | quote }}
             - name: HEPHAESTUS_EMAIL_RATE_LIMIT_OPTIONAL_DAILY_CAPACITY

@@ -309,8 +309,8 @@ void test("an admin page may not offer a variable that no chart workload sets", 
 				profile: "default",
 			},
 			{
-				variable: "AGENT_MAX_RETRIES",
-				property: "hephaestus.agent.max-retries",
+				variable: "SYNC_LISTED_LIMIT",
+				property: "hephaestus.sync.listed-limit",
 				profile: "default",
 			},
 		],
@@ -322,9 +322,13 @@ void test("an admin page may not offer a variable that no chart workload sets", 
 			sources,
 			new Map([
 				["docs/admin/a.md", "Set `SYNC_EXAMPLE_LIMIT` and `UNRELATED_NAME`."],
-				["docs/admin/b.md", "Or `SYNC_EXAMPLE_LIMIT`, and `AGENT_MAX_RETRIES`."],
+				["docs/admin/b.md", "Or `SYNC_EXAMPLE_LIMIT`, and `SYNC_LISTED_LIMIT`."],
 			]),
+			new Set(["SYNC_LISTED_LIMIT", "SYNC_RESOLVED_LIMIT"]),
 		),
-		["SYNC_EXAMPLE_LIMIT: docs/admin/a.md, docs/admin/b.md"],
+		[
+			"SYNC_EXAMPLE_LIMIT: docs/admin/a.md, docs/admin/b.md",
+			"SYNC_RESOLVED_LIMIT: listed, but no admin page offers it",
+		],
 	);
 });

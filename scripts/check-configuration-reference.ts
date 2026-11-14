@@ -48,9 +48,9 @@ export function judge(required: ReadonlySet<string>, pageText: string): Verdict 
 
 /**
  * Variables that admin docs offer although the chart cannot set them. Each needs a chart value or leaves the operator
- * docs; the pages are being rewritten (#4337), so this list empties when that work lands. Delete the list at zero.
+ * docs. An entry that the docs no longer offer fails too, so the list only shrinks. Delete it at zero.
  */
-const OFFERED_WITHOUT_CHART_VALUE = new Set([
+export const OFFERED_WITHOUT_CHART_VALUE: ReadonlySet<string> = new Set([
 	"AGENT_MAX_RETRIES",
 	"GH_APP_PRIVATE_KEY_LOCATION",
 	"GIT_MAX_CONCURRENT_INGESTIONS",
@@ -73,9 +73,15 @@ const OFFERED_WITHOUT_CHART_VALUE = new Set([
 
 /**
  * Self-hosting is the Helm chart, so an admin page that names a variable the application reads offers a setting.
- * Each such variable must be one that a workload of the chart sets: `variable: page, page` for each one that is not.
+ * Each such variable must be one that a workload of the chart sets: `variable: page, page` for each one that is not,
+ * and `variable: listed, but no admin page offers it` for a stale entry of `listed`. It sees names in inline code
+ * that an application YAML placeholder binds, not names in fenced code or relaxed Spring names.
  */
-export function unsettable(sources: Sources, pages: ReadonlyMap<string, string>): string[] {
+export function unsettable(
+	sources: Sources,
+	pages: ReadonlyMap<string, string>,
+	listed: ReadonlySet<string> = OFFERED_WITHOUT_CHART_VALUE,
+): string[] {
 	const read = new Set(sources.bindings.map((binding) => binding.variable));
 	const settable = requiredVariables(sources);
 	const offered = new Map<string, string[]>();
@@ -87,10 +93,14 @@ export function unsettable(sources: Sources, pages: ReadonlyMap<string, string>)
 			}
 		}
 	}
-	return [...offered]
-		.filter(([variable]) => !OFFERED_WITHOUT_CHART_VALUE.has(variable))
-		.map(([variable, where]) => `${variable}: ${where.join(", ")}`)
-		.toSorted();
+	return [
+		...[...offered]
+			.filter(([variable]) => !listed.has(variable))
+			.map(([variable, where]) => `${variable}: ${where.join(", ")}`),
+		...[...listed]
+			.filter((variable) => !offered.has(variable))
+			.map((variable) => `${variable}: listed, but no admin page offers it`),
+	].toSorted();
 }
 
 async function adminPages(): Promise<Map<string, string>> {
