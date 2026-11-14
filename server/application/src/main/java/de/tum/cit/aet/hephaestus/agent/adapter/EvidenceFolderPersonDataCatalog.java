@@ -590,7 +590,8 @@ public class EvidenceFolderPersonDataCatalog implements PersonEvidenceErasure, W
     /**
      * The still-owning admitting attempt may finish from the capture it received. Incomplete copied-job lineage
      * prevents retaining or recovering its inputs, not this live writer. Its READY receipt must still be unique
-     * and name no suppressed identity. The caller holds copy admission before its job lock.
+     * and name no suppressed identity. Admission asks under copy admission, before its job lock. A folder rebuild asks
+     * with no lock, and asks again when the rebuild fails.
      */
     public boolean vouchesForLiveAttempt(UUID jobId, long workspaceId, int attempt) {
         var payloads = jdbc.query(

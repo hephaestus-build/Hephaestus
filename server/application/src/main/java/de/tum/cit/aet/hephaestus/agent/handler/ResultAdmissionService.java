@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.handler;
 
+import de.tum.cit.aet.hephaestus.agent.context.AttemptFolderBusyException;
 import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.PublicFeedbackSnapshot;
 import de.tum.cit.aet.hephaestus.agent.context.providers.ReviewHistoryContentSource;
@@ -48,6 +49,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
@@ -112,8 +114,12 @@ public class ResultAdmissionService {
         }));
     }
 
-    /** Verifies and durably stages one completed practice. A lost acknowledgement can repeat only the same body. */
+    /**
+     * Verifies and durably stages one completed practice. A lost acknowledgement can repeat only the same body. Staging
+     * always reads the attempt's folder, so this server builds it first, with no transaction or lock held.
+     */
     public StageResponseDTO stage(AdmissionIdentity identity, AdmissionRequestDTO request) {
+        files.ensureAttemptFolder(identity);
         return Objects.requireNonNull(transactions.execute(status -> {
             files.holdCopyAdmission();
             var job = ownedJob(identity);
@@ -126,7 +132,7 @@ public class ResultAdmissionService {
 
     /** Seals the retained set once. Candidates are read from memberships, never resubmitted by the runner. */
     public AdmissionResponseDTO admit(AdmissionIdentity identity, SealResultsRequestDTO request) {
-        return admittedResponse(seal(identity, request));
+        return admittedResponse(withAttemptFolder(identity, () -> seal(identity, request)));
     }
 
     private ReviewJob seal(AdmissionIdentity identity, SealResultsRequestDTO request) {
@@ -194,24 +200,29 @@ public class ResultAdmissionService {
 
     /** A retry with every practice ended seals without capturing or starting a sandbox. */
     public boolean sealIfComplete(AdmissionIdentity identity) {
-        return Boolean.TRUE.equals(transactions.execute(status -> {
-            files.holdCopyAdmission();
-            var job = ownedJob(identity);
-            if (isAdmitted(job)) return false;
-            var currentness = staging.currentness(job);
-            if (currentness != Currentness.CURRENT) {
-                staging.failOpen(
-                        job,
-                        currentness == Currentness.STALE
-                                ? ReviewStopReason.REPLACED
-                                : ReviewStopReason.READINESS_REFUSED);
-            } else if (!assignments.open(job).isEmpty()) return false;
-            seal(
-                    identity,
-                    new SealResultsRequestDTO(
-                            SandboxLayout.PRACTICE_CONTRACT_VERSION, job.getReviewId(), job.getId(), job.getAttempt()));
-            return true;
-        }));
+        return withAttemptFolder(
+                identity,
+                () -> Boolean.TRUE.equals(transactions.execute(status -> {
+                    files.holdCopyAdmission();
+                    var job = ownedJob(identity);
+                    if (isAdmitted(job)) return false;
+                    var currentness = staging.currentness(job);
+                    if (currentness != Currentness.CURRENT) {
+                        staging.failOpen(
+                                job,
+                                currentness == Currentness.STALE
+                                        ? ReviewStopReason.REPLACED
+                                        : ReviewStopReason.READINESS_REFUSED);
+                    } else if (!assignments.open(job).isEmpty()) return false;
+                    seal(
+                            identity,
+                            new SealResultsRequestDTO(
+                                    SandboxLayout.PRACTICE_CONTRACT_VERSION,
+                                    job.getReviewId(),
+                                    job.getId(),
+                                    job.getAttempt()));
+                    return true;
+                })));
     }
 
     public boolean hasStaged(ReviewJob job) {
@@ -224,16 +235,35 @@ public class ResultAdmissionService {
 
     /** At the retry limit, preserve completed practices and record why the remaining work stopped. */
     public void finishInterrupted(AdmissionIdentity identity, ReviewStopReason reason) {
-        transactions.executeWithoutResult(status -> {
-            files.holdCopyAdmission();
-            var job = ownedJob(identity);
-            if (isAdmitted(job)) return;
-            staging.failOpen(job, reason);
-            seal(
-                    identity,
-                    new SealResultsRequestDTO(
-                            SandboxLayout.PRACTICE_CONTRACT_VERSION, job.getReviewId(), job.getId(), job.getAttempt()));
-        });
+        withAttemptFolder(
+                identity,
+                () -> Objects.requireNonNull(transactions.execute(status -> {
+                    files.holdCopyAdmission();
+                    var job = ownedJob(identity);
+                    if (isAdmitted(job)) return job;
+                    staging.failOpen(job, reason);
+                    return seal(
+                            identity,
+                            new SealResultsRequestDTO(
+                                    SandboxLayout.PRACTICE_CONTRACT_VERSION,
+                                    job.getReviewId(),
+                                    job.getId(),
+                                    job.getAttempt()));
+                })));
+    }
+
+    /**
+     * Runs a seal, which reads the attempt's folder only to keep its composition inputs. When this server lacks the
+     * folder, the transaction rolls back, the folder is built with no transaction or lock held, and the seal runs once
+     * more. A folder that is gone again is retryable ({@link AttemptFolderBusyException}).
+     */
+    private <T> T withAttemptFolder(AdmissionIdentity identity, Supplier<T> seal) {
+        try {
+            return seal.get();
+        } catch (AttemptFolderBusyException missing) {
+            files.ensureAttemptFolder(identity);
+            return seal.get();
+        }
     }
 
     public AdmissionResponseDTO admittedResponse(ReviewJob job) {

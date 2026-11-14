@@ -14,15 +14,26 @@ import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.PreparedEvidence;
 import de.tum.cit.aet.hephaestus.agent.context.ReviewAttemptCustody;
 import de.tum.cit.aet.hephaestus.agent.context.ReviewAttemptInputRepository;
+import de.tum.cit.aet.hephaestus.agent.context.providers.ReviewHistoryContentSource;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
+import de.tum.cit.aet.hephaestus.agent.handler.AdmittedResultProjectionService;
+import de.tum.cit.aet.hephaestus.agent.handler.FeedbackCompositionService;
+import de.tum.cit.aet.hephaestus.agent.handler.PracticeResultStaging;
+import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService.AdmissionIdentity;
+import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService.StaleAttemptException;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedJobInputs;
 import de.tum.cit.aet.hephaestus.agent.job.AttemptCaptureFailuresFixture;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
+import de.tum.cit.aet.hephaestus.agent.job.ReviewJobAssignments;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobLifecycleService;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.RuntimeJobTestData;
+import de.tum.cit.aet.hephaestus.agent.proxy.dto.AdmissionRequestDTO;
+import de.tum.cit.aet.hephaestus.agent.proxy.dto.SealResultsRequestDTO;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
+import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxWorkspaceManager;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxes;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
@@ -38,6 +49,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRep
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.fabric.EvidenceSpool;
 import de.tum.cit.aet.hephaestus.integration.core.fabric.FabricLayout;
+import de.tum.cit.aet.hephaestus.integration.core.spi.CapturedCheckouts;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CheckoutUnverifiedException;
 import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryRefState;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.capture.ReviewRepositoryPreparer;
@@ -47,7 +59,9 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryMan
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryProperties;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitTransportFixtures;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.RepositoryKey;
+import de.tum.cit.aet.hephaestus.practices.spi.AdmittedResultQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewWriteGuard;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.GitTestFixtures;
 import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer;
@@ -67,6 +81,7 @@ import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.time.Clock;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -74,12 +89,14 @@ import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.UnaryOperator;
 import org.eclipse.jgit.api.Git;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
@@ -89,10 +106,12 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.support.DefaultListableBeanFactory;
 import org.springframework.context.ApplicationContext;
+import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.FileSystemUtils;
 import tools.jackson.databind.ObjectMapper;
@@ -180,6 +199,7 @@ class EvidenceAcrossServersIntegrationTest extends BaseIntegrationTest {
             String sourceSha = ProvenanceDigest.sha256Hex(SOURCE.getBytes(StandardCharsets.UTF_8));
 
             assertThat(b.folder(recorded)).doesNotExist();
+            b.files.ensureAttemptFolder(recorded);
             assertThat(b.files.readText(recorded, "repos/reviewed/src/App.java", sourceSha))
                     .contains(SOURCE);
             assertThat(b.files.containsUtf8AtLines(
@@ -194,6 +214,64 @@ class EvidenceAcrossServersIntegrationTest extends BaseIntegrationTest {
                     .as("the captured refs are restored as the capture recorded them")
                     .hasSameBinaryContentAs(
                             a.folder(recorded).resolve("repos/reviewed/.git/" + GitRepositoryManager.CAPTURED_REFS));
+        }
+    }
+
+    @Test
+    void shouldBuildAMissingFolderBeforeStagingTakesItsLocksAndNotBeforeASeal() throws Exception {
+        var job = runningJob("evidence-admission-rebuild");
+        var a = new Server(temporary.resolve("a"), job);
+        try (var captured = a.capture(job)) {
+            var recorded = record(job, captured, null);
+            var identity = new AdmissionIdentity(
+                    recorded.getId(), recorded.getWorkspaceId(), recorded.getAttempt(), recorded.getRunId());
+
+            // Staging always reads the folder, so it builds it first. Another review id then refuses the request.
+            var staging = new Replica("stage", recorded);
+            assertThatThrownBy(() -> staging.admission.stage(
+                            identity,
+                            new AdmissionRequestDTO(
+                                    SandboxLayout.PRACTICE_CONTRACT_VERSION,
+                                    UUID.randomUUID(),
+                                    recorded.getId(),
+                                    recorded.getAttempt(),
+                                    List.of(),
+                                    List.of())))
+                    .isInstanceOf(StaleAttemptException.class);
+            assertThat(staging.builds).containsExactly(BUILT_WITHOUT_LOCKS);
+            assertThat(staging.server.folder(recorded)).isDirectory();
+
+            // A seal builds no folder before its transaction. Another review id refuses it before it reads any folder.
+            var admitting = new Replica("admit", recorded);
+            assertThatThrownBy(() -> admitting.admission.admit(
+                            identity,
+                            new SealResultsRequestDTO(
+                                    SandboxLayout.PRACTICE_CONTRACT_VERSION,
+                                    UUID.randomUUID(),
+                                    recorded.getId(),
+                                    recorded.getAttempt())))
+                    .isInstanceOf(StaleAttemptException.class);
+            assertThat(admitting.builds).isEmpty();
+            assertThat(admitting.server.folder(recorded)).doesNotExist();
+        }
+    }
+
+    private static final String BUILT_WITHOUT_LOCKS = "transaction=false, locks free=true";
+
+    /** A server without the attempt's folder: its admission, and how each checkout build it ran found the locks. */
+    private final class Replica {
+        final List<String> builds = new ArrayList<>();
+        final Server server;
+        final ResultAdmissionService admission;
+
+        Replica(String name, ReviewJob job) {
+            server = new Server(
+                    temporary.resolve("replica-" + name), job, checkouts -> (workspaceId, key, target, verified) -> {
+                        builds.add("transaction=" + TransactionSynchronizationManager.isActualTransactionActive()
+                                + ", locks free=" + locksFree(job));
+                        checkouts.copy(workspaceId, key, target, verified);
+                    });
+            admission = admission(server.files);
         }
     }
 
@@ -237,11 +315,7 @@ class EvidenceAcrossServersIntegrationTest extends BaseIntegrationTest {
             var recorded = record(job, captured, "0".repeat(64));
 
             var failure = catchThrowableOfType(
-                    CheckoutUnverifiedException.class,
-                    () -> b.files.readText(
-                            recorded,
-                            "repos/reviewed/src/App.java",
-                            ProvenanceDigest.sha256Hex(SOURCE.getBytes(StandardCharsets.UTF_8))));
+                    CheckoutUnverifiedException.class, () -> b.files.ensureAttemptFolder(recorded));
             assertThat(failure.reason()).isEqualTo(CheckoutUnverifiedException.Reason.MISMATCH);
             assertThat(b.folder(recorded)).doesNotExist();
 
@@ -283,6 +357,7 @@ class EvidenceAcrossServersIntegrationTest extends BaseIntegrationTest {
         ReviewJob recorded;
         try {
             recorded = record(job, captured, null);
+            b.files.ensureAttemptFolder(recorded);
             assertThat(b.files.readText(
                             recorded,
                             "context/item.json",
@@ -311,6 +386,7 @@ class EvidenceAcrossServersIntegrationTest extends BaseIntegrationTest {
         assertThat(a.catalog.removeErasedFolders()).isEqualTo(new ErasedFolders(1, 0));
         assertThat(a.folder(recorded)).doesNotExist();
         var c = new Server(temporary.resolve("c"), job);
+        c.files.ensureAttemptFolder(recorded);
         assertThat(c.files.readText(
                         recorded,
                         "context/item.json",
@@ -650,6 +726,40 @@ class EvidenceAcrossServersIntegrationTest extends BaseIntegrationTest {
         }
     }
 
+    /** Whether another session takes the job's row lock, its review's row lock and the erasure side of copy admission. */
+    private boolean locksFree(ReviewJob job) {
+        return CompletableFuture.supplyAsync(() -> {
+                    try {
+                        return Boolean.TRUE.equals(new TransactionTemplate(transactions).execute(status -> {
+                            jdbc.queryForList("SELECT id FROM review_job WHERE id=? FOR UPDATE NOWAIT", job.getId());
+                            jdbc.queryForList("SELECT id FROM review WHERE id=? FOR UPDATE NOWAIT", job.getReviewId());
+                            return jdbc.queryForObject("SELECT pg_try_advisory_xact_lock(2165,1)", Boolean.class);
+                        }));
+                    } catch (DataAccessException held) {
+                        return false;
+                    }
+                })
+                .orTimeout(30, TimeUnit.SECONDS)
+                .join();
+    }
+
+    /** This server's admission: its own evidence folders, and the shared PostgreSQL. */
+    private ResultAdmissionService admission(JobEvidenceFiles files) {
+        return new ResultAdmissionService(
+                jobs,
+                context.getBean(AdmittedResultQuery.class),
+                context.getBean(ReviewJobAssignments.class),
+                context.getBean(AdmittedResultProjectionService.class),
+                files,
+                context.getBean(ReviewHistoryContentSource.class),
+                mapper,
+                transactions,
+                context.getBean(FeedbackCompositionService.class),
+                context.getBean(ReviewWriteGuard.class),
+                context.getBean(PracticeResultStaging.class),
+                context.getBean(AgentRuns.class));
+    }
+
     /** What the executor records with the attempt's capture: its directories, checkout digests and checkout keys. */
     private ReviewJob record(ReviewJob job, PreparedJobInputs captured, @Nullable String digestOverride) {
         var capture = mapper.createObjectNode();
@@ -693,6 +803,10 @@ class EvidenceAcrossServersIntegrationTest extends BaseIntegrationTest {
         private final Path root;
 
         Server(Path root, ReviewJob job) {
+            this(root, job, UnaryOperator.identity());
+        }
+
+        Server(Path root, ReviewJob job, UnaryOperator<CapturedCheckouts> checkouts) {
             this.root = root;
             key = new RepositoryKey(job.getWorkspaceId(), 4242L);
             git = new GitRepositoryManager(
@@ -722,8 +836,8 @@ class EvidenceAcrossServersIntegrationTest extends BaseIntegrationTest {
                     catalog,
                     new AttemptInputs(
                             inputRows,
-                            new ScmCapturedCheckouts(
-                                    git, mock(ReviewRepositoryPreparer.class), new SimpleMeterRegistry()),
+                            checkouts.apply(new ScmCapturedCheckouts(
+                                    git, mock(ReviewRepositoryPreparer.class), new SimpleMeterRegistry())),
                             transactions));
         }
 

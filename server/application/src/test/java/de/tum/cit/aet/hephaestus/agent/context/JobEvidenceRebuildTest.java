@@ -12,6 +12,7 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceFolderLease;
 import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceFolderPersonDataCatalog;
+import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.RuntimeJobTestData;
@@ -25,6 +26,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Clock;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
@@ -32,6 +34,7 @@ import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import tools.jackson.databind.json.JsonMapper;
 
 /** A server rebuilds an attempt's folder that another server captured, and never turns its own state into a refusal. */
@@ -57,8 +60,11 @@ class JobEvidenceRebuildTest {
         when(copies.vouchesForLiveAttempt(job.getId(), job.getWorkspaceId(), job.getAttempt()))
                 .thenReturn(true);
         recorded(job);
+        var files = files();
 
-        assertThat(files().readText(job, "context/item.json", SHA)).contains(RECORD);
+        files.ensureAttemptFolder(job);
+
+        assertThat(files.readText(job, "context/item.json", SHA)).contains(RECORD);
     }
 
     @Test
@@ -86,9 +92,15 @@ class JobEvidenceRebuildTest {
         when(inputs.content(job, "context/item.json")).thenReturn(RECORD.getBytes(StandardCharsets.UTF_8));
         var files = files();
 
-        var first = CompletableFuture.supplyAsync(() -> files.readText(job, "context/item.json", SHA));
+        var first = CompletableFuture.supplyAsync(() -> {
+            files.ensureAttemptFolder(job);
+            return files.readText(job, "context/item.json", SHA);
+        });
         assertThat(listed.await(5, TimeUnit.SECONDS)).isTrue();
-        var second = CompletableFuture.supplyAsync(() -> files.readText(job, "context/item.json", SHA));
+        var second = CompletableFuture.supplyAsync(() -> {
+            files.ensureAttemptFolder(job);
+            return files.readText(job, "context/item.json", SHA);
+        });
         release.countDown();
 
         assertThat(first.get(10, TimeUnit.SECONDS)).contains(RECORD);
@@ -108,8 +120,11 @@ class JobEvidenceRebuildTest {
                 .orElseThrow();
         var released = CompletableFuture.runAsync(
                 () -> held.close(), CompletableFuture.delayedExecutor(300, TimeUnit.MILLISECONDS));
+        var files = files();
 
-        assertThat(files().readText(job, "context/item.json", SHA)).contains(RECORD);
+        files.ensureAttemptFolder(job);
+
+        assertThat(files.readText(job, "context/item.json", SHA)).contains(RECORD);
         released.get(5, TimeUnit.SECONDS);
     }
 
@@ -123,6 +138,22 @@ class JobEvidenceRebuildTest {
     }
 
     @Test
+    void shouldLeaveAnErasureThatCommitsDuringTheRebuildItsOwnReason() {
+        var job = runningJob();
+        when(copies.vouchesForLiveAttempt(job.getId(), job.getWorkspaceId(), job.getAttempt()))
+                .thenReturn(true, false);
+        when(inputs.list(job))
+                .thenReturn(List.of(new AttemptInputs.RecordedFile("context/item.json", SHA, "r--------")));
+        when(inputs.content(job, "context/item.json"))
+                .thenThrow(new CheckoutUnverifiedException(
+                        CheckoutUnverifiedException.Reason.UNAVAILABLE, "A recorded file is no longer recorded"));
+
+        files().ensureAttemptFolder(job);
+
+        assertThat(files().readText(job, "context/item.json", SHA)).isEmpty();
+    }
+
+    @Test
     void shouldReportARecordedFileThatDiffersAsACaptureFailure() {
         var job = runningJob();
         when(copies.vouchesForLiveAttempt(job.getId(), job.getWorkspaceId(), job.getAttempt()))
@@ -131,7 +162,7 @@ class JobEvidenceRebuildTest {
                 .thenReturn(List.of(new AttemptInputs.RecordedFile("context/item.json", SHA, "r--------")));
         when(inputs.content(job, "context/item.json")).thenReturn("changed".getBytes(StandardCharsets.UTF_8));
 
-        assertThatThrownBy(() -> files().readText(job, "context/item.json", SHA))
+        assertThatThrownBy(() -> files().ensureAttemptFolder(job))
                 .isInstanceOfSatisfying(
                         CheckoutUnverifiedException.class,
                         failure -> assertThat(failure.reason()).isEqualTo(CheckoutUnverifiedException.Reason.MISMATCH));
@@ -144,7 +175,7 @@ class JobEvidenceRebuildTest {
         when(copies.vouchesForLiveAttempt(job.getId(), job.getWorkspaceId(), job.getAttempt()))
                 .thenReturn(true);
 
-        assertThatThrownBy(() -> files().readText(job, "context/item.json", SHA))
+        assertThatThrownBy(() -> files().ensureAttemptFolder(job))
                 .isInstanceOfSatisfying(
                         CheckoutUnverifiedException.class,
                         failure ->
@@ -156,12 +187,74 @@ class JobEvidenceRebuildTest {
         var erased = runningJob();
         recorded(erased);
         when(copies.vouchesForLiveAttempt(any(), anyLong(), anyInt())).thenReturn(false);
+        files().ensureAttemptFolder(erased);
         assertThat(files().readText(erased, "context/item.json", SHA)).isEmpty();
 
         var ended = runningJob();
         ended.setStatus(ReviewJobStatus.FAILED);
         recorded(ended);
+        files().ensureAttemptFolder(ended);
         assertThat(files().readText(ended, "context/item.json", SHA)).isEmpty();
+    }
+
+    @Test
+    void shouldRefuseToRebuildInsideATransaction() {
+        var job = runningJob();
+        when(copies.vouchesForLiveAttempt(job.getId(), job.getWorkspaceId(), job.getAttempt()))
+                .thenReturn(true);
+        recorded(job);
+        TransactionSynchronizationManager.setActualTransactionActive(true);
+        try {
+            assertThatThrownBy(() -> files().ensureAttemptFolder(job)).isInstanceOf(IllegalStateException.class);
+        } finally {
+            TransactionSynchronizationManager.setActualTransactionActive(false);
+        }
+        assertThat(root.resolve("jobs")).doesNotExist();
+    }
+
+    @Test
+    void shouldRebuildForAdmissionOnlyTheRunningAttemptBeforeItIsAdmitted() {
+        var job = runningJob();
+        when(copies.vouchesForLiveAttempt(job.getId(), job.getWorkspaceId(), job.getAttempt()))
+                .thenReturn(true);
+        when(jobs.findByIdAndWorkspaceId(job.getId(), job.getWorkspaceId())).thenReturn(Optional.of(job));
+        recorded(job);
+        var files = files();
+
+        files.ensureAttemptFolder(new ResultAdmissionService.AdmissionIdentity(
+                job.getId(), job.getWorkspaceId(), job.getAttempt() + 1, job.getRunId()));
+        job.setAdmissionAttempt(job.getAttempt());
+        job.setAdmissionDigest(SHA);
+        files.ensureAttemptFolder(new ResultAdmissionService.AdmissionIdentity(
+                job.getId(), job.getWorkspaceId(), job.getAttempt(), job.getRunId()));
+        assertThat(root.resolve("jobs"))
+                .as("a stale or admitted attempt gets no folder")
+                .doesNotExist();
+
+        job.setAdmissionAttempt(null);
+        job.setAdmissionDigest(null);
+        files.ensureAttemptFolder(new ResultAdmissionService.AdmissionIdentity(
+                job.getId(), job.getWorkspaceId(), job.getAttempt(), job.getRunId()));
+        assertThat(files.readText(job, "context/item.json", SHA)).contains(RECORD);
+    }
+
+    @Test
+    void shouldAnswerRetryablyWhenAdmissionFindsTheFolderGoneAndNeverRebuildIt() {
+        var job = runningJob();
+        when(copies.vouchesForLiveAttempt(job.getId(), job.getWorkspaceId(), job.getAttempt()))
+                .thenReturn(true);
+        when(jobs.findByIdAndWorkspaceId(job.getId(), job.getWorkspaceId())).thenReturn(Optional.of(job));
+        recorded(job);
+        var identity = new ResultAdmissionService.AdmissionIdentity(
+                job.getId(), job.getWorkspaceId(), job.getAttempt(), job.getRunId());
+
+        assertThatThrownBy(() -> files().readText(job, "context/item.json", SHA))
+                .isInstanceOf(AttemptFolderBusyException.class);
+        assertThatThrownBy(() -> files().verificationDirectory(job)).isInstanceOf(AttemptFolderBusyException.class);
+        assertThatThrownBy(() -> files().originalCompositionInputs(identity))
+                .as("never an empty basis, which admission refuses as a conflict")
+                .isInstanceOf(AttemptFolderBusyException.class);
+        assertThat(root.resolve("jobs")).doesNotExist();
     }
 
     private void recorded(ReviewJob job) {
