@@ -252,18 +252,22 @@ class ReviewRequestPinIntegrationTest extends AbstractResultAdmissionIntegration
     }
 
     @Test
-    void shouldReadTheQueuedSourcesOnceInTheLockedStepWhenTheCallerHoldsATransaction() {
+    void shouldRefuseARequestThatStartsInsideATransaction() {
         var review = itemReview();
-        var transactionAtRead = recordFingerprintReads(review.ref());
+        doThrow(new AssertionError("A refused request pins nothing"))
+                .when(productItems)
+                .pin(any(), any());
 
-        var id = new TransactionTemplate(transactions).execute(status -> service.request(review.request()));
-
-        assertThat(transactionAtRead).containsExactly(true);
-        assertThat(reviews.findById(Objects.requireNonNull(id))).isPresent();
+        assertThatThrownBy(() ->
+                        new TransactionTemplate(transactions).execute(status -> service.request(review.request())))
+                .isInstanceOf(IllegalStateException.class);
+        assertThat(reviews.findByWorkspaceIdAndItemIdOrderByOrderedAtDesc(
+                        review.workspace(), review.ref().itemId()))
+                .isEmpty();
     }
 
     @Test
-    void shouldRefuseAnItemReviewWhenAPracticeReadsAnotherSourceDuringTheEarlyRead() throws Exception {
+    void shouldAskForTheItemReviewAgainWhenAPracticeReadsAnotherSourceDuringTheEarlyRead() throws Exception {
         var review = itemReview();
         var reading = new CountDownLatch(1);
         var release = new CountDownLatch(1);
@@ -300,7 +304,7 @@ class ReviewRequestPinIntegrationTest extends AbstractResultAdmissionIntegration
                     .isInstanceOfSatisfying(
                             ReviewRequestRejected.class,
                             refusal -> assertThat(refusal.reason())
-                                    .isEqualTo(ReviewRequestRejected.Reason.REQUEST_CONFLICT));
+                                    .isEqualTo(ReviewRequestRejected.Reason.PRACTICES_CHANGED));
             assertThat(reviews.findByWorkspaceIdAndItemIdOrderByOrderedAtDesc(
                             review.workspace(), review.ref().itemId()))
                     .isEmpty();

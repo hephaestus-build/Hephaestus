@@ -1,8 +1,10 @@
 package de.tum.cit.aet.hephaestus.practices.review;
 
+import static org.mockito.AdditionalMatchers.and;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.endsWith;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.startsWith;
 import static org.mockito.Mockito.lenient;
@@ -109,6 +111,39 @@ class ReviewCommandListenerTest extends BaseUnitTest {
                                 + " workspace admin, can ask for a review, and only from a GitHub account that is linked"
                                 + " to their Hephaestus account.");
         verify(sink, never()).reply(anyLong(), anyLong(), anyString(), anyString());
+    }
+
+    @Test
+    void shouldAskThePersonToAskAgainWhenThePracticesChangedDuringTheRequest() {
+        when(requests.requestByComment(anyLong(), anyLong(), any(), any(), any()))
+                .thenThrow(new ReviewRequestRejected(ReviewRequestRejected.Reason.PRACTICES_CHANGED, "changed"));
+
+        listener.on(command(ADDRESS));
+
+        verify(sink)
+                .reply(
+                        11L,
+                        22L,
+                        ADDRESS,
+                        "Hephaestus did not start a review: the practices changed while it was being requested. Ask"
+                                + " again.");
+    }
+
+    @Test
+    void shouldAskThePersonToAskAgainWhenTheWorkChangedDuringTheRequest() {
+        when(requests.requestByComment(anyLong(), anyLong(), any(), any(), any()))
+                .thenThrow(new ReviewRequestRejected(ReviewRequestRejected.Reason.VERSION_CHANGED, "changed"));
+
+        listener.on(command(ADDRESS));
+
+        verify(sink)
+                .reply(
+                        eq(11L),
+                        eq(22L),
+                        eq(ADDRESS),
+                        and(
+                                startsWith("Hephaestus did not start a review: the "),
+                                endsWith(" changed while it was being requested. Ask again.")));
     }
 
     @Test

@@ -1278,7 +1278,7 @@ class ScmItemSourceIntegrationTest extends BaseIntegrationTest {
                 ignored -> doThrow(new IllegalStateException("Planned source observation failure"))
                         .doCallRealMethod()
                         .when(currentness)
-                        .reconcile(item.workspaceId(), item.itemId()));
+                        .stale(item.workspaceId(), item.itemId()));
 
         changeChildState(setup.child().getId(), Issue.State.CLOSED, progressContext(setup.fixture(), type), type);
 
@@ -1368,7 +1368,7 @@ class ScmItemSourceIntegrationTest extends BaseIntegrationTest {
                 ignored -> doThrow(new IllegalStateException("Planned recorded occasion failure"))
                         .doCallRealMethod()
                         .when(currentness)
-                        .reconcile(item.workspaceId(), item.itemId()));
+                        .stale(item.workspaceId(), item.itemId()));
 
         changeChildState(setup.child().getId(), Issue.State.CLOSED, progressContext(setup.fixture(), type), type);
 

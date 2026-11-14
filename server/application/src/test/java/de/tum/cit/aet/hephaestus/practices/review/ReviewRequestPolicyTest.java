@@ -15,12 +15,10 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewOrigin;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStatus;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspacePortFixtures;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
-import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
-import java.util.Optional;
 import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
@@ -29,7 +27,6 @@ import tools.jackson.databind.json.JsonMapper;
 
 @Tag("unit")
 class ReviewRequestPolicyTest {
-    private final WorkspaceRepository workspaces = mock(WorkspaceRepository.class);
     private final ReviewRepository reviews = mock(ReviewRepository.class);
     private final PracticeReviewProperties properties = mock(PracticeReviewProperties.class);
     private final PracticeReviewCoverageService coverage = mock(PracticeReviewCoverageService.class);
@@ -39,12 +36,7 @@ class ReviewRequestPolicyTest {
             new JsonMapper(),
             mock(ClasspathSourceCatalogRegistry.class));
     private final ReviewRequestPolicy policy = new ReviewRequestPolicy(
-            WorkspacePortFixtures.queries(workspaces),
-            reviews,
-            properties,
-            coverage,
-            Clock.fixed(Instant.parse("2026-10-16T12:00:00Z"), ZoneOffset.UTC),
-            gate);
+            reviews, properties, coverage, Clock.fixed(Instant.parse("2026-10-16T12:00:00Z"), ZoneOffset.UTC), gate);
     private final Workspace workspace = new Workspace();
 
     @BeforeEach
@@ -52,20 +44,21 @@ class ReviewRequestPolicyTest {
         workspace.setId(1L);
         workspace.resume();
         workspace.getFeatures().setPracticesEnabled(true);
-        when(workspaces.findByIdForUpdate(1L)).thenReturn(Optional.of(workspace));
     }
 
     @Test
     void shouldRefuseDisabledRequestsBeforeConsentAndQuotaChecks() {
         workspace.getFeatures().setPracticeReviewManualTriggerEnabled(false);
-        assertThat(policy.refusal(1, 2, 3)).contains(ReviewRequestReason.GATE_WITHHELD);
+        assertThat(policy.refusal(WorkspacePortFixtures.reviewWorkspace(workspace), 2, 3))
+                .contains(ReviewRequestReason.GATE_WITHHELD);
         verifyNoInteractions(coverage, reviews);
     }
 
     @Test
     void shouldKeepConsentRequiredWhenRequestsAreEnabled() {
         when(coverage.eligibleAccountIds(1)).thenReturn(Set.of());
-        assertThat(policy.refusal(1, 2, 3)).contains(ReviewRequestReason.MEMBER_AI_DECLINED);
+        assertThat(policy.refusal(WorkspacePortFixtures.reviewWorkspace(workspace), 2, 3))
+                .contains(ReviewRequestReason.MEMBER_AI_DECLINED);
         verifyNoInteractions(reviews);
     }
 
@@ -76,7 +69,8 @@ class ReviewRequestPolicyTest {
         when(reviews.countByWorkspaceIdAndRequestedByIdAndOriginAndCreatedAtGreaterThanEqual(
                         anyLong(), anyLong(), any(ReviewOrigin.class), any(Instant.class)))
                 .thenReturn(1L);
-        assertThat(policy.refusal(1, 2, 3)).contains(ReviewRequestReason.REQUESTER_QUOTA_EXHAUSTED);
+        assertThat(policy.refusal(WorkspacePortFixtures.reviewWorkspace(workspace), 2, 3))
+                .contains(ReviewRequestReason.REQUESTER_QUOTA_EXHAUSTED);
     }
 
     @Test
@@ -86,15 +80,18 @@ class ReviewRequestPolicyTest {
         when(reviews.existsByWorkspaceIdAndItemIdAndOriginAndCreatedAtGreaterThanEqual(
                         anyLong(), anyLong(), any(ReviewOrigin.class), any(Instant.class)))
                 .thenReturn(true);
-        assertThat(policy.refusal(1, 2, 3)).contains(ReviewRequestReason.REQUEST_COOLDOWN_ACTIVE);
+        assertThat(policy.refusal(WorkspacePortFixtures.reviewWorkspace(workspace), 2, 3))
+                .contains(ReviewRequestReason.REQUEST_COOLDOWN_ACTIVE);
     }
 
     @Test
     void shouldKeepConcurrentDuplicateProtectionAndAllowAnEligibleRequest() {
         when(coverage.eligibleAccountIds(1)).thenReturn(Set.of(3L));
-        assertThat(policy.refusal(1, 2, 3)).isEmpty();
+        assertThat(policy.refusal(WorkspacePortFixtures.reviewWorkspace(workspace), 2, 3))
+                .isEmpty();
         when(reviews.existsByWorkspaceIdAndItemIdAndStatusIn(1, 2, List.of(ReviewStatus.QUEUED, ReviewStatus.RUNNING)))
                 .thenReturn(true);
-        assertThat(policy.refusal(1, 2, 3)).contains(ReviewRequestReason.CONCURRENT_DUPLICATE);
+        assertThat(policy.refusal(WorkspacePortFixtures.reviewWorkspace(workspace), 2, 3))
+                .contains(ReviewRequestReason.CONCURRENT_DUPLICATE);
     }
 }

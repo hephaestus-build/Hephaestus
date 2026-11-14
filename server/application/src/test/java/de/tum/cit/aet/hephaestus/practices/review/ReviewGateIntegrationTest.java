@@ -15,6 +15,7 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.ItemFixtures;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspacePortFixtures;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceQueries;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -59,14 +60,25 @@ class ReviewGateIntegrationTest extends BaseIntegrationTest {
     @Autowired
     WorkspaceRepository workspaces;
 
+    @Autowired
+    WorkspaceQueries workspaceQueries;
+
     @Test
     void shouldRefuseRequestedReviewsWhenTheirWorkspaceSwitchIsOff() {
         long ws = scenario.workspace().getId();
         long account = Objects.requireNonNull(scenario.account().getId());
-        assertThat(requests.refusal(ws, scenario.item().getId(), account)).isEmpty();
+        assertThat(requests.refusal(
+                        workspaceQueries.findById(ws).orElseThrow(),
+                        scenario.item().getId(),
+                        account))
+                .isEmpty();
         scenario.workspace().getFeatures().setPracticeReviewManualTriggerEnabled(false);
         workspaces.saveAndFlush(scenario.workspace());
-        assertThat(requests.refusal(ws, scenario.item().getId(), account)).contains(ReviewRequestReason.GATE_WITHHELD);
+        assertThat(requests.refusal(
+                        workspaceQueries.findById(ws).orElseThrow(),
+                        scenario.item().getId(),
+                        account))
+                .contains(ReviewRequestReason.GATE_WITHHELD);
     }
 
     @Autowired

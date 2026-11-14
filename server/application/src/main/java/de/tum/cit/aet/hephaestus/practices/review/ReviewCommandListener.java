@@ -38,7 +38,7 @@ public class ReviewCommandListener {
     private final ReviewRepository reviews;
     private final ReviewItemRepository memberships;
 
-    // Not joined: a refused request rolls back its own transaction, and the refusal is the handled outcome.
+    // Not joined: a review request runs only outside a transaction.
     @ApplicationModuleListener(propagation = Propagation.NOT_SUPPORTED)
     public void on(BotCommandReceivedEvent command) {
         String text = command.noteBody().strip().toLowerCase(Locale.ROOT);
@@ -71,7 +71,9 @@ public class ReviewCommandListener {
                     command.workspaceId(),
                     command.itemId());
             if (outcome.status() != ReviewRequestStatus.REFUSED) return;
-            // A comment delivered again finds its own review busy or recent: that review answers it.
+            // A comment delivered again replays its review before the policy. Its review can still commit between the
+            // replay check and the policy check of the unlocked read: then the policy finds it, and that review
+            // answers.
             if (reviews.findByWorkspaceIdAndRequestKey(command.workspaceId(), key)
                     .isPresent()) return;
             refusal = refused(outcome.reason(), command.kind());
@@ -171,6 +173,8 @@ public class ReviewCommandListener {
                         ? "no practice reviews this " + work(kind) + "."
                         : refused(rejected.eventReason(), kind);
             case REQUEST_CONFLICT -> "a review of this " + work(kind) + " is already running.";
+            case PRACTICES_CHANGED -> "the practices changed while it was being requested. Ask again.";
+            case VERSION_CHANGED -> "the " + work(kind) + " changed while it was being requested. Ask again.";
             default -> "it could not be started.";
         };
     }

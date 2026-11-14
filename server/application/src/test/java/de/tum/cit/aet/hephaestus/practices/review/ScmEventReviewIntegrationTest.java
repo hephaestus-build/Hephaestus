@@ -3,9 +3,11 @@ package de.tum.cit.aet.hephaestus.practices.review;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doAnswer;
@@ -124,6 +126,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewOrigin;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewRequest;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewRequestStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewRuntimeSnapshot;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewService;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewSnapshotQuery;
@@ -149,12 +152,16 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
@@ -168,12 +175,15 @@ import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.mock.env.MockEnvironment;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.event.ApplicationEvents;
 import org.springframework.test.context.event.RecordApplicationEvents;
 import org.springframework.test.web.reactive.server.WebTestClient;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -253,6 +263,9 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
 
     @Autowired
     ReviewService service;
+
+    @Autowired
+    ReviewRequestService requests;
 
     @Autowired
     WebTestClient http;
@@ -1691,6 +1704,368 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
     }
 
     @Test
+    void shouldReadAnEventReviewsSourcesWithNoTransactionWhileTheWorkspaceIsUnlocked() {
+        var prepared = prepare(IdentityProviderType.GITHUB, false);
+        var fetches = observeFetches(prepared.item());
+
+        publish(prepared);
+
+        assertThat(reviews.findByWorkspaceIdAndEventId(
+                        prepared.item().workspaceId(), event(prepared).getId()))
+                .isPresent();
+        assertThat(fetches).isNotEmpty().containsOnly(Fetch.FREE);
+    }
+
+    @Test
+    void shouldEndAStaleResultAfterReadingItsSourcesWithNoTransaction() {
+        var prepared = prepare(IdentityProviderType.GITHUB, false);
+        var item = prepared.item();
+        var at = Instant.now().minusSeconds(30);
+        var current = resultData.result(
+                authorScenario(prepared),
+                ResultOutcome.MET,
+                at,
+                at,
+                prepared.version().value());
+        recordSources(
+                item, current.getReviewId(), current.getPracticeId(), Set.of(new SourceKind("scm.pull-request.core")));
+        var fetches = observeFetches(item);
+
+        transactions.executeWithoutResult(ignored -> {
+            var changed =
+                    pulls.findById(Objects.requireNonNull(item.sourceId())).orElseThrow();
+            changed.setBody("The work changed after this capture.");
+            pulls.saveAndFlush(changed);
+            publisher.publishEvent(new ScmDomainEvent.PullRequestUpdated(
+                    ScmEventPayload.PullRequestData.from(changed), Set.of("body"), context(prepared)));
+        });
+
+        assertThat(resultRows.findById(current.getId()).orElseThrow().getEndReason())
+                .isEqualTo(ResultEndReason.WORK_CHANGED);
+        assertThat(fetches).isNotEmpty().containsOnly(Fetch.FREE);
+    }
+
+    @Test
+    void shouldWithholdAnOccasionWhenReviewsFromWorkActivityAreTurnedOffWhileItsReviewReadsItsSources()
+            throws Exception {
+        var prepared = prepare(IdentityProviderType.GITHUB, false);
+        long workspaceId = prepared.item().workspaceId();
+        var read = blockFirstFingerprintRead(prepared.item());
+        var executor = Executors.newSingleThreadExecutor();
+        try {
+            var published = executor.submit(() -> publish(prepared));
+            awaitLatch(read.reading());
+            var workspace = workspaces.findById(workspaceId).orElseThrow();
+            workspace.getFeatures().setPracticeReviewAutoTriggerEnabled(false);
+            workspaces.saveAndFlush(workspace);
+            read.release().countDown();
+            published.get(30, TimeUnit.SECONDS);
+
+            assertThat(read.seen()).hasValue(Fetch.FREE);
+            var occasion = event(prepared);
+            assertThat(occasion.getState()).isEqualTo(ItemEventState.WITHHELD);
+            assertThat(occasion.getReason()).isEqualTo(ReviewRequestReason.GATE_WITHHELD);
+            assertThat(reviews.findByWorkspaceIdAndEventId(workspaceId, occasion.getId()))
+                    .isEmpty();
+        } finally {
+            read.release().countDown();
+            executor.shutdownNow();
+        }
+    }
+
+    @Test
+    void shouldStartOneReviewWhenAnOccasionIsOfferedAgainWhileItsReviewReadsItsSources() throws Exception {
+        var prepared = prepare(IdentityProviderType.GITHUB, false);
+        var item = prepared.item();
+        var read = blockFirstFingerprintRead(item);
+        var executor = Executors.newSingleThreadExecutor();
+        try {
+            var published = executor.submit(() -> publish(prepared));
+            awaitLatch(read.reading());
+            var occasion = event(prepared);
+            transactions.executeWithoutResult(ignored ->
+                    publisher.publishEvent(new ItemEventRecorded(item.workspaceId(), occasion.getId(), item.itemId())));
+            var started = reviews.findByWorkspaceIdAndEventId(item.workspaceId(), occasion.getId())
+                    .orElseThrow();
+            read.release().countDown();
+            published.get(30, TimeUnit.SECONDS);
+
+            assertThat(read.seen()).hasValue(Fetch.FREE);
+            assertThat(events.findById(occasion.getId()).orElseThrow().getState())
+                    .isEqualTo(ItemEventState.STARTED);
+            assertThat(itemReviews(prepared)).extracting(Review::getId).containsExactly(started.getId());
+            // The overtaken offer finds the occasion decided and completes, so it is not sent again.
+            assertThat(jdbc.queryForList(
+                            "SELECT status FROM event_publication WHERE event_type=?"
+                                    + " AND serialized_event::jsonb->>'eventId'=? AND completion_date IS NULL",
+                            String.class,
+                            ItemEventRecorded.class.getName(),
+                            occasion.getId().toString()))
+                    .isEmpty();
+        } finally {
+            read.release().countDown();
+            executor.shutdownNow();
+        }
+    }
+
+    @Test
+    void shouldRefuseAMembersRequestThatAnotherRequestOvertookWhileItReadItsSources() throws Exception {
+        var prepared = prepare(IdentityProviderType.GITHUB, false);
+        var item = prepared.item();
+        long account = Objects.requireNonNull(authorScenario(prepared).account().getId());
+        var read = blockFirstFingerprintRead(item);
+        var executor = Executors.newSingleThreadExecutor();
+        try {
+            var first = executor.submit(() -> requests.request(item.workspaceId(), item.itemId(), account));
+            awaitLatch(read.reading());
+            var second = requests.request(item.workspaceId(), item.itemId(), account);
+            read.release().countDown();
+            var overtaken = first.get(30, TimeUnit.SECONDS);
+
+            assertThat(read.seen()).hasValue(Fetch.FREE);
+            assertThat(second.status()).isEqualTo(ReviewRequestStatus.SUBMITTED);
+            assertThat(overtaken.status()).isEqualTo(ReviewRequestStatus.REFUSED);
+            assertThat(overtaken.reason()).isEqualTo(ReviewRequestReason.CONCURRENT_DUPLICATE);
+            assertThat(itemReviews(prepared)).extracting(Review::getId).containsExactly(second.reviewId());
+        } finally {
+            read.release().countDown();
+            executor.shutdownNow();
+        }
+    }
+
+    @Test
+    void shouldQueueAPracticeWhoseCurrentResultEndsWhileTheEventReviewReadsItsSources() throws Exception {
+        var prepared = prepare(
+                IdentityProviderType.GITHUB,
+                false,
+                Map.of(),
+                false,
+                List.of(ScmItemEvents.PULL_REQUEST_SYNCHRONIZED),
+                ReadNeed.OPTIONAL);
+        var item = prepared.item();
+        corePractice(prepared, ScmItemEvents.PULL_REQUEST_SYNCHRONIZED);
+        var pushed = Objects.requireNonNull(transactions.execute(ignored -> {
+            var pull = pulls.findById(Objects.requireNonNull(item.sourceId())).orElseThrow();
+            pull.setHeadRefOid("c".repeat(40));
+            return ScmEventPayload.PullRequestData.from(pulls.saveAndFlush(pull));
+        }));
+        var version = source.pin(item, null).version();
+        // The practice that also reads the checks has a current result at the pushed version.
+        var at = Instant.now().minusSeconds(30);
+        var current = resultData.result(authorScenario(prepared), ResultOutcome.MET, at, at, version.value());
+        recordSources(
+                item, current.getReviewId(), current.getPracticeId(), Set.of(new SourceKind("scm.pull-request.core")));
+        var read = blockFingerprintRead(item, kinds -> kinds.contains(PullRequestChecksRecord.KIND));
+        var executor = Executors.newSingleThreadExecutor();
+        try {
+            var published = executor.submit(() -> transactions.executeWithoutResult(ignored ->
+                    publisher.publishEvent(new ScmDomainEvent.PullRequestSynchronized(pushed, context(prepared)))));
+            awaitLatch(read.reading());
+            jdbc.update(
+                    "UPDATE result SET ended_at = now(), end_reason = 'WORK_CHANGED' WHERE id = ?", current.getId());
+            read.release().countDown();
+            published.get(30, TimeUnit.SECONDS);
+
+            var occasion = events.findByWorkspaceIdAndItemIdAndNameAndItemVersion(
+                            item.workspaceId(),
+                            item.itemId(),
+                            ScmItemEvents.PULL_REQUEST_SYNCHRONIZED.value(),
+                            version.value())
+                    .orElseThrow();
+            assertThat(occasion.getState()).isEqualTo(ItemEventState.STARTED);
+            var review = reviews.findByWorkspaceIdAndEventId(item.workspaceId(), occasion.getId())
+                    .orElseThrow();
+            assertThat(memberships.findByWorkspaceIdAndReviewIdOrderByPracticeIdAscItemIdAsc(
+                            item.workspaceId(), review.getId()))
+                    .filteredOn(member -> member.getPracticeId() == current.getPracticeId())
+                    .singleElement()
+                    .extracting(ReviewItem::getState)
+                    .isEqualTo(ReviewItemState.LISTED);
+        } finally {
+            read.release().countDown();
+            executor.shutdownNow();
+        }
+    }
+
+    @Test
+    void shouldStartACommentRequestedReviewWhenTheChecksSettleWhileItReadsItsSources() throws Exception {
+        var prepared = prepare(IdentityProviderType.GITHUB, false, Map.of(), false, List.of(), ReadNeed.REQUIRED);
+        var item = prepared.item();
+        corePractice(prepared, ScmItemEvents.PULL_REQUEST_OPENED);
+        var pull = pulls.findById(Objects.requireNonNull(item.sourceId())).orElseThrow();
+        long repositoryId = Objects.requireNonNull(pull.getRepository()).getId();
+        var context = Objects.requireNonNull(transactions.execute(status -> ProcessingContext.forWebhook(
+                item.workspaceId(), repositories.findById(repositoryId).orElseThrow(), "completed")));
+        String head = Objects.requireNonNull(pull.getHeadRefOid());
+        Instant readAt = Instant.now().truncatedTo(ChronoUnit.MICROS);
+        checkRuns.observe(
+                repositoryId,
+                new HeadCheckRuns(head, List.of(checkRun("build", "in_progress", null)), true, readAt, null),
+                context);
+        var author =
+                users.findById(Objects.requireNonNull(pull.getAuthor()).getId()).orElseThrow();
+        var commenter = new PersonIdentity(providerId(author), Long.toString(author.getNativeId()), null);
+        var read = blockFirstFingerprintRead(item);
+        var executor = Executors.newSingleThreadExecutor();
+        try {
+            var requested = executor.submit(() ->
+                    requests.requestByComment(item.workspaceId(), item.itemId(), commenter, UUID.randomUUID(), null));
+            awaitLatch(read.reading());
+            checkRuns.observe(
+                    repositoryId,
+                    settled(
+                            head,
+                            List.of(checkRun("build", "success", readAt.plusSeconds(60))),
+                            readAt.plusSeconds(60)),
+                    context);
+            read.release().countDown();
+            var outcome = requested.get(30, TimeUnit.SECONDS);
+
+            assertThat(outcome.status()).isEqualTo(ReviewRequestStatus.SUBMITTED);
+            long readsChecks = practices
+                    .findByWorkspaceIdAndSlug(item.workspaceId(), "event-test")
+                    .orElseThrow()
+                    .getId();
+            assertThat(memberships.findByWorkspaceIdAndReviewIdOrderByPracticeIdAscItemIdAsc(
+                            item.workspaceId(), Objects.requireNonNull(outcome.reviewId())))
+                    .filteredOn(member -> member.getPracticeId() == readsChecks)
+                    .singleElement()
+                    .extracting(ReviewItem::getState)
+                    .isEqualTo(ReviewItemState.LISTED);
+        } finally {
+            read.release().countDown();
+            executor.shutdownNow();
+        }
+    }
+
+    @Test
+    void shouldStartAnOccasionOnceWhenItIsOfferedAgainAfterItsReviewWasRecordedButNotSettled() {
+        var prepared = prepare(IdentityProviderType.GITHUB, false);
+        var item = prepared.item();
+        when(budget.canRequest(anyLong(), eq(ReviewKind.ITEM), isNull())).thenReturn(false);
+        publish(prepared);
+        var occasion = event(prepared);
+        assertThat(occasion.getState()).isEqualTo(ItemEventState.WAITING);
+        when(budget.canRequest(anyLong(), eq(ReviewKind.ITEM), isNull())).thenReturn(true);
+        // The edge recorded its review, and then its settle step failed: the occasion still waits.
+        var recorded = service.request(ReviewRequest.builder()
+                .workspaceId(item.workspaceId())
+                .itemId(item.itemId())
+                .kind(ReviewKind.ITEM)
+                .version(new ItemVersion(Objects.requireNonNull(occasion.getItemVersion()), null))
+                .origin(ReviewOrigin.EVENT)
+                .eventId(occasion.getId())
+                .practiceIds(List.of())
+                .occasions(Set.of(prepared.name()))
+                .build());
+        assertThat(events.findById(occasion.getId()).orElseThrow().getState()).isEqualTo(ItemEventState.WAITING);
+
+        transactions.executeWithoutResult(ignored ->
+                publisher.publishEvent(new ItemEventRecorded(item.workspaceId(), occasion.getId(), item.itemId())));
+
+        assertThat(events.findById(occasion.getId()).orElseThrow().getState()).isEqualTo(ItemEventState.STARTED);
+        assertThat(itemReviews(prepared)).extracting(Review::getId).containsExactly(recorded);
+    }
+
+    /** A second practice of the prepared work: about nobody, selected on {@code on}, reading only the core record. */
+    private void corePractice(Prepared prepared, ItemEventName on) {
+        var original =
+                DefinitionTestFixtures.definition(ScmItemEvents.PULL_REQUEST, "Name the change", "Name it.", null);
+        var definition = new PracticeDefinition(
+                original.name(),
+                new ReviewOn(List.of(on), Map.of()),
+                original.appliesWhen(),
+                null,
+                original.reads(),
+                original.reviewedBy(),
+                original.criteria(),
+                original.script(),
+                original.scan(),
+                original.lineNotes(),
+                original.guidance());
+        versions.create(new PracticeVersionService.NewPractice(
+                prepared.item().workspaceId(), "core-only", ScmItemEvents.PULL_REQUEST, definition, null, 1, null));
+    }
+
+    /** Whether a provider read ran in a transaction, and whether the workspace row was locked at it. */
+    private record Fetch(boolean transaction, boolean workspaceLocked) {
+        static final Fetch FREE = new Fetch(false, false);
+    }
+
+    /** Records each source read and occasion pin of the item, which can fetch from the provider. */
+    private List<Fetch> observeFetches(ItemRef item) {
+        var fetches = new CopyOnWriteArrayList<Fetch>();
+        doAnswer(call -> {
+                    fetches.add(fetch(item.workspaceId()));
+                    return call.callRealMethod();
+                })
+                .when(productItems)
+                .fingerprints(argThat(ref -> ref != null && ref.itemId() == item.itemId()), any(), any());
+        doAnswer(call -> {
+                    fetches.add(fetch(item.workspaceId()));
+                    return call.callRealMethod();
+                })
+                .when(productItems)
+                .pinOccasion(argThat(ref -> ref != null && ref.itemId() == item.itemId()), any(), any());
+        return fetches;
+    }
+
+    private record BlockedRead(CountDownLatch reading, CountDownLatch release, AtomicReference<Fetch> seen) {}
+
+    /** The first source read of the item records its fetch and waits for {@code release}; later reads run at once. */
+    private BlockedRead blockFirstFingerprintRead(ItemRef item) {
+        return blockFingerprintRead(item, kinds -> true);
+    }
+
+    /** The first source read of the item for matching sources records its fetch and waits for {@code release}. */
+    private BlockedRead blockFingerprintRead(ItemRef item, Predicate<Set<SourceKind>> sources) {
+        var read = new BlockedRead(new CountDownLatch(1), new CountDownLatch(1), new AtomicReference<>());
+        var calls = new AtomicInteger();
+        doAnswer(call -> {
+                    Set<SourceKind> kinds = call.getArgument(1);
+                    if (sources.test(kinds) && calls.getAndIncrement() == 0) {
+                        read.seen().set(fetch(item.workspaceId()));
+                        read.reading().countDown();
+                        awaitLatch(read.release());
+                    }
+                    return call.callRealMethod();
+                })
+                .when(productItems)
+                .fingerprints(argThat(ref -> ref != null && ref.itemId() == item.itemId()), any(), any());
+        return read;
+    }
+
+    private Fetch fetch(long workspaceId) {
+        var other = new TransactionTemplate(Objects.requireNonNull(transactions.getTransactionManager()));
+        other.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        boolean locked;
+        try {
+            other.executeWithoutResult(ignored -> jdbc.queryForObject(
+                    "SELECT id FROM workspace WHERE id = ? FOR UPDATE NOWAIT", Long.class, workspaceId));
+            locked = false;
+        } catch (PessimisticLockingFailureException held) {
+            locked = true;
+        }
+        return new Fetch(TransactionSynchronizationManager.isActualTransactionActive(), locked);
+    }
+
+    /** The author of the prepared pull request, whose practice the fixture reviews. */
+    private ReviewIntegrationData.Scenario authorScenario(Prepared prepared) {
+        var item = prepared.item();
+        var pull = pulls.findById(Objects.requireNonNull(item.sourceId())).orElseThrow();
+        var author =
+                users.findById(Objects.requireNonNull(pull.getAuthor()).getId()).orElseThrow();
+        return new ReviewIntegrationData.Scenario(
+                workspaces.findById(item.workspaceId()).orElseThrow(),
+                accounts.findById(account(author)).orElseThrow(),
+                practices
+                        .findByWorkspaceIdAndSlug(item.workspaceId(), "event-test")
+                        .orElseThrow(),
+                itemRows.findByIdAndWorkspaceId(item.itemId(), item.workspaceId())
+                        .orElseThrow());
+    }
+
+    @Test
     void shouldCarryWhatAReplacedQueuedReviewSelectedIntoTheReviewOfTheNewerHead() {
         var prepared = prepare(
                 IdentityProviderType.GITHUB, false, Map.of(), false, List.of(ScmItemEvents.PULL_REQUEST_SYNCHRONIZED));
@@ -2119,15 +2494,58 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
     }
 
     /**
-     * A member's request pins the work with no lock. A push that lands before the request takes the workspace lock
-     * starts its own review of the newer version, so the request finds its version replaced and records nothing.
+     * A request pins the work with no lock. A push that lands before the request takes the workspace lock starts its own
+     * review of the newer version. A member's request then meets its policy (a review of the item already measures); a
+     * batch request finds its version replaced. Either records nothing.
      */
     @Test
-    void shouldRefuseAMembersRequestWhoseVersionAPushReplacedWhileItReadTheWork() throws Exception {
-        var prepared = prepare(
+    void shouldRefuseAMembersRequestWhoseItemAPushStartedReviewingWhileItReadTheWork() throws Exception {
+        var prepared = preparedForReplacedVersion();
+        long requester = memberAccount(prepared.item().workspaceId());
+
+        assertThat(requestWhileAPushLands(
+                        prepared, request(prepared).origin(ReviewOrigin.REQUEST).requestedById(requester)))
+                .isInstanceOfSatisfying(
+                        ReviewRequestRefused.class,
+                        refusal -> assertThat(refusal.reason()).isEqualTo(ReviewRequestReason.CONCURRENT_DUPLICATE));
+        assertThat(measuringReviews(prepared))
+                .singleElement()
+                .satisfies(review -> assertThat(review.getOrigin()).isEqualTo(ReviewOrigin.EVENT));
+    }
+
+    @Test
+    void shouldRefuseABatchRequestWhoseVersionAPushReplacedWhileItReadTheWork() throws Exception {
+        var prepared = preparedForReplacedVersion();
+
+        assertThat(requestWhileAPushLands(
+                        prepared,
+                        request(prepared).origin(ReviewOrigin.BACKFILL).batchId(UUID.randomUUID())))
+                .isInstanceOfSatisfying(
+                        ReviewRequestRejected.class,
+                        refusal ->
+                                assertThat(refusal.reason()).isEqualTo(ReviewRequestRejected.Reason.VERSION_CHANGED));
+        assertThat(measuringReviews(prepared))
+                .singleElement()
+                .satisfies(review -> assertThat(review.getOrigin()).isEqualTo(ReviewOrigin.EVENT));
+    }
+
+    private Prepared preparedForReplacedVersion() {
+        return prepare(
                 IdentityProviderType.GITHUB, false, Map.of(), false, List.of(ScmItemEvents.PULL_REQUEST_SYNCHRONIZED));
-        long workspace = prepared.item().workspaceId();
-        long requester = memberAccount(workspace);
+    }
+
+    private static ReviewRequest.ReviewRequestBuilder request(Prepared prepared) {
+        return ReviewRequest.builder()
+                .workspaceId(prepared.item().workspaceId())
+                .itemId(prepared.item().itemId())
+                .kind(ReviewKind.ITEM)
+                .version(prepared.version())
+                .practiceIds(List.of());
+    }
+
+    /** Holds the request right after its pin, lands a push and its event review, then lets the request continue. */
+    private Throwable requestWhileAPushLands(Prepared prepared, ReviewRequest.ReviewRequestBuilder request)
+            throws Exception {
         var pinned = new CountDownLatch(1);
         var release = new CountDownLatch(1);
         doAnswer(call -> {
@@ -2141,32 +2559,16 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
         var executor =
                 Executors.newSingleThreadExecutor(Thread.ofPlatform().daemon().factory());
         try {
-            Future<UUID> manual = executor.submit(() -> service.request(ReviewRequest.builder()
-                    .workspaceId(workspace)
-                    .itemId(prepared.item().itemId())
-                    .kind(ReviewKind.ITEM)
-                    .version(prepared.version())
-                    .origin(ReviewOrigin.REQUEST)
-                    .requestedById(requester)
-                    .practiceIds(List.of())
-                    .build()));
+            Future<UUID> requested = executor.submit(() -> service.request(request.build()));
             awaitLatch(pinned);
             deliver(
                     prepared,
                     "synchronize",
                     pullRequestPayload(prepared, "d".repeat(40), Instant.now().plusSeconds(60)));
             release.countDown();
-
-            assertThatThrownBy(() -> manual.get(20, TimeUnit.SECONDS))
-                    .isInstanceOf(ExecutionException.class)
-                    .cause()
-                    .isInstanceOfSatisfying(
-                            ReviewRequestRejected.class,
-                            refusal -> assertThat(refusal.reason())
-                                    .isEqualTo(ReviewRequestRejected.Reason.VERSION_CHANGED));
-            assertThat(measuringReviews(prepared))
-                    .singleElement()
-                    .satisfies(review -> assertThat(review.getOrigin()).isEqualTo(ReviewOrigin.EVENT));
+            var failure = catchThrowable(() -> requested.get(20, TimeUnit.SECONDS));
+            assertThat(failure).isInstanceOf(ExecutionException.class);
+            return Objects.requireNonNull(failure.getCause());
         } finally {
             release.countDown();
             executor.shutdownNow();
@@ -2267,28 +2669,24 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
         assertThat(six - one).isLessThanOrEqualTo(5L * 2);
     }
 
-    /** The statements of one manual review request of the item, rolled back so that the item can be requested again. */
+    /** The statements of one manual review request of the item, cancelled so that the item can be requested again. */
     private long admissionStatements(Prepared prepared, int practices) {
         long workspace = prepared.item().workspaceId();
         long requester = memberAccount(workspace);
-        return Objects.requireNonNull(transactions.execute(status -> {
-            var measured = statementCounter.measure(() -> service.request(ReviewRequest.builder()
-                    .workspaceId(workspace)
-                    .itemId(prepared.item().itemId())
-                    .kind(ReviewKind.ITEM)
-                    .version(prepared.version())
-                    .origin(ReviewOrigin.REQUEST)
-                    .requestedById(requester)
-                    .practiceIds(List.of())
-                    .build()));
-            assertThat(jdbc.queryForObject(
-                            "SELECT count(*) FROM review_practice WHERE review_id = ?",
-                            Integer.class,
-                            measured.value()))
-                    .isEqualTo(practices);
-            status.setRollbackOnly();
-            return measured.statements();
-        }));
+        var measured = statementCounter.measure(() -> service.request(ReviewRequest.builder()
+                .workspaceId(workspace)
+                .itemId(prepared.item().itemId())
+                .kind(ReviewKind.ITEM)
+                .version(prepared.version())
+                .origin(ReviewOrigin.REQUEST)
+                .requestedById(requester)
+                .practiceIds(List.of())
+                .build()));
+        assertThat(jdbc.queryForObject(
+                        "SELECT count(*) FROM review_practice WHERE review_id = ?", Integer.class, measured.value()))
+                .isEqualTo(practices);
+        assertThat(service.cancel(workspace, measured.value())).isTrue();
+        return measured.statements();
     }
 
     private void addPractice(Prepared prepared, int number) {

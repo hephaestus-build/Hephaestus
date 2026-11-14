@@ -195,7 +195,7 @@ Therefore a registry redelivery still needs an idempotency rule; the framework c
 
 | Listener | Existing rule on redelivery |
 | --- | --- |
-| `ItemEventReviewListener.on(ItemEventRecorded)` | Workspace lock, terminal event state and compare-and-set decisions prevent a second review for the same occasion. |
+| `ItemEventReviewListener.on(ItemEventRecorded)` | The review request replays the review of the same occasion by its event ID under the workspace lock. The occasion decisions read the open occasions again under that lock and compare-and-set their state. Thus a redelivery starts no second review for the same occasion. |
 | `ItemEventReviewListener.on(ItemSourceObserved)` | Reconciles currentness against the stored version; repeated reconciliation retains the same result state. |
 | `ReviewCommandListener.on(BotCommandReceivedEvent)` | The provider, comment id and kind derive the review request key. A refusal reply is an external effect. |
 | `ReviewCommandListener.on(CommentRequestedReviewEnded)` | Reads the recorded review outcome and replies through the provider. The remote reply retains its delivery limitation. |
