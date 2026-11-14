@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { beforeAll, describe, expect, it } from "vitest";
 
-import { workspaceListItem } from "@/mocks/fixtures/workspaces";
+import { ownMembership, workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
 import { ROUTE_RENDER_WAIT, loadRouteCode, renderRouteAt } from "@/test/router-harness";
 
@@ -18,6 +18,9 @@ function serveWorkspaces() {
 	const left: string[] = [];
 	server.use(
 		http.get("*/workspaces", () => HttpResponse.json(listed)),
+		http.get("*/workspaces/:workspaceSlug/members/me", () =>
+			HttpResponse.json(ownMembership("MEMBER")),
+		),
 		http.delete("*/workspaces/:workspaceSlug/members/me", ({ params }) => {
 			const slug = String(params.workspaceSlug);
 			left.push(slug);
@@ -78,6 +81,8 @@ describe("leaving a workspace from User settings", () => {
 		await dialog.findByText(
 			"You are the last owner of acme. Make another member an owner, or delete the workspace.",
 		);
-		within(region).getByRole("button", { name: "Leave Acme" });
+		// The confirmation stays open over the page, which still lists the workspace.
+		screen.getByRole("alertdialog");
+		within(region).getByRole("button", { name: "Leave Acme", hidden: true });
 	});
 });

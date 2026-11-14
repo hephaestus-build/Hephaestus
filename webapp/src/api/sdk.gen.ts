@@ -216,6 +216,7 @@ export { getWorkspaceSyncProgress } from "./sdk/getWorkspaceSyncProgress.gen.js"
 export { gitLabPreflight } from "./sdk/gitLabPreflight.gen.js";
 export { initiate } from "./sdk/initiate.gen.js";
 export { keepMyProductFeedbackPrivate } from "./sdk/keepMyProductFeedbackPrivate.gen.js";
+export { leaveWorkspace } from "./sdk/leaveWorkspace.gen.js";
 export { list } from "./sdk/list.gen.js";
 export { listAdoptablePractices } from "./sdk/listAdoptablePractices.gen.js";
 export { listAgents } from "./sdk/listAgents.gen.js";
