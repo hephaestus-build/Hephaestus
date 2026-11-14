@@ -1,0 +1,5 @@
+hephaestus:
+    # Erasure recovery reapplies purges and disconnects without the quiescence guards, so nothing else may write
+    # (PersonDataRecovery refuses to start otherwise).
+    background-work:
+        enabled: false

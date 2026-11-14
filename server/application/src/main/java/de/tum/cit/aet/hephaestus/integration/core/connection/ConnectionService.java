@@ -707,6 +707,9 @@ public class ConnectionService {
                     saved.getCredentialsGeneration()));
         }
         lifecycleEffects.publishLifecycleEvent(saved, current, req.next());
+        if (req.next() == IntegrationState.UNINSTALLED && beforeLocalTransition != null)
+            ConnectionErasures.record(
+                    Objects.requireNonNull(saved.getId()), saved.getWorkspace().getId());
         return saved;
     }
 
