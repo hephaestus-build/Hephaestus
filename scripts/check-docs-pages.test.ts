@@ -3,6 +3,7 @@ import { describe, test } from "node:test";
 import {
 	checkPage,
 	type Guide,
+	headingAnchors,
 	migrationNoteProblems,
 	screenshotProblems,
 } from "./check-docs-pages.ts";
@@ -227,5 +228,74 @@ await describe("migrationNoteProblems", async () => {
 		assert.deepEqual(migrationNoteProblems([note("No heading")], ""), [
 			'.migration/a.md:1: Start the migration note with a "#### " heading.',
 		]);
+	});
+});
+
+const anchors = (docsPage: string) =>
+	docsPage === "admin/upgrade"
+		? headingAnchors(
+				"## Stopped schema upgrades\n\n```md\n## Not a heading\n```\n## Drain {/*#drain-queues*/}\n",
+			)
+		: undefined;
+const linking = (link: string) => [
+	{ file: "n.md", source: `#### 🔴 Drain the queues\n\nSee [it](${link}).\n` },
+];
+
+await describe("migration note stops and links", async () => {
+	const named = "*Stop every role to drain* *Drain the queues*";
+	await test("a note that stops servers starts with the stop heading", () => {
+		assert.match(
+			migrationNoteProblems(
+				[{ file: "n.md", source: "#### 🔴 Drain the queues\n\nStop the old servers first.\n" }],
+				named,
+			).join("\n"),
+			/start its heading with "#### 🔴 Stop every role"/u,
+		);
+		assert.deepEqual(
+			migrationNoteProblems(
+				[
+					{
+						file: "n.md",
+						source: "#### 🔴 Stop every role to drain\n\nStop the old servers first.\n",
+					},
+				],
+				named,
+			),
+			[],
+		);
+	});
+	await test("each docs link and anchor in a note resolves", () => {
+		assert.deepEqual(
+			migrationNoteProblems(
+				linking("https://docs.hephaestus.build/admin/upgrade#stopped-schema-upgrades"),
+				named,
+				anchors,
+			),
+			[],
+		);
+		assert.deepEqual(
+			migrationNoteProblems(
+				linking("https://docs.hephaestus.build/admin/upgrade#drain-queues"),
+				named,
+				anchors,
+			),
+			[],
+		);
+		assert.deepEqual(
+			migrationNoteProblems(
+				linking("https://docs.hephaestus.build/admin/upgrade#not-a-heading"),
+				named,
+				anchors,
+			),
+			["n.md:3: docs/admin/upgrade has no heading with the anchor #not-a-heading."],
+		);
+		assert.deepEqual(
+			migrationNoteProblems(
+				linking("https://docs.hephaestus.build/admin/kubernetes#x"),
+				named,
+				anchors,
+			),
+			["n.md:3: No docs page docs/admin/kubernetes.md or .mdx exists."],
+		);
 	});
 });

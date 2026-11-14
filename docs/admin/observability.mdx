@@ -110,7 +110,7 @@ A slow or missing dependency therefore never restarts a Pod, and never takes eve
 | Liveness (`/actuator/health/liveness`, `/livez`) | `livenessState` | Does the process run? |
 | Readiness (`/actuator/health/readiness`, `/readyz`) | `readinessState` | Can this Pod serve now? |
 
-`integrationConsumer`, `practiceReview` and `kubernetesSandbox` are in neither group.
+`integrationConsumer` and `practiceReview` are in neither group.
 A server serves its API whether or not it may start sandboxes, and its readiness does not qualify sandbox isolation. Run the platform isolation gate before enabling work.
 They stay in `/actuator/health` and the metrics, which the alerts read.
 
