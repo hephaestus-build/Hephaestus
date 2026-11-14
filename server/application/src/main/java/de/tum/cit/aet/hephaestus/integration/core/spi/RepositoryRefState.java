@@ -5,6 +5,10 @@ import java.util.UUID;
 
 /** Last complete provider-ref observation, scoped to the monitored repository. */
 public interface RepositoryRefState {
+    /**
+     * Fences a fetch that starts now. The last complete observation stays readable while the fetch runs: a fetch that
+     * has begun says nothing new about the provider's refs.
+     */
     UUID begin(long workspaceId, long repositoryId);
 
     void record(long workspaceId, long repositoryId, UUID readId, String fingerprint);

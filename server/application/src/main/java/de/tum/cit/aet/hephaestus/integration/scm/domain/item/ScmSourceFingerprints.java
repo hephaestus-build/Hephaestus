@@ -79,12 +79,12 @@ public class ScmSourceFingerprints implements ItemFingerprintReader {
             }
         }
         if (!records.isEmpty()) {
-            var read = occasion != null && holds(item, snapshot, occasion) ? occasion : null;
+            var held = occasion == null ? null : held(item, snapshot, occasion);
             fingerprints.putAll(ItemSource.recordFingerprints(
                     (pinned, request) -> source.capture(pinned, request, ScmCapturePreparation.fromMirror()),
-                    snapshot,
+                    held != null ? held : snapshot,
                     records,
-                    read,
+                    held != null ? occasion : null,
                     mapper));
         }
         return Map.copyOf(fingerprints);
@@ -104,7 +104,8 @@ public class ScmSourceFingerprints implements ItemFingerprintReader {
         var current = source.current(item);
         if (current.isEmpty()) return;
         var snapshot = current.orElseThrow();
-        var read = occasion != null && holds(item, snapshot, occasion) ? occasion : null;
+        var held = occasion == null ? null : held(item, snapshot, occasion);
+        var read = held != null ? occasion : null;
         var request = new CaptureRequest(
                 new UUID(0, 0),
                 new UUID(0, 0),
@@ -116,21 +117,23 @@ public class ScmSourceFingerprints implements ItemFingerprintReader {
                 records,
                 read);
         if (!capture.readsClone(item.kind(), request)) return;
-        capture.fetch(transactions.read(() -> capture.reviewedRepository(snapshot, read)));
+        var pinned = held != null ? held : snapshot;
+        capture.fetch(transactions.read(() -> capture.reviewedRepository(pinned, read)));
     }
 
     /**
-     * Whether the work is still at the version of {@code occasion}. A capture reads an occasion only at its own
-     * version; once a newer version replaced it, a capture now reads the current work, which shows the change. An
-     * occasion whose record expired cannot be read again, so the comparison is unverifiable, never a change.
+     * The occasion's own snapshot while the work is still at its version, else null. A capture reads an occasion only
+     * at its own version; once a newer version replaced it, a capture now reads the current work, which shows the
+     * change. An occasion whose record expired cannot be read again, so the comparison is unverifiable, never a change.
+     * The occasion is read under its own snapshot, never the current one: its roles are the ones it retained, and a role
+     * change outside the version, such as an assignee added after the work opened, is not a change of its sources.
      */
-    private boolean holds(ItemRef item, ItemSnapshot current, UUID occasion) {
+    private @Nullable ItemSnapshot held(ItemRef item, ItemSnapshot current, UUID occasion) {
         try {
-            source.pinOccasion(item, current.version(), occasion);
-            return true;
+            return source.pinOccasion(item, current.version(), occasion);
         } catch (ItemCaptureException replaced) {
             if (replaced.code() != ItemCaptureCode.VERSION_UNAVAILABLE) throw replaced;
-            return false;
+            return null;
         }
     }
 }

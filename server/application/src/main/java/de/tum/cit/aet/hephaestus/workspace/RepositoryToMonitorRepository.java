@@ -18,7 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 public interface RepositoryToMonitorRepository extends JpaRepository<RepositoryToMonitor, Long> {
     @Modifying
     @Query(
-            value = "UPDATE repository_to_monitor rtm SET git_refs_read_id=:readId,git_refs_fingerprint=NULL "
+            value = "UPDATE repository_to_monitor rtm SET git_refs_read_id=:readId "
                     + "FROM repository r WHERE r.id=:repositoryId AND r.name_with_owner=rtm.name_with_owner "
                     + "AND rtm.workspace_id=:workspaceId AND " + MonitoredRepositoryScope.NATIVE_RTM_R,
             nativeQuery = true)

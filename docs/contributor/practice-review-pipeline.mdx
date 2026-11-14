@@ -239,6 +239,10 @@ The practice's role must resolve to exactly one eligible human account.
 
 When only confirmed bots hold AUTHOR, selection records `BOT_AUTHOR`.
 When only confirmed bots hold REVIEWER on a provider pull request review, selection records `BOT_REVIEWER`.
+
+A confirmed bot is an account that the provider types as a bot.
+Commit co-author trailers and the activity setting Treat as automation do not make an account a bot.
+
 If no eligible holder exists in other cases, selection records `ROLE_UNAVAILABLE`, including unknown identities.
 Multiple distinct eligible holders record `ROLE_AMBIGUOUS`.
 The server never picks the first assignee or makes an unresolved person anonymous.
@@ -298,6 +302,8 @@ A missing capture record makes the result unverifiable with `RECORD_MISSING` ([C
 Neither reason establishes a change to the work.
 The practice-start gateway records `REPLACED` for changed sources and `READINESS_REFUSED` for sources it cannot verify.
 A submitted review ends only results whose source fingerprints changed.
+An event review's practice start reads its sources again under the occasion's own record and roles.
+An assignee added after the work opened changes no version, so it changes no source.
 
 Submitted reviews use the same source comparison and retain normal claim ordering.
 Repository and file scans keep their frozen source contract.
@@ -306,6 +312,9 @@ Git freshness describes the last complete provider-ref observation, not a live p
 A received branch or tag event invalidates that observation until a complete fetch records it again.
 The next capture fetch can restore it. Until then, practice start records `READINESS_REFUSED` and delivery records `UNCORROBORATED`.
 These reasons appear in the review and feedback traces.
+
+A fetch that is still running keeps the last complete observation.
+Thus, practices of other reviews of the repository can start and verify their tree meanwhile.
 
 [GitHub](https://docs.github.com/en/webhooks/webhook-events-and-payloads#push) and [GitLab](https://docs.gitlab.com/user/project/integrations/webhook_events/#push-events) can omit bulk ref events.
 An omitted event is detected only by a later fetch, as with other source changes that have not synced.
