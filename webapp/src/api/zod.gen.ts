@@ -5968,6 +5968,7 @@ export const zPracticeItemTypeOption = z.object({
 	applicabilityClauses: z.array(z.enum(["CHANGED_PATH", "DIFF_CONTAINS", "HAS_ITEMS", "MERGED"])),
 	applicabilitySources: z.array(zReadSourceOption),
 	events: z.array(zItemEventOption),
+	feedbackOnWork: z.boolean(),
 	kind: z.string(),
 	label: z.string(),
 	readSources: z.array(zReadSourceOption),

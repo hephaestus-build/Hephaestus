@@ -8098,6 +8098,11 @@ export const PracticeItemTypeOptionSchema = {
 				$ref: "#/components/schemas/ItemEventOption",
 			},
 		},
+		feedbackOnWork: {
+			type: "boolean",
+			description:
+				"Whether feedback can appear on the reviewed work itself, for a practice about the author of the work. Otherwise its feedback goes only to the developer's practice page and conversation.",
+		},
 		kind: {
 			type: "string",
 		},
@@ -8131,6 +8136,7 @@ export const PracticeItemTypeOptionSchema = {
 		"applicabilityClauses",
 		"applicabilitySources",
 		"events",
+		"feedbackOnWork",
 		"kind",
 		"label",
 		"readSources",

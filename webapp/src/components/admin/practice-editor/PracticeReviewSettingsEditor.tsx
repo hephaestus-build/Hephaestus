@@ -1,4 +1,4 @@
-import { HandIcon } from "lucide-react";
+import { HandIcon, InboxIcon } from "lucide-react";
 
 import type { PracticeItemTypeOption, PracticeReadSource, ReviewOn } from "@/api/types.gen";
 import { FieldError } from "@/components/ui/field";
@@ -22,6 +22,10 @@ export interface PracticeReviewSettingsEditorProps {
 	value: ReviewSettings;
 	onChange: (value: ReviewSettings) => void;
 	reviewedBy: ReviewedByKind;
+	/** Whether this practice's feedback can appear on the work: its kind allows it and the practice is about the author. */
+	feedbackOnWork: boolean;
+	/** Whether the practice is about a developer. A practice about the work itself has nobody to give feedback to. */
+	aboutADeveloper: boolean;
 	error?: string;
 	/** The control the error points at, so the field it names is the one that opens. */
 	errorFocusId?: string;
@@ -33,6 +37,8 @@ export function PracticeReviewSettingsEditor({
 	value,
 	onChange,
 	reviewedBy,
+	feedbackOnWork,
+	aboutADeveloper,
 	error,
 	errorFocusId,
 	disabled = false,
@@ -87,6 +93,17 @@ export function PracticeReviewSettingsEditor({
 					<span>
 						Anyone can also request this review on the work itself. A requested review ignores
 						Review on and When, and still checks Applies when.
+					</span>
+				</p>
+			)}
+
+			{automated && !feedbackOnWork && (
+				<p className="flex items-start gap-2 text-sm text-muted-foreground">
+					<InboxIcon className="mt-0.5 size-4 shrink-0" aria-hidden />
+					<span>
+						This practice’s feedback never appears on the work itself.
+						{aboutADeveloper &&
+							" The developer it is about gets it on their Practice profile and from Hephaestus when they ask."}
 					</span>
 				</p>
 			)}

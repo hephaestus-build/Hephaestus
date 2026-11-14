@@ -21,6 +21,8 @@ const meta = {
 		itemType: mockPullRequestItemType,
 		value: { reviewOn, reads: reads.sources },
 		reviewedBy: "HEPHAESTUS",
+		feedbackOnWork: true,
+		aboutADeveloper: true,
 		onChange: fn(),
 	},
 	argTypes: {
@@ -54,6 +56,17 @@ export const PullRequest: Story = {
 		await expect(strip.getByRole("checkbox", { name: /^Merged/u })).not.toBeChecked();
 		await expect(canvas.getByRole("checkbox", { name: "Ready for review" })).toBeChecked();
 		await expect(canvas.getByRole("group", { name: "Reads" })).toBeVisible();
+		// Feedback can appear on a pull request, so the editor names no other place.
+		await expect(canvas.queryByText(/never appears on the work itself/u)).toBeNull();
+	},
+};
+
+/** A practice about the work itself names no developer, so the note says only where feedback cannot go. */
+export const AboutTheWork: Story = {
+	args: { feedbackOnWork: false, aboutADeveloper: false },
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText(/never appears on the work itself/u)).toBeVisible();
+		await expect(canvas.queryByText(/The developer it is about/u)).toBeNull();
 	},
 };
 
@@ -76,6 +89,7 @@ export const Issue: Story = {
 export const Document: Story = {
 	args: {
 		itemType: mockDocumentItemType,
+		feedbackOnWork: false,
 		value: {
 			reviewOn: { events: ["docs.document.published"], state: {} },
 			reads: [{ source: "docs.document.core", need: "REQUIRED" }],
@@ -85,12 +99,15 @@ export const Document: Story = {
 		const strip = within(canvas.getByRole("group", { name: "Review on" }));
 		await expect(strip.getByRole("checkbox", { name: /^Published/u })).toBeChecked();
 		await expect(strip.getByRole("checkbox", { name: /^Archived/u })).not.toBeChecked();
+		// Outline gets no feedback, so the editor says where it goes instead.
+		await expect(canvas.getByText(/never appears on the work itself/u)).toBeVisible();
 	},
 };
 
 export const ConversationHasOneEvent: Story = {
 	args: {
 		itemType: mockThreadItemType,
+		feedbackOnWork: false,
 		value: {
 			reviewOn: { events: ["chat.thread.settled"], state: {} },
 			reads: [{ source: "slack.conversation.thread", need: "REQUIRED" }],
@@ -100,6 +117,7 @@ export const ConversationHasOneEvent: Story = {
 		const strip = within(canvas.getByRole("group", { name: "Review on" }));
 		await expect(strip.getAllByRole("checkbox")).toHaveLength(1);
 		await expect(canvas.queryByText("Along the way")).toBeNull();
+		await expect(canvas.getByText(/never appears on the work itself/u)).toBeVisible();
 	},
 };
 
