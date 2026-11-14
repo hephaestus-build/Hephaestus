@@ -349,6 +349,16 @@ Each group starts a `CI/CD` run. GitHub's
 [runner concurrency limits](https://docs.github.com/en/actions/reference/limits#job-concurrency-limits-for-github-hosted-runners)
 apply across workflows, so queue parallelism competes with pull-request validation for capacity.
 
+The ruleset's status check timeout is 45 minutes.
+GitHub removes an entry from the queue when its required checks do not report within that time.
+Thus, a run that never reports blocks the entries behind it for 45 minutes, not two hours.
+
+The timeout is about twice the merge-group p90.
+We measured 162 successful groups from 2026-11-12 to 2026-11-14, from group creation to the last job.
+The median was 17.0 minutes, the p90 25.1 minutes and the slowest 27.8 minutes.
+Release-candidate groups took 18 to 20 minutes.
+When `report:ci-latency` shows a merge-group p90 above half of the timeout, change the timeout and this paragraph together.
+
 A failed merge group drops its pull requests from the queue without failing their checks.
 Thus, CI updates a comment with the run link on the pull request named by the merge group's head ref. It
 does not requeue automatically: the result does not say whether the failure was transient or
