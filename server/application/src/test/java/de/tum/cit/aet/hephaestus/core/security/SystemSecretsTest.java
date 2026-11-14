@@ -210,6 +210,38 @@ class SystemSecretsTest extends BaseUnitTest {
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
+    @Test
+    void shouldDescribeAValueOfAnotherKeyByBothKeyIdsAndNoKey() {
+        SystemSecrets sealedWith = systemSecrets(OLD_KEY, "test");
+        byte[] sealed = sealedWith.seal(bytes("v"), ROW);
+        SystemSecrets holder = systemSecretsWithPrior(NEW_KEY, "abcdefabcdefabcdefabcdefabcdefab", "test");
+
+        assertThat(holder.describeMismatch(sealed))
+                .contains("sealed by the system key with id " + sealedWith.activeKeyId())
+                .contains("the active key " + holder.activeKeyId())
+                .contains("the prior key " + systemSecrets("abcdefabcdefabcdefabcdefabcdefab", "test").activeKeyId())
+                .doesNotContain(OLD_KEY)
+                .doesNotContain(NEW_KEY);
+    }
+
+    @Test
+    void shouldDescribeAValueOfTheConfiguredKeyThatDoesNotOpenAsDamagedOrMoved() {
+        SystemSecrets secrets = systemSecrets(OLD_KEY, "test");
+        byte[] sealed = secrets.seal(bytes("v"), ROW);
+        sealed[sealed.length - 1] ^= 1;
+
+        assertThat(secrets.describeMismatch(sealed)).contains("damaged").contains(secrets.activeKeyId());
+    }
+
+    @Test
+    void shouldDescribeAValueThatIsNoSealedSecretOrAServerWithoutAKey() {
+        byte[] sealed = systemSecrets(OLD_KEY, "test").seal(bytes("v"), ROW);
+
+        assertThat(systemSecrets(OLD_KEY, "test").describeMismatch(new byte[] {1, 2, 3}))
+                .isEqualTo("the value is not a sealed system secret");
+        assertThat(systemSecrets(null, "test").describeMismatch(sealed)).contains("holds no system key");
+    }
+
     private static byte[] bytes(String value) {
         return value.getBytes(StandardCharsets.UTF_8);
     }
