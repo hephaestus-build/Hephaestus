@@ -64,11 +64,16 @@ public class OutlineConnectionAdminService {
         try {
             identity = apiClient.validateToken(serverUrl, token);
         } catch (OutlineApiException e) {
-            if (e.getCause() instanceof WebClientResponseException wire
-                    && (wire.getStatusCode().value() == 401
-                            || wire.getStatusCode().value() == 403)) {
+            int status = e.getCause() instanceof WebClientResponseException wire
+                    ? wire.getStatusCode().value()
+                    : 0;
+            if (status == 401) {
                 throw new IllegalArgumentException(
                         "Outline does not accept this key. Check that you copied all of it.");
+            }
+            if (status == 403) {
+                throw new IllegalArgumentException(
+                        "Outline refused this key for reading. Give the key read access to the API.");
             }
             throw e;
         }
@@ -76,11 +81,19 @@ public class OutlineConnectionAdminService {
             throw new IllegalArgumentException(
                     "This key belongs to another Outline team. Use a key of the connected team.");
         }
+        long validatedId = Objects.requireNonNull(connection.getId());
+        String teamId = identity.teamId();
         transactionTemplate.executeWithoutResult(status -> {
             Connection replaced = connectionService
                     .rotateBearerToken(workspaceId, IntegrationKind.OUTLINE, new BearerToken(token, null))
                     .orElseThrow(() -> new EntityNotFoundException("Outline connection", Long.toString(workspaceId)))
                     .connection();
+            // The key was checked against the connection read before the call to Outline. Another admin may have
+            // reconnected another team since; the throw rolls the write back.
+            if (!Objects.equals(replaced.getId(), validatedId) || !teamId.equals(replaced.getInstanceKey())) {
+                throw new IllegalArgumentException(
+                        "The Outline connection changed while Hephaestus checked the key. Reload the page and try again.");
+            }
             connectionCommands.recordAdministrativeChange(
                     replaced,
                     "REPLACE_CREDENTIALS",
@@ -91,7 +104,8 @@ public class OutlineConnectionAdminService {
                     "Outline API key replaced");
         });
         log.info("outline.admin: replaced the API key of workspaceId={}", workspaceId);
-        return tokenStatus(workspaceId);
+        // Outline accepted the key a moment ago; a second probe could only turn a passing outage into "refused".
+        return acceptedTokenStatus(workspaceId, serverUrl, token);
     }
 
     /**
@@ -117,6 +131,11 @@ public class OutlineConnectionAdminService {
             log.debug("outline.admin: token probe rejected for workspaceId={}: {}", workspaceId, e.toString());
             return new OutlineTokenStatusDTO(false, null, null, null, null);
         }
+        return acceptedTokenStatus(workspaceId, serverUrl, token);
+    }
+
+    /** The state of a key that Outline accepts, with the metadata that Outline lets the key read about itself. */
+    private OutlineTokenStatusDTO acceptedTokenStatus(long workspaceId, String serverUrl, String token) {
         try {
             return apiClient
                     .describeToken(serverUrl, token)

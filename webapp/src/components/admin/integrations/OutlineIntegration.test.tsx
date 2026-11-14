@@ -56,7 +56,7 @@ function OutlineIntegrationTestContainer() {
 			{outline.tokenStatusError && (
 				<QueryErrorAlert
 					error={outline.tokenStatusError}
-					title="We could not verify the Outline token"
+					title="We could not verify the Outline key"
 					onRetry={outline.retryTokenStatus}
 				/>
 			)}
@@ -387,7 +387,7 @@ describe("Outline integration — token lifecycle", () => {
 
 		renderContainer();
 
-		await screen.findByText(/we could not verify the outline token/iu);
+		await screen.findByText(/we could not verify the outline key/iu);
 		screen.getByRole("button", { name: /retry/iu });
 	});
 
@@ -403,7 +403,7 @@ describe("Outline integration — token lifecycle", () => {
 		renderContainer();
 
 		await screen.findByText(/outline no longer accepts this key/iu);
-		expect(screen.queryByText(/outline accepts this token/iu)).toBeNull();
+		expect(screen.queryByText(/outline accepts this key/iu)).toBeNull();
 	});
 
 	it("replaces the key on the connection it has, without a disconnect", async () => {
@@ -472,7 +472,7 @@ describe("Outline integration — token lifecycle", () => {
 
 		renderContainer();
 
-		await screen.findByText(/outline accepts this token/iu);
+		await screen.findByText(/outline accepts this key/iu);
 		screen.getByText(/Hephaestus mirror/u);
 		screen.getByText(/…9f2c/u);
 	});
