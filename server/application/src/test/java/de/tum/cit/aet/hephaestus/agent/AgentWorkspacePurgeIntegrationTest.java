@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.agent;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import de.tum.cit.aet.hephaestus.testconfig.ReviewJobFixtures;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmConnection;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmConnectionRepository;
@@ -131,7 +132,7 @@ class AgentWorkspacePurgeIntegrationTest extends BaseIntegrationTest {
         ReviewJob job = new ReviewJob();
         RuntimeJobTestData.initialize(job, workspace.getId());
 
-        job.setStatus(ReviewJobStatus.COMPLETED);
+        ReviewJobFixtures.withStatus(job, ReviewJobStatus.COMPLETED);
         job.setCompletedAt(Instant.now());
         job.setProcessingStatus(ProcessingStatus.PENDING);
         job.setConfigSnapshot(objectMapper.createObjectNode());
@@ -178,7 +179,7 @@ class AgentWorkspacePurgeIntegrationTest extends BaseIntegrationTest {
         ReviewJob job = new ReviewJob();
         RuntimeJobTestData.initialize(job, workspace.getId());
 
-        job.setStatus(ReviewJobStatus.COMPLETED);
+        ReviewJobFixtures.withStatus(job, ReviewJobStatus.COMPLETED);
         job.setCompletedAt(Instant.now());
         job.setProcessingStatus(ProcessingStatus.DONE);
         job.setCapture(objectMapper.createObjectNode().put("private", "content-" + suffix));

@@ -10,6 +10,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.testconfig.ReviewJobFixtures;
 import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceFolderLease;
 import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceFolderPersonDataCatalog;
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
@@ -191,7 +192,7 @@ class JobEvidenceRebuildTest {
         assertThat(files().readText(erased, "context/item.json", SHA)).isEmpty();
 
         var ended = runningJob();
-        ended.setStatus(ReviewJobStatus.FAILED);
+        ReviewJobFixtures.withStatus(ended, ReviewJobStatus.FAILED);
         recorded(ended);
         files().ensureAttemptFolder(ended);
         assertThat(files().readText(ended, "context/item.json", SHA)).isEmpty();
@@ -268,7 +269,7 @@ class JobEvidenceRebuildTest {
         job.setId(UUID.randomUUID());
         RuntimeJobTestData.initialize(job, 1L);
         job.setRunId(UUID.randomUUID());
-        job.setStatus(ReviewJobStatus.RUNNING);
+        ReviewJobFixtures.withStatus(job, ReviewJobStatus.RUNNING);
         var capture = JsonMapper.builder().build().createObjectNode();
         capture.putArray("directories");
         job.setCapture(capture);

@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.proxy;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import de.tum.cit.aet.hephaestus.testconfig.ReviewJobFixtures;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.RuntimeJobTestData;
@@ -51,7 +52,7 @@ class ScanCallLeasesIntegrationTest extends BaseIntegrationTest {
                 "scan-lease-" + UUID.randomUUID().toString().substring(0, 8)));
         job = new ReviewJob();
         RuntimeJobTestData.initialize(job, workspace.getId());
-        job.setStatus(ReviewJobStatus.RUNNING);
+        ReviewJobFixtures.withStatus(job, ReviewJobStatus.RUNNING);
         job.setProcessingStatus(ProcessingStatus.PENDING);
         job.setConfigSnapshot(mapper.createObjectNode());
         job = jobs.save(RuntimeJobTestData.persistParent(jdbc, job));

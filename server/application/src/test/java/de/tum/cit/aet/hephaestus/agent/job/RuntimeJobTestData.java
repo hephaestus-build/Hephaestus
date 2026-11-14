@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.job;
 
+import de.tum.cit.aet.hephaestus.testconfig.ReviewJobFixtures;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunFence;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunHold;
 import de.tum.cit.aet.hephaestus.evidence.AutomatedReviewReadinessDecision;
@@ -213,7 +214,7 @@ public final class RuntimeJobTestData {
         var job = new ReviewJob();
         job.setId(jobId);
         job.setRunId((UUID) Objects.requireNonNull(row.get("run_id")));
-        job.setStatus(ReviewJobStatus.valueOf((String) Objects.requireNonNull(row.get("status"))));
+        ReviewJobFixtures.withStatus(job, ReviewJobStatus.valueOf((String) Objects.requireNonNull(row.get("status"))));
         job.setWorkspaceId(((Number) Objects.requireNonNull(row.get("workspace_id"))).longValue());
         job.setReviewId((UUID) Objects.requireNonNull(row.get("review_id")));
         String state = switch (job.getStatus()) {

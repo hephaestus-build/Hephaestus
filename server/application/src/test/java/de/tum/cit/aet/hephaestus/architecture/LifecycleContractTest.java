@@ -14,6 +14,8 @@ import de.tum.cit.aet.hephaestus.core.privacy.PersonDataRequest;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewBatchStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewItemState;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewPracticeStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStatus;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import java.util.ArrayDeque;
@@ -60,6 +62,14 @@ class LifecycleContractTest extends HephaestusArchitectureTest {
                                 ReviewStatus.PARTIAL,
                                 ReviewStatus.FAILED,
                                 ReviewStatus.CANCELLED)),
+                new Contract<>(
+                        ReviewJobStatus.class,
+                        Set.of(ReviewJobStatus.QUEUED),
+                        Set.of(ReviewJobStatus.FAILED, ReviewJobStatus.TIMED_OUT, ReviewJobStatus.CANCELLED)),
+                new Contract<>(
+                        ReviewPracticeStatus.class,
+                        Set.of(ReviewPracticeStatus.QUEUED),
+                        Set.of(ReviewPracticeStatus.DONE, ReviewPracticeStatus.WITHHELD, ReviewPracticeStatus.FAILED)),
                 new Contract<>(
                         PersonDataRequest.State.class,
                         Set.of(PersonDataRequest.State.PREVIEW),

@@ -8,6 +8,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.testconfig.ReviewJobFixtures;
 import de.tum.cit.aet.hephaestus.agent.AgentControllerAdvice;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptKeyFixtures;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptSigningKey;
@@ -138,7 +139,7 @@ class ReviewCompositionGatewayReplicasIntegrationTest extends BaseIntegrationTes
         job = Objects.requireNonNull(transactions.execute(status -> {
             var created = new ReviewJob();
             RuntimeJobTestData.initialize(created, workspace.getId());
-            created.setStatus(ReviewJobStatus.QUEUED);
+            ReviewJobFixtures.withStatus(created, ReviewJobStatus.QUEUED);
             created.setConfigSnapshot(configuration());
             created.prePersist();
             var saved = jobs.saveAndFlush(RuntimeJobTestData.persistParent(jdbc, created));
@@ -152,7 +153,7 @@ class ReviewCompositionGatewayReplicasIntegrationTest extends BaseIntegrationTes
                             Set.of(AgentRunKind.REVIEW)))
                     .isPresent();
             RuntimeJobTestData.leaseUntil(jdbc, saved, Instant.now().plus(RuntimeJobTestData.LEASE));
-            saved.setStatus(ReviewJobStatus.RUNNING);
+            ReviewJobFixtures.withStatus(saved, ReviewJobStatus.RUNNING);
             saved.setStartedAt(Instant.now());
             return jobs.saveAndFlush(saved);
         }));
@@ -295,7 +296,7 @@ class ReviewCompositionGatewayReplicasIntegrationTest extends BaseIntegrationTes
                             Set.of(AgentRunKind.REVIEW_COMPOSE)))
                     .isPresent();
             RuntimeJobTestData.leaseUntil(jdbc, job, Instant.now().plus(RuntimeJobTestData.LEASE));
-            job.setStatus(ReviewJobStatus.RUNNING);
+            ReviewJobFixtures.withStatus(job, ReviewJobStatus.RUNNING);
             jobs.saveAndFlush(job);
             fence = RuntimeJobTestData.fence(jdbc, job);
         });
@@ -312,7 +313,7 @@ class ReviewCompositionGatewayReplicasIntegrationTest extends BaseIntegrationTes
         transactions.executeWithoutResult(status -> {
             var current = jobs.findById(job.getId()).orElseThrow();
             if (current.getStatus() == ReviewJobStatus.RUNNING || current.getStatus() == ReviewJobStatus.QUEUED) {
-                current.setStatus(ReviewJobStatus.CANCELLED);
+                ReviewJobFixtures.withStatus(current, ReviewJobStatus.CANCELLED);
                 current.setCompletedAt(Instant.now());
                 jobs.saveAndFlush(current);
                 RuntimeJobTestData.agree(jdbc, current.getId());

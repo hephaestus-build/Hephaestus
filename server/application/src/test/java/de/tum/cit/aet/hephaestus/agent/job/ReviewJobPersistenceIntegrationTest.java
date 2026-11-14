@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.job;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import de.tum.cit.aet.hephaestus.testconfig.ReviewJobFixtures;
 import de.tum.cit.aet.hephaestus.agent.AgentCapacityProperties;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmConnection;
@@ -269,7 +270,7 @@ class ReviewJobPersistenceIntegrationTest extends BaseIntegrationTest {
         UUID queuedId = staleRunningJob(snapshot().toJson(objectMapper));
         transactionTemplate.executeWithoutResult(transaction -> {
             var queued = jobRepository.findById(queuedId).orElseThrow();
-            queued.setStatus(ReviewJobStatus.QUEUED);
+            ReviewJobFixtures.withStatus(queued, ReviewJobStatus.QUEUED);
             queued.setStartedAt(null);
             queued.setExecutionStartedAt(null);
             jobRepository.saveAndFlush(queued);
@@ -287,7 +288,7 @@ class ReviewJobPersistenceIntegrationTest extends BaseIntegrationTest {
         UUID completedId = staleRunningJob(snapshot().toJson(objectMapper));
         transactionTemplate.executeWithoutResult(transaction -> {
             var completed = jobRepository.findById(completedId).orElseThrow();
-            completed.setStatus(ReviewJobStatus.COMPLETED);
+            ReviewJobFixtures.withStatus(completed, ReviewJobStatus.COMPLETED);
             completed.setCompletedAt(Instant.now());
             jobRepository.saveAndFlush(completed);
             RuntimeJobTestData.persistRun(jdbc, completed);
@@ -353,7 +354,7 @@ class ReviewJobPersistenceIntegrationTest extends BaseIntegrationTest {
         RuntimeJobTestData.initialize(job, workspace.getId());
         RuntimeJobTestData.spent(RuntimeJobTestData.attempt(job, spent), spent);
 
-        job.setStatus(ReviewJobStatus.RUNNING);
+        ReviewJobFixtures.withStatus(job, ReviewJobStatus.RUNNING);
         job.setConfigSnapshot(configSnapshot);
         job.setStartedAt(Instant.now().minus(Duration.ofMinutes(30)));
         // Non-null executionStartedAt is what makes this attempt billable: it got past preparation and

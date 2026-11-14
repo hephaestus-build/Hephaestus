@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doReturn;
 
+import de.tum.cit.aet.hephaestus.testconfig.ReviewJobFixtures;
 import de.tum.cit.aet.hephaestus.activity.ActivityEventRepository;
 import de.tum.cit.aet.hephaestus.activity.ActivityEventType;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
@@ -401,7 +402,7 @@ class WorkspacePurgeIntegrationTest extends AbstractWorkspaceIntegrationTest {
             Workspace workspace = createGitLabWorkspaceWithData("queued-agent");
             var work = modelFixtures.work(workspace, "queued-work-" + workspace.getId(), "scm.pull_request", 1L);
             var job = work.job();
-            job.setStatus(ReviewJobStatus.QUEUED);
+            ReviewJobFixtures.withStatus(job, ReviewJobStatus.QUEUED);
             agentJobRepository.saveAndFlush(job);
 
             assertThatThrownBy(() -> workspaceLifecycleService.purgeWorkspace(workspace.getWorkspaceSlug()))

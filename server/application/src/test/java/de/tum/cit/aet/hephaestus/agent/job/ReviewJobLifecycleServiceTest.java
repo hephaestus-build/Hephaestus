@@ -9,6 +9,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.testconfig.ReviewJobFixtures;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.config.FrozenModel;
@@ -81,7 +82,7 @@ class ReviewJobLifecycleServiceTest extends BaseUnitTest {
     private ReviewJob createJobWithStatus(ReviewJobStatus status) {
         ReviewJob job = new ReviewJob();
         RuntimeJobTestData.initialize(job, workspace.getId());
-        job.setStatus(status);
+        ReviewJobFixtures.withStatus(job, status);
 
         ConfigSnapshot snapshot = new ConfigSnapshot(
                         ConfigSnapshot.SCHEMA_VERSION,

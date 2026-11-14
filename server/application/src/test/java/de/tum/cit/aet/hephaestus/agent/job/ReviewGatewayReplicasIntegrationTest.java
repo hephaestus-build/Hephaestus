@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 
+import de.tum.cit.aet.hephaestus.testconfig.ReviewJobFixtures;
 import de.tum.cit.aet.hephaestus.agent.AgentControllerAdvice;
 import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceFolderPersonDataCatalog;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptKeyFixtures;
@@ -180,7 +181,7 @@ class ReviewGatewayReplicasIntegrationTest extends BaseIntegrationTest {
         job = Objects.requireNonNull(transactions.execute(status -> {
             var created = new ReviewJob();
             RuntimeJobTestData.initialize(created, workspace.getId());
-            created.setStatus(ReviewJobStatus.QUEUED);
+            ReviewJobFixtures.withStatus(created, ReviewJobStatus.QUEUED);
             created.setConfigSnapshot(configuration());
             created.prePersist();
             var saved = jobs.saveAndFlush(RuntimeJobTestData.persistParent(jdbc, created));
@@ -194,7 +195,7 @@ class ReviewGatewayReplicasIntegrationTest extends BaseIntegrationTest {
                             Set.of(AgentRunKind.REVIEW)))
                     .isPresent();
             RuntimeJobTestData.leaseUntil(jdbc, saved, Instant.now().plus(RuntimeJobTestData.LEASE));
-            saved.setStatus(ReviewJobStatus.RUNNING);
+            ReviewJobFixtures.withStatus(saved, ReviewJobStatus.RUNNING);
             saved.setStartedAt(Instant.now());
             return jobs.saveAndFlush(saved);
         }));
@@ -299,7 +300,7 @@ class ReviewGatewayReplicasIntegrationTest extends BaseIntegrationTest {
         transactions.executeWithoutResult(status -> {
             var current = jobs.findById(job.getId()).orElseThrow();
             if (current.getStatus() == ReviewJobStatus.RUNNING || current.getStatus() == ReviewJobStatus.QUEUED) {
-                current.setStatus(ReviewJobStatus.CANCELLED);
+                ReviewJobFixtures.withStatus(current, ReviewJobStatus.CANCELLED);
                 current.setCompletedAt(Instant.now());
                 jobs.saveAndFlush(current);
                 RuntimeJobTestData.agree(jdbc, current.getId());

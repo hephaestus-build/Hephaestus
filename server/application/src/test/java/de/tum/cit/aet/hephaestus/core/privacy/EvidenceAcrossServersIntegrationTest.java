@@ -7,6 +7,7 @@ import static org.awaitility.Awaitility.await;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
 
+import de.tum.cit.aet.hephaestus.testconfig.ReviewJobFixtures;
 import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceFolderPersonDataCatalog;
 import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceFolderPersonDataCatalog.ErasedFolders;
 import de.tum.cit.aet.hephaestus.agent.context.AttemptInputs;
@@ -780,7 +781,7 @@ class EvidenceAcrossServersIntegrationTest extends BaseIntegrationTest {
         var workspace = workspaces.saveAndFlush(WorkspaceTestFixtures.activeWorkspace(name));
         var work = modelFixtures.work(workspace, name, "chat.thread", sourceIds.incrementAndGet());
         var job = work.job();
-        job.setStatus(ReviewJobStatus.RUNNING);
+        ReviewJobFixtures.withStatus(job, ReviewJobStatus.RUNNING);
         return RuntimeJobTestData.save(new TransactionTemplate(transactions), jdbc, jobs, job);
     }
 

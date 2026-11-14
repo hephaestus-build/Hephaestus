@@ -13,6 +13,7 @@ import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
+import de.tum.cit.aet.hephaestus.testconfig.ReviewJobFixtures;
 import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceFolderLease;
 import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceFolderPersonDataCatalog;
 import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceFolderPersonDataCatalog.CopyUnavailableException;
@@ -873,7 +874,7 @@ class EvidenceFolderAccountErasureIntegrationTest extends BaseIntegrationTest {
                 "chat.thread",
                 sourceIds.incrementAndGet());
         var job = work.job();
-        job.setStatus(ReviewJobStatus.RUNNING);
+        ReviewJobFixtures.withStatus(job, ReviewJobStatus.RUNNING);
         return RuntimeJobTestData.save(new TransactionTemplate(transactions), jdbc, jobs, job);
     }
 
@@ -1305,7 +1306,7 @@ class EvidenceFolderAccountErasureIntegrationTest extends BaseIntegrationTest {
                 "expired-file-" + UUID.randomUUID().toString().substring(0, 8)));
         var work = modelFixtures.work(
                 workspace, "file-proof-" + UUID.randomUUID().toString().substring(0, 8), "scm.file", 1L);
-        work.job().setStatus(ReviewJobStatus.RUNNING);
+        ReviewJobFixtures.withStatus(work.job(), ReviewJobStatus.RUNNING);
         var job = RuntimeJobTestData.save(new TransactionTemplate(transactions), jdbc, jobs, work.job());
         var recorder = new ExactPersonDataCopyRecorder();
         var owner = catalog(root, recorder);

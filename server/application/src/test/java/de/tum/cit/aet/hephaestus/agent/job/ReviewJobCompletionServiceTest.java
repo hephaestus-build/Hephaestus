@@ -9,6 +9,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.testconfig.ReviewJobFixtures;
 import de.tum.cit.aet.hephaestus.agent.handler.RuntimeReviewTestData;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.practices.spi.ProcessingStatus;
@@ -66,7 +67,7 @@ class ReviewJobCompletionServiceTest extends BaseUnitTest {
     @Test
     void terminalScanProcessingSettlesBeforeTheDriverClosesTheProductReview() {
         var job = RuntimeReviewTestData.job();
-        job.setStatus(ReviewJobStatus.COMPLETED);
+        ReviewJobFixtures.withStatus(job, ReviewJobStatus.COMPLETED);
         job.setAdmissionAttempt(0);
         job.setAdmissionDigest("proof");
         service(job, ReviewKind.SCAN).tick();
@@ -78,7 +79,7 @@ class ReviewJobCompletionServiceTest extends BaseUnitTest {
     @Test
     void aCancelledUnstartedScanDoesNotClaimItsItemsWereReviewed() {
         var job = RuntimeReviewTestData.job();
-        job.setStatus(ReviewJobStatus.CANCELLED);
+        ReviewJobFixtures.withStatus(job, ReviewJobStatus.CANCELLED);
         service(job, ReviewKind.SCAN).tick();
         assertThat(job.getProcessingStatus()).isEqualTo(ProcessingStatus.FAILED);
         verifyNoInteractions(members, reviews);
@@ -87,7 +88,7 @@ class ReviewJobCompletionServiceTest extends BaseUnitTest {
     @Test
     void anActualFailedScanInvocationWithholdsItsReadyMembership() {
         var job = RuntimeReviewTestData.job();
-        job.setStatus(ReviewJobStatus.FAILED);
+        ReviewJobFixtures.withStatus(job, ReviewJobStatus.FAILED);
         job.setStartedAt(Instant.now());
         job.setExecutionStartedAt(Instant.now());
         var service = service(job, ReviewKind.SCAN);
@@ -107,7 +108,7 @@ class ReviewJobCompletionServiceTest extends BaseUnitTest {
     @Test
     void shouldKeepTheTrueReasonOfAnAdmittedRunThatEndedAfterItComposed() {
         var job = RuntimeReviewTestData.job();
-        job.setStatus(ReviewJobStatus.TIMED_OUT);
+        ReviewJobFixtures.withStatus(job, ReviewJobStatus.TIMED_OUT);
         job.setStartedAt(Instant.now());
         job.setExecutionStartedAt(Instant.now());
         job.setAdmissionAttempt(0);
@@ -126,7 +127,7 @@ class ReviewJobCompletionServiceTest extends BaseUnitTest {
     @Test
     void shouldCloseAReviewAsUnconfirmedOnlyWhenRecoveryEndedIt() {
         var job = RuntimeReviewTestData.job();
-        job.setStatus(ReviewJobStatus.FAILED);
+        ReviewJobFixtures.withStatus(job, ReviewJobStatus.FAILED);
         job.setAdmissionAttempt(0);
         job.setAdmissionDigest("proof");
         job.setOutput(new JsonMapper().createObjectNode().put("outcome", "COMPOSITION_UNCONFIRMED"));
@@ -144,7 +145,7 @@ class ReviewJobCompletionServiceTest extends BaseUnitTest {
     @Test
     void shouldCloseAReviewWhoseWorkspaceTheSandboxCouldNotPrepareAsAPreparationFailure() {
         var job = RuntimeReviewTestData.job();
-        job.setStatus(ReviewJobStatus.FAILED);
+        ReviewJobFixtures.withStatus(job, ReviewJobStatus.FAILED);
         job.setStartedAt(Instant.now());
         job.setExecutionStartedAt(Instant.now());
         job.setExitCode(SandboxLayout.EXIT_WORKSPACE_UNPREPARED);
@@ -169,7 +170,7 @@ class ReviewJobCompletionServiceTest extends BaseUnitTest {
     @Test
     void shouldCloseAReviewWhoseProviderStayedUnavailableWithThatReasonForItAndEachPractice() {
         var job = RuntimeReviewTestData.job();
-        job.setStatus(ReviewJobStatus.FAILED);
+        ReviewJobFixtures.withStatus(job, ReviewJobStatus.FAILED);
         job.setStartedAt(Instant.now());
         job.setExecutionStartedAt(Instant.now());
         job.setOutput(new JsonMapper().createObjectNode().put("outcome", "PROVIDER_UNAVAILABLE"));
@@ -194,7 +195,7 @@ class ReviewJobCompletionServiceTest extends BaseUnitTest {
     @Test
     void shouldCloseAnAdmittedReviewWhoseCompositionTheProviderStoppedAsProviderUnavailable() {
         var job = RuntimeReviewTestData.job();
-        job.setStatus(ReviewJobStatus.FAILED);
+        ReviewJobFixtures.withStatus(job, ReviewJobStatus.FAILED);
         job.setAdmissionAttempt(0);
         job.setAdmissionDigest("proof");
         job.setOutput(new JsonMapper().createObjectNode().put("outcome", "PROVIDER_UNAVAILABLE"));
@@ -212,7 +213,7 @@ class ReviewJobCompletionServiceTest extends BaseUnitTest {
     @Test
     void shouldCloseAnAdmittedPartialRunWithItsRuntimeNonResultReason() {
         var job = RuntimeReviewTestData.job();
-        job.setStatus(ReviewJobStatus.COMPLETED);
+        ReviewJobFixtures.withStatus(job, ReviewJobStatus.COMPLETED);
         job.setAdmissionAttempt(0);
         job.setAdmissionDigest("proof");
         var capture = new JsonMapper().createObjectNode();
@@ -242,7 +243,7 @@ class ReviewJobCompletionServiceTest extends BaseUnitTest {
     @CsvSource({"INSUFFICIENT_EVIDENCE,READINESS_REFUSED", "WORKSPACE_REFUSED,EVIDENCE_TOO_LARGE"})
     void capturedRefusalClosesAsNotReviewedWithItsOwnReason(String outcome, ReviewStopReason reason) {
         var job = RuntimeReviewTestData.job();
-        job.setStatus(ReviewJobStatus.COMPLETED);
+        ReviewJobFixtures.withStatus(job, ReviewJobStatus.COMPLETED);
         job.setOutput(new JsonMapper().createObjectNode().put("outcome", outcome));
         service(job, ReviewKind.ITEM).tick();
         var completion = ArgumentCaptor.forClass(ReviewCompletion.class);

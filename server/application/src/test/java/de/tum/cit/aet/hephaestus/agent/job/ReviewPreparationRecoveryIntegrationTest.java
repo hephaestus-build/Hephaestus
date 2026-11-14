@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.testconfig.ReviewJobFixtures;
 import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceFolderPersonDataCatalog;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenIssuer;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
@@ -356,7 +357,7 @@ class ReviewPreparationRecoveryIntegrationTest extends BaseIntegrationTest {
         var workspace = workspaces.saveAndFlush(WorkspaceTestFixtures.activeWorkspace(slug));
         var job = new ReviewJob();
         RuntimeJobTestData.initialize(job, workspace.getId());
-        job.setStatus(ReviewJobStatus.RUNNING);
+        ReviewJobFixtures.withStatus(job, ReviewJobStatus.RUNNING);
         job.setStartedAt(Instant.now());
         job.setConfigSnapshot(snapshot().toJson(new JsonMapper()));
         job.prePersist();

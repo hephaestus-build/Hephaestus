@@ -39,7 +39,6 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewMethod;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewModelBindings;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewOrigin;
-import de.tum.cit.aet.hephaestus.practices.spi.ReviewPracticeStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewRequest;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewRequested;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewRuntimeQuery;
@@ -470,10 +469,7 @@ public class ReviewServiceImpl implements ReviewService {
                         .build());
                 assignment.setItemsListed(1);
                 assignment.setListingComplete(true);
-                if (reason != null) {
-                    assignment.setStatus(ReviewPracticeStatus.WITHHELD);
-                    assignment.setReason(reason);
-                }
+                if (reason != null) assignment.withhold(reason);
             }
         }
         if (request.kind() == ReviewKind.ITEM

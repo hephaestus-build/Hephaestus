@@ -10,6 +10,7 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.testconfig.ReviewJobFixtures;
 import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceFolderPersonDataCatalog;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenIssuer;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
@@ -104,7 +105,7 @@ class ReviewPublishedPreparationTest extends BaseUnitTest {
     @BeforeEach
     void prepareFrozenSnapshot() throws Exception {
         job.setWorkspaceId(KEY.workspaceId());
-        job.setStatus(ReviewJobStatus.RUNNING);
+        ReviewJobFixtures.withStatus(job, ReviewJobStatus.RUNNING);
         job.setRunId(UUID.randomUUID());
         fence = new AgentRunFence(job.getRunId(), job.getWorkspaceId(), 1);
         var source = Files.createDirectories(root.resolve("source"));

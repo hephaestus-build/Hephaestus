@@ -12,6 +12,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.testconfig.ReviewJobFixtures;
 import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceErasureNotifications;
 import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceFolderLease;
 import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceFolderPersonDataCatalog;
@@ -188,7 +189,7 @@ class JobEvidenceFilesTest extends BaseUnitTest {
         var files = new JobEvidenceFiles(
                 new FabricLayout(root.toString()), jobs, clock, personCopies(), mock(AttemptInputs.class));
         var job = job();
-        job.setStatus(ReviewJobStatus.RUNNING);
+        ReviewJobFixtures.withStatus(job, ReviewJobStatus.RUNNING);
         when(jobs.findByIdAndWorkspaceId(job.getId(), 1L)).thenReturn(Optional.of(job));
         byte[] bytes = "verified quote".getBytes(StandardCharsets.UTF_8);
         String sha = ProvenanceDigest.sha256Hex(bytes);
@@ -215,9 +216,9 @@ class JobEvidenceFilesTest extends BaseUnitTest {
         byte[] bytes = "evidence".getBytes(StandardCharsets.UTF_8);
         String sha = ProvenanceDigest.sha256Hex(bytes);
         var running = job();
-        running.setStatus(ReviewJobStatus.RUNNING);
+        ReviewJobFixtures.withStatus(running, ReviewJobStatus.RUNNING);
         var finished = job();
-        finished.setStatus(ReviewJobStatus.FAILED);
+        ReviewJobFixtures.withStatus(finished, ReviewJobStatus.FAILED);
         var unknown = job();
         when(jobs.findByIdAndWorkspaceId(running.getId(), 1L)).thenReturn(Optional.of(running));
         when(jobs.findByIdAndWorkspaceId(finished.getId(), 1L)).thenReturn(Optional.of(finished));
@@ -409,7 +410,7 @@ class JobEvidenceFilesTest extends BaseUnitTest {
         var files = new JobEvidenceFiles(
                 new FabricLayout(root.toString()), jobs, clock, personCopies(), mock(AttemptInputs.class));
         var job = job();
-        job.setStatus(ReviewJobStatus.RUNNING);
+        ReviewJobFixtures.withStatus(job, ReviewJobStatus.RUNNING);
         when(jobs.findByIdAndWorkspaceId(job.getId(), 1L)).thenReturn(Optional.of(job));
         byte[] bytes = "source".getBytes(StandardCharsets.UTF_8);
         String sha = ProvenanceDigest.sha256Hex(bytes);
@@ -425,7 +426,7 @@ class JobEvidenceFilesTest extends BaseUnitTest {
                     mock(AttemptInputs.class));
             later.cleanEndedAttempts();
             assertThat(read(files, job, "inputs/source", sha)).contains(bytes);
-            job.setStatus(ReviewJobStatus.CANCELLED);
+            ReviewJobFixtures.withStatus(job, ReviewJobStatus.CANCELLED);
             later.cleanEndedAttempts();
             assertThat(read(files, job, "inputs/source", sha)).isEmpty();
             verify(jobs)
@@ -442,7 +443,7 @@ class JobEvidenceFilesTest extends BaseUnitTest {
         var job = job();
         job.setAdmissionAttempt(job.getAttempt());
         job.setAdmissionDigest("a".repeat(64));
-        job.setStatus(ReviewJobStatus.COMPLETED);
+        ReviewJobFixtures.withStatus(job, ReviewJobStatus.COMPLETED);
 
         when(jobs.findByIdAndWorkspaceId(job.getId(), 1L)).thenReturn(Optional.of(job));
         byte[] bytes = "source".getBytes(StandardCharsets.UTF_8);
@@ -466,7 +467,7 @@ class JobEvidenceFilesTest extends BaseUnitTest {
         var layout = new FabricLayout(root.toString());
         var files = new JobEvidenceFiles(layout, jobs, clock, personCopies(), mock(AttemptInputs.class));
         var job = job();
-        job.setStatus(ReviewJobStatus.FAILED);
+        ReviewJobFixtures.withStatus(job, ReviewJobStatus.FAILED);
         when(jobs.findByIdAndWorkspaceId(job.getId(), 1L)).thenReturn(Optional.of(job));
         Path parent = layout.jobsRoot().resolve("1").resolve(job.getId().toString());
         Files.createDirectories(parent);
@@ -595,7 +596,7 @@ class JobEvidenceFilesTest extends BaseUnitTest {
         String sha = ProvenanceDigest.sha256Hex(bytes);
         var ended = endedAttempt(preparing, bytes);
         var running = job();
-        running.setStatus(ReviewJobStatus.RUNNING);
+        ReviewJobFixtures.withStatus(running, ReviewJobStatus.RUNNING);
         when(jobs.findByIdAndWorkspaceId(running.getId(), 1L)).thenReturn(Optional.of(running));
         var later = new JobEvidenceFiles(
                 layout, jobs, Clock.offset(clock, Duration.ofHours(1)), personCopies(), mock(AttemptInputs.class));
@@ -671,12 +672,12 @@ class JobEvidenceFilesTest extends BaseUnitTest {
     /** An attempt whose job failed after its runtime released the inputs, so only a sweep removes its folder. */
     private ReviewJob endedAttempt(JobEvidenceFiles files, byte[] bytes) {
         var ended = job();
-        ended.setStatus(ReviewJobStatus.RUNNING);
+        ReviewJobFixtures.withStatus(ended, ReviewJobStatus.RUNNING);
         when(jobs.findByIdAndWorkspaceId(ended.getId(), 1L)).thenReturn(Optional.of(ended));
         PreparedJobInputsFixtures.prepare(
                         files, ended, PreparedJobInputsFixtures.filesOnly(Map.of("context/quote", bytes)))
                 .close();
-        ended.setStatus(ReviewJobStatus.FAILED);
+        ReviewJobFixtures.withStatus(ended, ReviewJobStatus.FAILED);
         assertThat(read(files, ended, "context/quote", ProvenanceDigest.sha256Hex(bytes)))
                 .contains(bytes);
         return ended;
@@ -768,7 +769,7 @@ class JobEvidenceFilesTest extends BaseUnitTest {
         var job = job();
         job.setAdmissionAttempt(job.getAttempt());
         job.setAdmissionDigest("a".repeat(64));
-        job.setStatus(ReviewJobStatus.RUNNING);
+        ReviewJobFixtures.withStatus(job, ReviewJobStatus.RUNNING);
         when(jobs.findByIdAndWorkspaceId(job.getId(), 1L)).thenReturn(Optional.of(job));
         byte[] bytes = "verified quote".getBytes(StandardCharsets.UTF_8);
         String sha = ProvenanceDigest.sha256Hex(bytes);
@@ -810,7 +811,7 @@ class JobEvidenceFilesTest extends BaseUnitTest {
         var job = job();
         job.setAdmissionAttempt(job.getAttempt());
         job.setAdmissionDigest("a".repeat(64));
-        job.setStatus(ReviewJobStatus.RUNNING);
+        ReviewJobFixtures.withStatus(job, ReviewJobStatus.RUNNING);
         byte[] bytes = "verified quote".getBytes(StandardCharsets.UTF_8);
         String sha = ProvenanceDigest.sha256Hex(bytes);
         var prepared = PreparedJobInputsFixtures.prepare(
@@ -899,7 +900,7 @@ class JobEvidenceFilesTest extends BaseUnitTest {
     /** A job as the executor launches it: RUNNING as attempt 0 of this worker; later changes show in both reads. */
     private ReviewJob launched() {
         var job = job();
-        job.setStatus(ReviewJobStatus.RUNNING);
+        ReviewJobFixtures.withStatus(job, ReviewJobStatus.RUNNING);
         when(jobs.findById(job.getId())).thenReturn(Optional.of(job));
         when(jobs.findByIdAndWorkspaceId(job.getId(), 1L)).thenReturn(Optional.of(job));
         return job;
@@ -928,7 +929,7 @@ class JobEvidenceFilesTest extends BaseUnitTest {
         var files = new JobEvidenceFiles(layout, jobs, clock, copies, mock(AttemptInputs.class));
         var upload = files.bind(job.getId(), 0, IMAGE);
         // Cancelled while it ran: the upload that still arrived is the attempt's.
-        job.setStatus(ReviewJobStatus.CANCELLED);
+        ReviewJobFixtures.withStatus(job, ReviewJobStatus.CANCELLED);
 
         var lease = runtimeLease(layout, job);
         try (lease) {
@@ -1141,7 +1142,7 @@ class JobEvidenceFilesTest extends BaseUnitTest {
                     .bind(job.getId(), 0, IMAGE)
                     .accept(TRACED_UPLOAD);
         }
-        job.setStatus(ReviewJobStatus.COMPLETED);
+        ReviewJobFixtures.withStatus(job, ReviewJobStatus.COMPLETED);
         Path trace = traceOf(layout, job, 0);
 
         new JobEvidenceFiles(layout, jobs, Clock.offset(clock, Duration.ofHours(23)), copies, mock(AttemptInputs.class))
@@ -1167,7 +1168,7 @@ class JobEvidenceFilesTest extends BaseUnitTest {
                     .bind(job.getId(), 0, IMAGE)
                     .accept(TRACED_UPLOAD);
         }
-        job.setStatus(ReviewJobStatus.COMPLETED);
+        ReviewJobFixtures.withStatus(job, ReviewJobStatus.COMPLETED);
         Path trace = traceOf(layout, job, 0);
         var record = new JsonMapper().readTree(Files.readString(trace.resolve("record.json")));
         assertThat(record.path("retention").asString()).isEqualTo("NATIVE_TRANSCRIPT");

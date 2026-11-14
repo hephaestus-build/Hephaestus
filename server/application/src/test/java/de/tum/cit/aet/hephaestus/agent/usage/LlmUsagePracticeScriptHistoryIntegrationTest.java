@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.usage;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import de.tum.cit.aet.hephaestus.testconfig.ReviewJobFixtures;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.RuntimeJobTestData;
@@ -128,7 +129,7 @@ class LlmUsagePracticeScriptHistoryIntegrationTest extends AbstractWorkspaceInte
         ReviewJob job = new ReviewJob();
         RuntimeJobTestData.initialize(job, workspace.getId());
 
-        job.setStatus(ReviewJobStatus.RUNNING);
+        ReviewJobFixtures.withStatus(job, ReviewJobStatus.RUNNING);
         job.setConfigSnapshot(objectMapper.valueToTree(Map.of("model", "test")));
         return jobRepository.saveAndFlush(RuntimeJobTestData.persistParent(jdbc, job));
     }

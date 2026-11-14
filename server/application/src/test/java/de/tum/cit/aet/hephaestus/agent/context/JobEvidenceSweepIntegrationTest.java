@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.context;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import de.tum.cit.aet.hephaestus.testconfig.ReviewJobFixtures;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.RuntimeJobTestData;
@@ -183,7 +184,7 @@ class JobEvidenceSweepIntegrationTest extends BaseIntegrationTest {
     private ReviewJob job(ReviewJobStatus status) {
         var job = new ReviewJob();
         RuntimeJobTestData.initialize(job, workspace.getId());
-        job.setStatus(status);
+        ReviewJobFixtures.withStatus(job, status);
         job.setConfigSnapshot(mapper.createObjectNode());
         job.setStartedAt(Instant.now());
         if (status != ReviewJobStatus.RUNNING) job.setCompletedAt(Instant.now());

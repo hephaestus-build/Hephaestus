@@ -9,6 +9,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.testconfig.ReviewJobFixtures;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptJwt;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
@@ -64,7 +65,7 @@ class ProxyRoutingServiceTest extends BaseUnitTest {
     void setup() {
         job.setId(UUID.randomUUID());
         RuntimeJobTestData.initialize(job, 7L);
-        job.setStatus(ReviewJobStatus.RUNNING);
+        ReviewJobFixtures.withStatus(job, ReviewJobStatus.RUNNING);
         RuntimeJobTestData.attempt(job, 2);
         job.setRunId(LEASE);
         var snapshot = new ConfigSnapshot(

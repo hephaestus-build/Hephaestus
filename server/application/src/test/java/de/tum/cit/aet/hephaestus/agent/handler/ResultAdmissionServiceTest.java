@@ -15,6 +15,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.testconfig.ReviewJobFixtures;
 import de.tum.cit.aet.hephaestus.agent.context.HistoryCopies;
 import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.PublicFeedbackSnapshot;
@@ -160,7 +161,7 @@ class ResultAdmissionServiceTest extends BaseUnitTest {
                 runs);
         lenient().when(jobs.databaseClock()).thenAnswer(call -> Instant.now());
         lenient().when(members.endedPractices(anyLong(), any(), any())).thenReturn(Set.of(31L));
-        job.setStatus(ReviewJobStatus.RUNNING);
+        ReviewJobFixtures.withStatus(job, ReviewJobStatus.RUNNING);
         job.setRunId(LEASE);
         job.setCapture(mapper.createObjectNode());
         when(jobs.findByIdAndWorkspaceId(job.getId(), 1L)).thenReturn(Optional.of(job));

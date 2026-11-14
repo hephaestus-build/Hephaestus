@@ -9,6 +9,7 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.testconfig.ReviewJobFixtures;
 import de.tum.cit.aet.hephaestus.agent.context.HistoryCopies;
 import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.providers.ReviewHistoryContentSource;
@@ -1079,7 +1080,7 @@ class FeedbackPublicationContextIntegrationTest extends AbstractFeedbackDelivery
                         reviewId,
                         RuntimeReviewTestData.assignment(developerId, null).id().practiceId(),
                         itemId))));
-        job.setStatus(ReviewJobStatus.RUNNING);
+        ReviewJobFixtures.withStatus(job, ReviewJobStatus.RUNNING);
         job.setStartedAt(AT);
         job.setAdmissionAttempt(0);
         job.setAdmissionDigest("a".repeat(64));

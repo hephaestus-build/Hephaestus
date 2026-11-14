@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.practice.live;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import de.tum.cit.aet.hephaestus.testconfig.ReviewJobFixtures;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenIssuer;
 import de.tum.cit.aet.hephaestus.agent.catalog.CreateWorkspaceLlmConnectionRequestDTO;
 import de.tum.cit.aet.hephaestus.agent.catalog.CreateWorkspaceLlmModelRequestDTO;
@@ -676,7 +677,7 @@ class PracticeScriptLiveLlmTest extends AbstractWorkspaceIntegrationTest {
         var priced = job.getConfigSnapshot();
         job = jobRepository.findByIdAndWorkspaceId(jobId, item.workspaceId()).orElseThrow();
         job.setConfigSnapshot(priced);
-        job.setStatus(ReviewJobStatus.RUNNING);
+        ReviewJobFixtures.withStatus(job, ReviewJobStatus.RUNNING);
         // No worker heartbeat renews this hand-built attempt, so its lease outlasts the whole live run.
         job.setStartedAt(Instant.now());
         job.setExecutionStartedAt(Instant.now());

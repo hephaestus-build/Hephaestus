@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
 import static org.assertj.core.api.Assertions.within;
 
+import de.tum.cit.aet.hephaestus.testconfig.ReviewJobFixtures;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmConnection;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmConnectionRepository;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModel;
@@ -263,7 +264,7 @@ class LlmUsageLedgerIntegrationTest extends AbstractWorkspaceIntegrationTest {
         ReviewJob job = new ReviewJob();
         RuntimeJobTestData.initialize(job, workspace.getId());
 
-        job.setStatus(ReviewJobStatus.QUEUED);
+        ReviewJobFixtures.withStatus(job, ReviewJobStatus.QUEUED);
         job.setConfigSnapshot(new ObjectMapper().createObjectNode());
         job.prePersist();
         ReviewJob saved = jobRepository.saveAndFlush(RuntimeJobTestData.persistParent(jdbc, job));
@@ -631,7 +632,7 @@ class LlmUsageLedgerIntegrationTest extends AbstractWorkspaceIntegrationTest {
             Workspace workspace = setupWorkspace("hold-running");
             Instant availableAt = Instant.now().plus(Duration.ofHours(1));
             ReviewJob running = queuedJob(workspace, availableAt, AgentRunHold.BUDGET);
-            running.setStatus(ReviewJobStatus.RUNNING);
+            ReviewJobFixtures.withStatus(running, ReviewJobStatus.RUNNING);
             RuntimeJobTestData.save(transactionTemplate, jdbc, jobRepository, running);
 
             llmUsageService.updateOwnProviderBudget(workspace.getId(), new BigDecimal("50.00"));

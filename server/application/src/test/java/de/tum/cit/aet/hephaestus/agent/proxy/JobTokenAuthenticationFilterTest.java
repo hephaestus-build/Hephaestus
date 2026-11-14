@@ -8,6 +8,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.testconfig.ReviewJobFixtures;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptJwt;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenVerifier;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
@@ -262,7 +263,7 @@ class JobTokenAuthenticationFilterTest extends BaseUnitTest {
         var job = new ReviewJob();
         job.setId(UUID.randomUUID());
         RuntimeJobTestData.initialize(job, 7L);
-        job.setStatus(ReviewJobStatus.RUNNING);
+        ReviewJobFixtures.withStatus(job, ReviewJobStatus.RUNNING);
         RuntimeJobTestData.attempt(job, 3);
         return job;
     }

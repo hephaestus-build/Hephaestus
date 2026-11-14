@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.job;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import de.tum.cit.aet.hephaestus.testconfig.ReviewJobFixtures;
 import de.tum.cit.aet.hephaestus.practices.spi.ProcessingStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
@@ -178,7 +179,7 @@ class ReviewJobRetentionIntegrationTest extends BaseIntegrationTest {
         ReviewJob job = new ReviewJob();
         RuntimeJobTestData.initialize(job, workspace.getId());
 
-        job.setStatus(status);
+        ReviewJobFixtures.withStatus(job, status);
         if (status == ReviewJobStatus.COMPLETED) {
             job.setProcessingStatus(ProcessingStatus.DONE);
             job.setCompletedAt(Instant.now().minus(Duration.ofDays(100)));

@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.testconfig.ReviewJobFixtures;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenIssuer;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmConnection;
@@ -1313,7 +1314,7 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
     private void heldBy(UUID jobId, AgentRunHold hold) {
         transactionTemplate.executeWithoutResult(status -> {
             ReviewJob job = jobRepository.findById(jobId).orElseThrow();
-            job.setStatus(ReviewJobStatus.QUEUED);
+            ReviewJobFixtures.withStatus(job, ReviewJobStatus.QUEUED);
             jobRepository.saveAndFlush(RuntimeJobTestData.persistParent(jdbc, job));
             RuntimeJobTestData.hold(jdbc, job, hold);
         });
@@ -1357,7 +1358,7 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
         owned.computeIfAbsent(workerId, ignored -> new ArrayList<>()).add(jobId);
         transactionTemplate.executeWithoutResult(status -> {
             ReviewJob job = jobRepository.findById(jobId).orElseThrow();
-            job.setStatus(ReviewJobStatus.RUNNING);
+            ReviewJobFixtures.withStatus(job, ReviewJobStatus.RUNNING);
             job.setStartedAt(Instant.now());
             jobRepository.saveAndFlush(RuntimeJobTestData.persistParent(jdbc, job));
         });
@@ -1602,7 +1603,7 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
         ReviewJob job = new ReviewJob();
         RuntimeJobTestData.initialize(job, workspace.getId());
 
-        job.setStatus(ReviewJobStatus.RUNNING);
+        ReviewJobFixtures.withStatus(job, ReviewJobStatus.RUNNING);
         job.setConfigSnapshot(new ConfigSnapshot(
                         ConfigSnapshot.SCHEMA_VERSION,
                         new FrozenModel(

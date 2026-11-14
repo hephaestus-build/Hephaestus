@@ -9,6 +9,7 @@ import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.testconfig.ReviewJobFixtures;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewayProperties;
@@ -186,7 +187,7 @@ class ScanCallGuardTest extends BaseUnitTest {
                 .when(leases)
                 .release(any(UUID.class), anyLong(), any(UUID.class));
         lenient().when(budget.callCap(ArgumentMatchers.anyInt())).thenReturn(36L);
-        job.setStatus(ReviewJobStatus.RUNNING);
+        ReviewJobFixtures.withStatus(job, ReviewJobStatus.RUNNING);
         job.setRunId(LEASE);
         var price = new LlmPriceSnapshot(
                 UsageFundingSource.INSTANCE,

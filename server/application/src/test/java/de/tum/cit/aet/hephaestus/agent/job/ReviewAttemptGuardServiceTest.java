@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.testconfig.ReviewJobFixtures;
 import de.tum.cit.aet.hephaestus.agent.adapter.ReviewAttemptGuardService;
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
@@ -36,7 +37,7 @@ class ReviewAttemptGuardServiceTest extends BaseUnitTest {
         var job = new ReviewJob();
         job.setId(JOB_ID);
         job.setWorkspaceId(WORKSPACE_ID);
-        job.setStatus(ReviewJobStatus.RUNNING);
+        ReviewJobFixtures.withStatus(job, ReviewJobStatus.RUNNING);
         RuntimeJobTestData.attempt(job, ATTEMPT);
         job.setRunId(UUID.randomUUID());
         when(jobs.findByIdAndWorkspaceIdForUpdate(JOB_ID, WORKSPACE_ID)).thenReturn(Optional.of(job));
@@ -53,7 +54,7 @@ class ReviewAttemptGuardServiceTest extends BaseUnitTest {
     @ParameterizedTest
     @EnumSource(value = ReviewJobStatus.class, names = "RUNNING", mode = EnumSource.Mode.EXCLUDE)
     void shouldRejectAnAttemptOutsideRunningState(ReviewJobStatus status) {
-        runningJob().setStatus(status);
+        ReviewJobFixtures.withStatus(runningJob(), status);
 
         assertThatThrownBy(() -> guard.requireOwner(WORKSPACE_ID, JOB_ID, ATTEMPT))
                 .isInstanceOf(ResultAdmissionService.StaleAttemptException.class);

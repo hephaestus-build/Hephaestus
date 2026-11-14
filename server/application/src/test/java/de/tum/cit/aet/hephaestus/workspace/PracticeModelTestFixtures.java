@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.workspace;
 
+import de.tum.cit.aet.hephaestus.testconfig.ReviewJobFixtures;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobInput;
 import de.tum.cit.aet.hephaestus.agent.job.RuntimeJobTestData;
@@ -276,8 +277,8 @@ public class PracticeModelTestFixtures {
         }
         frozen.judge(result.getId());
         frozen.setAttemptedAt(Instant.now());
-        assignment.setStatus(ReviewPracticeStatus.DONE);
-        work.job().setStatus(ReviewJobStatus.COMPLETED);
+        assignment.finish();
+        ReviewJobFixtures.withStatus(work.job(), ReviewJobStatus.COMPLETED);
         work.job().setProcessingStatus(ProcessingStatus.DONE);
         work.job().setCompletedAt(Instant.now());
         manager.merge(work.job());

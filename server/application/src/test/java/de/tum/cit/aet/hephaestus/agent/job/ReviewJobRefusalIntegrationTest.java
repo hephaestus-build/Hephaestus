@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.job;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import de.tum.cit.aet.hephaestus.testconfig.ReviewJobFixtures;
 import de.tum.cit.aet.hephaestus.practices.spi.ProcessingStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
@@ -42,7 +43,7 @@ class ReviewJobRefusalIntegrationTest extends BaseIntegrationTest {
                         .save(TestEntities.activeWorkspace("execution-refusal"))
                         .getId());
 
-        job.setStatus(ReviewJobStatus.RUNNING);
+        ReviewJobFixtures.withStatus(job, ReviewJobStatus.RUNNING);
         job.setConfigSnapshot(mapper.createObjectNode());
         var id = jobs.saveAndFlush(RuntimeJobTestData.persistParent(jdbc, job)).getId();
         var output = mapper.createObjectNode().put("outcome", RefusalOutcome.WORKSPACE_REFUSED.name());

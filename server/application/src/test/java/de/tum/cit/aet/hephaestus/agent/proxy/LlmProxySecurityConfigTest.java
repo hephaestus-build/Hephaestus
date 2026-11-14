@@ -10,6 +10,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.testconfig.ReviewJobFixtures;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptJwt;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenInvalidException;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenVerifier;
@@ -789,7 +790,7 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
         ReviewJob job = new ReviewJob();
         job.setId(UUID.randomUUID());
         RuntimeJobTestData.initialize(job, workspace.getId());
-        job.setStatus(ReviewJobStatus.RUNNING);
+        ReviewJobFixtures.withStatus(job, ReviewJobStatus.RUNNING);
         job.setRunId(LEASE);
         RuntimeJobTestData.attempt(job, attempt);
         // Only a credential of this attempt's own lease holds it.

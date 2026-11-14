@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.adapter;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 
+import de.tum.cit.aet.hephaestus.testconfig.ReviewJobFixtures;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.RuntimeJobTestData;
@@ -104,7 +105,7 @@ class EvidenceReceiptRetentionIntegrationTest extends AbstractWorkspaceIntegrati
     private ReviewJob job(Workspace workspace) {
         ReviewJob job = new ReviewJob();
         RuntimeJobTestData.initialize(job, workspace.getId());
-        job.setStatus(ReviewJobStatus.COMPLETED);
+        ReviewJobFixtures.withStatus(job, ReviewJobStatus.COMPLETED);
         job.setCompletedAt(Instant.now());
         job.setConfigSnapshot(new ObjectMapper().createObjectNode());
         job.prePersist();

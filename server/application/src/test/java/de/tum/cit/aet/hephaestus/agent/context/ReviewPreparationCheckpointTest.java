@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.testconfig.ReviewJobFixtures;
 import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceFolderPersonDataCatalog;
 import de.tum.cit.aet.hephaestus.agent.handler.RuntimeReviewTestData;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedJobInputs;
@@ -51,7 +52,7 @@ class ReviewPreparationCheckpointTest extends BaseUnitTest {
     private ReviewJob job() {
         var job = RuntimeReviewTestData.job();
         job.setRunId(UUID.randomUUID());
-        job.setStatus(ReviewJobStatus.RUNNING);
+        ReviewJobFixtures.withStatus(job, ReviewJobStatus.RUNNING);
         when(jobs.findByIdAndWorkspaceId(job.getId(), job.getWorkspaceId())).thenReturn(Optional.of(job));
         return job;
     }
@@ -205,7 +206,7 @@ class ReviewPreparationCheckpointTest extends BaseUnitTest {
         var files = files();
         try (var restored = files.resume(job)) {
             Path index = Objects.requireNonNull(restored.filesOnDisk().get("INDEX.json"));
-            job.setStatus(ReviewJobStatus.FAILED);
+            ReviewJobFixtures.withStatus(job, ReviewJobStatus.FAILED);
 
             assertThat(files.cleanEndedAttempts()).isZero();
 

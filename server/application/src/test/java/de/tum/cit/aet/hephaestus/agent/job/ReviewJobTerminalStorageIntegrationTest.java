@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.testconfig.ReviewJobFixtures;
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService.AdmissionIdentity;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunStopReason;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
@@ -62,7 +63,7 @@ class ReviewJobTerminalStorageIntegrationTest extends BaseIntegrationTest {
         var job = new ReviewJob();
         RuntimeJobTestData.initialize(job, workspace.getId());
         job.setConfigSnapshot(new JsonMapper().createObjectNode());
-        job.setStatus(ReviewJobStatus.RUNNING);
+        ReviewJobFixtures.withStatus(job, ReviewJobStatus.RUNNING);
         job.setStartedAt(Instant.now());
         job.prePersist();
         return jobs.saveAndFlush(RuntimeJobTestData.persistParent(jdbc, job));

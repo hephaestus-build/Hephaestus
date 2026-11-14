@@ -15,6 +15,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.testconfig.ReviewJobFixtures;
 import de.tum.cit.aet.hephaestus.agent.AgentCapacityProperties;
 import de.tum.cit.aet.hephaestus.agent.AgentWorkspacePurgeAdapter;
 import de.tum.cit.aet.hephaestus.agent.catalog.DataHandlingFacts;
@@ -913,7 +914,7 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
         var busyWorkspace = workspaces.saveAndFlush(TestEntities.activeWorkspace("busy-pool-" + UUID.randomUUID()));
         var runningReview = new ReviewJob();
         RuntimeJobTestData.initialize(runningReview, busyWorkspace.getId());
-        runningReview.setStatus(ReviewJobStatus.RUNNING);
+        ReviewJobFixtures.withStatus(runningReview, ReviewJobStatus.RUNNING);
         runningReview.setConfigSnapshot(job.getConfigSnapshot());
         runningReview.setStartedAt(Instant.now());
         runningReview = jobs.saveAndFlush(RuntimeJobTestData.persistParent(jdbc, runningReview));

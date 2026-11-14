@@ -7,6 +7,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.sun.management.ThreadMXBean;
+import de.tum.cit.aet.hephaestus.testconfig.ReviewJobFixtures;
 import de.tum.cit.aet.hephaestus.agent.LlmProperties;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptKeyFixtures;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptSigningKey;
@@ -1838,7 +1839,7 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
         ReviewJob job = new ReviewJob();
         RuntimeJobTestData.initialize(job, workspace.getId());
 
-        job.setStatus(ReviewJobStatus.RUNNING);
+        ReviewJobFixtures.withStatus(job, ReviewJobStatus.RUNNING);
         job.setConfigSnapshot(snapshot);
         return jobRepository.save(RuntimeJobTestData.persistParent(jdbc, job));
     }
@@ -1884,7 +1885,7 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 600);
         ReviewJob job = new ReviewJob();
         RuntimeJobTestData.initialize(job, workspace.getId());
-        job.setStatus(ReviewJobStatus.RUNNING);
+        ReviewJobFixtures.withStatus(job, ReviewJobStatus.RUNNING);
         job.setConfigSnapshot(snapshot.toJson(objectMapper));
         return jobRepository.saveAndFlush(RuntimeJobTestData.persistParent(jdbc, job));
     }
