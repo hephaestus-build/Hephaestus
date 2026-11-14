@@ -1,4 +1,5 @@
 import { GripVertical, MoreHorizontal } from "lucide-react";
+import { useSpinDelay } from "spin-delay";
 
 import type { CatalogGroup, CatalogPractice } from "@/api/types.gen";
 import {
@@ -410,14 +411,16 @@ function PracticeDragPreview({ entry }: { entry: TreePractice }) {
 
 /**
  * The row's save, said once. The live region mounts with the row and only its text changes, so a
- * screen reader announces "Saving …" when a save starts (ARIA22). The spinner is only seen.
+ * screen reader announces "Saving …" when a save starts (ARIA22). A save that ends within a second
+ * shows and says nothing (`webapp/DESIGN.md` § Loading and errors). The spinner is only seen.
  */
 function SavingStatus({ name, pending }: { name: string; pending: boolean }) {
+	const showSaving = useSpinDelay(pending, { delay: 1000, minDuration: 500 });
 	return (
 		<>
-			{pending && <Spinner className="size-4 text-muted-foreground" />}
+			{showSaving && <Spinner className="size-4 text-muted-foreground" />}
 			<span role="status" className="sr-only">
-				{pending ? `Saving ${name}…` : ""}
+				{showSaving ? `Saving ${name}…` : ""}
 			</span>
 		</>
 	);

@@ -2,6 +2,7 @@ import type { AnchorHTMLAttributes, ImgHTMLAttributes } from "react";
 import { Streamdown } from "streamdown";
 
 import { MarkdownCode } from "@/components/common/MarkdownCode";
+import { OutboundMark } from "@/components/common/outbound-link";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
 import { isSafeLegalHref, isSafeLegalImageSrc, type ResolvedLegalContent } from "@/lib/legal";
@@ -25,6 +26,7 @@ function SafeAnchor({ href, children, className }: AnchorHTMLAttributes<HTMLAnch
 			target={isExternal ? "_blank" : undefined}
 		>
 			{children}
+			{isExternal && <OutboundMark />}
 		</a>
 	);
 }

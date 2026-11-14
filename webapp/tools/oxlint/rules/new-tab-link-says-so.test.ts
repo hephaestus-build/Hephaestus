@@ -11,6 +11,8 @@ ruleTester.run("new-tab-link-says-so", newTabLinkSaysSo, {
 		// A slot inside a slot renders the outer owner's children.
 		'const p = <Trigger render={<Badge render={<a href={url} target="_blank" />} />}>Docs<OutboundMark /></Trigger>;',
 		'const r = <Badge render={href ? <a href={href} target="_blank" /> : undefined}>Docs<OutboundMark /></Badge>;',
+		// A condition may open the new tab, and the mark follows the same condition.
+		'const t = <a href={href} target={external ? "_blank" : undefined}>{label}{external && <OutboundMark />}</a>;',
 		// A label replaces the content, so it carries the words itself.
 		'const l = <a href={url} target="_blank" aria-label="TUM (opens in a new tab)"><img alt="" /><OutboundMark /></a>;',
 		`const m = <a href={url} target="_blank" aria-label={\`View \${branch} (opens in a new tab)\`}><OutboundMark /></a>;`,
@@ -45,6 +47,10 @@ ruleTester.run("new-tab-link-says-so", newTabLinkSaysSo, {
 		},
 		{
 			code: 'const s = <Badge render={href ? <a href={href} target="_blank" /> : undefined}>Docs</Badge>;',
+			errors: [{ messageId: "silent" }],
+		},
+		{
+			code: 'const u = <a href={href} target={external ? "_blank" : undefined}>{label}</a>;',
 			errors: [{ messageId: "silent" }],
 		},
 		{

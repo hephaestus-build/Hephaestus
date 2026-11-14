@@ -1,4 +1,4 @@
-import { ArrowRight, BookOpen } from "lucide-react";
+import { BookOpen } from "lucide-react";
 import { LandingSignInCta } from "@/components/auth/LandingSignInCta";
 import { OutboundMark } from "@/components/common/outbound-link";
 import { buttonVariants } from "@/components/ui/button";
@@ -50,7 +50,6 @@ export function LandingCtaSection({ onSignIn }: LandingCtaSectionProps) {
 							<BookOpen aria-hidden="true" />
 							<span>Read the user guide</span>
 							<OutboundMark />
-							<ArrowRight aria-hidden="true" />
 						</a>
 					</div>
 					<p className="mt-5 text-sm text-muted-foreground">

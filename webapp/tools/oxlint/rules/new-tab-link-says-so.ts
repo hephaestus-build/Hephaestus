@@ -3,22 +3,35 @@ import { defineRule, type ESTree } from "@oxlint/plugins";
 /** The component that draws the outbound icon and speaks "(opens in a new tab)". */
 const MARK = "OutboundMark";
 
-function isBlankTarget(attribute: ESTree.JSXAttribute | ESTree.JSXSpreadAttribute): boolean {
-	if (
-		attribute.type !== "JSXAttribute" ||
-		attribute.name.type !== "JSXIdentifier" ||
-		attribute.name.name !== "target"
-	) {
+/** Whether `"_blank"` is written anywhere in the value, such as in either branch of a condition. */
+function mentionsBlank(node: unknown): boolean {
+	if (typeof node !== "object" || node === null) {
 		return false;
 	}
-	const { value } = attribute;
-	if (value?.type === "Literal") {
-		return value.value === "_blank";
+	if (Array.isArray(node)) {
+		return node.some(mentionsBlank);
 	}
+	const candidate = node as { type?: unknown; value?: unknown };
+	if (candidate.type === "Literal" && candidate.value === "_blank") {
+		return true;
+	}
+	if (
+		candidate.type === "TemplateElement" &&
+		typeof candidate.value === "object" &&
+		candidate.value !== null
+	) {
+		const raw: unknown = Reflect.get(candidate.value, "raw");
+		return typeof raw === "string" && raw.includes("_blank");
+	}
+	return Object.entries(node).some(([key, value]) => key !== "parent" && mentionsBlank(value));
+}
+
+function isBlankTarget(attribute: ESTree.JSXAttribute | ESTree.JSXSpreadAttribute): boolean {
 	return (
-		value?.type === "JSXExpressionContainer" &&
-		value.expression.type === "Literal" &&
-		value.expression.value === "_blank"
+		attribute.type === "JSXAttribute" &&
+		attribute.name.type === "JSXIdentifier" &&
+		attribute.name.name === "target" &&
+		mentionsBlank(attribute.value)
 	);
 }
 
@@ -120,7 +133,7 @@ export const newTabLinkSaysSo = defineRule({
 		type: "problem",
 		docs: {
 			description:
-				'A link that opens a new tab says so twice: the outbound icon for the eye and "(opens in a new tab)" for a screen reader (`webapp/DESIGN.md` § Docs links, WCAG technique G201). `OutboundMark` draws both. `InlineLink external` and `DocLink` add it for you.',
+				'A link that opens a new tab says so twice: the outbound icon for the eye and "(opens in a new tab)" for a screen reader (`webapp/DESIGN.md` § Docs links, WCAG technique G201). `OutboundMark` draws both. `InlineLink external` and `DocLink` add it for you. The rule cannot see a `target` passed in a spread, an `aria-label` held in a variable, an `aria-labelledby`, or a label on a `render=` slot\'s owner.',
 		},
 		messages: {
 			silent:

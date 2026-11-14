@@ -136,15 +136,19 @@ export const SavingIsAnnounced: Story = {
 			canvas.getByRole("switch", { name: "Include Legacy conventions for workspaces" }),
 		);
 
-		const announced = await waitFor(() => {
-			const region = canvas
-				.getAllByRole("status")
-				.find((candidate) => candidate.textContent === "Saving Legacy conventions…");
-			if (region === undefined) {
-				throw new Error("No row announces the save yet");
-			}
-			return region;
-		});
+		const announced = await waitFor(
+			() => {
+				const region = canvas
+					.getAllByRole("status")
+					.find((candidate) => candidate.textContent === "Saving Legacy conventions…");
+				if (region === undefined) {
+					throw new Error("No row announces the save yet");
+				}
+				return region;
+				// The text waits a second, so a quick save says nothing.
+			},
+			{ timeout: 5000 },
+		);
 		await expect(regions).toContain(announced);
 	},
 };
