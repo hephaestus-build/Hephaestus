@@ -4,6 +4,7 @@ import path from "node:path";
 
 import { asRecord, asString, parseJson } from "./lib/json.ts";
 import { migrationGuideSections, renderMigrationGuide } from "./lib/migration-guide.ts";
+import { CAPTURE_LIMIT_BYTES } from "./lib/process.ts";
 import { CHANGELOG_HEADINGS, MIGRATION_HEADINGS, foldUnpublished } from "./lib/release-headings.ts";
 import { compareVersions, parseVersion } from "./lib/release-version.ts";
 
@@ -32,7 +33,10 @@ if (version.endsWith("-rc.0")) {
 // A cut that failed after its Version PR merged burned its number. Its notes belong to the published release that
 // shipped them. Only a later published release proves a number burned, so a cut in progress and a checkout with
 // missing tags fold nothing that a release carries.
-const tags = spawnSync("git", ["tag", "--list", "v*"], { encoding: "utf8" });
+const tags = spawnSync("git", ["tag", "--list", "v*"], {
+	encoding: "utf8",
+	maxBuffer: CAPTURE_LIMIT_BYTES,
+});
 const published = new Set(
 	tags.status === 0
 		? tags.stdout.split("\n").flatMap((tag) => (tag.startsWith("v") ? [tag.slice(1)] : []))
