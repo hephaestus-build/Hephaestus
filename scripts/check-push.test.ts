@@ -10,6 +10,7 @@ import { test, type TestContext } from "node:test";
 
 import {
 	focusedTests,
+	hookTests,
 	frontendCommands,
 	pushScopeReason,
 	pushScopes,
@@ -129,6 +130,18 @@ void test("a source change runs its changed and colocated tests, and resources r
 	assert.ok(extension !== undefined);
 	assert.ok(extension.includes("unit"));
 	assert.ok(!extension.includes("storybook"));
+});
+
+void test("a hook change runs every test that runs a hook as a process", () => {
+	const selected = focusedTests([".vite-hooks/pre-push"]);
+	// These run the hook through Git or directly, so no import ties them to it.
+	for (const file of ["scripts/enable-hooks.test.ts", "scripts/git-environment.test.ts"]) {
+		assert.ok(selected.includes(file), file);
+	}
+	assert.deepEqual(selected, hookTests());
+	assert.ok(
+		!focusedTests(["scripts/reorder-migrations.ts"]).includes("scripts/enable-hooks.test.ts"),
+	);
 });
 
 void test("focused Node tests include changed tests and existing source companions", () => {

@@ -1,6 +1,6 @@
 import { spawn, spawnSync } from "node:child_process";
 import { once } from "node:events";
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -136,8 +136,34 @@ const nativeTest =
 	/^(?:scripts\/.*\.test\.ts|docker\/agents\/.*\.test\.ts|server\/application\/src\/test\/resources\/agent\/[^/]+\.spec\.ts)$/u;
 
 /** Only explicit changed tests and existing source companions; full Node suites remain required. */
+/**
+ * The Node tests that run a Git hook: a test reaches a hook only through its path, Git's hook setting or the hook
+ * installer, and runs it as a process, which no import graph shows. A hook change runs each of them.
+ */
+export function hookTests(cwd = process.cwd()): string[] {
+	const scripts = path.join(cwd, "scripts");
+	if (!existsSync(scripts)) {
+		return [];
+	}
+	return readdirSync(scripts, { recursive: true })
+		.map(String)
+		.filter(
+			(entry) => entry.endsWith(".test.ts") && !entry.split(path.sep).includes("node_modules"),
+		)
+		.map((entry) => path.join("scripts", entry).split(path.sep).join("/"))
+		.filter((file) =>
+			/\.vite-hooks|core\.hooksPath|enable-hooks/u.test(readFileSync(path.join(cwd, file), "utf8")),
+		)
+		.toSorted();
+}
+
 export function focusedTests(paths: string[], cwd = process.cwd()): string[] {
 	const tests = new Set<string>();
+	if (paths.some((file) => file.startsWith(".vite-hooks/"))) {
+		for (const hookTest of hookTests(cwd)) {
+			tests.add(hookTest);
+		}
+	}
 	for (const file of paths) {
 		for (const candidate of [file, file.replace(/\.ts$/u, ".test.ts")]) {
 			if (nativeTest.test(candidate) && existsSync(path.join(cwd, candidate))) {
