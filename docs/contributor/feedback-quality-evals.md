@@ -272,7 +272,7 @@ They detect edits. They do not judge what an edit means: only the [model panel](
 | G2 | The composition set or the claim corpus does not parse. |
 | G3 | A quote check does not match, or an absence check finds its text and the claim label is not `false`. |
 | G4 | A prompt changed, or a new prompt file has no pin. Or a prompt no longer contains a clause that `gate.json` names. |
-| G5 | An automated practice has no Applicability section in its criteria and no Applies when gate. Or a practice's criteria or Applies when changed. |
+| G5 | An automated practice has no Applicability section in its criteria. An Applies when gate or a scan section does not replace it. Or a practice's criteria or Applies when changed. |
 | G6 | A bundled practice script gives other leads than its snapshot in `docker/agents/practice-scripts/corpus/snapshots/`. |
 | G7 | The pinned cases times the calls for each case permit more model calls than the panel's ceiling. |
 
@@ -291,7 +291,7 @@ A text check cannot tell a rule from its reversal, and a new paragraph can overr
 Thus, G4 pins each whole prompt. Any edit to a prompt fails until the pull request pins it again.
 The clause check names a rule that went missing. The panel and the review of the pull request judge what an edit means.
 
-G5 keeps a list of known gaps: automated practices without an Applicability section or an Applies when gate.
+G5 keeps a list of known gaps: automated practices without an Applicability section.
 The check also fails when a listed practice gets one. Then remove it from the list.
 
 G6 runs `docker/agents/practice-scripts/corpus.test.ts`. Each bundled script runs over the authored corpus, without a model.

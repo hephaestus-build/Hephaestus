@@ -169,21 +169,15 @@ export interface CatalogPractice {
 }
 
 /**
- * Where a practice defines its occasion: its Applies when gate and the Applicability section of its
- * criteria. The gate checks that one is there; whether its words are right is the panel's question.
+ * Where a practice defines its occasion for a review: the Applicability section of its criteria. An Applies when gate
+ * only rules out a change that cannot hold the subject, and a scan section covers only a scan, so neither replaces it.
+ * The gate checks that the section is there; whether its words are right is the panel's question.
  */
 export function occasionStatement(practice: CatalogPractice): string {
 	const section = /^## Applicability\n(?<body>[\s\S]*?)(?=^## |(?![\s\S]))/mu.exec(
 		practice.criteria,
 	)?.groups?.body;
-	return [
-		practice.appliesWhen === null || practice.appliesWhen === undefined
-			? ""
-			: JSON.stringify(practice.appliesWhen),
-		words(section ?? ""),
-	]
-		.filter((part) => part !== "")
-		.join("\n");
+	return words(section ?? "");
 }
 
 /** A practice's pin: its whole criteria and Applies when, so an edit to either needs a new pin. */
@@ -439,7 +433,7 @@ function occasions(gate: GateConfig, catalog: CatalogPractice[]): string[] {
 			const stated = occasionStatement(practice) !== "";
 			const problems: string[] = [];
 			if (practice.automated && !stated && !gaps.has(practice.slug)) {
-				problems.push(`${practice.slug} has no Applicability section and no Applies when gate`);
+				problems.push(`${practice.slug} has no Applicability section`);
 			}
 			if (stated && gaps.has(practice.slug)) {
 				problems.push(`${practice.slug} now states its occasion: remove it from occasionGaps`);

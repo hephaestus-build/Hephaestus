@@ -6,6 +6,7 @@ import { parseCompositions, type Review, type RunFile } from "./feedback-eval/co
 import {
 	catalogPractices,
 	deterministic,
+	occasionStatement,
 	parseGateConfig,
 	ceilingReached,
 	practiceDigest,
@@ -169,7 +170,7 @@ void test("invalid fixtures fail G2 and leave the checks that need them unchecke
 	assert.match(problems(checks, "G1")[0] ?? "", /Not checked/u);
 });
 
-void test("a practice without an Applicability section or an Applies when gate fails G5 unless listed", () => {
+void test("a practice without an Applicability section fails G5 unless listed, whatever its gate or scan section says", () => {
 	const silent = {
 		slug: "new-practice",
 		automated: true,
@@ -177,21 +178,29 @@ void test("a practice without an Applicability section or an Applies when gate f
 		appliesWhen: null,
 	};
 	assert.deepEqual(problems(deterministic(inputs({ catalog: [...catalog, silent] })), "G5"), [
-		"new-practice has no Applicability section and no Applies when gate",
+		"new-practice has no Applicability section",
 		`new-practice has no pin (now ${practiceDigest(silent)})`,
 	]);
-	const [gap] = gate.occasionGaps;
-	assert.ok(gap !== undefined);
-	const fixed = catalog.map((practice) =>
-		practice.slug === gap
-			? {
-					...practice,
-					criteria: `${practice.criteria}\n\n## Applicability\nIt applies to every change.`,
-				}
-			: practice,
+	// An Applies when gate and a scan section do not state the occasion of a review.
+	const gated = {
+		...silent,
+		slug: "swift-practice",
+		criteria: "## The standard\nJudge it.\n\n## In a scan\nA file with no view does not apply.",
+		appliesWhen: { anyOf: [{ changedPath: ["**/*.swift"] }] },
+	};
+	assert.equal(
+		problems(deterministic(inputs({ catalog: [...catalog, gated] })), "G5")[0],
+		"swift-practice has no Applicability section",
 	);
-	const found = problems(deterministic(inputs({ catalog: fixed })), "G5");
-	assert.ok(found.includes(`${gap} now states its occasion: remove it from occasionGaps`));
+	// A listed gap that states its occasion makes the list stale.
+	const stated = catalog.find(
+		(practice) => practice.automated && occasionStatement(practice) !== "",
+	);
+	assert.ok(stated);
+	const listed = { ...gate, occasionGaps: [stated.slug] };
+	assert.deepEqual(problems(deterministic(inputs({ gate: listed })), "G5"), [
+		`${stated.slug} now states its occasion: remove it from occasionGaps`,
+	]);
 });
 
 void test("an edit to a practice's criteria fails G5 until it is pinned again", () => {
