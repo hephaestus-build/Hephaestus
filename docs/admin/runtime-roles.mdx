@@ -83,6 +83,7 @@ The run mode starts no web server.
 It exits with status 0 when the schema is current, and with a non-zero status when the migration fails.
 
 The run mode needs `DATABASE_URL`, `DATABASE_USERNAME`, and `DATABASE_PASSWORD`, with the login of `hephaestus_owner`.
+It also needs `HEPHAESTUS_SECURITY_ENCRYPTION_KEY`, the system key that sealed the stored values, because a change set can migrate sealed values.
 The server uses the login of `hephaestus_app` ([Database roles](./helm-chart#database-roles)).
 
 Under the `prod` profile, the server does not migrate at start.
