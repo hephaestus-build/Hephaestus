@@ -1350,6 +1350,39 @@ async function layer(work: string, name: string, values: object): Promise<string
 	return ["--values", file];
 }
 
+/** The values that the installed release runs with: its profile, prepared values and every `--set` of its install. */
+async function installedValues(): Promise<object> {
+	return asRecord(
+		parseJson(
+			await output("helm", [
+				"get",
+				"values",
+				RELEASE,
+				"--namespace",
+				NAMESPACE,
+				"--output",
+				"json",
+			]),
+		),
+		"release values",
+	);
+}
+
+/**
+ * A drill install's values: the installed release's own values first, then the drill's overrides.
+ * Helm drops what an earlier install set on its command line, such as the runtime class and pod overhead of
+ * CI's gVisor run. Without the source layer, an install derives its capacity from the plain chart, whose
+ * connection budget can exceed the `max_connections` that the running database holds.
+ */
+export async function drillLayer(
+	work: string,
+	source: object,
+	name: string,
+	overrides: object,
+): Promise<string[]> {
+	return [...(await layer(work, "source", source)), ...(await layer(work, name, overrides))];
+}
+
 /**
  * The backup and restore drill of docs/admin/backup-restore.mdx, on the bundled
  * PostgreSQL: a full backup, a row that only the WAL archive holds, a dropped table, and then a
@@ -1391,6 +1424,7 @@ export async function backupDrill(work: string, podCidr: string): Promise<void> 
 		scheduled.getUTCMonth() + 1,
 		"*",
 	].join(" ");
+	const source = await installedValues();
 	// Pausing application replicas lowers the automatic budget, but WAL replay needs the source setting.
 	const maxConnections = Number(await psql("SHOW max_connections"));
 	if (!Number.isSafeInteger(maxConnections)) {
@@ -1417,7 +1451,7 @@ export async function backupDrill(work: string, podCidr: string): Promise<void> 
 			},
 		},
 	});
-	const backupOn = await layer(work, "backup", backup({ enabled: false, time: "" }));
+	const backupOn = await drillLayer(work, source, "backup", backup({ enabled: false, time: "" }));
 	await install(work, backupOn);
 	// PostgreSQL reads the bucket's keys at its start, and an install that changes no value of its Pod keeps it.
 	await kubectl(["-n", NAMESPACE, "rollout", "restart", `statefulset/${RELEASE}-postgresql`]);
@@ -1571,7 +1605,7 @@ export async function backupDrill(work: string, podCidr: string): Promise<void> 
 			}),
 		);
 		await install(work, [
-			...(await layer(work, "restore", backup({ enabled: true, time: target }))),
+			...(await drillLayer(work, source, "restore", backup({ enabled: true, time: target }))),
 			...paused,
 		]);
 		const job = `${RELEASE}-postgresql-backup-restore-${await revision()}`;
