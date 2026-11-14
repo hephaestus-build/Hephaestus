@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import de.tum.cit.aet.hephaestus.core.exception.InvalidInputException;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -72,7 +73,7 @@ class PracticeGuidanceRulesTest extends BaseUnitTest {
                 })
         void shouldRefuseTheVisualWhenAnElementIsNotAShapeOrText(String body) {
             assertThatThrownBy(() -> PracticeGuidanceRules.validate(new PracticeVisual(svg(body), "x")))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(InvalidInputException.class)
                     .hasMessageStartingWith("The visual uses <")
                     .hasMessageContaining("shapes and text");
         }
@@ -89,7 +90,7 @@ class PracticeGuidanceRulesTest extends BaseUnitTest {
                 })
         void shouldRefuseTheVisualWhenAnAttributeIsAScriptALinkAnIdOrAStyle(String body) {
             assertThatThrownBy(() -> PracticeGuidanceRules.validate(new PracticeVisual(svg(body), "x")))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(InvalidInputException.class)
                     .hasMessageContaining("uses the attribute");
         }
 
@@ -129,7 +130,7 @@ class PracticeGuidanceRulesTest extends BaseUnitTest {
                 })
         void shouldRefuseTheVisualWhenAnHtmlParserCouldReadItsMarkupDifferently(String body) {
             assertThatThrownBy(() -> PracticeGuidanceRules.validate(new PracticeVisual(svg(body), "x")))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(InvalidInputException.class)
                     .hasMessageContaining("contains markup a picture cannot use");
         }
 
@@ -145,7 +146,7 @@ class PracticeGuidanceRulesTest extends BaseUnitTest {
             String withEntity = "<!DOCTYPE svg [<!ENTITY secret SYSTEM \"file:///etc/passwd\">]>"
                     + svg("<text x=\"0\" y=\"5\">&secret;</text>");
             assertThatThrownBy(() -> PracticeGuidanceRules.validate(new PracticeVisual(withEntity, "x")))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(InvalidInputException.class)
                     .hasMessageContaining("is not valid SVG markup");
         }
 

@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditEntityType;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditEntry;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditPort;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
+import de.tum.cit.aet.hephaestus.core.exception.InvalidInputException;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.security.SecurityUtils;
 import de.tum.cit.aet.hephaestus.practices.review.ProductReferenceQuery;
@@ -75,7 +76,7 @@ public class ReviewScheduleService {
         var schedule = require(ws.id(), id);
         ReviewBatchService.checkVersion(schedule.getVersion(), precondition);
         if (!schedule.getKind().equals(input.itemKind()))
-            throw new IllegalArgumentException("The schedule's item kind cannot change.");
+            throw new InvalidInputException("The schedule's item kind cannot change.");
         var before = ReviewScheduleSnapshot.of(schedule);
         schedule.setCadence(input.cadence());
         schedule.setLookbackDays(input.lookbackDays());
@@ -121,24 +122,24 @@ public class ReviewScheduleService {
         batches.requireKind(input.itemKind());
         if (input.itemKind().equals("scm.repository")) {
             if (input.lookbackDays() != null || input.budgetUsd() == null)
-                throw new IllegalArgumentException("A repository schedule needs a scan budget and no lookback.");
+                throw new InvalidInputException("A repository schedule needs a scan budget and no lookback.");
             budget(input.budgetUsd());
         } else if (input.budgetUsd() != null
                 || input.lookbackDays() == null
                 || input.lookbackDays() < 1
                 || input.lookbackDays() > input.cadence().maxLookback())
-            throw new IllegalArgumentException("Choose a lookback within the schedule cadence and no scan budget.");
+            throw new InvalidInputException("Choose a lookback within the schedule cadence and no scan budget.");
     }
 
     private static @Nullable BigDecimal budget(@Nullable String text) {
         if (text == null) return null;
         if (!text.matches("(?:0|[1-9][0-9]*)(?:\\.[0-9]{1,4})?"))
-            throw new IllegalArgumentException("Enter a decimal budget with at most four decimal places.");
+            throw new InvalidInputException("Enter a decimal budget with at most four decimal places.");
         var value = new BigDecimal(text);
         if (value.scale() > 4
                 || value.compareTo(new BigDecimal("0.0001")) < 0
                 || value.compareTo(new BigDecimal("100000")) > 0)
-            throw new IllegalArgumentException(
+            throw new InvalidInputException(
                     "The scan budget must be 0.0001 to 100000 USD with at most four decimal places.");
         return value;
     }

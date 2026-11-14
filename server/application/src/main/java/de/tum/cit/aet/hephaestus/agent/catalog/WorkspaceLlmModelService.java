@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditPort;
 import de.tum.cit.aet.hephaestus.core.exception.AccessForbiddenException;
 import de.tum.cit.aet.hephaestus.core.exception.DataIntegrityViolationConstraints;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
+import de.tum.cit.aet.hephaestus.core.exception.InvalidInputException;
 import de.tum.cit.aet.hephaestus.core.security.SystemSecrets;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import java.math.BigDecimal;
@@ -174,7 +175,7 @@ public class WorkspaceLlmModelService {
                 connection.apiKey(secrets),
                 connection.getApiProtocol());
         if (!upstream.equals(model.getUpstreamModelId()) || !target.equals(current))
-            throw new IllegalArgumentException("The model connection changed. Test it again.");
+            throw new InvalidInputException("The model connection changed. Test it again.");
         var before = WorkspaceLlmModelSnapshot.of(model);
         model.setForcedToolChoice(capability.forcedToolChoice());
         configAudit.record(ConfigAuditEntry.updated(

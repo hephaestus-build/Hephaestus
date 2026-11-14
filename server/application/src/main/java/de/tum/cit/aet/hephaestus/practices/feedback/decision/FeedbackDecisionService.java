@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.practices.feedback.decision;
 
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
+import de.tum.cit.aet.hephaestus.core.exception.InvalidInputException;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
@@ -65,7 +66,7 @@ public class FeedbackDecisionService {
         var reason = request.reason();
         var note = request.note();
         var contentDigest = request.contentDigest();
-        if (actorAccountId <= 0) throw new IllegalArgumentException("A decision requires an authenticated account.");
+        if (actorAccountId <= 0) throw new InvalidInputException("A decision requires an authenticated account.");
         validate(action, reason, note, contentDigest);
         if (!privacy.holdForAccountWrite(actorAccountId)) {
             throw conflict("Your account cannot record feedback decisions.");

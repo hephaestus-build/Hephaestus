@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.core.connection.api;
 
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
+import de.tum.cit.aet.hephaestus.core.exception.InvalidInputException;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
@@ -135,14 +136,14 @@ public class ConnectionAdminService {
                 .orElseThrow(() -> new EntityNotFoundException("Workspace", workspaceId));
 
         if (kind == IntegrationKind.GITLAB && !workspace.active()) {
-            throw new IllegalArgumentException("Resume this workspace before reconnecting GitLab.");
+            throw new InvalidInputException("Resume this workspace before reconnecting GitLab.");
         }
 
         if (kind == IntegrationKind.GITLAB
                 && connectionRepository.findByWorkspaceId(workspaceId).stream()
                         .anyMatch(connection -> connection.getKind().family() == kind.family()
                                 && connection.getState() != IntegrationState.UNINSTALLED)) {
-            throw new IllegalArgumentException(
+            throw new InvalidInputException(
                     "Disconnect the current source-control integration before reconnecting GitLab.");
         }
 
@@ -218,7 +219,7 @@ public class ConnectionAdminService {
                 Connection previous = connectionRepository
                         .findByWorkspaceIdAndKindAndInstanceKey(workspaceId, kind, instanceKey)
                         .orElseThrow(() ->
-                                new IllegalArgumentException("This workspace has no GitLab connection to reconnect."));
+                                new InvalidInputException("This workspace has no GitLab connection to reconnect."));
                 long previousId = Objects.requireNonNull(previous.getId());
                 if (!(previous.getConfig() instanceof ConnectionConfig.GitLabConfig before)) {
                     throw new IllegalStateException("The disconnected GitLab connection has no group configuration.");
@@ -232,7 +233,7 @@ public class ConnectionAdminService {
                     throw new TransientDataAccessResourceException("The GitLab connection changed before reconnecting");
                 }
                 if (previous.getState() != IntegrationState.UNINSTALLED) {
-                    throw new IllegalArgumentException("This GitLab connection changed. Reload before reconnecting.");
+                    throw new InvalidInputException("This GitLab connection changed. Reload before reconnecting.");
                 }
                 ConnectionConfig current = previous.getConfig();
                 if (!(current instanceof ConnectionConfig.GitLabConfig gitlab)) {

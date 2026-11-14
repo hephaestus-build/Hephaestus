@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.practices;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import de.tum.cit.aet.hephaestus.core.exception.InvalidInputException;
 import java.util.Objects;
 
 public record ReviewLimit(
@@ -16,7 +17,7 @@ public record ReviewLimit(
                 || code.length() > CODE_MAX_LENGTH
                 || description.isBlank()
                 || description.length() > DESCRIPTION_MAX_LENGTH) {
-            throw new IllegalArgumentException("Give the review limit a code and a description.");
+            throw new InvalidInputException("Give the review limit a code and a description.");
         }
     }
 }

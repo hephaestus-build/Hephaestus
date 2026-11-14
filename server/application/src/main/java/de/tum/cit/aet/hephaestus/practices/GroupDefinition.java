@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.practices;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import de.tum.cit.aet.hephaestus.core.exception.InvalidInputException;
 import java.util.Objects;
 import org.jspecify.annotations.Nullable;
 
@@ -22,7 +23,7 @@ public record GroupDefinition(
                 || (description != null && description.length() > DESCRIPTION_MAX_LENGTH)
                 || (icon != null && icon.length() > ICON_MAX_LENGTH)
                 || (color != null && color.length() > COLOR_MAX_LENGTH)) {
-            throw new IllegalArgumentException("Use a group name and metadata within the supported lengths.");
+            throw new InvalidInputException("Use a group name and metadata within the supported lengths.");
         }
     }
 }

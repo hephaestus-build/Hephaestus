@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.workspace;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.exception.AccessForbiddenException;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
+import de.tum.cit.aet.hephaestus.core.exception.InvalidInputException;
 import de.tum.cit.aet.hephaestus.core.security.ScmOrigin;
 import de.tum.cit.aet.hephaestus.core.security.SecurityUtils;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
@@ -304,7 +305,7 @@ public class WorkspaceService {
     public Workspace updateAccountLogin(Long workspaceId, String accountLogin) {
         Workspace workspace = workspaceRepository
                 .findById(workspaceId)
-                .orElseThrow(() -> new IllegalArgumentException("We could not find that workspace. It may have been"
+                .orElseThrow(() -> new InvalidInputException("We could not find that workspace. It may have been"
                         + " deleted. Reload the page to see what is"
                         + " current."));
 

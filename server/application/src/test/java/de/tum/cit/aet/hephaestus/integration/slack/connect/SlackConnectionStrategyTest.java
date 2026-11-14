@@ -71,13 +71,15 @@ class SlackConnectionStrategyTest extends BaseUnitTest {
     }
 
     @Test
-    void finalize_oauthClientThrows_returnsFailedWithErrorMessage() {
+    void finalize_oauthClientThrows_returnsFailedWithItsOwnSentence() {
         when(oauthClient.exchangeCode(eq("c1"), any())).thenThrow(new SlackOAuthException("invalid_code"));
 
         ConnectFinalization r = strategy.finalizeConnect(ref(), Map.of("code", "c1"));
 
         assertThat(r).isInstanceOf(ConnectFinalization.Failed.class);
-        assertThat(((ConnectFinalization.Failed) r).reason()).contains("invalid_code");
+        assertThat(((ConnectFinalization.Failed) r).reason())
+                .startsWith("Slack refused the connection.")
+                .doesNotContain("invalid_code");
     }
 
     @Test

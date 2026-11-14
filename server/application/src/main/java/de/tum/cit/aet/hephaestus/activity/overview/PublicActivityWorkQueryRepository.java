@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.activity.overview;
 
 import de.tum.cit.aet.hephaestus.activity.ActivityEvent;
+import de.tum.cit.aet.hephaestus.core.exception.InvalidInputException;
 import de.tum.cit.aet.hephaestus.core.time.TimeRange;
 import java.time.Instant;
 import java.util.List;
@@ -100,7 +101,7 @@ interface PublicActivityWorkQueryRepository extends Repository<ActivityEvent, UU
                 case REVIEW_CHANGES_REQUESTED -> getChangeRequests();
                 case REVIEW_COMMENTED -> getCommentReviews();
                 case ISSUE_OPENED -> getIssuesOpened();
-                default -> throw new IllegalArgumentException("This activity kind is not published.");
+                default -> throw new InvalidInputException("This activity kind is not published.");
             };
         }
     }

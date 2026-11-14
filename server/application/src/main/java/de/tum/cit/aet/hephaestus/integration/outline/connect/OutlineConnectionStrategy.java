@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.outline.connect;
 
+import de.tum.cit.aet.hephaestus.core.exception.InvalidInputException;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.security.OutlineOriginPolicy;
 import de.tum.cit.aet.hephaestus.core.security.SecurityUtils;
@@ -77,19 +78,19 @@ public class OutlineConnectionStrategy implements ConnectionStrategy {
     public ConnectInitiation initiate(InitiateRequest request) {
         Map<String, String> userInput = request.userInput();
         if (userInput == null) {
-            throw new IllegalArgumentException("Outline needs 'server_url' and 'token' to connect.");
+            throw new InvalidInputException("Outline needs 'server_url' and 'token' to connect.");
         }
         String serverUrl = userInput.get(INPUT_SERVER_URL);
         if (serverUrl == null || serverUrl.isBlank()) {
-            throw new IllegalArgumentException("The required field “" + INPUT_SERVER_URL + "” is missing.");
+            throw new InvalidInputException("The required field “" + INPUT_SERVER_URL + "” is missing.");
         }
         if (!originPolicy.allows(serverUrl)) {
-            throw new IllegalArgumentException(
+            throw new InvalidInputException(
                     "This Outline address is not approved on this instance. Ask your instance operator to approve it.");
         }
         String token = userInput.get(INPUT_TOKEN);
         if (token == null || token.isBlank()) {
-            throw new IllegalArgumentException("The required field “" + INPUT_TOKEN + "” is missing.");
+            throw new InvalidInputException("The required field “" + INPUT_TOKEN + "” is missing.");
         }
         // Validates the token AND the (admin-supplied) server URL through the SSRF guard before anything
         // is persisted. A bad token or unreachable/blocked host throws, surfacing a structured error.

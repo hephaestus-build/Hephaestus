@@ -18,6 +18,7 @@ import de.tum.cit.aet.hephaestus.core.exception.ProblemType;
 import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import java.util.Locale;
 import java.util.Optional;
+import org.jspecify.annotations.Nullable;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.dao.OptimisticLockingFailureException;
@@ -46,13 +47,16 @@ public class AgentControllerAdvice {
                 HttpStatus.CONFLICT,
                 ProblemType.CONCURRENT_MODIFICATION,
                 "Concurrent modification",
-                new IllegalStateException("The record changed while the server processed this request. Try again."));
+                "The record changed while the server processed this request. Try again.");
     }
 
     @ExceptionHandler(ReviewJobStateConflictException.class)
     ProblemDetail handleAgentJobStateConflict(ReviewJobStateConflictException exception) {
         return problem(
-                HttpStatus.CONFLICT, ProblemType.AGENT_JOB_STATE_CONFLICT, "Agent job state conflict", exception);
+                HttpStatus.CONFLICT,
+                ProblemType.AGENT_JOB_STATE_CONFLICT,
+                "Agent job state conflict",
+                exception.getMessage());
     }
 
     /** {@code declaredTier} lets the client name the tier from its own label registry. */
@@ -62,7 +66,7 @@ public class AgentControllerAdvice {
                 HttpStatus.CONFLICT,
                 ProblemType.MODEL_ASSIGNMENT_SLOT_MISMATCH,
                 "Model does not fill this row",
-                exception);
+                exception.getMessage());
         DataHandlingTier declaredTier = exception.declaredTier();
         if (declaredTier != null) {
             problem.setProperty("declaredTier", declaredTier);
@@ -72,12 +76,17 @@ public class AgentControllerAdvice {
 
     @ExceptionHandler(LlmConnectionInUseException.class)
     ProblemDetail handleConnectionInUse(LlmConnectionInUseException exception) {
-        return problem(HttpStatus.CONFLICT, ProblemType.LLM_CONNECTION_IN_USE, "LLM connection is in use", exception);
+        return problem(
+                HttpStatus.CONFLICT,
+                ProblemType.LLM_CONNECTION_IN_USE,
+                "LLM connection is in use",
+                exception.getMessage());
     }
 
     @ExceptionHandler(LlmModelInUseException.class)
     ProblemDetail handleModelInUse(LlmModelInUseException exception) {
-        return problem(HttpStatus.CONFLICT, ProblemType.LLM_MODEL_IN_USE, "LLM model is in use", exception);
+        return problem(
+                HttpStatus.CONFLICT, ProblemType.LLM_MODEL_IN_USE, "LLM model is in use", exception.getMessage());
     }
 
     @ExceptionHandler(LlmConnectionSlugConflictException.class)
@@ -86,23 +95,31 @@ public class AgentControllerAdvice {
                 HttpStatus.CONFLICT,
                 ProblemType.LLM_CONNECTION_SLUG_CONFLICT,
                 "LLM connection slug conflict",
-                exception);
+                exception.getMessage());
     }
 
     @ExceptionHandler(LlmModelSlugConflictException.class)
     ProblemDetail handleModelSlugConflict(LlmModelSlugConflictException exception) {
-        return problem(HttpStatus.CONFLICT, ProblemType.LLM_MODEL_SLUG_CONFLICT, "LLM model slug conflict", exception);
+        return problem(
+                HttpStatus.CONFLICT,
+                ProblemType.LLM_MODEL_SLUG_CONFLICT,
+                "LLM model slug conflict",
+                exception.getMessage());
     }
 
     @ExceptionHandler(LlmCallPoolInUseException.class)
     ProblemDetail handleCallPoolInUse(LlmCallPoolInUseException exception) {
-        return problem(HttpStatus.CONFLICT, ProblemType.LLM_CALL_POOL_IN_USE, "Call pool is in use", exception);
+        return problem(
+                HttpStatus.CONFLICT, ProblemType.LLM_CALL_POOL_IN_USE, "Call pool is in use", exception.getMessage());
     }
 
     @ExceptionHandler(LlmCallPoolSlugConflictException.class)
     ProblemDetail handleCallPoolSlugConflict(LlmCallPoolSlugConflictException exception) {
         return problem(
-                HttpStatus.CONFLICT, ProblemType.LLM_CALL_POOL_SLUG_CONFLICT, "LLM call pool slug conflict", exception);
+                HttpStatus.CONFLICT,
+                ProblemType.LLM_CALL_POOL_SLUG_CONFLICT,
+                "LLM call pool slug conflict",
+                exception.getMessage());
     }
 
     @ExceptionHandler(LlmModelUpstreamIdConflictException.class)
@@ -111,7 +128,7 @@ public class AgentControllerAdvice {
                 HttpStatus.CONFLICT,
                 ProblemType.LLM_MODEL_UPSTREAM_ID_CONFLICT,
                 "LLM model upstream id conflict",
-                exception);
+                exception.getMessage());
     }
 
     /** Hephaestus declines the member; the detail names the setting that changes it. */
@@ -133,23 +150,25 @@ public class AgentControllerAdvice {
     /** A Hephaestus host wrote for a turn attempt that lost its lease. */
     @ExceptionHandler(ConversationLeaseLostException.class)
     ProblemDetail handleConversationLeaseLost(ConversationLeaseLostException exception) {
-        return problem(HttpStatus.CONFLICT, ProblemType.CONVERSATION_LEASE_LOST, "Turn lease lost", exception);
+        return problem(
+                HttpStatus.CONFLICT, ProblemType.CONVERSATION_LEASE_LOST, "Turn lease lost", exception.getMessage());
     }
 
     /** A turn attempt that must stop and end: the developer stopped it, or its deadline passed. */
     @ExceptionHandler(ConversationTurns.StopException.class)
     ProblemDetail handleTurnStop(ConversationTurns.StopException exception) {
-        ProblemDetail problem =
-                problem(HttpStatus.CONFLICT, ProblemType.CONVERSATION_TURN_STOPPED, "Turn stopped", exception);
+        ProblemDetail problem = problem(
+                HttpStatus.CONFLICT, ProblemType.CONVERSATION_TURN_STOPPED, "Turn stopped", exception.getMessage());
         problem.setProperty("stop", exception.reason().name().toLowerCase(Locale.ROOT));
         return problem;
     }
 
-    private ProblemDetail problem(HttpStatus status, ProblemType type, String title, Exception exception) {
+    /** Each handler passes the message of its own domain exception, which is written for the reader. */
+    private ProblemDetail problem(HttpStatus status, ProblemType type, String title, @Nullable String message) {
         return type.problem(
                 status,
                 title,
-                Optional.ofNullable(exception.getMessage())
+                Optional.ofNullable(message)
                         .map(LoggingUtils::sanitizeForLog)
                         .filter(s -> !s.isBlank())
                         .orElse("The server could not process this request."));

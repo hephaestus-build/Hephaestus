@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.practices.reviewoutput;
 
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
+import de.tum.cit.aet.hephaestus.core.exception.InvalidInputException;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import de.tum.cit.aet.hephaestus.practices.feedback.dto.ReviewBoundFeedbackDTO;
@@ -56,7 +57,7 @@ public class ReviewLineageService {
         if (Stream.of(itemId, reviewId, resultId, problemId, feedbackId)
                         .filter(Objects::nonNull)
                         .count()
-                != 1) throw new IllegalArgumentException("Select exactly one lineage record.");
+                != 1) throw new InvalidInputException("Select exactly one lineage record.");
         Object root = switch (kind) {
             case ITEM -> itemId;
             case REVIEW -> reviewId;
@@ -64,7 +65,7 @@ public class ReviewLineageService {
             case PROBLEM -> problemId;
             case FEEDBACK -> feedbackId;
         };
-        if (root == null) throw new IllegalArgumentException("The selected id must match the lineage kind.");
+        if (root == null) throw new InvalidInputException("The selected id must match the lineage kind.");
         var nodes = new LinkedHashMap<String, ReviewLineageNodeDTO>();
         var edges = new ArrayList<ReviewLineageEdgeDTO>();
         var reviewIds = new LinkedHashSet<UUID>();

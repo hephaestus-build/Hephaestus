@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.practices.review;
 
+import de.tum.cit.aet.hephaestus.core.exception.InvalidInputException;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.evidence.ClasspathSourceCatalogRegistry;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemDescriptor;
@@ -46,7 +47,7 @@ public class ReviewGate {
             Set<Long> carried,
             Collection<Long> selected) {
         if (workspace.id() != item.item().workspaceId())
-            throw new IllegalArgumentException("The item belongs to another workspace.");
+            throw new InvalidInputException("The item belongs to another workspace.");
         var refusal = refusal(workspace, origin);
         if (refusal.isPresent()) return refusal.orElseThrow();
         var descriptor = items.require(item.item().kind());

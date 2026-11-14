@@ -164,14 +164,13 @@ public class SlackConnectionStrategy implements ConnectionStrategy {
                     config,
                     attempt);
         } catch (RuntimeException failure) {
-            String reason = failure.getMessage();
             if (!tokenReturned
-                    && failure instanceof SlackOAuthException
-                    && reason != null
-                    && REFUSED_EXCHANGES.contains(reason)) {
+                    && failure instanceof SlackOAuthException refused
+                    && REFUSED_EXCHANGES.contains(refused.error())) {
                 exchangeRepairs.discard(attempt);
+                log.warn("Slack refused the OAuth code exchange: error={}", refused.error());
                 return new ConnectFinalization.Failed(
-                        "Hephaestus could not finish connecting to Slack: " + failure.getMessage());
+                        "Slack refused the connection. Start it again, and if Slack refuses it again, ask your instance operator to check the Slack app settings.");
             }
             exchangeRepairs.uncertain(attempt);
             throw failure;

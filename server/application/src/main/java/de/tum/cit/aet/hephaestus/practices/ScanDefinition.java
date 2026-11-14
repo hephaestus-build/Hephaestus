@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.practices;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import de.tum.cit.aet.hephaestus.core.exception.InvalidInputException;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
 import java.util.List;
 import java.util.Objects;
@@ -19,12 +20,12 @@ public record ScanDefinition(
         include = canonical(include);
         exclude = canonical(exclude);
         context = canonical(context);
-        if (include.isEmpty()) throw new IllegalArgumentException("Include at least one path in the scan.");
+        if (include.isEmpty()) throw new InvalidInputException("Include at least one path in the scan.");
     }
 
     private static List<String> canonical(List<String> values) {
         if (values.size() > 64 || values.size() != Set.copyOf(values).size()) {
-            throw new IllegalArgumentException("Use at most 64 distinct scan paths.");
+            throw new InvalidInputException("Use at most 64 distinct scan paths.");
         }
         values.forEach(ScanDefinition::validatePath);
         return values.stream().sorted().toList();
@@ -39,11 +40,11 @@ public record ScanDefinition(
                 || value.indexOf(0) >= 0
                 || value.contains("{")
                 || value.contains("}")) {
-            throw new IllegalArgumentException("Use a relative scan path without brace expansion.");
+            throw new InvalidInputException("Use a relative scan path without brace expansion.");
         }
         for (String part : value.split("/", -1)) {
             if (part.isEmpty() || part.equals(".") || part.equals("..") || part.equals(".git")) {
-                throw new IllegalArgumentException("Scan paths cannot contain empty, dot, parent or .git components.");
+                throw new InvalidInputException("Scan paths cannot contain empty, dot, parent or .git components.");
             }
         }
     }

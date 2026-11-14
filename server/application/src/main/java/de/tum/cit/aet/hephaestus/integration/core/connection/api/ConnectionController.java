@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.integration.core.connection.api;
 import de.tum.cit.aet.hephaestus.core.AuditLedger;
 import de.tum.cit.aet.hephaestus.core.Audited;
 import de.tum.cit.aet.hephaestus.core.auth.web.CurrentAccount;
+import de.tum.cit.aet.hephaestus.core.exception.InvalidInputException;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionBusyException;
@@ -118,16 +119,16 @@ public class ConnectionController {
             HttpServletResponse response) {
         Long workspaceId = workspace.id();
         if (body == null || body.kind() == null) {
-            throw new IllegalArgumentException("Choose an integration to connect.");
+            throw new InvalidInputException("Choose an integration to connect.");
         }
 
         ConnectionStrategy strategy = strategies.get(body.kind());
         if (strategy == null) {
-            throw new IllegalArgumentException("This instance cannot connect that integration.");
+            throw new InvalidInputException("This instance cannot connect that integration.");
         }
 
-        // Strategy-level validation failures (e.g. missing 'pat' for GitLab) surface as
-        // IllegalArgumentException → 400 ProblemDetail via GlobalControllerAdvice.
+        // A strategy refuses its input (e.g. a missing 'pat' for GitLab) with InvalidInputException, which
+        // GlobalControllerAdvice returns as a 400 with the strategy's sentence.
         Map<String, String> userInput = body.userInput() == null ? Map.of() : body.userInput();
         ConnectInitiation initiation = strategy.initiate(new ConnectionStrategy.InitiateRequest(
                 workspaceId, body.kind(), userInput, CurrentAccount.requireId()));
@@ -171,8 +172,7 @@ public class ConnectionController {
             case ACTIVE -> "REACTIVATE";
             case SUSPENDED -> "SUSPEND";
             case UNINSTALLED -> "DISCONNECT";
-            case PENDING ->
-                throw new IllegalArgumentException("An admin cannot set a connection to the state PENDING.");
+            case PENDING -> throw new InvalidInputException("An admin cannot set a connection to the state PENDING.");
         };
 
         String correlationId = eventType.toLowerCase(Locale.ROOT) + "-" + connection.getId() + "-" + UUID.randomUUID();
@@ -200,14 +200,16 @@ public class ConnectionController {
      * (deliberately undistinguished from cross-workspace reads to avoid leaking workspace
      * boundaries). It is mapped locally — rather than globally — so a stray {@code Optional.get()}
      * elsewhere in the app still surfaces as a 500, not a misleading 404.
-     * {@code EntityNotFoundException}, {@code IllegalStateException}, {@code IllegalArgumentException}
-     * and {@code DataIntegrityViolationException} are all handled by {@code GlobalControllerAdvice}.
+     * {@code EntityNotFoundException}, {@code InvalidInputException} and {@code DataIntegrityViolationException}
+     * are handled by {@code GlobalControllerAdvice}; a generic {@code IllegalArgumentException} or
+     * {@code IllegalStateException} gets fixed text there or in {@code WorkspaceControllerAdvice}.
      */
     @ExceptionHandler(NoSuchElementException.class)
     ProblemDetail handleNotFound(NoSuchElementException e) {
-        // The response carries the message; the log names the failure only.
+        // An empty Optional throws this type with a message for developers, so the response carries fixed text.
         log.info("Connection lookup 404: {}", e.getClass().getSimpleName());
-        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, e.getMessage());
+        ProblemDetail problem =
+                ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, "We could not find this connection.");
         problem.setTitle("Resource not found");
         return problem;
     }

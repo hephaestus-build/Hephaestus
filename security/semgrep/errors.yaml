@@ -1,0 +1,67 @@
+rules:
+  - id: java-generic-exception-message-to-client
+    languages: [java]
+    severity: ERROR
+    message: >-
+      Return a sentence written for the person who sent the request. The message of a generic exception type is
+      written for developers by any code, a library included, and can name internal values. Throw a
+      ResponseStatusException or a domain exception with a message for that person, and log the exception class.
+    metadata:
+      category: security
+      cwe: ["CWE-209: Generation of Error Message Containing Sensitive Information"]
+    mode: taint
+    pattern-sources:
+      - patterns:
+          - pattern-either:
+              - pattern: (IllegalArgumentException $E).$GET()
+              - pattern: (IllegalStateException $E).$GET()
+              - pattern: (NoSuchElementException $E).$GET()
+              - pattern: (RuntimeException $E).$GET()
+              - pattern: (Exception $E).$GET()
+              - pattern: (Throwable $E).$GET()
+          - metavariable-regex:
+              metavariable: $GET
+              regex: ^(getMessage|getLocalizedMessage)$
+      # Semgrep does not type a catch parameter, so a catch of a generic type is matched by its clause.
+      - patterns:
+          - pattern-inside: |
+              try { ... } catch ($TYPE $E) { ... }
+          - pattern: $E.$GET()
+          - metavariable-regex:
+              metavariable: $TYPE
+              regex: ^(IllegalArgumentException|IllegalStateException|NoSuchElementException|RuntimeException|Exception|Throwable)$
+          - metavariable-regex:
+              metavariable: $GET
+              regex: ^(getMessage|getLocalizedMessage)$
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: ProblemDetail.forStatusAndDetail($STATUS, $DETAIL)
+              - pattern: (ProblemDetail $P).setDetail($DETAIL)
+              - pattern: (ProblemDetail $P).setTitle($DETAIL)
+              - pattern: (ProblemDetail $P).setProperty($KEY, $DETAIL)
+              - pattern: new ResponseStatusException($STATUS, $DETAIL, ...)
+              - pattern: (ProblemType $T).problem($STATUS, $TITLE, $DETAIL)
+          - focus-metavariable: $DETAIL
+      # A typed metavariable does not match a variable declared with var.
+      - patterns:
+          - pattern-inside: |
+              $P = ProblemDetail.$CREATE(...);
+              ...
+          - pattern-either:
+              - pattern: $P.setDetail($DETAIL)
+              - pattern: $P.setTitle($DETAIL)
+              - pattern: $P.setProperty($KEY, $DETAIL)
+          - focus-metavariable: $DETAIL
+      # Taint stays inside one method, so an advice that hands the message to its own helper is matched at the call.
+      - patterns:
+          - pattern-inside: |
+              @ExceptionHandler(...)
+              $RET $HANDLER(...) { ... }
+          - pattern-either:
+              - pattern: $HELPER(..., $DETAIL, ...)
+              - pattern: new $TYPE(..., $DETAIL, ...)
+          # The log rule owns what reaches a log line.
+          - pattern-not-inside: log.$LEVEL(...)
+          - pattern-not-inside: log.$AT(). ... .$LEVEL(...)
+          - focus-metavariable: $DETAIL

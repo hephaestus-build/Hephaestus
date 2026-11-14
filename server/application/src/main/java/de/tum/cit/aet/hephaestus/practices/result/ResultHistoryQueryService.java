@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.practices.result;
 
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountMembershipQuery;
+import de.tum.cit.aet.hephaestus.core.exception.InvalidInputException;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import de.tum.cit.aet.hephaestus.practices.PracticeVersionRepository;
@@ -247,6 +248,6 @@ public class ResultHistoryQueryService implements ResultHistoryQuery {
     private record Receipt(UUID reviewId, UUID jobId) {}
 
     private static void limit(int limit) {
-        if (limit < 1 || limit > 1000) throw new IllegalArgumentException("Use a history limit from 1 to 1000.");
+        if (limit < 1 || limit > 1000) throw new InvalidInputException("Use a history limit from 1 to 1000.");
     }
 }

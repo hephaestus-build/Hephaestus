@@ -15,6 +15,7 @@ import static org.mockito.Mockito.when;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceModelAssignmentRepository;
 import de.tum.cit.aet.hephaestus.core.auth.spi.LlmModelAudit;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
+import de.tum.cit.aet.hephaestus.core.exception.InvalidInputException;
 import de.tum.cit.aet.hephaestus.core.security.SystemSecrets;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.testconfig.TestSystemSecrets;
@@ -330,8 +331,8 @@ class LlmModelServiceTest extends BaseUnitTest {
                     new UpdateLlmModelSharingRequestDTO(ModelVisibility.GRANTED, List.of(1L, 2L));
 
             assertThatThrownBy(() -> modelService.updateSharing(7L, request))
-                    .isInstanceOf(IllegalArgumentException.class)
-                    .hasMessageContaining("2");
+                    .isInstanceOf(InvalidInputException.class)
+                    .hasMessage("One of the chosen workspaces no longer exists. Reload and choose again.");
             verify(grantRepository, never()).deleteAll(anyCollection());
             verify(grantRepository, never()).saveAll(anyCollection());
         }

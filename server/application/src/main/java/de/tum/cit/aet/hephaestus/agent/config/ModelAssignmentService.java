@@ -11,6 +11,7 @@ import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditEntry;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditPort;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditSnapshot;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
+import de.tum.cit.aet.hephaestus.core.exception.InvalidInputException;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
@@ -84,7 +85,7 @@ public class ModelAssignmentService {
         if (request.timeoutSeconds() != null) {
             if (purpose == ModelPurpose.CONVERSATION
                     && request.timeoutSeconds() > ModelAssignmentLimits.MAX_CONVERSATION_TURN_SECONDS)
-                throw new IllegalArgumentException("Hephaestus stops an answer after %s seconds, so enter %s or less."
+                throw new InvalidInputException("Hephaestus stops an answer after %s seconds, so enter %s or less."
                         .formatted(
                                 ModelAssignmentLimits.MAX_CONVERSATION_TURN_SECONDS,
                                 ModelAssignmentLimits.MAX_CONVERSATION_TURN_SECONDS));
@@ -123,7 +124,7 @@ public class ModelAssignmentService {
             @Nullable Long instanceModelId,
             @Nullable Long workspaceModelId) {
         if ((instanceModelId == null) == (workspaceModelId == null)) {
-            throw new IllegalArgumentException(
+            throw new InvalidInputException(
                     "A binding must reference exactly one model. Use a shared model or a model from your own"
                             + " provider.");
         }
@@ -154,7 +155,7 @@ public class ModelAssignmentService {
             }
         }
         if (!llmModelResolver.isAvailable(binding)) {
-            throw new IllegalArgumentException("This model is not available to this workspace.");
+            throw new InvalidInputException("This model is not available to this workspace.");
         }
     }
 
@@ -165,7 +166,7 @@ public class ModelAssignmentService {
         Optional<String> tooSmall =
                 ModelAssignmentLimits.tooSmallForConversation(limits.contextWindow(), limits.maxOutputTokens());
         tooSmall.ifPresent(reason -> {
-            throw new IllegalArgumentException(reason);
+            throw new InvalidInputException(reason);
         });
     }
 

@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.practices.feedback;
 
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountMembershipQuery;
+import de.tum.cit.aet.hephaestus.core.exception.InvalidInputException;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import de.tum.cit.aet.hephaestus.practices.feedback.response.FeedbackResponse;
@@ -93,7 +94,7 @@ public class FeedbackHistoryQueryService implements FeedbackHistoryQuery {
     @Override
     public Optional<PrivateFeedbackHistory> forPrivateComposition(
             long workspaceId, long developerAccountId, Collection<PrivateFeedbackHistory.Route> routes, int limit) {
-        if (limit < 1) throw new IllegalArgumentException("A history read needs a positive limit.");
+        if (limit < 1) throw new InvalidInputException("A history read needs a positive limit.");
         if (routes.isEmpty() || !memberships.isActiveVisibleMember(workspaceId, developerAccountId))
             return Optional.empty();
         // Each destination with the practices routed to it, never the product of all of either.
@@ -190,7 +191,7 @@ public class FeedbackHistoryQueryService implements FeedbackHistoryQuery {
 
     private List<FeedbackHistoryEntry> read(
             Specification<Feedback> selected, long viewerAccountId, int limit, SourceUsePurpose purpose) {
-        if (limit < 1) throw new IllegalArgumentException("A history read needs a positive limit.");
+        if (limit < 1) throw new InvalidInputException("A history read needs a positive limit.");
         return feedback
                 .findAll(selected, PageRequest.of(0, limit, Sort.by(Sort.Direction.DESC, "createdAt", "id")))
                 .getContent()
@@ -205,7 +206,7 @@ public class FeedbackHistoryQueryService implements FeedbackHistoryQuery {
      */
     private List<FeedbackHistoryEntry> readOwn(
             long workspaceId, Specification<Feedback> selected, long developerAccountId, int limit) {
-        if (limit < 1) throw new IllegalArgumentException("A history read needs a positive limit.");
+        if (limit < 1) throw new InvalidInputException("A history read needs a positive limit.");
         Specification<Feedback> visible =
                 selected.and((row, query, cb) -> row.get("state").in(FeedbackState.VISIBLE_TO_DEVELOPER));
         // Withdrawal is a decision on the piece, not a column: page on until the limit holds pieces that are kept, so

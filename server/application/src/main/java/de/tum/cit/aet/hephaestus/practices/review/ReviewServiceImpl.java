@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.practices.review;
 
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountIdentityQuery;
+import de.tum.cit.aet.hephaestus.core.exception.InvalidInputException;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemEventService;
@@ -805,7 +806,7 @@ public class ReviewServiceImpl implements ReviewService {
                 || r.itemId() <= 0
                 || r.practiceIds().stream().distinct().count()
                         != r.practiceIds().size())
-            throw new IllegalArgumentException("Use positive item ids and distinct practices.");
+            throw new InvalidInputException("Use positive item ids and distinct practices.");
         if ((r.origin() == ReviewOrigin.EVENT && r.eventId() == null)
                 || (r.origin() == ReviewOrigin.REQUEST && r.requestedById() == null)
                 || ((r.origin() == ReviewOrigin.SCHEDULE || r.origin() == ReviewOrigin.BACKFILL)

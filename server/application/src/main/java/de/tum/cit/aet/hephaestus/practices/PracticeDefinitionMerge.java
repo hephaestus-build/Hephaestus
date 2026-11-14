@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.practices;
 
+import de.tum.cit.aet.hephaestus.core.exception.InvalidInputException;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -38,7 +39,7 @@ public final class PracticeDefinitionMerge {
                 .map(FieldChange::field)
                 .collect(Collectors.toSet());
         if (!required.equals(choices.keySet()) || choices.values().stream().anyMatch(Objects::isNull)) {
-            throw new IllegalArgumentException("Choose the current or offered value for every changed catalog field.");
+            throw new InvalidInputException("Choose the current or offered value for every changed catalog field.");
         }
         return new PracticeDefinition(
                 source(PracticeDefinitionField.NAME, current, offered, choices).name(),

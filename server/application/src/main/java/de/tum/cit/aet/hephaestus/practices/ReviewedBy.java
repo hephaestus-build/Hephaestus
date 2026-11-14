@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.practices;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import de.tum.cit.aet.hephaestus.core.exception.InvalidInputException;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewedByKind;
 import java.util.Comparator;
 import java.util.HashSet;
@@ -19,12 +20,11 @@ public record ReviewedBy(
         Objects.requireNonNull(by);
         var codes = new HashSet<String>();
         if (limits.stream().anyMatch(limit -> !codes.add(limit.code()))) {
-            throw new IllegalArgumentException("List each review limit code once.");
+            throw new InvalidInputException("List each review limit code once.");
         }
         limits = limits.stream().sorted(Comparator.comparing(ReviewLimit::code)).toList();
         if ((by == ReviewedByKind.PEOPLE) != (humanReason != null) || limits.size() > 100) {
-            throw new IllegalArgumentException(
-                    "Explain why people review this practice. Only people need that reason.");
+            throw new InvalidInputException("Explain why people review this practice. Only people need that reason.");
         }
     }
 }

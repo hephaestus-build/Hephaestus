@@ -65,10 +65,24 @@ public class GlobalControllerAdvice extends ResponseEntityExceptionHandler {
         return problem(HttpStatus.FORBIDDEN, "Access denied", "You do not have permission to do this.");
     }
 
+    @ExceptionHandler(InvalidInputException.class)
+    ProblemDetail handleInvalidInput(InvalidInputException exception) {
+        return problem(HttpStatus.BAD_REQUEST, "Invalid request", exception.getMessage());
+    }
+
+    /**
+     * Any code, a library included, throws this type, so its message is not written for the person who sent the
+     * request and can name internal values. A message for that person goes in a {@code ResponseStatusException} or a
+     * domain exception that its own advice maps.
+     */
     @ExceptionHandler(IllegalArgumentException.class)
     ProblemDetail handleBadRequest(IllegalArgumentException exception) {
-        log.debug("Handled bad request exception: message={}", messageOf(exception));
-        return problem(HttpStatus.BAD_REQUEST, "Invalid request", messageOf(exception));
+        log.atInfo()
+                .addKeyValue("event.name", "request.refused")
+                .addKeyValue("error.type", exception.getClass().getName())
+                .log("Refused a request that an argument check rejected");
+        return problem(
+                HttpStatus.BAD_REQUEST, "Invalid request", "We could not accept this request. Check it and try again.");
     }
 
     @ExceptionHandler(PropertyReferenceException.class)
@@ -76,10 +90,17 @@ public class GlobalControllerAdvice extends ResponseEntityExceptionHandler {
         return problem(HttpStatus.BAD_REQUEST, "Invalid request", "The requested sort field is not available.");
     }
 
+    /** As for {@link IllegalArgumentException}: the message stays on the server. */
     @ExceptionHandler(IllegalStateException.class)
     ProblemDetail handleIllegalState(IllegalStateException exception) {
-        log.warn("Handled illegal state exception: message={}", messageOf(exception));
-        return problem(HttpStatus.CONFLICT, "Invalid state", messageOf(exception));
+        log.atWarn()
+                .addKeyValue("event.name", "request.state_conflict")
+                .addKeyValue("error.type", exception.getClass().getName())
+                .log("Refused a request that a state check rejected");
+        return problem(
+                HttpStatus.CONFLICT,
+                "Invalid state",
+                "This request does not fit the current data. Reload and try again.");
     }
 
     @ExceptionHandler(ConfigAuditUnavailableException.class)

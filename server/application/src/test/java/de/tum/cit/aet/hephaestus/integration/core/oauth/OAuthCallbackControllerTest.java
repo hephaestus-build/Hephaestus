@@ -110,7 +110,7 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
         allParams.put("state", state);
 
         ResponseEntity<?> response =
-                controller.handleCallback("slack", state, null, null, allParams, htmlRequest(), servletResponse);
+                controller.handleCallback("slack", state, null, allParams, htmlRequest(), servletResponse);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FOUND);
         assertThat(response.getHeaders().getLocation()).isNotNull();
@@ -144,7 +144,7 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
         slackStrategy.nextFinalization = new ConnectFinalization.Completed("T123", new BearerToken("tok", null), null);
 
         controller.handleCallback(
-                "slack", state, null, null, Map.of("code", "c", "state", state), htmlRequest(), servletResponse);
+                "slack", state, null, Map.of("code", "c", "state", state), htmlRequest(), servletResponse);
 
         ArgumentCaptor<Long> actor = ArgumentCaptor.forClass(Long.class);
         verify(callbackService).completeConnection(any(Connection.class), any(), actor.capture());
@@ -157,7 +157,6 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
                 "slack",
                 /* state */ null,
                 "access_denied",
-                "The user denied the request",
                 Map.of("error", "access_denied", "error_description", "The user denied the request"),
                 jsonRequest(),
                 servletResponse);
@@ -167,7 +166,7 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
         ProblemDetail body = (ProblemDetail) response.getBody();
         assertThat(body).isNotNull();
         assertThat(body.getProperties()).containsEntry("callbackError", "access_denied");
-        assertThat(body.getDetail()).isEqualTo("The user denied the request");
+        assertThat(body.getDetail()).isEqualTo("You cancelled the connection. Start it again to connect.");
 
         // An unbound callback cannot name a return workspace.
         verify(oauthStateService, never()).consume(any());
@@ -182,7 +181,7 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
         lenient().when(otherBrowser.getHeader(HttpHeaders.ACCEPT)).thenReturn("text/html");
 
         var answer = controller.handleCallback(
-                "slack", "signed-state", "access_denied", null, Map.of(), otherBrowser, servletResponse);
+                "slack", "signed-state", "access_denied", Map.of(), otherBrowser, servletResponse);
 
         assertThat(String.valueOf(answer.getHeaders().getLocation()))
                 .contains("reason=access_denied")
@@ -198,13 +197,12 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
                 "slack",
                 "signed-state",
                 "access_denied",
-                "Connection cancelled",
                 Map.of("workspaceSlug", "forged-team"),
                 htmlRequest(),
                 servletResponse);
         assertThat(response.getHeaders().getLocation())
                 .hasToString(
-                        "/integrations?status=error&reason=access_denied&description=Connection+cancelled&kind=SLACK&workspaceSlug=team");
+                        "/integrations?status=error&reason=access_denied&description=You+cancelled+the+connection.+Start+it+again+to+connect.&kind=SLACK&workspaceSlug=team");
         verify(callbackService, never()).findAttemptConnection(any());
     }
 
@@ -212,18 +210,22 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
     void vendorCancellationKeepsItsReasonWhenStateExpired() {
         when(oauthStateService.consume("expired")).thenThrow(new IllegalArgumentException("Expired state"));
         var response = controller.handleCallback(
-                "slack", "expired", "access_denied", null, Map.of(), htmlRequest(), servletResponse);
+                "slack", "expired", "access_denied", Map.of(), htmlRequest(), servletResponse);
         assertThat(response.getHeaders().getLocation())
-                .hasToString(PROPS.resolvedFailureRedirect() + "&reason=access_denied&kind=SLACK");
+                .hasToString(
+                        PROPS.resolvedFailureRedirect()
+                                + "&reason=access_denied&description=You+cancelled+the+connection.+Start+it+again+to+connect.&kind=SLACK");
         verify(callbackService, never()).findAttemptConnection(any());
     }
 
     @Test
     void vendorCancellationDoesNotRequireStateForOtherIntegrations() {
         var response = controller.handleCallback(
-                "github", "expired", "access_denied", null, Map.of(), htmlRequest(), servletResponse);
+                "github", "expired", "access_denied", Map.of(), htmlRequest(), servletResponse);
         assertThat(response.getHeaders().getLocation())
-                .hasToString(PROPS.resolvedFailureRedirect() + "&reason=access_denied&kind=GITHUB");
+                .hasToString(PROPS.resolvedFailureRedirect()
+                        + "&reason=access_denied&description=You+cancelled+the+connection.+Start+it+again+to+connect."
+                        + "&kind=GITHUB");
         verify(oauthStateService, never()).consume(any());
     }
 
@@ -233,8 +235,8 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
                 .thenReturn(new StateBinding(42L, IntegrationKind.SLACK, Instant.now(), 42L));
         when(callbackService.findAttemptConnection(any()))
                 .thenThrow(new EntityNotFoundException("Workspace does not exist"));
-        var response = controller.handleCallback(
-                "slack", "signed-state", null, null, Map.of(), htmlRequest(), servletResponse);
+        var response =
+                controller.handleCallback("slack", "signed-state", null, Map.of(), htmlRequest(), servletResponse);
         var location = response.getHeaders().getLocation();
         assertNotNull(location);
         assertThat(location.toString()).contains("reason=workspace_not_found");
@@ -247,7 +249,7 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
                 .thenReturn(new StateBinding(42L, IntegrationKind.SLACK, Instant.now(), 42L));
         when(callbackService.workspaceSlug(42L)).thenThrow(new EntityNotFoundException("Workspace does not exist"));
         var response = controller.handleCallback(
-                "slack", "signed-state", "access_denied", null, Map.of(), htmlRequest(), servletResponse);
+                "slack", "signed-state", "access_denied", Map.of(), htmlRequest(), servletResponse);
         var location = response.getHeaders().getLocation();
         assertNotNull(location);
         assertThat(location.toString()).contains("reason=workspace_not_found").doesNotContain("workspaceSlug=");
@@ -259,7 +261,6 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
                 "slack",
                 null,
                 "access_denied",
-                "The user denied the request",
                 Map.of("error", "access_denied", "error_description", "The user denied the request"),
                 htmlRequest(),
                 servletResponse);
@@ -277,8 +278,8 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
 
     @Test
     void missingState_jsonRequest_returns400() {
-        ResponseEntity<?> response = controller.handleCallback(
-                "slack", null, null, null, Map.of("code", "code"), jsonRequest(), servletResponse);
+        ResponseEntity<?> response =
+                controller.handleCallback("slack", null, null, Map.of("code", "code"), jsonRequest(), servletResponse);
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
         ProblemDetail body = (ProblemDetail) response.getBody();
         assertThat(body).isNotNull();
@@ -287,8 +288,8 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
 
     @Test
     void missingState_browserRequest_redirects() {
-        ResponseEntity<?> response = controller.handleCallback(
-                "slack", null, null, null, Map.of("code", "code"), htmlRequest(), servletResponse);
+        ResponseEntity<?> response =
+                controller.handleCallback("slack", null, null, Map.of("code", "code"), htmlRequest(), servletResponse);
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FOUND);
         var location2 = response.getHeaders().getLocation();
         assertNotNull(location2);
@@ -301,19 +302,14 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
                 .thenThrow(new IllegalArgumentException("The signature of the OAuth state is not correct."));
 
         ResponseEntity<?> response = controller.handleCallback(
-                "slack",
-                "tampered",
-                null,
-                null,
-                Map.of("code", "c", "state", "tampered"),
-                jsonRequest(),
-                servletResponse);
+                "slack", "tampered", null, Map.of("code", "c", "state", "tampered"), jsonRequest(), servletResponse);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
         ProblemDetail body = (ProblemDetail) response.getBody();
         assertThat(body).isNotNull();
         assertThat(body.getProperties()).containsEntry("callbackError", "invalid_state");
-        assertThat(body.getDetail()).contains("signature of the OAuth state");
+        assertThat(body.getDetail())
+                .isEqualTo("This connection link expired or was already used. Start the connection again.");
         // Critical: strategy NEVER invoked when the state is bad.
         assertThat(slackStrategy.finalizeCalls).isEqualTo(0);
         verify(callbackService, never()).findAttemptConnection(any());
@@ -329,7 +325,6 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
                 "github",
                 "slack-state",
                 null,
-                null,
                 Map.of("code", "c", "state", "slack-state"),
                 jsonRequest(),
                 servletResponse);
@@ -338,7 +333,8 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
         ProblemDetail body = (ProblemDetail) response.getBody();
         assertThat(body).isNotNull();
         assertThat(body.getProperties()).containsEntry("callbackError", "kind_mismatch");
-        assertThat(body.getDetail()).contains("SLACK").contains("github");
+        assertThat(body.getDetail())
+                .isEqualTo("This connection link belongs to another integration. Start the connection again.");
         assertThat(slackStrategy.finalizeCalls).isEqualTo(0);
         verify(callbackService, never()).findAttemptConnection(any());
     }
@@ -350,16 +346,17 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
         Connection pending = newConnection(7L, 42L, IntegrationKind.SLACK, null, IntegrationState.PENDING);
         when(callbackService.findAttemptConnection(any())).thenReturn(pending);
 
-        slackStrategy.nextFinalization = new ConnectFinalization.Failed("vendor rejected the code");
+        slackStrategy.nextFinalization =
+                new ConnectFinalization.Failed("Slack refused the connection. Start it again.");
 
         ResponseEntity<?> response = controller.handleCallback(
-                "slack", "s", null, null, Map.of("code", "c", "state", "s"), jsonRequest(), servletResponse);
+                "slack", "s", null, Map.of("code", "c", "state", "s"), jsonRequest(), servletResponse);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
         ProblemDetail body = (ProblemDetail) response.getBody();
         assertThat(body).isNotNull();
         assertThat(body.getProperties()).containsEntry("callbackError", "finalize_failed");
-        assertThat(body.getDetail()).contains("vendor rejected");
+        assertThat(body.getDetail()).isEqualTo("Slack refused the connection. Start it again.");
         // No completion issued on a Failed result.
         verify(callbackService, never()).completeConnection(any(), any(), any());
     }
@@ -374,7 +371,7 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
         slackStrategy.nextFinalization = new ConnectFinalization.Failed("vendor rejected the code");
 
         ResponseEntity<?> response = controller.handleCallback(
-                "slack", "s", null, null, Map.of("code", "c", "state", "s"), htmlRequest(), servletResponse);
+                "slack", "s", null, Map.of("code", "c", "state", "s"), htmlRequest(), servletResponse);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FOUND);
         var location3 = response.getHeaders().getLocation();
@@ -397,7 +394,7 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
         slackStrategy.throwOnFinalize = new RuntimeException("vendor 500");
 
         ResponseEntity<?> response = controller.handleCallback(
-                "slack", "s", null, null, Map.of("code", "c", "state", "s"), jsonRequest(), servletResponse);
+                "slack", "s", null, Map.of("code", "c", "state", "s"), jsonRequest(), servletResponse);
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
         ProblemDetail body = (ProblemDetail) response.getBody();
         assertThat(body).isNotNull();
@@ -410,7 +407,6 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
 
         ResponseEntity<?> response = controller.handleCallback(
                 "slack",
-                null,
                 null,
                 null,
                 Map.of("installation_id", "4242", "setup_action", "install"),
@@ -427,13 +423,7 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
     @Test
     void shouldStillRequireStateWhenTheStrategyDoesNotRecognizeTheCallback() {
         ResponseEntity<?> response = controller.handleCallback(
-                "slack",
-                null,
-                null,
-                null,
-                Map.of("installation_id", "4242", "code", "c"),
-                jsonRequest(),
-                servletResponse);
+                "slack", null, null, Map.of("installation_id", "4242", "code", "c"), jsonRequest(), servletResponse);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
         ProblemDetail body = (ProblemDetail) response.getBody();
@@ -452,7 +442,7 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
                 .thenThrow(new OAuthCallbackService.InstanceConnectedElsewhereException("Held elsewhere.", null));
 
         ResponseEntity<?> response = controller.handleCallback(
-                "slack", "s", null, null, Map.of("code", "c", "state", "s"), jsonRequest(), servletResponse);
+                "slack", "s", null, Map.of("code", "c", "state", "s"), jsonRequest(), servletResponse);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
         ProblemDetail body = (ProblemDetail) response.getBody();
@@ -480,7 +470,7 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
                 .thenThrow(new IllegalStateException("Connection 7 cannot change from UNINSTALLED to ACTIVE."));
 
         ResponseEntity<?> response = controller.handleCallback(
-                "slack", "s", null, null, Map.of("code", "c", "state", "s"), jsonRequest(), servletResponse);
+                "slack", "s", null, Map.of("code", "c", "state", "s"), jsonRequest(), servletResponse);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
         ProblemDetail body = (ProblemDetail) response.getBody();
@@ -499,7 +489,7 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
                 .thenThrow(new IllegalStateException("Connection 7 cannot change from UNINSTALLED to ACTIVE."));
 
         ResponseEntity<?> response = controller.handleCallback(
-                "slack", "s", null, null, Map.of("code", "c", "state", "s"), htmlRequest(), servletResponse);
+                "slack", "s", null, Map.of("code", "c", "state", "s"), htmlRequest(), servletResponse);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FOUND);
         var location4 = response.getHeaders().getLocation();
@@ -510,7 +500,7 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
     @Test
     void unknownKind_jsonRequest_returns404() {
         ResponseEntity<?> response = controller.handleCallback(
-                "bitbucket", "s", null, null, Map.of("code", "c", "state", "s"), jsonRequest(), servletResponse);
+                "bitbucket", "s", null, Map.of("code", "c", "state", "s"), jsonRequest(), servletResponse);
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
         ProblemDetail body = (ProblemDetail) response.getBody();
         assertThat(body).isNotNull();
@@ -521,7 +511,7 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
     @Test
     void unknownKind_browserRequest_redirects() {
         ResponseEntity<?> response = controller.handleCallback(
-                "bitbucket", "s", null, null, Map.of("code", "c", "state", "s"), htmlRequest(), servletResponse);
+                "bitbucket", "s", null, Map.of("code", "c", "state", "s"), htmlRequest(), servletResponse);
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FOUND);
         var location5 = response.getHeaders().getLocation();
         assertNotNull(location5);
@@ -584,7 +574,6 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
                 "slack",
                 "signed-state",
                 null,
-                null,
                 Map.of("code", "c", "state", "signed-state"),
                 otherBrowser,
                 servletResponse);
@@ -605,7 +594,7 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
         });
 
         ResponseEntity<?> answer = controller.handleCallback(
-                "slack", "signed-state", null, null, Map.of("code", "c"), otherFlow, servletResponse);
+                "slack", "signed-state", null, Map.of("code", "c"), otherFlow, servletResponse);
 
         assertThat(answer.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
         verify(oauthStateService, never()).consume(any());
@@ -615,8 +604,7 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
     void shouldEndTheBrowserBindingOnTheCallback() {
         when(oauthStateService.consume("signed-state")).thenThrow(new IllegalArgumentException("expired"));
 
-        controller.handleCallback(
-                "slack", "signed-state", null, null, Map.of("code", "c"), htmlRequest(), servletResponse);
+        controller.handleCallback("slack", "signed-state", null, Map.of("code", "c"), htmlRequest(), servletResponse);
 
         Cookie cleared = servletResponse.getCookie(OAuthBrowserBinding.cookieName("signed-state"));
         assertNotNull(cleared);
@@ -729,5 +717,22 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
         public void eraseLocalData(IntegrationRef ref) {
             throw new UnsupportedOperationException("eraseLocalData() not exercised by OAuthCallbackController");
         }
+    }
+
+    /** The provider's error arrives in the query, so the page shows neither its code nor its text. */
+    @Test
+    void shouldShowItsOwnSentenceForAProviderErrorWhateverTheQuerySays() {
+        ResponseEntity<?> response = controller.handleCallback(
+                "slack",
+                null,
+                "Call support at example.com",
+                Map.of("error", "Call support at example.com", "error_description", "Sign in again at example.com"),
+                jsonRequest(),
+                servletResponse);
+
+        ProblemDetail body = (ProblemDetail) response.getBody();
+        assertThat(body).isNotNull();
+        assertThat(body.getProperties()).containsEntry("callbackError", "provider_error");
+        assertThat(body.getDetail()).isEqualTo("The provider refused the connection. Start it again.");
     }
 }

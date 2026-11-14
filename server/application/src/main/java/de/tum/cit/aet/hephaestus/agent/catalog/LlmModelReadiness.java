@@ -1,5 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.catalog;
 
+import de.tum.cit.aet.hephaestus.core.exception.InvalidInputException;
+
 /**
  * Whether a registered model can run now, and the first reason it cannot. Both admin consoles show this one answer, and
  * activation refuses a model for the same reasons.
@@ -28,7 +30,6 @@ public enum LlmModelReadiness {
     /** A model turns on only on an enabled connection and with a price, which may be no cost. */
     static void requireActivatable(boolean connectionEnabled, PricingMode pricing) {
         if (!connectionEnabled || pricing == PricingMode.UNPRICED)
-            throw new IllegalArgumentException(
-                    "Activate the connection and set a price before you activate the model.");
+            throw new InvalidInputException("Activate the connection and set a price before you activate the model.");
     }
 }

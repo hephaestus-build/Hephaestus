@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.core.security;
 
+import de.tum.cit.aet.hephaestus.core.exception.InvalidInputException;
 import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.net.URI;
@@ -59,29 +60,29 @@ public final class ServerUrlValidator {
      */
     public static void validate(@Nullable String url, PrivateHostAllowlist privateHosts) {
         if (url == null || url.isBlank()) {
-            throw new IllegalArgumentException("Server URL must not be blank");
+            throw new InvalidInputException("The server address must not be blank.");
         }
 
         URI uri;
         try {
             uri = new URI(url.trim());
         } catch (URISyntaxException e) {
-            throw new IllegalArgumentException("Server URL is malformed: " + e.getMessage(), e);
+            throw new InvalidInputException("This server address is not a valid URL.", e);
         }
 
         // Must be HTTPS
         if (!"https".equalsIgnoreCase(uri.getScheme())) {
-            throw new IllegalArgumentException("Server URL must use HTTPS scheme, got: " + uri.getScheme());
+            throw new InvalidInputException("Use an HTTPS server address.");
         }
 
         // Must not contain userinfo (credentials in URL)
         if (uri.getUserInfo() != null) {
-            throw new IllegalArgumentException("Server URL must not contain embedded credentials");
+            throw new InvalidInputException("Remove the credentials from the server address.");
         }
 
         String host = uri.getHost();
         if (host == null || host.isBlank()) {
-            throw new IllegalArgumentException("Server URL must have a valid hostname");
+            throw new InvalidInputException("The server address needs a valid host name.");
         }
 
         // A trailing dot names the same host, so "localhost." must not pass as another name.
@@ -89,28 +90,28 @@ public final class ServerUrlValidator {
 
         // Block known dangerous hostnames
         if (BLOCKED_HOSTNAMES.contains(hostLower)) {
-            throw new IllegalArgumentException("Server URL hostname is not allowed: " + host);
+            throw new InvalidInputException("This server host is not allowed: " + host);
         }
 
         // Block known dangerous IPs
         if (BLOCKED_IPS.contains(hostLower)) {
-            throw new IllegalArgumentException("Server URL must not point to a loopback or reserved address");
+            throw new InvalidInputException("The server address must not be a loopback or reserved address.");
         }
 
         // Block private TLDs
         for (String tld : BLOCKED_TLDS) {
             if (hostLower.endsWith(tld) && !privateHosts.listsHostName(hostLower)) {
-                throw new IllegalArgumentException("Server URL must not use a private TLD: " + tld);
+                throw new InvalidInputException("The server address must not use a private TLD: ." + tld);
             }
         }
 
         // Must not have a path beyond / (prevents open-redirect abuse like https://legit.com/redirect)
         String path = uri.getPath();
         if (path != null && !path.isEmpty() && !"/".equals(path)) {
-            throw new IllegalArgumentException("Server URL must be a base URL without path segments");
+            throw new InvalidInputException("Use the server address without a path.");
         }
         if (uri.getRawQuery() != null || uri.getRawFragment() != null) {
-            throw new IllegalArgumentException("Server URL must not contain a query or fragment");
+            throw new InvalidInputException("Remove the query or fragment from the server address.");
         }
 
         // If the hostname looks like an IP address, validate its range
@@ -131,12 +132,12 @@ public final class ServerUrlValidator {
         // but their textual form never equals the canonical getHostAddress() string — the classic SSRF
         // deny-list bypass. A legitimate server base URL only ever uses a canonical dotted-quad or IPv6.
         if (isNumericIpv4Form(ipCandidate) && !isCanonicalDottedQuad(ipCandidate)) {
-            throw new IllegalArgumentException("Server URL must not use a non-canonical numeric host: " + host);
+            throw new InvalidInputException("The server address must not use a non-canonical numeric host: " + host);
         }
 
         // A zone id names an interface, so "[::1%25eth0]" is loopback that the parser cannot read.
         if (ipCandidate.contains("%")) {
-            throw new IllegalArgumentException("Server URL must not use an IPv6 zone id: " + host);
+            throw new InvalidInputException("Remove the IPv6 zone from the server host: " + host);
         }
         // A name is never resolved here: getByName would look it up in DNS, on every check of a stored URL. The
         // connect-time resolver checks the addresses a name has when a client connects.
@@ -147,7 +148,7 @@ public final class ServerUrlValidator {
             addr = InetAddress.getByName(ipCandidate);
         } catch (UnknownHostException e) {
             // Brackets always hold an IP literal, so one that does not parse is refused, not taken for a name.
-            throw new IllegalArgumentException("Server URL has an invalid IPv6 literal", e);
+            throw new InvalidInputException("The IPv6 server host is not valid.", e);
         }
 
         // Only range-check IP literals (canonical dotted-quad or bracketed IPv6); a DNS hostname's resolved
@@ -162,26 +163,26 @@ public final class ServerUrlValidator {
         }
 
         if (addr.isLoopbackAddress()) {
-            throw new IllegalArgumentException("Server URL must not point to a loopback address");
+            throw new InvalidInputException("The server address must not be a loopback address.");
         }
         if (addr.isLinkLocalAddress()) {
-            throw new IllegalArgumentException("Server URL must not point to a link-local address");
+            throw new InvalidInputException("The server address must not be a link-local address.");
         }
         if (addr.isSiteLocalAddress()) {
-            throw new IllegalArgumentException("Server URL must not point to a private or site-local address");
+            throw new InvalidInputException("The server address must not be a private or site-local address.");
         }
         if (addr.isAnyLocalAddress()) {
-            throw new IllegalArgumentException("Server URL must not point to a wildcard address");
+            throw new InvalidInputException("The server address must not be a wildcard address.");
         }
         if (PrivateAddressGuard.isNonPublic(addr)
                 && !(addr instanceof Inet6Address && (addr.getAddress()[0] & 0xFE) == 0xFC)) {
-            throw new IllegalArgumentException("Server URL must not point to a non-public address");
+            throw new InvalidInputException("The server address must be a public address.");
         }
         // IPv6 Unique-Local Addresses (fc00::/7) are private — the dominant self-hosted IPv6 range — but
         // Java has no isUniqueLocalAddress() and isSiteLocalAddress() returns false for them, so check the
         // high 7 bits directly. Without this, https://[fc00::1] / https://[fd12::1] would pass the gate.
         if (addr instanceof Inet6Address && (addr.getAddress()[0] & 0xFE) == 0xFC) {
-            throw new IllegalArgumentException("Server URL must not point to a unique-local (ULA) address");
+            throw new InvalidInputException("The server address must not be a unique-local address.");
         }
     }
 

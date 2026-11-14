@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.integration.core.connection;
 
 import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
+import de.tum.cit.aet.hephaestus.core.exception.InvalidInputException;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonSourceNamespace;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -85,7 +86,7 @@ public sealed interface ConnectionConfig
             implements ConnectionConfig {
         public GitLabConfig {
             if (gitlabGroupId == null || gitlabGroupId <= 0) {
-                throw new IllegalArgumentException(
+                throw new InvalidInputException(
                         "A GitLab connection requires the provider group ID. Verify the group before connecting.");
             }
             Objects.requireNonNull(serverUrl, "A GitLab connection names its server");
