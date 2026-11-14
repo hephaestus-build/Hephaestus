@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react";
-import { fn } from "storybook/test";
+import { expect, fireEvent, fn } from "storybook/test";
 
 import { ConnectGitLabStep } from "./ConnectGitLabStep";
 import { withWizardState } from "./stories-utils";
@@ -49,6 +49,27 @@ export const FilledNotValidated: Story = {
 			personalAccessToken: "glpat-abc123def456",
 		}),
 	],
+};
+
+/**
+ * Enter also confirms an input method's conversion, as when typing in Japanese, so an Enter while
+ * composing does not check the token. An Enter after it does.
+ */
+export const EnterWhileComposingDoesNotCheck: Story = {
+	decorators: [
+		withWizardState({
+			step: 1,
+			serverUrl,
+			personalAccessToken: "glpat-abc123def456",
+		}),
+	],
+	play: async ({ args, canvas }) => {
+		const token = canvas.getByLabelText("Access token");
+		fireEvent.keyDown(token, { key: "Enter", isComposing: true });
+		await expect(args.onValidate).not.toHaveBeenCalled();
+		fireEvent.keyDown(token, { key: "Enter" });
+		await expect(args.onValidate).toHaveBeenCalledOnce();
+	},
 };
 
 /** Token validated successfully — shows green success alert with username. */

@@ -726,7 +726,10 @@ function BaseBranchEditor({
 					onKeyDown={(event) => {
 						if (event.key === "Enter") {
 							event.preventDefault();
-							add();
+							// Enter also confirms an input method's conversion, which is not a request to add.
+							if (!event.nativeEvent.isComposing) {
+								add();
+							}
 						}
 					}}
 				/>

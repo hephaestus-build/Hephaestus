@@ -86,7 +86,10 @@ export function ConnectGitLabStep({
 						onKeyDown={(e) => {
 							if (e.key === "Enter") {
 								e.preventDefault();
-								handleValidate();
+								// Enter also confirms an input method's conversion, which is not a request to check.
+								if (!e.nativeEvent.isComposing) {
+									handleValidate();
+								}
 							}
 						}}
 					/>
