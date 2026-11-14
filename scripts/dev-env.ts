@@ -75,7 +75,7 @@ export async function ensureGeneratedValues({
 	const existingData = await hasData(dataDirectory);
 	if (existingData && missing.some(({ name }) => name === "POSTGRES_PASSWORD")) {
 		throw new Error(
-			"The local database has data but no POSTGRES_PASSWORD. Set its password in server/.env before running local database commands.",
+			"The local database has data but no POSTGRES_PASSWORD. Set its password in server/.env, or run `vp run dev:reset` to start again with a new database.",
 		);
 	}
 	const written = missing.filter(({ newDatabaseOnly }) => !(existingData && newDatabaseOnly));
@@ -85,15 +85,20 @@ export async function ensureGeneratedValues({
 	return written.map(({ name }) => name);
 }
 
-/** Replaces the assignment of `name`, or appends one. The file holds secrets, so only its owner reads it. */
+/**
+ * Sets `name`, which the file leaves blank or unset. Readers take the last assignment of a key, so the last one is
+ * replaced, or a line is appended. The file holds secrets, so only its owner reads it.
+ */
 async function setEnvLine(envFile: string, name: string, value: string): Promise<void> {
 	const current = await readFile(envFile, "utf8").catch(() => "");
-	const pattern = new RegExp(`^${name}=.*$`, "mu");
+	const last = [...current.matchAll(new RegExp(`^${name}=.*$`, "gmu"))].at(-1);
 	const line = `${name}=${value}`;
-	const next = pattern.test(current)
-		? current.replace(pattern, () => line)
-		: `${current}${current === "" || current.endsWith("\n") ? "" : "\n"}${line}\n`;
-	await writeFile(envFile, next, { mode: 0o600 });
+	const next =
+		last === undefined
+			? `${current}${current === "" || current.endsWith("\n") ? "" : "\n"}${line}\n`
+			: `${current.slice(0, last.index)}${line}${current.slice(last.index + last[0].length)}`;
+	await writeFile(envFile, next);
+	await chmod(envFile, 0o600);
 }
 
 /**
@@ -155,6 +160,15 @@ export async function ensureLocalEnvironment(): Promise<void> {
 	const written = await ensureGeneratedValues(paths);
 	if (written.length > 0) {
 		console.log(`ℹ️  Generated ${written.join(", ")} in server/.env for this checkout.`);
+	}
+	const values = { ...(await readEnvFile(paths.envFile)), ...process.env };
+	const keys = GENERATED.filter(
+		({ newDatabaseOnly, name }) => newDatabaseOnly && !isSet(values[name]),
+	);
+	if (keys.length > 0) {
+		console.warn(
+			`⚠️  The local database has data but server/.env has no ${keys.map(({ name }) => name).join(" or ")}. Set the keys it was created with, or run \`vp run dev:reset\`.`,
+		);
 	}
 }
 

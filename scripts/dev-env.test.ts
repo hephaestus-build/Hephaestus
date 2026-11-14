@@ -99,10 +99,21 @@ await describe("the generated values of a checkout", async () => {
 		});
 	});
 
-	await test("a checkout without a .env file gets one that only its owner reads", async () => {
+	await test("a key repeated with a blank last line keeps the developer's line and gets set once", async () => {
 		await checkout(async (paths) => {
+			await writeFile(
+				paths.envFile,
+				"WEBHOOK_SECRET=mine\nPOSTGRES_PASSWORD=chosen\nWEBHOOK_SECRET=\n",
+				{ mode: 0o644 },
+			);
 			await ensureGeneratedValues({ ...paths, environment: {} });
-			assert.match((await passwordIn(paths.envFile)) ?? "", /^[0-9a-f]{48}$/u);
+			const first = await readFile(paths.envFile, "utf8");
+			assert.match(
+				first,
+				/^WEBHOOK_SECRET=mine\nPOSTGRES_PASSWORD=chosen\nWEBHOOK_SECRET=[0-9a-f]{64}\n/u,
+			);
+			assert.deepEqual(await ensureGeneratedValues({ ...paths, environment: {} }), []);
+			assert.equal(await readFile(paths.envFile, "utf8"), first);
 			if (process.platform !== "win32") {
 				const { mode } = await stat(paths.envFile);
 				assert.equal(mode.toString(8).slice(-2), "00");
@@ -139,7 +150,7 @@ await describe("the generated values of a checkout", async () => {
 			await writeFile(paths.envFile, "POSTGRES_PORT=15432\n");
 			await assert.rejects(
 				ensureGeneratedValues({ ...paths, environment: {} }),
-				/Set its password in server\/\.env/u,
+				/Set its password in server\/\.env, or run `vp run dev:reset`/u,
 			);
 			assert.equal(await readFile(paths.envFile, "utf8"), "POSTGRES_PORT=15432\n");
 		});

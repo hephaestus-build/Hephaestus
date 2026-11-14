@@ -170,7 +170,7 @@ To wipe the local database (e.g. after a bad migration or sync), run `vp run dev
 `server/.env` holds the local settings of a checkout.
 Docker Compose and Spring Boot both read it.
 One command writes it: `vp run dev:env`.
-Every `vp run dev*` and `db:*` command runs it first, so you run it yourself only to edit the file before the first start.
+`vp run dev`, `dev:server`, `dev:compose`, `dev:reset` and every `db:*` command run it first, so you run it yourself only to edit the file before the first start.
 It is safe to run again: it never replaces a value that is set.
 
 1. If `server/.env` does not exist, the command creates it from `server/.env.example`.
@@ -189,7 +189,7 @@ A value in your shell overrides the file.
 
 PostgreSQL reads the password only when it creates a database, and the server reads stored secrets only with the keys that encrypted them.
 Thus, a checkout whose `server/postgres-data` already has data gets no new password, project name or keys.
-If its password or project name is missing, the command stops and tells you to set it.
+If its password or project name is missing, the command stops and tells you to set it. If a key is missing, it warns.
 Run `vp run dev:reset` to start again with a new database. This deletes the local data.
 
 ### Port overrides
