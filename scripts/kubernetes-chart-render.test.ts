@@ -964,7 +964,7 @@ await test("the webapp serves the operator's legal pages from a ConfigMap, read-
 	);
 });
 
-await test("the route attaches to the platform Gateway and strips only /api", () => {
+await test("the route attaches to the platform Gateway and rewrites no path", () => {
 	const resources = rendered(layersFor("small"));
 	const routes = resources.filter((resource) => kindOf(resource) === "HTTPRoute");
 	assert.equal(routes.length, 1);

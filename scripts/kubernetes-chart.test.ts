@@ -485,7 +485,7 @@ await test("network policy is always rendered", () => {
 	assert.match(source("networkpolicy.yaml"), /^\{\{- \/\* Always rendered\./u);
 });
 
-await test("the route strips only /api and keeps every webhook path whole", () => {
+await test("the route sends each path to its backend as it is", () => {
 	const route = source("route.yaml").split("---")[0] ?? "";
 	for (const forbidden of [
 		/^kind:\s*(?:Gateway|Ingress)\s*$/mu,
