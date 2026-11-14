@@ -227,6 +227,7 @@ function runScenario(name: string): Map<string, string> {
 					AGENT_BUDGET_MS: "60000",
 					PI_PRACTICE_MODEL_CALLS: "6",
 					PI_PRACTICE_OUTPUT_TOKENS: "24000",
+					PI_PRACTICE_INPUT_TOKENS: "1152000",
 					LLM_PROXY_URL: "https://unused.invalid",
 					LLM_PROXY_TOKEN: "test-token",
 				},

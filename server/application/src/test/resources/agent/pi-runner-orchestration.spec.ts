@@ -1460,6 +1460,45 @@ if (scenario !== undefined && scenario !== "") {
 									},
 								});
 							}
+							if (scenario === "scope-input-budget") {
+								// ADR 0068's PracticeInputBudgetTest: the first practice reads until its prompts spend its
+								// input budget, cached reads included, and never records; its sibling records at once.
+								const calls = currentSlug === "test-practice" ? 3 : 1;
+								for (let call = 0; call < calls; call += 1) {
+									const recording = currentSlug !== "test-practice";
+									emit({
+										type: "message_end",
+										message: {
+											role: "assistant",
+											stopReason: "toolUse",
+											usage: { ...callUsage(100), input: 1000, cacheRead: 500 },
+											content: [
+												{
+													type: "toolCall",
+													id: `${currentSlug}-${call}`,
+													name: recording ? "submit_result" : "read",
+													arguments: {},
+												},
+											],
+										},
+									});
+									if (recording) {
+										const result = await report.execute(
+											`${currentSlug}-${call}`,
+											notMet(`Own ${currentSlug}`),
+										);
+										emit({
+											type: "tool_execution_end",
+											toolCallId: `${currentSlug}-${call}`,
+											toolName: "submit_result",
+											isError: false,
+											result,
+										});
+									}
+									emit({ type: "turn_end" });
+								}
+								return;
+							}
 							if (scenario === "scope-budget") {
 								for (let call = 0; call < 3; call += 1) {
 									emit({
@@ -2013,6 +2052,7 @@ if (scenario !== undefined && scenario !== "") {
 		"scope-repeat",
 		"scope-ownership",
 		"scope-budget",
+		"scope-input-budget",
 		"scope-stop-failure",
 		"scope-stop-hangs",
 		"late-usage",
@@ -2096,6 +2136,8 @@ if (scenario !== undefined && scenario !== "") {
 					"identical evidence reads in fresh practice sessions do not become a repeated-call loop",
 				"scope-ownership":
 					"a session's submissions bind to its own practice: they change no other practice's result and spend none of its refusal allowance",
+				"scope-input-budget":
+					"ends a practice whose prompts spend its input budget as not reached for budget, and its sibling goes on (ADR 0068 PracticeInputBudgetTest)",
 				"scope-budget":
 					"fresh practice sessions each have their own budget and accumulate nonzero native usage once",
 				"scope-stop-hangs":
@@ -2416,6 +2458,7 @@ if (scenario !== undefined && scenario !== "") {
 										["scope-native-read-correction", "12"],
 									]).get(stage) ?? "6",
 								PI_PRACTICE_OUTPUT_TOKENS: "24000",
+								PI_PRACTICE_INPUT_TOKENS: stage === "scope-input-budget" ? "4000" : "100000000",
 								LLM_PROXY_URL: "https://unused.invalid",
 								LLM_PROXY_TOKEN: "test-token",
 							},
@@ -2833,10 +2876,25 @@ if (scenario !== undefined && scenario !== "") {
 							if (stage === "scope-budget") {
 								assert.match(
 									child.stderr,
-									/turn\.finished .*calls=3 call_budget=6 output_tokens=300 output_token_budget=24000 tool_calls=/u,
+									/turn\.finished .*calls=3 call_budget=6 output_tokens=300 output_token_budget=24000 input_tokens=3000 input_token_budget=100000000 tool_calls=/u,
 								);
 								assert.match(child.stderr, /measurement\.finished .*calls=6/u);
 							}
+							break;
+						}
+						case "scope-input-budget": {
+							assert.equal(child.status, 0, child.stderr);
+							const result = candidatesIn(nodePath.join(cwd, "out/result.json"));
+							assert.deepEqual(
+								[...result].map(([slug, candidate]) => [slug, candidate.summary]),
+								[["second-practice", "Own second-practice"]],
+							);
+							assert.match(
+								child.stderr,
+								/turn\.finished .*calls=3 .*input_tokens=4500 input_token_budget=4000 stopped_by=budget/u,
+							);
+							reached({ "test-practice": "NOT_REACHED", "second-practice": "EVALUATED" });
+							ran({ "second-practice": "ok", "test-practice": "failed (budget)" });
 							break;
 						}
 						case "scope-stop-hangs":
@@ -2979,7 +3037,7 @@ if (scenario !== undefined && scenario !== "") {
 							assert.match(child.stderr, /turn\.stopped .*stopped_by=budget/u);
 							assert.match(
 								child.stderr,
-								/turn\.finished .*calls=6 call_budget=6 output_tokens=600 output_token_budget=24000 stopped_by=budget/u,
+								/turn\.finished .*calls=6 call_budget=6 output_tokens=600 output_token_budget=24000 input_tokens=6000 input_token_budget=100000000 stopped_by=budget/u,
 							);
 							reached({ "test-practice": "EVALUATED" });
 							ran({ "test-practice": "ok" });

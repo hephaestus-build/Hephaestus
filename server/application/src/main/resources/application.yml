@@ -554,6 +554,7 @@ hephaestus:
         # the whole run.
         practice-model-calls: ${PRACTICE_REVIEW_PRACTICE_MODEL_CALLS:36}
         practice-output-tokens: ${PRACTICE_REVIEW_PRACTICE_OUTPUT_TOKENS:48000}
+        practice-input-tokens: ${PRACTICE_REVIEW_PRACTICE_INPUT_TOKENS:1152000}
         # How long the server may compose a review's feedback after its sandbox ends. The stale-job sweep
         # bounds it as well.
         composition-timeout: ${PRACTICE_REVIEW_COMPOSITION_TIMEOUT:10m}

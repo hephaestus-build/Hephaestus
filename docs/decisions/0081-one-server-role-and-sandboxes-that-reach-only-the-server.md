@@ -58,7 +58,7 @@ A rule that main does not satisfy yet says "1.0 target" and names the pull reque
 The loop keeps two rules of ADR 0068:
 
 - **Codemode** runs inside the review loop. A read or a search in a codemode script thus gives its receipt ([workspace ABI](../contributor/agent/workspace-abi.mdx)).
-- **One context budget** (ADR 0068 decision K) stays decided and is not shipped. Each practice gets an input-token budget beside its call and output budgets. Older evidence-tool results become notes when the live context passes a threshold. No pull request delivers it yet.
+- **One context budget** (ADR 0068 decision K). Each practice has an input-token budget beside its call and output budgets. A practice that spends it ends as not reached, with the reason `budget`. The clearing rule of decision K is withdrawn (ADR 0068, update of 2026-11-14).
 
 ## What changed, and why
 
