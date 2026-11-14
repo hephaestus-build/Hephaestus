@@ -1,31 +1,10 @@
 import { execFileSync } from "node:child_process";
-import { createHash } from "node:crypto";
 import { appendFile, chmod, mkdir, mkdtemp, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { ciToolPin } from "./lib/ci-tool-catalog.ts";
 import { resolveCiTool } from "./lib/ci-tool-resolver.ts";
 import { requiredEnv } from "./lib/env.ts";
-
-export function verifyChecksum(bytes: Uint8Array, expected: string): void {
-	if (
-		!/^[a-f0-9]{64}$/u.test(expected) ||
-		createHash("sha256").update(bytes).digest("hex") !== expected
-	) {
-		throw new Error("Release security tool checksum differs");
-	}
-}
-
-export function checksumFor(text: string, name: string): string {
-	const entries = text
-		.split(/\r?\n/u)
-		.map((line) => /^(?<sha256>[a-f0-9]{64})\s+\*?(?<name>.+)$/u.exec(line))
-		.filter((entry) => entry?.groups?.name === name);
-	if (entries.length !== 1 || entries[0]?.groups?.sha256 === undefined) {
-		throw new Error(`No unique checksum for ${name}`);
-	}
-	return entries[0].groups.sha256;
-}
 
 export async function installReleaseSecurityTools(): Promise<void> {
 	const arch = process.env.RUNNER_ARCH;
@@ -84,10 +63,9 @@ export async function installReleaseSecurityTools(): Promise<void> {
 		if (tool === "syft" && process.env.INSTALL_SYFT === "false") {
 			continue;
 		}
+		// The resolver verifies the archive against its pinned SHA-256.
 		const pin = await ciToolPin(tool);
-		const bytes = await save(tool, pin.name);
-		const checksums = await save(tool, `${tool}-checksums`, "checksums");
-		verifyChecksum(bytes, checksumFor(new TextDecoder().decode(checksums), pin.name));
+		await save(tool, pin.name);
 		run("tar", ["-xzf", path.join(directory, pin.name), "-C", bin, tool]);
 		run(path.join(bin, tool), [tool === "syft" ? "version" : "--version"]);
 	}

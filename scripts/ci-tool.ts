@@ -9,7 +9,7 @@ const variant = process.env.CI_TOOL_VARIANT ?? "";
 const platform = `${process.platform}-${process.arch}`;
 let selector = platform;
 if (variant !== "") {
-	selector = ["key", "checksums"].includes(variant) ? variant : `${platform}-${variant}`;
+	selector = variant === "key" ? variant : `${platform}-${variant}`;
 }
 const pin = await ciToolPin(id, selector);
 if (process.argv[2] === "file") {

@@ -10,11 +10,6 @@
 			"version": "v1.57.1",
 			"sha256": "aa3d3e07344f590bcce8d31043b752daa76c8a56c2aa34ceeee63c6168152582",
 			"name": "syft_{version}_linux_arm64.tar.gz"
-		},
-		"checksums": {
-			"version": "v1.57.1",
-			"sha256": "92466b2b1a4695ee908f8a1567f4ff074e0fbb4f34da28463927a2630901fe2c",
-			"name": "syft_{version}_checksums.txt"
 		}
 	}
 }
