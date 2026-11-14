@@ -28,8 +28,9 @@ export interface BudgetAmountDialogProps {
 	isPending: boolean;
 	/** Rendered as this field's error, not a toast: the value that was rejected is still on screen. */
 	serverError?: string | null;
-	submitLabel?: string;
-	removeLabel?: string;
+	submitLabel: string;
+	/** For example "Remove cap" or "Remove budget". */
+	removeLabel: string;
 	fx?: Fx;
 	/** Defaults to `false`: a caller that has not thought about it gets no estimate, not a frozen one. */
 	isCurrentMonth?: boolean;
@@ -71,8 +72,8 @@ function BudgetAmountDialogContent({
 	currentValueUsd,
 	isPending,
 	serverError,
-	submitLabel = "Save cap",
-	removeLabel = "Remove cap",
+	submitLabel,
+	removeLabel,
 	fx,
 	isCurrentMonth = false,
 	onSubmit,

@@ -7,6 +7,7 @@ const meta = {
 	component: SignInButtons,
 	args: {
 		onSignIn: fn(),
+		onDevSignIn: fn(async () => undefined),
 		options: {
 			status: "ready",
 			providers: [
@@ -46,6 +47,23 @@ export const LinkOnlyProvidersHidden: Story = {
 	play: async () => {
 		await screen.findByRole("button", { name: "Continue with GitHub" });
 		await expect(screen.queryByRole("button", { name: /slack|outline/iu })).toBeNull();
+	},
+};
+
+/** The server advertises the `dev` provider outside production only; the form sits beside the others. */
+export const WithDevSignIn: Story = {
+	args: {
+		options: {
+			status: "ready",
+			providers: [
+				{ registrationId: "github", displayName: "GitHub", providerType: "GITHUB" },
+				{ registrationId: "dev", displayName: "Dev sign-in", providerType: "DEV" },
+			],
+		},
+	},
+	play: async () => {
+		await expect(await screen.findByRole("button", { name: "Continue with GitHub" })).toBeEnabled();
+		await expect(screen.getByRole("button", { name: "Continue as dev admin" })).toBeEnabled();
 	},
 };
 

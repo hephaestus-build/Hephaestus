@@ -42,6 +42,17 @@ await test("component boundaries reject extension IPC, aliased queries and netwo
 			assert.equal(result.status, 1, source);
 			assert.match(result.stderr, /extension\/src\/components\/Example\.tsx/u);
 		}
+		const webappComponent = path.join(root, "webapp/src/components/Example.tsx");
+		for (const source of [
+			'import { authClient } from "@/runtime/auth/auth-client";\n',
+			'import { resolveLegalContent } from "@/runtime/resolve-legal-content";\n',
+		]) {
+			await writeFile(webappComponent, source);
+			const result = run();
+			assert.equal(result.status, 1, source);
+			assert.match(result.stderr, /webapp\/src\/components\/Example\.tsx/u);
+		}
+		await writeFile(webappComponent, "export function Example() { return null; }\n");
 		await writeFile(component, 'import type { WorkFeedback } from "~/shared/review-context";\n');
 		assert.equal(run().status, 0, "types are props, not effects");
 		await writeFile(story, 'import { http } from "msw";\n');

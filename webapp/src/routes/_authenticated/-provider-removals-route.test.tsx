@@ -223,5 +223,9 @@ describe("provider removal routes", () => {
 		);
 		expect(link.getAttribute("href")).toBe("/w/own/admin/integrations/outline?repairConnection=7");
 		expect(screen.queryByRole("button", { name: "Confirm removal" })).toBeNull();
+		screen.getByText(
+			"Confirm that removal is complete, then release the block in connection administration.",
+		);
+		expect(screen.queryByText(/An instance admin can release/u)).toBeNull();
 	});
 });

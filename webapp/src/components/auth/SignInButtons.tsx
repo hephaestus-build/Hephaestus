@@ -13,10 +13,11 @@ export type SignInOptions =
 export interface SignInButtonsProps {
 	options: SignInOptions;
 	onSignIn: (registrationId: string) => void;
-	devReturnTo?: string;
+	/** Rejects when the server refuses the session; the form shows the message. */
+	onDevSignIn: (username: string) => Promise<void>;
 }
 
-export function SignInButtons({ options, onSignIn, devReturnTo }: SignInButtonsProps) {
+export function SignInButtons({ options, onSignIn, onDevSignIn }: SignInButtonsProps) {
 	if (options.status === "error") {
 		return (
 			<div className="space-y-3">
@@ -58,7 +59,7 @@ export function SignInButtons({ options, onSignIn, devReturnTo }: SignInButtonsP
 					onSignIn={onSignIn}
 				/>
 			))}
-			{hasDevSignIn && <DevSignInForm returnTo={devReturnTo} />}
+			{hasDevSignIn && <DevSignInForm onSignIn={onDevSignIn} />}
 		</div>
 	);
 }

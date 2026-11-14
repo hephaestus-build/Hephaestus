@@ -171,6 +171,9 @@ export const EmptyInitial: Story = {
 	args: { state: loaded([]) },
 	play: async ({ canvas }) => {
 		canvas.getByText("No settings changes yet");
+		canvas.getByText(
+			"Changes to settings, member roles, feature flags, and AI configuration will appear here.",
+		);
 	},
 };
 

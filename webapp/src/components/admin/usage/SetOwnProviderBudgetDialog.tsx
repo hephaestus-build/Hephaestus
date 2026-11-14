@@ -34,12 +34,13 @@ export function SetOwnProviderBudgetDialog({
 			title="Set your provider cap"
 			description="The most this workspace can spend on its own provider each month. At the cap, work on your provider pauses until the month resets. Enter $0 to pause now."
 			fieldLabel="Monthly cap (USD)"
+			submitLabel="Save cap"
+			removeLabel="Remove cap"
 			currentValueUsd={currentCapUsd ?? null}
 			fx={fx}
 			isCurrentMonth={isCurrentMonth}
 			isPending={isPending}
 			serverError={serverError}
-			// No `submitLabel`/`removeLabel`: "Save cap" / "Remove cap" are the shared editor's defaults.
 			onOpenChange={onOpenChange}
 			onSubmit={onSubmit}
 		/>

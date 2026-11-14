@@ -88,8 +88,8 @@ export function ConfigAuditTable({
 						</EmptyTitle>
 						{!hasFilter && (
 							<EmptyDescription>
-								Changes to workspace settings, member roles, feature flags, and AI configuration
-								will appear here.
+								Changes to settings, member roles, feature flags, and AI configuration will appear
+								here.
 							</EmptyDescription>
 						)}
 					</EmptyHeader>

@@ -9,6 +9,7 @@ const meta = {
 	component: LoginPage,
 	args: {
 		onSignIn: fn(),
+		onDevSignIn: fn(async () => undefined),
 		options: {
 			status: "ready",
 			providers: [

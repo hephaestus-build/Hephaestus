@@ -35,7 +35,7 @@ function WorkspaceLoginRoute() {
 	const providers = useSignInProviders();
 	const { workspaceSlug } = Route.useParams();
 	const { error } = Route.useSearch();
-	const { login } = useAuth();
+	const { login, devLogin } = useAuth();
 
 	const { data: workspace } = useQuery({
 		...getWorkspaceOptions({ path: { workspaceSlug } }),
@@ -53,7 +53,7 @@ function WorkspaceLoginRoute() {
 			title={heading}
 			error={error}
 			onSignIn={(registrationId) => login(registrationId, `/w/${workspaceSlug}`)}
-			devReturnTo={`/w/${workspaceSlug}`}
+			onDevSignIn={async (username) => devLogin(username, `/w/${workspaceSlug}`)}
 		/>
 	);
 }

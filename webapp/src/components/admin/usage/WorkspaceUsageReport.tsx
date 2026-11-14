@@ -117,6 +117,7 @@ export function WorkspaceUsageReport({
 			<BudgetPaceAlert
 				key="near-own"
 				scope="provider"
+				subjectName={null}
 				percent={providerPercent}
 				spendUsd={providerSpend}
 				capUsd={providerCap}
@@ -128,6 +129,7 @@ export function WorkspaceUsageReport({
 			<BudgetPaceAlert
 				key="near-shared"
 				scope="shared"
+				subjectName={null}
 				percent={sharedPercent}
 				spendUsd={sharedSpend}
 				capUsd={sharedBudget}
