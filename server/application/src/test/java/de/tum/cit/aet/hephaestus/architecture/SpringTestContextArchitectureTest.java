@@ -121,7 +121,9 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             assignment("productfeedback.ProductFeedbackUpdateEmailIntegrationTest", "email-capture"),
             assignment("productfeedback.ProductFeedbackCleanupIntegrationTest", "product-feedback-github"),
             assignment("productfeedback.ProductFeedbackTrustGatesIntegrationTest", "product-feedback-github"),
-            assignment("productfeedback.PrivateDestinationOutOfWorkspacesIntegrationTest", "product-feedback-github"),
+            assignment(
+                    "productfeedback.PrivateDestinationOutOfWorkspacesIntegrationTest",
+                    "product-feedback-private-withdrawal"),
             assignment("testconfig.BaseIntegrationTest", "base"),
             assignment("testconfig.RealAuthIntegrationTest", "real-auth"));
 
@@ -160,6 +162,9 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
                     "registry-fairness",
                     "real event publication registry and redelivery order with a test listener that fails on demand"),
             Map.entry("github-live", "explicitly selected live GitHub profile and credentials"),
+            Map.entry(
+                    "product-feedback-private-withdrawal",
+                    "real private-destination withdrawal and manual-add races with a repository identity lookup spy"),
             Map.entry(
                     "product-feedback-github",
                     "real product feedback rows, erasure, admin HTTP and captured admin email with only the"
