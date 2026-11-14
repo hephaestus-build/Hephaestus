@@ -114,8 +114,7 @@ public class GitHubOrganizationMessageHandler extends AbstractIntegrationMessage
         Long nativeOrganizationId = Objects.requireNonNull(orgDto.id());
 
         if (isMemberEvent(event)) {
-            currentMembership(event).ifPresent(current -> applyMembership(event, current));
-            return;
+            throw new IllegalStateException("A member event reads GitHub before its write transaction; dispatch it");
         }
         switch (event.actionType()) {
             case GitHubEventAction.Organization.MEMBER_ADDED, GitHubEventAction.Organization.MEMBER_REMOVED ->
@@ -140,21 +139,21 @@ public class GitHubOrganizationMessageHandler extends AbstractIntegrationMessage
     private record CurrentMembership(@Nullable String role) {}
 
     /**
-     * Reads the membership without a transaction. Empty when no workspace reads the organization, so there is no
-     * token to read with and nothing to grant. A removal that cannot be read is applied, because removing access is
+     * Reads the membership without a transaction. Empty when no active workspace reads the organization, so there is
+     * no token to read with and nothing to grant. A removal that cannot be read is applied, because removing access is
      * the safe direction; an addition that cannot be read fails, and the delivery is retried.
      */
     private Optional<CurrentMembership> currentMembership(GitHubOrganizationEventDTO event) {
         String organization = event.organization().login();
-        String login = event.membership().user().login();
+        Long userId = event.membership().user().id();
         Optional<Long> scopeId = scopeIdResolver.findScopeIdByOrgLogin(organization);
-        if (scopeId.isEmpty()) {
-            log.debug("Skipped organization member event: reason=noWorkspace, action={}", event.action());
+        if (userId == null || scopeId.isEmpty() || !accessReader.isReadable(scopeId.get())) {
+            log.debug("Skipped organization member event: reason=noReadableWorkspace, action={}", event.action());
             return Optional.empty();
         }
         try {
             return Optional.of(new CurrentMembership(accessReader
-                    .organizationRole(scopeId.get(), organization, login)
+                    .organizationRole(scopeId.get(), organization, userId)
                     .orElse(null)));
         } catch (RuntimeException readFailed) {
             if (event.actionType() != GitHubEventAction.Organization.MEMBER_REMOVED) throw readFailed;

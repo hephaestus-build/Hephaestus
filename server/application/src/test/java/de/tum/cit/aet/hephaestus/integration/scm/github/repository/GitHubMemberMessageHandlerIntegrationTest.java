@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.integration.scm.github.repository;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -39,6 +40,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.ClassPathResource;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.ObjectMapper;
 
@@ -106,9 +108,15 @@ class GitHubMemberMessageHandlerIntegrationTest extends BaseIntegrationTest {
         githubReportsCollaborator("write");
     }
 
+    /** GitHub's answer for the fixture member; it also proves the read runs with no transaction open. */
     private void githubReportsCollaborator(@Nullable String role) {
-        when(accessReader.collaboratorRole(anyLong(), eq("HephaestusTest"), eq("TestRepository"), eq("hephaestususer")))
-                .thenReturn(Optional.ofNullable(role));
+        when(accessReader.isReadable(anyLong())).thenReturn(true);
+        when(accessReader.collaboratorRole(anyLong(), eq("HephaestusTest"), eq("TestRepository"), eq(231_938_035L)))
+                .thenAnswer(read -> {
+                    assertThat(TransactionSynchronizationManager.isActualTransactionActive())
+                            .isFalse();
+                    return Optional.ofNullable(role);
+                });
     }
 
     private void setupTestData() {
@@ -170,7 +178,7 @@ class GitHubMemberMessageHandlerIntegrationTest extends BaseIntegrationTest {
     void shouldHandleMemberAddedEvent() throws Exception {
         GitHubMemberEventDTO event = loadPayload("member.added");
 
-        handler.handleEvent(event);
+        handler.dispatchEvent(event);
 
         // Then - handler processes without error
         assertThat(event.action()).isEqualTo("added");
@@ -200,7 +208,7 @@ class GitHubMemberMessageHandlerIntegrationTest extends BaseIntegrationTest {
         // Load remove event
         GitHubMemberEventDTO removeEvent = loadPayload("member.removed");
 
-        handler.handleEvent(removeEvent);
+        handler.dispatchEvent(removeEvent);
 
         // Then - handler processes without error
         assertThat(removeEvent.action()).isEqualTo("removed");
@@ -208,11 +216,11 @@ class GitHubMemberMessageHandlerIntegrationTest extends BaseIntegrationTest {
 
     @Test
     void shouldKeepARemovedCollaboratorRemovedWhenTheirOldAdditionIsDeliveredAgain() throws Exception {
-        handler.handleEvent(loadPayload("member.added"));
+        handler.dispatchEvent(loadPayload("member.added"));
         githubReportsCollaborator(null);
-        handler.handleEvent(loadPayload("member.removed"));
+        handler.dispatchEvent(loadPayload("member.removed"));
 
-        handler.handleEvent(loadPayload("member.added"));
+        handler.dispatchEvent(loadPayload("member.added"));
 
         assertThat(storedCollaborator()).isEmpty();
     }
@@ -221,7 +229,7 @@ class GitHubMemberMessageHandlerIntegrationTest extends BaseIntegrationTest {
     void shouldStoreThePermissionGitHubReportsRatherThanTheOneInTheDelivery() throws Exception {
         githubReportsCollaborator("admin");
 
-        handler.handleEvent(loadPayload("member.added"));
+        handler.dispatchEvent(loadPayload("member.added"));
 
         assertThat(storedCollaborator())
                 .get()
@@ -231,11 +239,35 @@ class GitHubMemberMessageHandlerIntegrationTest extends BaseIntegrationTest {
 
     @Test
     void shouldKeepTheCollaboratorWhenTheirOldRemovalIsDeliveredAgain() throws Exception {
-        handler.handleEvent(loadPayload("member.added"));
+        handler.dispatchEvent(loadPayload("member.added"));
 
-        handler.handleEvent(loadPayload("member.removed"));
+        handler.dispatchEvent(loadPayload("member.removed"));
 
         assertThat(storedCollaborator()).isPresent();
+    }
+
+    @Test
+    void shouldStoreAChangedPermissionWhenGitHubReportsTheChange() throws Exception {
+        handler.dispatchEvent(loadPayload("member.added"));
+        githubReportsCollaborator("maintain");
+
+        handler.dispatchEvent(loadPayload("member.edited"));
+
+        assertThat(storedCollaborator())
+                .get()
+                .extracting(RepositoryCollaborator::getPermission)
+                .isEqualTo(RepositoryCollaborator.Permission.MAINTAIN);
+    }
+
+    @Test
+    void shouldRemoveTheCollaboratorWhenGitHubCannotBeReadForARemoval() throws Exception {
+        handler.dispatchEvent(loadPayload("member.added"));
+        when(accessReader.collaboratorRole(anyLong(), anyString(), anyString(), anyLong()))
+                .thenThrow(new IllegalStateException("GitHub unavailable"));
+
+        handler.dispatchEvent(loadPayload("member.removed"));
+
+        assertThat(storedCollaborator()).isEmpty();
     }
 
     private Optional<RepositoryCollaborator> storedCollaborator() {

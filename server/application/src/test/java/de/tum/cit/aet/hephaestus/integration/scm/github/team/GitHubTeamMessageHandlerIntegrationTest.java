@@ -40,6 +40,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.ClassPathResource;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.ObjectMapper;
 
@@ -260,16 +261,26 @@ class GitHubTeamMessageHandlerIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    void shouldKeepARemovedRepositoryAccessRemovedWhenTheOldAdditionIsDeliveredAgain() throws Exception {
+    void shouldGrantNothingWhenAnOldAdditionArrivesAfterTheAccessIsGone() throws Exception {
         Team team = storeFixtureTeam();
-        githubReportsRepositoryRole("pull");
-        applyInOneTransaction(loadPayload("team.repo.added_to_repository"));
         githubReportsRepositoryRole(null);
-        applyInOneTransaction(loadPayload("team.repo.removed_from_repository"));
 
         applyInOneTransaction(loadPayload("team.repo.added_to_repository"));
 
         assertThat(storedPermission(team)).isEmpty();
+    }
+
+    @Test
+    void shouldLeaveARemovalToTheReconciliationEvenWhenGitHubReportsNoAccess() throws Exception {
+        Team team = storeFixtureTeam();
+        githubReportsRepositoryRole("pull");
+        applyInOneTransaction(loadPayload("team.repo.added_to_repository"));
+        githubReportsRepositoryRole(null);
+
+        applyInOneTransaction(loadPayload("team.repo.removed_from_repository"));
+
+        // The team may still reach the repository through a parent team; the next sync reads the whole team.
+        assertThat(storedPermission(team)).isPresent();
     }
 
     @Test
@@ -294,16 +305,21 @@ class GitHubTeamMessageHandlerIntegrationTest extends BaseIntegrationTest {
         return teamRepository.save(team);
     }
 
+    /** GitHub's answer for the fixture team; it also proves the read runs with no transaction open. */
     private void githubReportsRepositoryRole(@Nullable String role) {
+        when(accessReader.isReadable(anyLong())).thenReturn(true);
         when(accessReader.teamRepositoryRole(
                         anyLong(),
                         eq("HephaestusTest"),
                         eq("hephaestussubteam"),
                         eq("HephaestusTest"),
                         eq("TestRepository")))
-                .thenReturn(Optional.ofNullable(role));
+                .thenAnswer(read -> {
+                    assertThat(TransactionSynchronizationManager.isActualTransactionActive())
+                            .isFalse();
+                    return Optional.ofNullable(role);
+                });
     }
-
     /** As production does: the read before, the write in one transaction (AbstractIntegrationMessageHandler). */
     private void applyInOneTransaction(GitHubTeamEventDTO event) {
         var accessHandler = new GitHubTeamMessageHandler(

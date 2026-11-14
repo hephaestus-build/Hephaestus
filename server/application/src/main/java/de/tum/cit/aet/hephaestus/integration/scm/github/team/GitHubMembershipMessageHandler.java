@@ -19,6 +19,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubEventType;
 import de.tum.cit.aet.hephaestus.integration.scm.github.team.dto.GitHubMembershipEventDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.github.user.GitHubUserProcessor;
 import java.util.Optional;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -71,27 +72,30 @@ public class GitHubMembershipMessageHandler extends AbstractIntegrationMessageHa
      */
     @Override
     protected void dispatchEvent(GitHubMembershipEventDTO event) {
-        Optional<Boolean> member = currentMembership(event);
-        if (member.isEmpty()) return;
-        handleOnce(() -> apply(event, member.get()));
+        Optional<CurrentMembership> current = currentMembership(event);
+        if (current.isEmpty()) return;
+        handleOnce(() -> apply(event, current.get()));
     }
 
     @Override
     protected void handleEvent(GitHubMembershipEventDTO event) {
-        currentMembership(event).ifPresent(member -> apply(event, member));
+        throw new IllegalStateException("A membership event reads GitHub before its write transaction; dispatch it");
     }
 
+    /** The person's role in the team as GitHub reports it now, or none. */
+    private record CurrentMembership(TeamMembership.@Nullable Role role) {}
+
     /**
-     * Whether the person is a member of the team now, read without a transaction. Empty when the event cannot be
-     * handled: it lacks the team, the person or the organization, it is not an addition or removal, or no workspace
-     * reads the organization. A removal that cannot be read is applied, because removing is the safe direction.
+     * The person's team membership now, read without a transaction. Empty when the event cannot be handled: it lacks
+     * the team, the person or the organization, it is not an addition or removal, or no active workspace reads the
+     * organization. A removal that cannot be read is applied, because removing is the safe direction.
      */
-    private Optional<Boolean> currentMembership(GitHubMembershipEventDTO event) {
+    private Optional<CurrentMembership> currentMembership(GitHubMembershipEventDTO event) {
         var memberDto = event.member();
         var teamDto = event.team();
         var organization = event.organization();
         boolean removed = event.actionType() == GitHubEventAction.Membership.REMOVED;
-        if (memberDto == null || teamDto == null || organization == null) {
+        if (memberDto == null || memberDto.id() == null || teamDto == null || organization == null) {
             log.warn("Received membership event with missing data: action={}", event.action());
             return Optional.empty();
         }
@@ -100,24 +104,26 @@ public class GitHubMembershipMessageHandler extends AbstractIntegrationMessageHa
             return Optional.empty();
         }
         Optional<Long> scopeId = scopeIdResolver.findScopeIdByOrgLogin(organization.login());
-        if (scopeId.isEmpty()) {
-            log.debug("Skipped membership event: reason=noWorkspace, action={}", event.action());
+        if (scopeId.isEmpty() || !accessReader.isReadable(scopeId.get())) {
+            log.debug("Skipped membership event: reason=noReadableWorkspace, action={}", event.action());
             return Optional.empty();
         }
         try {
-            return Optional.of(accessReader
-                    .teamRole(scopeId.get(), organization.login(), teamDto.slug(), memberDto.login())
-                    .isPresent());
+            return Optional.of(new CurrentMembership(accessReader
+                    .teamRole(scopeId.get(), organization.login(), teamDto.slug(), memberDto.id())
+                    .map(role ->
+                            "maintainer".equals(role) ? TeamMembership.Role.MAINTAINER : TeamMembership.Role.MEMBER)
+                    .orElse(null)));
         } catch (RuntimeException readFailed) {
             if (!removed) throw readFailed;
             log.warn(
                     "Applied team membership removal without reading GitHub: error={}",
                     readFailed.getClass().getSimpleName());
-            return Optional.of(false);
+            return Optional.of(new CurrentMembership(null));
         }
     }
 
-    private void apply(GitHubMembershipEventDTO event, boolean member) {
+    private void apply(GitHubMembershipEventDTO event, CurrentMembership current) {
         var memberDto = event.member();
         var teamDto = event.team();
 
@@ -155,26 +161,23 @@ public class GitHubMembershipMessageHandler extends AbstractIntegrationMessageHa
             return;
         }
 
-        if (member) {
-            handleMemberAdded(team, user);
+        if (current.role() != null) {
+            storeMembership(team, user, current.role());
         } else {
             handleMemberRemoved(team, user);
         }
     }
 
-    private void handleMemberAdded(Team team, User user) {
-        // Check if membership already exists
-        if (teamMembershipRepository.existsByTeam_IdAndUser_Id(team.getId(), user.getId())) {
-            log.debug(
-                    "Skipped membership creation: reason=alreadyExists, userId={}, teamName={}",
-                    user.getId(),
-                    sanitizeForLog(team.getName()));
+    private void storeMembership(Team team, User user, TeamMembership.Role role) {
+        var existing = teamMembershipRepository.findByTeam_IdAndUser_Id(team.getId(), user.getId());
+        if (existing.isPresent()) {
+            if (existing.get().getRole() != role) {
+                existing.get().setRole(role);
+                teamMembershipRepository.save(existing.get());
+            }
             return;
         }
-
-        // Create and persist the membership
-        TeamMembership membership = new TeamMembership(team, user, TeamMembership.Role.MEMBER);
-        teamMembershipRepository.save(membership);
+        teamMembershipRepository.save(new TeamMembership(team, user, role));
         log.info("Created team membership: userId={}, teamName={}", user.getId(), sanitizeForLog(team.getName()));
     }
 

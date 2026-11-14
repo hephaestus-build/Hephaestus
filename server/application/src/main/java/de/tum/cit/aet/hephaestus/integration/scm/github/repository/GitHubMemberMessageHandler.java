@@ -74,7 +74,7 @@ public class GitHubMemberMessageHandler extends AbstractIntegrationMessageHandle
 
     @Override
     protected void handleEvent(GitHubMemberEventDTO event) {
-        currentAccess(event).ifPresent(current -> apply(event, current));
+        throw new IllegalStateException("A member event reads GitHub before its write transaction; dispatch it");
     }
 
     /** The person's role on the repository as GitHub reports it now, or none. */
@@ -82,30 +82,32 @@ public class GitHubMemberMessageHandler extends AbstractIntegrationMessageHandle
 
     /**
      * Reads the person's access without a transaction. Empty when the event cannot be handled: it lacks the person or
-     * the repository, it is not an addition or removal, or no workspace reads the repository. A removal that cannot be
+     * the repository, it is not an addition, change or removal, or no active workspace reads the repository. A removal that cannot be
      * read is applied, because removing is the safe direction.
      */
     private Optional<CurrentAccess> currentAccess(GitHubMemberEventDTO event) {
         var memberDto = event.member();
         var repositoryRef = event.repository();
         boolean removed = event.actionType() == GitHubEventAction.Member.REMOVED;
-        if (memberDto == null || repositoryRef == null || repositoryRef.fullName() == null) {
+        if (memberDto == null || memberDto.id() == null || repositoryRef == null || repositoryRef.fullName() == null) {
             log.warn("Received member event with missing data: action={}", event.action());
             return Optional.empty();
         }
-        if (!removed && event.actionType() != GitHubEventAction.Member.ADDED) {
+        if (!removed
+                && event.actionType() != GitHubEventAction.Member.ADDED
+                && event.actionType() != GitHubEventAction.Member.EDITED) {
             log.debug("Skipped member event: reason=unhandledAction, action={}", event.action());
             return Optional.empty();
         }
         String[] ownerAndName = repositoryRef.fullName().split("/", 2);
         Optional<Long> scopeId = scopeIdResolver.findScopeIdByRepositoryName(repositoryRef.fullName());
-        if (ownerAndName.length != 2 || scopeId.isEmpty()) {
-            log.debug("Skipped member event: reason=noWorkspace, action={}", event.action());
+        if (ownerAndName.length != 2 || scopeId.isEmpty() || !accessReader.isReadable(scopeId.get())) {
+            log.debug("Skipped member event: reason=noReadableWorkspace, action={}", event.action());
             return Optional.empty();
         }
         try {
             return Optional.of(new CurrentAccess(accessReader
-                    .collaboratorRole(scopeId.get(), ownerAndName[0], ownerAndName[1], memberDto.login())
+                    .collaboratorRole(scopeId.get(), ownerAndName[0], ownerAndName[1], memberDto.id())
                     .orElse(null)));
         } catch (RuntimeException readFailed) {
             if (!removed) throw readFailed;

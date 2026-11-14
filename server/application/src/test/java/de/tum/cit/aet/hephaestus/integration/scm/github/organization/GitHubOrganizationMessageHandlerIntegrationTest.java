@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.scm.github.organization;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -37,6 +38,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.ClassPathResource;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.ObjectMapper;
 
@@ -86,6 +88,8 @@ class GitHubOrganizationMessageHandlerIntegrationTest extends BaseIntegrationTes
     @Autowired
     private ObjectMapper objectMapper;
 
+    private static final long MEMBER_ID = 231_938_035L;
+
     private Organization testOrganization;
     private IdentityProvider githubProvider;
 
@@ -108,9 +112,15 @@ class GitHubOrganizationMessageHandlerIntegrationTest extends BaseIntegrationTes
         githubReportsMembership("member");
     }
 
+    /** GitHub's answer for the fixture member; it also proves the read runs with no transaction open. */
     private void githubReportsMembership(@Nullable String role) {
-        when(accessReader.organizationRole(anyLong(), eq("HephaestusTest"), eq("hephaestususer")))
-                .thenReturn(Optional.ofNullable(role));
+        when(accessReader.isReadable(anyLong())).thenReturn(true);
+        when(accessReader.organizationRole(anyLong(), eq("HephaestusTest"), eq(MEMBER_ID)))
+                .thenAnswer(read -> {
+                    assertThat(TransactionSynchronizationManager.isActualTransactionActive())
+                            .isFalse();
+                    return Optional.ofNullable(role);
+                });
     }
 
     private void setupTestData() {
@@ -153,7 +163,7 @@ class GitHubOrganizationMessageHandlerIntegrationTest extends BaseIntegrationTes
     void shouldHandleMemberAddedEvent() throws Exception {
         GitHubOrganizationEventDTO event = loadPayload("organization.member_added");
 
-        handler.handleEvent(event);
+        handler.dispatchEvent(event);
 
         // Then - organization should still exist
         assertThat(organizationRepository.findById(testOrganization.getId())).isPresent();
@@ -183,7 +193,7 @@ class GitHubOrganizationMessageHandlerIntegrationTest extends BaseIntegrationTes
         // Load remove event
         GitHubOrganizationEventDTO removeEvent = loadPayload("organization.member_removed");
 
-        handler.handleEvent(removeEvent);
+        handler.dispatchEvent(removeEvent);
 
         // Then - handler processes without error
         assertThat(organizationRepository.findById(testOrganization.getId())).isPresent();
@@ -196,7 +206,7 @@ class GitHubOrganizationMessageHandlerIntegrationTest extends BaseIntegrationTes
         long organizationId = required(testOrganization.getId());
         assertThat(organizationId).as("stored and GitHub ids must differ here").isNotEqualTo(nativeOrganizationId);
 
-        handler.handleEvent(event);
+        handler.dispatchEvent(event);
 
         long nativeUserId =
                 required(required(required(event.membership()).user()).id());
@@ -213,13 +223,13 @@ class GitHubOrganizationMessageHandlerIntegrationTest extends BaseIntegrationTes
     @Test
     void shouldRemoveAMemberStoredUnderTheStoredOrganizationAndPerson() throws Exception {
         GitHubOrganizationEventDTO addEvent = loadPayload("organization.member_added");
-        handler.handleEvent(addEvent);
+        handler.dispatchEvent(addEvent);
         long organizationId = required(testOrganization.getId());
         assertThat(membershipRepository.findUserIdsByOrganizationId(organizationId))
                 .hasSize(1);
         githubReportsMembership(null);
 
-        handler.handleEvent(loadPayload("organization.member_removed"));
+        handler.dispatchEvent(loadPayload("organization.member_removed"));
 
         assertThat(membershipRepository.findUserIdsByOrganizationId(organizationId))
                 .isEmpty();
@@ -227,11 +237,11 @@ class GitHubOrganizationMessageHandlerIntegrationTest extends BaseIntegrationTes
 
     @Test
     void shouldKeepARemovedMemberRemovedWhenTheirOldAdditionIsDeliveredAgain() throws Exception {
-        handler.handleEvent(loadPayload("organization.member_added"));
+        handler.dispatchEvent(loadPayload("organization.member_added"));
         githubReportsMembership(null);
-        handler.handleEvent(loadPayload("organization.member_removed"));
+        handler.dispatchEvent(loadPayload("organization.member_removed"));
 
-        handler.handleEvent(loadPayload("organization.member_added"));
+        handler.dispatchEvent(loadPayload("organization.member_added"));
 
         assertThat(membershipRepository.findUserIdsByOrganizationId(required(testOrganization.getId())))
                 .isEmpty();
@@ -241,7 +251,7 @@ class GitHubOrganizationMessageHandlerIntegrationTest extends BaseIntegrationTes
     void shouldStoreTheRoleGitHubReportsRatherThanTheRoleInTheDelivery() throws Exception {
         githubReportsMembership("admin");
 
-        handler.handleEvent(loadPayload("organization.member_added"));
+        handler.dispatchEvent(loadPayload("organization.member_added"));
 
         long organizationId = required(testOrganization.getId());
         long userId = required(
@@ -254,9 +264,9 @@ class GitHubOrganizationMessageHandlerIntegrationTest extends BaseIntegrationTes
 
     @Test
     void shouldKeepTheMemberWhenTheirOldRemovalIsDeliveredAgain() throws Exception {
-        handler.handleEvent(loadPayload("organization.member_added"));
+        handler.dispatchEvent(loadPayload("organization.member_added"));
 
-        handler.handleEvent(loadPayload("organization.member_removed"));
+        handler.dispatchEvent(loadPayload("organization.member_removed"));
 
         assertThat(membershipRepository.findUserIdsByOrganizationId(required(testOrganization.getId())))
                 .hasSize(1);
@@ -264,11 +274,24 @@ class GitHubOrganizationMessageHandlerIntegrationTest extends BaseIntegrationTes
 
     @Test
     void shouldRemoveTheMemberWhenGitHubCannotBeReadForARemoval() throws Exception {
-        handler.handleEvent(loadPayload("organization.member_added"));
-        when(accessReader.organizationRole(anyLong(), anyString(), anyString()))
+        handler.dispatchEvent(loadPayload("organization.member_added"));
+        when(accessReader.organizationRole(anyLong(), anyString(), anyLong()))
                 .thenThrow(new IllegalStateException("GitHub unavailable"));
 
-        handler.handleEvent(loadPayload("organization.member_removed"));
+        handler.dispatchEvent(loadPayload("organization.member_removed"));
+
+        assertThat(membershipRepository.findUserIdsByOrganizationId(required(testOrganization.getId())))
+                .isEmpty();
+    }
+
+    @Test
+    void shouldStoreNothingAndFailForARetryWhenGitHubCannotBeReadForAnAddition() throws Exception {
+        when(accessReader.isReadable(anyLong())).thenReturn(true);
+        when(accessReader.organizationRole(anyLong(), anyString(), anyLong()))
+                .thenThrow(new IllegalStateException("GitHub unavailable"));
+        GitHubOrganizationEventDTO added = loadPayload("organization.member_added");
+
+        assertThatThrownBy(() -> handler.dispatchEvent(added)).isInstanceOf(IllegalStateException.class);
 
         assertThat(membershipRepository.findUserIdsByOrganizationId(required(testOrganization.getId())))
                 .isEmpty();
@@ -278,7 +301,7 @@ class GitHubOrganizationMessageHandlerIntegrationTest extends BaseIntegrationTes
     void shouldHandleRenamedEvent() throws Exception {
         GitHubOrganizationEventDTO event = loadPayload("organization.renamed");
 
-        handler.handleEvent(event);
+        handler.dispatchEvent(event);
 
         // Then - organization should reflect new name
         assertThat(organizationRepository.findById(testOrganization.getId()))
