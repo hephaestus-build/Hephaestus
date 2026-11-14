@@ -46,7 +46,7 @@ The linked pages own the details of each stage.
    vp run dev
    ```
 
-3. Open the web app on the port that the [port map](./local-development#default-port-map) gives.
+3. Open the web app on the port that the [port map](./local-development#port-map) gives.
 4. Sign in with GitHub.
 
 You see the web app with your GitHub account.

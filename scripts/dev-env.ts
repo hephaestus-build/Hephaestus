@@ -1,7 +1,9 @@
+import { execFile } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
 import { constants } from "node:fs";
-import { chmod, copyFile, readdir, readFile, realpath, writeFile } from "node:fs/promises";
+import { access, chmod, copyFile, readdir, readFile, realpath, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { promisify } from "node:util";
 
 import { isSet, readEnvFile } from "./lib/env.ts";
 
@@ -141,8 +143,114 @@ export async function ensureComposeProject({
 }
 
 /**
+ * The host ports of a checkout and their defaults. Port set `n` adds `10 * n` to each default, so the management
+ * port stays `SERVER_PORT + 1010`, the value `dev-kubernetes.ts` derives when it is unset. Within 100 sets, no port
+ * of one set equals a port of another: the ranges that overlap differ in their last digit.
+ */
+const PORTS = [
+	{ name: "POSTGRES_PORT", port: 5432 },
+	{ name: "SERVER_PORT", port: 8080 },
+	{ name: "SANDBOX_API_PORT", port: 8081 },
+	{ name: "MAILPIT_SMTP_PORT", port: 1025 },
+	{ name: "MAILPIT_UI_PORT", port: 8025 },
+	{ name: "WEBAPP_PORT", port: 4200 },
+	{ name: "MANAGEMENT_PORT", port: 9090 },
+] as const;
+const PORT_SETS = 100;
+const MANAGEMENT_OFFSET = 1010;
+
+/** Every host port that a settings file uses, with the defaults for what it does not set. */
+export function portsOf(values: Record<string, string | undefined>): Set<number> {
+	const value = (name: string, fallback: number) => {
+		const configured = values[name];
+		return isSet(configured) ? Number(configured) : fallback;
+	};
+	const server = value("SERVER_PORT", 8080);
+	return new Set(
+		PORTS.map(({ name, port }) =>
+			value(name, name === "MANAGEMENT_PORT" ? server + MANAGEMENT_OFFSET : port),
+		),
+	);
+}
+
+/** The settings files of the other worktrees of this clone. A worktree that never ran a dev command has none. */
+async function otherWorktreeSettings(checkout: string): Promise<Record<string, string>[]> {
+	let listing: string;
+	try {
+		({ stdout: listing } = await promisify(execFile)("git", ["worktree", "list", "--porcelain"], {
+			cwd: checkout,
+		}));
+	} catch {
+		// A checkout outside Git, such as a source archive, has no other worktrees.
+		return [];
+	}
+	const self = await realpath(checkout);
+	const others = listing
+		.split("\n")
+		.filter((line) => line.startsWith("worktree "))
+		.map((line) => line.slice("worktree ".length));
+	const settings: Record<string, string>[] = [];
+	for (const other of others) {
+		const envFile = path.join(other, "server", ".env");
+		const resolved = await realpath(other).catch(() => other);
+		if (
+			resolved !== self &&
+			(await access(envFile).then(
+				() => true,
+				() => false,
+			))
+		) {
+			settings.push(await readEnvFile(envFile));
+		}
+	}
+	return settings;
+}
+
+/**
+ * Gives this checkout its own host ports, once: the first port set that no other worktree of the clone uses.
+ * A file that sets `SERVER_PORT` keeps its ports and only gets the management port that follows from it.
+ * Returns the ports it wrote.
+ */
+export async function ensurePorts({
+	envFile,
+	others,
+	environment = process.env,
+}: {
+	envFile: string;
+	others: Record<string, string | undefined>[];
+	environment?: NodeJS.ProcessEnv;
+}): Promise<Record<string, number>> {
+	const values = { ...(await readEnvFile(envFile)), ...environment };
+	if (isSet(values.SERVER_PORT)) {
+		if (isSet(values.MANAGEMENT_PORT)) {
+			return {};
+		}
+		// The value `dev-kubernetes.ts` derives, written so that every way of starting the server uses it.
+		const management = Number(values.SERVER_PORT) + MANAGEMENT_OFFSET;
+		await setEnvLine(envFile, "MANAGEMENT_PORT", String(management));
+		return { MANAGEMENT_PORT: management };
+	}
+	// Only the ports this command writes must be free. A port the developer set is their choice.
+	const taken = new Set(others.flatMap((other) => [...portsOf(other)]));
+	const unset = PORTS.filter(({ name }) => !isSet(values[name]));
+	for (let set = 0; set < PORT_SETS; set += 1) {
+		const written = Object.fromEntries(unset.map(({ name, port }) => [name, port + 10 * set]));
+		if (Object.values(written).some((port) => taken.has(port))) {
+			continue;
+		}
+		for (const [name, port] of Object.entries(written)) {
+			await setEnvLine(envFile, name, String(port));
+		}
+		return written;
+	}
+	throw new Error(
+		`Every one of the ${PORT_SETS} port sets is in use by another worktree. Set SERVER_PORT and the other ports in server/.env.`,
+	);
+}
+
+/**
  * The one writer of `server/.env`: it creates the file from `server/.env.example`, then adds the Compose
- * project and the generated values that are missing, and says what it wrote.
+ * project, the host ports and the generated values that are missing, and says what it wrote.
  */
 export async function ensureLocalEnvironment(): Promise<void> {
 	const paths = {
@@ -156,7 +264,19 @@ export async function ensureLocalEnvironment(): Promise<void> {
 			"ℹ️  Created server/.env from server/.env.example. Edit it; never copy the example over it.",
 		);
 	}
-	await ensureComposeProject({ ...paths, checkout: path.dirname(server) });
+	const checkout = path.dirname(server);
+	await ensureComposeProject({ ...paths, checkout });
+	const ports = await ensurePorts({
+		envFile: paths.envFile,
+		others: await otherWorktreeSettings(checkout),
+	});
+	if (Object.keys(ports).length > 0) {
+		console.log(
+			`ℹ️  Gave this worktree its own ports in server/.env: ${Object.entries(ports)
+				.map(([name, port]) => `${name}=${port}`)
+				.join(", ")}.`,
+		);
+	}
 	const written = await ensureGeneratedValues(paths);
 	if (written.length > 0) {
 		console.log(`ℹ️  Generated ${written.join(", ")} in server/.env for this checkout.`);

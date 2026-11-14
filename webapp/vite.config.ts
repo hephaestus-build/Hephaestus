@@ -1,8 +1,9 @@
 import path from "node:path";
 
 import { tanstackRouter } from "@tanstack/router-plugin/vite";
+import type { Plugin } from "vite";
 import Terminal from "vite-plugin-terminal";
-import { configDefaults, defineConfig } from "vite-plus";
+import { configDefaults, defineConfig, loadEnv } from "vite-plus";
 
 import { bundleBudget } from "./tools/bundle-budget/bundle-budget-plugin.ts";
 import { BUNDLE_LICENSE_FILE, bundlePackages } from "./tools/bundle-packages.ts";
@@ -10,6 +11,35 @@ import { loadLintConfig } from "./tools/oxlint/load-config.ts";
 import { appSourcePlugins } from "./vite.shared.ts";
 
 const lint = loadLintConfig(new URL(".oxlintrc.json", import.meta.url));
+
+// The worktree's ports live in `server/.env` (docs/contributor/local-development.mdx § Port map). A variable in the
+// shell wins. Only these two names are read, and none reaches the bundle.
+const ports = loadEnv("development", path.resolve(import.meta.dirname, "../server"), [
+	"WEBAPP_PORT",
+	"SERVER_PORT",
+]);
+const webappPort = Number.parseInt(ports.WEBAPP_PORT ?? "", 10) || 4200;
+const serverPort = Number.parseInt(ports.SERVER_PORT ?? "", 10) || 8080;
+
+/**
+ * Serves the dev server's runtime environment, as the container entrypoint writes it in production, so the app
+ * calls this worktree's server and not the default port.
+ */
+const devRuntimeEnvironment = (): Plugin => ({
+	name: "hephaestus:dev-runtime-environment",
+	apply: "serve",
+	configureServer(server) {
+		server.middlewares.use("/env-config.js", (_request, response) => {
+			response.setHeader("Content-Type", "text/javascript");
+			response.end(
+				`window.__ENV__ = ${JSON.stringify({
+					APPLICATION_CLIENT_URL: `http://localhost:${webappPort}`,
+					APPLICATION_SERVER_URL: `http://localhost:${serverPort}`,
+				})};`,
+			);
+		});
+	},
+});
 
 const viteConfig = defineConfig({
 	root: import.meta.dirname,
@@ -19,6 +49,7 @@ const viteConfig = defineConfig({
 		...appSourcePlugins(),
 		bundlePackages(),
 		bundleBudget(),
+		devRuntimeEnvironment(),
 		...Terminal({ output: ["terminal", "console"] }).map((plugin) =>
 			plugin === false ? false : { ...plugin, apply: "serve" as const },
 		),
@@ -75,7 +106,7 @@ const viteConfig = defineConfig({
 		tsconfigPaths: true,
 	},
 	server: {
-		port: Number.parseInt(process.env.WEBAPP_PORT ?? "", 10) || 4200,
+		port: webappPort,
 		strictPort: true,
 		// Storybook writes a separate site inside this root; rebuilding it must not reload the app.
 		watch: { ignored: ["**/storybook-static/**"] },

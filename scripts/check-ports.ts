@@ -55,12 +55,10 @@ async function main(): Promise<void> {
 		process.env[name] ?? fileEnv[name] ?? fallback;
 	let services: ServicePort[];
 	try {
+		const server = positivePort(value("SERVER_PORT", "8080"), "SERVER_PORT");
 		services = [
 			{ name: "PostgreSQL", port: positivePort(value("POSTGRES_PORT", "5432"), "POSTGRES_PORT") },
-			{
-				name: "Application server",
-				port: positivePort(value("SERVER_PORT", "8080"), "SERVER_PORT"),
-			},
+			{ name: "Application server", port: server },
 			{
 				name: "Sandbox gateway",
 				port: positivePort(value("SANDBOX_API_PORT", "8081"), "SANDBOX_API_PORT"),
@@ -74,6 +72,11 @@ async function main(): Promise<void> {
 				port: positivePort(value("MAILPIT_UI_PORT", "8025"), "MAILPIT_UI_PORT"),
 			},
 			{ name: "Webapp (Vite)", port: positivePort(value("WEBAPP_PORT", "4200"), "WEBAPP_PORT") },
+			{
+				// The default that `dev-kubernetes.ts` derives.
+				name: "Management",
+				port: positivePort(value("MANAGEMENT_PORT", String(server + 1010)), "MANAGEMENT_PORT"),
+			},
 		];
 	} catch (error) {
 		console.error(error instanceof Error ? error.message : String(error));
