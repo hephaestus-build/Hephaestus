@@ -160,6 +160,7 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
@@ -1831,6 +1832,160 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
         }
     }
 
+    @Test
+    void shouldQueueAPracticeWhoseCurrentResultEndsWhileTheEventReviewReadsItsSources() throws Exception {
+        var prepared = prepare(
+                IdentityProviderType.GITHUB,
+                false,
+                Map.of(),
+                false,
+                List.of(ScmItemEvents.PULL_REQUEST_SYNCHRONIZED),
+                ReadNeed.OPTIONAL);
+        var item = prepared.item();
+        corePractice(prepared, ScmItemEvents.PULL_REQUEST_SYNCHRONIZED);
+        var pushed = Objects.requireNonNull(transactions.execute(ignored -> {
+            var pull = pulls.findById(Objects.requireNonNull(item.sourceId())).orElseThrow();
+            pull.setHeadRefOid("c".repeat(40));
+            return ScmEventPayload.PullRequestData.from(pulls.saveAndFlush(pull));
+        }));
+        var version = source.pin(item, null).version();
+        // The practice that also reads the checks has a current result at the pushed version.
+        var at = Instant.now().minusSeconds(30);
+        var current = resultData.result(authorScenario(prepared), ResultOutcome.MET, at, at, version.value());
+        recordSources(
+                item, current.getReviewId(), current.getPracticeId(), Set.of(new SourceKind("scm.pull-request.core")));
+        var read = blockFingerprintRead(item, kinds -> kinds.contains(PullRequestChecksRecord.KIND));
+        var executor = Executors.newSingleThreadExecutor();
+        try {
+            var published = executor.submit(() -> transactions.executeWithoutResult(ignored ->
+                    publisher.publishEvent(new ScmDomainEvent.PullRequestSynchronized(pushed, context(prepared)))));
+            awaitLatch(read.reading());
+            jdbc.update(
+                    "UPDATE result SET ended_at = now(), end_reason = 'WORK_CHANGED' WHERE id = ?", current.getId());
+            read.release().countDown();
+            published.get(30, TimeUnit.SECONDS);
+
+            var occasion = events.findByWorkspaceIdAndItemIdAndNameAndItemVersion(
+                            item.workspaceId(),
+                            item.itemId(),
+                            ScmItemEvents.PULL_REQUEST_SYNCHRONIZED.value(),
+                            version.value())
+                    .orElseThrow();
+            assertThat(occasion.getState()).isEqualTo(ItemEventState.STARTED);
+            var review = reviews.findByWorkspaceIdAndEventId(item.workspaceId(), occasion.getId())
+                    .orElseThrow();
+            assertThat(memberships.findByWorkspaceIdAndReviewIdOrderByPracticeIdAscItemIdAsc(
+                            item.workspaceId(), review.getId()))
+                    .filteredOn(member -> member.getPracticeId() == current.getPracticeId())
+                    .singleElement()
+                    .extracting(ReviewItem::getState)
+                    .isEqualTo(ReviewItemState.LISTED);
+        } finally {
+            read.release().countDown();
+            executor.shutdownNow();
+        }
+    }
+
+    @Test
+    void shouldStartACommentRequestedReviewWhenTheChecksSettleWhileItReadsItsSources() throws Exception {
+        var prepared = prepare(IdentityProviderType.GITHUB, false, Map.of(), false, List.of(), ReadNeed.REQUIRED);
+        var item = prepared.item();
+        corePractice(prepared, ScmItemEvents.PULL_REQUEST_OPENED);
+        var pull = pulls.findById(Objects.requireNonNull(item.sourceId())).orElseThrow();
+        long repositoryId = Objects.requireNonNull(pull.getRepository()).getId();
+        var context = Objects.requireNonNull(transactions.execute(status -> ProcessingContext.forWebhook(
+                item.workspaceId(), repositories.findById(repositoryId).orElseThrow(), "completed")));
+        String head = Objects.requireNonNull(pull.getHeadRefOid());
+        Instant readAt = Instant.now().truncatedTo(ChronoUnit.MICROS);
+        checkRuns.observe(
+                repositoryId,
+                new HeadCheckRuns(head, List.of(checkRun("build", "in_progress", null)), true, readAt, null),
+                context);
+        var author =
+                users.findById(Objects.requireNonNull(pull.getAuthor()).getId()).orElseThrow();
+        var commenter = new PersonIdentity(providerId(author), Long.toString(author.getNativeId()), null);
+        var read = blockFirstFingerprintRead(item);
+        var executor = Executors.newSingleThreadExecutor();
+        try {
+            var requested = executor.submit(() ->
+                    requests.requestByComment(item.workspaceId(), item.itemId(), commenter, UUID.randomUUID(), null));
+            awaitLatch(read.reading());
+            checkRuns.observe(
+                    repositoryId,
+                    settled(
+                            head,
+                            List.of(checkRun("build", "success", readAt.plusSeconds(60))),
+                            readAt.plusSeconds(60)),
+                    context);
+            read.release().countDown();
+            var outcome = requested.get(30, TimeUnit.SECONDS);
+
+            assertThat(outcome.status()).isEqualTo(ReviewRequestStatus.SUBMITTED);
+            long readsChecks = practices
+                    .findByWorkspaceIdAndSlug(item.workspaceId(), "event-test")
+                    .orElseThrow()
+                    .getId();
+            assertThat(memberships.findByWorkspaceIdAndReviewIdOrderByPracticeIdAscItemIdAsc(
+                            item.workspaceId(), Objects.requireNonNull(outcome.reviewId())))
+                    .filteredOn(member -> member.getPracticeId() == readsChecks)
+                    .singleElement()
+                    .extracting(ReviewItem::getState)
+                    .isEqualTo(ReviewItemState.LISTED);
+        } finally {
+            read.release().countDown();
+            executor.shutdownNow();
+        }
+    }
+
+    @Test
+    void shouldStartAnOccasionOnceWhenItIsOfferedAgainAfterItsReviewWasRecordedButNotSettled() {
+        var prepared = prepare(IdentityProviderType.GITHUB, false);
+        var item = prepared.item();
+        when(budget.canRequest(anyLong(), eq(ReviewKind.ITEM), isNull())).thenReturn(false);
+        publish(prepared);
+        var occasion = event(prepared);
+        assertThat(occasion.getState()).isEqualTo(ItemEventState.WAITING);
+        when(budget.canRequest(anyLong(), eq(ReviewKind.ITEM), isNull())).thenReturn(true);
+        // The edge recorded its review, and then its settle step failed: the occasion still waits.
+        var recorded = service.request(ReviewRequest.builder()
+                .workspaceId(item.workspaceId())
+                .itemId(item.itemId())
+                .kind(ReviewKind.ITEM)
+                .version(new ItemVersion(Objects.requireNonNull(occasion.getItemVersion()), null))
+                .origin(ReviewOrigin.EVENT)
+                .eventId(occasion.getId())
+                .practiceIds(List.of())
+                .occasions(Set.of(prepared.name()))
+                .build());
+        assertThat(events.findById(occasion.getId()).orElseThrow().getState()).isEqualTo(ItemEventState.WAITING);
+
+        transactions.executeWithoutResult(ignored ->
+                publisher.publishEvent(new ItemEventRecorded(item.workspaceId(), occasion.getId(), item.itemId())));
+
+        assertThat(events.findById(occasion.getId()).orElseThrow().getState()).isEqualTo(ItemEventState.STARTED);
+        assertThat(itemReviews(prepared)).extracting(Review::getId).containsExactly(recorded);
+    }
+
+    /** A second practice of the prepared work: about nobody, selected on {@code on}, reading only the core record. */
+    private void corePractice(Prepared prepared, ItemEventName on) {
+        var original =
+                DefinitionTestFixtures.definition(ScmItemEvents.PULL_REQUEST, "Name the change", "Name it.", null);
+        var definition = new PracticeDefinition(
+                original.name(),
+                new ReviewOn(List.of(on), Map.of()),
+                original.appliesWhen(),
+                null,
+                original.reads(),
+                original.reviewedBy(),
+                original.criteria(),
+                original.script(),
+                original.scan(),
+                original.lineNotes(),
+                original.guidance());
+        versions.create(new PracticeVersionService.NewPractice(
+                prepared.item().workspaceId(), "core-only", ScmItemEvents.PULL_REQUEST, definition, null, 1, null));
+    }
+
     /** Whether a provider read ran in a transaction, and whether the workspace row was locked at it. */
     private record Fetch(boolean transaction, boolean workspaceLocked) {
         static final Fetch FREE = new Fetch(false, false);
@@ -1858,10 +2013,16 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
 
     /** The first source read of the item records its fetch and waits for {@code release}; later reads run at once. */
     private BlockedRead blockFirstFingerprintRead(ItemRef item) {
+        return blockFingerprintRead(item, kinds -> true);
+    }
+
+    /** The first source read of the item for matching sources records its fetch and waits for {@code release}. */
+    private BlockedRead blockFingerprintRead(ItemRef item, Predicate<Set<SourceKind>> sources) {
         var read = new BlockedRead(new CountDownLatch(1), new CountDownLatch(1), new AtomicReference<>());
         var calls = new AtomicInteger();
         doAnswer(call -> {
-                    if (calls.getAndIncrement() == 0) {
+                    Set<SourceKind> kinds = call.getArgument(1);
+                    if (sources.test(kinds) && calls.getAndIncrement() == 0) {
                         read.seen().set(fetch(item.workspaceId()));
                         read.reading().countDown();
                         awaitLatch(read.release());

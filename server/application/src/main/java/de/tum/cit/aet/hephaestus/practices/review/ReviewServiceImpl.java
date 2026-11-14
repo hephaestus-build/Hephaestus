@@ -241,7 +241,8 @@ public class ReviewServiceImpl implements ReviewService {
 
     /**
      * What an item review reads with no transaction before its locked step: the currentness of the item's open results
-     * that an event review compares, the sources that a first plan queues, and their fingerprints.
+     * that an event review compares, the sources that every practice the gate selects reads, and their fingerprints. A
+     * practice that the item's results or its readiness leave out still counts, because the locked step can queue it.
      */
     private record EarlyRead(
             Map<UUID, Currentness> currentness, Set<SourceKind> kinds, Map<SourceKind, String> fingerprints) {
@@ -251,9 +252,11 @@ public class ReviewServiceImpl implements ReviewService {
     private EarlyRead earlyRead(ReviewRequest request, ItemRef ref, ItemSnapshot pinned) {
         if (request.kind() != ReviewKind.ITEM) return EarlyRead.NONE;
         var currentness = currentness(request, pinned);
-        var kinds = transactions.read(() -> queuedKinds(
+        var kinds = transactions.read(() -> readKinds(
                 pinned,
-                plan(request, workspace(request), ref, pinned, currentness).planned()));
+                plan(request, workspace(request), ref, pinned, currentness).gated().stream()
+                        .map(Practice::getCurrentVersion)
+                        .toList()));
         return new EarlyRead(currentness, kinds, items.fingerprints(pinned.item(), kinds, occasion(request)));
     }
 
@@ -272,13 +275,13 @@ public class ReviewServiceImpl implements ReviewService {
 
     /**
      * The fingerprints of the sources that the locked plan queues, from the early read. A practice that came to read
-     * another source after the early read refuses the request.
+     * another source after the early read refuses the request until it is asked again.
      */
     private static Map<SourceKind, String> fingerprints(Set<SourceKind> kinds, EarlyRead early) {
         if (!early.kinds().containsAll(kinds))
             throw new ReviewRequestRejected(
-                    ReviewRequestRejected.Reason.REQUEST_CONFLICT,
-                    "The practices changed what they read while the review was requested.");
+                    ReviewRequestRejected.Reason.PRACTICES_CHANGED,
+                    "The practices changed while the review was requested. Ask for the review again.");
         return early.fingerprints();
     }
 
@@ -286,8 +289,13 @@ public class ReviewServiceImpl implements ReviewService {
         return request.origin() == ReviewOrigin.EVENT ? request.eventId() : null;
     }
 
+    /** @param gated every practice that the gate selects for an item review, before its results and readiness */
     private record Plan(
-            @Nullable Instant occurredAt, List<SelectedPractice> planned, ReviewMethod method, ObjectNode checks) {}
+            @Nullable Instant occurredAt,
+            List<Practice> gated,
+            List<SelectedPractice> planned,
+            ReviewMethod method,
+            ObjectNode checks) {}
 
     private Plan plan(
             ReviewRequest request,
@@ -307,6 +315,7 @@ public class ReviewServiceImpl implements ReviewService {
             occurredAt = fact.getOccurredAt();
         }
         List<Practice> selected;
+        List<Practice> gated = List.of();
         if (request.kind() == ReviewKind.SCAN) {
             if (!coverage.admitsRepositoryItem(workspace, ref.itemId()))
                 throw new ReviewRequestRejected(
@@ -338,6 +347,7 @@ public class ReviewServiceImpl implements ReviewService {
                             skip.eventReason());
                 case GateDecision.Run run -> run.matchedPractices();
             };
+            gated = selected;
             if (event) selected = pending(pinned, occasions, selected, currentness);
         }
         if (selected.isEmpty()
@@ -403,7 +413,7 @@ public class ReviewServiceImpl implements ReviewService {
                 throw refusal;
             }
         }
-        return new Plan(occurredAt, planned, method, checks);
+        return new Plan(occurredAt, gated, planned, method, checks);
     }
 
     private UUID recordReview(
@@ -598,10 +608,19 @@ public class ReviewServiceImpl implements ReviewService {
     }
 
     private Set<SourceKind> queuedKinds(ItemSnapshot item, List<SelectedPractice> plans) {
+        return readKinds(
+                item,
+                plans.stream()
+                        .filter(plan -> plan.reason() == null)
+                        .map(SelectedPractice::version)
+                        .toList());
+    }
+
+    /** The sources that these practice versions read, and those that their applicability conditions read. */
+    private Set<SourceKind> readKinds(ItemSnapshot item, List<PracticeVersion> versions) {
         var kinds = new HashSet<SourceKind>();
-        for (var plan : plans) {
-            if (plan.reason() != null) continue;
-            var definition = json.treeToValue(plan.version().getDefinition(), PracticeDefinition.class);
+        for (var version : versions) {
+            var definition = json.treeToValue(version.getDefinition(), PracticeDefinition.class);
             definition.reads().sources().forEach(read -> kinds.add(read.source()));
             var conditions = definition.appliesWhen();
             if (conditions == null) continue;

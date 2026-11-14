@@ -267,7 +267,7 @@ class ReviewRequestPinIntegrationTest extends AbstractResultAdmissionIntegration
     }
 
     @Test
-    void shouldRefuseAnItemReviewWhenAPracticeReadsAnotherSourceDuringTheEarlyRead() throws Exception {
+    void shouldAskForTheItemReviewAgainWhenAPracticeReadsAnotherSourceDuringTheEarlyRead() throws Exception {
         var review = itemReview();
         var reading = new CountDownLatch(1);
         var release = new CountDownLatch(1);
@@ -304,7 +304,7 @@ class ReviewRequestPinIntegrationTest extends AbstractResultAdmissionIntegration
                     .isInstanceOfSatisfying(
                             ReviewRequestRejected.class,
                             refusal -> assertThat(refusal.reason())
-                                    .isEqualTo(ReviewRequestRejected.Reason.REQUEST_CONFLICT));
+                                    .isEqualTo(ReviewRequestRejected.Reason.PRACTICES_CHANGED));
             assertThat(reviews.findByWorkspaceIdAndItemIdOrderByOrderedAtDesc(
                             review.workspace(), review.ref().itemId()))
                     .isEmpty();

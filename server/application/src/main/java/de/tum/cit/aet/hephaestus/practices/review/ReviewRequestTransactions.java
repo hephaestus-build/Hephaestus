@@ -5,7 +5,7 @@ import java.util.function.Supplier;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
-/** The short transactions of a review request, and of the event review that asks for one, which their fetches run between. */
+/** The short transactions of a review request and of the event review that asks for one. Their fetches run between. */
 @Component
 @ConditionalOnServerRole
 public class ReviewRequestTransactions {

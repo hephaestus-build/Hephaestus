@@ -158,6 +158,8 @@ public class ItemEventReviewListener {
             case ITEM_INELIGIBLE ->
                 Objects.requireNonNullElse(refusal.eventReason(), ReviewRequestReason.NO_ACTIVE_PRACTICE);
             case REQUEST_CONFLICT -> ReviewRequestReason.VERSION_SUPERSEDED;
+            // Nothing is decided: the event's publication fails, and the event is offered again.
+            case PRACTICES_CHANGED -> throw refusal;
             case SCAN_ACTIVE, REF_UNSUPPORTED, VERSION_CHANGED ->
                 throw new IllegalStateException("An item review cannot compete with a scan", refusal);
         };

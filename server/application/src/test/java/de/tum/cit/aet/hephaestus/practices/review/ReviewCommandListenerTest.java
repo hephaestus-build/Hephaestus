@@ -112,6 +112,22 @@ class ReviewCommandListenerTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldAskThePersonToAskAgainWhenThePracticesChangedDuringTheRequest() {
+        when(requests.requestByComment(anyLong(), anyLong(), any(), any(), any()))
+                .thenThrow(new ReviewRequestRejected(ReviewRequestRejected.Reason.PRACTICES_CHANGED, "changed"));
+
+        listener.on(command(ADDRESS));
+
+        verify(sink)
+                .reply(
+                        11L,
+                        22L,
+                        ADDRESS,
+                        "Hephaestus did not start a review: the practices changed while it was being requested. Ask"
+                                + " again.");
+    }
+
+    @Test
     void shouldAnswerARequestThatThePersonMayNotMake() {
         when(requests.requestByComment(anyLong(), anyLong(), any(), any(), any()))
                 .thenThrow(new AccessForbiddenException("not linked"));
