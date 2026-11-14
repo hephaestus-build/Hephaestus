@@ -16,7 +16,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
-import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceSummaryQuery;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import java.util.HashSet;
@@ -58,7 +58,7 @@ public class ConnectionAdminService {
     private final ConnectionRepository connectionRepository;
     private final ConnectionService connectionService;
     private final ProviderResourceRepairs repairs;
-    private final WorkspaceRepository workspaceRepository;
+    private final WorkspaceSummaryQuery workspaces;
     private final IntegrationManifestRegistry manifests;
     private final CredentialBundleConverter credentialConverter;
     private final ApplicationEventPublisher events;
@@ -66,7 +66,7 @@ public class ConnectionAdminService {
     public ConnectionAdminService(
             ConnectionRepository connectionRepository,
             ConnectionService connectionService,
-            WorkspaceRepository workspaceRepository,
+            WorkspaceSummaryQuery workspaces,
             IntegrationManifestRegistry manifests,
             CredentialBundleConverter credentialConverter,
             ProviderResourceRepairs repairs,
@@ -75,7 +75,7 @@ public class ConnectionAdminService {
         this.repairs = repairs;
         this.connectionRepository = connectionRepository;
         this.connectionService = connectionService;
-        this.workspaceRepository = workspaceRepository;
+        this.workspaces = workspaces;
         this.manifests = manifests;
         this.credentialConverter = credentialConverter;
     }
@@ -129,12 +129,12 @@ public class ConnectionAdminService {
             Map<String, String> userInput,
             @Nullable Long actorAccountId) {
         // Hold the workspace status steady while reconnecting.
-        Workspace workspace = (kind == IntegrationKind.GITLAB
-                        ? workspaceRepository.findByIdForUpdate(workspaceId)
-                        : workspaceRepository.findById(workspaceId))
+        var workspace = (kind == IntegrationKind.GITLAB
+                        ? workspaces.findStateForUpdate(workspaceId)
+                        : workspaces.findState(workspaceId))
                 .orElseThrow(() -> new EntityNotFoundException("Workspace", workspaceId));
 
-        if (kind == IntegrationKind.GITLAB && workspace.getStatus() != Workspace.WorkspaceStatus.ACTIVE) {
+        if (kind == IntegrationKind.GITLAB && !workspace.active()) {
             throw new IllegalArgumentException("Resume this workspace before reconnecting GitLab.");
         }
 
@@ -159,7 +159,11 @@ public class ConnectionAdminService {
                     locked.setConfig(config);
                     return locked;
                 })
-                .orElseGet(() -> connectionRepository.save(new Connection(workspace, kind, instanceKey, config)));
+                .orElseGet(() -> connectionRepository.save(new Connection(
+                        Objects.requireNonNull(entityManager).getReference(Workspace.class, workspace.id()),
+                        kind,
+                        instanceKey,
+                        config)));
 
         persistCredentials(connection, credentials);
 

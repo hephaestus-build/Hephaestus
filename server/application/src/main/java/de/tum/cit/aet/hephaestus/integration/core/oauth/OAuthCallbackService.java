@@ -16,7 +16,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionStrategy.Connect
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.core.spi.OAuthExchangeRepair;
-import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceSummaryQuery;
 import jakarta.persistence.EntityNotFoundException;
 import java.io.Serial;
 import java.util.EnumSet;
@@ -77,22 +77,22 @@ public class OAuthCallbackService {
     private final ConnectionService connectionService;
     private final ProviderResourceRepairs repairs;
     private final OAuthExchangeRepair exchangeRepairs;
-    private final WorkspaceRepository workspaceRepository;
+    private final WorkspaceSummaryQuery workspaces;
     private final CredentialBundleConverter credentialBundleConverter;
     private final AccountMembershipQuery membershipQuery;
     private final TransactionTemplate transactionTemplate;
 
     public String workspaceSlug(long workspaceId) {
-        return workspaceRepository
-                .findById(workspaceId)
+        return workspaces
+                .findState(workspaceId)
                 .orElseThrow(() -> new EntityNotFoundException("Workspace does not exist"))
-                .getWorkspaceSlug();
+                .slug();
     }
 
     public OAuthCallbackService(
             ConnectionRepository connectionRepository,
             ConnectionService connectionService,
-            WorkspaceRepository workspaceRepository,
+            WorkspaceSummaryQuery workspaces,
             CredentialBundleConverter credentialBundleConverter,
             AccountMembershipQuery membershipQuery,
             PlatformTransactionManager transactionManager,
@@ -102,7 +102,7 @@ public class OAuthCallbackService {
         this.exchangeRepairs = exchangeRepairs;
         this.connectionRepository = connectionRepository;
         this.connectionService = connectionService;
-        this.workspaceRepository = workspaceRepository;
+        this.workspaces = workspaces;
         this.credentialBundleConverter = credentialBundleConverter;
         this.membershipQuery = membershipQuery;
         this.transactionTemplate = new TransactionTemplate(transactionManager);

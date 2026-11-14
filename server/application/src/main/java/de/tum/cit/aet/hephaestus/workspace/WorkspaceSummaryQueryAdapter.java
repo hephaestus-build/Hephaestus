@@ -6,6 +6,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
@@ -42,6 +43,26 @@ class WorkspaceSummaryQueryAdapter implements WorkspaceSummaryQuery {
     @Transactional(readOnly = true)
     public Optional<Long> findActiveIdBySlug(String slug) {
         return workspaceRepository.findActiveIdBySlug(slug).map(WorkspaceIdData::id);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<WorkspaceState> findState(long workspaceId) {
+        return workspaceRepository.findById(workspaceId).map(WorkspaceSummaryQueryAdapter::state);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Optional<WorkspaceState> findStateForUpdate(long workspaceId) {
+        return workspaceRepository.findByIdForUpdate(workspaceId).map(WorkspaceSummaryQueryAdapter::state);
+    }
+
+    private static WorkspaceState state(Workspace workspace) {
+        return new WorkspaceState(
+                workspace.getId(),
+                workspace.getWorkspaceSlug(),
+                workspace.getStatus().name(),
+                workspace.getStatus() == Workspace.WorkspaceStatus.ACTIVE);
     }
 
     private static WorkspaceSummary summary(Workspace workspace) {

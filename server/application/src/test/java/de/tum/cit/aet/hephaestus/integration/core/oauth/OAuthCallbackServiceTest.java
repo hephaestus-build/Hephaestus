@@ -26,7 +26,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.core.spi.OAuthExchangeRepair;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
-import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceSummaryQuery;
 import java.sql.SQLException;
 import java.util.List;
 import java.util.Optional;
@@ -54,7 +54,7 @@ class OAuthCallbackServiceTest extends BaseUnitTest {
     private ConnectionService connectionService;
 
     @Mock
-    private WorkspaceRepository workspaceRepository;
+    private WorkspaceSummaryQuery workspaces;
 
     @Mock
     private CredentialBundleConverter credentialBundleConverter;
@@ -80,7 +80,7 @@ class OAuthCallbackServiceTest extends BaseUnitTest {
         service = new OAuthCallbackService(
                 connectionRepository,
                 connectionService,
-                workspaceRepository,
+                workspaces,
                 credentialBundleConverter,
                 membershipQuery,
                 transactionManager,
