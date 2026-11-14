@@ -152,6 +152,7 @@ class DataIsolationArchitectureTest extends HephaestusArchitectureTest {
             "ClientSignInHandoff", // Single-use installed-client sign-in code; precedes any workspace choice
             "JwtSigningKey", // System-wide signing keys
             "StoredSystemSecret", // Secrets that the instance generates for itself, sealed by the system key
+            "SlackRequestClaim", // Slack request signatures, held 15 minutes, past the signature window
             "AccountExport", // GDPR Art. 20 self-service export; account-scoped, spans workspaces
             "LoginProvider", // Instance-scoped OAuth login provider (sign-in option); not workspace-scoped
             "ConsentDecision", // Account-scoped consent evidence; spans workspaces

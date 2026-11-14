@@ -78,6 +78,9 @@ class PersonalDataMapArchTest extends BaseIntegrationTest {
             "jwt_signing_key",
             // Sealed instance secrets, such as the key of the namespace reservations: key material with no person.
             "system_secret",
+            // Signatures of handled Slack requests: opaque HMAC values with no Slack user or payload, deleted after
+            // 15 minutes by a scheduled job.
+            "slack_request_claim",
             "label",
             "llm_call_permit",
             "llm_call_pool",

@@ -84,13 +84,22 @@ class HmacOAuthStateServiceTest extends BaseUnitTest {
                 .isEqualTo(42L);
     }
 
+    /**
+     * Without its own secret, the state key derives from the webhook secret: servers that share it agree, and it is not
+     * the secret.
+     */
     @Test
-    void shouldUseWebhookSecretAsFallback() {
+    void shouldDeriveItsOwnKeyFromTheWebhookSecret() {
         HmacOAuthStateService issuer = configuredService(null, SECRET, false);
-        HmacOAuthStateService verifier = HmacOAuthStateService.withoutNonceStore(SECRET, Duration.ofMinutes(10), CLOCK);
+        HmacOAuthStateService otherServer = configuredService(null, SECRET, false);
 
-        assertThat(verifier.consume(issuer.issue(42L, IntegrationKind.GITHUB)).workspaceId())
+        assertThat(otherServer
+                        .consume(issuer.issue(42L, IntegrationKind.GITHUB))
+                        .workspaceId())
                 .isEqualTo(42L);
+        assertThatThrownBy(() -> HmacOAuthStateService.withoutNonceStore(SECRET, Duration.ofMinutes(10), CLOCK)
+                        .consume(issuer.issue(42L, IntegrationKind.GITHUB)))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
