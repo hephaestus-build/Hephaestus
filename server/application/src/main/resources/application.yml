@@ -405,7 +405,7 @@ hephaestus:
                 capacity: ${HEPHAESTUS_RATE_LIMIT_BROWSER_REPORTS_CAPACITY:30}
                 period: ${HEPHAESTUS_RATE_LIMIT_BROWSER_REPORTS_PERIOD:1m}
 
-    host-url: ${APPLICATION_HOST_URL:http://localhost:4200}
+    host-url: ${APPLICATION_HOST_URL:http://localhost:${WEBAPP_PORT:4200}}
 
     # ═══════════════════════════════════════════════════════════════════════════
     # RUNTIME ROLES (single JAR, deploy-config-selected mode)
@@ -465,7 +465,7 @@ hephaestus:
         # each profile can override; set them in application-local.yml to scope dev syncs.
     cors:
         allowed-origins:
-            - ${APPLICATION_HOST_URL:http://localhost:4200}
+            - ${APPLICATION_HOST_URL:http://localhost:${WEBAPP_PORT:4200}}
 
     # ═══════════════════════════════════════════════════════════════════════════
     # CONTEXT FABRIC AND LOCAL GIT CHECKOUT

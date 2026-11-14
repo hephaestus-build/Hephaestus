@@ -115,7 +115,7 @@ export function loadConfig(env: Record<string, string | undefined>, args: string
 		"E2E_LLM_PRICING_MODE must be PRICED or NO_CHARGE",
 	);
 	const appUrl = loopbackUrl(
-		get("--app-url", "E2E_APP_URL", "http://localhost:8080"),
+		get("--app-url", "E2E_APP_URL", `http://localhost:${env.SERVER_PORT ?? "8080"}`),
 		["http:"],
 		"E2E_APP_URL must be a loopback URL",
 	);
