@@ -1,0 +1,24 @@
+# The one cancel job of a merge group. docs/contributor/ci-cd.mdx § Fail fast in the merge queue.
+# Each caller is a job named `Stop the merge group early` that needs only its own leg, so the cancel
+# starts when that leg fails. Only this job holds a token that can write to Actions: it runs no
+# checkout and no action, and it cancels gracefully, so the `always()` jobs still report.
+name: CI / Stop the merge group early
+
+on:
+  workflow_call:
+
+permissions: {}
+
+jobs:
+  cancel:
+    name: Cancel this run
+    runs-on: ubuntu-slim
+    timeout-minutes: 15
+    permissions:
+      actions: write
+    steps:
+      - name: Cancel this run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.run_id }}
+        run: gh run cancel "$RUN_ID" --repo "$GITHUB_REPOSITORY"
