@@ -26,7 +26,7 @@ import org.springframework.jdbc.datasource.DriverManagerDataSource;
 @Tag("database")
 class SystemSecretSealingChangeDatabaseTest {
 
-    private static final String CHANGELOG = "20261114095400-system-key-ids.xml";
+    private static final String CHANGELOG = "20261114152032-system-key-ids.xml";
     private static final String KEY = "0123456789abcdef0123456789abcdef";
     private static final SecureRandom RANDOM = new SecureRandom();
 
