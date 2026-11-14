@@ -899,6 +899,18 @@ class AgentRunsIntegrationTest extends BaseIntegrationTest {
         });
     }
 
+    @Test
+    void shouldRefuseAHandedOffRunThatNoReviewJobKeeps() {
+        AgentRunRef run = enqueue(workspace, AgentRunBand.BATCH, "review:handed-off");
+        AgentRunLease lease = claimSubject(workspace, "review:handed-off").orElseThrow();
+
+        assertThatThrownBy(() -> transactions.executeWithoutResult(
+                        status -> runs.end(lease.fence(), AgentRunStopReason.HANDED_OFF)))
+                .rootCause()
+                .hasMessageContaining("a handed-off run belongs to the review job that it handed on");
+        assertThat(stopReason(run.id())).as("the end rolled back").isNull();
+    }
+
     private AgentRunRef enqueueWithin(long workspaceId, String subject, Duration startWithin) {
         AgentRunRef run = Objects.requireNonNull(transactions.execute(
                 status -> runs.enqueue(workspaceId, AgentRunKind.REVIEW, AgentRunBand.BATCH, subject, startWithin)));

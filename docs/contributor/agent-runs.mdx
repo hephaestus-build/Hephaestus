@@ -121,8 +121,12 @@ A lost run fence rolls that transaction back.
 `TurnRunsAdapter` maps a turn's `DONE`, `FAILED` and `STOPPED` states to `COMPLETED`, `FAILED` and `CANCELLED`.
 Each holder supplies its outcome to `AgentRuns.end`; there is no default success path.
 The database rejects a completed run whose review job or turn did not complete.
-A measurement handoff completes the measuring run's work and retires that run in the same transaction.
+A measurement handoff ends the measuring run as `HANDED_OFF` in the same transaction.
+The review job keeps that run in `handed_off_run_id`, in its own workspace, and retention and workspace erasure delete it with the job.
+A job has one measuring run and its composing runs continue as their own kind, so a job hands off at most once.
+The database keeps the reference write-once. At commit, every handed-off run belongs to exactly one job, and a job keeps only a run that handed off.
 The next composing run carries the review's terminal outcome, including a failed or timed-out measurement.
+A retry, an expiry or a resumed composition deletes the run that it continues, because the new run carries the same work.
 A reaper reason, such as `ATTEMPTS_EXHAUSTED`, retains its own diagnosis.
 A repeated holder end succeeds only for the same epoch and reason.
 

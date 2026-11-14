@@ -4,6 +4,8 @@ package de.tum.cit.aet.hephaestus.agent.run;
 public enum AgentRunStopReason {
     /** Its holder completed its work. */
     COMPLETED,
+    /** Its work went on in a run of another kind, which carries the outcome; its subject keeps it as history. */
+    HANDED_OFF,
     /** Its holder ended it because its work failed. */
     FAILED,
     /** Its subject was cancelled, erased or replaced. */

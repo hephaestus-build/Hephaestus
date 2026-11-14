@@ -392,6 +392,27 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
             @Param("nextRunId") UUID nextRunId);
 
     /**
+     * Hands the running attempt's admitted job on to the run that composes it, keeping the ended measuring run as the
+     * job's history. A job hands off once: a second hand-off finds the column set and updates nothing.
+     *
+     * @return rows updated (0 or 1)
+     */
+    @WorkspaceAgnostic("ID-based fenced hand-off; the caller holds the attempt's run")
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query(
+            value = "UPDATE review_job SET status = 'QUEUED', run_id = :nextRunId, handed_off_run_id = :runId,"
+                    + " started_at = NULL, execution_started_at = NULL"
+                    + " WHERE id = :id AND status = 'RUNNING' AND run_id = :runId AND handed_off_run_id IS NULL"
+                    + " AND (SELECT " + ReviewRunKind.ATTEMPT_OF_RUN + " FROM agent_run r WHERE r.id = :runId)"
+                    + " = :attempt",
+            nativeQuery = true)
+    int handOffToRun(
+            @Param("id") UUID id,
+            @Param("runId") UUID runId,
+            @Param("attempt") int attempt,
+            @Param("nextRunId") UUID nextRunId);
+
+    /**
      * Cancels this worker's attempt for capacity: nothing of its sandbox ran, so it has no execution time either.
      *
      * @return rows updated (0 or 1)
@@ -456,12 +477,14 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
     @WorkspaceAgnostic("Cross-workspace retention batch; caller is @WorkspaceAgnostic retention service")
     // A list result runs as a query, which neither flushes nor clears; Hibernate flushes before a native statement.
     @Query(
-            value = "DELETE FROM review_job WHERE id IN (" + "  SELECT j.id FROM review_job j "
+            value = "WITH deleted AS (DELETE FROM review_job WHERE id IN (" + "  SELECT j.id FROM review_job j "
                     + "  WHERE j.status IN ('COMPLETED','FAILED','TIMED_OUT','CANCELLED') "
                     + "  AND j.completed_at < :cutoff "
                     + "  AND j.processing_status IN ('DONE','FAILED') "
                     + "  LIMIT :batchSize"
-                    + ") RETURNING run_id",
+                    + ") RETURNING run_id, handed_off_run_id) "
+                    + "SELECT run_id FROM deleted UNION ALL "
+                    + "SELECT handed_off_run_id FROM deleted WHERE handed_off_run_id IS NOT NULL",
             nativeQuery = true)
     List<UUID> deleteUnreferencedTerminalRowsOlderThan(
             @Param("cutoff") Instant cutoff, @Param("batchSize") int batchSize);

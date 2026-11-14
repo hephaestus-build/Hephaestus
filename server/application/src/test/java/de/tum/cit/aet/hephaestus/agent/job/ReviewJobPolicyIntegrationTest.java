@@ -10,6 +10,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.agent.AgentWorkspacePurgeAdapter;
 import de.tum.cit.aet.hephaestus.agent.AgentCapacityProperties;
 import de.tum.cit.aet.hephaestus.agent.catalog.DataHandlingFacts;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallPermitRepository;
@@ -103,6 +104,9 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private ReviewRunKind reviewRuns;
+
+    @Autowired
+    private AgentWorkspacePurgeAdapter workspacePurge;
 
     @Autowired
     private WorkspaceRepository workspaces;
@@ -405,12 +409,65 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
         assertThat(waiting.getRunId()).isEqualTo(composing.id());
         assertThat(jdbc.queryForObject("SELECT kind FROM agent_run WHERE id=?", String.class, composing.id()))
                 .isEqualTo("REVIEW_COMPOSE");
-        assertThat(jdbc.queryForObject("SELECT count(*) FROM agent_run WHERE id=?", Integer.class, measuring))
-                .as("the measuring run is retired")
-                .isZero();
+        assertThat(jdbc.queryForMap("SELECT state, stop_reason FROM agent_run WHERE id=?", measuring))
+                .as("the job keeps its measuring run as history")
+                .containsEntry("state", "ENDED")
+                .containsEntry("stop_reason", "HANDED_OFF");
+        assertThat(waiting.getHandedOffRunId()).isEqualTo(measuring);
         Optional<AgentRunRef> again = Objects.requireNonNull(
                 transactions.execute(status -> reviewRuns.continueToCompose(job.getId(), started.fence())));
         assertThat(again).as("a stale claim hands nothing on").isEmpty();
+    }
+
+    @Test
+    void shouldHandOffOnceAndKeepTheHandedOffRunUntilItsJobIsDeleted() {
+        var job = queued(binding(DataHandlingTier.IN_HOUSE));
+        var started = claimLeased(job).orElseThrow();
+        UUID measuring = started.fence().runId();
+        var composing = Objects.requireNonNull(
+                        transactions.execute(status -> reviewRuns.continueToCompose(job.getId(), started.fence())))
+                .orElseThrow();
+
+        assertThatThrownBy(() -> jdbc.update("UPDATE review_job SET handed_off_run_id=NULL WHERE id=?", job.getId()))
+                .hasMessageContaining("a review job keeps the run that it handed off");
+        var composition = claimLeased(jobs.findById(job.getId()).orElseThrow()).orElseThrow();
+        int attempt = jobs.findById(job.getId()).orElseThrow().getAttempt();
+        assertThat(transactions.execute(status -> jobs.handOffToRun(
+                        job.getId(), composition.fence().runId(), attempt, UUID.randomUUID())))
+                .as("a composition cannot hand off again")
+                .isZero();
+        assertThatThrownBy(() -> transactions.executeWithoutResult(
+                        status -> jdbc.update("DELETE FROM review_job WHERE id=?", job.getId())))
+                .rootCause()
+                .hasMessageContaining("a handed-off run is deleted with its review job");
+        assertThat(jobs.findById(job.getId())).isPresent();
+
+        // Retention returns both runs of the job it deletes, in the same transaction.
+        transactions.executeWithoutResult(status -> {
+            jdbc.update("""
+                    UPDATE review_job SET status='CANCELLED', processing_status='DONE',
+                      completed_at=now() - interval '400 days'
+                    WHERE id=?""", job.getId());
+            List<UUID> ended = jobs.deleteUnreferencedTerminalRowsOlderThan(Instant.now(), 500);
+            assertThat(ended).containsExactlyInAnyOrder(composing.id(), measuring);
+            agentRuns.retireAll(ended);
+        });
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM agent_run WHERE id=?", Integer.class, measuring))
+                .isZero();
+    }
+
+    @Test
+    void shouldDeleteTheHandedOffRunWithTheWorkspace() {
+        var job = queued(binding(DataHandlingTier.IN_HOUSE));
+        var started = claimLeased(job).orElseThrow();
+        UUID measuring = started.fence().runId();
+        transactions.execute(status -> reviewRuns.continueToCompose(job.getId(), started.fence()));
+
+        transactions.executeWithoutResult(status -> workspacePurge.deleteWorkspaceData(workspace.getId()));
+
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM agent_run WHERE id=?", Integer.class, measuring))
+                .isZero();
+        assertThat(jobs.findById(job.getId())).isEmpty();
     }
 
     private AgentCapacityProperties runs() {
