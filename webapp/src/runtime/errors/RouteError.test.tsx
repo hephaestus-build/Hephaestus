@@ -14,6 +14,13 @@ import { afterEach, expect, it, vi } from "vitest";
 import { ROUTER_SEARCH } from "@/lib/router-search";
 import { RouteError } from "./RouteError";
 
+const realLocation = window.location;
+
+afterEach(() => {
+	sessionStorage.clear();
+	Object.defineProperty(window, "location", { configurable: true, value: realLocation });
+});
+
 it("runs a failed route again on retry and shows the page once it renders", async () => {
 	const error = new Error("failed route with private detail");
 	const renderPage = vi
@@ -129,11 +136,6 @@ it("names no reference for a failure without one, or with a value that is not a 
 	expect(screen.queryByRole("button", { name: "Copy reference" })).toBeNull();
 });
 
-afterEach(() => {
-	sessionStorage.clear();
-	vi.restoreAllMocks();
-});
-
 it("offers a reload, not a blank page, when a route's code is gone after a deploy and the reload already ran", async () => {
 	const missing = new TypeError(
 		"Failed to fetch dynamically imported module: https://hephaestus.example/assets/members-1a2b3c.js",
@@ -141,12 +143,15 @@ it("offers a reload, not a blank page, when a route's code is gone after a deplo
 	// TanStack Router reloads once per tab for each missing module; this tab already did.
 	sessionStorage.setItem(`tanstack_router_reload:${missing.message}`, "1");
 	const reload = vi.fn();
-	vi.spyOn(window, "location", "get").mockReturnValue({ ...window.location, reload });
+	// jsdom cannot reload, so the page's location is replaced by one that records the reload.
+	Object.defineProperty(window, "location", { configurable: true, value: { reload } });
 	const rootRoute = createRootRoute();
 	const route = createRoute({
 		getParentRoute: () => rootRoute,
 		path: "/",
-		component: lazyRouteComponent(async () => Promise.reject(missing)),
+		component: lazyRouteComponent(async () => {
+			throw missing;
+		}),
 	});
 	const router = createRouter({
 		...ROUTER_SEARCH,
