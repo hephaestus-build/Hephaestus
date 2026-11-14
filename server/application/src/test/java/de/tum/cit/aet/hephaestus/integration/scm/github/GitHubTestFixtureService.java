@@ -963,7 +963,7 @@ public class GitHubTestFixtureService {
             } catch (Exception e) {
                 // Retry
             }
-            TimeUnit.SECONDS.sleep(1);
+            TimeUnit.SECONDS.sleep(1); // NOPMD - retry interval against live GitHub
         }
         throw new RuntimeException("Timed out waiting for default branch on " + fullName);
     }

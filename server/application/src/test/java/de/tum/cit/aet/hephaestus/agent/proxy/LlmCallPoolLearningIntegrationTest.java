@@ -103,7 +103,7 @@ class LlmCallPoolLearningIntegrationTest extends BaseIntegrationTest {
                     refused.incrementAndGet();
                     return false;
                 }
-                Thread.sleep(callTakes.toMillis()); // NOPMD - the simulated provider call takes this long, which the pool learns from
+                Thread.sleep(callTakes.toMillis()); // NOPMD - simulated call duration
                 served.incrementAndGet();
                 concurrencyServed.add(concurrent);
                 return true;
@@ -281,7 +281,7 @@ class LlmCallPoolLearningIntegrationTest extends BaseIntegrationTest {
                 }));
             }
             while (System.nanoTime() < ends) {
-                TimeUnit.SECONDS.sleep(1);
+                TimeUnit.SECONDS.sleep(1); // NOPMD - samples the pool each second
                 limits.add(limit(pool));
             }
             for (var call : running) call.get(120, TimeUnit.SECONDS);
