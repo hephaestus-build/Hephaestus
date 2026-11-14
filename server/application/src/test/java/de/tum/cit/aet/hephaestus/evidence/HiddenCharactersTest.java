@@ -45,6 +45,16 @@ class HiddenCharactersTest {
     }
 
     @Test
+    void shouldMarkAJoinerNextToAsciiSoARecordAndItsExtractedStringAgree() {
+        String record = "{\"body\":\"خواهم" + ch(0x200C) + "\"}";
+        String extracted = "خواهم" + ch(0x200C);
+
+        assertThat(HiddenCharacters.mark(record)).isEqualTo("{\"body\":\"خواهم⟦U+200C⟧\"}");
+        assertThat(HiddenCharacters.mark(extracted)).isEqualTo("خواهم⟦U+200C⟧");
+        assertThat(HiddenCharacters.mark("a" + ch(0x200C) + "b")).isEqualTo("a⟦U+200C⟧b");
+    }
+
+    @Test
     void shouldLeaveBytesThatAreNotUtf8TextAsTheyAre() {
         byte[] binary = {(byte) 0xFF, (byte) 0xFE, 0x00, 0x41};
 

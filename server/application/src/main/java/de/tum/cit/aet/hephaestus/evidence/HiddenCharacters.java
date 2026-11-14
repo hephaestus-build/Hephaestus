@@ -11,8 +11,9 @@ import java.util.Locale;
  * characters, bidirectional controls, zero-width characters and other default-ignorable or control characters can
  * hide an instruction in a pull request, a Slack message or a document that a reviewer never sees. Each one becomes
  * {@code ⟦U+XXXX⟧}, so the model and anyone who reads its quote see that it is there. Tab, line feed and carriage
- * return stay. A single zero-width joiner or non-joiner between two visible characters stays too: emoji sequences,
- * Persian and Indic words need it (RFC 5892 CONTEXTJ).
+ * return stay. A single zero-width joiner or non-joiner between two visible non-ASCII characters stays too: emoji
+ * sequences, Persian and Indic words need it (RFC 5892 CONTEXTJ). Next to ASCII it is marked, so a JSON record, whose
+ * escapes and quotes are ASCII, and the string extracted from it decide the same way.
  *
  * <p>Applied where captured provider text enters a job's evidence ({@code JobFolderIndexBuilder}) and a
  * conversation's context ({@code WorkspaceContextBuilder}). On output, {@code FeedbackTextPolicy} refuses the same
@@ -73,7 +74,8 @@ public final class HiddenCharacters {
     private static boolean visible(int[] codePoints, int index) {
         if (index < 0 || index >= codePoints.length) return false;
         int codePoint = codePoints[index];
-        return !hidden(codePoint)
+        return codePoint > 0x7F
+                && !hidden(codePoint)
                 && codePoint != ZERO_WIDTH_JOINER
                 && codePoint != ZERO_WIDTH_NON_JOINER
                 && !Character.isWhitespace(codePoint)
