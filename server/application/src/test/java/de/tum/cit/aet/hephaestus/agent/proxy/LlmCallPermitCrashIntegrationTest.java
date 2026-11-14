@@ -213,7 +213,7 @@ class LlmCallPermitCrashIntegrationTest extends BaseIntegrationTest {
                 });
                 database.blackHole();
                 // A renewal already on its way may still land.
-                TimeUnit.SECONDS.sleep(1);
+                TimeUnit.SECONDS.sleep(1); // NOPMD - a late renewal may still land
                 Instant lastRenewal = renewedAt(poolId);
                 upstream.getInputStream().readAllBytes();
                 Duration closedAfter = Duration.between(lastRenewal, databaseNow());
@@ -363,7 +363,7 @@ class LlmCallPermitCrashIntegrationTest extends BaseIntegrationTest {
                         }
                     } catch (SocketException revoked) {
                         // The permit's revocation closed the call. The process stays up, like a partitioned worker.
-                        TimeUnit.MINUTES.sleep(5);
+                        TimeUnit.MINUTES.sleep(5); // NOPMD - the partitioned worker stays up
                     }
                 } finally {
                     permits.stop();

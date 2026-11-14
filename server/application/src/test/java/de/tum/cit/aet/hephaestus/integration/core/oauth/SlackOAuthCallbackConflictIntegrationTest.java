@@ -332,7 +332,7 @@ class SlackOAuthCallbackConflictIntegrationTest extends AbstractWorkspaceIntegra
                     .as("callback finished without waiting for the concurrent install")
                     .isNotDone();
             assertThat(Instant.now()).isBefore(deadline);
-            Thread.sleep(20); // NOPMD - proves over this window that the callback keeps waiting for the concurrent install
+            Thread.sleep(20); // NOPMD - proves the callback still waits
         }
     }
 

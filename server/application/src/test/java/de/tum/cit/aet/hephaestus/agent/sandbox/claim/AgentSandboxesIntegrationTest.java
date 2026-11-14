@@ -125,7 +125,7 @@ class AgentSandboxesIntegrationTest extends BaseIntegrationTest {
 
     private static void waitPast(Duration limit) {
         try {
-            Thread.sleep(limit.plusMillis(200).toMillis()); // NOPMD - the claim must outlive its limit, which is the behaviour under test
+            Thread.sleep(limit.plusMillis(200).toMillis()); // NOPMD - outlives the limit on purpose
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new IllegalStateException(e);

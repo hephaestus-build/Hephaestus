@@ -277,7 +277,7 @@ class FeedbackConversationReceiptIntegrationTest extends AbstractFeedbackDeliver
                             + " AND query LIKE '%FOR SHARE OF t%'",
                     Integer.class);
             if (waiting != null && waiting > 0) return;
-            Thread.sleep(50); // NOPMD - polling interval of a bounded wait for a condition with no event to await
+            Thread.sleep(50); // NOPMD - poll interval of a bounded wait
         }
         throw new AssertionError("The claim never waited for the turn lock");
     }

@@ -546,7 +546,7 @@ class ClientSessionConcurrencyIntegrationTest extends RealAuthIntegrationTest {
             if (waiting != null && waiting >= waiters) {
                 return;
             }
-            Thread.sleep(20); // NOPMD - polling interval of a bounded wait for a condition with no event to await
+            Thread.sleep(20); // NOPMD - poll interval of a bounded wait
         }
         fail("the second operation never blocked on a lock");
     }

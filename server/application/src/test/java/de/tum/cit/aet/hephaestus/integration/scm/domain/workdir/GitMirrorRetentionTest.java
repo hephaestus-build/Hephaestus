@@ -100,7 +100,7 @@ class GitMirrorRetentionTest extends BaseUnitTest {
         var capture = CompletableFuture.runAsync(() -> locks.withWriteLock(OLDEST, () -> {
             fetching.countDown();
             try {
-                Thread.sleep(500); // NOPMD - the fetch holds the write lock for this long, which retention must wait out
+                Thread.sleep(500); // NOPMD - holds the lock on purpose
                 Files.setLastModifiedTime(mirrorPath(OLDEST), FileTime.from(Instant.now()));
             } catch (InterruptedException | IOException e) {
                 throw new IllegalStateException(e);

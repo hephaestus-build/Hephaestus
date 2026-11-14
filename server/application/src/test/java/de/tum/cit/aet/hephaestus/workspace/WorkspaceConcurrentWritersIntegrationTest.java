@@ -255,7 +255,7 @@ class WorkspaceConcurrentWritersIntegrationTest extends AbstractWorkspaceIntegra
                     Integer.class,
                     backend);
             if (blocked != null && blocked > 0) return;
-            Thread.sleep(20); // NOPMD - polling interval of a bounded wait for a condition with no event to await
+            Thread.sleep(20); // NOPMD - poll interval of a bounded wait
         }
         throw new AssertionError("The second writer never waited on the first writer's lock");
     }

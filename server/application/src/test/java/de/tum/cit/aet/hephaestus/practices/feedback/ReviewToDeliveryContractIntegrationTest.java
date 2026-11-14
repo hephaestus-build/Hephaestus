@@ -1003,7 +1003,7 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                     assertThat(jobs.findById(jobId).orElseThrow().getStatus())
                             .as("the attempt of a server that renews its lease")
                             .isEqualTo(ReviewJobStatus.RUNNING);
-                    Thread.sleep(1000); // NOPMD - the lease must be renewed across real time, which is the behaviour under test
+                    Thread.sleep(1000); // NOPMD - renews across real time
                 }
             } finally {
                 lost.destroyForcibly();
@@ -1028,7 +1028,7 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
             while (jobs.findById(jobId).orElseThrow().getStatus() == ReviewJobStatus.RUNNING
                     && Instant.now().isBefore(deadline)) {
                 reaper.reap();
-                Thread.sleep(1000); // NOPMD - the lease must be renewed across real time, which is the behaviour under test
+                Thread.sleep(1000); // NOPMD - renews across real time
             }
 
             var retry = jobs.findById(jobId).orElseThrow();
