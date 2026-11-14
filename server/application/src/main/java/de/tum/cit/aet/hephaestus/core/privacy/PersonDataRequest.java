@@ -6,6 +6,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 import java.time.Instant;
@@ -20,7 +21,7 @@ import org.jspecify.annotations.Nullable;
 
 /** Transient identifying scope; completed audit receipts contain no subject identity or content. */
 @Entity
-@Table(name = "person_data_request")
+@Table(name = "person_data_request", indexes = @Index(name = "idx_person_data_request_state", columnList = "state"))
 @Getter
 @Setter
 public class PersonDataRequest {

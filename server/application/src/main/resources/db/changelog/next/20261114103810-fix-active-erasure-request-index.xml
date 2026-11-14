@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1794652690403-1" author="hephaestus">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <indexExists tableName="person_data_request" indexName="idx_person_data_request_state"/>
+            </not>
+        </preConditions>
+        <comment>Active-erasure checks read only ERASING and FAILED requests, and completed requests stay as receipts. Liquibase can commit the index before it records the change set, so a restart finds the index and marks the change set ran.</comment>
+        <createIndex indexName="idx_person_data_request_state" tableName="person_data_request">
+            <column name="state"/>
+        </createIndex>
+    </changeSet>
+</databaseChangeLog>
