@@ -3,7 +3,7 @@
 import { Drawer as DrawerPrimitive } from "@base-ui/react/drawer";
 import { cva, type VariantProps } from "class-variance-authority";
 import type * as React from "react";
-import { createContext, useContext } from "react";
+import { createContext, useContext, useId, useLayoutEffect, useState } from "react";
 
 import { cn } from "cn";
 
@@ -27,6 +27,8 @@ import { cn } from "cn";
  *    card colours inside the panel, so dark mode lifts the whole level, and a covered level recedes.
  * 8. `DrawerFooter` takes `tone`: `band` lays the footer on the `bg-sidebar` ground, for a footer
  *    whose one action leads off the drawer (`PracticeFocusFooter`).
+ * 9. `DrawerBody` is a region named by the level's `DrawerTitle`, so the Tab stop of 3. says where
+ *    the reader is. `DrawerTitle` registers its id with its `DrawerContent`.
  */
 interface DrawerContextProps {
 	hasSnapPoints: boolean;
@@ -149,6 +151,12 @@ const drawerContentVariants = cva("", {
  * of the parent shows; a wide side panel leaves a real column of the parent on screen, and an empty
  * column is worse than a readable one.
  */
+/** The id of the level's title, once one is mounted, so the body can take it as its name. */
+const DrawerTitleContext = createContext<{
+	titleId: string | undefined;
+	setTitleId: (id: string | undefined) => void;
+} | null>(null);
+
 function DrawerContent({
 	className,
 	children,
@@ -159,6 +167,7 @@ function DrawerContent({
 	VariantProps<typeof drawerContentVariants> & { dimWhenNested?: boolean }) {
 	const { hasSnapPoints, modal, showSwipeHandle, swipeDirection } = useDrawer();
 	const swipeAxis = swipeDirection === "down" || swipeDirection === "up" ? "y" : "x";
+	const [titleId, setTitleId] = useState<string>();
 
 	return (
 		<DrawerPortal>
@@ -214,7 +223,7 @@ function DrawerContent({
 								"group-data-nested-drawer-open/drawer-popup:opacity-0 group-data-nested-drawer-swiping/drawer-popup:opacity-100",
 						)}
 					>
-						{children}
+						<DrawerTitleContext value={{ titleId, setTitleId }}>{children}</DrawerTitleContext>
 					</DrawerPrimitive.Content>
 				</DrawerPrimitive.Popup>
 			</DrawerPrimitive.Viewport>
@@ -238,9 +247,12 @@ function DrawerHeader({ className, ...props }: React.ComponentProps<"div">) {
  * size is its content, so without it the body refuses to shrink and the panel overflows.
  */
 function DrawerBody({ className, ...props }: React.ComponentProps<"div">) {
+	const titleId = useContext(DrawerTitleContext)?.titleId;
 	return (
 		<div
 			data-slot="drawer-body"
+			role={titleId === undefined ? undefined : "region"}
+			aria-labelledby={titleId}
 			className={cn("min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 pb-6", className)}
 			// A form disables every control while it submits, and then nothing in here is focusable —
 			// but the panel's overflow still has to be readable to the end. Same call as `ui/table`.
@@ -277,9 +289,17 @@ function DrawerFooter({
 	);
 }
 
-function DrawerTitle({ className, ...props }: DrawerPrimitive.Title.Props) {
+function DrawerTitle({ className, id, ...props }: DrawerPrimitive.Title.Props) {
+	const ownId = useId();
+	const titleId = id ?? ownId;
+	const setTitleId = useContext(DrawerTitleContext)?.setTitleId;
+	useLayoutEffect(() => {
+		setTitleId?.(titleId);
+		return () => setTitleId?.(undefined);
+	}, [setTitleId, titleId]);
 	return (
 		<DrawerPrimitive.Title
+			id={titleId}
 			data-slot="drawer-title"
 			className={cn("text-base font-medium text-foreground", className)}
 			{...props}

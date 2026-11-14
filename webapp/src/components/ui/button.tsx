@@ -23,6 +23,9 @@ import { usePendingSpinner } from "@/lib/use-pending-spinner";
  * 8. `pending`, for a button whose action is in flight. Upstream leaves a caller to disable the
  *    button and render a `<Spinner />` in it, so each call site timed its own spinner or flashed it
  *    for a quick action. `webapp/DESIGN.md` § Loading and errors owns the rule; see `Button`.
+ * 9. `outline` compounds `dark:focus-visible:border-ring`. Its `dark:border-input` comes later than
+ *    the base `focus-visible:border-ring` at the same specificity, so the focused edge lost the ring
+ *    colour in the dark theme (WCAG 2.2 SC 2.4.7).
  */
 const buttonVariants = cva(
 	"group/button inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-[color,background-color,border-color,text-decoration-color,box-shadow] outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
@@ -33,7 +36,7 @@ const buttonVariants = cva(
 				// hover feedback to a button rendered as a link and to no other.
 				default: "bg-primary text-primary-foreground hover:bg-primary/80",
 				outline:
-					"border-border bg-background hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground aria-pressed:bg-muted aria-pressed:text-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50 dark:aria-expanded:bg-muted dark:aria-pressed:bg-muted",
+					"border-border bg-background hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground aria-pressed:bg-muted aria-pressed:text-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50 dark:focus-visible:border-ring dark:aria-expanded:bg-muted dark:aria-pressed:bg-muted",
 				secondary:
 					"bg-secondary text-secondary-foreground hover:bg-secondary/80 aria-expanded:bg-secondary aria-expanded:text-secondary-foreground aria-pressed:bg-secondary aria-pressed:text-secondary-foreground",
 				ghost:

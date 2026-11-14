@@ -14,9 +14,14 @@ import { useTheme } from "@/runtime/theme/ThemeContext";
  * Every toast announces politely, `toast.error` included: sonner exposes no assertive path.
  *
  * ⚠️ Diverges from the shadcn registry: every toast has a close button, because a failure stays until
- * the reader closes it (`@/lib/toast`). And a keyboard press on a toast's button that leaves other toasts
- * open moves focus to their list (`keepFocusAmongToasts`). Re-vendoring drops both.
+ * the reader closes it (`@/lib/toast`). A keyboard press on a toast's button that leaves other toasts
+ * open moves focus to their list (`keepFocusAmongToasts`). And a toast's action and cancel buttons draw
+ * a focus outline, which sonner's own styles do not (WCAG 2.2 SC 2.4.7). Re-vendoring drops all three.
  */
+/** An outline, not a shadow, so the focus also shows in forced colours. */
+const FOCUS_OUTLINE =
+	"focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring";
+
 function Toaster({ ...props }: ToasterProps) {
 	const { theme } = useTheme();
 
@@ -25,7 +30,10 @@ function Toaster({ ...props }: ToasterProps) {
 			<Sonner
 				theme={theme}
 				closeButton
-				toastOptions={{ closeButtonAriaLabel: "Close message" }}
+				toastOptions={{
+					closeButtonAriaLabel: "Close message",
+					classNames: { actionButton: FOCUS_OUTLINE, cancelButton: FOCUS_OUTLINE },
+				}}
 				icons={{
 					success: <CircleCheckIcon className="size-4" />,
 					info: <InfoIcon className="size-4" />,

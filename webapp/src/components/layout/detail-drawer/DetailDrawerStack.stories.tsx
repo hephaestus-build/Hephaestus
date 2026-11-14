@@ -105,6 +105,18 @@ export const OneLevel: Story = {
 	},
 };
 
+/**
+ * The body scrolls, so Tab stops on it. It is a region with the level's title as its name, so a
+ * screen reader says which level the reader scrolls.
+ */
+export const BodyIsNamedByTheTitle: Story = {
+	play: async () => {
+		await expectSettledVisible(await screen.findByText("practice · describe-what-and-why"));
+		const body = screen.getByRole("region", { name: "practice · describe-what-and-why" });
+		await expect(body).toHaveAttribute("tabindex", "0");
+	},
+};
+
 export const DismissedLevelSlidesOut: Story = {
 	play: async () => {
 		await expectSettledVisible(await screen.findByText("practice · describe-what-and-why"));

@@ -86,6 +86,28 @@ export const WithUndo: Story = {
 	},
 };
 
+/** A keyboard user sees where focus is on the toast's Undo button. */
+export const UndoShowsItsFocus: Story = {
+	render: WithUndo.render,
+	play: async ({ canvas }) => {
+		// Raised by keyboard, so the browser shows focus the way it does for a keyboard user.
+		canvas.getByRole("button", { name: "Hide from activity" }).focus();
+		await userEvent.keyboard("{Enter}");
+		const undo = await screen.findByRole("button", { name: "Undo" });
+		undo.focus();
+		await expect(undo).toHaveFocus();
+		await expect(undo.matches(":focus-visible")).toBe(true);
+		const { outlineStyle, outlineWidth } = getComputedStyle(undo);
+		await expect(outlineStyle).toBe("solid");
+		await expect(Number.parseFloat(outlineWidth)).toBeGreaterThan(0);
+	},
+};
+
+export const UndoShowsItsFocusInDarkMode: Story = {
+	...UndoShowsItsFocus,
+	globals: { theme: "dark" },
+};
+
 /** A plain success confirms what the page already shows, so it leaves on its own after 4 seconds. */
 export const Success: Story = {
 	render: () => (
