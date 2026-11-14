@@ -59,7 +59,8 @@ class MigratedJobSettlementMigrationTest {
         UUID migrated = job(database, true, "COMPLETED", "NONE", OLD);
         UUID owed = job(database, false, "CANCELLED", "NONE", OLD);
 
-        migrate(database);
+        // The repository's current statements run below, so the schema is the current one.
+        migrateToHead(database);
         var jdbc = new NamedParameterJdbcTemplate(
                 new DriverManagerDataSource(database.jdbcUrl(), database.username(), database.password()));
         var window = Map.of("cutoff", Timestamp.from(Instant.now().minus(Duration.ofDays(90))), "batchSize", 500);
@@ -87,6 +88,18 @@ class MigratedJobSettlementMigrationTest {
     }
 
     private static void migrate(TestDatabase database) throws Exception {
+        update(database, liquibase -> liquibase.update(2, new Contexts("prod"), new LabelExpression()));
+    }
+
+    private static void migrateToHead(TestDatabase database) throws Exception {
+        update(database, liquibase -> liquibase.update(new Contexts("prod"), new LabelExpression()));
+    }
+
+    private interface Update {
+        void apply(Liquibase liquibase) throws Exception;
+    }
+
+    private static void update(TestDatabase database, Update update) throws Exception {
         try (var connection =
                         DriverManager.getConnection(database.jdbcUrl(), database.username(), database.password());
                 var liquibase = new Liquibase(
@@ -94,7 +107,7 @@ class MigratedJobSettlementMigrationTest {
                         new ClassLoaderResourceAccessor(),
                         DatabaseFactory.getInstance()
                                 .findCorrectDatabaseImplementation(new JdbcConnection(connection)))) {
-            liquibase.update(2, new Contexts("prod"), new LabelExpression());
+            update.apply(liquibase);
         }
     }
 
