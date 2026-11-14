@@ -1286,6 +1286,36 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
         assertOccasionUnavailable(prepared, prepared.version(), UUID.randomUUID());
     }
 
+    /**
+     * An automatic review reads its occasion. At each practice start, the server reads the same sources again under that
+     * occasion. A repository workflow that assigns the author right after the pull request opens changes its roles but
+     * not its version, so every source that the occasion retained must keep its fingerprint, or no practice can start.
+     */
+    @ParameterizedTest
+    @EnumSource(
+            value = IdentityProviderType.class,
+            names = {"GITHUB", "GITLAB"})
+    void shouldKeepTheOccasionRecordFingerprintsAfterTheAuthorIsAssigned(IdentityProviderType type) {
+        var prepared = prepare(type, false);
+        publish(prepared);
+        var occasion = event(prepared);
+        Set<SourceKind> kinds =
+                Set.of(PullRequestContentSource.CORE, PullRequestChecksRecord.KIND, ReviewThreadContentSource.KIND);
+        var captured = productItems.fingerprints(prepared.item(), kinds, occasion.getId());
+        assertThat(captured).containsOnlyKeys(kinds);
+
+        transactions.executeWithoutResult(ignored -> {
+            var pull = pulls.findById(Objects.requireNonNull(prepared.item().sourceId()))
+                    .orElseThrow();
+            pull.getAssignees().add(Objects.requireNonNull(pull.getAuthor()));
+            pulls.saveAndFlush(pull);
+        });
+        assertThat(source.pin(prepared.item(), null).version()).isEqualTo(prepared.version());
+
+        assertThat(productItems.fingerprints(prepared.item(), kinds, occasion.getId()))
+                .isEqualTo(captured);
+    }
+
     @ParameterizedTest
     @EnumSource(
             value = IdentityProviderType.class,

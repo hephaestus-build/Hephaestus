@@ -985,3 +985,12 @@ D16 holds as stated in the update of 2026-11-09.
 
 [ADR 0079](0079-one-agent-system.md#update--2026-11-11-compose-deadlines-and-expired-run-continuation) defines the run's work deadline and closing reserve.
 The composer still checks, publishes once, reads back and corrects under that deadline.
+
+## Update — 2026-11-14: a starting fetch keeps the ref observation
+
+§ Freshness by source fingerprints said that a new fetch invalidates the monitored repository's ref record until its read completes.
+That cleared record made every practice start on the repository unverifiable while any fetch ran, also for reviews whose work did not change.
+A fetch that has begun says nothing new about the provider's refs.
+So a starting fetch now only claims the read.
+The last complete observation stays readable until the fetch records a new one or a ref event withdraws it.
+A ref event still invalidates the record, and a fetch that began before the event cannot restore it.

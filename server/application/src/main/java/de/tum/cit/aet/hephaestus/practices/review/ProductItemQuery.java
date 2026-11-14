@@ -22,6 +22,8 @@ import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
@@ -30,6 +32,8 @@ import tools.jackson.databind.ObjectMapper;
 @ConditionalOnServerRole
 @RequiredArgsConstructor
 public class ProductItemQuery {
+    private static final Logger log = LoggerFactory.getLogger(ProductItemQuery.class);
+
     // Repository/file current sources can fetch Git and do not describe the frozen scan context.
     // A submitted review also embeds mutable parent context; its own events retain currentness authority.
     private static final Set<String> WORK_KINDS = Set.of("scm.issue", "scm.pull_request");
@@ -142,6 +146,11 @@ public class ProductItemQuery {
                     // A source without its own reader captures only rows that this server stores.
                     : ItemSource.recordFingerprints(source::capture, current.orElseThrow(), kinds, occasion, mapper);
         } catch (ItemCaptureException unavailable) {
+            // Every source then reads as unverifiable. Page reads of expired occasions pass here too, so not INFO.
+            log.debug(
+                    "Current source fingerprints unreadable: itemId={}, captureCode={}",
+                    item.itemId(),
+                    unavailable.code());
             return Map.of();
         }
     }

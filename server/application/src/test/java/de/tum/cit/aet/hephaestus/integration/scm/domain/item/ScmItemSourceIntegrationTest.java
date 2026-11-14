@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.agent.context.CapturedSourceFingerprints;
 import de.tum.cit.aet.hephaestus.agent.context.WorkspaceContextBuilder;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Identity;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityRepository;
+import de.tum.cit.aet.hephaestus.evidence.SourceFingerprint;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import de.tum.cit.aet.hephaestus.evidence.capture.CaptureRequest;
@@ -33,6 +34,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRegistration;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemSnapshot;
 import de.tum.cit.aet.hephaestus.integration.core.spi.MonitoredRepositoryQuery;
+import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryRefState;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ReviewRequestReason;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ReviewStateValue;
 import de.tum.cit.aet.hephaestus.integration.core.spi.RoleHolder;
@@ -106,7 +108,11 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
@@ -160,6 +166,9 @@ class ScmItemSourceIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private ResultFreshness freshness;
+
+    @Autowired
+    private RepositoryRefState refState;
 
     @Autowired
     private ItemIndexService writer;
@@ -1783,6 +1792,74 @@ class ScmItemSourceIntegrationTest extends BaseIntegrationTest {
             assertThat(changed.currentness()).isEqualTo(Currentness.STALE);
             assertThat(changed.changed()).containsExactly(GeneralReviewCommentContentSource.KIND.value());
         }
+    }
+
+    /**
+     * Reviews of one repository fetch it while other practices start. A fetch that has begun says nothing new about the
+     * provider's refs, so every practice start still reads the last complete observation.
+     */
+    @Test
+    void shouldVerifyTheTreeOfPracticesStartingTogetherWhileAnotherReviewFetchesTheRepository() throws Exception {
+        var fixture = fixture(IdentityProviderType.GITHUB);
+        var pull = new PullRequest();
+        pull.setNativeId(ThreadLocalRandom.current().nextLong(1, Long.MAX_VALUE));
+        pull.setProvider(fixture.provider());
+        pull.setRepository(fixture.repository());
+        pull.setNumber(33);
+        pull.setTitle("A change that several practices review");
+        pull.setBody("Nothing changes while they start.");
+        pull.setState(Issue.State.OPEN);
+        pull.setAuthor(fixture.author());
+        pull.setHtmlUrl(fixture.repository().getHtmlUrl() + "/pull/33");
+        pull.setCreatedAt(Instant.parse("2026-10-01T10:00:00Z"));
+        pull.setUpdatedAt(Instant.parse("2026-10-01T10:00:00Z"));
+        pull.setHeadRefOid("c".repeat(40));
+        pull.setBaseRefOid("d".repeat(40));
+        pull.setHeadRefName("topic");
+        pull.setBaseRefName("main");
+        pull = pulls.saveAndFlush(pull);
+        ItemRef holder = writer.upsert(new ItemRegistration(
+                fixture.workspace().getId(),
+                ScmItemEvents.REPOSITORY,
+                fixture.repository().getId(),
+                null,
+                null));
+        ItemRef pullRef = writer.upsert(new ItemRegistration(
+                holder.workspaceId(), ScmItemEvents.PULL_REQUEST, pull.getId(), holder.itemId(), null));
+        long workspaceId = pullRef.workspaceId();
+        long repositoryId = fixture.repository().getId();
+        var observed = SourceFingerprint.refs(Map.of("refs/heads/main", "d".repeat(40)));
+        refState.record(workspaceId, repositoryId, refState.begin(workspaceId, repositoryId), observed);
+        var captured = fingerprints.fingerprints(
+                pullRef, Set.of(RepositoryTreeContentSource.KIND, PullRequestContentSource.DIFF), null, mapper);
+        assertThat(captured).containsOnlyKeys(RepositoryTreeContentSource.KIND, PullRequestContentSource.DIFF);
+        var facts = mapper.createObjectNode();
+        var recorded = facts.putObject(ReviewCaptureDecision.SOURCE_FINGERPRINTS);
+        captured.forEach((kind, value) -> recorded.put(kind.value(), value));
+
+        // Another review's fetch of the same repository has begun and not finished.
+        var inFlight = refState.begin(workspaceId, repositoryId);
+        var starts = 5;
+        var ready = new CountDownLatch(starts);
+        try (var pool = Executors.newFixedThreadPool(starts)) {
+            var checks = new ArrayList<Future<ResultFreshness.Check>>();
+            for (int i = 0; i < starts; i++)
+                checks.add(pool.submit(() -> {
+                    ready.countDown();
+                    ready.await();
+                    return freshness.check(workspaceId, pullRef.itemId(), null, facts);
+                }));
+            for (var check : checks) {
+                var started = check.get(30, TimeUnit.SECONDS);
+                assertThat(started.currentness()).isEqualTo(Currentness.CURRENT);
+                assertThat(started.unread()).isEmpty();
+            }
+        }
+
+        // The fetch completes with the same refs: nothing changed.
+        refState.record(workspaceId, repositoryId, inFlight, observed);
+        assertThat(freshness.check(workspaceId, pullRef.itemId(), null, facts).currentness())
+                .isEqualTo(Currentness.CURRENT);
     }
 
     private Fixture fixture(IdentityProviderType type) {
