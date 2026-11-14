@@ -106,9 +106,7 @@ class GitHubWebhookRedeliveryTest extends BaseUnitTest {
     void shouldRedeliverAnEventThatFailedAWeekendAgoWhenItIsTheServersFirstRun() throws Exception {
         configured();
         respond(
-                deliveries(
-                        delivery(41, "friday-evening", 62 * 60, 503),
-                        delivery(42, "beyond-github", 72 * 60, 503)),
+                deliveries(delivery(41, "friday-evening", 62 * 60, 503), delivery(42, "beyond-github", 72 * 60, 503)),
                 "<" + github.url("/app/hook/deliveries?per_page=100&cursor=v1_older") + ">; rel=\"next\"");
         github.enqueue(new MockResponse.Builder().code(202).build());
 
@@ -151,9 +149,7 @@ class GitHubWebhookRedeliveryTest extends BaseUnitTest {
 
         clock.set(NOW.plus(GitHubWebhookRedelivery.INTERVAL));
         respond(
-                deliveries(
-                        redelivery(47, "friday-evening", 0, 503),
-                        delivery(46, "friday-evening", 62 * 60, 503)),
+                deliveries(redelivery(47, "friday-evening", 0, 503), delivery(46, "friday-evening", 62 * 60, 503)),
                 null);
         github.enqueue(new MockResponse.Builder().code(202).build());
         job.redeliverFailed();
@@ -309,7 +305,7 @@ class GitHubWebhookRedeliveryTest extends BaseUnitTest {
     @Test
     void shouldStopRequestingAtTheRunBudgetAndRedeliverTheOldestEventsFirst() throws Exception {
         configured();
-        // Each reading of the time moves it on by a minute, so the budget ends after the first redelivery.
+        // Each reading of the time moves it on by a minute, so the budget ends after the second redelivery.
         GitHubWebhookRedelivery budgeted = new GitHubWebhookRedelivery(
                 tokens,
                 new MinutePerReading(NOW),
@@ -324,15 +320,17 @@ class GitHubWebhookRedeliveryTest extends BaseUnitTest {
                         delivery(63, "older", 30, 503)),
                 null);
         github.enqueue(new MockResponse.Builder().code(202).build());
+        github.enqueue(new MockResponse.Builder().code(202).build());
 
         budgeted.redeliverFailed();
 
         github.takeRequest();
         assertThat(github.takeRequest().getTarget()).isEqualTo("/app/hook/deliveries/62/attempts");
+        assertThat(github.takeRequest().getTarget()).isEqualTo("/app/hook/deliveries/63/attempts");
         assertThat(github.getRequestCount())
-                .as("the other two wait for the next run")
-                .isEqualTo(2);
-        assertThat(outcome("requested")).isEqualTo(1);
+                .as("the newest event waits for the next run")
+                .isEqualTo(3);
+        assertThat(outcome("requested")).isEqualTo(2);
     }
 
     @Test
@@ -578,7 +576,12 @@ class GitHubWebhookRedeliveryTest extends BaseUnitTest {
 
     private GitHubWebhookRedelivery jobAt(Clock clock) {
         return new GitHubWebhookRedelivery(
-                tokens, clock, meters, RestClient.builder(), github.url("/").toString().replaceAll("/$", ""), waits::add);
+                tokens,
+                clock,
+                meters,
+                RestClient.builder(),
+                github.url("/").toString().replaceAll("/$", ""),
+                waits::add);
     }
 
     private void configured() {
