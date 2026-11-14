@@ -25,7 +25,7 @@ This page lists the fields and the events.
 | `context.installation.id`                         | The GitHub App installation of a sync run, when it has one                                      |
 | `context.proxy.principal`, `context.proxy.api_protocol` | The proxy caller's scope ID and selected API protocol. These contain no credential |
 | `context.action.id`, `context.action.kind`, `context.action.attempt` | The outbox action, kind, and attempt count. Every record inside an attempt carries these fields, including adapter records. A workspace action also carries `workspace.id` |
-| `context.integration.route`, `context.integration.delivery` | On `integration.message.failed`: provider and event (`github.push`), and the delivery count |
+| `context.integration.route`, `context.integration.delivery` | On `integration.message.failed`: provider and event (`github.push`), and the delivery count. `integration.message.retry` also has the delivery count. It is a warning when a provider event waits for a lock in as many deliveries as a failing handler can have |
 | `context.*`                                       | Every other event field and thread-scoped value                                                  |
 | `error.type`, `error.stack_trace`                 | Exception class and frames when a call site includes the exception. Not present on every failure |
 

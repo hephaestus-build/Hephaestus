@@ -22,6 +22,7 @@ import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.stereotype.Component;
 
 /**
@@ -99,6 +100,21 @@ public class IntegrationPoisonHandler {
         if (store.retry(claimed.id(), claimed.leaseEpoch(), Duration.ofMillis(delayMs), counted)) {
             retryCounter(claimed.event().subject()).increment();
         }
+    }
+
+    /**
+     * Whether the handler lost a lock to another write: it waited past the session's {@code lock_timeout}, lost a
+     * deadlock, or found a {@code NOWAIT} row taken.
+     */
+    static boolean isLockContention(Throwable failure) {
+        Throwable cause = failure;
+        for (int depth = 0; depth < 16 && cause != null; depth++) {
+            if (cause instanceof PessimisticLockingFailureException) return true;
+            if (cause instanceof SQLException sql
+                    && ("55P03".equals(sql.getSQLState()) || "40P01".equals(sql.getSQLState()))) return true;
+            cause = cause.getCause();
+        }
+        return false;
     }
 
     static Throwable diagnosticCause(Throwable failure) {

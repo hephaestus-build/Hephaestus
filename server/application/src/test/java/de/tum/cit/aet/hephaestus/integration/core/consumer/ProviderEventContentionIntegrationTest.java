@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.integration.core.consumer;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -30,6 +31,7 @@ import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.nio.charset.StandardCharsets;
+import java.sql.SQLException;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -47,6 +49,7 @@ import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.dao.CannotAcquireLockException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -306,6 +309,47 @@ class ProviderEventContentionIntegrationTest extends BaseIntegrationTest {
             assertThat(consumer.claimAndHandle()).isTrue();
             assertThat(copies(target, unique)).isEqualTo(1);
             assertThat(logs.messagesAtLeast(Level.WARN)).isEmpty();
+        } finally {
+            consumer.close();
+            registry.close();
+        }
+    }
+
+    @ParameterizedTest
+    @CsvSource({"true,false", "false,false", "true,true"})
+    void shouldRetryLockContentionWithoutAHandlerErrorAndWarnWhenItRecurs(boolean translated, boolean recurring) {
+        String unique = UUID.randomUUID().toString();
+        Workspace target = workspaces.save(WorkspaceTestFixtures.activeWorkspace("lock-timeout-" + unique));
+        String subject = "github.fixture." + unique + ".message";
+        long id = StoredEventHandling.stored(store, jdbc, target.getId(), subject);
+        // The claim counts one more attempt.
+        int earlierAttempts = recurring ? properties.poison().maxAttempts() - 1 : 0;
+        jdbc.update(
+                "UPDATE provider_event SET available_at='-infinity'::timestamptz, attempt=? WHERE id=?",
+                earlierAttempts,
+                id);
+        var claimed = store.claim(Duration.ofMinutes(2)).orElseThrow();
+        assertThat(claimed.id()).isEqualTo(id);
+        var handler = mock(IntegrationMessageHandler.class);
+        when(handler.key()).thenReturn(new EventTypeKey(IntegrationKind.GITHUB, "message"));
+        RuntimeException lockTimeout = translated
+                ? new CannotAcquireLockException("canceling statement due to lock timeout")
+                : new IllegalStateException(
+                        "untranslated", new SQLException("canceling statement due to lock timeout", "55P03"));
+        doThrow(lockTimeout).when(handler).onMessage(any(ProviderEvent.class));
+        var registry = new SimpleMeterRegistry();
+        var consumer = consumer(handler, subject, registry);
+        try (var logs = new LogCapture(ProviderEventConsumer.class)) {
+            consumer.handle(claimed);
+
+            assertThat(jdbc.queryForObject("SELECT state FROM provider_event WHERE id=?", String.class, id))
+                    .isEqualTo("QUEUED");
+            assertThat(jdbc.queryForObject("SELECT failures FROM provider_event WHERE id=?", Integer.class, id))
+                    .isZero();
+            assertThat(logs.messagesAtLeast(Level.ERROR)).isEmpty();
+            if (recurring)
+                assertThat(logs.messagesAtLeast(Level.WARN)).containsExactly("Provider event waits for a lock");
+            else assertThat(logs.messagesAtLeast(Level.WARN)).isEmpty();
         } finally {
             consumer.close();
             registry.close();

@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
@@ -22,6 +23,7 @@ import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedJobInputs;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunFence;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
+import de.tum.cit.aet.hephaestus.agent.run.StaleRunException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxWorkspaceManager;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxKind;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxes;
@@ -131,6 +133,40 @@ class ReviewSandboxRunsTest extends BaseUnitTest {
         assertThat(archive).doesNotExist();
         assertThat(copiedPerson).doesNotExist();
         assertThatThrownBy(session::download).isInstanceOf(ResponseStatusException.class);
+    }
+
+    @Test
+    void shouldEndAResultWhoseAttemptThisReplicaDidNotPrepareWithoutPreparingIt() {
+        var jobs = mock(ReviewJobRepository.class);
+        var preparation = mock(ReviewAttemptPreparation.class);
+        var fence = new AgentRunFence(UUID.randomUUID(), 7, 1);
+        var job = new ReviewJob();
+        job.setId(UUID.randomUUID());
+        job.setWorkspaceId(7);
+        job.setRunId(fence.runId());
+        job.setReviewId(UUID.randomUUID());
+        when(jobs.findByRunIdAndWorkspaceId(fence.runId(), 7)).thenReturn(Optional.of(job));
+        var runtime = new ReviewSandboxRuns(
+                mock(ReviewJobClaimService.class),
+                preparation,
+                mock(ReviewAttemptCustody.class),
+                mock(ReviewJobTerminal.class),
+                jobs,
+                mock(SandboxWorkspaceManager.class),
+                new SandboxGatewaySessions(),
+                mock(TransactionTemplate.class),
+                JsonMapper.builder().build(),
+                mock(DefaultReviewExecutionHandler.class),
+                mock(ReviewAttemptResults.class),
+                mock(ReviewRunKind.class),
+                mock(AgentRuns.class),
+                mock(JobEvidenceFiles.class));
+        var sandbox = new AgentSandboxes.LiveSandbox(
+                UUID.randomUUID(), 7, ReviewRunKind.subject(job.getReviewId()), AgentSandboxKind.REVIEW);
+        var run = new SandboxRun(sandbox, fence, AgentRunKind.REVIEW, 0);
+
+        assertThatThrownBy(() -> runtime.preparedSession(run)).isInstanceOf(StaleRunException.class);
+        verifyNoInteractions(preparation);
     }
 
     @ParameterizedTest

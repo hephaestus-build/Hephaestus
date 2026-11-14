@@ -81,6 +81,10 @@ spring:
             # exception message. The primary message, the SQLState and the constraint name stay.
             data-source-properties:
                 "[logServerErrorDetail]": false
+                # Every pooled session waits for a lock at most this long (SQLState 55P03), so a lock cycle fails instead
+                # of hanging. Only the pool gets it: Liquibase (MigrationDataSourceConfiguration) and the LISTEN
+                # listeners connect without it, and the copy fence lifts it for its own waits.
+                "[options]": "-c lock_timeout=10s"
             connection-timeout: 45000
             idle-timeout: 600000
             max-lifetime: 1800000

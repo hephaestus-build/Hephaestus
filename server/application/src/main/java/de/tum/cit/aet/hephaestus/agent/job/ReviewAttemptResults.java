@@ -46,6 +46,7 @@ import org.springframework.core.retry.RetryState;
 import org.springframework.core.retry.RetryTemplate;
 import org.springframework.core.retry.Retryable;
 import org.springframework.dao.DataAccessResourceFailureException;
+import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.dao.RecoverableDataAccessException;
 import org.springframework.dao.TransientDataAccessException;
 import org.springframework.stereotype.Component;
@@ -437,7 +438,9 @@ public class ReviewAttemptResults {
      * on a failure that does not resolve itself.
      */
     static boolean isRetryable(Throwable failure) {
-        return failure instanceof ReviewSourceNotReadyException
+        // A lock timeout aborts its statement before anything commits, so no accounting can replay.
+        return failure instanceof PessimisticLockingFailureException
+                || failure instanceof ReviewSourceNotReadyException
                 || failure instanceof SandboxInfrastructureException
                 || failure instanceof IOException
                 || failure instanceof UncheckedIOException
