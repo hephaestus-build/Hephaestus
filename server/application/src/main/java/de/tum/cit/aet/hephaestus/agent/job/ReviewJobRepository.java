@@ -477,17 +477,28 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
     @WorkspaceAgnostic("Cross-workspace retention batch; caller is @WorkspaceAgnostic retention service")
     // A list result runs as a query, which neither flushes nor clears; Hibernate flushes before a native statement.
     @Query(
-            value = "WITH deleted AS (DELETE FROM review_job WHERE id IN (" + "  SELECT j.id FROM review_job j "
+            value = "DELETE FROM review_job WHERE id IN (" + "  SELECT j.id FROM review_job j "
                     + "  WHERE j.status IN ('COMPLETED','FAILED','TIMED_OUT','CANCELLED') "
                     + "  AND j.completed_at < :cutoff "
                     + "  AND j.processing_status IN ('DONE','FAILED') "
                     + "  LIMIT :batchSize"
-                    + ") RETURNING run_id, handed_off_run_id) "
-                    + "SELECT run_id FROM deleted UNION ALL "
-                    + "SELECT handed_off_run_id FROM deleted WHERE handed_off_run_id IS NOT NULL",
+                    + ") RETURNING run_id AS \"runId\", handed_off_run_id AS \"handedOffRunId\"",
             nativeQuery = true)
-    List<UUID> deleteUnreferencedTerminalRowsOlderThan(
+    List<DeletedJob> deleteUnreferencedTerminalRowsOlderThan(
             @Param("cutoff") Instant cutoff, @Param("batchSize") int batchSize);
+
+    /** A deleted job's runs, which retention deletes in the same transaction. */
+    interface DeletedJob {
+        UUID getRunId();
+
+        @Nullable
+        UUID getHandedOffRunId();
+
+        default List<UUID> runs() {
+            UUID handedOff = getHandedOffRunId();
+            return handedOff == null ? List.of(getRunId()) : List.of(getRunId(), handedOff);
+        }
+    }
 
     String NOT_ADMITTED = "j.admissionDigest IS NULL";
     String EVIDENCE_REFUSAL_TRANSITION =

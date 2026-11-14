@@ -128,6 +128,7 @@ class ReviewJobRetentionIntegrationTest extends BaseIntegrationTest {
         assertThat(jobRepository.findById(finished.getId()).orElseThrow().getOutput())
                 .isNull();
         assertThat(jobRepository.deleteUnreferencedTerminalRowsOlderThan(cutoff, 500))
+                .extracting(ReviewJobRepository.DeletedJob::getRunId)
                 .contains(finished.getRunId())
                 .doesNotContain(pending.getRunId(), unsettled.getRunId());
         assertThat(runtimeJdbc.queryForList(

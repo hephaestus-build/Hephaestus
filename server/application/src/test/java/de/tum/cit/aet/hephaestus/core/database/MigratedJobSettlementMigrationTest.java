@@ -68,7 +68,7 @@ class MigratedJobSettlementMigrationTest {
         assertThat(output(database, migrated)).isNull();
         assertThat(output(database, owed)).isEqualTo("{\"receipt\": \"kept\"}");
 
-        jdbc.queryForList(statement("deleteUnreferencedTerminalRowsOlderThan"), window, UUID.class);
+        jdbc.queryForList(statement("deleteUnreferencedTerminalRowsOlderThan"), window);
 
         assertThat(processing(database, migrated)).isNull();
         assertThat(processing(database, owed)).isEqualTo("NONE");
