@@ -17,6 +17,7 @@ const model: LlmModel = {
 	connectionId: 1,
 	connectionDisplayName: "OpenAI",
 	enabled: true,
+	readiness: "PRICE_MISSING",
 	reasoningEffort: "MEDIUM",
 	visibility: "PUBLIC",
 	grantedWorkspaceIds: [],

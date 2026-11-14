@@ -54,4 +54,22 @@ public record UpdateLlmModelRequestDTO(
         Boolean clearContextWindow,
 
         @Nullable @Schema(description = "True clears the admin's maximum output, so the provider's value applies")
-        Boolean clearMaxOutputTokens) {}
+        Boolean clearMaxOutputTokens) {
+    /** The settings part of this request, which both catalogs apply the same way. */
+    LlmModelSettingsChange settingsChange() {
+        return new LlmModelSettingsChange(
+                displayName,
+                contextWindow,
+                clearContextWindow,
+                maxOutputTokens,
+                clearMaxOutputTokens,
+                reasoningEffort,
+                clearReasoningEffort,
+                brand,
+                clearBrand,
+                operatedBy,
+                dataHandlingNote,
+                clearDataHandling,
+                enabled);
+    }
+}

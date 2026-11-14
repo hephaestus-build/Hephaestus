@@ -42,6 +42,7 @@ const gpt: WorkspaceLlmModel = {
 	dataHandlingTier: "CLOUD",
 	operatedBy: "PROVIDER",
 	enabled: true,
+	readiness: "READY",
 	pricingMode: "PRICED",
 	per1mInputUsd: 0.25,
 	per1mOutputUsd: 2,

@@ -17146,6 +17146,16 @@ components:
           enum:
           - OWN_ORGANISATION
           - PROVIDER
+        readiness:
+          type: string
+          description: "Whether the model can run now, or the first reason it cannot"
+          enum:
+          - READY
+          - PRICE_MISSING
+          - CONNECTION_OFF
+          - "OFF"
+          - LIMITS_MISSING
+          - NO_WORKSPACE_ACCESS
         reasoningEffort:
           type: string
           description: "Reasoning effort requested of the model; null sends none,\
@@ -17184,6 +17194,7 @@ components:
       - grantedWorkspaceIds
       - id
       - limits
+      - readiness
       - slug
       - upstreamModelId
       - visibility
@@ -27771,6 +27782,16 @@ components:
           - PRICED
           - NO_CHARGE
           - UNPRICED
+        readiness:
+          type: string
+          description: "Whether the model can run now, or the first reason it cannot"
+          enum:
+          - READY
+          - PRICE_MISSING
+          - CONNECTION_OFF
+          - "OFF"
+          - LIMITS_MISSING
+          - NO_WORKSPACE_ACCESS
         reasoningEffort:
           type: string
           description: "Reasoning effort requested of the model; null sends none,\
@@ -27804,6 +27825,7 @@ components:
       - id
       - limits
       - pricingMode
+      - readiness
       - slug
       - upstreamModelId
     WorkspaceLlmProbeResult:

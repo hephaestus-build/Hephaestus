@@ -908,6 +908,7 @@ function ownModel(id: number, displayName: string): Wire<WorkspaceLlmModel> {
 		displayName,
 		upstreamModelId: `upstream-${id}`,
 		enabled: true,
+		readiness: "READY",
 		pricingMode: "NO_CHARGE",
 		currency: "USD",
 		limits: { contextWindow: 128_000, maxOutputTokens: 16_384, bounded: true },
