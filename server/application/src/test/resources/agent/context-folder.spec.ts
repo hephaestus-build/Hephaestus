@@ -118,7 +118,7 @@ await test("a load is extracted read-only under its path, summarized there, and 
 	const fake = server(DOCUMENTS, async () =>
 		loaded(
 			{ "README.md": `version ${version}\n`, [`only-in-${version}.txt`]: "x" },
-			{ summary: ["sh", "-c", String.raw`ls | sort | tr '\n' ' '`] },
+			{ summary: ["sh", "-c", String.raw`ls | LC_ALL=C sort | tr '\n' ' '`] },
 		),
 	);
 	const { folder, root, close } = folderIn(fake);
