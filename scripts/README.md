@@ -21,7 +21,6 @@ Substantive developer orchestration under `scripts/` uses typed Node.js entry po
 | `vp run db:draft-changelog` | Rebuild a disposable database and generate a Liquibase diff. |
 | `vp run db:generate-erd-docs` | Apply migrations and regenerate the Mermaid ERD. |
 | `vp run dev:e2e:setup <options>` | Configure a local E2E workspace against the selected SCM and model provider. Secrets are environment-only. |
-| `vp run dev:practices-across-the-workspace:seed` / `:remove` | Seed or remove the practices demo in the local database: synthetic developers for Practices across the workspace and a full Practice profile for the reader — flags and defaults in [local-development.mdx](../docs/contributor/local-development.mdx#seeding-the-practices-demo). |
 
 The database commands require Docker with the Compose plugin.
 

@@ -8,6 +8,7 @@ import {
 	CODEX_INSTRUCTION_BYTES,
 	CODEX_SKILLS,
 	codeSpans,
+	namedTasks,
 	parse,
 	references,
 	type Snapshot,
@@ -31,6 +32,12 @@ function only(failures: readonly string[]): string {
 const symlinkTo = (target: string): { readonly target: string } => ({ target });
 const markdownSpans = (markdown: string): readonly string[] => codeSpans(markdown, "markdown");
 
+/** The instruction table once a case adds `server/AGENTS.md`. */
+const tableWithServer = {
+	"docs/contributor/ai-agent-workflow.mdx":
+		"| File | Covers |\n| --- | --- |\n| `AGENTS.md` | The repository |\n| `webapp/AGENTS.md` | The SPA |\n| `server/AGENTS.md` | The server |\n",
+};
+
 type Override = string | { readonly target: string } | { readonly kind: "opaque" } | null;
 
 /** A checkout with the wiring intact. `null` removes a file; every other value sets its kind. */
@@ -45,6 +52,8 @@ function snapshot(overrides: Record<string, Override> = {}): Snapshot {
 			"---\nname: land-pr\ndisable-model-invocation: true\n---\n\n# Land PR\n",
 		".opencode/commands/land-pr.md":
 			"---\ndescription: Land a PR\n---\n\n@.claude/skills/land-pr/SKILL.md\n",
+		"docs/contributor/ai-agent-workflow.mdx":
+			"| File | Covers |\n| --- | --- |\n| `AGENTS.md` | The repository |\n| `webapp/AGENTS.md` | The SPA |\n",
 	};
 	const files: TrackedFile[] = [];
 	for (const [file, content] of Object.entries({ ...base, ...overrides })) {
@@ -59,7 +68,7 @@ function snapshot(overrides: Record<string, Override> = {}): Snapshot {
 			files.push({ path: file, kind: "opaque" });
 		}
 	}
-	return { files };
+	return { files, tasks: ["check", "dev:env"] };
 }
 
 await test("the wired checkout passes", () => {
@@ -91,6 +100,7 @@ await test("sibling guides count against the budget separately", () => {
 				"webapp/AGENTS.md": "b".repeat(20_000),
 				"server/AGENTS.md": "c".repeat(20_000),
 				"server/CLAUDE.md": "@AGENTS.md\n",
+				...tableWithServer,
 			}),
 		),
 		[],
@@ -670,7 +680,11 @@ await test("a Codex file of a listed skill with no Claude Code counterpart is re
 
 await test("two pointers are allowed to look alike", () => {
 	const failures = analyse(
-		snapshot({ "server/AGENTS.md": "# Server\n", "server/CLAUDE.md": "@AGENTS.md\n" }),
+		snapshot({
+			"server/AGENTS.md": "# Server\n",
+			"server/CLAUDE.md": "@AGENTS.md\n",
+			...tableWithServer,
+		}),
 	);
 	assert.deepEqual(failures, []);
 });
@@ -682,6 +696,7 @@ await test("failures arrive in the order analyse lists its checks", () => {
 			// unread
 			"server/AGENTS.md": { kind: "opaque" },
 			"server/CLAUDE.md": "@AGENTS.md\n",
+			...tableWithServer,
 			// unreachable
 			"webapp/CLAUDE.md": null,
 			// dangling
@@ -699,4 +714,38 @@ await test("failures arrive in the order analyse lists its checks", () => {
 			".claude/skills/land-pr/SKILL.md sets",
 		],
 	);
+});
+
+await test("a vp run command reads the root task it names, and skips flags, placeholders and package scripts", () => {
+	assert.deepEqual(
+		namedTasks(
+			"Run `vp run check`, then `vp run --no-cache check:affected --base main`.\n" +
+				"```bash\nvp run --log grouped verify\nvp run --concurrency-limit 2 format\nvp run pr:wait <n>\n```\n" +
+				"`vp run --filter webapp test:e2e`, `vp run -F ./webapp dev`, `vp run --filter=docs build` and " +
+				"`vp run webapp#test` run package scripts. `vp run` lists every task, `vp run <task>` runs one, " +
+				"and `vp run --last-details` explains the last run.",
+		),
+		["check", "check:affected", "verify", "format", "pr:wait"],
+	);
+});
+
+await test("an agent file, a contributor doc or a README that names a task nobody defines fails", () => {
+	const failures = analyse(
+		snapshot({
+			"AGENTS.md": "# Hephaestus\n\nRun `vp run check` and `vp run chek`.\n",
+			"docs/contributor/setup.md": "Start with `vp run dev:env` and `vp run dev:setup`.\n",
+			"tools/README.md": "Run `vp run gate:gone`.\n",
+		}),
+	);
+	assert.equal(failures.length, 3, failures.join("\n"));
+	assert.match(failures[0] ?? "", /AGENTS\.md names `vp run chek`/u);
+	assert.match(failures[1] ?? "", /setup\.md names `vp run dev:setup`/u);
+	assert.match(failures[2] ?? "", /tools\/README\.md names `vp run gate:gone`/u);
+});
+
+await test("a guide the instruction table does not name fails", () => {
+	const failures = analyse(
+		snapshot({ "extension/AGENTS.md": "# Extension\n", "extension/CLAUDE.md": "@AGENTS.md\n" }),
+	);
+	assert.match(only(failures), /extension\/AGENTS\.md is not in the instruction table/u);
 });
