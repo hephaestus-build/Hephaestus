@@ -3,13 +3,20 @@ package de.tum.cit.aet.hephaestus.core.auth.web;
 import static org.hamcrest.Matchers.allOf;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.not;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 
+import de.tum.cit.aet.hephaestus.core.web.ApiPath;
 import de.tum.cit.aet.hephaestus.testconfig.RealAuthIntegrationTest;
+import jakarta.servlet.Filter;
 import org.hamcrest.MatcherAssert;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.reactive.server.WebTestClient;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import org.springframework.web.context.WebApplicationContext;
 
 /**
  * Pins that {@code core.security.SecurityHeaders} is actually applied on the live security chain.
@@ -18,19 +25,22 @@ import org.springframework.test.web.reactive.server.WebTestClient;
  * {@code .apply()} from a chain or a Spring-default change would have been caught only by inspection.
  * Asserted against the public {@code GET /identity-providers} so no auth/CSRF is needed.
  */
-// As in production, the server trusts the proxy's X-Forwarded-Proto, so a forwarded HTTPS request is secure.
-@TestPropertySource(properties = "server.forward-headers-strategy=native")
 class SecurityHeadersIntegrationTest extends RealAuthIntegrationTest {
+
+    /** The policy browsers already keep; the chart's route sets the same value on the web app's rules. */
+    private static final String HSTS = "max-age=2592000 ; includeSubDomains";
 
     @Autowired
     private WebTestClient webTestClient;
+
+    @Autowired
+    private WebApplicationContext application;
 
     @Test
     void publicResponseCarriesTheHardenedSecurityHeaders() {
         webTestClient
                 .get()
                 .uri("/identity-providers")
-                .header("X-Forwarded-Proto", "https")
                 .exchange()
                 .expectStatus()
                 .isOk()
@@ -66,22 +76,31 @@ class SecurityHeadersIntegrationTest extends RealAuthIntegrationTest {
                 // A future accidental re-introduction of reportOnly() must fail this test.
                 .expectHeader()
                 .doesNotExist("Content-Security-Policy-Report-Only")
-                .expectHeader()
-                .valueEquals("Strict-Transport-Security", "max-age=2592000 ; includeSubDomains")
                 .expectBody(Void.class);
     }
 
+    /**
+     * Spring writes HSTS only on a secure request, and the WebTestClient above drives plain HTTP. MockMvc over the
+     * same context and filter chain sends a secure request without a second application context.
+     */
+    private MockMvc secureMvc() {
+        return MockMvcBuilders.webAppContextSetup(application)
+                .addFilter(application.getBean("springSecurityFilterChain", Filter.class))
+                .build();
+    }
+
     @Test
-    void probeAndWebhookChainCarriesTheSameHsts() {
-        webTestClient
-                .get()
-                .uri("/actuator/health")
-                .header("X-Forwarded-Proto", "https")
-                .exchange()
-                .expectHeader()
-                .valueEquals("Strict-Transport-Security", "max-age=2592000 ; includeSubDomains")
-                .expectHeader()
-                .valueEquals("X-Content-Type-Options", "nosniff")
-                .expectBody(Void.class);
+    void shouldSendTheServerHstsPolicyWhenAnApiRequestIsSecure() throws Exception {
+        secureMvc()
+                .perform(get(ApiPath.of("/identity-providers")).secure(true))
+                .andExpect(header().string("Strict-Transport-Security", HSTS));
+    }
+
+    @Test
+    void shouldSendTheSameHstsPolicyWhenAWebhookRequestIsSecure() throws Exception {
+        secureMvc()
+                .perform(post("/webhooks/github").secure(true))
+                .andExpect(header().string("Strict-Transport-Security", HSTS))
+                .andExpect(header().string("X-Content-Type-Options", "nosniff"));
     }
 }

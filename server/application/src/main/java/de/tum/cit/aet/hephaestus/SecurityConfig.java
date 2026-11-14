@@ -232,7 +232,8 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.disable())
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .authorizeHttpRequests(requests -> requests.anyRequest().permitAll());
-        // Webhook and OAuth callback responses leave through the browser-facing host, so they carry the same header set.
+        // Webhook and OAuth callback responses leave through the browser-facing host, so they carry the same header
+        // set.
         SecurityHeaders.apply(http);
         return http.build();
     }
