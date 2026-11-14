@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.workspace;
 
 import de.tum.cit.aet.hephaestus.core.LoggingUtils;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
+import de.tum.cit.aet.hephaestus.core.exception.ProblemType;
 import de.tum.cit.aet.hephaestus.workspace.exception.InsufficientWorkspacePermissionsException;
 import de.tum.cit.aet.hephaestus.workspace.exception.InvalidWorkspaceSlugException;
 import de.tum.cit.aet.hephaestus.workspace.exception.LastOwnerRemovalException;
@@ -85,10 +86,10 @@ public class WorkspaceControllerAdvice {
 
     @ExceptionHandler(LastOwnerRemovalException.class)
     ProblemDetail handleLastOwnerRemoval(LastOwnerRemovalException exception) {
-        return problem(
+        return ProblemType.WORKSPACE_OWNER_REQUIRED.problem(
                 HttpStatus.CONFLICT,
                 "Workspace owner required",
-                Objects.requireNonNullElse(exception.getMessage(), "The workspace must retain an owner"));
+                userFacingDetail(Objects.requireNonNullElse(exception.getMessage(), "The workspace needs an owner.")));
     }
 
     @ExceptionHandler({WorkspaceLifecycleViolationException.class, WorkspacePurgeBlockedException.class})

@@ -7,20 +7,11 @@ public class LastOwnerRemovalException extends RuntimeException {
     @Serial
     private static final long serialVersionUID = 1L;
 
-    private LastOwnerRemovalException(String message) {
-        super(message);
-    }
-
-    /** A change would take the owner role from the last owner. */
-    public static LastOwnerRemovalException removing(String workspaceSlug) {
-        return new LastOwnerRemovalException(String.format(
-                "You cannot remove the last OWNER role from workspace '%s'. Assign another user as OWNER first.",
-                workspaceSlug));
-    }
-
-    /** The last owner tried to leave. */
-    public static LastOwnerRemovalException leaving(String workspaceSlug) {
-        return new LastOwnerRemovalException(String.format(
-                "You are the last owner of %s. Make another member an owner, or delete the workspace.", workspaceSlug));
+    /**
+     * A change would leave the workspace without an owner: removing, demoting or the leave of its last owner. Every
+     * path says the same, under the problem type {@code workspace-owner-required}.
+     */
+    public LastOwnerRemovalException(String workspaceName) {
+        super(workspaceName + " needs an owner. Make another member an owner first, or delete the workspace.");
     }
 }

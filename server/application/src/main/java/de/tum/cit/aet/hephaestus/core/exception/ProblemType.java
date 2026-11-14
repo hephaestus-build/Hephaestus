@@ -37,7 +37,8 @@ public enum ProblemType {
     STEP_UP_REQUIRED,
     SYNC_NOT_SUPPORTED,
     UNKNOWN_OUTLINE_COLLECTION,
-    WORKSPACE_BUDGET_EXCEEDED;
+    WORKSPACE_BUDGET_EXCEEDED,
+    WORKSPACE_OWNER_REQUIRED;
 
     /** The contributor guide lists each slug under this address. */
     private static final String BASE = "https://docs.hephaestus.build/contributor/api-error-handling#";

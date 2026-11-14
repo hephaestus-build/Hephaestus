@@ -63,7 +63,7 @@ describe("leaving a workspace from User settings", () => {
 						status: 409,
 						title: "Workspace owner required",
 						detail:
-							"You are the last owner of acme. Make another member an owner, or delete the workspace.",
+							"Acme needs an owner. Make another member an owner first, or delete the workspace.",
 					},
 					{ status: 409 },
 				),
@@ -79,7 +79,7 @@ describe("leaving a workspace from User settings", () => {
 		await userEvent.click(dialog.getByRole("button", { name: "Leave workspace" }));
 
 		await dialog.findByText(
-			"You are the last owner of acme. Make another member an owner, or delete the workspace.",
+			"Acme needs an owner. Make another member an owner first, or delete the workspace.",
 		);
 		// The confirmation stays open over the page, which still lists the workspace.
 		screen.getByRole("alertdialog");

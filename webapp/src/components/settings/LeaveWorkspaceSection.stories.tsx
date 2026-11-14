@@ -49,7 +49,7 @@ export const Leaving: Story = {
 export const LastOwner: Story = {
 	args: {
 		leaveError:
-			"You are the last owner of ase. Make another member an owner, or delete the workspace.",
+			"Applied Software Engineering needs an owner. Make another member an owner first, or delete the workspace.",
 		onLeave: fn(async () => Promise.reject(new Error("409"))),
 	},
 	play: async ({ canvas, userEvent }) => {
@@ -57,7 +57,7 @@ export const LastOwner: Story = {
 			canvas.getByRole("button", { name: "Leave Applied Software Engineering" }),
 		);
 		const dialog = within(await screen.findByRole("alertdialog"));
-		await expect(dialog.getByRole("alert")).toHaveTextContent(/last owner of ase/u);
+		await expect(dialog.getByRole("alert")).toHaveTextContent(/needs an owner/u);
 		await userEvent.click(dialog.getByRole("button", { name: "Leave workspace" }));
 		await expect(screen.getByRole("alertdialog")).toBeVisible();
 	},

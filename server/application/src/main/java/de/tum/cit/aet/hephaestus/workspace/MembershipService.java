@@ -296,9 +296,7 @@ public class MembershipService {
         var workspace = lockForMembershipChange(workspaceId);
         var member = requireMembership(workspaceId, accountId);
         if (member.getLeftAt() != null) return;
-        if (member.getRole() == Membership.WorkspaceRole.OWNER
-                && memberships.countByWorkspace_IdAndRole(workspaceId, Membership.WorkspaceRole.OWNER) <= 1)
-            throw LastOwnerRemovalException.leaving(workspace.getWorkspaceSlug());
+        requireNotLastOwner(workspace, member);
         member.setLeftAt(clock.instant());
         member.setRoleSource(Membership.RoleSource.PERSON);
         audit.roleChanged(
@@ -425,7 +423,7 @@ public class MembershipService {
         if (member.getLeftAt() == null
                 && member.getRole() == Membership.WorkspaceRole.OWNER
                 && memberships.countByWorkspace_IdAndRole(workspace.getId(), Membership.WorkspaceRole.OWNER) <= 1)
-            throw LastOwnerRemovalException.removing(workspace.getWorkspaceSlug());
+            throw new LastOwnerRemovalException(workspace.getDisplayName());
     }
 
     private static WorkspaceAuditSnapshots.RoleSnapshot snapshot(Membership member) {

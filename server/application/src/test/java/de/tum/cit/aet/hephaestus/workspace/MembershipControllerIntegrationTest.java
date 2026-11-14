@@ -899,7 +899,7 @@ class MembershipControllerIntegrationTest extends AbstractWorkspaceIntegrationTe
     @WithMentorUser
     void shouldRefuseToLetTheLastOwnerLeave() {
         User owner = persistUser("mentor");
-        Workspace workspace = createWorkspace("leave-last-owner", "Last owner", "owner", AccountType.ORG, owner);
+        Workspace workspace = createWorkspace("leave-last-owner", "Course", "owner", AccountType.ORG, owner);
 
         webTestClient
                 .delete()
@@ -909,9 +909,10 @@ class MembershipControllerIntegrationTest extends AbstractWorkspaceIntegrationTe
                 .expectStatus()
                 .isEqualTo(409)
                 .expectBody()
+                .jsonPath("$.type")
+                .isEqualTo("https://docs.hephaestus.build/contributor/api-error-handling#workspace-owner-required")
                 .jsonPath("$.detail")
-                .isEqualTo(
-                        "You are the last owner of leave-last-owner. Make another member an owner, or delete the workspace.");
+                .isEqualTo("Course needs an owner. Make another member an owner first, or delete the workspace.");
 
         Membership kept = workspaceMembershipService.getMembership(workspace.getId(), accountId(owner));
         assertThat(kept.getLeftAt()).isNull();
