@@ -99,7 +99,7 @@ class PersonalDataMapArchTest extends BaseIntegrationTest {
             "repository_to_monitor",
             "attempt_public_key",
             "workspace",
-            "workspace_agent_binding",
+            "workspace_model_assignment",
             "workspace_llm_connection",
             "workspace_llm_model",
             "workspace_slug_history",

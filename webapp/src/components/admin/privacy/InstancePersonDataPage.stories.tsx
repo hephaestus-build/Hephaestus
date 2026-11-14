@@ -14,7 +14,7 @@ const request = {
 	counts: {
 		practice_result: 4,
 		feedback: 2,
-		mentor_conversation: 1,
+		conversation: 1,
 		slack_message: 6,
 		user: 1,
 		user_preferences: 0,
@@ -218,7 +218,7 @@ export const Complete: Story = {
 				completed: {
 					practice_result: 4,
 					feedback: 2,
-					mentor_conversation: 1,
+					conversation: 1,
 					slack_message: 6,
 					user: 1,
 					user_preferences: 0,

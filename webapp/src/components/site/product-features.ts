@@ -19,7 +19,7 @@ export const PRODUCT_FEATURES: ProductFeature[] = [
 	{
 		icon: ListChecks,
 		name: "Practices",
-		text: "Start from a curated catalog or write your own. Each states what good work looks like.",
+		text: "Start from the catalog or write your own. Each states what good work looks like.",
 	},
 	{
 		icon: MessageSquareText,
@@ -33,7 +33,7 @@ export const PRODUCT_FEATURES: ProductFeature[] = [
 	},
 	{
 		icon: MessagesSquare,
-		name: "Conversations",
+		name: "Ask Hephaestus",
 		text: "A weekly digest you can turn on arrives in the conversation. Developers ask why, ask for an example, or disagree.",
 	},
 	{

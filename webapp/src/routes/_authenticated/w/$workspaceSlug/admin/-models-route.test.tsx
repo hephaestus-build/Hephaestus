@@ -6,13 +6,13 @@ import {
 	getMemberOnboardingSettingsQueryKey,
 	workspaceListAvailableLlmModelsQueryKey,
 	getMemberOnboardingQueryKey,
-	listAgentsQueryKey,
+	listModelAssignmentsQueryKey,
 } from "@/api/@tanstack/react-query.gen";
 import { deferred } from "@/test/async";
 
 import type {
-	AgentBinding,
-	AgentBindingRequest,
+	ModelAssignment,
+	ModelAssignmentRequest,
 	AvailableLlmModel,
 	WorkspaceLlmConnection,
 	WorkspaceLlmModel,
@@ -43,7 +43,7 @@ const MODELS: Wire<AvailableLlmModel>[] = [
 		connectionDisplayName: "Shared OpenAI",
 		pricingMode: "NO_CHARGE",
 		dataHandlingTier: "IN_HOUSE",
-		purposes: ["PRACTICE_REVIEW", "MENTOR"],
+		purposes: ["PRACTICE_REVIEW", "CONVERSATION"],
 	},
 	{
 		id: 21,
@@ -52,7 +52,7 @@ const MODELS: Wire<AvailableLlmModel>[] = [
 		connectionDisplayName: "Shared OpenAI",
 		pricingMode: "NO_CHARGE",
 		dataHandlingTier: "CLOUD",
-		purposes: ["PRACTICE_REVIEW", "MENTOR"],
+		purposes: ["PRACTICE_REVIEW", "CONVERSATION"],
 	},
 ];
 
@@ -78,14 +78,14 @@ const USAGE = {
 };
 
 const WORKSPACE_LIST_ITEM = { ...WORKSPACE, workspaceSlug: "acme", accountLogin: "acme" };
-const AGENTS_QUERY_KEY = listAgentsQueryKey({ path: { workspaceSlug: "acme" } });
+const AGENTS_QUERY_KEY = listModelAssignmentsQueryKey({ path: { workspaceSlug: "acme" } });
 
 /** The undeclared row takes any model, so most cases bind there and read the row by its title. */
 function binding(
-	purpose: AgentBinding["purpose"],
+	purpose: ModelAssignment["purpose"],
 	instanceModelId: number,
-	dataHandlingTier: AgentBinding["dataHandlingTier"] = "UNDECLARED",
-): AgentBinding {
+	dataHandlingTier: ModelAssignment["dataHandlingTier"] = "UNDECLARED",
+): ModelAssignment {
 	return {
 		dataHandlingTier,
 		purpose,
@@ -97,7 +97,7 @@ function binding(
 	};
 }
 
-function mockModelsRoute(bindings: () => AgentBinding[], aiChoiceRequired = false) {
+function mockModelsRoute(bindings: () => ModelAssignment[], aiChoiceRequired = false) {
 	server.use(
 		http.get("*/workspaces/:workspaceSlug/members/me", () =>
 			HttpResponse.json(ownMembership("ADMIN")),
@@ -118,7 +118,7 @@ function mockModelsRoute(bindings: () => AgentBinding[], aiChoiceRequired = fals
 				aiChoice: "CLOUD",
 			}),
 		),
-		http.get("*/workspaces/:workspaceSlug/agents", () => HttpResponse.json(bindings())),
+		http.get("*/workspaces/:workspaceSlug/model-assignments", () => HttpResponse.json(bindings())),
 		http.get("*/workspaces/:workspaceSlug/llm/available-models", () => HttpResponse.json(MODELS)),
 		http.get("*/workspaces/:workspaceSlug/llm/settings", () =>
 			HttpResponse.json({ ownProviderAllowed: false }),
@@ -130,11 +130,11 @@ function mockModelsRoute(bindings: () => AgentBinding[], aiChoiceRequired = fals
 	);
 }
 
-function deferredBindingsRefetch(bindings: () => AgentBinding[]) {
+function deferredBindingsRefetch(bindings: () => ModelAssignment[]) {
 	const { promise: pending, resolve: release } = deferred();
 	let asked = false;
 	return {
-		handler: http.get("*/workspaces/:workspaceSlug/agents", async () => {
+		handler: http.get("*/workspaces/:workspaceSlug/model-assignments", async () => {
 			asked = true;
 			await pending;
 			return HttpResponse.json(bindings());
@@ -144,7 +144,7 @@ function deferredBindingsRefetch(bindings: () => AgentBinding[]) {
 	};
 }
 
-async function renderModelsRoute(bindings: () => AgentBinding[], aiChoiceRequired = false) {
+async function renderModelsRoute(bindings: () => ModelAssignment[], aiChoiceRequired = false) {
 	mockModelsRoute(bindings, aiChoiceRequired);
 	const queryClient = renderRouteAt("/w/acme/admin/models");
 	await screen.findByRole("heading", { name: "AI models" }, ROUTE_RENDER_WAIT);
@@ -152,7 +152,7 @@ async function renderModelsRoute(bindings: () => AgentBinding[], aiChoiceRequire
 	return queryClient;
 }
 
-type PurposeTitle = "Practice reviews" | "Conversations";
+type PurposeTitle = "Practice reviews" | "Ask Hephaestus";
 const UNCHOSEN = "Members who have not chosen";
 
 const rowName = (title: string) => new RegExp(`^${title}`, "u");
@@ -190,23 +190,23 @@ describe("workspace AI models route", () => {
 		const { promise: slowSave, resolve: releaseSlowSave } = deferred();
 		let detectionSaves = 0;
 		server.use(
-			http.put("*/workspaces/:workspaceSlug/agents/PRACTICE_REVIEW", async () => {
+			http.put("*/workspaces/:workspaceSlug/model-assignments/PRACTICE_REVIEW", async () => {
 				detectionSaves += 1;
 				await slowSave;
 				return HttpResponse.json(binding("PRACTICE_REVIEW", 20));
 			}),
-			http.put("*/workspaces/:workspaceSlug/agents/MENTOR", () =>
-				HttpResponse.json(binding("MENTOR", 20)),
+			http.put("*/workspaces/:workspaceSlug/model-assignments/CONVERSATION", () =>
+				HttpResponse.json(binding("CONVERSATION", 20)),
 			),
 		);
 
-		await renderModelsRoute(() => [binding("PRACTICE_REVIEW", 20), binding("MENTOR", 20)]);
+		await renderModelsRoute(() => [binding("PRACTICE_REVIEW", 20), binding("CONVERSATION", 20)]);
 
 		fireEvent.click(saveButton("Practice reviews"));
 		await waitFor(() => expect(detectionSaves).toBe(1));
-		fireEvent.click(saveButton("Conversations"));
+		fireEvent.click(saveButton("Ask Hephaestus"));
 
-		await waitFor(() => expect(saveButton("Conversations").disabled).toBe(false));
+		await waitFor(() => expect(saveButton("Ask Hephaestus").disabled).toBe(false));
 		expect(saveButton("Practice reviews").disabled).toBe(true);
 
 		releaseSlowSave();
@@ -226,7 +226,7 @@ describe("workspace AI models route", () => {
 
 		bindings = [{ ...binding("PRACTICE_REVIEW", 21), ready: false }];
 		await queryClient.invalidateQueries({
-			queryKey: listAgentsQueryKey({ path: { workspaceSlug: "acme" } }),
+			queryKey: listModelAssignmentsQueryKey({ path: { workspaceSlug: "acme" } }),
 		});
 		await screen.findByText("Not ready");
 
@@ -240,10 +240,10 @@ describe("workspace AI models route", () => {
 		server.use(
 			refetch.handler,
 			http.put<PathParams, { instanceModelId: number; timeoutSeconds: number }>(
-				"*/workspaces/:workspaceSlug/agents/PRACTICE_REVIEW",
+				"*/workspaces/:workspaceSlug/model-assignments/PRACTICE_REVIEW",
 				async ({ request }) => {
 					const body = await request.json();
-					const saved: AgentBinding = {
+					const saved: ModelAssignment = {
 						...binding("PRACTICE_REVIEW", body.instanceModelId),
 						timeoutSeconds: body.timeoutSeconds,
 						ready: false,
@@ -276,7 +276,7 @@ describe("workspace AI models route", () => {
 		const refetch = deferredBindingsRefetch(() => bindings);
 		server.use(
 			refetch.handler,
-			http.delete("*/workspaces/:workspaceSlug/agents/PRACTICE_REVIEW", () => {
+			http.delete("*/workspaces/:workspaceSlug/model-assignments/PRACTICE_REVIEW", () => {
 				bindings = [];
 				return new HttpResponse(null, { status: 204 });
 			}),
@@ -303,7 +303,7 @@ describe("workspace AI models route", () => {
 
 	it("shows every tier of a purpose as the server routes it once a save lands", async () => {
 		const user = userEvent.setup();
-		let bindings: AgentBinding[] = [
+		let bindings: ModelAssignment[] = [
 			{ ...binding("PRACTICE_REVIEW", 20, "IN_HOUSE"), servedTiers: ["IN_HOUSE"] },
 			binding("PRACTICE_REVIEW", 21, "CLOUD"),
 		];
@@ -312,7 +312,7 @@ describe("workspace AI models route", () => {
 		const refetch = deferredBindingsRefetch(() => bindings);
 		server.use(
 			refetch.handler,
-			http.put("*/workspaces/acme/agents/PRACTICE_REVIEW", () => {
+			http.put("*/workspaces/acme/model-assignments/PRACTICE_REVIEW", () => {
 				const cloud = {
 					...binding("PRACTICE_REVIEW", 21, "CLOUD"),
 					enabled: false,
@@ -350,7 +350,7 @@ describe("workspace AI models route", () => {
 	it("keeps one row pending while its sibling of the same purpose stays editable", async () => {
 		const { promise: slowSave, resolve: releaseSlowSave } = deferred();
 		server.use(
-			http.put("*/workspaces/:workspaceSlug/agents/PRACTICE_REVIEW", async () => {
+			http.put("*/workspaces/:workspaceSlug/model-assignments/PRACTICE_REVIEW", async () => {
 				await slowSave;
 				return HttpResponse.json(binding("PRACTICE_REVIEW", 20, "IN_HOUSE"));
 			}),
@@ -373,7 +373,7 @@ describe("workspace AI models route", () => {
 	it("names the write a row waits on: a clear reads Clearing…, never Saving…", async () => {
 		const { promise: slowClear, resolve: releaseSlowClear } = deferred();
 		server.use(
-			http.delete("*/workspaces/:workspaceSlug/agents/PRACTICE_REVIEW", async () => {
+			http.delete("*/workspaces/:workspaceSlug/model-assignments/PRACTICE_REVIEW", async () => {
 				await slowClear;
 				return new HttpResponse(null, { status: 204 });
 			}),
@@ -398,7 +398,7 @@ describe("workspace AI models route", () => {
 
 	it("words the server's slot refusal from the registry and keeps it on the row that sent it", async () => {
 		server.use(
-			http.put("*/workspaces/acme/agents/PRACTICE_REVIEW", () =>
+			http.put("*/workspaces/acme/model-assignments/PRACTICE_REVIEW", () =>
 				HttpResponse.json(
 					{
 						type: "about:blank",
@@ -425,14 +425,14 @@ describe("workspace AI models route", () => {
 	it("keeps an unsaved assignment through a failed refresh and its retry, and saves it", async () => {
 		const user = userEvent.setup();
 		let agentReads = 0;
-		const saved: AgentBindingRequest[] = [];
+		const saved: ModelAssignmentRequest[] = [];
 		const queryClient = await renderModelsRoute(() => {
 			agentReads += 1;
 			return [binding("PRACTICE_REVIEW", 20)];
 		});
 		server.use(
-			http.put<PathParams, AgentBindingRequest>(
-				"*/workspaces/acme/agents/PRACTICE_REVIEW",
+			http.put<PathParams, ModelAssignmentRequest>(
+				"*/workspaces/acme/model-assignments/PRACTICE_REVIEW",
 				async ({ request }) => {
 					saved.push(await request.json());
 					return HttpResponse.json(binding("PRACTICE_REVIEW", 21));
@@ -478,7 +478,7 @@ describe("workspace AI models route", () => {
 		const served: number[] = [];
 		server.use(
 			http.get(
-				"*/workspaces/acme/agents",
+				"*/workspaces/acme/model-assignments",
 				() => {
 					served.push(403);
 					return HttpResponse.json({ status: 403, title: "Forbidden" }, { status: 403 });
@@ -486,14 +486,14 @@ describe("workspace AI models route", () => {
 				{ once: true },
 			),
 			http.get(
-				"*/workspaces/acme/agents",
+				"*/workspaces/acme/model-assignments",
 				() => {
 					served.push(503);
 					return HttpResponse.json({ status: 503, title: "Unavailable" }, { status: 503 });
 				},
 				{ once: true },
 			),
-			http.get("*/workspaces/acme/agents", () => {
+			http.get("*/workspaces/acme/model-assignments", () => {
 				served.push(200);
 				return HttpResponse.json([{ ...binding("PRACTICE_REVIEW", 21), timeoutSeconds: 1200 }]);
 			}),
@@ -529,7 +529,7 @@ describe("workspace AI models route", () => {
 		const queryClient = await renderModelsRoute(() => [binding("PRACTICE_REVIEW", 20)]);
 		server.use(
 			http.get(
-				"*/workspaces/acme/agents",
+				"*/workspaces/acme/model-assignments",
 				() => HttpResponse.json({ status: 503, title: "Unavailable" }, { status: 503 }),
 				{ once: true },
 			),
@@ -574,7 +574,7 @@ describe("workspace AI models route", () => {
 
 it("shows a slot refusal that names no tier as the server phrased it", async () => {
 	server.use(
-		http.put("*/workspaces/acme/agents/PRACTICE_REVIEW", () =>
+		http.put("*/workspaces/acme/model-assignments/PRACTICE_REVIEW", () =>
 			HttpResponse.json(
 				{
 					type: "about:blank",
@@ -597,7 +597,7 @@ it("shows a slot refusal that names no tier as the server phrased it", async () 
 
 it("saves and clears only the selected tier and lists only that tier's models", async () => {
 	const user = userEvent.setup();
-	let bindings: AgentBinding[] = [
+	let bindings: ModelAssignment[] = [
 		binding("PRACTICE_REVIEW", 20, "IN_HOUSE"),
 		binding("PRACTICE_REVIEW", 21, "CLOUD"),
 	];
@@ -605,11 +605,11 @@ it("saves and clears only the selected tier and lists only that tier's models", 
 	let savedTier: string | null = null;
 	let deletedTier: string | null = null;
 	server.use(
-		http.put("*/workspaces/acme/agents/PRACTICE_REVIEW", ({ request }) => {
+		http.put("*/workspaces/acme/model-assignments/PRACTICE_REVIEW", ({ request }) => {
 			savedTier = new URL(request.url).searchParams.get("dataHandlingTier");
 			return HttpResponse.json(binding("PRACTICE_REVIEW", 21, "CLOUD"));
 		}),
-		http.delete("*/workspaces/acme/agents/PRACTICE_REVIEW", ({ request }) => {
+		http.delete("*/workspaces/acme/model-assignments/PRACTICE_REVIEW", ({ request }) => {
 			deletedTier = new URL(request.url).searchParams.get("dataHandlingTier");
 			bindings = bindings.filter((entry) => entry.dataHandlingTier !== deletedTier);
 			return new HttpResponse(null, { status: 204 });
@@ -630,7 +630,7 @@ it("saves and clears only the selected tier and lists only that tier's models", 
 	await user.click(clearButton(row("Practice reviews", "Cloud")));
 	await waitFor(() => expect(deletedTier).toBe("CLOUD"));
 	await waitFor(() =>
-		expect(queryClient.getQueryData<AgentBinding[]>(AGENTS_QUERY_KEY)).toStrictEqual([
+		expect(queryClient.getQueryData<ModelAssignment[]>(AGENTS_QUERY_KEY)).toStrictEqual([
 			binding("PRACTICE_REVIEW", 20, "IN_HOUSE"),
 		]),
 	);
@@ -682,14 +682,19 @@ it.each([
 		unavailableHeading,
 	}) => {
 		const user = userEvent.setup();
-		let assignments: AgentBinding[] = [];
+		let assignments: ModelAssignment[] = [];
 		const unavailable: WorkspaceOnboarding = {
 			...workspaceOnboarding(),
 			...memberChoice,
-			mentorRefusal: "UNAVAILABLE",
+			conversationRefusal: "UNAVAILABLE",
 			aiOptions: [
-				{ choice: "IN_HOUSE_ONLY", mentorReady: false, practiceReviewsReady: false, models: [] },
-				{ choice: "CLOUD", mentorReady: false, practiceReviewsReady: false, models: [] },
+				{
+					choice: "IN_HOUSE_ONLY",
+					conversationReady: false,
+					practiceReviewsReady: false,
+					models: [],
+				},
+				{ choice: "CLOUD", conversationReady: false, practiceReviewsReady: false, models: [] },
 			],
 		};
 		const ready: WorkspaceOnboarding = {
@@ -698,11 +703,11 @@ it.each([
 			aiOptions: [
 				{
 					choice: "IN_HOUSE_ONLY",
-					mentorReady: inHouseReady,
+					conversationReady: inHouseReady,
 					practiceReviewsReady: false,
 					models: [],
 				},
-				{ choice: "CLOUD", mentorReady: cloudReady, practiceReviewsReady: false, models: [] },
+				{ choice: "CLOUD", conversationReady: cloudReady, practiceReviewsReady: false, models: [] },
 			],
 		};
 		let onboarding = unavailable;
@@ -719,17 +724,17 @@ it.each([
 						connectionDisplayName: "Test provider",
 						pricingMode: "NO_CHARGE",
 						dataHandlingTier: "UNDECLARED",
-						purposes: ["MENTOR"],
+						purposes: ["CONVERSATION"],
 					} satisfies AvailableLlmModel,
 				]),
 			),
-			http.put("*/workspaces/acme/agents/MENTOR", () => {
-				const saved = binding("MENTOR", id, tier);
+			http.put("*/workspaces/acme/model-assignments/CONVERSATION", () => {
+				const saved = binding("CONVERSATION", id, tier);
 				assignments = [saved];
 				onboarding = ready;
 				return HttpResponse.json(saved);
 			}),
-			http.delete("*/workspaces/acme/agents/MENTOR", () => {
+			http.delete("*/workspaces/acme/model-assignments/CONVERSATION", () => {
 				assignments = [];
 				onboarding = unavailable;
 				return new HttpResponse(null, { status: 204 });
@@ -737,7 +742,7 @@ it.each([
 			...new ConversationFake().handlers(),
 		);
 		const { router, queryClient } = renderRouteAtWithRouter("/w/acme/admin/models");
-		await screen.findByRole("button", { name: /Conversations/u }, ROUTE_RENDER_WAIT);
+		await screen.findByRole("button", { name: /Ask Hephaestus/u }, ROUTE_RENDER_WAIT);
 		await waitFor(() =>
 			expect(
 				queryClient.getQueryState(getMemberOnboardingQueryKey({ path: { workspaceSlug: "acme" } }))
@@ -746,9 +751,9 @@ it.each([
 		);
 		expect(screen.queryByRole("link", { name: /Ask Hephaestus/u })).toBeNull();
 
-		await user.click(pickerOf(row("Conversations", title)));
+		await user.click(pickerOf(row("Ask Hephaestus", title)));
 		await user.click(await screen.findByRole("option", { name: new RegExp(modelName, "u") }));
-		await user.click(saveButton("Conversations", title));
+		await user.click(saveButton("Ask Hephaestus", title));
 		await user.click(
 			await screen.findByRole("link", { name: /Ask Hephaestus/u }, ROUTE_RENDER_WAIT),
 		);
@@ -760,8 +765,8 @@ it.each([
 				params: { workspaceSlug: "acme" },
 			});
 		});
-		await screen.findByRole("button", { name: /Conversations/u }, ROUTE_RENDER_WAIT);
-		await user.click(clearButton(row("Conversations", title)));
+		await screen.findByRole("button", { name: /Ask Hephaestus/u }, ROUTE_RENDER_WAIT);
+		await user.click(clearButton(row("Ask Hephaestus", title)));
 		await waitFor(
 			() => expect(screen.queryByRole("link", { name: /Ask Hephaestus/u })).toBeNull(),
 			ROUTE_RENDER_WAIT,
@@ -795,11 +800,11 @@ it("resets model drafts on workspace navigation while a previous workspace save 
 				},
 			]),
 		),
-		http.get("*/workspaces/acme/agents", () => HttpResponse.json([savedAcme])),
-		http.get("*/workspaces/other/agents", () =>
+		http.get("*/workspaces/acme/model-assignments", () => HttpResponse.json([savedAcme])),
+		http.get("*/workspaces/other/model-assignments", () =>
 			HttpResponse.json([{ ...binding("PRACTICE_REVIEW", 21), timeoutSeconds: 1200 }]),
 		),
-		http.put("*/workspaces/acme/agents/PRACTICE_REVIEW", async () => {
+		http.put("*/workspaces/acme/model-assignments/PRACTICE_REVIEW", async () => {
 			started = true;
 			await response;
 			savedAcme = { ...binding("PRACTICE_REVIEW", 20), timeoutSeconds: 900 };
@@ -828,8 +833,8 @@ it("resets model drafts on workspace navigation while a previous workspace save 
 		expect(queryClient.getQueryState(AGENTS_QUERY_KEY)?.isInvalidated).toBe(true),
 	);
 	expect(
-		queryClient.getQueryData<AgentBinding[]>(
-			listAgentsQueryKey({ path: { workspaceSlug: "other" } }),
+		queryClient.getQueryData<ModelAssignment[]>(
+			listModelAssignmentsQueryKey({ path: { workspaceSlug: "other" } }),
 		)?.[0],
 	).toMatchObject({ instanceModelId: 21, timeoutSeconds: 1200 });
 	expect(timeoutInput(row("Practice reviews")).value).toBe("1200");
@@ -837,10 +842,10 @@ it("resets model drafts on workspace navigation while a previous workspace save 
 
 it("opens the purpose a link names, and drops the name from the address when the reader closes it", async () => {
 	mockModelsRoute(() => [binding("PRACTICE_REVIEW", 20)]);
-	const { router } = renderRouteAtWithRouter("/w/acme/admin/models?purpose=MENTOR");
+	const { router } = renderRouteAtWithRouter("/w/acme/admin/models?purpose=CONVERSATION");
 	const conversations = await screen.findByRole(
 		"button",
-		{ name: /^Conversations/u },
+		{ name: /^Ask Hephaestus/u },
 		ROUTE_RENDER_WAIT,
 	);
 	expect(conversations.getAttribute("aria-expanded")).toBe("true");
@@ -857,14 +862,14 @@ it("opens the purpose a link names, and drops the name from the address when the
 it("ignores a purpose the page does not have", async () => {
 	mockModelsRoute(() => [binding("PRACTICE_REVIEW", 20)]);
 	const { router } = renderRouteAtWithRouter("/w/acme/admin/models?purpose=SOMETHING_ELSE");
-	await screen.findByRole("button", { name: /^Conversations/u }, ROUTE_RENDER_WAIT);
+	await screen.findByRole("button", { name: /^Ask Hephaestus/u }, ROUTE_RENDER_WAIT);
 	expect(router.state.location.search.purpose).toBeUndefined();
 	expect(screen.queryAllByRole("button", { expanded: true })).toStrictEqual([]);
 });
 
 it("keeps a refusal of the chosen model's kind on the row that sent it", async () => {
 	server.use(
-		http.put("*/workspaces/acme/agents/PRACTICE_REVIEW", () =>
+		http.put("*/workspaces/acme/model-assignments/PRACTICE_REVIEW", () =>
 			HttpResponse.json(
 				{
 					type: "about:blank",
@@ -891,7 +896,7 @@ const OWN_CONNECTION = {
 	displayName: "Own OpenAI",
 	authMode: "BEARER",
 	apiProtocol: "openai-completions",
-	purposes: ["PRACTICE_REVIEW", "MENTOR"],
+	purposes: ["PRACTICE_REVIEW", "CONVERSATION"],
 	baseUrl: "https://llm.example.test/v1",
 	enabled: true,
 	hasApiKey: true,
@@ -929,9 +934,9 @@ function mockOwnProviders(models: () => Wire<WorkspaceLlmModel>[]) {
 }
 
 const inHousePicker = () =>
-	within(within(purposeRegion("Conversations")).getByRole("group", { name: "In-house" })).getByRole(
-		"combobox",
-	);
+	within(
+		within(purposeRegion("Ask Hephaestus")).getByRole("group", { name: "In-house" }),
+	).getByRole("combobox");
 
 it("offers a model added under the workspace's own provider in the pickers above, without a reload", async () => {
 	const user = userEvent.setup();
@@ -949,7 +954,7 @@ it("offers a model added under the workspace's own provider in the pickers above
 					connectionDisplayName: model.connectionDisplayName,
 					pricingMode: model.pricingMode,
 					dataHandlingTier: model.dataHandlingTier,
-					purposes: ["PRACTICE_REVIEW", "MENTOR"],
+					purposes: ["PRACTICE_REVIEW", "CONVERSATION"],
 				})),
 			]),
 		),
@@ -990,7 +995,7 @@ function mockOwnModelAssigned() {
 		priceNote: "Covered by our provider contract.",
 	};
 	let modelEnabled = true;
-	const ownBinding = (): AgentBinding => ({
+	const ownBinding = (): ModelAssignment => ({
 		...binding("PRACTICE_REVIEW", 0, "CLOUD"),
 		instanceModelId: undefined,
 		workspaceModelId: own.id,
@@ -1000,7 +1005,7 @@ function mockOwnModelAssigned() {
 	let usageReads = 0;
 	mockOwnProviders(() => [{ ...own, enabled: modelEnabled }]);
 	server.use(
-		http.get("*/workspaces/:workspaceSlug/agents", () =>
+		http.get("*/workspaces/:workspaceSlug/model-assignments", () =>
 			HttpResponse.json([
 				{
 					...binding("PRACTICE_REVIEW", 20, "IN_HOUSE"),

@@ -241,7 +241,7 @@ class WorkspaceOnboardingServiceTest extends BaseUnitTest {
                 .filteredOn(option -> option.choice() == AiChoice.IN_HOUSE_ONLY)
                 .allSatisfy(option -> {
                     assertThat(option.practiceReviewsReady()).isFalse();
-                    assertThat(option.mentorReady()).isFalse();
+                    assertThat(option.conversationReady()).isFalse();
                 });
     }
 

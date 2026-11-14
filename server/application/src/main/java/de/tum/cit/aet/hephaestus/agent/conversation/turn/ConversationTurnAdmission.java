@@ -1,0 +1,90 @@
+package de.tum.cit.aet.hephaestus.agent.conversation.turn;
+
+import com.fasterxml.jackson.annotation.JsonFormat;
+import de.tum.cit.aet.hephaestus.agent.catalog.ReasoningEffort;
+import de.tum.cit.aet.hephaestus.agent.conversation.ConversationLlmConfig;
+import de.tum.cit.aet.hephaestus.agent.usage.LlmPriceSnapshot;
+import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
+import java.math.BigDecimal;
+import java.util.Objects;
+import java.util.Optional;
+import org.jspecify.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
+
+/**
+ * The {@code conversation_turn.admission} document: the model, rates and route of a turn attempt, and the model shape that
+ * the turn driver configures the session with. {@link ConversationTurnCompletion} bills from it, also an attempt whose sandbox
+ * stopped. Rates are JSON strings, so a per-1M rate never passes through a binary64. {@link #read} never throws: billing
+ * runs inside the per-turn transaction, and a throw would leave the attempt unbilled.
+ */
+public record ConversationTurnAdmission(
+        String model,
+        LlmPriceSnapshot price,
+        Route route,
+        @Nullable Integer contextWindow,
+        @Nullable Integer maxOutputTokens,
+        @Nullable ReasoningEffort reasoningEffort) {
+
+    private static final Logger log = LoggerFactory.getLogger(ConversationTurnAdmission.class);
+    private static final ObjectMapper MAPPER = JsonMapper.builder()
+            .withConfigOverride(
+                    BigDecimal.class, rates -> rates.setFormat(JsonFormat.Value.forShape(JsonFormat.Shape.STRING)))
+            .build();
+
+    public ConversationTurnAdmission {
+        Objects.requireNonNull(model, "model");
+        Objects.requireNonNull(price, "price");
+        Objects.requireNonNull(route, "route");
+    }
+
+    /**
+     * Where an admitted attempt's model calls go: the same non-secret connection reference a practice review freezes
+     * into its config snapshot. The proxy resolves the live credential from it on every call.
+     */
+    public record Route(
+            String apiProtocol,
+            String baseUrl,
+            @Nullable UsageFundingSource connectionScope,
+            @Nullable Long connectionId,
+            @Nullable Long modelId) {}
+
+    public static ConversationTurnAdmission of(ConversationLlmConfig llm, LlmPriceSnapshot price) {
+        return new ConversationTurnAdmission(
+                llm.upstreamModelId(),
+                price,
+                new Route(llm.apiProtocol(), llm.baseUrl(), llm.connectionScope(), llm.connectionId(), llm.modelId()),
+                llm.contextWindow(),
+                llm.maxOutputTokens(),
+                llm.reasoningEffort());
+    }
+
+    public JsonNode toJson() {
+        return MAPPER.valueToTree(this);
+    }
+
+    /** The admission a turn carries; empty when it carries none or it cannot be read. */
+    public static Optional<ConversationTurnAdmission> read(@Nullable JsonNode document) {
+        if (document == null || !document.isObject()) {
+            return Optional.empty();
+        }
+        try {
+            return Optional.of(MAPPER.treeToValue(document, ConversationTurnAdmission.class));
+        } catch (JacksonException unreadable) {
+            // The class only: a parser message can quote the stored admission.
+            log.warn(
+                    "Unreadable conversation turn admission: {}",
+                    unreadable.getClass().getSimpleName());
+            return Optional.empty();
+        }
+    }
+
+    /** The rates a turn was admitted with, or an unpriced snapshot when they cannot be read. */
+    public static LlmPriceSnapshot priceOf(@Nullable JsonNode document) {
+        return read(document).map(ConversationTurnAdmission::price).orElseGet(LlmPriceSnapshot::unpricedInstance);
+    }
+}

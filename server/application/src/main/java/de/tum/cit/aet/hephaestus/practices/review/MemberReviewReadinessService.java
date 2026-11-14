@@ -73,7 +73,7 @@ public class MemberReviewReadinessService {
             var reason = refusal.orElseThrow().eventReason();
             if (reason == ReviewRequestReason.WORKSPACE_INACTIVE) return ReviewReadinessBlocker.WORKSPACE_INACTIVE;
             if (reason != ReviewRequestReason.GATE_WITHHELD
-                    || !Boolean.TRUE.equals(workspace.features().manualTriggerEnabled()))
+                    || !Boolean.TRUE.equals(workspace.features().requestReviewsEnabled()))
                 return ReviewReadinessBlocker.REVIEWS_OFF;
             onRequestOnly = true;
         }

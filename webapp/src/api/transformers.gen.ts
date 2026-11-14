@@ -38,7 +38,7 @@ import type {
 	BindPracticeGroupResponse,
 	CancelReviewResponse,
 	CheckResearchRemovalsResponse,
-	ClearMentorVoteResponse,
+	ClearConversationVoteResponse,
 	ClearOwnFeedbackResponseResponse,
 	CreateFeedbackDecisionResponse,
 	CreatePracticeGroupResponse,
@@ -58,13 +58,13 @@ import type {
 	GetActivityWorkResponse,
 	GetAllTeamsResponse,
 	GetConnectionSyncStatusResponse,
+	GetConversationResponse,
+	GetConversationThreadResponse,
 	GetDataExportStatusResponse,
 	GetIntegrationCatalogResponse,
 	GetItemFactsResponse,
 	GetItemTraceResponse,
 	GetLlmUsageReportResponse,
-	GetMentorConversationResponse,
-	GetMentorThreadResponse,
 	GetOpenWorkResponse,
 	GetOutlineTokenStatusResponse,
 	GetOwnActivityResponse,
@@ -104,6 +104,7 @@ import type {
 	ListConnectionSyncJobsResponse,
 	ListConnectionSyncResourcesResponse,
 	ListConsumerDeadLettersResponse,
+	ListConversationEntriesResponse,
 	ListedScanReportItem,
 	ListFeedbackDecisionsResponse,
 	ListGitHubInstallationsResponse,
@@ -111,7 +112,6 @@ import type {
 	ListInstanceProviderRepairsResponse,
 	ListLinkedIdentitiesResponse,
 	ListMembershipsResponse,
-	ListMentorEntriesResponse,
 	ListMyProductFeedbackResponse,
 	ListOutlineCollectionsResponse,
 	ListOwnGroupReviewsResponse,
@@ -141,7 +141,7 @@ import type {
 	ListWorkspaceConfigAuditEventsResponse,
 	ListWorkspacesResponse,
 	MakeMyProductFeedbackPrivateResponse,
-	MarkMentorConversationReadResponse,
+	MarkConversationReadResponse,
 	MovePracticeResponse,
 	NotReviewedScanReportItem,
 	ReadResponse,
@@ -160,21 +160,21 @@ import type {
 	ResolveReviewContextResponse,
 	RetryFeedbackResponse,
 	ReusedScanReportItem,
+	SetConversationVoteResponse,
 	SetGroupFeedbackModeResponse,
 	SetMemberHiddenResponse,
-	SetMentorVoteResponse,
 	SetPracticeFeedbackModeResponse,
 	SetReviewScheduleEnabledResponse,
 	StartScanResponse,
+	SubmitConversationTurnResponse,
 	SubmitInstanceProductFeedbackResponse,
-	SubmitMentorTurnResponse,
 	SubmitWorkspaceProductFeedbackResponse,
 	TriggerSyncJobResponse,
 	UpdateAccountAiChoiceResponse,
 	UpdateConnectionStatusResponse,
 	UpdateConnectionSyncJobResponse,
+	UpdateConversationTurnStatusResponse,
 	UpdateFeaturesResponse,
-	UpdateMentorTurnStatusResponse,
 	UpdateOutlineCollectionStateResponse,
 	UpdatePracticeGroupResponse,
 	UpdatePracticeResponse,
@@ -1308,6 +1308,163 @@ export const updateConnectionStatusResponseTransformer = async (
 	return data;
 };
 
+const conversationTurnSchemaResponseTransformer = (data: any) => {
+	data.createdAt = new Date(data.createdAt);
+	if (data.finishedAt) {
+		data.finishedAt = new Date(data.finishedAt);
+	}
+	return data;
+};
+
+const conversationThreadSummarySchemaResponseTransformer = (data: any) => {
+	if (data.lastReplyAt) {
+		data.lastReplyAt = new Date(data.lastReplyAt);
+	}
+	return data;
+};
+
+const conversationSchemaResponseTransformer = (data: any) => {
+	data.activeTurns = data.activeTurns.map((item: any) =>
+		conversationTurnSchemaResponseTransformer(item),
+	);
+	if (data.lastAnswerAt) {
+		data.lastAnswerAt = new Date(data.lastAnswerAt);
+	}
+	if (data.lastReadAt) {
+		data.lastReadAt = new Date(data.lastReadAt);
+	}
+	data.threads = data.threads.map((item: any) =>
+		conversationThreadSummarySchemaResponseTransformer(item),
+	);
+	return data;
+};
+
+export const getConversationResponseTransformer = async (
+	data: any,
+): Promise<GetConversationResponse> => {
+	data = conversationSchemaResponseTransformer(data);
+	return data;
+};
+
+const itemRefSchemaResponseTransformer = (data: any) => {
+	if (data.removedAt) {
+		data.removedAt = new Date(data.removedAt);
+	}
+	return data;
+};
+
+const profileChangeSchemaResponseTransformer = (data: any) => {
+	data.at = new Date(data.at);
+	data.evidence = data.evidence.map((item: any) => itemRefSchemaResponseTransformer(item));
+	return data;
+};
+
+const weeklyDigestFeedbackSchemaResponseTransformer = (data: any) => {
+	data.deliveredAt = new Date(data.deliveredAt);
+	if (data.item) {
+		data.item = itemRefSchemaResponseTransformer(data.item);
+	}
+	return data;
+};
+
+const weeklyDigestSchemaResponseTransformer = (data: any) => {
+	data.changes = data.changes.map((item: any) => profileChangeSchemaResponseTransformer(item));
+	data.feedback = data.feedback.map((item: any) =>
+		weeklyDigestFeedbackSchemaResponseTransformer(item),
+	);
+	data.weekStart = new Date(data.weekStart);
+	data.windowEnd = new Date(data.windowEnd);
+	data.windowStart = new Date(data.windowStart);
+	return data;
+};
+
+const conversationEntrySchemaResponseTransformer = (data: any) => {
+	data.createdAt = new Date(data.createdAt);
+	if (data.digest) {
+		data.digest = weeklyDigestSchemaResponseTransformer(data.digest);
+	}
+	if (data.editedAt) {
+		data.editedAt = new Date(data.editedAt);
+	}
+	if (data.thread) {
+		data.thread = conversationThreadSummarySchemaResponseTransformer(data.thread);
+	}
+	return data;
+};
+
+const cursorPageDtoConversationEntrySchemaResponseTransformer = (data: any) => {
+	data.content = data.content.map((item: any) => conversationEntrySchemaResponseTransformer(item));
+	return data;
+};
+
+export const listConversationEntriesResponseTransformer = async (
+	data: any,
+): Promise<ListConversationEntriesResponse> => {
+	data = cursorPageDtoConversationEntrySchemaResponseTransformer(data);
+	return data;
+};
+
+const conversationThreadSchemaResponseTransformer = (data: any) => {
+	data.parent = conversationEntrySchemaResponseTransformer(data.parent);
+	data.replies = cursorPageDtoConversationEntrySchemaResponseTransformer(data.replies);
+	return data;
+};
+
+export const getConversationThreadResponseTransformer = async (
+	data: any,
+): Promise<GetConversationThreadResponse> => {
+	data = conversationThreadSchemaResponseTransformer(data);
+	return data;
+};
+
+export const clearConversationVoteResponseTransformer = async (
+	data: any,
+): Promise<ClearConversationVoteResponse> => {
+	data = conversationEntrySchemaResponseTransformer(data);
+	return data;
+};
+
+export const setConversationVoteResponseTransformer = async (
+	data: any,
+): Promise<SetConversationVoteResponse> => {
+	data = conversationEntrySchemaResponseTransformer(data);
+	return data;
+};
+
+const conversationReadSchemaResponseTransformer = (data: any) => {
+	if (data.lastReadAt) {
+		data.lastReadAt = new Date(data.lastReadAt);
+	}
+	return data;
+};
+
+export const markConversationReadResponseTransformer = async (
+	data: any,
+): Promise<MarkConversationReadResponse> => {
+	data = conversationReadSchemaResponseTransformer(data);
+	return data;
+};
+
+const conversationSubmissionSchemaResponseTransformer = (data: any) => {
+	data.question = conversationEntrySchemaResponseTransformer(data.question);
+	data.turn = conversationTurnSchemaResponseTransformer(data.turn);
+	return data;
+};
+
+export const submitConversationTurnResponseTransformer = async (
+	data: any,
+): Promise<SubmitConversationTurnResponse> => {
+	data = conversationSubmissionSchemaResponseTransformer(data);
+	return data;
+};
+
+export const updateConversationTurnStatusResponseTransformer = async (
+	data: any,
+): Promise<UpdateConversationTurnStatusResponse> => {
+	data = conversationTurnSchemaResponseTransformer(data);
+	return data;
+};
+
 export const updateFeaturesResponseTransformer = async (
 	data: any,
 ): Promise<UpdateFeaturesResponse> => {
@@ -1454,161 +1611,6 @@ export const followProviderRoleResponseTransformer = async (
 	data: any,
 ): Promise<FollowProviderRoleResponse> => {
 	data = workspaceMembershipSchemaResponseTransformer(data);
-	return data;
-};
-
-const mentorTurnSchemaResponseTransformer = (data: any) => {
-	data.createdAt = new Date(data.createdAt);
-	if (data.finishedAt) {
-		data.finishedAt = new Date(data.finishedAt);
-	}
-	return data;
-};
-
-const mentorThreadSummarySchemaResponseTransformer = (data: any) => {
-	if (data.lastReplyAt) {
-		data.lastReplyAt = new Date(data.lastReplyAt);
-	}
-	return data;
-};
-
-const mentorConversationSchemaResponseTransformer = (data: any) => {
-	data.activeTurns = data.activeTurns.map((item: any) => mentorTurnSchemaResponseTransformer(item));
-	if (data.lastAnswerAt) {
-		data.lastAnswerAt = new Date(data.lastAnswerAt);
-	}
-	if (data.lastReadAt) {
-		data.lastReadAt = new Date(data.lastReadAt);
-	}
-	data.threads = data.threads.map((item: any) =>
-		mentorThreadSummarySchemaResponseTransformer(item),
-	);
-	return data;
-};
-
-export const getMentorConversationResponseTransformer = async (
-	data: any,
-): Promise<GetMentorConversationResponse> => {
-	data = mentorConversationSchemaResponseTransformer(data);
-	return data;
-};
-
-const mentorReadSchemaResponseTransformer = (data: any) => {
-	if (data.lastReadAt) {
-		data.lastReadAt = new Date(data.lastReadAt);
-	}
-	return data;
-};
-
-export const markMentorConversationReadResponseTransformer = async (
-	data: any,
-): Promise<MarkMentorConversationReadResponse> => {
-	data = mentorReadSchemaResponseTransformer(data);
-	return data;
-};
-
-const itemRefSchemaResponseTransformer = (data: any) => {
-	if (data.removedAt) {
-		data.removedAt = new Date(data.removedAt);
-	}
-	return data;
-};
-
-const profileChangeSchemaResponseTransformer = (data: any) => {
-	data.at = new Date(data.at);
-	data.evidence = data.evidence.map((item: any) => itemRefSchemaResponseTransformer(item));
-	return data;
-};
-
-const weeklyDigestFeedbackSchemaResponseTransformer = (data: any) => {
-	data.deliveredAt = new Date(data.deliveredAt);
-	if (data.item) {
-		data.item = itemRefSchemaResponseTransformer(data.item);
-	}
-	return data;
-};
-
-const weeklyDigestSchemaResponseTransformer = (data: any) => {
-	data.changes = data.changes.map((item: any) => profileChangeSchemaResponseTransformer(item));
-	data.feedback = data.feedback.map((item: any) =>
-		weeklyDigestFeedbackSchemaResponseTransformer(item),
-	);
-	data.weekStart = new Date(data.weekStart);
-	data.windowEnd = new Date(data.windowEnd);
-	data.windowStart = new Date(data.windowStart);
-	return data;
-};
-
-const mentorEntrySchemaResponseTransformer = (data: any) => {
-	data.createdAt = new Date(data.createdAt);
-	if (data.digest) {
-		data.digest = weeklyDigestSchemaResponseTransformer(data.digest);
-	}
-	if (data.editedAt) {
-		data.editedAt = new Date(data.editedAt);
-	}
-	if (data.thread) {
-		data.thread = mentorThreadSummarySchemaResponseTransformer(data.thread);
-	}
-	return data;
-};
-
-const cursorPageDtoMentorEntrySchemaResponseTransformer = (data: any) => {
-	data.content = data.content.map((item: any) => mentorEntrySchemaResponseTransformer(item));
-	return data;
-};
-
-export const listMentorEntriesResponseTransformer = async (
-	data: any,
-): Promise<ListMentorEntriesResponse> => {
-	data = cursorPageDtoMentorEntrySchemaResponseTransformer(data);
-	return data;
-};
-
-const mentorThreadSchemaResponseTransformer = (data: any) => {
-	data.parent = mentorEntrySchemaResponseTransformer(data.parent);
-	data.replies = cursorPageDtoMentorEntrySchemaResponseTransformer(data.replies);
-	return data;
-};
-
-export const getMentorThreadResponseTransformer = async (
-	data: any,
-): Promise<GetMentorThreadResponse> => {
-	data = mentorThreadSchemaResponseTransformer(data);
-	return data;
-};
-
-export const clearMentorVoteResponseTransformer = async (
-	data: any,
-): Promise<ClearMentorVoteResponse> => {
-	data = mentorEntrySchemaResponseTransformer(data);
-	return data;
-};
-
-export const setMentorVoteResponseTransformer = async (
-	data: any,
-): Promise<SetMentorVoteResponse> => {
-	data = mentorEntrySchemaResponseTransformer(data);
-	return data;
-};
-
-const mentorSubmissionSchemaResponseTransformer = (data: any) => {
-	data.question = mentorEntrySchemaResponseTransformer(data.question);
-	data.turn = mentorTurnSchemaResponseTransformer(data.turn);
-	return data;
-};
-
-export const submitMentorTurnResponseTransformer = async (
-	data: any,
-): Promise<SubmitMentorTurnResponse> => {
-	data = mentorSubmissionSchemaResponseTransformer(data);
-	return data;
-};
-
-export const updateMentorTurnStatusResponseTransformer = async (
-	data: any,
-): Promise<UpdateMentorTurnStatusResponse> => {
-	data = mentorTurnSchemaResponseTransformer(data);
 	return data;
 };
 

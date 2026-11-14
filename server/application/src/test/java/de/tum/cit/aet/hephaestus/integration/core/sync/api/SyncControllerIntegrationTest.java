@@ -27,7 +27,7 @@ import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobType;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
 import de.tum.cit.aet.hephaestus.testconfig.WithAdminUser;
-import de.tum.cit.aet.hephaestus.testconfig.WithMentorUser;
+import de.tum.cit.aet.hephaestus.testconfig.WithConversationUser;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Membership.WorkspaceRole;
@@ -421,10 +421,10 @@ class SyncControllerIntegrationTest extends AbstractWorkspaceIntegrationTest {
     }
 
     @Test
-    @WithMentorUser
+    @WithConversationUser
     @DisplayName("a workspace MEMBER is forbidden from every sync endpoint")
     void nonAdminMember_forbiddenEverywhere() {
-        User member = persistUser("mentor");
+        User member = persistUser("conversation");
         ensureMembership(workspace, member, WorkspaceRole.MEMBER);
 
         statusRequest().expectStatus().isForbidden().expectBody(Void.class);

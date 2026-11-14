@@ -39,7 +39,7 @@ class LlmUsageAdminControllerIntegrationTest extends AbstractWorkspaceIntegratio
     }
 
     private static final String ADMIN_TOKEN = "mock-jwt-token-for-admin-user";
-    private static final String MENTOR_TOKEN = "mock-jwt-token-for-mentor-user";
+    private static final String CONVERSATION_TOKEN = "mock-jwt-token-for-conversation-user";
 
     @Autowired
     private WebTestClient webTestClient;
@@ -329,7 +329,7 @@ class LlmUsageAdminControllerIntegrationTest extends AbstractWorkspaceIntegratio
         webTestClient
                 .get()
                 .uri("/admin/llm/usage")
-                .headers(h -> h.setBearerAuth(MENTOR_TOKEN))
+                .headers(h -> h.setBearerAuth(CONVERSATION_TOKEN))
                 .exchange()
                 .expectStatus()
                 .isForbidden()
@@ -355,7 +355,7 @@ class LlmUsageAdminControllerIntegrationTest extends AbstractWorkspaceIntegratio
         webTestClient
                 .put()
                 .uri("/admin/workspaces/{slug}/llm/budget", "any-workspace")
-                .headers(h -> h.setBearerAuth(MENTOR_TOKEN))
+                .headers(h -> h.setBearerAuth(CONVERSATION_TOKEN))
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(Map.of("monthlyBudgetUsd", 1))
                 .exchange()

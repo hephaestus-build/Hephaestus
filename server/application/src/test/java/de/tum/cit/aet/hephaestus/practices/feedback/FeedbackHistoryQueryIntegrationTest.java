@@ -10,15 +10,15 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import de.tum.cit.aet.hephaestus.agent.context.providers.mentor.DeliveredFeedbackContentSource;
+import de.tum.cit.aet.hephaestus.agent.context.providers.conversation.DeliveredFeedbackContentSource;
+import de.tum.cit.aet.hephaestus.conversation.ConversationLedgerFixtures;
+import de.tum.cit.aet.hephaestus.conversation.ConversationLinkDTO;
+import de.tum.cit.aet.hephaestus.conversation.ConversationService;
+import de.tum.cit.aet.hephaestus.conversation.ConversationTimeline;
+import de.tum.cit.aet.hephaestus.conversation.ConversationTurn;
+import de.tum.cit.aet.hephaestus.conversation.ConversationTurnClaims;
+import de.tum.cit.aet.hephaestus.conversation.ConversationTurnService;
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
-import de.tum.cit.aet.hephaestus.mentor.MentorConversationService;
-import de.tum.cit.aet.hephaestus.mentor.MentorLedgerFixtures;
-import de.tum.cit.aet.hephaestus.mentor.MentorLinkDTO;
-import de.tum.cit.aet.hephaestus.mentor.MentorTimeline;
-import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
-import de.tum.cit.aet.hephaestus.mentor.MentorTurnClaims;
-import de.tum.cit.aet.hephaestus.mentor.MentorTurnService;
 import de.tum.cit.aet.hephaestus.practices.feedback.dto.OwnFeedbackRefDTO;
 import de.tum.cit.aet.hephaestus.practices.model.Result;
 import de.tum.cit.aet.hephaestus.practices.result.ResultPresentation;
@@ -54,7 +54,7 @@ import tools.jackson.databind.node.JsonNodeFactory;
 class FeedbackHistoryQueryIntegrationTest extends AbstractFeedbackIntegrationTest {
 
     @Autowired
-    private MentorTurnClaims claims;
+    private ConversationTurnClaims claims;
 
     @Autowired
     FeedbackHistoryQueryService history;
@@ -66,13 +66,13 @@ class FeedbackHistoryQueryIntegrationTest extends AbstractFeedbackIntegrationTes
     ResultSourceAuthorization publicPermission;
 
     @Autowired
-    MentorConversationService conversations;
+    ConversationService conversations;
 
     @Autowired
-    MentorTurnService turns;
+    ConversationTurnService turns;
 
     @Autowired
-    MentorTimeline timeline;
+    ConversationTimeline timeline;
 
     @MockitoBean
     FeedbackVisibilityService visibility;
@@ -345,11 +345,11 @@ class FeedbackHistoryQueryIntegrationTest extends AbstractFeedbackIntegrationTes
     }
 
     /**
-     * Heph's context and the developer's own pages read the same states: never a proposal awaiting approval, a
+     * Hephaestus's context and the developer's own pages read the same states: never a proposal awaiting approval, a
      * rejection, a withholding or a replacement, whose state alone would tell the developer about it.
      */
     @Test
-    void shouldShowHephAndTheProfileOnlyTheFeedbackStatesTheDeveloperMayLearnOf() {
+    void shouldShowHephaestusAndTheProfileOnlyTheFeedbackStatesTheDeveloperMayLearnOf() {
         var proof = result();
         authorize(proof);
         var visible = new ArrayList<UUID>();
@@ -390,7 +390,7 @@ class FeedbackHistoryQueryIntegrationTest extends AbstractFeedbackIntegrationTes
             assertThat(history.find(workspace.getId(), id, developerId)).isEmpty();
     }
 
-    /** A withdrawn piece is gone for the developer: Heph reads it as their Practice profile does. */
+    /** A withdrawn piece is gone for the developer: Hephaestus reads it as their Practice profile does. */
     @Test
     void shouldLeaveOutAWithdrawnPieceAsTheProfileDoes() {
         var proof = result();
@@ -443,59 +443,67 @@ class FeedbackHistoryQueryIntegrationTest extends AbstractFeedbackIntegrationTes
         var asked = turns.submit(
                 workspace.getId(),
                 main.getId(),
-                new MentorTurnService.Question(
-                        MentorTurn.Surface.APP,
+                new ConversationTurnService.Question(
+                        ConversationTurn.Surface.APP,
                         "What did the review find?",
                         UUID.randomUUID().toString(),
                         null,
                         null));
-        MentorTurn running = running(asked.turn().getId());
+        ConversationTurn running = running(asked.turn().getId());
         turns.end(
                 running.getWorkspaceId(),
                 running.getId(),
                 running.getAttempt(),
                 Objects.requireNonNull(running.getRunId()),
-                new MentorTurnService.Ending(
-                        MentorTurn.Status.DONE,
+                new ConversationTurnService.Ending(
+                        ConversationTurn.Status.DONE,
                         List.of(
-                                MentorLedgerFixtures.toolCall(
-                                        MentorLedgerFixtures.piId(),
+                                ConversationLedgerFixtures.toolCall(
+                                        ConversationLedgerFixtures.piId(),
                                         "call-problem",
                                         "link_problem",
                                         JsonNodeFactory.instance
                                                 .objectNode()
                                                 .put("problemId", problemId.toString())
                                                 .put("text", "The failure case has no test.")),
-                                MentorLedgerFixtures.toolResult(
-                                        MentorLedgerFixtures.piId(), "call-problem", "link_problem", "Linked", false),
-                                MentorLedgerFixtures.toolCall(
-                                        MentorLedgerFixtures.piId(),
+                                ConversationLedgerFixtures.toolResult(
+                                        ConversationLedgerFixtures.piId(),
+                                        "call-problem",
+                                        "link_problem",
+                                        "Linked",
+                                        false),
+                                ConversationLedgerFixtures.toolCall(
+                                        ConversationLedgerFixtures.piId(),
                                         "call-feedback",
                                         "show_feedback",
                                         JsonNodeFactory.instance
                                                 .objectNode()
                                                 .put("feedbackId", shown.getId().toString())
                                                 .put("text", "Say why.")),
-                                MentorLedgerFixtures.toolResult(
-                                        MentorLedgerFixtures.piId(), "call-feedback", "show_feedback", "Shown", false)),
+                                ConversationLedgerFixtures.toolResult(
+                                        ConversationLedgerFixtures.piId(),
+                                        "call-feedback",
+                                        "show_feedback",
+                                        "Shown",
+                                        false)),
                         null,
                         null));
 
-        List<MentorLinkDTO> links = timeline.entries(workspace.getId(), developerId, null, 10).content().stream()
+        List<ConversationLinkDTO> links = timeline.entries(workspace.getId(), developerId, null, 10).content().stream()
                 .flatMap(entry -> entry.links().stream())
                 .toList();
 
         assertThat(links)
-                .extracting(MentorLinkDTO::kind, MentorLinkDTO::practiceSlug, MentorLinkDTO::itemId)
+                .extracting(ConversationLinkDTO::kind, ConversationLinkDTO::practiceSlug, ConversationLinkDTO::itemId)
                 .containsExactly(
-                        tuple(MentorLinkDTO.Kind.PROBLEM, "describe-why", itemId),
-                        tuple(MentorLinkDTO.Kind.FEEDBACK, "regression-tests", itemId));
+                        tuple(ConversationLinkDTO.Kind.PROBLEM, "describe-why", itemId),
+                        tuple(ConversationLinkDTO.Kind.FEEDBACK, "regression-tests", itemId));
     }
 
     /** Claims turns until this one starts. A turn of another test that starts first is taken along. */
-    private MentorTurn running(UUID turnId) {
+    private ConversationTurn running(UUID turnId) {
         while (true) {
-            MentorTurn claimed = claims.claimNext().orElseThrow();
+            ConversationTurn claimed = claims.claimNext().orElseThrow();
             if (claimed.getId().equals(turnId)) {
                 return claimed;
             }
@@ -559,14 +567,14 @@ class FeedbackHistoryQueryIntegrationTest extends AbstractFeedbackIntegrationTes
         authorize(proof);
         UUID conversation = UUID.randomUUID(), answer = UUID.randomUUID();
         jdbc.update(
-                "INSERT INTO mentor_conversation(id,workspace_id,account_id,created_at,last_activity_at)"
+                "INSERT INTO conversation(id,workspace_id,account_id,created_at,last_activity_at)"
                         + " VALUES (?,?,?,now(),now())",
                 conversation,
                 workspace.getId(),
                 developerId);
         jdbc.update(
-                "INSERT INTO mentor_entry(id,workspace_id,conversation_id,seq,kind,surface,text,created_at)"
-                        + " VALUES (?,?,?,1,'HEPH','APP','Try a focused test.',now())",
+                "INSERT INTO conversation_entry(id,workspace_id,conversation_id,seq,kind,surface,text,created_at)"
+                        + " VALUES (?,?,?,1,'ANSWER','APP','Try a focused test.',now())",
                 answer,
                 workspace.getId(),
                 conversation);
@@ -581,7 +589,7 @@ class FeedbackHistoryQueryIntegrationTest extends AbstractFeedbackIntegrationTes
                 .writeKey(id.toString())
                 .writeStartedAt(AT)
                 .postedAt(AT)
-                .mentorEntryId(answer)
+                .conversationEntryId(answer)
                 .createdAt(AT)
                 .build());
         var entry = history.forDeveloper(workspace.getId(), developerId, AT.minusSeconds(1), 1)
@@ -626,7 +634,7 @@ class FeedbackHistoryQueryIntegrationTest extends AbstractFeedbackIntegrationTes
     }
 
     @Test
-    void shouldUseMentoringPermissionForPrivateFeedbackHistory() {
+    void shouldUseConversationPermissionForPrivateFeedbackHistory() {
         var row = piece(FeedbackDestination.CONVERSATION, FeedbackState.READY, null);
         var proof = result();
         bind(row, proof);

@@ -91,9 +91,9 @@ public class TestSecurityConfig {
             String userId;
             String[] roles;
 
-            if ("mock-jwt-token-for-mentor-user".equals(token)) {
-                username = "mentor";
-                userId = "mentor-user-id";
+            if ("mock-jwt-token-for-conversation-user".equals(token)) {
+                username = "conversation";
+                userId = "conversation-user-id";
                 roles = new String[] {};
             } else if ("mock-jwt-token-for-admin-user".equals(token)) {
                 username = "admin";

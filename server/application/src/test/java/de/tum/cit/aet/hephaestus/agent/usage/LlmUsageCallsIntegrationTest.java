@@ -16,8 +16,8 @@ import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunLease;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunStopReason;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
+import de.tum.cit.aet.hephaestus.conversation.ConversationTurn;
 import de.tum.cit.aet.hephaestus.integration.core.spi.UsagePricingState;
-import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
 import de.tum.cit.aet.hephaestus.practices.spi.ModelKind;
 import de.tum.cit.aet.hephaestus.testconfig.LlmCatalogTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
@@ -88,8 +88,8 @@ class LlmUsageCallsIntegrationTest extends AbstractWorkspaceIntegrationTest {
         AgentRunLease lease = leasedRun("calls-failure-order");
         UUID older = open(lease, lease.epoch(), PRICED);
         UUID newer = open(lease, lease.epoch(), PRICED);
-        var first = new MentorTurn.FailedCall("upstream_status", 502);
-        var last = new MentorTurn.FailedCall("upstream_stalled", null);
+        var first = new ConversationTurn.FailedCall("upstream_status", 502);
+        var last = new ConversationTurn.FailedCall("upstream_stalled", null);
         transactions.executeWithoutResult(tx -> recorder.complete(newer, lease.workspaceId(), null, first));
         Instant firstTime = failedAt(newer);
         transactions.executeWithoutResult(tx -> recorder.complete(older, lease.workspaceId(), null, last));
@@ -99,7 +99,10 @@ class LlmUsageCallsIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 .isEqualTo(last);
 
         transactions.executeWithoutResult(tx -> recorder.complete(
-                newer, lease.workspaceId(), LlmUsageRecorder.CallUsage.NONE, new MentorTurn.FailedCall("later", 503)));
+                newer,
+                lease.workspaceId(),
+                LlmUsageRecorder.CallUsage.NONE,
+                new ConversationTurn.FailedCall("later", 503)));
         assertThat(failedAt(newer))
                 .as("a repeated completion cannot move a call's failure")
                 .isEqualTo(firstTime);
@@ -110,7 +113,7 @@ class LlmUsageCallsIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
         UUID anotherEpoch = open(lease, lease.epoch() + 1, PRICED);
         transactions.executeWithoutResult(tx -> recorder.complete(
-                anotherEpoch, lease.workspaceId(), null, new MentorTurn.FailedCall("other_epoch", 500)));
+                anotherEpoch, lease.workspaceId(), null, new ConversationTurn.FailedCall("other_epoch", 500)));
         assertThat(recorder.latestFailure(lease.workspaceId(), lease.runId(), lease.epoch()))
                 .isEqualTo(last);
         assertThat(recorder.latestFailure(lease.workspaceId(), UUID.randomUUID(), lease.epoch()))
@@ -119,7 +122,7 @@ class LlmUsageCallsIntegrationTest extends AbstractWorkspaceIntegrationTest {
         assertThat(recorder.latestFailure(otherWorkspace.workspaceId(), lease.runId(), lease.epoch()))
                 .isNull();
         transactions.executeWithoutResult(tx -> recorder.complete(
-                older, otherWorkspace.workspaceId(), null, new MentorTurn.FailedCall("wrong_workspace", 403)));
+                older, otherWorkspace.workspaceId(), null, new ConversationTurn.FailedCall("wrong_workspace", 403)));
         assertThat(failure(older)).isEqualTo(last);
     }
 
@@ -132,7 +135,7 @@ class LlmUsageCallsIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 call,
                 lease.workspaceId(),
                 new LlmUsageRecorder.CallUsage(10, 2, 0, 0, 0, 0),
-                new MentorTurn.FailedCall("upstream_status", 600)));
+                new ConversationTurn.FailedCall("upstream_status", 600)));
 
         assertThat(row(call))
                 .containsEntry("call_state", "ENDED")
@@ -141,7 +144,7 @@ class LlmUsageCallsIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 .containsEntry("measurement_verification", "VERIFIED")
                 .containsEntry("pricing_state", "PRICED");
         assertThat((BigDecimal) row(call).get("cost_usd")).isEqualByComparingTo("0.000036");
-        var failure = new MentorTurn.FailedCall("upstream_status", null);
+        var failure = new ConversationTurn.FailedCall("upstream_status", null);
         assertThat(failure(call)).isEqualTo(failure);
         assertThat(recorder.latestFailure(lease.workspaceId(), lease.runId(), lease.epoch()))
                 .isEqualTo(failure);
@@ -153,12 +156,15 @@ class LlmUsageCallsIntegrationTest extends AbstractWorkspaceIntegrationTest {
         UUID call = open(lease, lease.epoch(), PRICED);
         complete(lease, call, new LlmUsageRecorder.CallUsage(10, 2, 0, 0, 0, 0));
         var measured = row(call);
-        var failure = new MentorTurn.FailedCall("stream_failed", 200);
+        var failure = new ConversationTurn.FailedCall("stream_failed", 200);
 
         transactions.executeWithoutResult(tx -> recorder.complete(call, lease.workspaceId(), null, failure));
         Instant failed = failedAt(call);
         transactions.executeWithoutResult(tx -> recorder.complete(
-                call, lease.workspaceId(), LlmUsageRecorder.CallUsage.NONE, new MentorTurn.FailedCall("later", 503)));
+                call,
+                lease.workspaceId(),
+                LlmUsageRecorder.CallUsage.NONE,
+                new ConversationTurn.FailedCall("later", 503)));
 
         assertThat(row(call)).containsAllEntriesOf(measured);
         assertThat(failure(call)).isEqualTo(failure);
@@ -170,7 +176,7 @@ class LlmUsageCallsIntegrationTest extends AbstractWorkspaceIntegrationTest {
         AgentRunLease lease = leasedRun("calls-failure-late");
         UUID call = open(lease, lease.epoch(), PRICED);
         transactions.executeWithoutResult(tx -> runs.end(fence(lease), AgentRunStopReason.COMPLETED));
-        var failure = new MentorTurn.FailedCall("upstream_stalled", null);
+        var failure = new ConversationTurn.FailedCall("upstream_stalled", null);
         transactions.executeWithoutResult(tx -> recorder.complete(call, lease.workspaceId(), null, failure));
         Instant failed = failedAt(call);
         assertThat(row(call)).containsEntry("call_state", "SETTLED");
@@ -351,7 +357,7 @@ class LlmUsageCallsIntegrationTest extends AbstractWorkspaceIntegrationTest {
         var unpriced = new LlmPriceSnapshot(
                 UsageFundingSource.INSTANCE, UsagePricingState.UNPRICED, price.getId(), null, null, null, null, null);
         UUID call = open(lease, lease.epoch(), unpriced);
-        var failure = new MentorTurn.FailedCall("stream_failed", 200);
+        var failure = new ConversationTurn.FailedCall("stream_failed", 200);
         transactions.executeWithoutResult(tx -> recorder.complete(
                 call, lease.workspaceId(), new LlmUsageRecorder.CallUsage(1_000_000, 0, 0, 0, 0, 0), failure));
         Instant failed = failedAt(call);
@@ -533,7 +539,7 @@ class LlmUsageCallsIntegrationTest extends AbstractWorkspaceIntegrationTest {
     void shouldKeepAnInstanceCallsFirstFailureWhenItsSettledUsageArrivesLate() {
         UUID call = openInstance(UUID.randomUUID(), Instant.now().minusSeconds(1));
         var other = leasedRun("instance-failure-other");
-        var firstFailure = new MentorTurn.FailedCall("upstream_stalled", null);
+        var firstFailure = new ConversationTurn.FailedCall("upstream_stalled", null);
         Boolean wrongScope =
                 transactions.execute(tx -> recorder.complete(call, other.workspaceId(), null, firstFailure));
         assertThat(wrongScope).isFalse();
@@ -545,7 +551,7 @@ class LlmUsageCallsIntegrationTest extends AbstractWorkspaceIntegrationTest {
         Instant firstTime = failedAt(call);
         assertThat(failure(call)).isEqualTo(firstFailure);
         var usage = new LlmUsageRecorder.CallUsage(1_000_000, 100_000, 0, 0, 0, 0);
-        var laterFailure = new MentorTurn.FailedCall("upstream_status", 503);
+        var laterFailure = new ConversationTurn.FailedCall("upstream_status", 503);
         Boolean measured = transactions.execute(tx -> recorder.complete(call, null, usage, laterFailure));
         Boolean duplicate = transactions.execute(tx -> recorder.complete(call, null, usage, laterFailure));
         assertThat(measured).isTrue();
@@ -585,7 +591,7 @@ class LlmUsageCallsIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 .containsEntry("cost_usd", null);
         assertThat(row(live)).containsEntry("call_state", "OPEN");
         assertThat((BigDecimal) row(expired).get("cost_bound_usd")).isEqualByComparingTo("0.25");
-        var firstFailure = new MentorTurn.FailedCall("upstream_stalled", null);
+        var firstFailure = new ConversationTurn.FailedCall("upstream_stalled", null);
         Long wrongWorkspace =
                 workspaceProbe ? null : leasedRun("probe-wrong-scope").workspaceId();
         Boolean wrongScope = transactions.execute(tx -> recorder.complete(expired, wrongWorkspace, null, firstFailure));
@@ -597,7 +603,7 @@ class LlmUsageCallsIntegrationTest extends AbstractWorkspaceIntegrationTest {
         assertThat(unmeasured).isFalse();
         Instant firstTime = failedAt(expired);
         var lateUsage = new LlmUsageRecorder.CallUsage(1_000_000, 100_000, 0, 0, 0, 0);
-        var laterFailure = new MentorTurn.FailedCall("upstream_status", 503);
+        var laterFailure = new ConversationTurn.FailedCall("upstream_status", 503);
         Boolean measured = transactions.execute(tx -> recorder.complete(expired, workspaceId, lateUsage, laterFailure));
         Boolean duplicate =
                 transactions.execute(tx -> recorder.complete(expired, workspaceId, lateUsage, laterFailure));
@@ -755,10 +761,10 @@ class LlmUsageCallsIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 .toInstant();
     }
 
-    private MentorTurn.FailedCall failure(UUID call) {
+    private ConversationTurn.FailedCall failure(UUID call) {
         return Objects.requireNonNull(jdbc.queryForObject(
                 "SELECT call_failure ->> 'kind', (call_failure ->> 'status')::integer FROM llm_usage_event WHERE id = ?",
-                (rs, number) -> new MentorTurn.FailedCall(rs.getString(1), rs.getObject(2, Integer.class)),
+                (rs, number) -> new ConversationTurn.FailedCall(rs.getString(1), rs.getObject(2, Integer.class)),
                 call));
     }
 

@@ -8,7 +8,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
  * <p>Used to distinguish provider-specific behavior (API clients, sync engines, UI icons)
  * without coupling to the specific authentication mechanism. {@link #GITHUB}/{@link #GITLAB}
  * are SCM providers; {@link #SLACK} is a messaging identity provider (federated login +
- * DM mentor) and {@link #OUTLINE} is a documentation identity provider (link-only OAuth,
+ * DM conversation) and {@link #OUTLINE} is a documentation identity provider (link-only OAuth,
  * document authorship attribution) — neither has an SCM sync surface.
  */
 public enum IdentityProviderType {

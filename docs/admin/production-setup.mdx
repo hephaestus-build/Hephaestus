@@ -514,7 +514,7 @@ Use the private endpoint and example rules in [Scrape metrics](./monitoring.md#s
   A call starts only while its upper bound fits under the cap.
   Thus, confirmed spend crosses the cap only by the amounts above.
   This is your funded purse and the one that alerts you.
-- `llm.budget.blocked`: tagged by admission-point `surface`, including `review_job` and `mentor`.
+- `llm.budget.blocked`: tagged by admission-point `surface`, including `review_job` and `conversation`.
   The agent-job tag also has `cap`, which names the purse that refused work.
 
 Each EXHAUSTED transition logs a WARN.
@@ -537,7 +537,7 @@ There is no per-workspace mail configuration or connection authorization.
 Spring Boot's `spring.mail.*` is the transport, so each variable is the uppercase property path.
 
 The weekly digest is also an opt-in subscription in personal settings.
-Its email note, of kind `mentor-digest`, goes only to a developer with a verified address whom Hephaestus cannot reach in Slack.
+Its email note, of kind `weekly-digest`, goes only to a developer with a verified address whom Hephaestus cannot reach in Slack.
 This note is optional mail and expires if it is not sent within 24 hours.
 
 **Running without email is supported.**

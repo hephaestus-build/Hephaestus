@@ -42,7 +42,7 @@ public record AuthRateLimitProperties(
         @DefaultValue Limit userView,
         @DefaultValue Limit deleteUser,
         @DefaultValue Limit export,
-        @DefaultValue Limit mentorTurns,
+        @DefaultValue Limit conversationTurns,
         @DefaultValue Limit reviewRequest,
         @DefaultValue Limit syncTrigger,
         @DefaultValue Limit publicActivity,
@@ -58,7 +58,7 @@ public record AuthRateLimitProperties(
         // 10/hour: generous for legit "download my data" (POST + a few download polls) but caps a
         // session from spamming async bundle assemblies (each persisting a BYTEA blob).
         export = export != null ? export : Limit.of(10, Duration.ofHours(1));
-        mentorTurns = mentorTurns != null ? mentorTurns : Limit.of(20, Duration.ofMinutes(10));
+        conversationTurns = conversationTurns != null ? conversationTurns : Limit.of(20, Duration.ofMinutes(10));
         reviewRequest = reviewRequest != null ? reviewRequest : Limit.of(10, Duration.ofHours(1));
         syncTrigger = syncTrigger != null ? syncTrigger : Limit.of(10, Duration.ofHours(1));
         publicActivity = publicActivity != null ? publicActivity : Limit.of(60, Duration.ofMinutes(1));

@@ -244,7 +244,7 @@ public interface IssueRepository extends JpaRepository<Issue, Long> {
      * under single-table inheritance. Not cosmetic: for GitLab, issue and merge-request IIDs occupy
      * <em>separate</em> per-project namespaces (issue #5 and MR !5 coexist), so a type-blind UPDATE
      * keyed only on {@code (repository.id, number)} would tombstone a live merge request whenever an
-     * issue of the same number is swept — hiding it from counts, mentor and review until the next
+     * issue of the same number is swept — hiding it from counts, conversation and review until the next
      * reconciliation upsert revives it.
      *
      * <p>{@code deletedAt IS NULL} in the predicate makes this idempotent and preserves the

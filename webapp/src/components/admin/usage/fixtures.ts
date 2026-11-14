@@ -44,7 +44,7 @@ export function usageReport(month: string = STORY_MONTH): WorkspaceLlmUsageRepor
 				events: 41,
 			},
 			{
-				jobType: "MENTOR_TURN",
+				jobType: "CONVERSATION_TURN",
 				instanceTotalCostUsd: 3.84,
 				ownProviderTotalCostUsd: 0,
 				unpricedEventCount: 0,
@@ -102,7 +102,7 @@ export function usageReport(month: string = STORY_MONTH): WorkspaceLlmUsageRepor
 }
 
 const OWN_PROVIDER_COST_BY_JOB_TYPE: Partial<Record<LlmUsageByJobType["jobType"], number>> = {
-	MENTOR_TURN: 1.92,
+	CONVERSATION_TURN: 1.92,
 	ISSUE_REVIEW: 0.48,
 };
 const OWN_PROVIDER_COST_BY_DAY_INDEX: Partial<Record<number, number>> = { 1: 0.48, 3: 1.92 };

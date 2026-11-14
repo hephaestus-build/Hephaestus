@@ -138,7 +138,7 @@ A queued turn does not spend its time limit.
 
 ### Live answers
 
-The server serves the live answer stream at `GET /api/workspaces/{slug}/mentor/events`.
+The server serves the live answer stream at `GET /api/workspaces/{slug}/conversation/events`.
 It sends a `ping` comment every 20 seconds.
 Every proxy between the browser and the server needs an idle timeout of at least 60 seconds ([Gateway routes](./helm-chart#gateway-routes)).
 A developer can have at most 10 open streams.

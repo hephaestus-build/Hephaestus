@@ -39,11 +39,11 @@ The server refuses model activation until the model has a cost declaration.
 6. Enable the model.
 7. Share it publicly with all workspaces or grant it to a list.
 8. As a workspace admin, assign it to a purpose on your workspace's **AI models** page.
-   Examples are **Practice reviews** and **Conversations**.
+   Examples are **Practice reviews** and **Ask Hephaestus**.
 
 Nothing runs until the last step.
-A ready **Conversations** row on **AI models** offers Ask Hephaestus to every workspace member.
-If you turn off every **Conversations** row, Ask Hephaestus cannot answer.
+A ready **Ask Hephaestus** row on **AI models** offers Ask Hephaestus to every workspace member.
+If you turn off every **Ask Hephaestus** row, Ask Hephaestus cannot answer.
 There is no separate workspace switch or per-account grant before you invite a cohort.
 Each member's [AI choice](#data-handling-and-members-ai-choices) determines whether Hephaestus answers them.
 An instance admin without workspace membership can administer it but cannot use Ask Hephaestus there.
@@ -660,7 +660,7 @@ The UI shows the title.
 | 409    | `llm-call-pool-slug-conflict`    | The pool slug is taken.                                                                                                                                                                                          |
 | 409    | `llm-model-slug-conflict`        | The model slug is taken on this connection.                                                                                                                                                                      |
 | 409    | `llm-model-upstream-id-conflict` | Two catalog entries would use the same upstream id on one connection. This is refused because price selection would be nondeterministic. A `NO_CHARGE` copy could silently replace a `PRICED` model for billing. |
-| 409    | `agent-binding-slot-mismatch`    | A model's declared tier does not match the assignment row. The body's `declaredTier` names the model tier, which the UI uses to explain the refusal. An undeclared model has no `declaredTier`, only the detail. |
+| 409 | `model-assignment-slot-mismatch`    | A model's declared tier does not match the assignment row. The body's `declaredTier` names the model tier, which the UI uses to explain the refusal. An undeclared model has no `declaredTier`, only the detail. |
 | 404    | *Resource not found*             | Unknown connection or model id.                                                                                                                                                                                  |
 
 ## Check that it worked

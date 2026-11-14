@@ -40,8 +40,8 @@ function mockSlackPage() {
 		hasPersonalAccessToken: false,
 		hasSlackToken: false,
 		publicActivityEnabled: false,
-		practiceReviewAutoTriggerEnabled: false,
-		practiceReviewManualTriggerEnabled: false,
+		practiceReviewEventEnabled: false,
+		practiceReviewRequestEnabled: false,
 		updatedAt: listed.createdAt,
 	} satisfies Workspace;
 	server.use(

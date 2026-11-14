@@ -311,7 +311,7 @@ public class SlackChannelConsentService {
                 new SlackChannelConsentEvent(workspaceId, slackChannelId, from, to, actorAccountId, reason));
         eventPublisher.publishEvent(new SlackChannelConsentChangedEvent(workspaceId, slackChannelId));
         if (to == ConsentState.PAUSED || to == ConsentState.REVOKED) {
-            // A running Heph turn may hold the channel's threads in its context folder.
+            // A running Hephaestus turn may hold the channel's threads in its context folder.
             eventPublisher.publishEvent(new AgentContextChangedEvent(workspaceId));
         }
     }

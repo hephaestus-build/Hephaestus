@@ -1,6 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.catalog;
 
-import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBindingRepository;
+import de.tum.cit.aet.hephaestus.agent.config.WorkspaceModelAssignmentRepository;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.auth.spi.LlmModelAudit;
 import de.tum.cit.aet.hephaestus.core.exception.DataIntegrityViolationConstraints;
@@ -37,7 +37,7 @@ public class LlmModelService {
     private final LlmModelPriceRepository priceRepository;
     private final LlmModelWorkspaceGrantRepository grantRepository;
     private final WorkspaceSummaryQuery workspaceSummaries;
-    private final WorkspaceAgentBindingRepository agentBindingRepository;
+    private final WorkspaceModelAssignmentRepository modelAssignmentRepository;
     private final LlmModelAudit llmModelAudit;
 
     @Transactional(readOnly = true)
@@ -199,7 +199,7 @@ public class LlmModelService {
     @Transactional
     public void delete(Long id) {
         LlmModel model = modelRepository.findById(id).orElseThrow(() -> new EntityNotFoundException("LlmModel", id));
-        if (agentBindingRepository.existsByInstanceModelId(id)) {
+        if (modelAssignmentRepository.existsByInstanceModelId(id)) {
             throw new LlmModelInUseException(id);
         }
         modelRepository.delete(model);

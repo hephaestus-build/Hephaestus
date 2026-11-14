@@ -3,7 +3,7 @@
 Spring Boot 4 / Java 21 / Spring Modulith 2. Liquibase owns the schema. The OpenAPI spec and the
 GraphQL clients are generated. Package layout under
 `application/src/main/java/de/tum/cit/aet/hephaestus/` follows the domain (`core/`, `workspace/`, `agent/`,
-`practices/`, `integration/`, `mentor/`, …) — read it rather than a copy of it here.
+`practices/`, `integration/`, `conversation/`, …) — read it rather than a copy of it here.
 
 This file is the gotchas. Spring, JPA and Lombok idioms that the surrounding code already shows you
 are not here: write code that reads like the file you are editing.
@@ -124,7 +124,7 @@ Never write cleanup that another test depends on having run.
   uninitialized proxy fields rather than the target's state.
 - **`Issue` is SINGLE_TABLE with `PullRequest` as a subclass.** A JPQL query over `Issue` therefore
   returns pull requests too. Any query that means "issues only" must say `WHERE TYPE(i) = Issue`
-  explicitly — see `MentorContextQueryRepository` and `ReviewableArtifactOwnershipRepository`. A test
+  explicitly — see `ConversationContextQueryRepository` and `ReviewableArtifactOwnershipRepository`. A test
   with a mocked repository cannot catch a missing `TYPE(…)`.
 - **Integration tests use the dev migration context and `ddl-auto: validate`.** They do not replace
   production-context or released-state upgrade checks. Run `vp run db:check-drift` to replay and

@@ -263,13 +263,13 @@ await test("contributor docs reject missing repository paths and npm packages", 
 });
 
 await test("a settings path is not read as a missing package", () => {
-	// `hephaestus.mentor.docker-cli` ends the way an npm CLI package does.
+	// `hephaestus.conversation.docker-cli` ends the way an npm CLI package does.
 	assert.deepEqual(
 		analyse(
 			snapshot({
 				"package.json": JSON.stringify({ dependencies: {} }),
 				"docs/contributor/setup.md":
-					"Rename `hephaestus.mentor.docker-cli` to `hephaestus.sandbox.docker.cli`.\n",
+					"Rename `hephaestus.conversation.docker-cli` to `hephaestus.sandbox.docker.cli`.\n",
 			}),
 		),
 		[],

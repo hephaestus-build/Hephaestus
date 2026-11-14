@@ -150,7 +150,7 @@ class LiquibaseBaselineIntegrationTest {
     @ParameterizedTest
     @ValueSource(
             strings = {
-                "DROP INDEX idx_mentor_turn_leased_until",
+                "DROP INDEX idx_conversation_turn_leased_until",
                 "ALTER TABLE workspace ADD COLUMN operator_note text",
                 "ALTER TABLE workspace ALTER COLUMN display_name DROP NOT NULL",
                 "ALTER TABLE workspace DROP CONSTRAINT ck_workspace_feedback_mode"

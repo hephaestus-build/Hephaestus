@@ -15,8 +15,8 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
 /**
- * Account-linking guidance shared by App Home and mentor DMs. A link alone is insufficient:
- * mentoring also requires an active account and a project identity in the workspace.
+ * Account-linking guidance shared by App Home and conversation DMs. A link alone is insufficient:
+ * a conversation also requires an active account and a project identity in the workspace.
  */
 @Service
 @ConditionalOnProperty(name = "hephaestus.integration.slack.enabled", havingValue = "true", matchIfMissing = false)

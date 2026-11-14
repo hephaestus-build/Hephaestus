@@ -67,8 +67,8 @@ class ReviewGateTest {
     void shouldRefuseOnlyTheDisabledWayToStartAReview(ReviewOrigin origin) {
         when(practices.findByWorkspaceIdAndKind(1L, new ItemKind("scm.pull_request")))
                 .thenReturn(List.of(practice(1, DefinitionTestFixtures.definition())));
-        workspace.getFeatures().setPracticeReviewAutoTriggerEnabled(origin != ReviewOrigin.EVENT);
-        workspace.getFeatures().setPracticeReviewManualTriggerEnabled(origin == ReviewOrigin.EVENT);
+        workspace.getFeatures().setPracticeReviewEventEnabled(origin != ReviewOrigin.EVENT);
+        workspace.getFeatures().setPracticeReviewRequestEnabled(origin == ReviewOrigin.EVENT);
         var event = new ItemEventName("scm.pull_request.opened");
         assertThat(gate.evaluate(
                         WorkspacePortFixtures.reviewWorkspace(workspace),
@@ -80,8 +80,8 @@ class ReviewGateTest {
                 .isInstanceOfSatisfying(
                         GateDecision.Skip.class,
                         skip -> assertThat(skip.eventReason()).isEqualTo(ReviewRequestReason.GATE_WITHHELD));
-        workspace.getFeatures().setPracticeReviewAutoTriggerEnabled(origin == ReviewOrigin.EVENT);
-        workspace.getFeatures().setPracticeReviewManualTriggerEnabled(origin != ReviewOrigin.EVENT);
+        workspace.getFeatures().setPracticeReviewEventEnabled(origin == ReviewOrigin.EVENT);
+        workspace.getFeatures().setPracticeReviewRequestEnabled(origin != ReviewOrigin.EVENT);
         assertThat(gate.evaluate(
                         WorkspacePortFixtures.reviewWorkspace(workspace),
                         snapshot(Map.of()),
@@ -223,8 +223,8 @@ class ReviewGateTest {
     @ParameterizedTest
     @EnumSource(ReviewOrigin.class)
     void shouldSelectNoBundledPracticeThatPeopleReview(ReviewOrigin origin) {
-        workspace.getFeatures().setPracticeReviewAutoTriggerEnabled(true);
-        workspace.getFeatures().setPracticeReviewManualTriggerEnabled(true);
+        workspace.getFeatures().setPracticeReviewEventEnabled(true);
+        workspace.getFeatures().setPracticeReviewRequestEnabled(true);
         var peoplePractices = ScmCaptureFixtures.bundledPractices().entrySet().stream()
                 .filter(entry -> entry.getValue().definition().reviewedBy().by() == ReviewedByKind.PEOPLE)
                 .toList();

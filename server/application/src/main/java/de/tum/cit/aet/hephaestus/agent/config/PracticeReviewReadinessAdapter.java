@@ -8,11 +8,11 @@ import org.springframework.stereotype.Component;
 @Component
 public class PracticeReviewReadinessAdapter implements PracticeReviewReadiness {
 
-    private final WorkspaceAgentBindingRepository bindingRepository;
+    private final WorkspaceModelAssignmentRepository bindingRepository;
     private final LlmModelResolver llmModelResolver;
 
     public PracticeReviewReadinessAdapter(
-            WorkspaceAgentBindingRepository bindingRepository, LlmModelResolver llmModelResolver) {
+            WorkspaceModelAssignmentRepository bindingRepository, LlmModelResolver llmModelResolver) {
         this.bindingRepository = bindingRepository;
         this.llmModelResolver = llmModelResolver;
     }
@@ -21,8 +21,8 @@ public class PracticeReviewReadinessAdapter implements PracticeReviewReadiness {
     @Override
     public boolean hasRunnableAgent(Long workspaceId) {
         return bindingRepository.findByWorkspaceIdWithModels(workspaceId).stream()
-                .filter(binding -> binding.getPurpose() == AgentPurpose.PRACTICE_REVIEW)
-                .filter(WorkspaceAgentBinding::isEnabled)
+                .filter(binding -> binding.getPurpose() == ModelPurpose.PRACTICE_REVIEW)
+                .filter(WorkspaceModelAssignment::isEnabled)
                 .anyMatch(llmModelResolver::isAvailable);
     }
 }

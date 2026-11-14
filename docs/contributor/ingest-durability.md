@@ -159,7 +159,7 @@ A failure leaves the rows in place and increments `integration_consumer_inbox_re
 | Slack channel message handler | Claim message insert, edit, delete and channel erase writes. An edit retry can finish its timestamp write after the initial message insert committed. |
 | Slack channel lifecycle and member-joined handlers | Claim registration, pause, revoke and rename writes with the consent state and audit. An ephemeral join notice is an external effect. |
 | Slack app-uninstalled and tokens-revoked handlers | Claim the connection transition and database erasure in the uninstall transaction. |
-| Slack mentor DM and session-stopped handlers | Claim submission, edit, deletion and stop writes inside the active-connection transaction. The turn request id remains a natural idempotency key. |
+| Slack direct-message conversation and session-stopped handlers | Claim submission, edit, deletion and stop writes inside the active-connection transaction. The turn request id remains a natural idempotency key. |
 | Slack App Home handler | Reads database state and publishes the remote view. It has no database write step. |
 | Outline webhook handler | Mirror document writes and event recording have separate `REQUIRES_NEW` steps. A retry after the mirror commit finishes the missing event before the equal-version fast path. Collection writes use stable collection ids and a purpose. Failure and poison accounting remains per attempt. |
 
@@ -200,8 +200,8 @@ Therefore a registry redelivery still needs an idempotency rule; the framework c
 | `ReviewCommandListener.on(BotCommandReceivedEvent)` | The provider, comment id and kind derive the review request key. A refusal reply is an external effect. |
 | `ReviewCommandListener.on(CommentRequestedReviewEnded)` | Reads the recorded review outcome and replies through the provider. The remote reply retains its delivery limitation. |
 | `ReviewJobCompletionService.cancel` | Cancels only queued or running jobs, under the job lifecycle's state guard. |
-| `MentorTurnCompletion.billTakenBack` | Each model call already has its ledger row, so a repeat bills nothing twice; the cost metric can repeat. |
-| `MentorTurnCompletion.settle` | Settles the remaining conversation-copy claims by their persisted receipt identity. |
+| `ConversationTurnCompletion.billTakenBack` | Each model call already has its ledger row, so a repeat bills nothing twice; the cost metric can repeat. |
+| `ConversationTurnCompletion.settle` | Settles the remaining conversation-copy claims by their persisted receipt identity. |
 | `SlackThreadEventScheduler.onReviewCompleted` | A version check advances the reviewed watermark to the same thread timestamp. |
 | `SlackWeeklyDigestPointer.on` | Uses the stored message claim and receipt; uncertain sends are reconciled from Slack history rather than posted again. |
 | `ProviderTeardown.on` | Connection lock, credentials generation and pending teardown state fence the work. Provider teardown calls retain their external-effect limitation. |

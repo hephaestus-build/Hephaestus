@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect } from "storybook/test";
 
-import type { AgentBinding } from "@/api/types.gen";
+import type { ModelAssignment } from "@/api/types.gen";
 import { ReviewReadinessBanner } from "./ReviewReadinessBanner";
 
 const readyModel = {
@@ -11,7 +11,7 @@ const readyModel = {
 		enabled: true,
 		ready: true,
 		servedTiers: ["IN_HOUSE", "CLOUD"],
-	} satisfies AgentBinding,
+	} satisfies ModelAssignment,
 };
 
 const meta = {

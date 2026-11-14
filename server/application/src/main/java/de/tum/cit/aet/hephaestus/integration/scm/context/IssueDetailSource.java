@@ -1,8 +1,8 @@
 package de.tum.cit.aet.hephaestus.integration.scm.context;
 
 import de.tum.cit.aet.hephaestus.evidence.capture.ContentSource;
-import de.tum.cit.aet.hephaestus.evidence.capture.MentorContextPaths;
-import de.tum.cit.aet.hephaestus.evidence.capture.MentorContextRequest;
+import de.tum.cit.aet.hephaestus.evidence.capture.ConversationContextPaths;
+import de.tum.cit.aet.hephaestus.evidence.capture.ConversationContextRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment.IssueComment;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment.IssueCommentRepository;
@@ -47,14 +47,14 @@ public class IssueDetailSource implements ContentSource {
     private static final int MAX_RELATED = 10;
     private static final int MAX_CLOSING_PULL_REQUESTS = 5;
 
-    private final ScmMentorWorkQuery work;
-    private final MentorContextQueryRepository queryRepository;
+    private final ScmConversationWorkQuery work;
+    private final ConversationContextQueryRepository queryRepository;
     private final IssueCommentRepository commentRepository;
     private final ObjectMapper objectMapper;
 
     /** The on-demand key of one issue's detail, published as the {@code resource} of its rows. */
     public static String resourceOf(long issueId) {
-        return MentorContextPaths.issue(issueId);
+        return ConversationContextPaths.issue(issueId);
     }
 
     /** The issue id an on-demand key names, if {@code key} is one. */
@@ -69,7 +69,7 @@ public class IssueDetailSource implements ContentSource {
     }
 
     @Override
-    public boolean supports(MentorContextRequest request) {
+    public boolean supports(ConversationContextRequest request) {
         return false;
     }
 
@@ -79,7 +79,7 @@ public class IssueDetailSource implements ContentSource {
     }
 
     @Override
-    public void contribute(MentorContextRequest request, Map<String, byte[]> files) {
+    public void contribute(ConversationContextRequest request, Map<String, byte[]> files) {
         // Read on demand only: no fixed document.
     }
 
@@ -99,7 +99,7 @@ public class IssueDetailSource implements ContentSource {
         ObjectNode root = objectMapper.createObjectNode();
         root.put("readAt", Instant.now().toString());
         root.put("providerFreshness", "UNKNOWN");
-        Optional<ScmMentorWorkQuery.Actors> actors = work.actors(workspaceId, accountId);
+        Optional<ScmConversationWorkQuery.Actors> actors = work.actors(workspaceId, accountId);
         // A list: two monitor rows with one path would make a single-result query throw.
         Optional<Issue> found = actors.filter(scope -> !scope.userIds().isEmpty())
                 .flatMap(scope ->
@@ -120,7 +120,7 @@ public class IssueDetailSource implements ContentSource {
     }
 
     /** Every related item the issue names is read under the scope the issue was read with. */
-    private void describe(ObjectNode node, long workspaceId, ScmMentorWorkQuery.Actors scope, Issue issue) {
+    private void describe(ObjectNode node, long workspaceId, ScmConversationWorkQuery.Actors scope, Issue issue) {
         List<Long> developer = scope.userIds();
         node.put("sourceId", issue.getId());
         node.put("number", issue.getNumber());

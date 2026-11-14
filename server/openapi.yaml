@@ -28,6 +28,8 @@ tags:
 - description: "Where the instance files product feedback, its health, and the reports\
     \ that failed to file."
   name: product-feedback-destinations-controller
+- description: The model that serves each purpose in a workspace
+  name: Model assignments
 - description: Running release identity and update checks
   name: Instance Release
 - description: The current developer's standing in each practice
@@ -101,8 +103,6 @@ tags:
   name: Slack channel activation
 - description: "Sign-in, refresh and sign-out for installed clients"
   name: Client session
-- description: Workspace-scoped per-purpose agent configuration
-  name: Agents
 - description: The current developer's standing in each practice group
   name: Practice Group Standings
 - description: Asking for a review of a piece of work by hand
@@ -131,10 +131,10 @@ tags:
   name: Admin LLM
 - description: Public JWK set for verifying Hephaestus session JWTs
   name: Auth discovery
-- description: The developer's conversation with Hephaestus
-  name: Mentor
 - description: Repository contributions and open work
   name: Activity
+- description: The developer's conversation with Hephaestus
+  name: Conversation
 - description: Integration sync observability and manual controls
   name: Sync
 - description: "Current user identity, linked accounts, deletion"
@@ -511,6 +511,7 @@ paths:
             enum:
             - PROVIDER_RESOURCE_RELEASE
             - PRACTICE_REVIEW_SETTINGS
+            - MODEL_ASSIGNMENT
             - AGENT_BINDING
             - AGENT_CONFIG
             - AI_CONFIG_BINDING
@@ -604,6 +605,7 @@ paths:
             enum:
             - PROVIDER_RESOURCE_RELEASE
             - PRACTICE_REVIEW_SETTINGS
+            - MODEL_ASSIGNMENT
             - AGENT_BINDING
             - AGENT_CONFIG
             - AI_CONFIG_BINDING
@@ -1154,7 +1156,7 @@ paths:
         "404":
           description: LLM model not found
         "409":
-          description: Cannot delete a model still bound to an agent configuration
+          description: Cannot delete a model still assigned to a purpose
       summary: Delete an LLM catalog model
       tags:
       - Admin LLM
@@ -4840,119 +4842,6 @@ paths:
         \ at a time"
       tags:
       - Activity
-  /workspaces/{workspaceSlug}/agents:
-    get:
-      operationId: listAgents
-      parameters:
-      - description: Workspace slug
-        in: path
-        name: workspaceSlug
-        required: true
-        schema:
-          type: string
-          maxLength: 51
-          minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/AgentBinding"
-          description: Bindings returned
-      summary: List the workspace's agents and how each is configured
-      tags:
-      - Agents
-  /workspaces/{workspaceSlug}/agents/{purpose}:
-    delete:
-      operationId: deleteAgent
-      parameters:
-      - description: Workspace slug
-        in: path
-        name: workspaceSlug
-        required: true
-        schema:
-          type: string
-          maxLength: 51
-          minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
-      - in: path
-        name: purpose
-        required: true
-        schema:
-          type: string
-          enum:
-          - PRACTICE_REVIEW
-          - MENTOR
-      - in: query
-        name: dataHandlingTier
-        required: false
-        schema:
-          type: string
-          default: UNDECLARED
-          enum:
-          - IN_HOUSE
-          - CLOUD
-          - UNDECLARED
-      responses:
-        "204":
-          description: Binding removed
-      summary: Remove the agent for one purpose (turn it off)
-      tags:
-      - Agents
-    put:
-      operationId: configureAgent
-      parameters:
-      - description: Workspace slug
-        in: path
-        name: workspaceSlug
-        required: true
-        schema:
-          type: string
-          maxLength: 51
-          minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
-      - in: path
-        name: purpose
-        required: true
-        schema:
-          type: string
-          enum:
-          - PRACTICE_REVIEW
-          - MENTOR
-      - in: query
-        name: dataHandlingTier
-        required: false
-        schema:
-          type: string
-          default: UNDECLARED
-          enum:
-          - IN_HOUSE
-          - CLOUD
-          - UNDECLARED
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/AgentBindingRequest"
-        required: true
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AgentBinding"
-          description: Binding saved
-        "404":
-          description: Model not found
-        "409":
-          description: "The model is undeclared, or declared as another tier than\
-            \ this slot (problem type agent-binding-slot-mismatch, property declaredTier)"
-      summary: Configure the agent for one purpose
-      tags:
-      - Agents
   /workspaces/{workspaceSlug}/config-audit:
     get:
       operationId: listWorkspaceConfigAuditEvents
@@ -4988,6 +4877,7 @@ paths:
             enum:
             - PROVIDER_RESOURCE_RELEASE
             - PRACTICE_REVIEW_SETTINGS
+            - MODEL_ASSIGNMENT
             - AGENT_BINDING
             - AGENT_CONFIG
             - AI_CONFIG_BINDING
@@ -5084,6 +4974,7 @@ paths:
             enum:
             - PROVIDER_RESOURCE_RELEASE
             - PRACTICE_REVIEW_SETTINGS
+            - MODEL_ASSIGNMENT
             - AGENT_BINDING
             - AGENT_CONFIG
             - AI_CONFIG_BINDING
@@ -5646,6 +5537,325 @@ paths:
          (suspend), or <code>UNINSTALLED</code> (disconnect).
       tags:
       - Connections
+  /workspaces/{workspaceSlug}/conversation:
+    get:
+      operationId: getConversation
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Conversation"
+          description: OK
+      summary: "The developer's conversation: what runs now, its threads and how far\
+        \ it reached"
+      tags:
+      - Conversation
+  /workspaces/{workspaceSlug}/conversation/entries:
+    get:
+      operationId: listConversationEntries
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+      - in: query
+        name: cursor
+        required: false
+        schema:
+          type: string
+      - in: query
+        name: size
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 50
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CursorPageDTOConversationEntry"
+          description: OK
+      summary: "A page of top-level messages, oldest first; pass nextCursor as cursor\
+        \ for older ones"
+      tags:
+      - Conversation
+  /workspaces/{workspaceSlug}/conversation/entries/{entryId}:
+    delete:
+      description: Erases its text and every summary that read it. A question Hephaestus
+        has not answered yet is not answered.
+      operationId: deleteConversationEntry
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+      - in: path
+        name: entryId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "204":
+          description: The message is deleted
+        "409":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: Only the developer's own questions can be deleted
+      summary: Delete a message the developer wrote
+      tags:
+      - Conversation
+  /workspaces/{workspaceSlug}/conversation/entries/{entryId}/thread:
+    get:
+      operationId: getConversationThread
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+      - in: path
+        name: entryId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - in: query
+        name: cursor
+        required: false
+        schema:
+          type: string
+      - in: query
+        name: size
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 50
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConversationThread"
+          description: The thread; a message without replies has no conversation
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: No top-level message of the developer has this id
+      summary: "The thread on a top-level message: the message and a page of replies,\
+        \ oldest first"
+      tags:
+      - Conversation
+  /workspaces/{workspaceSlug}/conversation/entries/{entryId}/vote:
+    delete:
+      operationId: clearConversationVote
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+      - in: path
+        name: entryId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConversationEntry"
+          description: OK
+      summary: Clear the vote on one of Hephaestus's messages
+      tags:
+      - Conversation
+    put:
+      operationId: setConversationVote
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+      - in: path
+        name: entryId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConversationVoteRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConversationEntry"
+          description: The message with its vote
+        "409":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: The message is not one of Hephaestus's
+      summary: Rate one of Hephaestus's messages as helpful or not helpful
+      tags:
+      - Conversation
+  /workspaces/{workspaceSlug}/conversation/read:
+    put:
+      description: "Records how far the developer read, for every device. The marker\
+        \ keeps the latest time: an earlier one changes nothing."
+      operationId: markConversationRead
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConversationReadRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConversationRead"
+          description: "The marker after the request: this time or a later one"
+      summary: Mark the conversation read
+      tags:
+      - Conversation
+  /workspaces/{workspaceSlug}/conversation/turns:
+    post:
+      description: Stores the question before anything is shown and queues a turn.
+        A question while Hephaestus answers waits as a follow-up. Repeating a requestId
+        returns the first submission.
+      operationId: submitConversationTurn
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConversationTurnRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConversationSubmission"
+          description: The stored question and its turn
+        "409":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: "Hephaestus declines the developer (conversation-refused),\
+            \ too many follow-ups wait, the requestId was used for another message,\
+            \ or the parent cannot have a thread (conversation-rejected)"
+      summary: Ask Hephaestus
+      tags:
+      - Conversation
+  /workspaces/{workspaceSlug}/conversation/turns/{turnId}/status:
+    patch:
+      description: A queued turn never runs and keeps its question. A running turn
+        keeps what Hephaestus already wrote. Stopping an ended turn changes nothing.
+        A turn asked in Slack can be stopped here.
+      operationId: updateConversationTurnStatus
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+      - in: path
+        name: turnId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConversationTurnStatusRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConversationTurn"
+          description: OK
+      summary: Stop a turn
+      tags:
+      - Conversation
   /workspaces/{workspaceSlug}/features:
     patch:
       operationId: updateFeatures
@@ -6031,7 +6241,7 @@ paths:
         "404":
           description: Model not found
         "409":
-          description: Cannot delete a model still bound to an agent configuration
+          description: Cannot delete a model still assigned to a purpose
       summary: Remove a model on your AI provider
       tags:
       - Workspace LLM
@@ -6385,9 +6595,9 @@ paths:
       summary: Let the provider decide a member's role again
       tags:
       - membership
-  /workspaces/{workspaceSlug}/mentor/conversation:
+  /workspaces/{workspaceSlug}/model-assignments:
     get:
-      operationId: getMentorConversation
+      operationId: listModelAssignments
       parameters:
       - description: Workspace slug
         in: path
@@ -6403,84 +6613,16 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/MentorConversation"
-          description: OK
-      summary: "The developer's conversation: what runs now, its threads and how far\
-        \ it reached"
+                type: array
+                items:
+                  $ref: "#/components/schemas/ModelAssignment"
+          description: Model assignments returned
+      summary: List the workspace's model assignments
       tags:
-      - Mentor
-  /workspaces/{workspaceSlug}/mentor/conversation/read:
-    put:
-      description: "Records how far the developer read, for every device. The marker\
-        \ keeps the latest time: an earlier one changes nothing."
-      operationId: markMentorConversationRead
-      parameters:
-      - description: Workspace slug
-        in: path
-        name: workspaceSlug
-        required: true
-        schema:
-          type: string
-          maxLength: 51
-          minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/MentorReadRequest"
-        required: true
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/MentorRead"
-          description: "The marker after the request: this time or a later one"
-      summary: Mark the conversation read
-      tags:
-      - Mentor
-  /workspaces/{workspaceSlug}/mentor/entries:
-    get:
-      operationId: listMentorEntries
-      parameters:
-      - description: Workspace slug
-        in: path
-        name: workspaceSlug
-        required: true
-        schema:
-          type: string
-          maxLength: 51
-          minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
-      - in: query
-        name: cursor
-        required: false
-        schema:
-          type: string
-      - in: query
-        name: size
-        required: false
-        schema:
-          type: integer
-          format: int32
-          default: 50
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/CursorPageDTOMentorEntry"
-          description: OK
-      summary: "A page of top-level messages, oldest first; pass nextCursor as cursor\
-        \ for older ones"
-      tags:
-      - Mentor
-  /workspaces/{workspaceSlug}/mentor/entries/{entryId}:
+      - Model assignments
+  /workspaces/{workspaceSlug}/model-assignments/{purpose}:
     delete:
-      description: Erases its text and every summary that read it. A question Hephaestus
-        has not answered yet is not answered.
-      operationId: deleteMentorEntry
+      operationId: removeModelAssignment
       parameters:
       - description: Workspace slug
         in: path
@@ -6492,102 +6634,31 @@ paths:
           minLength: 3
           pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - in: path
-        name: entryId
+        name: purpose
         required: true
         schema:
           type: string
-          format: uuid
+          enum:
+          - PRACTICE_REVIEW
+          - CONVERSATION
+      - in: query
+        name: dataHandlingTier
+        required: false
+        schema:
+          type: string
+          default: UNDECLARED
+          enum:
+          - IN_HOUSE
+          - CLOUD
+          - UNDECLARED
       responses:
         "204":
-          description: The message is deleted
-        "409":
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
-          description: Only the developer's own questions can be deleted
-      summary: Delete a message the developer wrote
+          description: Model assignment removed
+      summary: Remove the model assignment of one purpose (turn it off)
       tags:
-      - Mentor
-  /workspaces/{workspaceSlug}/mentor/entries/{entryId}/thread:
-    get:
-      operationId: getMentorThread
-      parameters:
-      - description: Workspace slug
-        in: path
-        name: workspaceSlug
-        required: true
-        schema:
-          type: string
-          maxLength: 51
-          minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
-      - in: path
-        name: entryId
-        required: true
-        schema:
-          type: string
-          format: uuid
-      - in: query
-        name: cursor
-        required: false
-        schema:
-          type: string
-      - in: query
-        name: size
-        required: false
-        schema:
-          type: integer
-          format: int32
-          default: 50
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/MentorThread"
-          description: The thread; a message without replies has no conversation
-        "404":
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
-          description: No top-level message of the developer has this id
-      summary: "The thread on a top-level message: the message and a page of replies,\
-        \ oldest first"
-      tags:
-      - Mentor
-  /workspaces/{workspaceSlug}/mentor/entries/{entryId}/vote:
-    delete:
-      operationId: clearMentorVote
-      parameters:
-      - description: Workspace slug
-        in: path
-        name: workspaceSlug
-        required: true
-        schema:
-          type: string
-          maxLength: 51
-          minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
-      - in: path
-        name: entryId
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/MentorEntry"
-          description: OK
-      summary: Clear the vote on one of Hephaestus's messages
-      tags:
-      - Mentor
+      - Model assignments
     put:
-      operationId: setMentorVote
+      operationId: assignModel
       parameters:
       - description: Workspace slug
         in: path
@@ -6599,111 +6670,44 @@ paths:
           minLength: 3
           pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - in: path
-        name: entryId
+        name: purpose
         required: true
         schema:
           type: string
-          format: uuid
+          enum:
+          - PRACTICE_REVIEW
+          - CONVERSATION
+      - in: query
+        name: dataHandlingTier
+        required: false
+        schema:
+          type: string
+          default: UNDECLARED
+          enum:
+          - IN_HOUSE
+          - CLOUD
+          - UNDECLARED
       requestBody:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/MentorVoteRequest"
+              $ref: "#/components/schemas/ModelAssignmentRequest"
         required: true
       responses:
         "200":
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/MentorEntry"
-          description: The message with its vote
+                $ref: "#/components/schemas/ModelAssignment"
+          description: Model assignment saved
+        "404":
+          description: Model not found
         "409":
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
-          description: The message is not one of Hephaestus's
-      summary: Rate one of Hephaestus's messages as helpful or not helpful
+          description: "The model is undeclared, or declared as another tier than\
+            \ this slot (problem type model-assignment-slot-mismatch, property declaredTier)"
+      summary: Assign a model to one purpose
       tags:
-      - Mentor
-  /workspaces/{workspaceSlug}/mentor/turns:
-    post:
-      description: Stores the question before anything is shown and queues a turn.
-        A question while Hephaestus answers waits as a follow-up. Repeating a requestId
-        returns the first submission.
-      operationId: submitMentorTurn
-      parameters:
-      - description: Workspace slug
-        in: path
-        name: workspaceSlug
-        required: true
-        schema:
-          type: string
-          maxLength: 51
-          minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/MentorTurnRequest"
-        required: true
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/MentorSubmission"
-          description: The stored question and its turn
-        "409":
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
-          description: "Hephaestus declines the developer (mentor-refused), too many\
-            \ follow-ups wait, the requestId was used for another message, or the\
-            \ parent cannot have a thread (mentor-rejected)"
-      summary: Ask Hephaestus
-      tags:
-      - Mentor
-  /workspaces/{workspaceSlug}/mentor/turns/{turnId}/status:
-    patch:
-      description: A queued turn never runs and keeps its question. A running turn
-        keeps what Hephaestus already wrote. Stopping an ended turn changes nothing.
-        A turn asked in Slack can be stopped here.
-      operationId: updateMentorTurnStatus
-      parameters:
-      - description: Workspace slug
-        in: path
-        name: workspaceSlug
-        required: true
-        schema:
-          type: string
-          maxLength: 51
-          minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
-      - in: path
-        name: turnId
-        required: true
-        schema:
-          type: string
-          format: uuid
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/MentorTurnStatusRequest"
-        required: true
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/MentorTurn"
-          description: OK
-      summary: Stop a turn
-      tags:
-      - Mentor
+      - Model assignments
   /workspaces/{workspaceSlug}/onboarding/me:
     get:
       operationId: getMemberOnboarding
@@ -9102,7 +9106,7 @@ paths:
           - GITHUB
           - GITLAB
           - OTHER_WORK
-          - HEPH
+          - APP
           - SLACK
           - NEXT_CONVERSATION
           - PRACTICE_PAGES
@@ -9298,7 +9302,7 @@ paths:
           - GITHUB
           - GITLAB
           - OTHER_WORK
-          - HEPH
+          - APP
           - SLACK
           - NEXT_CONVERSATION
           - PRACTICE_PAGES
@@ -9479,7 +9483,7 @@ paths:
           - GITHUB
           - GITLAB
           - OTHER_WORK
-          - HEPH
+          - APP
           - SLACK
           - NEXT_CONVERSATION
           - PRACTICE_PAGES
@@ -12532,8 +12536,8 @@ components:
         events:
           type: integer
           format: int64
-          description: "Runs this month, either purse: job attempts and mentor turn\
-            \ attempts. A practice script call counts toward the run of its review."
+          description: "Runs this month, either purse: job attempts and conversation\
+            \ turn attempts. A practice script call counts toward the run of its review."
         instanceBudgetVerdict:
           type: string
           description: "Whether shared-model spend is within the instance cap, has\
@@ -12652,75 +12656,6 @@ components:
       - memberCount
       - status
       - workspaceSlug
-    AgentBinding:
-      type: object
-      description: A workspace's agent binding for one purpose
-      properties:
-        dataHandlingTier:
-          type: string
-          enum:
-          - IN_HOUSE
-          - CLOUD
-          - UNDECLARED
-        enabled:
-          type: boolean
-        instanceModelId:
-          type: integer
-          format: int64
-        purpose:
-          type: string
-          enum:
-          - PRACTICE_REVIEW
-          - MENTOR
-        ready:
-          type: boolean
-          description: True when the bound model is available to run right now
-        servedTiers:
-          type: array
-          description: "The members this binding serves now, named by the tier of\
-            \ their choice: IN_HOUSE and CLOUD for the members who chose them, UNDECLARED\
-            \ for the members who have not chosen. Empty when the binding serves no\
-            \ member."
-          items:
-            type: string
-            enum:
-            - IN_HOUSE
-            - CLOUD
-            - UNDECLARED
-        timeoutSeconds:
-          type: integer
-          format: int32
-        workspaceModelId:
-          type: integer
-          format: int64
-      required:
-      - dataHandlingTier
-      - enabled
-      - purpose
-      - ready
-      - servedTiers
-    AgentBindingRequest:
-      type: object
-      description: Bind a model and execution limits to an agent purpose
-      properties:
-        enabled:
-          type: boolean
-          description: Whether this purpose is active (paused when false)
-        instanceModelId:
-          type: integer
-          format: int64
-          description: Shared (instance-catalog) model id to run this purpose on
-        timeoutSeconds:
-          type: integer
-          format: int32
-          description: Per-run timeout in seconds (30–10800; three hours is the longest
-            a single run may take)
-          maximum: 10800
-          minimum: 30
-        workspaceModelId:
-          type: integer
-          format: int64
-          description: Workspace-owned model id to run this purpose on
     AiChoiceRequest:
       type: object
       properties:
@@ -12913,7 +12848,7 @@ components:
             type: string
             enum:
             - PRACTICE_REVIEW
-            - MENTOR
+            - CONVERSATION
         reasoningEffort:
           type: string
           description: "Reasoning effort requested of the model; null sends none,\
@@ -13657,6 +13592,7 @@ components:
           enum:
           - PROVIDER_RESOURCE_RELEASE
           - PRACTICE_REVIEW_SETTINGS
+          - MODEL_ASSIGNMENT
           - AGENT_BINDING
           - AGENT_CONFIG
           - AI_CONFIG_BINDING
@@ -14020,6 +13956,414 @@ components:
       - id
       - login
       - name
+    Conversation:
+      type: object
+      description: The developer's Hephaestus conversation in a workspace at one moment
+      properties:
+        activeTurns:
+          type: array
+          description: "Queued and running turns in the conversation and its threads,\
+            \ oldest first"
+          items:
+            $ref: "#/components/schemas/ConversationTurn"
+        id:
+          type: string
+          format: uuid
+          description: The main conversation; absent until the developer writes to
+            Hephaestus or gets a weekly digest
+        lastAnswerAt:
+          type: string
+          format: date-time
+          description: When Hephaestus's newest shown answer in the conversation or
+            any of its threads was written; absent before the first. Compare it with
+            the newest answer the client has seen.
+        lastReadAt:
+          type: string
+          format: date-time
+          description: How far the developer read the conversation on any device;
+            absent before the first read. Hephaestus has an unread answer when lastAnswerAt
+            is later.
+        latestSeq:
+          type: integer
+          format: int64
+          description: Sequence number of the newest top-level message shown; 0 when
+            there is none
+        threads:
+          type: array
+          description: "The newest threads, latest activity first"
+          items:
+            $ref: "#/components/schemas/ConversationThreadSummary"
+      required:
+      - activeTurns
+      - latestSeq
+      - threads
+    ConversationEntry:
+      type: object
+      description: One message of a Hephaestus conversation
+      properties:
+        conversationId:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+        deleted:
+          type: boolean
+          description: The message was deleted; its text is gone
+        digest:
+          $ref: "#/components/schemas/WeeklyDigest"
+          description: The weekly digest as it reads now; only on a weekly digest
+            that was not erased
+        editedAt:
+          type: string
+          format: date-time
+          description: Set when the developer edited the message in Slack
+        id:
+          type: string
+          format: uuid
+        kind:
+          type: string
+          enum:
+          - USER
+          - ANSWER
+          - DIGEST
+        links:
+          type: array
+          description: "The results, problems and prepared feedback Hephaestus showed\
+            \ in this message, in order"
+          items:
+            $ref: "#/components/schemas/ConversationLink"
+        parentEntryId:
+          type: string
+          format: uuid
+          description: "Set when the message is in a thread: the top-level message\
+            \ the thread replies to"
+        requestId:
+          type: string
+          description: The submission that wrote the message; the app matches its
+            own optimistic message by it
+        seq:
+          type: integer
+          format: int64
+          description: Order within its conversation
+        slackDelivery:
+          type: string
+          description: "Only on a question asked in Slack: whether Hephaestus's reply\
+            \ reached Slack. FAILED means Slack does not show the whole reply: it\
+            \ is not there, or a stream showed only part of it before Slack or Silent\
+            \ Mode refused the rest; the full reply is in the app. UNCERTAIN means\
+            \ Slack cannot tell."
+          enum:
+          - PENDING
+          - DELIVERED
+          - UNCERTAIN
+          - FAILED
+        surface:
+          type: string
+          description: Where the message was written; SYSTEM for a weekly digest
+          enum:
+          - APP
+          - SLACK
+          - SYSTEM
+        text:
+          type: string
+          description: "The developer's words or Hephaestus's answer; for a weekly\
+            \ digest, the note that points Hephaestus to it; empty when the message\
+            \ was deleted"
+        thread:
+          $ref: "#/components/schemas/ConversationThreadSummary"
+          description: The thread on this message; only on top-level messages that
+            have one
+        turnError:
+          type: string
+          description: "Why the turn this question asked failed, in words for the\
+            \ developer; only when it FAILED"
+        turnId:
+          type: string
+          format: uuid
+          description: The turn the message asked or answered
+        turnStatus:
+          type: string
+          description: The status of the turn this question asked; only on the developer's
+            messages
+          enum:
+          - QUEUED
+          - RUNNING
+          - DONE
+          - FAILED
+          - STOPPED
+        vote:
+          type: string
+          description: The developer's vote; only on Hephaestus's messages
+          enum:
+          - HELPFUL
+          - NOT_HELPFUL
+      required:
+      - conversationId
+      - createdAt
+      - deleted
+      - id
+      - kind
+      - links
+      - seq
+      - surface
+      - text
+    ConversationLink:
+      type: object
+      description: "A practice result, problem or prepared feedback Hephaestus showed\
+        \ in a message"
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: "The result, problem or feedback id, by kind"
+        itemId:
+          type: integer
+          format: int64
+          description: "The item (pull request, issue, conversation or document) it\
+            \ is about, when the developer may still read it: a problem's through\
+            \ its result"
+        kind:
+          type: string
+          enum:
+          - RESULT
+          - PROBLEM
+          - FEEDBACK
+        practiceSlug:
+          type: string
+          description: "The practice it is about: a problem's through its result,\
+            \ feedback's when it is about one practice; absent when the developer\
+            \ can no longer read it"
+        text:
+          type: string
+          description: "Hephaestus's words about it, shown to the developer"
+      required:
+      - id
+      - kind
+      - text
+    ConversationRead:
+      type: object
+      description: How far the developer read their Hephaestus conversation
+      properties:
+        lastReadAt:
+          type: string
+          format: date-time
+          description: The read marker; absent when the developer has no conversation
+            yet
+    ConversationReadRequest:
+      type: object
+      description: How far the developer read their Hephaestus conversation
+      properties:
+        at:
+          type: string
+          format: date-time
+          description: The time of the newest answer the developer saw
+      required:
+      - at
+    ConversationSubmission:
+      type: object
+      description: A stored question and the turn that answers it
+      properties:
+        question:
+          $ref: "#/components/schemas/ConversationEntry"
+        turn:
+          $ref: "#/components/schemas/ConversationTurn"
+      required:
+      - question
+      - turn
+    ConversationThread:
+      type: object
+      description: "A thread: the message it replies to and one page of its replies,\
+        \ oldest first"
+      properties:
+        conversationId:
+          type: string
+          format: uuid
+          description: The thread's conversation; absent until the first reply opens
+            it
+        parent:
+          $ref: "#/components/schemas/ConversationEntry"
+        replies:
+          $ref: "#/components/schemas/CursorPageDTOConversationEntry"
+      required:
+      - parent
+      - replies
+    ConversationThreadSummary:
+      type: object
+      description: The thread on a top-level message
+      properties:
+        conversationId:
+          type: string
+          format: uuid
+          description: The thread's own conversation
+        lastReplyAt:
+          type: string
+          format: date-time
+        latestSeq:
+          type: integer
+          format: int64
+          description: Sequence number of the thread's newest shown message; 0 when
+            it has none
+        parentEntryId:
+          type: string
+          format: uuid
+          description: The message the thread replies to
+        replyCount:
+          type: integer
+          format: int64
+          description: Messages in the thread; can count a Hephaestus message without
+            text whose feedback is no longer shown
+      required:
+      - conversationId
+      - latestSeq
+      - parentEntryId
+      - replyCount
+    ConversationTurn:
+      type: object
+      description: "One conversation turn: a requested answer or an opted-in proactive\
+        \ digest"
+      properties:
+        attempt:
+          type: integer
+          format: int32
+          description: "Attempts started so far; 0 while the turn waits for its first\
+            \ start. A lost lease queues the turn again with the same attempt, and\
+            \ the next start counts up. Thus, with the same attempt, RUNNING comes\
+            \ before QUEUED or an end."
+        conversationId:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+        error:
+          type: string
+          description: "Why the turn failed, worded for the developer; only on a failed\
+            \ turn"
+        finishedAt:
+          type: string
+          format: date-time
+        id:
+          type: string
+          format: uuid
+        parentEntryId:
+          type: string
+          format: uuid
+          description: "Set when the turn runs in a thread: the top-level message\
+            \ the thread replies to"
+        partial:
+          $ref: "#/components/schemas/ConversationTurnPartial"
+          description: Hephaestus's answer in progress; only while the turn runs
+        requestId:
+          type: string
+          description: The submission or schedule key; the stimulus entry carries
+            the same value
+        status:
+          type: string
+          enum:
+          - QUEUED
+          - RUNNING
+          - DONE
+          - FAILED
+          - STOPPED
+        surface:
+          type: string
+          enum:
+          - APP
+          - SLACK
+          - SYSTEM
+        waitingFor:
+          type: string
+          description: "Why a queued turn has not started. CAPACITY: a server may\
+            \ start it, and every conversation slot of the deployment is taken, so\
+            \ it starts when one is free. Absent when the turn does not wait, waits\
+            \ for an earlier question of its conversation, or waits for a reason that\
+            \ the server does not know, such as a server without a configured conversation\
+            \ turn capacity."
+          enum:
+          - CAPACITY
+      required:
+      - attempt
+      - conversationId
+      - createdAt
+      - id
+      - requestId
+      - status
+      - surface
+    ConversationTurnPartial:
+      type: object
+      description: What Hephaestus is doing in a running turn
+      properties:
+        activity:
+          type: string
+          enum:
+          - THINKING
+          - WRITING
+          - TOOL
+        stage:
+          type: string
+          description: "What Hephaestus is doing, in the developer's words, for example\
+            \ \"Reading your practice feedback…\""
+        text:
+          type: string
+          description: The text Hephaestus has written in this turn so far
+        tool:
+          type: string
+          description: "The tool Hephaestus runs, while the activity is TOOL"
+      required:
+      - activity
+      - stage
+      - text
+    ConversationTurnRequest:
+      type: object
+      description: A question to Hephaestus from the app
+      properties:
+        pageContext:
+          type: string
+          description: "The page the developer asks from, for example \"Pull request\
+            \ #421 in acme/web\""
+          maxLength: 500
+          minLength: 0
+        parentEntryId:
+          type: string
+          format: uuid
+          description: Ask in the thread on this top-level message; the first reply
+            opens the thread
+        requestId:
+          type: string
+          format: uuid
+          description: "Chosen by the app for each message. Sending the same id again\
+            \ returns the first submission, so a retried request never asks twice."
+        text:
+          type: string
+          description: The developer's words
+          minLength: 1
+      required:
+      - requestId
+      - text
+    ConversationTurnStatusRequest:
+      type: object
+      description: A status change the developer asks for on a turn
+      properties:
+        status:
+          type: string
+          description: STOPPED stops a queued or running turn. Hephaestus keeps what
+            it already wrote.
+          enum:
+          - STOPPED
+      required:
+      - status
+    ConversationVoteRequest:
+      type: object
+      description: The developer's vote on one of Hephaestus's messages
+      properties:
+        vote:
+          type: string
+          enum:
+          - HELPFUL
+          - NOT_HELPFUL
+      required:
+      - vote
     CoverageOmission:
       type: object
       properties:
@@ -14717,6 +15061,19 @@ components:
           description: Pass as cursor to read the next page; absent on the last page
       required:
       - content
+    CursorPageDTOConversationEntry:
+      type: object
+      description: One page of a list that a client reads forward with a cursor
+      properties:
+        content:
+          type: array
+          items:
+            $ref: "#/components/schemas/ConversationEntry"
+        nextCursor:
+          type: string
+          description: Pass as cursor to read the next page; absent on the last page
+      required:
+      - content
     CursorPageDTOGitLabProject:
       type: object
       description: One page of a list that a client reads forward with a cursor
@@ -14725,19 +15082,6 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/GitLabProject"
-        nextCursor:
-          type: string
-          description: Pass as cursor to read the next page; absent on the last page
-      required:
-      - content
-    CursorPageDTOMentorEntry:
-      type: object
-      description: One page of a list that a client reads forward with a cursor
-      properties:
-        content:
-          type: array
-          items:
-            $ref: "#/components/schemas/MentorEntry"
         nextCursor:
           type: string
           description: Pass as cursor to read the next page; absent on the last page
@@ -15239,6 +15583,12 @@ components:
           type:
           - string
           - "null"
+        conversationEntryId:
+          type:
+          - string
+          - "null"
+          format: uuid
+          description: The Hephaestus answer that showed a conversation copy
         endLine:
           type:
           - "null"
@@ -15266,12 +15616,6 @@ components:
           type:
           - string
           - "null"
-        mentorEntryId:
-          type:
-          - string
-          - "null"
-          format: uuid
-          description: The Hephaestus answer that showed a conversation copy
         path:
           type:
           - string
@@ -15367,13 +15711,13 @@ components:
           format: date-time
       required:
       - body
+      - conversationEntryId
       - endLine
       - externalRef
       - externalUrl
       - id
       - kind
       - lastError
-      - mentorEntryId
       - path
       - position
       - postedAt
@@ -17010,7 +17354,7 @@ components:
             type: string
             enum:
             - PRACTICE_REVIEW
-            - MENTOR
+            - CONVERSATION
         slug:
           type: string
           description: Unique slug
@@ -17305,8 +17649,8 @@ components:
         events:
           type: integer
           format: int64
-          description: "Runs: job attempts and mentor turn attempts. A practice script\
-            \ call counts toward the run of its review."
+          description: "Runs: job attempts and conversation turn attempts. A practice\
+            \ script call counts toward the run of its review."
         instanceTotalCostUsd:
           type: number
           format: decimal
@@ -17344,8 +17688,8 @@ components:
         events:
           type: integer
           format: int64
-          description: "Runs: job attempts and mentor turn attempts. A practice script\
-            \ call counts toward the run of its review."
+          description: "Runs: job attempts and conversation turn attempts. A practice\
+            \ script call counts toward the run of its review."
         inputTokens:
           type: integer
           format: int64
@@ -17367,7 +17711,7 @@ components:
         totalCalls:
           type: integer
           format: int64
-          description: LLM API calls that the proxy served. Practice reviews and mentor
+          description: LLM API calls that the proxy served. Practice reviews and conversation
             turns both include every assistant call in an internal tool loop.
         unpricedEventCount:
           type: integer
@@ -17466,414 +17810,75 @@ components:
       - approvalBeforePosting
       - blocker
       - events
-    MentorConversation:
+    ModelAssignment:
       type: object
-      description: The developer's Hephaestus conversation in a workspace at one moment
+      description: A workspace's model assignment for one purpose
       properties:
-        activeTurns:
-          type: array
-          description: "Queued and running turns in the conversation and its threads,\
-            \ oldest first"
-          items:
-            $ref: "#/components/schemas/MentorTurn"
-        id:
+        dataHandlingTier:
           type: string
-          format: uuid
-          description: The main conversation; absent until the developer writes to
-            Hephaestus or gets a weekly digest
-        lastAnswerAt:
-          type: string
-          format: date-time
-          description: When Hephaestus's newest shown answer in the conversation or
-            any of its threads was written; absent before the first. Compare it with
-            the newest answer the client has seen.
-        lastReadAt:
-          type: string
-          format: date-time
-          description: How far the developer read the conversation on any device;
-            absent before the first read. Hephaestus has an unread answer when lastAnswerAt
-            is later.
-        latestSeq:
-          type: integer
-          format: int64
-          description: Sequence number of the newest top-level message shown; 0 when
-            there is none
-        threads:
-          type: array
-          description: "The newest threads, latest activity first"
-          items:
-            $ref: "#/components/schemas/MentorThreadSummary"
-      required:
-      - activeTurns
-      - latestSeq
-      - threads
-    MentorEntry:
-      type: object
-      description: One message of a Hephaestus conversation
-      properties:
-        conversationId:
-          type: string
-          format: uuid
-        createdAt:
-          type: string
-          format: date-time
-        deleted:
+          enum:
+          - IN_HOUSE
+          - CLOUD
+          - UNDECLARED
+        enabled:
           type: boolean
-          description: The message was deleted; its text is gone
-        digest:
-          $ref: "#/components/schemas/WeeklyDigest"
-          description: The weekly digest as it reads now; only on a weekly digest
-            that was not erased
-        editedAt:
-          type: string
-          format: date-time
-          description: Set when the developer edited the message in Slack
-        id:
-          type: string
-          format: uuid
-        kind:
+        instanceModelId:
+          type: integer
+          format: int64
+        purpose:
           type: string
           enum:
-          - USER
-          - HEPH
-          - DIGEST
-        links:
+          - PRACTICE_REVIEW
+          - CONVERSATION
+        ready:
+          type: boolean
+          description: True when the bound model is available to run right now
+        servedTiers:
           type: array
-          description: "The results, problems and prepared feedback Hephaestus showed\
-            \ in this message, in order"
+          description: "The members this binding serves now, named by the tier of\
+            \ their choice: IN_HOUSE and CLOUD for the members who chose them, UNDECLARED\
+            \ for the members who have not chosen. Empty when the binding serves no\
+            \ member."
           items:
-            $ref: "#/components/schemas/MentorLink"
-        parentEntryId:
-          type: string
-          format: uuid
-          description: "Set when the message is in a thread: the top-level message\
-            \ the thread replies to"
-        requestId:
-          type: string
-          description: The submission that wrote the message; the app matches its
-            own optimistic message by it
-        seq:
-          type: integer
-          format: int64
-          description: Order within its conversation
-        slackDelivery:
-          type: string
-          description: "Only on a question asked in Slack: whether Hephaestus's reply\
-            \ reached Slack. FAILED means Slack does not show the whole reply: it\
-            \ is not there, or a stream showed only part of it before Slack or Silent\
-            \ Mode refused the rest; the full reply is in the app. UNCERTAIN means\
-            \ Slack cannot tell."
-          enum:
-          - PENDING
-          - DELIVERED
-          - UNCERTAIN
-          - FAILED
-        surface:
-          type: string
-          description: Where the message was written; SYSTEM for a weekly digest
-          enum:
-          - APP
-          - SLACK
-          - SYSTEM
-        text:
-          type: string
-          description: "The developer's words or Hephaestus's answer; for a weekly\
-            \ digest, the note that points Hephaestus to it; empty when the message\
-            \ was deleted"
-        thread:
-          $ref: "#/components/schemas/MentorThreadSummary"
-          description: The thread on this message; only on top-level messages that
-            have one
-        turnError:
-          type: string
-          description: "Why the turn this question asked failed, in words for the\
-            \ developer; only when it FAILED"
-        turnId:
-          type: string
-          format: uuid
-          description: The turn the message asked or answered
-        turnStatus:
-          type: string
-          description: The status of the turn this question asked; only on the developer's
-            messages
-          enum:
-          - QUEUED
-          - RUNNING
-          - DONE
-          - FAILED
-          - STOPPED
-        vote:
-          type: string
-          description: The developer's vote; only on Hephaestus's messages
-          enum:
-          - HELPFUL
-          - NOT_HELPFUL
-      required:
-      - conversationId
-      - createdAt
-      - deleted
-      - id
-      - kind
-      - links
-      - seq
-      - surface
-      - text
-    MentorLink:
-      type: object
-      description: "A practice result, problem or prepared feedback Hephaestus showed\
-        \ in a message"
-      properties:
-        id:
-          type: string
-          format: uuid
-          description: "The result, problem or feedback id, by kind"
-        itemId:
-          type: integer
-          format: int64
-          description: "The item (pull request, issue, conversation or document) it\
-            \ is about, when the developer may still read it: a problem's through\
-            \ its result"
-        kind:
-          type: string
-          enum:
-          - RESULT
-          - PROBLEM
-          - FEEDBACK
-        practiceSlug:
-          type: string
-          description: "The practice it is about: a problem's through its result,\
-            \ feedback's when it is about one practice; absent when the developer\
-            \ can no longer read it"
-        text:
-          type: string
-          description: "Hephaestus's words about it, shown to the developer"
-      required:
-      - id
-      - kind
-      - text
-    MentorRead:
-      type: object
-      description: How far the developer read their Hephaestus conversation
-      properties:
-        lastReadAt:
-          type: string
-          format: date-time
-          description: The read marker; absent when the developer has no conversation
-            yet
-    MentorReadRequest:
-      type: object
-      description: How far the developer read their Hephaestus conversation
-      properties:
-        at:
-          type: string
-          format: date-time
-          description: The time of the newest answer the developer saw
-      required:
-      - at
-    MentorSubmission:
-      type: object
-      description: A stored question and the turn that answers it
-      properties:
-        question:
-          $ref: "#/components/schemas/MentorEntry"
-        turn:
-          $ref: "#/components/schemas/MentorTurn"
-      required:
-      - question
-      - turn
-    MentorThread:
-      type: object
-      description: "A thread: the message it replies to and one page of its replies,\
-        \ oldest first"
-      properties:
-        conversationId:
-          type: string
-          format: uuid
-          description: The thread's conversation; absent until the first reply opens
-            it
-        parent:
-          $ref: "#/components/schemas/MentorEntry"
-        replies:
-          $ref: "#/components/schemas/CursorPageDTOMentorEntry"
-      required:
-      - parent
-      - replies
-    MentorThreadSummary:
-      type: object
-      description: The thread on a top-level message
-      properties:
-        conversationId:
-          type: string
-          format: uuid
-          description: The thread's own conversation
-        lastReplyAt:
-          type: string
-          format: date-time
-        latestSeq:
-          type: integer
-          format: int64
-          description: Sequence number of the thread's newest shown message; 0 when
-            it has none
-        parentEntryId:
-          type: string
-          format: uuid
-          description: The message the thread replies to
-        replyCount:
-          type: integer
-          format: int64
-          description: Messages in the thread; can count a Hephaestus message without
-            text whose feedback is no longer shown
-      required:
-      - conversationId
-      - latestSeq
-      - parentEntryId
-      - replyCount
-    MentorTurn:
-      type: object
-      description: "One conversation turn: a requested answer or an opted-in proactive\
-        \ digest"
-      properties:
-        attempt:
+            type: string
+            enum:
+            - IN_HOUSE
+            - CLOUD
+            - UNDECLARED
+        timeoutSeconds:
           type: integer
           format: int32
-          description: "Attempts started so far; 0 while the turn waits for its first\
-            \ start. A lost lease queues the turn again with the same attempt, and\
-            \ the next start counts up. Thus, with the same attempt, RUNNING comes\
-            \ before QUEUED or an end."
-        conversationId:
-          type: string
-          format: uuid
-        createdAt:
-          type: string
-          format: date-time
-        error:
-          type: string
-          description: "Why the turn failed, worded for the developer; only on a failed\
-            \ turn"
-        finishedAt:
-          type: string
-          format: date-time
-        id:
-          type: string
-          format: uuid
-        parentEntryId:
-          type: string
-          format: uuid
-          description: "Set when the turn runs in a thread: the top-level message\
-            \ the thread replies to"
-        partial:
-          $ref: "#/components/schemas/MentorTurnPartial"
-          description: Hephaestus's answer in progress; only while the turn runs
-        requestId:
-          type: string
-          description: The submission or schedule key; the stimulus entry carries
-            the same value
-        status:
-          type: string
-          enum:
-          - QUEUED
-          - RUNNING
-          - DONE
-          - FAILED
-          - STOPPED
-        surface:
-          type: string
-          enum:
-          - APP
-          - SLACK
-          - SYSTEM
-        waitingFor:
-          type: string
-          description: "Why a queued turn has not started. FREE_HEPH: a server may\
-            \ start it, and every conversation slot of the deployment is taken, so\
-            \ it starts when one is free. Absent when the turn does not wait, waits\
-            \ for an earlier question of its conversation, or waits for a reason that\
-            \ the server does not know, such as a server without a configured conversation\
-            \ turn capacity."
-          enum:
-          - FREE_HEPH
+        workspaceModelId:
+          type: integer
+          format: int64
       required:
-      - attempt
-      - conversationId
-      - createdAt
-      - id
-      - requestId
-      - status
-      - surface
-    MentorTurnPartial:
+      - dataHandlingTier
+      - enabled
+      - purpose
+      - ready
+      - servedTiers
+    ModelAssignmentRequest:
       type: object
-      description: What Hephaestus is doing in a running turn
+      description: Bind a model and execution limits to an agent purpose
       properties:
-        activity:
-          type: string
-          enum:
-          - THINKING
-          - WRITING
-          - TOOL
-        stage:
-          type: string
-          description: "What Hephaestus is doing, in the developer's words, for example\
-            \ \"Reading your practice feedback…\""
-        text:
-          type: string
-          description: The text Hephaestus has written in this turn so far
-        tool:
-          type: string
-          description: "The tool Hephaestus runs, while the activity is TOOL"
-      required:
-      - activity
-      - stage
-      - text
-    MentorTurnRequest:
-      type: object
-      description: A question to Hephaestus from the app
-      properties:
-        pageContext:
-          type: string
-          description: "The page the developer asks from, for example \"Pull request\
-            \ #421 in acme/web\""
-          maxLength: 500
-          minLength: 0
-        parentEntryId:
-          type: string
-          format: uuid
-          description: Ask in the thread on this top-level message; the first reply
-            opens the thread
-        requestId:
-          type: string
-          format: uuid
-          description: "Chosen by the app for each message. Sending the same id again\
-            \ returns the first submission, so a retried request never asks twice."
-        text:
-          type: string
-          description: The developer's words
-          minLength: 1
-      required:
-      - requestId
-      - text
-    MentorTurnStatusRequest:
-      type: object
-      description: A status change the developer asks for on a turn
-      properties:
-        status:
-          type: string
-          description: STOPPED stops a queued or running turn. Hephaestus keeps what
-            it already wrote.
-          enum:
-          - STOPPED
-      required:
-      - status
-    MentorVoteRequest:
-      type: object
-      description: The developer's vote on one of Hephaestus's messages
-      properties:
-        vote:
-          type: string
-          enum:
-          - HELPFUL
-          - NOT_HELPFUL
-      required:
-      - vote
+        enabled:
+          type: boolean
+          description: Whether this purpose is active (paused when false)
+        instanceModelId:
+          type: integer
+          format: int64
+          description: Shared (instance-catalog) model id to run this purpose on
+        timeoutSeconds:
+          type: integer
+          format: int32
+          description: Per-run timeout in seconds (30–10800; three hours is the longest
+            a single run may take)
+          maximum: 10800
+          minimum: 30
+        workspaceModelId:
+          type: integer
+          format: int64
+          description: Workspace-owned model id to run this purpose on
     MovePracticeRequest:
       type: object
       properties:
@@ -22701,7 +22706,7 @@ components:
           - GITHUB
           - GITLAB
           - OTHER_WORK
-          - HEPH
+          - APP
           - SLACK
           - NEXT_CONVERSATION
           - PRACTICE_PAGES
@@ -22911,7 +22916,7 @@ components:
           - GITHUB
           - GITLAB
           - OTHER_WORK
-          - HEPH
+          - APP
           - SLACK
           - NEXT_CONVERSATION
           - PRACTICE_PAGES
@@ -26615,10 +26620,10 @@ components:
       description: Request to turn practice reviews and their triggers on or off.
         Null fields are left unchanged.
       properties:
-        practiceReviewAutoTriggerEnabled:
+        practiceReviewEventEnabled:
           type: boolean
           description: Enable automatic practice reviews triggered by PR events
-        practiceReviewManualTriggerEnabled:
+        practiceReviewRequestEnabled:
           type: boolean
           description: Enable manual practice reviews triggered through a bot command
         practicesEnabled:
@@ -27050,6 +27055,16 @@ components:
       description: "One piece of feedback that reached the developer in the week,\
         \ and where it was delivered"
       properties:
+        conversationEntryId:
+          type: string
+          format: uuid
+          description: "The Hephaestus message it appeared in; only for CONVERSATION,\
+            \ and never when withdrawn"
+        conversationParentEntryId:
+          type: string
+          format: uuid
+          description: "The top-level message whose thread holds that Hephaestus message;\
+            \ only for CONVERSATION, and absent when the message is not in a thread"
         deliveredAt:
           type: string
           format: date-time
@@ -27073,16 +27088,6 @@ components:
           $ref: "#/components/schemas/ItemRef"
           description: "The item it was delivered on; only for ON_WORK, and never\
             \ when withdrawn"
-        mentorEntryId:
-          type: string
-          format: uuid
-          description: "The Hephaestus message it appeared in; only for CONVERSATION,\
-            \ and never when withdrawn"
-        mentorParentEntryId:
-          type: string
-          format: uuid
-          description: "The top-level message whose thread holds that Hephaestus message;\
-            \ only for CONVERSATION, and absent when the message is not in a thread"
         practiceName:
           type: string
         practiceSlug:
@@ -27270,11 +27275,11 @@ components:
         kind:
           type: string
           description: Integration kind backing this workspace (GITHUB or GITLAB)
-        practiceReviewAutoTriggerEnabled:
+        practiceReviewEventEnabled:
           type: boolean
           description: Whether automatic practice reviews triggered by PR events are
             enabled
-        practiceReviewManualTriggerEnabled:
+        practiceReviewRequestEnabled:
           type: boolean
           description: Whether manual practice reviews triggered through a bot command
             are enabled
@@ -27329,8 +27334,8 @@ components:
       - hasPersonalAccessToken
       - hasSlackToken
       - id
-      - practiceReviewAutoTriggerEnabled
-      - practiceReviewManualTriggerEnabled
+      - practiceReviewEventEnabled
+      - practiceReviewRequestEnabled
       - practicesEnabled
       - publicActivityEnabled
       - status
@@ -27396,7 +27401,7 @@ components:
           - NO_AI
           - IN_HOUSE_ONLY
           - CLOUD
-        mentorReady:
+        conversationReady:
           type: boolean
         models:
           type: array
@@ -27406,7 +27411,7 @@ components:
           type: boolean
       required:
       - choice
-      - mentorReady
+      - conversationReady
       - models
       - practiceReviewsReady
     WorkspaceGroupSplit:
@@ -27611,7 +27616,7 @@ components:
             type: string
             enum:
             - PRACTICE_REVIEW
-            - MENTOR
+            - CONVERSATION
         slug:
           type: string
           description: Unique slug within the workspace
@@ -27895,13 +27900,13 @@ components:
         unpricedEventCount:
           type: integer
           format: int64
-          description: "Runs this month (job attempts and mentor turn attempts, either\
-            \ purse) with at least one call whose cost is unavailable because a rate\
-            \ is missing or the measurement is unverified, and that has no upper bound,\
-            \ each counted once. A capability test with unavailable cost counts once.\
-            \ A practice script call counts toward the run of its review. Those rows\
-            \ are excluded from both totals above, so a non-zero value means the real\
-            \ spend may be higher than shown."
+          description: "Runs this month (job attempts and conversation turn attempts,\
+            \ either purse) with at least one call whose cost is unavailable because\
+            \ a rate is missing or the measurement is unverified, and that has no\
+            \ upper bound, each counted once. A capability test with unavailable cost\
+            \ counts once. A practice script call counts toward the run of its review.\
+            \ Those rows are excluded from both totals above, so a non-zero value\
+            \ means the real spend may be higher than shown."
       required:
       - byDay
       - byJobType
@@ -27972,7 +27977,7 @@ components:
       description: |-
         One member's view of setup in one workspace. <code>aiChoice</code> is the account's answer, the same in
          every workspace; <code>aiOptions</code> says what this workspace has set up under each answer, which is
-         what differs between workspaces. <code>mentorRefusal</code> is this member's own answer from Hephaestus's admission.
+         what differs between workspaces. <code>conversationRefusal</code> is this member's own answer from Hephaestus's admission.
       properties:
         aiChoice:
           type: string
@@ -27986,13 +27991,7 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/WorkspaceAiOption"
-        enabled:
-          type: boolean
-        links:
-          type: array
-          items:
-            $ref: "#/components/schemas/WorkspaceOnboardingLink"
-        mentorRefusal:
+        conversationRefusal:
           type: string
           description: "Why Hephaestus declines this member here, by the rule that\
             \ admits each question; null when Hephaestus can answer"
@@ -28001,6 +28000,12 @@ components:
           - NO_AI
           - CHOICE_REQUIRED
           - UNAVAILABLE
+        enabled:
+          type: boolean
+        links:
+          type: array
+          items:
+            $ref: "#/components/schemas/WorkspaceOnboardingLink"
         needsSetup:
           type: boolean
         workspaceName:

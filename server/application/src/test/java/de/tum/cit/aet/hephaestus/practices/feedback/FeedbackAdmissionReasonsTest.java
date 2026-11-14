@@ -28,6 +28,7 @@ import de.tum.cit.aet.hephaestus.practices.model.Result;
 import de.tum.cit.aet.hephaestus.practices.result.ProblemRepository;
 import de.tum.cit.aet.hephaestus.practices.result.ResultRepository;
 import de.tum.cit.aet.hephaestus.practices.spi.ConversationDecision;
+import de.tum.cit.aet.hephaestus.practices.spi.ConversationReadinessQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackBasisInput;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCheck;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCheckFacts;
@@ -37,7 +38,6 @@ import de.tum.cit.aet.hephaestus.practices.spi.FeedbackDraft;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackMode;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackState;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackStopReason;
-import de.tum.cit.aet.hephaestus.practices.spi.MentorReadinessQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.PinnedPractice;
 import de.tum.cit.aet.hephaestus.practices.spi.PracticePageDecision;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultHistoryQuery;
@@ -117,7 +117,7 @@ class FeedbackAdmissionReasonsTest {
             new PracticePageFeedbackRouter(),
             gate,
             mock(ResultHistoryQuery.class),
-            mock(MentorReadinessQuery.class),
+            mock(ConversationReadinessQuery.class),
             clock);
     private final FeedbackPreparationService preparation = new FeedbackPreparationService(
             reviews,

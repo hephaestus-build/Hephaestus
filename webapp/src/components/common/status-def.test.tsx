@@ -6,9 +6,9 @@ import {
 	ACTIVITY_KIND_DEFS,
 } from "@/components/activity/activity-kind-defs";
 import {
-	UNKNOWN_AGENT_PURPOSE_DEF,
-	AGENT_PURPOSE_DEFS,
-} from "@/components/practice-vocabulary/agent-purpose-defs";
+	UNKNOWN_MODEL_PURPOSE_DEF,
+	MODEL_PURPOSE_DEFS,
+} from "@/components/practice-vocabulary/model-purpose-defs";
 import { OUTCOME_DEFS } from "@/components/practice-vocabulary/outcome-defs";
 import { definitionFor, UNKNOWN_STATUS_DEF } from "./status-def";
 import { StatusBadge } from "./StatusBadge";
@@ -28,7 +28,7 @@ it.each(["constructor", "toString", "__proto__"])(
 );
 
 it("retains the typed fields that rich registries need for an unknown value", () => {
-	const purpose = definitionFor(AGENT_PURPOSE_DEFS, "NEW_PURPOSE", UNKNOWN_AGENT_PURPOSE_DEF);
+	const purpose = definitionFor(MODEL_PURPOSE_DEFS, "NEW_PURPOSE", UNKNOWN_MODEL_PURPOSE_DEF);
 	expect(purpose.title).toBe("Unknown model purpose");
 	const activity = definitionFor(ACTIVITY_KIND_DEFS, "NEW_ACTIVITY", UNKNOWN_ACTIVITY_KIND_DEF);
 	expect(activity.noun("GITHUB")).toStrictEqual({

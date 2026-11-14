@@ -17,7 +17,7 @@ import de.tum.cit.aet.hephaestus.agent.job.RuntimeJobTestData;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRun;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunRef;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
-import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
+import de.tum.cit.aet.hephaestus.conversation.ConversationTurnRepository;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import jakarta.servlet.ServletException;
@@ -41,7 +41,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 
 class JobTokenAuthenticationFilterTest extends BaseUnitTest {
     private final ReviewJobRepository jobs = mock(ReviewJobRepository.class);
-    private final MentorTurnRepository turns = mock(MentorTurnRepository.class);
+    private final ConversationTurnRepository turns = mock(ConversationTurnRepository.class);
 
     private final AttemptTokenVerifier verifier = mock(AttemptTokenVerifier.class);
     private final AgentRuns runs = mock(AgentRuns.class);

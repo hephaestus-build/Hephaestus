@@ -22,7 +22,7 @@ import de.tum.cit.aet.hephaestus.practices.dto.ReadSourceOptionDTO;
 import de.tum.cit.aet.hephaestus.practices.dto.ReorderRequestDTO;
 import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
 import de.tum.cit.aet.hephaestus.testconfig.WithAdminUser;
-import de.tum.cit.aet.hephaestus.testconfig.WithMentorUser;
+import de.tum.cit.aet.hephaestus.testconfig.WithConversationUser;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import java.net.URI;
 import java.util.List;
@@ -270,9 +270,9 @@ class CatalogAdminControllerIntegrationTest extends AbstractWorkspaceIntegration
     }
 
     @Test
-    @WithMentorUser
+    @WithConversationUser
     void shouldRefuseInstanceCatalogWritesForAMember() {
-        persistUser("mentor");
+        persistUser("conversation");
         client.post()
                 .uri("/admin/practice-catalog/practices")
                 .headers(TestAuthUtils.withCurrentUser())

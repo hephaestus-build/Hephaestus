@@ -275,7 +275,7 @@ public class PersonDataService {
                                 long count = store.erase(Objects.requireNonNull(frozen.get(store.store())), scope(r));
                                 // The database clock, which every runtime shares: PersonDataCopyFence.erasedSince
                                 // compares
-                                // it with the start of a Heph turn, which is on the database clock too.
+                                // it with the start of a Hephaestus turn, which is on the database clock too.
                                 Instant erasedAt = Objects.requireNonNull(
                                                 jdbc.queryForObject("SELECT clock_timestamp()", Timestamp.class))
                                         .toInstant();

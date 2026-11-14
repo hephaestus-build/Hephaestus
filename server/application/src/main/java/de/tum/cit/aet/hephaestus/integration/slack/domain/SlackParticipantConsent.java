@@ -21,7 +21,7 @@ import org.jspecify.annotations.Nullable;
  * so it exists independently of whether that Slack user is currently linked to a workspace member: an unlinked
  * user can still opt out, and the decision applies once they later link.
  *
- * <p><strong>{@code ingestion_opted_out}</strong> is the mentoring-purpose firewall: when {@code true} the ingest
+ * <p><strong>{@code ingestion_opted_out}</strong> is the conversation-purpose firewall: when {@code true} the ingest
  * write-path ({@code SlackIngestService}) never stores this person's channel messages, composing with the
  * capability flag and the channel {@code ACTIVE} gate — ingestion happens iff capability ON <em>and</em> channel
  * ACTIVE <em>and</em> NOT {@code ingestion_opted_out}.
@@ -47,7 +47,7 @@ public class SlackParticipantConsent {
     @Column(name = "slack_user_id", nullable = false, length = 32)
     private String slackUserId;
 
-    /** {@code true} ⇒ this person's channel messages are never ingested (the mentoring-purpose firewall). */
+    /** {@code true} ⇒ this person's channel messages are never ingested (the conversation-purpose firewall). */
     @Column(name = "ingestion_opted_out", nullable = false)
     @ColumnDefault("false")
     private boolean ingestionOptedOut;

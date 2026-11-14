@@ -10,7 +10,7 @@ const longPath =
 const copy = (fields: Partial<FeedbackCopy> & Pick<FeedbackCopy, "id" | "kind" | "position">) =>
 	({
 		body: null,
-		mentorEntryId: null,
+		conversationEntryId: null,
 		endLine: null,
 		externalRef: null,
 		externalUrl: null,

@@ -206,7 +206,7 @@ public final class PracticeGuidanceRules {
 
     /**
      * The guide for a reader without pictures: every image becomes "(Figure: description)", so a
-     * text-only reader such as Heph learns what each figure shows.
+     * text-only reader such as Hephaestus learns what each figure shows.
      */
     public static String describeFigures(String markdown) {
         StringBuilder described = new StringBuilder(markdown);

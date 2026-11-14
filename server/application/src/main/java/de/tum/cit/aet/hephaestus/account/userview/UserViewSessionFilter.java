@@ -70,9 +70,9 @@ public class UserViewSessionFilter extends OncePerRequestFilter {
                     "/workspaces/{workspaceSlug}/practices/workspace-overview",
                     "/workspaces/{workspaceSlug}/practices/items/{itemId}/trace",
                     "/workspaces/{workspaceSlug}/practices/results/{resultId}",
-                    "/workspaces/{workspaceSlug}/mentor/conversation",
-                    "/workspaces/{workspaceSlug}/mentor/entries",
-                    "/workspaces/{workspaceSlug}/mentor/entries/{entryId}/thread")
+                    "/workspaces/{workspaceSlug}/conversation",
+                    "/workspaces/{workspaceSlug}/conversation/entries",
+                    "/workspaces/{workspaceSlug}/conversation/entries/{entryId}/thread")
             .stream()
             .map(PATHS::parse)
             .toList();

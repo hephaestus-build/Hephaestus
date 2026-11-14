@@ -6,7 +6,7 @@ import path from "node:path";
 import { parseArgs } from "node:util";
 
 import { databaseMigration } from "./lib/database-migration.ts";
-import { hephBindingsEnabled, seedRestoreProbe } from "./lib/restore-probe.ts";
+import { conversationBindingsEnabled, seedRestoreProbe } from "./lib/restore-probe.ts";
 
 const { values } = parseArgs({ options: { "target-image": { type: "string" } } });
 const migrate = databaseMigration(6 * 60 * 1000);
@@ -394,10 +394,10 @@ try {
 	}
 	if (
 		sql(
-			`SELECT practice_delivery_status || ':' || ${hephBindingsEnabled} FROM workspace WHERE slug = 'restore-probe'`,
+			`SELECT practice_delivery_status || ':' || ${conversationBindingsEnabled} FROM workspace WHERE slug = 'restore-probe'`,
 		) !== "PAUSED:false"
 	) {
-		throw new Error("restored workspace did not pause feedback delivery and mentor");
+		throw new Error("restored workspace did not pause feedback delivery and conversation");
 	}
 	console.log(
 		`PITR passed: encrypted S3 repository verified; read-only restore and backup outage proved; restored target ${target} in ${restoreSeconds}s; pre-target WAL present; post-target row absent; application data locked down`,

@@ -30,7 +30,7 @@ import tools.jackson.databind.ObjectMapper;
 class LlmCallPoolAdminControllerIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     private static final String ADMIN_TOKEN = "mock-jwt-token-for-admin-user";
-    private static final String MENTOR_TOKEN = "mock-jwt-token-for-mentor-user";
+    private static final String CONVERSATION_TOKEN = "mock-jwt-token-for-conversation-user";
 
     @Autowired
     private WebTestClient webTestClient;
@@ -384,11 +384,11 @@ class LlmCallPoolAdminControllerIntegrationTest extends AbstractWorkspaceIntegra
 
     @Test
     void shouldRefuseAnyoneButTheInstanceAdmin() {
-        persistUser("mentor");
+        persistUser("conversation");
         webTestClient
                 .post()
                 .uri("/admin/llm/call-pools")
-                .headers(h -> h.setBearerAuth(MENTOR_TOKEN))
+                .headers(h -> h.setBearerAuth(CONVERSATION_TOKEN))
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(new SaveLlmCallPoolRequestDTO(slug("denied"), "Denied", 4, null, null, null, null, null))
                 .exchange()

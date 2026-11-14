@@ -10,6 +10,7 @@ type ActorKind = NonNullable<ConfigAuditEntryView["actorKind"]>;
 /** The trail is append-only, so a row keeps the spelling it was written under: entity types that no
  * longer exist under these names must still read as the thing they describe. */
 const RENAMED_ENTITY_TYPE_LABELS = {
+	AGENT_BINDING: "Model assignment",
 	AGENT_CONFIG: "AI configuration",
 	AI_CONFIG_BINDING: "Model assignment",
 	PRACTICE_ACTIVE: "Practice review participation",
@@ -20,7 +21,7 @@ const RENAMED_ENTITY_TYPE_LABELS = {
 export const ENTITY_TYPE_LABELS: Record<EntityType, string> = {
 	PROVIDER_RESOURCE_RELEASE: "Provider removal release",
 	PRACTICE_REVIEW_SETTINGS: "Review settings",
-	AGENT_BINDING: "Model assignment",
+	MODEL_ASSIGNMENT: "Model assignment",
 	WORKSPACE_ROLE: "Workspace role",
 	ACTIVITY_AUTOMATION: "Activity automation",
 	WORKSPACE_FEATURES: "Feature flags",

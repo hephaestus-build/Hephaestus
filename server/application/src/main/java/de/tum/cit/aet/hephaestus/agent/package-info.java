@@ -1,5 +1,5 @@
 /**
- * Agent module — LLM-driven sandbox runtime that executes practice review and mentor turns.
+ * Agent module — LLM-driven sandbox runtime that executes practice review and conversation turns.
  *
  * <p>A review's job waits on its agent run (ADR 0079): the server dispatches each due run's
  * sandbox, and the sandbox claims and runs it through the gateway.
@@ -30,8 +30,8 @@
             "integration.core::items",
             "integration.core::review-metrics",
             "integration.core::spi",
-            "mentor",
-            "mentor::spi",
+            "conversation",
+            "conversation::spi",
             "practices",
             "practices::model",
             "practices::result",

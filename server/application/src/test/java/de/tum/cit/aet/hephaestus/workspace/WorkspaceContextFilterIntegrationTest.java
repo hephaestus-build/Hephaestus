@@ -6,7 +6,7 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
 import de.tum.cit.aet.hephaestus.testconfig.WithAdminUser;
-import de.tum.cit.aet.hephaestus.testconfig.WithMentorUser;
+import de.tum.cit.aet.hephaestus.testconfig.WithConversationUser;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceEchoControllers;
 import de.tum.cit.aet.hephaestus.workspace.dto.WorkspaceDTO;
 import java.time.Instant;
@@ -65,9 +65,9 @@ class WorkspaceContextFilterIntegrationTest extends AbstractWorkspaceIntegration
     }
 
     @Test
-    @WithMentorUser
+    @WithConversationUser
     void shouldAnswerNotFoundWhenSignedInAccountIsNotAMember() {
-        persistUser("mentor");
+        persistUser("conversation");
         User workspaceOwner = persistUser("workspace-owner");
         Workspace workspace = createWorkspace("beta-space", "Beta", "beta", AccountType.ORG, workspaceOwner);
 
@@ -126,13 +126,13 @@ class WorkspaceContextFilterIntegrationTest extends AbstractWorkspaceIntegration
     }
 
     @Test
-    @WithMentorUser
+    @WithConversationUser
     void autoSeedDisabledDoesNotGrantAdminToFirstVisitorOfEmptyMembershipWorkspace() {
         // SECURITY (A5): with auto-seed disabled (the production default), the first authenticated
         // visitor of a zero-membership workspace must NOT be silently seeded as ADMIN. A
         // non-member,
         // non-super-admin visitor gets not found, and no membership row is created.
-        User visitor = persistUser("mentor");
+        User visitor = persistUser("conversation");
         User workspaceOwner = persistUser("empty-membership-owner");
         Workspace workspace = createWorkspace("empty-seed", "Empty", "emptyseed", AccountType.ORG, workspaceOwner);
         // createWorkspace seeds an OWNER membership; strip it so the workspace is genuinely

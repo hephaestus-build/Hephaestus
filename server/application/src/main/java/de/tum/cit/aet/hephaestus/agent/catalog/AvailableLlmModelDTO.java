@@ -1,6 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.catalog;
 
-import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
+import de.tum.cit.aet.hephaestus.agent.config.ModelPurpose;
 import de.tum.cit.aet.hephaestus.workspace.spi.AiModelBrand;
 import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -41,7 +41,7 @@ public record AvailableLlmModelDTO(
 
         @NonNull
         @Schema(description = "The purposes a binding may assign this model to, from its connection's protocol")
-        List<AgentPurpose> purposes,
+        List<ModelPurpose> purposes,
 
         @NonNull @Schema(description = "Pricing mode") PricingMode pricingMode,
 
@@ -66,7 +66,7 @@ public record AvailableLlmModelDTO(
                 model.getConnection().getDisplayName(),
                 model.getReasoningEffort(),
                 model.getDataHandlingTier(),
-                AgentPurpose.servedBy(model.getConnection().getApiProtocol()),
+                ModelPurpose.servedBy(model.getConnection().getApiProtocol()),
                 pricingMode,
                 currentPrice != null ? currentPrice.getPer1mInputUsd() : null,
                 currentPrice != null ? currentPrice.getPer1mOutputUsd() : null,
@@ -83,7 +83,7 @@ public record AvailableLlmModelDTO(
                 model.getConnection().getDisplayName(),
                 model.getReasoningEffort(),
                 model.getDataHandlingTier(),
-                AgentPurpose.servedBy(model.getConnection().getApiProtocol()),
+                ModelPurpose.servedBy(model.getConnection().getApiProtocol()),
                 model.getPricingMode(),
                 model.getPer1mInputUsd(),
                 model.getPer1mOutputUsd(),

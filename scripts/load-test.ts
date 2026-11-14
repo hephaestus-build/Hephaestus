@@ -12,7 +12,12 @@ export const k6Image =
 const dockerUser =
 	process.getuid && process.getgid ? ["--user", `${process.getuid()}:${process.getgid()}`] : [];
 /** The scenarios under `load-tests/`, each run by `vp run test:load:<name>`. */
-export const loadScenarios = ["webhook-burst", "detection-mentor", "heph", "course"] as const;
+export const loadScenarios = [
+	"webhook-burst",
+	"detection-conversation",
+	"conversation",
+	"course",
+] as const;
 
 function isLoadScenario(value: unknown): value is (typeof loadScenarios)[number] {
 	return loadScenarios.some((known) => known === value);
@@ -35,8 +40,8 @@ const inputs = [
 	"PRE_ALLOCATED_VUS",
 	"MAX_VUS",
 	"WEBHOOK_PADDING_BYTES",
-	"MENTOR_VUS",
-	"MENTOR_TIMEOUT_SECONDS",
+	"CONVERSATION_VUS",
+	"CONVERSATION_TIMEOUT_SECONDS",
 	"REVIEW_VUS",
 	"REVIEW_REQUESTS",
 	"REVIEW_MAX_DURATION",
@@ -53,9 +58,9 @@ const inputs = [
 const secrets = new Set(["WEBHOOK_SECRET", "AUTH_TOKEN", "AUTH_TOKENS"]);
 const limits = ["SANDBOX_API_MAX_REQUEST_BYTES", "SANDBOX_API_REQUESTS_PER_MINUTE"];
 
-// Only the detection+mentor workload reaches the sandbox gateway, so only its result depends on the
+// Only the detection+conversation workload reaches the sandbox gateway, so only its result depends on the
 // gateway's deployed limits.
-const gatewayLimits = (scenario: string) => (scenario === "detection-mentor" ? limits : []);
+const gatewayLimits = (scenario: string) => (scenario === "detection-conversation" ? limits : []);
 
 /** What a scenario cannot run without, beyond the base URL and the gateway limits it records. */
 function workloadInputs(
@@ -68,7 +73,7 @@ function workloadInputs(
 	if (scenario === "webhook-burst") {
 		return ["WEBHOOK_SECRET"];
 	}
-	if (scenario === "heph") {
+	if (scenario === "conversation") {
 		// One token for every simulated developer, or one shared token.
 		return ["WORKSPACE_SLUG", isSet(env.AUTH_TOKENS?.trim()) ? "AUTH_TOKENS" : "AUTH_TOKEN"];
 	}
@@ -203,7 +208,8 @@ async function checkScenarios(root: string) {
 				"summary",
 			);
 			const metrics = asRecord(summary.metrics, "metrics");
-			const metricName = name === "unfinished" ? "review_jobs_finished" : "heph_turns_finished";
+			const metricName =
+				name === "unfinished" ? "review_jobs_finished" : "conversation_turns_finished";
 			const metric = asRecord(metrics[metricName], metricName);
 			const verdicts = Object.values(asRecord(metric.thresholds, "thresholds"));
 			if (

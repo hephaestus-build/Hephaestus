@@ -14,11 +14,11 @@ import de.tum.cit.aet.hephaestus.agent.catalog.PricingMode;
 import de.tum.cit.aet.hephaestus.agent.catalog.WorkspaceLlmConnection;
 import de.tum.cit.aet.hephaestus.agent.catalog.WorkspaceLlmConnectionService;
 import de.tum.cit.aet.hephaestus.agent.catalog.WorkspaceLlmModelService;
-import de.tum.cit.aet.hephaestus.agent.config.AgentBindingRequestDTO;
-import de.tum.cit.aet.hephaestus.agent.config.AgentBindingService;
-import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.config.MemberAiRoutingAdapter;
+import de.tum.cit.aet.hephaestus.agent.config.ModelAssignmentRequestDTO;
+import de.tum.cit.aet.hephaestus.agent.config.ModelAssignmentService;
+import de.tum.cit.aet.hephaestus.agent.config.ModelPurpose;
 import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.PreparedEvidence;
 import de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures;
@@ -208,7 +208,7 @@ class PracticeScriptLiveLlmTest extends AbstractWorkspaceIntegrationTest {
     private WorkspaceLlmModelService models;
 
     @Autowired
-    private AgentBindingService bindings;
+    private ModelAssignmentService bindings;
 
     @Autowired
     private LlmModelResolver resolver;
@@ -302,7 +302,7 @@ class PracticeScriptLiveLlmTest extends AbstractWorkspaceIntegrationTest {
         WorkspaceContextHolder.setContext(context);
         bind(
                 context,
-                AgentPurpose.PRACTICE_REVIEW,
+                ModelPurpose.PRACTICE_REVIEW,
                 LlmApiProtocol.OPENAI_COMPLETIONS,
                 chat.baseUrl(),
                 chat.apiKey(),
@@ -453,7 +453,7 @@ class PracticeScriptLiveLlmTest extends AbstractWorkspaceIntegrationTest {
 
     private void bind(
             WorkspaceContext context,
-            AgentPurpose purpose,
+            ModelPurpose purpose,
             LlmApiProtocol protocol,
             String baseUrl,
             String apiKey,
@@ -487,7 +487,10 @@ class PracticeScriptLiveLlmTest extends AbstractWorkspaceIntegrationTest {
                                 null))
                 .getId();
         bindings.upsertBinding(
-                context, purpose, DataHandlingTier.UNDECLARED, new AgentBindingRequestDTO(null, modelId, null, true));
+                context,
+                purpose,
+                DataHandlingTier.UNDECLARED,
+                new ModelAssignmentRequestDTO(null, modelId, null, true));
     }
 
     private Practice practice(Workspace workspace, String program) {
@@ -517,7 +520,7 @@ class PracticeScriptLiveLlmTest extends AbstractWorkspaceIntegrationTest {
 
     private ReviewJob runningJob(Workspace workspace, Practice practice, long actor) {
         var binding = runtimeModelRouting
-                .binding(workspace.getId(), AgentPurpose.PRACTICE_REVIEW, actor)
+                .binding(workspace.getId(), ModelPurpose.PRACTICE_REVIEW, actor)
                 .orElseThrow();
         var job = new ReviewJob();
         RuntimeJobTestData.initialize(job, workspace.getId());

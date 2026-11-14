@@ -19,7 +19,7 @@ import de.tum.cit.aet.hephaestus.notification.email.EmailNotice.Prepared;
 import de.tum.cit.aet.hephaestus.testconfig.AccountFixtures;
 import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
 import de.tum.cit.aet.hephaestus.testconfig.WithAdminUser;
-import de.tum.cit.aet.hephaestus.testconfig.WithMentorUser;
+import de.tum.cit.aet.hephaestus.testconfig.WithConversationUser;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Membership.WorkspaceRole;
@@ -125,17 +125,17 @@ class RoleChangeEmailIntegrationTest extends AbstractWorkspaceIntegrationTest {
     }
 
     @Test
-    @WithMentorUser
+    @WithConversationUser
     void shouldQueueAnEmailForTheAffectedPersonAndEachOtherOwnerWhenAWorkspaceAdminIsGrantedAndRemoved() {
         User owner = persistUser("role-notice-owner");
         Workspace workspace = createWorkspace("role-notice", "Role notice", "role-notice", AccountType.ORG, owner);
         User other = persistUser("role-notice-second-owner");
         workspaceMembershipService.createMembership(workspace, accountId(other), WorkspaceRole.OWNER);
-        User mentor = persistUser("mentor");
-        ensureMembership(workspace, mentor, WorkspaceRole.ADMIN);
+        User conversation = persistUser("conversation");
+        ensureMembership(workspace, conversation, WorkspaceRole.ADMIN);
         User target = persistUser("role-notice-target");
         workspaceMembershipService.createMembership(workspace, accountId(target), WorkspaceRole.MEMBER);
-        for (User user : List.of(owner, other, mentor, target)) verified(accountId(user));
+        for (User user : List.of(owner, other, conversation, target)) verified(accountId(user));
 
         assign(workspace, target, WorkspaceRole.ADMIN);
         assign(workspace, target, WorkspaceRole.ADMIN);
@@ -171,12 +171,12 @@ class RoleChangeEmailIntegrationTest extends AbstractWorkspaceIntegrationTest {
     }
 
     @Test
-    @WithMentorUser
+    @WithConversationUser
     void shouldQueueNothingWhenOnlyAMemberJoinsOrLeaves() {
         User owner = persistUser("member-notice-owner");
         Workspace workspace =
                 createWorkspace("member-notice", "Member notice", "member-notice", AccountType.ORG, owner);
-        ensureMembership(workspace, persistUser("mentor"), WorkspaceRole.ADMIN);
+        ensureMembership(workspace, persistUser("conversation"), WorkspaceRole.ADMIN);
         User joining = persistUser("member-notice-joining");
         verified(accountId(owner));
         verified(accountId(joining));
@@ -195,12 +195,12 @@ class RoleChangeEmailIntegrationTest extends AbstractWorkspaceIntegrationTest {
     }
 
     @Test
-    @WithMentorUser
+    @WithConversationUser
     void shouldQueueOneEmailWhenAResetRoleChangesAtTheNextSyncButNoneForTheResetItself() {
         User owner = persistUser("reset-notice-owner");
         Workspace workspace = createWorkspace("reset-notice", "Reset notice", "reset-notice", AccountType.ORG, owner);
-        User mentor = persistUser("mentor");
-        ensureMembership(workspace, mentor, WorkspaceRole.ADMIN);
+        User conversation = persistUser("conversation");
+        ensureMembership(workspace, conversation, WorkspaceRole.ADMIN);
         User target = persistUser("reset-notice-target");
         workspaceMembershipService.createMembership(workspace, accountId(target), WorkspaceRole.MEMBER);
         verified(accountId(owner));
@@ -210,7 +210,7 @@ class RoleChangeEmailIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 workspace,
                 Map.of(
                         Objects.requireNonNull(target.getId()), WorkspaceRole.MEMBER,
-                        Objects.requireNonNull(mentor.getId()), WorkspaceRole.ADMIN));
+                        Objects.requireNonNull(conversation.getId()), WorkspaceRole.ADMIN));
 
         assign(workspace, target, WorkspaceRole.ADMIN);
         assertThat(recipients(accountId(target))).containsExactlyInAnyOrder(accountId(target), accountId(owner));

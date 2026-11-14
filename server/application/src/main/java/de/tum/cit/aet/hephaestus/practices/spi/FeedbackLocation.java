@@ -4,7 +4,7 @@ public enum FeedbackLocation {
     GITHUB,
     GITLAB,
     OTHER_WORK,
-    HEPH,
+    APP,
     SLACK,
     NEXT_CONVERSATION,
     PRACTICE_PAGES;

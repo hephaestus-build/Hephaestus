@@ -69,14 +69,14 @@ function linkTo(row: WeeklyDigestFeedback, workspaceSlug: string): ReactElement 
 			);
 		}
 		case "CONVERSATION": {
-			return row.mentorEntryId === undefined ? undefined : (
+			return row.conversationEntryId === undefined ? undefined : (
 				<Link
 					to="/w/$workspaceSlug/conversation"
 					params={{ workspaceSlug }}
 					search={
-						row.mentorParentEntryId === undefined
-							? { entry: row.mentorEntryId }
-							: { thread: row.mentorParentEntryId, entry: row.mentorEntryId }
+						row.conversationParentEntryId === undefined
+							? { entry: row.conversationEntryId }
+							: { thread: row.conversationParentEntryId, entry: row.conversationEntryId }
 					}
 				/>
 			);

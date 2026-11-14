@@ -18,7 +18,7 @@ public class TestAuthUtils {
     /**
      * Gets the appropriate JWT token value for the current security context.
      *
-     * This allows tests to use @WithMentorUser, @WithAdminUser, etc. and automatically
+     * This allows tests to use @WithConversationUser, @WithAdminUser, etc. and automatically
      * get the correct token for WebTestClient requests.
      *
      * @return JWT token string, or null if no authentication should be used

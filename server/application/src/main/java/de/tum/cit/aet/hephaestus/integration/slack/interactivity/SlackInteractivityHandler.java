@@ -3,16 +3,16 @@ package de.tum.cit.aet.hephaestus.integration.slack.interactivity;
 import static com.slack.api.model.block.Blocks.section;
 import static com.slack.api.model.block.composition.BlockCompositions.markdownText;
 
-import de.tum.cit.aet.hephaestus.agent.mentor.weeklydigest.WeeklyDigestSubscriptions;
+import de.tum.cit.aet.hephaestus.agent.conversation.weeklydigest.WeeklyDigestSubscriptions;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.slack.channel.SlackConsentBlocks;
-import de.tum.cit.aet.hephaestus.integration.slack.events.SlackMentorService;
+import de.tum.cit.aet.hephaestus.integration.slack.conversation.SlackConversationIdentityResolver;
+import de.tum.cit.aet.hephaestus.integration.slack.conversation.SlackConversationPosts;
+import de.tum.cit.aet.hephaestus.integration.slack.conversation.SlackWeeklyDigestPointer;
+import de.tum.cit.aet.hephaestus.integration.slack.events.SlackConversationService;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackParticipantConsentService;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackPersonErasureService;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackWorkspaceResolver;
-import de.tum.cit.aet.hephaestus.integration.slack.mentor.SlackMentorIdentityResolver;
-import de.tum.cit.aet.hephaestus.integration.slack.mentor.SlackMentorPosts;
-import de.tum.cit.aet.hephaestus.integration.slack.mentor.SlackWeeklyDigestPointer;
 import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackMessageService;
 import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackSendException;
 import de.tum.cit.aet.hephaestus.integration.slack.onboarding.SlackAppHomeService;
@@ -46,23 +46,23 @@ public class SlackInteractivityHandler {
     private final ExecutorService followUpExecutor;
 
     private final SlackWorkspaceResolver workspaceResolver;
-    private final SlackMentorIdentityResolver identityResolver;
+    private final SlackConversationIdentityResolver identityResolver;
     private final SlackAppHomeService appHomeService;
     private final SlackParticipantConsentService participantConsentService;
     private final SlackPersonErasureService personErasureService;
     private final SlackMessageService messageService;
-    private final SlackMentorService mentorService;
+    private final SlackConversationService conversationService;
     private final WeeklyDigestSubscriptions weeklyDigests;
 
     @Autowired
     public SlackInteractivityHandler(
             SlackWorkspaceResolver workspaceResolver,
-            SlackMentorIdentityResolver identityResolver,
+            SlackConversationIdentityResolver identityResolver,
             SlackAppHomeService appHomeService,
             SlackParticipantConsentService participantConsentService,
             SlackPersonErasureService personErasureService,
             SlackMessageService messageService,
-            SlackMentorService mentorService,
+            SlackConversationService conversationService,
             WeeklyDigestSubscriptions weeklyDigests) {
         this(
                 workspaceResolver,
@@ -71,19 +71,19 @@ public class SlackInteractivityHandler {
                 participantConsentService,
                 personErasureService,
                 messageService,
-                mentorService,
+                conversationService,
                 weeklyDigests,
                 Executors.newVirtualThreadPerTaskExecutor());
     }
 
     SlackInteractivityHandler(
             SlackWorkspaceResolver workspaceResolver,
-            SlackMentorIdentityResolver identityResolver,
+            SlackConversationIdentityResolver identityResolver,
             SlackAppHomeService appHomeService,
             SlackParticipantConsentService participantConsentService,
             SlackPersonErasureService personErasureService,
             SlackMessageService messageService,
-            SlackMentorService mentorService,
+            SlackConversationService conversationService,
             WeeklyDigestSubscriptions weeklyDigests,
             ExecutorService followUpExecutor) {
         this.workspaceResolver = workspaceResolver;
@@ -92,7 +92,7 @@ public class SlackInteractivityHandler {
         this.participantConsentService = participantConsentService;
         this.personErasureService = personErasureService;
         this.messageService = messageService;
-        this.mentorService = mentorService;
+        this.conversationService = conversationService;
         this.weeklyDigests = weeklyDigests;
         this.followUpExecutor = followUpExecutor;
     }
@@ -116,8 +116,8 @@ public class SlackInteractivityHandler {
                     handleChannelMessageOptIn(workspaceId, teamId, slackUserId);
                 case SlackConsentBlocks.ACTION_PARTICIPANT_OPT_OUT ->
                     handleChannelMessageOptOut(workspaceId, teamId, slackUserId, channelId, false);
-                case SlackMentorPosts.FEEDBACK_ACTION ->
-                    mentorService.handleFeedback(
+                case SlackConversationPosts.FEEDBACK_ACTION ->
+                    conversationService.handleFeedback(
                             teamId, channelId, slackUserId, action.path("value").asString(""));
                 case SlackWeeklyDigestPointer.TURN_OFF_ACTION ->
                     turnOffWeeklyDigest(workspaceId, teamId, slackUserId, channelId);

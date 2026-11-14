@@ -12,7 +12,7 @@ import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRecorder;
-import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
+import de.tum.cit.aet.hephaestus.conversation.ConversationTurnRepository;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewSnapshotQuery;
 import de.tum.cit.aet.hephaestus.productfeedback.drafting.ProductFeedbackDraftCalls;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
@@ -45,7 +45,7 @@ public final class SandboxModelProxy {
                 context.getBean(LlmUsageRecorder.class),
                 context.getBean(AgentRuns.class),
                 context.getBean(ReviewJobRepository.class),
-                context.getBean(MentorTurnRepository.class),
+                context.getBean(ConversationTurnRepository.class),
                 budgets,
                 mapper,
                 meters,
@@ -61,7 +61,7 @@ public final class SandboxModelProxy {
                 mock(ScanCallGuard.class),
                 new ProxyRoutingService(
                         context.getBean(ReviewJobRepository.class),
-                        context.getBean(MentorTurnRepository.class),
+                        context.getBean(ConversationTurnRepository.class),
                         mapper,
                         context.getBean(ReviewSnapshotQuery.class),
                         context.getBean(AgentRuns.class),
@@ -69,7 +69,7 @@ public final class SandboxModelProxy {
                 new ProxyCallsInFlight(12),
                 new LlmConnectionHealth(CircuitBreakerRegistry.ofDefaults()),
                 permits,
-                new HephCallProperties(Duration.ofMinutes(5), Duration.ofMinutes(2)));
+                new ConversationCallProperties(Duration.ofMinutes(5), Duration.ofMinutes(2)));
         return new LlmProxyController(service, context.getBean(ComposerTranscript.class), accounting);
     }
 }

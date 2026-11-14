@@ -74,7 +74,7 @@ public class AuthRateLimitFilter extends OncePerRequestFilter {
         // GDPR Art. 20 export: cap POST /user/exports (the async assembly). Account-scoped (JWT sub)
         // with IP fallback — the route requires isAuthenticated(), so sub is normally present.
         EXPORT("export", true, false),
-        MENTOR_TURNS("mentor-turns", true, false),
+        CONVERSATION_TURNS("conversation-turns", true, false),
         REVIEW_REQUEST("review-request", true, false),
         SYNC_TRIGGER("sync-trigger", true, false),
         PUBLIC_ACTIVITY("public-activity", false, false),
@@ -196,8 +196,8 @@ public class AuthRateLimitFilter extends OncePerRequestFilter {
         if ("POST".equals(method) && path.equals("/user/exports")) {
             return Endpoint.EXPORT;
         }
-        if ("POST".equals(method) && path.matches("/workspaces/[^/]+/mentor/turns")) {
-            return Endpoint.MENTOR_TURNS;
+        if ("POST".equals(method) && path.matches("/workspaces/[^/]+/conversation/turns")) {
+            return Endpoint.CONVERSATION_TURNS;
         }
         if ("POST".equals(method) && path.matches("/workspaces/[^/]+/practices/review-requests")) {
             return Endpoint.REVIEW_REQUEST;
@@ -220,7 +220,7 @@ public class AuthRateLimitFilter extends OncePerRequestFilter {
             case USER_VIEW -> properties.userView();
             case DELETE_USER -> properties.deleteUser();
             case EXPORT -> properties.export();
-            case MENTOR_TURNS -> properties.mentorTurns();
+            case CONVERSATION_TURNS -> properties.conversationTurns();
             case REVIEW_REQUEST -> properties.reviewRequest();
             case SYNC_TRIGGER -> properties.syncTrigger();
             case PUBLIC_ACTIVITY -> properties.publicActivity();

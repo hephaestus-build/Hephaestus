@@ -1,7 +1,7 @@
 import { useQuery, type UseQueryResult } from "@tanstack/react-query";
 
-import { getWorkspaceOptions, listAgentsOptions } from "@/api/@tanstack/react-query.gen";
-import type { ListAgentsResponse } from "@/api/types.gen";
+import { getWorkspaceOptions, listModelAssignmentsOptions } from "@/api/@tanstack/react-query.gen";
+import type { ListModelAssignmentsResponse } from "@/api/types.gen";
 import {
 	availableReviewBinding,
 	type ReviewModelState,
@@ -14,7 +14,7 @@ import {
  */
 export function useReviewReadiness(workspaceSlug: string): ReviewReadinessState | undefined {
 	const workspaceQuery = useQuery({ ...getWorkspaceOptions({ path: { workspaceSlug } }) });
-	const bindingsQuery = useQuery({ ...listAgentsOptions({ path: { workspaceSlug } }) });
+	const bindingsQuery = useQuery({ ...listModelAssignmentsOptions({ path: { workspaceSlug } }) });
 	return (
 		workspaceQuery.data && {
 			enabled: workspaceQuery.data.practicesEnabled,
@@ -23,8 +23,10 @@ export function useReviewReadiness(workspaceSlug: string): ReviewReadinessState 
 	);
 }
 
-/** The review model's readiness, read off the workspace's agent bindings. */
-export function reviewModelOf(bindingsQuery: UseQueryResult<ListAgentsResponse>): ReviewModelState {
+/** The review model's readiness, read off the workspace's model assignments. */
+export function reviewModelOf(
+	bindingsQuery: UseQueryResult<ListModelAssignmentsResponse>,
+): ReviewModelState {
 	if (bindingsQuery.isPending) {
 		return { status: "loading" };
 	}

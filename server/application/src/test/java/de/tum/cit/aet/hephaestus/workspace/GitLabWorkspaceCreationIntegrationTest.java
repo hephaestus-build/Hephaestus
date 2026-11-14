@@ -40,7 +40,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabWebhookS
 import de.tum.cit.aet.hephaestus.testconfig.OfflineNetwork;
 import de.tum.cit.aet.hephaestus.testconfig.TestUserFactory;
 import de.tum.cit.aet.hephaestus.testconfig.WithAdminUser;
-import de.tum.cit.aet.hephaestus.testconfig.WithMentorUser;
+import de.tum.cit.aet.hephaestus.testconfig.WithConversationUser;
 import de.tum.cit.aet.hephaestus.workspace.dto.CreateWorkspaceRequestDTO;
 import de.tum.cit.aet.hephaestus.workspace.dto.GitLabPreflightRequestDTO;
 import de.tum.cit.aet.hephaestus.workspace.dto.WorkspaceDTO;
@@ -236,7 +236,7 @@ class GitLabWorkspaceCreationIntegrationTest extends AbstractWorkspaceIntegratio
 
     @Test
     void shouldRefuseUnconfiguredInstanceBeforeCreatingTheWorkspace() {
-        postGitLabWorkspace(gitLabCaller("mentor"), "gitlab-unconfigured", "https://gitlab.attacker.example")
+        postGitLabWorkspace(gitLabCaller("conversation"), "gitlab-unconfigured", "https://gitlab.attacker.example")
                 .expectStatus()
                 .isEqualTo(422)
                 .expectBody(Void.class);
@@ -250,7 +250,7 @@ class GitLabWorkspaceCreationIntegrationTest extends AbstractWorkspaceIntegratio
         ProblemDetail problem = webTestClient
                 .post()
                 .uri("/workspaces/gitlab/preflight")
-                .headers(gitLabCaller("mentor"))
+                .headers(gitLabCaller("conversation"))
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(new GitLabPreflightRequestDTO("glpat-test", DEFAULT_INSTANCE + "/api?redirect=1", null))
                 .exchange()
@@ -578,9 +578,9 @@ class GitLabWorkspaceCreationIntegrationTest extends AbstractWorkspaceIntegratio
 
     @Test
     void createGitLabWorkspacePersistsCorrectProviderModeAndServerUrl() {
-        persistUser("mentor");
+        persistUser("conversation");
         IdentityProvider instance = gitLabInstance(DEFAULT_INSTANCE);
-        Consumer<HttpHeaders> auth = gitLabCaller("mentor", gitLabInstance("https://gitlab.com"), instance);
+        Consumer<HttpHeaders> auth = gitLabCaller("conversation", gitLabInstance("https://gitlab.com"), instance);
 
         var request = new CreateWorkspaceRequestDTO(
                 "gitlab-space",
@@ -626,7 +626,7 @@ class GitLabWorkspaceCreationIntegrationTest extends AbstractWorkspaceIntegratio
         // A request that names no selection follows every project of the group.
         assertThat(persisted.getRepositorySelection()).isEqualTo(RepositorySelection.ALL);
         User instanceActor = userRepository
-                .findByLoginAndProviderId("mentor", persistedId(instance.getId()))
+                .findByLoginAndProviderId("conversation", persistedId(instance.getId()))
                 .orElseThrow();
         assertThat(workspaceMembershipRepository.findByWorkspace_IdAndId_AccountId(
                         workspace.id(), accountId(instanceActor)))
@@ -636,8 +636,8 @@ class GitLabWorkspaceCreationIntegrationTest extends AbstractWorkspaceIntegratio
 
     @Test
     void createGitLabWorkspaceWithoutServerUrlUsesTheDefaultInstance() {
-        persistUser("mentor");
-        Consumer<HttpHeaders> auth = gitLabCaller("mentor");
+        persistUser("conversation");
+        Consumer<HttpHeaders> auth = gitLabCaller("conversation");
 
         var request = new CreateWorkspaceRequestDTO(
                 "gitlab-default",
@@ -771,8 +771,8 @@ class GitLabWorkspaceCreationIntegrationTest extends AbstractWorkspaceIntegratio
 
     @Test
     void shouldAssignOwnershipToTheVerifiedGitLabCallerInsteadOfTheSubmittedNamesake() {
-        User namesake = persistUser("mentor");
-        GitLabCaller caller = gitLabCallerWithMirror("mentor");
+        User namesake = persistUser("conversation");
+        GitLabCaller caller = gitLabCallerWithMirror("conversation");
 
         var request = new CreateWorkspaceRequestDTO(
                 "gitlab-ownership",
@@ -810,8 +810,8 @@ class GitLabWorkspaceCreationIntegrationTest extends AbstractWorkspaceIntegratio
 
     @Test
     void createGitLabWorkspaceResponseNeverContainsRawToken() {
-        persistUser("mentor");
-        Consumer<HttpHeaders> auth = gitLabCaller("mentor");
+        persistUser("conversation");
+        Consumer<HttpHeaders> auth = gitLabCaller("conversation");
         String secretToken = "test-token-placeholder";
 
         var request = new CreateWorkspaceRequestDTO(
@@ -844,9 +844,9 @@ class GitLabWorkspaceCreationIntegrationTest extends AbstractWorkspaceIntegratio
     }
 
     @Test
-    @WithMentorUser
+    @WithConversationUser
     void gitLabWorkspaceAppearsInListWithCorrectProviderType() {
-        GitLabCaller caller = gitLabCallerWithMirror("mentor");
+        GitLabCaller caller = gitLabCallerWithMirror("conversation");
 
         var gitlabRequest = new CreateWorkspaceRequestDTO(
                 "gitlab-ws",
@@ -939,7 +939,7 @@ class GitLabWorkspaceCreationIntegrationTest extends AbstractWorkspaceIntegratio
 
     @Test
     void shouldRefuseAContradictoryProjectSelectionBeforeAskingGitLab() {
-        Consumer<HttpHeaders> caller = gitLabCaller("mentor");
+        Consumer<HttpHeaders> caller = gitLabCaller("conversation");
         List<CreateWorkspaceRequestDTO> contradictory = List.of(
                 selecting("selection-all-ids", IntegrationKind.GITLAB, RepositorySelection.ALL, List.of(5L)),
                 selecting("selection-ids-only", IntegrationKind.GITLAB, null, List.of(5L)),
@@ -990,7 +990,7 @@ class GitLabWorkspaceCreationIntegrationTest extends AbstractWorkspaceIntegratio
 
     @Test
     void shouldRefuseToListProjectsWithoutAGroupOrOnAPageBeforeTheFirst() {
-        Consumer<HttpHeaders> caller = gitLabCaller("mentor");
+        Consumer<HttpHeaders> caller = gitLabCaller("conversation");
 
         webTestClient
                 .post()

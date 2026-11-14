@@ -58,7 +58,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.workspace.GitLabStoppedProjectS
 import de.tum.cit.aet.hephaestus.integration.scm.workspace.ScmWorkspaceContentEraser;
 import de.tum.cit.aet.hephaestus.integration.scm.workspace.WorkspaceRepositoryMonitorService;
 import de.tum.cit.aet.hephaestus.testconfig.ProviderEvents;
-import de.tum.cit.aet.hephaestus.testconfig.WithMentorUser;
+import de.tum.cit.aet.hephaestus.testconfig.WithConversationUser;
 import de.tum.cit.aet.hephaestus.workspace.adapter.WorkspaceSyncTargetProvider;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import java.nio.charset.StandardCharsets;
@@ -956,9 +956,9 @@ class RepositoryProviderScopeIntegrationTest extends AbstractWorkspaceIntegratio
     }
 
     @Test
-    @WithMentorUser
+    @WithConversationUser
     void shouldExposeOnlyTheConnectedInstanceWhenNamesAndNativeIdsCollide() {
-        User caller = persistUser("mentor");
+        User caller = persistUser("conversation");
         Workspace own = workspace("source-a", caller);
         Workspace other = workspace("source-b", caller);
         IdentityProvider first = provider("HTTPS://A.example.test:443/");
@@ -985,9 +985,9 @@ class RepositoryProviderScopeIntegrationTest extends AbstractWorkspaceIntegratio
     }
 
     @Test
-    @WithMentorUser
+    @WithConversationUser
     void shouldExposeNoRepositoryWhenTheWorkspaceHasNoSourceConnection() {
-        Workspace workspace = workspace("unconnected", persistUser("mentor"));
+        Workspace workspace = workspace("unconnected", persistUser("conversation"));
         Repository repository = repository(provider("https://unconnected.example.test"), NATIVE_ID, NAME);
         monitor(workspace, NATIVE_ID);
         assertThat(repositories.findAllByWorkspaceMonitors(workspace.getId())).isEmpty();
@@ -995,9 +995,9 @@ class RepositoryProviderScopeIntegrationTest extends AbstractWorkspaceIntegratio
     }
 
     @Test
-    @WithMentorUser
+    @WithConversationUser
     void shouldRetainMonitoredWorkAndRefuseDeliveryWhilePausedThenRestoreAccessOnResume() {
-        Workspace workspace = workspace("default-source", persistUser("mentor"));
+        Workspace workspace = workspace("default-source", persistUser("conversation"));
         Repository mine = repository(ensureGitHubProvider(), NATIVE_ID, NAME);
         IdentityProvider enterprise = gitProviderRepository.saveAndFlush(
                 new IdentityProvider(IdentityProviderType.GITHUB, "https://enterprise.example.test"));
@@ -1108,9 +1108,9 @@ class RepositoryProviderScopeIntegrationTest extends AbstractWorkspaceIntegratio
     }
 
     @Test
-    @WithMentorUser
+    @WithConversationUser
     void shouldDenyPendingAndRetiredSourcesAfterAWorkspaceReconnects() {
-        Workspace workspace = workspace("reconnected", persistUser("mentor"));
+        Workspace workspace = workspace("reconnected", persistUser("conversation"));
         IdentityProvider old = provider("https://retired.example.test");
         IdentityProvider current = provider("https://current.example.test");
         Workspace sharedOld = workspace("retained-old-source", persistUser("retained-owner"));

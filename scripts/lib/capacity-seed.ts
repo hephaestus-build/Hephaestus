@@ -120,12 +120,19 @@ export async function bindReplayModel(
 		maxOutputTokens: 8192,
 		operatedBy: "OWN_ORGANISATION",
 	});
-	for (const purpose of ["MENTOR", "PRACTICE_REVIEW"]) {
-		await api("DELETE", `/workspaces/${workspace}/agents/${purpose}?dataHandlingTier=UNDECLARED`);
-		await api("PUT", `/workspaces/${workspace}/agents/${purpose}?dataHandlingTier=IN_HOUSE`, {
-			workspaceModelId: id,
-			enabled: true,
-			timeoutSeconds: purpose === "MENTOR" ? conversationTimeoutSeconds : 1200,
-		});
+	for (const purpose of ["CONVERSATION", "PRACTICE_REVIEW"]) {
+		await api(
+			"DELETE",
+			`/workspaces/${workspace}/model-assignments/${purpose}?dataHandlingTier=UNDECLARED`,
+		);
+		await api(
+			"PUT",
+			`/workspaces/${workspace}/model-assignments/${purpose}?dataHandlingTier=IN_HOUSE`,
+			{
+				workspaceModelId: id,
+				enabled: true,
+				timeoutSeconds: purpose === "CONVERSATION" ? conversationTimeoutSeconds : 1200,
+			},
+		);
 	}
 }

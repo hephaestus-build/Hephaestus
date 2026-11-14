@@ -15,7 +15,7 @@ public enum FeedbackState {
     FAILED;
 
     /**
-     * The states of feedback that the developer it is about may learn of, on their own pages and through Heph. A
+     * The states of feedback that the developer it is about may learn of, on their own pages and through Hephaestus. A
      * proposal awaiting approval, a rejection, a withholding and a replacement stay with the workspace admins: their
      * state alone would disclose a proposal or a decision that the developer was not shown.
      */

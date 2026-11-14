@@ -5,7 +5,7 @@ import {
 	TriangleAlertIcon,
 } from "lucide-react";
 
-import type { AgentBinding } from "@/api/types.gen";
+import type { ModelAssignment } from "@/api/types.gen";
 
 import type { StatusDefs } from "@/components/common/status-def";
 
@@ -40,7 +40,7 @@ export const PURPOSE_STATUS_DEFS = {
 
 export interface PurposeStatusInput {
 	/** This purpose's bindings only. */
-	bindings: readonly Pick<AgentBinding, "enabled" | "ready">[];
+	bindings: readonly Pick<ModelAssignment, "enabled" | "ready">[];
 	/**
 	 * Whether each member choice the row shows gets a model, judged as the row's tier columns judge
 	 * it. Once members must choose, the row shows no column for members who have not chosen.

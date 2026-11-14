@@ -34,7 +34,7 @@ declare global {
 
 const API = "http://api.test";
 const APP = new URL(E2E_BASE_URL).origin;
-const EVENTS = "/mentor/events";
+const EVENTS = "/conversation/events";
 const LATENCY_MS = 100;
 
 export interface JourneyCost {

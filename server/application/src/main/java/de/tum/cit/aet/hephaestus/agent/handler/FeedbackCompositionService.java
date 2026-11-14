@@ -384,7 +384,7 @@ public class FeedbackCompositionService {
                         row.createdAt(),
                         entry.currentness(),
                         basedOn,
-                        body == null ? null : PrivateFeedbackHistoryDTO.BodyRole.MENTOR_NOTES,
+                        body == null ? null : PrivateFeedbackHistoryDTO.BodyRole.CONVERSATION_NOTES,
                         body));
         }
         return new PrivateFeedbackHistoryDTO(

@@ -2,12 +2,12 @@ package de.tum.cit.aet.hephaestus.agent.catalog;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
+import de.tum.cit.aet.hephaestus.agent.config.ModelPurpose;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.testconfig.LlmCatalogTestFixtures;
 import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
 import de.tum.cit.aet.hephaestus.testconfig.WithAdminUser;
-import de.tum.cit.aet.hephaestus.testconfig.WithMentorUser;
+import de.tum.cit.aet.hephaestus.testconfig.WithConversationUser;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Membership.WorkspaceRole;
@@ -87,7 +87,7 @@ class WorkspaceLlmConnectionControllerIntegrationTest extends AbstractWorkspaceI
         assertThat(created.hasApiKey()).isTrue();
         assertThat(created.apiKeyLast4()).isEqualTo("9999");
         assertThat(created.connectionPlatform()).isEqualTo(LlmConnectionPlatform.AZURE);
-        assertThat(created.purposes()).containsExactly(AgentPurpose.PRACTICE_REVIEW, AgentPurpose.MENTOR);
+        assertThat(created.purposes()).containsExactly(ModelPurpose.PRACTICE_REVIEW, ModelPurpose.CONVERSATION);
 
         assertThat(listedConnection(workspace, created.id())).hasValueSatisfying(listed -> {
             assertThat(listed.slug()).isEqualTo("my-openai");
@@ -166,13 +166,13 @@ class WorkspaceLlmConnectionControllerIntegrationTest extends AbstractWorkspaceI
     }
 
     @Test
-    @WithMentorUser
+    @WithConversationUser
     void aWorkspaceMemberCannotReachTheEndpoint() {
         Workspace workspace = setupWorkspace("byo-member-ws");
-        // Login must match @WithMentorUser's default "mentor" principal so the workspace membership
+        // Login must match @WithConversationUser's default "conversation" principal so the workspace membership
         // resolver finds this exact row.
-        User mentor = persistUser("mentor");
-        ensureMembership(workspace, mentor, WorkspaceRole.MEMBER);
+        User conversation = persistUser("conversation");
+        ensureMembership(workspace, conversation, WorkspaceRole.MEMBER);
 
         webTestClient
                 .get()
@@ -207,12 +207,12 @@ class WorkspaceLlmConnectionControllerIntegrationTest extends AbstractWorkspaceI
     }
 
     @Test
-    @WithMentorUser
+    @WithConversationUser
     void shouldNotFindAnotherWorkspaceButStillAdmitTheAdminOfTheirOwn() {
         // A genuine (non-superadmin) workspace ADMIN — app_admin JWT authority is a separate,
         // instance-wide elevation (see WithAdminUser's javadoc); this proves the ordinary
         // membership-scoped path independent of that bypass.
-        User admin = persistUser("mentor");
+        User admin = persistUser("conversation");
         Workspace workspace =
                 createWorkspace("byo-realadmin-ws", "Real Admin", "byo-realadmin-org", AccountType.ORG, admin);
         ensureMembership(workspace, admin, WorkspaceRole.ADMIN);

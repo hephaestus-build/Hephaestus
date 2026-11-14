@@ -133,13 +133,13 @@
         "text" : "## Undecided\nThe review leaves these NOT_MET results undecided: 30000000-0000-4000-8000-000000000001, 30000000-0000-4000-8000-000000000002.\nCheck the final review with check_package, then publish_package using the returned draftId. A review that says nothing is still a checked draft followed by publish_package. No prose outside the calls."
       } ]
     }, {
-      "system" : "2e492307d096e11dbaaccda468a2a6404386cebef916942f63d7ad4e61464ac1",
-      "tools" : "61d3ebe7e6e2dfd9d500a28f233ee909bc1caac5acbda6dd0e1a1e37e93add5a",
+      "system" : "1e501e7de72fedc3e0da35ea890607b422ff46d0daddbc73322b42e5fa2c1577",
+      "tools" : "1bc45d4b8e35ebd3d1badbf264e7974b78333884c2e7a2e1b59369e912971b31",
       "messages" : [ {
         "role" : "user",
         "text" : {
-          "sha256" : "8c3fcb64e428c8446ea5dc557baef41058607be9a71fe54d786ec73ec9f313b3",
-          "length" : 16361
+          "sha256" : "9900c720f7045cb49eb019734b5e7caab8011a7f82d14e02681fa664db7a6877",
+          "length" : 16367
         }
       } ]
     }, {
@@ -151,13 +151,13 @@
         "text" : "## Undecided\nThe turn ended with no piece and no WITHHOLD for these practices, each with a NOT_MET result: handles-errors on PRACTICE_PAGE. For each, persist the piece you decided on, or a WITHHOLD with its reason (NO_MATERIAL_CHANGE, ALREADY_SAID, BELOW_BAR), in check_package before publish_package call. Room left for new items: PRACTICE_PAGE 1 of 1; a destination with none left takes only a WITHHOLD. The admitted results and their problems are in the turn above. Use tools only from this point onward; no prose."
       } ]
     }, {
-      "system" : "2e492307d096e11dbaaccda468a2a6404386cebef916942f63d7ad4e61464ac1",
-      "tools" : "5865ccc8a378eb2faffec36f1d411aa9ecfbe632bbe80321478ea9acc5f7183d",
+      "system" : "1e501e7de72fedc3e0da35ea890607b422ff46d0daddbc73322b42e5fa2c1577",
+      "tools" : "e23f731eb5bd9987a2f5c4823d894f7a9c009f6decbb55e800cbca5beed8ec38",
       "messages" : [ {
         "role" : "user",
         "text" : {
-          "sha256" : "10a194255d5e038d4a94955d733c708501ce2d41f574b621caffc48b511d1dcd",
-          "length" : 14264
+          "sha256" : "f535d5128f78d3df937704c16facc7c596233dd337d732e329c3545658fa9ad6",
+          "length" : 14270
         }
       } ]
     }, {

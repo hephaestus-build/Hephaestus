@@ -47,7 +47,7 @@ class AuthRateLimitStoreIntegrationTest extends BaseIntegrationTest {
                 configured.userView(),
                 configured.deleteUser(),
                 configured.export(),
-                configured.mentorTurns(),
+                configured.conversationTurns(),
                 configured.reviewRequest(),
                 configured.syncTrigger(),
                 configured.publicActivity(),

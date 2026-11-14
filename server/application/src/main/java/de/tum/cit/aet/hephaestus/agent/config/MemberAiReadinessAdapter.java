@@ -1,7 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.config;
 
-import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorAdmission;
-import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorRefusal;
+import de.tum.cit.aet.hephaestus.agent.conversation.turn.ConversationAdmission;
+import de.tum.cit.aet.hephaestus.agent.conversation.turn.ConversationRefusal;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AiChoice;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonProcessingSuppression;
 import de.tum.cit.aet.hephaestus.workspace.spi.AiRefusalReason;
@@ -15,21 +15,21 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * The admission rules for one member: Heph's, which each question passes, and review admission's for a review whose
+ * The admission rules for one member: Hephaestus's, which each question passes, and review admission's for a review whose
  * only subject is the member ({@code ReviewMemberAiPolicy}).
  */
 @Component
 @RequiredArgsConstructor
 class MemberAiReadinessAdapter implements MemberAiReadiness {
 
-    private final MentorAdmission admission;
+    private final ConversationAdmission admission;
     private final PersonProcessingSuppression suppression;
     private final MemberAiPreferences preferences;
     private final MemberAiRoutingAdapter routing;
 
     @Override
     public Optional<AiRefusalReason> conversationRefusal(long workspaceId, long accountId) {
-        return admission.refusal(workspaceId, accountId).map(MentorRefusal::reason);
+        return admission.refusal(workspaceId, accountId).map(ConversationRefusal::reason);
     }
 
     @Override
@@ -39,7 +39,7 @@ class MemberAiReadinessAdapter implements MemberAiReadiness {
         var decision = preferences.forDeveloper(workspaceId, accountId);
         if (decision.choice() == AiChoice.NO_AI) return Optional.of(AiRefusalReason.NO_AI);
         if (!decision.permitsAi()) return Optional.of(AiRefusalReason.CHOICE_REQUIRED);
-        if (routing.bindingForPeople(workspaceId, AgentPurpose.PRACTICE_REVIEW, List.<@Nullable Long>of(accountId))
+        if (routing.bindingForPeople(workspaceId, ModelPurpose.PRACTICE_REVIEW, List.<@Nullable Long>of(accountId))
                 .isEmpty()) return Optional.of(AiRefusalReason.UNAVAILABLE);
         return Optional.empty();
     }

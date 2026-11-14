@@ -14,7 +14,7 @@ const connection: WorkspaceLlmConnection = {
 	slug: "custom",
 	displayName: "Custom endpoint",
 	apiProtocol: "openai-responses",
-	purposes: ["PRACTICE_REVIEW", "MENTOR"],
+	purposes: ["PRACTICE_REVIEW", "CONVERSATION"],
 	authMode: "BEARER",
 	baseUrl: "https://llm.example.test/v1",
 	enabled: true,

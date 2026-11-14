@@ -3,7 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.catalog;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
 import de.tum.cit.aet.hephaestus.testconfig.WithAdminUser;
-import de.tum.cit.aet.hephaestus.testconfig.WithMentorUser;
+import de.tum.cit.aet.hephaestus.testconfig.WithConversationUser;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Membership.WorkspaceRole;
@@ -50,12 +50,12 @@ class WorkspaceLlmSettingsControllerIntegrationTest extends AbstractWorkspaceInt
     }
 
     @Test
-    @WithMentorUser
+    @WithConversationUser
     void aWorkspaceMemberCannotReachTheEndpoint() {
         Workspace workspace = setupWorkspace("llmsettings-member-ws");
-        // Login must match @WithMentorUser's default "mentor" principal so the membership resolver
+        // Login must match @WithConversationUser's default "conversation" principal so the membership resolver
         // finds this exact row.
-        User member = persistUser("mentor");
+        User member = persistUser("conversation");
         ensureMembership(workspace, member, WorkspaceRole.MEMBER);
 
         webTestClient
@@ -69,11 +69,11 @@ class WorkspaceLlmSettingsControllerIntegrationTest extends AbstractWorkspaceInt
     }
 
     @Test
-    @WithMentorUser
+    @WithConversationUser
     void shouldNotFindAnotherWorkspaceButStillAdmitTheAdminOfTheirOwn() {
         // A genuine (non-superadmin) workspace ADMIN: @WithAdminUser carries the instance-wide
         // app_admin elevation, which would admit this call for the wrong reason.
-        User admin = persistUser("mentor");
+        User admin = persistUser("conversation");
         Workspace own = createWorkspace("llmsettings-own-ws", "Own", "llmsettings-own-org", AccountType.ORG, admin);
         ensureMembership(own, admin, WorkspaceRole.ADMIN);
 

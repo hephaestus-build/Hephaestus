@@ -2,7 +2,7 @@ package de.tum.cit.aet.hephaestus.notification.preferences;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import de.tum.cit.aet.hephaestus.agent.mentor.weeklydigest.WeeklyDigestSubscriptions;
+import de.tum.cit.aet.hephaestus.agent.conversation.weeklydigest.WeeklyDigestSubscriptions;
 import de.tum.cit.aet.hephaestus.core.EntityTagPrecondition;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
@@ -281,7 +281,7 @@ class NotificationSubscriptionIntegrationTest extends BaseIntegrationTest {
                 .expectBody(Void.class);
         assertThat(subscriptions.isEnabled(account, NotificationSubscriptionKind.WORKSPACE_ALERTS))
                 .isFalse();
-        assertThat(subscriptions.isEnabled(account, NotificationSubscriptionKind.MENTOR_DIGEST))
+        assertThat(subscriptions.isEnabled(account, NotificationSubscriptionKind.WEEKLY_DIGEST))
                 .isTrue();
     }
 
@@ -320,7 +320,7 @@ class NotificationSubscriptionIntegrationTest extends BaseIntegrationTest {
         }
         assertThat(subscriptions.isEnabled(account, NotificationSubscriptionKind.WORKSPACE_ALERTS))
                 .isFalse();
-        assertThat(subscriptions.isEnabled(account, NotificationSubscriptionKind.MENTOR_DIGEST))
+        assertThat(subscriptions.isEnabled(account, NotificationSubscriptionKind.WEEKLY_DIGEST))
                 .isTrue();
     }
 
@@ -346,7 +346,7 @@ class NotificationSubscriptionIntegrationTest extends BaseIntegrationTest {
         var choices = new UpdateNotificationPreferencesDTO(
                 kind == NotificationSubscriptionKind.PRODUCT_FEEDBACK,
                 kind == NotificationSubscriptionKind.WORKSPACE_ALERTS,
-                kind == NotificationSubscriptionKind.MENTOR_DIGEST,
+                kind == NotificationSubscriptionKind.WEEKLY_DIGEST,
                 kind == NotificationSubscriptionKind.PRODUCT_FEEDBACK_UPDATES);
         subscriptions.update(
                 account,
@@ -380,7 +380,7 @@ class NotificationSubscriptionIntegrationTest extends BaseIntegrationTest {
         subscriptions.unsubscribe(token);
         assertThat(subscriptions.isEnabled(account, NotificationSubscriptionKind.WORKSPACE_ALERTS))
                 .isFalse();
-        assertThat(subscriptions.isEnabled(account, NotificationSubscriptionKind.MENTOR_DIGEST))
+        assertThat(subscriptions.isEnabled(account, NotificationSubscriptionKind.WEEKLY_DIGEST))
                 .isTrue();
         update(account, true, true);
         assertThat(subscriptions.unsubscribeToken(account, NotificationSubscriptionKind.WORKSPACE_ALERTS))
@@ -400,7 +400,7 @@ class NotificationSubscriptionIntegrationTest extends BaseIntegrationTest {
         erasure.eraseAccount(first);
         subscriptions.unsubscribe(token);
         assertThat(repository.findAllByAccountIdOrderByKind(first)).isEmpty();
-        assertThat(subscriptions.isEnabled(second, NotificationSubscriptionKind.MENTOR_DIGEST))
+        assertThat(subscriptions.isEnabled(second, NotificationSubscriptionKind.WEEKLY_DIGEST))
                 .isTrue();
     }
 
@@ -453,7 +453,7 @@ class NotificationSubscriptionIntegrationTest extends BaseIntegrationTest {
                 .isEqualTo(true);
 
         assertThat(repository.findAllByAccountIdOrderByKind(account))
-                .filteredOn(row -> row.getKind() == NotificationSubscriptionKind.MENTOR_DIGEST)
+                .filteredOn(row -> row.getKind() == NotificationSubscriptionKind.WEEKLY_DIGEST)
                 .singleElement()
                 .satisfies(row -> assertThat(row.isEnabled()).isTrue());
         assertThat(subscriptions.isEnabled(account, NotificationSubscriptionKind.WORKSPACE_ALERTS))
@@ -481,7 +481,7 @@ class NotificationSubscriptionIntegrationTest extends BaseIntegrationTest {
                 .jsonPath("$.weeklyDigest")
                 .isEqualTo(false);
 
-        assertThat(subscriptions.isEnabled(account, NotificationSubscriptionKind.MENTOR_DIGEST))
+        assertThat(subscriptions.isEnabled(account, NotificationSubscriptionKind.WEEKLY_DIGEST))
                 .isFalse();
     }
 
@@ -494,7 +494,7 @@ class NotificationSubscriptionIntegrationTest extends BaseIntegrationTest {
                 EntityTagPrecondition.parse(subscriptions.get(account).etag()),
                 false);
         String token = subscriptions
-                .unsubscribeToken(account, NotificationSubscriptionKind.MENTOR_DIGEST)
+                .unsubscribeToken(account, NotificationSubscriptionKind.WEEKLY_DIGEST)
                 .orElseThrow();
 
         web.post()

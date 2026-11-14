@@ -1,9 +1,9 @@
 import type { LlmConnection } from "@/api/types.gen";
 import { definitionFor } from "@/components/common/status-def";
 import {
-	UNKNOWN_AGENT_PURPOSE_DEF,
-	AGENT_PURPOSE_DEFS,
-} from "@/components/practice-vocabulary/agent-purpose-defs";
+	UNKNOWN_MODEL_PURPOSE_DEF,
+	MODEL_PURPOSE_DEFS,
+} from "@/components/practice-vocabulary/model-purpose-defs";
 import { ModelKindMark } from "@/components/practice-vocabulary/ModelKindMark";
 import { LLM_API_PROTOCOL_LABELS } from "@/lib/llm-api-protocol-labels";
 import { andList } from "@/lib/text";
@@ -27,7 +27,7 @@ export function LlmConnectionApi({ connection: { apiProtocol, purposes } }: LlmC
 				{andList.format(
 					purposes.map(
 						(purpose) =>
-							definitionFor(AGENT_PURPOSE_DEFS, purpose, UNKNOWN_AGENT_PURPOSE_DEF).title,
+							definitionFor(MODEL_PURPOSE_DEFS, purpose, UNKNOWN_MODEL_PURPOSE_DEF).title,
 					),
 				)}
 			</span>

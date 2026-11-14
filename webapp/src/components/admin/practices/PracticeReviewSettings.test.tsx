@@ -1,12 +1,12 @@
 import { act, fireEvent, screen } from "@testing-library/react";
 import { useState } from "react";
 import { assert, describe, expect, it, vi } from "vitest";
-import type { AgentBinding, PracticeReviewSettings as Settings } from "@/api/types.gen";
+import type { ModelAssignment, PracticeReviewSettings as Settings } from "@/api/types.gen";
 import { renderWithRouter } from "@/test/router-harness";
 import { PracticeReviewSettings } from "./PracticeReviewSettings";
 import { reviewSettings } from "./review/fixtures";
 
-const readyBinding: AgentBinding = {
+const readyBinding: ModelAssignment = {
 	dataHandlingTier: "IN_HOUSE",
 	purpose: "PRACTICE_REVIEW",
 	enabled: true,

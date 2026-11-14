@@ -1,19 +1,19 @@
 import { HttpResponse, http, type PathParams } from "msw";
 
 import type {
-	MentorConversation,
-	MentorEntry,
-	CursorPageDtoMentorEntry,
-	MentorSubmission,
-	MentorThread,
-	MentorTurn,
-	MentorTurnRequest,
-	MentorVoteRequest,
+	Conversation,
+	ConversationEntry,
+	CursorPageDtoConversationEntry,
+	ConversationSubmission,
+	ConversationThread,
+	ConversationTurn,
+	ConversationTurnRequest,
+	ConversationVoteRequest,
 } from "@/api/types.gen";
 import type { Wire } from "@/lib/dates";
 
-type WireEntry = Wire<MentorEntry>;
-type WireTurn = Wire<MentorTurn>;
+type WireEntry = Wire<ConversationEntry>;
+type WireTurn = Wire<ConversationTurn>;
 
 const BASE_TIME = Date.parse("2026-10-09T09:00:00Z");
 
@@ -33,10 +33,10 @@ function beforeOf(request: Request): number | undefined {
 export class ConversationFake {
 	readonly entries: WireEntry[] = [];
 	readonly turns: WireTurn[] = [];
-	/** Every `POST /mentor/turns` body, a repeated `requestId` included. */
-	readonly submissions: MentorTurnRequest[] = [];
+	/** Every `POST /conversation/turns` body, a repeated `requestId` included. */
+	readonly submissions: ConversationTurnRequest[] = [];
 	readonly stops: string[] = [];
-	readonly votes: { entryId: string; vote: MentorVoteRequest["vote"] | null }[] = [];
+	readonly votes: { entryId: string; vote: ConversationVoteRequest["vote"] | null }[] = [];
 	readonly deletes: string[] = [];
 	/** The read marker the server keeps for the developer, on every device. */
 	lastReadAt: string | undefined;
@@ -111,14 +111,14 @@ export class ConversationFake {
 		// ISO times in UTC sort as text.
 		let newest: string | undefined;
 		for (const { kind, deleted, createdAt } of this.entries) {
-			if (kind === "HEPH" && !deleted && (newest === undefined || createdAt > newest)) {
+			if (kind === "ANSWER" && !deleted && (newest === undefined || createdAt > newest)) {
 				newest = createdAt;
 			}
 		}
 		return newest === undefined ? {} : { lastAnswerAt: newest };
 	}
 
-	conversation(): Wire<MentorConversation> {
+	conversation(): Wire<Conversation> {
 		return {
 			id: MAIN_CONVERSATION_ID,
 			latestSeq: this.scope(undefined).at(-1)?.seq ?? 0,
@@ -129,7 +129,10 @@ export class ConversationFake {
 		};
 	}
 
-	private page(scope: WireEntry[], before: number | undefined): Wire<CursorPageDtoMentorEntry> {
+	private page(
+		scope: WireEntry[],
+		before: number | undefined,
+	): Wire<CursorPageDtoConversationEntry> {
 		const older = before === undefined ? scope : scope.filter(({ seq }) => seq < before);
 		const content = older.slice(-this.pageSize);
 		const nextCursor = older.length > content.length ? content[0]?.seq : undefined;
@@ -137,10 +140,10 @@ export class ConversationFake {
 	}
 
 	handlers() {
-		const base = `*/workspaces/${this.workspaceSlug}/mentor`;
+		const base = `*/workspaces/${this.workspaceSlug}/conversation`;
 		return [
-			http.get(`${base}/conversation`, () => HttpResponse.json(this.conversation())),
-			http.put<PathParams, { at: string }>(`${base}/conversation/read`, async ({ request }) => {
+			http.get(base, () => HttpResponse.json(this.conversation())),
+			http.put<PathParams, { at: string }>(`${base}/read`, async ({ request }) => {
 				const { at } = await request.json();
 				// The server keeps the later time.
 				if (this.lastReadAt === undefined || at > this.lastReadAt) {
@@ -160,9 +163,9 @@ export class ConversationFake {
 					parent,
 					...(parent.thread ? { conversationId: parent.thread.conversationId } : {}),
 					replies: this.page(this.scope(parent.id), beforeOf(request)),
-				} satisfies Wire<MentorThread>);
+				} satisfies Wire<ConversationThread>);
 			}),
-			http.post<PathParams, MentorTurnRequest>(`${base}/turns`, async ({ request }) => {
+			http.post<PathParams, ConversationTurnRequest>(`${base}/turns`, async ({ request }) => {
 				const body = await request.json();
 				this.submissions.push(body);
 				const turn = this.addTurn({
@@ -177,7 +180,7 @@ export class ConversationFake {
 					turnId: turn.id,
 					...(body.parentEntryId === undefined ? {} : { parentEntryId: body.parentEntryId }),
 				});
-				return HttpResponse.json({ turn, question: stored } satisfies Wire<MentorSubmission>);
+				return HttpResponse.json({ turn, question: stored } satisfies Wire<ConversationSubmission>);
 			}),
 			http.patch<{ turnId: string }>(`${base}/turns/:turnId/status`, ({ params }) => {
 				const turn = this.turns.find(({ id }) => id === params.turnId);
@@ -189,7 +192,7 @@ export class ConversationFake {
 				delete turn.partial;
 				return HttpResponse.json(turn);
 			}),
-			http.put<{ entryId: string }, MentorVoteRequest>(
+			http.put<{ entryId: string }, ConversationVoteRequest>(
 				`${base}/entries/:entryId/vote`,
 				async ({ params, request }) => {
 					const { vote } = await request.json();
@@ -211,7 +214,7 @@ export class ConversationFake {
 		];
 	}
 
-	private vote(entryId: string, vote: MentorVoteRequest["vote"] | null) {
+	private vote(entryId: string, vote: ConversationVoteRequest["vote"] | null) {
 		const entry = this.entries.find(({ id }) => id === entryId);
 		if (!entry) {
 			return HttpResponse.json({ status: 404 }, { status: 404 });

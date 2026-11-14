@@ -10,7 +10,7 @@ import {
 	type FolderServer,
 	type LoadedArchive,
 } from "../../../main/resources/agent/context-folder.ts";
-import type { SandboxRefusal } from "../../../main/resources/agent/heph-host-protocol.ts";
+import type { SandboxRefusal } from "../../../main/resources/agent/conversation-host-protocol.ts";
 import { archiveOf, tarOf } from "./turn-worker.ts";
 
 function loaded(

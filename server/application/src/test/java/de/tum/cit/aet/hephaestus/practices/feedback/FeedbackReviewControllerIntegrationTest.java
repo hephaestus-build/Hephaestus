@@ -13,7 +13,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.FeedbackState;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackUsefulness;
 import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
 import de.tum.cit.aet.hephaestus.testconfig.WithAdminUser;
-import de.tum.cit.aet.hephaestus.testconfig.WithMentorUser;
+import de.tum.cit.aet.hephaestus.testconfig.WithConversationUser;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Membership;
 import java.sql.Timestamp;
@@ -273,9 +273,9 @@ class FeedbackReviewControllerIntegrationTest extends AbstractFeedbackIntegratio
     }
 
     @Test
-    @WithMentorUser
+    @WithConversationUser
     void shouldRequireWorkspaceAdministrationForFeedbackAndDecisions() {
-        ensureMembership(workspace, persistUser("mentor"), Membership.WorkspaceRole.MEMBER);
+        ensureMembership(workspace, persistUser("conversation"), Membership.WorkspaceRole.MEMBER);
         var parent = piece(FeedbackDestination.PRACTICE_PAGE, FeedbackState.READY, null);
         client.get()
                 .uri(route())
@@ -325,13 +325,13 @@ class FeedbackReviewControllerIntegrationTest extends AbstractFeedbackIntegratio
 
     @Test
     @WithAdminUser
-    void shouldLocateConversationFeedbackByTheOriginOfTheHephMessageThatShowedIt() {
+    void shouldLocateConversationFeedbackByTheOriginOfTheHephaestusMessageThatShowedIt() {
         var inApp = piece(FeedbackDestination.CONVERSATION, FeedbackState.DELIVERED, AT);
         var inSlack = piece(FeedbackDestination.CONVERSATION, FeedbackState.DELIVERED, AT);
         var waiting = piece(FeedbackDestination.CONVERSATION, FeedbackState.READY, null);
         UUID conversation = UUID.randomUUID();
         jdbc.update(
-                "INSERT INTO mentor_conversation(id,workspace_id,account_id,created_at,last_activity_at)"
+                "INSERT INTO conversation(id,workspace_id,account_id,created_at,last_activity_at)"
                         + " VALUES (?,?,?,?,?)",
                 conversation,
                 workspace.getId(),
@@ -342,7 +342,7 @@ class FeedbackReviewControllerIntegrationTest extends AbstractFeedbackIntegratio
         shownIn(inSlack, conversation, 2, "SLACK");
 
         for (var expected : List.of(
-                Map.entry("HEPH", inApp), Map.entry("SLACK", inSlack), Map.entry("NEXT_CONVERSATION", waiting))) {
+                Map.entry("APP", inApp), Map.entry("SLACK", inSlack), Map.entry("NEXT_CONVERSATION", waiting))) {
             client.get()
                     .uri(route() + "?location=" + expected.getKey())
                     .headers(TestAuthUtils.withCurrentUser())
@@ -357,12 +357,12 @@ class FeedbackReviewControllerIntegrationTest extends AbstractFeedbackIntegratio
         }
     }
 
-    /** A conversation copy of {@code parent} posted in a Heph message written on {@code surface}. */
+    /** A conversation copy of {@code parent} posted in a Hephaestus message written on {@code surface}. */
     private void shownIn(Feedback parent, UUID conversation, int seq, String surface) {
         UUID entry = UUID.randomUUID();
         jdbc.update(
-                "INSERT INTO mentor_entry(id,workspace_id,conversation_id,seq,kind,surface,text,created_at)"
-                        + " VALUES (?,?,?,?,'HEPH',?,'Add a focused regression test.',?)",
+                "INSERT INTO conversation_entry(id,workspace_id,conversation_id,seq,kind,surface,text,created_at)"
+                        + " VALUES (?,?,?,?,'ANSWER',?,'Add a focused regression test.',?)",
                 entry,
                 workspace.getId(),
                 conversation,
@@ -372,7 +372,7 @@ class FeedbackReviewControllerIntegrationTest extends AbstractFeedbackIntegratio
         UUID id = FeedbackIds.copy(parent.getId(), FeedbackCopyKind.CHAT_TURN, 0);
         jdbc.update(
                 "INSERT INTO feedback_copy(id,workspace_id,feedback_id,kind,position,state,write_key,write_marker,"
-                        + "write_started_at,posted_at,external_ref,body,mentor_entry_id,created_at)"
+                        + "write_started_at,posted_at,external_ref,body,conversation_entry_id,created_at)"
                         + " VALUES (?,?,?,'CHAT_TURN',0,'POSTED',?,?,?,?,?,'Add a focused regression test.',?,?)",
                 id,
                 workspace.getId(),

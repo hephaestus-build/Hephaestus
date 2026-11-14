@@ -1,0 +1,20 @@
+package de.tum.cit.aet.hephaestus.agent.conversation.weeklydigest;
+
+import java.time.Instant;
+import java.util.UUID;
+
+/**
+ * A weekly digest was written into a developer's Hephaestus conversation. Published in the write's transaction; the
+ * listener of the chosen {@link WeeklyDigestPointer} enqueues the note in the same transaction. The outbox checks
+ * the current subscription before it sends.
+ *
+ * @param weekDays the week's days as the note names them, such as "5–11 October"
+ * @param requestedAt when the digest was written; a later opt-in does not revive this note
+ */
+public record WeeklyDigestWritten(
+        UUID entryId,
+        long workspaceId,
+        long accountId,
+        String weekDays,
+        WeeklyDigestPointer pointer,
+        Instant requestedAt) {}

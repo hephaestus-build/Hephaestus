@@ -10,7 +10,7 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * What a weekly digest entry stores in {@code mentor_entry.payload}: the week and which feedback and changes it held.
+ * What a weekly digest entry stores in {@code conversation_entry.payload}: the week and which feedback and changes it held.
  * It freezes membership, never words or state ({@link WeeklyDigestFacts}).
  *
  * <p>It does not store whose digest it is: the digest is rendered for the account that owns its conversation.

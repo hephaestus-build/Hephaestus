@@ -66,7 +66,7 @@ function connection(id: number, displayName: string): LlmConnection {
 		displayName,
 		authMode: "BEARER",
 		apiProtocol: "openai-responses",
-		purposes: ["PRACTICE_REVIEW", "MENTOR"],
+		purposes: ["PRACTICE_REVIEW", "CONVERSATION"],
 		baseUrl: `https://provider-${id}.example.test/v1`,
 		enabled: true,
 		hasApiKey: true,

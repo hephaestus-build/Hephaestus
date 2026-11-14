@@ -13,7 +13,7 @@ import org.mockito.Mock;
 class PracticeReviewReadinessAdapterTest extends BaseUnitTest {
 
     @Mock
-    private WorkspaceAgentBindingRepository bindingRepository;
+    private WorkspaceModelAssignmentRepository bindingRepository;
 
     @Mock
     private LlmModelResolver resolver;
@@ -25,9 +25,9 @@ class PracticeReviewReadinessAdapterTest extends BaseUnitTest {
         checker = new PracticeReviewReadinessAdapter(bindingRepository, resolver);
     }
 
-    private WorkspaceAgentBinding binding(boolean enabled) {
-        WorkspaceAgentBinding b = new WorkspaceAgentBinding();
-        b.setPurpose(AgentPurpose.PRACTICE_REVIEW);
+    private WorkspaceModelAssignment binding(boolean enabled) {
+        WorkspaceModelAssignment b = new WorkspaceModelAssignment();
+        b.setPurpose(ModelPurpose.PRACTICE_REVIEW);
         b.setEnabled(enabled);
         return b;
     }
@@ -46,7 +46,7 @@ class PracticeReviewReadinessAdapterTest extends BaseUnitTest {
 
     @Test
     void enabledBindingWithRevokedModelIsNotRunnable() {
-        WorkspaceAgentBinding b = binding(true);
+        WorkspaceModelAssignment b = binding(true);
         when(bindingRepository.findByWorkspaceIdWithModels(1L)).thenReturn(List.of(b));
         when(resolver.isAvailable(b)).thenReturn(false);
         assertThat(checker.hasRunnableAgent(1L)).isFalse();
@@ -54,7 +54,7 @@ class PracticeReviewReadinessAdapterTest extends BaseUnitTest {
 
     @Test
     void enabledBindingWithAvailableModelIsRunnable() {
-        WorkspaceAgentBinding b = binding(true);
+        WorkspaceModelAssignment b = binding(true);
         when(bindingRepository.findByWorkspaceIdWithModels(1L)).thenReturn(List.of(b));
         when(resolver.isAvailable(b)).thenReturn(true);
         assertThat(checker.hasRunnableAgent(1L)).isTrue();

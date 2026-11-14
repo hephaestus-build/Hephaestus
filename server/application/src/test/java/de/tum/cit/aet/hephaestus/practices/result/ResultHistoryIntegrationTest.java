@@ -392,7 +392,7 @@ class ResultHistoryIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    void shouldRefuseOperatorOnlyProofInAMentorRead() {
+    void shouldRefuseOperatorOnlyProofInAConversationRead() {
         var result = data.result(scenario, ResultOutcome.NOT_MET, Instant.now());
         when(authorization.authorized(any(), any(), eq(SourceUsePurpose.CONVERSATIONAL_MENTORING)))
                 .thenReturn(false);
@@ -834,7 +834,7 @@ class ResultHistoryIntegrationTest extends BaseIntegrationTest {
         return productItems.current(ref).orElseThrow().version().value();
     }
 
-    /** The mentor's overview and its detail read state the same comparison. */
+    /** The conversation's overview and its detail read state the same comparison. */
     private void assertStoredWorkVersion(Result recorded, String expected) {
         JsonNode fact = json.valueToTree(expected);
         var overview = history.forDeveloper(recorded.getWorkspaceId(), scenarioAccountId, Instant.EPOCH, 20).stream()

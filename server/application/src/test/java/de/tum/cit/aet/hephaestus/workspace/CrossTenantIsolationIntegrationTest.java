@@ -9,7 +9,18 @@ import de.tum.cit.aet.hephaestus.activity.overview.dto.ActivityPeopleDTO;
 import de.tum.cit.aet.hephaestus.activity.overview.dto.ActivityPersonDTO;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmConnectionRepository;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelRepository;
-import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBindingRepository;
+import de.tum.cit.aet.hephaestus.agent.config.WorkspaceModelAssignmentRepository;
+import de.tum.cit.aet.hephaestus.conversation.Conversation;
+import de.tum.cit.aet.hephaestus.conversation.ConversationEntry;
+import de.tum.cit.aet.hephaestus.conversation.ConversationEntryRepository;
+import de.tum.cit.aet.hephaestus.conversation.ConversationEntryService;
+import de.tum.cit.aet.hephaestus.conversation.ConversationLedgerFixtures;
+import de.tum.cit.aet.hephaestus.conversation.ConversationLedgerNotifications;
+import de.tum.cit.aet.hephaestus.conversation.ConversationLedgerProbe;
+import de.tum.cit.aet.hephaestus.conversation.ConversationService;
+import de.tum.cit.aet.hephaestus.conversation.ConversationTurn;
+import de.tum.cit.aet.hephaestus.conversation.ConversationTurnRepository;
+import de.tum.cit.aet.hephaestus.conversation.ConversationTurnService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.Organization;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationRepository;
@@ -20,24 +31,13 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.team.TeamRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.team.membership.TeamMembership;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.team.membership.TeamMembershipRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
-import de.tum.cit.aet.hephaestus.mentor.MentorConversation;
-import de.tum.cit.aet.hephaestus.mentor.MentorConversationService;
-import de.tum.cit.aet.hephaestus.mentor.MentorEntry;
-import de.tum.cit.aet.hephaestus.mentor.MentorEntryRepository;
-import de.tum.cit.aet.hephaestus.mentor.MentorEntryService;
-import de.tum.cit.aet.hephaestus.mentor.MentorLedgerFixtures;
-import de.tum.cit.aet.hephaestus.mentor.MentorLedgerNotifications;
-import de.tum.cit.aet.hephaestus.mentor.MentorLedgerProbe;
-import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
-import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
-import de.tum.cit.aet.hephaestus.mentor.MentorTurnService;
 import de.tum.cit.aet.hephaestus.practices.result.ResultRepository;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackDestination;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackState;
 import de.tum.cit.aet.hephaestus.testconfig.LlmCatalogTestFixtures;
 import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
 import de.tum.cit.aet.hephaestus.testconfig.WithAdminUser;
-import de.tum.cit.aet.hephaestus.testconfig.WithMentorUser;
+import de.tum.cit.aet.hephaestus.testconfig.WithConversationUser;
 import de.tum.cit.aet.hephaestus.workspace.Membership.WorkspaceRole;
 import java.time.Duration;
 import java.time.Instant;
@@ -81,22 +81,22 @@ class CrossTenantIsolationIntegrationTest extends AbstractWorkspaceIntegrationTe
     private ActivityEventRepository activityEventRepository;
 
     @Autowired
-    private MentorConversationService mentorConversations;
+    private ConversationService conversations;
 
     @Autowired
-    private MentorTurnService mentorTurns;
+    private ConversationTurnService conversationTurns;
 
     @Autowired
-    private MentorTurnRepository mentorTurnRepository;
+    private ConversationTurnRepository conversationTurnRepository;
 
     @Autowired
-    private MentorEntryService mentorEntries;
+    private ConversationEntryService conversationEntries;
 
     @Autowired
-    private MentorEntryRepository mentorEntryRepository;
+    private ConversationEntryRepository conversationEntryRepository;
 
     @Autowired
-    private MentorLedgerNotifications mentorNotifications;
+    private ConversationLedgerNotifications conversationNotifications;
 
     @Autowired
     private TransactionTemplate transactions;
@@ -108,7 +108,7 @@ class CrossTenantIsolationIntegrationTest extends AbstractWorkspaceIntegrationTe
     private LlmModelRepository llmModels;
 
     @Autowired
-    private WorkspaceAgentBindingRepository agentBindings;
+    private WorkspaceModelAssignmentRepository modelAssignments;
 
     @Autowired
     private TeamRepository teamRepository;
@@ -144,7 +144,7 @@ class CrossTenantIsolationIntegrationTest extends AbstractWorkspaceIntegrationTe
 
     @BeforeEach
     void provisionTwoTenants() {
-        overlapUser = persistUser("mentor");
+        overlapUser = persistUser("conversation");
 
         User ownerA = persistUser("owner-a");
         workspaceA = createWorkspace("tenant-a", "Tenant A", SHARED_LOGIN, AccountType.ORG, ownerA);
@@ -171,12 +171,12 @@ class CrossTenantIsolationIntegrationTest extends AbstractWorkspaceIntegrationTe
         var result = modelFixtures.result(work, accountId(overlapUser), "Result in " + ws.getWorkspaceSlug());
         var feedback = modelFixtures.feedback(
                 result, FeedbackDestination.ON_WORK, FeedbackState.DELIVERED, "Advice in " + ws.getWorkspaceSlug());
-        MentorConversation main = mentorConversations.findOrCreateMain(ws.getId(), accountId(overlapUser));
-        MentorTurnService.Submission question = mentorTurns.submit(
+        Conversation main = conversations.findOrCreateMain(ws.getId(), accountId(overlapUser));
+        ConversationTurnService.Submission question = conversationTurns.submit(
                 ws.getId(),
                 main.getId(),
-                new MentorTurnService.Question(
-                        MentorTurn.Surface.APP,
+                new ConversationTurnService.Question(
+                        ConversationTurn.Surface.APP,
                         "Question in " + ws.getWorkspaceSlug(),
                         UUID.randomUUID().toString(),
                         null,
@@ -217,7 +217,7 @@ class CrossTenantIsolationIntegrationTest extends AbstractWorkspaceIntegrationTe
     class Practices {
 
         @Test
-        @WithMentorUser
+        @WithConversationUser
         void listReturnsOnlyOwnWorkspacePractices() {
             webTestClient
                     .get()
@@ -234,7 +234,7 @@ class CrossTenantIsolationIntegrationTest extends AbstractWorkspaceIntegrationTe
         }
 
         @Test
-        @WithMentorUser
+        @WithConversationUser
         void detailIsScopedToWorkspace() {
             expectDetailStatus("/practices/{key}", tenantA.practiceSlug())
                     .isOk()
@@ -250,7 +250,7 @@ class CrossTenantIsolationIntegrationTest extends AbstractWorkspaceIntegrationTe
     class Results {
 
         @Test
-        @WithMentorUser
+        @WithConversationUser
         void listReturnsOnlyOwnWorkspaceResults() {
             webTestClient
                     .get()
@@ -267,7 +267,7 @@ class CrossTenantIsolationIntegrationTest extends AbstractWorkspaceIntegrationTe
         }
 
         @Test
-        @WithMentorUser
+        @WithConversationUser
         void detailIsScopedToWorkspace() {
             expectDetailStatus("/practices/results/{key}", tenantA.practiceResultId())
                     .isOk()
@@ -278,7 +278,7 @@ class CrossTenantIsolationIntegrationTest extends AbstractWorkspaceIntegrationTe
         }
 
         @Test
-        @WithMentorUser
+        @WithConversationUser
         void adviceOnTheDetailReadComesOnlyFromThisWorkspace() {
             UUID localFeedback = bindFeedback(
                     tenantA.practiceResultId(), "Feedback in tenant A", Instant.parse("2026-01-01T00:00:00Z"));
@@ -316,7 +316,7 @@ class CrossTenantIsolationIntegrationTest extends AbstractWorkspaceIntegrationTe
     class FeedbackFeedbackResponses {
 
         @Test
-        @WithMentorUser
+        @WithConversationUser
         void reactionsAreScopedToWorkspace() {
             expectDetailStatus("/practices/feedback/{key}/response", tenantA.feedbackId())
                     .isOk();
@@ -327,15 +327,15 @@ class CrossTenantIsolationIntegrationTest extends AbstractWorkspaceIntegrationTe
     }
 
     @Nested
-    @DisplayName("Mentor threads")
-    class Mentor {
+    @DisplayName("Conversation threads")
+    class ConversationThreads {
 
         @Test
-        @WithMentorUser
+        @WithConversationUser
         void shouldListOnlyTheOwnWorkspacesMessagesWhenTheDeveloperBelongsToTwoWorkspaces() {
             webTestClient
                     .get()
-                    .uri("/workspaces/{slug}/mentor/entries", workspaceA.getWorkspaceSlug())
+                    .uri("/workspaces/{slug}/conversation/entries", workspaceA.getWorkspaceSlug())
                     .headers(TestAuthUtils.withCurrentUser())
                     .exchange()
                     .expectStatus()
@@ -348,106 +348,108 @@ class CrossTenantIsolationIntegrationTest extends AbstractWorkspaceIntegrationTe
         }
 
         @Test
-        @WithMentorUser
+        @WithConversationUser
         void detailIsScopedToWorkspace() {
-            expectDetailStatus("/mentor/entries/{key}/thread", tenantA.entryId())
+            expectDetailStatus("/conversation/entries/{key}/thread", tenantA.entryId())
                     .isOk()
                     .expectBody(Void.class);
-            expectDetailStatus("/mentor/entries/{key}/thread", tenantB.entryId())
+            expectDetailStatus("/conversation/entries/{key}/thread", tenantB.entryId())
                     .isNotFound()
                     .expectBody(Void.class);
         }
 
         @Test
-        @WithMentorUser
+        @WithConversationUser
         void shouldLeaveTheOtherWorkspacesTurnQueuedWhenTheDeveloperStopsItThroughThisWorkspace() {
             Map<String, String> stop = Map.of("status", "STOPPED");
 
-            expectMentorWrite(HttpMethod.PATCH, "/mentor/turns/{key}/status", tenantA.turnId(), stop)
+            expectConversationWrite(HttpMethod.PATCH, "/conversation/turns/{key}/status", tenantA.turnId(), stop)
                     .isOk()
                     .expectBody(Void.class);
-            expectMentorWrite(HttpMethod.PATCH, "/mentor/turns/{key}/status", tenantB.turnId(), stop)
+            expectConversationWrite(HttpMethod.PATCH, "/conversation/turns/{key}/status", tenantB.turnId(), stop)
                     .isNotFound()
                     .expectBody(Void.class);
 
-            assertThat(mentorTurnRepository
+            assertThat(conversationTurnRepository
                             .findById(tenantB.turnId())
                             .orElseThrow()
                             .getStatus())
-                    .isEqualTo(MentorTurn.Status.QUEUED);
+                    .isEqualTo(ConversationTurn.Status.QUEUED);
         }
 
         @Test
-        @WithMentorUser
+        @WithConversationUser
         void shouldKeepTheOtherWorkspacesVoteWhenTheDeveloperVotesThroughThisWorkspace() {
-            UUID ownAnswer = hephAnswer(workspaceA).getId();
-            UUID foreignAnswer = hephAnswer(workspaceB).getId();
-            mentorEntries.vote(workspaceB.getId(), foreignAnswer, MentorEntry.Vote.NOT_HELPFUL);
+            UUID ownAnswer = conversationAnswer(workspaceA).getId();
+            UUID foreignAnswer = conversationAnswer(workspaceB).getId();
+            conversationEntries.vote(workspaceB.getId(), foreignAnswer, ConversationEntry.Vote.NOT_HELPFUL);
             Map<String, String> helpful = Map.of("vote", "HELPFUL");
 
-            expectMentorWrite(HttpMethod.PUT, "/mentor/entries/{key}/vote", ownAnswer, helpful)
+            expectConversationWrite(HttpMethod.PUT, "/conversation/entries/{key}/vote", ownAnswer, helpful)
                     .isOk()
                     .expectBody(Void.class);
-            expectMentorWrite(HttpMethod.PUT, "/mentor/entries/{key}/vote", foreignAnswer, helpful)
+            expectConversationWrite(HttpMethod.PUT, "/conversation/entries/{key}/vote", foreignAnswer, helpful)
                     .isNotFound()
                     .expectBody(Void.class);
-            expectMentorWrite(HttpMethod.DELETE, "/mentor/entries/{key}/vote", foreignAnswer, null)
+            expectConversationWrite(HttpMethod.DELETE, "/conversation/entries/{key}/vote", foreignAnswer, null)
                     .isNotFound()
                     .expectBody(Void.class);
 
-            assertThat(mentorEntryRepository
+            assertThat(conversationEntryRepository
                             .findById(foreignAnswer)
                             .orElseThrow()
                             .getVote())
-                    .isEqualTo(MentorEntry.Vote.NOT_HELPFUL);
+                    .isEqualTo(ConversationEntry.Vote.NOT_HELPFUL);
         }
 
         @Test
-        @WithMentorUser
+        @WithConversationUser
         void shouldKeepTheOtherWorkspacesMessageWhenTheDeveloperDeletesItThroughThisWorkspace() {
-            expectMentorWrite(HttpMethod.DELETE, "/mentor/entries/{key}", tenantB.entryId(), null)
+            expectConversationWrite(HttpMethod.DELETE, "/conversation/entries/{key}", tenantB.entryId(), null)
                     .isNotFound()
                     .expectBody(Void.class);
-            expectMentorWrite(HttpMethod.DELETE, "/mentor/entries/{key}", tenantA.entryId(), null)
+            expectConversationWrite(HttpMethod.DELETE, "/conversation/entries/{key}", tenantA.entryId(), null)
                     .isNoContent()
                     .expectBody(Void.class);
 
-            MentorEntry foreign =
-                    mentorEntryRepository.findById(tenantB.entryId()).orElseThrow();
+            ConversationEntry foreign =
+                    conversationEntryRepository.findById(tenantB.entryId()).orElseThrow();
             assertThat(foreign.getRedactedAt()).isNull();
             assertThat(foreign.getText()).isEqualTo("Question in " + workspaceB.getWorkspaceSlug());
-            assertThat(mentorTurnRepository
+            assertThat(conversationTurnRepository
                             .findById(tenantB.turnId())
                             .orElseThrow()
                             .getStatus())
-                    .isEqualTo(MentorTurn.Status.QUEUED);
+                    .isEqualTo(ConversationTurn.Status.QUEUED);
         }
 
         @Test
-        @WithMentorUser
+        @WithConversationUser
         void shouldOpenNoThreadOnTheOtherWorkspacesMessageWhenTheDeveloperAsksThroughThisWorkspace() {
-            enableHeph(workspaceA);
+            enableConversation(workspaceA);
             String ownRequest = UUID.randomUUID().toString();
             String foreignRequest = UUID.randomUUID().toString();
 
             ask(ownRequest, tenantA.entryId()).isOk().expectBody(Void.class);
             ask(foreignRequest, tenantB.entryId()).isNotFound().expectBody(Void.class);
 
-            assertThat(mentorConversations.findThread(workspaceA.getId(), tenantA.entryId()))
+            assertThat(conversations.findThread(workspaceA.getId(), tenantA.entryId()))
                     .isPresent();
-            assertThat(mentorConversations.findThread(workspaceB.getId(), tenantB.entryId()))
+            assertThat(conversations.findThread(workspaceB.getId(), tenantB.entryId()))
                     .isEmpty();
-            assertThat(mentorEntries.exists(workspaceA.getId(), foreignRequest)).isFalse();
-            assertThat(mentorEntries.exists(workspaceB.getId(), foreignRequest)).isFalse();
+            assertThat(conversationEntries.exists(workspaceA.getId(), foreignRequest))
+                    .isFalse();
+            assertThat(conversationEntries.exists(workspaceB.getId(), foreignRequest))
+                    .isFalse();
         }
 
         @Test
-        @WithMentorUser
+        @WithConversationUser
         void shouldStreamNoChangeOfTheOtherWorkspaceWhenTheDeveloperWatchesThisWorkspace() {
             List<ServerSentEvent<String>> events = new CopyOnWriteArrayList<>();
             Disposable subscription = webTestClient
                     .get()
-                    .uri("/workspaces/{slug}/mentor/events", workspaceA.getWorkspaceSlug())
+                    .uri("/workspaces/{slug}/conversation/events", workspaceA.getWorkspaceSlug())
                     .headers(TestAuthUtils.withCurrentUser())
                     .accept(MediaType.TEXT_EVENT_STREAM)
                     .exchange()
@@ -461,14 +463,14 @@ class CrossTenantIsolationIntegrationTest extends AbstractWorkspaceIntegrationTe
                 await().atMost(STREAM_WAIT).until(() -> streamed(events, "snapshot", tenantA.turnId()));
                 awaitLedgerListening();
 
-                MentorEntry foreignAnswer = hephAnswer(workspaceB);
-                mentorTurns.stop(workspaceB.getId(), tenantB.turnId());
+                ConversationEntry foreignAnswer = conversationAnswer(workspaceB);
+                conversationTurns.stop(workspaceB.getId(), tenantB.turnId());
                 // Changes reach the stream in commit order, so this change arrives after the foreign ones.
-                mentorTurns.stop(workspaceA.getId(), tenantA.turnId());
+                conversationTurns.stop(workspaceA.getId(), tenantA.turnId());
 
                 await().atMost(STREAM_WAIT)
                         .until(() -> streamed(events, "turn", tenantA.turnId())
-                                && streamed(events, "turn", MentorTurn.Status.STOPPED.name()));
+                                && streamed(events, "turn", ConversationTurn.Status.STOPPED.name()));
                 assertThat(events)
                         .noneMatch(event -> mentions(event, tenantB.turnId())
                                 || mentions(event, tenantB.entryId())
@@ -480,7 +482,8 @@ class CrossTenantIsolationIntegrationTest extends AbstractWorkspaceIntegrationTe
         }
     }
 
-    private StatusAssertions expectMentorWrite(HttpMethod method, String suffix, Object key, @Nullable Object body) {
+    private StatusAssertions expectConversationWrite(
+            HttpMethod method, String suffix, Object key, @Nullable Object body) {
         WebTestClient.RequestBodySpec request = webTestClient
                 .method(method)
                 .uri("/workspaces/{slug}" + suffix, workspaceA.getWorkspaceSlug(), key)
@@ -494,7 +497,7 @@ class CrossTenantIsolationIntegrationTest extends AbstractWorkspaceIntegrationTe
     private StatusAssertions ask(String requestId, UUID parentEntryId) {
         return webTestClient
                 .post()
-                .uri("/workspaces/{slug}/mentor/turns", workspaceA.getWorkspaceSlug())
+                .uri("/workspaces/{slug}/conversation/turns", workspaceA.getWorkspaceSlug())
                 .headers(TestAuthUtils.withCurrentUser())
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(Map.of("requestId", requestId, "text", "Follow-up question", "parentEntryId", parentEntryId))
@@ -502,24 +505,25 @@ class CrossTenantIsolationIntegrationTest extends AbstractWorkspaceIntegrationTe
                 .expectStatus();
     }
 
-    /** Binds a mentor model to the workspace, so Heph accepts questions there. */
-    private void enableHeph(Workspace ws) {
-        var connection = llmConnections.save(LlmCatalogTestFixtures.connection("heph-" + ws.getWorkspaceSlug()));
+    /** Binds a conversation model to the workspace, so Hephaestus accepts questions there. */
+    private void enableConversation(Workspace ws) {
+        var connection = llmConnections.save(LlmCatalogTestFixtures.connection("ask-" + ws.getWorkspaceSlug()));
         var model =
-                llmModels.save(LlmCatalogTestFixtures.model(connection, "heph-" + ws.getWorkspaceSlug(), "heph-model"));
-        agentBindings.save(LlmCatalogTestFixtures.mentorBinding(ws, model));
+                llmModels.save(LlmCatalogTestFixtures.model(connection, "ask-" + ws.getWorkspaceSlug(), "ask-model"));
+        modelAssignments.save(LlmCatalogTestFixtures.conversationBinding(ws, model));
     }
 
-    /** One of Heph's answers in the shared developer's main conversation of {@code ws}. */
-    private MentorEntry hephAnswer(Workspace ws) {
-        MentorConversation main = mentorConversations.findOrCreateMain(ws.getId(), accountId(overlapUser));
-        return mentorEntries.append(
-                ws.getId(), main.getId(), MentorLedgerFixtures.heph("Answer in " + ws.getWorkspaceSlug()));
+    /** One of Hephaestus's answers in the shared developer's main conversation of {@code ws}. */
+    private ConversationEntry conversationAnswer(Workspace ws) {
+        Conversation main = conversations.findOrCreateMain(ws.getId(), accountId(overlapUser));
+        return conversationEntries.append(
+                ws.getId(), main.getId(), ConversationLedgerFixtures.hephaestus("Answer in " + ws.getWorkspaceSlug()));
     }
 
     /** Waits until this process receives ledger notifications, so the stream does not miss a change. */
     private void awaitLedgerListening() {
-        MentorLedgerProbe.on(mentorNotifications).awaitListening(transactions, mentorTurnRepository, STREAM_WAIT);
+        ConversationLedgerProbe.on(conversationNotifications)
+                .awaitListening(transactions, conversationTurnRepository, STREAM_WAIT);
     }
 
     private static boolean streamed(List<ServerSentEvent<String>> events, String name, Object content) {
@@ -545,7 +549,7 @@ class CrossTenantIsolationIntegrationTest extends AbstractWorkspaceIntegrationTe
         }
 
         @Test
-        @WithMentorUser
+        @WithConversationUser
         void shouldListOnlyWorkspaceContributorsWhenOrganizationsOverlap() {
             Team sharedTeam = seedTeam("shared-team", 900_100L, SHARED_LOGIN, ensureGitHubProvider());
             teamMembershipRepository.save(new TeamMembership(sharedTeam, bobOnlyB, TeamMembership.Role.MEMBER));
@@ -568,17 +572,17 @@ class CrossTenantIsolationIntegrationTest extends AbstractWorkspaceIntegrationTe
         }
 
         @Test
-        @WithMentorUser
+        @WithConversationUser
         void countsOnlyOwnWorkspaceActivity() {
             seedActivity(workspaceA, overlapUser, 1);
             seedActivity(workspaceB, overlapUser, 3);
 
-            ActivityPersonDTO mentor = memberActivity(workspaceA).stream()
-                    .filter(member -> member.person().login().equals("mentor"))
+            ActivityPersonDTO conversation = memberActivity(workspaceA).stream()
+                    .filter(member -> member.person().login().equals("conversation"))
                     .findFirst()
                     .orElseThrow();
 
-            assertThat(mentor.counts().issuesOpened()).isEqualTo(1);
+            assertThat(conversation.counts().issuesOpened()).isEqualTo(1);
         }
     }
 
@@ -591,9 +595,9 @@ class CrossTenantIsolationIntegrationTest extends AbstractWorkspaceIntegrationTe
         }
 
         @Test
-        @WithMentorUser
+        @WithConversationUser
         void shouldReturnNotFoundWhenOpenWorkMemberOnlyBelongsToAnotherWorkspace() {
-            expectDetailStatus("/activity/members/{key}/open-work", "mentor")
+            expectDetailStatus("/activity/members/{key}/open-work", "conversation")
                     .isOk()
                     .expectBody(Void.class);
             expectDetailStatus("/activity/members/{key}/open-work", bobOnlyB.getLogin())
@@ -602,9 +606,11 @@ class CrossTenantIsolationIntegrationTest extends AbstractWorkspaceIntegrationTe
         }
 
         @Test
-        @WithMentorUser
+        @WithConversationUser
         void shouldReturnNotFoundWhenWorkMemberOnlyBelongsToAnotherWorkspace() {
-            expectDetailStatus("/activity/work?login={key}", "mentor").isOk().expectBody(Void.class);
+            expectDetailStatus("/activity/work?login={key}", "conversation")
+                    .isOk()
+                    .expectBody(Void.class);
             expectDetailStatus("/activity/work?login={key}", bobOnlyB.getLogin())
                     .isNotFound()
                     .expectBody(Void.class);
@@ -616,7 +622,7 @@ class CrossTenantIsolationIntegrationTest extends AbstractWorkspaceIntegrationTe
     class Teams {
 
         @Test
-        @WithMentorUser
+        @WithConversationUser
         void listIsScopedToWorkspaceProvider() {
             linkSyncedOrg(workspaceA, ensureGitHubProvider());
             seedTeam("own-team", 900_200L, SHARED_LOGIN, ensureGitHubProvider());
@@ -637,7 +643,7 @@ class CrossTenantIsolationIntegrationTest extends AbstractWorkspaceIntegrationTe
         }
 
         @Test
-        @WithMentorUser
+        @WithConversationUser
         void memberRosterExposesOnlyOwnWorkspaceTeams() {
             linkSyncedOrg(workspaceA, ensureGitHubProvider());
             Team ownTeam = seedTeam("own-team", 900_400L, SHARED_LOGIN, ensureGitHubProvider());
@@ -677,7 +683,7 @@ class CrossTenantIsolationIntegrationTest extends AbstractWorkspaceIntegrationTe
     class AccessControl {
 
         @Test
-        @WithMentorUser
+        @WithConversationUser
         void shouldAnswerNotFoundWhenNonMemberCallsScopedEndpoint() {
             webTestClient
                     .get()
@@ -690,7 +696,7 @@ class CrossTenantIsolationIntegrationTest extends AbstractWorkspaceIntegrationTe
         }
 
         @Test
-        @WithMentorUser
+        @WithConversationUser
         void workspaceMembershipDoesNotGrantInstanceAdminListing() {
             webTestClient
                     .get()

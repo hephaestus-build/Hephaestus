@@ -82,7 +82,7 @@ public class FeedbackMarkListener {
                     && children.stream()
                             .allMatch(copy -> copy.getPostedAt() == null
                                     && copy.getExternalRef() == null
-                                    && copy.getMentorTurnId() == null
+                                    && copy.getConversationTurnId() == null
                                     && copy.getState() != FeedbackCopyState.WRITE_STARTED
                                     && (copy.getWriteStartedAt() == null
                                             || (row.getDestination() == FeedbackDestination.ON_WORK

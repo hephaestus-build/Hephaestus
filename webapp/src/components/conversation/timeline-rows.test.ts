@@ -1,12 +1,15 @@
 import { describe, expect, it } from "vitest";
 
-import type { MentorEntry, MentorTurn } from "@/api/types.gen";
+import type { ConversationEntry, ConversationTurn } from "@/api/types.gen";
 
 import { dayLabel, timelineRows } from "./timeline-rows";
 
 const DAY = "2026-10-08";
 
-function entry(id: string, fields: Partial<MentorEntry> & Pick<MentorEntry, "kind">): MentorEntry {
+function entry(
+	id: string,
+	fields: Partial<ConversationEntry> & Pick<ConversationEntry, "kind">,
+): ConversationEntry {
 	return {
 		id,
 		conversationId: "main",
@@ -20,7 +23,11 @@ function entry(id: string, fields: Partial<MentorEntry> & Pick<MentorEntry, "kin
 	};
 }
 
-function turn(id: string, status: MentorTurn["status"], requestId = `request-${id}`): MentorTurn {
+function turn(
+	id: string,
+	status: ConversationTurn["status"],
+	requestId = `request-${id}`,
+): ConversationTurn {
 	return {
 		id,
 		conversationId: "main",
@@ -73,9 +80,9 @@ describe("timelineRows", () => {
 				entry("e1", { kind: "USER", createdAt: new Date(`${DAY}T09:00:00`) }),
 				entry("e2", { kind: "USER", createdAt: new Date(`${DAY}T09:04:00`) }),
 				entry("e3", { kind: "USER", createdAt: new Date(`${DAY}T09:04:30`), surface: "SLACK" }),
-				entry("e4", { kind: "HEPH", createdAt: new Date(`${DAY}T09:05:00`) }),
-				entry("e5", { kind: "HEPH", createdAt: new Date(`${DAY}T09:11:00`) }),
-				entry("e6", { kind: "HEPH", createdAt: new Date("2026-10-09T09:12:00") }),
+				entry("e4", { kind: "ANSWER", createdAt: new Date(`${DAY}T09:05:00`) }),
+				entry("e5", { kind: "ANSWER", createdAt: new Date(`${DAY}T09:11:00`) }),
+				entry("e6", { kind: "ANSWER", createdAt: new Date("2026-10-09T09:12:00") }),
 			],
 			pending: [],
 			turns: [],
@@ -94,7 +101,10 @@ describe("timelineRows", () => {
 
 	it("never groups a weekly digest with the message before it", () => {
 		const rows = timelineRows({
-			entries: [entry("e1", { kind: "HEPH" }), entry("e2", { kind: "DIGEST", surface: "SYSTEM" })],
+			entries: [
+				entry("e1", { kind: "ANSWER" }),
+				entry("e2", { kind: "DIGEST", surface: "SYSTEM" }),
+			],
 			pending: [],
 			turns: [],
 		});
@@ -171,8 +181,8 @@ describe("timelineRows", () => {
 			entries: [
 				entry("e1", { kind: "USER", requestId: "r1", turnId: "t1" }),
 				entry("e2", { kind: "USER", requestId: "r2" }),
-				entry("e3", { kind: "HEPH", turnId: "t1" }),
-				entry("e4", { kind: "HEPH", turnId: "t1" }),
+				entry("e3", { kind: "ANSWER", turnId: "t1" }),
+				entry("e4", { kind: "ANSWER", turnId: "t1" }),
 			],
 			pending: [],
 			turns: [turn("t1", "RUNNING", "r1")],
@@ -195,7 +205,7 @@ describe("timelineRows", () => {
 		const rows = timelineRows({
 			entries: [
 				entry("e1", { kind: "USER", turnId: "t1", turnStatus: "STOPPED" }),
-				entry("e2", { kind: "HEPH", turnId: "t1" }),
+				entry("e2", { kind: "ANSWER", turnId: "t1" }),
 				entry("e3", { kind: "USER", turnId: "t2", turnStatus: "FAILED", turnError: "Too long." }),
 				entry("e4", { kind: "USER", turnId: "t3", turnStatus: "DONE" }),
 			],
@@ -215,10 +225,10 @@ describe("timelineRows", () => {
 		const rows = timelineRows({
 			entries: [
 				entry("e1", { kind: "USER", surface: "SLACK", turnId: "t1", slackDelivery: "FAILED" }),
-				entry("e2", { kind: "HEPH", surface: "SLACK", turnId: "t1" }),
-				entry("e3", { kind: "HEPH", surface: "SLACK", turnId: "t1" }),
+				entry("e2", { kind: "ANSWER", surface: "SLACK", turnId: "t1" }),
+				entry("e3", { kind: "ANSWER", surface: "SLACK", turnId: "t1" }),
 				entry("e4", { kind: "USER", surface: "SLACK", turnId: "t2", slackDelivery: "UNCERTAIN" }),
-				entry("e5", { kind: "HEPH", surface: "SLACK", turnId: "t2" }),
+				entry("e5", { kind: "ANSWER", surface: "SLACK", turnId: "t2" }),
 			],
 			pending: [],
 			turns: [],

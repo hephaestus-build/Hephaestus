@@ -7,7 +7,7 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
 import org.springframework.validation.annotation.Validated;
 
 /**
- * The server's sandbox gateway, the API that sandboxed practice reviews and Heph turns call.
+ * The server's sandbox gateway, the API that sandboxed practice reviews and Hephaestus turns call.
  *
  * @param port Port of the extra server connector that serves the sandbox gateway. The gateway API answers only on this
  *     port. The value 0 binds a free port at start.

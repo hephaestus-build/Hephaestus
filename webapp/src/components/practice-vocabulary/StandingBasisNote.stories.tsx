@@ -5,7 +5,7 @@ import { StandingBasisNote } from "./StandingBasisNote";
 
 /**
  * Beside a standing on the Practice profile and on Practices across the workspace: whether it includes
- * earlier assessments. Nothing shows for a standing from current reviews.
+ * earlier observations. Nothing shows for a standing from current reviews.
  */
 const meta = {
 	component: StandingBasisNote,

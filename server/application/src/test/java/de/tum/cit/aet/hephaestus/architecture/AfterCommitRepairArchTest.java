@@ -54,11 +54,11 @@ class AfterCommitRepairArchTest extends HephaestusArchitectureTest {
                             "notification.NotificationRedeliveryJob.resubmitFailed",
                             true)),
             Map.entry(
-                    "mentor.MentorTurnWaits.publishWaits",
+                    "conversation.ConversationTurnWaits.publishWaits",
                     new Repair(
                             RepairKind.RECONCILE,
-                            "MentorTimeline reads recompute waits from committed turn rows; the next SlotsChanged event republishes claimable turns across workspaces.",
-                            "mentor.MentorTimeline.conversation",
+                            "ConversationTimeline reads recompute waits from committed turn rows; the next SlotsChanged event republishes claimable turns across workspaces.",
+                            "conversation.ConversationTimeline.conversation",
                             false)),
             Map.entry(
                     "integration.core.sync.push.SyncPushService.onSyncStateChanged",

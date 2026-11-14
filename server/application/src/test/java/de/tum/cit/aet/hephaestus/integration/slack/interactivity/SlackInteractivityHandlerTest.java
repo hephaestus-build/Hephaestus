@@ -6,15 +6,15 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import de.tum.cit.aet.hephaestus.agent.mentor.weeklydigest.WeeklyDigestSubscriptions;
+import de.tum.cit.aet.hephaestus.agent.conversation.weeklydigest.WeeklyDigestSubscriptions;
 import de.tum.cit.aet.hephaestus.integration.slack.channel.SlackConsentBlocks;
-import de.tum.cit.aet.hephaestus.integration.slack.events.SlackMentorService;
+import de.tum.cit.aet.hephaestus.integration.slack.conversation.SlackConversationIdentityResolver;
+import de.tum.cit.aet.hephaestus.integration.slack.conversation.SlackConversationPosts;
+import de.tum.cit.aet.hephaestus.integration.slack.conversation.SlackWeeklyDigestPointer;
+import de.tum.cit.aet.hephaestus.integration.slack.events.SlackConversationService;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackParticipantConsentService;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackPersonErasureService;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackWorkspaceResolver;
-import de.tum.cit.aet.hephaestus.integration.slack.mentor.SlackMentorIdentityResolver;
-import de.tum.cit.aet.hephaestus.integration.slack.mentor.SlackMentorPosts;
-import de.tum.cit.aet.hephaestus.integration.slack.mentor.SlackWeeklyDigestPointer;
 import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackMessageService;
 import de.tum.cit.aet.hephaestus.integration.slack.onboarding.SlackAppHomeService;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
@@ -50,7 +50,7 @@ class SlackInteractivityHandlerTest extends BaseUnitTest {
     private SlackWorkspaceResolver workspaceResolver;
 
     @Mock
-    private SlackMentorIdentityResolver identityResolver;
+    private SlackConversationIdentityResolver identityResolver;
 
     @Mock
     private SlackAppHomeService appHomeService;
@@ -65,7 +65,7 @@ class SlackInteractivityHandlerTest extends BaseUnitTest {
     private SlackMessageService messageService;
 
     @Mock
-    private SlackMentorService mentorService;
+    private SlackConversationService conversationService;
 
     @Mock
     private WeeklyDigestSubscriptions weeklyDigests;
@@ -81,7 +81,7 @@ class SlackInteractivityHandlerTest extends BaseUnitTest {
                 participantConsentService,
                 personErasureService,
                 messageService,
-                mentorService,
+                conversationService,
                 weeklyDigests,
                 directExecutor());
         when(workspaceResolver.resolveWorkspaceId(TEAM)).thenReturn(Optional.of(WORKSPACE_ID));
@@ -147,10 +147,10 @@ class SlackInteractivityHandlerTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldPassTheVoteToHephWhenTheDeveloperPressesAFeedbackButton() {
-        handler.handleBlockActions(blockActions(SlackMentorPosts.FEEDBACK_ACTION, "HELPFUL:" + ANSWER_ID));
+    void shouldPassTheVoteToHephaestusWhenTheDeveloperPressesAFeedbackButton() {
+        handler.handleBlockActions(blockActions(SlackConversationPosts.FEEDBACK_ACTION, "HELPFUL:" + ANSWER_ID));
 
-        verify(mentorService).handleFeedback(TEAM, CHANNEL, USER, "HELPFUL:" + ANSWER_ID);
+        verify(conversationService).handleFeedback(TEAM, CHANNEL, USER, "HELPFUL:" + ANSWER_ID);
     }
 
     @Test

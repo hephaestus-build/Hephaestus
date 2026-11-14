@@ -2,8 +2,8 @@ import { sleep } from "k6";
 import exec from "k6/execution";
 import { Counter } from "k6/metrics";
 
-import { detection, setup as reviewSetup } from "./detection-mentor.js";
-import { ask, options as conversationOptions } from "./heph.js";
+import { ask, options as conversationOptions } from "./conversation.js";
+import { detection, setup as reviewSetup } from "./detection-conversation.js";
 import { integer, required } from "./lib/config.js";
 import webhookBurst from "./webhook-burst.js";
 
@@ -91,7 +91,7 @@ export const options = {
 		...(conversations
 			? {
 					course_sessions_finished: [`count==${expectedSessions}`],
-					heph_turn_refused: ["count==0"],
+					conversation_turn_refused: ["count==0"],
 				}
 			: {}),
 		...(reviews

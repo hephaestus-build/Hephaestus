@@ -357,8 +357,8 @@ class LlmUsageLedgerIntegrationTest extends AbstractWorkspaceIntegrationTest {
         record(
                 workspace.getId(),
                 sample(
-                        "MENTOR_TURN",
-                        UsageSourceType.MENTOR_TURN,
+                        "CONVERSATION_TURN",
+                        UsageSourceType.CONVERSATION_TURN,
                         UUID.randomUUID(),
                         0,
                         "local-model",
@@ -393,8 +393,8 @@ class LlmUsageLedgerIntegrationTest extends AbstractWorkspaceIntegrationTest {
         record(
                 workspace.getId(),
                 sample(
-                        "MENTOR_TURN",
-                        UsageSourceType.MENTOR_TURN,
+                        "CONVERSATION_TURN",
+                        UsageSourceType.CONVERSATION_TURN,
                         UUID.randomUUID(),
                         0,
                         "byo-model",

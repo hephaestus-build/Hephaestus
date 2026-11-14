@@ -16,7 +16,7 @@ const connection: LlmConnection = {
 	slug: "custom",
 	displayName: "Custom endpoint",
 	apiProtocol: "openai-completions",
-	purposes: ["PRACTICE_REVIEW", "MENTOR"],
+	purposes: ["PRACTICE_REVIEW", "CONVERSATION"],
 	authMode: "BEARER",
 	baseUrl: "https://llm.example.test/v1",
 	enabled: true,

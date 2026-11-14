@@ -4,7 +4,7 @@ import { once } from "node:events";
 import { createServer, request as forward, type Server } from "node:http";
 import { createInterface } from "node:readline";
 
-import { isRecord } from "../../../main/resources/agent/heph-host-protocol.ts";
+import { isRecord } from "../../../main/resources/agent/conversation-host-protocol.ts";
 import { httpTurnApi, runModels } from "../../../main/resources/agent/turn.ts";
 import { assertRecoveredTurn, CUT_ANSWER, WHOLE_ANSWER } from "./turn-stream-cut.ts";
 import { AGENT_DIR, contextOf, DOCUMENTS, fakeWorker, runTurn } from "./turn-worker.ts";

@@ -7,9 +7,9 @@ import de.tum.cit.aet.hephaestus.integration.core.api.ItemIndexService;
 import de.tum.cit.aet.hephaestus.integration.core.spi.FoundBy;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemEventInput;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRegistration;
-import de.tum.cit.aet.hephaestus.integration.slack.conversation.SlackConversationCandidateSource;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackThreadRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackTs;
+import de.tum.cit.aet.hephaestus.integration.slack.thread.SlackThreadCandidateSource;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewCompleted;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewService;
 import java.time.Clock;
@@ -31,7 +31,7 @@ public class SlackThreadEventScheduler {
     private static final int MIN_TURNS = 4;
     private static final int MIN_GROWTH = 2;
     private static final Duration QUIESCENCE = Duration.ofMinutes(10);
-    private final SlackConversationCandidateSource candidates;
+    private final SlackThreadCandidateSource candidates;
     private final ThreadItemSource source;
     private final ItemIndexService items;
     private final SlackThreadRepository threads;
@@ -40,7 +40,7 @@ public class SlackThreadEventScheduler {
     private final Clock clock;
 
     public SlackThreadEventScheduler(
-            SlackConversationCandidateSource candidates,
+            SlackThreadCandidateSource candidates,
             ThreadItemSource source,
             ItemIndexService items,
             SlackThreadRepository threads,

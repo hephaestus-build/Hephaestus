@@ -13,9 +13,9 @@ import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelPriceRepository;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelRepository;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
 import de.tum.cit.aet.hephaestus.agent.catalog.PricingMode;
-import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
-import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBinding;
-import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBindingRepository;
+import de.tum.cit.aet.hephaestus.agent.config.ModelPurpose;
+import de.tum.cit.aet.hephaestus.agent.config.WorkspaceModelAssignment;
+import de.tum.cit.aet.hephaestus.agent.config.WorkspaceModelAssignmentRepository;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.runtime.PiResultParser;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmAdmissionService;
@@ -67,7 +67,7 @@ class ReviewMethodPersistenceIntegrationTest extends BaseIntegrationTest {
     private LlmModelPriceRepository prices;
 
     @Autowired
-    private WorkspaceAgentBindingRepository bindings;
+    private WorkspaceModelAssignmentRepository bindings;
 
     @Autowired
     private ReviewJobRepository jobs;
@@ -257,9 +257,9 @@ class ReviewMethodPersistenceIntegrationTest extends BaseIntegrationTest {
         price.setNote("No charge for the declared test model.");
         price.setEffectiveFrom(Instant.now());
         prices.saveAndFlush(price);
-        var binding = new WorkspaceAgentBinding();
+        var binding = new WorkspaceModelAssignment();
         binding.setWorkspace(workspace);
-        binding.setPurpose(AgentPurpose.PRACTICE_REVIEW);
+        binding.setPurpose(ModelPurpose.PRACTICE_REVIEW);
         binding.setDataHandlingTier(DataHandlingTier.UNDECLARED);
         binding.setInstanceModel(model);
         binding.setEnabled(true);

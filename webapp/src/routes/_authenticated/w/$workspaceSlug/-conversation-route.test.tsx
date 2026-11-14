@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { http, HttpResponse, type PathParams } from "msw";
 import { beforeAll, afterEach, assert, expect, it, vi } from "vitest";
 
-import type { MentorTurnRequest } from "@/api/types.gen";
+import type { ConversationTurnRequest } from "@/api/types.gen";
 import { conversationEntriesOptions } from "@/hooks/conversation-cache";
 import { workspaceOnboarding } from "@/mocks/fixtures/onboarding";
 import { ownMembership, workspaceListItem } from "@/mocks/fixtures/workspaces";
@@ -32,7 +32,12 @@ function serve(...fakes: ConversationFake[]) {
 				...workspaceOnboarding(),
 				aiChoice: "IN_HOUSE_ONLY",
 				aiOptions: [
-					{ choice: "IN_HOUSE_ONLY", mentorReady: true, practiceReviewsReady: true, models: [] },
+					{
+						choice: "IN_HOUSE_ONLY",
+						conversationReady: true,
+						practiceReviewsReady: true,
+						models: [],
+					},
 				],
 			}),
 		),
@@ -163,9 +168,9 @@ it("leaves an unsent draft behind in its own workspace", async () => {
 it("opens at the newest messages and reads older ones above them", async () => {
 	const fake = new ConversationFake("acme", { pageSize: 2 });
 	fake.add({ kind: "USER", text: "The oldest question" });
-	fake.add({ kind: "HEPH", text: "A middle answer" });
+	fake.add({ kind: "ANSWER", text: "A middle answer" });
 	fake.add({ kind: "USER", text: "The newest question" });
-	const reads = recordPageReads("/mentor/entries");
+	const reads = recordPageReads("/conversation/entries");
 	serve(fake);
 
 	renderRouteAtWithRouter("/w/acme/conversation");
@@ -179,7 +184,7 @@ it("opens at the newest messages and reads older ones above them", async () => {
 it("says older messages are loading once Retry reads them again after they failed", async () => {
 	const fake = new ConversationFake("acme", { pageSize: 2 });
 	fake.add({ kind: "USER", text: "The oldest question" });
-	fake.add({ kind: "HEPH", text: "A middle answer" });
+	fake.add({ kind: "ANSWER", text: "A middle answer" });
 	fake.add({ kind: "USER", text: "The newest question" });
 	serve(fake);
 	const held = deferred();
@@ -189,7 +194,7 @@ it("says older messages are loading once Retry reads them again after they faile
 		await screen.findByText("The newest question", {}, ROUTE_RENDER_WAIT);
 		server.use(
 			http.get(
-				"*/workspaces/acme/mentor/entries",
+				"*/workspaces/acme/conversation/entries",
 				() => HttpResponse.json({ status: 503 }, { status: 503 }),
 				{ once: true },
 			),
@@ -201,7 +206,7 @@ it("says older messages are loading once Retry reads them again after they faile
 		// The read Retry starts is held open, so the line shows what is on screen while it runs.
 		server.use(
 			http.get(
-				"*/workspaces/acme/mentor/entries",
+				"*/workspaces/acme/conversation/entries",
 				async () => {
 					await held.promise;
 					return HttpResponse.json({ content: fake.entries.slice(0, 1) });
@@ -228,7 +233,7 @@ it("offers the composer only once the conversation is read, so a message sent fr
 	const held = deferred();
 	server.use(
 		http.get(
-			"*/workspaces/acme/mentor/entries",
+			"*/workspaces/acme/conversation/entries",
 			async () => {
 				await held.promise;
 				return HttpResponse.json({ status: 503 }, { status: 503 });
@@ -292,7 +297,7 @@ it("gives a draft back once Retry reads a conversation that could not be read on
 	expect(queryClient.getQueryState(acmePages)).toBeUndefined();
 	server.use(
 		http.get(
-			"*/workspaces/acme/mentor/entries",
+			"*/workspaces/acme/conversation/entries",
 			() => HttpResponse.json({ status: 503 }, { status: 503 }),
 			{ once: true },
 		),
@@ -320,12 +325,12 @@ it("gives a draft back once Retry reads a conversation that could not be read on
 
 it("brings a linked message into view on a cold load, reading older pages until it arrives", async () => {
 	const fake = new ConversationFake("acme", { pageSize: 2 });
-	const linked = fake.add({ kind: "HEPH", text: "The answer the digest links to" });
+	const linked = fake.add({ kind: "ANSWER", text: "The answer the digest links to" });
 	fake.add({ kind: "USER", text: "A later question" });
-	fake.add({ kind: "HEPH", text: "A later answer" });
+	fake.add({ kind: "ANSWER", text: "A later answer" });
 	fake.add({ kind: "USER", text: "The newest question" });
-	fake.add({ kind: "HEPH", text: "The newest answer" });
-	const reads = recordPageReads("/mentor/entries");
+	fake.add({ kind: "ANSWER", text: "The newest answer" });
+	const reads = recordPageReads("/conversation/entries");
 	serve(fake);
 
 	renderRouteAtWithRouter(`/w/acme/conversation?entry=${linked.id}`);
@@ -336,9 +341,9 @@ it("brings a linked message into view on a cold load, reading older pages until 
 it("says when a linked message is not in the conversation, after reading every older page", async () => {
 	const fake = new ConversationFake("acme", { pageSize: 2 });
 	fake.add({ kind: "USER", text: "The oldest question" });
-	fake.add({ kind: "HEPH", text: "A later answer" });
+	fake.add({ kind: "ANSWER", text: "A later answer" });
 	fake.add({ kind: "USER", text: "The newest question" });
-	const reads = recordPageReads("/mentor/entries");
+	const reads = recordPageReads("/conversation/entries");
 	serve(fake);
 
 	renderRouteAtWithRouter("/w/acme/conversation?entry=e9999999-0000-4000-8000-000000000000");
@@ -355,12 +360,16 @@ it("brings a linked reply into view inside its thread, reading older replies unt
 	const fake = new ConversationFake("acme", { pageSize: 1 });
 	const parent = fake.add({ kind: "USER", text: "How did my week go?" });
 	const linked = fake.add({
-		kind: "HEPH",
+		kind: "ANSWER",
 		text: "Share blockers earlier next time.",
 		parentEntryId: parent.id,
 	});
 	fake.add({ kind: "USER", text: "Why?", parentEntryId: parent.id });
-	fake.add({ kind: "HEPH", text: "Two pull requests waited a day.", parentEntryId: parent.id });
+	fake.add({
+		kind: "ANSWER",
+		text: "Two pull requests waited a day.",
+		parentEntryId: parent.id,
+	});
 	const reads = recordPageReads(`/entries/${parent.id}/thread`);
 	serve(fake);
 
@@ -374,10 +383,10 @@ it("shows a sent message at once and keeps its request id when a failed send is 
 	const fake = new ConversationFake();
 	serve(fake);
 	const held = deferred();
-	const attempts: MentorTurnRequest[] = [];
+	const attempts: ConversationTurnRequest[] = [];
 	server.use(
-		http.post<PathParams, MentorTurnRequest>(
-			"*/workspaces/acme/mentor/turns",
+		http.post<PathParams, ConversationTurnRequest>(
+			"*/workspaces/acme/conversation/turns",
 			async ({ request }) => {
 				attempts.push(await request.json());
 				await held.promise;
@@ -423,8 +432,8 @@ it("keeps a successful send visible until an in-flight read lets its stored copy
 	const pagesStarted = deferred();
 	const pagesAnswer = deferred();
 	server.use(
-		http.post<PathParams, MentorTurnRequest>(
-			"*/workspaces/acme/mentor/turns",
+		http.post<PathParams, ConversationTurnRequest>(
+			"*/workspaces/acme/conversation/turns",
 			async ({ request }) => {
 				const body = await request.json();
 				fake.submissions.push(body);
@@ -455,7 +464,7 @@ it("keeps a successful send visible until an in-flight read lets its stored copy
 		// A read already underway must land before the stored send patches the page.
 		server.use(
 			http.get(
-				"*/workspaces/acme/mentor/entries",
+				"*/workspaces/acme/conversation/entries",
 				async () => {
 					const page = { content: [...fake.entries] };
 					pagesStarted.resolve();
@@ -496,16 +505,16 @@ it("copies and discards only one failed send without deleting stored messages or
 	const fake = new ConversationFake();
 	fake.add({ kind: "USER", text: "A message the server already stored" });
 	serve(fake);
-	const attempts: MentorTurnRequest[] = [];
+	const attempts: ConversationTurnRequest[] = [];
 	const deletes: string[] = [];
 	server.use(
 		// Records every message deletion the app asks for, then lets the fake answer it: a resolver that
 		// returns nothing passes the request on to the next handler.
-		http.delete("*/workspaces/acme/mentor/entries/:entryId", ({ request }) => {
+		http.delete("*/workspaces/acme/conversation/entries/:entryId", ({ request }) => {
 			deletes.push(request.url);
 		}),
-		http.post<PathParams, MentorTurnRequest>(
-			"*/workspaces/acme/mentor/turns",
+		http.post<PathParams, ConversationTurnRequest>(
+			"*/workspaces/acme/conversation/turns",
 			async ({ request }) => {
 				attempts.push(await request.json());
 				return HttpResponse.json(
@@ -591,7 +600,7 @@ it("sends a follow-up while Hephaestus answers, and stops the running turn", asy
 
 it("votes on Hephaestus's message, and clears the vote when the pressed vote is pressed again", async () => {
 	const fake = new ConversationFake();
-	const answer = fake.add({ kind: "HEPH", text: "Link the issue in the description." });
+	const answer = fake.add({ kind: "ANSWER", text: "Link the issue in the description." });
 	serve(fake);
 
 	renderRouteAtWithRouter("/w/acme/conversation");
@@ -619,10 +628,10 @@ it("votes on Hephaestus's message, and clears the vote when the pressed vote is 
 
 it("takes an optimistic vote back when the server refuses it", async () => {
 	const fake = new ConversationFake();
-	fake.add({ kind: "HEPH", text: "Link the issue in the description." });
+	fake.add({ kind: "ANSWER", text: "Link the issue in the description." });
 	serve(fake);
 	server.use(
-		http.put("*/workspaces/acme/mentor/entries/:entryId/vote", () =>
+		http.put("*/workspaces/acme/conversation/entries/:entryId/vote", () =>
 			HttpResponse.json({ status: 503 }, { status: 503 }),
 		),
 	);
@@ -656,7 +665,7 @@ it("deletes the developer's own message once they confirm", async () => {
 it("opens the thread named in the address and answers in it", async () => {
 	giveRoom(ROOMY);
 	const fake = new ConversationFake();
-	const parent = fake.add({ kind: "HEPH", text: "Three pull requests left the reason out." });
+	const parent = fake.add({ kind: "ANSWER", text: "Three pull requests left the reason out." });
 	fake.add({ kind: "USER", text: "Which ones?", parentEntryId: parent.id });
 	serve(fake);
 
@@ -688,7 +697,7 @@ it("keeps a deleted message's thread to read and delete in, but offers no reply 
 	const fake = new ConversationFake();
 	// As the server keeps it: the message's words are gone, its thread stays.
 	const parent = fake.add({ kind: "USER", text: "", deleted: true });
-	fake.add({ kind: "HEPH", text: "Here is what I would change.", parentEntryId: parent.id });
+	fake.add({ kind: "ANSWER", text: "Here is what I would change.", parentEntryId: parent.id });
 	const own = fake.add({
 		kind: "USER",
 		text: "A reply I want gone too.",
@@ -745,7 +754,7 @@ it("says the thread is loading in its panel while the conversation beside it sho
 	const fake = new ConversationFake();
 	const parent = fake.add({ kind: "USER", text: "How did my week go?" });
 	const reply = fake.add({
-		kind: "HEPH",
+		kind: "ANSWER",
 		text: "Share blockers earlier.",
 		parentEntryId: parent.id,
 	});
@@ -753,7 +762,7 @@ it("says the thread is loading in its panel while the conversation beside it sho
 	const held = deferred();
 	server.use(
 		http.get(
-			"*/workspaces/acme/mentor/entries/:entryId/thread",
+			"*/workspaces/acme/conversation/entries/:entryId/thread",
 			async () => {
 				await held.promise;
 				return HttpResponse.json({
@@ -783,7 +792,7 @@ it("says the thread is loading in its panel while the conversation beside it sho
 it("shows a thread as a drawer until the page has measured room for it beside the conversation", async () => {
 	const fake = new ConversationFake();
 	const parent = fake.add({ kind: "USER", text: "How did my week go?" });
-	fake.add({ kind: "HEPH", text: "Share blockers earlier.", parentEntryId: parent.id });
+	fake.add({ kind: "ANSWER", text: "Share blockers earlier.", parentEntryId: parent.id });
 	serve(fake);
 
 	// No measurement arrives, as before the browser lays the page out.
@@ -799,7 +808,7 @@ it("needs a wider region for the thread's column when the reader's browser shows
 	const resize = giveRoom(952, 20);
 	const fake = new ConversationFake();
 	const parent = fake.add({ kind: "USER", text: "How did my week go?" });
-	fake.add({ kind: "HEPH", text: "Share blockers earlier.", parentEntryId: parent.id });
+	fake.add({ kind: "ANSWER", text: "Share blockers earlier.", parentEntryId: parent.id });
 	serve(fake);
 
 	renderRouteAtWithRouter(`/w/acme/conversation?thread=${parent.id}`);
@@ -818,7 +827,7 @@ it("chooses the thread's column or drawer by the room the page measures, and kee
 	const resize = giveRoom(744);
 	const fake = new ConversationFake();
 	const parent = fake.add({ kind: "USER", text: "How did my week go?" });
-	fake.add({ kind: "HEPH", text: "Share blockers earlier.", parentEntryId: parent.id });
+	fake.add({ kind: "ANSWER", text: "Share blockers earlier.", parentEntryId: parent.id });
 	serve(fake);
 
 	renderRouteAtWithRouter(`/w/acme/conversation?thread=${parent.id}`);
@@ -850,7 +859,7 @@ it("closes a thread drawer before the address drops the thread, and gives focus 
 	giveRoom(744);
 	const fake = new ConversationFake();
 	const parent = fake.add({ kind: "USER", text: "How did my week go?" });
-	fake.add({ kind: "HEPH", text: "Share blockers earlier.", parentEntryId: parent.id });
+	fake.add({ kind: "ANSWER", text: "Share blockers earlier.", parentEntryId: parent.id });
 	serve(fake);
 
 	const { router } = renderRouteAtWithRouter("/w/acme/conversation");
@@ -873,7 +882,7 @@ it("counts every reply above the open thread and on its message, from Slack and 
 	giveRoom(ROOMY);
 	const fake = new ConversationFake();
 	const parent = fake.add({ kind: "USER", text: "How did my week go?" });
-	fake.add({ kind: "HEPH", text: "Share blockers earlier.", parentEntryId: parent.id });
+	fake.add({ kind: "ANSWER", text: "Share blockers earlier.", parentEntryId: parent.id });
 	serve(fake);
 
 	renderRouteAtWithRouter(`/w/acme/conversation?thread=${parent.id}`);
@@ -885,7 +894,7 @@ it("counts every reply above the open thread and on its message, from Slack and 
 		stream.emit("snapshot", fake.conversation());
 	});
 	const live = fake.add({
-		kind: "HEPH",
+		kind: "ANSWER",
 		surface: "SLACK",
 		text: "A second reply from Slack.",
 		parentEntryId: parent.id,
@@ -926,7 +935,7 @@ it("closes the live stream while the page is hidden, and reads back what landed 
 		await waitFor(() => expect(first.closed).toBe(true));
 		expect(FakeEventSource.latest()).toBeUndefined();
 
-		fake.add({ kind: "HEPH", text: "An answer that landed while the tab was hidden." });
+		fake.add({ kind: "ANSWER", text: "An answer that landed while the tab was hidden." });
 		visibility.mockReturnValue("visible");
 		act(() => {
 			document.dispatchEvent(new Event("visibilitychange"));
@@ -953,9 +962,9 @@ it("starts each thread fresh, and gives a thread back the reply the developer wa
 	giveRoom(ROOMY);
 	const fake = new ConversationFake();
 	const first = fake.add({ kind: "USER", text: "First question" });
-	fake.add({ kind: "HEPH", text: "First answer", parentEntryId: first.id });
+	fake.add({ kind: "ANSWER", text: "First answer", parentEntryId: first.id });
 	const second = fake.add({ kind: "USER", text: "Second question" });
-	fake.add({ kind: "HEPH", text: "Second answer", parentEntryId: second.id });
+	fake.add({ kind: "ANSWER", text: "Second answer", parentEntryId: second.id });
 	serve(fake);
 
 	const { router } = renderRouteAtWithRouter(`/w/acme/conversation?thread=${first.id}`);
@@ -991,7 +1000,7 @@ it("shows what the live stream reports: Hephaestus's answer as it arrives and a 
 	await screen.findByText("How did my week go?", {}, ROUTE_RENDER_WAIT);
 	const stream = FakeEventSource.latest();
 	assert.isDefined(stream);
-	expect(stream.url).toMatch(/\/workspaces\/acme\/mentor\/events$/u);
+	expect(stream.url).toMatch(/\/workspaces\/acme\/conversation\/events$/u);
 	expect(stream.withCredentials).toBe(true);
 
 	const turn = {
@@ -1019,7 +1028,7 @@ it("shows what the live stream reports: Hephaestus's answer as it arrives and a 
 			id: "e9000000-0000-4000-8000-000000000002",
 			conversationId: question.conversationId,
 			seq: question.seq + 1,
-			kind: "HEPH",
+			kind: "ANSWER",
 			surface: "APP",
 			text: "You opened two pull requests this week.",
 			turnId: turn.id,
@@ -1059,7 +1068,7 @@ it("shows why a turn failed after Hephaestus wrote part of its answer, and asks 
 	await screen.findByText("How did my week go?", {}, ROUTE_RENDER_WAIT);
 	const stream = await liveStream();
 	const partAnswer = fake.add({
-		kind: "HEPH",
+		kind: "ANSWER",
 		text: "You opened two pull requests and",
 		turnId: turn.id,
 	});
@@ -1095,7 +1104,7 @@ it("reads the conversation again when a reconnect's snapshot is ahead of it", as
 		stream.emit("snapshot", fake.conversation());
 	});
 	// Written while the stream was down, so no entry event carries it.
-	fake.add({ kind: "HEPH", text: "Written while you were away" });
+	fake.add({ kind: "ANSWER", text: "Written while you were away" });
 	act(() => {
 		stream.emit("snapshot", fake.conversation());
 	});
@@ -1105,9 +1114,9 @@ it("reads the conversation again when a reconnect's snapshot is ahead of it", as
 it("keeps every loaded message when a reconnect rereads the conversation after older pages were read", async () => {
 	const fake = new ConversationFake("acme", { pageSize: 2 });
 	fake.add({ kind: "USER", text: "The oldest question" });
-	fake.add({ kind: "HEPH", text: "A middle answer" });
+	fake.add({ kind: "ANSWER", text: "A middle answer" });
 	fake.add({ kind: "USER", text: "The newest question" });
-	const reads = recordPageReads("/mentor/entries");
+	const reads = recordPageReads("/conversation/entries");
 	serve(fake);
 
 	renderRouteAtWithRouter("/w/acme/conversation");
@@ -1121,7 +1130,7 @@ it("keeps every loaded message when a reconnect rereads the conversation after o
 	});
 	// The connect's own snapshot rereads what is loaded.
 	await waitFor(() => expect(reads).toStrictEqual([null, "2", null, "2"]));
-	fake.add({ kind: "HEPH", text: "Written while you were away" });
+	fake.add({ kind: "ANSWER", text: "Written while you were away" });
 	act(() => {
 		stream.emit("snapshot", fake.conversation());
 	});
@@ -1139,9 +1148,13 @@ it("keeps every loaded reply when a reconnect rereads a thread after older repli
 	giveRoom(ROOMY);
 	const fake = new ConversationFake("acme", { pageSize: 2 });
 	const parent = fake.add({ kind: "USER", text: "How did my week go?" });
-	fake.add({ kind: "HEPH", text: "Share blockers earlier next time.", parentEntryId: parent.id });
+	fake.add({
+		kind: "ANSWER",
+		text: "Share blockers earlier next time.",
+		parentEntryId: parent.id,
+	});
 	fake.add({ kind: "USER", text: "Why?", parentEntryId: parent.id });
-	fake.add({ kind: "HEPH", text: "They waited for review.", parentEntryId: parent.id });
+	fake.add({ kind: "ANSWER", text: "They waited for review.", parentEntryId: parent.id });
 	const reads = recordPageReads(`/entries/${parent.id}/thread`);
 	serve(fake);
 
@@ -1157,7 +1170,11 @@ it("keeps every loaded reply when a reconnect rereads a thread after older repli
 	});
 	// The connect's own snapshot rereads what is loaded.
 	await waitFor(() => expect(reads).toStrictEqual([null, "2", null, "2"]));
-	fake.add({ kind: "HEPH", text: "Two pull requests waited a day.", parentEntryId: parent.id });
+	fake.add({
+		kind: "ANSWER",
+		text: "Two pull requests waited a day.",
+		parentEntryId: parent.id,
+	});
 	act(() => {
 		stream.emit("snapshot", fake.conversation());
 	});
@@ -1172,7 +1189,7 @@ it("keeps every loaded reply when a reconnect rereads a thread after older repli
 it("shows an edit and a deletion made while the stream was down, though no new message moved the newest seq", async () => {
 	const fake = new ConversationFake();
 	const question = fake.add({ kind: "USER", text: "Something I should not have pasted" });
-	const answer = fake.add({ kind: "HEPH", text: "The first wording of the answer" });
+	const answer = fake.add({ kind: "ANSWER", text: "The first wording of the answer" });
 	serve(fake);
 
 	renderRouteAtWithRouter("/w/acme/conversation");
@@ -1208,7 +1225,7 @@ it("keeps a message that arrives live while a reconnect's reread is still answer
 	const readStarted = deferred();
 	server.use(
 		http.get(
-			"*/workspaces/acme/mentor/entries",
+			"*/workspaces/acme/conversation/entries",
 			async () => {
 				const page = {
 					content: fake.entries.filter((entry) => entry.parentEntryId === undefined),
@@ -1225,7 +1242,7 @@ it("keeps a message that arrives live while a reconnect's reread is still answer
 		stream.emit("snapshot", fake.conversation());
 	});
 	await readStarted.promise;
-	const live = fake.add({ kind: "HEPH", text: "Arrived over the live stream" });
+	const live = fake.add({ kind: "ANSWER", text: "Arrived over the live stream" });
 	act(() => {
 		stream.emit("entry", live);
 	});
@@ -1243,8 +1260,8 @@ it("shows no phantom turn when a send's answer lands after Hephaestus already an
 	const postStarted = deferred();
 	const postAnswer = deferred();
 	server.use(
-		http.post<PathParams, MentorTurnRequest>(
-			"*/workspaces/acme/mentor/turns",
+		http.post<PathParams, ConversationTurnRequest>(
+			"*/workspaces/acme/conversation/turns",
 			async ({ request }) => {
 				const body = await request.json();
 				const turn = fake.addTurn({ status: "QUEUED", requestId: body.requestId });
@@ -1260,7 +1277,7 @@ it("shows no phantom turn when a send's answer lands after Hephaestus already an
 				turn.status = "DONE";
 				turn.attempt = 1;
 				question.turnStatus = "DONE";
-				fake.add({ kind: "HEPH", text: "Hephaestus's answer", turnId: turn.id });
+				fake.add({ kind: "ANSWER", text: "Hephaestus's answer", turnId: turn.id });
 				postStarted.resolve();
 				await postAnswer.promise;
 				return HttpResponse.json(submission);
@@ -1281,7 +1298,7 @@ it("shows no phantom turn when a send's answer lands after Hephaestus already an
 	const pagesStarted = deferred();
 	server.use(
 		http.get(
-			"*/workspaces/acme/mentor/entries",
+			"*/workspaces/acme/conversation/entries",
 			async () => {
 				const page = {
 					content: fake.entries.filter((entry) => entry.parentEntryId === undefined),
@@ -1328,7 +1345,7 @@ it("says live updates are paused while the browser's own reconnects keep failing
 it("says in a thread drawer over the conversation that live updates are paused, and clears it once one opens", async () => {
 	const fake = new ConversationFake();
 	const parent = fake.add({ kind: "USER", text: "How did my week go?" });
-	fake.add({ kind: "HEPH", text: "Share blockers earlier.", parentEntryId: parent.id });
+	fake.add({ kind: "ANSWER", text: "Share blockers earlier.", parentEntryId: parent.id });
 	serve(fake);
 
 	// No room is measured, so the thread is a drawer that covers the conversation and its notice.
@@ -1350,10 +1367,10 @@ it("offers Retry in a linked thread when the conversation's state cannot be read
 	giveRoom(ROOMY);
 	const fake = new ConversationFake();
 	const parent = fake.add({ kind: "USER", text: "How did my week go?" });
-	fake.add({ kind: "HEPH", text: "Share blockers earlier.", parentEntryId: parent.id });
+	fake.add({ kind: "ANSWER", text: "Share blockers earlier.", parentEntryId: parent.id });
 	serve(fake);
 	server.use(
-		http.get("*/workspaces/acme/mentor/conversation", () =>
+		http.get("*/workspaces/acme/conversation", () =>
 			HttpResponse.json({ status: 503 }, { status: 503 }),
 		),
 	);
@@ -1362,7 +1379,7 @@ it("offers Retry in a linked thread when the conversation's state cannot be read
 	const panel = await screen.findByRole("complementary", { name: "Thread" }, ROUTE_RENDER_WAIT);
 	const retry = await within(panel).findByRole("button", { name: "Retry" });
 	server.use(
-		http.get("*/workspaces/acme/mentor/conversation", () => HttpResponse.json(fake.conversation())),
+		http.get("*/workspaces/acme/conversation", () => HttpResponse.json(fake.conversation())),
 	);
 	await userEvent.click(retry);
 	await within(panel).findByText("Share blockers earlier.");
@@ -1376,7 +1393,7 @@ it("reads the conversation again when a live event cannot be read", async () => 
 	renderRouteAtWithRouter("/w/acme/conversation");
 	await screen.findByText("How did my week go?", {}, ROUTE_RENDER_WAIT);
 	const stream = await liveStream();
-	fake.add({ kind: "HEPH", text: "An answer in a shape this tab does not know" });
+	fake.add({ kind: "ANSWER", text: "An answer in a shape this tab does not know" });
 	act(() => {
 		stream.open();
 		stream.emit("entry", { kind: "TOOL_RESULT" });
@@ -1388,7 +1405,7 @@ it("links a problem and feedback Hephaestus showed to the developer's feedback o
 	const fake = new ConversationFake();
 	fake.add({ kind: "USER", text: "What should I fix in my pull request?" });
 	fake.add({
-		kind: "HEPH",
+		kind: "ANSWER",
 		text: "Two things stand out.",
 		links: [
 			{
@@ -1429,7 +1446,7 @@ it("links a problem and feedback Hephaestus showed to the developer's feedback o
 it("nests Hephaestus's headings and a digest's sections under the page's headings without skipping a level", async () => {
 	const fake = new ConversationFake();
 	const answer = fake.add({
-		kind: "HEPH",
+		kind: "ANSWER",
 		text: "## Why\n\nThe reviewer could not see the reason.",
 	});
 	fake.add({
@@ -1447,7 +1464,7 @@ it("nests Hephaestus's headings and a digest's sections under the page's heading
 					practiceSlug: "share-blockers",
 					practiceName: "Share blockers early",
 					destination: "CONVERSATION",
-					mentorEntryId: answer.id,
+					conversationEntryId: answer.id,
 					deliveredAt: "2026-10-08T10:00:00Z",
 					withdrawn: false,
 					replaced: false,
@@ -1491,8 +1508,8 @@ it("links a weekly digest's feedback to its place in the conversation, and repli
 					practiceSlug: "share-blockers",
 					practiceName: "Share blockers early",
 					destination: "CONVERSATION",
-					mentorEntryId: "e8000000-0000-4000-8000-000000000002",
-					mentorParentEntryId: "e8000000-0000-4000-8000-000000000001",
+					conversationEntryId: "e8000000-0000-4000-8000-000000000002",
+					conversationParentEntryId: "e8000000-0000-4000-8000-000000000001",
 					deliveredAt: "2026-10-08T10:00:00Z",
 					withdrawn: false,
 					replaced: false,

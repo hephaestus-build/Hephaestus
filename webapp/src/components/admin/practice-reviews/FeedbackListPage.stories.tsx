@@ -221,7 +221,7 @@ export const DeveloperSummary: Story = {
 		const [count] = within(table).getAllByRole("link");
 		await expect(
 			parseSearch(new URL(String(count?.getAttribute("href")), window.location.origin).search),
-		).toMatchObject({ developerId: "9", location: "HEPH" });
+		).toMatchObject({ developerId: "9", location: "APP" });
 	},
 };
 

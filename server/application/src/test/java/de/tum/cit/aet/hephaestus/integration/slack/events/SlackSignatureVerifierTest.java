@@ -24,7 +24,7 @@ class SlackSignatureVerifierTest extends BaseUnitTest {
 
     @Test
     void validSignatureWithinWindowVerifies() {
-        byte[] body = body("token=abc&command=%2Fmentor");
+        byte[] body = body("token=abc&command=%2Fconversation");
         String ts = Long.toString(NOW);
         String sig = sign(SECRET, ts, body);
 
@@ -79,7 +79,7 @@ class SlackSignatureVerifierTest extends BaseUnitTest {
         byte[] tamperedBody = body("{\"text\":\"HELLO\"}");
 
         String expiredTs = Long.toString(NOW - 301);
-        byte[] expiredBody = body("token=abc&command=%2Fmentor");
+        byte[] expiredBody = body("token=abc&command=%2Fconversation");
         String expiredSig = sign(SECRET, expiredTs, expiredBody);
 
         String nonNumericTs = "not-a-number";

@@ -3,25 +3,25 @@ import { z } from "zod";
 import { isRecord } from "@/lib/is-record";
 
 import type {
-	MentorConversation,
-	MentorEntry,
-	MentorRead,
-	MentorTurn,
-	MentorTurnRequest,
+	Conversation,
+	ConversationEntry,
+	ConversationRead,
+	ConversationTurn,
+	ConversationTurnRequest,
 } from "@/api/types.gen";
 import {
-	zMentorConversation,
-	zMentorEntry,
-	zMentorRead,
-	zMentorTurn,
-	zMentorTurnRequest,
+	zConversation,
+	zConversationEntry,
+	zConversationRead,
+	zConversationTurn,
+	zConversationTurnRequest,
 } from "@/api/zod.gen";
 
 export type ConversationLiveEvent =
-	| { type: "snapshot"; conversation: MentorConversation }
-	| { type: "turn"; turn: MentorTurn }
-	| { type: "entry"; entry: MentorEntry }
-	| { type: "read"; read: MentorRead };
+	| { type: "snapshot"; conversation: Conversation }
+	| { type: "turn"; turn: ConversationTurn }
+	| { type: "entry"; entry: ConversationEntry }
+	| { type: "read"; read: ConversationRead };
 
 function parseJson(data: string): unknown {
 	try {
@@ -32,26 +32,26 @@ function parseJson(data: string): unknown {
 }
 
 /**
- * One named event of `GET /mentor/events`, or `undefined` when its payload does not match.
+ * One named event of `GET /conversation/events`, or `undefined` when its payload does not match.
  * An `EventSource` bypasses the SDK, so the generated schemas check each payload.
  */
 export function parseLiveEvent(type: string, data: string): ConversationLiveEvent | undefined {
 	const decoded = parseJson(data);
 	switch (type) {
 		case "snapshot": {
-			const parsed = zMentorConversation.safeParse(decoded);
+			const parsed = zConversation.safeParse(decoded);
 			return parsed.success ? { type, conversation: parsed.data } : undefined;
 		}
 		case "turn": {
-			const parsed = zMentorTurn.safeParse(decoded);
+			const parsed = zConversationTurn.safeParse(decoded);
 			return parsed.success ? { type, turn: parsed.data } : undefined;
 		}
 		case "entry": {
-			const parsed = zMentorEntry.safeParse(decoded);
+			const parsed = zConversationEntry.safeParse(decoded);
 			return parsed.success ? { type, entry: parsed.data } : undefined;
 		}
 		case "read": {
-			const parsed = zMentorRead.safeParse(decoded);
+			const parsed = zConversationRead.safeParse(decoded);
 			return parsed.success ? { type, read: parsed.data } : undefined;
 		}
 		default: {
@@ -61,8 +61,8 @@ export function parseLiveEvent(type: string, data: string): ConversationLiveEven
 }
 
 /** The mutation cache types every mutation's variables as `unknown`, so a pending message is read back here. */
-export function turnRequestOf(variables: unknown): MentorTurnRequest | undefined {
-	const parsed = z.object({ body: zMentorTurnRequest }).safeParse(variables);
+export function turnRequestOf(variables: unknown): ConversationTurnRequest | undefined {
+	const parsed = z.object({ body: zConversationTurnRequest }).safeParse(variables);
 	return parsed.success ? parsed.data.body : undefined;
 }
 
@@ -79,8 +79,8 @@ export type PendingMessage = {
 } & ({ status: "sending" } | { status: "failed"; reason: string });
 
 /** Hephaestus's own deleted messages leave the conversation; the developer's stay as a placeholder. */
-export function isRemovedEntry(entry: Pick<MentorEntry, "kind" | "deleted">): boolean {
-	return entry.deleted && entry.kind === "HEPH";
+export function isRemovedEntry(entry: Pick<ConversationEntry, "kind" | "deleted">): boolean {
+	return entry.deleted && entry.kind === "ANSWER";
 }
 
 /** The time a pending read request asks the server to mark, read back from the mutation cache. */

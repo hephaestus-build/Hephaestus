@@ -26,25 +26,26 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class MemberAiRoutingAdapter implements WorkspaceAiAvailability {
-    private final WorkspaceAgentBindingRepository bindings;
+    private final WorkspaceModelAssignmentRepository bindings;
     private final MemberAiPreferences preferences;
     private final LlmModelResolver models;
     private final WorkspaceQueries workspaces;
     private final PersonProcessingSuppression suppression;
 
     @Transactional(readOnly = true)
-    public Optional<WorkspaceAgentBinding> binding(long workspaceId, AgentPurpose purpose, @Nullable Long developerId) {
+    public Optional<WorkspaceModelAssignment> binding(
+            long workspaceId, ModelPurpose purpose, @Nullable Long developerId) {
         return route(workspaceId, purpose, developerId);
     }
 
     @Transactional(readOnly = true)
-    public Optional<WorkspaceAgentBinding> bindingForPeople(
-            long workspaceId, AgentPurpose purpose, List<@Nullable Long> people) {
+    public Optional<WorkspaceModelAssignment> bindingForPeople(
+            long workspaceId, ModelPurpose purpose, List<@Nullable Long> people) {
         return routePeople(workspaceId, purpose, people);
     }
 
-    private Optional<WorkspaceAgentBinding> routePeople(
-            long workspaceId, AgentPurpose purpose, List<@Nullable Long> people) {
+    private Optional<WorkspaceModelAssignment> routePeople(
+            long workspaceId, ModelPurpose purpose, List<@Nullable Long> people) {
         if (people.isEmpty())
             throw new IllegalArgumentException("A review must declare its subjects, including nobody");
         var candidates = bindings.findByWorkspaceIdAndPurpose(workspaceId, purpose).stream()
@@ -64,7 +65,8 @@ public class MemberAiRoutingAdapter implements WorkspaceAiAvailability {
     }
 
     // Self-invocation bypasses Spring's transactional proxy; route within the caller's transaction.
-    private Optional<WorkspaceAgentBinding> route(long workspaceId, AgentPurpose purpose, @Nullable Long developerId) {
+    private Optional<WorkspaceModelAssignment> route(
+            long workspaceId, ModelPurpose purpose, @Nullable Long developerId) {
         if (developerId == null) {
             if (!preferences.forDeveloper(workspaceId, null).permitsAi()) return Optional.empty();
             return routePeople(workspaceId, purpose, Collections.singletonList(null));
@@ -88,14 +90,14 @@ public class MemberAiRoutingAdapter implements WorkspaceAiAvailability {
      * UNDECLARED} for the members who have not chosen, when the workspace lets them leave the choice open.
      */
     @Transactional(readOnly = true)
-    public Map<AgentPurpose, Map<DataHandlingTier, List<DataHandlingTier>>> servedTiers(long workspaceId) {
+    public Map<ModelPurpose, Map<DataHandlingTier, List<DataHandlingTier>>> servedTiers(long workspaceId) {
         var rows = bindings.findByWorkspaceIdWithModels(workspaceId).stream()
                 .collect(Collectors.groupingBy(
-                        WorkspaceAgentBinding::getPurpose,
-                        () -> new EnumMap<>(AgentPurpose.class),
+                        WorkspaceModelAssignment::getPurpose,
+                        () -> new EnumMap<>(ModelPurpose.class),
                         Collectors.toList()));
         boolean choiceOptional = choiceOptional(workspaceId);
-        var served = new EnumMap<AgentPurpose, Map<DataHandlingTier, List<DataHandlingTier>>>(AgentPurpose.class);
+        var served = new EnumMap<ModelPurpose, Map<DataHandlingTier, List<DataHandlingTier>>>(ModelPurpose.class);
         rows.forEach((purpose, own) -> {
             var bySlot = new EnumMap<DataHandlingTier, List<DataHandlingTier>>(DataHandlingTier.class);
             serving(own, choiceOptional)
@@ -111,9 +113,9 @@ public class MemberAiRoutingAdapter implements WorkspaceAiAvailability {
         return !preferences.forDeveloper(workspaceId, null).choiceRequired();
     }
 
-    private Map<DataHandlingTier, WorkspaceAgentBinding> serving(
-            List<WorkspaceAgentBinding> rows, boolean choiceOptional) {
-        var serving = new EnumMap<DataHandlingTier, WorkspaceAgentBinding>(DataHandlingTier.class);
+    private Map<DataHandlingTier, WorkspaceModelAssignment> serving(
+            List<WorkspaceModelAssignment> rows, boolean choiceOptional) {
+        var serving = new EnumMap<DataHandlingTier, WorkspaceModelAssignment>(DataHandlingTier.class);
         for (var choice : List.of(AiChoice.IN_HOUSE_ONLY, AiChoice.CLOUD)) {
             var ceiling = ceiling(choice).orElseThrow();
             loosestWithin(rows, ceiling).ifPresent(binding -> serving.put(ceiling, binding));
@@ -156,25 +158,25 @@ public class MemberAiRoutingAdapter implements WorkspaceAiAvailability {
         // Reviews that are off have no rows worth loading; each purpose is loaded once and shared by both
         // choices.
         var reviewRows = rowsIfEnabled(
-                workspaceId, AgentPurpose.PRACTICE_REVIEW, workspace.features().practicesEnabled());
-        var mentorRows = bindings.findByWorkspaceIdAndPurpose(workspaceId, AgentPurpose.MENTOR);
+                workspaceId, ModelPurpose.PRACTICE_REVIEW, workspace.features().practicesEnabled());
+        var conversationRows = bindings.findByWorkspaceIdAndPurpose(workspaceId, ModelPurpose.CONVERSATION);
         var choices = List.of(AiChoice.IN_HOUSE_ONLY, AiChoice.CLOUD);
         var options = new ArrayList<Option>();
         for (var choice : choices) {
             var review = ceiling(choice).flatMap(ceiling -> loosestWithin(reviewRows, ceiling));
-            var mentor = ceiling(choice).flatMap(ceiling -> loosestWithin(mentorRows, ceiling));
-            var models = Stream.concat(review.stream(), mentor.stream())
+            var conversation = ceiling(choice).flatMap(ceiling -> loosestWithin(conversationRows, ceiling));
+            var models = Stream.concat(review.stream(), conversation.stream())
                     .map(MemberAiRoutingAdapter::model)
                     .flatMap(Optional::stream)
                     .distinct()
                     .toList();
-            options.add(new Option(choice, review.isPresent(), mentor.isPresent(), models));
+            options.add(new Option(choice, review.isPresent(), conversation.isPresent(), models));
         }
         return List.copyOf(options);
     }
 
     /** The ready binding's model declarations; the connection URL stays on the server. */
-    private static Optional<WorkspaceAiAvailability.Model> model(WorkspaceAgentBinding binding) {
+    private static Optional<WorkspaceAiAvailability.Model> model(WorkspaceModelAssignment binding) {
         var instance = binding.getInstanceModel();
         if (instance != null) {
             return Optional.of(new WorkspaceAiAvailability.Model(
@@ -194,29 +196,30 @@ public class MemberAiRoutingAdapter implements WorkspaceAiAvailability {
         return Optional.empty();
     }
 
-    private List<WorkspaceAgentBinding> rowsIfEnabled(
-            long workspaceId, AgentPurpose purpose, @Nullable Boolean featureEnabled) {
+    private List<WorkspaceModelAssignment> rowsIfEnabled(
+            long workspaceId, ModelPurpose purpose, @Nullable Boolean featureEnabled) {
         return Boolean.TRUE.equals(featureEnabled)
                 ? bindings.findByWorkspaceIdAndPurpose(workspaceId, purpose)
                 : List.of();
     }
 
-    private Optional<WorkspaceAgentBinding> loosestWithin(List<WorkspaceAgentBinding> rows, DataHandlingTier ceiling) {
+    private Optional<WorkspaceModelAssignment> loosestWithin(
+            List<WorkspaceModelAssignment> rows, DataHandlingTier ceiling) {
         return rows.stream()
                 .filter(binding -> binding.getDataHandlingTier().isWithin(ceiling))
                 .filter(this::ready)
-                .max(Comparator.comparing(WorkspaceAgentBinding::getDataHandlingTier));
+                .max(Comparator.comparing(WorkspaceModelAssignment::getDataHandlingTier));
     }
 
-    private boolean ready(WorkspaceAgentBinding binding) {
+    private boolean ready(WorkspaceModelAssignment binding) {
         return binding.isEnabled() && models.isAvailable(binding);
     }
 
-    private boolean servesUndeclared(WorkspaceAgentBinding binding) {
+    private boolean servesUndeclared(WorkspaceModelAssignment binding) {
         return ready(binding) && currentTier(binding) == DataHandlingTier.UNDECLARED;
     }
 
-    private static DataHandlingTier currentTier(WorkspaceAgentBinding binding) {
+    private static DataHandlingTier currentTier(WorkspaceModelAssignment binding) {
         var instance = binding.getInstanceModel();
         if (instance != null) return instance.getDataHandlingTier();
         var own = binding.getWorkspaceModel();

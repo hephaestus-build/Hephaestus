@@ -7,9 +7,9 @@ import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
-import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBinding;
-import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBindingRepository;
+import de.tum.cit.aet.hephaestus.agent.config.ModelPurpose;
+import de.tum.cit.aet.hephaestus.agent.config.WorkspaceModelAssignment;
+import de.tum.cit.aet.hephaestus.agent.config.WorkspaceModelAssignmentRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.testconfig.LlmCatalogTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
@@ -43,7 +43,7 @@ class LlmModelAdminControllerIntegrationTest extends AbstractWorkspaceIntegratio
     }
 
     private static final String ADMIN_TOKEN = "mock-jwt-token-for-admin-user";
-    private static final String MENTOR_TOKEN = "mock-jwt-token-for-mentor-user";
+    private static final String CONVERSATION_TOKEN = "mock-jwt-token-for-conversation-user";
 
     @Autowired
     private WebTestClient webTestClient;
@@ -55,7 +55,7 @@ class LlmModelAdminControllerIntegrationTest extends AbstractWorkspaceIntegratio
     private LlmConnectionRepository llmConnectionRepository;
 
     @Autowired
-    private WorkspaceAgentBindingRepository agentBindingRepository;
+    private WorkspaceModelAssignmentRepository modelAssignmentRepository;
 
     @Autowired
     private LlmModelRepository llmModelRepository;
@@ -106,7 +106,7 @@ class LlmModelAdminControllerIntegrationTest extends AbstractWorkspaceIntegratio
         webTestClient
                 .put()
                 .uri("/admin/llm/models/1/capabilities")
-                .headers(h -> h.setBearerAuth(MENTOR_TOKEN))
+                .headers(h -> h.setBearerAuth(CONVERSATION_TOKEN))
                 .exchange()
                 .expectStatus()
                 .isForbidden()
@@ -464,11 +464,11 @@ class LlmModelAdminControllerIntegrationTest extends AbstractWorkspaceIntegratio
         User owner = persistUser("delete-guard-owner");
         Workspace workspace =
                 createWorkspace("delete-guard-ws", "Delete Guard", "delete-guard-org", AccountType.ORG, owner);
-        WorkspaceAgentBinding binding = new WorkspaceAgentBinding();
+        WorkspaceModelAssignment binding = new WorkspaceModelAssignment();
         binding.setWorkspace(workspace);
-        binding.setPurpose(AgentPurpose.PRACTICE_REVIEW);
+        binding.setPurpose(ModelPurpose.PRACTICE_REVIEW);
         binding.setInstanceModel(llmModelFromRepository(model.id()));
-        agentBindingRepository.save(binding);
+        modelAssignmentRepository.save(binding);
 
         webTestClient
                 .delete()
@@ -520,7 +520,7 @@ class LlmModelAdminControllerIntegrationTest extends AbstractWorkspaceIntegratio
         webTestClient
                 .get()
                 .uri("/admin/llm/models")
-                .headers(h -> h.setBearerAuth(MENTOR_TOKEN))
+                .headers(h -> h.setBearerAuth(CONVERSATION_TOKEN))
                 .exchange()
                 .expectStatus()
                 .isForbidden()

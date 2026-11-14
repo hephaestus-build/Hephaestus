@@ -1,6 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.sandbox.claim;
 
-import de.tum.cit.aet.hephaestus.mentor.MentorLedgerEvents;
+import de.tum.cit.aet.hephaestus.conversation.ConversationLedgerEvents;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -58,7 +58,7 @@ public class ConversationSandboxRevocations {
     }
 
     @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT, fallbackExecution = true)
-    public void contextChanged(MentorLedgerEvents.ContextChanged change) {
+    public void contextChanged(ConversationLedgerEvents.ContextChanged change) {
         transactions.executeWithoutResult(status -> sandboxes.revokeConversations(change.workspaceId()));
     }
 }

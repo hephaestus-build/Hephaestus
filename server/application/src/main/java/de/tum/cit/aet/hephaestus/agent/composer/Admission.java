@@ -53,7 +53,7 @@ record Admission(
     private static final List<String> CONVERSATION_DECISIONS = List.of(
             "ADMIT",
             "FEEDBACK_OFF",
-            "MENTOR_UNAVAILABLE",
+            "CONVERSATION_UNAVAILABLE",
             "GATE_REFUSED",
             "UNATTRIBUTABLE_SUBJECT",
             "REVIEWER_DEFERRED",

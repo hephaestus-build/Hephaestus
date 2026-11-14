@@ -1,7 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.usage;
 
+import de.tum.cit.aet.hephaestus.conversation.ConversationTurn;
 import de.tum.cit.aet.hephaestus.integration.core.spi.UsagePricingState;
-import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
 import de.tum.cit.aet.hephaestus.practices.spi.ModelKind;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -32,7 +32,7 @@ import org.jspecify.annotations.Nullable;
  * rows of their own hold one job attempt, practice script model kind or turn attempt each, have no run, and keep
  * their {@code totalCalls}.
  *
- * <p>{@code sourceId} is a soft reference (no FK) to the originating {@code review_job.id} or {@code mentor_turn.id},
+ * <p>{@code sourceId} is a soft reference (no FK) to the originating {@code review_job.id} or {@code conversation_turn.id},
  * and {@code practiceId} to the practice whose script made the call: accounting must survive their deletion. The run
  * reference is cleared when the run is deleted, for the same reason.
  */
@@ -112,7 +112,7 @@ public class LlmUsageEvent {
     /** The first failure of the call; no request, response, or provider message is retained. */
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "call_failure", columnDefinition = "jsonb", updatable = false)
-    private MentorTurn.@Nullable FailedCall callFailure;
+    private ConversationTurn.@Nullable FailedCall callFailure;
 
     /** Database time when the failure was recorded, independent of when the call opened. */
     @Nullable

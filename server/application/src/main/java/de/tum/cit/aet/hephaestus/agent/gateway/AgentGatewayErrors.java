@@ -1,7 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.gateway;
 
+import de.tum.cit.aet.hephaestus.agent.conversation.host.ConversationTurnController;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewSandboxController;
-import de.tum.cit.aet.hephaestus.agent.mentor.host.HephTurnController;
 import de.tum.cit.aet.hephaestus.agent.proxy.JobTokenAuthenticationFilter;
 import de.tum.cit.aet.hephaestus.agent.proxy.ResultAdmissionController;
 import de.tum.cit.aet.hephaestus.agent.run.StaleRunException;
@@ -15,13 +15,13 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 /**
- * The answers that every route a sandbox calls gives the same way: the gateway, Heph's turn, the review runtime, result
+ * The answers that every route a sandbox calls gives the same way: the gateway, Hephaestus's turn, the review runtime, result
  * admission and the model proxy. It comes before the global advice, which would answer {@code 409} or {@code 500}.
  */
 @RestControllerAdvice(
         basePackageClasses = {
             AgentRunController.class,
-            HephTurnController.class,
+            ConversationTurnController.class,
             ReviewSandboxController.class,
             ResultAdmissionController.class
         })

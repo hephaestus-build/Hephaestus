@@ -162,34 +162,6 @@ export const zAdminWorkspaceView = z.object({
 	workspaceSlug: z.string(),
 });
 
-/**
- * A workspace's agent binding for one purpose
- */
-export const zAgentBinding = z.object({
-	dataHandlingTier: z.enum(["IN_HOUSE", "CLOUD", "UNDECLARED"]),
-	enabled: z.boolean(),
-	instanceModelId: z.int().optional(),
-	purpose: z.enum(["PRACTICE_REVIEW", "MENTOR"]),
-	ready: z.boolean(),
-	servedTiers: z.array(z.enum(["IN_HOUSE", "CLOUD", "UNDECLARED"])),
-	timeoutSeconds: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.optional(),
-	workspaceModelId: z.int().optional(),
-});
-
-/**
- * Bind a model and execution limits to an agent purpose
- */
-export const zAgentBindingRequest = z.object({
-	enabled: z.boolean().optional(),
-	instanceModelId: z.int().optional(),
-	timeoutSeconds: z.int().gte(30).lte(10800).optional(),
-	workspaceModelId: z.int().optional(),
-});
-
 export const zAiChoiceRequest = z.object({
 	choice: z.enum(["NO_AI", "IN_HOUSE_ONLY", "CLOUD"]),
 });
@@ -276,7 +248,7 @@ export const zAvailableLlmModel = z.object({
 	per1mInputUsd: z.number().optional(),
 	per1mOutputUsd: z.number().optional(),
 	pricingMode: z.enum(["PRICED", "NO_CHARGE", "UNPRICED"]),
-	purposes: z.array(z.enum(["PRACTICE_REVIEW", "MENTOR"])),
+	purposes: z.array(z.enum(["PRACTICE_REVIEW", "CONVERSATION"])),
 	reasoningEffort: z.enum(["NONE", "MINIMAL", "LOW", "MEDIUM", "HIGH", "XHIGH", "MAX"]).optional(),
 	scope: z.enum(["SHARED", "WORKSPACE"]),
 });
@@ -429,6 +401,7 @@ export const zConfigAuditEntryView = z.object({
 		.enum([
 			"PROVIDER_RESOURCE_RELEASE",
 			"PRACTICE_REVIEW_SETTINGS",
+			"MODEL_ASSIGNMENT",
 			"AGENT_BINDING",
 			"AGENT_CONFIG",
 			"AI_CONFIG_BINDING",
@@ -571,6 +544,109 @@ export const zContributor = z.object({
 	id: z.int(),
 	login: z.string(),
 	name: z.string(),
+});
+
+/**
+ * A practice result, problem or prepared feedback Hephaestus showed in a message
+ */
+export const zConversationLink = z.object({
+	id: z.uuid(),
+	itemId: z.int().optional(),
+	kind: z.enum(["RESULT", "PROBLEM", "FEEDBACK"]),
+	practiceSlug: z.string().optional(),
+	text: z.string(),
+});
+
+/**
+ * How far the developer read their Hephaestus conversation
+ */
+export const zConversationRead = z.object({
+	lastReadAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
+});
+
+/**
+ * How far the developer read their Hephaestus conversation
+ */
+export const zConversationReadRequest = z.object({
+	at: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
+});
+
+/**
+ * The thread on a top-level message
+ */
+export const zConversationThreadSummary = z.object({
+	conversationId: z.uuid(),
+	lastReplyAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
+	latestSeq: z.int(),
+	parentEntryId: z.uuid(),
+	replyCount: z.int(),
+});
+
+/**
+ * What Hephaestus is doing in a running turn
+ */
+export const zConversationTurnPartial = z.object({
+	activity: z.enum(["THINKING", "WRITING", "TOOL"]),
+	stage: z.string(),
+	text: z.string(),
+	tool: z.string().optional(),
+});
+
+/**
+ * One conversation turn: a requested answer or an opted-in proactive digest
+ */
+export const zConversationTurn = z.object({
+	attempt: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	conversationId: z.uuid(),
+	createdAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
+	error: z.string().optional(),
+	finishedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
+	id: z.uuid(),
+	parentEntryId: z.uuid().optional(),
+	partial: zConversationTurnPartial.optional(),
+	requestId: z.string(),
+	status: z.enum(["QUEUED", "RUNNING", "DONE", "FAILED", "STOPPED"]),
+	surface: z.enum(["APP", "SLACK", "SYSTEM"]),
+	waitingFor: z.enum(["CAPACITY"]).optional(),
+});
+
+/**
+ * The developer's Hephaestus conversation in a workspace at one moment
+ */
+export const zConversation = z.object({
+	activeTurns: z.array(zConversationTurn),
+	id: z.uuid().optional(),
+	lastAnswerAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
+	lastReadAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
+	latestSeq: z.int(),
+	threads: z.array(zConversationThreadSummary),
+});
+
+/**
+ * A question to Hephaestus from the app
+ */
+export const zConversationTurnRequest = z.object({
+	pageContext: z.string().min(0).max(500).optional(),
+	parentEntryId: z.uuid().optional(),
+	requestId: z.uuid(),
+	text: z.string().min(1),
+});
+
+/**
+ * A status change the developer asks for on a turn
+ */
+export const zConversationTurnStatusRequest = z.object({
+	status: z.enum(["STOPPED"]),
+});
+
+/**
+ * The developer's vote on one of Hephaestus's messages
+ */
+export const zConversationVoteRequest = z.object({
+	vote: z.enum(["HELPFUL", "NOT_HELPFUL"]),
 });
 
 export const zCoverageOmission = z.object({
@@ -1075,6 +1151,7 @@ export const zFeedbackCheck = z.object({
 
 export const zFeedbackCopy = z.object({
 	body: z.string().nullable(),
+	conversationEntryId: z.uuid().nullable(),
 	endLine: z
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
@@ -1085,7 +1162,6 @@ export const zFeedbackCopy = z.object({
 	id: z.uuid(),
 	kind: z.enum(["SUMMARY", "LINE_NOTE", "FILE_NOTE", "CHAT_TURN"]),
 	lastError: z.string().nullable(),
-	mentorEntryId: z.uuid().nullable(),
 	path: z.string().nullable(),
 	position: z
 		.int()
@@ -1919,7 +1995,7 @@ export const zLlmConnection = z.object({
 	enabled: z.boolean(),
 	hasApiKey: z.boolean(),
 	id: z.int(),
-	purposes: z.array(z.enum(["PRACTICE_REVIEW", "MENTOR"])),
+	purposes: z.array(z.enum(["PRACTICE_REVIEW", "CONVERSATION"])),
 	slug: z.string(),
 	updatedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
 });
@@ -2134,106 +2210,31 @@ export const zMemberReviewReadiness = z.object({
 });
 
 /**
- * A practice result, problem or prepared feedback Hephaestus showed in a message
+ * A workspace's model assignment for one purpose
  */
-export const zMentorLink = z.object({
-	id: z.uuid(),
-	itemId: z.int().optional(),
-	kind: z.enum(["RESULT", "PROBLEM", "FEEDBACK"]),
-	practiceSlug: z.string().optional(),
-	text: z.string(),
-});
-
-/**
- * How far the developer read their Hephaestus conversation
- */
-export const zMentorRead = z.object({
-	lastReadAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
-});
-
-/**
- * How far the developer read their Hephaestus conversation
- */
-export const zMentorReadRequest = z.object({
-	at: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
-});
-
-/**
- * The thread on a top-level message
- */
-export const zMentorThreadSummary = z.object({
-	conversationId: z.uuid(),
-	lastReplyAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
-	latestSeq: z.int(),
-	parentEntryId: z.uuid(),
-	replyCount: z.int(),
-});
-
-/**
- * What Hephaestus is doing in a running turn
- */
-export const zMentorTurnPartial = z.object({
-	activity: z.enum(["THINKING", "WRITING", "TOOL"]),
-	stage: z.string(),
-	text: z.string(),
-	tool: z.string().optional(),
-});
-
-/**
- * One conversation turn: a requested answer or an opted-in proactive digest
- */
-export const zMentorTurn = z.object({
-	attempt: z
+export const zModelAssignment = z.object({
+	dataHandlingTier: z.enum(["IN_HOUSE", "CLOUD", "UNDECLARED"]),
+	enabled: z.boolean(),
+	instanceModelId: z.int().optional(),
+	purpose: z.enum(["PRACTICE_REVIEW", "CONVERSATION"]),
+	ready: z.boolean(),
+	servedTiers: z.array(z.enum(["IN_HOUSE", "CLOUD", "UNDECLARED"])),
+	timeoutSeconds: z
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	conversationId: z.uuid(),
-	createdAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
-	error: z.string().optional(),
-	finishedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
-	id: z.uuid(),
-	parentEntryId: z.uuid().optional(),
-	partial: zMentorTurnPartial.optional(),
-	requestId: z.string(),
-	status: z.enum(["QUEUED", "RUNNING", "DONE", "FAILED", "STOPPED"]),
-	surface: z.enum(["APP", "SLACK", "SYSTEM"]),
-	waitingFor: z.enum(["FREE_HEPH"]).optional(),
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	workspaceModelId: z.int().optional(),
 });
 
 /**
- * The developer's Hephaestus conversation in a workspace at one moment
+ * Bind a model and execution limits to an agent purpose
  */
-export const zMentorConversation = z.object({
-	activeTurns: z.array(zMentorTurn),
-	id: z.uuid().optional(),
-	lastAnswerAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
-	lastReadAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
-	latestSeq: z.int(),
-	threads: z.array(zMentorThreadSummary),
-});
-
-/**
- * A question to Hephaestus from the app
- */
-export const zMentorTurnRequest = z.object({
-	pageContext: z.string().min(0).max(500).optional(),
-	parentEntryId: z.uuid().optional(),
-	requestId: z.uuid(),
-	text: z.string().min(1),
-});
-
-/**
- * A status change the developer asks for on a turn
- */
-export const zMentorTurnStatusRequest = z.object({
-	status: z.enum(["STOPPED"]),
-});
-
-/**
- * The developer's vote on one of Hephaestus's messages
- */
-export const zMentorVoteRequest = z.object({
-	vote: z.enum(["HELPFUL", "NOT_HELPFUL"]),
+export const zModelAssignmentRequest = z.object({
+	enabled: z.boolean().optional(),
+	instanceModelId: z.int().optional(),
+	timeoutSeconds: z.int().gte(30).lte(10800).optional(),
+	workspaceModelId: z.int().optional(),
 });
 
 export const zMovePracticeRequest = z.object({
@@ -3605,7 +3606,7 @@ export const zReviewFeedback = z.object({
 		"GITHUB",
 		"GITLAB",
 		"OTHER_WORK",
-		"HEPH",
+		"APP",
 		"SLACK",
 		"NEXT_CONVERSATION",
 		"PRACTICE_PAGES",
@@ -3751,7 +3752,7 @@ export const zReviewFeedbackDetail = z.object({
 		"GITHUB",
 		"GITLAB",
 		"OTHER_WORK",
-		"HEPH",
+		"APP",
 		"SLACK",
 		"NEXT_CONVERSATION",
 		"PRACTICE_PAGES",
@@ -5745,8 +5746,8 @@ export const zUpdateUserSettings = z.object({
  * Request to turn practice reviews and their triggers on or off. Null fields are left unchanged.
  */
 export const zUpdateWorkspaceFeaturesRequest = z.object({
-	practiceReviewAutoTriggerEnabled: z.boolean().optional(),
-	practiceReviewManualTriggerEnabled: z.boolean().optional(),
+	practiceReviewEventEnabled: z.boolean().optional(),
+	practiceReviewRequestEnabled: z.boolean().optional(),
 	practicesEnabled: z.boolean().optional(),
 });
 
@@ -6022,14 +6023,14 @@ export const zWebVitalsReport = z.object({
  * One piece of feedback that reached the developer in the week, and where it was delivered
  */
 export const zWeeklyDigestFeedback = z.object({
+	conversationEntryId: z.uuid().optional(),
+	conversationParentEntryId: z.uuid().optional(),
 	deliveredAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
 	destination: z.enum(["ON_WORK", "PRACTICE_PAGE", "CONVERSATION"]),
 	feedbackId: z.uuid(),
 	groupName: z.string().optional(),
 	groupSlug: z.string().optional(),
 	item: zItemRef.optional(),
-	mentorEntryId: z.uuid().optional(),
-	mentorParentEntryId: z.uuid().optional(),
 	practiceName: z.string(),
 	practiceSlug: z.string(),
 	replaced: z.boolean(),
@@ -6055,22 +6056,22 @@ export const zWeeklyDigest = z.object({
 /**
  * One message of a Hephaestus conversation
  */
-export const zMentorEntry = z.object({
+export const zConversationEntry = z.object({
 	conversationId: z.uuid(),
 	createdAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
 	deleted: z.boolean(),
 	digest: zWeeklyDigest.optional(),
 	editedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
 	id: z.uuid(),
-	kind: z.enum(["USER", "HEPH", "DIGEST"]),
-	links: z.array(zMentorLink),
+	kind: z.enum(["USER", "ANSWER", "DIGEST"]),
+	links: z.array(zConversationLink),
 	parentEntryId: z.uuid().optional(),
 	requestId: z.string().optional(),
 	seq: z.int(),
 	slackDelivery: z.enum(["PENDING", "DELIVERED", "UNCERTAIN", "FAILED"]).optional(),
 	surface: z.enum(["APP", "SLACK", "SYSTEM"]),
 	text: z.string(),
-	thread: zMentorThreadSummary.optional(),
+	thread: zConversationThreadSummary.optional(),
 	turnError: z.string().optional(),
 	turnId: z.uuid().optional(),
 	turnStatus: z.enum(["QUEUED", "RUNNING", "DONE", "FAILED", "STOPPED"]).optional(),
@@ -6078,28 +6079,28 @@ export const zMentorEntry = z.object({
 });
 
 /**
- * One page of a list that a client reads forward with a cursor
+ * A stored question and the turn that answers it
  */
-export const zCursorPageDtoMentorEntry = z.object({
-	content: z.array(zMentorEntry),
-	nextCursor: z.string().optional(),
+export const zConversationSubmission = z.object({
+	question: zConversationEntry,
+	turn: zConversationTurn,
 });
 
 /**
- * A stored question and the turn that answers it
+ * One page of a list that a client reads forward with a cursor
  */
-export const zMentorSubmission = z.object({
-	question: zMentorEntry,
-	turn: zMentorTurn,
+export const zCursorPageDtoConversationEntry = z.object({
+	content: z.array(zConversationEntry),
+	nextCursor: z.string().optional(),
 });
 
 /**
  * A thread: the message it replies to and one page of its replies, oldest first
  */
-export const zMentorThread = z.object({
+export const zConversationThread = z.object({
 	conversationId: z.uuid().optional(),
-	parent: zMentorEntry,
-	replies: zCursorPageDtoMentorEntry,
+	parent: zConversationEntry,
+	replies: zCursorPageDtoConversationEntry,
 });
 
 export const zWithheldScanReportItem = z.object({
@@ -6146,8 +6147,8 @@ export const zWorkspace = z.object({
 	installationId: z.int().optional(),
 	installationLinkedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
 	kind: z.string().optional(),
-	practiceReviewAutoTriggerEnabled: z.boolean(),
-	practiceReviewManualTriggerEnabled: z.boolean(),
+	practiceReviewEventEnabled: z.boolean(),
+	practiceReviewRequestEnabled: z.boolean(),
 	practicesEnabled: z.boolean(),
 	providerType: z.enum(["GITHUB", "GITLAB", "SLACK", "OUTLINE"]).optional(),
 	publicActivityEnabled: z.boolean(),
@@ -6206,7 +6207,7 @@ export const zWorkspaceAiModel = z.object({
 
 export const zWorkspaceAiOption = z.object({
 	choice: z.enum(["NO_AI", "IN_HOUSE_ONLY", "CLOUD"]),
-	mentorReady: z.boolean(),
+	conversationReady: z.boolean(),
 	models: z.array(zWorkspaceAiModel),
 	practiceReviewsReady: z.boolean(),
 });
@@ -6262,7 +6263,7 @@ export const zWorkspaceLlmConnection = z.object({
 	enabled: z.boolean(),
 	hasApiKey: z.boolean(),
 	id: z.int(),
-	purposes: z.array(z.enum(["PRACTICE_REVIEW", "MENTOR"])),
+	purposes: z.array(z.enum(["PRACTICE_REVIEW", "CONVERSATION"])),
 	slug: z.string(),
 	updatedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
 });
@@ -6414,15 +6415,17 @@ export const zWorkspaceOnboardingLink = z.object({
 /**
  * One member's view of setup in one workspace. <code>aiChoice</code> is the account's answer, the same in
  * every workspace; <code>aiOptions</code> says what this workspace has set up under each answer, which is
- * what differs between workspaces. <code>mentorRefusal</code> is this member's own answer from Hephaestus's admission.
+ * what differs between workspaces. <code>conversationRefusal</code> is this member's own answer from Hephaestus's admission.
  */
 export const zWorkspaceOnboarding = z.object({
 	aiChoice: z.enum(["NO_AI", "IN_HOUSE_ONLY", "CLOUD"]).optional(),
 	aiChoiceRequired: z.boolean(),
 	aiOptions: z.array(zWorkspaceAiOption),
+	conversationRefusal: z
+		.enum(["PERSON_ERASED", "NO_AI", "CHOICE_REQUIRED", "UNAVAILABLE"])
+		.optional(),
 	enabled: z.boolean(),
 	links: z.array(zWorkspaceOnboardingLink),
-	mentorRefusal: z.enum(["PERSON_ERASED", "NO_AI", "CHOICE_REQUIRED", "UNAVAILABLE"]).optional(),
 	needsSetup: z.boolean(),
 	workspaceName: z.string(),
 });

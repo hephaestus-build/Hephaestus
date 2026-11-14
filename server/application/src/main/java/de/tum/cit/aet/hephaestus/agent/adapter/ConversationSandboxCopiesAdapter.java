@@ -1,7 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.adapter;
 
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.ConversationSandboxRevocations;
-import de.tum.cit.aet.hephaestus.mentor.spi.ConversationSandboxCopies;
+import de.tum.cit.aet.hephaestus.conversation.spi.ConversationSandboxCopies;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;

@@ -42,7 +42,7 @@ The alert or the objective tells the operator when the answer needs work.
 | Which route is slow at the 95th percentile? | `http_server_requests_seconds_bucket`, by `uri` | The Activity objective |
 | Does the database pool make requests wait? | `hikaricp_connections_acquire_seconds`, `hikaricp_connections_timeout_total` | `HephaestusDatabasePoolSlow`, `HephaestusDatabaseConnectionTimeouts` |
 | Do pages show their content fast enough? | `web_vital_duration_seconds` | `HephaestusPageExperiencePoor`, `HephaestusPageExperiencePoorWeekly` |
-| Does a conversation answer, and how fast does it start? | `mentor_turn_completed_total`, `agent_run_first_token_seconds` | `HephaestusConversationTurnsFailing` and the conversation objective |
+| Does a conversation answer, and how fast does it start? | `conversation_turn_completed_total`, `agent_run_first_token_seconds` | `HephaestusConversationTurnsFailing` and the conversation objective |
 | Do provider events arrive and get processed? | `webhook_publish_total`, `integration_consumer_*` | The webhook and provider event alerts |
 | Does a workspace sync wait for a new credential? | `workspace_sync_paused_total`, by `kind` and `reason` | None. Workspace admins receive the connection alert |
 | Does the GitLab sweep verify each note deletion? | `gitlab_note_reconciliation_unverified_total` counts issues and merge requests whose notes a sweep could not check | None. The next reconciliation checks them again, and the sync job of that workspace ends with a warning |

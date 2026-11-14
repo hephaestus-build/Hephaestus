@@ -3,10 +3,10 @@ package de.tum.cit.aet.hephaestus.testconfig;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmConnectionRepository;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelRepository;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
-import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
-import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBinding;
-import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBindingRepository;
+import de.tum.cit.aet.hephaestus.agent.config.ModelPurpose;
+import de.tum.cit.aet.hephaestus.agent.config.WorkspaceModelAssignment;
+import de.tum.cit.aet.hephaestus.agent.config.WorkspaceModelAssignmentRepository;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import tools.jackson.databind.JsonNode;
@@ -21,11 +21,11 @@ public final class AdmittedReviewJobFixtures {
             Workspace workspace,
             LlmConnectionRepository connections,
             LlmModelRepository models,
-            WorkspaceAgentBindingRepository bindings,
+            WorkspaceModelAssignmentRepository bindings,
             LlmModelResolver resolver,
             ObjectMapper mapper) {
         var existing = bindings.findByWorkspaceIdAndPurposeAndDataHandlingTier(
-                workspace.getId(), AgentPurpose.PRACTICE_REVIEW, DataHandlingTier.UNDECLARED);
+                workspace.getId(), ModelPurpose.PRACTICE_REVIEW, DataHandlingTier.UNDECLARED);
         if (existing.isPresent())
             return ConfigSnapshot.from(existing.get(), resolver).toJson(mapper);
 
@@ -33,26 +33,27 @@ public final class AdmittedReviewJobFixtures {
         String slug = "review-delivery-" + workspace.getId();
         var connection = connections.save(LlmCatalogTestFixtures.connection(slug));
         var model = models.save(LlmCatalogTestFixtures.model(connection, slug, "test-model"));
-        var binding = new WorkspaceAgentBinding();
+        var binding = new WorkspaceModelAssignment();
         binding.setWorkspace(workspace);
-        binding.setPurpose(AgentPurpose.PRACTICE_REVIEW);
+        binding.setPurpose(ModelPurpose.PRACTICE_REVIEW);
         binding.setInstanceModel(model);
         return ConfigSnapshot.from(bindings.saveAndFlush(binding), resolver).toJson(mapper);
     }
 
-    /** A conversation-capable fixture reuses the review's configured model through a distinct Mentor binding. */
-    public static WorkspaceAgentBinding mentorBinding(Workspace workspace, WorkspaceAgentBindingRepository bindings) {
+    /** A conversation-capable fixture reuses the review's configured model through a distinct Conversation binding. */
+    public static WorkspaceModelAssignment conversationBinding(
+            Workspace workspace, WorkspaceModelAssignmentRepository bindings) {
         var existing = bindings.findByWorkspaceIdAndPurposeAndDataHandlingTier(
-                workspace.getId(), AgentPurpose.MENTOR, DataHandlingTier.UNDECLARED);
+                workspace.getId(), ModelPurpose.CONVERSATION, DataHandlingTier.UNDECLARED);
         if (existing.isPresent()) return existing.get();
         var review = bindings.findByWorkspaceIdAndPurposeAndDataHandlingTier(
-                        workspace.getId(), AgentPurpose.PRACTICE_REVIEW, DataHandlingTier.UNDECLARED)
+                        workspace.getId(), ModelPurpose.PRACTICE_REVIEW, DataHandlingTier.UNDECLARED)
                 .orElseThrow();
-        var mentor = new WorkspaceAgentBinding();
-        mentor.setWorkspace(workspace);
-        mentor.setPurpose(AgentPurpose.MENTOR);
-        mentor.setInstanceModel(review.getInstanceModel());
-        mentor.setWorkspaceModel(review.getWorkspaceModel());
-        return bindings.saveAndFlush(mentor);
+        var conversation = new WorkspaceModelAssignment();
+        conversation.setWorkspace(workspace);
+        conversation.setPurpose(ModelPurpose.CONVERSATION);
+        conversation.setInstanceModel(review.getInstanceModel());
+        conversation.setWorkspaceModel(review.getWorkspaceModel());
+        return bindings.saveAndFlush(conversation);
     }
 }

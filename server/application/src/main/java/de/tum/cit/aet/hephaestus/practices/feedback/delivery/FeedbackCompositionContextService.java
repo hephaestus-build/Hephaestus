@@ -9,11 +9,11 @@ import de.tum.cit.aet.hephaestus.practices.model.Result;
 import de.tum.cit.aet.hephaestus.practices.result.ResultRepository;
 import de.tum.cit.aet.hephaestus.practices.spi.ConversationDecision;
 import de.tum.cit.aet.hephaestus.practices.spi.ConversationEligibility;
+import de.tum.cit.aet.hephaestus.practices.spi.ConversationReadinessQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCompositionContext;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackDestination;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackMode;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackStopReason;
-import de.tum.cit.aet.hephaestus.practices.spi.MentorReadinessQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.PracticePageDecision;
 import de.tum.cit.aet.hephaestus.practices.spi.PracticePageSupport;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultHistoryQuery;
@@ -49,7 +49,7 @@ public class FeedbackCompositionContextService {
     private final PracticePageFeedbackRouter pageRouter;
     private final FeedbackGate gate;
     private final ResultHistoryQuery history;
-    private final MentorReadinessQuery mentor;
+    private final ConversationReadinessQuery conversation;
     private final Clock clock;
 
     public FeedbackCompositionContext read(long workspaceId, UUID reviewId, List<UUID> admittedResultIds) {
@@ -201,9 +201,9 @@ public class FeedbackCompositionContextService {
         var check = gate.evaluateComposition(review, developer, List.of(result), FeedbackDestination.CONVERSATION);
         if (!check.allowed())
             return new ConversationAdmission(ConversationDecision.GATE_REFUSED, Objects.requireNonNull(check.reason()));
-        if (!mentor.isReady(review.workspaceId()))
+        if (!conversation.isReady(review.workspaceId()))
             return new ConversationAdmission(
-                    ConversationDecision.MENTOR_UNAVAILABLE, FeedbackStopReason.RECIPIENT_UNAVAILABLE);
+                    ConversationDecision.CONVERSATION_UNAVAILABLE, FeedbackStopReason.RECIPIENT_UNAVAILABLE);
         // A place or a delivery on the work does not close the conversation: each destination is judged on its own.
         return new ConversationAdmission(ConversationDecision.ADMIT, null);
     }

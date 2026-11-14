@@ -43,7 +43,7 @@ final class SlackBackoff {
     private static final long RATE_LIMIT_MAX_WAIT_MS = 20_000L;
 
     /**
-     * Wider bounds for history reads that no one waits on: the nightly history reconciliation and the Heph reply
+     * Wider bounds for history reads that no one waits on: the nightly history reconciliation and the Hephaestus reply
      * reconciler's history read. Slack's clamp on {@code conversations.history}/{@code conversations.replies} for
      * distributed non-Marketplace apps (1 request per minute) answers with {@code Retry-After: 60}, which the
      * interactive {@link #RATE_LIMIT_MAX_WAIT_MS} cap would refuse.

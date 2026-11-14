@@ -27,5 +27,5 @@ public record LlmUsageByDayDTO(
         @NonNull
         @Schema(
                 description =
-                        "Runs: job attempts and mentor turn attempts. A practice script call counts toward the run of its review.")
+                        "Runs: job attempts and conversation turn attempts. A practice script call counts toward the run of its review.")
         Long events) {}

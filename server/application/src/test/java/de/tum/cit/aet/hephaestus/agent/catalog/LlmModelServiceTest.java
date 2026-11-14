@@ -12,7 +12,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBindingRepository;
+import de.tum.cit.aet.hephaestus.agent.config.WorkspaceModelAssignmentRepository;
 import de.tum.cit.aet.hephaestus.core.auth.spi.LlmModelAudit;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
@@ -56,7 +56,7 @@ class LlmModelServiceTest extends BaseUnitTest {
     private WorkspaceRepository workspaceRepository;
 
     @Mock
-    private WorkspaceAgentBindingRepository agentBindingRepository;
+    private WorkspaceModelAssignmentRepository modelAssignmentRepository;
 
     @Mock
     private LlmModelAudit llmModelAudit;
@@ -73,7 +73,7 @@ class LlmModelServiceTest extends BaseUnitTest {
                 priceRepository,
                 grantRepository,
                 WorkspaceSummaryFixtures.summaries(workspaceRepository),
-                agentBindingRepository,
+                modelAssignmentRepository,
                 llmModelAudit);
         model = new LlmModel();
         model.setId(7L);
@@ -590,8 +590,8 @@ class LlmModelServiceTest extends BaseUnitTest {
     class Deletion {
 
         @Test
-        void deletingAModelStillBoundToAnAgentBindingIsRejected() {
-            when(agentBindingRepository.existsByInstanceModelId(7L)).thenReturn(true);
+        void deletingAModelStillBoundToAModelAssignmentIsRejected() {
+            when(modelAssignmentRepository.existsByInstanceModelId(7L)).thenReturn(true);
 
             assertThatThrownBy(() -> modelService.delete(7L)).isInstanceOf(LlmModelInUseException.class);
             verify(modelRepository, never()).delete(any());
@@ -599,7 +599,7 @@ class LlmModelServiceTest extends BaseUnitTest {
 
         @Test
         void deletingAnUnboundModelSucceeds() {
-            when(agentBindingRepository.existsByInstanceModelId(7L)).thenReturn(false);
+            when(modelAssignmentRepository.existsByInstanceModelId(7L)).thenReturn(false);
 
             modelService.delete(7L);
 
@@ -609,7 +609,7 @@ class LlmModelServiceTest extends BaseUnitTest {
 
         @Test
         void deletingAModelDoesNotAuditWhenTheGuardRejectsIt() {
-            when(agentBindingRepository.existsByInstanceModelId(7L)).thenReturn(true);
+            when(modelAssignmentRepository.existsByInstanceModelId(7L)).thenReturn(true);
 
             assertThatThrownBy(() -> modelService.delete(7L)).isInstanceOf(LlmModelInUseException.class);
 

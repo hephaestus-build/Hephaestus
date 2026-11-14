@@ -40,7 +40,7 @@ class EmailRendererTest extends BaseUnitTest {
     void shouldLinkTheWeeklyDigestOnTheWorkspaceAddress() {
         var tenantRenderer = EmailTestSupport.renderer(new WorkspaceSubdomainProperties(true, "hephaestus.example"));
         var email = tenantRenderer.render(
-                EmailKind.MENTOR_DIGEST,
+                EmailKind.WEEKLY_DIGEST,
                 Map.of(
                         "workspaceSlug",
                         "delivery-team",
@@ -99,7 +99,7 @@ class EmailRendererTest extends BaseUnitTest {
                                 "delivery-team",
                                 "description",
                                 "The installation was suspended.");
-                    case MENTOR_DIGEST ->
+                    case WEEKLY_DIGEST ->
                         Map.of(
                                 "workspaceName",
                                 "Delivery team",
@@ -120,7 +120,7 @@ class EmailRendererTest extends BaseUnitTest {
             case PRODUCT_FEEDBACK -> "/admin/feedback";
             case PRODUCT_FEEDBACK_UPDATE -> "/product-feedback";
             case WORKSPACE_ALERT -> "/w/delivery-team/admin/settings";
-            case MENTOR_DIGEST -> "/w/delivery-team/conversation?entry=0f8a6c1e-3b0d-4a43-9f43-3bd1d5a0e2c4";
+            case WEEKLY_DIGEST -> "/w/delivery-team/conversation?entry=0f8a6c1e-3b0d-4a43-9f43-3bd1d5a0e2c4";
         };
         String actionUrl = EmailTestSupport.WEBAPP_URL + actionPath;
         assertThat(rendered.text()).contains(actionUrl);

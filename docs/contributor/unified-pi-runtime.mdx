@@ -29,71 +29,71 @@ PostgreSQL holds all Hephaestus state in three workspace-scoped tables:
 
 | Table | Holds |
 | --- | --- |
-| `mentor_conversation` | One main conversation for each account and workspace, and one row for each thread. `account_id` names the owner. A main conversation can carry the Slack team, the Slack user, and the Slack channel id of the direct message. |
-| `mentor_entry` | Each question, answer, tool result, system entry, summary, and weekly digest. The column `seq` orders the entries of one conversation. `surface` tells whether a message was written in the app or in Slack. |
-| `mentor_turn` | One question's run: status, lease, attempt, usage, and error. The partial answer is not stored. |
+| `conversation` | One main conversation for each account and workspace, and one row for each thread. `account_id` names the owner. A main conversation can carry the Slack team, the Slack user, and the Slack channel id of the direct message. |
+| `conversation_entry` | Each question, answer, tool result, system entry, summary, and weekly digest. The column `seq` orders the entries of one conversation. `surface` tells whether a message was written in the app or in Slack. |
+| `conversation_turn` | One question's run: status, lease, attempt, usage, and error. The partial answer is not stored. |
 
-A thread is a `mentor_conversation` row with `parent_conversation_id` and `parent_entry_id`.
+A thread is a `conversation` row with `parent_conversation_id` and `parent_entry_id`.
 It forks the main conversation at that entry.
-The `mentor` module owns these tables, their services, and the path builder.
-The `agent.mentor` packages own TURN run admission, sandbox context, and the web API.
+The `conversation` module owns these tables, their services, and the path builder.
+The `agent.conversation` packages own TURN run admission, sandbox context, and the web API.
 
 An entry that Pi wrote keeps the Pi session entry verbatim in `payload`.
-The server derives the kind from the Pi entry (`MentorPiEntries.kind`).
+The server derives the kind from the Pi entry (`ConversationPiEntries.kind`).
 `text` holds only the developer's words or Hephaestus's text.
 Thus, export, search, and erasure read one column.
 
 ### Owner and tenancy
 
 The account owns the conversation.
-`mentor_conversation.account_id` is a foreign key to `account` with `ON DELETE RESTRICT`.
+`conversation.account_id` is a foreign key to `account` with `ON DELETE RESTRICT`.
 
 The server finds the conversation by account.
 In the app, it uses the account of the request (`CurrentDeveloperLookup`).
-In Slack, it uses the account of the Slack identity (`SlackMentorIdentityResolver.resolveActiveAccountId`).
-The first write of an account in a workspace creates its main conversation (`MentorConversationService.findOrCreateMain`).
+In Slack, it uses the account of the Slack identity (`SlackConversationIdentityResolver.resolveActiveAccountId`).
+The first write of an account in a workspace creates its main conversation (`ConversationService.findOrCreateMain`).
 A lock on the account and the workspace makes sure that two first writes create one main conversation.
 
 Each of the three tables has a unique key on `(id, workspace_id)`.
 Each reference inside a workspace also names the workspace.
 These references are the parent of a thread, the conversation and the turn of an entry, and the conversation of a turn.
-`feedback_copy.mentor_entry_id` and `feedback_copy.mentor_turn_id` also name the workspace.
+`feedback_copy.conversation_entry_id` and `feedback_copy.conversation_turn_id` also name the workspace.
 Thus, no row can refer to a row of another workspace.
 
 Roster sync can create an unclaimed account, and a conversation can belong to that account.
-When a person claims the account, `MentorAccountAbsorptionContributor` moves the conversations of the unclaimed account to the claiming account.
+When a person claims the account, `ConversationAccountAbsorptionContributor` moves the conversations of the unclaimed account to the claiming account.
 If both accounts have a main conversation in a workspace, it merges them:
 
 1. The entries of the absorbed main conversation follow the entries of the claiming main conversation, in their own order. They get new `seq` values and keep their ids, so threads, turns, and feedback copies still find them.
-2. Its turns and threads move to the claiming main conversation. Before they move, a running attempt of the absorbed conversation goes back to the queue (`MentorTurnService.requeueRunning`), as for an expired lease. Its sandbox driver loses the lease, so the ledger refuses its later writes. The attempt is billed, and its feedback claims get `UNCONFIRMED` receipts (`MentorLedgerEvents.AttemptTakenBack`).
+2. Its turns and threads move to the claiming main conversation. Before they move, a running attempt of the absorbed conversation goes back to the queue (`ConversationTurnService.requeueRunning`), as for an expired lease. Its sandbox driver loses the lease, so the ledger refuses its later writes. The attempt is billed, and its feedback claims get `UNCONFIRMED` receipts (`ConversationLedgerEvents.AttemptTakenBack`).
 3. Its summaries are erased, so the next turn summarizes the merged conversation again.
 4. Its Slack identity moves only if the claiming main conversation has none.
 5. The absorbed conversation row is deleted.
 
 ## Turn lifecycle
 
-1. The server writes the question entry and a `QUEUED` turn in one transaction (`MentorTurnService.submit`). The client `requestId` makes a repeat return the same rows. [Personal data](#personal-data) tells when the server refuses the write.
-2. The conversation sandbox driver claims its next run with `POST /internal/agent/next` ([Turn assignment](#turn-assignment)). The server claims the first queued turn of a conversation that has no running turn (`MentorTurnStarter.startClaimed`). The order in a conversation is the `seq` of the questions, which the server gives under the lock of the conversation. The clock of a server does not decide it. The turn becomes `RUNNING` with a lease.
-3. The server admits the turn (`MentorAdmission.admit`) and freezes the model and price in `mentor_turn.admission`. A refusal ends the turn `FAILED` with the refusal text.
+1. The server writes the question entry and a `QUEUED` turn in one transaction (`ConversationTurnService.submit`). The client `requestId` makes a repeat return the same rows. [Personal data](#personal-data) tells when the server refuses the write.
+2. The conversation sandbox driver claims its next run with `POST /internal/agent/next` ([Turn assignment](#turn-assignment)). The server claims the first queued turn of a conversation that has no running turn (`ConversationTurnStarter.startClaimed`). The order in a conversation is the `seq` of the questions, which the server gives under the lock of the conversation. The clock of a server does not decide it. The turn becomes `RUNNING` with a lease.
+3. The server admits the turn (`ConversationAdmission.admit`) and freezes the model and price in `conversation_turn.admission`. A refusal ends the turn `FAILED` with the refusal text.
 4. The server answers the pull with the run and epoch. The driver uses its sandbox credential to read context and run Pi. While Pi works, the driver reports the partial answer. Each call of the attempt can reach a different server.
-5. The loop ends the turn as `DONE`, `STOPPED`, or `FAILED` (`MentorTurnCompletion.end`). The end carries all Pi entries of the turn. The server that receives the end stores them in one transaction.
+5. The loop ends the turn as `DONE`, `STOPPED`, or `FAILED` (`ConversationTurnCompletion.end`). The end carries all Pi entries of the turn. The server that receives the end stores them in one transaction.
    A model call that Pi retried or recovered stays out, with the `context_edit` that leaves it out of the model's view (`turn.ts` `withoutOmitted`). The server bills the attempt from the proxy's row counters.
 6. In the transaction of the end, the server records the receipts that the attempt's claims are due. After the end commits, it stores them ([Delivery of shown feedback](#delivery-of-shown-feedback)).
 
 A conversation has at most one running turn.
-The partial unique index `ux_mentor_turn_running` enforces this.
+The partial unique index `ux_conversation_turn_running` enforces this.
 The main conversation and its threads are separate conversations, so they run at the same time.
 
 A question for a busy conversation waits as `QUEUED`.
-A conversation holds at most `hephaestus.mentor.turn.max-follow-ups` queued turns.
+A conversation holds at most `hephaestus.conversation.turn.max-follow-ups` queued turns.
 The next question gets `409` with the reason `FOLLOW_UPS_FULL`.
 
-A queued turn tells its clients when it waits for a free Hephaestus (`MentorTurnDTO.waitingFor`, `MentorTurnWaits`).
+A queued turn tells its clients when it waits for a free Hephaestus (`ConversationTurnDTO.waitingFor`, `ConversationTurnWaits`).
 Two facts decide the reason, and both are rows:
 
-- A server may start the turn. The SQL rule is the same as the claim (`MentorTurnRepository.CLAIMABLE`), so the two cannot disagree.
+- A server may start the turn. The SQL rule is the same as the claim (`ConversationTurnRepository.CLAIMABLE`), so the two cannot disagree.
 - The turns that hold a Hephaestus slot are at least `hephaestus.agent.capacity.turns`.
-  A turn holds a slot while its run is leased (`MentorTurnRepository.countHeld`).
+  A turn holds a slot while its run is leased (`ConversationTurnRepository.countHeld`).
   The run is leased while the turn runs, and while it is stopped and its loop still commits the answer.
 
 The capacity is the number of turns that the whole installation runs at once.
@@ -103,22 +103,22 @@ Each turn has a run of kind `TURN` whose subject is its conversation ([Agent run
 A claim takes the nonblocking turn-claim lock and counts the leased TURN runs in the installation (`AgentRuns.claimSubject`).
 It claims no turn while that count is at the capacity.
 
-- `FREE_HEPH`: a server may start the turn, and every Hephaestus slot of the deployment is taken.
+- `CAPACITY`: a server may start the turn, and every Hephaestus slot of the deployment is taken.
 - No value: the server knows no reason.
   The turn starts at once, waits behind an earlier question of its conversation, or the server has no capacity.
 
 A turn whose loop stopped holds its slot until the run reaper takes it back.
-Thus, for a short time, a question can show `FREE_HEPH` while a loop has room.
+Thus, for a short time, a question can show `CAPACITY` while a loop has room.
 It starts at the next pull.
 
 All workspaces share the installation's Hephaestus slots.
-Thus, `FREE_HEPH` depends on turns of other workspaces.
+Thus, `CAPACITY` depends on turns of other workspaces.
 It tells a member only that every slot answers some question, never whose question it is.
 
 A start, an end, a stop, and a requeue can each change the held slots.
 They can also let the next question of a conversation start.
-Each of these changes publishes `MentorTurnWaits.SlotsChanged`.
-After the change commits, `MentorTurnWaits.publishWaits` publishes a turn change for each turn that a server may start.
+Each of these changes publishes `ConversationTurnWaits.SlotsChanged`.
+After the change commits, `ConversationTurnWaits.publishWaits` publishes a turn change for each turn that a server may start.
 Only these turns can wait for a free Hephaestus.
 
 Because the publication comes after the commit, two changes that commit together each read the other.
@@ -135,8 +135,8 @@ The lease is `hephaestus.agent.capacity.turn-lease-ttl`, 60 seconds by default.
 The sandbox credential names its subject. Each run call supplies `X-Agent-Run` and `X-Agent-Epoch`.
 
 No server holds a turn in its memory.
-Each turn call checks the turn's row and its run's claim (`HephTurns.write`).
-A call of an attempt that lost its run or ended gets `409` with `MENTOR_LEASE_LOST`.
+Each turn call checks the turn's row and its run's claim (`ConversationTurns.write`).
+A call of an attempt that lost its run or ended gets `409` with `CONVERSATION_LEASE_LOST`.
 Each write of the attempt holds its run's claim until it commits (`AgentRuns.requireCurrent`).
 
 The end is the only write of the turn's entries.
@@ -146,7 +146,7 @@ Thus, its retry starts from the same path as the first attempt.
 The server can fail to answer a context read or an end, with a network error or a `5xx`.
 Then the loop sends the call again, after 1, 2, and 4 seconds.
 The end ends the turn and its run together, so the server answers a repeated end with `409` and stores nothing twice.
-A database trigger (`mentor_turn_run_agrees`) checks at each commit that a turn and its run agree.
+A database trigger (`conversation_turn_run_agrees`) checks at each commit that a turn and its run agree.
 
 The run reaper (`AgentRunReaper`, server role) takes back an expired lease through `TurnRunKind`:
 
@@ -163,18 +163,18 @@ A sandbox driver serves one run at a time. A retry rebuilds its context from the
 
 ### Stop and deadline
 
-A developer stops a turn with `PATCH …/mentor/turns/{turnId}/status`.
+A developer stops a turn with `PATCH …/conversation/turns/{turnId}/status`.
 
 - A queued turn becomes `STOPPED` and never runs, and its run ends. The question stays without an answer.
-- A running turn becomes `STOPPED` at once, but its run stays leased. The stop moves the run's deadline to 30 seconds later (`TurnRunsAdapter.GRACE`). Every server seals the attempt's model calls in flight. The next call of the attempt gets `409` with `MENTOR_TURN_STOPPED` and `stop: developer`. The loop then aborts Pi and ends the turn with the cut-off answer.
+- A running turn becomes `STOPPED` at once, but its run stays leased. The stop moves the run's deadline to 30 seconds later (`TurnRunsAdapter.GRACE`). Every server seals the attempt's model calls in flight. The next call of the attempt gets `409` with `CONVERSATION_TURN_STOPPED` and `stop: developer`. The loop then aborts Pi and ends the turn with the cut-off answer.
 
 The next queued turn of that conversation starts after the loop ends the stopped turn, or after its run ends.
 An abort can leave a tool call without its result.
 The loop stores no result for it.
 In the stopped turn, Pi gives each open tool call a result when it builds a request (`transformMessages`).
-For later turns, the path builder removes the tool calls from the cut-off answer (`MentorContextPathBuilder.keepCutOffAnswer`).
+For later turns, the path builder removes the tool calls from the cut-off answer (`ConversationContextPathBuilder.keepCutOffAnswer`).
 
-The deadline of a turn is the LLM timeout of the conversation model binding, at most 15 minutes (`AgentBindingLimits.MAX_HEPH_TURN_SECONDS`).
+The deadline of a turn is the LLM timeout of the conversation model binding, at most 15 minutes (`ModelAssignmentLimits.MAX_CONVERSATION_TURN_SECONDS`).
 The deadline is the hard ceiling of a turn that keeps making progress.
 A stall ends a turn earlier: the server's LLM proxy cuts a silent model call (`LlmProxyService`, `upstream_stalled`), and the loop ends the turn as `STALLED`.
 The proxy cuts a review's streamed call on the same bounds, and the review runner retries it ([Stalled model calls](./agent-runs#stalled-model-calls)).
@@ -186,7 +186,7 @@ The idle bounds and the turn's stop end the call. Its exchange waits until a min
 
 The run row carries the deadline. A sandbox credential identifies the sandbox.
 Each call also checks the run's current claim.
-After the deadline, each call of the attempt except its end gets `409` with `MENTOR_TURN_STOPPED` and `stop: deadline`.
+After the deadline, each call of the attempt except its end gets `409` with `CONVERSATION_TURN_STOPPED` and `stop: deadline`.
 A lease call still renews the lease, so that the loop can end the attempt.
 
 The run's deadline bounds the claim: 30 seconds (`TurnRunsAdapter.GRACE`) after the attempt's deadline, or after a developer's stop.
@@ -212,12 +212,12 @@ Its question stays in the path with a marker ([The path](#the-path)), and the de
 
 | Cause | Who ends the turn | Text for the developer |
 | --- | --- | --- |
-| Admission refuses the turn. The causes are no model, no AI choice, budget, unpriced usage, and a model below Hephaestus's smallest model ([Limits](#limits)). A requested erasure of the developer's personal data is also a cause. | The server, before the loop runs the turn (`MentorTurnStarter`). | The refusal text. |
-| After a claim, the server cannot start the attempt, for example it cannot issue the attempt's token. | The server (`HephTurns.begin`). | "Hephaestus could not start. Try again in a moment." |
+| Admission refuses the turn. The causes are no model, no AI choice, budget, unpriced usage, and a model below Hephaestus's smallest model ([Limits](#limits)). A requested erasure of the developer's personal data is also a cause. | The server, before the loop runs the turn (`ConversationTurnStarter`). | The refusal text. |
+| After a claim, the server cannot start the attempt, for example it cannot issue the attempt's token. | The server (`ConversationTurns.begin`). | "Hephaestus could not start. Try again in a moment." |
 | The deadline passes. | The loop, with the reason `DEADLINE`. If the loop does not end it within `STOP_GRACE`, the next lease call. | "Hephaestus took too long to reply and stopped. Try again." |
 | The turn reaches its model call limit. | The loop, with the reason `ERROR` and the detail `call_limit`. | "Hephaestus could not finish this reply. Try again." |
-| The provider of a model call sends no response headers within `hephaestus.mentor.turn.model-first-byte-timeout`, or its stream sends no byte for `model-idle-timeout`, or its breaker refuses the call. The proxy answers with the code `upstream_stalled` or `upstream_paused`. | The loop, with the reason `STALLED`. | "Hephaestus's AI model stopped responding, so Hephaestus could not finish this reply. Try again in a moment." |
-| The provider breaker of the admitted model's connection is open ([Server runtime](/admin/runtime-roles#provider-breaker)). | The server, before the loop runs the turn (`MentorTurnStarter`). | "Hephaestus's AI model is not responding right now, so Hephaestus did not start this reply. Try again in a few minutes." |
+| The provider of a model call sends no response headers within `hephaestus.conversation.turn.model-first-byte-timeout`, or its stream sends no byte for `model-idle-timeout`, or its breaker refuses the call. The proxy answers with the code `upstream_stalled` or `upstream_paused`. | The loop, with the reason `STALLED`. | "Hephaestus's AI model stopped responding, so Hephaestus could not finish this reply. Try again in a moment." |
+| The provider breaker of the admitted model's connection is open ([Server runtime](/admin/runtime-roles#provider-breaker)). | The server, before the loop runs the turn (`ConversationTurnStarter`). | "Hephaestus's AI model is not responding right now, so Hephaestus did not start this reply. Try again in a few minutes." |
 | Pi writes no answer, or the model call fails. | The loop, with the reason `ERROR` and a `detail`. | "Hephaestus could not finish this reply. Try again." |
 | The conversation stays too long after compaction. | The loop, with the reason `ERROR` and a `detail`. | "Hephaestus could not finish this reply. Try again." |
 | The server refuses the end with `400`, for example for too many entries. | The loop, with the reason `ERROR` and a `detail`. | "Hephaestus could not finish this reply. Try again." |
@@ -233,7 +233,7 @@ An attempt that loses its lease does not fail by itself.
 The loop stops it without a call to the server, and the reaper decides (see [Leases and retries](#leases-and-retries)).
 
 The server that receives a failed end logs it at `WARN`, with the reason and the loop's `detail`.
-The `detail` is a kind of failure from a closed set, for example `model_error`, `context_overflow` or `worker_refused` (`FAILURE_DETAILS` in `heph-host-protocol.ts` and in `HephTurnController`).
+The `detail` is a kind of failure from a closed set, for example `model_error`, `context_overflow` or `worker_refused` (`FAILURE_DETAILS` in `conversation-host-protocol.ts` and in `ConversationTurnController`).
 It is never the text of the model provider, a tool, or the server.
 The server logs a `detail` outside the set as `unrecognized`.
 
@@ -255,7 +255,7 @@ The `text` appears in the answer where Hephaestus calls the tool.
 
 | Tool | Endpoint | The server admits | Effect on delivery |
 | --- | --- | --- | --- |
-| `link_result` | `POST link-result` | A result of the developer that Hephaestus may read for conversational mentoring (`ResultHistoryQuery`). | None. |
+| `link_result` | `POST link-result` | A result of the developer that Hephaestus may read in a conversation (`ResultHistoryQuery`). | None. |
 | `link_problem` | `POST link-problem` | A problem of such a result. The result decides for the problem. | None. |
 | `show_feedback` | `POST show-feedback` | Prepared conversation feedback of the developer. The call claims its copy. | The server settles the copy when the attempt ends. |
 
@@ -278,7 +278,7 @@ It succeeds only when all of these are true:
 - Its only copy is a `PLANNED` copy of the kind `CHAT_TURN`.
 - The turn runs this attempt, in a conversation of the developer.
 
-The claim sets the copy to `WRITE_STARTED` and records the turn in `feedback_copy.mentor_turn_id`.
+The claim sets the copy to `WRITE_STARTED` and records the turn in `feedback_copy.conversation_turn_id`.
 The feedback becomes `UNCONFIRMED` while the claim is open.
 Thus, an attempt that stops after the claim never leaves feedback that looks unsent.
 A second `show_feedback` call for the same feedback in the same attempt keeps the claim that the attempt holds.
@@ -287,7 +287,7 @@ An attempt cannot use a claim of an earlier attempt.
 #### The receipt
 
 The transaction that records how an attempt or its Slack reply ended also publishes `ConversationReceiptsDue`.
-The event publication registry keeps the event until `MentorTurnCompletion.settle` stored one receipt for each copy that the attempt claimed (`FeedbackStore.recordConversationReceipt`).
+The event publication registry keeps the event until `ConversationTurnCompletion.settle` stored one receipt for each copy that the attempt claimed (`FeedbackStore.recordConversationReceipt`).
 A crash after the commit or a failed receipt write leaves the publication incomplete, and `NotificationRedeliveryJob` resubmits it.
 A receipt is stored once, so a repeat settles only what is left.
 A Hephaestus message shows a piece of feedback when it stores a `show_feedback` call for it whose tool result succeeded.
@@ -299,9 +299,9 @@ The call names the feedback by a well-formed id in any letter case.
 | A turn asked in Slack ended `DONE`. | What Slack shows decides ([Slack replies](#slack-replies)). |
 | Any other end, and the attempt's entries or its last partial answer have a `show_feedback` call for the feedback. For example, the turn ended `STOPPED` or `FAILED` after the call. | `UNCONFIRMED` |
 | Any other end, and no `show_feedback` call for the feedback. | `FAILED` |
-| The attempt lost its lease (`MentorTurnCompletion.billLostAttempt`). | `UNCONFIRMED` |
+| The attempt lost its lease (`ConversationTurnCompletion.billLostAttempt`). | `UNCONFIRMED` |
 
-A delivered copy records the Hephaestus message that showed the feedback in `feedback_copy.mentor_entry_id`.
+A delivered copy records the Hephaestus message that showed the feedback in `feedback_copy.conversation_entry_id`.
 It also stores the words that the answer showed: the `text` of the successful `show_feedback` calls of that message for that feedback.
 The database function `conversation_receipt_words` holds this rule.
 The receipt query and the trigger that guards `feedback_copy` both use it.
@@ -321,14 +321,14 @@ It uses the same sandbox runner, admission and epoch fence as a requested answer
 The feedback becomes `WITHHELD` with the stop reason `CONVERSATION_EXPIRED`.
 A later `show_feedback` call for it gets `422`.
 
-`MentorRetentionSweeper` and `SlackRetentionSweeper#sweepCopies` (server role, every Sunday) erase entries through `MentorRedaction`, up to two weeks before their limit, so a missed run keeps the limit.
+`ConversationRetentionSweeper` and `SlackRetentionSweeper#sweepCopies` (server role, every Sunday) erase entries through `ConversationRedaction`, up to two weeks before their limit, so a missed run keeps the limit.
 The first erases every entry that reaches `hephaestus.feedback-retention`, the window that feedback and results share.
 The second erases each tool result of `COPIES_PERSON_DATA` that reaches the Slack retention, because no record says which source it copied.
 An erased entry erases each summary that covers it, and coverage starts at the first entry of a conversation.
 Thus a long conversation loses its summary after each run and pays for one compaction on its next turn.
 The runs are weekly so that this cost comes about once a week.
 
-The weekly digest links each piece of conversation feedback that became `DELIVERED` in its week to the message in `feedback_copy.mentor_entry_id`.
+The weekly digest links each piece of conversation feedback that became `DELIVERED` in its week to the message in `feedback_copy.conversation_entry_id`.
 The digest creates no copy and changes no delivery.
 In a thread on a digest, Hephaestus discusses a piece through `link_result` or `link_problem`.
 A `show_feedback` call for a piece of the digest gets `422`, because that feedback is not `READY`.
@@ -337,7 +337,7 @@ A `show_feedback` call for a piece of the digest gets `422`, because that feedba
 ## Slack replies
 
 The ledger stores the complete admitted answer and enqueues one `SLACK_POST` action in the same transaction.
-`SlackMentorProjector` only wakes the outbox executor for a terminal turn.
+`SlackConversationProjector` only wakes the outbox executor for a terminal turn.
 Its subscription is excluded from the `test` profile.
 The [outbox](./outbox.md) owns the post, its lease, retry, metadata readback and terminal outcome.
 Slack receives no model text while a turn runs.
@@ -439,7 +439,7 @@ A sandbox restart loses these files. The next turn reconstructs its context from
 #### Documents and loads
 
 The context response carries a tar of the fixed documents, built with its situation receipt.
-`HephTurnContexts` formats JSON with indentation and times in the developer's time zone.
+`ConversationTurnContexts` formats JSON with indentation and times in the developer's time zone.
 The sandbox extracts that archive locally.
 
 An item document is read on demand through its owning `ContentSource.read`.
@@ -471,7 +471,7 @@ Without Git mirrors (`GIT_CHECKOUT_ENABLED`), INDEX.md has no `repos/` section.
 
 | Limit | Value |
 | --- | --- |
-| Loads in one attempt | 5 (`TurnContextLoads.MAX_LOADS_PER_ATTEMPT`), counted in `mentor_turn.tools_loads` |
+| Loads in one attempt | 5 (`TurnContextLoads.MAX_LOADS_PER_ATTEMPT`), counted in `conversation_turn.tools_loads` |
 | Loads at once on one worker | 2 (`TurnContextLoads.LOADS_AT_ONCE`) |
 | Time of a load | The time left in the turn |
 | Size of a checkout | The checkout bound of a review (`GIT_MAX_SNAPSHOT_BYTES`) |
@@ -488,7 +488,7 @@ After the turn, the results follow the rules of [Tool results](#tool-results).
 
 ## Live updates
 
-The server role serves `GET /workspaces/{slug}/mentor/events` as server-sent events (`MentorLiveHub`).
+The server role serves `GET /workspaces/{slug}/conversation/events` as server-sent events (`ConversationLiveHub`).
 The browser authenticates the stream with its cookie, and a native client with `Authorization: Bearer`.
 
 - On each connect, the stream sends a `snapshot` of the conversation.
@@ -514,12 +514,12 @@ Thus, an older response cannot replace them.
 
 The snapshot carries `lastAnswerAt` and `lastReadAt`.
 The conversation has an unread answer when `lastAnswerAt` is later than `lastReadAt`.
-`PUT /workspaces/{slug}/mentor/conversation/read` moves `lastReadAt` of the main conversation forward.
+`PUT /workspaces/{slug}/conversation/read` moves `lastReadAt` of the main conversation forward.
 An earlier time changes nothing, so each device of the developer can send its own time.
-When the marker moves, the developer's other open streams get a `read` event with the new `lastReadAt` (`MentorRead`).
+When the marker moves, the developer's other open streams get a `read` event with the new `lastReadAt` (`ConversationRead`).
 
 One `LISTEN` connection serves each server replica.
-`MentorLiveHub` limits the streams of each account in a workspace ([Server runtime](/admin/runtime-roles#live-answers)).
+`ConversationLiveHub` limits the streams of each account in a workspace ([Server runtime](/admin/runtime-roles#live-answers)).
 A stream whose queue of 256 events overflows gets a new snapshot.
 
 ## Context of a turn
@@ -528,11 +528,11 @@ The loop rebuilds the Pi session of a turn from rows.
 Nothing about a conversation stays in the loop after the turn.
 The request has four parts, in this order:
 
-1. The system prompt `agent/mentor/system.md` and the [shared feedback writing guide](./practice-feedback-language.md#writing-feedback). They are the same for each turn.
-   `HephTurnContexts.SYSTEM_PROMPT` joins them, and `GET context` returns it. `HephTurnControllerIntegrationTest` keeps the two together at 15 KiB or less, because each model call sends them again.
+1. The system prompt `agent/conversation/system.md` and the [shared feedback writing guide](./practice-feedback-language.md#writing-feedback). They are the same for each turn.
+   `ConversationTurnContexts.SYSTEM_PROMPT` joins them, and `GET context` returns it. `ConversationTurnControllerIntegrationTest` keeps the two together at 15 KiB or less, because each model call sends them again.
 2. The tools. They are the same for each turn.
-3. The path from the server (`MentorContextPathBuilder`). It is the same bytes for each turn of one conversation, until it changes.
-4. The situation (`MentorSituation`). The loop adds it as the last message and never stores it.
+3. The path from the server (`ConversationContextPathBuilder`). It is the same bytes for each turn of one conversation, until it changes.
+4. The situation (`ConversationSituation`). The loop adds it as the last message and never stores it.
 
 The first three parts form a stable prefix for the prompt cache.
 The Anthropic cache breakpoint sits on the last stored message, before the situation.
@@ -564,11 +564,11 @@ The situation message gives these facts:
 - For a thread, its parent and the main entries since the thread started.
 - For the main conversation, up to 10 open threads.
 - The page of the floating Hephaestus panel, if the client sent one.
-- Who the developer is: their name and their handle in each connected system (`HephSituation`).
+- Who the developer is: their name and their handle in each connected system (`TurnSituation`).
   Context files mark the developer's own words with these handles, for example `byYou` on a Slack message.
-- The days of today, yesterday, this week and last week in the developer's time zone (`HephSituation`).
+- The days of today, yesterday, this week and last week in the developer's time zone (`TurnSituation`).
   Hephaestus uses these days and does not calculate dates.
-- The prepared feedback that waits in this conversation (`MentorTurnEvidence.receipt`): the count, and up to 3 feedback ids with their practices.
+- The prepared feedback that waits in this conversation (`ConversationTurnEvidence.receipt`): the count, and up to 3 feedback ids with their practices.
   It never contains the words of the feedback.
   It names the document that holds the feedback.
 - The line "Start with `read INDEX.md`: it lists what this turn can read."
@@ -577,8 +577,8 @@ The situation message gives these facts:
 ### Context documents
 
 A context document is one file under `inputs/context/` in the [context folder](#context-folder).
-An `evidence.capture.ContentSource` builds each document from a `MentorContextRequest`: the workspace, the account, the conversation, and the question.
-`MentorContextKeys` lists the fixed keys.
+An `evidence.capture.ContentSource` builds each document from a `ConversationContextRequest`: the workspace, the account, the conversation, and the question.
+`ConversationContextKeys` lists the fixed keys.
 INDEX.md gives Hephaestus one line about each built document (`ContextFolderIndex`).
 That index is the only description of the documents.
 An item path, for example the detail of one issue, comes only from a `resource` field in a document.
@@ -587,10 +587,10 @@ The source of each document is in the module that owns its data:
 
 | Document under `inputs/context/` | Source |
 | --- | --- |
-| `user.json`, `workspace.json`, `practice_catalog.json`, `practice_profile.json`, `delivered_feedback.json` with the item path `delivered_feedback/<id>`, `prepared_conversation_feedback.json`, `weekly_digest.json` | `agent/context/providers/mentor/` |
-| `results_history.json` and `review_attempts.json`, and the item paths `results_history/<id>` and `review_attempts/<kind>/<id>` | `ResultHistoryContentSource` and `ReviewAttemptsContentSource` in `agent/context/providers/mentor/` |
+| `user.json`, `workspace.json`, `practice_catalog.json`, `practice_profile.json`, `delivered_feedback.json` with the item path `delivered_feedback/<id>`, `prepared_conversation_feedback.json`, `weekly_digest.json` | `agent/context/providers/conversation/` |
+| `results_history.json` and `review_attempts.json`, and the item paths `results_history/<id>` and `review_attempts/<kind>/<id>` | `ResultHistoryContentSource` and `ReviewAttemptsContentSource` in `agent/context/providers/conversation/` |
 | `recent_authored_work.json`, `activity.json`, `merge_readiness.json`, and the item paths `merge_readiness/<id>` and `issue/<id>` | `integration/scm/context/` |
-| `slack_conversations.json` | `integration/slack/capture/ConversationCaptureSource` |
+| `slack_conversations.json` | `integration/slack/capture/SlackThreadsCaptureSource` |
 | `outline_docs.json` | `integration/outline/capture/DocumentCaptureSource` |
 
 An admitted entry in `delivered_feedback.json` can include `developerResponse.resolution` from the developer's recorded response.
@@ -603,7 +603,7 @@ Each document obeys these rules:
 - It covers the developer's own or assigned work and the developer's activity on it.
   Where the work needs them, it also has the names and words of other people on that work.
   Examples are review comments on a pull request and comments on an issue.
-- Slack messages come only from threads that the developer took part in, in monitored channels whose consent is active (`ConversationThreadProjection`).
+- Slack messages come only from threads that the developer took part in, in monitored channels whose consent is active (`ThreadProjection`).
   Other members' messages in those threads are included and marked as untrusted content.
 - It reads only repositories that the workspace monitors on its connected instance.
 - It reads no repository that a team hides from contributions.
@@ -631,7 +631,7 @@ At all other times the stage is "Thinking…".
 A tool's stage holds for the partial-answer window in which the tool started, so a fast read is shown at least once.
 A stage never contains a tool name, a path, a command, or a repository name, because the model selects them.
 
-The app shows the stage of a running turn (`MentorTurnPartialDTO.stage`).
+The app shows the stage of a running turn (`ConversationTurnPartialDTO.stage`).
 Slack receives the complete admitted answer when the turn ends.
 
 ### Tool results
@@ -650,7 +650,7 @@ Hephaestus uses Pi's own compaction, with Pi's default summary prompt.
 - **Before the prompt.** Above the working trigger, the loop compacts the stored conversation before it sends the question. The trigger is 49,152 tokens, or less for a small window. The status line shows *Thinking…* while the loop compacts, and the summary call counts against the turn. If the conversation stays too long, the turn fails.
 - **Thinking off.** Every summary call runs with thinking off. A reasoning model would otherwise spend Pi's summary output limit on thinking and leave the summary unfinished. The loop sets the level on the agent state for the summary only, so the conversation stores no level change. Pi maps the level to each API's standard reasoning control and sends no provider-specific field. A model server that thinks by default keeps thinking ([AI providers](/admin/ai-providers#models-that-think-by-default)).
 - **A failed summary.** If Pi cannot write the summary, the history stays whole. The question goes out while the conversation fits the model's window, and the next turn compacts again. Thus, one failed summary never fails every later question of the conversation.
-- **The trigger.** `mentorCompaction` starts with a reserve of min(16,384, a quarter of the window). The trigger is the smaller of 49,152 tokens and the window less that reserve. Pi's reserve is then the window less the trigger. For a window of 128,000 tokens, it is 78,848 tokens. The reserve also caps the summary's output.
+- **The trigger.** `conversationCompaction` starts with a reserve of min(16,384, a quarter of the window). The trigger is the smaller of 49,152 tokens and the window less that reserve. Pi's reserve is then the window less the trigger. For a window of 128,000 tokens, it is 78,848 tokens. The reserve also caps the summary's output.
 - **Recent messages.** Pi keeps recent messages up to a target. The target is the smallest of 20,000 tokens, half the trigger and a sixth of the window. It is not a bound. Pi keeps a message whole and a tool call with its results. Thus, one long message can exceed the target.
 - **Room to answer.** After a summary, the loop estimates the messages and the fixed prompt. The answer needs min(output limit, an eighth of the window). If that does not fit the window, the turn fails with "still too long after shortening it".
 - **A repeat.** A conversation that stays past the trigger after its summary is shortened again on the next turn. Nothing guarantees that one summary is enough.
@@ -670,7 +670,7 @@ The server stores it as a `SUMMARY` entry, with `fromSeq` and `toSeq` of the ent
 
 Erasure of an entry erases every summary that covers it.
 An edit of a Slack message keeps the message, but erases every summary that covers it and every `search_conversation` result that quotes it.
-A turn that ran during an erasure or an edit erases the same copies when it ends (`MentorRedaction.eraseStaleCopies`).
+A turn that ran during an erasure or an edit erases the same copies when it ends (`ConversationRedaction.eraseStaleCopies`).
 The next turn then pays for one new compaction.
 
 An erasure locks the main conversation row of each tree that it changes before it changes an entry.
@@ -682,8 +682,8 @@ In the second case, the end of the turn erases each summary and search result th
 
 `search_conversation` finds entries with PostgreSQL full-text search (`simple` configuration).
 It searches the words that the app shows: the text of a message and the words of each link that Hephaestus showed.
-The server stores these words once, when it stores the message, in `mentor_entry.search_text`.
-The GIN index `ix_mentor_entry_text_search` covers that column.
+The server stores these words once, when it stores the message, in `conversation_entry.search_text`.
+The GIN index `ix_conversation_entry_text_search` covers that column.
 An edit replaces the words, and an erasure clears them.
 The personal-data export reads the same column.
 
@@ -703,10 +703,10 @@ After the erasure is requested, the fence refuses each later write:
 - A `show_feedback` claim gets `422`.
 - The weekly digest is not written.
 
-The erasure of a person (`MentorPersonDataCatalog`) exports and deletes the person's own conversations.
-In the conversations of other people, it redacts the Hephaestus messages that showed feedback about the person (`MentorFeedbackCopyPersonDataStore`).
-As its last step, it redacts the tool results that can copy the person's data (`MentorToolResultCopyPersonDataStore`).
-A turn that ran during that step erases the same copies when it ends (`MentorRedaction.eraseStaleCopies`).
+The erasure of a person (`ConversationPersonDataCatalog`) exports and deletes the person's own conversations.
+In the conversations of other people, it redacts the Hephaestus messages that showed feedback about the person (`ConversationFeedbackCopyPersonDataStore`).
+As its last step, it redacts the tool results that can copy the person's data (`ConversationToolResultCopyPersonDataStore`).
+A turn that ran during that step erases the same copies when it ends (`ConversationRedaction.eraseStaleCopies`).
 A `show_feedback` result copies no one's data, so it stays.
 The [data map](/admin/dsms/personal-data-map) owns the inventory of person data.
 
@@ -718,14 +718,14 @@ This table gives the fixed limits that only contributors change.
 
 | Limit | Value | Where |
 | --- | --- | --- |
-| Attempts per turn | 2 | `MentorTurnService.MAX_ATTEMPTS` |
+| Attempts per turn | 2 | `ConversationTurnService.MAX_ATTEMPTS` |
 | One `read` page, or the output that `bash` returns | 2,000 lines or 50 KB | Pi SDK `DEFAULT_MAX_LINES` and `DEFAULT_MAX_BYTES`, through `turn.ts` |
 | Time of one `bash` command | 60 seconds | `turn.ts` (`EXEC_TIMEOUT_SECONDS`) |
 | Loads in one attempt | 5 | `TurnContextLoads.MAX_LOADS_PER_ATTEMPT` |
 | Partial answer interval | 250 ms | `turn.ts` |
-| Smallest conversation model | 32,768 tokens of context, 4,096 tokens of output | `AgentBindingLimits` |
-| Entries per end | 500 | `HephTurnController` |
-| Search hits | 20 | `MentorEntryService.MAX_SEARCH_HITS` |
+| Smallest conversation model | 32,768 tokens of context, 4,096 tokens of output | `ModelAssignmentLimits` |
+| Entries per end | 500 | `ConversationTurnController` |
+| Search hits | 20 | `ConversationEntryService.MAX_SEARCH_HITS` |
 | Words of a delivered piece in `delivered_feedback.json`, and in its item `delivered_feedback/<id>.json` | 600 and 2,000 characters. `bodyTruncated` marks a cut. | `DeliveredFeedbackContentSource` |
 | Prepared conversation feedback in one turn's context | 3 pieces | `PreparedConversationFeedbackContentSource` |
 | Age of prepared conversation feedback | 14 days | `ConversationFeedbackTtlSweeper.TTL_DAYS` |

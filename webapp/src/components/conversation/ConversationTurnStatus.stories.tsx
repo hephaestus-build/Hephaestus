@@ -163,7 +163,7 @@ export const WaitingForCapacity: Story = {
 			createdAt: minutesBefore(1),
 			status: "QUEUED",
 			surface: "APP",
-			waitingFor: "FREE_HEPH",
+			waitingFor: "CAPACITY",
 		},
 	},
 	play: async ({ canvas }) => {

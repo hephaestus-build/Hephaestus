@@ -16,9 +16,9 @@ import de.tum.cit.aet.hephaestus.practices.profile.OverviewWindow;
 import de.tum.cit.aet.hephaestus.practices.profile.ProfileChangeQuery;
 import de.tum.cit.aet.hephaestus.practices.profile.dto.ProfileChangeDTO;
 import de.tum.cit.aet.hephaestus.practices.review.ProductReferenceQuery;
+import de.tum.cit.aet.hephaestus.practices.spi.ConversationThreadLookup;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackDestination;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackState;
-import de.tum.cit.aet.hephaestus.practices.spi.HephThreadLookup;
 import de.tum.cit.aet.hephaestus.practices.spi.ProfileChangeType;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -80,10 +80,10 @@ public class WeeklyDigestFacts {
     private final FeedbackVisibilityService visibility;
     private final ProfileChangeQuery profileChanges;
     private final ProductReferenceQuery references;
-    private final HephThreadLookup hephThreads;
+    private final ConversationThreadLookup conversationThreads;
 
     /**
-     * A digest as it reads now. Heph reads it as one JSON document: the digest's fields, and the results and problems
+     * A digest as it reads now. Hephaestus reads it as one JSON document: the digest's fields, and the results and problems
      * behind each listed piece that still shows and is not withdrawn, for {@code link_result} and {@code link_problem}.
      *
      * @param resultIds by feedback id, the results the piece rests on
@@ -150,8 +150,8 @@ public class WeeklyDigestFacts {
                         .filter(Objects::nonNull)
                         .collect(Collectors.toSet()));
         Map<UUID, UUID> entries = conversationEntries(workspaceId, standing);
-        Map<UUID, HephThreadLookup.Place> places =
-                entries.isEmpty() ? Map.of() : hephThreads.places(workspaceId, Set.copyOf(entries.values()));
+        Map<UUID, ConversationThreadLookup.Place> places =
+                entries.isEmpty() ? Map.of() : conversationThreads.places(workspaceId, Set.copyOf(entries.values()));
         Map<UUID, List<FeedbackBasis>> basisByFeedback = standing.isEmpty()
                 ? Map.of()
                 : basisRepository
@@ -190,7 +190,7 @@ public class WeeklyDigestFacts {
             int waiting,
             Map<Long, ItemRefDTO> items,
             Map<UUID, UUID> entries,
-            Map<UUID, HephThreadLookup.Place> places,
+            Map<UUID, ConversationThreadLookup.Place> places,
             Map<UUID, List<FeedbackBasis>> basisByFeedback) {
         WeeklyDigestWindow window = payload.window();
         Set<WeeklyDigestChangeKey> held = new HashSet<>(payload.changeKeys());
@@ -226,7 +226,7 @@ public class WeeklyDigestFacts {
                 rows.stream()
                         .map(row -> {
                             UUID entryId = entries.get(row.feedback().getId());
-                            HephThreadLookup.Place place = entryId == null ? null : places.get(entryId);
+                            ConversationThreadLookup.Place place = entryId == null ? null : places.get(entryId);
                             return place == null
                                     ? row.toDto(items, null, null)
                                     : row.toDto(items, entryId, place.threadParentId());
@@ -262,7 +262,9 @@ public class WeeklyDigestFacts {
         }
 
         WeeklyDigestFeedbackDTO toDto(
-                Map<Long, ItemRefDTO> items, @Nullable UUID mentorEntryId, @Nullable UUID mentorParentEntryId) {
+                Map<Long, ItemRefDTO> items,
+                @Nullable UUID conversationEntryId,
+                @Nullable UUID conversationParentEntryId) {
             PracticeGroup group = practice.getGroup();
             boolean withdrawn = withdrawnAt != null;
             FeedbackDestination destination = feedback.getDestination();
@@ -277,8 +279,8 @@ public class WeeklyDigestFacts {
                     destination != FeedbackDestination.ON_WORK || withdrawn || itemId == null
                             ? null
                             : items.get(itemId),
-                    destination != FeedbackDestination.CONVERSATION || withdrawn ? null : mentorEntryId,
-                    destination != FeedbackDestination.CONVERSATION || withdrawn ? null : mentorParentEntryId,
+                    destination != FeedbackDestination.CONVERSATION || withdrawn ? null : conversationEntryId,
+                    destination != FeedbackDestination.CONVERSATION || withdrawn ? null : conversationParentEntryId,
                     deliveredAt(),
                     withdrawn,
                     feedback.getState() == FeedbackState.REPLACED);
@@ -312,7 +314,7 @@ public class WeeklyDigestFacts {
         return rows;
     }
 
-    /** The Heph message each conversation piece appeared in; {@link #render} drops the ones that were erased. */
+    /** The Hephaestus message each conversation piece appeared in; {@link #render} drops the ones that were erased. */
     private Map<UUID, UUID> conversationEntries(long workspaceId, List<Row> rows) {
         List<UUID> conversational = rows.stream()
                 .filter(row -> row.feedback().getDestination() == FeedbackDestination.CONVERSATION)
@@ -324,7 +326,7 @@ public class WeeklyDigestFacts {
         Map<UUID, UUID> entries = new LinkedHashMap<>();
         for (WeeklyDigestRepository.ConversationCopy copy :
                 repository.conversationCopies(workspaceId, conversational)) {
-            entries.putIfAbsent(copy.getFeedbackId(), copy.getMentorEntryId());
+            entries.putIfAbsent(copy.getFeedbackId(), copy.getConversationEntryId());
         }
         return entries;
     }

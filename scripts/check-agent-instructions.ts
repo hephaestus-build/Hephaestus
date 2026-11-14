@@ -253,7 +253,7 @@ const INTENTIONALLY_MISSING_PATHS = [
 const PACKAGE_NAME = /^(?:@[a-z0-9][a-z0-9._-]*\/[a-z0-9][a-z0-9._-]*|[a-z0-9][a-z0-9._-]*)$/u;
 const PACKAGE_SHAPED = /-(?:cli|config|core|js|node|package|plugin|react|sdk|test|ts)$/u;
 /**
- * A settings path this product owns — `hephaestus.mentor.docker-cli` reads as a package to the shape
+ * A settings path this product owns — `hephaestus.conversation.docker-cli` reads as a package to the shape
  * test above. An npm name reaches two dots about as often as a Spring property reaches none, so the
  * dotted depth is what separates them; a declared dependency is still recognised as itself.
  */

@@ -7,12 +7,12 @@ import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
+import de.tum.cit.aet.hephaestus.agent.config.ModelPurpose;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.testconfig.LlmCatalogTestFixtures;
 import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
 import de.tum.cit.aet.hephaestus.testconfig.WithAdminUser;
-import de.tum.cit.aet.hephaestus.testconfig.WithMentorUser;
+import de.tum.cit.aet.hephaestus.testconfig.WithConversationUser;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Membership.WorkspaceRole;
@@ -196,10 +196,10 @@ class WorkspaceLlmModelControllerIntegrationTest extends AbstractWorkspaceIntegr
     }
 
     @Test
-    @WithMentorUser
+    @WithConversationUser
     void shouldRefuseCapabilityProbeWhenTheCallerIsNotAWorkspaceAdmin() {
         Workspace owner = setupWorkspace("cap-member");
-        ensureMembership(owner, persistUser("mentor"), WorkspaceRole.MEMBER);
+        ensureMembership(owner, persistUser("conversation"), WorkspaceRole.MEMBER);
         webTestClient
                 .put()
                 .uri("/workspaces/{slug}/llm/models/1/capabilities", owner.getWorkspaceSlug())
@@ -441,7 +441,7 @@ class WorkspaceLlmModelControllerIntegrationTest extends AbstractWorkspaceIntegr
                 .filteredOn(model -> model.id().equals(chat.getId()))
                 .singleElement()
                 .extracting(AvailableLlmModelDTO::purposes)
-                .isEqualTo(List.of(AgentPurpose.PRACTICE_REVIEW, AgentPurpose.MENTOR));
+                .isEqualTo(List.of(ModelPurpose.PRACTICE_REVIEW, ModelPurpose.CONVERSATION));
     }
 
     @Test
@@ -556,12 +556,12 @@ class WorkspaceLlmModelControllerIntegrationTest extends AbstractWorkspaceIntegr
     }
 
     @Test
-    @WithMentorUser
+    @WithConversationUser
     void aWorkspaceMemberCannotReachAnyModelEndpoint() {
         Workspace workspace = setupWorkspace("wsmodel-member-ws");
-        // Login must match @WithMentorUser's default "mentor" principal so the membership resolver
+        // Login must match @WithConversationUser's default "conversation" principal so the membership resolver
         // finds this exact row.
-        User member = persistUser("mentor");
+        User member = persistUser("conversation");
         ensureMembership(workspace, member, WorkspaceRole.MEMBER);
         String slug = workspace.getWorkspaceSlug();
 
@@ -607,11 +607,11 @@ class WorkspaceLlmModelControllerIntegrationTest extends AbstractWorkspaceIntegr
     }
 
     @Test
-    @WithMentorUser
+    @WithConversationUser
     void shouldNotFindAnotherWorkspaceButStillAdmitTheAdminOfTheirOwn() {
         // A genuine (non-superadmin) workspace ADMIN — @WithAdminUser carries the instance-wide
         // app_admin elevation, which would let this call through for the wrong reason.
-        User admin = persistUser("mentor");
+        User admin = persistUser("conversation");
         Workspace own = createWorkspace("wsmodel-own-ws", "Own", "wsmodel-own-org", AccountType.ORG, admin);
         ensureMembership(own, admin, WorkspaceRole.ADMIN);
 

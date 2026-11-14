@@ -3,13 +3,13 @@ package de.tum.cit.aet.hephaestus.agent.proxy;
 import de.tum.cit.aet.hephaestus.agent.catalog.EgressPolicy;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
 import de.tum.cit.aet.hephaestus.agent.config.MemberAiRoutingAdapter;
+import de.tum.cit.aet.hephaestus.agent.conversation.weeklydigest.DigestAdmission;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewMemberAiPolicy;
-import de.tum.cit.aet.hephaestus.agent.mentor.weeklydigest.DigestAdmission;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
+import de.tum.cit.aet.hephaestus.conversation.ConversationTurnRepository;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
-import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
 import de.tum.cit.aet.hephaestus.productfeedback.drafting.ProductFeedbackDraftCalls;
 import java.util.Objects;
 import lombok.RequiredArgsConstructor;
@@ -26,7 +26,7 @@ class ProxyRequestPolicy {
     private final EgressPolicy egress;
     private final DigestAdmission digests;
     private final ReviewJobRepository jobs;
-    private final MentorTurnRepository turns;
+    private final ConversationTurnRepository turns;
     private final ReviewMemberAiPolicy reviews;
     private final MemberAiRoutingAdapter routing;
 
@@ -60,7 +60,7 @@ class ProxyRequestPolicy {
                         .filter(job -> reviews.allows(job, model))
                         .isPresent();
             case PRODUCT_FEEDBACK_DRAFT, PROBE -> false;
-            case MENTOR_TURN ->
+            case CONVERSATION_TURN ->
                 turns.findAccountIdByIdAndWorkspaceId(attempt.sourceId(), workspaceId)
                         .filter(account -> !digests.refuses(workspaceId, attempt.sourceId())
                                 && routing.allows(workspaceId, account, model))

@@ -10,6 +10,11 @@ import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxKind;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxes;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.SandboxClaims;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.SandboxOwnerFixtures;
+import de.tum.cit.aet.hephaestus.conversation.ConversationContextChanges;
+import de.tum.cit.aet.hephaestus.conversation.ConversationEntryRepository;
+import de.tum.cit.aet.hephaestus.conversation.ConversationRedaction;
+import de.tum.cit.aet.hephaestus.conversation.adapter.ConversationPersonDataCatalog;
+import de.tum.cit.aet.hephaestus.conversation.spi.ConversationSandboxCopies;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwtRepository;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonConversationCopySource;
@@ -19,11 +24,6 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyFence;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataStores;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentityResolver;
-import de.tum.cit.aet.hephaestus.mentor.MentorContextChanges;
-import de.tum.cit.aet.hephaestus.mentor.MentorEntryRepository;
-import de.tum.cit.aet.hephaestus.mentor.MentorRedaction;
-import de.tum.cit.aet.hephaestus.mentor.adapter.MentorPersonDataCatalog;
-import de.tum.cit.aet.hephaestus.mentor.spi.ConversationSandboxCopies;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -120,7 +120,7 @@ class ConversationSandboxErasureIntegrationTest extends AbstractWorkspaceIntegra
         var completed = online.get(request.getId()).request();
         assertThat(completed.getState()).isEqualTo(PersonDataRequest.State.COMPLETE);
         assertThat(mapper.readTree(Objects.requireNonNull(completed.getCompletedJson()))
-                        .has(MentorEntryRepository.COPIES_PERSON_DATA_STORE))
+                        .has(ConversationEntryRepository.COPIES_PERSON_DATA_STORE))
                 .isTrue();
         assertThat(jdbc.queryForObject(
                         "SELECT count(*) FROM agent_sandbox WHERE id=? AND workspace_id=?",
@@ -162,7 +162,7 @@ class ConversationSandboxErasureIntegrationTest extends AbstractWorkspaceIntegra
         assertThat(Objects.requireNonNull(request.getSelectionsJson()))
                 .contains("sandbox_ids", original.id().toString());
         assertThat(mapper.readTree(Objects.requireNonNull(request.getCountsJson()))
-                        .path(MentorEntryRepository.COPIES_PERSON_DATA_STORE)
+                        .path(ConversationEntryRepository.COPIES_PERSON_DATA_STORE)
                         .asLong())
                 .isEqualTo(1);
         transactions.executeWithoutResult(status -> online.requestErasure(request.getId(), administratorId, true));
@@ -196,7 +196,7 @@ class ConversationSandboxErasureIntegrationTest extends AbstractWorkspaceIntegra
         var completed = online.get(request.getId()).request();
         assertThat(completed.getState()).isEqualTo(PersonDataRequest.State.COMPLETE);
         assertThat(mapper.readTree(Objects.requireNonNull(completed.getCompletedJson()))
-                        .path(MentorEntryRepository.COPIES_PERSON_DATA_STORE)
+                        .path(ConversationEntryRepository.COPIES_PERSON_DATA_STORE)
                         .path("count")
                         .asLong())
                 .isEqualTo(1);
@@ -225,22 +225,22 @@ class ConversationSandboxErasureIntegrationTest extends AbstractWorkspaceIntegra
         String completed = jdbc.queryForObject(
                 "SELECT completed_json FROM person_data_request WHERE id=?", String.class, requestId);
         assertThat(mapper.readTree(Objects.requireNonNull(completed))
-                        .has(MentorEntryRepository.COPIES_PERSON_DATA_STORE))
+                        .has(ConversationEntryRepository.COPIES_PERSON_DATA_STORE))
                 .isFalse();
     }
 
     private PersonDataService service(ConversationSandboxCopies copies) {
-        var catalog = new MentorPersonDataCatalog(
+        var catalog = new ConversationPersonDataCatalog(
                 beans.getBean(NamedParameterJdbcTemplate.class),
                 mapper,
-                beans.getBean(MentorRedaction.class),
+                beans.getBean(ConversationRedaction.class),
                 beans.getBeanProvider(PersonConversationCopySource.class)
                         .orderedStream()
                         .toList(),
-                beans.getBean(MentorContextChanges.class),
+                beans.getBean(ConversationContextChanges.class),
                 copies);
         var store = catalog.contributors().stream()
-                .filter(contributor -> contributor.store().equals(MentorEntryRepository.COPIES_PERSON_DATA_STORE))
+                .filter(contributor -> contributor.store().equals(ConversationEntryRepository.COPIES_PERSON_DATA_STORE))
                 .findFirst()
                 .orElseThrow();
         return new PersonDataService(
@@ -258,7 +258,7 @@ class ConversationSandboxErasureIntegrationTest extends AbstractWorkspaceIntegra
                 beans.getBean(MeterRegistry.class));
     }
 
-    @PersonDataStores(MentorEntryRepository.COPIES_PERSON_DATA_STORE)
+    @PersonDataStores(ConversationEntryRepository.COPIES_PERSON_DATA_STORE)
     private record ToolCopyStore(List<PersonDataContributor> contributors) implements PersonDataCatalog {}
 
     private static final class PhysicalClaims implements SandboxClaims {

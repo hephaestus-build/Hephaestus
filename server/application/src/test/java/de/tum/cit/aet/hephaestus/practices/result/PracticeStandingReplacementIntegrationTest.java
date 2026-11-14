@@ -175,7 +175,7 @@ class PracticeStandingReplacementIntegrationTest extends AbstractResultAdmission
     }
 
     @Test
-    void shouldUseTheSameCurrentStandingForMentoringWhenProcessingIsAuthorized() {
+    void shouldUseTheSameCurrentStandingForConversationWhenProcessingIsAuthorized() {
         var result = admit(ResultOutcome.NOT_MET, itemVersion);
         var human = snapshot();
         var processing = processingSnapshot();
@@ -216,7 +216,7 @@ class PracticeStandingReplacementIntegrationTest extends AbstractResultAdmission
     }
 
     @Test
-    void shouldRefuseMentoringOverAnotherContributorsNoAiChoice() {
+    void shouldRefuseConversationOverAnotherContributorsNoAiChoice() {
         var result = admit(ResultOutcome.MET, itemVersion);
         assertThat(processingSnapshot().dto().standing()).isEqualTo(PracticeStanding.STRENGTH);
         var pull = pulls.findById(Objects.requireNonNull(scenario.item().getSourceId()))
@@ -320,7 +320,7 @@ class PracticeStandingReplacementIntegrationTest extends AbstractResultAdmission
         assertThat(after.dto().standing()).isEqualTo(before.dto().standing());
         assertThat(after.dto().basis()).isEqualTo(StandingBasis.CURRENT_REVIEWS);
         assertThat(after.liveRuns()).extracting(view -> view.result().getId()).containsExactly(live.getId());
-        // An ended result proves nothing current: it is not quoted, and Heph does not read it.
+        // An ended result proves nothing current: it is not quoted, and Hephaestus does not read it.
         assertThat(after.dto().toWorkOn()).isEmpty();
         assertThat(processingSnapshot().liveRuns()).isEmpty();
     }

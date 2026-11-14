@@ -83,7 +83,7 @@ function nonnegative(value: unknown): value is number {
 /** An attempt's monotonic phase timestamps, in milliseconds from one clock. No message or prompt text. */
 export interface QueueObservation {
 	id: string;
-	kind: "review" | "composition" | "mentor";
+	kind: "review" | "composition" | "conversation";
 	submitted: number;
 	eligible: number;
 	granted: number;
@@ -103,7 +103,7 @@ export function parseQueueObservation(value: unknown): QueueObservation {
 	if (
 		!isRecord(value) ||
 		typeof value.id !== "string" ||
-		(value.kind !== "review" && value.kind !== "composition" && value.kind !== "mentor") ||
+		(value.kind !== "review" && value.kind !== "composition" && value.kind !== "conversation") ||
 		!nonnegative(value.submitted) ||
 		!nonnegative(value.eligible) ||
 		!nonnegative(value.granted) ||
@@ -147,10 +147,10 @@ export function queueReport(observations: readonly QueueObservation[]) {
 		return {
 			capacity: milliseconds(rows.map((row) => row.granted - row.eligible)),
 			intentionalConversationWait: milliseconds(
-				(kind === "mentor" ? rows : []).map((row) => row.eligible - row.submitted),
+				(kind === "conversation" ? rows : []).map((row) => row.eligible - row.submitted),
 			),
 			readinessWait: milliseconds(
-				(kind === "mentor" ? [] : rows).map((row) => row.eligible - row.submitted),
+				(kind === "conversation" ? [] : rows).map((row) => row.eligible - row.submitted),
 			),
 			podReady: milliseconds(
 				rows.flatMap((row) => (row.podReady === undefined ? [] : [row.podReady - row.eligible])),
@@ -168,7 +168,7 @@ export function queueReport(observations: readonly QueueObservation[]) {
 	return {
 		review: summarize("review"),
 		composition: summarize("composition"),
-		mentor: summarize("mentor"),
+		conversation: summarize("conversation"),
 	};
 }
 

@@ -9,13 +9,13 @@ import static org.mockito.Mockito.when;
 import de.tum.cit.aet.hephaestus.agent.catalog.EgressPolicy;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
 import de.tum.cit.aet.hephaestus.agent.config.MemberAiRoutingAdapter;
+import de.tum.cit.aet.hephaestus.agent.conversation.weeklydigest.DigestAdmission;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewMemberAiPolicy;
-import de.tum.cit.aet.hephaestus.agent.mentor.weeklydigest.DigestAdmission;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
-import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
+import de.tum.cit.aet.hephaestus.conversation.ConversationTurnRepository;
 import de.tum.cit.aet.hephaestus.productfeedback.drafting.ProductFeedbackDraftCalls;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Instant;
@@ -37,7 +37,7 @@ class ProxyRequestPolicyTest extends BaseUnitTest {
     private ReviewJobRepository jobs;
 
     @Mock
-    private MentorTurnRepository turns;
+    private ConversationTurnRepository turns;
 
     @Mock
     private ReviewMemberAiPolicy reviews;
@@ -72,7 +72,9 @@ class ProxyRequestPolicyTest extends BaseUnitTest {
                 8L,
                 1L,
                 new ProxyRouting.BilledAttempt(source, id, 0, LEASE),
-                source == UsageSourceType.MENTOR_TURN ? null : Instant.now().plusSeconds(60),
+                source == UsageSourceType.CONVERSATION_TURN
+                        ? null
+                        : Instant.now().plusSeconds(60),
                 null);
     }
 
@@ -102,10 +104,10 @@ class ProxyRequestPolicyTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldUseTheDurableMentorTurnAccountNotASuppliedUserId() {
+    void shouldUseTheDurableConversationTurnAccountNotASuppliedUserId() {
         when(turns.findAccountIdByIdAndWorkspaceId(id, 1L)).thenReturn(Optional.of(20L));
         when(routing.allows(1L, 20L, model)).thenReturn(false);
-        assertThat(policy.allows(request(UsageSourceType.MENTOR_TURN))).isFalse();
+        assertThat(policy.allows(request(UsageSourceType.CONVERSATION_TURN))).isFalse();
         verify(routing).allows(1L, 20L, model);
         verifyNoInteractions(jobs);
     }
@@ -139,7 +141,7 @@ class ProxyRequestPolicyTest extends BaseUnitTest {
         when(turns.findAccountIdByIdAndWorkspaceId(id, 1L)).thenReturn(Optional.of(21L));
         when(routing.allows(1L, 21L, model)).thenReturn(true);
         when(digests.refuses(1L, id)).thenReturn(false, true);
-        var request = request(UsageSourceType.MENTOR_TURN);
+        var request = request(UsageSourceType.CONVERSATION_TURN);
         assertThat(policy.allows(request)).isTrue();
         assertThat(policy.allows(request)).isFalse();
     }
@@ -154,7 +156,7 @@ class ProxyRequestPolicyTest extends BaseUnitTest {
                 7L,
                 8L,
                 null,
-                new ProxyRouting.BilledAttempt(UsageSourceType.MENTOR_TURN, id, 0, LEASE),
+                new ProxyRouting.BilledAttempt(UsageSourceType.CONVERSATION_TURN, id, 0, LEASE),
                 null,
                 null);
         assertThat(policy.allows(request)).isFalse();

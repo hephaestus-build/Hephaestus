@@ -4,7 +4,7 @@ import java.util.Optional;
 import java.util.Set;
 
 /**
- * Verified SCM actor for a workspace request or mentor turn. The actor id is the lookup key. The account's actor ids are every actor of the same account
+ * Verified SCM actor for a workspace request or conversation turn. The actor id is the lookup key. The account's actor ids are every actor of the same account
  * that is a member of the workspace, the selected one included, so what the account created
  * through another of them stays its own when the selection changes.
  */

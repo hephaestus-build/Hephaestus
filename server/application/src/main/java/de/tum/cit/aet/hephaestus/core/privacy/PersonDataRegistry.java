@@ -21,7 +21,7 @@ import org.springframework.stereotype.Component;
 @Component
 @ConditionalOnServerRole
 public class PersonDataRegistry {
-    private static final String FINAL_COPY_STORE = "mentor_entry_tool_result_copy";
+    private static final String FINAL_COPY_STORE = "conversation_entry_tool_result_copy";
 
     private final List<PersonDataContributor> stores;
 
@@ -51,7 +51,8 @@ public class PersonDataRegistry {
                 .toList();
         if ((!last.isEmpty() || stores.stream().anyMatch(store -> store.store().equals(FINAL_COPY_STORE)))
                 && !last.equals(List.of(FINAL_COPY_STORE)))
-            throw new IllegalStateException("The mentor copy store must be the only store at the last erasure order");
+            throw new IllegalStateException(
+                    "The conversation copy store must be the only store at the last erasure order");
     }
 
     public List<PersonDataContributor> stores() {

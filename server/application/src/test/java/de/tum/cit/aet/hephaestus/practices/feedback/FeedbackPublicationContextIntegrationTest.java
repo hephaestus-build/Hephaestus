@@ -68,7 +68,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewSnapshot;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewWriteGuard;
 import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
 import de.tum.cit.aet.hephaestus.testconfig.WithAdminUser;
-import de.tum.cit.aet.hephaestus.testconfig.WithMentorUser;
+import de.tum.cit.aet.hephaestus.testconfig.WithConversationUser;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Membership;
 import java.sql.Timestamp;
@@ -172,7 +172,7 @@ class FeedbackPublicationContextIntegrationTest extends AbstractFeedbackDelivery
     void shouldNotLetOtherPeopleOrOtherWorkContend() {
         UUID review = review();
         var piece = publicPiece(review, "Name the missing failure case.", contextFor(review));
-        var otherDeveloper = persistUser("mentor");
+        var otherDeveloper = persistUser("conversation");
         ensureMembership(workspace, otherDeveloper, Membership.WorkspaceRole.MEMBER);
         long otherPerson = accountId(otherDeveloper);
         sibling(otherPerson, itemId, FeedbackCopyState.POSTED);
@@ -755,10 +755,10 @@ class FeedbackPublicationContextIntegrationTest extends AbstractFeedbackDelivery
     }
 
     @Test
-    @WithMentorUser
+    @WithConversationUser
     void shouldRequireWorkspaceAdministrationToRecheck() {
         settledUnknown();
-        ensureMembership(workspace, persistUser("mentor"), Membership.WorkspaceRole.MEMBER);
+        ensureMembership(workspace, persistUser("conversation"), Membership.WorkspaceRole.MEMBER);
         client.post()
                 .uri(route() + "/" + feedbackId + "/recheck")
                 .headers(TestAuthUtils.withCurrentUser())

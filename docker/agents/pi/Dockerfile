@@ -21,7 +21,7 @@ COPY pi/tsconfig.build.json pi/gateway-capabilities.ts pi/gateway-init.ts pi/gat
 # The entrypoint of a sandbox from a SandboxTemplate: its driver, and the run kinds that it drives.
 COPY --from=agent-runtime driver.ts driver-kinds.ts driver-isolation.ts sandbox-paths.ts review-measure.ts \
     review-composer.ts review-composer-gateway.ts review-composer-model.ts ./
-COPY --from=agent-runtime turn.ts heph-host-protocol.ts context-folder.ts pi-agent-sandbox.ts pi-diagnostics.ts \
+COPY --from=agent-runtime turn.ts conversation-host-protocol.ts context-folder.ts pi-agent-sandbox.ts pi-diagnostics.ts \
     pi-diagnostics.json pi-error-text.ts pi-provider.ts pi-text.ts ./
 RUN pnpm exec tsc -p tsconfig.build.json
 

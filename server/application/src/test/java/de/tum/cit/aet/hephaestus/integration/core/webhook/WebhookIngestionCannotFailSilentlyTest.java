@@ -56,8 +56,8 @@ class WebhookIngestionCannotFailSilentlyTest extends BaseUnitTest {
             "practiceReview",
             "kubernetesSandboxHealthIndicator",
             "kubernetesSandbox",
-            "hephTurnDispatcher",
-            "hephTurnDispatcher");
+            "conversationTurnDispatcher",
+            "conversationTurnDispatcher");
 
     @Test
     void readinessAsksOnlyWhetherThisPodCanServe() {
@@ -108,7 +108,7 @@ class WebhookIngestionCannotFailSilentlyTest extends BaseUnitTest {
                 "integrationConsumerHealthIndicator",
                 "practiceReviewHealthIndicator",
                 "kubernetesSandboxHealthIndicator",
-                "hephTurnDispatcher"
+                "conversationTurnDispatcher"
             })
     void aFailingContributorLeavesReadinessUpAndHealthDown(String contributor) {
         healthContext(

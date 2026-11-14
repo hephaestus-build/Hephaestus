@@ -6,8 +6,8 @@ import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import de.tum.cit.aet.hephaestus.evidence.capture.CaptureContribution;
 import de.tum.cit.aet.hephaestus.evidence.capture.CaptureRequest;
-import de.tum.cit.aet.hephaestus.integration.chat.item.ConversationThreadProjection;
 import de.tum.cit.aet.hephaestus.integration.chat.item.ThreadEvents;
+import de.tum.cit.aet.hephaestus.integration.chat.item.ThreadProjection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.spi.AboutRole;
@@ -25,9 +25,9 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ItemVersion;
 import de.tum.cit.aet.hephaestus.integration.core.spi.RoleHolder;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SourceReadAudience;
 import de.tum.cit.aet.hephaestus.integration.slack.capture.ThreadCaptureSource;
-import de.tum.cit.aet.hephaestus.integration.slack.conversation.SlackConversationProjector;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMessageRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackThreadRepository;
+import de.tum.cit.aet.hephaestus.integration.slack.thread.SlackThreadProjector;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
@@ -50,7 +50,7 @@ import tools.jackson.databind.ObjectMapper;
 public class ThreadItemSource implements ItemSource, ItemSourceAccess {
     private final SlackThreadRepository threads;
     private final SlackMessageRepository messages;
-    private final SlackConversationProjector projection;
+    private final SlackThreadProjector projection;
     private final ThreadCaptureSource capture;
     private final GitProviderRegistry providers;
     private final ObjectMapper mapper;
@@ -59,7 +59,7 @@ public class ThreadItemSource implements ItemSource, ItemSourceAccess {
     public ThreadItemSource(
             SlackThreadRepository threads,
             SlackMessageRepository messages,
-            SlackConversationProjector projection,
+            SlackThreadProjector projection,
             ThreadCaptureSource capture,
             GitProviderRegistry providers,
             ObjectMapper mapper,
@@ -104,7 +104,7 @@ public class ThreadItemSource implements ItemSource, ItemSourceAccess {
                 .filter(thread -> audience == SourceReadAudience.PROCESSING
                         ? projection.threadReadability(
                                         item.workspaceId(), thread.getSlackChannelId(), thread.getSlackThreadTs())
-                                == ConversationThreadProjection.ThreadReadability.READABLE
+                                == ThreadProjection.ThreadReadability.READABLE
                         : humanReadable(item.workspaceId(), thread.getSlackChannelId(), thread.getSlackThreadTs()))
                 .isPresent();
     }
@@ -159,7 +159,7 @@ public class ThreadItemSource implements ItemSource, ItemSourceAccess {
                 .flatMap(thread -> connectionFor(item.workspaceId(), thread)
                         .filter(active -> projection.threadReadability(
                                         item.workspaceId(), thread.getSlackChannelId(), thread.getSlackThreadTs())
-                                == ConversationThreadProjection.ThreadReadability.READABLE)
+                                == ThreadProjection.ThreadReadability.READABLE)
                         .flatMap(active -> providers
                                 .findProviderId("SLACK", "https://slack.com")
                                 .map(providerId -> {

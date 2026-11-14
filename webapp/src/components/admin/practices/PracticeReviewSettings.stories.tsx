@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, screen, userEvent, within } from "storybook/test";
-import type { AgentBinding, PracticeReviewScopePreview } from "@/api/types.gen";
+import type { ModelAssignment, PracticeReviewScopePreview } from "@/api/types.gen";
 import { expectNoPageOverflow } from "@/stories/reflow";
 import { pending } from "@/test/async";
 import { expectGenuinelyDisabled, expectUnavailable } from "@/test/controls";
@@ -8,7 +8,7 @@ import { PracticeReviewSettings } from "./PracticeReviewSettings";
 import { reviewSettings } from "./review/fixtures";
 
 const settings = reviewSettings({ deliverToMerged: false });
-const readyBinding: AgentBinding = {
+const readyBinding: ModelAssignment = {
 	dataHandlingTier: "IN_HOUSE",
 	purpose: "PRACTICE_REVIEW",
 	enabled: true,

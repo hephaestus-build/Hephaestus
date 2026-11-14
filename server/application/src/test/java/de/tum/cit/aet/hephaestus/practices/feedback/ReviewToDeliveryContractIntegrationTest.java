@@ -16,7 +16,7 @@ import de.tum.cit.aet.hephaestus.agent.composer.CompositionSessions;
 import de.tum.cit.aet.hephaestus.agent.composer.CompositionStop;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.config.FrozenModel;
-import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBinding;
+import de.tum.cit.aet.hephaestus.agent.config.WorkspaceModelAssignment;
 import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.PreparedEvidence;
 import de.tum.cit.aet.hephaestus.agent.context.ReviewAttemptCustody;
@@ -2928,7 +2928,7 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
     private static ReviewMemberAiPolicy composingPolicy(boolean permits) {
         var policy = mock(ReviewMemberAiPolicy.class);
         when(policy.permitsReview(any())).thenReturn(permits);
-        when(policy.binding(any())).thenReturn(Optional.of(new WorkspaceAgentBinding()));
+        when(policy.binding(any())).thenReturn(Optional.of(new WorkspaceModelAssignment()));
         return policy;
     }
 

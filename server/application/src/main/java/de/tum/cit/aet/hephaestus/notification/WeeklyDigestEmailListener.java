@@ -1,8 +1,8 @@
 package de.tum.cit.aet.hephaestus.notification;
 
-import de.tum.cit.aet.hephaestus.agent.mentor.weeklydigest.WeeklyDigestPointer;
-import de.tum.cit.aet.hephaestus.agent.mentor.weeklydigest.WeeklyDigestTransport;
-import de.tum.cit.aet.hephaestus.agent.mentor.weeklydigest.WeeklyDigestWritten;
+import de.tum.cit.aet.hephaestus.agent.conversation.weeklydigest.WeeklyDigestPointer;
+import de.tum.cit.aet.hephaestus.agent.conversation.weeklydigest.WeeklyDigestTransport;
+import de.tum.cit.aet.hephaestus.agent.conversation.weeklydigest.WeeklyDigestWritten;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountContactQuery;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountMembershipQuery;
@@ -28,7 +28,7 @@ import org.springframework.transaction.event.TransactionalEventListener;
 
 /**
  * The email note that a weekly digest is ready, for a developer with no Slack identity in the workspace. It names
- * the week and the workspace and links to the digest, and nothing else (see the {@code agent.mentor.weeklydigest}
+ * the week and the workspace and links to the digest, and nothing else (see the {@code agent.conversation.weeklydigest}
  * package).
  */
 @Component
@@ -69,7 +69,7 @@ public class WeeklyDigestEmailListener implements WeeklyDigestTransport, EmailNo
 
     @Override
     public EmailKind kind() {
-        return EmailKind.MENTOR_DIGEST;
+        return EmailKind.WEEKLY_DIGEST;
     }
 
     @Override
@@ -92,7 +92,7 @@ public class WeeklyDigestEmailListener implements WeeklyDigestTransport, EmailNo
             return Prepared.withhold(Outcome.EXPIRED);
         }
         var token = subscriptions.unsubscribeToken(
-                event.accountId(), NotificationSubscriptionKind.MENTOR_DIGEST, event.requestedAt());
+                event.accountId(), NotificationSubscriptionKind.WEEKLY_DIGEST, event.requestedAt());
         if (token.isEmpty()) {
             return Prepared.withhold(Outcome.UNSUBSCRIBED);
         }
@@ -107,7 +107,7 @@ public class WeeklyDigestEmailListener implements WeeklyDigestTransport, EmailNo
             return Prepared.withhold(Outcome.NOT_CONFIGURED);
         }
         var rendered = renderer.render(
-                EmailKind.MENTOR_DIGEST,
+                EmailKind.WEEKLY_DIGEST,
                 Map.of(
                         "workspaceSlug",
                         workspace.get().workspaceSlug(),
@@ -120,7 +120,7 @@ public class WeeklyDigestEmailListener implements WeeklyDigestTransport, EmailNo
                         "unsubscribeUrl",
                         links.confirmationUrl(token.get())));
         return Prepared.send(new EmailMessage(
-                EmailKind.MENTOR_DIGEST,
+                EmailKind.WEEKLY_DIGEST,
                 recipient.get(),
                 rendered.subject(),
                 rendered.text(),

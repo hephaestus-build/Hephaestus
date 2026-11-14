@@ -14,9 +14,9 @@ import de.tum.cit.aet.hephaestus.agent.catalog.WorkspaceLlmConnection;
 import de.tum.cit.aet.hephaestus.agent.catalog.WorkspaceLlmConnectionRepository;
 import de.tum.cit.aet.hephaestus.agent.catalog.WorkspaceLlmModel;
 import de.tum.cit.aet.hephaestus.agent.catalog.WorkspaceLlmModelRepository;
-import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
-import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBinding;
-import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBindingRepository;
+import de.tum.cit.aet.hephaestus.agent.config.ModelPurpose;
+import de.tum.cit.aet.hephaestus.agent.config.WorkspaceModelAssignment;
+import de.tum.cit.aet.hephaestus.agent.config.WorkspaceModelAssignmentRepository;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.RuntimeJobTestData;
@@ -69,7 +69,7 @@ class AgentWorkspacePurgeIntegrationTest extends BaseIntegrationTest {
     private WorkspaceLlmModelRepository modelRepository;
 
     @Autowired
-    private WorkspaceAgentBindingRepository bindingRepository;
+    private WorkspaceModelAssignmentRepository bindingRepository;
 
     @Autowired
     private ReviewJobRepository jobRepository;
@@ -161,9 +161,9 @@ class AgentWorkspacePurgeIntegrationTest extends BaseIntegrationTest {
         model.setEnabled(true);
         model = modelRepository.save(model);
 
-        WorkspaceAgentBinding binding = new WorkspaceAgentBinding();
+        WorkspaceModelAssignment binding = new WorkspaceModelAssignment();
         binding.setWorkspace(workspace);
-        binding.setPurpose(AgentPurpose.PRACTICE_REVIEW);
+        binding.setPurpose(ModelPurpose.PRACTICE_REVIEW);
         binding.setWorkspaceModel(model);
         bindingRepository.save(binding);
 

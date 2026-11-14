@@ -1,6 +1,6 @@
 import { CircleAlertIcon } from "lucide-react";
 
-import type { AgentBinding } from "@/api/types.gen";
+import type { ModelAssignment } from "@/api/types.gen";
 
 import type { StatusDefs } from "@/components/common/status-def";
 
@@ -21,6 +21,6 @@ export const BINDING_READINESS_DEFS: StatusDefs<BindingReadiness> = {
 	},
 };
 
-export function bindingReadiness(binding: Pick<AgentBinding, "ready">): BindingReadiness | null {
+export function bindingReadiness(binding: Pick<ModelAssignment, "ready">): BindingReadiness | null {
 	return binding.ready ? null : "NOT_READY";
 }

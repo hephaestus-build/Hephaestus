@@ -10,7 +10,7 @@ import {
 	getPublicActivityPolicyQueryKey,
 	listWorkspacesQueryKey,
 	getWorkspacePublicActivitySettingsQueryKey,
-	listAgentsQueryKey,
+	listModelAssignmentsQueryKey,
 	listHiddenContributorsQueryKey,
 } from "@/api/@tanstack/react-query.gen";
 import type {
@@ -145,7 +145,7 @@ function serveSetupReads(workspaceSlug: string) {
 			record(request);
 			return HttpResponse.json([]);
 		}),
-		http.get(`*/workspaces/${workspaceSlug}/agents`, ({ request }) => {
+		http.get(`*/workspaces/${workspaceSlug}/model-assignments`, ({ request }) => {
 			record(request);
 			return HttpResponse.json({ status: 503, title: "Unavailable" }, { status: 503 });
 		}),
@@ -197,8 +197,8 @@ function serveAcmeWorkspace() {
 				...workspaceListItem("acme"),
 				kind: "GITHUB",
 				practicesEnabled: false,
-				practiceReviewAutoTriggerEnabled: true,
-				practiceReviewManualTriggerEnabled: true,
+				practiceReviewEventEnabled: true,
+				practiceReviewRequestEnabled: true,
 			}),
 		),
 	);
@@ -234,7 +234,7 @@ describe("the setup summary", () => {
 	it("says Unknown for a fact whose refresh failed, and the fact again once it reads", async () => {
 		serveSetupReads("acme");
 		serveAcmeWorkspace();
-		const agents = serveRead("*/workspaces/acme/agents", {
+		const agents = serveRead("*/workspaces/acme/model-assignments", {
 			status: 200,
 			body: [
 				{
@@ -253,12 +253,12 @@ describe("the setup summary", () => {
 
 		// The cache still holds the ready model; the failed read must not keep claiming it.
 		agents.answer = { status: 503 };
-		await reread(queryClient, listAgentsQueryKey(ACME));
+		await reread(queryClient, listModelAssignmentsQueryKey(ACME));
 		await waitFor(() => expect(setupRow("Review model").textContent).toContain("Unknown"));
 		expect(setupRow("Review model").textContent).not.toContain("Ready for every AI choice");
 
 		agents.answer = { status: 200, body: [] };
-		await reread(queryClient, listAgentsQueryKey(ACME));
+		await reread(queryClient, listModelAssignmentsQueryKey(ACME));
 		await waitFor(() =>
 			expect(setupRow("Review model").textContent).toContain(
 				"No review model is ready, so no review can start.",

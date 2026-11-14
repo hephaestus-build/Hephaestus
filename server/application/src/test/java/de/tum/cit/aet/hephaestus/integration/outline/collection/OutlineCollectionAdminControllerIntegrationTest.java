@@ -35,7 +35,7 @@ import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineDocumentRepos
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
 import de.tum.cit.aet.hephaestus.testconfig.WithAdminUser;
-import de.tum.cit.aet.hephaestus.testconfig.WithMentorUser;
+import de.tum.cit.aet.hephaestus.testconfig.WithConversationUser;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Membership.WorkspaceRole;
@@ -128,11 +128,11 @@ class OutlineCollectionAdminControllerIntegrationTest extends AbstractWorkspaceI
     }
 
     @Test
-    @WithMentorUser
+    @WithConversationUser
     @DisplayName("non-admin cannot reach the collection control plane → 403")
     void nonAdmin_forbidden() {
-        User mentor = persistUser("mentor");
-        ensureMembership(workspace, mentor, WorkspaceRole.MEMBER);
+        User conversation = persistUser("conversation");
+        ensureMembership(workspace, conversation, WorkspaceRole.MEMBER);
 
         listRequest().expectStatus().isForbidden().expectBody(Void.class);
         registerRequest(COLLECTION_ID).expectStatus().isForbidden().expectBody(Void.class);

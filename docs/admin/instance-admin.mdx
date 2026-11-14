@@ -119,6 +119,11 @@ For retention and access policy, use the [data-protection documentation](./dsms)
 1. Read authentication events, user views, and configuration changes.
 2. Use the available filters to find who changed a setting and when.
 
+An entry keeps the type that it was written with.
+A change to a workspace's model assignments is written as `MODEL_ASSIGNMENT`.
+Entries from before 1.0 have the earlier type `AGENT_BINDING`, or `AGENT_CONFIG` or `AI_CONFIG_BINDING` from older releases.
+The console shows all of these types as **Model assignment**.
+
 ## Usage
 
 The instance admin sets or clears a workspace's cap on shared-model spend. A workspace admin sets the separate cap for that workspace's own provider.

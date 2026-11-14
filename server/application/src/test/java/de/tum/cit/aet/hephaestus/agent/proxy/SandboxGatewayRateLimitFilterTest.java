@@ -109,7 +109,7 @@ class SandboxGatewayRateLimitFilterTest extends BaseUnitTest {
                 .isEqualTo(1);
     }
 
-    /** A Heph host reports its turn's progress several times a second; that bookkeeping is never throttled. */
+    /** A Hephaestus host reports its turn's progress several times a second; that bookkeeping is never throttled. */
     @Test
     void shouldServeExemptRequestsWhenThePrincipalsBudgetIsSpent() throws Exception {
         var filter = filterAllowing(1);

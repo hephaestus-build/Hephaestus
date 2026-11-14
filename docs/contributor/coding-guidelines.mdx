@@ -33,7 +33,7 @@ These guidelines keep every service aligned. Keep changes focused. Mention any d
 - Create routes with `createFileRoute`. Route modules handle auth gating (see `src/routes/_authenticated.tsx`), loader logic, and orchestration.
 - Keep presentational components in `src/components/**`. They should take props, stay pure, and avoid side effects.
 - Fetch data by spreading generated `...Options()` helpers into `useQuery` or `useMutation`. The helpers provide typing, query keys, and retry defaults. A hand-written query key is a lint error (`hephaestus/no-manual-query-key`), because it stops matching the generated one silently.
-- Invalidate caches with the generated `...QueryKey()` helpers or the same keys passed to `useQuery`. Use optimistic updates only when the UI must respond instantly, such as mentor chat streaming.
+- Invalidate caches with the generated `...QueryKey()` helpers or the same keys passed to `useQuery`. Use optimistic updates only when the UI must respond instantly, such as a streamed answer in Ask Hephaestus.
 - The React Compiler rules and the clock rules are `webapp/AGENTS.md` § React Compiler and § The time of day. Lint enforces both.
 - Stay inside the `--color-*` token scale declared in `src/styles/theme-tokens.css` and, for provider colors, `src/styles.css`. Reach for shadcn/ui primitives before adding new component libraries. `@apply` lives in `styles.css` for base and wrapper rules, not in components.
 - Co-locate `*.stories.tsx` files. Show the states the component can actually reach, with realistic data. Run `vp run --filter webapp chromatic:ci` whenever stories change.
@@ -58,7 +58,7 @@ These guidelines keep every service aligned. Keep changes focused. Mention any d
 
 ### Structure
 
-- Feature packages sit directly under `de.tum.cit.aet.hephaestus` — `practices/`, `evidence/`, `agent/`, `integration/`, `mentor/`, `workspace/`, `activity/` and the rest. Shared wiring sits in `config/` and `core/`. Cross-cutting integration traits (webhook ingress, oauth ingress, SPI, registry) live under `integration/` directly. `ls` the package root rather than trusting a list here.
+- Feature packages sit directly under `de.tum.cit.aet.hephaestus` — `practices/`, `evidence/`, `agent/`, `integration/`, `conversation/`, `workspace/`, `activity/` and the rest. Shared wiring sits in `config/` and `core/`. Cross-cutting integration traits (webhook ingress, oauth ingress, SPI, registry) live under `integration/` directly. `ls` the package root rather than trusting a list here.
 - Controllers return DTOs located near the controller. `ActivityCountsDTO` in `activity/overview/dto/` is the reference example.
 - Repositories return `Optional<T>` instead of `null`.
 - Services take their collaborators through the constructor, over `private final` fields. Do not use field injection with `@Autowired`. If a service depends on many collaborators, split the responsibility.

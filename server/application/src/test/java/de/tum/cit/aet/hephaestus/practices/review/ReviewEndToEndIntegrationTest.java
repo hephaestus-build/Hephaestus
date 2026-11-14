@@ -15,9 +15,9 @@ import de.tum.cit.aet.hephaestus.agent.catalog.WorkspaceLlmModelService;
 import de.tum.cit.aet.hephaestus.agent.composer.CompositionSessions;
 import de.tum.cit.aet.hephaestus.agent.composer.CompositionStop;
 import de.tum.cit.aet.hephaestus.agent.composer.ReviewComposeSandboxKind;
-import de.tum.cit.aet.hephaestus.agent.config.AgentBindingRequestDTO;
-import de.tum.cit.aet.hephaestus.agent.config.AgentBindingService;
-import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
+import de.tum.cit.aet.hephaestus.agent.config.ModelAssignmentRequestDTO;
+import de.tum.cit.aet.hephaestus.agent.config.ModelAssignmentService;
+import de.tum.cit.aet.hephaestus.agent.config.ModelPurpose;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxDispatcher;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxRun;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxRunKind;
@@ -199,7 +199,7 @@ class ReviewEndToEndIntegrationTest extends AbstractWorkspaceIntegrationTest {
     private WorkspaceLlmModelService models;
 
     @Autowired
-    private AgentBindingService bindings;
+    private ModelAssignmentService bindings;
 
     @Autowired
     private WorkspaceRepository workspaces;
@@ -660,9 +660,9 @@ class ReviewEndToEndIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 .getId();
         bindings.upsertBinding(
                 context,
-                AgentPurpose.PRACTICE_REVIEW,
+                ModelPurpose.PRACTICE_REVIEW,
                 DataHandlingTier.UNDECLARED,
-                new AgentBindingRequestDTO(null, model, null, true));
+                new ModelAssignmentRequestDTO(null, model, null, true));
         return workspace;
     }
 

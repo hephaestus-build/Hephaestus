@@ -12,7 +12,7 @@ const openAi: WorkspaceLlmConnection = {
 	displayName: "My OpenAI account",
 	authMode: "BEARER",
 	apiProtocol: "openai-responses",
-	purposes: ["PRACTICE_REVIEW", "MENTOR"],
+	purposes: ["PRACTICE_REVIEW", "CONVERSATION"],
 	baseUrl: "https://api.openai.com/v1",
 	enabled: true,
 	hasApiKey: true,
@@ -88,7 +88,7 @@ export const Default: Story = {
 		await expect(chat.getByRole("table", { name: "Models on My OpenAI account" })).toBeVisible();
 		const onPremProvider = within(canvas.getByRole("region", { name: "On-prem vLLM" }));
 		await expect(onPremProvider.getByText("Chat Completions API")).toBeVisible();
-		await expect(onPremProvider.getByText(", for Practice reviews and Conversations")).toHaveClass(
+		await expect(onPremProvider.getByText(", for Practice reviews and Ask Hephaestus")).toHaveClass(
 			"sr-only",
 		);
 		await expect(

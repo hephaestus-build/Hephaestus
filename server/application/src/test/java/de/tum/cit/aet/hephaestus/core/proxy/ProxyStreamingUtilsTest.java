@@ -653,7 +653,7 @@ class ProxyStreamingUtilsTest extends BaseUnitTest {
             assertThat(delivered.getNativeBuffer().refCnt()).isZero();
         }
 
-        /** The mentor's stream limit: counted from the head, and shorter than its whole-exchange limit. */
+        /** The conversation's stream limit: counted from the head, and shorter than its whole-exchange limit. */
         @Test
         @DisplayName("a body limit ends a stalled stream as timed out within a longer exchange limit")
         void shouldEndAStalledBodyAtItsOwnLimit() {
