@@ -107,7 +107,8 @@ export function LeaveWorkspaceSection({
 			<AlertDialog
 				open={confirming !== undefined}
 				onOpenChange={(open) => {
-					if (!open) {
+					// A leave under way finishes in this confirmation, whose outcome it then shows.
+					if (!open && !leaving) {
 						setConfirming(undefined);
 						onDismissError();
 					}
@@ -118,7 +119,7 @@ export function LeaveWorkspaceSection({
 						<AlertDialogTitle>Leave {confirming?.name}?</AlertDialogTitle>
 						<AlertDialogDescription>
 							You lose access to the workspace and stop getting its practice feedback. Your history
-							there stays recorded. To come back, ask a workspace admin to give you a role again.
+							there stays recorded. To come back, ask a workspace admin to add you again.
 						</AlertDialogDescription>
 					</AlertDialogHeader>
 					{leaveError !== undefined && (

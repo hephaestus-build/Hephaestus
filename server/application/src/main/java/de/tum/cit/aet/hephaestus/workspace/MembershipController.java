@@ -85,6 +85,7 @@ public class MembershipController {
             description = "You are the workspace's last owner",
             content = @Content(schema = @Schema(implementation = ProblemDetail.class)))
     @Audited(ledger = AuditLedger.CONFIG_AUDIT, type = "WORKSPACE_ROLE")
+    @RecentSignInExempt(reason = "lowers only the caller's own role; a workspace admin can give it back")
     public ResponseEntity<Void> leaveWorkspace(WorkspaceContext context) {
         workspaceMembershipService.leave(context.id(), CurrentAccount.requireId());
         return ResponseEntity.noContent().build();

@@ -973,4 +973,30 @@ class MembershipControllerIntegrationTest extends AbstractWorkspaceIntegrationTe
         assertThat(back.getLeftAt()).isNull();
         assertThat(back.getRole()).isEqualTo(WorkspaceRole.MEMBER);
     }
+
+    @Test
+    @WithMentorUser
+    void shouldKeepAMemberWhomAnAdminRemovedOutThroughProviderSync() {
+        User owner = persistUser("removal-owner");
+        Workspace workspace = createWorkspace("removal-sticks", "Removal", "removal", AccountType.ORG, owner);
+        ensureMembership(workspace, persistUser("mentor"), WorkspaceRole.ADMIN);
+        User member = persistUser("removal-member");
+        workspaceMembershipService.applyProviderGrant(workspace, member.getId(), WorkspaceRole.MEMBER);
+        long accountId = accountId(member);
+
+        webTestClient
+                .delete()
+                .uri("/workspaces/{slug}/members/{accountId}", workspace.getWorkspaceSlug(), accountId)
+                .headers(TestAuthUtils.withCurrentUser())
+                .exchange()
+                .expectStatus()
+                .isNoContent()
+                .expectBody(Void.class);
+        workspaceMembershipService.syncWorkspaceMembers(workspace, Map.of(member.getId(), WorkspaceRole.MEMBER));
+
+        assertThat(workspaceMembershipService
+                        .getMembership(workspace.getId(), accountId)
+                        .getLeftAt())
+                .isNotNull();
+    }
 }

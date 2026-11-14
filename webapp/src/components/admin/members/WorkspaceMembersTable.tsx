@@ -377,8 +377,25 @@ export function WorkspaceMembersTable({
 				id: "role",
 				header: () => "Role",
 				cell: ({ row }) => {
-					const { account, role } = row.original.membership;
+					const { account, role, leftAt } = row.original.membership;
 					const manages = onRoleChange !== undefined && assignableRoles.includes(role);
+					// A person who left, or whom an admin removed, stays out until an admin adds them again.
+					if (leftAt !== null) {
+						return manages ? (
+							<Button
+								variant="outline"
+								size="sm"
+								disabled={pendingRoleAccountId === account.id}
+								aria-label={`Add ${row.original.name} again as ${WORKSPACE_ROLE_LABELS[role]}`}
+								onClick={(event) => onRoleChange(row.original, role, event.currentTarget)}
+							>
+								{pendingRoleAccountId === account.id && <Spinner />}
+								Add again as {WORKSPACE_ROLE_LABELS[role]}
+							</Button>
+						) : (
+							<span className="text-muted-foreground">—</span>
+						);
+					}
 					return (
 						<div className="space-y-1">
 							{manages ? (
