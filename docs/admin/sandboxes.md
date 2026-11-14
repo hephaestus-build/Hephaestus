@@ -110,8 +110,17 @@ The sandbox nodes need these items:
    The default runtime needs [user namespace support](https://kubernetes.io/docs/concepts/workloads/pods/user-namespaces/) for `hostUsers: false`.
    A `gvisor` template omits `hostUsers` and uses gVisor's kernel boundary instead.
 5. The pinned agent-sandbox controller and its extensions.
+6. A PID limit of 4096 or lower for each Pod: the kubelet's `podPidsLimit`, or its flag `--pod-max-pids`.
+   Without it, a sandbox can use all free process IDs of its node.
+   Then no Pod on the node can start a process.
+   The one-host platform sets 4096 in `k3s-kubelet.yaml`.
 
-The [sandbox isolation gate](#sandbox-isolation-gate) checks items 1, 2 and 4 on your cluster.
+The [sandbox isolation gate](#sandbox-isolation-gate) checks items 1, 2, 4 and 6 on your cluster.
+It checks item 6 only for a template whose runtime is not gVisor.
+Under gVisor, the threads of a sandbox are tasks of the gVisor kernel and do not count against the node's limit.
+Its processes count, and gVisor stops the whole sandbox at the limit.
+Thus, the gate cannot see the limit from inside a gVisor sandbox.
+For gVisor templates, read the limit of each sandbox node in its kubelet configuration.
 
 ## Sandbox templates
 
@@ -198,6 +207,7 @@ From inside one of them, it checks:
 - The Pod settings of [Sandbox templates](#sandbox-templates), and a user namespace of its own or the gVisor kernel.
 - No API credential: no service account directory, no projected token, and no Secret as a volume or a variable.
 - A non-root user, `no_new_privs`, and no effective capabilities.
+- Except under gVisor, the node refuses a new thread before the sandbox holds more than 4096 tasks (processes and threads).
 - It reaches the gateway.
 - It does not reach the Kubernetes API, by the address of its Service or by any address behind that Service.
 - It does not reach the cluster DNS server, the node's kubelet, or the other sandbox.
@@ -266,6 +276,7 @@ Do not connect a workspace until the gate passes.
 | `<sandbox namespace>: admits a Pod that the Restricted Pod Security Standard refuses` | Pod Security admission does not enforce the Restricted level in the sandbox namespace. The line names the namespace's `pod-security.kubernetes.io/enforce` label. | Run `kubectl label namespace <sandbox namespace> pod-security.kubernetes.io/enforce=restricted --overwrite`. |
 | `<sandbox namespace>: refused a Pod that the Restricted Pod Security Standard refuses, but not by Pod Security admission` | Another admission control, such as a quota or a policy engine, refused the Pod before Pod Security admission. Pod Security admission does not enforce the Restricted level. | Label the namespace as in the row above. The line ends with the answer of the API server. |
 | `no user namespace of its own` | The node runtime has no user namespace support. | Use nodes with user namespace support, or a gVisor RuntimeClass in `sandbox.templates.runtimeClassName`. |
+| `holds <n> tasks with no PID limit of 4096 or lower` | The kubelet of the sandbox node sets no PID limit for each Pod, or a limit above 4096. | Set the kubelet's `podPidsLimit` to 4096 or lower on each sandbox node, and restart the kubelet. |
 | `a Kubernetes token is mounted`, `runs as`, `effective capabilities`, or a Pod setting | The template differs from the chart's template. | Upgrade the release again with the verified chart, so that the chart writes its templates. |
 | `kubectl wait` times out on a `sandboxclaim` | The controller did not start the sandbox: it is not running, the quota is full, or the node cannot pull the agent image. | Check the controller's log and `kubectl -n <sandbox namespace> get pods,resourcequota`. |
 | An error that names the DNS Service | The cluster DNS Service has another name. | Give it with `--dns`. |

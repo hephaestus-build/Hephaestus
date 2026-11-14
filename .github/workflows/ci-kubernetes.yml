@@ -320,6 +320,11 @@ jobs:
           networking:
             disableDefaultCNI: true
             podSubnet: "$POD_CIDR"
+          # The PID limit of the one-host platform, which the sandbox isolation gate checks.
+          kubeadmConfigPatches:
+            - |
+              kind: KubeletConfiguration
+              podPidsLimit: 4096
           nodes:
             - role: control-plane
             - role: worker
