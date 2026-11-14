@@ -169,7 +169,7 @@ class ScriptModelMachineryMigrationTest {
         when(routing.bindingForPeople(anyLong(), eq(AgentPurpose.PRACTICE_REVIEW), anyList()))
                 .thenReturn(Optional.of(binding));
         var verifier = new ReviewMethodVerifier(
-                resolver, new PracticeReviewProperties(false, 15, 5, null, 36, 48000, Duration.ofMinutes(10)));
+                resolver, new PracticeReviewProperties(false, 15, 5, null, 36, 48000, 342_000, Duration.ofMinutes(10)));
         return new ReviewModelBindingsAdapter(routing, verifier);
     }
 

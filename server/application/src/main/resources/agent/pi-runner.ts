@@ -107,6 +107,7 @@ import {
 	extractUsageFromSession,
 	newUsageLedger,
 	outputTokensOf,
+	inputTokensOf,
 	type UsageReport,
 } from "./pi-runner-usage.ts";
 import {
@@ -266,6 +267,10 @@ interface TurnTrace {
 	compactions: number;
 	providerRetries: number;
 	outputTokens: number;
+	/** The prompt total of every call in the turn. */
+	inputTokens: number;
+	/** The prompt total of the turn's last call: what one more call reads at least. */
+	lastPromptTokens: number;
 	/** Calls that ran into the model's output limit, and so reached their tool incomplete. */
 	cutOff: number;
 	/** What the turn may spend; it ends after the model call that spends it. */
@@ -281,6 +286,11 @@ interface TurnTrace {
  * ceiling, or a loop guard fired.
  */
 type StopReason = "budget" | "stall" | "safety" | "loop";
+
+/** What a turn has spent, in the dimensions of its budget. */
+function workOf(turn: TurnTrace): Work {
+	return { modelCalls: turn.calls, outputTokens: turn.outputTokens, inputTokens: turn.inputTokens };
+}
 
 /** Why a required source was or was not in the brief, and how much of it the session read. */
 interface RequiredSourceTrace {
@@ -733,6 +743,7 @@ export async function runReviewJob(): Promise<void> {
 	const PER_PRACTICE_WORK: Work = {
 		modelCalls: positiveIntegerEnv("PI_PRACTICE_MODEL_CALLS"),
 		outputTokens: positiveIntegerEnv("PI_PRACTICE_OUTPUT_TOKENS"),
+		inputTokens: positiveIntegerEnv("PI_PRACTICE_INPUT_TOKENS"),
 	};
 	// Abort a stalled stream independently of the turn's work budget. A call that waits for its first
 	// byte is not stalled: the proxy answers it when the pool grants it, or refuses it at the deadline.
@@ -1519,6 +1530,7 @@ export async function runReviewJob(): Promise<void> {
 		const turn = state.currentTurn;
 		if (event.type === "message_end" && event.message.role === "assistant") {
 			const output = outputTokensOf(event.message);
+			const prompt = inputTokensOf(event.message);
 			state.recordingMessageTokens = listOrEmpty(event.message.content).some(
 				(c) => c.type === "toolCall" && c.name === "submit_result",
 			)
@@ -1529,15 +1541,23 @@ export async function runReviewJob(): Promise<void> {
 			}
 			turn.calls += 1;
 			turn.outputTokens += output;
+			turn.inputTokens += prompt;
+			turn.lastPromptTokens = prompt;
 			noteCutOff(
 				turn,
 				event.message.stopReason === "length" || output >= (state.callOutputLimit ?? outputLimit),
 			);
-			const used: Work = { modelCalls: turn.calls, outputTokens: turn.outputTokens };
+			const used = workOf(turn);
 			if (
 				!turn.askedToRecord &&
 				turn.stoppedBy === null &&
-				shouldRecordNow(used, turn.budget, state.turnDemand.owed(), state.tokensPerProblem)
+				shouldRecordNow(
+					used,
+					turn.budget,
+					state.turnDemand.owed(),
+					state.tokensPerProblem,
+					turn.lastPromptTokens,
+				)
 			) {
 				turn.askedToRecord = true;
 				if (state.activeReview !== null) {
@@ -1549,6 +1569,8 @@ export async function runReviewJob(): Promise<void> {
 					call_budget: turn.budget.modelCalls,
 					output_tokens: turn.outputTokens,
 					output_token_budget: turn.budget.outputTokens,
+					input_tokens: turn.inputTokens,
+					input_token_budget: turn.budget.inputTokens,
 				});
 				if (state.activeSession) {
 					void steer(state.activeSession, state.turnDemand.nudge);
@@ -1566,11 +1588,7 @@ export async function runReviewJob(): Promise<void> {
 			state.recordingMessageTokens = 0;
 			return;
 		}
-		if (
-			event.type === "turn_end" &&
-			turn?.stoppedBy === null &&
-			spent({ modelCalls: turn.calls, outputTokens: turn.outputTokens }, turn.budget)
-		) {
+		if (event.type === "turn_end" && turn?.stoppedBy === null && spent(workOf(turn), turn.budget)) {
 			stopTurn("budget");
 		}
 	}
@@ -2194,6 +2212,8 @@ export async function runReviewJob(): Promise<void> {
 			compactions: 0,
 			providerRetries: 0,
 			outputTokens: 0,
+			inputTokens: 0,
+			lastPromptTokens: 0,
 			cutOff: 0,
 			budget,
 			askedToRecord: false,
@@ -2216,6 +2236,8 @@ export async function runReviewJob(): Promise<void> {
 			call_budget: trace.budget.modelCalls,
 			output_tokens: trace.outputTokens,
 			output_token_budget: trace.budget.outputTokens,
+			input_tokens: trace.inputTokens,
+			input_token_budget: trace.budget.inputTokens,
 			stopped_by: trace.stoppedBy ?? undefined,
 			tool_calls: Object.values(trace.toolCalls).reduce((sum, count) => sum + count, 0),
 			stored: trace.stored,
@@ -2375,6 +2397,7 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 		diagnose("review.planned", {
 			calls_per_practice: PER_PRACTICE_WORK.modelCalls,
 			output_tokens_per_practice: PER_PRACTICE_WORK.outputTokens,
+			input_tokens_per_practice: PER_PRACTICE_WORK.inputTokens,
 			ceiling_ms: AGENT_BUDGET_MS,
 		});
 
@@ -2722,11 +2745,7 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 					options,
 				): ReturnType<AgentSession["agent"]["streamFunction"]> => {
 					const trace = scope.currentTurn;
-					if (
-						trace === null ||
-						trace.stoppedBy !== null ||
-						spent({ modelCalls: trace.calls, outputTokens: trace.outputTokens }, trace.budget)
-					) {
+					if (trace === null || trace.stoppedBy !== null || spent(workOf(trace), trace.budget)) {
 						throw new UnratedError("budget", "the practice reservation is spent");
 					}
 					// A final call can finish, but cannot write tokens beyond its turn or reserved for a sibling practice.
@@ -2851,6 +2870,7 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 				practices: slugs.length,
 				call_budget: budget.modelCalls,
 				output_token_budget: budget.outputTokens,
+				input_token_budget: budget.inputTokens,
 				tokens_per_result: sessionState().tokensPerProblem,
 			});
 			const trace = openTurnTrace(label, budget, {
@@ -2898,10 +2918,7 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 				interrupted: Promise<undefined>,
 			) {
 				const state = sessionState();
-				if (
-					!endedUnrecorded(slug) ||
-					spent({ modelCalls: trace.calls, outputTokens: trace.outputTokens }, trace.budget)
-				) {
+				if (!endedUnrecorded(slug) || spent(workOf(trace), trace.budget)) {
 					return;
 				}
 				diagnose("practice.unsubmitted", {

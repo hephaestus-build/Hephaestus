@@ -31,6 +31,8 @@ public class PracticePiAdapter {
 
     static final String PRACTICE_OUTPUT_TOKENS_ENV = "PI_PRACTICE_OUTPUT_TOKENS";
 
+    static final String PRACTICE_INPUT_TOKENS_ENV = "PI_PRACTICE_INPUT_TOKENS";
+
     /**
      * The shortest job timeout: more than the runner's shutdown buffer, so the runner has work time at all. No
      * program stage is reserved; the programs run inside the runner's own budget.
@@ -51,6 +53,7 @@ public class PracticePiAdapter {
         Map<String, String> environment = new LinkedHashMap<>(plan.environment());
         environment.put(PRACTICE_MODEL_CALLS_ENV, Integer.toString(reviewProperties.practiceModelCalls()));
         environment.put(PRACTICE_OUTPUT_TOKENS_ENV, Integer.toString(reviewProperties.practiceOutputTokens()));
+        environment.put(PRACTICE_INPUT_TOKENS_ENV, Integer.toString(reviewProperties.practiceInputTokens()));
         Double temperature = reviewProperties.samplingTemperature();
         if (temperature != null) {
             environment.put(SAMPLING_TEMPERATURE_ENV, temperature.toString());

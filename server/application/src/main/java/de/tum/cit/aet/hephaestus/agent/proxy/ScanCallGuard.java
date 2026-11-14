@@ -127,7 +127,7 @@ public class ScanCallGuard {
 
     /**
      * An ordinary review's own calls take at most {@link #WORK_MARGIN} times the work that its loop may spend: the model
-     * calls and output tokens of each assigned practice. The loop holds itself to its budget; this bound holds a caller
+     * calls, output tokens and input tokens of each assigned practice. The loop holds itself to its budget; this bound holds a caller
      * that does not, so an attempt's cost never rests on its runner alone. Each call already in flight may pass it
      * once.
      */
@@ -137,7 +137,8 @@ public class ScanCallGuard {
         long practices = job.getInput().assignments().size();
         var used = reviewCalls(job, route.attempt().number());
         if (used.getCalls() >= WORK_MARGIN * practices * practiceReview.practiceModelCalls()
-                || used.getOutputTokens() >= WORK_MARGIN * practices * practiceReview.practiceOutputTokens())
+                || used.getOutputTokens() >= WORK_MARGIN * practices * practiceReview.practiceOutputTokens()
+                || used.getInputTokens() >= WORK_MARGIN * practices * practiceReview.practiceInputTokens())
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, ATTEMPT_WORK_SPENT);
     }
 

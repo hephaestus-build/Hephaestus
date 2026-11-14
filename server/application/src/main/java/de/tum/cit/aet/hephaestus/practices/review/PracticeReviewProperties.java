@@ -23,6 +23,8 @@ import org.springframework.validation.annotation.Validated;
  * @param samplingTemperature requested model sampling temperature, or null for the provider default.
  * @param practiceModelCalls  The model calls that one practice gets in a review.
  * @param practiceOutputTokens The output tokens that one practice gets in a review.
+ * @param practiceInputTokens The input tokens that one practice gets in a review: the prompt total of its model calls,
+ *                            cached or not. It guards against a practice that keeps rereading, not normal work.
  * @param compositionTimeout  the longest a review's composition run composes its feedback after the review is
  *                            measured. A destination still open then is withheld as not composed.
  */
@@ -35,4 +37,5 @@ public record PracticeReviewProperties(
         @Nullable @DecimalMin("0.0") @DecimalMax("2.0") Double samplingTemperature,
         @Min(1) @DefaultValue("36") int practiceModelCalls,
         @Min(1000) @DefaultValue("48000") int practiceOutputTokens,
+        @Min(10000) @DefaultValue("342000") int practiceInputTokens,
         @DurationMin(minutes = 1) @DefaultValue("PT10M") Duration compositionTimeout) {}

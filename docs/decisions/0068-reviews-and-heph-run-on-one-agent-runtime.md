@@ -881,3 +881,24 @@ The [glossary](../contributor/practice-review-glossary.mdx#runtime-terms) calls 
 - **[Decision C](#c-user-namespaces-are-required) and [decision E](#e-gvisor-is-optional-hardening).** gVisor is the default runtime where the node has it, and runc is the fallback. gVisor cannot run with `hostUsers: false` yet (google/gvisor#13303). Thus, a gVisor sandbox omits `hostUsers`, and gVisor's Sentry is the kernel boundary. A runc sandbox keeps `hostUsers: false`, and decision C stays for it.
 
 **Stays:** decisions D, I and K, and decision C for runc. Decision F stays without the worker: a refused call at the proxy is the one form of control. Decision H stays. The isolation probe becomes one egress and isolation gate for the sandbox.
+
+## Update — 2026-11-14: decision K ships its budget and withdraws its clearing rule
+
+**The input-token budget ships.** Each practice has an input-token budget beside its model calls and output tokens: `hephaestus.practice-review.practice-input-tokens`, default 342000.
+The default is twice the 99th percentile of the input tokens of one practice session on staging over 14 days.
+It counts the prompt total of every call, cached or not.
+A practice that spends it ends as `NOT_REACHED` with the reason `budget`, and its siblings go on.
+The model proxy holds each review attempt to twice the budget of its practices, as for calls and output tokens.
+
+**The frozen review method does not carry the input-token budget.** It is a cost limit, like the direct-model limits.
+A change to it does not change the method of a pinned review or the comparability of results.
+
+**The clearing rule is withdrawn.** Older evidence-tool results do not become notes. The reasons:
+
+1. The input-token budget already bounds the cost of reads, deterministically.
+2. Clearing rewrites the prompt prefix, so later calls lose the provider's prompt cache. Its net saving is not measured.
+3. It changes what the model reads. Its A/B proof can show no gain, and it costs model calls.
+4. Coverage does not depend on it, because the receipts live in the loop, not in the context.
+5. A conversation keeps Pi's own compaction, which bounds a long turn.
+
+A later ADR can propose clearing again with a measured A/B result.

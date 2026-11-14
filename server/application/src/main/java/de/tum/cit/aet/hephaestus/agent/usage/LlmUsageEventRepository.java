@@ -193,10 +193,11 @@ public interface LlmUsageEventRepository extends JpaRepository<LlmUsageEvent, UU
 
     /**
      * The calls of one review attempt on the review's own model, those without reported usage and those still open
-     * included, and the output tokens of the ended ones.
+     * included, and the output tokens and prompt total (input, cache reads and cache writes) of the ended ones.
      */
     @Query(value = """
-        SELECT COUNT(*) AS calls, COALESCE(SUM(e.output_tokens), 0) AS outputTokens
+        SELECT COUNT(*) AS calls, COALESCE(SUM(e.output_tokens), 0) AS outputTokens,
+               COALESCE(SUM(e.input_tokens + e.cache_read_tokens + e.cache_write_tokens), 0) AS inputTokens
         FROM llm_usage_event e
         WHERE e.workspace_id = :workspaceId AND e.source_type = 'REVIEW_JOB' AND e.source_id = :jobId
           AND e.source_attempt = :attempt
@@ -225,6 +226,8 @@ public interface LlmUsageEventRepository extends JpaRepository<LlmUsageEvent, UU
         long getCalls();
 
         long getOutputTokens();
+
+        long getInputTokens();
     }
 
     /**
