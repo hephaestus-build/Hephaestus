@@ -80,10 +80,10 @@ Option 3.
 | 2 | Database tests: the `review` and `workspace` triggers refuse the illegal update. |
 | 3 | `ReviewClosureIntegrationTest`: each end path (complete, cancel, refused selection, replaced) asserts its rows and the `practice_review.ended` increment. |
 | 4 | ArchUnit: `new Workspace()` appears only in `Workspace`. |
-| 5 | ArchUnit `RepositoryOwnershipArchTest` over `ApplicationModules`: a class that uses a Spring Data repository is in that repository's module, except for the SCM-kernel pairs. `ModulithVerificationTest` refuses access to a non-exposed package. |
-| 6 | `ModuleDeclarationTest`: every module declares `allowedDependencies` other than `ApplicationModule.OPEN_TOKEN`, and only listed modules are `Type.OPEN`. `ModulithVerificationTest` refuses an unlisted dependency. |
+| 5 | ArchUnit `RepositoryOwnershipArchTest#shouldAllowOnlyTheExactOwnedRepositoryAccesses` over `ApplicationModules`: a class that uses a Spring Data repository is in that repository's module, except for the SCM-kernel pairs. `ModulithVerificationTest` refuses access to a non-exposed package. |
+| 6 | `ModuleDeclarationTest#shouldDeclareEveryModuleAndItsAllowedDependencies`: every module declares `allowedDependencies` other than `ApplicationModule.OPEN_TOKEN`, and only listed modules are `Type.OPEN`. `ModulithVerificationTest` refuses an unlisted dependency. |
 | 7 | `AfterCommitRepairArchTest`: every after-commit `@TransactionalEventListener` is listed with its repair. |
-| 8 | `ContextMapCoverageTest`: every module of `ApplicationModules` is in the table of `system-design.mdx`. The architecture tier writes `build/spring-modulith-docs`. |
+| 8 | `ContextMapCoverageTest#shouldDescribeEveryModuleInTheContextMapTable`: every module of `ApplicationModules` is in the table of `system-design.mdx`. `ContextMapCoverageTest#shouldGenerateTheContextMapFromVerifiedModules` verifies the module graph and writes `build/spring-modulith-docs`. |
 | Ratchet | The allowlists of rules 1 and 5 name an owner per entry. The test fails when the target version has no pre-release suffix and a list is not empty. The target is `hephaestus.releaseVersion`, or the root `package.json` version by default. |
 | 9 | Not enforced. Review refuses a new dependency (ADR 0072). |
 
