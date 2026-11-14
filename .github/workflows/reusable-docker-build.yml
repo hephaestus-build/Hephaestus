@@ -379,19 +379,19 @@ jobs:
               postgres) digest=$POSTGRES_DIGEST outcome=$BAKE_OUTCOME ;;
               *) digest= outcome= ;;
             esac
+            # A failed bake can still have pushed its other images, so a digest decides first.
+            if [[ "$digest" =~ ^sha256:[a-f0-9]{64}$ ]]; then
+              mkdir -p "$RUNNER_TEMP/digests/$name/$PLATFORM_PAIR"
+              touch "$RUNNER_TEMP/digests/$name/$PLATFORM_PAIR/${digest#sha256:}"
+              continue
+            fi
+            missing+=("$name")
             if [[ "$outcome" == failure ]]; then
-              # The build step annotates its own error; a missing digest would only repeat its effect.
-              echo "::notice::$name did not build; read the build step's error above"
-              missing+=("$name")
-              continue
-            fi
-            if [[ ! "$digest" =~ ^sha256:[a-f0-9]{64}$ ]]; then
+              # The failed step reports the cause; a missing digest would only repeat its effect.
+              echo "::notice::$name has no digest: its build step failed (see the first failed step)"
+            else
               echo "::error::No digest produced for $name (got: ${digest:-<empty>})"
-              missing+=("$name")
-              continue
             fi
-            mkdir -p "$RUNNER_TEMP/digests/$name/$PLATFORM_PAIR"
-            touch "$RUNNER_TEMP/digests/$name/$PLATFORM_PAIR/${digest#sha256:}"
           done
           (( ${#missing[@]} == 0 ))
 
