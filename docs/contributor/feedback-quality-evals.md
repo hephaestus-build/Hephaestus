@@ -271,8 +271,9 @@ The expected outcome is what the server admitted:
 - Every package that reached preparation.
 - The stops that the review on the work recorded.
 - The cause that handed the attempt on.
-- What each model call added to its conversation. That is whether it starts a session, the model's answers and the server's tool results.
-  The case leaves out the prompts and turns that the server wrote. Thus, a prompt edit changes no case.
+- What each model call added to its conversation. A call that starts a session names its tools.
+  The case keeps the model's answers and the server's tool results.
+  Of each turn that the server wrote, it keeps only the IDs. Thus, a prompt edit changes no case.
 
 `ComposerReplayTest` replays every case and compares the outcome exactly. It runs in the unit tier.
 The harness runs the real composer sessions over an in-memory result admission.

@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.composer;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.fail;
 
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import java.io.IOException;
@@ -34,7 +35,7 @@ import tools.jackson.databind.node.ObjectNode;
  */
 @Tag("unit")
 class ComposerTurnsTest {
-    /** Rewrites the tool schema files from what the composer renders, without their descriptions. */
+    /** Rewrites each tool schema file that differs from what the composer renders, without descriptions, and fails. */
     private static final boolean UPDATE = "1".equals(System.getenv("UPDATE_COMPOSITION_TOOLS"));
     /** The source copy of the scenarios, from the module directory that Gradle runs tests in. */
     private static final Path SOURCE = Path.of("src/test/resources/agent/golden-prompts/composition-turns");
@@ -68,6 +69,25 @@ class ComposerTurnsTest {
                 assertThat(scenario.reviewTurn()).as(id).doesNotContain(id);
             }
         }
+    }
+
+    /** What only the developer may see, and what was not found wanting, never reaches the review on the work. */
+    @ParameterizedTest
+    @ValueSource(strings = {"pull-request", "issue", "oversized"})
+    void shouldKeepPrivateHistoryAndMetPracticesOutOfTheReviewOnTheWork(String name) throws Exception {
+        var scenario = render(name);
+        String review = Objects.requireNonNull(scenario.reviewTurn());
+        for (JsonNode delivered : scenario.privateHistory().path("delivered")) {
+            String id = delivered.path("id").asString();
+            assertThat(review).as("delivered private feedback %s", id).doesNotContain(id);
+            assertThat(review).doesNotContain(delivered.path("body").asString());
+            assertThat(scenario.feedbackTurn())
+                    .as("the private composer sees %s", id)
+                    .contains(id);
+        }
+        for (JsonNode result : scenario.admitted())
+            if (result.path("outcome").asString().equals("MET"))
+                assertThat(review).doesNotContain(result.path("practiceSlug").asString());
     }
 
     @Test
@@ -133,6 +153,15 @@ class ComposerTurnsTest {
             if (context && bytes.length > 0 && !path.endsWith("/change.json"))
                 assertThat(scenario.brief()).as(path).contains("`" + path + "`");
         });
+        // The work's own words reach the composer, not only the file names.
+        scenario.inputs().forEach((path, bytes) -> {
+            if (!path.startsWith(ComposerFiles.CONTEXT_ROOT + "/") || !path.endsWith(".md")) return;
+            new String(bytes, StandardCharsets.UTF_8)
+                    .lines()
+                    .filter(line -> !line.isBlank())
+                    .findFirst()
+                    .ifPresent(line -> assertThat(scenario.brief()).as(path).contains(line));
+        });
     }
 
     @ParameterizedTest
@@ -154,7 +183,7 @@ class ComposerTurnsTest {
         // Names the model receives outside a rendered turn: the server's check receipt and the publish_package and
         // edit_own parameters carry draftId, and an earlier review record names its work (ResultHistoryContentSource
         // .putWork), which no scenario stages.
-        known.addAll(List.of("draftId", "work", "title", "number", "url"));
+        known.addAll(List.of("draftId", "work", "number", "url"));
         for (JsonNode block : blocks(markedDiscussion().privateTurn())) vocabulary(block, known);
         for (String name : SCENARIOS) {
             var scenario = render(name);
@@ -169,6 +198,8 @@ class ComposerTurnsTest {
         instructions.put("ReviewOnWork.WRITE_CONTRACT", ReviewOnWork.WRITE_CONTRACT);
         instructions.put("ReviewOnWork.TOOL_DESCRIPTION", ReviewOnWork.TOOL_DESCRIPTION);
         instructions.put("PrivateFeedback.TOOL_DESCRIPTION", PrivateFeedback.TOOL_DESCRIPTION);
+        instructions.put("ReviewOnWork.NUDGE", ReviewOnWork.NUDGE);
+        instructions.put("PrivateFeedback.NUDGE", PrivateFeedback.NUDGE);
         instructions.forEach((source, text) -> {
             var matcher = MENTIONED_NAME.matcher(text);
             while (matcher.find())
@@ -220,6 +251,7 @@ class ComposerTurnsTest {
     private record Rendered(
             Map<String, byte[]> inputs,
             JsonNode admitted,
+            JsonNode privateHistory,
             @Nullable String reviewTurn,
             @Nullable JsonNode reviewTool,
             String brief,
@@ -267,6 +299,7 @@ class ComposerTurnsTest {
         return new Rendered(
                 inputs,
                 response.path("admitted"),
+                response.path("privateHistory"),
                 reviewTurn,
                 reviewTool,
                 captured.brief(),
@@ -277,16 +310,17 @@ class ComposerTurnsTest {
     /** The tool's structure equals the scenario's file: names, types, required fields and allowed values. */
     private static void structure(String scenario, String file, JsonNode rendered) throws Exception {
         JsonNode actual = withoutDescriptions(rendered.deepCopy());
-        if (UPDATE) {
+        JsonNode expected = json(scenario(scenario).resolve(file));
+        if (UPDATE && !actual.equals(expected)) {
             Files.writeString(
                     SOURCE.resolve(scenario).resolve(file),
                     JsonText.stringify(actual, 2) + "\n",
                     StandardCharsets.UTF_8);
-            return;
+            // A Gradle daemon can keep the variable after the build that set it, so a rewrite never passes.
+            fail(scenario + "/" + file
+                    + " was rewritten: review the diff, then run again without UPDATE_COMPOSITION_TOOLS");
         }
-        assertThat(actual)
-                .as(scenario + "/" + file)
-                .isEqualTo(json(scenario(scenario).resolve(file)));
+        assertThat(actual).as(scenario + "/" + file).isEqualTo(expected);
     }
 
     private static JsonNode withoutDescriptions(JsonNode node) {

@@ -53,6 +53,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -61,6 +62,7 @@ import java.util.TreeMap;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
+import java.util.regex.Pattern;
 import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
 import org.mockito.Answers;
@@ -91,6 +93,10 @@ final class ComposerReplay {
     private static final Path SCENARIOS = Path.of("src/test/resources/agent/golden-prompts/composition-turns");
     static final UUID RUN = UUID.fromString("508d958c-100e-594f-8b4e-6d5c60e59470");
     private static final Instant PREPARED_AT = Instant.parse("2026-11-09T12:00:00Z");
+
+    /** A result, problem or feedback id in a turn the server wrote. */
+    private static final Pattern ID =
+            Pattern.compile("\\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\\b");
 
     private ComposerReplay() {}
 
@@ -298,9 +304,9 @@ final class ComposerReplay {
     }
 
     /**
-     * What one model call added to its conversation, protocol-neutral: whether it starts a session, and every message
-     * it did not send before. The prompts and turns the server wrote are left out, so a prompt edit changes no case;
-     * ComposerTurnsTest asserts what the turns carry.
+     * What one model call added to its conversation, protocol-neutral: whether it starts a session and with which
+     * tools, and every message it did not send before. A turn the server wrote keeps only the ids it names, so a
+     * prompt edit changes no case; ComposerTurnsTest asserts what the turns carry.
      */
     private static ObjectNode delta(JsonNode request, List<JsonNode> previous) {
         var messages = new ArrayList<JsonNode>();
@@ -311,7 +317,10 @@ final class ComposerReplay {
                 && previous.equals(messages.subList(0, previous.size()));
         int from = continues ? previous.size() : 0;
         if (!continues) {
-            call.put("starts", true);
+            var tools = call.putArray("starts");
+            request.path("tools")
+                    .forEach(
+                            tool -> tools.add(tool.path("function").path("name").asString()));
             from = 1;
         }
         var added = call.putArray("messages");
@@ -336,7 +345,12 @@ final class ComposerReplay {
                                         call.path("function").path("arguments").asString()));
         }
         JsonNode content = message.path("content");
-        if (content.isString() && !role.equals("user")) shown.put("text", content.asString());
+        if (content.isString() && role.equals("user")) {
+            var named = new LinkedHashSet<String>();
+            var ids = ID.matcher(content.asString());
+            while (ids.find()) named.add(ids.group());
+            if (!named.isEmpty()) named.forEach(shown.putArray("names")::add);
+        } else if (content.isString()) shown.put("text", content.asString());
         return shown;
     }
 
