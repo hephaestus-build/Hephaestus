@@ -383,7 +383,8 @@ It creates a group, a project and a non-admin group token, and connects a worksp
 GitLab then sends its own events for a new issue and a retitled merge request to the connection's route on the test server.
 The test claims the stored events and checks the mirrored work, the handled inbox rows, and GitLab's record of each accepted delivery.
 
-Run the test JVM in a container on the fixture's Docker network, so that GitLab delivers to it as it delivers to a server in the cluster.
+Run the test JVM in a container on the fixture's Docker network.
+GitLab then delivers to it as it delivers to a server in the cluster.
 Do not open a host firewall port for it.
 Set `HEPHAESTUS_LIVE_GITLAB_WEBHOOK_HOST` to the container's address on that network.
 GitLab refuses a hook to a local address, so the test adds that address and the server's port to the instance's outbound allowlist.
