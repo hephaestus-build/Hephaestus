@@ -15,7 +15,9 @@ import static org.mockito.Mockito.when;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBindingRepository;
 import de.tum.cit.aet.hephaestus.core.auth.spi.LlmModelAudit;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
+import de.tum.cit.aet.hephaestus.core.security.SystemSecrets;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import de.tum.cit.aet.hephaestus.testconfig.TestSystemSecrets;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceSummaryFixtures;
@@ -39,6 +41,9 @@ import org.mockito.Mock;
 import org.springframework.dao.DataIntegrityViolationException;
 
 class LlmModelServiceTest extends BaseUnitTest {
+
+    private static final SystemSecrets SECRETS =
+            TestSystemSecrets.systemSecrets("0123456789abcdef0123456789abcdef", "test");
 
     @Mock
     private LlmModelRepository modelRepository;
@@ -74,7 +79,8 @@ class LlmModelServiceTest extends BaseUnitTest {
                 grantRepository,
                 WorkspaceSummaryFixtures.summaries(workspaceRepository),
                 agentBindingRepository,
-                llmModelAudit);
+                llmModelAudit,
+                SECRETS);
         model = new LlmModel();
         model.setId(7L);
         model.setSlug("gpt-5");
@@ -82,6 +88,7 @@ class LlmModelServiceTest extends BaseUnitTest {
         model.setUpstreamModelId("gpt-5");
         LlmConnection connection = new LlmConnection();
         connection.setId(3L);
+        connection.setSlug("primary");
         model.setConnection(connection);
         // Not every test looks up model 7 (e.g. the unknown-id 404 case) — lenient so those aren't
         // flagged as unnecessary stubbing. All three finders are stubbed because the service picks a
@@ -96,7 +103,7 @@ class LlmModelServiceTest extends BaseUnitTest {
         var connection = model.getConnection();
         connection.setBaseUrl("https://model.example");
         connection.setApiProtocol(LlmApiProtocol.ANTHROPIC_MESSAGES);
-        connection.setApiKey("new-key");
+        connection.replaceApiKey("new-key", SECRETS);
         model.setForcedToolChoice(true);
         var oldTarget = new LlmProbeTarget(
                 "https://model.example", LlmAuthMode.BEARER, "old-key", LlmApiProtocol.ANTHROPIC_MESSAGES);

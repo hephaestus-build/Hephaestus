@@ -36,7 +36,7 @@ import org.springframework.web.server.ResponseStatusException;
  * <h2>Fail-closed in production</h2>
  * Gated by {@code hephaestus.auth.dev-login-enabled} (default {@code false} → the endpoint 404s, invisible).
  * Enabling it under the {@code prod} profile is a <strong>startup failure</strong> — a passwordless login
- * must be impossible to switch on in production (mirrors {@code JwtSigningKeySealer}'s blank-key guard).
+ * must be impossible to switch on in production (mirrors the blank-key guard of {@code SystemSecrets}).
  */
 @Service
 @ConditionalOnServerRole

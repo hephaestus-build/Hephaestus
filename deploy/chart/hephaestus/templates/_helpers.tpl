@@ -273,9 +273,15 @@ container names this version, commit and environment.
   value: {{ .Values.config.tracing.otlpEndpoint | quote }}
 {{- end -}}
 
+{{/* The active system key. The migration Job reads it too, because it migrates sealed values. */}}
+{{- define "hephaestus.env.systemKey" -}}
+{{ include "hephaestus.secretEnv" (dict "root" . "env" "HEPHAESTUS_SECURITY_ENCRYPTION_KEY") }}
+{{- end -}}
+
 {{/* The application roles use the same stored-secret keys. */}}
 {{- define "hephaestus.env.encryptionKeys" -}}
-{{ include "hephaestus.secretEnv" (dict "root" . "env" "HEPHAESTUS_SECURITY_ENCRYPTION_KEY") }}
+{{ include "hephaestus.env.systemKey" . }}
+{{ include "hephaestus.secretEnv" (dict "root" . "env" "HEPHAESTUS_SECURITY_PRIOR_ENCRYPTION_KEY" "optional" true) }}
 {{ include "hephaestus.secretEnv" (dict "root" . "env" "HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY") }}
 - name: HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY_VERSION
   value: {{ .Values.config.credentialKey.version | int | quote }}
@@ -315,6 +321,8 @@ fails every pod, so each role is owed the lock's digest. */}}
 {{ include "hephaestus.env.encryptionKeys" . }}
 - name: HEPHAESTUS_SECURITY_CREDENTIAL_ROTATION_ENABLED
   value: {{ .Values.config.credentialKey.rotationEnabled | quote }}
+- name: HEPHAESTUS_SECURITY_ENCRYPTION_ROTATION_ENABLED
+  value: {{ .Values.config.systemKey.rotationEnabled | quote }}
 {{- end -}}
 
 {{/* The server verifies webhook deliveries. */}}

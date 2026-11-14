@@ -52,6 +52,7 @@ public class WorkspaceScopedTables {
             "auth_event",
             "issued_jwt",
             "jwt_signing_key",
+            "system_secret",
             // Installed-client sessions and their single-use sign-in handoffs;
             // account-scoped like issued_jwt
             "client_session",

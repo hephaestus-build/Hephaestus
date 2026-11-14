@@ -6,6 +6,7 @@ import de.tum.cit.aet.hephaestus.core.auth.spi.LlmModelAudit;
 import de.tum.cit.aet.hephaestus.core.exception.DataIntegrityViolationConstraints;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.core.security.SystemSecrets;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceSummaryQuery;
 import java.time.Instant;
 import java.util.LinkedHashSet;
@@ -39,6 +40,7 @@ public class LlmModelService {
     private final WorkspaceSummaryQuery workspaceSummaries;
     private final WorkspaceAgentBindingRepository agentBindingRepository;
     private final LlmModelAudit llmModelAudit;
+    private final SystemSecrets secrets;
 
     @Transactional(readOnly = true)
     public List<LlmModel> list() {
@@ -189,7 +191,10 @@ public class LlmModelService {
                 modelRepository.findByIdForUpdate(id).orElseThrow(() -> new EntityNotFoundException("LlmModel", id));
         var connection = model.getConnection();
         var current = new LlmProbeTarget(
-                connection.getBaseUrl(), connection.getAuthMode(), connection.getApiKey(), connection.getApiProtocol());
+                connection.getBaseUrl(),
+                connection.getAuthMode(),
+                connection.apiKey(secrets),
+                connection.getApiProtocol());
         if (!upstream.equals(model.getUpstreamModelId()) || !target.equals(current))
             throw new IllegalArgumentException("The model connection changed. Test it again.");
         model.setForcedToolChoice(capability.forcedToolChoice());

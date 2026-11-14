@@ -101,6 +101,8 @@ spec:
             - name: DATABASE_USERNAME
               value: hephaestus_owner
             {{- include "hephaestus.secretEnv" (dict "root" . "env" "DATABASE_PASSWORD" "key" "DATABASE_OWNER_PASSWORD") | nindent 12 }}
+            # A change set that migrates sealed values opens them with the system key.
+            {{- include "hephaestus.env.systemKey" . | nindent 12 }}
           resources:
             {{- toYaml .Values.migration.resources | nindent 12 }}
           securityContext:

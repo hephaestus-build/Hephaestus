@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1794650040110-1" author="hephaestus">
+        <createTable tableName="system_secret">
+            <column name="name" type="VARCHAR(64)">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="system_secret_pkey"/>
+            </column>
+            <column name="sealed_value" type="BYTEA">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="TIMESTAMP WITH TIME ZONE" defaultValueComputed="now()">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+    <changeSet id="1794650040110-2" author="hephaestus">
+        <comment>Each system secret names its key and is bound to its row (ADR 0104).</comment>
+        <customChange class="de.tum.cit.aet.hephaestus.core.database.SystemSecretSealingChange"/>
+        <rollback><stop>Restore the verified pre-upgrade backup to reverse the sealing of the system secrets.</stop></rollback>
+    </changeSet>
+    <changeSet id="1794650040110-3" author="hephaestus">
+        <comment>Each sealed signing key names its key.</comment>
+        <dropColumn tableName="jwt_signing_key" columnName="encryption_key_id"/>
+    </changeSet>
+</databaseChangeLog>

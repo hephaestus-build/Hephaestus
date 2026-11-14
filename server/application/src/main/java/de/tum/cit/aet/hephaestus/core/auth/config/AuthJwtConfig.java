@@ -9,6 +9,7 @@ import de.tum.cit.aet.hephaestus.core.auth.jwt.RevocationAwareJwtDecoder;
 import de.tum.cit.aet.hephaestus.core.auth.metrics.AuthMetrics;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.security.StaleAuthCookieFilter;
+import de.tum.cit.aet.hephaestus.core.security.StoredSystemSecrets;
 import java.time.Clock;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -82,8 +83,13 @@ public class AuthJwtConfig {
     // Build profiles load the authentication contract but have no database to seed.
     @Bean
     @Profile("!specs & !cds-training")
-    ApplicationRunner seedKeysOnStartup() {
+    ApplicationRunner seedKeysOnStartup(StoredSystemSecrets storedSecrets) {
         return args -> {
+            // First, and not caught: a server whose system key does not open the stored keys would otherwise start,
+            // report ready and refuse every session. Before the bootstrap, so such a server never seals a new signing
+            // key that the servers with the right key cannot open. A new database has nothing to check.
+            keyService.verifyActiveKeysOpen();
+            storedSecrets.verifyAllOpen();
             try {
                 keyService.ensureActiveKey();
             } catch (RuntimeException e) {

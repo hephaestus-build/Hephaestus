@@ -3,8 +3,10 @@ package de.tum.cit.aet.hephaestus.core.auth;
 import de.tum.cit.aet.hephaestus.core.auth.provider.LoginProvider;
 import java.net.URI;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import org.jspecify.annotations.Nullable;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.bind.DefaultValue;
 import org.springframework.web.util.UriComponentsBuilder;
@@ -41,6 +43,9 @@ import org.springframework.web.util.UriComponentsBuilder;
  *                     disabling is restricted to HTTP E2E tests without the production profile
  * @param browserExtensionIds Chrome extension IDs that may sign in as installed clients. Each ID gets exactly one
  *                            callback and one CORS origin.
+ * @param signingKeyNotBefore Makes a new JWT signing key. A server that starts after this instant and finds no signing
+ *                            key created at or after it makes one. Older keys keep verifying tokens for access-ttl
+ *                            after that, then retire. Set it to the current time, as an ISO-8601 instant, to rotate the key.
  */
 @ConfigurationProperties(prefix = "hephaestus.auth")
 public record AuthProperties(
@@ -58,7 +63,8 @@ public record AuthProperties(
         @DefaultValue("true") boolean assuranceEnforced,
         @DefaultValue("false") boolean devLoginEnabled,
         @DefaultValue("true") boolean cookieSecure,
-        @DefaultValue List<String> browserExtensionIds) {
+        @DefaultValue List<String> browserExtensionIds,
+        @Nullable Instant signingKeyNotBefore) {
     public AuthProperties {
         if (!("http".equals(issuer.getScheme()) || "https".equals(issuer.getScheme()))
                 || issuer.getHost() == null

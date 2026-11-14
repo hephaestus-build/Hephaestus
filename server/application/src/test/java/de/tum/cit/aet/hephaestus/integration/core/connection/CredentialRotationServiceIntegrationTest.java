@@ -53,7 +53,7 @@ class CredentialRotationServiceIntegrationTest extends AbstractWorkspaceIntegrat
         healthy.setCredentials(TOKEN, oldConverter);
         healthy = connectionRepository.saveAndFlush(healthy);
 
-        SecurityProperties properties = new SecurityProperties(null, NEW_KEY, 2, OLD_KEY, 1, true, 25);
+        SecurityProperties properties = new SecurityProperties(null, NEW_KEY, 2, OLD_KEY, 1, true, 25, null, false);
         CredentialRotationService service = new CredentialRotationService(
                 connectionRepository,
                 rotatingConverter,

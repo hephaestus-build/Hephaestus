@@ -5,6 +5,7 @@ import com.github.benmanes.caffeine.cache.Caffeine;
 import de.tum.cit.aet.hephaestus.core.auth.spi.IdentityProviderCatalog;
 import de.tum.cit.aet.hephaestus.core.security.OutlineOriginPolicy;
 import de.tum.cit.aet.hephaestus.core.security.ScmServerEndpointPolicy;
+import de.tum.cit.aet.hephaestus.core.security.SystemSecrets;
 import java.time.Duration;
 import java.util.Iterator;
 import java.util.List;
@@ -31,6 +32,7 @@ public class LoginProviderClientRegistrationRepository
     private final LoginProviderRepository loginProviderRepository;
     private final OutlineOriginPolicy outlineOriginPolicy;
     private final ScmServerEndpointPolicy scmEndpoints;
+    private final SystemSecrets secrets;
 
     private final String callbackBase;
 
@@ -43,8 +45,10 @@ public class LoginProviderClientRegistrationRepository
             LoginProviderRepository loginProviderRepository,
             String callbackBase,
             OutlineOriginPolicy outlineOriginPolicy,
-            ScmServerEndpointPolicy scmEndpoints) {
+            ScmServerEndpointPolicy scmEndpoints,
+            SystemSecrets secrets) {
         this.loginProviderRepository = loginProviderRepository;
+        this.secrets = secrets;
         this.outlineOriginPolicy = outlineOriginPolicy;
         this.scmEndpoints = scmEndpoints;
         this.callbackBase = callbackBase;
@@ -112,7 +116,7 @@ public class LoginProviderClientRegistrationRepository
         String base = provider.getBaseUrl().replaceAll("/+$", "");
         ClientRegistration.Builder builder = ClientRegistration.withRegistrationId(provider.getRegistrationId())
                 .clientId(provider.getClientId())
-                .clientSecret(provider.getClientSecret())
+                .clientSecret(provider.clientSecret(secrets))
                 .clientAuthenticationMethod(ClientAuthenticationMethod.CLIENT_SECRET_BASIC)
                 .authorizationGrantType(AuthorizationGrantType.AUTHORIZATION_CODE)
                 .redirectUri(callbackBase + "/login/oauth2/code/" + provider.getRegistrationId())

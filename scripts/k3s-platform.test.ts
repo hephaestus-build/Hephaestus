@@ -1419,6 +1419,7 @@ await test("the installer ends with the command that backs up the keys a restore
 		...generated,
 		"GITHUB_OAUTH_CLIENT_SECRET",
 		"HEPHAESTUS_SECURITY_PRIOR_CREDENTIAL_ENCRYPTION_KEY",
+		"HEPHAESTUS_SECURITY_PRIOR_ENCRYPTION_KEY",
 		"BACKUP_CIPHER_PASS",
 		"BACKUP_S3_KEY_SECRET",
 	]);
@@ -1431,6 +1432,7 @@ await test("the installer ends with the command that backs up the keys a restore
 			"HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY",
 			"HEPHAESTUS_SECURITY_ENCRYPTION_KEY",
 			"HEPHAESTUS_SECURITY_PRIOR_CREDENTIAL_ENCRYPTION_KEY",
+			"HEPHAESTUS_SECURITY_PRIOR_ENCRYPTION_KEY",
 		],
 	);
 });

@@ -15,7 +15,9 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.core.SsrfGuardedResolverGroup;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
+import de.tum.cit.aet.hephaestus.core.security.SystemSecrets;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import de.tum.cit.aet.hephaestus.testconfig.TestSystemSecrets;
 import java.io.IOException;
 import java.util.List;
 import java.util.Objects;
@@ -33,6 +35,9 @@ import org.springframework.web.client.RestClient;
 import tools.jackson.databind.ObjectMapper;
 
 class LlmModelLimitDiscoveryTest extends BaseUnitTest {
+
+    private static final SystemSecrets SECRETS =
+            TestSystemSecrets.systemSecrets("0123456789abcdef0123456789abcdef", "test");
 
     private MockWebServer upstream;
     private LlmConnectionRepository connections;
@@ -60,7 +65,30 @@ class LlmModelLimitDiscoveryTest extends BaseUnitTest {
                 workspaceConnections,
                 workspaceModels,
                 egressPolicy,
-                new TransactionTemplate(mock(PlatformTransactionManager.class)));
+                new TransactionTemplate(mock(PlatformTransactionManager.class)),
+                SECRETS);
+    }
+
+    /** The row a repository projects for {@code target}, its key sealed for an instance connection named "primary". */
+    private static SealedProbeTarget sealed(LlmProbeTarget target) {
+        String key = target.apiKey();
+        return new SealedProbeTarget(
+                target.baseUrl(),
+                target.authMode(),
+                key == null ? null : SECRETS.sealText(key, LlmConnection.secretBinding("primary")),
+                target.apiProtocol(),
+                "primary");
+    }
+
+    private static SealedProbeTarget sealedInWorkspace(LlmProbeTarget target) {
+        String key = target.apiKey();
+        return new SealedProbeTarget(
+                target.baseUrl(),
+                target.authMode(),
+                key == null ? null : SECRETS.sealText(key, WorkspaceLlmConnection.secretBinding(1L, "own")),
+                target.apiProtocol(),
+                1L,
+                "own");
     }
 
     @AfterEach
@@ -158,9 +186,9 @@ class LlmModelLimitDiscoveryTest extends BaseUnitTest {
     void shouldStoreNothingWhenTheConnectionChangedWhileTheProbeRan() throws Exception {
         LlmProbeTarget probed = instance("/v1", LlmApiProtocol.OPENAI_COMPLETIONS, List.of("openai/gpt-oss-120b"));
         when(connections.findProbeTargetById(5L))
-                .thenReturn(Optional.of(probed))
-                .thenReturn(Optional.of(new LlmProbeTarget(
-                        "https://other.example/v1", probed.authMode(), probed.apiKey(), probed.apiProtocol())));
+                .thenReturn(Optional.of(sealed(probed)))
+                .thenReturn(Optional.of(sealed(new LlmProbeTarget(
+                        "https://other.example/v1", probed.authMode(), probed.apiKey(), probed.apiProtocol()))));
         upstream.enqueue(
                 json(ProviderModelLimitsTest.fixture("vllm-models.json").toString()));
 
@@ -193,11 +221,11 @@ class LlmModelLimitDiscoveryTest extends BaseUnitTest {
     @Test
     void shouldNotDialAStoredConnectionWhoseBaseUrlTheEgressPolicyNowRejects() {
         when(connections.findProbeTargetById(5L))
-                .thenReturn(Optional.of(new LlmProbeTarget(
+                .thenReturn(Optional.of(sealed(new LlmProbeTarget(
                         upstream.url("/v1").toString(),
                         LlmAuthMode.BEARER,
                         "sk-abc",
-                        LlmApiProtocol.OPENAI_COMPLETIONS)));
+                        LlmApiProtocol.OPENAI_COMPLETIONS))));
         doThrow(new IllegalArgumentException("Provider host must be a public HTTPS URL"))
                 .when(egressPolicy)
                 .validate(any());
@@ -247,7 +275,7 @@ class LlmModelLimitDiscoveryTest extends BaseUnitTest {
 
     private LlmProbeTarget instance(String path, LlmApiProtocol protocol, List<String> upstreamIds) {
         var target = new LlmProbeTarget(upstream.url(path).toString(), LlmAuthMode.BEARER, "sk-abc", protocol);
-        when(connections.findProbeTargetById(5L)).thenReturn(Optional.of(target));
+        when(connections.findProbeTargetById(5L)).thenReturn(Optional.of(sealed(target)));
         when(models.findUpstreamModelIdsByConnectionId(5L)).thenReturn(upstreamIds);
         return target;
     }
@@ -255,7 +283,8 @@ class LlmModelLimitDiscoveryTest extends BaseUnitTest {
     private void workspace(boolean privateTarget, List<String> upstreamIds) {
         var target = new LlmProbeTarget(
                 upstream.url("/v1").toString(), LlmAuthMode.BEARER, null, LlmApiProtocol.OPENAI_COMPLETIONS);
-        when(workspaceConnections.findProbeTargetByIdAndWorkspaceId(5L, 1L)).thenReturn(Optional.of(target));
+        when(workspaceConnections.findProbeTargetByIdAndWorkspaceId(5L, 1L))
+                .thenReturn(Optional.of(sealedInWorkspace(target)));
         when(workspaceModels.findUpstreamModelIdsByConnectionIdAndWorkspaceId(5L, 1L))
                 .thenReturn(upstreamIds);
         when(egressPolicy.validate(target.baseUrl())).thenReturn(privateTarget);

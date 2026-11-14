@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.core.RecentSignInExempt;
 import de.tum.cit.aet.hephaestus.core.RequireInstanceAdmin;
 import de.tum.cit.aet.hephaestus.core.RequiresRecentSignIn;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.core.security.SystemSecrets;
 import de.tum.cit.aet.hephaestus.core.web.PublicApiUrls;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -48,12 +49,14 @@ public class LlmConnectionAdminController {
     private final PublicApiUrls publicApiUrls;
     private final LlmConnectionProbeService probeService;
     private final LlmModelLimitDiscovery limitDiscovery;
+    private final SystemSecrets secrets;
 
     @GetMapping
     @Operation(summary = "List LLM connections", operationId = "adminListLlmConnections")
     public ResponseEntity<List<LlmConnectionDTO>> list() {
-        return ResponseEntity.ok(
-                connectionService.list().stream().map(LlmConnectionDTO::from).toList());
+        return ResponseEntity.ok(connectionService.list().stream()
+                .map(connection -> LlmConnectionDTO.from(connection, secrets))
+                .toList());
     }
 
     @PostMapping
@@ -68,7 +71,7 @@ public class LlmConnectionAdminController {
     public ResponseEntity<LlmConnectionDTO> create(@Valid @RequestBody CreateLlmConnectionRequestDTO request) {
         LlmConnection created = connectionService.create(request);
         URI location = publicApiUrls.uri("/admin/llm/connections/{id}", created.getId());
-        return ResponseEntity.created(location).body(LlmConnectionDTO.from(created));
+        return ResponseEntity.created(location).body(LlmConnectionDTO.from(created, secrets));
     }
 
     @PatchMapping("/{id}")
@@ -85,7 +88,7 @@ public class LlmConnectionAdminController {
     @Audited(ledger = AuditLedger.AUTH_EVENT, type = "LLM_CONNECTION_UPDATED")
     public ResponseEntity<LlmConnectionDTO> update(
             @PathVariable Long id, @Valid @RequestBody UpdateLlmConnectionRequestDTO request) {
-        return ResponseEntity.ok(LlmConnectionDTO.from(connectionService.update(id, request)));
+        return ResponseEntity.ok(LlmConnectionDTO.from(connectionService.update(id, request), secrets));
     }
 
     @DeleteMapping("/{id}")

@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.core.AuditExempt;
 import de.tum.cit.aet.hephaestus.core.AuditLedger;
 import de.tum.cit.aet.hephaestus.core.Audited;
 import de.tum.cit.aet.hephaestus.core.RecentSignInExempt;
+import de.tum.cit.aet.hephaestus.core.security.SystemSecrets;
 import de.tum.cit.aet.hephaestus.core.web.PublicApiUrls;
 import de.tum.cit.aet.hephaestus.workspace.authorization.RequireAtLeastWorkspaceAdmin;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
@@ -43,13 +44,14 @@ public class WorkspaceLlmConnectionController {
 
     private final WorkspaceLlmConnectionService connectionService;
     private final PublicApiUrls publicApiUrls;
+    private final SystemSecrets secrets;
 
     @GetMapping
     @Operation(summary = "List your AI provider connections", operationId = "workspaceListLlmConnections")
     @RequireAtLeastWorkspaceAdmin
     public ResponseEntity<List<WorkspaceLlmConnectionDTO>> list(WorkspaceContext workspaceContext) {
         return ResponseEntity.ok(connectionService.list(workspaceContext).stream()
-                .map(WorkspaceLlmConnectionDTO::from)
+                .map(connection -> WorkspaceLlmConnectionDTO.from(connection, secrets))
                 .toList());
     }
 
@@ -67,7 +69,7 @@ public class WorkspaceLlmConnectionController {
         WorkspaceLlmConnection created = connectionService.create(workspaceContext, request);
         URI location = publicApiUrls.uri(
                 "/workspaces/{workspaceSlug}/llm/connections/{id}", workspaceContext.slug(), created.getId());
-        return ResponseEntity.created(location).body(WorkspaceLlmConnectionDTO.from(created));
+        return ResponseEntity.created(location).body(WorkspaceLlmConnectionDTO.from(created, secrets));
     }
 
     @PatchMapping("/{id}")
@@ -87,7 +89,7 @@ public class WorkspaceLlmConnectionController {
             @PathVariable Long id,
             @Valid @RequestBody UpdateWorkspaceLlmConnectionRequestDTO request) {
         return ResponseEntity.ok(
-                WorkspaceLlmConnectionDTO.from(connectionService.update(workspaceContext, id, request)));
+                WorkspaceLlmConnectionDTO.from(connectionService.update(workspaceContext, id, request), secrets));
     }
 
     @RecentSignInExempt(reason = "a workspace admin can add the connection again")

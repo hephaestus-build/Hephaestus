@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.catalog;
 
 import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
+import de.tum.cit.aet.hephaestus.core.security.SystemSecrets;
 import de.tum.cit.aet.hephaestus.workspace.spi.LlmConnectionPlatform;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
@@ -49,8 +50,8 @@ public record WorkspaceLlmConnectionDTO(
 
         @Nullable @Schema(description = "Last update timestamp")
         Instant updatedAt) {
-    public static WorkspaceLlmConnectionDTO from(WorkspaceLlmConnection connection) {
-        String apiKey = connection.getApiKey();
+    public static WorkspaceLlmConnectionDTO from(WorkspaceLlmConnection connection, SystemSecrets secrets) {
+        String apiKey = connection.apiKey(secrets);
         boolean hasKey = apiKey != null && !apiKey.isBlank();
         String last4 = apiKey != null && hasKey && apiKey.length() >= 4 ? apiKey.substring(apiKey.length() - 4) : null;
         return new WorkspaceLlmConnectionDTO(
