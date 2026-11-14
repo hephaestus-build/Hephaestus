@@ -31,7 +31,10 @@ export interface FiledIssueProps {
 export function FiledIssue({ title, text }: FiledIssueProps) {
 	return (
 		<Collapsible>
-			<CollapsibleTrigger render={<Button variant="ghost" size="sm" className="group" />}>
+			<CollapsibleTrigger
+				aria-label={`The issue as filed: ${title}`}
+				render={<Button variant="ghost" size="sm" className="group" />}
+			>
 				The issue as filed
 				<ChevronDown
 					data-icon="inline-end"

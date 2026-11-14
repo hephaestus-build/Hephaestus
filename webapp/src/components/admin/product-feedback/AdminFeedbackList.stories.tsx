@@ -79,7 +79,14 @@ export const OnGitHub: Story = {
 		await expect(
 			canvas.getByText("It may be about a security problem, so it stays private."),
 		).toBeVisible();
-		await expect(canvas.getAllByRole("button", { name: "The issue as filed" })).toHaveLength(2);
+		await expect(
+			canvas.getByRole("button", {
+				name: "The issue as filed: Practice page jumps to the top when the filter changes",
+			}),
+		).toBeVisible();
+		await expect(
+			canvas.getByRole("button", { name: "The issue as filed: Report about session handling" }),
+		).toBeVisible();
 	},
 };
 

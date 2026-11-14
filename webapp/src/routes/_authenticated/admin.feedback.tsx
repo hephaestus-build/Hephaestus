@@ -41,6 +41,7 @@ import { ResultCount } from "@/components/common/ResultCount";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { PageLayout } from "@/components/layout/PageLayout";
 import { Section } from "@/components/layout/Section";
+import { isSettling } from "@/components/product-feedback/sharing-copy";
 import { useClampedPage } from "@/hooks/use-clamped-page";
 import { useConfirmAccess } from "@/hooks/use-confirm-access";
 import { filedUnder, pathString, usePendingMutationIds } from "@/hooks/use-pending-mutation-ids";
@@ -49,6 +50,7 @@ import { problemDetailOf, type StepUpChallenge, stepUpChallengeOf } from "@/lib/
 import { pageParam, useSearchState } from "@/lib/search-params";
 
 const PAGE_SIZE = 20;
+const SETTLING_REFRESH_MS = 10_000;
 const TRIAGE_KEY = ["adminTriageProductFeedback"];
 const RETRY_KEY = ["retryProductFeedbackFiling"];
 const FILE_KEY = ["fileSavedProductFeedback"];
@@ -81,6 +83,10 @@ function AdminProductFeedbackPage() {
 	const feedbackQuery = useQuery({
 		...adminListProductFeedbackOptions({ query: { status, page, size: PAGE_SIZE } }),
 		placeholderData: keepPreviousData,
+		refetchInterval: (query) =>
+			query.state.data?.content.some((report) => isSettling(report.state)) === true
+				? SETTLING_REFRESH_MS
+				: false,
 	});
 	const triage = useMutation({
 		...filedUnder(TRIAGE_KEY, adminTriageProductFeedbackMutation()),

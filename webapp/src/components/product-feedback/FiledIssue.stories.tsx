@@ -19,9 +19,11 @@ type Story = StoryObj<typeof meta>;
 
 /** Closed until the reader asks, so a list of reports stays short. */
 export const Default: Story = {
-	play: async ({ canvas }) => {
+	play: async ({ canvas, args }) => {
 		await expect(canvas.queryByText("Expected result")).not.toBeInTheDocument();
-		await userEvent.click(canvas.getByRole("button", { name: "The issue as filed" }));
+		await userEvent.click(
+			canvas.getByRole("button", { name: `The issue as filed: ${args.title}` }),
+		);
 		await expectSettledVisible(await canvas.findByText("Expected result"));
 	},
 };
@@ -40,8 +42,10 @@ export const LongText: Story = {
 			</div>
 		),
 	],
-	play: async ({ canvas }) => {
-		await userEvent.click(canvas.getByRole("button", { name: "The issue as filed" }));
+	play: async ({ canvas, args }) => {
+		await userEvent.click(
+			canvas.getByRole("button", { name: `The issue as filed: ${args.title}` }),
+		);
 		await expectSettledVisible(await canvas.findByText(/Seen on/u));
 	},
 };

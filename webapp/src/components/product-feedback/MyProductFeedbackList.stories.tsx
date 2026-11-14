@@ -150,7 +150,11 @@ export const PrivateFiledCopy: Story = {
 			canvas.getByText("The summary repeats the same point. ".repeat(8).trim()),
 		).toBeVisible();
 		await expect(canvas.queryByRole("link", { name: /issue #/u })).not.toBeInTheDocument();
-		await userEvent.click(canvas.getByRole("button", { name: "The issue as filed" }));
+		await userEvent.click(
+			canvas.getByRole("button", {
+				name: "The issue as filed: Avoid repeated points in the review summary",
+			}),
+		);
 		await expectSettledVisible(
 			await canvas.findByText("Avoid repeated points in the review summary"),
 		);
