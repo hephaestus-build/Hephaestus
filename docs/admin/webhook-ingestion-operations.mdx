@@ -48,12 +48,13 @@ This is the procedure that GitHub [recommends](https://docs.github.com/en/webhoo
 
 How far a run reads back:
 
-- A run reads back 2 hours from the start of the previous run, and further for an event that it still redelivers.
+- A run reads back 2 hours from the start of the previous run.
+  It reads further back for an event that it still redelivers.
 - A run that cannot read the deliveries changes nothing, so the next run reads the whole gap.
   This also covers a database outage: the run then does not start, because its lock is in the database.
 - The first run after a server starts reads back 71 hours.
   GitHub keeps deliveries for 3 days, and a redelivery requested an hour before that limit is still accepted.
-  A server that stops on a Friday evening and starts on a Monday morning thus recovers the deliveries of the weekend.
+  Thus, a server that stops on a Friday evening recovers the deliveries of the weekend when it starts on Monday.
 - A run reads at most 10,000 deliveries. Older ones are not redelivered, and the run counts `outcome=truncated`.
 
 - Runs never overlap, also across server replicas: each run holds a lock for 9 minutes.
