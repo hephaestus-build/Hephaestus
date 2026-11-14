@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, test } from "node:test";
 
-import { anchorsOf, missingTargets, readBuiltPage } from "./check-doc-targets.ts";
+import { anchorsOf, missingBuild, missingTargets, readBuiltPage } from "./check-doc-targets.ts";
 
 const PAGES: Record<string, string> = {
 	"admin/upgrade": '<h2 class="anchor" id="update-checks">Update checks</h2>',
@@ -61,6 +61,20 @@ await describe("readBuiltPage", async () => {
 			assert.equal(readBuiltPage(build, "admin/missing"), undefined);
 		} finally {
 			rmSync(build, { recursive: true, force: true });
+		}
+	});
+});
+
+await describe("missingBuild", async () => {
+	await test("refuses a docs directory with no built site, naming the command that builds it", () => {
+		const directory = mkdtempSync(path.join(tmpdir(), "doc-targets-"));
+		try {
+			assert.match(missingBuild(path.join(directory, "build")) ?? "", /vp run docs:build/u);
+			mkdirSync(path.join(directory, "build"));
+			writeFileSync(path.join(directory, "build", "index.html"), "<html></html>");
+			assert.equal(missingBuild(path.join(directory, "build")), undefined);
+		} finally {
+			rmSync(directory, { recursive: true, force: true });
 		}
 	});
 });
