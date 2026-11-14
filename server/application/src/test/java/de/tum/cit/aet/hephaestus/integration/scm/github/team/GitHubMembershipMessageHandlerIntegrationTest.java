@@ -2,18 +2,29 @@ package de.tum.cit.aet.hephaestus.integration.scm.github.team;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
+import de.tum.cit.aet.hephaestus.integration.core.handler.EventPayloadDeserializer;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IdentityProviderLookup;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ScopeIdResolver;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.Organization;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.team.Team;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.team.TeamRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.team.membership.TeamMembership;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.team.membership.TeamMembershipRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubAccessReader;
 import de.tum.cit.aet.hephaestus.integration.scm.github.team.dto.GitHubMembershipEventDTO;
+import de.tum.cit.aet.hephaestus.integration.scm.github.user.GitHubUserProcessor;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
@@ -21,18 +32,34 @@ import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.util.Optional;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.ClassPathResource;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.ObjectMapper;
 
 class GitHubMembershipMessageHandlerIntegrationTest extends BaseIntegrationTest {
 
-    @Autowired
+    // The handler reads GitHub's current team membership; a plain mock answers for GitHub.
+    private final GitHubAccessReader accessReader = mock(GitHubAccessReader.class);
+
     private GitHubMembershipMessageHandler handler;
+
+    @Autowired
+    private GitHubUserProcessor userProcessor;
+
+    @Autowired
+    private IdentityProviderLookup identityProviders;
+
+    @Autowired
+    private ScopeIdResolver scopeIdResolver;
+
+    @Autowired
+    private EventPayloadDeserializer deserializer;
 
     @Autowired
     private TeamRepository teamRepository;
@@ -66,6 +93,31 @@ class GitHubMembershipMessageHandlerIntegrationTest extends BaseIntegrationTest 
     void setUp() {
         databaseTestUtils.cleanDatabase();
         setupTestData();
+        handler = new GitHubMembershipMessageHandler(
+                userProcessor,
+                identityProviders,
+                teamRepository,
+                teamMembershipRepository,
+                scopeIdResolver,
+                accessReader,
+                deserializer,
+                transactionTemplate);
+        githubReportsTeamMember(true);
+    }
+
+    /** GitHub's answer for the fixture member; it also proves the read runs with no transaction open. */
+    private void githubReportsTeamMember(boolean member) {
+        githubReportsTeamRole(member ? "member" : null);
+    }
+
+    private void githubReportsTeamRole(@Nullable String role) {
+        when(accessReader.isReadable(anyLong())).thenReturn(true);
+        when(accessReader.teamRole(anyLong(), eq("HephaestusTest"), eq("hephaestussubteam"), eq(231_938_035L)))
+                .thenAnswer(read -> {
+                    assertThat(TransactionSynchronizationManager.isActualTransactionActive())
+                            .isFalse();
+                    return Optional.ofNullable(role);
+                });
     }
 
     private void setupTestData() {
@@ -119,7 +171,7 @@ class GitHubMembershipMessageHandlerIntegrationTest extends BaseIntegrationTest 
         GitHubMembershipEventDTO event = loadPayload("membership.added");
         createTestTeam(required(event.team().id()), event.team().name());
 
-        handler.handleEvent(event);
+        handler.dispatchEvent(event);
 
         // Then - handler processes without error
         assertThat(event.action()).isEqualTo("added");
@@ -142,7 +194,7 @@ class GitHubMembershipMessageHandlerIntegrationTest extends BaseIntegrationTest 
             userRepository.save(member);
         }
 
-        handler.handleEvent(event);
+        handler.dispatchEvent(event);
 
         // Then - handler processes without error
         assertThat(event.action()).isEqualTo("removed");
@@ -156,8 +208,7 @@ class GitHubMembershipMessageHandlerIntegrationTest extends BaseIntegrationTest 
         long teamId = required(testTeam.getId());
         assertThat(teamId).as("stored and GitHub ids must differ here").isNotEqualTo(nativeTeamId);
 
-        // Production runs each event in a transaction (AbstractIntegrationMessageHandler).
-        transactionTemplate.executeWithoutResult(status -> handler.handleEvent(added));
+        handler.dispatchEvent(added);
 
         long nativeUserId = required(required(added.member()).id());
         long userId = required(userRepository
@@ -169,10 +220,82 @@ class GitHubMembershipMessageHandlerIntegrationTest extends BaseIntegrationTest 
                 .isTrue();
 
         GitHubMembershipEventDTO removed = loadPayload("membership.removed");
-        transactionTemplate.executeWithoutResult(status -> handler.handleEvent(removed));
+        githubReportsTeamMember(false);
+        handler.dispatchEvent(removed);
 
         assertThat(teamMembershipRepository.existsByTeam_IdAndUser_Id(teamId, userId))
                 .isFalse();
+    }
+
+    @Test
+    void shouldKeepARemovedTeamMemberRemovedWhenTheirOldAdditionIsDeliveredAgain() throws Exception {
+        GitHubMembershipEventDTO added = loadPayload("membership.added");
+        createTestTeam(
+                required(required(added.team()).id()), required(added.team()).name());
+        handle(added);
+        githubReportsTeamMember(false);
+        handle(loadPayload("membership.removed"));
+
+        handle(added);
+
+        assertThat(memberIsStored(added)).isFalse();
+    }
+
+    @Test
+    void shouldKeepTheTeamMemberWhenTheirOldRemovalIsDeliveredAgain() throws Exception {
+        GitHubMembershipEventDTO added = loadPayload("membership.added");
+        createTestTeam(
+                required(required(added.team()).id()), required(added.team()).name());
+        handle(added);
+
+        handle(loadPayload("membership.removed"));
+
+        assertThat(memberIsStored(added)).isTrue();
+    }
+
+    @Test
+    void shouldStoreTheTeamRoleGitHubReports() throws Exception {
+        GitHubMembershipEventDTO added = loadPayload("membership.added");
+        createTestTeam(
+                required(required(added.team()).id()), required(added.team()).name());
+        githubReportsTeamRole("maintainer");
+
+        handle(added);
+
+        long userId = required(userRepository
+                .findByNativeIdAndProviderId(231_938_035L, required(gitProvider.getId()))
+                .orElseThrow()
+                .getId());
+        assertThat(teamMembershipRepository.findByTeam_IdAndUser_Id(required(testTeam.getId()), userId))
+                .get()
+                .extracting(TeamMembership::getRole)
+                .isEqualTo(TeamMembership.Role.MAINTAINER);
+    }
+
+    @Test
+    void shouldRemoveTheTeamMemberWhenGitHubCannotBeReadForARemoval() throws Exception {
+        GitHubMembershipEventDTO added = loadPayload("membership.added");
+        createTestTeam(
+                required(required(added.team()).id()), required(added.team()).name());
+        handle(added);
+        when(accessReader.teamRole(anyLong(), anyString(), anyString(), anyLong()))
+                .thenThrow(new IllegalStateException("GitHub unavailable"));
+
+        handle(loadPayload("membership.removed"));
+
+        assertThat(memberIsStored(added)).isFalse();
+    }
+
+    private void handle(GitHubMembershipEventDTO event) {
+        handler.dispatchEvent(event);
+    }
+
+    private boolean memberIsStored(GitHubMembershipEventDTO event) {
+        long userId = required(userRepository
+                .findByNativeIdAndProviderId(required(required(event.member()).id()), required(gitProvider.getId()))
+                .orElseThrow()
+                .getId());
+        return teamMembershipRepository.existsByTeam_IdAndUser_Id(required(testTeam.getId()), userId);
     }
 
     private GitHubMembershipEventDTO loadPayload(String filename) throws IOException {

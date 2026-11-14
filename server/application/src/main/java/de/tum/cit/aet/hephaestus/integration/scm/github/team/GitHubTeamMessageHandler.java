@@ -16,11 +16,14 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.team.Team;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.team.TeamRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.team.permission.TeamRepositoryPermission;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.team.permission.TeamRepositoryPermissionRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubAccessReader;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubEventAction;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubEventType;
 import de.tum.cit.aet.hephaestus.integration.scm.github.team.dto.GitHubTeamEventDTO;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.Optional;
+import java.util.function.Consumer;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -37,7 +40,7 @@ import org.springframework.transaction.support.TransactionTemplate;
  *       {@code organization.team} (this handler).</li>
  *   <li>{@code added_to_repository}/{@code removed_from_repository} additionally carry a
  *       {@code repository} → {@code repository.team}, routed by {@link GitHubTeamRepositoryMessageHandler}
- *       which delegates back into {@link #routeTeamEvent(GitHubTeamEventDTO)}.</li>
+ *       which delegates back into {@link #dispatchTeamEvent}.</li>
  * </ul>
  * Without the second registration the repo-permission actions would key to {@code repository.team},
  * which has no handler, and be silently ACK-dropped — team↔repo permission changes would only land at
@@ -54,6 +57,7 @@ public class GitHubTeamMessageHandler extends AbstractIntegrationMessageHandler<
     private final TeamRepository teamRepository;
     private final RepositoryRepository repositoryRepository;
     private final TeamRepositoryPermissionRepository permissionRepository;
+    private final GitHubAccessReader accessReader;
 
     GitHubTeamMessageHandler(
             GitHubTeamProcessor teamProcessor,
@@ -62,6 +66,7 @@ public class GitHubTeamMessageHandler extends AbstractIntegrationMessageHandler<
             TeamRepository teamRepository,
             RepositoryRepository repositoryRepository,
             TeamRepositoryPermissionRepository permissionRepository,
+            GitHubAccessReader accessReader,
             EventPayloadDeserializer deserializer,
             TransactionTemplate transactionTemplate) {
         super(
@@ -76,11 +81,85 @@ public class GitHubTeamMessageHandler extends AbstractIntegrationMessageHandler<
         this.teamRepository = teamRepository;
         this.repositoryRepository = repositoryRepository;
         this.permissionRepository = permissionRepository;
+        this.accessReader = accessReader;
+    }
+
+    @Override
+    protected void dispatchEvent(GitHubTeamEventDTO event) {
+        dispatchTeamEvent(event, this::handleOnce);
     }
 
     @Override
     protected void handleEvent(GitHubTeamEventDTO event) {
         routeTeamEvent(event);
+    }
+
+    /**
+     * Dispatches one delivery through {@code once}, its handler's one write transaction. An event that adds a team to
+     * a repository or removes it only names the pair. It stores the team's role there once a read of GitHub, made
+     * before that transaction, confirms the access; a delivery that arrives again after a later removal therefore
+     * grants nothing. It never removes access: the team may still reach the repository through a parent team, and the
+     * next sync's reconciliation, which reads the whole team, removes what is gone.
+     */
+    void dispatchTeamEvent(GitHubTeamEventDTO event, Consumer<Runnable> once) {
+        if (!isRepositoryAccessEvent(event)) {
+            once.accept(() -> routeTeamEvent(event));
+            return;
+        }
+        Optional<String> role = confirmedRepositoryRole(event);
+        if (role.isEmpty()) {
+            log.debug("Left team repository access to the reconciliation: action={}", event.action());
+            return;
+        }
+        once.accept(() -> grantRepositoryAccess(event, role.get()));
+    }
+
+    private static boolean isRepositoryAccessEvent(GitHubTeamEventDTO event) {
+        return event.actionType() == GitHubEventAction.Team.ADDED_TO_REPOSITORY
+                || event.actionType() == GitHubEventAction.Team.REMOVED_FROM_REPOSITORY;
+    }
+
+    /**
+     * The team's role on the repository when GitHub confirms the access, read without a transaction. Empty when the
+     * event cannot be handled (it lacks the team, the organization or the repository, or no active workspace reads the
+     * organization), when GitHub reports no access, and when a removal cannot be read. An addition that cannot be read
+     * fails, and the delivery is retried.
+     */
+    private Optional<String> confirmedRepositoryRole(GitHubTeamEventDTO event) {
+        var teamDto = event.team();
+        var repoRef = event.repository();
+        String orgLogin = event.organization() != null ? event.organization().login() : null;
+        if (teamDto == null
+                || teamDto.slug() == null
+                || orgLogin == null
+                || repoRef == null
+                || repoRef.fullName() == null) {
+            log.warn("Received team repository event with missing data: action={}", event.action());
+            return Optional.empty();
+        }
+        String[] ownerAndName = repoRef.fullName().split("/", 2);
+        Optional<Long> scopeId = scopeIdResolver.findScopeIdByOrgLogin(orgLogin);
+        if (ownerAndName.length != 2 || scopeId.isEmpty() || !accessReader.isReadable(scopeId.get())) {
+            log.debug("Skipped team repository event: reason=noReadableScope, action={}", event.action());
+            return Optional.empty();
+        }
+        try {
+            return accessReader.teamRepositoryRole(
+                    scopeId.get(), orgLogin, teamDto.slug(), ownerAndName[0], ownerAndName[1]);
+        } catch (RuntimeException readFailed) {
+            if (event.actionType() != GitHubEventAction.Team.REMOVED_FROM_REPOSITORY) throw readFailed;
+            log.warn(
+                    "Left a team repository removal to the reconciliation: reason=unreadable, error={}",
+                    readFailed.getClass().getSimpleName());
+            return Optional.empty();
+        }
+    }
+
+    private void grantRepositoryAccess(GitHubTeamEventDTO event, String role) {
+        IdentityProvider gitHubProvider = providerNamespaces
+                .findForMirror(IdentityProviderType.GITHUB, "https://github.com")
+                .orElseThrow(() -> new IllegalStateException("GitHub provider not configured"));
+        handleAddedToRepository(event, gitHubProvider, role);
     }
 
     /**
@@ -125,13 +204,14 @@ public class GitHubTeamMessageHandler extends AbstractIntegrationMessageHandler<
             case GitHubEventAction.Team.DELETED -> teamProcessor.delete(teamDto.id(), context);
             case GitHubEventAction.Team.CREATED, GitHubEventAction.Team.EDITED ->
                 teamProcessor.process(teamDto, orgLogin, context);
-            case GitHubEventAction.Team.ADDED_TO_REPOSITORY -> handleAddedToRepository(event, gitHubProvider);
-            case GitHubEventAction.Team.REMOVED_FROM_REPOSITORY -> handleRemovedFromRepository(event, gitHubProvider);
+            case GitHubEventAction.Team.ADDED_TO_REPOSITORY, GitHubEventAction.Team.REMOVED_FROM_REPOSITORY ->
+                throw new IllegalStateException(
+                        "A team repository event reads GitHub before its write transaction; dispatch it");
             default -> log.debug("Skipped team event: reason=unhandledAction, action={}", event.action());
         }
     }
 
-    private void handleAddedToRepository(GitHubTeamEventDTO event, IdentityProvider provider) {
+    private void handleAddedToRepository(GitHubTeamEventDTO event, IdentityProvider provider, String role) {
         var repoRef = event.repository();
         var teamDto = event.team();
 
@@ -163,7 +243,7 @@ public class GitHubTeamMessageHandler extends AbstractIntegrationMessageHandler<
         Team team = teamOpt.get();
         Repository repo = repoOpt.get();
 
-        TeamRepositoryPermission.PermissionLevel level = mapWebhookPermission(teamDto.permission());
+        TeamRepositoryPermission.PermissionLevel level = mapRestPermission(role);
 
         var existingOpt = permissionRepository.findByTeam_IdAndRepository_Id(team.getId(), repo.getId());
         if (existingOpt.isPresent()) {
@@ -188,62 +268,11 @@ public class GitHubTeamMessageHandler extends AbstractIntegrationMessageHandler<
         }
     }
 
-    private void handleRemovedFromRepository(GitHubTeamEventDTO event, IdentityProvider provider) {
-        var repoRef = event.repository();
-        var teamDto = event.team();
-
-        if (repoRef == null || repoRef.id() == null) {
-            log.warn(
-                    "Skipped removed_from_repository: reason=noRepository, teamName={}",
-                    sanitizeForLog(teamDto.name()));
-            return;
-        }
-
-        Long providerId = Objects.requireNonNull(provider.getId());
-
-        var teamOpt = teamRepository.findByNativeIdAndProviderId(Objects.requireNonNull(teamDto.id()), providerId);
-        if (teamOpt.isEmpty()) {
-            log.debug(
-                    "Skipped removed_from_repository: reason=teamNotFound, teamNativeId={}, teamName={}",
-                    teamDto.id(),
-                    sanitizeForLog(teamDto.name()));
-            return;
-        }
-
-        var repoOpt = repositoryRepository.findByNativeIdAndProviderId(repoRef.id(), providerId);
-        if (repoOpt.isEmpty()) {
-            log.debug(
-                    "Skipped removed_from_repository: reason=repoNotMonitored, repoNativeId={}, repoName={}",
-                    repoRef.id(),
-                    sanitizeForLog(repoRef.fullName()));
-            return;
-        }
-
-        Team team = teamOpt.get();
-        Repository repo = repoOpt.get();
-
-        permissionRepository
-                .findByTeam_IdAndRepository_Id(team.getId(), repo.getId())
-                .ifPresentOrElse(
-                        permission -> {
-                            permissionRepository.delete(permission);
-                            log.info(
-                                    "Deleted team repo permission: teamName={}, repoName={}",
-                                    sanitizeForLog(team.getName()),
-                                    sanitizeForLog(repo.getNameWithOwner()));
-                        },
-                        () -> log.debug(
-                                "Skipped removed_from_repository: reason=permissionNotFound, teamName={}, repoName={}",
-                                sanitizeForLog(team.getName()),
-                                sanitizeForLog(repo.getNameWithOwner())));
-    }
-
     /**
-     * GitHub webhook payloads use REST-style permission names ({@code pull}, {@code triage}, {@code
-     * push}, {@code maintain}, {@code admin}), not the GraphQL enum ({@code READ}, {@code TRIAGE},
-     * {@code WRITE}, {@code MAINTAIN}, {@code ADMIN}) used elsewhere.
+     * GitHub's REST API names a team's repository role {@code read}, {@code triage}, {@code write}, {@code maintain}
+     * or {@code admin} (older payloads say {@code pull} and {@code push}), not the GraphQL enum used elsewhere.
      */
-    private static TeamRepositoryPermission.PermissionLevel mapWebhookPermission(@Nullable String permission) {
+    private static TeamRepositoryPermission.PermissionLevel mapRestPermission(@Nullable String permission) {
         if (permission == null) {
             return TeamRepositoryPermission.PermissionLevel.READ;
         }

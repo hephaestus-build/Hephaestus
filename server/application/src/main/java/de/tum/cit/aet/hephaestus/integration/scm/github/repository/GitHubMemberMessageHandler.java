@@ -5,17 +5,21 @@ import static de.tum.cit.aet.hephaestus.core.LoggingUtils.sanitizeForLog;
 import de.tum.cit.aet.hephaestus.integration.core.handler.AbstractIntegrationMessageHandler;
 import de.tum.cit.aet.hephaestus.integration.core.handler.EventPayloadDeserializer;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ScopeIdResolver;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.ProcessingContext;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.collaborator.RepositoryCollaborator;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.collaborator.RepositoryCollaboratorRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
+import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubAccessReader;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubEventAction;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubEventType;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.ProcessingContextFactory;
 import de.tum.cit.aet.hephaestus.integration.scm.github.repository.dto.GitHubMemberEventDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.github.user.GitHubUserProcessor;
 import java.util.Objects;
+import java.util.Optional;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -32,11 +36,15 @@ public class GitHubMemberMessageHandler extends AbstractIntegrationMessageHandle
     private final ProcessingContextFactory contextFactory;
     private final GitHubUserProcessor userProcessor;
     private final RepositoryCollaboratorRepository collaboratorRepository;
+    private final ScopeIdResolver scopeIdResolver;
+    private final GitHubAccessReader accessReader;
 
     GitHubMemberMessageHandler(
             ProcessingContextFactory contextFactory,
             GitHubUserProcessor userProcessor,
             RepositoryCollaboratorRepository collaboratorRepository,
+            ScopeIdResolver scopeIdResolver,
+            GitHubAccessReader accessReader,
             EventPayloadDeserializer deserializer,
             TransactionTemplate transactionTemplate) {
         super(
@@ -48,16 +56,75 @@ public class GitHubMemberMessageHandler extends AbstractIntegrationMessageHandle
         this.contextFactory = contextFactory;
         this.userProcessor = userProcessor;
         this.collaboratorRepository = collaboratorRepository;
+        this.scopeIdResolver = scopeIdResolver;
+        this.accessReader = accessReader;
+    }
+
+    /**
+     * The event names the repository and the person whose access changed; what is stored is the access GitHub reports
+     * now, read before the write transaction. A delivery that arrives again after a later change cannot restore the
+     * older access.
+     */
+    @Override
+    protected void dispatchEvent(GitHubMemberEventDTO event) {
+        Optional<CurrentAccess> current = currentAccess(event);
+        if (current.isEmpty()) return;
+        handleOnce(() -> apply(event, current.get()));
     }
 
     @Override
     protected void handleEvent(GitHubMemberEventDTO event) {
-        var memberDto = event.member();
+        throw new IllegalStateException("A member event reads GitHub before its write transaction; dispatch it");
+    }
 
-        if (memberDto == null) {
+    /** The person's role on the repository as GitHub reports it now, or none. */
+    private record CurrentAccess(@Nullable String role) {}
+
+    /**
+     * Reads the person's access without a transaction. Empty when the event cannot be handled: it lacks the person or
+     * the repository, it is not an addition, change or removal, or no active workspace reads the repository. A removal that cannot be
+     * read is applied, because removing is the safe direction.
+     */
+    private Optional<CurrentAccess> currentAccess(GitHubMemberEventDTO event) {
+        var memberDto = event.member();
+        var repositoryRef = event.repository();
+        boolean removed = event.actionType() == GitHubEventAction.Member.REMOVED;
+        if (memberDto == null || memberDto.id() == null || repositoryRef == null || repositoryRef.fullName() == null) {
             log.warn("Received member event with missing data: action={}", event.action());
-            return;
+            return Optional.empty();
         }
+        if (!removed
+                && event.actionType() != GitHubEventAction.Member.ADDED
+                && event.actionType() != GitHubEventAction.Member.EDITED) {
+            log.debug("Skipped member event: reason=unhandledAction, action={}", event.action());
+            return Optional.empty();
+        }
+        String[] ownerAndName = repositoryRef.fullName().split("/", 2);
+        Optional<Long> scopeId = scopeIdResolver.findScopeIdByRepositoryName(repositoryRef.fullName());
+        if (ownerAndName.length != 2 || scopeId.isEmpty()) {
+            log.debug("Skipped member event: reason=noWorkspace, action={}", event.action());
+            return Optional.empty();
+        }
+        if (!accessReader.isReadable(scopeId.get())) {
+            // A workspace that cannot read GitHub still applies a removal: removing access is the safe direction.
+            log.debug("Member event without a GitHub read: reason=unreadable, action={}", event.action());
+            return removed ? Optional.of(new CurrentAccess(null)) : Optional.empty();
+        }
+        try {
+            return Optional.of(new CurrentAccess(accessReader
+                    .collaboratorRole(scopeId.get(), ownerAndName[0], ownerAndName[1], memberDto.id())
+                    .orElse(null)));
+        } catch (RuntimeException readFailed) {
+            if (!removed) throw readFailed;
+            log.warn(
+                    "Applied collaborator removal without reading GitHub: error={}",
+                    readFailed.getClass().getSimpleName());
+            return Optional.of(new CurrentAccess(null));
+        }
+    }
+
+    private void apply(GitHubMemberEventDTO event, CurrentAccess current) {
+        var memberDto = event.member();
 
         log.debug(
                 "Received member event: action={}, userNativeId={}, repoName={}",
@@ -79,18 +146,15 @@ public class GitHubMemberMessageHandler extends AbstractIntegrationMessageHandle
 
         Repository repository = Objects.requireNonNull(context.repository());
 
-        switch (event.actionType()) {
-            case GitHubEventAction.Member.ADDED -> handleCollaboratorAdded(repository, user, event);
-            case GitHubEventAction.Member.REMOVED -> handleCollaboratorRemoved(repository, user);
-            default -> log.debug("Skipped member event: reason=unhandledAction, action={}", event.action());
+        if (current.role() != null) {
+            handleCollaboratorAdded(repository, user, current.role());
+        } else {
+            handleCollaboratorRemoved(repository, user);
         }
     }
 
-    private void handleCollaboratorAdded(Repository repository, User user, GitHubMemberEventDTO event) {
-        // Extract permission from event changes
-        String permissionValue = event.getPermission();
-        RepositoryCollaborator.Permission permission =
-                RepositoryCollaborator.Permission.fromGitHubValue(permissionValue);
+    private void handleCollaboratorAdded(Repository repository, User user, String role) {
+        RepositoryCollaborator.Permission permission = RepositoryCollaborator.Permission.fromGitHubValue(role);
 
         // Check if collaborator already exists
         var existingCollaborator = collaboratorRepository.findByRepositoryIdAndUserId(repository.getId(), user.getId());

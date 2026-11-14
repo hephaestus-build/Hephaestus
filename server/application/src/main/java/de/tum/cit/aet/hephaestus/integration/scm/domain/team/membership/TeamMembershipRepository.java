@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.scm.domain.team.membership;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
+import java.util.Optional;
 import java.util.Set;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -30,6 +31,10 @@ public interface TeamMembershipRepository extends JpaRepository<TeamMembership, 
      * @return true if the membership exists
      */
     boolean existsByTeam_IdAndUser_Id(Long teamId, Long userId);
+
+    /** The membership of one person in one team. */
+    @WorkspaceAgnostic("Team memberships are shared mirror rows reached through their team (ADR 0077)")
+    Optional<TeamMembership> findByTeam_IdAndUser_Id(Long teamId, Long userId);
 
     /**
      * Collect distinct user IDs of every member of a team under the given root group path (case-insensitive) on one
