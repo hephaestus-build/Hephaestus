@@ -12,6 +12,8 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionFixtures;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
+import de.tum.cit.aet.hephaestus.integration.core.connection.IntegrationAttentionService;
+import de.tum.cit.aet.hephaestus.integration.core.events.IntegrationAttentionChangedEvent;
 import de.tum.cit.aet.hephaestus.integration.core.item.ItemRepository;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
@@ -104,6 +106,9 @@ class WorkspaceControllerIntegrationTest extends AbstractWorkspaceIntegrationTes
 
     @Autowired
     private TransactionTemplate transactions;
+
+    @Autowired
+    private IntegrationAttentionService attention;
 
     @Test
     @WithAdminUser
@@ -1366,6 +1371,56 @@ class WorkspaceControllerIntegrationTest extends AbstractWorkspaceIntegrationTes
                 .expectStatus()
                 .isNotFound()
                 .expectBody(Void.class);
+
+        // A suspended workspace the caller has no part in still answers as if it did not exist.
+        Workspace foreign = createWorkspace("listing-foreign", "Listing foreign", "listing-f", AccountType.ORG, owner);
+        workspaceLifecycleService.suspendWorkspace(foreign.getWorkspaceSlug());
+        webTestClient
+                .get()
+                .uri("/workspaces/{workspaceSlug}/members/me", foreign.getWorkspaceSlug())
+                .headers(TestAuthUtils.withCurrentUser())
+                .exchange()
+                .expectStatus()
+                .isNotFound()
+                .expectBody(Void.class);
+    }
+
+    @Test
+    @WithAdminUser
+    void shouldRefuseToResumeAWorkspaceThatGitHubKeepsSuspended() {
+        User owner = persistUser("github-suspended-owner");
+        Workspace workspace =
+                createWorkspace("github-suspended", "GitHub suspended", "github-suspended", AccountType.ORG, owner);
+        ensureAdminMembership(workspace);
+        Connection connection = new Connection(
+                workspace,
+                IntegrationKind.GITHUB,
+                "7001",
+                new ConnectionConfig.GitHubAppConfig(7001L, "github-suspended", null, Set.of()));
+        ConnectionFixtures.reachState(connection, IntegrationState.ACTIVE);
+        connection = connectionRepository.save(connection);
+        attention.report(
+                connection.getId(),
+                workspace.getId(),
+                IntegrationAttentionChangedEvent.Problem.PROVIDER_SUSPENDED,
+                false);
+        workspaceLifecycleService.suspendWorkspace(workspace.getWorkspaceSlug());
+
+        webTestClient
+                .patch()
+                .uri("/workspaces/{workspaceSlug}/status", workspace.getWorkspaceSlug())
+                .headers(TestAuthUtils.withCurrentUser())
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(new UpdateWorkspaceStatusRequestDTO(Workspace.WorkspaceStatus.ACTIVE))
+                .exchange()
+                .expectStatus()
+                .isEqualTo(HttpStatus.CONFLICT)
+                .expectBody()
+                .jsonPath("$.detail")
+                .value(detail -> assertThat(detail).asString().startsWith("GitHub has suspended the Hephaestus app"));
+
+        assertThat(workspaceRepository.findById(workspace.getId()).orElseThrow().getStatus())
+                .isEqualTo(Workspace.WorkspaceStatus.SUSPENDED);
     }
 
     @Test

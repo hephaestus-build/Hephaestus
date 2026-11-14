@@ -4,11 +4,7 @@ import { Settings2 } from "lucide-react";
 import type { ReactNode } from "react";
 import { useWorkspacePasskeySettings } from "@/hooks/use-workspace-passkey-settings";
 
-import {
-	getWorkspaceQueryKey,
-	listWorkspacesQueryKey,
-	updateStatusMutation,
-} from "@/api/@tanstack/react-query.gen";
+import { updateStatusMutation } from "@/api/@tanstack/react-query.gen";
 import { SuspendedWorkspaceCard } from "@/components/admin/settings/SuspendedWorkspaceCard";
 import { WorkspaceDangerZoneSettings } from "@/components/admin/settings/WorkspaceDangerZoneSettings";
 import { WorkspacePasskeyPolicySection } from "@/components/admin/settings/WorkspacePasskeyPolicySection";
@@ -57,7 +53,11 @@ function AdminSettings() {
 	// A suspended workspace answers no settings read, so its page offers only what it can still do.
 	if (hasText(adminWorkspaceSlug) && workspace?.status === "SUSPENDED") {
 		return (
-			<SuspendedSettings workspaceSlug={adminWorkspaceSlug} workspaceName={workspace.displayName} />
+			<SuspendedSettings
+				workspaceSlug={adminWorkspaceSlug}
+				workspaceName={workspace.displayName}
+				github={workspace.providerType === "GITHUB"}
+			/>
 		);
 	}
 	return <ActiveSettings />;
@@ -66,9 +66,11 @@ function AdminSettings() {
 function SuspendedSettings({
 	workspaceSlug,
 	workspaceName,
+	github,
 }: {
 	workspaceSlug: string;
 	workspaceName: string;
+	github: boolean;
 }) {
 	const queryClient = useQueryClient();
 	const dangerZone = useWorkspaceDangerZone(workspaceSlug);
@@ -76,12 +78,8 @@ function SuspendedSettings({
 		...updateStatusMutation(),
 		onSuccess: async () => {
 			toast.success(`${workspaceName} is active again`);
-			await Promise.all([
-				queryClient.invalidateQueries({ queryKey: listWorkspacesQueryKey() }),
-				queryClient.invalidateQueries({
-					queryKey: getWorkspaceQueryKey({ path: { workspaceSlug } }),
-				}),
-			]);
+			// Every read of the workspace failed while it was suspended, the app chrome's included.
+			await queryClient.invalidateQueries();
 		},
 	});
 	return (
@@ -90,6 +88,7 @@ function SuspendedSettings({
 			<div className="max-w-4xl space-y-8">
 				<SuspendedWorkspaceCard
 					workspaceName={workspaceName}
+					github={github}
 					resuming={resume.isPending}
 					resumeError={resume.error == null ? undefined : problemDetailOf(resume.error)}
 					onResume={() => {
