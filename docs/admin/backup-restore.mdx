@@ -103,6 +103,33 @@ The [alert rules](./alert-rules.md) watch the WAL archive, the age of the latest
 Preserve the database, keys and signed release identity as one recovery set.
 Keep the originals until the recovery is verified.
 
+### Take a backup now {/*#take-a-backup-now*/}
+
+Take a full backup before each upgrade.
+Verify it with an [isolated restore drill](#isolated-restore-drill).
+The verified backup is the recovery point of that upgrade.
+
+1. Start a full backup from the CronJob of the release:
+
+   ```bash
+   job="hephaestus-postgresql-backup-manual-$(date -u +%Y%m%d%H%M)"
+   kubectl --namespace hephaestus create job "$job" --from=cronjob/hephaestus-postgresql-backup-full
+   ```
+
+2. Wait until the Job completes:
+
+   ```bash
+   kubectl --namespace hephaestus wait --for=condition=complete --timeout=2h "job/$job"
+   ```
+
+   If the Job fails or the wait stops at its time limit, read `kubectl --namespace hephaestus logs "job/$job"`.
+   Do not start the upgrade without a completed backup.
+
+3. Record the completion time and the release version with the upgrade.
+   The CronJob keeps only its three latest Jobs, so the Job itself does not stay.
+
+If you back up the PostgreSQL volume yourself, take a snapshot with your storage tools instead.
+
 ## Restore
 
 Choose the [isolated restore drill](#isolated-restore-drill) or [live recovery](#recover-the-live-installation) procedure for the intended destination.
@@ -177,6 +204,7 @@ Use [Recover the live installation](#recover-the-live-installation) for a live r
    Follow [Prove silence](./production-operations-runbook#silent-deployment-checklist) before opening any external destination.
 
 The restored database has the role passwords that it had at the backup.
+After a loss of the cluster, the old `DATABASE_ADMIN_PASSWORD` is only in the copy that [Secret custody](./secret-custody#keep-the-required-keys-outside-the-cluster) step 2 keeps.
 The migration Job of step 8 sets the passwords of `hephaestus_owner` and `hephaestus_app` from the Secret again.
 If `DATABASE_ADMIN_PASSWORD` changed since the backup, put the old value back in the Secret before step 3.
 Rehearse a restore on a copy of the instance before you need one.
