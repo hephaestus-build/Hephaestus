@@ -150,6 +150,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.ThreadLocalRandom;
@@ -2113,6 +2114,61 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
                     .noneMatch(occasion -> occasion.getState() == ItemEventState.RECORDED);
             assertThat(measuringReviews(prepared)).hasSize(1);
         } finally {
+            executor.shutdownNow();
+        }
+    }
+
+    /**
+     * A member's request pins the work with no lock. A push that lands before the request takes the workspace lock
+     * starts its own review of the newer version, so the request finds its version replaced and records nothing.
+     */
+    @Test
+    void shouldRefuseAMembersRequestWhoseVersionAPushReplacedWhileItReadTheWork() throws Exception {
+        var prepared = prepare(
+                IdentityProviderType.GITHUB, false, Map.of(), false, List.of(ScmItemEvents.PULL_REQUEST_SYNCHRONIZED));
+        long workspace = prepared.item().workspaceId();
+        long requester = memberAccount(workspace);
+        var pinned = new CountDownLatch(1);
+        var release = new CountDownLatch(1);
+        doAnswer(call -> {
+                    Object snapshot = call.callRealMethod();
+                    pinned.countDown();
+                    awaitLatch(release);
+                    return snapshot;
+                })
+                .when(productItems)
+                .pin(eq(prepared.item()), eq(prepared.version()));
+        var executor =
+                Executors.newSingleThreadExecutor(Thread.ofPlatform().daemon().factory());
+        try {
+            Future<UUID> manual = executor.submit(() -> service.request(ReviewRequest.builder()
+                    .workspaceId(workspace)
+                    .itemId(prepared.item().itemId())
+                    .kind(ReviewKind.ITEM)
+                    .version(prepared.version())
+                    .origin(ReviewOrigin.REQUEST)
+                    .requestedById(requester)
+                    .practiceIds(List.of())
+                    .build()));
+            awaitLatch(pinned);
+            deliver(
+                    prepared,
+                    "synchronize",
+                    pullRequestPayload(prepared, "d".repeat(40), Instant.now().plusSeconds(60)));
+            release.countDown();
+
+            assertThatThrownBy(() -> manual.get(20, TimeUnit.SECONDS))
+                    .isInstanceOf(ExecutionException.class)
+                    .cause()
+                    .isInstanceOfSatisfying(
+                            ReviewRequestRejected.class,
+                            refusal -> assertThat(refusal.reason())
+                                    .isEqualTo(ReviewRequestRejected.Reason.VERSION_CHANGED));
+            assertThat(measuringReviews(prepared))
+                    .singleElement()
+                    .satisfies(review -> assertThat(review.getOrigin()).isEqualTo(ReviewOrigin.EVENT));
+        } finally {
+            release.countDown();
             executor.shutdownNow();
         }
     }
