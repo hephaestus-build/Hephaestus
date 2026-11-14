@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, test } from "node:test";
 
-import { ensureComposeProject, ensureDatabasePassword } from "./dev-env.ts";
+import { ensureComposeProject, ensureEnvFile, ensureGeneratedValues } from "./dev-env.ts";
 import { readEnvFile } from "./lib/env.ts";
 
 async function checkout(
@@ -22,28 +22,93 @@ async function checkout(
 	}
 }
 
-async function passwordIn(envFile: string): Promise<string | undefined> {
-	const values = await readEnvFile(envFile);
-	return values.POSTGRES_PASSWORD;
-}
+const keyNames = [
+	"HEPHAESTUS_SECURITY_ENCRYPTION_KEY",
+	"HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY",
+] as const;
 
-await describe("the local database password", async () => {
-	await test("a new checkout gets a random password and keeps its other settings", async () => {
+await describe("the settings file of a checkout", async () => {
+	await test("a checkout without one gets a copy of the template that only its owner reads", async () => {
+		await checkout(async ({ envFile, checkout: directory }) => {
+			const template = path.join(directory, ".env.example");
+			await writeFile(template, "# comment\nGITHUB_OAUTH_CLIENT_ID=\n");
+			assert.equal(await ensureEnvFile({ envFile, template }), true);
+			assert.equal(await readFile(envFile, "utf8"), "# comment\nGITHUB_OAUTH_CLIENT_ID=\n");
+			if (process.platform !== "win32") {
+				const { mode } = await stat(envFile);
+				assert.equal(mode.toString(8).slice(-2), "00");
+			}
+		});
+	});
+
+	await test("an existing file is never replaced by the template", async () => {
+		await checkout(async ({ envFile, checkout: directory }) => {
+			const template = path.join(directory, ".env.example");
+			await writeFile(template, "GITHUB_OAUTH_CLIENT_ID=\n");
+			await writeFile(envFile, "GITHUB_OAUTH_CLIENT_ID=mine\nPOSTGRES_PASSWORD=chosen\n");
+			assert.equal(await ensureEnvFile({ envFile, template }), false);
+			assert.equal(
+				await readFile(envFile, "utf8"),
+				"GITHUB_OAUTH_CLIENT_ID=mine\nPOSTGRES_PASSWORD=chosen\n",
+			);
+		});
+	});
+
+	await test("the template's blank lines receive the generated values, and a second run changes nothing", async () => {
+		await checkout(async (paths) => {
+			const template = path.join(paths.checkout, ".env.example");
+			await writeFile(
+				template,
+				"# keys\nHEPHAESTUS_SECURITY_ENCRYPTION_KEY=\nHEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY=\n",
+			);
+			await ensureEnvFile({ envFile: paths.envFile, template });
+			await ensureGeneratedValues({ ...paths, environment: {} });
+			const first = await readFile(paths.envFile, "utf8");
+			assert.equal(first.match(/^HEPHAESTUS_SECURITY_ENCRYPTION_KEY=/gmu)?.length, 1);
+			assert.deepEqual(await ensureGeneratedValues({ ...paths, environment: {} }), []);
+			assert.equal(await readFile(paths.envFile, "utf8"), first);
+		});
+	});
+});
+
+await describe("the generated values of a checkout", async () => {
+	await test("a new checkout gets a password, both keys and a webhook secret, and keeps its other settings", async () => {
 		await checkout(async (paths) => {
 			await writeFile(paths.envFile, "POSTGRES_PORT=15432");
-			assert.equal(await ensureDatabasePassword({ ...paths, environment: {} }), "generated");
-			const password = await passwordIn(paths.envFile);
-			assert.match(password ?? "", /^[0-9a-f]{48}$/u);
-			assert.notEqual(password, "root");
+			assert.deepEqual(await ensureGeneratedValues({ ...paths, environment: {} }), [
+				"POSTGRES_PASSWORD",
+				...keyNames,
+				"WEBHOOK_SECRET",
+			]);
 			const values = await readEnvFile(paths.envFile);
+			assert.match(values.POSTGRES_PASSWORD ?? "", /^[0-9a-f]{48}$/u);
+			for (const key of keyNames) {
+				assert.equal(Buffer.byteLength(values[key] ?? "", "utf8"), 32);
+			}
+			assert.notEqual(
+				values.HEPHAESTUS_SECURITY_ENCRYPTION_KEY,
+				values.HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY,
+			);
+			assert.match(values.WEBHOOK_SECRET ?? "", /^[0-9a-f]{64}$/u);
 			assert.equal(values.POSTGRES_PORT, "15432");
 		});
 	});
 
-	await test("a checkout without a .env file gets one", async () => {
+	await test("a key repeated with a blank last line keeps the developer's line and gets set once", async () => {
 		await checkout(async (paths) => {
-			assert.equal(await ensureDatabasePassword({ ...paths, environment: {} }), "generated");
-			assert.match((await passwordIn(paths.envFile)) ?? "", /^[0-9a-f]{48}$/u);
+			await writeFile(
+				paths.envFile,
+				"WEBHOOK_SECRET=mine\nPOSTGRES_PASSWORD=chosen\nWEBHOOK_SECRET=\n",
+				{ mode: 0o644 },
+			);
+			await ensureGeneratedValues({ ...paths, environment: {} });
+			const first = await readFile(paths.envFile, "utf8");
+			assert.match(
+				first,
+				/^WEBHOOK_SECRET=mine\nPOSTGRES_PASSWORD=chosen\nWEBHOOK_SECRET=[0-9a-f]{64}\n/u,
+			);
+			assert.deepEqual(await ensureGeneratedValues({ ...paths, environment: {} }), []);
+			assert.equal(await readFile(paths.envFile, "utf8"), first);
 			if (process.platform !== "win32") {
 				const { mode } = await stat(paths.envFile);
 				assert.equal(mode.toString(8).slice(-2), "00");
@@ -51,24 +116,24 @@ await describe("the local database password", async () => {
 		});
 	});
 
-	await test("a password that is set stays, and a second run changes nothing", async () => {
+	await test("values that are set stay, and a second run changes nothing", async () => {
 		await checkout(async (paths) => {
-			await ensureDatabasePassword({ ...paths, environment: {} });
+			await ensureGeneratedValues({ ...paths, environment: {} });
 			const first = await readFile(paths.envFile, "utf8");
-			assert.equal(await ensureDatabasePassword({ ...paths, environment: {} }), "present");
+			assert.deepEqual(await ensureGeneratedValues({ ...paths, environment: {} }), []);
 			assert.equal(await readFile(paths.envFile, "utf8"), first);
 		});
 	});
 
-	await test("a password in the environment is left alone", async () => {
+	await test("values in the environment are left alone", async () => {
 		await checkout(async (paths) => {
-			assert.equal(
-				await ensureDatabasePassword({
-					...paths,
-					environment: { POSTGRES_PASSWORD: "from-shell" },
-				}),
-				"present",
-			);
+			const environment = {
+				POSTGRES_PASSWORD: "from-shell",
+				HEPHAESTUS_SECURITY_ENCRYPTION_KEY: "from-shell",
+				HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY: "from-shell",
+				WEBHOOK_SECRET: "from-shell",
+			};
+			assert.deepEqual(await ensureGeneratedValues({ ...paths, environment }), []);
 			await assert.rejects(readFile(paths.envFile, "utf8"));
 		});
 	});
@@ -79,14 +144,14 @@ await describe("the local database password", async () => {
 			await writeFile(path.join(paths.dataDirectory, "PG_VERSION"), "18");
 			await writeFile(paths.envFile, "POSTGRES_PORT=15432\n");
 			await assert.rejects(
-				ensureDatabasePassword({ ...paths, environment: {} }),
-				/Set its password in server\/\.env/u,
+				ensureGeneratedValues({ ...paths, environment: {} }),
+				/Set its password in server\/\.env, or run `vp run dev:reset`/u,
 			);
 			assert.equal(await readFile(paths.envFile, "utf8"), "POSTGRES_PORT=15432\n");
 		});
 	});
 
-	await test("existing data keeps its configured password and other settings", async () => {
+	await test("existing data gets no new keys, because its stored secrets need the old ones", async () => {
 		await checkout(async (paths) => {
 			await mkdir(paths.dataDirectory);
 			await writeFile(path.join(paths.dataDirectory, "PG_VERSION"), "18");
@@ -94,19 +159,16 @@ await describe("the local database password", async () => {
 				paths.envFile,
 				"POSTGRES_PORT=15432\nPOSTGRES_PASSWORD=chosen\nSERVER_PORT=18080\n",
 			);
-			assert.equal(await ensureDatabasePassword({ ...paths, environment: {} }), "present");
+			assert.deepEqual(await ensureGeneratedValues({ ...paths, environment: {} }), [
+				"WEBHOOK_SECRET",
+			]);
 			const values = await readEnvFile(paths.envFile);
 			assert.equal(values.POSTGRES_PASSWORD, "chosen");
 			assert.equal(values.POSTGRES_PORT, "15432");
 			assert.equal(values.SERVER_PORT, "18080");
-		});
-	});
-
-	await test("a password that the developer chose survives a reset", async () => {
-		await checkout(async (paths) => {
-			await writeFile(paths.envFile, "POSTGRES_PASSWORD=chosen\n");
-			assert.equal(await ensureDatabasePassword({ ...paths, environment: {} }), "present");
-			assert.equal(await passwordIn(paths.envFile), "chosen");
+			for (const key of keyNames) {
+				assert.equal(values[key], undefined);
+			}
 		});
 	});
 });
