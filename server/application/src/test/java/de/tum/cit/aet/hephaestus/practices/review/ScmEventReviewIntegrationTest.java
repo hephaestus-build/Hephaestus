@@ -143,6 +143,7 @@ import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -175,6 +176,10 @@ import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.core.retry.RetryListener;
+import org.springframework.core.retry.RetryPolicy;
+import org.springframework.core.retry.RetryTemplate;
+import org.springframework.core.retry.Retryable;
 import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.mock.env.MockEnvironment;
@@ -215,6 +220,15 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
 
     @Autowired
     UserRepository users;
+
+    /** Counts down when a delivery first loses a lock to another write and is retried. */
+    private final CountDownLatch lockContention = new CountDownLatch(1);
+
+    /**
+     * Retries a delivery that lost a lock to another write, as the provider event inbox does without spending an
+     * attempt ({@code ProviderEventConsumer}). A direct delivery bypasses the inbox, so it needs the same rule.
+     */
+    private final RetryTemplate contentionRetries = contentionRetries();
 
     @Autowired
     PullRequestRepository pulls;
@@ -2503,6 +2517,44 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
     }
 
     /**
+     * A delivery whose author's login another write holds loses that lock at once. The provider event inbox retries it
+     * without spending an attempt, and the retried delivery decides its occasion with one review.
+     */
+    @Test
+    void shouldDecideADeliveryThatFoundItsAuthorsLoginLockedOnceTheLockIsReleased() throws Exception {
+        var prepared = prepare(
+                IdentityProviderType.GITHUB, false, Map.of(), false, List.of(ScmItemEvents.PULL_REQUEST_SYNCHRONIZED));
+        var payload = pullRequestPayload(prepared, "c".repeat(40), Instant.now().plusSeconds(60));
+        long provider = Objects.requireNonNull(transactions.execute(
+                ignored -> pulls.findById(Objects.requireNonNull(prepared.item().sourceId()))
+                        .orElseThrow()
+                        .getProvider()
+                        .getId()));
+        String login = Objects.requireNonNull(payload.author()).login();
+        var held = new CountDownLatch(1);
+        try (var holder =
+                Executors.newSingleThreadExecutor(Thread.ofPlatform().daemon().factory())) {
+            Future<?> locked = holder.submit(() -> transactions.executeWithoutResult(ignored -> {
+                assertThat(users.tryAcquireLoginLock(login, provider)).isTrue();
+                held.countDown();
+                awaitLatch(lockContention);
+            }));
+            awaitLatch(held);
+
+            deliver(prepared, "synchronize", payload);
+            locked.get(20, TimeUnit.SECONDS);
+        }
+
+        assertThat(lockContention.getCount())
+                .as("the delivery met the held login")
+                .isZero();
+        assertThat(synchronizations(prepared))
+                .singleElement()
+                .matches(occasion -> occasion.getState() != ItemEventState.RECORDED);
+        assertThat(measuringReviews(prepared)).hasSize(1);
+    }
+
+    /**
      * Pushes for several pull requests compete for admission in one workspace. Every occasion is decided, and each
      * pull request gets one measuring review. Its further occasions wait for that review.
      */
@@ -2533,9 +2585,8 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
                 IdentityProviderType.GITHUB, false, Map.of(), false, List.of(ScmItemEvents.PULL_REQUEST_SYNCHRONIZED));
         long workspace = prepared.item().workspaceId();
         long requester = memberAccount(workspace);
-        var executor =
-                Executors.newSingleThreadExecutor(Thread.ofPlatform().daemon().factory());
-        try {
+        try (var executor =
+                Executors.newSingleThreadExecutor(Thread.ofPlatform().daemon().factory())) {
             Future<?> manual = executor.submit(() -> {
                 try {
                     service.request(ReviewRequest.builder()
@@ -2560,8 +2611,6 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
                     .hasSize(3)
                     .noneMatch(occasion -> occasion.getState() == ItemEventState.RECORDED);
             assertThat(measuringReviews(prepared)).hasSize(1);
-        } finally {
-            executor.shutdownNow();
         }
     }
 
@@ -2666,8 +2715,10 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
      * the test pool.
      */
     private void burst(List<Prepared> items, int rounds) throws Exception {
-        var pool = Executors.newFixedThreadPool(4, Thread.ofPlatform().daemon().factory());
-        try {
+        // Closing the pool waits for every delivery, also after one failed: a delivery still running would hold its
+        // transaction into the next test's cleanup.
+        try (var pool =
+                Executors.newFixedThreadPool(4, Thread.ofPlatform().daemon().factory())) {
             var deliveries = new ArrayList<Future<?>>();
             var go = new CountDownLatch(1);
             for (int index = 0; index < items.size(); index++) {
@@ -2687,8 +2738,6 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
             }
             go.countDown();
             for (var delivery : deliveries) delivery.get(60, TimeUnit.SECONDS);
-        } finally {
-            pool.shutdownNow();
         }
     }
 
@@ -2774,7 +2823,7 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
     }
 
     private void deliver(Prepared prepared, String action, GitHubPullRequestDTO payload, @Nullable String before) {
-        transactions.executeWithoutResult(ignored -> {
+        contentionRetries.invoke(() -> transactions.executeWithoutResult(ignored -> {
             var repository = repositories
                     .findById(Objects.requireNonNull(pulls.findById(Objects.requireNonNull(
                                             prepared.item().sourceId()))
@@ -2785,7 +2834,25 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
             var context = ProcessingContext.forWebhook(prepared.item().workspaceId(), repository, action);
             if (action.equals("ready_for_review")) pullRequestProcessor.processReadyForReview(payload, context);
             else pullRequestProcessor.processSynchronize(payload, before, context);
+        }));
+    }
+
+    private RetryTemplate contentionRetries() {
+        var retries = new RetryTemplate(RetryPolicy.builder()
+                .includes(PessimisticLockingFailureException.class)
+                .maxRetries(20)
+                .delay(Duration.ofMillis(50))
+                .jitter(Duration.ofMillis(25))
+                .multiplier(1.5)
+                .maxDelay(Duration.ofMillis(500))
+                .build());
+        retries.setRetryListener(new RetryListener() {
+            @Override
+            public void beforeRetry(RetryPolicy policy, Retryable<?> retryable) {
+                lockContention.countDown();
+            }
         });
+        return retries;
     }
 
     private List<ItemEvent> itemEvents(Prepared prepared) {
