@@ -4,4 +4,6 @@
 | --- | --- | --- | --- | --- |
 | `HEPHAESTUS_EMAIL_FROM` | `hephaestus.email.from` | `default: (empty)` | `server` | The sender address in the envelope and the header. Required when `spring.mail.host` is set. The relay must be allowed to send for its domain through SPF and DKIM. |
 | `HEPHAESTUS_EMAIL_FROM_NAME` | `hephaestus.email.from-name` | `default: Hephaestus` | `server` | The display name shown next to `from`. |
+| `HEPHAESTUS_EMAIL_RATE_LIMIT_DAILY_CAPACITY` | `hephaestus.email.rate-limit.daily-capacity` |  | `server` | Most emails this instance sends per day. Hephaestus does not send an email above this limit. |
+| `HEPHAESTUS_EMAIL_RATE_LIMIT_OPTIONAL_DAILY_CAPACITY` | `hephaestus.email.rate-limit.optional-daily-capacity` |  | `server` | Most optional emails, such as digests and product feedback notifications, this instance sends per day. Optional emails also count toward daily-capacity. Must be lower than daily-capacity. |
 | `HEPHAESTUS_EMAIL_REPLY_TO` | `hephaestus.email.reply-to` | `default: (empty)` | `server` | The address that receives human replies. When it is blank, replies go to the sender address. |

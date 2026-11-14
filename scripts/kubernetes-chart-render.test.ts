@@ -2158,6 +2158,12 @@ await test("the server's operator settings reach the server alone", () => {
 		"SYNC_TIMEFRAME_DAYS",
 		"SYNC_CRON",
 		"SYNC_COOLDOWN_MINUTES",
+		"SYNC_BACKFILL_ENABLED",
+		"SYNC_BACKFILL_BATCH_SIZE",
+		"SYNC_BACKFILL_RATE_LIMIT_THRESHOLD",
+		"SYNC_BACKFILL_INTERVAL_SECONDS",
+		"HEPHAESTUS_EMAIL_RATE_LIMIT_DAILY_CAPACITY",
+		"HEPHAESTUS_EMAIL_RATE_LIMIT_OPTIONAL_DAILY_CAPACITY",
 	];
 	// The application's defaults under the prod profile (application.yml, application-prod.yml).
 	const defaults = workload(rendered(layersFor("small")), "server");
@@ -2177,6 +2183,12 @@ await test("the server's operator settings reach the server alone", () => {
 			"7",
 			"0 0 * * * *",
 			"60",
+			"true",
+			"50",
+			"500",
+			"60",
+			"250",
+			"200",
 		],
 	);
 	const resources = rendered([
@@ -2200,7 +2212,14 @@ await test("the server's operator settings reach the server alone", () => {
 					timeframeDays: 14,
 					syncCron: "0 0 3 * * *",
 					cooldownMinutes: 15,
+					backfill: {
+						enabled: false,
+						batchSize: 20,
+						rateLimitThreshold: 1000,
+						intervalSeconds: 300,
+					},
 				},
+				email: { rateLimit: { dailyCapacity: 1000, optionalDailyCapacity: 400 } },
 			},
 		},
 	]);
@@ -2220,7 +2239,21 @@ await test("the server's operator settings reach the server alone", () => {
 			"14",
 			"0 0 3 * * *",
 			"15",
+			"false",
+			"20",
+			"1000",
+			"300",
+			"1000",
+			"400",
 		],
+	);
+	assert.throws(
+		() =>
+			rendered([
+				...layersFor("small"),
+				{ config: { email: { rateLimit: { dailyCapacity: 100, optionalDailyCapacity: 100 } } } },
+			]),
+		/optionalDailyCapacity must be lower than dailyCapacity/u,
 	);
 	for (const workloadRole of ["server"]) {
 		for (const retired of [

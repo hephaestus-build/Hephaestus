@@ -2,6 +2,10 @@
 
 | Key | Type | Default | Required in object | Constraints |
 | --- | --- | --- | --- | --- |
+| `config.sync.backfill.batchSize` | integer | `50` | yes | Most pages of issues or pull requests that one backfill cycle reads for each repository.<br />`minimum: 1. maximum: 1000` |
+| `config.sync.backfill.enabled` | boolean | `true` | yes | Turns on the historical backfill of issues and pull requests after the recent sync. |
+| `config.sync.backfill.intervalSeconds` | integer | `60` | yes | Seconds between backfill cycles. A cycle holds its lock for 30 seconds, so a value below 30 runs every 30 seconds.<br />`minimum: 10. maximum: 86400` |
+| `config.sync.backfill.rateLimitThreshold` | integer | `500` | yes | Remaining provider API requests below which the backfill waits for the next cycle.<br />`minimum: 0` |
 | `config.sync.cooldownMinutes` | integer | `60` | yes | Whole minutes, bound to an application integer. This is the minimum interval between syncs.<br />`minimum: 1. maximum: 1440` |
 | `config.sync.runOnStartup` | boolean | `true` | yes | — |
 | `config.sync.syncCron` | string | `"0 0 * * * *"` | yes | A Spring cron expression with six fields, seconds first.<br />`pattern: "^\\S+( \\S+){5}$"` |

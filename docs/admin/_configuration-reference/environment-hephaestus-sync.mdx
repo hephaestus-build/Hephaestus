@@ -2,6 +2,10 @@
 
 | Variable | Setting | Application default | Containers | Description |
 | --- | --- | --- | --- | --- |
+| `SYNC_BACKFILL_BATCH_SIZE` | `hephaestus.sync.backfill.batch-size` | `prod: 50` | `server` | Maximum pages to process per repository per cycle. |
+| `SYNC_BACKFILL_ENABLED` | `hephaestus.sync.backfill.enabled` | `prod: true` | `server` | Whether backfill processing is enabled. |
+| `SYNC_BACKFILL_INTERVAL_SECONDS` | `hephaestus.sync.backfill.interval-seconds` | `prod: 60` | `server` | Seconds between backfill cycles. A cycle holds its replica lock for at least 30 seconds, so a shorter interval runs at most every 30 seconds. |
+| `SYNC_BACKFILL_RATE_LIMIT_THRESHOLD` | `hephaestus.sync.backfill.rate-limit-threshold` | `prod: 500` | `server` | Remaining API rate limit below which backfill pauses. |
 | `SYNC_COOLDOWN_MINUTES` | `hephaestus.sync.cooldown-minutes` | `prod: 60` | `server` | Minimum minutes between consecutive sync operations. |
 | `SYNC_CRON` | `hephaestus.sync.cron` | `prod: 0 0 * * * *` | `server` | Cron expression for scheduled sync execution. |
 | `SYNC_RUN_ON_STARTUP` | `hephaestus.sync.run-on-startup` | `prod: true` | `server` | Whether to trigger a sync run immediately when the application starts. |

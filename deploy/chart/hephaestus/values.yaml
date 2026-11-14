@@ -364,6 +364,12 @@ config:
     timeframeDays: 7
     syncCron: "0 0 * * * *"
     cooldownMinutes: 60
+    # Historical issue and pull request backfill after the recent sync, paced by the provider's rate limit.
+    backfill:
+      enabled: true
+      batchSize: 50
+      rateLimitThreshold: 500
+      intervalSeconds: 60
   credentialKey:
     version: 1
     priorVersion: ""
@@ -411,6 +417,10 @@ config:
     from: ""
     fromName: Hephaestus
     replyTo: ""
+    # The instance's daily send budget. Optional emails, such as digests, count toward both.
+    rateLimit:
+      dailyCapacity: 250
+      optionalDailyCapacity: 200
   tracing:
     otlpEnabled: false
     otlpEndpoint: http://localhost:4318/v1/traces

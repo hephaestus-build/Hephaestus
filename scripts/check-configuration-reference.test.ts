@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { judge } from "./check-configuration-reference.ts";
+import { judge, unsettable } from "./check-configuration-reference.ts";
 import {
 	chartRows,
 	environmentGroup,
@@ -297,5 +297,38 @@ await test("native map names retain their canonical field boundary and reject mi
 	assert.equal(
 		metadata.relaxedProperty("HEPHAESTUS_WEBHOOK_STREAM_MAXAGEBYSTREM_SLACK"),
 		undefined,
+	);
+});
+
+void test("an admin page may not offer a variable that no chart workload sets", () => {
+	const sources = {
+		bindings: [
+			{
+				variable: "SYNC_EXAMPLE_LIMIT",
+				property: "hephaestus.sync.example-limit",
+				profile: "default",
+			},
+			{
+				variable: "SYNC_LISTED_LIMIT",
+				property: "hephaestus.sync.listed-limit",
+				profile: "default",
+			},
+		],
+		containers: [],
+		values: [],
+	};
+	assert.deepEqual(
+		unsettable(
+			sources,
+			new Map([
+				["docs/admin/a.md", "Set `SYNC_EXAMPLE_LIMIT` and `UNRELATED_NAME`."],
+				["docs/admin/b.md", "Or `SYNC_EXAMPLE_LIMIT`, and `SYNC_LISTED_LIMIT`."],
+			]),
+			new Set(["SYNC_LISTED_LIMIT", "SYNC_RESOLVED_LIMIT"]),
+		),
+		[
+			"SYNC_EXAMPLE_LIMIT: docs/admin/a.md, docs/admin/b.md",
+			"SYNC_RESOLVED_LIMIT: listed, but no admin page offers it",
+		],
 	);
 });

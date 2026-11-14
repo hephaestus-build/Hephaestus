@@ -141,6 +141,21 @@ spec:
               value: {{ $config.sync.syncCron | quote }}
             - name: SYNC_COOLDOWN_MINUTES
               value: {{ $config.sync.cooldownMinutes | int | quote }}
+            - name: SYNC_BACKFILL_ENABLED
+              value: {{ $config.sync.backfill.enabled | quote }}
+            - name: SYNC_BACKFILL_BATCH_SIZE
+              value: {{ $config.sync.backfill.batchSize | int | quote }}
+            - name: SYNC_BACKFILL_RATE_LIMIT_THRESHOLD
+              value: {{ $config.sync.backfill.rateLimitThreshold | int | quote }}
+            - name: SYNC_BACKFILL_INTERVAL_SECONDS
+              value: {{ $config.sync.backfill.intervalSeconds | int | quote }}
+            {{- if ge (int $config.email.rateLimit.optionalDailyCapacity) (int $config.email.rateLimit.dailyCapacity) }}
+            {{- fail "config.email.rateLimit.optionalDailyCapacity must be lower than dailyCapacity" }}
+            {{- end }}
+            - name: HEPHAESTUS_EMAIL_RATE_LIMIT_DAILY_CAPACITY
+              value: {{ $config.email.rateLimit.dailyCapacity | int | quote }}
+            - name: HEPHAESTUS_EMAIL_RATE_LIMIT_OPTIONAL_DAILY_CAPACITY
+              value: {{ $config.email.rateLimit.optionalDailyCapacity | int | quote }}
             - name: HEPHAESTUS_AUTH_ISSUER
               value: {{ printf "https://%s" .Values.host | quote }}
             {{- include "hephaestus.secretEnv" (dict "root" . "env" "HEPHAESTUS_AUTH_STATE_COOKIE_KEY") | nindent 12 }}
