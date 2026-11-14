@@ -2,7 +2,6 @@ package de.tum.cit.aet.hephaestus.integration.scm.gitlab.issuetype;
 
 import static de.tum.cit.aet.hephaestus.core.LoggingUtils.sanitizeForLog;
 
-import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issuetype.IssueType;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issuetype.IssueTypeRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.Organization;
@@ -11,6 +10,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlClie
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlResponseHandler;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabProperties;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabSyncException;
+import de.tum.cit.aet.hephaestus.workspace.WorkspaceActorSelector;
 import java.time.Instant;
 import java.util.HashSet;
 import java.util.List;
@@ -49,6 +49,7 @@ public class GitLabIssueTypeSyncService {
     private final GitLabGraphQlResponseHandler responseHandler;
     private final GitLabProperties gitLabProperties;
     private final TransactionTemplate transactionTemplate;
+    private final WorkspaceActorSelector actorSelector;
 
     public GitLabIssueTypeSyncService(
             IssueTypeRepository issueTypeRepository,
@@ -56,13 +57,15 @@ public class GitLabIssueTypeSyncService {
             GitLabGraphQlClientProvider graphQlClientProvider,
             GitLabGraphQlResponseHandler responseHandler,
             GitLabProperties gitLabProperties,
-            TransactionTemplate transactionTemplate) {
+            TransactionTemplate transactionTemplate,
+            WorkspaceActorSelector actorSelector) {
         this.issueTypeRepository = issueTypeRepository;
         this.organizationRepository = organizationRepository;
         this.graphQlClientProvider = graphQlClientProvider;
         this.responseHandler = responseHandler;
         this.gitLabProperties = gitLabProperties;
         this.transactionTemplate = transactionTemplate;
+        this.actorSelector = actorSelector;
     }
 
     /**
@@ -75,8 +78,10 @@ public class GitLabIssueTypeSyncService {
     public int syncIssueTypesForGroup(Long scopeId, String groupPath) {
         String safeGroupPath = sanitizeForLog(groupPath);
 
-        Long organizationId = organizationRepository
-                .findByLoginIgnoreCaseAndProvider_Type(groupPath, IdentityProviderType.GITLAB)
+        // ADR 0012: a group path is unique only on its own GitLab instance.
+        Long organizationId = actorSelector
+                .connectedProviderId(scopeId)
+                .flatMap(providerId -> organizationRepository.findByLoginIgnoreCaseAndProviderId(groupPath, providerId))
                 .map(Organization::getId)
                 .orElse(null);
         if (organizationId == null) {

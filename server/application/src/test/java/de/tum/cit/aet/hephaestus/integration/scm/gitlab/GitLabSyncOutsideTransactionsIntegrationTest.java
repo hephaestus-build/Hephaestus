@@ -16,8 +16,10 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlResp
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabProperties;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.issuetype.GitLabIssueTypeSyncService;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
+import de.tum.cit.aet.hephaestus.workspace.WorkspaceActorSelector;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Queue;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -52,6 +54,7 @@ import reactor.core.publisher.Mono;
 class GitLabSyncOutsideTransactionsIntegrationTest extends BaseIntegrationTest {
 
     private static final String SERVER = "https://gitlab.outside.example.test";
+    private static final String OTHER_SERVER = "https://gitlab.twin.example.test";
 
     @Autowired
     private ApplicationContext context;
@@ -70,6 +73,8 @@ class GitLabSyncOutsideTransactionsIntegrationTest extends BaseIntegrationTest {
 
     // A plain mock, not a @MockitoBean: the service below is built over it, so the shared context stays unchanged.
     private final GitLabGraphQlClientProvider clients = mock(GitLabGraphQlClientProvider.class);
+
+    private final WorkspaceActorSelector actors = mock(WorkspaceActorSelector.class);
 
     /** Each request to GitLab: the thread that sent it, and whether that thread had a transaction open. */
     private final List<Request> requests = new CopyOnWriteArrayList<>();
@@ -94,6 +99,7 @@ class GitLabSyncOutsideTransactionsIntegrationTest extends BaseIntegrationTest {
         organization.setHtmlUrl(SERVER + "/outside-group-" + unique);
         organization.setProvider(provider);
         group = organizations.saveAndFlush(organization);
+        when(actors.connectedProviderId(scopeId)).thenReturn(Optional.of(Objects.requireNonNull(provider.getId())));
 
         // A filter answers from the script, so no request leaves the test.
         WebClient gitlab = WebClient.builder()
@@ -143,6 +149,34 @@ class GitLabSyncOutsideTransactionsIntegrationTest extends BaseIntegrationTest {
                 .isFalse();
     }
 
+    @Test
+    void shouldStoreTheIssueTypesOnTheWorkspaceInstanceWhenAnotherInstanceHasTheSameGroupPath() {
+        var otherInstance = providers
+                .findByTypeAndServerUrl(IdentityProviderType.GITLAB, OTHER_SERVER)
+                .orElseGet(
+                        () -> providers.saveAndFlush(new IdentityProvider(IdentityProviderType.GITLAB, OTHER_SERVER)));
+        var twin = new Organization();
+        twin.setNativeId(group.getNativeId());
+        twin.setLogin(group.getLogin());
+        twin.setHtmlUrl(OTHER_SERVER + "/" + group.getLogin());
+        twin.setProvider(otherInstance);
+        twin = organizations.saveAndFlush(twin);
+        // A custom type: its global id is unique, unlike the fixed ids of GitLab's system-defined types.
+        String listed = "gid://gitlab/WorkItems::Type/" + (9_000_000L + group.getId());
+        answers.add("""
+                {"data":{"group":{"workItemTypes":{"nodes":[{"id":"%s","name":"Task","iconName":"issue-type-task"}]}}}}
+                """.formatted(listed));
+
+        int synced = issueTypes().syncIssueTypesForGroup(scopeId, group.getLogin());
+
+        assertThat(synced).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT organization_id FROM issue_type WHERE id = ?", Long.class, listed))
+                .isEqualTo(group.getId());
+        assertThat(jdbc.queryForObject(
+                        "SELECT count(*) FROM issue_type WHERE organization_id = ?", Long.class, twin.getId()))
+                .isZero();
+    }
+
     private GitLabIssueTypeSyncService issueTypes() {
         return transactional(
                 GitLabIssueTypeSyncService.class,
@@ -152,7 +186,8 @@ class GitLabSyncOutsideTransactionsIntegrationTest extends BaseIntegrationTest {
                         clients,
                         context.getBean(GitLabGraphQlResponseHandler.class),
                         context.getBean(GitLabProperties.class),
-                        context.getBean(TransactionTemplate.class)));
+                        context.getBean(TransactionTemplate.class),
+                        actors));
     }
 
     /** The service as Spring proxies it, so its own transaction annotations apply. */
