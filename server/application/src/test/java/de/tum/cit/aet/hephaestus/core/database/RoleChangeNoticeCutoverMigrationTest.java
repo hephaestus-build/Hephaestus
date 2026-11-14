@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.core.action.ActionState;
 import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer;
 import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer.TestDatabase;
 import java.sql.DriverManager;
+import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 import liquibase.Contexts;
@@ -15,6 +16,7 @@ import liquibase.Liquibase;
 import liquibase.database.DatabaseFactory;
 import liquibase.database.jvm.JdbcConnection;
 import liquibase.resource.ClassLoaderResourceAccessor;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
@@ -37,15 +39,7 @@ class RoleChangeNoticeCutoverMigrationTest {
         UUID publication = publication(database, "APP_ROLE_CHANGED");
         UUID otherPublication = publication(database, "PASSKEY_CHANGED");
 
-        try (var connection =
-                        DriverManager.getConnection(database.jdbcUrl(), database.username(), database.password());
-                var liquibase = new Liquibase(
-                        "db/changelog/next/" + CHANGELOG,
-                        new ClassLoaderResourceAccessor(),
-                        DatabaseFactory.getInstance()
-                                .findCorrectDatabaseImplementation(new JdbcConnection(connection)))) {
-            liquibase.update(new Contexts("prod"), new LabelExpression());
-        }
+        update(database, CHANGELOG);
 
         for (UUID id : new UUID[] {proposed, admitted, claimed}) {
             assertThat(outcome(database, id)).isEqualTo("CANCELLED:WITHDRAWN");
@@ -76,18 +70,18 @@ class RoleChangeNoticeCutoverMigrationTest {
     }
 
     @Test
-    void shouldConfirmTheCorrectionWhenNoOldNoticeIsOpen() throws Exception {
+    void shouldRecordTheCorrectionThatClosedTheOldNotices() throws Exception {
         TestDatabase database = PostgreSQLTestContainer.createDatabase(
                 "role_notice_record_" + UUID.randomUUID().toString().replace("-", ""));
-        PracticeMigrationFixture.upgradeBefore(database, "prod", RECORD);
-        UUID sent = action(database, ActionState.DONE, true, "APP_ROLE_CHANGED");
-        UUID other = action(database, ActionState.ADMITTED, false, "PASSKEY_CHANGED");
+        PracticeMigrationFixture.upgradeBefore(database, "prod", CHANGELOG);
+        action(database, ActionState.PROPOSED, false, "APP_ROLE_CHANGED");
+        action(database, ActionState.EXECUTING, true, "APP_ROLE_CHANGED");
+        publication(database, "APP_ROLE_CHANGED");
 
+        update(database, CHANGELOG);
         update(database, RECORD);
 
-        assertThat(outcome(database, sent)).isEqualTo("DONE:COMPLETED");
-        assertThat(PracticeMigrationFixture.column(database, "SELECT state FROM agent_action WHERE id='" + other + "'"))
-                .containsExactly("ADMITTED");
+        assertThat(recorded(database)).containsExactly("1");
     }
 
     @Test
@@ -100,6 +94,24 @@ class RoleChangeNoticeCutoverMigrationTest {
 
         assertThatThrownBy(() -> update(database, RECORD))
                 .hasStackTraceContaining("Queued copies of the general role notice are open again");
+        assertThat(recorded(database)).containsExactly("0");
+    }
+
+    @Test
+    void shouldHaltWhenAnOldNoticePublicationIsOpenAgainAfterTheCorrection() throws Exception {
+        TestDatabase database = PostgreSQLTestContainer.createDatabase(
+                "role_notice_republished_" + UUID.randomUUID().toString().replace("-", ""));
+        PracticeMigrationFixture.upgradeBefore(database, "prod", RECORD);
+        publication(database, "APP_ROLE_CHANGED");
+
+        assertThatThrownBy(() -> update(database, RECORD))
+                .hasStackTraceContaining("Queued copies of the general role notice are open again");
+        assertThat(recorded(database)).containsExactly("0");
+    }
+
+    private static List<@Nullable String> recorded(TestDatabase database) {
+        return PracticeMigrationFixture.column(
+                database, "SELECT count(*)::text FROM databasechangelog WHERE filename LIKE '%" + RECORD + "'");
     }
 
     private static void update(TestDatabase database, String changelog) throws Exception {
