@@ -509,6 +509,14 @@ groups:
         annotations:
           summary: An agent run that can start has waited for more than one hour
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+      # The run gauges keep their last values while the sampler fails, so the two alerts above see an old queue.
+      - alert: HephaestusAgentRunsUnsampled
+        expr: sum(increase(agent_run_sampler_failure_total{job="hephaestus"}[15m])) > 10
+        labels:
+          severity: warning
+        annotations:
+          summary: The agent run gauges failed to refresh for 15 minutes and show old values
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       # A turn that has not started after 3 minutes ends as NOT_STARTED and leaves the queue, so the hour above never sees it.
       - alert: HephaestusInteractiveRunWaiting
         expr: max(agent_run_oldest_due_age_seconds{job="hephaestus",band="interactive"}) > 60
@@ -525,6 +533,14 @@ groups:
           severity: warning
         annotations:
           summary: An outbox action has waited for more than 15 minutes since it became due
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+      # The outbox gauges keep their last values while the sampler fails, so the alert above sees an old backlog.
+      - alert: HephaestusOutboxUnsampled
+        expr: sum(increase(action_backlog_sampler_failures_total{job="hephaestus"}[15m])) > 10
+        labels:
+          severity: warning
+        annotations:
+          summary: The outbox backlog gauges failed to refresh for 15 minutes and show old values
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusOutboxUncertain
         expr: sum by (kind) (increase(action_ended_total{job="hephaestus",state="UNCERTAIN"}[1h])) > 0
