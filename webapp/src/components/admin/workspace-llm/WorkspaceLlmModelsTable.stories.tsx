@@ -68,7 +68,6 @@ const meta = {
 	tags: ["autodocs"],
 	args: {
 		providerName: "My OpenAI account",
-		connectionEnabled: true,
 		models: mockModels,
 		mutatingIds: new Set<number>(),
 		onEdit: fn(),
@@ -102,35 +101,44 @@ export const Empty: Story = {
 	},
 };
 
+/** Rows read the server's readiness for each model; the table shows it and decides nothing. */
+function withReadiness(...readiness: WorkspaceLlmModel["readiness"][]): WorkspaceLlmModel[] {
+	return mockModels.map((model, index) => ({ ...model, readiness: readiness[index] ?? "READY" }));
+}
+
+async function expectStatuses(canvas: StoryContext["canvas"], expected: string[]) {
+	const rows = canvas.getAllByRole("row").slice(1);
+	const status = rows.map((row) => within(row).getAllByRole("cell")[3]?.textContent);
+	await expect(status).toStrictEqual(expected);
+}
+
 export const ModelOff: Story = {
-	args: { models: mockModels.map((model, index) => ({ ...model, enabled: index !== 0 })) },
+	args: { models: withReadiness("OFF") },
 	play: async ({ canvas }) => {
-		const rows = canvas.getAllByRole("row").slice(1);
-		const status = rows.map((row) => within(row).getAllByRole("cell")[3]?.textContent);
-		await expect(status).toStrictEqual(["Off", "Ready", "Ready"]);
+		await expectStatuses(canvas, ["Off", "Ready", "Ready"]);
 	},
 };
 
 /** A model whose limits nobody knows cannot run, and the table says so. */
 export const LimitsMissing: Story = {
-	args: {
-		models: mockModels.map((model, index) =>
-			index === 1 ? { ...model, limits: { bounded: false } } : model,
-		),
-	},
+	args: { models: withReadiness("OFF", "LIMITS_MISSING") },
 	play: async ({ canvas }) => {
-		const rows = canvas.getAllByRole("row").slice(1);
-		const status = rows.map((row) => within(row).getAllByRole("cell")[3]?.textContent);
-		await expect(status).toStrictEqual(["Off", "Limits missing", "Ready"]);
+		await expectStatuses(canvas, ["Off", "Limits missing", "Ready"]);
+	},
+};
+
+/** A workspace model with no price cannot be turned on, as in the instance console. */
+export const PriceMissing: Story = {
+	args: { models: withReadiness("READY", "PRICE_MISSING") },
+	play: async ({ canvas }) => {
+		await expectStatuses(canvas, ["Ready", "Price missing", "Ready"]);
 	},
 };
 
 export const ConnectionOff: Story = {
-	args: { connectionEnabled: false },
+	args: { models: withReadiness("CONNECTION_OFF", "CONNECTION_OFF", "CONNECTION_OFF") },
 	play: async ({ canvas }) => {
-		const rows = canvas.getAllByRole("row").slice(1);
-		const status = rows.map((row) => within(row).getAllByRole("cell")[3]?.textContent);
-		await expect(status).toStrictEqual(["Connection off", "Connection off", "Connection off"]);
+		await expectStatuses(canvas, ["Connection off", "Connection off", "Connection off"]);
 	},
 };
 

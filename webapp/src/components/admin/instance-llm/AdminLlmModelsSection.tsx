@@ -3,14 +3,10 @@ import { useState } from "react";
 
 import type { LlmConnection, LlmModel } from "@/api/types.gen";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
-import { StatusBadge } from "@/components/common/StatusBadge";
 import { TableRowsSkeleton } from "@/components/common/TableRowsSkeleton";
 import { AiMark } from "@/components/icons/AiMark";
 import { DataHandlingBadge } from "@/components/practice-vocabulary/DataHandlingBadge";
-import {
-	MODEL_READINESS_DEFS,
-	type ModelReadiness,
-} from "@/components/practice-vocabulary/model-readiness-defs";
+import { ModelReadinessStatus } from "@/components/practice-vocabulary/ModelReadinessStatus";
 import { Button } from "@/components/ui/button";
 import {
 	Table,
@@ -28,7 +24,7 @@ import { LlmConnectionApi } from "./LlmConnectionApi";
 import type { WorkspaceOption } from "./workspace-options";
 
 export interface AdminLlmModelsSectionProps {
-	connection: Pick<LlmConnection, "displayName" | "apiProtocol" | "purposes" | "enabled">;
+	connection: Pick<LlmConnection, "displayName" | "apiProtocol" | "purposes">;
 	workspaceOptions: WorkspaceOption[];
 	models: LlmModel[];
 	/** The models have not been read yet; the table keeps its header and holds placeholder rows. */
@@ -40,26 +36,6 @@ export interface AdminLlmModelsSectionProps {
 	onEdit: (model: LlmModel) => void;
 	onManageAccess: (model: LlmModel) => void;
 	onDelete: (model: LlmModel) => void;
-}
-
-// Undeclared data handling warns but does not block availability.
-function readiness(model: LlmModel, connectionEnabled: boolean): ModelReadiness | null {
-	if (!model.currentPrice || model.currentPrice.pricingMode === "UNPRICED") {
-		return "PRICE_MISSING";
-	}
-	if (!connectionEnabled) {
-		return "CONNECTION_OFF";
-	}
-	if (!model.enabled) {
-		return "OFF";
-	}
-	if (!model.limits.bounded) {
-		return "LIMITS_MISSING";
-	}
-	if (model.visibility === "GRANTED" && model.grantedWorkspaceIds.length === 0) {
-		return "NO_WORKSPACE_ACCESS";
-	}
-	return null;
 }
 
 const COLUMNS = 6;
@@ -147,7 +123,6 @@ export function AdminLlmModelsSection({
 						)}
 						{models.map((model) => {
 							const busy = mutatingIds.has(model.id);
-							const status = readiness(model, connection.enabled);
 							return (
 								<TableRow key={model.id}>
 									<TableCell>
@@ -166,11 +141,7 @@ export function AdminLlmModelsSection({
 									<TableCell numeric>{priceLabel(priceFieldsOf(model), "instance")}</TableCell>
 									<TableCell>{shareLabel(model, workspaceOptions)}</TableCell>
 									<TableCell>
-										{status === null ? (
-											<span className="text-muted-foreground">Ready</span>
-										) : (
-											<StatusBadge def={MODEL_READINESS_DEFS[status]} />
-										)}
+										<ModelReadinessStatus readiness={model.readiness} />
 									</TableCell>
 									<TableCell className="text-right">
 										<div className="flex justify-end gap-1">

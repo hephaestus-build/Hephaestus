@@ -1,5 +1,6 @@
 import { TrendingUp } from "lucide-react";
 
+import type { Purse } from "@/components/practice-vocabulary/purse-defs";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { formatCapUsd, formatCostUsd } from "@/lib/money";
 
@@ -7,7 +8,7 @@ import { type Fx, FxAmount, spendConversion, spendOfCapConversion } from "./fx";
 import { type BudgetProjection, formatDayLabel } from "./usage-utils";
 
 export interface BudgetPaceAlertProps {
-	scope: "provider" | "shared";
+	purse: Purse;
 	/** Absent on the workspace's own page ("You’ve used …"), the name on the instance console. */
 	subjectName?: string;
 	percent: number;
@@ -20,7 +21,7 @@ export interface BudgetPaceAlertProps {
 
 /** Warn before the wall: how much of a cap is gone, and when this month's pace would reach it. */
 export function BudgetPaceAlert({
-	scope,
+	purse,
 	subjectName,
 	percent,
 	spendUsd,
@@ -28,9 +29,9 @@ export function BudgetPaceAlert({
 	projection,
 	fx,
 }: BudgetPaceAlertProps) {
-	const capName = scope === "provider" ? "provider cap" : "shared-model budget";
+	const capName = purse === "OWN_PROVIDER" ? "provider cap" : "shared-model budget";
 	// Short, because the title one line up has already said which purse this is.
-	const capNoun = scope === "provider" ? "cap" : "budget";
+	const capNoun = purse === "OWN_PROVIDER" ? "cap" : "budget";
 	return (
 		<Alert variant="warning" role="status">
 			<TrendingUp aria-hidden />

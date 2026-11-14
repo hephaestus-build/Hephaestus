@@ -7,6 +7,10 @@ import type {
 	WorkspaceLlmConnection,
 } from "@/api/types.gen";
 import {
+	connectionCreateBodyOf,
+	connectionUpdateBodyOf,
+} from "@/components/admin/instance-llm/llm-connection-request";
+import {
 	connectionFieldsValueOf,
 	LlmConnectionFields,
 	type LlmConnectionFieldsValue,
@@ -90,34 +94,10 @@ function WorkspaceLlmConnectionFormDialogContent({
 		}
 
 		if (editing) {
-			const body: UpdateWorkspaceLlmConnectionRequest = {
-				displayName: fields.displayName.trim(),
-				enabled,
-			};
-			if (fields.connectionPlatform) {
-				body.connectionPlatform = fields.connectionPlatform;
-			} else if (editing.connectionPlatform) {
-				body.clearConnectionPlatform = true;
-			}
-			if (fields.apiKey.trim()) {
-				body.apiKey = fields.apiKey.trim();
-			}
-			if (fields.clearApiKey) {
-				body.clearApiKey = true;
-			}
-			onUpdate(editing.id, body);
+			onUpdate(editing.id, { ...connectionUpdateBodyOf(fields, editing), enabled });
 			return;
 		}
-
-		onCreate({
-			displayName: fields.displayName.trim(),
-			baseUrl: fields.baseUrl.trim(),
-			apiProtocol: fields.apiProtocol,
-			authMode: fields.authMode,
-			connectionPlatform: fields.connectionPlatform,
-			apiKey: fields.apiKey.trim() || undefined,
-			enabled: false,
-		});
+		onCreate(connectionCreateBodyOf(fields));
 	};
 
 	return (

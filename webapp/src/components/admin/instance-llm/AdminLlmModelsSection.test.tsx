@@ -26,7 +26,6 @@ const connection: AdminLlmModelsSectionProps["connection"] = {
 	displayName: "OpenAI",
 	apiProtocol: "openai-responses",
 	purposes: ["PRACTICE_REVIEW", "MENTOR"],
-	enabled: true,
 };
 
 describe("AdminLlmModelsSection", () => {

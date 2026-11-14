@@ -3,13 +3,9 @@ import { useState } from "react";
 
 import type { WorkspaceLlmModel } from "@/api/types.gen";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
-import { StatusBadge } from "@/components/common/StatusBadge";
 import { AiMark } from "@/components/icons/AiMark";
 import { DataHandlingBadge } from "@/components/practice-vocabulary/DataHandlingBadge";
-import {
-	MODEL_READINESS_DEFS,
-	type ModelReadiness,
-} from "@/components/practice-vocabulary/model-readiness-defs";
+import { ModelReadinessStatus } from "@/components/practice-vocabulary/ModelReadinessStatus";
 import { Button } from "@/components/ui/button";
 import {
 	Table,
@@ -24,7 +20,6 @@ import { priceLabel } from "@/lib/llm-pricing";
 
 export interface WorkspaceLlmModelsTableProps {
 	providerName: string;
-	connectionEnabled: boolean;
 	models: WorkspaceLlmModel[];
 	/** Ids of the models with a write in flight. */
 	mutatingIds: ReadonlySet<number>;
@@ -34,19 +29,8 @@ export interface WorkspaceLlmModelsTableProps {
 
 const COLUMNS = 5;
 
-function readiness(model: WorkspaceLlmModel, connectionEnabled: boolean): ModelReadiness | null {
-	if (!connectionEnabled) {
-		return "CONNECTION_OFF";
-	}
-	if (!model.enabled) {
-		return "OFF";
-	}
-	return model.limits.bounded ? null : "LIMITS_MISSING";
-}
-
 export function WorkspaceLlmModelsTable({
 	providerName,
-	connectionEnabled,
 	models,
 	mutatingIds,
 	onEdit,
@@ -86,7 +70,6 @@ export function WorkspaceLlmModelsTable({
 					)}
 					{models.map((model) => {
 						const busy = mutatingIds.has(model.id);
-						const status = readiness(model, connectionEnabled);
 						return (
 							<TableRow key={model.id}>
 								<TableCell>
@@ -106,11 +89,7 @@ export function WorkspaceLlmModelsTable({
 									{priceLabel(model, "workspace")}
 								</TableCell>
 								<TableCell>
-									{status === null ? (
-										<span className="text-muted-foreground">Ready</span>
-									) : (
-										<StatusBadge def={MODEL_READINESS_DEFS[status]} />
-									)}
+									<ModelReadinessStatus readiness={model.readiness} />
 								</TableCell>
 								<TableCell className="text-right">
 									<div className="flex justify-end gap-1">
