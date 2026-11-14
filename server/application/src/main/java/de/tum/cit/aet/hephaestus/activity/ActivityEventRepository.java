@@ -115,6 +115,13 @@ public interface ActivityEventRepository extends JpaRepository<ActivityEvent, UU
     int deleteByWorkspaceIdAndRepositoryIds(
             @Param("workspaceId") long workspaceId, @Param("repositoryIds") Collection<Long> repositoryIds);
 
+    @WorkspaceAgnostic(
+            "Instance-wide repository exclusion finds the workspaces that hold its Activity; each withdraws under its own lock")
+    @Query(
+            value = "SELECT DISTINCT workspace_id FROM activity_event WHERE repository_id IN (:repositoryIds)",
+            nativeQuery = true)
+    List<Long> findWorkspaceIdsByRepositoryIds(@Param("repositoryIds") Collection<Long> repositoryIds);
+
     @Query(value = "SELECT COUNT(*) FROM activity_event WHERE workspace_id = :workspaceId", nativeQuery = true)
     long countByWorkspaceId(@Param("workspaceId") Long workspaceId);
 

@@ -1,7 +1,9 @@
 package de.tum.cit.aet.hephaestus.integration.core.item;
 
+import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import jakarta.persistence.LockModeType;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.jspecify.annotations.Nullable;
@@ -27,6 +29,17 @@ public interface ItemRepository extends JpaRepository<Item, Long> {
             @Param("workspaceId") long workspaceId, @Param("kind") String kind, @Param("sourceId") long sourceId);
 
     Optional<Item> findByWorkspaceIdAndParentIdAndPath(long workspaceId, long parentId, String path);
+
+    @WorkspaceAgnostic(
+            "Instance-wide repository exclusion finds the workspaces that hold its work; each withdraws under its own lock")
+    @Query(value = """
+            SELECT DISTINCT s.workspace_id FROM item s
+            WHERE s.kind = :kind AND s.source_id IN (:sourceIds)
+              AND (s.removed_at IS NULL OR EXISTS (SELECT 1 FROM item c
+                WHERE c.workspace_id = s.workspace_id AND c.parent_id = s.id AND c.removed_at IS NULL))
+            """, nativeQuery = true)
+    List<Long> findWorkspaceIdsHoldingSources(
+            @Param("kind") String kind, @Param("sourceIds") Collection<Long> sourceIds);
 
     @Modifying
     @Query(

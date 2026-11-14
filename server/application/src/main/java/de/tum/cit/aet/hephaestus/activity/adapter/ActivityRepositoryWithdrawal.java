@@ -2,6 +2,9 @@ package de.tum.cit.aet.hephaestus.activity.adapter;
 
 import de.tum.cit.aet.hephaestus.activity.ActivityEventRepository;
 import de.tum.cit.aet.hephaestus.core.event.RepositoryWithdrawnFromWorkspaceEvent;
+import de.tum.cit.aet.hephaestus.workspace.spi.RepositoryHoldings;
+import java.util.Collection;
+import java.util.List;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
@@ -9,7 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 /** Removes the Activity a workspace recorded from a repository it had to give up. */
 @Component
-public class ActivityRepositoryWithdrawal {
+public class ActivityRepositoryWithdrawal implements RepositoryHoldings {
 
     private final ActivityEventRepository activityEvents;
 
@@ -23,5 +26,12 @@ public class ActivityRepositoryWithdrawal {
         if (!event.repositoryIds().isEmpty()) {
             activityEvents.deleteByWorkspaceIdAndRepositoryIds(event.workspaceId(), event.repositoryIds());
         }
+    }
+
+    /** A workspace that stopped monitoring the repository still holds the Activity it recorded before. */
+    @Override
+    @Transactional(readOnly = true)
+    public List<Long> workspacesHolding(Collection<Long> repositoryIds) {
+        return repositoryIds.isEmpty() ? List.of() : activityEvents.findWorkspaceIdsByRepositoryIds(repositoryIds);
     }
 }

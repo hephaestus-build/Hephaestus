@@ -343,6 +343,36 @@ class PrivateDestinationOutOfWorkspacesIntegrationTest extends BaseIntegrationTe
     }
 
     @Test
+    void shouldRemoveWhatAWorkspaceKeptWhenItStoppedMonitoringBeforeTheSetting() {
+        long item = heldIn(workspace, PRIVATE_ID, 91L);
+        monitors.removeRepositoryMonitorForInstallation(INSTALLATION, PRIVATE, PRIVATE_ID);
+        // Stopping keeps the history; only the repository item goes.
+        assertThat(number(
+                        "SELECT COUNT(*) FROM repository_to_monitor WHERE workspace_id = ? AND native_id = ?",
+                        workspace.getId(),
+                        PRIVATE_ID))
+                .isZero();
+        assertThat(activityOf(workspace)).isOne();
+        assertThat(jdbc.queryForObject("SELECT removed_at IS NULL FROM item WHERE id = ?", Boolean.class, item))
+                .isTrue();
+
+        save(PRIVATE);
+
+        assertThat(activityOf(workspace)).isZero();
+        assertThat(jdbc.queryForObject("SELECT removed_at IS NOT NULL FROM item WHERE id = ?", Boolean.class, item))
+                .isTrue();
+        assertThat(number(
+                        "SELECT COUNT(*) FROM item_event WHERE item_id = ? AND evidence::text LIKE '%The words%'",
+                        item))
+                .isZero();
+        assertThat(monitorsOf(PRIVATE)).isZero();
+        // The repair's scheduler lock would skip a run in the next test, so the event is published directly.
+        var after = rowCounts();
+        events.publishEvent(new RepositoryExcludedFromWorkspacesEvent(PRIVATE));
+        assertThat(rowCounts()).isEqualTo(after);
+    }
+
+    @Test
     void aFiledReportKeepsItsFilingItsViewAndItsFollowUpWhenTheMirrorRowsGo() {
         long reporter = newAccount("A reporter");
         var destination = new ProductFeedbackDestination();

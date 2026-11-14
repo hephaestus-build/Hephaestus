@@ -54,7 +54,7 @@ Once removal finishes, the private repository stays out of every workspace, so o
 Until then, workspace members can still see copies already held there, including while a failed removal waits for a retry.
 
 An installation that covers all repositories does not add it, and a workspace admin cannot add it.
-When you set it, Hephaestus removes it from each workspace that monitors it, and a repair tries again every 15 minutes until that succeeds. If it keeps failing, the alert `HephaestusPrivateRepositoryNotWithdrawn` fires.
+When you set it, Hephaestus removes it from each workspace that monitors it or monitored it before. A repair tries again every 15 minutes until that succeeds. If it keeps failing, the alert `HephaestusPrivateRepositoryNotWithdrawn` fires.
 Those workspaces lose its issues, their Activity, and the text of its work items. This cannot be undone, but the data stays on GitHub.
 
 A repository you replace is free again. If an installation covers it, its issues can reach that workspace.

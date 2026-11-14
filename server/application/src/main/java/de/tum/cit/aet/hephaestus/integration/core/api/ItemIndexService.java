@@ -7,6 +7,8 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRegistration;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.Collection;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -26,6 +28,12 @@ public class ItemIndexService {
     @Transactional(readOnly = true)
     public Optional<ItemRef> findSource(long workspaceId, String kind, long sourceId) {
         return repository.findSource(workspaceId, kind, sourceId).map(ItemIndexService::ref);
+    }
+
+    /** Workspaces whose item of one of these sources is live, or was removed with its children left live. */
+    @Transactional(readOnly = true)
+    public List<Long> workspacesHoldingSources(String kind, Collection<Long> sourceIds) {
+        return sourceIds.isEmpty() ? List.of() : repository.findWorkspaceIdsHoldingSources(kind, sourceIds);
     }
 
     public ItemRef upsert(ItemRegistration registration) {
