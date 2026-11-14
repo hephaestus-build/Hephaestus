@@ -1,0 +1,22 @@
+rules:
+  # A regex rule: Semgrep parses no Java for it, so a file that its Java parser reads only in part
+  # cannot turn the strict scan red.
+  - id: java-hand-built-git-clone-url
+    languages: [regex]
+    severity: ERROR
+    message: Build provider clone URLs with GitCloneUrl.
+    metadata:
+      category: security
+      cwe: ["CWE-918: Server-Side Request Forgery (SSRF)"]
+    paths:
+      include:
+        - "*.java"
+      exclude:
+        - "**/GitCloneUrl.java"
+    pattern-either:
+      # serverUrl + "/" + path + ".git"
+      - pattern-regex: '"/"\s*\+[^;]*\+\s*"\.git"'
+      # "https://host/" + path + ".git"
+      - pattern-regex: '"[a-z][a-z0-9+.-]*://[^"]*"\s*\+[^;]*\+\s*"\.git"'
+      # path[last] += ".git"
+      - pattern-regex: '\]\s*\+=\s*"\.git"'

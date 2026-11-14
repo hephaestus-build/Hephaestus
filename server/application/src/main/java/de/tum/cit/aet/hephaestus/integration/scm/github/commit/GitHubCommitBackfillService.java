@@ -11,6 +11,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.util.CommitUtils;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.DataSource;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitCloneUrl;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.RepositoryKey;
 import de.tum.cit.aet.hephaestus.integration.scm.github.app.GitHubAppTokenService;
@@ -49,7 +50,7 @@ public class GitHubCommitBackfillService {
 
         Long repoId = repository.getId();
         RepositoryKey key = new RepositoryKey(scopeId, repoId);
-        String cloneUrl = "https://github.com/" + repository.getNameWithOwner() + ".git";
+        String cloneUrl = GitCloneUrl.require("https://github.com", repository.getNameWithOwner());
         String token = resolveToken(syncTarget);
         gitRepositoryManager.ensureRepository(key, cloneUrl, token);
 

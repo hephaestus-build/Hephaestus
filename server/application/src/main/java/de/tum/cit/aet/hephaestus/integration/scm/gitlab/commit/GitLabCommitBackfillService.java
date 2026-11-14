@@ -15,6 +15,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.util.CommitUtils;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.DataSource;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitCloneUrl;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.RepositoryKey;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabTokenService;
@@ -114,7 +115,7 @@ public class GitLabCommitBackfillService {
         try {
             String serverUrl = tokenService.resolveServerUrl(scopeId);
             String token = tokenService.getAccessToken(scopeId);
-            String cloneUrl = serverUrl + "/" + repository.getNameWithOwner() + ".git";
+            String cloneUrl = GitCloneUrl.require(serverUrl, repository.getNameWithOwner());
             gitRepositoryManager.ensureRepository(key, cloneUrl, token);
 
             Long providerId = Objects.requireNonNull(repository.getProvider().getId());

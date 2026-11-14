@@ -100,7 +100,8 @@ class ReviewRepositoryPreparerIntegrationTest extends BaseIntegrationTest {
     void setUp() throws Exception {
         upstream = new MockWebServer();
         upstream.start();
-        serverUrl = upstream.url("/").toString().replaceAll("/$", "");
+        // The stub is the e2e SCM simulator, whose origin is the loopback address and not a host name.
+        serverUrl = "http://127.0.0.1:" + upstream.getPort();
         databaseTestUtils.cleanDatabase();
         var provider = providers.save(new IdentityProvider(IdentityProviderType.GITLAB, serverUrl));
         var repository = new Repository();
@@ -177,7 +178,7 @@ class ReviewRepositoryPreparerIntegrationTest extends BaseIntegrationTest {
                 new GitRepositoryProperties(true, 1, 1024 * 1024, 1L << 40),
                 new GitRepositoryLockManager(),
                 new FabricLayout(temporary.resolve("fabric").toString()),
-                GitTransportFixtures.guarded(),
+                GitTransportFixtures.simulator(upstream.getPort()),
                 mock(RepositoryRefState.class),
                 GitTransportFixtures.copyFence());
         var realPreparer = new ReviewRepositoryPreparer(git, pullRequests, connections, List.of(tokens), repositories);
@@ -197,7 +198,7 @@ class ReviewRepositoryPreparerIntegrationTest extends BaseIntegrationTest {
                 new GitRepositoryProperties(true, 1, 1024 * 1024, 1L << 40),
                 new GitRepositoryLockManager(),
                 new FabricLayout(temporary.resolve("fabric").toString()),
-                GitTransportFixtures.guarded(),
+                GitTransportFixtures.simulator(upstream.getPort()),
                 mock(RepositoryRefState.class),
                 GitTransportFixtures.copyFence());
         var realPreparer = new ReviewRepositoryPreparer(git, pullRequests, connections, List.of(tokens), repositories);

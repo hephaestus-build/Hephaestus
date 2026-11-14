@@ -201,4 +201,57 @@ class GuardedGitTransportTest extends BaseUnitTest {
                     .hasMessageContaining("left the requested origin");
         }
     }
+
+    /** Only HTTPS reaches the egress check, so every other way to a host is refused before JGit connects. */
+    @ParameterizedTest
+    @ValueSource(
+            strings = {
+                "http://gitlab.example.com/team/repo.git",
+                "git://gitlab.example.com/team/repo.git",
+                "ssh://git@gitlab.example.com/team/repo.git",
+                "git@gitlab.example.com:team/repo.git",
+                "http://127.0.0.1:8080/team/repo.git",
+                "file://evil.example/team/repo.git"
+            })
+    void shouldRefuseAFetchThatIsNotHttpsOrLocal(String cloneUrl) throws Exception {
+        var transport = mock(Transport.class);
+        when(transport.getURI()).thenReturn(new URIish(cloneUrl));
+
+        assertThatThrownBy(
+                        () -> GitTransportFixtures.guarded().callback(cloneUrl).configure(transport))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("must use HTTPS");
+    }
+
+    @Test
+    void shouldAcceptALocalPathWithoutAScheme() throws Exception {
+        var local = mock(Transport.class);
+        when(local.getURI()).thenReturn(new URIish("/data/git-repos/mirrors/1/2.git"));
+
+        GitTransportFixtures.guarded()
+                .callback("/data/git-repos/mirrors/1/2.git")
+                .configure(local);
+
+        verify(local).setOptionUploadPack("git-upload-pack");
+    }
+
+    @Test
+    void shouldAllowPlainHttpOnlyToTheSimulator() throws Exception {
+        var environment = new MockEnvironment().withProperty("hephaestus.e2e.scm-origin", "http://127.0.0.1:8099");
+        environment.setActiveProfiles("e2e");
+        var transports = new GuardedGitTransport(
+                new ScmServerEndpointPolicy(environment, WebClient.builder(), new ScmEgressProperties(List.of())));
+        var simulator = mock(Transport.class);
+        when(simulator.getURI()).thenReturn(new URIish("http://127.0.0.1:8099/team/repo.git"));
+        var otherPort = mock(Transport.class);
+        when(otherPort.getURI()).thenReturn(new URIish("http://127.0.0.1:8098/team/repo.git"));
+
+        transports.callback("http://127.0.0.1:8099/team/repo.git").configure(simulator);
+
+        verify(simulator).setOptionUploadPack("git-upload-pack");
+        assertThatThrownBy(() -> transports
+                        .callback("http://127.0.0.1:8098/team/repo.git")
+                        .configure(otherPort))
+                .isInstanceOf(IllegalStateException.class);
+    }
 }

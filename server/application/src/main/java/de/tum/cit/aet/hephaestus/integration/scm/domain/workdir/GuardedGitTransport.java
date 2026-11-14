@@ -36,9 +36,11 @@ import org.springframework.stereotype.Component;
 @Component
 public class GuardedGitTransport {
     private final Factory factory;
+    private final ScmServerEndpointPolicy endpoints;
 
     public GuardedGitTransport(ScmServerEndpointPolicy endpoints) {
         this.factory = new Factory(endpoints, defaultTrust());
+        this.endpoints = endpoints;
     }
 
     /**
@@ -61,7 +63,16 @@ public class GuardedGitTransport {
             if (!actual.equals(requested)
                     || !String.valueOf(actual.getRawPath()).equals(requested.getRawPath()))
                 throw new IllegalStateException("Git fetch refused: the Git configuration rewrote the URL");
-            if (!"https".equalsIgnoreCase(requested.getScheme())) {
+            // URIish gives a lowercase scheme, or none for a path or the scp form host:path.
+            String scheme = requested.getScheme();
+            if (!"https".equals(scheme)) {
+                // Only the server's own mirror (a local path) and the e2e simulator are not HTTPS. Every other scheme,
+                // and the scp form host:path, would reach a host that the egress check never sees.
+                boolean local = requested.getHost() == null && (scheme == null || "file".equals(scheme));
+                boolean simulator = "http".equals(scheme)
+                        && endpoints.isSimulationOrigin(scheme, requested.getHost(), requested.getPort());
+                if (!local && !simulator)
+                    throw new IllegalStateException("Git fetch refused: a provider fetch must use HTTPS");
                 // A configured upload-pack command runs in a shell; the default one runs inside JGit.
                 transport.setOptionUploadPack(RemoteConfig.DEFAULT_UPLOAD_PACK);
                 return;
