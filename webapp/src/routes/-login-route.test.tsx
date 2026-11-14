@@ -149,8 +149,11 @@ describe("contextual sign-in", () => {
 			http.get("*/identity-providers", () =>
 				HttpResponse.json([{ registrationId: "dev", displayName: "Dev", providerType: "DEV" }]),
 			),
+			http.get("*/auth/csrf", () =>
+				HttpResponse.json({ token: "token", headerName: "X-XSRF-TOKEN" }),
+			),
+			http.post("*/auth/dev-login", () => new HttpResponse(null, { status: 403 })),
 		);
-		vi.spyOn(authClient, "devLogin").mockRejectedValue(new Error("Dev sign-in failed (403)"));
 		renderRouteAtWithRouter("/login");
 		await userEvent.click(
 			await screen.findByRole("button", { name: "Continue as dev admin" }, ROUTE_RENDER_WAIT),

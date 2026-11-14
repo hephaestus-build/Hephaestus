@@ -11,7 +11,6 @@ const meta = {
 	parameters: { layout: "padded" },
 	tags: ["autodocs"],
 	args: {
-		scope: "workspace",
 		state: { status: "ready", items: [] },
 		onRelease: fn(async () => undefined),
 	},
@@ -57,7 +56,7 @@ export const Error: Story = {
 	},
 };
 export const WorkspaceAdministrator: Story = {
-	args: { state: { status: "ready", items: [{ repair, releaseAvailable: false }] } },
+	args: { state: { status: "ready", items: [{ repair, release: "instance-admin" }] } },
 	play: async ({ canvas }) => {
 		await expect(canvas.queryByRole("button", { name: "Confirm removal" })).not.toBeInTheDocument();
 		await expect(
@@ -68,7 +67,7 @@ export const WorkspaceAdministrator: Story = {
 	},
 };
 export const InstanceAdministratorOnConnection: Story = {
-	args: { state: { status: "ready", items: [{ repair, releaseAvailable: true }] } },
+	args: { state: { status: "ready", items: [{ repair, release: "available" }] } },
 	play: async ({ canvas, canvasElement, userEvent }) => {
 		await userEvent.click(canvas.getByRole("button", { name: "Confirm removal" }));
 		const body = within(canvasElement.ownerDocument.body);
@@ -77,11 +76,26 @@ export const InstanceAdministratorOnConnection: Story = {
 		await expect(body.getByRole("button", { name: "Release block" })).toBeEnabled();
 	},
 };
+export const Registering: Story = {
+	args: {
+		state: {
+			status: "ready",
+			items: [{ repair: { ...repair, state: "REGISTERING" }, release: "registering" }],
+		},
+	},
+	play: async ({ canvas }) => {
+		await expect(
+			canvas.getByText(
+				"Wait for the authorization or registration to finish before confirming its outcome.",
+			),
+		).toBeVisible();
+	},
+};
 export const AuthorizationNeeded: Story = {
 	args: {
 		state: {
 			status: "ready",
-			items: [{ repair: { ...repair, state: "NEEDS_AUTHORIZATION" }, releaseAvailable: false }],
+			items: [{ repair: { ...repair, state: "NEEDS_AUTHORIZATION" }, release: "instance-admin" }],
 		},
 	},
 };
@@ -98,7 +112,7 @@ export const SlackBotUser: Story = {
 						parentId: "T123",
 						resourceId: "U456",
 					},
-					releaseAvailable: false,
+					release: "instance-admin",
 				},
 			],
 		},
@@ -108,7 +122,7 @@ export const FreshReplacement: Story = {
 	args: {
 		state: {
 			status: "ready",
-			items: [{ repair: { ...repair, replacementInUse: true }, releaseAvailable: false }],
+			items: [{ repair: { ...repair, replacementInUse: true }, release: "instance-admin" }],
 		},
 	},
 	play: async ({ canvas }) => {
@@ -121,7 +135,7 @@ export const AwaitingLateRemoval: Story = {
 	args: {
 		state: {
 			status: "ready",
-			items: [{ repair: { ...repair, state: "CONFIRMATION_REQUIRED" }, releaseAvailable: true }],
+			items: [{ repair: { ...repair, state: "CONFIRMATION_REQUIRED" }, release: "available" }],
 		},
 	},
 };
@@ -137,7 +151,7 @@ export const Reflow: Story = {
 						origin: "https://documentation.engineering.example.test",
 						resourceId: "41aa91ab-7e54-4cc0-a344-a60ee874312f",
 					},
-					releaseAvailable: true,
+					release: "available",
 				},
 			],
 		},
@@ -149,7 +163,6 @@ export const Reflow: Story = {
 
 export const InstanceAdministratorOrphan: Story = {
 	args: {
-		scope: "instance",
 		state: {
 			status: "ready",
 			items: [
@@ -163,7 +176,7 @@ export const InstanceAdministratorOrphan: Story = {
 						resourceId: "4242",
 						state: "CONFIRMATION_REQUIRED",
 					},
-					releaseAvailable: true,
+					release: "available",
 				},
 			],
 		},
@@ -176,13 +189,12 @@ export const InstanceAdministratorOrphan: Story = {
 
 export const InstanceOverviewWithOwner: Story = {
 	args: {
-		scope: "instance",
 		state: {
 			status: "ready",
 			items: [
 				{
 					repair: { ...repair, owners: [{ workspaceSlug: "platform", connectionId: 7 }] },
-					releaseAvailable: false,
+					release: "at-connection",
 				},
 			],
 		},
@@ -215,7 +227,7 @@ export const UncertainSlackAuthorization: Story = {
 						resourceId: "authorization-attempt",
 						state: "CONFIRMATION_REQUIRED",
 					},
-					releaseAvailable: true,
+					release: "available",
 				},
 			],
 		},

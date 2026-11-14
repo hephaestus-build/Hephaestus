@@ -1,15 +1,10 @@
 import type { Meta, StoryObj } from "@storybook/react";
-import { expect, spyOn } from "storybook/test";
+import { expect } from "storybook/test";
 
-import {
-	LEGAL_PAGE_TITLES,
-	type LegalPageId,
-	type ResolvedLegalContent,
-	type LegalContentResolver,
-} from "@/lib/legal";
+import { LEGAL_PAGE_TITLES, type LegalPageId } from "@/lib/legal";
 import { withStandardPage } from "@/stories/decorators";
 
-import { LegalPage } from "./LegalPage";
+import { LegalPage, type LegalContentState } from "./LegalPage";
 
 const OPERATOR_IMPRINT = `Information in accordance with § 5 DDG — German Digital Services Act.
 
@@ -59,34 +54,10 @@ const FIXTURES: Record<FixtureKey, Record<LegalPageId, string>> = {
 	},
 };
 
-function makeResolver(key: FixtureKey): LegalContentResolver {
-	return async (page): Promise<ResolvedLegalContent> => ({
-		markdown: FIXTURES[key][page],
-		source: key,
-	});
-}
-
-// LegalPage.test.tsx requires each page's warning exactly once across mounts. Docs and reruns
-// share that production state, so a story asserts any new diagnostics without resetting it.
-function captureDisclaimerWarning(page: LegalPageId) {
-	const expected = `[legal] Disclaimer fallback served for page=${page}. Mount /legal-overrides/. See docs/admin/legal-pages.`;
-	// oxlint-disable-next-line no-console -- Unexpected diagnostics must remain visible while the intentional fallback warning is asserted.
-	const original = console.warn;
-	const warning = spyOn(console, "warn").mockImplementation((...args: unknown[]) => {
-		if (args.length !== 1 || args[0] !== expected) {
-			original(...args);
-		}
-	});
-	return async () => {
-		try {
-			for (const args of warning.mock.calls) {
-				await expect(args).toEqual([expected]);
-			}
-		} finally {
-			warning.mockRestore();
-		}
-	};
-}
+const ready = (key: FixtureKey, page: LegalPageId): LegalContentState => ({
+	status: "ready",
+	content: { markdown: FIXTURES[key][page], source: key },
+});
 
 const meta = {
 	component: LegalPage,
@@ -96,11 +67,7 @@ const meta = {
 	},
 	decorators: [withStandardPage],
 	argTypes: {
-		page: {
-			control: { type: "inline-radio" },
-			options: ["imprint", "privacy"] satisfies LegalPageId[],
-		},
-		resolver: {
+		state: {
 			control: false,
 		},
 	},
@@ -110,59 +77,57 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const OperatorImprint: Story = {
-	args: {
-		page: "imprint",
-		title: LEGAL_PAGE_TITLES.imprint,
-		resolver: makeResolver("override"),
-	},
+	args: { title: LEGAL_PAGE_TITLES.imprint, state: ready("override", "imprint") },
 };
 
 export const OperatorPrivacy: Story = {
-	args: {
-		page: "privacy",
-		title: LEGAL_PAGE_TITLES.privacy,
-		resolver: makeResolver("override"),
-	},
+	args: { title: LEGAL_PAGE_TITLES.privacy, state: ready("override", "privacy") },
 };
 
 export const DisclaimerImprint: Story = {
-	beforeEach: () => captureDisclaimerWarning("imprint"),
+	args: { title: LEGAL_PAGE_TITLES.imprint, state: ready("disclaimer", "imprint") },
 	play: async ({ canvas }) => {
-		await expect(canvas.findByRole("alert")).resolves.toHaveTextContent(
+		await expect(canvas.getByRole("alert")).toHaveTextContent(
 			"has not published its own legal pages",
 		);
-	},
-	args: {
-		page: "imprint",
-		title: LEGAL_PAGE_TITLES.imprint,
-		resolver: makeResolver("disclaimer"),
 	},
 };
 
 export const DisclaimerPrivacy: Story = {
-	beforeEach: () => captureDisclaimerWarning("privacy"),
+	args: { title: LEGAL_PAGE_TITLES.privacy, state: ready("disclaimer", "privacy") },
 	play: async ({ canvas }) => {
-		await expect(canvas.findByRole("alert")).resolves.toHaveTextContent(
+		await expect(canvas.getByRole("alert")).toHaveTextContent(
 			"has not published its own legal pages",
 		);
 	},
-	args: {
-		page: "privacy",
-		title: LEGAL_PAGE_TITLES.privacy,
-		resolver: makeResolver("disclaimer"),
+};
+
+export const Loading: Story = {
+	args: { title: LEGAL_PAGE_TITLES.privacy, state: { status: "loading" } },
+	play: async ({ canvas }) => {
+		await expect(canvas.getByRole("status")).toHaveAttribute("aria-busy", "true");
+	},
+};
+
+export const Error: Story = {
+	args: { title: LEGAL_PAGE_TITLES.privacy, state: { status: "error" } },
+	play: async ({ canvas }) => {
+		await expect(canvas.getByRole("alert")).toHaveTextContent("We could not load this page");
 	},
 };
 
 export const PlainTextCode: Story = {
 	args: {
-		page: "privacy",
 		title: LEGAL_PAGE_TITLES.privacy,
-		resolver: async () => ({
-			markdown: "The export includes this identifier.\n\n```text\naccount_id: 42\n```",
-			source: "override",
-		}),
+		state: {
+			status: "ready",
+			content: {
+				markdown: "The export includes this identifier.\n\n```text\naccount_id: 42\n```",
+				source: "override",
+			},
+		},
 	},
 	play: async ({ canvas }) => {
-		await canvas.findByText("The export includes this identifier.");
+		await expect(canvas.getByText("The export includes this identifier.")).toBeVisible();
 	},
 };

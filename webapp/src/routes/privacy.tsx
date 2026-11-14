@@ -1,9 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 
 import { LegalPage } from "@/components/site/LegalPage";
+import { useLegalContent } from "@/hooks/use-legal-content";
 import { LEGAL_PAGE_TITLES } from "@/lib/legal";
 import { pageHead } from "@/lib/page-title";
-import { resolveLegalContent } from "@/runtime/resolve-legal-content";
 
 export const Route = createFileRoute("/privacy")({
 	head: pageHead(LEGAL_PAGE_TITLES.privacy),
@@ -11,7 +11,6 @@ export const Route = createFileRoute("/privacy")({
 });
 
 function PrivacyContainer() {
-	return (
-		<LegalPage page="privacy" title={LEGAL_PAGE_TITLES.privacy} resolver={resolveLegalContent} />
-	);
+	const state = useLegalContent("privacy");
+	return <LegalPage title={LEGAL_PAGE_TITLES.privacy} state={state} />;
 }

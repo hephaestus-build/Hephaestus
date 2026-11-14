@@ -14,7 +14,10 @@ import {
 	releaseOrphanProviderRepairMutation,
 } from "@/api/@tanstack/react-query.gen";
 import type { OffsetPageDtoProviderResourceRepair, ProviderResourceRepair } from "@/api/types.gen";
-import type { ProviderResourceRepairsProps } from "@/components/admin/integrations/ProviderResourceRepairs";
+import type {
+	ProviderRepairItem,
+	ProviderResourceRepairsProps,
+} from "@/components/admin/integrations/ProviderResourceRepairs";
 import { currentUserQueryOptions, isAppAdmin } from "@/runtime/auth/guard";
 import { useQueryReadRefusal } from "@/runtime/tanstack-query/use-query-read-refusal";
 
@@ -62,6 +65,17 @@ function useRepairView(
 		onSettled,
 	});
 	const allowed = isAppAdmin(currentUser.isError ? undefined : currentUser.data);
+	// Releasing needs an instance admin. The instance console releases a removal with an owning
+	// connection from that connection, where its owner can see what the connection still uses.
+	const releaseOf = (repair: ProviderResourceRepair): ProviderRepairItem["release"] => {
+		if (repair.state === "REGISTERING") {
+			return "registering";
+		}
+		if (!allowed) {
+			return "instance-admin";
+		}
+		return scope.kind === "instance" && repair.owners.length > 0 ? "at-connection" : "available";
+	};
 	const onRelease = async (repair: ProviderResourceRepair) => {
 		const body = { confirmedGone: true, identityHash: repair.identityHash };
 		if (scope.kind === "instance") {
@@ -91,17 +105,10 @@ function useRepairView(
 	} else {
 		state = {
 			status: "ready",
-			items: query.data.content.map((repair) => ({
-				repair,
-				releaseAvailable:
-					repair.state !== "REGISTERING" &&
-					allowed &&
-					(scope.kind === "workspace" || repair.owners.length === 0),
-			})),
+			items: query.data.content.map((repair) => ({ repair, release: releaseOf(repair) })),
 		};
 	}
 	return {
-		scope: scope.kind,
 		state,
 		onRelease,
 		isReleasing: instanceRelease.isPending || connectionRelease.isPending,

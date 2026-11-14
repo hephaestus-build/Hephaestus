@@ -1,9 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 
 import { LegalPage } from "@/components/site/LegalPage";
+import { useLegalContent } from "@/hooks/use-legal-content";
 import { LEGAL_PAGE_TITLES } from "@/lib/legal";
 import { pageHead } from "@/lib/page-title";
-import { resolveLegalContent } from "@/runtime/resolve-legal-content";
 
 export const Route = createFileRoute("/imprint")({
 	head: pageHead(LEGAL_PAGE_TITLES.imprint),
@@ -11,7 +11,6 @@ export const Route = createFileRoute("/imprint")({
 });
 
 function ImprintContainer() {
-	return (
-		<LegalPage page="imprint" title={LEGAL_PAGE_TITLES.imprint} resolver={resolveLegalContent} />
-	);
+	const state = useLegalContent("imprint");
+	return <LegalPage title={LEGAL_PAGE_TITLES.imprint} state={state} />;
 }

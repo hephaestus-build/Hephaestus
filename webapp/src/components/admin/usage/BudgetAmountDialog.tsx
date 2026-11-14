@@ -29,7 +29,7 @@ export interface BudgetAmountDialogProps {
 	/** Rendered as this field's error, not a toast: the value that was rejected is still on screen. */
 	serverError?: string | null;
 	submitLabel: string;
-	/** Names the number being capped — "Remove cap" or "Remove budget" — so the button never reads generic. */
+	/** For example "Remove cap" or "Remove budget". */
 	removeLabel: string;
 	fx?: Fx;
 	/** Defaults to `false`: a caller that has not thought about it gets no estimate, not a frozen one. */

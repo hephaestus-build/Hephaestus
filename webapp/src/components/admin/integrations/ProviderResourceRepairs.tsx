@@ -55,28 +55,25 @@ function repairStateCopy(repair: ProviderResourceRepair) {
 	return "This authorization has an uncertain outcome. An instance admin must confirm its outcome at Slack before releasing this block.";
 }
 
-/** Why this console offers no release button. The instance console releases an owned block through its connection. */
-function releaseUnavailableCopy(
-	repair: ProviderResourceRepair,
-	scope: ProviderResourceRepairsProps["scope"],
-) {
-	if (repair.state === "REGISTERING") {
-		return "Wait for the authorization or registration to finish before confirming its outcome.";
-	}
-	if (scope === "instance" && repair.owners.length > 0) {
-		return "Confirm that removal is complete, then release the block in connection administration.";
-	}
-	return "An instance admin can release the block after confirming removal is complete.";
-}
+/** Why a removal has no release button here. */
+const RELEASE_UNAVAILABLE_COPY = {
+	registering:
+		"Wait for the authorization or registration to finish before confirming its outcome.",
+	"at-connection":
+		"Confirm that removal is complete, then release the block in connection administration.",
+	"instance-admin": "An instance admin can release the block after confirming removal is complete.",
+} satisfies Record<Exclude<ProviderRepairItem["release"], "available">, string>;
 
 export interface ProviderRepairItem {
 	repair: ProviderResourceRepair;
-	releaseAvailable: boolean;
+	/**
+	 * Whether this console releases the block. Otherwise it says where, or when, someone can:
+	 * the instance console releases a removal that has an owning connection in that connection.
+	 */
+	release: "available" | "registering" | "at-connection" | "instance-admin";
 }
 
 export interface ProviderResourceRepairsProps {
-	/** The console that renders the list. It decides where a block with an owning connection is released. */
-	scope: "instance" | "workspace";
 	state:
 		| { status: "loading" }
 		| { status: "error"; error: unknown; onRetry: () => void }
@@ -99,7 +96,6 @@ function owningPage(kind: ProviderResourceRepair["kind"]) {
 }
 
 export function ProviderResourceRepairs({
-	scope,
 	state,
 	onRelease,
 	isReleasing = false,
@@ -111,7 +107,7 @@ export function ProviderResourceRepairs({
 	const isLoading = state.status === "loading";
 	const [selected, setSelected] = useState<ProviderResourceRepair>();
 	const selectedItem = items.find(
-		(item) => item.repair.id === selected?.id && item.releaseAvailable,
+		(item) => item.repair.id === selected?.id && item.release === "available",
 	);
 	return (
 		<Card>
@@ -145,7 +141,7 @@ export function ProviderResourceRepairs({
 						{items.length === 0 && state.status === "ready" && (
 							<p className="text-sm text-muted-foreground">No pending provider removals.</p>
 						)}
-						{items.map(({ repair, releaseAvailable }) => (
+						{items.map(({ repair, release }) => (
 							<Alert key={repair.id} variant="warning">
 								<ShieldAlertIcon />
 								<AlertTitle>{RESOURCE_LABELS[repair.resourceType]}</AlertTitle>
@@ -176,12 +172,18 @@ export function ProviderResourceRepairs({
 											Open connection administration
 										</Link>
 									))}
-									{releaseAvailable && onRelease ? (
+									{release === "available" && onRelease ? (
 										<Button variant="outline" size="sm" onClick={() => setSelected(repair)}>
 											Confirm removal
 										</Button>
 									) : (
-										<p>{releaseUnavailableCopy(repair, scope)}</p>
+										<p>
+											{
+												RELEASE_UNAVAILABLE_COPY[
+													release === "available" ? "instance-admin" : release
+												]
+											}
+										</p>
 									)}
 								</AlertDescription>
 							</Alert>

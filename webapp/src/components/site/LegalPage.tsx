@@ -1,14 +1,10 @@
-import { type AnchorHTMLAttributes, type ImgHTMLAttributes, useEffect, useState } from "react";
+import type { AnchorHTMLAttributes, ImgHTMLAttributes } from "react";
 import { Streamdown } from "streamdown";
 
 import { MarkdownCode } from "@/components/common/MarkdownCode";
-import {
-	isSafeLegalHref,
-	isSafeLegalImageSrc,
-	type LegalPageId,
-	type LegalContentResolver,
-	type ResolvedLegalContent,
-} from "@/lib/legal";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Skeleton } from "@/components/ui/skeleton";
+import { isSafeLegalHref, isSafeLegalImageSrc, type ResolvedLegalContent } from "@/lib/legal";
 
 const DISCLAIMER_BANNER =
 	"This deployment has not published its own legal pages. The content below is a placeholder and does not identify the operator of this instance.";
@@ -42,100 +38,55 @@ function SafeImage({ src, alt, className }: ImgHTMLAttributes<HTMLImageElement>)
 
 const SAFE_COMPONENTS = { a: SafeAnchor, code: MarkdownCode, img: SafeImage };
 
-const warnedDisclaimer = new Set<LegalPageId>();
+export type LegalContentState =
+	| { status: "loading" }
+	| { status: "error" }
+	| { status: "ready"; content: ResolvedLegalContent };
 
 export interface LegalPageProps {
-	page: LegalPageId;
 	title: string;
-	resolver: LegalContentResolver;
+	state: LegalContentState;
 }
 
-export function LegalPage({ page, title, resolver }: LegalPageProps) {
+export function LegalPage({ title, state }: LegalPageProps) {
 	return (
 		<div className="mx-auto flex max-w-4xl flex-col gap-4">
 			<h1 className="text-3xl font-bold">{title}</h1>
-			{/* Keyed by what identifies the content: a switch remounts, so the previous page's markdown
-			    is never on screen while the new one loads. */}
-			<LegalContent key={page} page={page} resolver={resolver} />
+			{state.status === "loading" && (
+				<div role="status" aria-busy="true" className="space-y-3">
+					<span className="sr-only">Loading {title}</span>
+					<Skeleton className="h-6 w-2/3" />
+					<Skeleton className="h-24" />
+				</div>
+			)}
+			{state.status === "error" && (
+				<Alert variant="destructive">
+					<AlertDescription>{ERROR_COPY}</AlertDescription>
+				</Alert>
+			)}
+			{state.status === "ready" && (
+				<>
+					{state.content.source === "disclaimer" && (
+						<Alert variant="destructive">
+							<AlertDescription>{DISCLAIMER_BANNER}</AlertDescription>
+						</Alert>
+					)}
+					<article lang="en" className="prose max-w-none dark:prose-invert">
+						{/* Empty `rehypePlugins` drops Streamdown's default rehype-raw, and its bundled
+						    rehype-harden ships `allowedProtocols: ["*"]`, so SAFE_COMPONENTS is the only
+						    thing keeping `javascript:` and unknown schemes out of the DOM. */}
+						<Streamdown
+							mode="static"
+							rehypePlugins={[]}
+							remarkRehypeOptions={{ allowDangerousHtml: false }}
+							parseIncompleteMarkdown={false}
+							components={SAFE_COMPONENTS}
+						>
+							{state.content.markdown}
+						</Streamdown>
+					</article>
+				</>
+			)}
 		</div>
-	);
-}
-
-interface LegalContentProps {
-	page: LegalPageId;
-	resolver: LegalContentResolver;
-}
-
-function LegalContent({ page, resolver }: LegalContentProps) {
-	const [resolved, setResolved] = useState<ResolvedLegalContent | null>(null);
-	const [loadError, setLoadError] = useState<Error | null>(null);
-
-	useEffect(() => {
-		const controller = new AbortController();
-		async function load() {
-			try {
-				const content = await resolver(page, { signal: controller.signal });
-				if (controller.signal.aborted) {
-					return;
-				}
-				setResolved(content);
-				if (content.source === "disclaimer" && !warnedDisclaimer.has(page)) {
-					warnedDisclaimer.add(page);
-					// oxlint-disable-next-line no-console -- Remediation addressed to whoever deployed the instance, once per page; the reader's half of this is the disclaimer banner.
-					console.warn(
-						`[legal] Disclaimer fallback served for page=${page}. Mount /legal-overrides/. See docs/admin/legal-pages.`,
-					);
-				}
-			} catch (error: unknown) {
-				if (
-					controller.signal.aborted ||
-					(error instanceof DOMException && error.name === "AbortError")
-				) {
-					return;
-				}
-				setLoadError(error instanceof Error ? error : new Error("Failed to load legal content"));
-			}
-		}
-		void load();
-		return () => controller.abort();
-	}, [page, resolver]);
-
-	return (
-		<>
-			{resolved?.source === "disclaimer" ? (
-				<div
-					role="alert"
-					className="rounded-md border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive"
-				>
-					{DISCLAIMER_BANNER}
-				</div>
-			) : null}
-
-			{loadError ? (
-				<div
-					role="alert"
-					className="rounded-md border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive"
-				>
-					{ERROR_COPY}
-				</div>
-			) : null}
-
-			{resolved ? (
-				<article lang="en" className="prose max-w-none dark:prose-invert">
-					{/* Empty `rehypePlugins` drops Streamdown's default rehype-raw, and its bundled
-				    rehype-harden ships `allowedProtocols: ["*"]`, so SAFE_COMPONENTS is the only
-				    thing keeping `javascript:` and unknown schemes out of the DOM. */}
-					<Streamdown
-						mode="static"
-						rehypePlugins={[]}
-						remarkRehypeOptions={{ allowDangerousHtml: false }}
-						parseIncompleteMarkdown={false}
-						components={SAFE_COMPONENTS}
-					>
-						{resolved.markdown}
-					</Streamdown>
-				</article>
-			) : null}
-		</>
 	);
 }

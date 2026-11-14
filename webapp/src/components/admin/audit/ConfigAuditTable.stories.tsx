@@ -177,16 +177,6 @@ export const EmptyInitial: Story = {
 	},
 };
 
-/** The instance log has the workspace column, and its empty state reads the same. */
-export const EmptyInitialInstanceLog: Story = {
-	args: { state: loaded([]), showWorkspace: true },
-	play: async ({ canvas }) => {
-		canvas.getByText(
-			"Changes to settings, member roles, feature flags, and AI configuration will appear here.",
-		);
-	},
-};
-
 /** The first read is on its way: the real columns, with no empty state. */
 export const Loading: Story = {
 	args: { state: { status: "loading" }, showWorkspace: true },

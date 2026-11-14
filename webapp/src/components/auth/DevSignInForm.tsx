@@ -10,7 +10,12 @@ import { hasText } from "@/lib/text";
  * real admin session, so local development and the live E2E suite can authenticate without an OAuth
  * provider; the server decides whether it is offered, and does not offer it in production.
  */
-export function DevSignInForm({ onSignIn }: { onSignIn: (username: string) => Promise<void> }) {
+export function DevSignInForm({
+	onSignIn,
+}: {
+	/** A resolved sign-in navigates away, so the form stays pending. A rejection shows its message. */
+	onSignIn: (username: string) => Promise<void>;
+}) {
 	const [username, setUsername] = useState("dev-admin");
 	const [pending, setPending] = useState(false);
 	const [signInError, setSignInError] = useState<string>();

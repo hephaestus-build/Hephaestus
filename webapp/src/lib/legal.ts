@@ -10,12 +10,6 @@ export interface ResolvedLegalContent {
 	source: "override" | "disclaimer";
 }
 
-/** Loads a page's markdown. The route supplies it, so a component never fetches. */
-export type LegalContentResolver = (
-	page: LegalPageId,
-	options?: { signal?: AbortSignal },
-) => Promise<ResolvedLegalContent>;
-
 // Restrict hyperlink protocols in operator-supplied markdown. `javascript:`,
 // `data:`, `vbscript:`, unknown schemes are silently dropped at render time.
 // `\/(?!\/)` permits absolute same-origin paths like `/privacy` while rejecting
