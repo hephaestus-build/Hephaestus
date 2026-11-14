@@ -386,7 +386,7 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: A role's Git cache volume stayed above 90 percent, and eviction cannot free it
+          summary: A role's Git cache stayed above 90 percent of its eviction budget, and eviction cannot free it
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusGitMirrorsEvicted
         expr: sum(increase(git_mirror_evictions_total{job="hephaestus"}[1h])) >= 5

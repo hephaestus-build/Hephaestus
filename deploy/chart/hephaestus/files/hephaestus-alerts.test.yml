@@ -741,7 +741,7 @@ tests:
               job: hephaestus
               instance: server-b:9090
             exp_annotations:
-              summary: A role's Git cache volume stayed above 90 percent, and eviction cannot free it
+              summary: A role's Git cache stayed above 90 percent of its eviction budget, and eviction cannot free it
               runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
   - name: five evictions in one hour fire, a few do not

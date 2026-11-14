@@ -11,11 +11,13 @@ import org.springframework.validation.annotation.Validated;
  * @param enabled Keeps local Git mirrors of monitored repositories, which practice reviews read code from. Turn it on
  *     wherever agent jobs run. Without it, the practice review health check reports out of service.
  * @param maxConcurrentIngestions how many captured commits are written to PostgreSQL at once
- * @param maxSnapshotBytes The most disk that the checkout and reachable history of one review may use. Hephaestus
- *                         refuses a larger repository whole and does not capture part of it.
- * @param maxCacheBytes The most disk that Git mirrors, review checkouts and staged archives may use on this process's
- *     volume. Set it to the size of that volume. Above 80 % of it, Hephaestus deletes the mirrors it used least recently.
- *     A deleted mirror costs one full fetch at its next capture.
+ * @param maxSnapshotBytes The most disk that one snapshot may use: the checkout and reachable history of a review, a
+ *     conversation's context load, or a scan. Hephaestus refuses a larger repository whole and does not capture part of
+ *     it.
+ * @param maxCacheBytes This process's eviction budget on its Git volume. Set it to the volume's size minus one snapshot
+ *     bound for each review and each conversation load that the process runs at once; the Helm chart does this. When
+ *     everything on the volume uses more than 80 % of it, Hephaestus deletes the mirrors it used least recently. A
+ *     deleted mirror costs one full fetch at its next capture.
  */
 @ConfigurationProperties(prefix = "hephaestus.git")
 @Validated

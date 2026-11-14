@@ -344,8 +344,19 @@ A restarted server clones them again, so they use node storage and no volume cla
 The node needs that much free ephemeral storage, and the container limits include it.
 The same volume holds review checkouts and the archives that wait for their sandbox.
 
-Above 80 percent of `server.gitCache.sizeLimit`, the server deletes the mirrors that it used least recently. Each deleted mirror costs a full fetch at its next capture.
-Review checkouts that fill the volume alone still make the kubelet evict the Pod. `HephaestusGitCacheNearlyFull` warns first.
+`server.gitCache.snapshotLimit` bounds one snapshot: a checkout with its history for a review, a conversation's context load, or a scan.
+The server refuses the whole repository when its snapshot needs more.
+After preparation, a review attempt keeps only its evidence, at most 512 MiB.
+
+The chart keeps one snapshot of room for each review that a server runs at once.
+It keeps the same for each of the two conversation loads that a server prepares at once.
+The server cannot evict those snapshots.
+The rest of the volume is the server's eviction budget, and the chart refuses a volume that leaves less than 1Gi of it.
+A scan's snapshot comes out of the eviction budget.
+
+Everything on the volume counts against the budget: mirrors, snapshots and archives.
+Above 80 percent of the budget, the server deletes the mirrors that it used least recently.
+Each deleted mirror costs a full fetch at its next capture.
 
 ## Pod security
 

@@ -1994,7 +1994,10 @@ await test("the server keeps headroom for native memory and reserves its measure
 	assert.deepEqual(
 		memoryCalculator([
 			...layersFor("small"),
-			{ sandbox: { reviewMemory: memoryFor(64), conversationTurns: 8, budget: null } },
+			{
+				sandbox: { reviewMemory: memoryFor(64), conversationTurns: 8, budget: null },
+				server: { gitCache: { snapshotLimit: "256Mi" } },
+			},
 		]),
 		defaults,
 	);
@@ -2014,7 +2017,10 @@ await test("the server keeps headroom for native memory and reserves its measure
 await test("the server runs the reviews that the sandbox nodes hold, and the quota holds no more", () => {
 	const base = [
 		...layersFor("small"),
-		{ sandbox: { reviewMemory: memoryFor(66), conversationTurns: 8, budget: null } },
+		{
+			sandbox: { reviewMemory: memoryFor(66), conversationTurns: 8, budget: null },
+			server: { gitCache: { snapshotLimit: "256Mi" } },
+		},
 	];
 	// Only the actual review sandboxes consume this quota.
 	assert.deepEqual(reviewWidth(base), { sandboxes: "66", pods: "66" });
@@ -2088,19 +2094,23 @@ await test("practice reviews run exactly when the sandboxes run, with the instal
 		assert.equal(envValue(workload(resources, "server"), "AGENT_ENABLED"), "true", name);
 		// Without git checkout the server reports practice reviews out of service.
 		assert.equal(envValue(workload(resources, "server"), "GIT_CHECKOUT_ENABLED"), "true", name);
-		// The server evicts mirrors against the volume that the kubelet bounds, so the two sizes are one value.
-		for (const role of ["server"]) {
-			const cache = list(get(podSpec(workload(resources, role)), "volumes")).find(
-				(volume) => get(volume, "name") === "git-cache",
-			);
-			const size = String(get(cache, "emptyDir", "sizeLimit"));
-			assert.match(size, /^\d+Gi$/u, `${name} ${role}`);
-			assert.equal(
-				envValue(workload(resources, role), "GIT_MAX_CACHE_BYTES"),
-				String(Number.parseInt(size, 10) * 1024 ** 3),
-				`${name} ${role}`,
-			);
-		}
+		// The volume that the kubelet bounds keeps one snapshot for each review and each of the two conversation
+		// loads that run at once, and the eviction budget is the rest: a budget of the whole volume let them fill it.
+		const server = workload(resources, "server");
+		const cache = list(get(podSpec(server), "volumes")).find(
+			(volume) => get(volume, "name") === "git-cache",
+		);
+		const volume = amount(String(get(cache, "emptyDir", "sizeLimit")));
+		const loads =
+			Number(envValue(server, "HEPHAESTUS_CONVERSATION_TURN_CAPACITY") ?? 0) > 0
+				? javaCapacityConstant("agent/conversation/sandbox/TurnContextLoads.java", "LOADS_AT_ONCE")
+				: 0;
+		const snapshots =
+			(Number(envValue(server, "SANDBOX_MAX_CONCURRENT")) + loads) *
+			Number(envValue(server, "GIT_MAX_SNAPSHOT_BYTES"));
+		const mirrors = Number(envValue(server, "GIT_MAX_CACHE_BYTES"));
+		assert.equal(mirrors + snapshots, volume, name);
+		assert.ok(mirrors >= 1024 ** 3, `${name}: the mirrors keep at least 1Gi`);
 	}
 	const capacity = (layers: readonly Layer[]) =>
 		envValue(workload(rendered(layers), "server"), "HEPHAESTUS_CONVERSATION_TURN_CAPACITY");
@@ -2112,6 +2122,23 @@ await test("practice reviews run exactly when the sandboxes run, with the instal
 	]);
 	assert.equal(exhausted.ok, false);
 	assert.match(exhausted.stderr, /sandbox.budget|no room/u);
+	// The small profile: five reviews and two conversation loads of 2Gi on a 20Gi volume leave a 6Gi budget.
+	const small = workload(rendered(layersFor("small")), "server");
+	assert.equal(envValue(small, "GIT_MAX_SNAPSHOT_BYTES"), String(2 * 1024 ** 3));
+	assert.equal(envValue(small, "GIT_MAX_CACHE_BYTES"), String(6 * 1024 ** 3));
+	// Without conversation turns, the server prepares no conversation load.
+	const reviewsOnly = workload(
+		rendered([...layersFor("small"), { sandbox: { conversationTurns: 0 } }]),
+		"server",
+	);
+	assert.equal(envValue(reviewsOnly, "GIT_MAX_CACHE_BYTES"), String(10 * 1024 ** 3));
+	// Seven snapshots of 2Gi do not fit a 10Gi volume, so the chart refuses it and names the size that fits.
+	const crowded = render([...layersFor("small"), { server: { gitCache: { sizeLimit: "10Gi" } } }]);
+	assert.equal(crowded.ok, false);
+	assert.match(
+		crowded.stderr,
+		/server\.gitCache\.sizeLimit \(10Gi\) leaves the Git mirrors less than 1Gi beside 7 snapshots.*5 reviews and 2 conversation loads.*at least 15360Mi/u,
+	);
 	assert.equal(capacity([...layersFor("small"), { sandbox: { conversationTurns: 0 } }]), "0");
 	assert.equal(
 		env(workload(rendered(layersFor("dev")), "server"), "HEPHAESTUS_CONVERSATION_TURN_CAPACITY"),
@@ -4074,7 +4101,14 @@ await test("the database budget holds the runtime pools, rollout, listeners and 
 			expectedMaximum: 120,
 		},
 		{
-			layers: [...base, { sandbox: { reviewMemory: memoryFor(8) } }],
+			layers: [
+				...base,
+				{
+					sandbox: { reviewMemory: memoryFor(8) },
+					// Eight reviews and two conversation loads fit small's 20Gi Git cache at 1Gi each.
+					server: { gitCache: { snapshotLimit: "1Gi" } },
+				},
+			],
 			expectedPool: 51,
 			expectedRequired: 128,
 			expectedMaximum: 140,

@@ -43,7 +43,7 @@ Check the rendered requests against the allocatable resources of your nodes befo
 | More reviews at once | `sandbox.reviewMemory`: 512 MiB more for each review, plus the RuntimeClass overhead | That memory on the sandbox nodes. Each review also takes three database connections of the server's pool. |
 | More conversation turns at once | `sandbox.conversationTurns`, or with `auto` a larger `sandbox.budget` | 384 MiB and 100m CPU on the sandbox nodes for each turn ([Sandbox capacity budget](./helm-chart#sandbox-capacity-budget)) |
 | More API capacity, and reception during a restart | `server.replicas` | A server request for each replica, and its database connections. More servers do not add reviews or turns. |
-| Larger repositories | `server.gitCache.sizeLimit` | That much free ephemeral storage on each server's node |
+| Larger repositories | `server.gitCache.snapshotLimit` for one repository, and `server.gitCache.sizeLimit` for the volume | That much free ephemeral storage on each server's node ([Storage and retention](./helm-chart#storage-and-retention)) |
 | More database space | `postgresql.persistence.size` | [Change a volume size](./upgrade#change-a-volume-size) |
 | A larger review or conversation sandbox | `sandbox.templates.<kind>.resources` | The quotas follow the requests ([Sandbox sizes](./sandboxes#sandbox-sizes)) |
 

@@ -151,7 +151,7 @@ It is not a claim about the developer's work.
 
 - **Repository capture.**
   A capture holds every file at the reviewed commit and the Git history that it can reach.
-  A checkout with its mirrored history over 8 GiB refuses the whole repository.
+  A checkout with its mirrored history over `server.gitCache.snapshotLimit` (default 2Gi) refuses the whole repository.
   The server never captures a smaller tree.
   Submodules are not fetched, and Git LFS files stay pointers.
   Size the Git cache volume for the repositories that the workspaces monitor.
