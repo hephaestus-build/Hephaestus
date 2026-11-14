@@ -141,19 +141,17 @@ describe("instance AI models route", () => {
 	});
 
 	it("shows the server's readiness for a model again after its connection turns off", async () => {
-		let enabled = true;
-		const provider = connection(1, "Main provider");
+		// The server's state: turning the connection off changes the model's readiness with it.
+		let provider = connection(1, "Main provider");
+		let mainModel: LlmModel = { ...model(11, 1, "Main model"), readiness: "READY" };
 		mockPage();
 		server.use(
-			http.get("*/admin/llm/connections", () => HttpResponse.json([{ ...provider, enabled }])),
-			http.get("*/admin/llm/models", () =>
-				HttpResponse.json([
-					{ ...model(11, 1, "Main model"), readiness: enabled ? "READY" : "CONNECTION_OFF" },
-				]),
-			),
+			http.get("*/admin/llm/connections", () => HttpResponse.json([provider])),
+			http.get("*/admin/llm/models", () => HttpResponse.json([mainModel])),
 			http.patch("*/admin/llm/connections/1", () => {
-				enabled = false;
-				return HttpResponse.json({ ...provider, enabled });
+				provider = { ...provider, enabled: false };
+				mainModel = { ...mainModel, readiness: "CONNECTION_OFF" };
+				return HttpResponse.json(provider);
 			}),
 		);
 
