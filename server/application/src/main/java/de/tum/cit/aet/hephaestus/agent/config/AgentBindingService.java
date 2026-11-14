@@ -12,10 +12,13 @@ import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditPort;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditSnapshot;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
-import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceQueries;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
@@ -31,11 +34,14 @@ import org.springframework.transaction.annotation.Transactional;
 public class AgentBindingService {
 
     private final WorkspaceAgentBindingRepository bindingRepository;
-    private final WorkspaceRepository workspaceRepository;
+    private final WorkspaceQueries workspaceQueries;
     private final LlmModelRepository llmModelRepository;
     private final WorkspaceLlmModelRepository workspaceLlmModelRepository;
     private final LlmModelResolver llmModelResolver;
     private final ConfigAuditPort configAudit;
+
+    @PersistenceContext
+    private @Nullable EntityManager entityManager;
 
     @Transactional(readOnly = true)
     public List<WorkspaceAgentBinding> getBindings(WorkspaceContext workspaceContext) {
@@ -62,13 +68,12 @@ public class AgentBindingService {
             DataHandlingTier tier,
             AgentBindingRequestDTO request) {
         Long workspaceId = workspaceContext.id();
-        Workspace workspace = workspaceRepository
-                .findByIdForUpdate(workspaceId)
-                .orElseThrow(() -> new EntityNotFoundException("Workspace", workspaceContext.slug()));
+        if (workspaceQueries.findByIdForUpdate(workspaceId).isEmpty())
+            throw new EntityNotFoundException("Workspace", workspaceContext.slug());
 
         WorkspaceAgentBinding binding = bindingRepository
                 .findByWorkspaceIdAndPurposeAndDataHandlingTier(workspaceId, purpose, tier)
-                .orElseGet(() -> newBinding(workspace, purpose, tier));
+                .orElseGet(() -> newBinding(workspaceId, purpose, tier));
         BindingSnapshot before = BindingSnapshot.of(binding);
 
         applyModel(binding, workspaceId, request.instanceModelId(), request.workspaceModelId());
@@ -96,7 +101,7 @@ public class AgentBindingService {
     public void deleteBinding(WorkspaceContext workspaceContext, AgentPurpose purpose, DataHandlingTier tier) {
         Long workspaceId = workspaceContext.id();
         // Taken for the row lock and the 404 only; nothing below writes the workspace row.
-        if (workspaceRepository.findByIdForUpdate(workspaceId).isEmpty()) {
+        if (workspaceQueries.findByIdForUpdate(workspaceId).isEmpty()) {
             throw new EntityNotFoundException("Workspace", workspaceContext.slug());
         }
         bindingRepository
@@ -175,9 +180,9 @@ public class AgentBindingService {
                 ConfigAuditEntityType.AGENT_BINDING, purpose.name(), workspaceId, before, after));
     }
 
-    private static WorkspaceAgentBinding newBinding(Workspace workspace, AgentPurpose purpose, DataHandlingTier tier) {
+    private WorkspaceAgentBinding newBinding(long workspaceId, AgentPurpose purpose, DataHandlingTier tier) {
         WorkspaceAgentBinding binding = new WorkspaceAgentBinding();
-        binding.setWorkspace(workspace);
+        binding.setWorkspace(Objects.requireNonNull(entityManager).getReference(Workspace.class, workspaceId));
         binding.setPurpose(purpose);
         binding.setDataHandlingTier(tier);
         if (purpose == AgentPurpose.MENTOR) binding.setTimeoutSeconds(AgentBindingLimits.MAX_HEPH_TURN_SECONDS);

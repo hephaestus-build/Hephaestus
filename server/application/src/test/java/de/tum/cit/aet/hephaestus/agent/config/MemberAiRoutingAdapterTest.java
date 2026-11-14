@@ -19,6 +19,7 @@ import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AiChoice;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonProcessingSuppression;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import de.tum.cit.aet.hephaestus.testconfig.WorkspacePortFixtures;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.spi.AiModelBrand;
@@ -54,7 +55,8 @@ class MemberAiRoutingAdapterTest extends BaseUnitTest {
 
     @BeforeEach
     void setUp() {
-        routing = new MemberAiRoutingAdapter(bindings, preferences, models, workspaces, suppression);
+        routing = new MemberAiRoutingAdapter(
+                bindings, preferences, models, WorkspacePortFixtures.queries(workspaces), suppression);
     }
 
     private WorkspaceAgentBinding ready(DataHandlingTier tier) {

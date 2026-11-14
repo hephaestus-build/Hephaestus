@@ -9,6 +9,7 @@ import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBinding;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBindingRepository;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import de.tum.cit.aet.hephaestus.testconfig.WorkspacePortFixtures;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.util.List;
@@ -35,7 +36,8 @@ class DefaultMentorReadinessQueryTest extends BaseUnitTest {
         Workspace workspace = new Workspace();
         workspace.resume();
         when(workspaceRepository.findById(1L)).thenReturn(Optional.of(workspace));
-        query = new DefaultMentorReadinessQuery(agentBindingRepository, llmModelResolver, workspaceRepository);
+        query = new DefaultMentorReadinessQuery(
+                agentBindingRepository, llmModelResolver, WorkspacePortFixtures.queries(workspaceRepository));
     }
 
     @Test

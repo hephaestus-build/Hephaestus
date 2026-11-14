@@ -6,9 +6,8 @@ import de.tum.cit.aet.hephaestus.evidence.capture.ContentSource;
 import de.tum.cit.aet.hephaestus.evidence.capture.MentorContextPaths;
 import de.tum.cit.aet.hephaestus.evidence.capture.MentorContextRequest;
 import de.tum.cit.aet.hephaestus.integration.core.spi.MentorWorkQuery;
-import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceActorSelector;
-import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceSummaryQuery;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -46,7 +45,7 @@ public class WorkspaceContentSource implements ContentSource {
     private static final int REVIEW_WAIT_URGENCY_DAYS = 3;
 
     private final AccountSummaryQuery accounts;
-    private final WorkspaceRepository workspaceRepository;
+    private final WorkspaceSummaryQuery workspaceSummaries;
     private final MentorWorkQuery queryRepository;
     private final WorkspaceActorSelector actorSelector;
     private final ObjectMapper objectMapper;
@@ -77,7 +76,7 @@ public class WorkspaceContentSource implements ContentSource {
     public ObjectNode buildPayload(Long workspaceId, Long developerId) {
         var account = accounts.findAllByIds(List.of(developerId)).get(developerId);
         if (account == null) throw new EntityNotFoundException("Account", developerId.toString());
-        Workspace workspace = workspaceRepository
+        var workspace = workspaceSummaries
                 .findById(workspaceId)
                 .orElseThrow(() -> new EntityNotFoundException("Workspace", workspaceId.toString()));
 
@@ -85,8 +84,8 @@ public class WorkspaceContentSource implements ContentSource {
         root.putObject("user").put("name", account.displayName());
 
         ObjectNode workspaceNode = root.putObject("workspace");
-        workspaceNode.put("slug", workspace.getWorkspaceSlug());
-        workspaceNode.put("displayName", workspace.getDisplayName());
+        workspaceNode.put("slug", workspace.slug());
+        workspaceNode.put("displayName", workspace.displayName());
 
         // A repository path names a repository only on one instance: no lists without the connected one.
         boolean connected = actorSelector.connectedProviderId(workspaceId).isPresent();

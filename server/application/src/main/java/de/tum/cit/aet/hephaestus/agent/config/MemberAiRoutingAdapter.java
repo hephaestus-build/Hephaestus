@@ -3,10 +3,10 @@ package de.tum.cit.aet.hephaestus.agent.config;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AiChoice;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonProcessingSuppression;
-import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import de.tum.cit.aet.hephaestus.workspace.spi.MemberAiPreferences;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceAiAvailability;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceQueries;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -29,7 +29,7 @@ public class MemberAiRoutingAdapter implements WorkspaceAiAvailability {
     private final WorkspaceAgentBindingRepository bindings;
     private final MemberAiPreferences preferences;
     private final LlmModelResolver models;
-    private final WorkspaceRepository workspaces;
+    private final WorkspaceQueries workspaces;
     private final PersonProcessingSuppression suppression;
 
     @Transactional(readOnly = true)
@@ -156,9 +156,7 @@ public class MemberAiRoutingAdapter implements WorkspaceAiAvailability {
         // Reviews that are off have no rows worth loading; each purpose is loaded once and shared by both
         // choices.
         var reviewRows = rowsIfEnabled(
-                workspaceId,
-                AgentPurpose.PRACTICE_REVIEW,
-                workspace.getFeatures().getPracticesEnabled());
+                workspaceId, AgentPurpose.PRACTICE_REVIEW, workspace.features().practicesEnabled());
         var mentorRows = bindings.findByWorkspaceIdAndPurpose(workspaceId, AgentPurpose.MENTOR);
         var choices = List.of(AiChoice.IN_HOUSE_ONLY, AiChoice.CLOUD);
         var options = new ArrayList<Option>();

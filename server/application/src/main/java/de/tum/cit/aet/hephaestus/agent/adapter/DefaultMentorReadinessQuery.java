@@ -6,8 +6,7 @@ import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBinding;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBindingRepository;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.practices.spi.MentorReadinessQuery;
-import de.tum.cit.aet.hephaestus.workspace.Workspace;
-import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceQueries;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -20,23 +19,23 @@ class DefaultMentorReadinessQuery implements MentorReadinessQuery {
 
     private final WorkspaceAgentBindingRepository agentBindingRepository;
     private final LlmModelResolver llmModelResolver;
-    private final WorkspaceRepository workspaceRepository;
+    private final WorkspaceQueries workspaceQueries;
 
     DefaultMentorReadinessQuery(
             WorkspaceAgentBindingRepository agentBindingRepository,
             LlmModelResolver llmModelResolver,
-            WorkspaceRepository workspaceRepository) {
+            WorkspaceQueries workspaceQueries) {
         this.agentBindingRepository = agentBindingRepository;
         this.llmModelResolver = llmModelResolver;
-        this.workspaceRepository = workspaceRepository;
+        this.workspaceQueries = workspaceQueries;
     }
 
     @Override
     public boolean isReady(long workspaceId) {
         try {
-            boolean active = workspaceRepository
+            boolean active = workspaceQueries
                     .findById(workspaceId)
-                    .filter(workspace -> workspace.getStatus() == Workspace.WorkspaceStatus.ACTIVE)
+                    .filter(workspace -> workspace.active())
                     .isPresent();
             return active
                     && agentBindingRepository.findByWorkspaceIdWithModels(workspaceId).stream()

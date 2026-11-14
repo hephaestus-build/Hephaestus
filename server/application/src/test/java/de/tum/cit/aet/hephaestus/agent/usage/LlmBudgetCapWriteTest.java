@@ -10,6 +10,7 @@ import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditEntityType;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditEntry;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditPort;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import de.tum.cit.aet.hephaestus.testconfig.WorkspacePortFixtures;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.math.BigDecimal;
@@ -55,10 +56,20 @@ class LlmBudgetCapWriteTest extends BaseUnitTest {
 
     @BeforeEach
     void setUp() {
-        adminService =
-                new LlmUsageAdminService(usageRepository, workspaceRepository, configAudit, reviewRuns, fxRateLookup);
+        adminService = new LlmUsageAdminService(
+                usageRepository,
+                WorkspacePortFixtures.commands(workspaceRepository),
+                configAudit,
+                reviewRuns,
+                fxRateLookup);
         workspaceService = new LlmUsageService(
-                usageRepository, workspaceRepository, llmBudgetService, configAudit, reviewRuns, fxRateLookup);
+                usageRepository,
+                WorkspacePortFixtures.queries(workspaceRepository),
+                WorkspacePortFixtures.commands(workspaceRepository),
+                llmBudgetService,
+                configAudit,
+                reviewRuns,
+                fxRateLookup);
         workspace = new Workspace();
         workspace.setId(WORKSPACE_ID);
         workspace.setWorkspaceSlug(SLUG);

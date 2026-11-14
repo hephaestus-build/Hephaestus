@@ -21,8 +21,10 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import de.tum.cit.aet.hephaestus.workspace.WorkspaceSummaryFixtures;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.spi.LlmConnectionPlatform;
+import jakarta.persistence.EntityManager;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -31,8 +33,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.springframework.test.util.ReflectionTestUtils;
 
 class WorkspaceLlmConnectionServiceTest extends BaseUnitTest {
 
@@ -57,7 +59,9 @@ class WorkspaceLlmConnectionServiceTest extends BaseUnitTest {
     @Mock
     private ConfigAuditPort configAudit;
 
-    @InjectMocks
+    @Mock
+    private EntityManager entityManager;
+
     private WorkspaceLlmConnectionService connectionService;
 
     private WorkspaceContext workspaceContext;
@@ -68,6 +72,16 @@ class WorkspaceLlmConnectionServiceTest extends BaseUnitTest {
         workspace = new Workspace();
         workspace.setId(1L);
         workspace.setWorkspaceSlug("test-workspace");
+        connectionService = new WorkspaceLlmConnectionService(
+                connectionRepository,
+                modelRepository,
+                WorkspaceSummaryFixtures.summaries(workspaceRepository),
+                egressPolicy,
+                instanceLlmSettingsService,
+                limitDiscovery,
+                configAudit);
+        ReflectionTestUtils.setField(connectionService, "entityManager", entityManager);
+        lenient().when(entityManager.getReference(Workspace.class, 1L)).thenReturn(workspace);
         workspaceContext =
                 new WorkspaceContext(1L, "test-workspace", "Test Workspace", AccountType.ORG, null, Set.of());
     }

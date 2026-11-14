@@ -8,9 +8,7 @@ import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditEntityType;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditEntry;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditPort;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditSnapshot;
-import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
-import de.tum.cit.aet.hephaestus.workspace.Workspace;
-import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceCommands;
 import java.math.BigDecimal;
 import java.time.YearMonth;
 import java.util.List;
@@ -30,7 +28,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class LlmUsageAdminService {
 
     private final LlmUsageEventRepository usageRepository;
-    private final WorkspaceRepository workspaceRepository;
+    private final WorkspaceCommands workspaceCommands;
     private final ConfigAuditPort configAudit;
     private final ReviewRunKind reviewRuns;
 
@@ -39,12 +37,12 @@ public class LlmUsageAdminService {
 
     public LlmUsageAdminService(
             LlmUsageEventRepository usageRepository,
-            WorkspaceRepository workspaceRepository,
+            WorkspaceCommands workspaceCommands,
             ConfigAuditPort configAudit,
             ReviewRunKind reviewRuns,
             FxRateLookup fxRateLookup) {
         this.usageRepository = usageRepository;
-        this.workspaceRepository = workspaceRepository;
+        this.workspaceCommands = workspaceCommands;
         this.configAudit = configAudit;
         this.reviewRuns = reviewRuns;
         this.fxRateLookup = fxRateLookup;
@@ -66,22 +64,15 @@ public class LlmUsageAdminService {
     /** Sets the host's cap on this workspace. The audit write joins this transaction. */
     @Transactional
     public void updateBudget(String workspaceSlug, @Nullable BigDecimal monthlyLlmBudgetUsd) {
-        // Locked read: this cap and the workspace's own-provider cap are two columns of ONE row written
-        // by two different people, and Hibernate's UPDATE covers every column — without the lock, two
-        // concurrent patches each revert the other's cap.
-        Workspace workspace = workspaceRepository
-                .findByWorkspaceSlugForUpdate(workspaceSlug)
-                .orElseThrow(() -> new EntityNotFoundException("Workspace", workspaceSlug));
-        BigDecimal before = workspace.getMonthlyLlmBudgetUsd();
-        workspace.setMonthlyLlmBudgetUsd(monthlyLlmBudgetUsd);
-        workspaceRepository.save(workspace);
+        var change = workspaceCommands.updateInstanceLlmBudget(workspaceSlug, monthlyLlmBudgetUsd);
+        BigDecimal before = change.previousLimit();
         configAudit.record(ConfigAuditEntry.updated(
                 ConfigAuditEntityType.WORKSPACE_INSTANCE_LLM_BUDGET,
-                workspace.getId(),
-                workspace.getId(),
+                change.workspaceId(),
+                change.workspaceId(),
                 new LlmBudgetSnapshot(before),
                 new LlmBudgetSnapshot(monthlyLlmBudgetUsd)));
-        reviewRuns.releaseBudgetHolds(workspace.getId());
+        reviewRuns.releaseBudgetHolds(change.workspaceId());
     }
 
     private static AdminWorkspaceLlmUsageDTO toRollup(

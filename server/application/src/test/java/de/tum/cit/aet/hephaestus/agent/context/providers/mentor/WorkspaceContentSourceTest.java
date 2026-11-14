@@ -13,6 +13,7 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceActorSelector;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import de.tum.cit.aet.hephaestus.workspace.WorkspaceSummaryFixtures;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -23,7 +24,6 @@ import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import tools.jackson.databind.JsonNode;
@@ -46,16 +46,22 @@ class WorkspaceContentSourceTest extends BaseUnitTest {
     @Spy
     ObjectMapper objectMapper = new ObjectMapper();
 
-    @InjectMocks
     WorkspaceContentSource provider;
 
     @BeforeEach
     void connectedInstance() {
+        provider = new WorkspaceContentSource(
+                accounts,
+                WorkspaceSummaryFixtures.summaries(workspaceRepository),
+                queryRepository,
+                actorSelector,
+                objectMapper);
         lenient().when(actorSelector.connectedProviderId(1L)).thenReturn(Optional.of(5L));
         lenient()
                 .when(accounts.findAllByIds(List.of(2L)))
                 .thenReturn(Map.of(2L, new AccountSummaryQuery.AccountSummary(2, "Octo", null)));
         Workspace ws = new Workspace();
+        ws.setId(1L);
         ws.setWorkspaceSlug("acme");
         ws.setDisplayName("Acme");
         lenient().when(workspaceRepository.findById(eq(1L))).thenReturn(Optional.of(ws));

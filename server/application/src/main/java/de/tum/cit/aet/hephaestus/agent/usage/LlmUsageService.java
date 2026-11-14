@@ -7,8 +7,8 @@ import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditEntry;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditPort;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditSnapshot;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
-import de.tum.cit.aet.hephaestus.workspace.Workspace;
-import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceCommands;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceQueries;
 import java.math.BigDecimal;
 import java.time.YearMonth;
 import java.time.ZoneOffset;
@@ -25,7 +25,8 @@ import org.springframework.transaction.annotation.Transactional;
 public class LlmUsageService {
 
     private final LlmUsageEventRepository usageRepository;
-    private final WorkspaceRepository workspaceRepository;
+    private final WorkspaceQueries workspaceQueries;
+    private final WorkspaceCommands workspaceCommands;
     private final LlmBudgetService llmBudgetService;
 
     private final ConfigAuditPort configAudit;
@@ -36,13 +37,15 @@ public class LlmUsageService {
 
     public LlmUsageService(
             LlmUsageEventRepository usageRepository,
-            WorkspaceRepository workspaceRepository,
+            WorkspaceQueries workspaceQueries,
+            WorkspaceCommands workspaceCommands,
             LlmBudgetService llmBudgetService,
             ConfigAuditPort configAudit,
             ReviewRunKind reviewRuns,
             FxRateLookup fxRateLookup) {
         this.usageRepository = usageRepository;
-        this.workspaceRepository = workspaceRepository;
+        this.workspaceQueries = workspaceQueries;
+        this.workspaceCommands = workspaceCommands;
         this.llmBudgetService = llmBudgetService;
         this.configAudit = configAudit;
         this.reviewRuns = reviewRuns;
@@ -51,8 +54,8 @@ public class LlmUsageService {
 
     @Transactional(readOnly = true)
     public WorkspaceLlmUsageReportDTO getWorkspaceReport(Long workspaceId, YearMonth month) {
-        Workspace workspace = workspaceRepository
-                .findById(workspaceId)
+        var workspace = workspaceQueries
+                .llmBudgets(workspaceId)
                 .orElseThrow(() -> new EntityNotFoundException("Workspace", workspaceId.toString()));
         LlmBudgetService.MonthWindow window = LlmBudgetService.MonthWindow.of(month);
 
@@ -88,8 +91,8 @@ public class LlmUsageService {
         BigDecimal ownProviderTotal = spend.getOwnProviderConfirmedUsd();
         BigDecimal instanceCapSpend = pricedTotal.add(spend.getInstanceUpperBoundUsd());
         BigDecimal ownProviderCapSpend = ownProviderTotal.add(spend.getOwnProviderUpperBoundUsd());
-        BigDecimal instanceBudget = workspace.getMonthlyLlmBudgetUsd();
-        BigDecimal ownProviderBudget = workspace.getMonthlyByoLlmBudgetUsd();
+        BigDecimal instanceBudget = workspace.instanceBudgetUsd();
+        BigDecimal ownProviderBudget = workspace.ownProviderBudgetUsd();
         long unpricedRuns = usageRepository.countUnpricedRuns(workspaceId, window.from(), window.to());
         LlmBudgetVerdict instanceVerdict = LlmBudgetService.verdictFor(
                 instanceCapSpend,
@@ -129,15 +132,8 @@ public class LlmUsageService {
      */
     @Transactional
     public void updateOwnProviderBudget(Long workspaceId, @Nullable BigDecimal monthlyBudgetUsd) {
-        // Locked read — see LlmUsageAdminService#updateBudget: the two caps share one workspace row,
-        // and Hibernate's all-columns UPDATE would otherwise let this write revert the instance
-        // admin's cap (or be reverted by it).
-        Workspace workspace = workspaceRepository
-                .findByIdForUpdate(workspaceId)
-                .orElseThrow(() -> new EntityNotFoundException("Workspace", workspaceId.toString()));
-        BigDecimal before = workspace.getMonthlyByoLlmBudgetUsd();
-        workspace.setMonthlyByoLlmBudgetUsd(monthlyBudgetUsd);
-        workspaceRepository.save(workspace);
+        var change = workspaceCommands.updateOwnProviderLlmBudget(workspaceId, monthlyBudgetUsd);
+        BigDecimal before = change.previousLimit();
         configAudit.record(ConfigAuditEntry.updated(
                 ConfigAuditEntityType.WORKSPACE_OWN_PROVIDER_LLM_BUDGET,
                 workspaceId,

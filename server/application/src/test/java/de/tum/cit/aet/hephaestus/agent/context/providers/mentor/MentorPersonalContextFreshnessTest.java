@@ -19,6 +19,7 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceActorSelector;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import de.tum.cit.aet.hephaestus.workspace.WorkspaceSummaryFixtures;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
@@ -54,9 +55,11 @@ class MentorPersonalContextFreshnessTest extends BaseUnitTest {
             case WORKSPACE -> {
                 var workspaces = mock(WorkspaceRepository.class);
                 var workspace = new Workspace();
+                workspace.setId(1L);
                 workspace.setWorkspaceSlug("context-freshness");
                 when(workspaces.findById(1L)).thenReturn(Optional.of(workspace));
-                yield new WorkspaceContentSource(accounts, workspaces, queries, actorSelector, mapper);
+                yield new WorkspaceContentSource(
+                        accounts, WorkspaceSummaryFixtures.summaries(workspaces), queries, actorSelector, mapper);
             }
             case AUTHORED_WORK ->
                 new RecentAuthoredWorkContentSource(

@@ -9,6 +9,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import de.tum.cit.aet.hephaestus.testconfig.WorkspacePortFixtures;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.math.BigDecimal;
@@ -41,7 +42,7 @@ class LlmBudgetServiceTest extends BaseUnitTest {
 
     @BeforeEach
     void setUp() {
-        budgetService = new LlmBudgetService(usageRepository, workspaceRepository);
+        budgetService = new LlmBudgetService(usageRepository, WorkspacePortFixtures.queries(workspaceRepository));
     }
 
     private Workspace workspaceWithBudgets(@Nullable BigDecimal instanceBudget, @Nullable BigDecimal byoBudget) {
