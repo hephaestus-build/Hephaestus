@@ -830,7 +830,7 @@ describe("the public activity page setting", () => {
 		try {
 			await user.click(page.getByRole("button", { name: "Retry" }));
 			const retrying = await page.findByRole("button", { name: "Retrying…" });
-			expect(retrying.hasAttribute("disabled")).toBe(true);
+			expect(retrying.getAttribute("aria-disabled")).toBe("true");
 		} finally {
 			fresh.resolve();
 		}

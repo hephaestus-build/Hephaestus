@@ -206,11 +206,15 @@ describe("workspace AI models route", () => {
 		await waitFor(() => expect(detectionSaves).toBe(1));
 		fireEvent.click(saveButton("Ask Hephaestus"));
 
-		await waitFor(() => expect(saveButton("Ask Hephaestus").disabled).toBe(false));
-		expect(saveButton("Practice reviews").disabled).toBe(true);
+		await waitFor(() =>
+			expect(saveButton("Ask Hephaestus").getAttribute("aria-disabled")).toBeNull(),
+		);
+		expect(saveButton("Practice reviews").getAttribute("aria-disabled")).toBe("true");
 
 		releaseSlowSave();
-		await waitFor(() => expect(saveButton("Practice reviews").disabled).toBe(false));
+		await waitFor(() =>
+			expect(saveButton("Practice reviews").getAttribute("aria-disabled")).toBeNull(),
+		);
 		expect(detectionSaves).toBe(1);
 	});
 
@@ -362,7 +366,9 @@ describe("workspace AI models route", () => {
 
 		fireEvent.click(saveButton("Practice reviews", "In-house"));
 
-		await waitFor(() => expect(saveButton("Practice reviews", "In-house").disabled).toBe(true));
+		await waitFor(() =>
+			expect(saveButton("Practice reviews", "In-house").getAttribute("aria-disabled")).toBe("true"),
+		);
 		expect(saveButton("Practice reviews", "Cloud").disabled).toBe(false);
 		expect(pickerOf(row("Practice reviews", "Cloud")).hasAttribute("disabled")).toBe(false);
 
@@ -385,7 +391,7 @@ describe("workspace AI models route", () => {
 		const clearing = await within(row("Practice reviews")).findByRole("button", {
 			name: /^Clearing…/u,
 		});
-		expect(clearing.hasAttribute("disabled")).toBe(true);
+		expect(clearing.getAttribute("aria-disabled")).toBe("true");
 		expect(within(row("Practice reviews")).queryByRole("button", { name: /^Saving…/u })).toBeNull();
 
 		releaseSlowClear();

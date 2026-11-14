@@ -139,7 +139,7 @@ describe("instance overview release card", () => {
 		try {
 			await user.click(within(notice).getByRole("button", { name: "Retry" }));
 			const retrying = await within(notice).findByRole("button", { name: "Retrying…" });
-			expect(retrying.hasAttribute("disabled")).toBe(true);
+			expect(retrying.getAttribute("aria-disabled")).toBe("true");
 		} finally {
 			fresh.resolve();
 		}

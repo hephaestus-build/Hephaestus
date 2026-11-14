@@ -108,7 +108,10 @@ export const LoadingMore: Story = {
 	args: { state: { ...ready(ITEM_ENTRIES, true), loadingMore: true } },
 	play: async ({ canvas }) => {
 		await expectTablePlaceholders(canvas.getByRole("table", { name: "Files and practices" }));
-		await expect(canvas.getByRole("button", { name: "Loading…" })).toBeDisabled();
+		await expect(canvas.getByRole("button", { name: "Loading…" })).toHaveAttribute(
+			"aria-disabled",
+			"true",
+		);
 	},
 };
 

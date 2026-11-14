@@ -670,8 +670,8 @@ describe("refreshing public activity", () => {
 		);
 		await userEvent.setup().click(screen.getByRole("button", { name: "Retry" }));
 		await waitFor(() =>
-			expect(screen.getByRole<HTMLButtonElement>("button", { name: "Retrying…" }).disabled).toBe(
-				true,
+			expect(screen.getByRole("button", { name: "Retrying…" }).getAttribute("aria-disabled")).toBe(
+				"true",
 			),
 		);
 		expect(names()).toStrictEqual(["Ada Lovelace", "Bob Brenner"]);

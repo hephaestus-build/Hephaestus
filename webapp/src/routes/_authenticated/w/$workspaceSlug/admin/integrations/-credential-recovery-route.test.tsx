@@ -1271,7 +1271,9 @@ describe("source-control management reads", () => {
 			try {
 				await user.click(screen.getByRole("button", { name: "Retry" }));
 				await waitFor(() => expect(repositories.reads.count).toBe(repositoryReads + 2));
-				expect(screen.getByRole("button", { name: "Retrying…" })).toHaveProperty("disabled", true);
+				expect(
+					screen.getByRole("button", { name: "Retrying…" }).getAttribute("aria-disabled"),
+				).toBe("true");
 				await user.click(screen.getByRole("button", { name: "Stop monitoring acme/platform/api" }));
 				await screen.findByRole("alertdialog", { name: "Stop monitoring acme/platform/api?" });
 			} finally {
@@ -1516,7 +1518,7 @@ describe("Slack credential recovery", () => {
 			const pending = await screen.findByRole<HTMLButtonElement>("button", {
 				name: "Redirecting to Slack…",
 			});
-			expect(pending.disabled).toBe(true);
+			expect(pending.getAttribute("aria-disabled")).toBe("true");
 			response.resolve();
 
 			await waitFor(() => expect(window.location.href).toBe(vendorUrl));
@@ -1774,7 +1776,9 @@ describe("canceled sync recovery on the integration overview", () => {
 					await screen.findByRole("button", { name: "Check and retry sync" }, ROUTE_RENDER_WAIT),
 				);
 				await waitFor(() => expect(requests).toStrictEqual([{ type: "RECONCILIATION" }]));
-				expect(screen.getByRole("button", { name: "Checking…" })).toHaveProperty("disabled", true);
+				expect(
+					screen.getByRole("button", { name: "Checking…" }).getAttribute("aria-disabled"),
+				).toBe("true");
 				response.resolve();
 				await waitFor(() => expect(announced).toHaveBeenCalledWith(message));
 			} finally {
@@ -1808,7 +1812,7 @@ describe("canceled sync recovery on the integration overview", () => {
 				{ name: "Stopping…" },
 				ROUTE_RENDER_WAIT,
 			);
-			expect(stoppingButton).toHaveProperty("disabled", true);
+			expect(stoppingButton.getAttribute("aria-disabled")).toBe("true");
 			expect(screen.queryByRole("button", { name: /check and retry/iu })).toBeNull();
 		},
 	);
@@ -1979,7 +1983,10 @@ describe("sync evidence through a failed refresh", () => {
 				}),
 			);
 			const retrying = screen.getAllByRole("button", { name: "Retrying…" });
-			expect(retrying.map((button) => button.hasAttribute("disabled"))).toStrictEqual([true, true]);
+			expect(retrying.map((button) => button.getAttribute("aria-disabled"))).toStrictEqual([
+				"true",
+				"true",
+			]);
 			screen.getByText("acme/platform/ledger");
 			screen.getByText("Sub-issue sync stopped after 40 of 52 issues.");
 		} finally {

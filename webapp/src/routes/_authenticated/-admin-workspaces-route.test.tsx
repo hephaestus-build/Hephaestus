@@ -119,7 +119,7 @@ describe("instance workspaces route", () => {
 		try {
 			await user.click(screen.getByRole("button", { name: "Retry" }));
 			const retrying = await screen.findByRole("button", { name: "Retrying…" });
-			expect(retrying).toHaveProperty("disabled", true);
+			expect(retrying.getAttribute("aria-disabled")).toBe("true");
 			screen.getByRole("button", viewAsUser("AET"));
 			expect(served.answered).toBe(answeredBefore + 1);
 

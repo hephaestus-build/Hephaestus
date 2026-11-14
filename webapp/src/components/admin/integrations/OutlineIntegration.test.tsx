@@ -743,7 +743,7 @@ describe("Outline integration — managed collections read and Remove", () => {
 			collections.hold = retry.promise;
 			await user.click(screen.getByRole("button", { name: "Retry" }));
 			const retrying = await screen.findByRole("button", { name: "Retrying…" });
-			expect(retrying).toHaveProperty("disabled", true);
+			expect(retrying.getAttribute("aria-disabled")).toBe("true");
 			await waitFor(() => expect(collections.reads).toBe(readsBefore + 2));
 			screen.getByText("Engineering");
 

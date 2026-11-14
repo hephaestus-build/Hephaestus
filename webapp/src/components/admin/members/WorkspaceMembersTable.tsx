@@ -264,9 +264,16 @@ function MemberActions({ member, onRemove, onAddBack }: MemberActionsProps) {
 			<DropdownMenuTrigger
 				ref={trigger}
 				aria-busy={pending || undefined}
-				render={<Button variant="ghost" size="icon-xs" aria-label={`Actions for ${member.name}`} />}
+				render={
+					<Button
+						pending={pending}
+						variant="ghost"
+						size="icon-xs"
+						aria-label={`Actions for ${member.name}`}
+					/>
+				}
 			>
-				{pending ? <Spinner /> : <MoreHorizontal className="size-4" />}
+				<MoreHorizontal className="size-4" />
 			</DropdownMenuTrigger>
 			<DropdownMenuContent align="end">
 				<DropdownMenuGroup>
@@ -281,7 +288,6 @@ function MemberActions({ member, onRemove, onAddBack }: MemberActionsProps) {
 					>
 						{left ? <UserPlus className="size-4" /> : <UserMinus className="size-4" />}
 						{left ? "Add back to workspace" : "Remove from workspace"}
-						{pending && <Spinner />}
 					</DropdownMenuItem>
 				</DropdownMenuGroup>
 			</DropdownMenuContent>

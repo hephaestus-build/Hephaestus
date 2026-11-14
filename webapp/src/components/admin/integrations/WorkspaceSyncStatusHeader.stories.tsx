@@ -301,7 +301,10 @@ export const BackfillUnsupported: Story = {
 export const SyncTriggerPending: Story = {
 	args: { triggeringType: "RECONCILIATION" },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("button", { name: /starting…/iu })).toBeDisabled();
+		await expect(canvas.getByRole("button", { name: /starting…/iu })).toHaveAttribute(
+			"aria-disabled",
+			"true",
+		);
 		await expect(canvas.getByRole("button", { name: /more sync options/iu })).toBeDisabled();
 	},
 };
@@ -323,7 +326,10 @@ export const Cancelling: Story = {
 		status: { ...baseStatus, activeJob: { ...runningJob, cancelRequested: true } },
 	},
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("button", { name: "Stopping…" })).toBeDisabled();
+		await expect(canvas.getByRole("button", { name: "Stopping…" })).toHaveAttribute(
+			"aria-disabled",
+			"true",
+		);
 		await expect(
 			canvas.queryByRole("button", { name: /check and retry/iu }),
 		).not.toBeInTheDocument();
@@ -427,7 +433,10 @@ export const StoppingInitial: Story = {
 		status: { ...baseStatus, activeJob: { ...runningJob, type: "INITIAL", cancelRequested: true } },
 	},
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("button", { name: "Stopping…" })).toBeDisabled();
+		await expect(canvas.getByRole("button", { name: "Stopping…" })).toHaveAttribute(
+			"aria-disabled",
+			"true",
+		);
 		await expect(
 			canvas.queryByRole("button", { name: /check and retry/iu }),
 		).not.toBeInTheDocument();
@@ -443,7 +452,10 @@ export const StoppingUnsupportedBackfill: Story = {
 		},
 	},
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("button", { name: "Stopping…" })).toBeDisabled();
+		await expect(canvas.getByRole("button", { name: "Stopping…" })).toHaveAttribute(
+			"aria-disabled",
+			"true",
+		);
 		await expect(
 			canvas.queryByRole("button", { name: /check and retry/iu }),
 		).not.toBeInTheDocument();
