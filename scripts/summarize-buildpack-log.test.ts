@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -76,4 +76,65 @@ void test("a buildpack download that does not come from the dependency binding f
 		fetched.stdout.includes(`::error::A buildpack downloaded ${upstream}.`),
 		fetched.stdout,
 	);
+});
+
+void test("the lifecycle's failure lines become one annotation, so the step names its cause", (t) => {
+	const directory = mkdtempSync(path.join(tmpdir(), "buildpack-log-"));
+	t.after(() => rmSync(directory, { recursive: true, force: true }));
+	const result = spawnSync(
+		process.execPath,
+		["scripts/summarize-buildpack-log.ts", path.join(directory, "raw.log")],
+		{
+			input: [
+				"[builder]   BellSoft Liberica JRE 21.0.13: Contributing to layer",
+				"[builder] unable to invoke layer creator",
+				"[builder] unable to get dependency BellSoft Liberica JRE. see DEBUG log level",
+				"[builder] \u001B[31mERROR: \u001B[0mfailed to build: exit status 1",
+				"ERROR: failed to build: executing lifecycle: failed with status code: 51",
+				"",
+			].join("\n"),
+			encoding: "utf8",
+		},
+	);
+	assert.equal(result.status, 0, result.stderr);
+	assert.ok(
+		result.stdout.includes(
+			"::error title=Buildpacks build failed::[builder] unable to invoke layer creator%0A[builder] unable to get dependency BellSoft Liberica JRE. see DEBUG log level%0A[builder] ERROR: failed to build: exit status 1%0AERROR: failed to build: executing lifecycle: failed with status code: 51",
+		),
+		result.stdout,
+	);
+	const warning = spawnSync(
+		process.execPath,
+		["scripts/summarize-buildpack-log.ts", path.join(directory, "raw.log")],
+		{ input: "[builder] unable to read an optional file\n", encoding: "utf8" },
+	);
+	assert.doesNotMatch(warning.stdout, /::error/u);
+});
+
+void test("the image build takes the per-arch digest that the lifecycle reports, with no registry read", (t) => {
+	const workflow = readFileSync(".github/workflows/reusable-docker-build.yml", "utf8");
+	const start = workflow.indexOf("mapfile -t reported");
+	const assignment = String.raw`DIGEST=${"$"}{reported[0]}`;
+	const end = workflow.indexOf(assignment, start);
+	assert.ok(start !== -1 && end !== -1, "the build step reads the reported digest");
+	const snippet = `${workflow.slice(start, end)}${assignment}\necho "$DIGEST"`.replaceAll(
+		/^ {10}/gmu,
+		"",
+	);
+	const directory = mkdtempSync(path.join(tmpdir(), "buildpack-digest-"));
+	t.after(() => rmSync(directory, { recursive: true, force: true }));
+	const digest = `sha256:${"a".repeat(64)}`;
+	const run = (log: string) => {
+		writeFileSync(path.join(directory, "buildpacks.log"), log);
+		return spawnSync("bash", ["-euo", "pipefail", "-c", snippet], {
+			encoding: "utf8",
+			env: { ...process.env, RUNNER_TEMP: directory },
+		});
+	};
+	const reported = run(`[exporter] *** Images (${digest}):\n[exporter]       ghcr.io/x:tag\n`);
+	assert.equal(reported.status, 0, reported.stderr);
+	assert.equal(reported.stdout.trim(), digest);
+	const missing = run("Successfully built image\n");
+	assert.notEqual(missing.status, 0);
+	assert.match(missing.stdout, /reported 0 image digests/u);
 });
