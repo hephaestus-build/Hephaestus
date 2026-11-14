@@ -1,0 +1,116 @@
+{
+  "description" : "Composition eval case gh-c-04-scheduler-skip-without-reason: the model raises a gap that still-current earlier advice on its practice already named, as a live model did on 2026-10-31. The check asks it back, and it withholds the result as NO_MATERIAL_CHANGE with the earlier advice as its witness.",
+  "evalCase" : "gh-c-04-scheduler-skip-without-reason",
+  "responses" : [ {
+    "tool" : "check_package",
+    "arguments" : {
+      "decisions" : [ {
+        "resultId" : "f0791410-b25a-34af-b708-4bc0f74b12ff",
+        "disposition" : "RAISE"
+      } ],
+      "summary" : {
+        "basedOn" : [ "f0791410-b25a-34af-b708-4bc0f74b12ff" ],
+        "body" : "The bare skip marker disables the only check that a cancelled job does not run, and no reason is tied to it. Restore the test, or record why the check no longer applies."
+      },
+      "inline" : [ ]
+    }
+  }, {
+    "tool" : "check_package",
+    "arguments" : {
+      "decisions" : [ {
+        "resultId" : "f0791410-b25a-34af-b708-4bc0f74b12ff",
+        "disposition" : "NO_MATERIAL_CHANGE",
+        "witnessIds" : [ "feedback:12ac6e04-6d7c-3512-9ace-f89523f64253" ]
+      } ],
+      "summary" : null,
+      "inline" : [ ]
+    }
+  }, {
+    "tool" : "publish_package",
+    "arguments" : {
+      "draftId" : "${draftId}"
+    }
+  } ],
+  "expected" : {
+    "packages" : [ {
+      "basisResultIds" : [ "f0791410-b25a-34af-b708-4bc0f74b12ff" ],
+      "composition" : [ {
+        "destination" : "ON_WORK",
+        "resultIds" : [ "f0791410-b25a-34af-b708-4bc0f74b12ff" ],
+        "summary" : null,
+        "notes" : [ ],
+        "withheldReason" : "COMPOSER_WITHHELD",
+        "trace" : {
+          "copies" : [ ],
+          "withheld" : [ {
+            "basedOn" : [ {
+              "resultId" : "f0791410-b25a-34af-b708-4bc0f74b12ff",
+              "problemId" : null
+            } ],
+            "reason" : "NO_MATERIAL_CHANGE",
+            "witnessIds" : [ "feedback:12ac6e04-6d7c-3512-9ace-f89523f64253" ]
+          } ],
+          "replacesId" : null,
+          "primaryResultId" : null
+        },
+        "page" : null
+      } ],
+      "publicComposition" : true,
+      "publicationContext" : "v1:7:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "editOf" : null
+    } ],
+    "reviewStops" : [ ],
+    "handedOn" : "ROUTING_UNAVAILABLE",
+    "calls" : [ {
+      "system" : "589e8428aef21d6493632f86116fe7c9ba11d8fe634c0174fab192f5b73a2830",
+      "tools" : "75f46aa3226942af00094c1cd798f0d4e6d62e64c5474865fd27e152ee145a96",
+      "messages" : [ {
+        "role" : "user",
+        "text" : {
+          "sha256" : "1c60e7203e54013e2bd3346ee4eb4f7cb915cf2c293716ff4fe3b91af10b2e3c",
+          "length" : 20027
+        }
+      } ]
+    }, {
+      "messages" : [ {
+        "role" : "assistant",
+        "toolCalls" : [ {
+          "name" : "check_package",
+          "arguments" : {
+            "decisions" : [ {
+              "resultId" : "f0791410-b25a-34af-b708-4bc0f74b12ff",
+              "disposition" : "RAISE"
+            } ],
+            "summary" : {
+              "basedOn" : [ "f0791410-b25a-34af-b708-4bc0f74b12ff" ],
+              "body" : "The bare skip marker disables the only check that a cancelled job does not run, and no reason is tied to it. Restore the test, or record why the check no longer applies."
+            },
+            "inline" : [ ]
+          }
+        } ]
+      }, {
+        "role" : "tool",
+        "text" : "review refused, nothing was stored:\n- decisions #1: feedback:12ac6e04-6d7c-3512-9ace-f89523f64253 already gave still-current advice on keeps-the-test-suite-honest to this work. If it gave this advice, decide ALREADY_SAID or NO_MATERIAL_CHANGE with witnessIds [feedback:12ac6e04-6d7c-3512-9ace-f89523f64253]. If this result makes a point it did not, keep RAISE and add newSince: what this result says that the earlier advice did not"
+      } ]
+    }, {
+      "messages" : [ {
+        "role" : "assistant",
+        "toolCalls" : [ {
+          "name" : "check_package",
+          "arguments" : {
+            "decisions" : [ {
+              "resultId" : "f0791410-b25a-34af-b708-4bc0f74b12ff",
+              "disposition" : "NO_MATERIAL_CHANGE",
+              "witnessIds" : [ "feedback:12ac6e04-6d7c-3512-9ace-f89523f64253" ]
+            } ],
+            "summary" : null,
+            "inline" : [ ]
+          }
+        } ]
+      }, {
+        "role" : "tool",
+        "text" : "{\"draftId\":\"fe0629516ded7729ac91dffd5441a6b645fd72bff9bdeabc7c0f88f0f87daff9\",\"checked\":true,\"next\":\"Correct the draft and check again, or publish_package with this draftId.\"}"
+      } ]
+    } ]
+  }
+}

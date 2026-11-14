@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.function.Function;
 import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
@@ -138,8 +139,19 @@ final class ReviewOnWork {
 
     // ---------------------------------------------------------------- already said on this work
 
-    /** Two cutoffs, two questions: advice the work could have answered, and words said here before composition. */
-    record Witness(boolean eligibleForPriorAdvice, boolean eligibleForAlreadySaid) {}
+    /**
+     * Two cutoffs, two questions: advice the work could have answered, and words said here before composition.
+     *
+     * @param practices the practices whose NOT_MET results the statement rests on; empty for a statement of a person
+     */
+    record Witness(boolean eligibleForPriorAdvice, boolean eligibleForAlreadySaid, Set<String> practices) {
+        Witness {
+            practices = Set.copyOf(practices);
+        }
+    }
+
+    /** What a raise over still-current advice on its practice says that the advice did not; one or two sentences. */
+    static final int NEW_SINCE_CHARS = 300;
 
     record OwnHistory(List<ObjectNode> feedback, int oversizedEntries, int budgetEntries) {}
 
@@ -293,13 +305,25 @@ final class ReviewOnWork {
                         witnessId,
                         new Witness(
                                 isTrue(statement.path("eligibleForPriorAdvice")),
-                                isTrue(statement.path("eligibleForAlreadySaid"))));
+                                isTrue(statement.path("eligibleForAlreadySaid")),
+                                practices(statement.path("basedOn"))));
         }
         for (JsonNode statement : listOf(capturedStatements)) {
             boolean eligible = isTrue(statement.path("eligibleForPriorAdvice"));
-            witnesses.put(Evidence.text(statement.path("witnessId")), new Witness(eligible, eligible));
+            witnesses.put(Evidence.text(statement.path("witnessId")), new Witness(eligible, eligible, Set.of()));
         }
         return witnesses;
+    }
+
+    /** The practices of the NOT_MET results that a delivered piece rests on. */
+    static Set<String> practices(JsonNode basedOn) {
+        var practices = new TreeSet<String>();
+        for (JsonNode support : listOf(basedOn))
+            if (isRecord(support)
+                    && "NOT_MET".equals(string(support.path("outcome")))
+                    && support.path("practiceSlug").isString())
+                practices.add(Js.trim(support.path("practiceSlug").asString()));
+        return practices;
     }
 
     // ---------------------------------------------------------------- the tool
@@ -454,6 +478,13 @@ final class ReviewOnWork {
             witnessIds.put("maxItems", 0);
             witnessIds.putObject("items").put("type", "string");
         }
+        var newSince = decisionProperties.putObject("newSince");
+        newSince.put("type", "string");
+        newSince.put("maxLength", NEW_SINCE_CHARS);
+        newSince.put(
+                "description",
+                "Only for a RAISE whose practice already has still-current advice on this work: what this result "
+                        + "says that the earlier advice did not. Without it, such a raise is asked back.");
         witnessIds.put(
                 "description",
                 "For ALREADY_SAID or NO_MATERIAL_CHANGE: the witnessId of each statement under what was "
@@ -731,7 +762,11 @@ final class ReviewOnWork {
                 : value;
     }
 
-    private record DecisionInput(String resultId, String disposition, List<String> witnessIds) {}
+    private record DecisionInput(
+            String resultId,
+            String disposition,
+            List<String> witnessIds,
+            @Nullable String newSince) {}
 
     private record NoteInput(String body, List<String> basedOn, String problemId, int citationIndex) {}
 
@@ -757,8 +792,8 @@ final class ReviewOnWork {
                     continue;
                 }
                 for (String key : decision.propertyNames())
-                    if (!Set.of("resultId", "disposition", "witnessIds").contains(key))
-                        errors.add(prefix + ": unrecognized key \"" + key + "\"");
+                    if (!Set.of("resultId", "disposition", "witnessIds", "newSince")
+                            .contains(key)) errors.add(prefix + ": unrecognized key \"" + key + "\"");
                 String id = string(decision.path("resultId"));
                 String disposition = string(decision.path("disposition"));
                 if (id == null || Js.blank(id)) errors.add(prefix + ".resultId: expected a non-empty string");
@@ -773,8 +808,15 @@ final class ReviewOnWork {
                         witnessIds = List.of();
                     }
                 }
+                JsonNode newSinceNode = decision.path("newSince");
+                String newSince = null;
+                if (!newSinceNode.isMissingNode() && !newSinceNode.isNull()) {
+                    newSince = newSinceNode.isString() ? Js.trim(newSinceNode.asString()) : null;
+                    if (newSince == null || newSince.isEmpty())
+                        errors.add(prefix + ".newSince: expected a non-empty string, or null");
+                }
                 if (id != null && !Js.blank(id) && disposition != null && DISPOSITIONS.contains(disposition))
-                    decisionInputs.add(new DecisionInput(Js.trim(id), disposition, witnessIds));
+                    decisionInputs.add(new DecisionInput(Js.trim(id), disposition, witnessIds, newSince));
             }
         JsonNode summaryNode = value.path("summary");
         String summaryBody = null;
@@ -859,7 +901,13 @@ final class ReviewOnWork {
             if (result != null && result.notMet()) decidedNamed.add(decision.resultId());
             if (decision.disposition().equals("RAISE")) {
                 if (!decision.witnessIds().isEmpty()) problems.add("a raised result names no witness");
-            } else problems.addAll(witnessProblems(decision.disposition(), decision.witnessIds(), witnesses));
+                if (result != null && result.notMet())
+                    problems.addAll(raiseProblems(result.practiceSlug(), decision.newSince(), witnesses));
+            } else {
+                problems.addAll(witnessProblems(decision.disposition(), decision.witnessIds(), witnesses));
+                if (decision.newSince() != null)
+                    problems.add("newSince goes only with RAISE: a withheld result says nothing new");
+            }
             problems.forEach(problem -> errors.add(label + ": " + problem));
             if (problems.isEmpty()) decided.put(decision.resultId(), decision.disposition());
         }
@@ -1038,6 +1086,34 @@ final class ReviewOnWork {
                         + ", and a text speaks about it or its problems; a result is raised or withheld, never both");
         });
         return errors;
+    }
+
+    /**
+     * A raise over still-current advice on its practice must say what is new since that advice. The server cannot tell
+     * whether the advice made this result's point, because a delivered piece rests on its own review's results and
+     * no problem identity links them to this review's; so it asks once, by practice, and the composer decides.
+     */
+    private static List<String> raiseProblems(
+            String practiceSlug, @Nullable String newSince, Map<String, Witness> witnesses) {
+        var current = witnesses.entrySet().stream()
+                .filter(entry -> entry.getValue().eligibleForPriorAdvice()
+                        && entry.getValue().practices().contains(practiceSlug))
+                .map(Map.Entry::getKey)
+                .toList();
+        if (current.isEmpty()) {
+            return newSince == null
+                    ? List.of()
+                    : List.of(
+                            "newSince goes only with a raise over still-current advice on its practice; leave it out");
+        }
+        if (newSince == null)
+            return List.of(String.join(", ", current) + " already gave still-current advice on " + practiceSlug
+                    + " to this work. If it gave this advice, decide ALREADY_SAID or NO_MATERIAL_CHANGE with witnessIds "
+                    + current + ". If this result makes a point it did not, keep RAISE and add newSince: what this "
+                    + "result says that the earlier advice did not");
+        if (newSince.length() > NEW_SINCE_CHARS)
+            return List.of("newSince has " + newSince.length() + " characters; keep it within " + NEW_SINCE_CHARS);
+        return List.of();
     }
 
     /** ALREADY_SAID needs a recorded communication; NO_MATERIAL_CHANGE also needs advice available at capture. */

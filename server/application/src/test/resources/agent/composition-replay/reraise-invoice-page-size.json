@@ -1,0 +1,116 @@
+{
+  "description" : "Composition eval case gh-c-03-invoice-page-size-zero: the model raises a gap that still-current earlier advice on its practice already named, as a live model did on 2026-10-31. The check asks it back, and it withholds the result as NO_MATERIAL_CHANGE with the earlier advice as its witness.",
+  "evalCase" : "gh-c-03-invoice-page-size-zero",
+  "responses" : [ {
+    "tool" : "check_package",
+    "arguments" : {
+      "decisions" : [ {
+        "resultId" : "325ccf86-7364-3123-ba96-da52f575f9c8",
+        "disposition" : "RAISE"
+      } ],
+      "summary" : {
+        "basedOn" : [ "325ccf86-7364-3123-ba96-da52f575f9c8" ],
+        "body" : "`size` is a request parameter and `(all.size() + size - 1) / size` has no guard for a value below 1. Reject a `size` below 1 before the arithmetic."
+      },
+      "inline" : [ ]
+    }
+  }, {
+    "tool" : "check_package",
+    "arguments" : {
+      "decisions" : [ {
+        "resultId" : "325ccf86-7364-3123-ba96-da52f575f9c8",
+        "disposition" : "NO_MATERIAL_CHANGE",
+        "witnessIds" : [ "feedback:e3358889-c19b-3bf4-b545-87fd587218d1" ]
+      } ],
+      "summary" : null,
+      "inline" : [ ]
+    }
+  }, {
+    "tool" : "publish_package",
+    "arguments" : {
+      "draftId" : "${draftId}"
+    }
+  } ],
+  "expected" : {
+    "packages" : [ {
+      "basisResultIds" : [ "325ccf86-7364-3123-ba96-da52f575f9c8" ],
+      "composition" : [ {
+        "destination" : "ON_WORK",
+        "resultIds" : [ "325ccf86-7364-3123-ba96-da52f575f9c8" ],
+        "summary" : null,
+        "notes" : [ ],
+        "withheldReason" : "COMPOSER_WITHHELD",
+        "trace" : {
+          "copies" : [ ],
+          "withheld" : [ {
+            "basedOn" : [ {
+              "resultId" : "325ccf86-7364-3123-ba96-da52f575f9c8",
+              "problemId" : null
+            } ],
+            "reason" : "NO_MATERIAL_CHANGE",
+            "witnessIds" : [ "feedback:e3358889-c19b-3bf4-b545-87fd587218d1" ]
+          } ],
+          "replacesId" : null,
+          "primaryResultId" : null
+        },
+        "page" : null
+      } ],
+      "publicComposition" : true,
+      "publicationContext" : "v1:7:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "editOf" : null
+    } ],
+    "reviewStops" : [ ],
+    "handedOn" : "ROUTING_UNAVAILABLE",
+    "calls" : [ {
+      "system" : "589e8428aef21d6493632f86116fe7c9ba11d8fe634c0174fab192f5b73a2830",
+      "tools" : "cf4cb9db16a47e8ea6da010b2748de7dc43d6e8a0a220c2580f10986e14f515a",
+      "messages" : [ {
+        "role" : "user",
+        "text" : {
+          "sha256" : "84ea1bafc2322640da81534816385392653f6dcbd74f94720dc67b1c2918f87a",
+          "length" : 23332
+        }
+      } ]
+    }, {
+      "messages" : [ {
+        "role" : "assistant",
+        "toolCalls" : [ {
+          "name" : "check_package",
+          "arguments" : {
+            "decisions" : [ {
+              "resultId" : "325ccf86-7364-3123-ba96-da52f575f9c8",
+              "disposition" : "RAISE"
+            } ],
+            "summary" : {
+              "basedOn" : [ "325ccf86-7364-3123-ba96-da52f575f9c8" ],
+              "body" : "`size` is a request parameter and `(all.size() + size - 1) / size` has no guard for a value below 1. Reject a `size` below 1 before the arithmetic."
+            },
+            "inline" : [ ]
+          }
+        } ]
+      }, {
+        "role" : "tool",
+        "text" : "review refused, nothing was stored:\n- decisions #1: feedback:e3358889-c19b-3bf4-b545-87fd587218d1 already gave still-current advice on validates-inputs-and-edge-cases-at-the-boundary to this work. If it gave this advice, decide ALREADY_SAID or NO_MATERIAL_CHANGE with witnessIds [feedback:e3358889-c19b-3bf4-b545-87fd587218d1]. If this result makes a point it did not, keep RAISE and add newSince: what this result says that the earlier advice did not"
+      } ]
+    }, {
+      "messages" : [ {
+        "role" : "assistant",
+        "toolCalls" : [ {
+          "name" : "check_package",
+          "arguments" : {
+            "decisions" : [ {
+              "resultId" : "325ccf86-7364-3123-ba96-da52f575f9c8",
+              "disposition" : "NO_MATERIAL_CHANGE",
+              "witnessIds" : [ "feedback:e3358889-c19b-3bf4-b545-87fd587218d1" ]
+            } ],
+            "summary" : null,
+            "inline" : [ ]
+          }
+        } ]
+      }, {
+        "role" : "tool",
+        "text" : "{\"draftId\":\"0f131e5ff6fe83578d5d19a235a379fe17d6106a0e06757dcb7f84bcc366dfea\",\"checked\":true,\"next\":\"Correct the draft and check again, or publish_package with this draftId.\"}"
+      } ]
+    } ]
+  }
+}

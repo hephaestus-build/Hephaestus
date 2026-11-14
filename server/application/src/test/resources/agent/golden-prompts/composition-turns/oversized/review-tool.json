@@ -73,6 +73,11 @@
               ]
             },
             "description": "For ALREADY_SAID or NO_MATERIAL_CHANGE: the witnessId of each statement under what was already said on this work that gave this advice. ALREADY_SAID takes a statement marked eligibleForAlreadySaid; NO_MATERIAL_CHANGE one marked eligibleForPriorAdvice. Checked, never stored."
+          },
+          "newSince": {
+            "type": "string",
+            "maxLength": 300,
+            "description": "Only for a RAISE whose practice already has still-current advice on this work: what this result says that the earlier advice did not. Without it, such a raise is asked back."
           }
         }
       }

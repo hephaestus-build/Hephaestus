@@ -1,0 +1,116 @@
+{
+  "description" : "Composition eval case gh-c-01-session-cache-remaining-swallow: the model raises a gap that still-current earlier advice on its practice already named, as a live model did on 2026-10-31. The check asks it back, and it withholds the result as NO_MATERIAL_CHANGE with the earlier advice as its witness.",
+  "evalCase" : "gh-c-01-session-cache-remaining-swallow",
+  "responses" : [ {
+    "tool" : "check_package",
+    "arguments" : {
+      "decisions" : [ {
+        "resultId" : "0852304b-007a-3d09-9125-894f2eee376e",
+        "disposition" : "RAISE"
+      } ],
+      "summary" : {
+        "basedOn" : [ "0852304b-007a-3d09-9125-894f2eee376e" ],
+        "body" : "The catch block in `write` returns and records nothing, so a failed cache write is invisible to callers. Log the error with the session id, or rethrow it."
+      },
+      "inline" : [ ]
+    }
+  }, {
+    "tool" : "check_package",
+    "arguments" : {
+      "decisions" : [ {
+        "resultId" : "0852304b-007a-3d09-9125-894f2eee376e",
+        "disposition" : "NO_MATERIAL_CHANGE",
+        "witnessIds" : [ "feedback:a599d9f5-0140-3ace-ac9e-07200a7950bc" ]
+      } ],
+      "summary" : null,
+      "inline" : [ ]
+    }
+  }, {
+    "tool" : "publish_package",
+    "arguments" : {
+      "draftId" : "${draftId}"
+    }
+  } ],
+  "expected" : {
+    "packages" : [ {
+      "basisResultIds" : [ "0852304b-007a-3d09-9125-894f2eee376e" ],
+      "composition" : [ {
+        "destination" : "ON_WORK",
+        "resultIds" : [ "0852304b-007a-3d09-9125-894f2eee376e" ],
+        "summary" : null,
+        "notes" : [ ],
+        "withheldReason" : "COMPOSER_WITHHELD",
+        "trace" : {
+          "copies" : [ ],
+          "withheld" : [ {
+            "basedOn" : [ {
+              "resultId" : "0852304b-007a-3d09-9125-894f2eee376e",
+              "problemId" : null
+            } ],
+            "reason" : "NO_MATERIAL_CHANGE",
+            "witnessIds" : [ "feedback:a599d9f5-0140-3ace-ac9e-07200a7950bc" ]
+          } ],
+          "replacesId" : null,
+          "primaryResultId" : null
+        },
+        "page" : null
+      } ],
+      "publicComposition" : true,
+      "publicationContext" : "v1:7:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "editOf" : null
+    } ],
+    "reviewStops" : [ ],
+    "handedOn" : "ROUTING_UNAVAILABLE",
+    "calls" : [ {
+      "system" : "589e8428aef21d6493632f86116fe7c9ba11d8fe634c0174fab192f5b73a2830",
+      "tools" : "74e8a4dd90a99eb80cebcbcf20f526dd8457b2d856edab32ddfaebf1007e003d",
+      "messages" : [ {
+        "role" : "user",
+        "text" : {
+          "sha256" : "85c47e9b123f56fba6955846143254b22b6a67a0b443ebd97907b6059fb2eef0",
+          "length" : 24198
+        }
+      } ]
+    }, {
+      "messages" : [ {
+        "role" : "assistant",
+        "toolCalls" : [ {
+          "name" : "check_package",
+          "arguments" : {
+            "decisions" : [ {
+              "resultId" : "0852304b-007a-3d09-9125-894f2eee376e",
+              "disposition" : "RAISE"
+            } ],
+            "summary" : {
+              "basedOn" : [ "0852304b-007a-3d09-9125-894f2eee376e" ],
+              "body" : "The catch block in `write` returns and records nothing, so a failed cache write is invisible to callers. Log the error with the session id, or rethrow it."
+            },
+            "inline" : [ ]
+          }
+        } ]
+      }, {
+        "role" : "tool",
+        "text" : "review refused, nothing was stored:\n- decisions #1: feedback:a599d9f5-0140-3ace-ac9e-07200a7950bc already gave still-current advice on handles-errors-instead-of-swallowing-them to this work. If it gave this advice, decide ALREADY_SAID or NO_MATERIAL_CHANGE with witnessIds [feedback:a599d9f5-0140-3ace-ac9e-07200a7950bc]. If this result makes a point it did not, keep RAISE and add newSince: what this result says that the earlier advice did not"
+      } ]
+    }, {
+      "messages" : [ {
+        "role" : "assistant",
+        "toolCalls" : [ {
+          "name" : "check_package",
+          "arguments" : {
+            "decisions" : [ {
+              "resultId" : "0852304b-007a-3d09-9125-894f2eee376e",
+              "disposition" : "NO_MATERIAL_CHANGE",
+              "witnessIds" : [ "feedback:a599d9f5-0140-3ace-ac9e-07200a7950bc" ]
+            } ],
+            "summary" : null,
+            "inline" : [ ]
+          }
+        } ]
+      }, {
+        "role" : "tool",
+        "text" : "{\"draftId\":\"0165534de216e8581c725681580750dc07577bbb8745f0c7aa9a316c8797fbc7\",\"checked\":true,\"next\":\"Correct the draft and check again, or publish_package with this draftId.\"}"
+      } ]
+    } ]
+  }
+}
