@@ -912,7 +912,7 @@ class LlmProxyService {
         boolean completed = false;
         try {
             UpstreamResult result =
-                    ProxyStreamingUtils.forward(parts, limit, response, capture == null ? tap : tap.andThen(capture));
+                    ProxyStreamingUtils.forward(parts, limit, response, capture == null ? tap : both(tap, capture));
             completed = !cancelled.get()
                     && (result.streamOutcome() == null || result.streamOutcome() == StreamOutcome.COMPLETED);
             return cancelled.get() && !result.streamed() ? null : result;
@@ -935,6 +935,17 @@ class LlmProxyService {
         Duration ceiling = BLOCK_TIMEOUT.plus(ProxyStreamingUtils.DEFAULT_SSE_TIMEOUT);
         Duration remaining = ProxyStreamingUtils.remainingUntil(deadline, now);
         return reviewStream || remaining.compareTo(ceiling) < 0 ? remaining : ceiling;
+    }
+
+    /** Feeds both: a usage tap that fails on a chunk does not keep that chunk from the capture. */
+    private static Consumer<byte[]> both(Consumer<byte[]> tap, Consumer<byte[]> capture) {
+        return chunk -> {
+            try {
+                tap.accept(chunk);
+            } finally {
+                capture.accept(chunk);
+            }
+        };
     }
 
     private boolean requestsStream(byte[] body) {

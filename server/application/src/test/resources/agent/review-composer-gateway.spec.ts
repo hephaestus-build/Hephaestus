@@ -74,3 +74,59 @@ void test("a provider's answer as one body and a refusal of the proxy reach the 
 		refusal: "NOT_STREAMED",
 	});
 });
+
+void test("the answer still reads when the provider left its last event open before the gateway's", async () => {
+	const { gateway } = client(stream(`data: [DONE]\n\nevent: ${ANSWER_EVENT}\ndata: ${ANSWER}\n\n`));
+	const open = client(
+		stream(
+			`data: [DONE]\n\nevent: ${ANSWER_EVENT}\ndata: ${ANSWER}\n\n`.replace("[DONE]\n\n", "[DONE]"),
+		),
+	);
+
+	assert.deepEqual(await gateway.model("openai-completions", "{}"), {
+		status: 200,
+		body: ANSWER,
+		refusal: null,
+	});
+	// Without the gateway's blank line, the provider's open event swallows the answer: no answer, a retry.
+	assert.equal((await open.gateway.model("openai-completions", "{}")).status, 502);
+});
+
+void test("only the stream's last event can be the answer, so a provider cannot forge one", async () => {
+	const { gateway } = client(
+		stream(
+			`event: ${ANSWER_EVENT}\ndata: ${ANSWER}\n\n` +
+				'data: {"choices":[{"index":0,"delta":{"content":"more"}}]}\n\n',
+		),
+	);
+
+	assert.deepEqual(await gateway.model("openai-completions", "{}"), {
+		status: 502,
+		body: "",
+		refusal: null,
+	});
+});
+
+void test("a stream that a provider answered with an error status keeps that status", async () => {
+	const { gateway } = client(
+		new Response("data: {}\n\n", { status: 400, headers: { "content-type": "text/event-stream" } }),
+	);
+
+	assert.deepEqual(await gateway.model("openai-completions", "{}"), {
+		status: 400,
+		body: "",
+		refusal: null,
+	});
+});
+
+void test("line endings of any form separate the events", async () => {
+	const { gateway } = client(
+		stream(`data: [DONE]\r\n\r\nevent: ${ANSWER_EVENT}\r\ndata: ${ANSWER}\r\n\r\n`),
+	);
+
+	assert.deepEqual(await gateway.model("openai-completions", "{}"), {
+		status: 200,
+		body: ANSWER,
+		refusal: null,
+	});
+});

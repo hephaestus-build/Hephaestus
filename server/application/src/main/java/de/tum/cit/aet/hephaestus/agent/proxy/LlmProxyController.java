@@ -119,7 +119,8 @@ class LlmProxyController {
     private static void writeAnswer(HttpServletResponse response, String answer) {
         try {
             var out = response.getOutputStream();
-            out.write(("event: " + ComposerStreamAnswer.EVENT + "\ndata: " + answer + "\n\n")
+            // The blank line first ends a last upstream event that the provider left open.
+            out.write(("\n\nevent: " + ComposerStreamAnswer.EVENT + "\ndata: " + answer + "\n\n")
                     .getBytes(StandardCharsets.UTF_8));
             out.flush();
         } catch (IOException clientGone) {

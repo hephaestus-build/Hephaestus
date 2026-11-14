@@ -8,6 +8,8 @@ import java.util.Map;
 import java.util.TreeMap;
 import java.util.function.Consumer;
 import org.jspecify.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -29,16 +31,24 @@ public final class ComposerStreamAnswer implements Consumer<byte[]> {
     /** The event that carries the assembled answer to the composer, after the upstream's own events. */
     public static final String EVENT = "hephaestus.answer";
 
-    // A composer reply is a few kilobytes of notes and tool calls; a stream past this is not one to keep.
-    private static final int MAX_BYTES = 4 * 1024 * 1024;
+    // The assembled text of one answer, its reasoning included: far above any output limit a composer asks for.
+    private static final int MAX_TEXT = 4 * 1024 * 1024;
+
+    // One event line; a completed response carries its whole output on one line.
+    private static final int MAX_LINE = 16 * 1024 * 1024;
+
+    private static final Logger log = LoggerFactory.getLogger(ComposerStreamAnswer.class);
 
     private static final JsonNodeFactory JSON = JsonNodeFactory.instance;
 
     private final LlmApiProtocol protocol;
     private final ObjectMapper mapper;
     private final ByteArrayOutputStream line = new ByteArrayOutputStream();
-    private int seen;
+    private boolean afterCarriageReturn;
+    private boolean finished;
+    private long text;
     private boolean overflowed;
+    private boolean failed;
 
     // openai-completions
     private final StringBuilder content = new StringBuilder();
@@ -61,28 +71,40 @@ public final class ComposerStreamAnswer implements Consumer<byte[]> {
         this.mapper = mapper;
     }
 
+    /** Reads lines ended by LF, CRLF or a lone CR, as the proxy's own event boundary does. */
     @Override
     public void accept(byte[] chunk) {
-        if (overflowed) return;
-        seen += chunk.length;
-        if (seen > MAX_BYTES) {
-            overflowed = true;
-            return;
-        }
+        if (overflowed || finished) return;
         int start = 0;
         for (int i = 0; i < chunk.length; i++) {
-            if (chunk[i] != '\n') continue;
-            line.write(chunk, start, i - start);
-            handle(line.toString(StandardCharsets.UTF_8));
-            line.reset();
+            byte b = chunk[i];
+            if (b != '\n' && b != '\r') continue;
+            boolean secondHalfOfCrLf = b == '\n' && afterCarriageReturn && i == start && line.size() == 0;
+            afterCarriageReturn = b == '\r';
+            if (!secondHalfOfCrLf) {
+                line.write(chunk, start, i - start);
+                endLine();
+            }
             start = i + 1;
         }
-        line.write(chunk, start, chunk.length - start);
+        if (start < chunk.length) {
+            afterCarriageReturn = false;
+            if (line.size() + chunk.length - start > MAX_LINE) {
+                overflow("an event line");
+                return;
+            }
+            line.write(chunk, start, chunk.length - start);
+        }
     }
 
-    /** The answer as the call answers without streaming; {@code null} when the stream did not reach its end. */
+    /**
+     * The answer as the call answers without streaming; {@code null} when the stream did not reach its end, failed, or
+     * was too large to keep. A last event that the provider did not end with a newline still counts.
+     */
     public @Nullable JsonNode answer() {
-        if (overflowed) return null;
+        if (!finished && !overflowed && line.size() > 0) endLine();
+        finished = true;
+        if (overflowed || failed) return null;
         return switch (protocol) {
             case OPENAI_COMPLETIONS -> completion();
             case ANTHROPIC_MESSAGES -> message();
@@ -90,10 +112,15 @@ public final class ComposerStreamAnswer implements Consumer<byte[]> {
         };
     }
 
+    private void endLine() {
+        String raw = line.toString(StandardCharsets.UTF_8);
+        line.reset();
+        handle(raw);
+    }
+
     private void handle(String raw) {
-        String text = raw.endsWith("\r") ? raw.substring(0, raw.length() - 1) : raw;
-        if (!text.startsWith("data:")) return;
-        String data = text.substring(5).strip();
+        if (!raw.startsWith("data:")) return;
+        String data = raw.substring(5).strip();
         if (data.isEmpty() || data.equals("[DONE]")) return;
         JsonNode event;
         try {
@@ -109,30 +136,67 @@ public final class ComposerStreamAnswer implements Consumer<byte[]> {
         }
     }
 
+    /** Counts assembled text; past the bound the answer is dropped, and the operator learns why. */
+    private boolean keep(String added) {
+        text += added.length();
+        if (text <= MAX_TEXT) return true;
+        overflow("its text");
+        return false;
+    }
+
+    private void overflow(String what) {
+        if (!overflowed)
+            log.warn("Dropped a composer answer: {} passed the assembly bound, protocol={}", what, protocol.wire());
+        overflowed = true;
+    }
+
     // ------------------------------------------------------------ openai-completions
 
     private void chunk(JsonNode event) {
+        // A provider that fails mid-stream sends an error instead of a choice; what came before is no answer.
+        if (event.has("error")) failed = true;
         JsonNode choice = event.path("choices").path(0);
         if (!choice.isObject()) return;
         JsonNode delta = choice.path("delta");
-        if (delta.path("content").isString()) {
+        if (delta.path("content").isString() && keep(delta.get("content").asString())) {
             anyContent = true;
             content.append(delta.get("content").asString());
         }
-        if (delta.path("reasoning_content").isString()) {
+        if (delta.path("reasoning_content").isString()
+                && keep(delta.get("reasoning_content").asString())) {
             anyReasoning = true;
             reasoning.append(delta.get("reasoning_content").asString());
         }
         for (JsonNode call : delta.path("tool_calls")) {
-            ToolCall assembled = calls.computeIfAbsent(call.path("index").asInt(0), index -> new ToolCall());
-            if (call.path("id").isString()) assembled.id = call.get("id").asString();
+            ToolCall assembled = toolCall(call);
+            if (call.path("id").isString() && assembled.id.isEmpty())
+                assembled.id = call.get("id").asString();
             JsonNode fn = call.path("function");
-            if (fn.path("name").isString()) assembled.name.append(fn.get("name").asString());
-            if (fn.path("arguments").isString())
+            // Some providers repeat the name in every delta: it is set once, as pi-ai sets it.
+            if (fn.path("name").isString() && assembled.name.isEmpty())
+                assembled.name = fn.get("name").asString();
+            if (fn.path("arguments").isString() && keep(fn.get("arguments").asString()))
                 assembled.arguments.append(fn.get("arguments").asString());
         }
-        if (choice.path("finish_reason").isString())
+        if (choice.path("finish_reason").isString()) {
             finishReason = choice.get("finish_reason").asString();
+            if (finishReason.equals("error")) failed = true;
+        }
+    }
+
+    /** The call a delta continues: by its index, else by its id, else the last one. */
+    private ToolCall toolCall(JsonNode delta) {
+        if (delta.path("index").isNumber())
+            return calls.computeIfAbsent(delta.get("index").asInt(), index -> new ToolCall());
+        String id = delta.path("id").asString("");
+        if (!id.isEmpty()) {
+            for (ToolCall known : calls.values()) if (known.id.equals(id)) return known;
+            ToolCall started = new ToolCall();
+            calls.put(calls.isEmpty() ? 0 : calls.lastKey() + 1, started);
+            return started;
+        }
+        if (calls.isEmpty()) calls.put(0, new ToolCall());
+        return calls.lastEntry().getValue();
     }
 
     private @Nullable JsonNode completion() {
@@ -144,9 +208,7 @@ public final class ComposerStreamAnswer implements Consumer<byte[]> {
             ArrayNode toolCalls = message.putArray("tool_calls");
             for (ToolCall call : calls.values()) {
                 ObjectNode written = toolCalls.addObject().put("id", call.id).put("type", "function");
-                written.putObject("function")
-                        .put("name", call.name.toString())
-                        .put("arguments", call.arguments.toString());
+                written.putObject("function").put("name", call.name).put("arguments", call.arguments.toString());
             }
         }
         if (anyReasoning) message.put("reasoning_content", reasoning.toString());
@@ -161,7 +223,7 @@ public final class ComposerStreamAnswer implements Consumer<byte[]> {
 
     private static final class ToolCall {
         private String id = "";
-        private final StringBuilder name = new StringBuilder();
+        private String name = "";
         private final StringBuilder arguments = new StringBuilder();
     }
 
@@ -176,13 +238,14 @@ public final class ComposerStreamAnswer implements Consumer<byte[]> {
             }
             case "content_block_delta" -> {
                 Block block = blocks.get(event.path("index").asInt(0));
-                if (block != null) block.add(event.path("delta"));
+                if (block != null) keep(block.add(event.path("delta")));
             }
             case "message_delta" -> {
                 JsonNode reason = event.path("delta").path("stop_reason");
                 if (!reason.isMissingNode()) stopReason = reason;
             }
             case "message_stop" -> messageStopped = true;
+            case "error" -> failed = true;
             default -> {}
         }
     }
@@ -207,25 +270,28 @@ public final class ComposerStreamAnswer implements Consumer<byte[]> {
             this.start = start;
         }
 
-        private void add(JsonNode delta) {
-            switch (delta.path("type").asString("")) {
+        /** Adds a delta's text, thinking, signature or tool input, and returns what it added. */
+        private String add(JsonNode delta) {
+            return switch (delta.path("type").asString("")) {
                 case "text_delta" -> append("text", delta.path("text"));
                 case "thinking_delta" -> append("thinking", delta.path("thinking"));
                 case "signature_delta" -> append("signature", delta.path("signature"));
                 case "input_json_delta" -> {
                     anyInput = true;
-                    input.append(delta.path("partial_json").asString(""));
+                    String partial = delta.path("partial_json").asString("");
+                    input.append(partial);
+                    yield partial;
                 }
-                default -> {}
-            }
+                default -> "";
+            };
         }
 
-        private void append(String field, JsonNode text) {
-            if (text.isString())
-                texts.computeIfAbsent(
-                                field,
-                                unused -> new StringBuilder(start.path(field).asString("")))
-                        .append(text.asString());
+        private String append(String field, JsonNode text) {
+            if (!text.isString()) return "";
+            texts.computeIfAbsent(
+                            field, unused -> new StringBuilder(start.path(field).asString("")))
+                    .append(text.asString());
+            return text.asString();
         }
 
         private JsonNode written(ObjectMapper mapper) {

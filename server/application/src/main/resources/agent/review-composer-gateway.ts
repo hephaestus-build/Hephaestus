@@ -211,6 +211,9 @@ export function compositionClient(gateway: Gateway): Client {
 			if (!(response.headers.get("content-type") ?? "").includes("text/event-stream")) {
 				return { status: response.status, body: text, refusal };
 			}
+			if (response.status < 200 || response.status >= 300) {
+				return { status: response.status, body: "", refusal };
+			}
 			// The gateway writes the recorded answer as the stream's last event; a stream without it is a failed call.
 			const answer = answerEvent(text);
 			return answer === null
@@ -225,24 +228,29 @@ export function compositionClient(gateway: Gateway): Client {
 /** The event that carries a streamed call's recorded answer: `ComposerStreamAnswer.EVENT` on the server. */
 export const ANSWER_EVENT = "hephaestus.answer";
 
-/** The data of the stream's answer event, or `null` when the stream has none. */
+/**
+ * The data of the stream's answer event, or `null` when the stream has none. Only the stream's last event counts: the
+ * gateway writes it after every event of the provider, so an earlier event of that name is not the gateway's.
+ */
 export function answerEvent(stream: string): string | null {
-	let found: string | null = null;
-	for (const event of stream.split(/\r?\n\r?\n/)) {
-		let name = "";
-		const data: string[] = [];
-		for (const line of event.split(/\r?\n/)) {
-			if (line.startsWith("event:")) {
-				name = line.slice(6).trim();
-			} else if (line.startsWith("data:")) {
-				data.push(line.slice(5).replace(/^ /, ""));
-			}
-		}
-		if (name === ANSWER_EVENT) {
-			found = data.join("\n");
+	const events = stream
+		.replaceAll(/\r\n?/g, "\n")
+		.split(/\n\n+/)
+		.filter((event) => event.trim() !== "");
+	const last = events.at(-1);
+	if (last === undefined) {
+		return null;
+	}
+	let name = "";
+	const data: string[] = [];
+	for (const line of last.split("\n")) {
+		if (line.startsWith("event:")) {
+			name = line.slice(6).trim();
+		} else if (line.startsWith("data:")) {
+			data.push(line.slice(5).replace(/^ /, ""));
 		}
 	}
-	return found;
+	return name === ANSWER_EVENT ? data.join("\n") : null;
 }
 
 async function json(response: Response): Promise<unknown> {
