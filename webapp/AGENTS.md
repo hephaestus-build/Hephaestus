@@ -218,19 +218,6 @@ Both live in the **`storybook-components` skill** (`.claude/skills/storybook-com
 when you design a component's props, write or review a `*.stories.tsx`, or grade a webapp diff. It has
 a routing table on the front page. Its `RUBRIC.md` is the grading instrument for review.
 
-`scripts/check-story-states.ts` runs in `gate:stories`.
-It requires a sibling story for each state that a component's props carry:
-
-- **Loading:** a prop `isLoading` or `loading`, or a `status` or `state` of `"loading"`.
-  `isPending` is not a signal, because on a form it means that a submit is in flight.
-- **Error:** a prop `error` or `isError`, a prop that ends in `Error` (`serverError`), or a `status` or `state` of `"error"`.
-- **Empty:** a `status` or `state` of `"empty"`.
-
-A story covers a state when its args, or the props that its `render` passes, set that state by the same rules.
-Its name decides nothing, so a story keeps the name of its domain state, such as `Checking` or `CheckRefused`.
-A component whose props cannot show a state needs no story for it. Do not add a prop to get one.
-Cover a state that the parent owns in the parent's story.
-
 ## Routing
 
 Declare routes with `createFileRoute`. Keep loaders side-effect free and prefer

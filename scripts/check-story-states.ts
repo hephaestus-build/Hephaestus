@@ -1,7 +1,8 @@
 /**
  * A component whose props carry a loading, error or empty state ships a story that sets each state it
- * can show (AGENTS.md § Hit every surface, UI states). `webapp/AGENTS.md` § Component API and
- * Storybook owns the rule: which props carry a state, and when a story covers it.
+ * can show (AGENTS.md § Hit every surface, UI states). The storybook-components skill owns the rule
+ * (`rules/story-args-and-coverage.md` § Which states earn a story): which props carry a state, and
+ * when a story covers it.
  *
  * The check reads declarations with Oxc, as the sibling gates do. On the component side, it follows a
  * props type through local aliases, interfaces, intersections, unions, generic arguments and relative
