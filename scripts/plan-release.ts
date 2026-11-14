@@ -370,7 +370,7 @@ export async function renderReleaseNotes(
 	throw new Error(`release notes: no "## ${previousVersion}" section below "## ${version}"`);
 }
 
-/** Refuses a cut whose CHANGELOG.md or MIGRATION.md names an unpublished release or lacks a published one. */
+/** Refuses a cut whose CHANGELOG.md or MIGRATION.md keeps a burned release section or lacks a published one. */
 async function withReleaseHistory(
 	plan: ReleasePlan,
 	releases: readonly ReleaseRef[],
@@ -395,7 +395,7 @@ async function withReleaseHistory(
 		? plan
 		: {
 				kind: "refuse",
-				reason: `${problems.join("; ")}. A Version PR regenerated after the last release folds such a section into it; push to main, merge the regenerated Version PR, and cut again.`,
+				reason: `${problems.join("; ")}. A Version PR regenerated after the last release folds such a section into it; merge a change with a changeset so that main regenerates the Version PR, merge that, and cut again.`,
 			};
 }
 
