@@ -1831,7 +1831,8 @@ Storage redirects retain their signed URL credentials. Other hosts receive no re
 Cosign keeps the upstream installer's trust chain.
 Its 3.1.3 bootstrap and release public key have the same pinned SHA-256 values as before.
 The bootstrap verifies the selected binary with both its keyless bundle and its KMS bundle.
-Syft and Trivy archives also match their pinned release checksum files before extraction.
+Syft and Trivy archives match their pinned SHA-256 values before extraction.
+Their release checksum files come from the same release, so a second check against them adds no trust.
 
 The image build installs `pack` through `setup-ci-tool`, for `linux/amd64` and `linux/arm64`.
 Pack publishes a SHA-256 file for each archive, but no signature.
