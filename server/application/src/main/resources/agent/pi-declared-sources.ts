@@ -8,14 +8,6 @@ import { CHANGE_ROOT } from "./pi-change.ts";
 import { DIFF_SOURCE, TREE_SOURCE } from "./work/practice-scripts/kits/scm/sources.ts";
 import { isJsonObject as isRecord } from "./work/practice-scripts/lib/core/json.ts";
 
-/**
- * Whether captured context sits on a volume that only the loop mounts. While it is false, `bash` and code
- * in the tools container can read every captured file, so only the loop's own tools hold the boundary.
- * ADR 0068's tools layer sets it with the Pod layout that makes it true (`SandboxLayout`), and L7 of ADR 0069
- * reads it to decide which sources a session could read.
- */
-export const CONTEXT_IS_LOOP_ONLY = false;
-
 /** What a session of a practice that declares `declared` may read. */
 export function readableKinds(declared: Iterable<string>): Set<string> {
 	return new Set([...declared, DIFF_SOURCE, TREE_SOURCE]);

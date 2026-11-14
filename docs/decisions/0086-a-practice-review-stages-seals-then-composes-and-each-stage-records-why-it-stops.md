@@ -134,3 +134,35 @@ Decision 16 is enforced for submitted reviews only. The prepared change adds `Fe
 - [ADR 0069 § Removed rules](0069-practices-run-when-ready-and-stay-current-by-their-sources.md#removed-rules): a window per kind, the check run, a three-value draft setting, and the deadline switch.
 - [ADR 0069 § Removed rules](0069-practices-run-when-ready-and-stay-current-by-their-sources.md#removed-rules): the interdiff resolve rule, and extra summary reasons.
 - [ADR 0074](0074-a-reviews-width-and-count-follow-the-provider.md#considered-options): a model check that selects practices before the sessions.
+
+## Update — 2026-11-14: `bash` reads undeclared sources, and this is accepted
+
+A practice session has `bash`.
+`bash` can read every captured file, including the files of sources that the practice does not declare.
+The read tools refuse such a file, so they keep a session on its sources, but they are not a boundary.
+The gap stays inside one review: a sandbox holds only its subject's capture.
+This update accepts the gap for 1.0. It does not close it.
+
+**Why it is accepted:**
+
+- A second user or container for the tools is already declined: [ADR 0079 § Option 2](0079-one-agent-system.md#2-a-pod-for-each-conversation-with-a-split-loop-and-tools-rejected).
+  The sandbox also runs as one unprivileged user with no privilege escalation. So it cannot start a process as another user.
+- Landlock can restrict an unprivileged process, but it has costs that 1.0 does not pay.
+  Node has no Landlock API, so the image needs a native helper. gVisor support is not verified. Some nodes run kernels without Landlock.
+- Removing `bash` from practice sessions changes review quality. Literal reads and Git history use it. No eval proves that a session without `bash` reviews as well.
+
+**What keeps results trustworthy:**
+
+- For each practice, freshness records the fingerprint of every captured source, whatever the practice declares.
+  The section above says this: "Freshness does not narrow to declared sources".
+  An undeclared read thus cannot keep a stale result current. The cost is extra staleness.
+  Enforced by: `DefaultReviewExecutionHandlerTest#shouldRecordEveryCapturedSourceFingerprintForEachPracticeWhateverItDeclares`.
+- Admission refuses a result that cites or consulted an undeclared source, with `UNDECLARED_SOURCE_CITED`.
+  So a result cannot rest on a source that its practice does not declare.
+  Enforced by: `ReviewOutputServiceTest#shouldWithholdAResultThatConsultedASourceItsPracticeDoesNotDeclare` and `ReviewToDeliveryContractIntegrationTest#shouldWithholdAnUndeclaredSourceAndComposeOnlyTheValidSibling`.
+
+**Residual risk:** an undeclared file can still influence the model's reasoning, without a citation.
+The mitigation is the review prompt's rule that captured context is data, never instructions.
+
+**Revisit trigger:** the isolation gate proves a per-process file boundary in the sandbox runtime, such as Landlock under gVisor, on the supported clusters.
+Then the host refuses undeclared reads for `bash` too, and results record only the declared fingerprints (§ Revisit trigger).

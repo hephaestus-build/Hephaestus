@@ -84,7 +84,6 @@
 		"chars": "count",
 		"codemode": "flag",
 		"compactions": "count",
-		"context_loop_only": "flag",
 		"context_window": "count",
 		"delay_ms": "count",
 		"duration_ms": "count",

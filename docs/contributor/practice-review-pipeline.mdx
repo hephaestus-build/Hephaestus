@@ -536,8 +536,9 @@ A result may cite only its declared sources, the change and the checkout. The ru
 Every session can also read the change and the checkout through Git.
 
 Thus, a session that uses only these tools reads and cites only its declared sources.
-`bash` and code in the session can still read every captured file, until captured context moves to a volume that only the loop mounts.
-[ADR 0069](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0069-practices-run-when-ready-and-stay-current-by-their-sources.md) decides this.
+`bash` and code in the session can still read every captured file. So these tools keep a session on its sources, but they are not a boundary.
+Freshness therefore records every captured source, and admission refuses an undeclared citation.
+[ADR 0086](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0086-a-practice-review-stages-seals-then-composes-and-each-stage-records-why-it-stops.md#update--2026-11-14-bash-reads-undeclared-sources-and-this-is-accepted) accepts this gap and names its residual risk.
 
 An omitted source requires continuous reads from line 1 through EOF.
 A failed read or an unread range of a required or cited source prevents complete coverage.
