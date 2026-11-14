@@ -373,7 +373,7 @@ class PrivateDestinationOutOfWorkspacesIntegrationTest extends BaseIntegrationTe
                 .filter(candidate -> candidate.id().equals(report))
                 .findFirst()
                 .orElseThrow();
-        assertThat(seen.excerpt()).isEqualTo("The list jumps");
+        assertThat(seen.message()).isEqualTo("The list jumps");
         assertThat(seen.issueClosedAs()).isEqualTo("completed");
         assertThat(filings.findById(report).orElseThrow().getState()).isEqualTo(FilingState.FILED);
     }
