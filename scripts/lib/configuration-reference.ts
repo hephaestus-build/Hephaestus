@@ -581,8 +581,13 @@ export function environmentGroup(row: Row): string {
 	return setting === undefined ? "other" : setting.split(".").slice(0, 2).join(".");
 }
 
-const slug = (group: string): string =>
-	group.replaceAll(/[^a-z0-9]+/gu, "-").replaceAll(/^-|-$/gu, "");
+/** The file name of a group: camelCase becomes kebab-case before every other character turns into a hyphen. */
+export const slug = (group: string): string =>
+	group
+		.replaceAll(/(?<=[a-z0-9])(?=[A-Z])/gu, "-")
+		.toLowerCase()
+		.replaceAll(/[^a-z0-9]+/gu, "-")
+		.replaceAll(/^-|-$/gu, "");
 const HELM_HEADER = [
 	"| Key | Type | Default | Required in object | Constraints |",
 	"| --- | --- | --- | --- | --- |",
@@ -626,13 +631,23 @@ function parts<T>(
 		const name = group(row);
 		byGroup.set(name, [...(byGroup.get(name) ?? []), line(row)]);
 	}
-	return [...byGroup.entries()]
+	const list = [...byGroup.entries()]
 		.toSorted(([a], [b]) => a.localeCompare(b))
 		.map(([name, lines]) => ({
 			name: `${prefix}-${slug(name)}`,
 			group: name,
 			lines: [...header, ...lines],
 		}));
+	// Two groups with one file name would write one file, and one section would be lost.
+	const seen = new Map<string, string>();
+	for (const part of list) {
+		const other = seen.get(part.name);
+		if (other !== undefined) {
+			throw new Error(`The groups "${other}" and "${part.group}" both write ${part.name}.mdx`);
+		}
+		seen.set(part.name, part.group);
+	}
+	return list;
 }
 
 /** The page lines that place each part. Fumadocs MDX inlines an `::include` at compile time, so its headings reach the page's table of contents. */

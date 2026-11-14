@@ -3,6 +3,7 @@ import { test } from "node:test";
 
 import { judge, unsettable } from "./check-configuration-reference.ts";
 import {
+	slug,
 	chartRows,
 	environmentGroup,
 	helmGroup,
@@ -331,4 +332,12 @@ void test("an admin page may not offer a variable that no chart workload sets", 
 			"SYNC_RESOLVED_LIMIT: listed, but no admin page offers it",
 		],
 	);
+});
+
+await test("a group's file name keeps every letter of a camelCase group", () => {
+	assert.equal(slug("config.credentialKey"), "config-credential-key");
+	assert.equal(slug("networkPolicy"), "network-policy");
+	assert.equal(slug("workspaceSubdomains"), "workspace-subdomains");
+	assert.equal(slug("hephaestus.llm"), "hephaestus-llm");
+	assert.equal(slug("top-level"), "top-level");
 });
