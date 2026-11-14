@@ -1,22 +1,22 @@
 {
 	"accepted": [
 		{
-			"load": "entry",
-			"gzipBytes": 387798,
-			"acceptedBy": "https://github.com/hephaestus-build/Hephaestus/pull/4330",
-			"reason": "Your reports and the admin list show the whole report and its saved filed issue. Markdown stays lazy until expansion; these measured route and entry changes support the report views without new packages."
+			"load": "src/routes/_authenticated/workspaces/new/github.tsx?tsr-split=component",
+			"gzipBytes": 6527,
+			"acceptedBy": "https://github.com/hephaestus-build/Hephaestus/pull/4379",
+			"reason": "The workspace creation pages show skeletons in the shape of their regions instead of a bare spinner, as webapp/DESIGN.md asks; the growth is the skeletons and their one-second delay."
 		},
 		{
-			"load": "src/routes/_authenticated/admin.feedback.tsx?tsr-split=component",
-			"gzipBytes": 60013,
-			"acceptedBy": "https://github.com/hephaestus-build/Hephaestus/pull/4330",
-			"reason": "Your reports and the admin list show the whole report and its saved filed issue. Markdown stays lazy until expansion; these measured route and entry changes support the report views without new packages."
+			"load": "src/routes/_authenticated/workspaces/new/gitlab.tsx?tsr-split=component",
+			"gzipBytes": 31697,
+			"acceptedBy": "https://github.com/hephaestus-build/Hephaestus/pull/4379",
+			"reason": "The workspace creation pages show skeletons in the shape of their regions instead of a bare spinner, as webapp/DESIGN.md asks; the growth is the skeletons and their one-second delay."
 		},
 		{
-			"load": "src/routes/_authenticated/product-feedback.tsx?tsr-split=component",
-			"gzipBytes": 24200,
-			"acceptedBy": "https://github.com/hephaestus-build/Hephaestus/pull/4330",
-			"reason": "Your reports and the admin list show the whole report and its saved filed issue. Markdown stays lazy until expansion; these measured route and entry changes support the report views without new packages."
+			"load": "src/routes/_authenticated/workspaces/new/index.tsx?tsr-split=component",
+			"gzipBytes": 4562,
+			"acceptedBy": "https://github.com/hephaestus-build/Hephaestus/pull/4379",
+			"reason": "The workspace creation pages show skeletons in the shape of their regions instead of a bare spinner, as webapp/DESIGN.md asks; the growth is the skeletons and their one-second delay."
 		}
 	]
 }
