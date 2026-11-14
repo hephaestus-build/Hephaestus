@@ -36,7 +36,7 @@ class PracticePiAdapterTest extends BaseUnitTest {
                 new PiResultParser(mapper, new SimpleMeterRegistry()),
                 new AgentImageProperties(IMAGE, ImagePullPolicy.IF_NOT_PRESENT),
                 new PracticeReviewProperties(
-                        false, 15, 5, samplingTemperature, 12, 16000, 1_152_000, Duration.ofMinutes(10)));
+                        false, 15, 5, samplingTemperature, 12, 16000, 342_000, Duration.ofMinutes(10)));
     }
 
     @Test
@@ -57,7 +57,7 @@ class PracticePiAdapterTest extends BaseUnitTest {
         assertThat(adapter.buildSandboxSpec(proxyRequest()).environment())
                 .containsEntry(PracticePiAdapter.PRACTICE_MODEL_CALLS_ENV, "12")
                 .containsEntry(PracticePiAdapter.PRACTICE_OUTPUT_TOKENS_ENV, "16000")
-                .containsEntry(PracticePiAdapter.PRACTICE_INPUT_TOKENS_ENV, "1152000");
+                .containsEntry(PracticePiAdapter.PRACTICE_INPUT_TOKENS_ENV, "342000");
     }
 
     @Test
