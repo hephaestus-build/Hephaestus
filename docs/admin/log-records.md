@@ -179,6 +179,20 @@ Each record has an `event.name` and `workspace.id`.
 
 `practice_review.stage.ended` takes `workspace.id`, `job.id`, `job.attempt`, `review.id`, `run.id`, `run.epoch`, `subject.key` and the trace ID from the log context of its attempt. `job.attempt` starts at zero. `run.epoch` identifies the lease claim and starts at one. Join stages by `job.id` and `job.attempt`. Use `review.id` to join attempts of one review, and `run.id` with `run.epoch` to identify the holder.
 
+## Erasure events
+
+Each record names what was erased by its ids alone.
+
+| `event.name` | Emitted when | Fields |
+| --- | --- | --- |
+| `account.deleted` | A person's deletion of their own account commits. The record is written at least once. | `account.id` |
+| `workspace.purged` | A workspace purge commits. | `workspace.id` |
+| `connection.erased` | A disconnect commits and erases the connection's local data. A provider can cause it, for example by a Slack app uninstall. | `connection.id`, `workspace.id` |
+
+A database restore brings the erased data back.
+Keep these records for as long as your oldest backup, so that the erasure recovery can erase the data again.
+[Backup and restore](./backup-restore#reapply-erasure-decisions-before-processing-resumes) describes the recovery.
+
 ## Agent run and outbox events
 
 A review attempt runs under an agent run.
