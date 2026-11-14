@@ -5,9 +5,9 @@ import de.tum.cit.aet.hephaestus.core.auth.spi.GitProviderRegistry;
 import de.tum.cit.aet.hephaestus.core.auth.spi.LoginProviderQuery;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.security.ScmOrigin;
-import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
-import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionQueries;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionQueries.ConnectionView;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import java.util.ArrayList;
@@ -21,7 +21,7 @@ import org.springframework.stereotype.Service;
 @ConditionalOnServerRole
 @RequiredArgsConstructor
 class WorkspaceOnboardingLinks {
-    private final ConnectionRepository connections;
+    private final ConnectionQueries connections;
     private final LoginProviderQuery providers;
     private final AccountIdentityQuery identities;
     private final GitProviderRegistry registry;
@@ -32,9 +32,8 @@ class WorkspaceOnboardingLinks {
         var enabledProviders = providers.enabledProviders();
         var result = new ArrayList<WorkspaceOnboardingDTO.WorkspaceOnboardingLinkDTO>();
         for (var connection : connections.findByWorkspaceId(workspaceId)) {
-            if (connection.getKind() != IntegrationKind.SLACK && connection.getKind() != IntegrationKind.OUTLINE)
-                continue;
-            String type = connection.getKind().name();
+            if (connection.kind() != IntegrationKind.SLACK && connection.kind() != IntegrationKind.OUTLINE) continue;
+            String type = connection.kind().name();
             String server = serverUrl(connection);
             String team = teamId(connection);
             var provider = enabledProviders.stream()
@@ -43,7 +42,7 @@ class WorkspaceOnboardingLinks {
                             && Objects.equals(origin(p.serverUrl()), origin(server)))
                     .findFirst()
                     .orElse(null);
-            boolean available = connection.getState() == IntegrationState.ACTIVE
+            boolean available = connection.state() == IntegrationState.ACTIVE
                     && provider != null
                     && team != null
                     && !team.isBlank();
@@ -55,8 +54,8 @@ class WorkspaceOnboardingLinks {
                                     && Objects.equals(
                                             origin(registry.providerServerUrl(link.providerId())), origin(server))
                                     && team.equals(link.teamKey()));
-            long id = Objects.requireNonNull(connection.getId());
-            String name = connection.getDisplayName();
+            long id = connection.id();
+            String name = connection.displayName();
             result.add(new WorkspaceOnboardingDTO.WorkspaceOnboardingLinkDTO(
                     id,
                     name == null || name.isBlank() ? type.equals("SLACK") ? "Slack" : "Outline" : name,
@@ -77,20 +76,20 @@ class WorkspaceOnboardingLinks {
         return List.copyOf(result);
     }
 
-    private static @Nullable String serverUrl(Connection connection) {
-        var config = connection.getConfig();
+    private static @Nullable String serverUrl(ConnectionView connection) {
+        var config = connection.config();
         if (config instanceof ConnectionConfig.SlackConfig) return "https://slack.com";
         return config instanceof ConnectionConfig.OutlineConfig outline ? outline.serverUrl() : null;
     }
 
-    private static @Nullable String teamId(Connection connection) {
-        return connection.getConfig() instanceof ConnectionConfig.SlackConfig slack
+    private static @Nullable String teamId(ConnectionView connection) {
+        return connection.config() instanceof ConnectionConfig.SlackConfig slack
                 ? slack.teamId()
-                : connection.getInstanceKey();
+                : connection.instanceKey();
     }
 
-    private static @Nullable String teamName(Connection connection) {
-        return connection.getConfig() instanceof ConnectionConfig.SlackConfig slack ? slack.teamName() : null;
+    private static @Nullable String teamName(ConnectionView connection) {
+        return connection.config() instanceof ConnectionConfig.SlackConfig slack ? slack.teamName() : null;
     }
 
     private static @Nullable String origin(@Nullable String value) {

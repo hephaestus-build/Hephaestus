@@ -5,9 +5,9 @@ import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
-import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionQueries;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionQueries.ConnectionView;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ProviderEventSubscriptions.Subscription;
@@ -41,7 +41,7 @@ class WorkspaceEventSubscriptionsTest extends BaseUnitTest {
     private WorkspaceScopeFilter scope;
 
     @Mock
-    private ConnectionRepository connections;
+    private ConnectionQueries connections;
 
     @Mock
     private Workspace workspace;
@@ -148,10 +148,7 @@ class WorkspaceEventSubscriptionsTest extends BaseUnitTest {
     }
 
     private void connection(IntegrationKind kind, ConnectionConfig config) {
-        Connection connection = mock(Connection.class);
-        lenient().when(connection.getId()).thenReturn(42L);
-        lenient().when(connection.getKind()).thenReturn(kind);
-        lenient().when(connection.getConfig()).thenReturn(config);
+        var connection = new ConnectionView(42L, kind, IntegrationState.ACTIVE, config, null, null);
         lenient().when(connections.findByWorkspaceId(WS)).thenReturn(List.of(connection));
         for (IntegrationState state : IntegrationState.values()) {
             lenient()

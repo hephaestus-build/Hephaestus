@@ -7,24 +7,21 @@ import static org.mockito.Mockito.when;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountIdentityQuery;
 import de.tum.cit.aet.hephaestus.core.auth.spi.GitProviderRegistry;
 import de.tum.cit.aet.hephaestus.core.auth.spi.LoginProviderQuery;
-import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
-import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionFixtures;
-import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionQueries;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionQueries.ConnectionView;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
-import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import java.util.List;
 import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
-import org.springframework.test.util.ReflectionTestUtils;
 
 class WorkspaceOnboardingLinksTest extends BaseUnitTest {
     @Mock
-    private ConnectionRepository connections;
+    private ConnectionQueries connections;
 
     @Mock
     private LoginProviderQuery providers;
@@ -42,14 +39,14 @@ class WorkspaceOnboardingLinksTest extends BaseUnitTest {
         links = new WorkspaceOnboardingLinks(connections, providers, identities, registry);
     }
 
-    private Connection slack() {
-        var connection = new Connection(
-                new Workspace(),
+    private ConnectionView slack() {
+        var connection = new ConnectionView(
+                9L,
                 IntegrationKind.SLACK,
+                IntegrationState.ACTIVE,
+                new ConnectionConfig.SlackConfig("T123", "Engineering", null, Set.of()),
                 "T123",
-                new ConnectionConfig.SlackConfig("T123", "Engineering", null, Set.of()));
-        ReflectionTestUtils.setField(connection, "id", 9L);
-        ConnectionFixtures.reachState(connection, IntegrationState.ACTIVE);
+                null);
         return connection;
     }
 
@@ -86,13 +83,13 @@ class WorkspaceOnboardingLinksTest extends BaseUnitTest {
 
     @Test
     void shouldNotAcceptAnOutlineLinkFromAnotherServerWithTheSameTeamId() {
-        var connection = new Connection(
-                new Workspace(),
+        var connection = new ConnectionView(
+                9L,
                 IntegrationKind.OUTLINE,
+                IntegrationState.ACTIVE,
+                new ConnectionConfig.OutlineConfig("https://docs.example.org", null, null, Set.of()),
                 "team",
-                new ConnectionConfig.OutlineConfig("https://docs.example.org", null, null, Set.of()));
-        ReflectionTestUtils.setField(connection, "id", 9L);
-        ConnectionFixtures.reachState(connection, IntegrationState.ACTIVE);
+                null);
         when(connections.findByWorkspaceId(1L)).thenReturn(List.of(connection));
         when(providers.enabledProviders())
                 .thenReturn(List.of(
@@ -116,13 +113,13 @@ class WorkspaceOnboardingLinksTest extends BaseUnitTest {
 
     @Test
     void shouldRejectMalformedOriginsEvenWhenBothAreMalformed() {
-        var connection = new Connection(
-                new Workspace(),
+        var connection = new ConnectionView(
+                9L,
                 IntegrationKind.OUTLINE,
+                IntegrationState.ACTIVE,
+                new ConnectionConfig.OutlineConfig("not-a-url", null, null, Set.of()),
                 "team",
-                new ConnectionConfig.OutlineConfig("not-a-url", null, null, Set.of()));
-        ReflectionTestUtils.setField(connection, "id", 9L);
-        ConnectionFixtures.reachState(connection, IntegrationState.ACTIVE);
+                null);
         when(connections.findByWorkspaceId(1L)).thenReturn(List.of(connection));
         when(providers.enabledProviders())
                 .thenReturn(List.of(new LoginProviderQuery.Provider("outline", "Outline", "OUTLINE", "not-a-url")));

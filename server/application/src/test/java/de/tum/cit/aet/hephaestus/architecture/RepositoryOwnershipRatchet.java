@@ -64,12 +64,6 @@ final class RepositoryOwnershipRatchet {
                     Set.of("activity.overview.ActivityScopeResolver")),
             new Entry(
                     "agent",
-                    "integration.core.connection.IdentityProviderRepository",
-                    "DDD11 (integration.core)",
-                    "integration.core::spi IdentityProviderLookup; SourceProviderNamespaces registration",
-                    Set.of("agent.mentor.host.HephSituation")),
-            new Entry(
-                    "agent",
                     "mentor.MentorConversationRepository",
                     "DDD10",
                     "mentor::spi MentorTurnAccess and MentorConversationAccess",
@@ -109,18 +103,6 @@ final class RepositoryOwnershipRatchet {
                     Set.of("agent.adapter.EvidenceDeliveryAuthorization")),
             new Entry(
                     "integration",
-                    "integration.core.connection.ConnectionRepository",
-                    "DDD11 (integration.core)",
-                    "integration.core::spi ConnectionQueries and ConnectionService commands",
-                    Set.of("integration.identity.connect.RegistrationToGitProviderResolver")),
-            new Entry(
-                    "integration",
-                    "integration.core.connection.IdentityProviderRepository",
-                    "DDD11 (integration.core)",
-                    "integration.core::spi IdentityProviderLookup; SourceProviderNamespaces registration",
-                    Set.of("integration.identity.connect.RegistrationToGitProviderResolver")),
-            new Entry(
-                    "integration",
                     "integration.scm.domain.user.UserRepository",
                     "DDD14 (identity/SCM)",
                     "integration.scm::spi ScmIdentityLookup",
@@ -131,12 +113,6 @@ final class RepositoryOwnershipRatchet {
                     "DDD9 (ROLE)",
                     "workspace::spi WorkspaceSummaryQuery.findStateForUpdate; workspace-owned connection initiation",
                     Set.of("integration.core.oauth.state.OAuthStateNonceStore")),
-            new Entry(
-                    "integration.outline",
-                    "integration.core.connection.ConnectionRepository",
-                    "DDD11 (integration.core)",
-                    "integration.core::spi ConnectionQueries and ConnectionService commands",
-                    Set.of("integration.outline.lifecycle.OutlineWebhookRegistrar")),
             new Entry(
                     "integration.scm",
                     "integration.core.connection.ConnectionAuditRepository",
@@ -318,19 +294,5 @@ final class RepositoryOwnershipRatchet {
                             "integration.scm.gitlab.workspace.GitLabWebhookService",
                             "integration.scm.gitlab.workspace.GitLabWorkspaceDataSyncTrigger",
                             "integration.scm.gitlab.workspace.GitLabWorkspaceInitializationService",
-                            "integration.scm.gitlab.workspace.GitLabWorkspaceLinkService")),
-            new Entry(
-                    "workspace",
-                    "integration.core.connection.ConnectionRepository",
-                    "DDD11 (integration.core)",
-                    "integration.core::spi ConnectionQueries and ConnectionService commands",
-                    Set.of(
-                            "workspace.adapter.WorkspaceEventSubscriptions",
-                            "workspace.onboarding.WorkspaceOnboardingLinks")),
-            new Entry(
-                    "workspace",
-                    "integration.core.connection.IdentityProviderRepository",
-                    "DDD11 (integration.core)",
-                    "integration.core::spi IdentityProviderLookup; SourceProviderNamespaces registration",
-                    Set.of("workspace.WorkspaceActorSelector")));
+                            "integration.scm.gitlab.workspace.GitLabWorkspaceLinkService")));
 }

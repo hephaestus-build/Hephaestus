@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.core.connection;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionQueries;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import jakarta.persistence.LockModeType;
@@ -182,6 +183,13 @@ public interface ConnectionRepository extends JpaRepository<Connection, Long> {
     @WorkspaceAgnostic("Provider uninstall guard checks whether another workspace still uses the same installation")
     boolean existsByKindAndInstanceKeyAndStateNotAndIdNot(
             IntegrationKind kind, String instanceKey, IntegrationState state, Long id);
+
+    @Query("""
+            SELECT new de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionQueries$ConnectionView(
+                c.id, c.kind, c.state, c.config, c.instanceKey, c.displayName)
+            FROM Connection c WHERE c.workspace.id = :workspaceId
+            """)
+    List<ConnectionQueries.ConnectionView> findViewsByWorkspaceId(@Param("workspaceId") long workspaceId);
 
     @Query("SELECT c FROM Connection c WHERE c.workspace.id = :workspaceId")
     List<Connection> findByWorkspaceId(@Param("workspaceId") long workspaceId);
