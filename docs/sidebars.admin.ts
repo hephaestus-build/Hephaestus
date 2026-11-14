@@ -23,9 +23,12 @@ const sidebars: SidebarsConfig = {
 			collapsed: false,
 			items: [
 				"configuration-readiness",
-				"production-setup",
-				"integrations",
 				"github-integration",
+				"github-app-permissions",
+				"connect-gitlab",
+				"connect-slack",
+				"connect-outline",
+				"set-up-email",
 				"ai-providers",
 				"passkeys",
 				"browser-extension",
@@ -34,14 +37,7 @@ const sidebars: SidebarsConfig = {
 				{
 					type: "category",
 					label: "Practices and feedback",
-					items: [
-						"practice-catalog",
-						"writing-practices",
-						"practice-scripts",
-						"practice-review",
-						"practice-scans",
-						"product-feedback",
-					],
+					items: ["practice-catalog", "practice-scripts", "product-feedback"],
 				},
 			],
 		},
@@ -85,6 +81,7 @@ const sidebars: SidebarsConfig = {
 				"credential-key-rotation",
 				"release-image-lock",
 				"legal-pages",
+				"research-program",
 				{
 					type: "category",
 					label: "Data-protection documentation",

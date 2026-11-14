@@ -32,7 +32,7 @@ An invalid custom script never falls back to it.
 
 ## The public API
 
-The [operator script guide](/admin/practice-scripts#the-script-api) lists every public name.
+The [practice script API](/admin/practice-scripts#the-script-api) lists every public name.
 The `exports` map in `docker/agents/practice-scripts/package.json` is the one home of the entry points.
 
 A map alone does not enforce the boundary, because a relative path still reaches any file.
@@ -213,5 +213,23 @@ A result has at most 50 problems. A problem has at most 20 citations.
 Open questions have a limit of 20.
 The runtime withholds excessive proof rather than truncating a claim.
 
-The [operator script guide](/admin/practice-scripts) owns author procedures and local test commands.
-The [cost guide](/admin/ai-providers#ai-usage) owns model usage limits and prices.
+The [practice script API](/admin/practice-scripts) lists the public names and the author limits.
+[AI models and spending](/user/ai-models) describes the workspace's models and budget.
+
+## Test a script locally
+
+Use a checkout with the repository's pinned Node and Vite+ versions.
+Keep the script under test in an ignored scratch directory.
+Use the toolkit's fixture style to supply strict version 3 inputs.
+Mock models and captured evidence. Do not call live providers.
+
+1. Run the toolkit test file that covers the script while you develop it.
+2. Run the agent suite before you deploy the script:
+
+   ```bash
+   vp run test:agents
+   ```
+
+Include both ITEM and SCAN cases when the practice supports scans.
+Test a refused read and an unavailable required model as operational failures.
+Never assert that a missing required source produces Could not determine.

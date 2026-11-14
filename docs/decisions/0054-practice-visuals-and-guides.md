@@ -87,7 +87,7 @@ The server applies it when a definition is saved and when the bundled catalog lo
 It refuses ids, styles, links, `url(...)` references, and a DOCTYPE.
 The webapp sanitizes the markup again with DOMPurify [9] and draws it inline.
 
-[Add a visual and a guide](../admin/writing-practices.mdx#add-a-visual-and-a-guide) owns the limits and the classes.
+[Practice visual rules](../user/practice-visual-rules.md) lists the limits and the classes.
 [Practice visuals and guides](../contributor/practice-visuals.md) is the style guide.
 
 ## Consequences

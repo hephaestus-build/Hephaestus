@@ -23,7 +23,7 @@ Database-generated name and review digest are read-only projections.
 ## Authoring experience
 
 The editor separates Review on, When, About, Reviewed by and Applies when.
-The [operator author guide](/admin/writing-practices) owns the procedure.
+[Practices](/user/practices#create-a-practice) gives the procedure.
 The same definition shape serves both admin consoles.
 Neither console inserts scope-specific fields into shared definition components.
 

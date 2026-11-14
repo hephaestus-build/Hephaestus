@@ -1,155 +1,113 @@
 ---
 title: Protect admin access with passkeys
-description: Configure passkey protection, enroll administrators, and recover lost credentials.
+description: Set the passkey policy of your instance with the Helm chart, and recover an admin who lost every passkey and recovery code.
 page_type: how-to
 ---
 
-OAuth identifies the account. Local WebAuthn verification permits protected admin access.
-Production instances require passkeys for instance administration by default.
-Workspace owners can require passkeys for workspace admins and owners.
-The instance can require this protection for every workspace.
-Personal choices cannot weaken either requirement.
+A passkey protects admin access after the sign-in provider identifies the account.
+By default, the Helm chart requires a passkey for instance administration.
+Each admin registers their own passkeys and recovery codes, as the user guide's [Passkeys](/user/passkeys) describes.
 
-## Configure the policy
+## Set the passkey policy {/*#configure-the-policy*/}
 
-| Variable | Default | Effect |
-| --- | --- | --- |
-| `HEPHAESTUS_AUTH_PASSKEYS_INSTANCE_ADMIN_REQUIRED` | `true` in production | Require passkeys for instance administration and workspace elevation. |
-| `HEPHAESTUS_AUTH_PASSKEYS_WORKSPACE_ADMIN_REQUIRED` | `false` | Require passkeys for all workspace administration. |
-| `HEPHAESTUS_AUTH_PASSKEYS_RP_ID` | Instance hostname | The stable domain that owns the credentials. |
-| `HEPHAESTUS_AUTH_PASSKEYS_ALLOWED_ORIGINS` | Instance origin | Comma-separated trusted HTTPS browser origins. |
-| `HEPHAESTUS_AUTH_PASSKEYS_ADMIN_MAX_AGE` | `6h` | How long one passkey verification opens protected admin access. |
+1. Add the policy to `site.yaml`.
+   The block shows the defaults of the chart:
 
-Configure the actual SPA origin, not an internal API address.
-Use the narrowest RP ID that serves the application.
-Do not add an origin that an untrusted party controls.
-An RP ID change makes existing credentials unusable.
-Development permits HTTP only on localhost.
+   ```yaml title="values.yaml"
+   config:
+     auth:
+       passkeys:
+         instanceAdminRequired: true
+         workspaceAdminRequired: false
+         rpId: ""
+         allowedOrigins: []
+         adminMaxAge: 6h
+   ```
 
-Policy applies when an account uses an admin capability.
-An admin can still use ordinary member access without admin verification.
-Instance-admin elevation and user views require the same protection.
-Installed clients cannot use browser passkey assurance.
-Use the web app for protected administration.
+2. Apply `site.yaml`.
+   On a cluster, run the `helm upgrade` command of [Install](./kubernetes#install) again.
+   On one host, run the installer again ([Run the installer](./k3s#2-run-the-installer)).
 
-A passkey verification opens protected admin access for six hours by default.
-After that, the admin verifies a passkey again.
-The session continues, and member access stays open.
-The six-hour window matches GitLab Admin Mode and stays inside the NIST SP 800-63B-4 AAL2 limit of 24 hours.
+| Value | Effect |
+| --- | --- |
+| `config.auth.passkeys.instanceAdminRequired` | Require a passkey for instance administration and for elevation to a workspace. |
+| `config.auth.passkeys.workspaceAdminRequired` | Require a passkey for the administration of every workspace. Without it, each workspace chooses with **Require admin passkeys**. |
+| `config.auth.passkeys.rpId` | The domain that owns the passkeys. Empty uses `host`. |
+| `config.auth.passkeys.allowedOrigins` | The HTTPS origins of the web app where browsers use passkeys. Empty uses `https://<host>`. |
+| `config.auth.passkeys.adminMaxAge` | How long one passkey verification opens protected admin access |
+
+Set the origin that the browser shows, not an internal address of the API.
+Never add an origin that another party controls.
+A change of `rpId`, or of `host` while `rpId` is empty, makes every registered passkey unusable.
+After such a change, each admin recovers with a recovery code and registers a new passkey.
+An admin without a recovery code needs [deployment-controlled recovery](./passkeys.mdx#deployment-controlled-recovery).
+
+A passkey policy applies only when an account uses an admin capability.
+Member access never needs a passkey.
+The browser extension and other installed clients cannot verify a passkey, so protected administration needs the web app.
+
+After `adminMaxAge`, the admin verifies a passkey again, and the session continues.
+High-risk admin operations need a verification within the last five minutes.
+The chart has no value that changes these five minutes.
 
 ## Test instances without additional confirmation
 
-`HEPHAESTUS_AUTH_ASSURANCE_ENFORCED` defaults to `true`.
-Set it to `false` only on an isolated test instance that needs unattended validation.
-It suspends passkey and recent-sign-in requirements, including personal and workspace policies.
-OAuth sign-in, session validity, role and workspace permissions, consent, and audit still apply.
-User views remain read-only.
+`config.auth.assuranceEnforced` is `true` by default.
+Set it to `false` only on an isolated test instance that runs unattended checks.
+It suspends every passkey and recent-sign-in requirement, also the personal and workspace policies.
+Sign-in, sessions, roles, workspace permissions, consent and the audit log still apply.
+Views as another user stay read-only.
 
-Settings show that confirmation checks are disabled.
-Saved policies, passkeys and recovery codes remain unchanged.
-The server does not report a session as verified without an actual passkey verification.
-Set the variable back to `true` to restore the saved requirements.
-Do not use this setting to recover a production account.
-
-## Enroll an administrator
-
-1. Sign in through the account's existing OAuth provider.
-2. Open **User settings**.
-3. Register a passkey under **Passkeys**.
-4. Verify the passkey.
-5. Register a second passkey on another device.
-6. Verify the passkey again if confirmation expires.
-7. Select **Create new recovery codes**, then **Create codes**.
-8. Store the codes outside the browser.
-
-Enrollment enables personal admin protection.
-An account without a credential cannot use admin capabilities that require passkeys.
-The first enrollment depends on the security of the existing OAuth account.
-An upstream session can satisfy OAuth without a new authenticator challenge.
-
-An account owner can remove their last passkey.
-They must first verify a passkey recently and turn off personal admin protection.
-Removal is not possible during recovery.
-It deletes the account's recovery codes and ends its other sessions.
-Admin capabilities that require passkeys stay locked until the owner enrolls and verifies a new passkey.
-That new enrollment depends on the OAuth account again.
-
-High-risk admin operations require passkey verification within five minutes by default.
-`HEPHAESTUS_AUTH_STEP_UP_MAX_AGE` controls this interval.
-Token refresh does not advance verification time or the absolute session deadline.
-The application does not replay a refused operation after verification.
+The settings then show that confirmation checks are off.
+Saved policies, passkeys and recovery codes stay unchanged, and apply again when you set the value back to `true`.
+Do not use this value to recover a production account.
 
 ## Check that it worked
 
-1. Open **User settings**.
-2. Under **Passkeys**, find the two passkeys that you registered.
-   **Personal admin protection** is on.
-3. Select **Verify passkey**.
-   The section shows **Recently confirmed.**
+1. Sign in as an instance admin who has a passkey.
+2. Open **Instance administration**.
+   With `instanceAdminRequired`, Hephaestus asks you to select **Confirm with passkey**.
+3. Confirm with your passkey.
+   The page opens.
 
-## Recover passkeys
+## Recover an admin who lost every passkey {/*#deployment-controlled-recovery*/}
 
-1. Sign in through OAuth.
-2. Open **User settings**.
-3. Open **Recover passkeys**.
-4. Enter one recovery code.
-5. Select **Start recovery**.
-6. Register a replacement passkey.
-7. Verify the replacement passkey.
-8. Register another passkey on a separate device.
-9. Replace and store the recovery codes.
+Use this procedure only when an admin lost every passkey and every recovery code.
+The first-admin bootstrap token cannot recover an existing admin.
 
-Recovery removes existing credentials and ends previous sessions.
-It permits enrollment but does not grant admin access.
-The server consumes each recovery code once.
-Recovery also invalidates the remaining codes.
-Replacement invalidates all previous recovery codes.
+1. Confirm the identity of the account owner outside Hephaestus.
+2. Record the approval in your incident record.
+3. Connect `psql` to the application database with an operator account.
+4. Set `account_id` to the numeric ID of the account, and run the script.
+   Stop if the `SELECT` shows another person or an account that is not active.
 
-If all credentials and recovery codes are lost, deployment-controlled recovery is necessary.
-The first-admin bootstrap token cannot recover an existing administrator.
-Keep database access available during initial deployment and policy changes.
-Do not use another account's credentials or reset credentials through workspace administration.
+   ```sql
+   \set ON_ERROR_STOP on
+   \set account_id 42
+   SELECT id, display_name, status FROM account WHERE id = :'account_id'::bigint;
 
-Passkeys do not stop an attacker who controls an already verified browser or session.
-Keep session revocation, browser security controls, and security notices enabled.
+   BEGIN;
+   SELECT id FROM account WHERE id = :'account_id'::bigint FOR UPDATE;
+   UPDATE account SET passkey_recovery_required = true
+   WHERE id = :'account_id'::bigint AND status = 'ACTIVE';
+   DELETE FROM passkey_challenge WHERE account_id = :'account_id'::bigint;
+   DELETE FROM passkey_recovery_code WHERE account_id = :'account_id'::bigint;
+   DELETE FROM passkey_credential WHERE account_id = :'account_id'::bigint;
+   UPDATE client_sign_in_handoff SET consumed_at = now()
+   WHERE account_id = :'account_id'::bigint AND consumed_at IS NULL;
+   UPDATE client_session SET revoked_at = now(), revoked_reason = 'ADMIN_REVOKE'
+   WHERE account_id = :'account_id'::bigint AND revoked_at IS NULL;
+   UPDATE issued_jwt SET revoked_at = now(), revoked_reason = 'ADMIN_REVOKE'
+   WHERE account_id = :'account_id'::bigint AND revoked_at IS NULL;
+   INSERT INTO auth_event (account_id, event_type, result, details)
+   VALUES (:'account_id'::bigint, 'PASSKEY_CHANGED', 'SUCCESS',
+           '{"passkey_operation":"deployment_recovery"}');
+   COMMIT;
+   ```
 
-### Deployment-controlled recovery
+5. Tell the owner through a verified channel.
+6. The owner signs in, registers a new passkey, and verifies it.
 
-Use this procedure only when all passkeys and recovery codes are lost.
-An operator with database write access already controls the instance trust boundary.
-Verify the account owner's identity outside the application before you change the account.
-Record the approval in your operational incident record.
-
-Connect `psql` to the application database with an operator account.
-Set `account_id` to the confirmed account's numeric ID.
-Check the display name and account status before you continue.
-Stop if the account is not active or if its identity is uncertain.
-
-```sql
-\set ON_ERROR_STOP on
-\set account_id 42
-SELECT id, display_name, status FROM account WHERE id = :'account_id'::bigint;
-
-BEGIN;
-SELECT id FROM account WHERE id = :'account_id'::bigint FOR UPDATE;
-UPDATE account SET passkey_recovery_required = true
-WHERE id = :'account_id'::bigint AND status = 'ACTIVE';
-DELETE FROM passkey_challenge WHERE account_id = :'account_id'::bigint;
-DELETE FROM passkey_recovery_code WHERE account_id = :'account_id'::bigint;
-DELETE FROM passkey_credential WHERE account_id = :'account_id'::bigint;
-UPDATE client_sign_in_handoff SET consumed_at = now()
-WHERE account_id = :'account_id'::bigint AND consumed_at IS NULL;
-UPDATE client_session SET revoked_at = now(), revoked_reason = 'ADMIN_REVOKE'
-WHERE account_id = :'account_id'::bigint AND revoked_at IS NULL;
-UPDATE issued_jwt SET revoked_at = now(), revoked_reason = 'ADMIN_REVOKE'
-WHERE account_id = :'account_id'::bigint AND revoked_at IS NULL;
-INSERT INTO auth_event (account_id, event_type, result, details)
-VALUES (:'account_id'::bigint, 'PASSKEY_CHANGED', 'SUCCESS',
-        '{"passkey_operation":"deployment_recovery"}');
-COMMIT;
-```
-
-Notify the owner through a verified communication channel.
-The owner must sign in through OAuth, enroll a replacement passkey, and verify it.
-Admin access remains blocked until verification succeeds.
-Do not disable instance protection as a recovery method.
+The script removes the passkeys and recovery codes of the account, and ends its sessions.
+Admin access stays blocked until the owner verifies the new passkey.
+Do not turn off `instanceAdminRequired` to recover an account.

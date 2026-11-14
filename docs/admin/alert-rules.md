@@ -167,4 +167,4 @@ An archive command that hangs without a failure stops the next backup, because p
 
 `HephaestusProviderRemovalNeedsConfirmation` fires when a provider has an unresolved removal, registration or authorization need for one hour.
 It reads `integration_provider_repair_open`, takes the maximum across replicas, then groups by provider kind.
-The [integration guide](./integrations.mdx#confirm-a-provider-removal) owns the procedure.
+[Provider removals](/admin/instance-admin#provider-removals) gives the procedure.
