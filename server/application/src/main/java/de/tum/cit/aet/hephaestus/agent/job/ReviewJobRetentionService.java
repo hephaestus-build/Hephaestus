@@ -12,8 +12,6 @@ import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
 import java.time.Instant;
-import java.util.List;
-import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.slf4j.Logger;
@@ -131,11 +129,12 @@ public class ReviewJobRetentionService {
     private void deleteOldRows() {
         Instant cutoff = clock.instant().minus(agentProperties.rowRetention());
         BoundedBatchPass.Result result = pass.run(log, "delete", () -> {
-            // A job's run ends with it, so its deleted rows take their ended runs along.
+            // A job's runs end with it, so its deleted rows take their ended runs, including a handed-off one, along.
             Integer removed = transactionTemplate.execute(status -> {
-                List<UUID> ended = jobRepository.deleteUnreferencedTerminalRowsOlderThan(cutoff, pass.batchSize());
-                runs.retireAll(ended);
-                return ended.size();
+                var deletedJobs = jobRepository.deleteUnreferencedTerminalRowsOlderThan(cutoff, pass.batchSize());
+                runs.retireAll(
+                        deletedJobs.stream().flatMap(job -> job.runs().stream()).toList());
+                return deletedJobs.size();
             });
             int batchDeleted = removed != null ? removed : 0;
             if (batchDeleted > 0) {

@@ -224,8 +224,10 @@ public class ReviewRunKind implements AgentRunHandler {
 
     /**
      * Hands an admitted review from its measuring run on to the run that composes it, in the caller's transaction: the
-     * measuring run ends, which settles its open model calls, and the job waits on a {@code REVIEW_COMPOSE} run that continues it
-     * ({@link AgentRuns#continueAs}). The sandbox of the review drives the composition next.
+     * measuring run ends as {@code HANDED_OFF}, which settles its open model calls, and the job waits on a
+     * {@code REVIEW_COMPOSE} run that continues it ({@link AgentRuns#continueAs}). The job keeps the ended run as its
+     * history. A job hands off once: a job has one measuring run, and its composing runs continue as their own kind.
+     * The sandbox of the review drives the composition next.
      *
      * @return the composing run; empty when {@code fence} no longer holds the job
      */
@@ -235,14 +237,13 @@ public class ReviewRunKind implements AgentRunHandler {
         jobs.lockParentOfJob(jobId);
         ReviewJob job = jobs.lockById(jobId).orElse(null);
         if (job == null || !holds(job, fence)) return Optional.empty();
-        if (runs.end(fence) != AgentRuns.EndOutcome.ENDED) return Optional.empty();
+        if (runs.end(fence, AgentRunStopReason.HANDED_OFF) != AgentRuns.EndOutcome.ENDED) return Optional.empty();
         AgentRunRef ended = new AgentRunRef(fence.runId(), fence.workspaceId());
         AgentRunRef composing =
                 runs.continueAs(ended, fence.epoch(), AgentRunKind.REVIEW_COMPOSE, compositionExecutionWindow());
-        if (jobs.queueOnNextRun(jobId, fence.runId(), attempt(fence.epoch()), composing.id()) == 0)
-            throw new IllegalStateException("The attempt's job moved under its lock");
+        if (jobs.handOffToRun(jobId, fence.runId(), attempt(fence.epoch()), composing.id()) == 0)
+            throw new IllegalStateException("The attempt's job moved under its lock, or it already handed off");
         reviewStart.requeue(job.getWorkspaceId(), job.getReviewId());
-        runs.retire(ended);
         return Optional.of(composing);
     }
 
@@ -253,7 +254,7 @@ public class ReviewRunKind implements AgentRunHandler {
         jobs.lockParentOfJob(jobId);
         var job = jobs.lockById(jobId).orElse(null);
         if (job == null || !holds(job, fence) || !ResultAdmissionService.isAdmitted(job)) return false;
-        if (runs.end(fence) != AgentRuns.EndOutcome.ENDED) return false;
+        if (runs.end(fence, AgentRunStopReason.FAILED) != AgentRuns.EndOutcome.ENDED) return false;
         var ended = fence.run();
         var delay = AgentRuns.backoff(job.spentAttempts() + 1);
         var next = runs.continueAfter(ended, fence.epoch(), delay, compositionExecutionWindow());
@@ -303,7 +304,8 @@ public class ReviewRunKind implements AgentRunHandler {
                 .orElse(null);
         if (resumable == null) return false;
         AgentRunRef ended = new AgentRunRef(resumable.getRunId(), workspaceId);
-        // A review that composed on its review run, before composition had a run of its own, resumes on one.
+        // A review that composed on its review run, before composition had a run of its own, resumes on one. That run
+        // ended COMPLETED long ago and does not change, so it is resumed work like any other, not a hand-off.
         AgentRunRef next = runs.find(ended).map(AgentRun::getKind).orElseThrow() == AgentRunKind.REVIEW_COMPOSE
                 ? runs.continueAfter(ended, resumable.getEpoch(), Duration.ZERO, compositionExecutionWindow())
                 : runs.continueAs(

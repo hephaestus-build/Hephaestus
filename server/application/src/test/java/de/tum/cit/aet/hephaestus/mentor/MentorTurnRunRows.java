@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.mentor;
 
+import de.tum.cit.aet.hephaestus.agent.mentor.turn.TurnRunsAdapter;
 import java.util.UUID;
 
 /**
@@ -29,7 +30,11 @@ public final class MentorTurnRunRows {
                         state,
                         attempt,
                         state.equals("LEASED") ? "now() + interval '5 minutes'" : "NULL",
-                        state.equals("ENDED") ? "'COMPLETED'" : "NULL",
+                        state.equals("ENDED")
+                                ? "'"
+                                        + TurnRunsAdapter.endReason(MentorTurn.Status.valueOf(turnStatus))
+                                                .name() + "'"
+                                : "NULL",
                         state.equals("QUEUED") ? "NULL" : "now()",
                         state.equals("ENDED") ? "now()" : "NULL");
     }

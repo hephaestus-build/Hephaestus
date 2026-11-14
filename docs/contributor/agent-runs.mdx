@@ -105,6 +105,31 @@ The capped claims of one kind take an advisory lock in turn, so the cap holds ac
 A claim leases a turn for `hephaestus.agent.capacity.turn-lease-ttl` (60 seconds), and any other run for `lease-ttl`.
 A person waits for a turn, so a lost turn is taken back sooner.
 
+## Subject outcomes
+
+`ReviewJobTerminal` owns the mapping from a review job's terminal state to its run reason.
+The job and run end in one transaction.
+A lost run fence rolls that transaction back.
+
+| Review job state | Holder's run reason |
+| --- | --- |
+| `COMPLETED` | `COMPLETED` |
+| `FAILED` | `FAILED` |
+| `TIMED_OUT` | `DEADLINE` |
+| `CANCELLED` | `CANCELLED` |
+
+`TurnRunsAdapter` maps a turn's `DONE`, `FAILED` and `STOPPED` states to `COMPLETED`, `FAILED` and `CANCELLED`.
+Each holder supplies its outcome to `AgentRuns.end`; there is no default success path.
+The database rejects a completed run whose review job or turn did not complete.
+A measurement handoff ends the measuring run as `HANDED_OFF` in the same transaction.
+The review job keeps that run in `handed_off_run_id`, in its own workspace, and retention and workspace erasure delete it with the job.
+A job has one measuring run and its composing runs continue as their own kind, so a job hands off at most once.
+The database keeps the reference write-once. At commit, every handed-off run belongs to exactly one job, and a job keeps only a run that handed off.
+The next composing run carries the review's terminal outcome, including a failed or timed-out measurement.
+A retry, an expiry or a resumed composition deletes the run that it continues, because the new run carries the same work.
+A reaper reason, such as `ATTEMPTS_EXHAUSTED`, retains its own diagnosis.
+A repeated holder end succeeds only for the same epoch and reason.
+
 ## Clocks
 
 A run has two clocks, and the reaper enforces both:

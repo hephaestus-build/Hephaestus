@@ -149,7 +149,7 @@ public class ReviewJobClaimService {
             return switch (claimed) {
                 case ClaimResult started -> Optional.of(started);
                 case TerminalClaim ended -> {
-                    runs.end(fence);
+                    ReviewJobTerminal.endRun(runs, fence, ended.status());
                     yield Optional.empty();
                 }
                 case PoolWait waiting -> {
@@ -173,7 +173,7 @@ public class ReviewJobClaimService {
         job.setCompletedAt(Instant.now());
         job.setErrorMessage(preparation.message());
         jobRepository.save(job);
-        runs.end(fence);
+        ReviewJobTerminal.endRun(runs, fence, ReviewJobStatus.FAILED);
         jobRepository.recordPreparationFailure(
                 job.getId(),
                 job.getWorkspaceId(),

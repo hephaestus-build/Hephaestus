@@ -44,7 +44,11 @@ import tools.jackson.databind.JsonNode;
             // A run belongs to one workspace, so this keeps one job per run; it also indexes the run's foreign key.
             @UniqueConstraint(
                     name = "uk_review_job_run",
-                    columnNames = {"run_id", "workspace_id"})
+                    columnNames = {"run_id", "workspace_id"}),
+            // A job hands off at most once, and the same index serves the handed-off run's foreign key.
+            @UniqueConstraint(
+                    name = "uk_review_job_handed_off_run",
+                    columnNames = {"handed_off_run_id", "workspace_id"})
         })
 @Getter
 @Setter
@@ -76,6 +80,15 @@ public class ReviewJob {
      */
     @Column(name = "run_id", nullable = false)
     private UUID runId;
+
+    /**
+     * The measuring run that handed this job on to its composition ({@link ReviewRunKind#continueToCompose}), kept as the
+     * job's history and deleted with it. {@link ReviewJobRepository#handOffToRun} is its only writer, and the database
+     * keeps it write-once.
+     */
+    @Setter(AccessLevel.NONE)
+    @Column(name = "handed_off_run_id", insertable = false, updatable = false)
+    private @Nullable UUID handedOffRunId;
 
     /**
      * The job's attempt number, from 0: the attempt that runs or ran last ({@link ReviewRunKind#attempt} of its run's

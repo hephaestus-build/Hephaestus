@@ -149,18 +149,21 @@ public class TurnSandboxRunKind implements SandboxRunKind {
         AgentRunFence claim = run.fence();
         Optional<MentorTurn> held = turnService
                 .lockByRun(claim.workspaceId(), claim.runId())
-                .filter(turn -> turn.getAttempt() == claim.epoch()
-                        && (turn.getStatus() == MentorTurn.Status.RUNNING
-                                || turn.getStatus() == MentorTurn.Status.STOPPED));
-        if (held.isEmpty()) return runs.end(claim) != AgentRuns.EndOutcome.STALE;
-        if (!runs.isCurrent(claim.run(), claim.epoch())) return false;
+                .filter(turn -> turn.getAttempt() == claim.epoch());
+        if (held.isEmpty()) return false;
         MentorTurn turn = held.get();
+        if (turn.getStatus() == MentorTurn.Status.QUEUED) return false;
+        if (turn.getStatus() == MentorTurn.Status.DONE || turn.getStatus() == MentorTurn.Status.FAILED)
+            return runs.end(claim, TurnRunsAdapter.endReason(turn.getStatus())) != AgentRuns.EndOutcome.STALE;
+        if (!runs.isCurrent(claim.run(), claim.epoch()))
+            return turn.getStatus() == MentorTurn.Status.STOPPED
+                    && runs.end(claim, TurnRunsAdapter.endReason(turn.getStatus())) != AgentRuns.EndOutcome.STALE;
         if (outcome == Outcome.HANDED_ON) {
             MentorTurnService.LostAttempt taken = turnService.takeBack(turn, true);
             completion.billLostAttempt(taken);
             return turn.getStatus() == MentorTurn.Status.QUEUED
                     ? runs.requeue(claim, AgentRuns.Charge.SPEND, Duration.ZERO, null)
-                    : runs.end(claim) != AgentRuns.EndOutcome.STALE;
+                    : runs.end(claim, TurnRunsAdapter.endReason(turn.getStatus())) != AgentRuns.EndOutcome.STALE;
         }
         completion.end(
                 claim.workspaceId(),

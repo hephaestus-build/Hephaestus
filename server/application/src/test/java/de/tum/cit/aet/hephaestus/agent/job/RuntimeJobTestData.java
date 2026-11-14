@@ -103,7 +103,7 @@ public final class RuntimeJobTestData {
                     leased_until, available_at, stop_reason, created_at, started_at, ended_at)
                 VALUES (:id, :ws, 'REVIEW', 'BATCH', :subject, :state, 0, :epoch,
                     CASE WHEN :state = 'LEASED' THEN clock_timestamp() + interval '10 minutes' END, clock_timestamp(),
-                    CASE WHEN :state = 'ENDED' THEN 'COMPLETED' END, clock_timestamp(),
+                    :reason, clock_timestamp(),
                     CASE WHEN :state <> 'QUEUED' THEN clock_timestamp() END,
                     CASE WHEN :state = 'ENDED' THEN clock_timestamp() END)
                 """)
@@ -111,6 +111,12 @@ public final class RuntimeJobTestData {
                 .param("ws", workspaceId)
                 .param("subject", ReviewRunKind.subject(reviewId) + ":" + runId)
                 .param("state", state)
+                .param(
+                        "reason",
+                        state.equals("ENDED")
+                                ? ReviewJobTerminal.endReason(ReviewJobStatus.valueOf(jobStatus))
+                                        .name()
+                                : null)
                 .param("epoch", state.equals("QUEUED") ? attempt : ReviewRunKind.epoch(attempt))
                 .update();
         return runId;
@@ -140,7 +146,7 @@ public final class RuntimeJobTestData {
                     leased_until, available_at, stop_reason, created_at, started_at, ended_at)
                 VALUES (?, ?, 'REVIEW', 'BATCH', ?, ?, ?, ?,
                     CASE WHEN ? = 'LEASED' THEN clock_timestamp() + make_interval(secs => ?) END, clock_timestamp(),
-                    CASE WHEN ? = 'ENDED' THEN 'COMPLETED' END, clock_timestamp(),
+                    ?, clock_timestamp(),
                     CASE WHEN ? <> 'QUEUED' THEN clock_timestamp() END,
                     CASE WHEN ? = 'ENDED' THEN clock_timestamp() END)
                 """,
@@ -152,7 +158,9 @@ public final class RuntimeJobTestData {
                 epoch,
                 state,
                 LEASE.toSeconds(),
-                state,
+                state.equals("ENDED")
+                        ? ReviewJobTerminal.endReason(job.getStatus()).name()
+                        : null,
                 state,
                 state);
         return job;
@@ -169,6 +177,8 @@ public final class RuntimeJobTestData {
         job.setId(jobId);
         job.setRunId((UUID) Objects.requireNonNull(row.get("run_id")));
         job.setStatus(ReviewJobStatus.valueOf((String) Objects.requireNonNull(row.get("status"))));
+        job.setWorkspaceId(((Number) Objects.requireNonNull(row.get("workspace_id"))).longValue());
+        job.setReviewId((UUID) Objects.requireNonNull(row.get("review_id")));
         String state = switch (job.getStatus()) {
             case QUEUED -> "QUEUED";
             case RUNNING -> "LEASED";
@@ -176,17 +186,6 @@ public final class RuntimeJobTestData {
         };
         String current = runState(jdbc, job);
         if (current == null) return;
-        if (current.equals("ENDED") && !state.equals("ENDED")) {
-            // An ended run is final: a job that a test makes run again runs on a new run.
-            UUID runId = insertRun(
-                    jdbc,
-                    ((Number) Objects.requireNonNull(row.get("workspace_id"))).longValue(),
-                    (UUID) Objects.requireNonNull(row.get("review_id")),
-                    job.getStatus().name(),
-                    0);
-            jdbc.update("UPDATE review_job SET run_id=? WHERE id=?", runId, jobId);
-            return;
-        }
         agree(jdbc, job, current, state);
     }
 
@@ -246,7 +245,26 @@ public final class RuntimeJobTestData {
 
     /** Moves the job's existing run to {@code state}, as the transitions the job's status took would have. */
     private static void agree(JdbcTemplate jdbc, ReviewJob job, String current, String state) {
-        if (current.equals(state) || current.equals("ENDED")) return;
+        if (current.equals("ENDED")) {
+            String reason =
+                    jdbc.queryForObject("SELECT stop_reason FROM agent_run WHERE id=?", String.class, job.getRunId());
+            if (!state.equals("ENDED")
+                    || !ReviewJobTerminal.endReason(job.getStatus()).name().equals(reason)) {
+                // A fixture that changes an ended job uses a new run: the original run remains final.
+                int nextAttempt = state.equals("ENDED") ? job.getAttempt() : 0;
+                UUID next = insertRun(
+                        jdbc,
+                        job.getWorkspaceId(),
+                        job.getReviewId(),
+                        job.getStatus().name(),
+                        nextAttempt);
+                jdbc.update("UPDATE review_job SET run_id=? WHERE id=?", next, job.getId());
+                job.setRunId(next);
+                attempt(job, nextAttempt);
+            }
+            return;
+        }
+        if (current.equals(state)) return;
         switch (state) {
             case "QUEUED" ->
                 jdbc.update("UPDATE agent_run SET state='QUEUED', leased_until=NULL WHERE id=?", job.getRunId());
@@ -260,8 +278,9 @@ public final class RuntimeJobTestData {
             }
             default ->
                 jdbc.update(
-                        "UPDATE agent_run SET state='ENDED', leased_until=NULL, hold_reason=NULL, stop_reason='COMPLETED',"
+                        "UPDATE agent_run SET state='ENDED', leased_until=NULL, hold_reason=NULL, stop_reason=?,"
                                 + " ended_at=clock_timestamp() WHERE id=?",
+                        ReviewJobTerminal.endReason(job.getStatus()).name(),
                         job.getRunId());
         }
     }

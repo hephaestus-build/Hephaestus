@@ -53,6 +53,7 @@ import de.tum.cit.aet.hephaestus.agent.run.AgentRunFence;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunReaper;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunRef;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunStopReason;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.ComposeRunGateway;
@@ -2513,6 +2514,7 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
             var original = RuntimeJobTestData.fence(jdbc, current);
             jdbc.update(
                     "UPDATE agent_run SET leased_until = now() - interval '1 second' WHERE id = ?", original.runId());
+            long subjectRuns = subjectRunCount(review.workspaceId(), original.runId());
             assertThatThrownBy(() -> transactions.executeWithoutResult(tx -> {
                         reviewRuns.lock(original.run());
                         reviewRuns.continueExpiredComposition(original);
@@ -2522,12 +2524,9 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                     .hasMessage("domain transaction refused");
             assertThat(jobs.findById(jobId).orElseThrow().getRunId()).isEqualTo(original.runId());
             assertThat(runState(original.runId())).isEqualTo("LEASED");
-            assertThat(jdbc.queryForObject(
-                            "SELECT count(*) FROM agent_run WHERE workspace_id = ? AND concurrency_key = ?",
-                            Long.class,
-                            review.workspaceId(),
-                            subjectOf(original.runId())))
-                    .isEqualTo(1);
+            assertThat(subjectRunCount(review.workspaceId(), original.runId()))
+                    .as("the rolled-back continuation added no run")
+                    .isEqualTo(subjectRuns);
             int ceiling = context.getBean(ReviewComposeRunKind.class).retries();
             for (int spent = current.spentAttempts(); spent < ceiling; spent++) {
                 UUID previous = current.getRunId();
@@ -2902,7 +2901,7 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
     private UUID queuedComposition(ReviewJob job, Instant deadline) {
         return Objects.requireNonNull(transactions.execute(status -> {
             var fence = RuntimeJobTestData.fence(jdbc, job);
-            assertThat(agentRuns.end(fence)).isEqualTo(AgentRuns.EndOutcome.ENDED);
+            assertThat(agentRuns.end(fence, AgentRunStopReason.COMPLETED)).isEqualTo(AgentRuns.EndOutcome.ENDED);
             var composing = agentRuns.continueAs(
                     fence.run(),
                     fence.epoch(),
@@ -2931,6 +2930,14 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
         when(policy.permitsReview(any())).thenReturn(permits);
         when(policy.binding(any())).thenReturn(Optional.of(new WorkspaceAgentBinding()));
         return policy;
+    }
+
+    private long subjectRunCount(long workspaceId, UUID runId) {
+        return Objects.requireNonNull(jdbc.queryForObject(
+                "SELECT count(*) FROM agent_run WHERE workspace_id = ? AND concurrency_key = ?",
+                Long.class,
+                workspaceId,
+                subjectOf(runId)));
     }
 
     private String subjectOf(UUID run) {

@@ -278,6 +278,7 @@ erDiagram
         UUID run_id FK,UK "NOT NULL"
         UUID scan_call_lease
         TIMESTAMPTZ scan_call_until
+        UUID handed_off_run_id FK,UK
     }
 
     ReviewJobScriptRun {
@@ -360,7 +361,8 @@ erDiagram
     %% Relationships
     %% One-to-One relationships
     ReviewJob ||--|| ReviewCompositionBasi : reviewed
-    AgentRun ||--|| ReviewJob : reviewed
+    AgentRun ||--|| ReviewJob : handed_off_run_id
+    AgentRun ||--|| ReviewJob : run_id
 
     %% One-to-Many relationships
     Workspace ||--o{ AgentRun : has

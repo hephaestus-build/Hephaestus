@@ -12,6 +12,7 @@ import de.tum.cit.aet.hephaestus.agent.attempt.SandboxJwt;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunBand;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunLease;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunStopReason;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.observability.StructuredLogKeys;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
@@ -301,7 +302,7 @@ class AgentSandboxesIntegrationTest extends BaseIntegrationTest {
         assertThat(sandboxes.lease(
                         sandbox,
                         Set.of(AgentRunKind.REVIEW),
-                        lease -> runs.end(lease.fence()) != AgentRuns.EndOutcome.ENDED))
+                        lease -> runs.end(lease.fence(), AgentRunStopReason.COMPLETED) != AgentRuns.EndOutcome.ENDED))
                 .isEmpty();
         assertThat(runState(subject)).isEqualTo("ENDED");
 

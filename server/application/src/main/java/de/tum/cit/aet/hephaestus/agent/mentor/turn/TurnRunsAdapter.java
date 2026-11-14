@@ -4,9 +4,11 @@ import de.tum.cit.aet.hephaestus.agent.run.AgentRunBand;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunFence;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunRef;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunStopReason;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.run.StaleRunException;
 import de.tum.cit.aet.hephaestus.mentor.MentorLeaseLostException;
+import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
 import de.tum.cit.aet.hephaestus.mentor.spi.TurnRuns;
 import java.time.Clock;
 import java.time.Duration;
@@ -69,9 +71,19 @@ public class TurnRunsAdapter implements TurnRuns {
 
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
-    public void ended(long workspaceId, UUID runId, int epoch) {
-        if (runs.end(new AgentRunFence(runId, workspaceId, epoch)) == AgentRuns.EndOutcome.STALE)
+    public void ended(long workspaceId, UUID runId, int epoch, MentorTurn.Status outcome) {
+        if (runs.end(new AgentRunFence(runId, workspaceId, epoch), endReason(outcome)) == AgentRuns.EndOutcome.STALE)
             throw new IllegalStateException("The turn's run ended under another claim while the turn was held");
+    }
+
+    /** The one mapping for a turn holder's terminal outcome, shared with the sandbox's repeated end. */
+    public static AgentRunStopReason endReason(MentorTurn.Status status) {
+        return switch (status) {
+            case DONE -> AgentRunStopReason.COMPLETED;
+            case FAILED -> AgentRunStopReason.FAILED;
+            case STOPPED -> AgentRunStopReason.CANCELLED;
+            case QUEUED, RUNNING -> throw new IllegalArgumentException("An unfinished turn cannot end its run");
+        };
     }
 
     @Override

@@ -14,6 +14,7 @@ import de.tum.cit.aet.hephaestus.agent.run.AgentRunBand;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunFence;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunLease;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunStopReason;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.integration.core.spi.UsagePricingState;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
@@ -168,7 +169,7 @@ class LlmUsageCallsIntegrationTest extends AbstractWorkspaceIntegrationTest {
     void shouldKeepTheFirstFailureWhenSettledUsageArrivesLate() {
         AgentRunLease lease = leasedRun("calls-failure-late");
         UUID call = open(lease, lease.epoch(), PRICED);
-        transactions.executeWithoutResult(tx -> runs.end(fence(lease)));
+        transactions.executeWithoutResult(tx -> runs.end(fence(lease), AgentRunStopReason.COMPLETED));
         var failure = new MentorTurn.FailedCall("upstream_stalled", null);
         transactions.executeWithoutResult(tx -> recorder.complete(call, lease.workspaceId(), null, failure));
         Instant failed = failedAt(call);
@@ -234,8 +235,8 @@ class LlmUsageCallsIntegrationTest extends AbstractWorkspaceIntegrationTest {
         complete(lease, measured, new LlmUsageRecorder.CallUsage(10, 0, 0, 0, 0, 0));
         UUID otherClaim = open(lease, lease.epoch() + 1, PRICED);
 
-        transactions.executeWithoutResult(
-                tx -> assertThat(runs.end(fence(lease))).isEqualTo(AgentRuns.EndOutcome.ENDED));
+        transactions.executeWithoutResult(tx ->
+                assertThat(runs.end(fence(lease), AgentRunStopReason.COMPLETED)).isEqualTo(AgentRuns.EndOutcome.ENDED));
 
         assertThat(row(open))
                 .containsEntry("call_state", "SETTLED")
@@ -296,7 +297,7 @@ class LlmUsageCallsIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 null);
         UUID call = open(lease, lease.epoch(), price, new BigDecimal("3.00"));
         UUID error = open(lease, lease.epoch(), price, new BigDecimal("3.00"));
-        transactions.executeWithoutResult(tx -> runs.end(fence(lease)));
+        transactions.executeWithoutResult(tx -> runs.end(fence(lease), AgentRunStopReason.COMPLETED));
         complete(lease, call, new LlmUsageRecorder.CallUsage(1_000_000, 100_000, 0, 0, 0, 0));
         complete(lease, error, LlmUsageRecorder.CallUsage.NONE);
         assertThat(row(call)).containsEntry("pricing_state", state.name());
@@ -384,8 +385,8 @@ class LlmUsageCallsIntegrationTest extends AbstractWorkspaceIntegrationTest {
         UUID crashed = open(lease, lease.epoch(), PRICED, new BigDecimal("0.340000"));
 
         complete(lease, cut, null);
-        transactions.executeWithoutResult(
-                tx -> assertThat(runs.end(fence(lease))).isEqualTo(AgentRuns.EndOutcome.ENDED));
+        transactions.executeWithoutResult(tx ->
+                assertThat(runs.end(fence(lease), AgentRunStopReason.COMPLETED)).isEqualTo(AgentRuns.EndOutcome.ENDED));
 
         assertThat(row(cut)).containsEntry("call_state", "ENDED");
         assertThat(row(crashed)).containsEntry("call_state", "SETTLED");

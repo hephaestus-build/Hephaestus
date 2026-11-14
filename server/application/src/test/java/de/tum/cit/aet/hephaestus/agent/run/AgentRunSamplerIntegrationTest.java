@@ -71,7 +71,7 @@ class AgentRunSamplerIntegrationTest extends BaseIntegrationTest {
         AgentRunLease finished = Objects.requireNonNull(transactions.execute(
                         status -> runs.claimSubject(workspace, "review:ended", Set.of(AgentRunKind.REVIEW))))
                 .orElseThrow();
-        transactions.executeWithoutResult(status -> runs.end(finished.fence()));
+        transactions.executeWithoutResult(status -> runs.end(finished.fence(), AgentRunStopReason.COMPLETED));
 
         new AgentRunSampler(repository, meters).sample();
 
