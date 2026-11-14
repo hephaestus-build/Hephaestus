@@ -60,23 +60,30 @@ public class WorkspaceContextBuilder {
 
     /** The resource with each hidden character in its text marked ({@link HiddenCharacters}). */
     private static JsonNode marked(JsonNode node) {
-        if (node.isString()) {
-            String text = node.asString();
-            String marked = HiddenCharacters.mark(text);
-            return marked.equals(text) ? node : JsonNodeFactory.instance.stringNode(marked);
-        }
+        if (node.isString()) return markedString(node);
+        if (!node.isContainer()) return node;
+        JsonNode copy = node.deepCopy();
+        markInPlace(copy);
+        return copy;
+    }
+
+    private static JsonNode markedString(JsonNode node) {
+        String text = node.asString();
+        return HiddenCharacters.hides(text) ? JsonNodeFactory.instance.stringNode(HiddenCharacters.mark(text)) : node;
+    }
+
+    private static void markInPlace(JsonNode node) {
         if (node instanceof ObjectNode object) {
-            var copy = object.deepCopy();
-            for (Map.Entry<String, JsonNode> property : object.properties())
-                copy.set(property.getKey(), marked(property.getValue()));
-            return copy;
+            for (Map.Entry<String, JsonNode> property : List.copyOf(object.properties())) {
+                if (property.getValue().isString()) object.set(property.getKey(), markedString(property.getValue()));
+                else markInPlace(property.getValue());
+            }
+        } else if (node instanceof ArrayNode array) {
+            for (int index = 0; index < array.size(); index++) {
+                if (array.get(index).isString()) array.set(index, markedString(array.get(index)));
+                else markInPlace(array.get(index));
+            }
         }
-        if (node instanceof ArrayNode array) {
-            var copy = array.deepCopy();
-            for (int index = 0; index < array.size(); index++) copy.set(index, marked(array.get(index)));
-            return copy;
-        }
-        return node;
     }
 
     public Map<String, byte[]> build(ConversationContextRequest request) {

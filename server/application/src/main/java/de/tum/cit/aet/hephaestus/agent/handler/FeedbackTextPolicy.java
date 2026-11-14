@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.handler;
 
 import de.tum.cit.aet.hephaestus.agent.handler.composition.ComposedFeedback;
+import de.tum.cit.aet.hephaestus.evidence.HiddenCharacters;
 import de.tum.cit.aet.hephaestus.practices.spi.AdmittedResultSnapshot;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -54,9 +55,6 @@ final class FeedbackTextPolicy {
     private static final Pattern BARE_LINK =
             Pattern.compile("(?i)(?<![\\p{L}\\p{N}])(?:https?://|ftp://|www\\.)[^\\s<>\"'`\\\\]+");
 
-    // A zero-width joiner composes emoji and hides nothing on its own.
-    private static final int ZERO_WIDTH_JOINER = 0x200D;
-
     private final List<AdmittedResultSnapshot> admitted;
     private @Nullable Set<String> supplied;
 
@@ -88,26 +86,17 @@ final class FeedbackTextPolicy {
     /** The first rule that the text breaks, or null when it may be prepared. */
     @Nullable
     Rule broken(String text) {
-        if (text.codePoints().anyMatch(FeedbackTextPolicy::hidden)) return Rule.HIDDEN_CHARACTER;
+        if (HiddenCharacters.hides(text)) return Rule.HIDDEN_CHARACTER;
         if (SLACK_SYNTAX.matcher(text).find()) return Rule.MENTION;
         var read = Reading.of(text);
         // CommonMark decodes character references outside code, so `&#x202E;` renders the character the raw scan
         // missed.
-        if (read.prose.codePoints().anyMatch(FeedbackTextPolicy::hidden)) return Rule.HIDDEN_CHARACTER;
+        if (HiddenCharacters.hides(read.prose.toString())) return Rule.HIDDEN_CHARACTER;
         if (read.html) return Rule.HTML;
         if (read.image) return Rule.IMAGE;
         if (MENTION.matcher(read.prose).find()) return Rule.MENTION;
         if (!read.links.isEmpty() && !supplied().containsAll(read.links)) return Rule.LINK;
         return null;
-    }
-
-    private static boolean hidden(int codePoint) {
-        return switch (Character.getType(codePoint)) {
-            case Character.FORMAT -> codePoint != ZERO_WIDTH_JOINER;
-            case Character.CONTROL -> codePoint != '\n' && codePoint != '\r' && codePoint != '\t';
-            case Character.LINE_SEPARATOR, Character.PARAGRAPH_SEPARATOR -> true;
-            default -> false;
-        };
     }
 
     /** The links in the verified quotes that the admitted results and their problems cite. */

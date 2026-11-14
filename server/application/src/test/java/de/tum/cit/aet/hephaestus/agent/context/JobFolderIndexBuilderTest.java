@@ -122,11 +122,12 @@ class JobFolderIndexBuilderTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldKeepTheBytesOfARepositoryFileCopySoACodeQuoteMatchesTheDiff() {
+    void shouldKeepTheBytesOfTheCapturedDiffAndItsFileCopiesSoACodeQuoteMatchesBoth() {
         var captured = new SourceKind("scm.pull-request.diff");
         byte[] code = ("const label = \"" + ch(0x200F) + "\";\n").getBytes(StandardCharsets.UTF_8);
+        byte[] change = ("{\"patch\":\"+const label = \\\"" + ch(0x200F) + "\\\";\"}").getBytes(StandardCharsets.UTF_8);
         var contribution = new CaptureContribution(
-                Map.of("context/citable/new/src/label.ts", code),
+                Map.of("context/citable/new/src/label.ts", code, "context/change.json", change),
                 Map.of(captured, SourceCompleteness.COMPLETE),
                 Map.of(),
                 Map.of(),
@@ -143,6 +144,7 @@ class JobFolderIndexBuilderTest extends BaseUnitTest {
         var prepared = builder().build(new ItemKind("scm.pull_request"), Map.of(captured, contribution));
 
         assertThat(prepared.files().get("context/citable/new/src/label.ts")).isEqualTo(code);
+        assertThat(prepared.files().get("context/change.json")).isEqualTo(change);
     }
 
     @Test

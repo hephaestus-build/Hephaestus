@@ -28,6 +28,23 @@ class HiddenCharactersTest {
     }
 
     @Test
+    void shouldKeepAJoinerBetweenTwoLettersThatAWordNeeds() {
+        String persian = "می" + ch(0x200C) + "خواهم";
+        String arabicNumber = ch(0x0600) + "١٢٣";
+
+        assertThat(HiddenCharacters.mark(persian)).isSameAs(persian);
+        assertThat(HiddenCharacters.mark(arabicNumber)).isSameAs(arabicNumber);
+    }
+
+    @Test
+    void shouldMarkJoinersInARunOrAtAnEdgeAndOtherDefaultIgnorableCharacters() {
+        String text = "a" + ch(0x200C) + ch(0x200D) + "b " + ch(0x200D) + "c" + ch(0x17B4) + ch(0xE0080);
+
+        assertThat(HiddenCharacters.mark(text)).isEqualTo("a⟦U+200C⟧⟦U+200D⟧b ⟦U+200D⟧c⟦U+17B4⟧⟦U+E0080⟧");
+        assertThat(HiddenCharacters.hides(text)).isTrue();
+    }
+
+    @Test
     void shouldLeaveBytesThatAreNotUtf8TextAsTheyAre() {
         byte[] binary = {(byte) 0xFF, (byte) 0xFE, 0x00, 0x41};
 

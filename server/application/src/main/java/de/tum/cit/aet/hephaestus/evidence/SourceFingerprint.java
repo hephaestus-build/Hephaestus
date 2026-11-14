@@ -47,7 +47,7 @@ public final class SourceFingerprint {
             // Extracted citations repeat their source record. Commit words are addressed by the Git pair in metadata.
             if (path.startsWith("context/citable-records/") || path.equals("context/commits.json")) return;
             // A stored capture holds the marked text and a current read the raw text: both are read as marked.
-            byte[] bytes = CapturedTextMarking.shown(path, raw);
+            byte[] bytes = HiddenCharacters.markUtf8(raw);
             if (path.endsWith(".json")) {
                 var record = mapper.readTree(bytes);
                 // This timestamp belongs to the mirror observation, not to a provider check run.

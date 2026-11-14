@@ -3,9 +3,10 @@ package de.tum.cit.aet.hephaestus.agent.context;
 import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.evidence.CapturedSource;
-import de.tum.cit.aet.hephaestus.evidence.CapturedTextMarking;
 import de.tum.cit.aet.hephaestus.evidence.ClasspathSourceCatalogRegistry;
+import de.tum.cit.aet.hephaestus.evidence.HiddenCharacters;
 import de.tum.cit.aet.hephaestus.evidence.SourceCapture;
+import de.tum.cit.aet.hephaestus.evidence.SourceFingerprint;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.evidence.capture.CaptureContribution;
 import de.tum.cit.aet.hephaestus.evidence.capture.CitableText;
@@ -51,10 +52,12 @@ public class JobFolderIndexBuilder {
         contributions.forEach((source, contribution) -> {
             var capturedFiles = new ArrayList<CapturedSource>();
             // Captured provider text reaches the model with each hidden character marked; a quote of it is checked
-            // against these marked bytes, so its digest is the marked one.
+            // against these marked bytes, so its digest is the marked one. Repository content (the diff, the copies
+            // of changed files and the tree) keeps its bytes, so a quote of code matches the checkout.
+            boolean repositoryContent = SourceFingerprint.contentAddressed(source);
             var markedDigests = new HashMap<String, String>();
             contribution.files().forEach((path, raw) -> {
-                byte[] bytes = CapturedTextMarking.shown(path, raw);
+                byte[] bytes = repositoryContent ? raw : HiddenCharacters.markUtf8(raw);
                 if (!Arrays.equals(bytes, raw)) markedDigests.put(path, ProvenanceDigest.sha256Hex(bytes));
                 if (memory.putIfAbsent(path, bytes.clone()) != null || disk.containsKey(path)) throw duplicate(path);
                 capturedFiles.add(
@@ -75,6 +78,11 @@ public class JobFolderIndexBuilder {
                 if (contribution.files().containsKey(text.stagedPath())
                         || contribution.filesOnDisk().containsKey(text.stagedPath())) {
                     var marked = markedDigests.get(text.stagedPath());
+                    byte[] captured = contribution.files().get(text.stagedPath());
+                    if (marked != null
+                            && captured != null
+                            && !text.sha256().equals(ProvenanceDigest.sha256Hex(captured)))
+                        throw new IllegalArgumentException("A citable text does not match its captured bytes");
                     texts.add(
                             marked == null
                                     ? text
