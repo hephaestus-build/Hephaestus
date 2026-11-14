@@ -4,8 +4,8 @@
  * (`onBrokenLinks`, `onBrokenAnchors`), but not an address that another program writes. Thus, a
  * renamed page or heading fails the docs build here instead of breaking a link in the app.
  *
- * `docs/package.json` runs it after `docusaurus build`, on the output in `docs/build`. Run on its own, it reads
- * whatever build is there, so it refuses when there is none instead of reporting every target as missing.
+ * `docs/package.json` runs it after `docusaurus build`, on the output in `docs/build`. Run on its own,
+ * it reads whatever build is there.
  */
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
