@@ -116,7 +116,7 @@ A workspace-only role cannot release a fence.
 It has no credential, provider payload or signed callback URL.
 Workspace and connection deletion cascade to these references, without deleting the unresolved security identity.
 Credential erasure keeps its existing deadlines.
-[Connection repair](../integrations.mdx) describes the admin action.
+[Provider removals](/admin/instance-admin#provider-removals) describes the admin action.
 
 ## Operator verification
 

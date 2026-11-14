@@ -95,10 +95,7 @@ export const ConnectUnavailable: Story = {
 		// The step to pass on to the operator, in the admin guide.
 		await expect(
 			canvas.getByRole("link", { name: "enable the Outline integration (opens in a new tab)" }),
-		).toHaveAttribute(
-			"href",
-			expect.stringMatching(/\/admin\/production-setup#outline-integration$/u),
-		);
+		).toHaveAttribute("href", expect.stringMatching(/\/admin\/connect-outline$/u));
 	},
 };
 

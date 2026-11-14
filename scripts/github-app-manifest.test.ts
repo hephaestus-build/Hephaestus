@@ -10,7 +10,7 @@ import { test } from "node:test";
 
 import { asRecord, asString, asStringArray, parseJson } from "./lib/json.ts";
 
-const PAGE = "docs/admin/github-integration.mdx";
+const PAGE = "docs/admin/github-app-permissions.md";
 const EVENT_TYPES =
 	"server/application/src/main/java/de/tum/cit/aet/hephaestus/integration/scm/github/common/GitHubEventType.java";
 
@@ -104,8 +104,8 @@ const events = asStringArray(manifest.default_events, "default_events");
 
 void test("the manifest grants exactly the permissions the tables explain", () => {
 	const explained = new Map([
-		...grants("Core contract — required"),
-		...grants("Provisioned — read access ahead of features"),
+		...grants("Required permissions"),
+		...grants("Provisioned permissions"),
 	]);
 
 	assert.deepEqual(
@@ -116,7 +116,7 @@ void test("the manifest grants exactly the permissions the tables explain", () =
 });
 
 void test("the manifest grants no held permission at its held level", () => {
-	const granted = [...grants("Held — do not grant")].flatMap(([key, held]) => {
+	const granted = [...grants("Held permissions")].flatMap(([key, held]) => {
 		const level = permissions[key];
 		return level !== undefined &&
 			LEVEL_ORDER.indexOf(asString(level, key)) >= LEVEL_ORDER.indexOf(held)
@@ -128,7 +128,7 @@ void test("the manifest grants no held permission at its held level", () => {
 });
 
 void test("the fine-grained token table asks for the core contract GitHub offers to tokens", () => {
-	const core = [...grants("Core contract — required")].filter(([key]) => !APP_ONLY.has(key));
+	const core = [...grants("Required permissions")].filter(([key]) => !APP_ONLY.has(key));
 
 	assert.deepEqual(
 		grants("Fine-grained token permissions"),
@@ -166,9 +166,9 @@ void test("the event table lists exactly the manifest's subscriptions", () => {
 });
 
 void test("no event is both subscribed and deliberately not subscribed", () => {
-	const excluded = [
-		...section("Deliberately not subscribed").matchAll(/`(?<name>[a-z_\d]+)`/gu),
-	].flatMap(({ groups }) => (groups?.name === undefined ? [] : [groups.name]));
+	const excluded = [...section("Events not subscribed").matchAll(/`(?<name>[a-z_\d]+)`/gu)].flatMap(
+		({ groups }) => (groups?.name === undefined ? [] : [groups.name]),
+	);
 	assert.notEqual(excluded.length, 0, "the exclusion table names no event; the pattern is stale");
 
 	assert.deepEqual(

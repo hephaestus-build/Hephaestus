@@ -1,32 +1,23 @@
 ---
 title: Set up the Chrome extension
-description: Allow the Hephaestus Chrome extension to sign in to your instance. Deploy it to your users. Check the setup.
+description: Allow the Chrome extension to sign in to your instance with the Helm chart, verify its release package, and deploy it to your users.
 page_type: how-to
 ---
 
-The Hephaestus Chrome extension shows a practice review after the description of the pull request, merge request, or issue open in a person's tab.
-It shows links to comments Hephaestus posted there for them, the review time, and the conclusions about their own work.
-Each reader sees only their own records.
-A workspace admin gets a **Review details** link to the web app for every developer's observations, feedback delivery, and reviews.
-On a repository's list, a person can preview one row's work as one line inside the row.
-[The user guide](/user/browser-extension) describes what they see.
+The Hephaestus Chrome extension shows the practice review of a pull request, merge request or issue on its provider page.
+Your instance accepts a sign-in only from the extension IDs that you allow.
+The extension is not in the Chrome Web Store, so you deploy the signed package of each release to your users.
+The user guide's [Chrome extension](/user/browser-extension) describes what people see.
 
-The extension runs on desktop Chrome only.
-It is not yet in the Chrome Web Store.
-Each release publishes it as a signed package, `hephaestus-chrome-extension-X.Y.Z.zip`.
-Until store publication, you [get that package](#get-the-extension-package) and [deploy it to your users](#deploy-it-to-your-users).
+## Before you start
 
-Chrome gives each unpacked folder its own id.
-Read the actual id from Chrome.
-Keep the folder in one place.
-
-A store draft supplies a stable id before publication.
-The [contributor release guide](/contributor/browser-extension#releasing-to-the-chrome-web-store) explains how to test a build with that id.
+- The release version that your server runs.
+- `gh` and `cosign`, to verify the package.
 
 ## Get the extension package
 
-Take the package of the release that your server runs.
-Download it, its signature, and the release attestation, then verify both:
+Take the package of the release that your server runs, with its signature and the release attestation.
+Then verify both:
 
 ```bash
 VERSION=X.Y.Z # the release, without the leading "v"
@@ -50,183 +41,98 @@ gh attestation verify "$PACKAGE" \
 `gh attestation verify` proves that the package is a subject of that release.
 If either command fails, do not distribute the package.
 
-The release builds the package once, from the released commit.
-Before it signs the package, it checks the manifest against the [release package contract](/contributor/browser-extension#commands).
-The source SBOMs of the release list the extension's JavaScript dependencies.
+The package is the ZIP that the Chrome Web Store takes, not a signed `.crx`.
 [Release assets](./release-image-lock#release-assets) lists the other assets of a release.
-
-The package is the same ZIP that the Chrome Web Store takes.
-It is not a signed `.crx`.
 
 ## Allow the extension to sign in
 
-An instance accepts sign-ins only from extensions in its list.
-The list is empty by default.
-Nothing changes until you set it:
+1. Get the ID of each build that you distribute.
+   Chrome shows the ID of an unpacked extension on `chrome://extensions`, and each unpacked folder has its own ID.
+2. Add the IDs to `site.yaml`:
 
-```bash
-# Comma-separated exact Chrome extension ids
-HEPHAESTUS_AUTH_BROWSER_EXTENSION_IDS=abcdefghijklmnopabcdefghijklmnop
-```
+   ```yaml title="values.yaml"
+   config:
+     auth:
+       browserExtensionIds:
+         - abcdefghijklmnopabcdefghijklmnop
+   ```
 
-Each id allows exactly two things:
+3. Apply `site.yaml`.
+   On a cluster, run the `helm upgrade` command of [Install](./kubernetes#install) again.
+   On one host, run the installer again ([Run the installer](./k3s#2-run-the-installer)).
+
+The list is empty by default, and then no extension can sign in.
+Each ID allows two things:
 
 - The sign-in return address `https://<id>.chromiumapp.org/callback`, which Chrome reserves for that extension.
-- Cross-origin API requests from `chrome-extension://<id>`.
+- API requests from the origin `chrome-extension://<id>`.
 
-Both come from the id, so they cannot become inconsistent.
-If a sign-in names another extension or return address, it stops on an error page on your instance.
-The instance never redirects it.
+A sign-in that names another extension or return address stops on an error page of your instance.
 
-1. Set the list to the builds you distribute.
-2. After you change the list, restart the application server.
+The list controls where a sign-in returns, not which package runs.
+Extension IDs and their public keys are public, so anyone can load a changed build with the same ID.
+Managed distribution controls which packages your users run.
+Do not list the development ID `ijkajblcbajjpjbknfgdiiiljipafiko` on a production instance: every local build of a contributor has it.
 
-### What listing an id does, and what it does not
-
-The list restricts routing.
-It names where a completed sign-in may return and which origin may call the API.
-It is **not** proof of which package runs.
-Extension ids and their public keys are public.
-Anyone can load a modified unpacked build with the same key and id.
-
-The sign-in uses your own login providers in the user's browser.
-The extension has no client secret to steal.
-PKCE binds the one-time code to the extension instance that started the sign-in.
-The code is valid for one minute and works once.
-[Managed distribution](#deploy-it-to-your-users), not this list, controls which packages your users may run.
-
-Do not list the development id (`ijkajblcbajjpjbknfgdiiiljipafiko`) on a production instance.
-It belongs to every contributor's local build, modified or not.
-No build you distribute uses it.
-
-### Nothing changes at GitHub or GitLab
-
-Your login providers stay unchanged.
-The extension opens your instance's normal sign-in page in a Chrome sign-in window.
-Your instance completes the provider sign-in on its own callback, as it does for the web app.
-Only then does it return the result to the extension.
-You do not register a new OAuth application or add a callback URL at a provider.
-
-## Sessions
-
-- **They are visible.** An extension sign-in appears beside web sessions in the user's session list under **User settings**.
-  Its label is **Browser extension in Chrome on …**.
-- **Every way of ending a session ends it.** All these actions end extension sessions with web sessions:
-  - The user ends that session or signs out everywhere.
-  - An instance admin forces a sign-out.
-  - An account is deleted.
-  - An instance admin is demoted.
-- **They cannot outlive the sign-in.** An extension session ends at the web session's absolute limit, however often it renews.
-  `HEPHAESTUS_AUTH_SESSION_MAX_LIFETIME` sets that limit to seven days by default.
-  `HEPHAESTUS_AUTH_ACCESS_TTL` sets the access token lifetime to 24 hours by default.
-  The server checks revocation on every request.
-  Chrome keeps the credentials in memory, so closing Chrome signs the extension out sooner.
-- **Reuse of a renewal secret ends the session.** Each renewal replaces the extension's renewal secret.
-  If the server receives an older secret again, it ends the whole extension session.
-  It records the event in the authentication audit log.
-  The user signs in again.
-  A copied secret becomes detectable only when the copy or extension presents a secret the other has already replaced.
-- **Consent still applies.** If a user has not completed web app setup, the extension sends them back before it shows anything.
-  This includes acceptance of the current notice.
-
-[Session deadlines](./configuration-readiness.mdx#session-deadlines) explains the limits and how to choose them.
-
-## Rate limits
-
-Sign-in starts share a per-address limit of 20 requests a minute with other sign-ins.
-Sign-in code redemption, session renewal, and sign-out share a separate limit of 30 requests a minute per address.
-Everyone behind one network address shares that limit.
-The Helm chart exposes no value to change these limits.
-If sign-ins return HTTP 429 behind a shared address, stagger sign-ins across separate minutes.
-
-Users confirm review requests in the extension's own window.
-The extension sends them to the web app's endpoints, with the same permissions, cooldowns, and rate limits.
-A refusal uses your instance's words.
-Feedback approval and rejection stay in the web app.
+The extension uses the sign-in page of your instance, with your login providers.
+You register no new OAuth application and add no callback at GitHub or GitLab.
 
 ## Deploy it to your users
 
-Distribution depends on how users' Chrome installations are managed:
-
 - **Unmanaged Chrome.** Give users the package that you verified.
-  They unzip it and load the folder from `chrome://extensions` with **Developer mode** on, as the [user guide](/user/browser-extension#install-it) describes.
-  Chrome labels it as unpacked.
-  It does not update itself.
-  Each user's folder has its own id: users send you theirs, and you add it to `HEPHAESTUS_AUTH_BROWSER_EXTENSION_IDS`.
-  Some organizations disable developer mode.
-- **Managed Chrome.** [`ExtensionInstallForcelist`](https://chromeenterprise.google/policies/#ExtensionInstallForcelist) installs an extension for every managed profile.
-  Each entry has an extension id and update address.
-  An off-store package must be a signed `.crx` that you host with an update manifest.
-  The release package is a ZIP, so you pack and sign the `.crx` with your own key.
-  See [self-hosting](https://developer.chrome.com/docs/extensions/how-to/distribute/host-on-linux).
-  Chrome accepts off-store force-installs only on machines that meet its management requirements.
-  For example, Windows and macOS require a domain-joined, MDM-managed, or cloud-enrolled browser.
-  This does not work on every desktop.
-- **Restricting where it runs.** The [`ExtensionSettings`](https://chromeenterprise.google/policies/#ExtensionSettings) policy's `runtime_blocked_hosts` removes sites from the extension's reach, even with user permission.
-  Its `runtime_allowed_hosts` makes exceptions to a broader block.
+  They unzip it and load the folder on `chrome://extensions` with **Developer mode** on, as the user guide's [Install it](/user/browser-extension#install-it) describes.
+  The extension does not update itself.
+  Each folder has its own ID, so users send you theirs, and you add it to `config.auth.browserExtensionIds`.
+  Some organizations turn off developer mode.
+- **Managed Chrome.** The [`ExtensionInstallForcelist`](https://chromeenterprise.google/policies/#ExtensionInstallForcelist) policy installs an extension for every managed profile.
+  A package outside the store must be a signed `.crx` that you host with an update manifest.
+  Pack and sign the `.crx` with your own key, as [Self-host for Linux](https://developer.chrome.com/docs/extensions/how-to/distribute/host-on-linux) describes.
+  Chrome force-installs a package outside the store only on a managed browser, such as a domain-joined, MDM-managed or cloud-enrolled one.
+- **Limit where it runs.** The `runtime_blocked_hosts` setting of the [`ExtensionSettings`](https://chromeenterprise.google/policies/#ExtensionSettings) policy removes sites from its reach, also with the permission of the user.
 
-Before you plan managed distribution, check the policy documentation for your platforms.
-After Chrome Web Store publication, the store id and update address replace your own package.
-The same policies apply.
-Users still choose which provider sites the extension may read, one site at a time.
-Your instance address is the only other site it contacts.
-
-### Provider addresses
-
-The extension supports GitHub.com and GitLab, including self-hosted GitLab.
-It requests access to each provider address separately.
-A user allows `https://gitlab.example.org` the same way as `https://gitlab.com`.
-Your instance matches the page against the configured workspace connection for that address.
-Work on a provider that no workspace connects to appears as not available.
-GitHub Enterprise Server has no end-to-end verification and is not currently supported by this extension setup.
-
-## Keep the server current
-
-Chrome updates the extension on its own, so a new extension version can reach users before you upgrade the server.
-The extension supports every server that names version 1.0.0 or newer in `/.well-known/hephaestus.json`.
-A release candidate that names its version counts as that release.
-A file without a version counts as too old.
-Version 1.0.0-rc.1 writes no version, so it counts as too old.
-
-On a server that is too old, the report and extension settings say so and ask users to contact you.
-The report and settings then ask that server for nothing else.
-After you upgrade, the extension works again without a reinstall.
-
-If the extension cannot read that file within three seconds, it carries on.
-Any call that then fails reports its own error.
+The extension reads GitHub.com and GitLab, also a self-managed GitLab.
+Users allow each provider site one at a time.
+Work on a provider that no workspace connects shows as not available.
+GitHub Enterprise Server is not supported.
 
 ## Check that it worked
 
-1. Ask your instance whether it accepts an id:
+1. Ask your instance whether it accepts an ID:
 
    ```bash
-   curl "https://<APP_HOSTNAME>/api/auth/client/configuration?clientId=<extension id>"
+   curl "https://<host>/api/auth/client/configuration?clientId=<extension id>"
    ```
 
-   `{"registered":true}` means the id is in the list.
-   `{"registered":false}` means it is not.
+   `{"registered":true}` means that the ID is in the list.
 
-2. If the id is absent, check that the variable reached the application server.
-3. Check that the server restarted.
-4. Sign in from the extension's options page.
-5. Confirm the session appears in your session list as **Browser extension in Chrome on …**.
+2. Sign in from the options page of the extension.
+3. Open **User settings**.
+   The session list shows **Browser extension in Chrome on …**.
 
-## What the extension sends
+## Undo
 
-After a user allows a provider site, the extension sends your instance the canonical address of each supported work page they open there.
-Supported work includes pull requests, merge requests, and issues.
-It sends the address when the page opens, and again while the page stays open and its review may change.
-On a repository's list, it sends a row's work address only when the user presses that row's Hephaestus button.
-It sends no page content and looks up no other page.
+1. Remove the ID from `config.auth.browserExtensionIds`.
+2. Apply `site.yaml`.
 
-The extension does not read cookies.
-Its API calls use its own session, not browser cookies.
-Sign-in uses the user's normal Chrome profile.
-An existing provider or instance sign-in may be reused there, exactly as for the web app.
-Your instance resolves the address against data it already synchronized for the user's workspace.
-It makes no provider request to resolve it.
+A new sign-in from that extension then fails.
+To end its sessions that exist, ask each user to end them in **User settings**, or force a sign-out as an instance admin.
 
-The report shows no feedback text.
-The listed comments contain no feedback text in the report, which links to them on the provider.
-Everything the report shows stays inside the extension-origin frame.
-A link to the web app opens a separate web session and may require sign-in there.
+## Keep the server current
+
+Chrome can update a managed extension before you upgrade the server.
+The extension works with every server that names version 1.0.0 or later in `/.well-known/hephaestus.json`.
+On an older server, the extension says that the server is too old and asks users to contact you.
+After you upgrade, it works again without a reinstall.
+
+## Sessions and limits
+
+An extension session ends with the web sessions of the account, at the same absolute limit.
+[Session deadlines](./configuration-readiness#session-deadlines) gives the limits.
+The chart has no value that changes them.
+
+Sign-in starts share a limit of 20 requests a minute for each network address.
+Code redemption, session renewal and sign-out share a limit of 30 requests a minute for each address.
+The chart has no value that changes these limits.
+If many users behind one address get HTTP `429`, spread their sign-ins over several minutes.
+
+The user guide's [Chrome extension privacy](/user/browser-extension-privacy) states what the extension sends to your instance.

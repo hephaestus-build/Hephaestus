@@ -22,7 +22,7 @@ Semantic versioning applies to the surfaces an operator or API consumer depends 
 | **Helm chart values** | The values of the Helm chart, and the key names that [Secret custody](./secret-custody) lists for `secret.name`. Removing or renaming a value, accepting less than before, or changing its meaning is a breaking change. A new optional value or a wider limit is a minor change. |
 | **Signed release** | The assets that [Release image lock](./release-image-lock.md) lists and the schema of the joint lock. The location of the chart, and the image names in [Docker image tags](#docker-image-tags). |
 | **Backups** | The pgBackRest stanza name of the bundled PostgreSQL, because an existing repository uses it. |
-| **Practice scripts** | What [Write a practice script](./practice-scripts) documents: the shape of a script, its context, its result, and the modules that it imports. Removing or renaming one, or changing the script contract version, is a breaking change. Other modules of the toolkit are not covered. |
+| **Practice scripts** | What the [Practice script API](./practice-scripts) documents: the shape of a script, its context, its result, and the modules that it imports. Removing or renaming one, or changing the script contract version, is a breaking change. Other modules of the toolkit are not covered. |
 | **Practice definitions and catalog** | The fields of a practice definition, its Applies when conditions, and the practice and group slugs of the catalog. A new field or condition is a minor change. A changed catalog practice reaches a workspace as an offer that an admin accepts. |
 | **Alert rules** | The alert names of the shipped rules, and the metrics that those rules read. |
 | **Provider connections** | The webhook routes that you registered at a provider, and the permissions of the GitHub App, the GitLab token and the Slack app. A new required permission is a breaking change. A minor release can ask for a permission only if its feature stays off, with a recorded reason, until you grant it. |
@@ -36,7 +36,7 @@ It does not add these operations to the 1.x public promise.
 From 1.0, the promised operations must stay compatible with the stable release.
 
 A limit that a release states can go in a minor release.
-[One GitLab instance for each install](./integrations#more-than-one-gitlab) is an example.
+[One GitLab instance for each install](./connect-gitlab#gitlab-instances-and-workspaces) is an example.
 
 Other surfaces can change in any release without notice:
 

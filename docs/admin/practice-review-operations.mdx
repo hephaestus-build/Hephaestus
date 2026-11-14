@@ -5,7 +5,7 @@ page_type: reference
 ---
 
 Use this reference to configure the runtime and monitor a deployed instance. Workspace admins
-should start with [Practice Review](./practice-review.mdx).
+should start with [Practice reviews and feedback mode](/user/practice-reviews).
 
 Public feedback addresses the author’s work.
 `PUBLIC_SUBJECT_INELIGIBLE` means the recorded developer or its support does not qualify for that public copy.
@@ -102,7 +102,7 @@ The model proxy also holds each review attempt to twice that budget for all its 
 Past it, the proxy refuses the attempt's next model call with `403`.
 
 A practice script that calls `ctx.review()` opens review sessions, and their calls count against the budget of that practice.
-[AI usage](./ai-providers.mdx#ai-usage) owns model usage and prices.
+[Read AI usage](/user/ai-models#read-ai-usage) gives model usage and prices.
 [Practice scripts](#practice-scripts) tells you how to read what each practice script did.
 
 The defaults cap excessive work at several times a set's normal use.
@@ -246,7 +246,7 @@ See [Source governance](./dsms/item-source-governance.md).
 
 ## Running instance
 
-For workspace model readiness, coverage, feedback mode, spend, and review activity, see [Practice review](./practice-review.mdx).
+For workspace model readiness, coverage, feedback mode, spend, and review activity, see [Practice reviews and feedback mode](/user/practice-reviews).
 
 ### Queue health
 
@@ -336,7 +336,7 @@ Then it has at most one link that fixes the cause.
 On the Practice profile, the line also has **Details**, which opens the review's section **Practice scripts**.
 
 A script that returned a candidate observation has not yet passed admission.
-The server can still withhold that candidate observation, as [What admission checks](./practice-scripts.mdx#return-a-result) tells.
+The server can still withhold that candidate observation, as [What admission checks](./practice-scripts.mdx#results) tells.
 
 For `undeclared_source_cited`, compare the cited source with the pinned practice's Reads block.
 For a scan, use the Scan Reads block.
@@ -350,7 +350,7 @@ The [glossary](/contributor/practice-review-glossary#admission-reasons) owns thi
 | The line starts with                          | What it means                                                                                                                                                                                                                                                                                                                               | What to do                                                                                                                                                                                                                                 |
 | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | **… returned a candidate observation**        | The script ran to its end and returned a valid candidate observation. The line can say how: from its code alone or through the review.                                                                                                                                                    | Nothing.                                                                                  |
-| **… stopped without a candidate observation** | The script stopped. The line gives the reason, such as `it raised an error`, `it ran out of time`, `what it returned is not a candidate observation`, or `it is not a script the review can run`. The practice has no observation in this review.                                                                                           | For a script error, select **Edit the script**. The review's section shows the first line of the error. To reproduce it, [run the script on the same change](./practice-scripts.mdx#test-a-script-locally). For time or budget, see below. |
+| **… stopped without a candidate observation** | The script stopped. The line gives the reason, such as `it raised an error`, `it ran out of time`, `what it returned is not a candidate observation`, or `it is not a script the review can run`. The practice has no observation in this review.                                                                                           | For a script error, select **Edit the script**. The review's section shows the first line of the error. To reproduce it, [run the script on the same change](/contributor/practice-script-runner#test-a-script-locally). For time or budget, see below. |
 | **The review ended before … started**         | The attempt ran out of time or budget, or was cancelled, before it reached this practice.                                                                                                                                                                                                                                                   | Same as for a script that ran out of time.                                                                                                                                                                                                 |
 | **… did not finish**                          | The review's report does not name the script, for example because the container stopped.                                                                                                                                                                                                                                                    | Same as for a script that ran out of time. If it continues, read the container logs that the job record keeps.                                                                                                                             |
 
@@ -368,8 +368,6 @@ The practices of a review run one after the other in the time of the **Practice 
 If many practices in one review run out of time, raise the timeout of that assignment on **AI models**.
 Otherwise, make the slow script faster.
 [Limits](./practice-scripts.mdx#limits) gives the time and token limits of a script.
-
-[Upgrade a script from an earlier release](./practice-scripts.mdx#upgrade-a-script-from-an-earlier-release) tells what to do.
 
 #### The review's practice scripts
 
@@ -457,7 +455,7 @@ Existing ordinary comments retain their original placement.
 
 Historical write keys, markers, sides and provider references stay immutable.
 Never clear a fence or edit an internal send row to force a retry.
-Use the [review controls](./practice-review.mdx#approve-reject-and-retry) after authoritative lookup proves absence.
+Use the [review controls](/user/practice-reviews#check-delivery) after authoritative lookup proves absence.
 
 ### Retention
 
@@ -560,7 +558,7 @@ Each bounded file job retains its own attempt. Durable membership retains every 
 Default inventory limits are one million entries and 268,435,456 metadata bytes.
 Enumeration has a five-minute deadline. A scan has a 24-hour deadline.
 A limit or source failure does not mark repository files removed.
-The [scan guide](./practice-scans.mdx) owns report counts, comparison and the removal guard.
+The [scan guide](/user/scans) owns report counts, comparison and the removal guard.
 
 [Data retention](./data-retention) gives the retention of jobs, item events, results, usage records and evidence-copy receipts.
 No result expires while retained feedback still cites it.
@@ -568,4 +566,4 @@ Aggregate reports remain with expired-proof availability after raw scan proof ex
 
 An unknown priced cost is not zero spend.
 Unknown provider visibility permits readback, never automatic repeat posting.
-See [review delivery](./practice-review.mdx#approve-reject-and-retry) for safe admin retry.
+[Check delivery](/user/practice-reviews#check-delivery) gives the safe admin check of an unconfirmed comment and the retry of a withdrawal.

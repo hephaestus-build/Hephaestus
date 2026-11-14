@@ -4,8 +4,6 @@ description: Create a workspace, connect repositories, manage members and roles,
 page_type: feature
 ---
 
-import Screenshot from "@site/src/components/Screenshot";
-
 Set up a workspace so that its members get practice feedback.
 A workspace holds one team’s repositories, members, practices, integrations, and settings.
 Workspace admins and owners do these tasks under **Administration** in the sidebar.
@@ -41,10 +39,14 @@ For GitLab:
 
 1. Select **Create workspace**, then **GitLab**.
 2. Connect your account on the GitLab instance that your deployment uses.
-3. Enter an access token for that account.
+3. In **Access token**, enter a group access token with the **Owner** role and the **api** scope, then select **Validate token**.
 4. Choose a group.
 5. Choose the projects to monitor: **All projects**, or **Selected projects** and then each project.
 6. Finish the creation wizard.
+
+Hephaestus uses the token to read the group and to register its webhook, which needs the **Owner** role.
+Before the token expires, Hephaestus rotates it, which needs the **api** or **self_rotate** scope.
+A rotation revokes the old token at once, so use the token only for Hephaestus.
 
 The workspace belongs to that GitLab account.
 With **All projects**, the workspace monitors every project of the group and its subgroups, including projects added later.
@@ -94,6 +96,20 @@ For a **token-managed** workspace:
 
 The first sync takes longer for large repositories and long histories.
 Webhooks and scheduled syncs collect later changes.
+
+### Change the GitLab projects to follow
+
+You can change which projects of the GitLab group the workspace follows while the GitLab connection is active.
+
+1. Under **Administration → Integrations**, open **GitLab**.
+2. Under **Projects to follow**, choose one option:
+   - **All projects in the group** adds each project that Hephaestus finds in the group at its next check. Select **Add new projects** to confirm.
+   - **Only the projects listed below** keeps the current projects and adds no new ones.
+
+Neither choice removes synced work or changes membership in GitLab.
+Stopped projects stay stopped.
+Workspace members follow the new choice at the next sync.
+To change the list itself, use **Add a repository** and [Stop monitoring](#stop-monitoring-a-repository).
 
 ### Stop monitoring a repository
 
@@ -177,45 +193,17 @@ These emails go to your verified address. You cannot turn them off.
 
 ## Practices and AI
 
-Workspace admins choose:
+Workspace admins choose these settings under **Administration**:
 
-- The practices of the workspace, in **Practice setup** under **Administration → Practices**. Add them from the instance catalog.
-- The feedback mode, in **Review settings** under **Administration → Practices**. It applies to the workspace, a practice group, or one practice: **Off**, **Approve first** (the default), or **Automatic**.
-- Whether practice reviews start by themselves, on request, or both, also in **Review settings**.
-- The models for practice reviews and conversations, in **AI models**.
-- A monthly cap on the workspace’s own AI provider, in **AI usage**.
-
-**Approve first** keeps feedback on the work until a workspace admin approves it.
-Feedback on practice pages and in conversations needs no approval.
-
-<Screenshot
-  src="workspace/feedback-mode"
-  alt="Review settings with the workspace feedback mode set to Approve first. Off and Automatic are the other choices."
-/>
+- The practices of the workspace, in **Practice setup**. [Practices](./practices.md) gives the steps.
+- Whether practice reviews run, which work they cover, and the feedback mode, in **Review settings**. [Practice reviews and feedback mode](./practice-reviews.mdx) gives the steps.
+- The models for practice reviews and conversations, in **AI models**, and the cap on your own provider, in **AI usage**. [AI models and spending](./ai-models.md) gives the steps.
 
 To hide members or teams from workspace activity, see [Activity](./activity).
 
-### Approve feedback before it posts
-
-With **Approve first**, feedback on the work waits for a workspace admin.
-
-1. Under **Administration → Practices**, open **Practice reviews**. A badge shows how many pieces of feedback wait.
-2. Under **Awaiting your approval**, select the **Review** button.
-3. Read **What will be sent**.
-4. Select **Approve and open next**, or **Approve and close** on the last one.
-
-To reject a piece of feedback, select **Reject feedback**, choose a reason, and select **Reject feedback** again.
-
-## Your AI choice
-
-Each member chooses which AI may handle their work, and the choice applies in all their workspaces.
-Workspace model settings do not change it.
-Choose models that meet the choices of your members.
-[User settings](./user-settings#your-ai-choice) explains **In-house**, **Cloud**, and **No AI**.
-
 ## Replace a refused token
 
-Hephaestus checks GitLab tokens daily and rotates them before expiry when GitLab permits it.
+Hephaestus checks GitLab tokens daily and rotates them, as [Create a workspace](#create-a-workspace) describes.
 The connection page shows the expiry date, or says that the token has no expiry.
 When GitHub or GitLab refuses a token, **Administration → Integrations** says, for example, **GitHub no longer accepts this token**.
 Sync cannot continue until you replace the token.
@@ -249,9 +237,10 @@ If the workspace does not need the repository, remove it as [Repositories](#repo
 
 ## More admin tasks
 
-- [Connect Slack or Outline](/admin/integrations#slack) to a workspace.
-- [Set up AI models and Member onboarding](/admin/ai-providers) for a workspace.
-- [Publish a public activity page](/admin/public-activity#workspace-administrators).
+- [Connect Slack or Outline](./integrations) to a workspace.
+- [Set up member onboarding](./ai-models.md#set-up-member-onboarding) for a workspace.
+- [Publish a public activity page](./publish-public-activity.md).
+- [Scan repositories](./scans.md) on a schedule.
 
 ## Troubleshooting
 

@@ -1,266 +1,120 @@
 ---
 title: Turn on workspace subdomains
-description: Give each workspace its own host name under a base domain. Configure the server, DNS, TLS, and the OAuth callbacks.
-sidebar_position: 18
+description: Give each workspace its own host name under the host of your instance. Prepare DNS and a wildcard certificate, then turn on the Helm value.
 page_type: how-to
 ---
 
-Workspace subdomains give each workspace an address such as `https://ls1intum.hephaestus.build`.
-Authentication and the API stay on the apex, `https://hephaestus.build`.
-The instance switch is off by default.
-The web app supports workspace addresses.
-Prepare DNS, TLS, and OAuth callbacks before you turn on the switch.
+Workspace subdomains give each workspace its own address, such as `https://acme.hephaestus.example.com` for the workspace `acme`.
+Sign-in, the API and webhooks stay on the host of the instance, `https://hephaestus.example.com`.
+The feature is off by default.
 
-## Configure the server
+## Before you start
 
-The server uses these properties:
+- A DNS name as `host`, not an IP address.
+  The host must not be a [public suffix](https://publicsuffix.org/list/).
+  Otherwise, the workspace hosts cannot use the session of the apex.
+- A DNS provider that cert-manager can use for a [DNS-01 challenge](https://cert-manager.io/docs/configuration/acme/dns01/).
+- A cert-manager ClusterIssuer with a DNS-01 solver for your zone.
+  Keep its credential in a Secret in the namespace of cert-manager, never in `site.yaml`.
+- A `host` of at most 189 characters, so that a full workspace label fits.
 
-| Property                                      | Environment variable                          | Default |
-| --------------------------------------------- | --------------------------------------------- | ------- |
-| `hephaestus.workspace.subdomains.enabled`     | `HEPHAESTUS_WORKSPACE_SUBDOMAINS_ENABLED`     | `false` |
-| `hephaestus.workspace.subdomains.base-domain` | `HEPHAESTUS_WORKSPACE_SUBDOMAINS_BASE_DOMAIN` | Empty   |
+## Prepare DNS and the certificate {/*#configure-dns-and-the-edge*/}
 
-The base domain must use lowercase ASCII.
-It must not contain a scheme, port, or path.
-Its maximum length is 189 characters, to leave space for a full workspace label.
-With the switch on, the webapp URL and auth issuer must use the HTTPS apex.
-The webapp URL must have no final slash.
+1. Add a wildcard record `*.<host>` that points to the same address as the record of `<host>`.
+   Keep the records of other services, such as `docs`, as separate records.
+2. If your DNS provider proxies traffic, set both records to DNS only.
+3. If the zone has CAA records, allow `letsencrypt.org` in `issue` for the host and in `issuewild` for the wildcard ([CAA](https://letsencrypt.org/docs/caa/)).
+4. Get one certificate for `<host>` and `*.<host>` on the Gateway.
 
-```yaml
-hephaestus:
-  workspace:
-    subdomains:
-      enabled: true
-      base-domain: hephaestus.build
-  webapp:
-    url: https://hephaestus.build
-  auth:
-    issuer: https://hephaestus.build
-    api-base-path: /api
-```
+On one host with k3s, the installer requests that certificate.
+On another cluster, issue it on the Gateway as you issue the certificate of the host.
 
-The server switch alone does not configure DNS, TLS, redirects, or SPA routes.
-Use DNS-only records and a DNS-01 wildcard certificate, as [ADR 0053](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0053-workspace-addresses-are-a-presentation-origin.md) requires.
-Cloudflare must not proxy these hosts.
+## Turn on the Helm value {/*#helm-chart-and-k3s*/}
 
-Before you turn it on, configure DNS, TLS, and the apex callbacks.
-To turn it off, set `enabled` to `false` in the app and proxy settings and recreate both.
-Keep the apex workspace paths available.
+1. Add the value to `site.yaml`:
 
-## Configure DNS and the edge
+   ```yaml title="values.yaml"
+   workspaceSubdomains:
+     enabled: true
+   ```
 
-DNS and TLS can be prepared while the switch stays off.
-If the zone has CAA records, allow `letsencrypt.org` in `issue` for the apex.
-If it has `issuewild` records, they must also allow `letsencrypt.org` for the wildcard.
-See [CAA guidance](https://letsencrypt.org/docs/caa/).
-The edge serves the same trusted SPA on every valid tenant host.
-It does not check whether a workspace exists.
+   The chart uses `host` as the base domain, and gives both settings to the server and the webapp.
 
-### Cloudflare checklist for hephaestus.build
+2. Apply `site.yaml`.
+   On a cluster, run the `helm upgrade` command of [Install](./kubernetes#install) again.
+   On one host, run the installer again with the issuer of the wildcard certificate:
 
-1. Open the `hephaestus.build` zone and select **DNS**.
-2. Create a wildcard record with **Name** `*`, pointing to the same origin as the apex.
-3. Set the wildcard and apex records to **DNS only** (grey cloud).
-4. Keep explicit records for reserved services, including `docs` and `staging`, separate from the wildcard.
-5. Open **My Profile → API Tokens → Create Token** and select **Edit zone DNS**.
-6. Add **Zone → Zone → Read** and **Zone → DNS → Edit** permissions.
-7. Set **Zone Resources** to **Include → Specific zone → hephaestus.build**.
-8. Save only the raw token in `/etc/hephaestus/dns/token`, with file mode `0600`.
+   ```bash
+   sh k3s-install.sh --workspace-subdomains --dns01-issuer <issuer-name>
+   ```
 
-Use one zone-scoped token with both permissions.
-Do not use the account's global API key.
-Cloudflare supplies DNS only, not the HTTP connection or TLS certificate.
-Do not configure its proxy, Origin CA, origin locks, or trusted-proxy address ranges.
-The server trusts only the actual Traefik ingress address.
+   Add the options of your first install.
+   On a repeat run, the installer keeps `site.yaml`, so set the value in the file yourself.
+   Without `--workspace-subdomains`, a repeat run stops instead of replacing the wildcard certificate, as [Run the installer](./k3s#2-run-the-installer) describes.
 
-See [Cloudflare wildcard records](https://developers.cloudflare.com/dns/manage-dns-records/reference/wildcard-dns-records/) and [API token creation](https://developers.cloudflare.com/fundamentals/api/get-started/create-token/).
-The permissions follow [lego's Cloudflare provider](https://go-acme.github.io/lego/dns/cloudflare/).
-
-### Helm chart and k3s
-
-Set `workspaceSubdomains.enabled: true` in `site.yaml`.
-The base domain is `host`. The chart passes both settings to the server and webapp.
-Prepare DNS-only apex and wildcard records first.
-The Gateway needs a DNS-01 certificate for both `host` and `*.host`.
-
-The chart adds a wildcard HTTPRoute to the webapp alone.
-nginx rejects reserved or invalid workspace hosts and the API, auth and webhook paths on tenant hosts.
-Apex GET and HEAD requests to valid workspace paths return a 308 redirect that keeps the path and query.
-No workspace lookup controls that redirect.
-The server still checks every workspace permission.
-
-For the one-host platform, prepare a cert-manager ClusterIssuer with a DNS-01 solver for your zone.
-Keep its scoped credentials in a private Secret in cert-manager's namespace.
-Do not put a credential value in `site.yaml`.
-Use the [cert-manager DNS-01 configuration](https://cert-manager.io/docs/configuration/acme/dns01/) for your DNS provider.
-
-Make the issuer and its credential available when k3s applies the platform manifests.
-On a fresh host, protected manifests can be placed in k3s's manifests directory before the installer runs.
-Then add `--workspace-subdomains --dns01-issuer <issuer-name>` to `k3s-install.sh`.
-The installer requests the apex and wildcard certificate from that issuer.
-For a test certificate, select a test issuer. The installer's `--staging` flag controls only its built-in HTTP-01 issuer.
-
-On an existing install, update `site.yaml` yourself and prepare the wildcard certificate before the chart upgrade.
-The installer preserves an existing `site.yaml`.
-
-### Apply the configuration
-
-1. Check the apex and wildcard DNS records.
-2. Check that the certificate covers both names.
-3. Apply `site.yaml` with the verified chart package.
-4. If a Pod fails to become ready, inspect its events and logs.
-
-### Check the same-site precondition
-
-Use a DNS base domain, not an IP address.
-
-The base domain must not be a [public suffix](https://publicsuffix.org/list/).
-Check both the ICANN and PRIVATE sections of the current list.
-Include wildcard and exception entries in the check.
-Check that tenant hosts have the same registrable domain as the apex.
-A public suffix would put the apex and tenant hosts on different sites.
-The unchanged `SameSite` cookies would then prevent the tenant SPA from using the apex session.
-
-See [MDN's site definition](https://developer.mozilla.org/en-US/docs/Glossary/Site).
+The chart adds a wildcard route to the webapp.
+On a workspace host, the webapp refuses reserved or invalid labels and the API, sign-in and webhook paths.
+On the apex, a `GET` or `HEAD` of a workspace path, such as `/w/acme/activity`, redirects to the workspace host with `308`.
 
 ## Register exact OAuth callbacks
 
-Every login provider uses one callback on the configured auth issuer's origin.
-The server adds `api-base-path` and `/login/oauth2/code/<registrationId>`.
-Neither `Host` nor `X-Forwarded-Host` can change that callback.
-Instance administration shows the same callback that authentication uses.
+Each login provider uses one callback on the apex, also with workspace subdomains.
+A workspace host never receives a callback.
 
-1. Open **Login providers** in instance administration.
-2. Copy each provider's callback URI.
-3. If the registered address differs, register the exact URI shown.
-4. In the GitHub login app settings, set **Callback URL** to `https://hephaestus.build/api/login/oauth2/code/github`.
-5. Turn off **Enable wildcard matching in the callback URL** and remove tenant-host callbacks.
-6. In the GitLab OAuth application, set **Redirect URI** to `https://hephaestus.build/api/login/oauth2/code/gitlab`.
-7. In the Outline OAuth application, set **Redirect URI** to `https://hephaestus.build/api/login/oauth2/code/outline`.
+1. Open **Instance administration → Login providers**.
+2. Select **Copy redirect URI** for each provider.
+3. Make sure that the OAuth application of the provider registers that exact URI.
+4. In the GitHub OAuth App, turn off **Enable wildcard matching in the callback URL**, and remove callbacks on workspace hosts.
 
-Self-hosters replace `hephaestus.build` with their apex and use the registration ID shown in instance administration.
-Do not add a final slash or wildcard.
-Dynamic providers can have a different registration ID.
+The callbacks have this form, without a final slash or a wildcard:
 
-GitHub, GitLab, Slack sign-in, and Outline use this policy.
-The separate Slack workspace connection derives its callback from the configured issuer origin and API prefix.
-Register the exact apex `/api/oauth/callback/slack` address on the Slack app.
-GitHub App installations and GitLab token connections do not use a request-derived login callback.
+| Provider | Callback |
+| --- | --- |
+| GitHub sign-in | `https://<host>/api/login/oauth2/code/github` |
+| GitLab sign-in | `https://<host>/api/login/oauth2/code/gitlab` |
+| Outline account linking | `https://<host>/api/login/oauth2/code/outline` |
+| Slack account linking | `https://<host>/api/login/oauth2/code/slack` |
+| Slack workspace connection | `https://<host>/api/oauth/callback/slack` |
+| GitHub App | `https://<host>/api/oauth/callback/github` |
 
-If the registered callback already matches the configured issuer origin and API prefix, no callback update is needed.
-This includes existing callbacks registered at the apex.
-See [GitLab OAuth applications](https://docs.gitlab.com/integration/oauth_provider/) and [Outline's OAuth provider](https://docs.getoutline.com/s/hosting/doc/oauth-provider-9YJWoe3BJN).
-See [GitHub's callback guidance](https://docs.github.com/en/apps/creating-github-apps/registering-a-github-app/about-the-user-authorization-callback-url).
-Exact callback comparison follows [OAuth Security Best Current Practice](https://www.rfc-editor.org/rfc/rfc9700.html#section-4.1.3).
+A provider that an instance admin added can have another registration ID in place of the provider name.
+If the registered callbacks already use the apex, change nothing.
 
 ## Check that it worked
 
-1. Open the apex.
+1. Open `https://<host>`.
    It serves the web app over HTTPS.
-2. Open a workspace hostname.
-   It serves the web app over HTTPS.
+2. Ask the apex for a workspace path:
+
+   ```bash
+   curl -sI https://<host>/w/<workspace slug>/activity
+   ```
+
+   The answer is `308`, with `location: https://<workspace slug>.<host>/activity`.
+
+3. Open `https://<workspace slug>.<host>`.
+   It serves the web app over HTTPS, and you are signed in.
 
 ## Undo
 
-1. Set `workspaceSubdomains.enabled: false`.
-2. Upgrade with the same site values.
-3. Keep the DNS records and the certificate while other services need them.
+1. Set `workspaceSubdomains.enabled` to `false` in `site.yaml`.
+2. Apply `site.yaml`.
+3. Keep the DNS records and the certificate while other services use them.
 
-The apex workspace links then serve the web app without a tenant redirect.
+Workspace links on the apex then open the web app without a redirect.
 
-## Browser access and CSRF
+## Workspace names
 
-The CORS policy permits exact configured origins and installed extension origins as before.
-With subdomains on, it also permits an exact HTTPS origin with one valid, non-reserved workspace label.
-It checks the entire origin, not a suffix substring.
-The check does not look up a workspace.
-An unknown valid label gets the same CORS response as a current workspace label.
-The `docs` host is never a tenant origin, even if it appears in the configured origins.
-
-Serve only the trusted Hephaestus SPA on tenant hosts.
-Never host uploaded HTML, third-party applications, or workspace-controlled scripts there.
-Reserve each label that another service uses before you enable subdomains.
-A trusted origin can read the browser session through the apex API.
-
-The policy does not grant workspace membership.
-Every API request still passes the existing authorization checks.
-
-The tenant SPA cannot read the apex `__Host-XSRF-TOKEN` cookie.
-It must fetch `GET https://<apex>/api/auth/csrf` with credentials.
-The response contains the raw `token` and its `headerName`.
-Send that header on unsafe requests to the apex, with credentials.
-
-At startup, fetch the token before any other credentialed request.
-Sign-in and sign-out reload the page.
-The new page fetches the current token before it sends credentialed requests.
-Wait for the response before starting other requests.
-
-A CSRF 403 has the problem type `https://docs.hephaestus.build/contributor/api-error-handling#csrf-token-rejected`.
-On that response, refetch the token once and retry the rejected request once.
-Do not retry another 403 or an ambiguous network failure.
-OAuth sign-in and browser sign-out clear the previous CSRF cookie through Spring Security.
-
-The endpoint is available before sign-in and sends `Cache-Control: no-store`.
-Do not cache or compress this response at the edge.
-It must not appear in logs.
-
-The auth cookies keep the `__Host-` prefix, `Secure`, `Path=/`, and no `Domain`.
-Return paths remain relative-only.
-Workspace detail and list responses expose the canonical `workspaceAddress` for the SPA.
-
-## Browser state and navigation
-
-Each origin keeps its own **View as user** session.
-The theme is the exception: the `hephaestus-theme` cookie on the base domain holds it, so it stays the same on every workspace host.
-The cookie can hold only `light`, `dark` or `system`, so another host under the base domain can change only the theme.
-No browser storage or session token is copied between hosts.
-The workspace-specific **View as user** entry opens on the workspace host before it stores the view.
-Instance administration stays on the apex.
-
-Workspace administration uses `/admin` on the workspace host.
-This is the only shared prefix: internal `/admin` links target instance administration on the apex.
-Unambiguous apex paths, including `/workspaces/new`, leave the workspace host.
-Links to instance administration use absolute apex URLs.
-
-Sign-in uses the apex `/login` page.
-The return path is relative, such as `/w/<slug>/activity?range=1y`.
-After sign-in, a document request reaches the edge's workspace redirect.
-The server does not accept an absolute return path.
-Slack connection callbacks derive their return workspace from the signed workspace ID, not browser storage.
-
-The extension reads `/.well-known/hephaestus.json` on a pasted workspace host.
-This public, non-cacheable document names the configured apex, the base domain, and the running version.
-The extension asks for access to the apex before it connects.
-It does not guess a parent domain or send credentials during discovery.
-
-## Workspace names and upgrade
-
-A slug is a lowercase ASCII DNS label with 3 to 51 characters.
+A workspace slug is a DNS label of 3 to 51 lowercase ASCII letters, digits and single hyphens.
 It cannot start or end with a hyphen.
-Consecutive hyphens are prohibited.
-This also excludes `xn--` names.
-This follows [ADR 0053](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0053-workspace-addresses-are-a-presentation-origin.md).
+Infrastructure and application names are reserved, such as `www`, `api`, `docs`, `admin`, `auth`, `login`, `mail`, `status`, `staging`, `preview` and `pr` followed by digits.
+The [RFC 2142 mailbox names](https://www.rfc-editor.org/rfc/rfc2142.html) are reserved too.
+Reserve each label that another service uses before you turn on subdomains.
 
-Infrastructure and application names are reserved.
-These include `www`, `api`, `docs`, `admin`, `auth`, `login`, `mail`, `status`, `staging`, `preview`, and `pr<digits>`.
-The policy also reserves [RFC 2142 mailbox names](https://www.rfc-editor.org/rfc/rfc2142.html) and the application's route names.
+Serve only Hephaestus on workspace hosts.
+A page on a workspace host can use the session of the apex.
+Thus, never host uploaded HTML, another application, or scripts that a workspace controls there.
 
-The migration preserves valid slugs.
-It replaces an invalid or reserved slug with `workspace-<id>`.
-If that address was already used, it adds a numeric suffix.
-The migration records the old address in slug history.
-Old paths that match the previous slug format redirect directly to the current slug, with authorization unchanged.
-
-Rename redirects do not expire or discard old entries.
-A used slug cannot name another workspace, even after workspace deletion.
-Database reservations enforce this across concurrent writes.
-
-Make and verify a database backup before the upgrade.
-Check workspace addresses after the upgrade.
-The migration waits at most one second for each required table lock.
-If a long transaction prevents it from acquiring a lock, startup fails without a partial slug migration.
-Retry startup after that transaction finishes.
-
-The database cannot recover history that an earlier version deleted.
-Reservations cover all current slugs and all retained history at upgrade time.
-Restore the verified pre-upgrade backup to reverse the migration.
+A renamed workspace keeps its old slug, which redirects to the new one.
+A used slug cannot name another workspace, also after the workspace is deleted.
+[ADR 0053](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0053-workspace-addresses-are-a-presentation-origin.md) explains the design, with the session and CSRF rules of the web app.

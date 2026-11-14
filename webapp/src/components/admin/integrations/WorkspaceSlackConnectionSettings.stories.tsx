@@ -104,7 +104,10 @@ export const MissingScopes: Story = {
 		// A reconnect keeps the Slack app's old scopes until the app gets the current manifest.
 		await expect(
 			canvas.getByRole("link", { name: "update the Slack app (opens in a new tab)" }),
-		).toHaveAttribute("href", expect.stringMatching(/\/admin\/integrations#slack$/u));
+		).toHaveAttribute(
+			"href",
+			expect.stringMatching(/\/admin\/connect-slack#create-the-slack-app$/u),
+		);
 		await expect(canvas.queryByText("Connected")).not.toBeInTheDocument();
 		await userEvent.click(canvas.getByRole("button", { name: "Reconnect Slack" }));
 		await expect(onReconnect).toHaveBeenCalled();

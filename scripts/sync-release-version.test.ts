@@ -135,7 +135,7 @@ void test("refreshes current instructions without changing a byte of real releas
 		...["releases", "issues", "discussions"].map(
 			(page) => `https://github.com/hephaestus-build/Hephaestus/${page}`,
 		),
-		...["compatibility-policy", "production-setup", "backup-restore"].map(
+		...["compatibility-policy", "configuration-reference", "backup-restore"].map(
 			(page) => `https://docs.hephaestus.build/admin/${page}`,
 		),
 	]) {

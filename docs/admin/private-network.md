@@ -68,7 +68,7 @@ networkPolicy:
       ports: [443]
 ```
 
-The list has the same rules as `config.llmPrivateHosts`: [Connect an AI provider](./ai-providers#model-endpoints-on-your-own-network) describes them.
+The list has the same rules as `config.llmPrivateHosts`, as [Rules for the private host lists](#rules-for-the-private-host-lists) describes.
 A host name entry trusts the DNS of that name, so list only a name whose DNS you control.
 A listed host name can also use a private TLD such as `.internal`.
 
@@ -138,7 +138,7 @@ networkPolicy:
 
 If only `config.llmPrivateHosts` names the endpoint, a connection saves, and then the request times out at the network.
 The chart cannot compare the two lists, because a host name is not an address range.
-[Connect an AI provider](./ai-providers#model-endpoints-on-your-own-network) tells what the application allows.
+[Rules for the private host lists](#rules-for-the-private-host-lists) tells what the application allows.
 
 A `cidr` must be in `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `100.64.0.0/10`, or `fc00::/7`.
 `ports` must name at least one port.
@@ -153,6 +153,40 @@ For an endpoint behind this cluster's Gateway, use `networkPolicy.modelGatewayPo
 For another endpoint in this cluster, such as a model server behind a ClusterIP Service, add a NetworkPolicy.
 Use the example in [Admit a Git provider on a private network](#admit-a-git-provider-on-a-private-network) with the Pods and the port of the model server.
 Also list the host name of the Service in `config.llmPrivateHosts`. List the name, not an address range.
+
+## Rules for the private host lists
+
+`config.llmPrivateHosts` and `config.scmPrivateHosts` take these entries:
+
+| Entry | Example | Allows |
+| --- | --- | --- |
+| A host name | `vllm.lab.example` | This exact name, at any private address that it resolves to. Wildcards are not supported. |
+| An IP address | `192.168.5.9` | Any host name that resolves to this address. |
+| A CIDR range | `10.20.0.0/16`, `fd00:1::/48` | Any host name that resolves into this range. It can be no wider than `/16` for IPv4 or `/48` for IPv6. |
+
+These rules apply:
+
+- Only private addresses qualify: `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `100.64.0.0/10`, and `fc00::/7`.
+  Loopback, link-local, and public addresses stay refused, also when a listed host name resolves to them.
+- The metadata and credential ranges in the next table stay refused, although they are private.
+- An entry stops startup if it is not a host name, an IP address, or a CIDR range. An IPv4 address needs all four parts.
+- A range stops startup if it is outside the private ranges or wider than the limit.
+  It also stops startup if it is inside a metadata range or covers an address of the server.
+- A host name entry trusts the DNS of that name. Never list the name of a Hephaestus service.
+- List single hosts or narrow ranges.
+  Each workspace admin can reach every port of every host in a model range, if workspaces may add providers.
+- The server checks the address again each time it connects, so a name that later resolves elsewhere gets no access.
+- A model endpoint needs HTTPS, unless `config.llmPrivateHostsAllowHttp` is `true`. The API key then crosses your network unencrypted.
+- **Allowed provider hosts** in **Instance administration → AI models** still applies on top of the list.
+
+| Refused range | Provider |
+| --- | --- |
+| `100.100.100.200` | Alibaba Cloud |
+| `fd00:ec2::/32` | AWS |
+| `fd20:ce::/48` | Google Cloud |
+| `fd00:a9fe::/32` | Akamai (Linode) |
+| `fd00:42::/32` | Scaleway |
+| `fd00:c1::/32` | Oracle Cloud |
 
 ## Check that it worked
 

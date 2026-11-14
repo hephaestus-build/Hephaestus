@@ -119,7 +119,7 @@ A Helm failure does not prove that the Job stopped.
    Do not put either value in logs.
 2. Set the secret of the App or of the manual webhook to the value of `WEBHOOK_SECRET`.
 3. Make sure that each proxy keeps the body and the `X-Hub-Signature-256` header.
-4. Deliver the rejected event again, as [Failed deliveries and redelivery](./github-integration#failed-deliveries-and-redelivery) describes.
+4. Deliver the rejected event again, as [Failed GitHub deliveries](./webhook-ingestion-operations#failed-github-deliveries) describes.
 
 **Check:** **Recent deliveries** on GitHub shows `2xx` for a real event.
 The initial `ping` returns `200` even with a wrong secret, so it does not prove the fix.
@@ -132,7 +132,7 @@ Without it, updates wait for the scheduled sync.
 **Fix:**
 
 1. Check that the provider webhook exists.
-   [Connect GitHub](./github-integration) and [Manage workspace integrations](./integrations) give the setup of each provider.
+   [Connect GitHub](./github-integration), [Connect GitLab](./connect-gitlab), [Connect Slack](./connect-slack) and [Connect Outline](./connect-outline) give the setup of each provider.
 2. Check that its deliveries reach the server's `/webhooks` path.
 
 **Check:** A change to a pull request appears in the workspace without a wait for the scheduled sync.
