@@ -8,8 +8,9 @@
  * props type through local aliases, interfaces, intersections, unions, generic arguments and relative
  * or `@/` imports. It descends into a member only when the member is named `state` or `status`, so a
  * nested domain object cannot add a signal. Generated wire types (`@/api/`) are not read. On the story
- * side, it reads the properties and JSX attributes that each exported story and the meta set, at any
- * depth, and follows the module constants and stories that a story references or spreads.
+ * side, it reads by the same rules what each exported story and the meta pass to the component: their
+ * `args`, and the JSX attributes their `render` gives the component. It follows the module constants
+ * and stories that a story names or spreads.
  */
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
@@ -24,7 +25,7 @@ const COMPONENT_TREE = "webapp/src/components";
 export const STATES = ["loading", "error", "empty"] as const;
 export type State = (typeof STATES)[number];
 
-/** What the props name, and what the story names must contain, per state. */
+/** The prop names that carry each state. */
 const PROP_NAMES: Record<State, readonly string[]> = {
 	loading: ["isLoading", "loading"],
 	error: ["error", "isError"],
@@ -353,61 +354,159 @@ function stateOf(name: string, value: Node | undefined, attribute: boolean): Sta
 	return undefined;
 }
 
+/** The expression under a `satisfies`, `as` or parentheses. */
+function unwrap(value: Node | undefined): Node | undefined {
+	let current = value;
+	while (
+		current?.type === "TSSatisfiesExpression" ||
+		current?.type === "TSAsExpression" ||
+		current?.type === "ParenthesizedExpression"
+	) {
+		current = node(current.expression);
+	}
+	return current;
+}
+
+/** The module constant that an expression names: `LOADING_ARGS`, or `Loading` in `Loading.args`. */
+function referenceOf(value: Node | undefined): string | undefined {
+	const current = unwrap(value);
+	if (current?.type === "MemberExpression") {
+		return referenceOf(node(current.object));
+	}
+	return nameOf(current);
+}
+
 /**
- * The states that a story's own code sets: every property and JSX attribute in its args and its
- * `render`, at any depth. `references` collects the names it uses, so the module constants and
- * stories it spreads or passes count too. A story's name decides nothing.
+ * The states that one value passed as props sets, by the rules that read the props: each top-level
+ * key, and the keys inside a `state` or `status` member. A child part's data, nested under any other
+ * key, sets nothing.
  */
-function setStates(root: Node, references: Set<string>): Set<State> {
+function propStates(value: Node | undefined, found: Set<State>, references: Set<string>): void {
+	const current = unwrap(value);
+	if (current?.type !== "ObjectExpression") {
+		const reference = referenceOf(current);
+		if (reference !== undefined) {
+			references.add(reference);
+		}
+		return;
+	}
+	for (const property of list(current.properties)) {
+		if (property.type === "SpreadElement") {
+			const reference = referenceOf(node(property.argument));
+			if (reference !== undefined) {
+				references.add(reference);
+			}
+			continue;
+		}
+		const key = node(property.key);
+		const name = nameOf(key) ?? (typeof key?.value === "string" ? key.value : undefined);
+		if (name === undefined) {
+			continue;
+		}
+		const state = stateOf(name, unwrap(node(property.value)), false);
+		if (state !== undefined) {
+			found.add(state);
+		}
+		if (STATE_MEMBERS.has(name)) {
+			propStates(node(property.value), found, references);
+		}
+	}
+}
+
+/** The states that `render` passes to the components of the file under test, as JSX attributes. */
+function renderStates(
+	value: unknown,
+	components: ReadonlySet<string>,
+	found: Set<State>,
+	references: Set<string>,
+): void {
+	if (Array.isArray(value)) {
+		value.forEach((child) => {
+			renderStates(child, components, found, references);
+		});
+		return;
+	}
+	const current = node(value);
+	if (current === undefined) {
+		return;
+	}
+	if (
+		current.type === "JSXOpeningElement" &&
+		components.has(asString(asRecord(current.name)?.name) ?? "")
+	) {
+		for (const attribute of list(current.attributes)) {
+			if (attribute.type === "JSXSpreadAttribute") {
+				const reference = referenceOf(node(attribute.argument));
+				if (reference !== undefined) {
+					references.add(reference);
+				}
+				continue;
+			}
+			const name = asString(asRecord(attribute.name)?.name);
+			const raw = node(attribute.value);
+			const expression =
+				raw?.type === "JSXExpressionContainer" ? unwrap(node(raw.expression)) : raw;
+			const state = name === undefined ? undefined : stateOf(name, expression, true);
+			if (state !== undefined) {
+				found.add(state);
+			}
+			if (name !== undefined && STATE_MEMBERS.has(name)) {
+				propStates(expression, found, references);
+			}
+		}
+	}
+	for (const [key, child] of Object.entries(current)) {
+		if (key !== "type" && key !== "start" && key !== "end") {
+			renderStates(child, components, found, references);
+		}
+	}
+}
+
+/**
+ * The states that a module constant sets for the component: a story's or the meta's `args` and the
+ * props its `render` passes to the component, or, for a constant of props, its own keys. `references`
+ * collects the constants and stories it spreads or names, so their states count too. A story's name,
+ * its `play`, its `argTypes` and the data it passes to child parts decide nothing.
+ */
+function setStates(
+	init: Node,
+	components: ReadonlySet<string>,
+	references: Set<string>,
+): Set<State> {
 	const found = new Set<State>();
-	const visit = (value: unknown): void => {
-		if (Array.isArray(value)) {
-			value.forEach(visit);
-			return;
+	const value = unwrap(init);
+	if (value?.type !== "ObjectExpression") {
+		const reference = referenceOf(value);
+		if (reference !== undefined) {
+			references.add(reference);
 		}
-		const current = node(value);
-		if (current === undefined) {
-			return;
+		return found;
+	}
+	// A constant of props (`const LOADING_ARGS = { isLoading: true }`) is read as props. A story or
+	// the meta has no key that names a state, so reading it this way too adds nothing.
+	propStates(value, found, references);
+	for (const property of list(value.properties)) {
+		const key = nameOf(node(property.key));
+		if (key === "args") {
+			propStates(node(property.value), found, references);
+		} else if (key === "render") {
+			renderStates(property.value, components, found, references);
 		}
-		if (current.type === "Property") {
-			const key = node(current.key);
-			const name = nameOf(key) ?? (typeof key?.value === "string" ? key.value : undefined);
-			const state = name === undefined ? undefined : stateOf(name, node(current.value), false);
-			if (state !== undefined) {
-				found.add(state);
-			}
-		} else if (current.type === "JSXAttribute") {
-			const name = asString(asRecord(current.name)?.name);
-			const raw = node(current.value);
-			const value = raw?.type === "JSXExpressionContainer" ? node(raw.expression) : raw;
-			const state = name === undefined ? undefined : stateOf(name, value, true);
-			if (state !== undefined) {
-				found.add(state);
-			}
-		} else if (current.type === "Identifier" && typeof current.name === "string") {
-			// `args: LOADING_ARGS`, `...Loading` or `...Loading.args`: a module constant's states count too.
-			references.add(current.name);
-		}
-		for (const [key, child] of Object.entries(current)) {
-			const skipped =
-				key === "type" ||
-				key === "start" ||
-				key === "end" ||
-				// A property's key and a member's name are names, not references.
-				(current.type === "Property" && key === "key") ||
-				(current.type === "MemberExpression" && key === "property");
-			if (!skipped) {
-				visit(child);
-			}
-		}
-	};
-	visit(root);
+	}
 	return found;
 }
 
 /** The states that the sibling stories set, through their args, their `render` or the meta's args. */
 async function storyStates(storyFile: string, program: Program): Promise<ReadonlySet<State>> {
 	const module = await program.module(storyFile);
+	// The components under test: the file's namesake and whatever else the story imports from it.
+	const componentFile = storyFile.replace(/\.stories\.tsx$/u, ".tsx");
+	const components = new Set([path.posix.basename(componentFile, ".tsx")]);
+	for (const [local, target] of module?.imports ?? []) {
+		if (target === componentFile) {
+			components.add(local);
+		}
+	}
 	// Every module constant, exported story or not, so that a story's reference to one resolves.
 	const constants = new Map<string, { states: Set<State>; references: Set<string> }>();
 	const exported: string[] = [];
@@ -425,7 +524,7 @@ async function storyStates(storyFile: string, program: Program): Promise<Readonl
 				continue;
 			}
 			const references = new Set<string>();
-			constants.set(name, { states: setStates(init, references), references });
+			constants.set(name, { states: setStates(init, components, references), references });
 			// The meta's args are every story's defaults.
 			if (name === "meta" || statement.type === "ExportNamedDeclaration") {
 				exported.push(name);
@@ -467,7 +566,7 @@ async function componentFiles(root: string): Promise<string[]> {
 export type Measurement = {
 	/** Data-region components: the states their props carry. */
 	regions: ReadonlyMap<string, ReadonlySet<State>>;
-	/** The carried states that no sibling story name covers. A component with none left is absent. */
+	/** The carried states that no sibling story sets. A component with none left is absent. */
 	missing: ReadonlyMap<string, readonly State[]>;
 };
 
@@ -507,7 +606,8 @@ if (import.meta.main) {
 			"A component whose props carry a loading, error, or empty state needs a sibling story for it:\n",
 		);
 		for (const [file, states] of missing) {
-			console.error(`  ${file}: add a ${states.join(" and a ")} story.`);
+			const stories = states.map((state) => `${state === "error" ? "an" : "a"} ${state} story`);
+			console.error(`  ${file}: add ${stories.join(" and ")}.`);
 		}
 		process.exit(1);
 	}

@@ -86,6 +86,25 @@ export const Empty = { render: () => <Panel state={{ status: "empty" }} /> };
 	assert.deepEqual(missing, {});
 });
 
+await test("a child part's state, a control and a play function cover nothing", async () => {
+	const missing = await missingOf({
+		[`${COMPONENTS}/Drawer.tsx`]:
+			"export function Drawer({ isLoading, isError }: { isLoading: boolean; isError: boolean }) { return null; }",
+		[`${COMPONENTS}/Drawer.stories.tsx`]: `
+const meta = {
+	args: { isLoading: false, groups: { status: "loading" }, members: { isError: true } },
+	argTypes: { isError: { control: "boolean" }, isLoading: { control: "boolean" } },
+};
+export default meta;
+export const Default = {
+	render: () => <Drawer isLoading={false}><Child isLoading isError /></Drawer>,
+	play: async ({ canvas }) => { await canvas.findByText("Loading"); return { isError: true }; },
+};
+`,
+	});
+	assert.deepEqual(missing, { [`${COMPONENTS}/Drawer.tsx`]: ["loading", "error"] });
+});
+
 await test("a state that the props exclude or do not extract needs no story", async () => {
 	const missing = await missingOf({
 		[`${COMPONENTS}/Region.tsx`]: `
