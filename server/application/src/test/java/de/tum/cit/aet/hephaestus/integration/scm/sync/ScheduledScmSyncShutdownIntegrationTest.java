@@ -51,7 +51,7 @@ import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceActorSelector;
-import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceLookup;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceSummaryQuery;
 import java.time.Duration;
 import java.time.Instant;
@@ -135,7 +135,7 @@ class ScheduledScmSyncShutdownIntegrationTest extends AbstractWorkspaceIntegrati
     private SyncJobRepository jobRepository;
 
     @Autowired
-    private WorkspaceRepository workspaceRepository;
+    private WorkspaceLookup workspaceLookup;
 
     @Autowired
     private WorkspaceSummaryQuery workspaceQueries;
@@ -492,7 +492,7 @@ class ScheduledScmSyncShutdownIntegrationTest extends AbstractWorkspaceIntegrati
                 mock(GitLabDeletionSweepService.class),
                 initialization,
                 mock(GitLabRepositoryMonitors.class),
-                workspaceRepository,
+                workspaceLookup,
                 mock(WorkspaceActorSelector.class),
                 mock(GitLabProjectSyncService.class),
                 mock(ActivityLedgerRepair.class),

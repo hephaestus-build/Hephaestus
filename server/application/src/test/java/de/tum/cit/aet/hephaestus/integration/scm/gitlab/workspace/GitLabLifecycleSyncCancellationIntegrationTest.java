@@ -48,7 +48,8 @@ import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitor;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceActorSelector;
-import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceLookup;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceRepositoryMonitors;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -75,9 +76,6 @@ class GitLabLifecycleSyncCancellationIntegrationTest extends AbstractWorkspaceIn
     private GitLabProjectAdmission projectAdmission;
 
     @Autowired
-    private WorkspaceRepository workspaceRepository;
-
-    @Autowired
     private OrganizationRepository organizationRepository;
 
     @Autowired
@@ -85,6 +83,12 @@ class GitLabLifecycleSyncCancellationIntegrationTest extends AbstractWorkspaceIn
 
     @Autowired
     private RepositoryToMonitorRepository monitorRepository;
+
+    @Autowired
+    private WorkspaceLookup workspaceLookup;
+
+    @Autowired
+    private WorkspaceRepositoryMonitors monitorPort;
 
     @Autowired
     private ConnectionRepository connectionRepository;
@@ -540,9 +544,9 @@ class GitLabLifecycleSyncCancellationIntegrationTest extends AbstractWorkspaceIn
             ObjectProvider<GitLabSyncServiceHolder> services, ConnectionService discoveryConfig, int cooldownMinutes) {
         StaticListableBeanFactory absent = new StaticListableBeanFactory();
         GitLabWorkspaceInitializationService initialization = new GitLabWorkspaceInitializationService(
-                workspaceRepository,
+                workspaceLookup,
                 organizationRepository,
-                monitorRepository,
+                monitorPort,
                 repositoryRepository,
                 new SyncSchedulerProperties(
                         true,
@@ -562,7 +566,7 @@ class GitLabLifecycleSyncCancellationIntegrationTest extends AbstractWorkspaceIn
                 actorSelector,
                 new ConcurrentTaskExecutor(new SyncTaskExecutor()),
                 projectAdmission);
-        return new GitLabWorkspaceDataSyncTrigger(initialization, workspaceRepository, connectionQueries, jobService);
+        return new GitLabWorkspaceDataSyncTrigger(initialization, workspaceLookup, connectionQueries, jobService);
     }
 
     private Repository monitoredRepository(String name, long nativeId) {

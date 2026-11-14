@@ -7,7 +7,9 @@ import de.tum.cit.aet.hephaestus.workspace.RepositorySelection;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceLocks;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceLookup;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceRoots;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
@@ -19,9 +21,26 @@ import org.springframework.transaction.annotation.Transactional;
 @Component
 @RequiredArgsConstructor
 @Transactional(propagation = Propagation.MANDATORY)
-public class WorkspaceRootsAdapter implements WorkspaceRoots, WorkspaceLocks {
+public class WorkspaceRootsAdapter implements WorkspaceRoots, WorkspaceLookup, WorkspaceLocks {
     private final WorkspaceRepository workspaces;
     private final MembershipService memberships;
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<Workspace> find(long workspaceId) {
+        return workspaces.findById(workspaceId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<Workspace> active() {
+        return workspaces.findByStatus(Workspace.WorkspaceStatus.ACTIVE);
+    }
+
+    @Override
+    public Optional<Workspace> lock(long workspaceId) {
+        return workspaces.findByIdForUpdate(workspaceId);
+    }
 
     @Override
     public Optional<Workspace> lockByInstallation(long installationId) {

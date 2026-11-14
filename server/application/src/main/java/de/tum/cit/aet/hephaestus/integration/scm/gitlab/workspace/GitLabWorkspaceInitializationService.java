@@ -19,12 +19,12 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabSyncService
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.organization.GitLabSelectedMembershipProjection;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.organization.GitLabSyncResult;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitor;
-import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceActorSelector;
-import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContextHolder;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceLookup;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceRepositoryMonitors;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.OffsetDateTime;
@@ -75,9 +75,9 @@ public class GitLabWorkspaceInitializationService {
     private static final Logger log = LoggerFactory.getLogger(GitLabWorkspaceInitializationService.class);
 
     // Core repositories
-    private final WorkspaceRepository workspaceRepository;
+    private final WorkspaceLookup workspaceLookup;
     private final OrganizationRepository organizationRepository;
-    private final RepositoryToMonitorRepository repositoryToMonitorRepository;
+    private final WorkspaceRepositoryMonitors monitors;
     private final RepositoryRepository repositoryRepository;
 
     // Configuration
@@ -101,9 +101,9 @@ public class GitLabWorkspaceInitializationService {
     private final AsyncTaskExecutor monitoringExecutor;
 
     public GitLabWorkspaceInitializationService(
-            WorkspaceRepository workspaceRepository,
+            WorkspaceLookup workspaceLookup,
             OrganizationRepository organizationRepository,
-            RepositoryToMonitorRepository repositoryToMonitorRepository,
+            WorkspaceRepositoryMonitors monitors,
             RepositoryRepository repositoryRepository,
             SyncSchedulerProperties syncSchedulerProperties,
             SyncTargetProvider syncTargetProvider,
@@ -117,9 +117,9 @@ public class GitLabWorkspaceInitializationService {
             WorkspaceActorSelector actorSelector,
             @Qualifier("monitoringExecutor") AsyncTaskExecutor monitoringExecutor,
             GitLabProjectAdmission admission) {
-        this.workspaceRepository = workspaceRepository;
+        this.workspaceLookup = workspaceLookup;
         this.organizationRepository = organizationRepository;
-        this.repositoryToMonitorRepository = repositoryToMonitorRepository;
+        this.monitors = monitors;
         this.repositoryRepository = repositoryRepository;
         this.syncSchedulerProperties = syncSchedulerProperties;
         this.syncTargetProvider = syncTargetProvider;
@@ -143,7 +143,7 @@ public class GitLabWorkspaceInitializationService {
     public void initializeAsync(Long workspaceId) {
         monitoringExecutor.execute(() -> {
             try {
-                Workspace workspace = workspaceRepository.findById(workspaceId).orElse(null);
+                Workspace workspace = workspaceLookup.find(workspaceId).orElse(null);
                 if (workspace == null) {
                     log.warn(
                             "Skipped async GitLab initialization: reason=workspaceNotFound, workspaceId={}",
@@ -292,7 +292,7 @@ public class GitLabWorkspaceInitializationService {
             return false;
         }
         log.info("Retrying GitLab initialization: reason=webhookMissing, workspaceId={}", workspaceId);
-        workspaceRepository.findById(workspaceId).ifPresent(this::initialize);
+        workspaceLookup.find(workspaceId).ifPresent(this::initialize);
         return isWebhookMissing(workspaceId);
     }
 
@@ -661,10 +661,9 @@ public class GitLabWorkspaceInitializationService {
         // Map nameWithOwner → sync target id so each phase can stamp its per-repo watermark
         // via the SPI. Mirrors GitLabDataSyncScheduler.syncRepositories — without this the
         // initial sync left every watermark column NULL until the first cron run.
-        Map<String, Long> syncTargetIdsByNameWithOwner =
-                repositoryToMonitorRepository.findByWorkspaceId(workspace.getId()).stream()
-                        .collect(Collectors.toMap(
-                                RepositoryToMonitor::getNameWithOwner, RepositoryToMonitor::getId, (a, b) -> a));
+        Map<String, Long> syncTargetIdsByNameWithOwner = monitors.monitors(workspace.getId()).stream()
+                .collect(Collectors.toMap(
+                        RepositoryToMonitor::getNameWithOwner, RepositoryToMonitor::getId, (a, b) -> a));
 
         GitLabRateLimitTracker rateLimitTracker = rateLimitTrackerProvider.getIfAvailable();
         Instant cooldownThreshold = Instant.now().minusSeconds(syncSchedulerProperties.cooldownMinutes() * 60L);

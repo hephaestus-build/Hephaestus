@@ -35,6 +35,7 @@ import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.metrics.WorkspaceMetrics;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceLookup;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.nio.charset.StandardCharsets;
@@ -76,6 +77,9 @@ class GitLabTokenLifecycleIntegrationTest extends AbstractWorkspaceIntegrationTe
 
     @Autowired
     private WorkspaceRepository workspaces;
+
+    @Autowired
+    private WorkspaceLookup workspaceLookup;
 
     @Autowired
     private GitLabTokenLifecycleService lifecycle;
@@ -161,7 +165,7 @@ class GitLabTokenLifecycleIntegrationTest extends AbstractWorkspaceIntegrationTe
                 .thenReturn(new GitLabTokenRotationClient.RotatedToken("rotated", nextExpiry));
         when(rotation.getTokenInfo(other.getWorkspace().getId()))
                 .thenReturn(new GitLabTokenRotationClient.TokenInfo(2, "other", null));
-        new GitLabTokenRotationScheduler(connections, workspaces, webhooks).rotateTokens();
+        new GitLabTokenRotationScheduler(connections, workspaceLookup, webhooks).rotateTokens();
         assertThat(connections
                         .findActiveBearerToken(workspace, IntegrationKind.GITLAB)
                         .orElseThrow()

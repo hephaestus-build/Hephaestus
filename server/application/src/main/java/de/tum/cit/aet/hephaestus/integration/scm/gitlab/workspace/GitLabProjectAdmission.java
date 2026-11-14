@@ -12,8 +12,9 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.workspace.RepositorySelection;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitor;
-import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
-import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import de.tum.cit.aet.hephaestus.workspace.spi.RepositoryMonitorSources;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceProviderAccounts;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceRepositoryMonitors;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -47,8 +48,9 @@ public class GitLabProjectAdmission {
     private final ConnectionCommands connections;
     private final ConnectionQueries connectionQueries;
     private final RepositoryRepository repositories;
-    private final RepositoryToMonitorRepository monitors;
-    private final WorkspaceRepository workspaces;
+    private final WorkspaceRepositoryMonitors monitors;
+    private final RepositoryMonitorSources monitorSources;
+    private final WorkspaceProviderAccounts providerAccounts;
     private final TransactionTemplate transactions;
 
     @Transactional(readOnly = true)
@@ -59,7 +61,7 @@ public class GitLabProjectAdmission {
     private Optional<ConnectionRead> captureConnection(long workspaceId, long providerId, boolean discovery) {
         Map<String, Set<Long>> original = new HashMap<>();
         if (discovery) {
-            for (RepositoryToMonitor monitor : monitors.findByWorkspaceId(workspaceId)) {
+            for (RepositoryToMonitor monitor : monitors.monitors(workspaceId)) {
                 String key = "id:" + monitor.getNativeId();
                 original.computeIfAbsent(key, ignored -> new HashSet<>()).add(monitor.getId());
             }
@@ -67,13 +69,13 @@ public class GitLabProjectAdmission {
         return connectionQueries
                 .findActive(workspaceId, IntegrationKind.GITLAB)
                 .filter(connection -> connection.config() instanceof GitLabConfig)
-                .flatMap(connection -> workspaces
-                        .findMonitorPolicy(workspaceId)
+                .flatMap(connection -> providerAccounts
+                        .providerAccount(workspaceId)
                         .map(policy -> new ConnectionRead(
                                 connection.id(),
                                 workspaceId,
                                 providerId,
-                                policy.getAccountLogin(),
+                                policy.accountLogin(),
                                 original.entrySet().stream()
                                         .collect(Collectors.toUnmodifiableMap(
                                                 Map.Entry::getKey, entry -> Set.copyOf(entry.getValue()))))));
@@ -97,7 +99,7 @@ public class GitLabProjectAdmission {
                             repository.getNameWithOwner(),
                             repository.getProvider().getServerUrl(),
                             false)) return Optional.empty();
-            return monitors.findByWorkspaceIdAndSourceRepositoryId(workspaceId, repository.getId()).stream()
+            return monitors.monitorsOfRepository(workspaceId, repository.getId()).stream()
                     .min(Comparator.comparing(RepositoryToMonitor::getId))
                     .map(monitor -> new ProjectRead(
                             connection.get(), repository.getId(), repository.getNativeId(), monitor.getId()));
@@ -131,8 +133,7 @@ public class GitLabProjectAdmission {
                                 repository.getNameWithOwner(),
                                 repository.getProvider().getServerUrl(),
                                 true)
-                        && monitors.findSourceRepositoryIdsOfMonitor(read.monitorId())
-                                .contains(read.repositoryId()))
+                        && monitorSources.sourceRepositoryIds(read.monitorId()).contains(read.repositoryId()))
                 .isPresent();
     }
 
@@ -162,10 +163,11 @@ public class GitLabProjectAdmission {
         return Optional.ofNullable(transactions.execute(status -> {
             connections.holdLifecycleLock(read.workspaceId(), read.connectionId());
             Set<Long> original = originalMonitors(read, nativeId);
-            if (!original.isEmpty() && original.stream().noneMatch(monitors::existsById)) return null;
+            if (!original.isEmpty()
+                    && original.stream().noneMatch(id -> monitorSources.find(id).isPresent())) return null;
             if (selected(read.workspaceId())
                     && original.stream()
-                            .map(monitors::findById)
+                            .map(monitorSources::find)
                             .flatMap(Optional::stream)
                             .noneMatch(monitor -> Objects.equals(monitor.getNativeId(), nativeId))) return null;
             return allowed(read, nativeId, path, serverUrl, true) ? write.get() : null;
@@ -182,7 +184,7 @@ public class GitLabProjectAdmission {
         return Objects.equals(
                         repository.getProvider().getId(), read.connection().providerId())
                 && (!selected(workspaceId)
-                        || !monitors.findByWorkspaceIdAndSourceRepositoryId(workspaceId, repository.getId())
+                        || !monitors.monitorsOfRepository(workspaceId, repository.getId())
                                 .isEmpty())
                 && connections
                         .configurationInState(
@@ -211,19 +213,19 @@ public class GitLabProjectAdmission {
         GitLabConfig current = config.orElse(null);
         if (current == null
                 || !ScmOrigin.of(current.serverUrl()).equals(ScmOrigin.of(serverUrl))
-                || workspaces
-                        .findMonitorPolicy(read.workspaceId())
-                        .filter(policy -> policy.getAccountLogin().equals(read.groupPath()))
-                        .filter(policy -> contains(policy.getAccountLogin(), path))
+                || providerAccounts
+                        .providerAccount(read.workspaceId())
+                        .filter(policy -> policy.accountLogin().equals(read.groupPath()))
+                        .filter(policy -> contains(policy.accountLogin(), path))
                         .isEmpty()) return false;
         return !current.projectExclusions().excludes(nativeId);
     }
 
     /** Whether the workspace monitors only the projects it selected, as stored now. */
     private boolean selected(long workspaceId) {
-        return workspaces
-                .findMonitorPolicy(workspaceId)
-                .filter(policy -> policy.getRepositorySelection() == RepositorySelection.SELECTED)
+        return providerAccounts
+                .providerAccount(workspaceId)
+                .filter(policy -> policy.repositorySelection() == RepositorySelection.SELECTED)
                 .isPresent();
     }
 

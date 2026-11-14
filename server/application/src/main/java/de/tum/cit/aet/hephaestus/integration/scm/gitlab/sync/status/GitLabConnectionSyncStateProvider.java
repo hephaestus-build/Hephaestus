@@ -21,7 +21,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.sync.status.ScmBackfillRollup;
 import de.tum.cit.aet.hephaestus.integration.scm.sync.status.ScmResourceCountReader;
 import de.tum.cit.aet.hephaestus.integration.scm.sync.status.ScmResourceCountReader.ScmResourceCounts;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitor;
-import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceRepositoryMonitors;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
@@ -41,7 +41,7 @@ public class GitLabConnectionSyncStateProvider implements ConnectionSyncStatePro
     private final ConnectionService connectionService;
     private final ObjectProvider<GitLabRateLimitTracker> rateLimitTrackerProvider;
     private final SyncSchedulerProperties syncSchedulerProperties;
-    private final RepositoryToMonitorRepository repositoryToMonitorRepository;
+    private final WorkspaceRepositoryMonitors monitors;
     private final RepositoryRepository repositoryRepository;
     private final ScmResourceCountReader countReader;
     private final Clock clock;
@@ -50,14 +50,14 @@ public class GitLabConnectionSyncStateProvider implements ConnectionSyncStatePro
             ConnectionService connectionService,
             ObjectProvider<GitLabRateLimitTracker> rateLimitTrackerProvider,
             SyncSchedulerProperties syncSchedulerProperties,
-            RepositoryToMonitorRepository repositoryToMonitorRepository,
+            WorkspaceRepositoryMonitors monitors,
             RepositoryRepository repositoryRepository,
             ScmResourceCountReader countReader,
             Clock clock) {
         this.connectionService = connectionService;
         this.rateLimitTrackerProvider = rateLimitTrackerProvider;
         this.syncSchedulerProperties = syncSchedulerProperties;
-        this.repositoryToMonitorRepository = repositoryToMonitorRepository;
+        this.monitors = monitors;
         this.repositoryRepository = repositoryRepository;
         this.countReader = countReader;
         this.clock = clock;
@@ -83,7 +83,7 @@ public class GitLabConnectionSyncStateProvider implements ConnectionSyncStatePro
         // rollup is computed identically via the shared helper.
         BackfillSummary backfill = ScmBackfillRollup.summarize(
                 syncSchedulerProperties.backfill().enabled(),
-                repositoryToMonitorRepository.findByWorkspaceId(workspaceId).stream()
+                monitors.monitors(workspaceId).stream()
                         .map(GitLabConnectionSyncStateProvider::toBackfillProgress)
                         .toList());
 
@@ -103,8 +103,8 @@ public class GitLabConnectionSyncStateProvider implements ConnectionSyncStatePro
     @Override
     public List<SyncResourceState> resources(IntegrationRef ref, long connectionId) {
         long workspaceId = ref.workspaceId();
-        List<RepositoryToMonitor> monitors = repositoryToMonitorRepository.findByWorkspaceId(workspaceId);
-        if (monitors.isEmpty()) {
+        List<RepositoryToMonitor> monitored = monitors.monitors(workspaceId);
+        if (monitored.isEmpty()) {
             return List.of();
         }
 
@@ -116,7 +116,7 @@ public class GitLabConnectionSyncStateProvider implements ConnectionSyncStatePro
                 reposByNameWithOwner.values().stream().map(Repository::getId).toList();
         Map<Long, ScmResourceCounts> countsByRepositoryId = countReader.countsByRepositoryId(repositoryIds);
 
-        return monitors.stream()
+        return monitored.stream()
                 .map(monitor -> toResourceState(monitor, reposByNameWithOwner, countsByRepositoryId))
                 .toList();
     }

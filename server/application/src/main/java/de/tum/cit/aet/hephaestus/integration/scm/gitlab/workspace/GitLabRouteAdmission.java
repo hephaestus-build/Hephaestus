@@ -29,9 +29,9 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.user.GitLabUserService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.webhook.GitLabRouteCredential;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.webhook.GitLabSubjectKeyDeriver;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitor;
-import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceScopeFilter;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceRepositoryMonitors;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -106,7 +106,7 @@ public class GitLabRouteAdmission implements RouteAdmission {
     private final ConnectionCommands connectionCommands;
     private final IdentityProviderLookup identityProviders;
     private final RepositoryRepository repositoryRepository;
-    private final RepositoryToMonitorRepository repositoryToMonitorRepository;
+    private final WorkspaceRepositoryMonitors monitors;
     private final WorkspaceScopeFilter workspaceScopeFilter;
     private final GitLabRepositoryMonitors repositoryMonitors;
     private final GitLabProjectSyncService projectSyncService;
@@ -122,7 +122,7 @@ public class GitLabRouteAdmission implements RouteAdmission {
             ConnectionCommands connectionCommands,
             IdentityProviderLookup identityProviders,
             RepositoryRepository repositoryRepository,
-            RepositoryToMonitorRepository repositoryToMonitorRepository,
+            WorkspaceRepositoryMonitors monitors,
             WorkspaceScopeFilter workspaceScopeFilter,
             GitLabRepositoryMonitors repositoryMonitors,
             GitLabProjectSyncService projectSyncService,
@@ -136,7 +136,7 @@ public class GitLabRouteAdmission implements RouteAdmission {
         this.connectionCommands = connectionCommands;
         this.identityProviders = identityProviders;
         this.repositoryRepository = repositoryRepository;
-        this.repositoryToMonitorRepository = repositoryToMonitorRepository;
+        this.monitors = monitors;
         this.workspaceScopeFilter = workspaceScopeFilter;
         this.repositoryMonitors = repositoryMonitors;
         this.projectSyncService = projectSyncService;
@@ -303,7 +303,7 @@ public class GitLabRouteAdmission implements RouteAdmission {
 
     /** This workspace's monitors of the exact provider project. */
     private List<RepositoryToMonitor> ownMonitors(AdmittedRoute route, long nativeId) {
-        return repositoryToMonitorRepository.findByWorkspaceIdAndNativeId(route.workspaceId(), nativeId);
+        return monitors.monitorsOf(route.workspaceId(), nativeId);
     }
 
     private Workspace workspace(AdmittedRoute route) {
@@ -399,7 +399,7 @@ public class GitLabRouteAdmission implements RouteAdmission {
         // still hold a path its project was moved away from, and monitoring it again needs GitLab's word.
         Boolean monitoredKnown = transaction.execute(status -> holdActive(route)
                 && projectAllowed(route, projectId)
-                && repositoryToMonitorRepository.existsByWorkspaceIdAndNameWithOwner(route.workspaceId(), path)
+                && monitors.monitorsPath(route.workspaceId(), path)
                 && repositoryRepository
                         .findByNameWithOwnerAndProviderId(path, route.providerId())
                         .filter(known -> projectId == null || projectId.equals(known.getNativeId()))

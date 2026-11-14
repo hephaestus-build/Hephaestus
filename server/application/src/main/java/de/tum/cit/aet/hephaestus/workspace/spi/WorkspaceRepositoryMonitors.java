@@ -9,4 +9,12 @@ import java.util.List;
  */
 public interface WorkspaceRepositoryMonitors {
     List<RepositoryToMonitor> monitors(long workspaceId);
+
+    /** The workspace's monitors of the repository with this provider-stable id. */
+    List<RepositoryToMonitor> monitorsOf(long workspaceId, long nativeId);
+
+    /** The workspace's monitors of a mirrored repository. */
+    List<RepositoryToMonitor> monitorsOfRepository(long workspaceId, long repositoryId);
+
+    boolean monitorsPath(long workspaceId, String nameWithOwner);
 }
