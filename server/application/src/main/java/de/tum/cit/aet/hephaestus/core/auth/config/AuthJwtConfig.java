@@ -6,6 +6,7 @@ import de.tum.cit.aet.hephaestus.core.auth.jwt.AccessTokenAdmission;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.CookieBearerTokenResolver;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.JwtSigningKeyService;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.RevocationAwareJwtDecoder;
+import de.tum.cit.aet.hephaestus.core.security.StoredSystemSecrets;
 import de.tum.cit.aet.hephaestus.core.auth.metrics.AuthMetrics;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.security.StaleAuthCookieFilter;
@@ -82,13 +83,17 @@ public class AuthJwtConfig {
     // Build profiles load the authentication contract but have no database to seed.
     @Bean
     @Profile("!specs & !cds-training")
-    ApplicationRunner seedKeysOnStartup() {
+    ApplicationRunner seedKeysOnStartup(StoredSystemSecrets storedSecrets) {
         return args -> {
             try {
                 keyService.ensureActiveKey();
             } catch (RuntimeException e) {
                 log.warn("auth.jwt: deferred signing-key bootstrap (will seed on first issuance): {}", e.toString());
             }
+            // Not caught: with a system key that does not open the stored keys, the server would start, report ready and
+            // refuse every session. Stopping here names the key identifiers involved.
+            keyService.verifyActiveKeysOpen();
+            storedSecrets.verifyAllOpen();
         };
     }
 }

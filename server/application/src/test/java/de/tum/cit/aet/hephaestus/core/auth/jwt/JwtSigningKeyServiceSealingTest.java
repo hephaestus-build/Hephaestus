@@ -16,6 +16,7 @@ import com.nimbusds.jose.jwk.JWKSet;
 import de.tum.cit.aet.hephaestus.core.auth.AuthPropertiesFixture;
 import de.tum.cit.aet.hephaestus.core.security.SystemSecrets;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import de.tum.cit.aet.hephaestus.testconfig.TestSystemSecrets;
 import java.time.Clock;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -159,5 +160,41 @@ class JwtSigningKeyServiceSealingTest extends BaseUnitTest {
         service.ensureActiveKey();
 
         assertThat(saved.getValue().resealWithActiveKey(sealer)).isFalse();
+    }
+
+    /**
+     * A restore with another system key: the server must stop at start, name the identifier of the key that sealed the
+     * signing key and the identifier it holds, and never print a key.
+     */
+    @Test
+    void shouldNameBothKeyIdsWhenTheSystemKeyDoesNotOpenTheSigningKey() {
+        JwtSigningKeyRepository repo = mock(JwtSigningKeyRepository.class);
+        ArgumentCaptor<JwtSigningKey> saved = ArgumentCaptor.forClass(JwtSigningKey.class);
+        when(repo.save(saved.capture())).thenAnswer(inv -> inv.getArgument(0));
+        SystemSecrets sealedWith = systemSecrets(KEY, "dev");
+        serviceWith(repo, sealedWith).ensureActiveKey();
+        when(repo.findActive()).thenReturn(List.of(saved.getValue()));
+        String otherKey = "fedcba9876543210fedcba9876543210";
+        SystemSecrets restored = systemSecrets(otherKey, "dev");
+
+        assertThatThrownBy(() -> serviceWith(repo, restored).verifyActiveKeysOpen())
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining(saved.getValue().getKid())
+                .hasMessageContaining("sealed by the system key with id " + sealedWith.activeKeyId())
+                .hasMessageContaining("the active key " + restored.activeKeyId())
+                .hasMessageNotContaining(KEY)
+                .hasMessageNotContaining(otherKey);
+    }
+
+    @Test
+    void shouldOpenTheSigningKeyWhenItsSystemKeyIsThePriorKey() {
+        JwtSigningKeyRepository repo = mock(JwtSigningKeyRepository.class);
+        ArgumentCaptor<JwtSigningKey> saved = ArgumentCaptor.forClass(JwtSigningKey.class);
+        when(repo.save(saved.capture())).thenAnswer(inv -> inv.getArgument(0));
+        serviceWith(repo, systemSecrets(KEY, "dev")).ensureActiveKey();
+        when(repo.findActive()).thenReturn(List.of(saved.getValue()));
+
+        serviceWith(repo, TestSystemSecrets.systemSecretsWithPrior("fedcba9876543210fedcba9876543210", KEY, "dev"))
+                .verifyActiveKeysOpen();
     }
 }

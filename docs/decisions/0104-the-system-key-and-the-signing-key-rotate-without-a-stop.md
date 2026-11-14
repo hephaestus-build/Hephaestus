@@ -49,7 +49,8 @@ Two more facts shaped the decision:
 3. **The rotation needs no stop.** The operator adds the new key as the prior key first, so each server can open values under it. Then the operator makes it the active key, with the old key as the prior key, and turns on the pass. An old server and a new server can each open what the other writes. [Secret custody § System key](../admin/secret-custody.mdx#system-key) owns the procedure.
 4. **The key of the namespace reservations is a stored system secret.** It is a random value in `system_secret`, sealed like the other values. The upgrade stores the key that the earlier release derived, so each existing reservation stays.
 5. **The upgrade into 1.0 seals each value once.** The change set `SystemSecretSealingChange` reads the earlier envelopes and writes the new one, while every role is stopped. The migration Job gets the active system key for this, because a change set that migrates sealed values must open them. A database without an earlier value needs no key.
-6. **A new JWT signing key comes from a setting.** `hephaestus.auth.signing-key-not-before` is an instant. A server that starts after it and finds no signing key created at or after it makes a new key. The newest key signs. Every older active key still verifies until `access-ttl` after a newer key was created, and then it retires. A server that sees a token from a key that it does not know reloads the keys, at most once in five seconds, so a server with an older key set does not refuse it. Each token names its key in the `kid` header.
+6. **A server checks its system key at start.** It opens each active signing key and each stored system secret. If one does not open, it stops before it reports ready, and the message names the identifier of the key that sealed the value and the identifiers that it holds. Without this check, a server with another key starts and refuses every session.
+7. **A new JWT signing key comes from a setting.** `hephaestus.auth.signing-key-not-before` is an instant. A server that starts after it and finds no signing key created at or after it makes a new key. The newest key signs. Every older active key still verifies until `access-ttl` after a newer key was created, and then it retires. A server that sees a token from a key that it does not know reloads the keys, at most once in five seconds, so a server with an older key set does not refuse it. Each token names its key in the `kid` header.
 
 ## Consequences
 
@@ -64,6 +65,7 @@ Two more facts shaped the decision:
 - `SystemSecretsTest`: a value opens under the prior key after the switch, a value moved to another row or column does not open, and a second re-seal changes nothing.
 - `SystemSecretSealingChangeDatabaseTest`: the upgrade seals each earlier value again and keeps the reservation key. A wrong key stops it and writes nothing.
 - `SystemKeyRotationIntegrationTest`: a pass moves every value to the active key, a second pass changes nothing, and a client secret copied to another provider does not open.
+- `JwtSigningKeyServiceSealingTest#shouldNameBothKeyIdsWhenTheSystemKeyDoesNotOpenTheSigningKey` and `AuthJwtConfigTest#shouldStopStartupWhenTheSystemKeyDoesNotOpenTheStoredKeys`: a server with another system key stops at start and names both key identifiers, never a key.
 - `JwtSigningKeyRotationTest`: a token from the earlier signing key verifies during the overlap, and a server with an older key set accepts a token from the new key.
 
 ## Revisit trigger

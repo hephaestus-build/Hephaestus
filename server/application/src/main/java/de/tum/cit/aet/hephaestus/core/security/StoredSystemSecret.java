@@ -43,6 +43,11 @@ public class StoredSystemSecret {
         return true;
     }
 
+    /** Why the value does not open with the configured keys; names key identifiers, never a key. */
+    public String sealingMismatch(SystemSecrets secrets) {
+        return secrets.describeMismatch(sealedValue);
+    }
+
     static SecretBinding binding(String name) {
         return SecretBinding.of("system_secret.sealed_value", name);
     }
