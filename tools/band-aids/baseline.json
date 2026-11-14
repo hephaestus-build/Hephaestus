@@ -17370,15 +17370,6 @@
 		"reason": "constraint: The styled prefix is part of the complete Hephaestus wordmark."
 	},
 	{
-		"file": "webapp/src/components/common/CodeEditor.tsx",
-		"category": "lint-suppression",
-		"source": "/* oxlint-disable import/default",
-		"context": "<module> -> import EditorWorker from \"monaco-editor/editor/editor.worker.js?worker\";",
-		"count": 1,
-		"owner": "BANDAID",
-		"reason": "constraint: Vite's ?worker transform supplies the default worker constructor."
-	},
-	{
 		"file": "webapp/src/components/common/DateRangeFacet.tsx",
 		"category": "lint-suppression",
 		"source": "// oxlint-disable-next-line jsx-a11y/no-autofocus",

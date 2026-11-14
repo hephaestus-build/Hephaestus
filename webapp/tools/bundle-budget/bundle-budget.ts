@@ -37,6 +37,8 @@ export interface Measured {
 	sizes: BundleSizes;
 	/** The packages in the entry closure. */
 	entryPackages: string[];
+	/** The packages each route's split component adds past the entry, by its facade module. */
+	routePackages: Record<string, string[]>;
 }
 
 /** Growth that one change may add to a size: a small feature or fix fits in it. */
@@ -77,6 +79,7 @@ export function measure(chunks: readonly BuiltChunk[]): Measured {
 	}
 	const entryClosure = staticClosure(entries[0]?.fileName ?? "", byName);
 	const lazy: Record<string, number> = {};
+	const routePackages: Record<string, string[]> = {};
 	for (const chunk of chunks) {
 		if (!chunk.isDynamicEntry || chunk.facadeModule === null) {
 			continue;
@@ -89,6 +92,11 @@ export function measure(chunks: readonly BuiltChunk[]): Measured {
 			(name) => !entryClosure.has(name),
 		);
 		lazy[key] = gzipOf(added, byName);
+		if (key.includes("?tsr-split=")) {
+			routePackages[key] = [
+				...new Set(added.flatMap((name) => byName.get(name)?.packages ?? [])),
+			].sort();
+		}
 	}
 	const entryPackages = new Set(
 		[...entryClosure].flatMap((name) => byName.get(name)?.packages ?? []),
@@ -99,6 +107,7 @@ export function measure(chunks: readonly BuiltChunk[]): Measured {
 			lazy: Object.fromEntries(Object.entries(lazy).sort(([a], [b]) => a.localeCompare(b))),
 		},
 		entryPackages: [...entryPackages].sort(),
+		routePackages,
 	};
 }
 
@@ -110,6 +119,23 @@ export function entryViolations(
 	return routeOnlyPackages
 		.filter((name) => measured.entryPackages.includes(name))
 		.map((name) => `${name} is in the entry closure; only the routes that use it may load it.`);
+}
+
+/**
+ * Why a route's own chunk holds a package that only a lazy component on that route may load: it then
+ * loads with the page, before the reader opens what needs it.
+ */
+export function routeViolations(
+	measured: Measured,
+	componentOnlyPackages: readonly string[],
+): string[] {
+	return Object.entries(measured.routePackages).flatMap(([route, packages]) =>
+		componentOnlyPackages
+			.filter((name) => packages.includes(name))
+			.map(
+				(name) => `${name} loads with ${route}; only the lazy component that uses it may load it.`,
+			),
+	);
 }
 
 /** One load that a change grew past the tolerance on purpose, and the change that accepted it. */
