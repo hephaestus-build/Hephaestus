@@ -84,6 +84,7 @@ a nullness contract.
 | `live`         | real provider APIs, LLMs and sandbox containers | from `server/`, `./gradlew :application:liveTest`                                                                                                      |
 
 Live-test credential gates and setup: [Testing Guide](../docs/contributor/testing.mdx#live-external-service-tests).
+What each test must protect, and when a golden file is acceptable: [What a test protects](../docs/contributor/testing.mdx#what-a-test-protects).
 
 **JUnit tags, not filename patterns, select tests.** Keep descriptive `*Test` and `*IntegrationTest`
 names for readers. `TestTierTaggingArchTest` uses JUnit discovery to reject untagged tests.
