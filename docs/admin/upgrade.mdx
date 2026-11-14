@@ -104,7 +104,8 @@ Qualify sandbox isolation with the platform isolation gate before enabling work.
 
 An old server drains for up to `server.drainTimeoutSeconds`, and Kubernetes no longer counts it while it stops.
 The value is 30 minutes by default and 10 minutes in the single-node profile.
-Existing review runs keep their gateway during this interval. Ready replacements accept new claims.
+Any ready server serves the sandbox calls of existing review runs. A connection that is open can finish on the old server within this interval.
+Ready replacements accept new claims.
 
 The Helm `--timeout` must cover the drain, 2 minutes of shutdown and up to 10 minutes of start.
 Past the timeout, Helm rolls the release back. If you set a longer drain, set a longer timeout.
@@ -348,29 +349,31 @@ The [database migration instructions](./compatibility-policy#database-migrations
 - [Native Hibernate JSON cutover](./native-hibernate-json-cutover): the stopped-writer accounting cutover.
 - [Practice model cutover checks](./practice-model-cutover): the pilot rehearsal and a refused practice model upgrade.
 
-### Drain legacy review compositions
+### Drain legacy reviews before removing gateway affinity
 
 Before this first upgrade, stop the old servers and let their [graceful drain](./runtime-roles#graceful-drain) finish.
 Follow the server stop procedure in [Planned node maintenance](./maintenance#planned-node-maintenance). Keep PostgreSQL running.
-Do not start the target servers beside old servers with an active review composition during this first upgrade.
-An old server held each composition's claim decision in its own memory, so a target server cannot read it.
+Do not start the target servers beside old servers with an active review during this first upgrade.
+An old server held each composition's claim decision in its own memory, and an older review attempt has no published preparation checkpoint.
+A target server cannot continue either of them.
 
-Before starting the target servers, check that no composition run has a live lease:
+Before starting the target servers, check that no review run has a live lease:
 
 ```sql
 SELECT count(*) FROM agent_run
-WHERE state = 'LEASED' AND kind = 'REVIEW_COMPOSE'
+WHERE state = 'LEASED' AND kind IN ('REVIEW', 'REVIEW_COMPOSE')
   AND leased_until > clock_timestamp();
 ```
 
 The count must be zero. If the drain deadline expired, keep the target stopped until the remaining leases expire.
-Queued work can stay queued. The target claims it and records its own decision in PostgreSQL.
-After this first upgrade, any server replica that serves the sandbox gateway can read the same composition decision.
-This step does not change the gateway Service, and it does not cover review measurement runs.
+Queued work can stay queued. The target claims it and records its own decision and preparation checkpoint in PostgreSQL.
+After this first upgrade, the sandbox gateway Service has no client-IP affinity.
+Each ready server reads the same run, lease, decision and checkpoint, so later rolling upgrades keep all active work.
 
 The chart reserves three pooled connections for each concurrent review capture.
 Use `server.databasePool.maximumPoolSize=auto` or raise an explicit pool to the chart's validated floor.
 Keep `postgresql.parameters.max_connections` at the derived setting or a larger validated value.
+Helm does not check the limit of an external database.
 [Database connections](./sizing#database-connections) owns the formula and the overlap budget.
 
 ### Hosts with reconciler tooling of 1.0.0-rc.4

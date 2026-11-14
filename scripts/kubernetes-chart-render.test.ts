@@ -1286,20 +1286,10 @@ await test("a server with sandboxes receives its runtime settings, its sandbox n
 	assert.equal(envValue(server, "SANDBOX_API_PORT"), "8081");
 	const service = (name: string) =>
 		resources.find((resource) => kindOf(resource) === "Service" && nameOf(resource) === name);
-	// Existing calls must reach the draining server until it releases its review attempts.
-	assert.equal(get(service("heph-sandbox-gateway"), "spec", "publishNotReadyAddresses"), true);
-	// A review attempt lives on the worker that took its sandbox's first call.
-	assert.equal(get(service("heph-sandbox-gateway"), "spec", "sessionAffinity"), "ClientIP");
-	assert.equal(
-		get(
-			service("heph-sandbox-gateway"),
-			"spec",
-			"sessionAffinityConfig",
-			"clientIP",
-			"timeoutSeconds",
-		),
-		86_400,
-	);
+	// Each ready replica serves calls by the persisted run and lease, including during a rollout.
+	assert.equal(get(service("heph-sandbox-gateway"), "spec", "publishNotReadyAddresses"), undefined);
+	assert.equal(get(service("heph-sandbox-gateway"), "spec", "sessionAffinity"), undefined);
+	assert.equal(get(service("heph-sandbox-gateway"), "spec", "sessionAffinityConfig"), undefined);
 	assert.equal(service("heph-sandbox-gateway-probe"), undefined);
 	for (const name of ["heph-sandbox-gateway"]) {
 		assert.equal(get(service(name), "spec", "type"), "ClusterIP", name);

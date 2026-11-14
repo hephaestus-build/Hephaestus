@@ -161,8 +161,6 @@ spec:
           protocol: TCP
 ---
 # The servers' gateway port.
-# A review sandbox's attempt lives on the server that took the sandbox's first call, so each caller
-# stays on one server until the gateway keeps no attempt state of its own.
 apiVersion: v1
 kind: Service
 metadata:
@@ -171,13 +169,7 @@ metadata:
     {{- include "hephaestus.labels" (dict "root" . "component" "server") | nindent 4 }}
 spec:
   type: ClusterIP
-  # Existing runs must reach the terminating server until its review drain ends.
-  # Claim routes reject work before startup readiness and during the drain.
-  publishNotReadyAddresses: true
-  sessionAffinity: ClientIP
-  sessionAffinityConfig:
-    clientIP:
-      timeoutSeconds: 86400
+  # Every ready server serves the same run/lease identity from PostgreSQL.
   selector:
     {{- include "hephaestus.selectorLabels" (dict "root" . "component" "server") | nindent 4 }}
   ports:

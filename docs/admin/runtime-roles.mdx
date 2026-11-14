@@ -195,7 +195,9 @@ After 60 seconds, one call tries the provider. If it succeeds, the breaker close
 
 On `SIGTERM`, the server stops taking review and conversation claims before the web server closes.
 It keeps the sandbox gateway and the database open while leased runs finish.
-The gateway Service still includes the stopping server, so its sandboxes can renew their leases.
+The gateway Service sends new connections only to ready servers.
+Each server reads the run and its lease from PostgreSQL, so a sandbox's next call can reach another server.
+A connection that is open can finish on the stopping server.
 A model stream that loses its server connection is tried again by the sandbox runtime, within the run's time limit.
 
 `server.drainTimeoutSeconds` bounds the wait: 1800 seconds by default, 600 in the `small` profile.
