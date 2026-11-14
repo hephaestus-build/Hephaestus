@@ -787,10 +787,8 @@ esac
 			const walked = invoke();
 			assert.equal(walked.status, 0, walked.stderr);
 			assert.match(walked.stdout, cause);
-			assert.deepEqual((await readFile(calls, "utf8")).match(/number=\d+/gu), [
-				"number=1",
-				"number=2",
-			]);
+			const walkedCalls = await readFile(calls, "utf8");
+			assert.deepEqual(walkedCalls.match(/number=\d+/gu), ["number=1", "number=2"]);
 		}
 		await writeFile(
 			path.join(directory, "gh"),
