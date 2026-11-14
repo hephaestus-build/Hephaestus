@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
+import { spawn } from "node:child_process";
+import { once } from "node:events";
+import { createServer, type Server } from "node:net";
 import { test } from "node:test";
 
+import { parseJson } from "./lib/json.ts";
+import { output, run } from "./lib/process.ts";
 import {
 	apiEndpoints,
 	gateTemplate,
@@ -11,6 +16,8 @@ import {
 	namespacedName,
 	parseAddress,
 	podSecurityFailures,
+	parseInside,
+	program,
 	specFailures,
 	type Target,
 	unrestrictedPod,
@@ -327,3 +334,61 @@ void test("the sandbox namespace must refuse, by Pod Security admission, a Pod t
 		],
 	);
 });
+
+function portOf(server: Server): number {
+	const address = server.address();
+	assert.ok(address !== null && typeof address !== "string");
+	return address.port;
+}
+
+/** A port that nothing listens on: the OS hands it out, then the listener closes. */
+async function freePort(): Promise<number> {
+	const server = createServer().listen(0, "127.0.0.1");
+	await once(server, "listening");
+	const port = portOf(server);
+	server.close();
+	await once(server, "close");
+	return port;
+}
+
+await test("the peer's listener starts from its stripped program, and the readiness check sees it", async (t) => {
+	const port = await freePort();
+	const listener = spawn(
+		process.execPath,
+		["--input-type=module", "-e", program("listen"), String(port)],
+		{ stdio: "ignore" },
+	);
+	t.after(() => {
+		listener.kill();
+	});
+	await run(process.execPath, ["--input-type=module", "-e", program("listening"), String(port)]);
+});
+
+await test(
+	"the probe reports an open port as reached and a closed one as not, from its stripped program",
+	{ skip: process.platform !== "linux" && "the probe reads /proc, as in the Linux sandbox" },
+	async (t) => {
+		const server = createServer((socket) => {
+			socket.end();
+		}).listen(0, "127.0.0.1");
+		t.after(() => {
+			server.close();
+		});
+		await once(server, "listening");
+		const open = portOf(server);
+		const closed = await freePort();
+		const probed: Target[] = [
+			{ name: "open", host: "127.0.0.1", port: open, reachable: true },
+			{ name: "closed", host: "127.0.0.1", port: closed, reachable: false },
+		];
+		const stdout = await output(process.execPath, [
+			"--input-type=module",
+			"-e",
+			program("probe"),
+			JSON.stringify({ targets: probed, dns: "", firstApi: "/nonexistent" }),
+		]);
+		const report = parseInside(parseJson(stdout));
+		assert.deepEqual(report.reached, { open: true, closed: false });
+		assert.equal(report.firstApi, null);
+	},
+);

@@ -18,6 +18,8 @@
  *     --gateway <host>:<port> [--reach <name>=<host>:<port> ...] [--forbid <name>=<host>:<port> ...] \
  *     [--dns <namespace>/<service>] [--context <kubectl context>]
  */
+import { readFileSync } from "node:fs";
+import { stripTypeScriptTypes } from "node:module";
 import { parseArgs } from "node:util";
 
 import { asArray, asRecord, asString, isRecord, parseJson } from "./lib/json.ts";
@@ -58,92 +60,19 @@ export const PEER_PORT = 9099;
 const HOST_USERS_MAP = "0 0 4294967295";
 
 /**
- * Runs inside the sandbox with the image's Node. A target counts as reached once a TCP connection opens.
- * A target that must be reached gets ten seconds, because a new Pod's policy can take a moment to apply;
- * one that must not gets three. DNS is one UDP query to the cluster resolver.
+ * A typed program of `sandbox-isolation-*.ts` as plain JavaScript for `node --input-type=module -e`: a Pod's
+ * `command` and an exec's argument cannot carry a file, and the sandbox's Node then runs no TypeScript
+ * loader, which would add its own memory to the container under test.
  */
-export const PROBE = String.raw`
-const fs = require("node:fs");
-const net = require("node:net");
-const dgram = require("node:dgram");
-const os = require("node:os");
-const spec = JSON.parse(process.argv[1]);
-const reach = (host, port) => new Promise((done) => {
-  const socket = net.connect({ host, port, timeout: 3000 });
-  socket.on("connect", () => { socket.destroy(); done(true); });
-  socket.on("timeout", () => { socket.destroy(); done(false); });
-  socket.on("error", () => done(false));
-});
-const resolve = (server) => new Promise((done) => {
-  if (!server) return done(false);
-  const socket = dgram.createSocket("udp4");
-  const query = Buffer.from("abcd01000001000000000000076578616d706c6503636f6d0000010001", "hex");
-  const timer = setTimeout(() => { socket.close(); done(false); }, 3000);
-  socket.on("message", () => { clearTimeout(timer); socket.close(); done(true); });
-  socket.on("error", () => { clearTimeout(timer); socket.close(); done(false); });
-  socket.send(query, 53, server);
-});
-const status = (key) => {
-  const line = fs.readFileSync("/proc/self/status", "utf8").split("\n").find((l) => l.startsWith(key + ":"));
-  return line ? line.slice(key.length + 1).trim() : null;
-};
-(async () => {
-  const out = { uid: process.getuid(), gid: process.getgid(), reached: {} };
-  out.token = fs.existsSync("/var/run/secrets/kubernetes.io/serviceaccount/token");
-  out.serviceAccount = fs.existsSync("/var/run/secrets/kubernetes.io/serviceaccount");
-  out.serviceHosts = Object.keys(process.env).filter((name) => name.endsWith("_SERVICE_HOST")).sort();
-  try { out.uidMap = fs.readFileSync("/proc/self/uid_map", "utf8").trim().split(/\s+/).join(" "); } catch { out.uidMap = null; }
-  out.noNewPrivs = status("NoNewPrivs") === "1";
-  out.capEff = status("CapEff");
-  out.kernel = os.release();
-  try { out.firstApi = fs.readFileSync(spec.firstApi, "utf8"); } catch { out.firstApi = null; }
-  await Promise.all(spec.targets.map(async (target) => {
-    const until = Date.now() + (target.reachable ? 10000 : 0);
-    let reached = await reach(target.host, target.port);
-    while (!reached && Date.now() < until) {
-      await new Promise((wait) => setTimeout(wait, 250));
-      reached = await reach(target.host, target.port);
-    }
-    out.reached[target.name] = reached;
-  }));
-  [out.dns, out.publicDns] = await Promise.all([resolve(spec.dns), resolve("1.1.1.1")]);
-  console.log(JSON.stringify(out));
-})();
-`;
+export const program = (name: "probe" | "listen" | "listening" | "hold") =>
+	stripTypeScriptTypes(
+		readFileSync(new URL(`sandbox-isolation-${name}.ts`, import.meta.url), "utf8"),
+	);
 
-/** Exits 0 once the peer's listener accepts on its own loopback, within five seconds. */
-const LISTENING = `const net = require("node:net"); const until = Date.now() + 5000; const try_ = () => { const s = net.connect(${PEER_PORT}, "127.0.0.1"); s.on("connect", () => process.exit(0)); s.on("error", () => (Date.now() < until ? setTimeout(try_, 100) : process.exit(1))); }; try_();`;
-
-/** Starts a listener that outlives the exec, so the peer has something to reach. */
-const LISTEN = `require("node:net").createServer((s) => s.end()).listen(${PEER_PORT});setTimeout(() => process.exit(0), 120000);`;
-
-/** The command of a gate sandbox: it waits, so that the probe can run beside it. */
+/** Where a gate sandbox records when the Kubernetes API stopped answering it. */
 export const FIRST_API = "/tmp/isolation-first-api";
-export const HOLD = [
-	"node",
-	"-e",
-	String.raw`
-const fs = require("node:fs");
-const net = require("node:net");
-const start = performance.timeOrigin;
-const reach = () => new Promise((done) => {
-  const socket = net.connect({ host: process.env.KUBERNETES_SERVICE_HOST, port: Number(process.env.KUBERNETES_SERVICE_PORT), timeout: 300 });
-  socket.on("connect", () => { socket.destroy(); done(true); });
-  socket.on("timeout", () => { socket.destroy(); done(false); });
-  socket.on("error", () => done(false));
-});
-(async () => {
-  let result = "open";
-  while (Date.now() - start < 10000) {
-    if (!(await reach())) { result = "closed after " + Math.round(Date.now() - start) + " ms"; break; }
-    await new Promise((wait) => setTimeout(wait, 50));
-  }
-  try { fs.writeFileSync("${FIRST_API}", result); } catch {}
-})();
-process.on("SIGTERM", () => process.exit(0));
-setInterval(() => {}, 1 << 30);
-`,
-];
+/** The command of a gate sandbox: it waits, so that the probe can run beside it. */
+export const HOLD = ["node", "--input-type=module", "-e", program("hold"), FIRST_API];
 
 /**
  * A clone of a SandboxTemplate under another name: the same Pod spec, labels and policies, with the
@@ -521,10 +450,23 @@ export async function isolationGate(options: GateOptions): Promise<Inside> {
 			"--",
 			"sh",
 			"-c",
-			`node -e '${LISTEN}' >/dev/null 2>&1 &`,
+			'node --input-type=module -e "$0" "$1" >/dev/null 2>&1 &',
+			program("listen"),
+			String(PEER_PORT),
 		]);
 		// A denied peer counts only if it listens.
-		await kubectl(["-n", namespace, "exec", peer, "--", "node", "-e", LISTENING]);
+		await kubectl([
+			"-n",
+			namespace,
+			"exec",
+			peer,
+			"--",
+			"node",
+			"--input-type=module",
+			"-e",
+			program("listening"),
+			String(PEER_PORT),
+		]);
 		const targets: Target[] = [
 			{ name: "the gateway", ...options.gateway, reachable: true },
 			{ name: "the Kubernetes API", host: apiIp, port: 443, reachable: false },
@@ -549,8 +491,9 @@ export async function isolationGate(options: GateOptions): Promise<Inside> {
 			probe,
 			"--",
 			"node",
+			"--input-type=module",
 			"-e",
-			PROBE,
+			program("probe"),
 			JSON.stringify({ targets, dns, firstApi: FIRST_API }),
 		]);
 		const inside = parseInside(parseJson(raw.trim().split("\n").at(-1) ?? ""));
