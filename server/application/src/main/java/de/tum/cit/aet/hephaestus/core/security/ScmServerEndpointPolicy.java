@@ -101,6 +101,15 @@ public class ScmServerEndpointPolicy {
                 .build();
     }
 
+    /** Whether the origin is the e2e SCM simulator, the only one that may speak plain HTTP. */
+    public boolean isSimulationOrigin(@Nullable String scheme, @Nullable String host, int port) {
+        if (simulationOrigin.isEmpty()) return false;
+        URI simulation = URI.create(simulationOrigin);
+        return simulation.getScheme().equals(scheme)
+                && simulation.getHost().equals(host)
+                && simulation.getPort() == port;
+    }
+
     private boolean isSimulation(String serverUrl) {
         return !simulationOrigin.isEmpty()
                 && (simulationOrigin.equals(serverUrl) || (simulationOrigin + "/").equals(serverUrl));

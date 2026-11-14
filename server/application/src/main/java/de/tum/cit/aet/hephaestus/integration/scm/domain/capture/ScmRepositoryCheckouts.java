@@ -6,6 +6,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryCheckoutExceptio
 import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryCheckouts;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitCloneUrl;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.RepositoryKey;
 import de.tum.cit.aet.hephaestus.integration.scm.spi.ScmTokenSource;
@@ -102,7 +103,7 @@ public class ScmRepositoryCheckouts implements RepositoryCheckouts {
         var source =
                 preparer.activeTokenSource(workspaceId).orElseThrow(() -> unavailable("SCM connection is unavailable"));
         String cloneUrl = source.serverUrl(workspaceId)
-                .flatMap(serverUrl -> ReviewRepositoryPreparer.cloneUrl(serverUrl, path))
+                .flatMap(serverUrl -> GitCloneUrl.of(serverUrl, path))
                 .orElseThrow(() -> unavailable("SCM server is unavailable"));
         String token =
                 source.accessToken(workspaceId).orElseThrow(() -> unavailable("SCM credentials are unavailable"));
