@@ -10,7 +10,6 @@ import { test, type TestContext } from "node:test";
 
 import {
 	focusedTests,
-	hookTests,
 	frontendCommands,
 	pushScopeReason,
 	pushScopes,
@@ -92,7 +91,7 @@ void test("unknown inputs and unavailable bases retain every static scope", () =
 	assert.equal(frontendCommands(undefined).length, 2);
 });
 
-void test("a source change runs its changed and colocated tests, and resources run the whole unit project", () => {
+void test("the hook runs the changed and colocated frontend tests, never the whole unit project", () => {
 	// Before, Vitest's related selection reached 101 test files through the router for one component.
 	const component = frontendCommands([
 		"webapp/src/components/product-feedback/ProductFeedbackDialog.tsx",
@@ -111,25 +110,32 @@ void test("a source change runs its changed and colocated tests, and resources r
 	// A source without a colocated test leaves its tests to CI, and the hook says so.
 	assert.deepEqual(frontendCommands(["webapp/src/components/ui/button.tsx"]), []);
 	assert.equal(skipsImportedTests(["webapp/src/components/ui/button.tsx"]), true);
-	assert.equal(skipsImportedTests(["webapp/package.json"]), false);
 	assert.equal(skipsImportedTests(["scripts/reorder-migrations.ts"]), false);
+	// Helpers, mocks, setup files, resources and shared inputs reach every test: CI runs them all.
 	for (const files of [
 		["webapp/public/a.svg"],
 		["webapp/src/deleted.ts"],
 		["webapp/package.json"],
 		["webapp/src/test/async.ts"],
+		["webapp/src/test/setup-msw.ts"],
 		["webapp/src/mocks/handlers.ts"],
 	]) {
-		assert.deepEqual(
-			frontendCommands(files),
-			[["-C", "webapp", "test", "--run", "--maxWorkers=1"]],
-			"the whole unit project",
-		);
+		assert.deepEqual(frontendCommands(files), [], String(files));
+		assert.equal(skipsImportedTests(files), true, String(files));
 	}
-	const extension = frontendCommands(["extension/src/deleted.ts"])[0];
-	assert.ok(extension !== undefined);
-	assert.ok(extension.includes("unit"));
-	assert.ok(!extension.includes("storybook"));
+	// A helper changed with the tests that use it runs those tests.
+	assert.deepEqual(
+		frontendCommands(["webapp/src/test/async.ts", "webapp/src/test/router-harness.test.tsx"]),
+		[["-C", "webapp", "test", "--run", "--maxWorkers=1", "src/test/router-harness.test.tsx"]],
+	);
+	// A changed test alone leaves nothing out.
+	assert.equal(skipsImportedTests(["webapp/src/test/router-harness.test.tsx"]), false);
+	assert.deepEqual(frontendCommands(["extension/src/deleted.ts"]), []);
+	// Without a merge base the hook runs both whole unit projects, the extension's without Storybook.
+	assert.deepEqual(frontendCommands(undefined), [
+		["-C", "webapp", "test", "--run", "--maxWorkers=1"],
+		["-C", "extension", "test", "--run", "--maxWorkers=1", "--project", "unit"],
+	]);
 });
 
 void test("a hook change runs every test that runs a hook as a process", () => {
@@ -138,7 +144,6 @@ void test("a hook change runs every test that runs a hook as a process", () => {
 	for (const file of ["scripts/enable-hooks.test.ts", "scripts/git-environment.test.ts"]) {
 		assert.ok(selected.includes(file), file);
 	}
-	assert.deepEqual(selected, hookTests());
 	assert.ok(
 		!focusedTests(["scripts/reorder-migrations.ts"]).includes("scripts/enable-hooks.test.ts"),
 	);
@@ -266,7 +271,10 @@ void test("a missing base falls back without fetching and reports omitted full s
 		const result = f.run(f.directory, "missing-reference");
 		assert.equal(result.status, 0, result.stderr);
 		assert.match(result.stdout, /No usable merge base/u);
-		assert.match(result.stdout, /Complete Node suites, Java unit and integration tests/u);
+		assert.match(
+			result.stdout,
+			/Complete frontend unit projects and Node suites, Java unit and integration tests/u,
+		);
 		const calls = await readFile(f.calls, "utf8");
 		assert.match(calls, /"-C","webapp","test","--run","--maxWorkers=1"/u);
 		assert.match(calls, /"-C","extension".*"--project","unit"/u);
@@ -314,18 +322,14 @@ void test("a later selected static failure blocks the push", async () => {
 	}
 });
 
-void test("resource inputs retain full frontend coverage in a mixed change", () => {
+void test("resource inputs that select a frontend tree leave its tests to CI", () => {
 	for (const input of [
 		"server/application/src/main/resources/practices/default-catalog.json",
 		"server/application/src/main/resources/practices/guidance/a.md",
 		"docs/images/readme/a.png",
 	]) {
-		const commands = frontendCommands(["webapp/src/components/ui/button.tsx", input]);
-		assert.ok(commands.length > 0);
-		assert.ok(
-			commands.every((command) => !command.includes("related")),
-			input,
-		);
+		assert.deepEqual(frontendCommands(["webapp/src/components/ui/button.tsx", input]), [], input);
+		assert.equal(skipsImportedTests(["webapp/src/components/ui/button.tsx", input]), true, input);
 	}
 });
 

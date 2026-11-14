@@ -3476,19 +3476,62 @@ void describe("CI contract", () => {
 			if (file.endsWith(".test.ts")) {
 				continue;
 			}
-			const source = await readFile(file, "utf8");
-			// `stdio: inherit`/`ignore` streams to the parent and buffers nothing; only a capture,
-			// which is what `encoding` marks, can overflow.
-			const captures =
-				source.match(/exec(?:File)?Sync\(|execFileAsync\(|spawnSync\(/gu)?.length ?? 0;
-			if (captures === 0 || !source.includes("encoding")) {
-				continue;
-			}
-			if (!source.includes("maxBuffer")) {
+			if (capturesWithoutBound(await readFile(file, "utf8"))) {
 				offenders.push(file);
 			}
 		}
 		assert.deepEqual(offenders, [], "these capture a subprocess without bounding its buffer");
+	});
+
+	void test("a capture is a subprocess whose output stays in memory, not a file that names an encoding", () => {
+		const streamed = [
+			'spawnSync("vp", ["run", "check"], { stdio: "inherit" });',
+			'readdirSync(directory, { recursive: true, encoding: "utf8" });',
+		].join("\n");
+		assert.equal(capturesWithoutBound(streamed), false);
+		assert.equal(
+			capturesWithoutBound(
+				'spawnSync("git", ["log"], { stdio: ["ignore", "inherit", "inherit"] });',
+			),
+			false,
+		);
+		// spawnSync buffers its output under the same 1 MiB default with or without an encoding.
+		assert.equal(capturesWithoutBound('spawnSync("git", ["log"], { encoding: "utf8" });'), true);
+		assert.equal(
+			capturesWithoutBound('spawnSync("git", ["log"], { stdio: ["ignore", "pipe", "inherit"] });'),
+			true,
+		);
+		assert.equal(
+			capturesWithoutBound('const out = execFileSync("gh", ["api", path], options);'),
+			true,
+		);
+		assert.equal(
+			capturesWithoutBound('await execFileAsync("cosign", args, { stdio: "inherit" });'),
+			true,
+		);
+		assert.equal(
+			capturesWithoutBound(
+				'spawnSync("git", ["log"], { encoding: "utf8", maxBuffer: MAX_BUFFER });',
+			),
+			false,
+		);
+		// stderr keeps its default, a pipe, when the stdio array names fewer than three streams.
+		assert.equal(
+			capturesWithoutBound('spawnSync("git", ["log"], { stdio: ["ignore", "inherit"] });'),
+			true,
+		);
+		// A comment, a regex or a `;` inside a literal cannot carry the scan past the capturing call to a later one.
+		const streamedLater = '\nspawnSync("vp", ["run"], { stdio: "inherit" });';
+		for (const capture of [
+			'spawnSync("git", ["log"], { // do not stream: "inherit" would hide it\n encoding: "utf8" });',
+			'spawnSync("git", ["log"] /* ) */, { encoding: "utf8" });',
+			String.raw`spawnSync("git", ["log", String(/\(/.test(name))], { encoding: "utf8" });`,
+			// A template literal with a `;` and a parenthesis inside its placeholder.
+			`spawnSync("git", [\`log;\${")"}\`], { encoding: "utf8" });`,
+			'spawnSync("git", ["log"], { /* stdio: "inherit" */ encoding: "utf8" });',
+		]) {
+			assert.equal(capturesWithoutBound(capture + streamedLater), true, capture);
+		}
 	});
 
 	void test("scans both released platforms before the release, not just linux/amd64", async () => {
@@ -7577,3 +7620,107 @@ void test("an old candidate lacks the release drill verifier and stops before an
 	assert.match(String(checkout.get("uses")), /^actions\/checkout@/u);
 	assert.equal(steps.items[1], verifier);
 });
+
+/**
+ * The text between a call's opening parenthesis at `start` and its matching close, without its comments. String,
+ * template and regex literals stay whole, so a parenthesis, quote or `;` inside one cannot end the call early or late.
+ */
+function callArguments(source: string, start: number): string {
+	let depth = 1;
+	let text = "";
+	// The last character outside a literal or comment: a `/` after one of these starts a regex, not a division.
+	let previous = "(";
+	let index = start;
+	while (index < source.length) {
+		const character = source[index] ?? "";
+		const next = source[index + 1] ?? "";
+		if (character === "/" && next === "/") {
+			const end = source.indexOf("\n", index);
+			index = end === -1 ? source.length : end;
+			continue;
+		}
+		if (character === "/" && next === "*") {
+			const end = source.indexOf("*/", index + 2);
+			index = end === -1 ? source.length : end + 2;
+			continue;
+		}
+		const regex = character === "/" && "(,=:[!&|?{};".includes(previous);
+		if (regex || character === '"' || character === "'" || character === "`") {
+			const end = literalEnd(source, index, regex ? "/" : character);
+			text += source.slice(index, end);
+			previous = character;
+			index = end;
+			continue;
+		}
+		if (character === "(") {
+			depth += 1;
+		} else if (character === ")") {
+			depth -= 1;
+			if (depth === 0) {
+				return text;
+			}
+		}
+		text += character;
+		if (character.trim() !== "") {
+			previous = character;
+		}
+		index += 1;
+	}
+	return text;
+}
+
+/** The index after the literal that opens at `start` with `delimiter`; a regex's character class may hold a `/`. */
+function literalEnd(source: string, start: number, delimiter: string): number {
+	let inClass = false;
+	let index = start + 1;
+	while (index < source.length) {
+		const character = source[index];
+		if (character === "\\") {
+			index += 2;
+			continue;
+		}
+		if (delimiter === "/" && character === "[") {
+			inClass = true;
+		} else if (delimiter === "/" && character === "]") {
+			inClass = false;
+		} else if (character === delimiter && !inClass) {
+			return index + 1;
+		}
+		index += 1;
+	}
+	return source.length;
+}
+
+/**
+ * Whether a source captures a subprocess's output in memory without the shared `maxBuffer` bound. A call captures
+ * unless its options stream stdout and stderr to the parent or discard them; `execFileAsync` always captures.
+ */
+function capturesWithoutBound(source: string): boolean {
+	if (source.includes("maxBuffer")) {
+		return false;
+	}
+	for (const call of source.matchAll(
+		/\b(?<name>execFileAsync|execFileSync|execSync|spawnSync)\(/gu,
+	)) {
+		if (call.groups?.name === "execFileAsync") {
+			return true;
+		}
+		const options = callArguments(source, call.index + call[0].length);
+		if (/stdio:\s*["'](?:inherit|ignore)["']/u.test(options)) {
+			continue;
+		}
+		const streams = /stdio:\s*\[(?<entries>[^\]]*)\]/u
+			.exec(options)
+			?.groups?.entries?.split(",")
+			.map((entry) => entry.trim());
+		if (
+			streams !== undefined &&
+			streams.length >= 3 &&
+			streams.slice(1, 3).every((entry) => /^["'](?:inherit|ignore)["']$/u.test(entry))
+		) {
+			continue;
+		}
+		return true;
+	}
+	return false;
+}
