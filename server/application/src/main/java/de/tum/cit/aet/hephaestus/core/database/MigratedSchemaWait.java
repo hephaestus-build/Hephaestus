@@ -20,6 +20,7 @@ import liquibase.database.core.PostgresDatabase;
 import liquibase.integration.spring.SpringResourceAccessor;
 import liquibase.parser.ChangeLogParserFactory;
 import liquibase.resource.ResourceAccessor;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.InitializingBean;
@@ -30,6 +31,7 @@ import org.springframework.boot.liquibase.autoconfigure.LiquibaseProperties;
 import org.springframework.boot.sql.init.dependency.AbstractBeansOfTypeDatabaseInitializerDetector;
 import org.springframework.context.annotation.Profile;
 import org.springframework.core.io.ResourceLoader;
+import org.springframework.jdbc.CannotGetJdbcConnectionException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
@@ -75,19 +77,24 @@ public final class MigratedSchemaWait implements InitializingBean {
         List<ChangeSet> expected = expected();
         long start = System.nanoTime();
         long nextReport = start;
-        List<ChangeSet> pending = pending(expected);
-        while (!pending.isEmpty()) {
+        Attempt attempt = attempt(expected);
+        while (!attempt.current()) {
             long now = System.nanoTime();
             if (now - start >= timeout.toNanos()) {
-                throw new IllegalStateException(behind(pending) + " The wait ended after " + timeout
-                        + ". Run this release's database migration, then start this process again. "
-                        + "https://docs.hephaestus.build/admin/runtime-roles#database-migrations");
+                throw new IllegalStateException(
+                        attempt.describe() + " The wait ended after " + timeout + ". " + attempt.advice(),
+                        attempt.refusal());
             }
             if (now - nextReport >= 0) {
-                log.atWarn()
-                        .addKeyValue("event.name", "database.migration.awaited")
-                        .addKeyValue("database.migration.pending", pending.size())
-                        .log("{} Waiting for the database migration", behind(pending));
+                var event = log.atWarn();
+                List<ChangeSet> pending = attempt.pending();
+                if (pending != null) {
+                    event = event.addKeyValue("event.name", "database.migration.awaited")
+                            .addKeyValue("database.migration.pending", pending.size());
+                } else {
+                    event = event.addKeyValue("event.name", "database.unreachable");
+                }
+                event.log("{} Waiting for the database migration", attempt.describe());
                 nextReport = now + REPORT_EVERY.toNanos();
             }
             try {
@@ -96,9 +103,19 @@ public final class MigratedSchemaWait implements InitializingBean {
                 Thread.currentThread().interrupt();
                 throw new IllegalStateException("Interrupted while waiting for the database migration", e);
             }
-            pending = pending(expected);
+            attempt = attempt(expected);
         }
         log.atInfo().addKeyValue("event.name", "database.migration.current").log("Database schema is current");
+    }
+
+    // On a first install the server starts beside PostgreSQL and the migration Job, which also creates the server's
+    // database role. Until both are done, the database refuses the connection, which is one more reason to wait.
+    private Attempt attempt(List<ChangeSet> expected) {
+        try {
+            return new Attempt(pending(expected), null);
+        } catch (CannotGetJdbcConnectionException e) {
+            return new Attempt(null, e);
+        }
     }
 
     /** The change sets that the migration applies, with the filters Liquibase applies apart from the history. */
@@ -147,6 +164,31 @@ public final class MigratedSchemaWait implements InitializingBean {
         ChangeSet first = pending.getFirst();
         return "The database schema is behind this release: " + pending.size() + " change sets have not run, "
                 + "first " + first.getId() + " in " + first.getFilePath() + ".";
+    }
+
+    /** One look at the database: the change sets still pending, or the refused connection that hid them. */
+    private record Attempt(
+            @Nullable List<ChangeSet> pending, @Nullable CannotGetJdbcConnectionException refusal) {
+
+        boolean current() {
+            return pending != null && pending.isEmpty();
+        }
+
+        String describe() {
+            return pending != null
+                    ? behind(pending)
+                    : "The database refused a connection: "
+                            + (refusal == null
+                                    ? ""
+                                    : refusal.getMostSpecificCause().getMessage());
+        }
+
+        String advice() {
+            return pending != null
+                    ? "Run this release's database migration, then start this process again. "
+                            + "https://docs.hephaestus.build/admin/runtime-roles#database-migrations"
+                    : "Check the database address and credentials, and that PostgreSQL runs.";
+        }
     }
 
     /** Registered in {@code META-INF/spring.factories}: the users of the database start after the wait. */

@@ -601,6 +601,8 @@ await test("small: a rolling server can finish its drain and start within the up
 	const start = Number(get(probe, "periodSeconds")) * Number(get(probe, "failureThreshold"));
 	assert.ok(stop + start <= Number(timeout) * 60, `${stop} s to stop, ${start} s to start`);
 	assert.ok(Number(get(server, "spec", "progressDeadlineSeconds")) >= stop + start);
+	// The server waits up to 10 minutes for the schema before it serves the probe; the kubelet must not kill it first.
+	assert.ok(start >= 10 * 60 + 60, `${start} s of startup probe for a 10-minute schema wait`);
 });
 
 const alertRules = readFileSync(path.join(chart, "files", "hephaestus-alerts.yml"), "utf8");

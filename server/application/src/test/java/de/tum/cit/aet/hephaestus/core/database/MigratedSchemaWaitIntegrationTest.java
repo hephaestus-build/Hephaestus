@@ -40,6 +40,29 @@ class MigratedSchemaWaitIntegrationTest {
                 .hasMessageContaining("The database schema is behind this release");
     }
 
+    @Test
+    void shouldWaitForADatabaseThatDoesNotAcceptAConnectionYet() {
+        // Port 1 refuses at once, as PostgreSQL does while it starts beside the server of a first install.
+        var unreachable = new TestDatabase("jdbc:postgresql://127.0.0.1:1/hephaestus", "hephaestus", "unused");
+
+        assertThatThrownBy(() -> start(unreachable).close())
+                .hasStackTraceContaining("The database refused a connection")
+                .hasStackTraceContaining("The wait ended after PT1S");
+    }
+
+    @Test
+    void shouldWaitForARoleThatTheMigrationHasNotCreatedYet() {
+        // The migration Job creates the server's role, so until it runs PostgreSQL answers 28P01.
+        TestDatabase database = PostgreSQLTestContainer.createMigratedDatabase("hephaestus_wait_role");
+        var withoutRole = new TestDatabase(database.jdbcUrl(), "hephaestus_role_not_created", "unused");
+
+        assertThatThrownBy(() -> start(withoutRole).close())
+                .hasStackTraceContaining("The database refused a connection")
+                .hasStackTraceContaining("Check the database address and credentials")
+                .rootCause()
+                .hasMessageContaining("hephaestus_role_not_created");
+    }
+
     private static ConfigurableApplicationContext start(TestDatabase database) {
         var application = new SpringApplication(
                 Application.class,
