@@ -7604,30 +7604,49 @@ void test("the feedback eval gate runs on its paths in every tier, a stacked lay
 	assert.equal(runs({}), false);
 });
 
-void test("only the eval:run label or a push to a labelled pull request starts the panel, and nothing else cancels it", async () => {
+/** The `github` context of a feedback eval panel run for a pull request with `labels`. */
+function panelContext(event: string, action: string, labels: string[], label?: string) {
+	return {
+		github: {
+			event_name: event,
+			event: {
+				action,
+				...(label === undefined ? {} : { label: { name: label } }),
+				pull_request: { number: 7, labels: labels.map((name) => ({ name })) },
+			},
+		},
+		vars: {},
+	};
+}
+
+void test("a prompt change composes the safety subset, the eval:run label the whole panel, and nothing else cancels it", async () => {
 	const workflow = parseDocument(
 		await readFile(".github/workflows/feedback-eval-panel.yml", "utf8"),
 	);
 	const starts = (action: string, labels: string[], label?: string) =>
 		expandExpressions(
 			`\${{ ${asString(workflow.getIn(["jobs", "provider", "if"]), "provider if")} }}`,
-			{
-				github: {
-					event_name: "pull_request",
-					event: {
-						action,
-						...(label === undefined ? {} : { label: { name: label } }),
-						pull_request: { number: 7, labels: labels.map((name) => ({ name })) },
-					},
-				},
-				vars: {},
-			},
+			panelContext("pull_request", action, labels, label),
 		) === "true";
-	// An unrelated label on a pull request that already carries eval:run starts no panel.
+	// The path filter selects the pull requests; an unrelated label adds no second run.
 	assert.equal(starts("labeled", ["eval:run", "ci:full"], "ci:full"), false);
 	assert.equal(starts("labeled", ["eval:run"], "eval:run"), true);
-	assert.equal(starts("synchronize", ["eval:run"]), true);
-	assert.equal(starts("synchronize", ["ci:full"]), false);
+	assert.equal(starts("synchronize", []), true);
+	assert.equal(starts("opened", []), true);
+	const jobs = asRecord(asRecord(workflow.toJS(), "panel workflow").jobs, "jobs");
+	const gateStep = asArray(asRecord(jobs.panel, "panel job").steps, "panel steps")
+		.map((entry) => asRecord(entry, "panel step"))
+		.find((entry) => entry.id === "gate");
+	assert.ok(gateStep);
+	const scope = (event: string, labels: string[]) =>
+		expandExpressions(
+			asString(asRecord(gateStep.env, "gate env").SCOPE, "scope"),
+			panelContext(event, "synchronize", labels),
+		);
+	assert.equal(scope("pull_request", []), "--safety");
+	assert.equal(scope("pull_request", ["eval:run"]), "--model");
+	assert.equal(scope("schedule", []), "--model");
+	assert.equal(scope("workflow_dispatch", []), "--model");
 	// A run whose jobs are skipped must not enter a cancelling group, so only the panel job holds one.
 	assert.equal(workflow.has("concurrency"), false);
 	assert.equal(workflow.hasIn(["jobs", "provider", "concurrency"]), false);

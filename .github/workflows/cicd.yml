@@ -726,8 +726,9 @@ jobs:
               - 'server/gradle/**'
               - 'server/gradlew*'
               - 'scripts/check-gradle-verification-metadata.ts'
-            # What the feedback eval gate measures: the prompts and the writing guide they include, the
+            # What the feedback eval gate checks: the prompts and the writing guide they include, the
             # practice catalog and its scripts, the composer, and the gate with its fixed case set.
+            # feedback-eval-panel.yml composes the safety subset on the same composer inputs.
             feedback-eval:
               - 'server/application/src/main/resources/agent/*.md'
               - 'server/application/src/main/resources/agent/mentor/**'
@@ -841,23 +842,8 @@ jobs:
         with:
           install: "frozen"
 
-      # G1 compares gate.json with the base, so a changed pin without a new version fails.
-      - name: Fetch the base commit
-        id: base
-        if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
-        run: |
-          git fetch --no-tags --depth=1 origin "$BASE_SHA"
-          echo "sha=$BASE_SHA" >> "$GITHUB_OUTPUT"
-
       - name: Run the feedback eval gate
-        env:
-          BASE_SHA: ${{ steps.base.outputs.sha }}
-        run: |
-          args=(--output "$RUNNER_TEMP/feedback-eval-gate")
-          if [ -n "$BASE_SHA" ]; then args+=(--base "$BASE_SHA"); fi
-          node scripts/feedback-eval-gate.ts "${args[@]}"
+        run: node scripts/feedback-eval-gate.ts --output "$RUNNER_TEMP/feedback-eval-gate"
 
       - name: Keep the gate result
         if: ${{ !cancelled() }}
