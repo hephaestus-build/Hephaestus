@@ -28,47 +28,6 @@ final class RepositoryOwnershipRatchet {
 
     static final List<Entry> ENTRIES = List.of(
             new Entry(
-                    "activity",
-                    "integration.scm.domain.pullrequestreviewthread.PullRequestReviewThreadRepository",
-                    "DDD13 (activity/SCM)",
-                    "integration.scm::spi ActivityScmFacts",
-                    Set.of("activity.ActivityEventListener")),
-            new Entry(
-                    "activity",
-                    "integration.scm.domain.repository.RepositoryRepository",
-                    "DDD13 (activity/SCM)",
-                    "integration.scm::spi ActivityScmFacts",
-                    Set.of("activity.ActivityEventListener", "activity.ActivityFactDelivery")),
-            new Entry(
-                    "activity",
-                    "integration.scm.domain.team.TeamRepository",
-                    "DDD13 (activity/SCM)",
-                    "integration.scm::spi ActivityScmFacts",
-                    Set.of("activity.overview.ActivityScopeResolver")),
-            new Entry(
-                    "activity",
-                    "integration.scm.domain.user.UserRepository",
-                    "DDD13 (activity/SCM)",
-                    "integration.scm::spi ActivityScmFacts",
-                    Set.of(
-                            "activity.ActivityEventListener",
-                            "activity.ActivityFactDelivery",
-                            "activity.ActivityPersonWriteAdmission",
-                            "activity.overview.ActivityAutomationService",
-                            "activity.overview.ActivityWorkAssembler")),
-            new Entry(
-                    "activity",
-                    "integration.scm.workspace.ScmMemberRepository",
-                    "DDD13 (activity/SCM)",
-                    "integration.scm::spi ActivityScmFacts",
-                    Set.of("activity.overview.ActivityScopeResolver")),
-            new Entry(
-                    "integration",
-                    "integration.scm.domain.user.UserRepository",
-                    "DDD14 (identity/SCM)",
-                    "integration.scm::spi ScmIdentityLookup",
-                    Set.of("integration.identity.connect.RegistrationToGitProviderResolver")),
-            new Entry(
                     "integration.core",
                     "workspace.WorkspaceRepository",
                     "DDD9 (ROLE)",

@@ -2,9 +2,8 @@ package de.tum.cit.aet.hephaestus.activity.overview;
 
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.team.Team;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.team.TeamRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
-import de.tum.cit.aet.hephaestus.integration.scm.workspace.ScmMemberRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.spi.ActivityScmFacts;
 import de.tum.cit.aet.hephaestus.integration.scm.workspace.WorkspaceTeamScopeResolver;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceActorSelector;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceQueries;
@@ -28,18 +27,17 @@ class ActivityScopeResolver {
                     (User user) -> user.getName() != null ? user.getName() : user.getLogin(), NAMES)
             .thenComparing(User::getLogin, NAMES);
 
-    private final ScmMemberRepository memberships;
     private final WorkspaceActorSelector actorSelector;
     private final WorkspaceQueries workspaces;
     private final WorkspaceTeamScopeResolver teamScopes;
-    private final TeamRepository teams;
+    private final ActivityScmFacts scm;
 
     /** A member of the workspace by login, including one hidden from workspace activity. */
     @Transactional(readOnly = true)
     public User member(long workspaceId, String login) {
         return actorSelector
                 .connectedProviderId(workspaceId)
-                .flatMap(providerId -> memberships.findMemberByLogin(workspaceId, login, providerId))
+                .flatMap(providerId -> scm.member(workspaceId, login, providerId))
                 .orElseThrow(() -> new EntityNotFoundException("Member", login));
     }
 
@@ -64,8 +62,7 @@ class ActivityScopeResolver {
         var workspace = workspaces.organizationScope(workspaceId).orElseThrow();
         return teamScopes
                 .resolve(workspace)
-                .map(scope ->
-                        teams.findAllByOrganizationIgnoreCaseAndProviderId(scope.accountLogin(), scope.providerId()))
+                .map(scope -> scm.organizationTeams(scope.accountLogin(), scope.providerId()))
                 .orElse(List.of());
     }
 }

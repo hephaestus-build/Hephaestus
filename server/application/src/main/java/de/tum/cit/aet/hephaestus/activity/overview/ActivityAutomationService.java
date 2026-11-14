@@ -9,7 +9,7 @@ import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditPort;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditSnapshot;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyFence;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.spi.ActivityScmFacts;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceQueries;
 import jakarta.persistence.EntityManager;
@@ -29,7 +29,7 @@ class ActivityAutomationService {
     @PersistenceContext
     private @Nullable EntityManager entityManager;
 
-    private final UserRepository users;
+    private final ActivityScmFacts scm;
     private final ActivityPeopleQueryRepository people;
     private final ConfigAuditPort audit;
     private final PersonDataCopyFence fence;
@@ -57,7 +57,7 @@ class ActivityAutomationService {
             var classification = new ActivityAutomation();
             classification.setWorkspace(
                     Objects.requireNonNull(entityManager).getReference(Workspace.class, workspace.id()));
-            classification.setUser(users.getReferenceById(userId));
+            classification.setUser(scm.userReference(userId));
             automation.save(classification);
         } else {
             automation.deleteById(id);

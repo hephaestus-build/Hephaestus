@@ -2,14 +2,10 @@ package de.tum.cit.aet.hephaestus.activity;
 
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReview;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewthread.PullRequestReviewThread;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewthread.PullRequestReviewThreadRepository;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.events.ScmDomainEvent;
 import de.tum.cit.aet.hephaestus.integration.scm.events.ScmEventIdentity;
+import de.tum.cit.aet.hephaestus.integration.scm.spi.ActivityScmFacts;
 import java.time.Instant;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -31,9 +27,7 @@ public class ActivityEventListener {
 
     private final ActivityEventService activityEventService;
     private final ActivityFactDelivery activityFacts;
-    private final PullRequestReviewThreadRepository reviewThreadRepository;
-    private final UserRepository userRepository;
-    private final RepositoryRepository repositoryRepository;
+    private final ActivityScmFacts scm;
 
     @Nullable
     private Long validScopeId(String eventName, Long entityId, @Nullable Long scopeId) {
@@ -44,13 +38,13 @@ public class ActivityEventListener {
     }
 
     /**
-     * Gets the actor (User) for an activity event, or null if the actor is unknown or doesn't exist.
+     * Gets the actor id for an activity event, or null if the actor is unknown or doesn't exist.
      *
      * <p>When an author ID is null (e.g., GitHub user deleted, organization bot, etc.),
      * we return null rather than skipping the event. This preserves the activity record
      * for the audit trail and repository metrics.
      *
-     * <p>Uses {@code findById()} to verify the user exists before returning a reference.
+     * <p>Reads the mirrored user to verify it exists before returning its id.
      * This prevents FK constraint violations when webhook events reference users
      * that haven't been synced to the local database (e.g., external collaborators,
      * deleted users, or users outside the monitored scope).
@@ -59,34 +53,27 @@ public class ActivityEventListener {
      * and events where the original actor is no longer known.
      *
      * @param authorId the author ID from the event payload (nullable)
-     * @return User reference if authorId is present and user exists, null otherwise
+     * @return the author id if it is present and the user exists, null otherwise
      */
     @Nullable
-    private User getActorOrNull(@Nullable Long authorId) {
+    private Long actorIdOrNull(@Nullable Long authorId) {
         if (authorId == null) {
             return null;
         }
-        return userRepository.findById(authorId).orElse(null);
+        return scm.user(authorId).map(User::getId).orElse(null);
     }
 
     private void record(
             Long workspaceId,
             ActivityEventType type,
             Instant occurredAt,
-            @Nullable User actor,
-            @Nullable Repository repository,
+            @Nullable Long actorId,
+            @Nullable Long repositoryId,
             ActivityTargetType targetType,
             Long targetId,
             @Nullable String sourceKey) {
         activityFacts.publish(new ActivityFact(
-                workspaceId,
-                type,
-                occurredAt,
-                actor != null ? actor.getId() : null,
-                repository != null ? repository.getId() : null,
-                targetType,
-                targetId,
-                sourceKey));
+                workspaceId, type, occurredAt, actorId, repositoryId, targetType, targetId, sourceKey));
     }
 
     private void recordDeleted(
@@ -121,8 +108,8 @@ public class ActivityEventListener {
                 scopeId,
                 ActivityEventType.PULL_REQUEST_OPENED,
                 createdAt,
-                userRepository.getReferenceById(authorId),
-                repositoryRepository.getReferenceById(pr.repository().id()),
+                authorId,
+                pr.repository().id(),
                 ActivityTargetType.PULL_REQUEST,
                 pr.id(),
                 null);
@@ -152,8 +139,8 @@ public class ActivityEventListener {
                 scopeId,
                 ActivityEventType.PULL_REQUEST_MERGED,
                 finalOccurredAt,
-                userRepository.getReferenceById(authorId),
-                repositoryRepository.getReferenceById(pr.repository().id()),
+                authorId,
+                pr.repository().id(),
                 ActivityTargetType.PULL_REQUEST,
                 pr.id(),
                 null);
@@ -185,8 +172,8 @@ public class ActivityEventListener {
                 scopeId,
                 ActivityEventType.PULL_REQUEST_CLOSED,
                 finalOccurredAt,
-                userRepository.getReferenceById(authorId),
-                repositoryRepository.getReferenceById(pr.repository().id()),
+                authorId,
+                pr.repository().id(),
                 ActivityTargetType.PULL_REQUEST,
                 pr.id(),
                 null);
@@ -210,8 +197,8 @@ public class ActivityEventListener {
                 scopeId,
                 ActivityEventType.PULL_REQUEST_REOPENED,
                 occurredAt,
-                userRepository.getReferenceById(authorId),
-                repositoryRepository.getReferenceById(pr.repository().id()),
+                authorId,
+                pr.repository().id(),
                 ActivityTargetType.PULL_REQUEST,
                 pr.id(),
                 ScmEventIdentity.of(event));
@@ -235,8 +222,8 @@ public class ActivityEventListener {
                 scopeId,
                 ActivityEventType.PULL_REQUEST_READY,
                 occurredAt,
-                userRepository.getReferenceById(authorId),
-                repositoryRepository.getReferenceById(pr.repository().id()),
+                authorId,
+                pr.repository().id(),
                 ActivityTargetType.PULL_REQUEST,
                 pr.id(),
                 ScmEventIdentity.of(event));
@@ -263,8 +250,8 @@ public class ActivityEventListener {
                 scopeId,
                 ActivityEventType.PULL_REQUEST_DRAFTED,
                 occurredAt,
-                userRepository.getReferenceById(authorId),
-                repositoryRepository.getReferenceById(pr.repository().id()),
+                authorId,
+                pr.repository().id(),
                 ActivityTargetType.PULL_REQUEST,
                 pr.id(),
                 ScmEventIdentity.of(event));
@@ -289,8 +276,8 @@ public class ActivityEventListener {
                 scopeId,
                 ActivityEventType.PULL_REQUEST_SYNCHRONIZED,
                 occurredAt,
-                userRepository.getReferenceById(authorId),
-                repositoryRepository.getReferenceById(pr.repository().id()),
+                authorId,
+                pr.repository().id(),
                 ActivityTargetType.PULL_REQUEST,
                 pr.id(),
                 ScmEventIdentity.of(event));
@@ -314,8 +301,8 @@ public class ActivityEventListener {
                 scopeId,
                 ActivityEventType.PULL_REQUEST_LABELED,
                 occurredAt,
-                userRepository.getReferenceById(authorId),
-                repositoryRepository.getReferenceById(pr.repository().id()),
+                authorId,
+                pr.repository().id(),
                 ActivityTargetType.PULL_REQUEST,
                 pr.id(),
                 null);
@@ -339,8 +326,8 @@ public class ActivityEventListener {
                 scopeId,
                 ActivityEventType.PULL_REQUEST_UNLABELED,
                 occurredAt,
-                userRepository.getReferenceById(authorId),
-                repositoryRepository.getReferenceById(pr.repository().id()),
+                authorId,
+                pr.repository().id(),
                 ActivityTargetType.PULL_REQUEST,
                 pr.id(),
                 null);
@@ -380,8 +367,8 @@ public class ActivityEventListener {
                 scopeId,
                 mapReviewState(reviewData.state()),
                 occurredAt,
-                userRepository.getReferenceById(authorId),
-                repositoryRepository.getReferenceById(repositoryId),
+                authorId,
+                repositoryId,
                 ActivityTargetType.REVIEW,
                 reviewData.id(),
                 null);
@@ -413,8 +400,8 @@ public class ActivityEventListener {
                 scopeId,
                 ActivityEventType.REVIEW_DISMISSED,
                 occurredAt,
-                userRepository.getReferenceById(authorId),
-                repositoryRepository.getReferenceById(repositoryId),
+                authorId,
+                repositoryId,
                 ActivityTargetType.REVIEW,
                 reviewData.id(),
                 ScmEventIdentity.of(event));
@@ -455,8 +442,8 @@ public class ActivityEventListener {
                 scopeId,
                 ActivityEventType.REVIEW_EDITED,
                 occurredAt,
-                userRepository.getReferenceById(authorId),
-                repositoryRepository.getReferenceById(repositoryId),
+                authorId,
+                repositoryId,
                 ActivityTargetType.REVIEW,
                 reviewData.id(),
                 null);
@@ -487,8 +474,8 @@ public class ActivityEventListener {
                 scopeId,
                 ActivityEventType.COMMENT_CREATED,
                 occurredAt,
-                userRepository.getReferenceById(authorId),
-                repositoryRepository.getReferenceById(repositoryId),
+                authorId,
+                repositoryId,
                 ActivityTargetType.ISSUE_COMMENT,
                 commentData.id(),
                 null);
@@ -525,8 +512,8 @@ public class ActivityEventListener {
                 scopeId,
                 ActivityEventType.COMMENT_UPDATED,
                 occurredAt,
-                userRepository.getReferenceById(authorId),
-                repositoryRepository.getReferenceById(repositoryId),
+                authorId,
+                repositoryId,
                 ActivityTargetType.ISSUE_COMMENT,
                 commentData.id(),
                 ScmEventIdentity.of(event));
@@ -590,8 +577,8 @@ public class ActivityEventListener {
                 scopeId,
                 ActivityEventType.REVIEW_COMMENT_CREATED,
                 occurredAt,
-                userRepository.getReferenceById(authorId),
-                repositoryRepository.getReferenceById(repositoryId),
+                authorId,
+                repositoryId,
                 ActivityTargetType.REVIEW_COMMENT,
                 commentData.id(),
                 null);
@@ -623,8 +610,8 @@ public class ActivityEventListener {
                 scopeId,
                 ActivityEventType.REVIEW_COMMENT_EDITED,
                 occurredAt,
-                userRepository.getReferenceById(authorId),
-                repositoryRepository.getReferenceById(repositoryId),
+                authorId,
+                repositoryId,
                 ActivityTargetType.REVIEW_COMMENT,
                 commentData.id(),
                 ScmEventIdentity.of(event));
@@ -672,35 +659,30 @@ public class ActivityEventListener {
             return;
         }
         // Fetch the thread to get repository and resolver info
-        PullRequestReviewThread thread =
-                reviewThreadRepository.findById(threadData.id()).orElse(null);
+        var thread = scm.reviewThread(threadData.id()).orElse(null);
         if (thread == null) {
             log.debug("Skipping review thread resolved event (thread not found): threadId={}", threadData.id());
             return;
         }
-        if (thread.getPullRequest() == null || thread.getPullRequest().getRepository() == null) {
+        Long repositoryId = thread.repositoryId();
+        if (repositoryId == null) {
             log.debug("Skipping review thread resolved event (missing PR or repository): threadId={}", threadData.id());
             return;
         }
         // The resolver might be different from the PR author - use resolvedBy if available
-        Long resolverId = thread.getResolvedBy() != null
-                ? thread.getResolvedBy().getId()
-                : (thread.getPullRequest().getAuthor() != null
-                        ? thread.getPullRequest().getAuthor().getId()
-                        : null);
+        Long resolverId = thread.resolvedById() != null ? thread.resolvedById() : thread.pullRequestAuthorId();
         if (resolverId == null) {
             log.debug("Skipping review thread resolved event (no resolver found): threadId={}", threadData.id());
             return;
         }
-        Long repositoryId = thread.getPullRequest().getRepository().getId();
         record(
                 scopeId,
                 ActivityEventType.REVIEW_THREAD_RESOLVED,
                 threadData.resolvedAt() != null
                         ? threadData.resolvedAt()
                         : event.context().occurredAt(),
-                userRepository.getReferenceById(resolverId),
-                repositoryRepository.getReferenceById(repositoryId),
+                resolverId,
+                repositoryId,
                 ActivityTargetType.REVIEW_THREAD,
                 threadData.id(),
                 ScmEventIdentity.of(event));
@@ -720,32 +702,29 @@ public class ActivityEventListener {
             return;
         }
         // Fetch the thread to get repository info
-        PullRequestReviewThread thread =
-                reviewThreadRepository.findById(threadData.id()).orElse(null);
+        var thread = scm.reviewThread(threadData.id()).orElse(null);
         if (thread == null) {
             log.debug("Skipping review thread unresolved event (thread not found): threadId={}", threadData.id());
             return;
         }
-        if (thread.getPullRequest() == null || thread.getPullRequest().getRepository() == null) {
+        Long repositoryId = thread.repositoryId();
+        if (repositoryId == null) {
             log.debug(
                     "Skipping review thread unresolved event (missing PR or repository): threadId={}", threadData.id());
             return;
         }
         // For unresolved, we use the PR author since we don't track who unresolved it
-        Long userId = thread.getPullRequest().getAuthor() != null
-                ? thread.getPullRequest().getAuthor().getId()
-                : null;
+        Long userId = thread.pullRequestAuthorId();
         if (userId == null) {
             log.debug("Skipping review thread unresolved event (no user found): threadId={}", threadData.id());
             return;
         }
-        Long repositoryId = thread.getPullRequest().getRepository().getId();
         record(
                 scopeId,
                 ActivityEventType.REVIEW_THREAD_UNRESOLVED,
                 event.context().occurredAt(),
-                userRepository.getReferenceById(userId),
-                repositoryRepository.getReferenceById(repositoryId),
+                userId,
+                repositoryId,
                 ActivityTargetType.REVIEW_THREAD,
                 threadData.id(),
                 null);
@@ -770,7 +749,7 @@ public class ActivityEventListener {
         if (scopeId == null) {
             return;
         }
-        User actor = getActorOrNull(issueData.authorId());
+        Long actor = actorIdOrNull(issueData.authorId());
         // Log unknown authors for observability, but don't skip the event
         if (actor == null) {
             log.info(
@@ -785,7 +764,7 @@ public class ActivityEventListener {
                 ActivityEventType.ISSUE_CREATED,
                 occurredAt,
                 actor,
-                repositoryRepository.getReferenceById(issueData.repository().id()),
+                issueData.repository().id(),
                 ActivityTargetType.ISSUE,
                 issueData.id(),
                 null);
@@ -819,8 +798,8 @@ public class ActivityEventListener {
                 scopeId,
                 ActivityEventType.ISSUE_CLOSED,
                 finalOccurredAt,
-                getActorOrNull(issueData.authorId()),
-                repositoryRepository.getReferenceById(issueData.repository().id()),
+                actorIdOrNull(issueData.authorId()),
+                issueData.repository().id(),
                 ActivityTargetType.ISSUE,
                 issueData.id(),
                 null);
@@ -850,8 +829,8 @@ public class ActivityEventListener {
                 scopeId,
                 ActivityEventType.ISSUE_REOPENED,
                 occurredAt,
-                getActorOrNull(issueData.authorId()),
-                repositoryRepository.getReferenceById(issueData.repository().id()),
+                actorIdOrNull(issueData.authorId()),
+                issueData.repository().id(),
                 ActivityTargetType.ISSUE,
                 issueData.id(),
                 ScmEventIdentity.of(event));
@@ -906,8 +885,8 @@ public class ActivityEventListener {
                 scopeId,
                 ActivityEventType.ISSUE_LABELED,
                 occurredAt,
-                getActorOrNull(issueData.authorId()),
-                repositoryRepository.getReferenceById(issueData.repository().id()),
+                actorIdOrNull(issueData.authorId()),
+                issueData.repository().id(),
                 ActivityTargetType.ISSUE,
                 issueData.id(),
                 null);
@@ -937,8 +916,8 @@ public class ActivityEventListener {
                 scopeId,
                 ActivityEventType.ISSUE_UNLABELED,
                 occurredAt,
-                getActorOrNull(issueData.authorId()),
-                repositoryRepository.getReferenceById(issueData.repository().id()),
+                actorIdOrNull(issueData.authorId()),
+                issueData.repository().id(),
                 ActivityTargetType.ISSUE,
                 issueData.id(),
                 null);
@@ -971,8 +950,8 @@ public class ActivityEventListener {
                 scopeId,
                 ActivityEventType.ISSUE_TYPED,
                 occurredAt,
-                getActorOrNull(issueData.authorId()),
-                repositoryRepository.getReferenceById(issueData.repository().id()),
+                actorIdOrNull(issueData.authorId()),
+                issueData.repository().id(),
                 ActivityTargetType.ISSUE,
                 issueData.id(),
                 null);
@@ -1005,8 +984,8 @@ public class ActivityEventListener {
                 scopeId,
                 ActivityEventType.ISSUE_UNTYPED,
                 occurredAt,
-                getActorOrNull(issueData.authorId()),
-                repositoryRepository.getReferenceById(issueData.repository().id()),
+                actorIdOrNull(issueData.authorId()),
+                issueData.repository().id(),
                 ActivityTargetType.ISSUE,
                 issueData.id(),
                 null);
@@ -1039,14 +1018,14 @@ public class ActivityEventListener {
         if (scopeId == null) {
             return;
         }
-        User actor = getActorOrNull(commitData.authorId());
+        Long actor = actorIdOrNull(commitData.authorId());
         Instant occurredAt = commitData.authoredAt();
         record(
                 scopeId,
                 ActivityEventType.COMMIT_CREATED,
                 occurredAt,
                 actor,
-                repositoryRepository.getReferenceById(commitData.repositoryId()),
+                commitData.repositoryId(),
                 ActivityTargetType.COMMIT,
                 commitData.id(),
                 null);

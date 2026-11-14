@@ -15,15 +15,13 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.common.DataSource;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReview;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewthread.PullRequestReviewThreadRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.events.EventContext;
 import de.tum.cit.aet.hephaestus.integration.scm.events.RepositoryRef;
 import de.tum.cit.aet.hephaestus.integration.scm.events.ScmDomainEvent;
 import de.tum.cit.aet.hephaestus.integration.scm.events.ScmEventPayload;
+import de.tum.cit.aet.hephaestus.integration.scm.spi.ActivityScmFacts;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Instant;
 import java.util.Optional;
@@ -50,13 +48,7 @@ class ActivityEventListenerTest extends BaseUnitTest {
     private ActivityFactDelivery activityFacts;
 
     @Mock
-    private PullRequestReviewThreadRepository reviewThreadRepository;
-
-    @Mock
-    private UserRepository userRepository;
-
-    @Mock
-    private RepositoryRepository repositoryRepository;
+    private ActivityScmFacts scm;
 
     private ActivityEventListener listener;
 
@@ -65,8 +57,7 @@ class ActivityEventListenerTest extends BaseUnitTest {
 
     @BeforeEach
     void setUp() {
-        listener = new ActivityEventListener(
-                activityEventService, activityFacts, reviewThreadRepository, userRepository, repositoryRepository);
+        listener = new ActivityEventListener(activityEventService, activityFacts, scm);
 
         testUser = new User();
         testUser.setId(100L);
@@ -76,10 +67,7 @@ class ActivityEventListenerTest extends BaseUnitTest {
         testRepository.setId(200L);
         testRepository.setName("test-repo");
 
-        // Set up getReferenceById mocks - these return proxy references without DB queries
-        when(userRepository.getReferenceById(100L)).thenReturn(testUser);
-        when(repositoryRepository.getReferenceById(200L)).thenReturn(testRepository);
-        when(userRepository.findById(100L)).thenReturn(Optional.of(testUser));
+        when(scm.user(100L)).thenReturn(Optional.of(testUser));
     }
 
     @Nested
@@ -101,8 +89,6 @@ class ActivityEventListenerTest extends BaseUnitTest {
                     ActivityTargetType.PULL_REQUEST,
                     1L,
                     null);
-            verify(userRepository).getReferenceById(100L);
-            verify(repositoryRepository).getReferenceById(200L);
         }
 
         @Test
@@ -153,7 +139,6 @@ class ActivityEventListenerTest extends BaseUnitTest {
                     ActivityTargetType.PULL_REQUEST,
                     2L,
                     null);
-            verify(userRepository, never()).getReferenceById(999L);
         }
 
         @Test
