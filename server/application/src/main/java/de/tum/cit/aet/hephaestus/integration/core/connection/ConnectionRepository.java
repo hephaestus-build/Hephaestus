@@ -150,8 +150,10 @@ public interface ConnectionRepository extends JpaRepository<Connection, Long> {
     @WorkspaceAgnostic("Unresolved pre-cutover removals prohibit adoption until their durable identity is captured")
     List<Connection> findByStateAndProviderTeardownRequestedAtNotNull(IntegrationState state);
 
+    /** Oldest request first, so the most overdue credential is erased first. */
     @WorkspaceAgnostic("The expiry of retained credentials runs across workspaces")
-    List<Connection> findByStateAndProviderTeardownRequestedAtBefore(IntegrationState state, Instant cutoff);
+    List<Connection> findByStateAndProviderTeardownRequestedAtBeforeOrderByProviderTeardownRequestedAtAsc(
+            IntegrationState state, Instant cutoff);
 
     @Query("""
         SELECT new de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionMaintenanceQueries$WebhookCleanupCandidate(

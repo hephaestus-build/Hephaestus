@@ -113,15 +113,7 @@ class ConnectionDisconnectErasureIntegrationTest extends AbstractWorkspaceIntegr
         workspace = createWorkspace(
                 "disconnect-erase-" + suffix, "Disconnect Erase", "erase-org-" + suffix, AccountType.ORG, owner);
         ensureAdminMembership(workspace);
-        long installationId = System.nanoTime();
-        Connection github = new Connection(
-                workspace,
-                IntegrationKind.GITHUB,
-                Long.toString(installationId),
-                new ConnectionConfig.GitHubAppConfig(installationId, workspace.getAccountLogin(), null, Set.of()));
-        github.setCredentials(new InstallationCredential(installationId, "app"), credentialConverter);
-        ConnectionFixtures.reachState(github, IntegrationState.ACTIVE);
-        connection = connectionRepository.save(github);
+        connection = activeGitHubConnection(workspace);
         RepositoryToMonitor monitor = new RepositoryToMonitor();
         monitor.setNativeId(1L);
         monitor.setNameWithOwner(workspace.getAccountLogin() + "/disconnect-erase");
@@ -131,6 +123,7 @@ class ConnectionDisconnectErasureIntegrationTest extends AbstractWorkspaceIntegr
 
     @AfterEach
     void dropBlockers() {
+        schemaOwner.execute("DROP TRIGGER IF EXISTS " + BLOCK + " ON connection");
         schemaOwner.execute("DROP TRIGGER IF EXISTS " + BLOCK + " ON repository_to_monitor");
         schemaOwner.execute("DROP TRIGGER IF EXISTS " + BLOCK + " ON connection_audit");
         schemaOwner.execute("DROP FUNCTION IF EXISTS " + BLOCK + "()");
@@ -240,6 +233,43 @@ class ConnectionDisconnectErasureIntegrationTest extends AbstractWorkspaceIntegr
     }
 
     @Test
+    void shouldEraseTheOtherExpiredCredentialsWhenOneConnectionCannotBeErased() {
+        disconnect(connection);
+        User otherOwner = persistUser("disconnect-erase-poisoned-" + System.nanoTime());
+        Workspace other = createWorkspace(
+                "disconnect-poisoned-" + System.nanoTime(),
+                "Disconnect Poisoned",
+                "poisoned-org-" + System.nanoTime(),
+                AccountType.ORG,
+                otherOwner);
+        Connection poisoned = activeGitHubConnection(other);
+        disconnect(poisoned);
+        // The poisoned connection expired first, so the sweep reaches it before the healthy one.
+        expireTeardownRequest(poisoned, Duration.ofHours(26));
+        expireTeardownRequest(connection, Duration.ofHours(25));
+        createBlockFunction();
+        schemaOwner.execute("CREATE TRIGGER " + BLOCK + " BEFORE UPDATE ON connection FOR EACH ROW WHEN (OLD.id = "
+                + poisoned.getId() + ") EXECUTE FUNCTION " + BLOCK + "()");
+
+        new ProviderTeardown(
+                        connectionRepository,
+                        credentialConverter,
+                        resourceRepairs,
+                        repairDispatcher,
+                        transactionManager,
+                        Clock.systemUTC())
+                .expire();
+
+        assertThat(connectionRepository.findById(poisoned.getId()).orElseThrow().getCredentialsEncrypted())
+                .isNotNull();
+        assertThat(connectionRepository
+                        .findById(connection.getId())
+                        .orElseThrow()
+                        .getCredentialsEncrypted())
+                .isNull();
+    }
+
+    @Test
     void shouldEraseLocallyAndRetainTheFenceWhenTheProviderCannotConfirmRemoval() {
         var purge = new ConnectionPurgeContributor(connectionRepository, connectionService, teardowns, strategies);
         new TransactionTemplate(transactionManager)
@@ -325,9 +355,13 @@ class ConnectionDisconnectErasureIntegrationTest extends AbstractWorkspaceIntegr
     }
 
     private void disconnect() {
+        disconnect(connection);
+    }
+
+    private void disconnect(Connection target) {
         var actor = persistAccount("disconnect administrator " + UUID.randomUUID());
         connectionService.disconnect(
-                connection,
+                target,
                 TransitionRequest.byAccount(
                         IntegrationState.UNINSTALLED,
                         "DISCONNECT",
@@ -336,6 +370,26 @@ class ConnectionDisconnectErasureIntegrationTest extends AbstractWorkspaceIntegr
                         UUID.randomUUID().toString(),
                         null),
                 strategy(IntegrationKind.GITHUB));
+    }
+
+    private Connection activeGitHubConnection(Workspace owner) {
+        long installationId = System.nanoTime();
+        Connection github = new Connection(
+                owner,
+                IntegrationKind.GITHUB,
+                Long.toString(installationId),
+                new ConnectionConfig.GitHubAppConfig(installationId, owner.getAccountLogin(), null, Set.of()));
+        github.setCredentials(new InstallationCredential(installationId, "app"), credentialConverter);
+        ConnectionFixtures.reachState(github, IntegrationState.ACTIVE);
+        return connectionRepository.save(github);
+    }
+
+    private void expireTeardownRequest(Connection target, Duration age) {
+        jdbcTemplate.update(
+                "UPDATE connection SET provider_teardown_requested_at = ? WHERE workspace_id = ? AND id = ?",
+                Timestamp.from(Instant.now().minus(age)),
+                target.getWorkspace().getId(),
+                target.getId());
     }
 
     private ConnectionStrategy strategy(IntegrationKind kind) {

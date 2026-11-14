@@ -90,6 +90,11 @@ A failed run of a scheduled job logs `scheduled.job.failed`.
 The next run retries the job, so a transient failure is a `WARN` with `error.transient` set to `true`.
 Any other failure is an `ERROR` with its stack trace.
 
+A sweep that handles rows one at a time logs `scheduled.row.failed` when one row fails and the failure is not transient.
+The record has `sweep.name`, `workspace.id` and `row.id`, and it is an `ERROR` with its stack trace.
+The sweep goes on with its other rows and tries the failed row again on its next run.
+A transient failure stops the pass instead and logs `scheduled.job.failed`.
+
 Run production at `INFO`.
 `DEBUG` on framework, client or driver packages can write request content, provider responses and container settings that no guard above covers.
 

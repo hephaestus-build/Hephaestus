@@ -5,10 +5,9 @@ import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackCopyRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackOutcomes;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
 import java.time.Instant;
-import java.util.Comparator;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 @Component
@@ -19,17 +18,15 @@ public class ConversationFeedbackTtlPurger {
     private final FeedbackCopyRepository copies;
     private final FeedbackOutcomes outcomes;
 
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public int expireWorkspaceBefore(long workspaceId, Instant cutoff) {
-        var expired = feedback.findExpiredConversation(workspaceId, cutoff);
-        int count = 0;
-        for (var row : expired.stream()
-                .sorted(Comparator.comparing(piece -> piece.getId().toString()))
-                .toList()) {
-            feedback.lockByIdAndWorkspaceId(row.getId(), workspaceId);
-            copies.withholdPlanned(workspaceId, row.getId(), "CONVERSATION_EXPIRED");
-            count += outcomes.expireConversation(row, cutoff);
-        }
-        return count;
+    /** Expires one row. A row that left {@code READY} after it was selected keeps its state and its planned copies. */
+    @Transactional
+    public int expire(long workspaceId, UUID id, Instant cutoff) {
+        return feedback.lockByIdAndWorkspaceId(id, workspaceId)
+                .map(row -> {
+                    int expired = outcomes.expireConversation(row, cutoff);
+                    if (expired == 1) copies.withholdPlanned(workspaceId, id, "CONVERSATION_EXPIRED");
+                    return expired;
+                })
+                .orElse(0);
     }
 }

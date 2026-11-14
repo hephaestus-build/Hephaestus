@@ -1,8 +1,10 @@
 package de.tum.cit.aet.hephaestus.integration.slack.item;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -31,6 +33,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -93,6 +96,46 @@ class SlackThreadEventSchedulerTest extends BaseUnitTest {
         assertThat(captured.getValue().name()).isEqualTo(ThreadEvents.SETTLED);
         assertThat(captured.getValue().foundBy()).isEqualTo(FoundBy.SYNC);
         assertThat(captured.getValue().requestedById()).isNull();
+    }
+
+    @Test
+    void shouldRecordTheOtherThreadsWhenOneThreadCannotBeRead() {
+        String last = (NOW.getEpochSecond() - 1200) + ".000000";
+        var poisoned = new ConversationThreadCandidate(
+                8L, 20L, "C2", "Channel", "1680000000.000000", last, null, List.of(57L));
+        var healthy = new ConversationThreadCandidate(
+                7L, 19L, "C1", "Channel", "1690000000.000000", last, null, List.of(55L, 56L));
+        when(candidates.settledCandidates(4)).thenReturn(List.of(poisoned, healthy));
+        when(candidates.liveTurnCount(8L, "C2", poisoned.threadTs()))
+                .thenThrow(new IllegalStateException("unreadable thread"));
+        when(candidates.liveTurnCount(7L, "C1", healthy.threadTs())).thenReturn(4L);
+        when(candidates.liveTurnCountSince(7L, "C1", healthy.threadTs(), null)).thenReturn(4L);
+        when(manager.getTransaction(any())).thenReturn(mock(TransactionStatus.class));
+        when(items.upsert(any())).thenReturn(item);
+        when(source.current(item)).thenReturn(Optional.of(snapshot(version)));
+
+        assertThat(scheduler().sweepNow()).isEqualTo(1);
+
+        var captured = ArgumentCaptor.forClass(ItemEventInput.class);
+        verify(items).record(captured.capture());
+        assertThat(captured.getValue().workspaceId()).isEqualTo(7L);
+        assertThat(captured.getValue().itemId()).isEqualTo(41L);
+    }
+
+    @Test
+    void shouldStopThePassWhenTheDatabaseIsUnavailable() {
+        String last = (NOW.getEpochSecond() - 1200) + ".000000";
+        var first = new ConversationThreadCandidate(
+                8L, 20L, "C2", "Channel", "1680000000.000000", last, null, List.of(57L));
+        var second = new ConversationThreadCandidate(
+                7L, 19L, "C1", "Channel", "1690000000.000000", last, null, List.of(55L, 56L));
+        when(candidates.settledCandidates(4)).thenReturn(List.of(first, second));
+        when(candidates.liveTurnCount(8L, "C2", first.threadTs()))
+                .thenThrow(new DataAccessResourceFailureException("database unavailable"));
+
+        assertThatThrownBy(() -> scheduler().sweepNow()).isInstanceOf(DataAccessResourceFailureException.class);
+
+        verify(candidates, never()).liveTurnCount(7L, "C1", second.threadTs());
     }
 
     @Test
