@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { glob, readFile } from "node:fs/promises";
 import { availableParallelism } from "node:os";
 import { fileURLToPath } from "node:url";
 
@@ -61,6 +61,31 @@ export function incompleteAlerts(rules: string, tests: string, runbook: string):
 }
 
 /**
+ * The counters of samplers that keep their gauges' last values when a pass fails. While a sampler fails, an alert on
+ * those gauges reads an old value and stays silent, so each such counter needs an alert of its own.
+ */
+export function unwatchedSamplers(rules: string, javaSources: readonly string[]): string[] {
+	const expressions = asArray(asRecord(parse(rules), rulesFile).groups, "groups")
+		.flatMap((group) => asArray(asRecord(group, "group").rules, "rules"))
+		.map((rule) => asRecord(rule, "rule"))
+		.filter((rule) => typeof rule.alert === "string")
+		.map((rule) => String(rule.expr));
+	const counters = new Set(
+		javaSources.flatMap((source) =>
+			[...source.matchAll(/"(?<meter>[a-z0-9_.]+\.sampler\.failures?)"/gu)].map(
+				(match) => `${(match.groups?.meter ?? "").replaceAll(".", "_")}_total`,
+			),
+		),
+	);
+	return [...counters]
+		.filter(
+			(counter) =>
+				!expressions.some((expression) => new RegExp(`\\b${counter}\\b`, "u").test(expression)),
+		)
+		.map((counter) => `${counter}: no alert in ${rulesFile} reads this sampler failure counter`);
+}
+
+/**
  * The test groups split round-robin into `parts` lists of exact `--run` patterns. promtool runs one
  * group at a time on one core, which took 7 of the tooling leg's 9 minutes, so each list gets a
  * promtool process of its own.
@@ -81,12 +106,27 @@ export function runPatterns(tests: string, parts: number): string[][] {
 
 const read = async (path: string) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 
-if (import.meta.main) {
-	const gaps = incompleteAlerts(
-		await read(`deploy/chart/hephaestus/files/${rulesFile}`),
-		await read(`deploy/chart/hephaestus/files/${testsFile}`),
-		await read(runbookFile),
+/** The application's main Java sources, which declare the meter names. */
+export async function readJavaSources(): Promise<string[]> {
+	const files = await Array.fromAsync(
+		glob("server/application/src/main/java/**/*.java", {
+			cwd: fileURLToPath(new URL("..", import.meta.url)),
+		}),
 	);
+	return Promise.all(files.map(async (file) => read(file)));
+}
+
+if (import.meta.main) {
+	const rulesText = await read(`deploy/chart/hephaestus/files/${rulesFile}`);
+	const javaSources = await readJavaSources();
+	const gaps = [
+		...incompleteAlerts(
+			rulesText,
+			await read(`deploy/chart/hephaestus/files/${testsFile}`),
+			await read(runbookFile),
+		),
+		...unwatchedSamplers(rulesText, javaSources),
+	];
 	if (gaps.length > 0) {
 		console.error(gaps.join("\n"));
 		process.exit(1);

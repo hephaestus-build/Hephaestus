@@ -2,7 +2,13 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 
-import { incompleteAlerts, RUNBOOK_URL, runPatterns } from "./check-alert-rules.ts";
+import {
+	incompleteAlerts,
+	readJavaSources,
+	RUNBOOK_URL,
+	runPatterns,
+	unwatchedSamplers,
+} from "./check-alert-rules.ts";
 
 const read = async (path: string) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 
@@ -114,4 +120,37 @@ void test("the promtool groups split into parts that select each group exactly o
 	const special = runPatterns("tests:\n  - name: a (b) | c.d\n", 8);
 	assert.deepEqual(special, [[String.raw`--run=^a \(b\) \| c\.d$`]]);
 	assert.throws(() => runPatterns("tests:\n  - interval: 1m\n", 2));
+});
+
+const watching = (expr: string) =>
+	`groups:\n  - name: h\n    rules:\n      - alert: HephaestusQueueUnsampled\n        expr: ${expr}\n`;
+
+void test("a sampler failure counter without an alert is refused", () => {
+	const sources = [
+		'String WATCHED = "queue.sampler.failures";',
+		'Counter.builder("runs.sampler.failure").register(meters);',
+	];
+	assert.deepEqual(
+		unwatchedSamplers(watching("increase(queue_sampler_failures_total[15m]) > 10"), sources),
+		[
+			"runs_sampler_failure_total: no alert in hephaestus-alerts.yml reads this sampler failure counter",
+		],
+	);
+	assert.deepEqual(
+		unwatchedSamplers(
+			watching(
+				"increase(queue_sampler_failures_total[15m]) + increase(runs_sampler_failure_total[15m]) > 10",
+			),
+			sources,
+		),
+		[],
+	);
+});
+
+void test("every sampler failure counter on main has an alert", async () => {
+	const sources = await readJavaSources();
+	assert.deepEqual(
+		unwatchedSamplers(await read("deploy/chart/hephaestus/files/hephaestus-alerts.yml"), sources),
+		[],
+	);
 });
