@@ -11,7 +11,10 @@ import type {
 	WorkspaceLlmModel,
 } from "@/api/types.gen";
 import {
-	modelDetailsBodyOf,
+	workspaceModelCreateBodyOf,
+	workspaceModelUpdateBodyOf,
+} from "@/components/admin/instance-llm/llm-model-request";
+import {
 	LlmModelFields,
 	type LlmModelFieldsValue,
 	modelFieldsValueOf,
@@ -32,7 +35,6 @@ import {
 } from "@/components/ui/dialog";
 import { Spinner } from "@/components/ui/spinner";
 import type { FieldErrors, LlmModelFormField } from "@/lib/llm-form-validation";
-import { reasoningEffortOf, reasoningEffortUpdateOf } from "@/lib/reasoning-effort";
 
 export interface WorkspaceLlmModelFormDialogProps {
 	open: boolean;
@@ -106,38 +108,11 @@ function WorkspaceLlmModelFormDialogContent({
 			return;
 		}
 
-		const { price } = fields;
-		const shared = {
-			displayName: fields.displayName.trim(),
-			contextWindow: fields.contextWindow.trim() ? Number(fields.contextWindow) : undefined,
-			maxOutputTokens: fields.maxOutputTokens.trim() ? Number(fields.maxOutputTokens) : undefined,
-			...modelDetailsBodyOf(fields),
-			enabled: isEdit ? fields.enabled : false,
-			pricingMode: price.pricingMode,
-			per1mInputUsd: price.pricingMode === "PRICED" ? price.per1mInputUsd : undefined,
-			per1mOutputUsd: price.pricingMode === "PRICED" ? price.per1mOutputUsd : undefined,
-			per1mCacheReadUsd: price.pricingMode === "PRICED" ? price.per1mCacheReadUsd : undefined,
-			per1mCacheWriteUsd: price.pricingMode === "PRICED" ? price.per1mCacheWriteUsd : undefined,
-			priceNote: price.pricingMode === "NO_CHARGE" ? price.note?.trim() : undefined,
-		};
-
 		if (isEdit) {
-			onUpdate(editing.id, {
-				...shared,
-				clearBrand: fields.brand === undefined,
-				// A blank limit field hands the limit back to the provider's metadata.
-				clearContextWindow: !fields.contextWindow.trim(),
-				clearMaxOutputTokens: !fields.maxOutputTokens.trim(),
-				clearDataHandling: fields.operatedBy === undefined,
-				...reasoningEffortUpdateOf(fields.reasoningEffort),
-			} satisfies UpdateWorkspaceLlmModelRequest);
+			onUpdate(editing.id, workspaceModelUpdateBodyOf(fields));
 			return;
 		}
-		onCreate({
-			...shared,
-			reasoningEffort: reasoningEffortOf(fields.reasoningEffort),
-			upstreamModelId: fields.upstreamModelId.trim(),
-		} satisfies CreateWorkspaceLlmModelRequest);
+		onCreate(workspaceModelCreateBodyOf(fields));
 	};
 
 	return (
