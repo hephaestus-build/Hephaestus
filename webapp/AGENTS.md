@@ -74,7 +74,7 @@ Colocation does not change the rule.
 ## Which admin console a component belongs to
 
 `src/components/admin/**` holds two consoles. Six directories hold components that both render: `audit`, `integrations`, `llm`, `practices`, `practice-editor`, `usage`.
-In those, the **component name** carries the scope:
+Directly in those, the **component name** carries the scope:
 
 - `Admin*` or `Instance*` — instance-wide. Configures the deployment for every workspace.
 - `Workspace*` — scoped to one workspace.
@@ -83,11 +83,11 @@ In those, the **component name** carries the scope:
   A scope-specific field, permission check or copy string in either one silently breaks the other console.
   Nothing in the file says it has two callers.
 
-In every other directory, the components serve one console, so they stay unprefixed; a helper module may serve both.
+In every other directory, components serve one console, so they stay unprefixed; a helper module may serve both.
 A shared component never lives there.
 
 Name a new component for its scope.
-Before you edit an unprefixed component, check its caller list.
+Before you edit an unprefixed component, check its callers.
 
 A split into `admin/instance/` and `admin/workspace/` was rejected: shared components would still need a third directory.
 The prefix identifies the scope in imports and in the Storybook sidebar.
