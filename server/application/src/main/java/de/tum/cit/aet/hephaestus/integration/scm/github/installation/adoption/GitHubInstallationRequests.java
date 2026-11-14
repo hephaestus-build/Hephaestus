@@ -6,7 +6,7 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationLifecycleListener.AccountKind;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceProperties;
-import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceSummaryQuery;
 import java.util.List;
 import java.util.Optional;
 import org.jspecify.annotations.Nullable;
@@ -33,14 +33,14 @@ public class GitHubInstallationRequests {
     private final WorkspaceProperties workspaceProperties;
     private final GitProviderRegistry providers;
     private final PersonDataWriteFence fence;
-    private final WorkspaceRepository workspaces;
+    private final WorkspaceSummaryQuery workspaces;
 
     public GitHubInstallationRequests(
             GitHubInstallationRequestRepository requests,
             WorkspaceProperties workspaceProperties,
             GitProviderRegistry providers,
             PersonDataWriteFence fence,
-            WorkspaceRepository workspaces) {
+            WorkspaceSummaryQuery workspaces) {
         this.requests = requests;
         this.workspaceProperties = workspaceProperties;
         this.providers = providers;
@@ -106,7 +106,7 @@ public class GitHubInstallationRequests {
     @Transactional
     public void recordFiltered(long installationId, @Nullable Long accountId, String accountLogin, AccountKind kind) {
         if (requiresApproval()
-                && workspaces.findByInstallationId(installationId).isEmpty()) {
+                && workspaces.findStateByInstallationId(installationId).isEmpty()) {
             record(installationId, accountId, accountLogin, kind);
         }
     }

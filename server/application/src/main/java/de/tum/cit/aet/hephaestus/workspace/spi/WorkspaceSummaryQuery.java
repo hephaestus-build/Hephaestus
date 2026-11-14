@@ -14,6 +14,9 @@ public interface WorkspaceSummaryQuery {
 
     Optional<WorkspaceState> findState(long workspaceId);
 
+    /** The workspace that holds or last held the GitHub App installation. */
+    Optional<WorkspaceState> findStateByInstallationId(long installationId);
+
     /** Hold the tenant root steady until the caller's transaction ends. */
     Optional<WorkspaceState> findStateForUpdate(long workspaceId);
 
