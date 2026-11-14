@@ -189,7 +189,7 @@ try {
 			head,
 			path.join(copy, METADATA),
 			baseName,
-			path.join(copy, "webapp", "tools", "bundle-budget", "accepted-growth.json"),
+			path.join(copy, "webapp", "tools", "bundle-budget", "accepted-growth"),
 		],
 		{
 			cwd: ROOT,
