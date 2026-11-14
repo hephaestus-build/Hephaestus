@@ -177,6 +177,19 @@ export function portsOf(values: Record<string, string | undefined>): Set<number>
 	);
 }
 
+/** The host ports that a settings file sets, and the management port that follows a server port it sets. */
+export function portsSetIn(values: Record<string, string | undefined>): number[] {
+	const ports = PORTS.flatMap(({ name }) => {
+		const configured = values[name];
+		return isSet(configured) ? [Number(configured)] : [];
+	});
+	const configuredServer = values.SERVER_PORT;
+	if (isSet(configuredServer) && !isSet(values.MANAGEMENT_PORT)) {
+		ports.push(Number(configuredServer) + MANAGEMENT_OFFSET);
+	}
+	return ports;
+}
+
 /** The settings files of the other worktrees of this clone. A worktree that never ran a dev command has none. */
 async function otherWorktreeSettings(checkout: string): Promise<Record<string, string>[]> {
 	let listing: string;
@@ -213,9 +226,9 @@ async function otherWorktreeSettings(checkout: string): Promise<Record<string, s
  * no other worktree of the clone uses. A port the developer set stays, and the management port follows a server
  * port they set. Returns the ports it wrote.
  *
- * A worktree whose file sets no ports runs on the defaults. A file just created avoids those worktrees, because
- * one may be running. An older file without ports was such a worktree itself, so only ports that another
- * worktree wrote move it: the first older worktree keeps the defaults.
+ * A worktree whose file sets no ports runs on the defaults. A file just created, or one that sets some ports, avoids
+ * those worktrees, because one may be running. An older file without ports was such a worktree itself, so only
+ * ports that another file set move it: the first older worktree keeps the defaults.
  */
 export async function ensurePorts({
 	envFile,
@@ -233,10 +246,11 @@ export async function ensurePorts({
 	if (unset.length === 0) {
 		return {};
 	}
+	// A file that sets no ports belongs to a worktree that runs on the defaults. An older file of that kind
+	// keeps them unless another file set them; every other file avoids the defaults of such worktrees too.
+	const ownsTheDefaults = !created && unset.length === PORTS.length;
 	const taken = new Set(
-		others
-			.filter((other) => created || isSet(other.SERVER_PORT))
-			.flatMap((other) => [...portsOf(other)]),
+		others.flatMap((other) => (ownsTheDefaults ? portsSetIn(other) : [...portsOf(other)])),
 	);
 	const developerServer = isSet(values.SERVER_PORT) ? Number(values.SERVER_PORT) : undefined;
 	for (let set = 0; set < PORT_SETS; set += 1) {
