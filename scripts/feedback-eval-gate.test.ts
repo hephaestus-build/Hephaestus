@@ -170,7 +170,7 @@ void test("invalid fixtures fail G2 and leave the checks that need them unchecke
 	assert.match(problems(checks, "G1")[0] ?? "", /Not checked/u);
 });
 
-void test("a practice without an Applicability section or an Applies when gate fails G5 unless listed", () => {
+void test("a practice without an Applicability section fails G5 unless listed, whatever its gate or scan section says", () => {
 	const silent = {
 		slug: "new-practice",
 		automated: true,
@@ -178,9 +178,20 @@ void test("a practice without an Applicability section or an Applies when gate f
 		appliesWhen: null,
 	};
 	assert.deepEqual(problems(deterministic(inputs({ catalog: [...catalog, silent] })), "G5"), [
-		"new-practice has no Applicability section and no Applies when gate",
+		"new-practice has no Applicability section",
 		`new-practice has no pin (now ${practiceDigest(silent)})`,
 	]);
+	// An Applies when gate and a scan section do not state the occasion of a review.
+	const gated = {
+		...silent,
+		slug: "swift-practice",
+		criteria: "## The standard\nJudge it.\n\n## In a scan\nA file with no view does not apply.",
+		appliesWhen: { anyOf: [{ changedPath: ["**/*.swift"] }] },
+	};
+	assert.equal(
+		problems(deterministic(inputs({ catalog: [...catalog, gated] })), "G5")[0],
+		"swift-practice has no Applicability section",
+	);
 	// A listed gap that states its occasion makes the list stale.
 	const stated = catalog.find(
 		(practice) => practice.automated && occasionStatement(practice) !== "",
