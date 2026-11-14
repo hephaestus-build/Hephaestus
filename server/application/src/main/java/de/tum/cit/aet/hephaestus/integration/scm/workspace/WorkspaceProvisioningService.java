@@ -31,6 +31,7 @@ import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceService;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceSlugService;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceProvisioning;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceRepositoryExclusion;
 import java.time.Duration;
 import java.util.EnumMap;
 import java.util.List;
@@ -68,6 +69,7 @@ public class WorkspaceProvisioningService implements WorkspaceProvisioning {
     private final List<SelectedRepositoryVerifier> repositoryVerifiers;
     private final List<RepositoryIdentityLookup> identityLookups;
     private final ScmServerEndpointPolicy endpoints;
+    private final List<WorkspaceRepositoryExclusion> exclusions;
 
     private final Map<IntegrationKind, WorkspaceProviderAvailability> providerAvailability;
 
@@ -87,7 +89,9 @@ public class WorkspaceProvisioningService implements WorkspaceProvisioning {
             ScmServerEndpointPolicy endpoints,
             WebClient.Builder webClients,
             List<SelectedRepositoryVerifier> repositoryVerifiers,
-            List<RepositoryIdentityLookup> identityLookups) {
+            List<RepositoryIdentityLookup> identityLookups,
+            List<WorkspaceRepositoryExclusion> exclusions) {
+        this.exclusions = List.copyOf(exclusions);
         this.repositoryVerifiers = repositoryVerifiers;
         this.identityLookups = identityLookups;
         this.endpoints = endpoints;
@@ -171,6 +175,7 @@ public class WorkspaceProvisioningService implements WorkspaceProvisioning {
         config.repositoriesToMonitor().stream()
                 .map(repo -> repo == null ? null : repo.trim())
                 .filter(nameWithOwner -> !isBlank(nameWithOwner))
+                .filter(nameWithOwner -> exclusions.stream().noneMatch(exclusion -> exclusion.excludes(nameWithOwner)))
                 .forEach(nameWithOwner -> {
                     RepositoryToMonitor monitor = new RepositoryToMonitor();
                     var identity = identityLookups.stream()

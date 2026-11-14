@@ -457,7 +457,9 @@ class GitHubSyncOutsideTransactionsIntegrationTest extends BaseIntegrationTest {
                         context.getBean(GitHubExceptionClassifier.class),
                         context.getBean(GitHubGraphQlSyncCoordinator.class),
                         context.getBean("gitHubGraphQlWebClient", WebClient.class),
-                        context.getBean(TransactionTemplate.class)));
+                        context.getBean(TransactionTemplate.class),
+                        List.of(),
+                        List.of()));
     }
 
     private GitHubTeamSyncService teams() {

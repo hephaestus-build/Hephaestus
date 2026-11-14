@@ -25,7 +25,7 @@ public class WorkspaceRepositoryScopeFilterAdapter implements RepositoryScopeFil
 
     @Override
     public boolean isRepositoryAllowed(String nameWithOwner) {
-        return workspaceScopeFilter.isRepositoryAllowed(nameWithOwner);
+        return workspaceScopeFilter.isGitHubRepositoryAllowed(nameWithOwner);
     }
 
     @Override

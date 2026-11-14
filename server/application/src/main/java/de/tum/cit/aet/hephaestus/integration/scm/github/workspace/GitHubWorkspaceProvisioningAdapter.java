@@ -97,7 +97,7 @@ public class GitHubWorkspaceProvisioningAdapter implements ProvisioningListener 
         // metadata.
         if (installation.repositories() != null && !installation.repositories().isEmpty()) {
             List<RepositorySnapshot> allowedRepos = installation.repositories().stream()
-                    .filter(r -> workspaceScopeFilter.isRepositoryAllowed(r.nameWithOwner()))
+                    .filter(r -> workspaceScopeFilter.isGitHubRepositoryAllowed(r.nameWithOwner()))
                     .toList();
 
             if (allowedRepos.size() < installation.repositories().size()) {
@@ -164,7 +164,7 @@ public class GitHubWorkspaceProvisioningAdapter implements ProvisioningListener 
         }
 
         List<RepositorySnapshot> allowedRepos = repositories.stream()
-                .filter(r -> workspaceScopeFilter.isRepositoryAllowed(r.nameWithOwner()))
+                .filter(r -> workspaceScopeFilter.isGitHubRepositoryAllowed(r.nameWithOwner()))
                 .toList();
 
         if (allowedRepos.size() < repositories.size()) {

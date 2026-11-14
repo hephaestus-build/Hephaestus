@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.integration.scm.workspace;
 import de.tum.cit.aet.hephaestus.core.LoggingUtils;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.event.RepositoryMonitoringChangedEvent;
+import de.tum.cit.aet.hephaestus.core.event.RepositoryWithdrawnFromWorkspaceEvent;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionCommands;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
@@ -28,6 +29,7 @@ import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import io.micrometer.common.util.StringUtils;
 import java.util.Collection;
 import java.util.EnumMap;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -287,6 +289,39 @@ public class WorkspaceRepositoryMonitorService {
         repositoryIds.forEach(this::deleteRepositoryIfOrphaned);
     }
 
+    void withdrawExcludedRepository(Long workspaceId, Long monitorId) {
+        // A live GitLab connection, suspended too: its project on the same path is another repository, and is kept.
+        // An uninstalled one is history, and its workspace may monitor GitHub now.
+        boolean gitLab = EnumSet.of(IntegrationState.ACTIVE, IntegrationState.SUSPENDED).stream()
+                .anyMatch(state -> connectionQueries.hasConnectionInState(workspaceId, IntegrationKind.GITLAB, state));
+        if (gitLab) return;
+        Workspace workspace = workspaceRepository
+                .findByIdForUpdate(workspaceId)
+                .orElseThrow(() -> new EntityNotFoundException("Workspace", workspaceId));
+        // Re-read under the workspace lock, and ask the exclusion again: the destination may have been replaced, or the
+        // monitor renamed, since the caller looked.
+        repositoryToMonitorRepository
+                .findById(monitorId)
+                .filter(monitor -> Objects.equals(
+                        Objects.requireNonNull(monitor.getWorkspace()).getId(), workspaceId))
+                .filter(monitor -> workspaceScopeFilter.isExcluded(monitor.getNameWithOwner()))
+                .ifPresent(monitor -> {
+                    log.info(
+                            "Removed an excluded repository from a workspace: workspaceId={}, syncTargetId={}",
+                            workspaceId,
+                            monitorId);
+                    withdrawRepository(workspace, monitor);
+                });
+    }
+
+    /** Unlike a stopped monitor, this also removes the history, so the workspace keeps nothing of the repository. */
+    private void withdrawRepository(Workspace workspace, RepositoryToMonitor monitor) {
+        List<Long> repositoryIds = repositoryToMonitorRepository.findSourceRepositoryIdsForWithdrawal(monitor.getId());
+        eventPublisher.publishEvent(new RepositoryWithdrawnFromWorkspaceEvent(workspace.getId(), repositoryIds));
+        deleteRepositoryMonitor(workspace, monitor, false);
+        repositoryIds.forEach(this::deleteRepositoryIfOrphaned);
+    }
+
     @Transactional
     public Optional<Workspace> removeAllRepositoriesFromMonitor(long installationId, boolean deleteRepositories) {
         return removeAllRepositoriesInTransaction(installationId, deleteRepositories);
@@ -422,7 +457,7 @@ public class WorkspaceRepositoryMonitorService {
             boolean deferSync) {
         // Filter before processing so excluded repositories do not acquire mirror rows.
         List<InstallationRepositoryEnumerator.InstallationRepository> allowedSnapshots = snapshots.stream()
-                .filter(s -> workspaceScopeFilter.isRepositoryAllowed(s.nameWithOwner()))
+                .filter(s -> workspaceScopeFilter.isGitHubRepositoryAllowed(s.nameWithOwner()))
                 .toList();
 
         if (allowedSnapshots.size() < snapshots.size()) {
@@ -436,11 +471,15 @@ public class WorkspaceRepositoryMonitorService {
         Set<Long> desiredIds = allowedSnapshots.stream()
                 .map(InstallationRepositoryEnumerator.InstallationRepository::id)
                 .collect(Collectors.toSet());
+        Set<Long> excludedIds = snapshots.stream()
+                .filter(snapshot -> workspaceScopeFilter.isExcluded(snapshot.nameWithOwner()))
+                .map(InstallationRepositoryEnumerator.InstallationRepository::id)
+                .collect(Collectors.toSet());
         Set<String> protectedNames = protectedRepositories == null
                 ? Set.of()
                 : protectedRepositories.stream()
                         .filter(name -> !StringUtils.isBlank(name))
-                        .filter(name -> workspaceScopeFilter.isRepositoryAllowed(name))
+                        .filter(name -> workspaceScopeFilter.isGitHubRepositoryAllowed(name))
                         .map(name -> name.toLowerCase(Locale.ENGLISH))
                         .collect(Collectors.toSet());
 
@@ -456,9 +495,16 @@ public class WorkspaceRepositoryMonitorService {
                 .filter(monitor -> {
                     String name = monitor.getNameWithOwner().toLowerCase(Locale.ENGLISH);
                     boolean listed = desiredIds.contains(monitor.getNativeId());
-                    return !listed && !protectedNames.contains(name);
+                    return excludedIds.contains(monitor.getNativeId()) || (!listed && !protectedNames.contains(name));
                 })
-                .forEach(monitor -> removeMonitorAndOrphanedRepositories(workspace, monitor));
+                .forEach(monitor -> {
+                    if (excludedIds.contains(monitor.getNativeId())
+                            || workspaceScopeFilter.isExcluded(monitor.getNameWithOwner())) {
+                        withdrawRepository(workspace, monitor);
+                    } else {
+                        removeMonitorAndOrphanedRepositories(workspace, monitor);
+                    }
+                });
 
         allowedSnapshots.forEach(snapshot -> {
             if (ensureRepositoryFromSnapshot(
@@ -513,7 +559,14 @@ public class WorkspaceRepositoryMonitorService {
     }
 
     private void announceRepositoryMonitor(Workspace workspace, RepositoryToMonitor monitor, boolean deferSync) {
-        boolean repositoryAllowed = workspaceScopeFilter.isRepositoryAllowed(monitor);
+        // A GitLab project on the private repository's path is another repository, so only GitHub asks the exclusion.
+        boolean gitLab = connectionService
+                .findActiveProviderKind(workspace.getId())
+                .filter(kind -> kind == IntegrationKind.GITLAB)
+                .isPresent();
+        boolean repositoryAllowed = gitLab
+                ? workspaceScopeFilter.isRepositoryAllowed(monitor)
+                : workspaceScopeFilter.isGitHubRepositoryAllowed(monitor);
         if (deferSync) {
             log.debug(
                     "Persisted repository with deferred sync: repoName={}",

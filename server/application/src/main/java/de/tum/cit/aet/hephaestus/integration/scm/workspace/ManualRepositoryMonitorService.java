@@ -22,6 +22,7 @@ import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitor;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import de.tum.cit.aet.hephaestus.workspace.WorkspaceScopeFilter;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
@@ -49,6 +50,7 @@ public class ManualRepositoryMonitorService {
     private final Map<IntegrationKind, RepositoryIdentityLookup> repositoryIdentityLookups;
     private final GitLabRepositorySelectionService selection;
     private final ApplicationEventPublisher eventPublisher;
+    private final WorkspaceScopeFilter scopeFilter;
 
     public ManualRepositoryMonitorService(
             WorkspaceRepository workspaceRepository,
@@ -61,7 +63,9 @@ public class ManualRepositoryMonitorService {
             TransactionTemplate transactionTemplate,
             List<RepositoryIdentityLookup> repositoryIdentityLookupList,
             GitLabRepositorySelectionService selection,
-            ApplicationEventPublisher eventPublisher) {
+            ApplicationEventPublisher eventPublisher,
+            WorkspaceScopeFilter scopeFilter) {
+        this.scopeFilter = scopeFilter;
         this.workspaceRepository = workspaceRepository;
         this.repositoryToMonitorRepository = repositoryToMonitorRepository;
         this.repositoryRepository = repositoryRepository;
@@ -89,6 +93,10 @@ public class ManualRepositoryMonitorService {
             return addGitLabRepositoryToMonitor(workspace, nameWithOwner);
         }
 
+        if (scopeFilter.isExcluded(nameWithOwner)) {
+            throw new RepositoryExcludedFromWorkspacesException(nameWithOwner);
+        }
+
         Long workspaceId = workspace.getId();
         var connection = connectionQueries
                 .findActive(workspaceId, IntegrationKind.GITHUB)
@@ -114,6 +122,9 @@ public class ManualRepositoryMonitorService {
             var current = lockAnsweringConnection(workspaceId, IntegrationKind.GITHUB, connection.id(), slug);
             if (!(current.getConfig() instanceof ConnectionConfig.GitHubPatConfig config)) {
                 throw new RepositoryManagementNotAllowedException(slug);
+            }
+            if (scopeFilter.isExcluded(nameWithOwner) || scopeFilter.isExcluded(reported.fullPath())) {
+                throw new RepositoryExcludedFromWorkspacesException(nameWithOwner);
             }
             // A new token or a reconnect keeps the row; only its version shows that GitHub answered an earlier one.
             if (!Objects.equals(current.getVersion(), answeredVersion)) {
