@@ -136,13 +136,30 @@ public class ReviewServiceImpl implements ReviewService {
                             workspaces.findByIdForUpdate(request.workspaceId()).orElseThrow();
                     return switch (admit(request, workspace)) {
                         case Admission.Replay replay -> replay.reviewId();
-                        case Admission.Admitted locked ->
-                            recordReview(
+                        case Admission.Admitted locked -> {
+                            requirePinnedVersion(request, pinned);
+                            yield recordReview(
                                     request, workspace, pinned, plan(request, workspace, locked.item(), pinned), early);
+                        }
                     };
                 });
             }
         };
+    }
+
+    /**
+     * The pin ran before the lock, so a newer version of the work may have arrived since, and its event review may
+     * already measure it. Under the lock the stored version must still be the pinned one. An event review pins its
+     * occasion's version, which {@link #plan} checks against the occasion.
+     */
+    private void requirePinnedVersion(ReviewRequest request, ItemSnapshot pinned) {
+        if (request.kind() != ReviewKind.ITEM || occasion(request) != null) return;
+        if (items.currentWorkVersion(request.workspaceId(), request.itemId())
+                        instanceof ProductItemQuery.CurrentWorkVersion.Known current
+                && !current.value().equals(pinned.version().value()))
+            throw new ReviewRequestRejected(
+                    ReviewRequestRejected.Reason.VERSION_CHANGED,
+                    "The work changed while the review was requested. Ask for the review again.");
     }
 
     private ReviewWorkspace workspace(ReviewRequest request) {

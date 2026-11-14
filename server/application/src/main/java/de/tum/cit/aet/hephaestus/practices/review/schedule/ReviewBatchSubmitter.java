@@ -58,8 +58,9 @@ public class ReviewBatchSubmitter {
                 case BUDGET_UNAVAILABLE -> new SubmissionOutcome.Paused(ReviewBatchPauseReason.BUDGET_EXHAUSTED);
                 case WORKSPACE_INACTIVE -> new SubmissionOutcome.Paused(ReviewBatchPauseReason.WORKSPACE_UNAVAILABLE);
                 case MODEL_UNAVAILABLE -> new SubmissionOutcome.Paused(ReviewBatchPauseReason.REVIEW_MODEL_UNBOUND);
-                case SCAN_ACTIVE -> new SubmissionOutcome.Deferred();
-                case SOURCE_UNAVAILABLE, ITEM_INELIGIBLE, REQUEST_CONFLICT, REF_UNSUPPORTED, VERSION_CHANGED ->
+                // A newer version arrived while the request read the work: the next tick reviews that one.
+                case SCAN_ACTIVE, VERSION_CHANGED -> new SubmissionOutcome.Deferred();
+                case SOURCE_UNAVAILABLE, ITEM_INELIGIBLE, REQUEST_CONFLICT, REF_UNSUPPORTED ->
                     new SubmissionOutcome.Skipped();
             };
         }
