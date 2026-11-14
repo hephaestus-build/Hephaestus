@@ -225,20 +225,22 @@ export function classifyCancellation(
 			(removal) =>
 				removal.head === head && Date.parse(removal.at) >= start && Date.parse(removal.at) <= end,
 		);
-	const own = matching(run.head_sha);
-	if (own?.reason === "manual") {
-		return { cause: "manual", removal: own };
-	}
-	if (own?.reason === "stack_invalidated") {
-		return { cause: "predecessor_drop", removal: own };
-	}
-	for (const ancestor of ancestors.slice(1)) {
-		const removal = matching(ancestor.head_sha);
-		if (removal && removal.reason !== null && removal.reason !== "merged") {
+	// A stack_invalidated removal is a cascade: the cause is the nearest root removal ahead of it.
+	// A hand removal ahead of this group is manual queue churn, not a failure that dropped it.
+	let cascade: QueueRemoval | undefined;
+	for (const [index, entry] of [run, ...ancestors.slice(1)].entries()) {
+		const removal = matching(entry.head_sha);
+		if (removal?.reason === "stack_invalidated") {
+			cascade ??= removal;
+		} else if (removal?.reason === "manual") {
+			return { cause: "manual", removal };
+		} else if (index > 0 && removal && removal.reason !== null && removal.reason !== "merged") {
 			return { cause: "predecessor_drop", removal };
 		}
 	}
-	return { cause: "unknown" };
+	return cascade === undefined
+		? { cause: "unknown" }
+		: { cause: "predecessor_drop", removal: cascade };
 }
 
 export function cancellationBudget(
@@ -335,8 +337,8 @@ export function renderLatencyBudget(
 		"| Cause | Cancelled groups |",
 		"|---|---:|",
 		`| Native worker failure | ${cancellations.causes.worker_failure} |`,
-		`| Predecessor drop | ${cancellations.causes.predecessor_drop} |`,
-		`| Manual removal | ${cancellations.causes.manual} |`,
+		`| Predecessor drop (an entry ahead dropped out) | ${cancellations.causes.predecessor_drop} |`,
+		`| Manual removal (this entry or one ahead) | ${cancellations.causes.manual} |`,
 		`| Timeout | ${cancellations.causes.timeout} |`,
 		`| Unknown | ${cancellations.causes.unknown} |`,
 		"",
@@ -621,7 +623,8 @@ if (import.meta.main) {
 					removals.push(...events);
 					cancellation = classifyCancellation(run, jobs, ancestors, removals);
 					if (
-						cancellation.cause !== "unknown" ||
+						(cancellation.cause !== "unknown" &&
+							cancellation.removal?.reason !== "stack_invalidated") ||
 						events.some(
 							(event) =>
 								event.head === ancestor.head_sha &&

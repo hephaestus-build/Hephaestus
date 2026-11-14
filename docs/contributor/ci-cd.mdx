@@ -1429,10 +1429,17 @@ A cancelled group with no failed worker, or only a failed gate, its reporter or 
 The same weekly report shows all cancellations over seven days, split by cause:
 
 - Native worker failure, including fail-fast cancellation after that failure.
-- Predecessor drop, matched through the queue branch's predecessor SHA and queue removal events.
-- Manual removal, matched to the exact merge-group SHA.
+- Predecessor drop: an entry ahead left the queue, but not by a merge or a manual removal.
+  Examples are failed checks, a conflict and a timeout.
+  The report matches it through the queue branch's predecessor SHA and queue removal events.
+- Manual removal: someone removed this entry, or an entry ahead of it, from the queue.
+  The report matches the removal to the exact merge-group SHA.
 - Timeout, from a native job timeout.
 - Unknown, when the available evidence cannot identify the cause.
+
+A `stack_invalidated` removal is a cascade, so the report follows the chain to the removal that started it.
+If the report cannot find that removal, it counts the group as a predecessor drop.
+Manual removals and predecessor drops both count against the target below.
 
 A successful intermediate group does not break the predecessor chain.
 Traversal stops when a predecessor merged before the cancelled run began.
