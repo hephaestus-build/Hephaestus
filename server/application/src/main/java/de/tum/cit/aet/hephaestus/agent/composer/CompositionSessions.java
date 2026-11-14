@@ -431,9 +431,30 @@ public class CompositionSessions {
 
     /** Runs one tool call of a session and records it, with what it decided, in the composition's trace. */
     public ToolResult tool(ReviewJob job, ResultAdmissionService.AdmissionIdentity identity, ToolCall call) {
-        var answered = call.destination() == FeedbackDestination.ON_WORK
-                ? reviewing(job, () -> reviewTool(job, identity, call))
-                : privateTool(job, identity, call);
+        Answered answered;
+        try {
+            answered = call.destination() == FeedbackDestination.ON_WORK
+                    ? reviewing(job, () -> reviewTool(job, identity, call))
+                    : privateTool(job, identity, call);
+        } catch (ResultAdmissionService.StaleAttemptException
+                | AdmissionConflictException
+                | ReviewCompositionContinuation.InputsUnavailableException answeredByTheRoute) {
+            throw answeredByTheRoute;
+        } catch (RuntimeException failed) {
+            // A defect of the server ends the session with its own cause, never as a failed request.
+            log.atError()
+                    .addKeyValue("event.name", "agent.composition.tool_failed")
+                    .addKeyValue("error.type", failed.getClass().getName())
+                    .setCause(failed)
+                    .log("A composition tool failed");
+            answered = new Answered(
+                    new ToolResult(
+                            "The server could not run this tool. This session stops.",
+                            false,
+                            Ending.STOPPED,
+                            CompositionStop.UNEXPECTED),
+                    CompositionToolTrace.Decision.none(call.destination()));
+        }
         toolTrace.record(
                 identity,
                 call.id(),
@@ -596,14 +617,24 @@ public class CompositionSessions {
             return Answered.text(
                     destination, "Unknown tool; use check_package, then publish_package with its draftId.");
         var plan = found(job, identity);
-        if (plan == null || !plan.request().open(destination.name())) throw new AdmissionConflictException();
+        if (plan == null) throw new AdmissionConflictException();
         if (call.name().equals("publish_package")) return publishPrivately(job, identity, call);
-        var basis = basis(job, plan);
         var state = plan.state();
-        var scoped = scoped(
-                plan.request(),
-                PrivateFeedback.closeUnrouted(plan.request(), state, new ArrayList<>()),
-                destination.name());
+        // Each call reads the admission again, and routing narrows the request to what is still open: a destination
+        // that its session opened can be closed by now, because its routing read failed or nothing is left to compose.
+        var unavailable = new ArrayList<String>();
+        var routes = PrivateFeedback.closeUnrouted(plan.request(), state, unavailable);
+        if (unavailable.contains(destination.name()))
+            return Answered.text(
+                    destination,
+                    "Where this feedback may go cannot be read now. Stop this session; nothing was checked, and the "
+                            + "server records why the destination is still open.");
+        if (!plan.request().open(destination.name()))
+            return Answered.text(
+                    destination,
+                    "This destination has nothing left to compose. Stop this session; nothing was checked.");
+        var basis = basis(job, plan);
+        var scoped = scoped(plan.request(), routes, destination.name());
         PrivateFeedback.stageHistory(state.privateHistory(), basis.files());
         var targets = PrivateFeedback.preparedTargets(basis.files(), mapper);
         var witnesses = PrivateFeedback.deliveredWitnesses(

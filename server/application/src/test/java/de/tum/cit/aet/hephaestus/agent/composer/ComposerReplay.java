@@ -89,7 +89,7 @@ final class ComposerReplay {
     static final Path CASES = Path.of("src/test/resources/agent/composition-replay");
 
     private static final Path SCENARIOS = Path.of("src/test/resources/agent/golden-prompts/composition-turns");
-    private static final UUID RUN = UUID.fromString("508d958c-100e-594f-8b4e-6d5c60e59470");
+    static final UUID RUN = UUID.fromString("508d958c-100e-594f-8b4e-6d5c60e59470");
     private static final Instant PREPARED_AT = Instant.parse("2026-11-09T12:00:00Z");
     /** A user turn longer than this is recorded by its digest: the golden scenarios hold the rendered text. */
     private static final int SHOWN_TEXT = 2_000;
@@ -352,7 +352,7 @@ final class ComposerReplay {
     }
 
     /** The server side of one case: the sealed basis, and what preparation accepted. */
-    private static final class Server {
+    static final class Server {
         final ResultAdmissionService admission = mock(ResultAdmissionService.class);
         final ReviewCompositionContinuation continuation = mock(ReviewCompositionContinuation.class);
         final ReviewJobAssignments assignments = mock(ReviewJobAssignments.class);
