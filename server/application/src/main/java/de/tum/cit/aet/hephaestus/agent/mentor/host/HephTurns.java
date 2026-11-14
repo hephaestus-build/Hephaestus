@@ -11,6 +11,7 @@ import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxes;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyFence;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
 import de.tum.cit.aet.hephaestus.mentor.MentorConversationRepository;
+import de.tum.cit.aet.hephaestus.mentor.MentorEntryRepository;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnService;
@@ -83,7 +84,11 @@ public class HephTurns {
         });
     }
 
-    /** Checks the subject and current lease in the transaction that writes a tool's proposal. */
+    /**
+     * Checks the subject and current lease in the transaction that writes a tool's proposal. It holds the sandbox, turn
+     * and run rows until it commits, so the run's renewal and the reaper wait for it: only short checked writes belong
+     * here. A read that can take longer, such as the turn's context, uses {@link #read}.
+     */
     public <T> T write(SandboxRun run, boolean ending, Function<TurnAttempt, T> proposal) {
         return Objects.requireNonNull(transactions.execute(status -> {
             if (!run.kind().conversation() || run.sandbox().kind() != AgentSandboxKind.CONVERSATION)
@@ -98,6 +103,27 @@ public class HephTurns {
     }
 
     /**
+     * Reads for the run's attempt without holding the sandbox, turn or run row while the read runs, as {@code GET
+     * …/context} requires ({@link de.tum.cit.aet.hephaestus.agent.gateway.SandboxRunKind#context}). A context build can
+     * take longer than the run's lease, and the renewal and the reaper lock the run's row. The fences and the lease are
+     * checked in a short transaction before the read and again after it. The read runs outside any transaction, so each
+     * part opens its own and holds its locks only as long as that part reads. A person erasure that completed after the attempt started fails the attempt, as its next partial answer
+     * would ({@code MentorTurnService#updatePartial}), so no read that an erasure overtook is answered.
+     */
+    public <T> T read(SandboxRun run, Function<TurnAttempt, T> reader) {
+        TurnAttempt turn = write(run, false, held -> held);
+        T value = reader.apply(turn);
+        write(run, false, held -> {
+            // write() holds capture admission in this transaction, so the answer holds until it commits.
+            Instant startedAt = attemptOf(run).getStartedAt();
+            if (startedAt == null || copyFence.erasedSince(MentorEntryRepository.COPIES_PERSON_DATA_STORE, startedAt))
+                throw new StaleRunException(run.fence());
+            return held;
+        });
+        return value;
+    }
+
+    /**
      * The attempt that a sandbox's run drives, while the run's claim holds it: what its tools act for.
      *
      * @param ending whether the call ends the attempt, which a stop or a passed work deadline still allows
@@ -105,7 +131,7 @@ public class HephTurns {
      * @throws StopException when the attempt must stop, for a call that does not end it
      */
     public TurnAttempt held(SandboxRun run, boolean ending) {
-        MentorTurnRepository.RunAttempt held = read(run);
+        MentorTurnRepository.RunAttempt held = attemptOf(run);
         if (!ending) {
             if (stopped(held)) throw new StopException(Stop.DEVELOPER);
             Instant deadline = held.getDeadline();
@@ -126,7 +152,7 @@ public class HephTurns {
 
     /** When the run's attempt must have done its work: its run's deadline, less the grace to end what it wrote. */
     public Instant workDeadline(SandboxRun run) {
-        Instant deadline = read(run).getDeadline();
+        Instant deadline = attemptOf(run).getDeadline();
         if (deadline == null) throw new IllegalStateException("A started turn's run has a deadline");
         return deadline.minus(TurnRunsAdapter.GRACE);
     }
@@ -136,7 +162,7 @@ public class HephTurns {
         return sandboxes.start(run.sandbox(), run.fence()).orElseThrow(() -> new StaleRunException(run.fence()));
     }
 
-    private MentorTurnRepository.RunAttempt read(SandboxRun run) {
+    private MentorTurnRepository.RunAttempt attemptOf(SandboxRun run) {
         AgentRunFence fence = run.fence();
         return rows.findRunAttempt(fence.workspaceId(), fence.runId(), fence.epoch())
                 .orElseThrow(() -> new StaleRunException(fence));

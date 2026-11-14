@@ -408,6 +408,30 @@ It refuses a stale epoch, and a lease whose `leased_until` passed, whatever its 
 Every write that a holder makes for the run calls it, or fences its own update on the run and the epoch.
 Lock a domain row before its run: every writer of both takes them in that order.
 
+### Locks and slow work
+
+A transaction that locks a run, its sandbox or its domain row does only short, bounded work.
+The lease renewal is one conditional write on the run, and the reaper locks the domain row first.
+Both wait on such a transaction, up to the pool's lock timeout.
+A TURN or DIGEST lease lasts 60 seconds, so a build that holds these locks for longer loses the lease on every attempt.
+
+These belong outside the locks:
+
+- context and document builds;
+- record captures and freshness renders;
+- provider reads;
+- folder walks and archive parsing;
+- loads that grow with the workspace;
+- waits on another thread.
+
+Check the fence and the lease in a short transaction.
+Do the work with no lock held, then check them again before you write or answer.
+`HephTurns.read` and `TurnContextController.load` follow this order.
+
+`RunLockProbe` proves it in an integration test.
+The test holds the route in its slow part.
+The probe then renews the lease and locks the named rows with a short lock timeout, and fails when it would wait.
+
 ## Reaper
 
 `AgentRunReaper` runs on every server replica, every `hephaestus.agent.capacity.lease-renewal`, without a leader.

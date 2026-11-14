@@ -135,7 +135,7 @@ public class TurnSandboxRunKind implements SandboxRunKind {
     /** The turn's system prompt, path, situation and model, as {@code GET …/context} answers it. */
     @Override
     public JsonNode context(SandboxRun run) {
-        return turns.write(run, false, turn -> mapper.valueToTree(contexts.context(turn)));
+        return turns.read(run, turn -> mapper.valueToTree(contexts.context(turn)));
     }
 
     /**
