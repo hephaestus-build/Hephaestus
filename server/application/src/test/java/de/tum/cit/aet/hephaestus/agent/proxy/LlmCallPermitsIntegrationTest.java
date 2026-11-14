@@ -8,6 +8,7 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallPermitRepository;
+import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallPermitState;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallPool;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallPoolProperties;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallPoolRepository;
@@ -698,7 +699,7 @@ class LlmCallPermitsIntegrationTest extends BaseIntegrationTest {
 
         active.close();
 
-        assertThat(rows.findById(remote).orElseThrow().getState()).isEqualTo("ACTIVE");
+        assertThat(rows.findById(remote).orElseThrow().getState()).isEqualTo(LlmCallPermitState.ACTIVE);
         assertThat(rows.countActive(pool)).isEqualTo(1);
     }
 
@@ -717,8 +718,8 @@ class LlmCallPermitsIntegrationTest extends BaseIntegrationTest {
 
         active.close();
 
-        assertThat(rows.findById(review).orElseThrow().getState()).isEqualTo("ACTIVE");
-        assertThat(rows.findById(feedback).orElseThrow().getState()).isEqualTo("WAITING");
+        assertThat(rows.findById(review).orElseThrow().getState()).isEqualTo(LlmCallPermitState.ACTIVE);
+        assertThat(rows.findById(feedback).orElseThrow().getState()).isEqualTo(LlmCallPermitState.WAITING);
     }
 
     @Test
@@ -970,7 +971,7 @@ class LlmCallPermitsIntegrationTest extends BaseIntegrationTest {
     }
 
     private String state(UUID id) {
-        return rows.findById(id).orElseThrow().getState();
+        return rows.findById(id).orElseThrow().getState().name();
     }
 
     private static LlmCallPermits.@Nullable Permit probe(

@@ -360,6 +360,21 @@ The attempt then ends early.
 If no call of the attempt was answered, the review runs again under the normal retry rules.
 `llm_proxy_upstream_stalled_total` counts each cut call.
 
+`LlmCallPermitState` owns the transition table of a permit.
+Each move is one native statement in `LlmCallPermitRepository`, and its `WHERE` names the legal source state, so two servers cannot both move one permit.
+`LlmCallPermitSqlTest` holds those statements to the table.
+
+```mermaid
+stateDiagram-v2
+    accTitle: Lifecycle of a model call permit
+    accDescr: A call enters its pool's queue in WAITING. A grant round moves it to ACTIVE. Its release, or the prune of a lease that stopped renewing, moves it to CLOSED, which has no exit. An abandoned or stale waiting permit and an old closed permit are deleted.
+    [*] --> WAITING: admit
+    WAITING --> ACTIVE: grantRound
+    ACTIVE --> CLOSED: release, prune
+    WAITING --> [*]: abandon, prune deletes
+    CLOSED --> [*]: prune deletes
+```
+
 ## Fence
 
 A holder writes under its `AgentRunFence`: the run, its workspace and the epoch of its claim.

@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.architecture;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.tngtech.archunit.core.domain.JavaClass;
+import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallPermitState;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunState;
 import de.tum.cit.aet.hephaestus.core.Lifecycle;
 import de.tum.cit.aet.hephaestus.core.action.ActionState;
@@ -22,6 +23,10 @@ class LifecycleContractTest extends HephaestusArchitectureTest {
     private static List<Contract<?>> contracts() {
         return List.of(
                 new Contract<>(AgentRunState.class, Set.of(AgentRunState.QUEUED), Set.of(AgentRunState.ENDED)),
+                new Contract<>(
+                        LlmCallPermitState.class,
+                        Set.of(LlmCallPermitState.WAITING),
+                        Set.of(LlmCallPermitState.CLOSED)),
                 new Contract<>(
                         ActionState.class,
                         Set.of(ActionState.PROPOSED),

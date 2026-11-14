@@ -26,14 +26,13 @@ Use a plain enum. Do not add a state machine framework.
 
 [`Lifecycle`](https://github.com/hephaestus-build/Hephaestus/blob/main/server/application/src/main/java/de/tum/cit/aet/hephaestus/core/Lifecycle.java)
 is the shared transition contract.
-`AgentRunState`, `ActionState`, `IntegrationState`, `ReviewStatus` and `WorkspaceStatus` implement it.
 `LifecycleContractTest` discovers every production enum that implements the contract.
 Each enum has explicit initial and terminal states in that test.
 The test checks that a terminal state has no exit and that each state is reachable from an initial state.
 
 `LifecycleSetterArchTest` refuses an entity method named `set*` that takes a `Lifecycle` value.
 Its remaining exceptions name one owner per field.
-The list includes lifecycle fields that do not yet use the contract, including the String state of `LlmCallPermit`.
+The list includes lifecycle fields that do not yet use the contract.
 Remove an entry when its field uses the contract and its entity has no lifecycle setter.
 [ADR 0099 § Confirmation](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0099-aggregates-own-their-lifecycle-and-module-boundaries.md#confirmation)
 owns the release gate for this list.

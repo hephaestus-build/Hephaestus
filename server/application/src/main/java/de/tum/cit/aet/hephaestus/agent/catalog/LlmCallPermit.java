@@ -61,8 +61,9 @@ public class LlmCallPermit {
     private int attempt;
 
     @ColumnDefault("'WAITING'")
+    @Enumerated(EnumType.STRING)
     @Column(name = "state", nullable = false, length = 16)
-    private String state;
+    private LlmCallPermitState state;
 
     @Nullable
     @Column(name = "granted_at")
