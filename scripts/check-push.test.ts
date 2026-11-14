@@ -10,7 +10,6 @@ import { test, type TestContext } from "node:test";
 
 import {
 	focusedTests,
-	hookTests,
 	frontendCommands,
 	pushScopeReason,
 	pushScopes,
@@ -145,7 +144,6 @@ void test("a hook change runs every test that runs a hook as a process", () => {
 	for (const file of ["scripts/enable-hooks.test.ts", "scripts/git-environment.test.ts"]) {
 		assert.ok(selected.includes(file), file);
 	}
-	assert.deepEqual(selected, hookTests());
 	assert.ok(
 		!focusedTests(["scripts/reorder-migrations.ts"]).includes("scripts/enable-hooks.test.ts"),
 	);

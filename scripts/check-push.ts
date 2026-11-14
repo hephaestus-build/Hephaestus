@@ -135,10 +135,9 @@ export function pushTasks(paths: string[] | undefined): string[] {
 const nativeTest =
 	/^(?:scripts\/.*\.test\.ts|docker\/agents\/.*\.test\.ts|server\/application\/src\/test\/resources\/agent\/[^/]+\.spec\.ts)$/u;
 
-/** Only explicit changed tests and existing source companions; full Node suites remain required. */
 /**
- * The Node tests that run a Git hook: a test reaches a hook only through its path, Git's hook setting or the hook
- * installer, and runs it as a process, which no import graph shows. A hook change runs each of them.
+ * The Node tests that run a Git hook. A test reaches a hook only through its path, Git's hook setting or the hook
+ * installer. It runs the hook as a process, which no import graph shows.
  */
 export function hookTests(cwd = process.cwd()): string[] {
 	const scripts = path.join(cwd, "scripts");
@@ -157,6 +156,10 @@ export function hookTests(cwd = process.cwd()): string[] {
 		.toSorted();
 }
 
+/**
+ * The Node tests that a push runs: changed tests, existing source companions, the CI contract suites for a workflow
+ * change, and the hook tests for a hook change. The complete Node suites remain in CI.
+ */
 export function focusedTests(paths: string[], cwd = process.cwd()): string[] {
 	const tests = new Set<string>();
 	if (paths.some((file) => file.startsWith(".vite-hooks/"))) {
