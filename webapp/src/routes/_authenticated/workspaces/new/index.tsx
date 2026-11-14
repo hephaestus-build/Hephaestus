@@ -4,10 +4,10 @@ import { ArrowLeftIcon, type LucideIcon, OctagonXIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { getProvidersOptions } from "@/api/@tanstack/react-query.gen";
+import { ProviderChoiceSkeleton } from "@/components/create-workspace/CreateWorkspaceSkeletons";
 import { type BrandIcon, GitHubIcon, GitLabIcon } from "@/components/icons/brand";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Spinner } from "@/components/ui/spinner";
 import { workspaceCreationOf } from "@/hooks/use-workspace-creation";
 import { pageHead } from "@/lib/page-title";
 import { hasText } from "@/lib/text";
@@ -70,11 +70,7 @@ function ProviderSelectionPage() {
 
 	let providerChoice: ReactNode;
 	if (isLoading) {
-		providerChoice = (
-			<div className="flex justify-center py-12">
-				<Spinner />
-			</div>
-		);
+		providerChoice = <ProviderChoiceSkeleton />;
 	} else if (blockedForNonAdmin) {
 		providerChoice = (
 			<Alert className="mb-4">
