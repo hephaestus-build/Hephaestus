@@ -36,9 +36,11 @@ import childProcess from "node:child_process";
 import { syncBuiltinESMExports } from "node:module";
 const commands = [];
 let java;
+let unpack;
 childProcess.spawnSync = (command, args, options = {}) => {
   commands.push([command, ...args]);
   if (command === "java") java = { cwd: options.cwd, env: Object.keys(options.env ?? {}) };
+  if (command === "jar") unpack = { cwd: options.cwd, env: Object.keys(options.env ?? {}) };
   if (command === "node" || command === "java") {
     return { status: 1, signal: null, stdout: "", stderr: "stop before migrations" };
   }
@@ -58,7 +60,7 @@ try {
 } catch (error) {
   if (!String(error).includes(${JSON.stringify(failure)})) throw error;
 }
-process.stdout.write(JSON.stringify({ commands, java }));
+process.stdout.write(JSON.stringify({ commands, java, unpack }));
 `,
 		encoding: "utf8",
 		env: { ...process.env, ...environment },
@@ -67,11 +69,16 @@ process.stdout.write(JSON.stringify({ commands, java }));
 	const parsed: unknown = JSON.parse(result.stdout);
 	const value = asRecord(parsed, "preparation");
 	const java = value.java === undefined ? undefined : asRecord(value.java, "java launch");
+	const unpack = value.unpack === undefined ? undefined : asRecord(value.unpack, "jar unpack");
 	return {
 		commands: asArray(value.commands, "commands").map((command) =>
 			asStringArray(command, "command"),
 		),
 		java: java && { cwd: asString(java.cwd, "java cwd"), env: asStringArray(java.env, "java env") },
+		unpack: unpack && {
+			cwd: asString(unpack.cwd, "jar cwd"),
+			env: asStringArray(unpack.env, "jar env"),
+		},
 	};
 }
 
@@ -89,7 +96,10 @@ void test("local drill builds one PostgreSQL image and lets Gradle prepare its i
 });
 
 void test("restored CI artifacts and PostgreSQL image are reused, not rebuilt or deleted", () => {
-	const { commands, java } = preparation(["--target-image", "hephaestus-postgres:ci"], packaged);
+	const { commands, java, unpack } = preparation(
+		["--target-image", "hephaestus-postgres:ci"],
+		packaged,
+	);
 	assert.deepEqual(commands[0], ["docker", "image", "inspect", "hephaestus-postgres:ci"]);
 	assert.equal(commands.filter((command) => command[1] === "build").length, 0);
 	assert.equal(commands.filter((command) => command.includes("install")).length, 0);
@@ -98,24 +108,37 @@ void test("restored CI artifacts and PostgreSQL image are reused, not rebuilt or
 		commands.some((command) => command[1] === "rmi" && command.includes("hephaestus-postgres:ci")),
 		false,
 	);
-	// The supplied JAR migrates the database through its own launcher; Gradle never runs.
+	// The supplied JAR's own classes migrate the database, unpacked so that Liquibase can list next/;
+	// Gradle never runs.
 	assert.equal(
 		commands.some((command) => command[0] === "node"),
 		false,
 	);
+	assert.deepEqual(
+		commands.find((command) => command[0] === "jar"),
+		["jar", "xf", jar, "BOOT-INF/classes", "BOOT-INF/lib"],
+	);
 	const launch = commands.find((command) => command[0] === "java");
-	assert.ok(launch !== undefined && java !== undefined);
+	assert.ok(launch !== undefined && java !== undefined && unpack !== undefined);
+	assert.ok(
+		commands.findIndex((command) => command[0] === "jar") <
+			commands.findIndex((command) => command[0] === "java"),
+		"the JAR is unpacked before the migration runs",
+	);
+	assert.equal(unpack.cwd, java.cwd, "the unpacked classes are the launcher's own directory");
 	for (const argument of [
-		"-Dloader.main=liquibase.integration.commandline.Main",
-		`-Dloader.home=${java.cwd}`,
-		"org.springframework.boot.loader.launch.PropertiesLauncher",
+		"liquibase.integration.commandline.Main",
 		"--changeLogFile=db/master.xml",
 		"update",
 	]) {
 		assert.ok(launch.includes(argument), argument);
 	}
-	assert.equal(launch[launch.indexOf("-cp") + 1], jar);
+	assert.equal(
+		launch[launch.indexOf("-cp") + 1],
+		["BOOT-INF/classes", "BOOT-INF/lib/*"].join(path.delimiter),
+	);
 	assert.deepEqual(java.env, ["PATH"]);
+	assert.deepEqual(unpack.env, ["PATH"]);
 	assert.equal(
 		existsSync(java.cwd),
 		false,

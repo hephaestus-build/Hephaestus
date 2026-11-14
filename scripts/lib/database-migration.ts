@@ -59,20 +59,25 @@ export function databaseMigration(localTimeout?: number): (port: number, passwor
 		throw new Error(`HEPHAESTUS_APPLICATION_JAR does not name a non-empty JAR file: ${jar}`);
 	}
 	const javaHome = process.env.JAVA_HOME;
-	const java = isSet(javaHome) ? path.join(javaHome, "bin", "java") : "java";
+	const tool = (name: string) => (isSet(javaHome) ? path.join(javaHome, "bin", name) : name);
 	return (port, password) => {
 		const home = mkdtempSync(path.join(tmpdir(), "hephaestus-migration-"));
 		try {
+			// Liquibase lists `includeAll` directories, and it cannot list one inside the nested JAR:
+			// master.xml's `next/` include then applies nothing, without an error. So run from the
+			// archive's own classes and libraries, unpacked.
+			migrate(tool("jar"), ["xf", archive, "BOOT-INF/classes", "BOOT-INF/lib"], {
+				cwd: home,
+				env: { PATH: process.env.PATH },
+				timeout: MIGRATION_DEADLINE_MS,
+			});
 			migrate(
-				java,
+				tool("java"),
 				[
 					"-Xmx512m",
-					"-Dloader.main=liquibase.integration.commandline.Main",
-					"-Dloader.path=BOOT-INF/lib",
-					`-Dloader.home=${home}`,
 					"-cp",
-					archive,
-					"org.springframework.boot.loader.launch.PropertiesLauncher",
+					["BOOT-INF/classes", "BOOT-INF/lib/*"].join(path.delimiter),
+					"liquibase.integration.commandline.Main",
 					"--changeLogFile=db/master.xml",
 					`--url=jdbc:postgresql://127.0.0.1:${port}/hephaestus`,
 					"--username=root",
