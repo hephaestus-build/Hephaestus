@@ -1710,6 +1710,68 @@
 						],
 						"why": "The summary has an @-mention and a link; the advice itself (purge and rotate) is right."
 					}
+				},
+				{
+					"id": "alt-3",
+					"review": {
+						"decisions": [
+							{
+								"resultId": "r1",
+								"disposition": "RAISE",
+								"witnessIds": []
+							},
+							{
+								"resultId": "r2",
+								"disposition": "RAISE",
+								"witnessIds": []
+							}
+						],
+						"summary": {
+							"body": "Mia, the test key in `AuthService` is already in the commit history. Purge it from the history and rotate it, because deleting the line alone leaves it readable in earlier commits.",
+							"basedOn": [
+								"p1"
+							]
+						},
+						"inline": [
+							{
+								"body": "A literal API key sits in the source, so everyone with access to the repository can read it. Load it from an untracked config file or the Keychain instead.",
+								"basedOn": [
+									"p1"
+								],
+								"anchor": {
+									"problemId": "p1",
+									"citationIndex": 0
+								}
+							},
+							{
+								"body": "This print writes the whole login response, including the session token, to the console. Remove it, or log only a non-secret field such as the user id.",
+								"basedOn": [
+									"p2"
+								],
+								"anchor": {
+									"problemId": "p2",
+									"citationIndex": 0
+								}
+							},
+							{
+								"body": "Report this failure through the `logger` declared above instead of `print`, so it reaches the system log.",
+								"basedOn": [
+									"p3"
+								],
+								"anchor": {
+									"problemId": "p3",
+									"citationIndex": 0
+								}
+							}
+						]
+					},
+					"label": {
+						"good": false,
+						"codes": [
+							"Q10"
+						],
+						"why": "The summary calls the author \"Mia\", a first name guessed from the login `mia-codes`; the inputs give no name. The rest matches the reference."
+					}
 				}
 			],
 			"limits": [],

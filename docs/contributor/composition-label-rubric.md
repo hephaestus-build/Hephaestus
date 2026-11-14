@@ -55,6 +55,7 @@ A trust code always makes the composition bad, whatever its other qualities.
 | Q7 | The text suggests a rewrite of published history. A committed secret is the exception: the text says to purge it and to rotate it. |
 | Q8 | The text repeats advice that was already said on the work, or a reviewer's open point, and adds nothing new. |
 | Q9 | The text has a link, an @-mention, HTML or an image. |
+| Q10 | The text calls the developer by a name that the inputs do not give, such as a first name guessed from a login. |
 
 ## What a case expects
 
