@@ -31,6 +31,12 @@ import { parseInventory } from "./commit-image-lock.ts";
 import { chartValues } from "./kubernetes-chart.ts";
 import { pressureNodeTaint, priorityClassResources } from "./kubernetes-memory-drill.ts";
 import { asArray, asRecord, isRecord, parseJson, readJsonFileSync } from "./lib/json.ts";
+import {
+	chartReviewLimits,
+	DISK_VOLUMES,
+	reviewLimits,
+	templateFlags,
+} from "./lib/sandbox-footprint-report.ts";
 import { packageReleaseChart } from "./release-chart.ts";
 import { parseReleaseImageLock } from "./release-image-lock.ts";
 
@@ -4467,6 +4473,61 @@ await test("each sandbox kind has a cold-start template of one container, behind
 		get(list(get(templates[0], "spec", "podTemplate", "spec", "containers"))[0], "image"),
 	);
 	assert.equal(get(podSpec(holder), "automountServiceAccountToken"), false);
+});
+
+const byPath = (left: { path: unknown }, right: { path: unknown }) =>
+	byCodePoint(String(left.path), String(right.path));
+
+await test("the footprint benchmark runs a review in the container that the review template ships", async () => {
+	// What scripts/sandbox-footprint.ts passes to Docker for the template's part of a review container.
+	const flags = templateFlags(
+		DISK_VOLUMES.map((target) => `volume${target}`),
+		await chartReviewLimits(),
+	);
+	const after = (flag: string) => flags.filter((_, index) => flags[index - 1] === flag);
+	const harnessMounts = after("--mount").map((mount) => {
+		const fields = mount.split(",");
+		return {
+			path: fields.find((field) => field.startsWith("dst="))?.slice(4),
+			readOnly: fields.includes("readonly"),
+		};
+	});
+	const harnessEnvironment = after("--env").map((entry) => {
+		const split = entry.indexOf("=");
+		return { name: entry.slice(0, split), value: entry.slice(split + 1) };
+	});
+	for (const name of profiles) {
+		const review = templatesOf(rendered(withSandboxes(name))).find(
+			(template) => nameOf(template) === "heph-sandbox-review",
+		);
+		const agent = list(get(review, "spec", "podTemplate", "spec", "containers"))[0];
+		assert.deepEqual(
+			harnessMounts.toSorted(byPath),
+			list(get(agent, "volumeMounts"))
+				.map((mount) => ({
+					path: get(mount, "mountPath"),
+					readOnly: get(mount, "readOnly") === true,
+				}))
+				.toSorted(byPath),
+			`${name}: the benchmark mounts what the review template mounts`,
+		);
+		assert.equal(
+			flags.includes("--read-only"),
+			get(agent, "securityContext", "readOnlyRootFilesystem") === true,
+		);
+		// The benchmark runs the review kind's programs, not the driver that reads the sandbox kind.
+		assert.deepEqual(
+			harnessEnvironment,
+			list(get(agent, "env")).filter((entry) => get(entry, "name") !== "HEPHAESTUS_SANDBOX_KIND"),
+			`${name}: the benchmark sets the review template's environment`,
+		);
+		const limits = get(agent, "resources", "limits");
+		assert.deepEqual(
+			{ memory: after("--memory")[0], cpus: after("--cpus")[0] },
+			reviewLimits(stringify({ sandbox: { templates: { review: { resources: { limits } } } } })),
+			`${name}: the benchmark runs under the review template's limits`,
+		);
+	}
 });
 
 /** Kinds that have no namespace: a release without cluster-admin cannot create any of them. */

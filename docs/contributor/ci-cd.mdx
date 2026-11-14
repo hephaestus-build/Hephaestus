@@ -1200,7 +1200,9 @@ Right after a merge, that run is still building, so the pull request builds ever
   The sampler container runs privileged in the host's process namespace, because it reads every container's cgroup and processes.
   The job has no secret that this could expose.
   A run fails unless each review submitted every practice, finished, uploaded its result and was sampled.
-  The memory result is informational: no budget is enforced until the sandbox requests file holds the measured need.
+  Each review runs under the review template's limits from the chart's `values.yaml`.
+  A review that outgrows its memory limit fails the run.
+  The run enforces no memory budget below that limit: the measured memory is informational.
   The two reviews start together. The concurrent peak sums their samples per tick, so drift between them lowers it.
   A busy merge queue skips the night with a notice, because a busy queue is not a defect in `main`.
   The job waits for the queue for up to 45 minutes. Then it works for about 15–20 minutes, inside a 90-minute limit.
@@ -1208,7 +1210,8 @@ Right after a merge, that run is still building, so the pull request builds ever
 - To read a footprint failure, open the run's `sandbox-footprint` artifact:
   1. Read `verdict.reasons` in `footprint.json`. Each reason names the review, counted from 0, and the check that failed.
   2. A runtime exit of 137 means that the kernel killed the container. Usually it reached its memory limit.
-  3. Open the review's container logs: `reviews[].initializeLog` and `reviews[].log` give their paths in the artifact.
+  3. Open the review's container log: `reviews[].log` gives its path in the artifact.
+     A review that has no log did not start. The job's step log then holds the Docker error.
   4. Compare the review's `runtime` peak and processes with an earlier green run to find what grew.
 - A job's `timeout-minutes` is a hang detector of at least 15 minutes.
   This holds whatever the job's usual duration is.
