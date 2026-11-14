@@ -1,16 +1,16 @@
 {
 	"pnpm-lock.yaml": {
 		"envPackages": 15,
-		"packages": 1940,
+		"packages": 1917,
 		"importers": {
 			".": {
 				"direct": {
 					"prod": 0,
-					"dev": 45
+					"dev": 44
 				},
 				"transitive": {
 					"prod": 0,
-					"all": 893
+					"all": 868
 				}
 			},
 			"docs": {
@@ -50,7 +50,7 @@
 				},
 				"transitive": {
 					"prod": 222,
-					"all": 1185
+					"all": 1184
 				}
 			}
 		}

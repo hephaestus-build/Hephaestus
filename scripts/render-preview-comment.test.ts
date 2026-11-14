@@ -49,26 +49,17 @@ async function repository(...changedFiles: string[]): Promise<{ base: string; ro
 	return { base, root };
 }
 
-async function render(
-	root: string,
-	base: string,
-	kind: string,
-	directory: string,
-): Promise<string> {
-	execFileSync(
-		"node",
-		[script, kind, directory, "https://preview.example/", base, "comments.json"],
-		{
-			cwd: root,
-			stdio: "pipe",
-			env: environmentForGitFixture({
-				GITHUB_SERVER_URL: "https://github.com",
-				GITHUB_REPOSITORY: "example/project",
-				GITHUB_RUN_ID: "123",
-				GITHUB_SHA: "not-the-checked-out-commit",
-			}),
-		},
-	);
+async function render(root: string, base: string, directory: string): Promise<string> {
+	execFileSync("node", [script, directory, "https://preview.example/", base, "comments.json"], {
+		cwd: root,
+		stdio: "pipe",
+		env: environmentForGitFixture({
+			GITHUB_SERVER_URL: "https://github.com",
+			GITHUB_REPOSITORY: "example/project",
+			GITHUB_RUN_ID: "123",
+			GITHUB_SHA: "not-the-checked-out-commit",
+		}),
+	});
 	return asStringArray(
 		parseJson(await readFile(path.resolve(root, "comments.json"), "utf8")),
 		"comments",
@@ -109,7 +100,7 @@ void test("links only stories from changed files to their canvases", async () =>
 			},
 		}),
 	);
-	const comment = await render(root, base, "storybook", "build");
+	const comment = await render(root, base, "build");
 	assert.match(comment, /Stories in changed files/u);
 	assert.ok(comment.includes("#### UI/Button (2)"));
 	assert.ok(comment.includes(String.raw`[Primary \[default\]]`));
@@ -149,7 +140,7 @@ void test("shows all 106 stories without truncation or disclosure controls", asy
 			),
 		}),
 	);
-	const comment = await render(root, base, "storybook", "build");
+	const comment = await render(root, base, "build");
 	assert.match(comment, /Stories in changed files \(106\)/u);
 	assert.match(comment, /#### Button \(106\)/u);
 	for (let index = 0; index < 106; index += 1) {
@@ -162,44 +153,11 @@ void test("does not claim files are unchanged when they have no published storie
 	const { base, root } = await repository("webapp/src/Button.stories.tsx");
 	await mkdir(path.resolve(root, "build"));
 	await writeFile(path.resolve(root, "build/index.json"), JSON.stringify({ entries: {} }));
-	const comment = await render(root, base, "storybook", "build");
+	const comment = await render(root, base, "build");
 	assert.match(
 		comment,
 		/Stories in changed files\n\nNo published stories found in changed files\./u,
 	);
-});
-
-void test("links each changed page that the build published, by its title, once", async () => {
-	const { base, root } = await repository(
-		"docs/user/getting-started.mdx",
-		"docs/admin/dsms/index.mdx",
-	);
-	await mkdir(path.resolve(root, "build/user"), { recursive: true });
-	await mkdir(path.resolve(root, "build/admin"), { recursive: true });
-	await writeFile(
-		path.resolve(root, "build/user/getting-started.html"),
-		"<html><head><title>Start [here] &amp; go | Hephaestus documentation</title></head></html>",
-	);
-	await writeFile(
-		path.resolve(root, "build/admin/dsms.html"),
-		"<title>Data protection | Hephaestus documentation</title>",
-	);
-	const comment = await render(root, base, "docs", "build");
-	assert.match(comment, /Changed pages \(2\)/u);
-	const link = String.raw`[Start \[here\] &amp; go](<https://preview.example/user/getting-started>)`;
-	assert.equal(comment.split(link).length - 1, 1);
-	assert.match(comment, /\[Data protection\]\(<https:\/\/preview\.example\/admin\/dsms>\)/u);
-});
-
-void test("skips a changed partial, which is no page", async () => {
-	const { base, root } = await repository("docs/admin/_configuration-reference/helm.mdx");
-	await mkdir(path.resolve(root, "build/admin/_configuration-reference"), { recursive: true });
-	await writeFile(
-		path.resolve(root, "build/admin/_configuration-reference/helm.html"),
-		"<title>Partial</title>",
-	);
-	const comment = await render(root, base, "docs", "build");
-	assert.match(comment, /Changed pages\n\nNo published pages found in changed files\./u);
 });
 
 void test("rejects an invalid Storybook index instead of publishing an empty result", async () => {
@@ -213,42 +171,9 @@ void test("rejects an invalid Storybook index instead of publishing an empty res
 	]) {
 		await writeFile(path.resolve(root, "build/index.json"), JSON.stringify(index));
 		await assert.rejects(
-			render(root, base, "storybook", "build"),
+			render(root, base, "build"),
 			/Storybook (?:index\.entries|entry button--primary\.importPath) must be/u,
 		);
-	}
-});
-
-void test("does not claim docs are unchanged when a changed page is unpublished", async () => {
-	const { base, root } = await repository("docs/user/draft.mdx");
-	await mkdir(path.resolve(root, "build"));
-	const comment = await render(root, base, "docs", "build");
-	assert.match(comment, /Changed pages\n\nNo published pages found in changed files\./u);
-});
-
-void test("groups every changed documentation page by source directory", async () => {
-	const sources = Array.from(
-		{ length: 35 },
-		(_, index) => `docs/${index % 2 ? "user" : "contributor/deep"}/page-${index}.mdx`,
-	);
-	const { base, root } = await repository(...sources);
-	await Promise.all(
-		sources.map(async (source, index) => {
-			const file = path.resolve(
-				root,
-				source.replace(/^docs\//u, "build/").replace(/\.mdx$/u, ".html"),
-			);
-			await mkdir(path.dirname(file), { recursive: true });
-			await writeFile(file, `<title>Page ${index} | Hephaestus documentation</title>`);
-		}),
-	);
-	const comment = await render(root, base, "docs", "build");
-	assert.match(comment, /Changed pages \(35\)/u);
-	assert.match(comment, /#### docs\/contributor\/deep \(18\)/u);
-	assert.match(comment, /#### docs\/user \(17\)/u);
-	for (const source of sources) {
-		const route = source.replace(/^docs\//u, "").replace(/\.mdx$/u, "");
-		assert.equal(comment.split(`https://preview.example/${route}>`).length - 1, 1);
 	}
 });
 
