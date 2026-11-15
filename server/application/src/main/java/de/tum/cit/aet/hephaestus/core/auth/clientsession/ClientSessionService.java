@@ -16,7 +16,6 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
@@ -339,8 +338,7 @@ public class ClientSessionService {
 
     /**
      * Revokes an MCP client grant from the workspace console, in the order account, session, grant. The
-     * session link is read again under the grant lock: an exchange that linked a session meanwhile is
-     * seen, and its session is ended too.
+     * session that the grant held when the revoke began ends with it.
      *
      * @return whether the grant was open
      */
@@ -348,26 +346,17 @@ public class ClientSessionService {
     public boolean revokeMcpGrant(Long accountId, UUID grantId) {
         accountRepository.lockStatusForShare(accountId);
         Instant now = clock.instant();
-        for (int attempt = 0; attempt < 2; attempt++) {
-            UUID sessionId = grantRepository.findSessionId(grantId).orElse(null);
-            if (sessionId != null) {
-                sessionRepository.lockById(sessionId);
-            }
-            if (grantRepository.lockById(grantId).isEmpty()) {
-                return false;
-            }
-            UUID linked = grantRepository.findSessionId(grantId).orElse(null);
-            if (!Objects.equals(linked, sessionId)) {
-                continue;
-            }
-            handoffRepository.consumeForGrant(grantId, now);
-            boolean open = grantRepository.revokeIfOpen(grantId, now) == 1;
-            if (sessionId != null) {
-                end(sessionId, IssuedJwt.RevokedReason.ADMIN_REVOKE, now);
-            }
-            return open;
+        UUID sessionId = grantRepository.findSessionId(grantId).orElse(null);
+        if (sessionId != null) {
+            sessionRepository.lockById(sessionId);
         }
-        throw new IllegalStateException("the grant's session link changed twice during one revoke");
+        if (grantRepository.lockById(grantId).isEmpty()) {
+            return false;
+        }
+        handoffRepository.consumeForGrant(grantId, now);
+        boolean open = grantRepository.revokeIfOpen(grantId, now) == 1;
+        endLockedSession(grantId, sessionId, IssuedJwt.RevokedReason.ADMIN_REVOKE, now);
+        return open;
     }
 
     /** Sessions that can still refresh, including those whose access token lapsed while the client sat idle. */
@@ -412,17 +401,27 @@ public class ClientSessionService {
     }
 
     /**
-     * A used MCP code came back, so two parties hold it: the grant and whatever session the code issued end
-     * (OAuth 2.1 § 4.1.2). The caller holds the grant lock. A session that an exchange linked after the
-     * caller read the link is ended too, even though its lock comes after the grant's here.
+     * A used MCP code came back, so two parties hold it: the grant and the session the code issued end
+     * (OAuth 2.1 § 4.1.2). The caller holds the grant lock.
      */
     private void endReplayedGrant(UUID grantId, @Nullable UUID lockedSessionId, Instant now) {
-        UUID sessionId = grantRepository.findSessionId(grantId).orElse(lockedSessionId);
         if (grantRepository.revokeIfOpen(grantId, now) == 1) {
             log.warn("auth.client: a used MCP authorization code was presented again; its grant ended");
         }
-        if (sessionId != null) {
-            end(sessionId, IssuedJwt.RevokedReason.CODE_REUSE, now);
+        endLockedSession(grantId, lockedSessionId, IssuedJwt.RevokedReason.CODE_REUSE, now);
+    }
+
+    /**
+     * Ends the grant's session if this transaction locked it before the grant. A session that an exchange
+     * linked after the link was read is not locked here, because its lock comes before the grant's. It needs
+     * no lock: its grant is revoked, and every MCP call and every refresh requires an active grant, so its
+     * tokens stop working at once and the row ends at its deadline.
+     */
+    private void endLockedSession(
+            UUID grantId, @Nullable UUID lockedSessionId, IssuedJwt.RevokedReason reason, Instant now) {
+        if (lockedSessionId != null
+                && lockedSessionId.equals(grantRepository.findSessionId(grantId).orElse(null))) {
+            end(lockedSessionId, reason, now);
         }
     }
 

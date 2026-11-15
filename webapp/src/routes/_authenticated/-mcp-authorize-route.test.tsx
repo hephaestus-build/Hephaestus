@@ -99,4 +99,20 @@ describe("the MCP consent route", () => {
 		expect(screen.queryByText("We could not load this request")).toBeNull();
 		expect(assigned).toStrictEqual([]);
 	});
+	it("never sends the browser to an address that is not HTTP or HTTPS", async () => {
+		serveRequest();
+		server.use(
+			http.put(`*/mcp/oauth/requests/${REQUEST_ID}/approval`, () =>
+				HttpResponse.json({ redirectUri: "javascript:alert(1)" }),
+			),
+		);
+		renderRouteAt(`/mcp/authorize?request=${REQUEST_ID}`);
+		const allow = await screen.findByRole("button", { name: "Allow" }, ROUTE_RENDER_WAIT);
+		const assigned = captureNavigation();
+
+		fireEvent.click(allow);
+
+		await screen.findByText("This client cannot connect", undefined, ROUTE_RENDER_WAIT);
+		expect(assigned).toStrictEqual([]);
+	});
 });
