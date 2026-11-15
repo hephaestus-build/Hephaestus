@@ -233,10 +233,10 @@ class ProxyCallLedger {
     }
 
     private OpenCall reviewCall(ProxyRouting.BilledAttempt attempt, long workspaceId, UUID runId, Bound bound) {
-        var job = jobs.findByIdAndWorkspaceId(attempt.sourceId(), workspaceId)
-                .filter(found -> found.getRunId().equals(runId))
+        var job = jobs.findCall(attempt.sourceId(), workspaceId)
+                .filter(found -> found.runId().equals(runId))
                 .orElseThrow(() -> new ClaimLost(new IllegalStateException("The call's job moved to another run")));
-        ConfigSnapshot snapshot = ConfigSnapshot.fromJson(job.getConfigSnapshot(), mapper);
+        ConfigSnapshot snapshot = ConfigSnapshot.fromJson(job.configSnapshot(), mapper);
         FrozenCharge charge = FrozenCharge.of(snapshot.model());
         return new OpenCall(
                 workspaceId,
@@ -244,9 +244,9 @@ class ProxyCallLedger {
                 attempt.epoch(),
                 "PRACTICE_REVIEW",
                 UsageSourceType.REVIEW_JOB,
-                job.getId(),
+                job.id(),
                 attempt.number(),
-                job.getReviewId(),
+                job.reviewId(),
                 ModelKind.CHAT,
                 null,
                 charge.model(),

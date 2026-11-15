@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import com.sun.management.ThreadMXBean;
 import de.tum.cit.aet.hephaestus.agent.LlmProperties;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptKeyFixtures;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptSigningKey;
@@ -79,6 +80,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewSnapshotQuery;
 import de.tum.cit.aet.hephaestus.productfeedback.drafting.ProductFeedbackDraftCalls;
 import de.tum.cit.aet.hephaestus.productfeedback.drafting.ProductFeedbackDrafts;
 import de.tum.cit.aet.hephaestus.testconfig.LlmCatalogTestFixtures;
+import de.tum.cit.aet.hephaestus.testconfig.SqlStatementCounter;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
@@ -88,6 +90,7 @@ import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Timer;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import io.micrometer.tracing.Tracer;
+import java.lang.management.ManagementFactory;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
@@ -101,6 +104,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.regex.Pattern;
 import mockwebserver3.Dispatcher;
 import mockwebserver3.MockResponse;
 import mockwebserver3.MockWebServer;
@@ -141,6 +145,9 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     /** The output limit that the fixture jobs freeze for their chat model. */
     private static final int CHAT_OUTPUT_LIMIT = 4096;
+
+    @Autowired
+    private SqlStatementCounter statements;
 
     @Autowired
     private LlmBudgetService liveBudgetService;
@@ -1145,6 +1152,62 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
                     .isEqualByComparingTo("0.004160");
         }
     }
+
+    /**
+     * A review's sandbox makes a model call every few seconds. Each read of the job's capture would parse a listing that
+     * a repository tree makes megabytes large, so no statement of the call may select it.
+     */
+    @Test
+    void shouldServeAReviewsModelCallWithoutReadingTheJobsCapture() throws Exception {
+        try (MockWebServer upstream = new MockWebServer()) {
+            upstream.start();
+            upstream.enqueue(json("{\"choices\":[]}"));
+            upstream.enqueue(json("{\"choices\":[]}"));
+            ReviewJob job = reviewJob(upstream.url("/v1").toString());
+            // A repository tree capture of a production repository: two citable texts for each of 12,000 files.
+            var texts = objectMapper.createArrayNode();
+            for (int file = 0; file < 12_000; file++)
+                for (String commit : new String[] {"c".repeat(40), null}) {
+                    String path = "server/application/src/main/java/some/deeply/nested/package/File" + file + ".java";
+                    texts.addObject()
+                            .put("source", "scm.repository.tree")
+                            .put("path", path)
+                            .put("side", "NEW")
+                            .put("commit", commit)
+                            .put("stagedPath", "repos/reviewed/" + path)
+                            .put("sha256", "a".repeat(64));
+                }
+            var capture = objectMapper.createObjectNode();
+            capture.putObject("manifest").set("citableTexts", texts);
+            jdbc.update(
+                    "UPDATE review_job SET capture = CAST(? AS jsonb) WHERE id = ?", capture.toString(), job.getId());
+            // The first call builds the plans of its statements; only a steady call is measured.
+            assertThat(callChat(proxyService(), job)).isEqualTo(200);
+            var threads = (ThreadMXBean) ManagementFactory.getThreadMXBean();
+
+            long before = threads.getCurrentThreadAllocatedBytes();
+            var call = statements.measure(() -> {
+                try {
+                    return callChat(proxyService(), job);
+                } catch (Exception failure) {
+                    throw new IllegalStateException(failure);
+                }
+            });
+            long allocated = threads.getCurrentThreadAllocatedBytes() - before;
+
+            assertThat(call.value()).isEqualTo(200);
+            assertThat(call.sql())
+                    .isNotEmpty()
+                    .noneMatch(sql -> CAPTURE_COLUMN.matcher(sql).find());
+            assertThat(allocated)
+                    .as(
+                            "bytes one model call allocates with a %d-byte capture",
+                            capture.toString().length())
+                    .isLessThan(capture.toString().length());
+        }
+    }
+
+    private static final Pattern CAPTURE_COLUMN = Pattern.compile("\\bcapture\\b");
 
     /** A client's default of 16,384 output tokens on a model whose limit is lower: the composer's case. */
     @Test

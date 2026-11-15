@@ -61,12 +61,11 @@ final class JobTokenAuthenticationProvider implements AuthenticationProvider {
 
     private Authentication review(AttemptJwt jwt, JobTokenAuthenticationFilter.RequestIdentity request) {
         if (request.turnId() != null) throw invalid();
-        var job = jobs.findById(jwt.id()).orElseThrow(JobTokenAuthenticationProvider::invalid);
-        if (job.getWorkspaceId() != jwt.workspaceId()) throw invalid();
+        var job = jobs.findCall(jwt.id(), jwt.workspaceId()).orElseThrow(JobTokenAuthenticationProvider::invalid);
         if (request.runtimeJobId() != null
                 && !request.runtimeJobId().equals(jwt.id().toString())) throw invalid();
         // A valid credential of an attempt that ended or was requeued, so that it lost its lease: its runner stops.
-        if (!job.getRunId().equals(jwt.runId())
+        if (!job.runId().equals(jwt.runId())
                 || !runs.isCurrent(new AgentRunRef(jwt.runId(), jwt.workspaceId()), jwt.epoch()))
             throw new AttemptLeaseConflict("This review attempt no longer holds its lease");
         return new JobTokenAuthentication(ProxyIdentity.of(jwt), jwt.scopes());

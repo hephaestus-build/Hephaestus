@@ -214,7 +214,7 @@ class ScanCallGuardTest extends BaseUnitTest {
                 1000,
                 100,
                 60)));
-        when(jobs.findByIdAndWorkspaceId(job.getId(), 1L)).thenReturn(Optional.of(job));
+        when(jobs.findCall(job.getId(), 1L)).thenAnswer(read -> Optional.of(RuntimeJobTestData.call(job)));
         // The database answers from the run: a replaced attempt or another run holds no live lease.
         when(runs.isCurrent(any(AgentRunRef.class), anyInt()))
                 .thenAnswer(call -> ReviewRunKind.epoch(job.getAttempt()) == (int) call.getArgument(1)

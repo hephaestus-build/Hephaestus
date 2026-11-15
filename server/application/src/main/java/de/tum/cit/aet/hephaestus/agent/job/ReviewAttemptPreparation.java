@@ -225,11 +225,7 @@ public class ReviewAttemptPreparation {
         }
     }
 
-    static Instant workDeadline(ReviewJob job, ConfigSnapshot snapshot) {
-        return workDeadline(Objects.requireNonNull(job.getExecutionStartedAt()), snapshot);
-    }
-
-    private static Instant workDeadline(Instant started, ConfigSnapshot snapshot) {
+    static Instant workDeadline(Instant started, ConfigSnapshot snapshot) {
         return started.plusSeconds(snapshot.timeoutSeconds()).truncatedTo(ChronoUnit.SECONDS);
     }
 

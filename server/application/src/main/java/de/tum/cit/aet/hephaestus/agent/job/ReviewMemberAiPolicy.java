@@ -9,6 +9,7 @@ import de.tum.cit.aet.hephaestus.agent.handler.spi.JobPreparationException;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonProcessingSuppression;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentId;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentSnapshot;
 import de.tum.cit.aet.hephaestus.workspace.spi.MemberAiPreferences;
 import java.util.ArrayList;
 import java.util.List;
@@ -37,7 +38,8 @@ public class ReviewMemberAiPolicy {
 
     public Optional<WorkspaceModelAssignment> binding(ReviewJob job) {
         if (!permitsReview(job)) return Optional.empty();
-        return routing.bindingForPeople(job.getWorkspaceId(), ModelPurpose.PRACTICE_REVIEW, people(job));
+        return routing.bindingForPeople(
+                job.getWorkspaceId(), ModelPurpose.PRACTICE_REVIEW, people(assignments.load(job)));
     }
 
     public Optional<WorkspaceModelAssignment> binding(
@@ -62,33 +64,47 @@ public class ReviewMemberAiPolicy {
     }
 
     public boolean isProcessingSuppressed(ReviewJob job) {
+        // A job under erasure is suppressed before its assignments are read: erasure can remove its review first.
         if (suppression.isReviewJobSuppressed(job.getId())) return true;
-        return assignments.load(job).stream()
+        return suppressed(job.getWorkspaceId(), assignments.load(job));
+    }
+
+    public boolean permitsReview(ReviewJob job) {
+        if (suppression.isReviewJobSuppressed(job.getId())) return false;
+        var loaded = assignments.load(job);
+        return !suppressed(job.getWorkspaceId(), loaded) && permitsAi(job.getWorkspaceId(), people(loaded));
+    }
+
+    /** Whether a model call of the job may use {@code model}; it reads the job's call fields, never its capture. */
+    public boolean allows(ReviewJobRepository.ReviewJobCall job, LlmModelResolver.ConnectionRef model) {
+        if (suppression.isReviewJobSuppressed(job.id())) return false;
+        var loaded = assignments.load(job.workspaceId(), job.reviewId(), job.input());
+        var people = people(loaded);
+        return !suppressed(job.workspaceId(), loaded)
+                && permitsAi(job.workspaceId(), people)
+                && people.stream().allMatch(person -> routing.allows(job.workspaceId(), person, model));
+    }
+
+    private boolean suppressed(long workspaceId, List<ReviewAssignmentSnapshot> loaded) {
+        return loaded.stream()
                 .anyMatch(assignment ->
                         (assignment.developerId() != null && suppression.isAccountSuppressed(assignment.developerId()))
                                 || (assignment.item().sourceId() != null
                                         && suppression.isSourceSuppressed(
-                                                job.getWorkspaceId(),
+                                                workspaceId,
                                                 assignment.item().kind().value(),
                                                 assignment.item().sourceId())));
     }
 
-    public boolean permitsReview(ReviewJob job) {
-        return !isProcessingSuppressed(job)
-                && people(job).stream()
-                        .allMatch(person -> person == null
-                                || preferences
-                                        .forDeveloper(job.getWorkspaceId(), person)
-                                        .permitsAi());
-    }
-
-    public boolean allows(ReviewJob job, LlmModelResolver.ConnectionRef model) {
-        return permitsReview(job)
-                && people(job).stream().allMatch(person -> routing.allows(job.getWorkspaceId(), person, model));
+    private boolean permitsAi(long workspaceId, List<@Nullable Long> people) {
+        return people.stream()
+                .allMatch(person -> person == null
+                        || preferences.forDeveloper(workspaceId, person).permitsAi());
     }
 
     public boolean allowsResult(ReviewJob job) {
-        return permitsReview(job) && people(job).stream().allMatch(person -> allowsPerson(job, person));
+        return permitsReview(job)
+                && people(assignments.load(job)).stream().allMatch(person -> allowsPerson(job, person));
     }
 
     public boolean allowsPerson(ReviewJob job, @Nullable Long accountId) {
@@ -110,9 +126,9 @@ public class ReviewMemberAiPolicy {
         }
     }
 
-    private List<@Nullable Long> people(ReviewJob job) {
+    private static List<@Nullable Long> people(List<ReviewAssignmentSnapshot> loaded) {
         List<@Nullable Long> people = new ArrayList<>();
-        for (var assignment : assignments.load(job)) {
+        for (var assignment : loaded) {
             Long developer = assignment.developerId();
             if (!people.contains(developer)) people.add(developer);
         }

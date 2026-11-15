@@ -13,6 +13,7 @@ import de.tum.cit.aet.hephaestus.agent.conversation.weeklydigest.DigestAdmission
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewMemberAiPolicy;
+import de.tum.cit.aet.hephaestus.agent.job.RuntimeJobTestData;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
 import de.tum.cit.aet.hephaestus.conversation.spi.ConversationTurnAccess;
@@ -81,14 +82,17 @@ class ProxyRequestPolicyTest extends BaseUnitTest {
     @Test
     void shouldRefuseASourceThatDoesNotBelongToTheAuthenticatedWorkspace() {
         assertThat(policy.allows(request(UsageSourceType.REVIEW_JOB))).isFalse();
-        verify(jobs).findByIdAndWorkspaceId(id, 1L);
+        verify(jobs).findCall(id, 1L);
         verifyNoInteractions(reviews, routing);
     }
 
     @Test
     void shouldRecheckTheCurrentChoiceOnEveryModelRequest() {
-        var job = new ReviewJob();
-        when(jobs.findByIdAndWorkspaceId(id, 1L)).thenReturn(Optional.of(job));
+        var entity = new ReviewJob();
+        entity.setId(id);
+        RuntimeJobTestData.initialize(entity, 1L);
+        var job = RuntimeJobTestData.call(entity);
+        when(jobs.findCall(id, 1L)).thenReturn(Optional.of(job));
         when(reviews.allows(job, model)).thenReturn(true, false);
         assertThat(policy.allows(request(UsageSourceType.REVIEW_JOB))).isTrue();
         assertThat(policy.allows(request(UsageSourceType.REVIEW_JOB))).isFalse();

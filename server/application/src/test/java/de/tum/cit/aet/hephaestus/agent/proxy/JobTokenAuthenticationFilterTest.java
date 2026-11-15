@@ -63,7 +63,8 @@ class JobTokenAuthenticationFilterTest extends BaseUnitTest {
         String subject = "review:" + job.getReviewId();
         when(run.getConcurrencyKey()).thenReturn(subject);
         when(verifier.verify("valid-token")).thenReturn(jwt);
-        when(jobs.findById(job.getId())).thenReturn(Optional.of(job));
+        when(jobs.findCall(job.getId(), job.getWorkspaceId()))
+                .thenAnswer(read -> Optional.of(RuntimeJobTestData.call(job)));
         when(runs.isCurrent(ref, jwt.epoch())).thenReturn(true);
         when(runs.find(ref)).thenReturn(Optional.of(run));
         var previous = Map.of("run.id", "parent", "review.id", "parent-review", "custom", "kept");
@@ -92,7 +93,8 @@ class JobTokenAuthenticationFilterTest extends BaseUnitTest {
         var job = running();
         var jwt = jwt(job);
         when(verifier.verify("valid-token")).thenReturn(jwt);
-        when(jobs.findById(job.getId())).thenReturn(Optional.of(job));
+        when(jobs.findCall(job.getId(), job.getWorkspaceId()))
+                .thenAnswer(read -> Optional.of(RuntimeJobTestData.call(job)));
         when(runs.isCurrent(new AgentRunRef(jwt.runId(), job.getWorkspaceId()), ReviewRunKind.epoch(job.getAttempt())))
                 .thenReturn(true);
         var request = request("/internal/llm/admit-results", "Bearer valid-token");
@@ -108,7 +110,7 @@ class JobTokenAuthenticationFilterTest extends BaseUnitTest {
         assertThat(((JobTokenAuthentication) principal.get()).getPrincipal().job())
                 .isEqualTo(ProxyAttempt.of(jwt));
         assertThat(job.getConfigSnapshot()).isNull();
-        verify(jobs).findById(job.getId());
+        verify(jobs).findCall(job.getId(), job.getWorkspaceId());
         verify(runs)
                 .isCurrent(new AgentRunRef(jwt.runId(), job.getWorkspaceId()), ReviewRunKind.epoch(job.getAttempt()));
         verifyNoMoreInteractions(jobs);
@@ -145,7 +147,7 @@ class JobTokenAuthenticationFilterTest extends BaseUnitTest {
         // One token type for both kinds: the kind decides which rows the id may name.
         var jwt = jwt(UUID.randomUUID(), 7L, 2);
         when(verifier.verify("valid-token")).thenReturn(jwt);
-        when(jobs.findById(jwt.id())).thenReturn(Optional.empty());
+        when(jobs.findCall(jwt.id(), jwt.workspaceId())).thenReturn(Optional.empty());
         var response = new MockHttpServletResponse();
         filter.doFilter(request("/internal/llm/responses", "Bearer valid-token"), response, (incoming, outgoing) -> {
             throw new AssertionError("A review token served as a turn");
@@ -160,7 +162,8 @@ class JobTokenAuthenticationFilterTest extends BaseUnitTest {
         var job = running();
         var jwt = jwt(job.getId(), mismatch.equals("workspace") ? 999L : job.getWorkspaceId(), job.getAttempt());
         when(verifier.verify("valid-token")).thenReturn(jwt);
-        when(jobs.findById(job.getId())).thenReturn(Optional.of(job));
+        when(jobs.findCall(job.getId(), job.getWorkspaceId()))
+                .thenAnswer(read -> Optional.of(RuntimeJobTestData.call(job)));
         var request = request(
                 mismatch.equals("path") ? "/internal/llm/runtime/" + UUID.randomUUID() : "/internal/llm/admit-results",
                 "Bearer valid-token");
@@ -180,7 +183,8 @@ class JobTokenAuthenticationFilterTest extends BaseUnitTest {
         var job = running();
         var jwt = jwt(job);
         when(verifier.verify("valid-token")).thenReturn(jwt);
-        when(jobs.findById(job.getId())).thenReturn(Optional.of(job));
+        when(jobs.findCall(job.getId(), job.getWorkspaceId()))
+                .thenAnswer(read -> Optional.of(RuntimeJobTestData.call(job)));
         when(runs.isCurrent(new AgentRunRef(jwt.runId(), job.getWorkspaceId()), ReviewRunKind.epoch(job.getAttempt())))
                 .thenReturn(false);
         var response = new MockHttpServletResponse();
@@ -197,7 +201,8 @@ class JobTokenAuthenticationFilterTest extends BaseUnitTest {
         // The job runs, but no longer under this credential's lease.
         var job = running();
         when(verifier.verify("valid-token")).thenReturn(jwt(job));
-        when(jobs.findById(job.getId())).thenReturn(Optional.of(job));
+        when(jobs.findCall(job.getId(), job.getWorkspaceId()))
+                .thenAnswer(read -> Optional.of(RuntimeJobTestData.call(job)));
         for (var id : new UUID[] {job.getId(), UUID.randomUUID()}) {
             var response = new MockHttpServletResponse();
             filter.doFilter(
@@ -240,7 +245,8 @@ class JobTokenAuthenticationFilterTest extends BaseUnitTest {
         var job = running();
         var jwt = jwt(job);
         when(verifier.verify("valid-token")).thenReturn(jwt);
-        when(jobs.findById(job.getId())).thenReturn(Optional.of(job));
+        when(jobs.findCall(job.getId(), job.getWorkspaceId()))
+                .thenAnswer(read -> Optional.of(RuntimeJobTestData.call(job)));
         when(runs.isCurrent(new AgentRunRef(jwt.runId(), job.getWorkspaceId()), ReviewRunKind.epoch(job.getAttempt())))
                 .thenReturn(true);
         var request = request("/internal/llm/admit-results", "Bearer valid-token");

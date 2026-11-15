@@ -86,7 +86,7 @@ class ProxyRoutingServiceTest extends BaseUnitTest {
                 now,
                 now.plusSeconds(60),
                 workDeadline));
-        lenient().when(jobs.findById(job.getId())).thenReturn(Optional.of(job));
+        lenient().when(jobs.findCall(job.getId(), 7L)).thenAnswer(read -> Optional.of(RuntimeJobTestData.call(job)));
         lenient()
                 .when(runs.isCurrent(
                         new AgentRunRef(Objects.requireNonNull(identity.job()).runId(), 7L), ReviewRunKind.epoch(2)))
@@ -224,7 +224,7 @@ class ProxyRoutingServiceTest extends BaseUnitTest {
         assertThat(route.sourceId()).isEqualTo(job.getId());
         assertThat(route.attempt().sourceType()).isEqualTo(UsageSourceType.REVIEW_JOB);
         assertThat(route.attempt().workspaceId()).isEqualTo(7L);
-        verify(jobs).findById(job.getId());
+        verify(jobs).findCall(job.getId(), 7L);
         verify(runs)
                 .isCurrent(
                         new AgentRunRef(Objects.requireNonNull(identity.job()).runId(), 7L), ReviewRunKind.epoch(2));

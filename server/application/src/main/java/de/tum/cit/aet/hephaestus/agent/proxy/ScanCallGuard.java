@@ -2,7 +2,6 @@ package de.tum.cit.aet.hephaestus.agent.proxy;
 
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewayProperties;
-import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewRunKind;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunRef;
@@ -56,8 +55,8 @@ public class ScanCallGuard {
         if (workspace == null
                 || attempt.sourceType() == UsageSourceType.CONVERSATION_TURN
                 || attempt.sourceType() == UsageSourceType.PROBE) return Optional.empty();
-        var job = jobs.findByIdAndWorkspaceId(attempt.sourceId(), workspace).orElseThrow(ScanCallGuard::refused);
-        var review = reviews.find(workspace, job.getReviewId()).orElseThrow(ScanCallGuard::refused);
+        var job = jobs.findCall(attempt.sourceId(), workspace).orElseThrow(ScanCallGuard::refused);
+        var review = reviews.find(workspace, job.reviewId()).orElseThrow(ScanCallGuard::refused);
         if (review.kind() != ReviewKind.SCAN) {
             requireWithinAttemptWork(job, route);
             return Optional.empty();
@@ -66,7 +65,7 @@ public class ScanCallGuard {
         // same work deadline.
         Instant deadline = Objects.requireNonNull(route.workDeadline());
         UUID lease;
-        while ((lease = leases.take(job.getId(), workspace).orElse(null)) == null) {
+        while ((lease = leases.take(job.id(), workspace).orElse(null)) == null) {
             if (!Instant.now().plus(LEASE_POLL).isBefore(deadline)) throw workTimeOver(null);
             try {
                 Thread.sleep(LEASE_POLL);
@@ -76,20 +75,20 @@ public class ScanCallGuard {
             }
         }
         try {
-            job = jobs.findByIdAndWorkspaceId(job.getId(), workspace).orElseThrow(ScanCallGuard::refused);
+            job = jobs.findCall(job.id(), workspace).orElseThrow(ScanCallGuard::refused);
             UUID runId = attempt.runId();
             if (runId == null
-                    || !job.getRunId().equals(runId)
+                    || !job.runId().equals(runId)
                     || !runs.isCurrent(new AgentRunRef(runId, workspace), ReviewRunKind.epoch(attempt.number())))
                 throw refused();
-            var snapshot = ConfigSnapshot.fromJson(job.getConfigSnapshot(), mapper);
+            var snapshot = ConfigSnapshot.fromJson(job.configSnapshot(), mapper);
             var model = snapshot.model();
             if (model == null || model.priceSnapshot() == null) throw refused();
-            var cap = reviews.budgetUsd(workspace, job.getReviewId()).orElseThrow(ScanCallGuard::refused);
+            var cap = reviews.budgetUsd(workspace, job.reviewId()).orElseThrow(ScanCallGuard::refused);
             // Every call of the review is in its rows, those of this attempt included; an open or unmeasured one
             // counts at its upper bound.
-            var spent = budget.spent(workspace, job.getReviewId());
-            var assigned = job.getInput().assignments();
+            var spent = budget.spent(workspace, job.reviewId());
+            var assigned = job.input().assignments();
             var pinned = review.practices().stream()
                     .filter(practice -> assigned.stream().anyMatch(id -> id.practiceId() == practice.practiceId()))
                     .findFirst()
@@ -117,10 +116,10 @@ public class ScanCallGuard {
                     ProxyCallLedger.costBound(model.priceSnapshot(), new ProxyCallLedger.Bound(body.length, output));
             if (next == null || !spent.priced() || spent.cost().add(next).compareTo(cap) > 0) throw refused();
             if (reviewCalls(job, attempt.number()).getCalls()
-                    >= budget.callCap(job.getInput().assignments().size())) throw refused();
-            return Optional.of(new Lease(leases, job.getId(), workspace, lease));
+                    >= budget.callCap(job.input().assignments().size())) throw refused();
+            return Optional.of(new Lease(leases, job.id(), workspace, lease));
         } catch (RuntimeException | Error failure) {
-            leases.release(job.getId(), workspace, lease);
+            leases.release(job.id(), workspace, lease);
             throw failure;
         }
     }
@@ -131,10 +130,10 @@ public class ScanCallGuard {
      * holds a caller that does not, so an attempt's cost never rests on its runner alone. Each call already in flight
      * may pass it once.
      */
-    private void requireWithinAttemptWork(ReviewJob job, ProxyRouting route) {
+    private void requireWithinAttemptWork(ReviewJobRepository.ReviewJobCall job, ProxyRouting route) {
         // A row that moved to another attempt counts that attempt's calls; the lease refuses this one's.
-        if (job.getAttempt() != route.attempt().number()) return;
-        long practices = job.getInput().assignments().size();
+        if (job.attempt() != route.attempt().number()) return;
+        long practices = job.input().assignments().size();
         var used = reviewCalls(job, route.attempt().number());
         if (used.getCalls() >= WORK_MARGIN * practices * practiceReview.practiceModelCalls()
                 || used.getOutputTokens() >= WORK_MARGIN * practices * practiceReview.practiceOutputTokens()
@@ -143,8 +142,8 @@ public class ScanCallGuard {
     }
 
     /** The attempt's calls on the review's own model: every call it opened, with usage or without. */
-    private LlmUsageEventRepository.ReviewCalls reviewCalls(ReviewJob job, int attempt) {
-        return usage.countReviewCalls(job.getWorkspaceId(), job.getId(), attempt);
+    private LlmUsageEventRepository.ReviewCalls reviewCalls(ReviewJobRepository.ReviewJobCall job, int attempt) {
+        return usage.countReviewCalls(job.workspaceId(), job.id(), attempt);
     }
 
     private static ResponseStatusException workTimeOver(@Nullable Throwable cause) {

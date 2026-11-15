@@ -9,6 +9,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;
 import org.springframework.http.HttpStatus;
@@ -16,6 +17,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.ErrorResponseException;
 import org.springframework.web.server.ResponseStatusException;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 /** The decision made when a composition run is claimed, shared by every gateway replica. */
@@ -85,7 +87,24 @@ public class ReviewCompositionClaim {
                 || !run.fence().runId().equals(job.getRunId())) return Optional.empty();
         var capture = job.getCapture();
         if (capture == null) return Optional.empty();
-        var stored = capture.path(FIELD);
+        return decision(run, capture.path(FIELD));
+    }
+
+    /** The run's job and its decision, read without the rest of the job's capture, as each sandbox request needs. */
+    public Optional<Claimed> find(SandboxRun run) {
+        return jobs.findCompositionClaimByRun(run.fence().runId(), run.fence().workspaceId())
+                .flatMap(row -> {
+                    String claim = row.claim();
+                    return claim == null
+                            ? Optional.empty()
+                            : decision(run, mapper.readTree(claim)).map(found -> new Claimed(row.id(), found));
+                });
+    }
+
+    /** @param jobId the job that the run composes */
+    public record Claimed(UUID jobId, Decision decision) {}
+
+    private Optional<Decision> decision(SandboxRun run, JsonNode stored) {
         if (!stored.path("runId").asString("").equals(run.fence().runId().toString())
                 || stored.path("epoch").asInt(-1) != run.fence().epoch()) return Optional.empty();
         return Optional.of(mapper.treeToValue(stored.required("snapshot"), Decision.class));

@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.InstanceOfAssertFactories.type;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -437,7 +438,9 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
     @Test
     void shouldRejectCookieAndQueryCredentialsWhenNoBearerHeaderIsPresent() throws Exception {
         ReviewJob job = runningJobOnAttempt(1);
-        when(jobRepository.findById(job.getId())).thenReturn(Optional.of(job));
+        lenient()
+                .when(jobRepository.findCall(job.getId(), job.getWorkspaceId()))
+                .thenAnswer(read -> Optional.of(RuntimeJobTestData.call(job)));
         when(jwtVerifier.verify("current-attempt")).thenReturn(jobJwt(job, 1));
         assertThat(answerToTokenCall("current-attempt")).isEqualTo(200);
 
@@ -465,7 +468,9 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
     @Test
     void servesACapabilityCallAsTheAttemptItsTokenNames() throws Exception {
         ReviewJob job = runningJobOnAttempt(1);
-        when(jobRepository.findById(job.getId())).thenReturn(Optional.of(job));
+        lenient()
+                .when(jobRepository.findCall(job.getId(), job.getWorkspaceId()))
+                .thenAnswer(read -> Optional.of(RuntimeJobTestData.call(job)));
         when(jwtVerifier.verify("current-attempt")).thenReturn(jobJwt(job, 1));
         when(jwtVerifier.verify("dead-attempt")).thenReturn(jobJwt(job, 0));
 
@@ -504,7 +509,9 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
     })
     void shouldServeEveryCapabilityWhenTheJobsOneTokenCallsIt(String method, String path) throws Exception {
         ReviewJob job = runningJobOnAttempt(1);
-        when(jobRepository.findById(job.getId())).thenReturn(Optional.of(job));
+        lenient()
+                .when(jobRepository.findCall(job.getId(), job.getWorkspaceId()))
+                .thenAnswer(read -> Optional.of(RuntimeJobTestData.call(job)));
         when(jwtVerifier.verify("job-token")).thenReturn(jobJwt(job, 1));
         MockHttpServletRequest request =
                 request(method, path.replace("{job}", job.getId().toString()), GATEWAY_PORT);
@@ -517,7 +524,9 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
     @Test
     void shouldRefuseATokenWhenItCarriesOnlyTheRetiredPracticeScriptScope() throws Exception {
         ReviewJob job = runningJobOnAttempt(1);
-        when(jobRepository.findById(job.getId())).thenReturn(Optional.of(job));
+        lenient()
+                .when(jobRepository.findCall(job.getId(), job.getWorkspaceId()))
+                .thenAnswer(read -> Optional.of(RuntimeJobTestData.call(job)));
         when(jwtVerifier.verify("practice-script-token")).thenReturn(jobJwt(job, 1, "llm_practice_script"));
         MockHttpServletRequest request = request("POST", "/internal/llm/chat/completions", GATEWAY_PORT);
         request.addHeader("Authorization", "Bearer practice-script-token");
@@ -530,7 +539,9 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
     @Test
     void refusesAJobTokenWithoutTheProxyScope() throws Exception {
         ReviewJob job = runningJobOnAttempt(1);
-        when(jobRepository.findById(job.getId())).thenReturn(Optional.of(job));
+        lenient()
+                .when(jobRepository.findCall(job.getId(), job.getWorkspaceId()))
+                .thenAnswer(read -> Optional.of(RuntimeJobTestData.call(job)));
         when(jwtVerifier.verify("unscoped")).thenReturn(jobJwt(job, 1, "other"));
 
         assertThat(answerToTokenCall("unscoped")).isEqualTo(403);
