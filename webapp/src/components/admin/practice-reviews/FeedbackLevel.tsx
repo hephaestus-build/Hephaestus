@@ -237,6 +237,12 @@ export function FeedbackLevel({
 					<SheetSection part="state" foldKey={levelFoldKey("feedback", "state")}>
 						<SheetHistory events={feedbackHistory(record)} now={feedbackNow(record)} />
 					</SheetSection>
+					{/* Rejected feedback is never awaiting approval, so at most one of these footers shows. */}
+					{canApproveAfterAll(record) && (
+						<DrawerFooter>
+							<ApproveRejectedFeedback isDeciding={isDeciding} onApprove={onApprove} />
+						</DrawerFooter>
+					)}
 					{awaitingApproval ? (
 						<ProposalPackage feedback={record} />
 					) : (
@@ -302,11 +308,8 @@ export function FeedbackLevel({
 						/>
 					</div>
 				</DrawerFooter>
-			) : canApproveAfterAll(record) ? (
-				<DrawerFooter>
-					<ApproveRejectedFeedback isDeciding={isDeciding} onApprove={onApprove} />
-				</DrawerFooter>
 			) : (
+				!canApproveAfterAll(record) &&
 				canChangeWithdrawal(record) && (
 					<DrawerFooter>
 						{deliveryCheck(record) === "available" && (

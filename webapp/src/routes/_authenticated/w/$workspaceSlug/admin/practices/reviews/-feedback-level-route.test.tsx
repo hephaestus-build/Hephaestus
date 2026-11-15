@@ -692,19 +692,19 @@ describe("feedback approval level", () => {
 	});
 });
 
-describe("approving rejected feedback after all", () => {
-	function rejectedWire(state: "REJECTED" | "READY") {
-		return {
-			...proposalWire("READY"),
-			state,
-			stopReason: null,
-			decisions: [
-				{ ...decisionWire(FEEDBACK_ID, "REJECT"), reasonCode: "UNHELPFUL" as const },
-				...(state === "READY" ? [decisionWire(FEEDBACK_ID, "APPROVE")] : []),
-			],
-		};
-	}
+function rejectedWire(state: "REJECTED" | "READY") {
+	return {
+		...proposalWire("READY"),
+		state,
+		stopReason: null,
+		decisions: [
+			{ ...decisionWire(FEEDBACK_ID, "REJECT"), reasonCode: "UNHELPFUL" as const },
+			...(state === "READY" ? [decisionWire(FEEDBACK_ID, "APPROVE")] : []),
+		],
+	};
+}
 
+describe("approving rejected feedback after all", () => {
 	it("confirms what approval sends, then approves with the package it read", async () => {
 		let state: "REJECTED" | "READY" = "REJECTED";
 		let requestBody: unknown;
