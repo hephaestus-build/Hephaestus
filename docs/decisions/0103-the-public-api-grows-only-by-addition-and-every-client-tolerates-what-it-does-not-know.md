@@ -1,6 +1,6 @@
 # ADR 0103: The public API grows only by addition, and every client tolerates what it does not know
 
-**Status:** Proposed
+**Status:** Accepted
 **Date:** 2026-11-13
 **Authors:** Hephaestus maintainers
 
@@ -43,7 +43,7 @@ The rules apply to the public contract: the public operations, the documents and
    Compatible: a new operation; a new optional request parameter or property; a new response property; a new value of an open enum; a new problem type; a new error status; a new stream event name.
    Breaking: removing or renaming an operation, parameter or property; a response property that was always present becomes absent; a new required request input; a narrower request constraint (`maxLength`, `pattern`, `minimum`); a changed type, format or default; a new value of a closed enum; `additionalProperties: false` on a response; a changed status code or problem type for the same condition.
    The contract is the wire format. Generated source code can need edits after a compatible change ([Zalando #106][zalando]).
-2. **A missing value is absent.** A response leaves out a property that has no value. No schema that a public operation reaches has a `null` type. A request may leave out an optional property, and `null` means the same as absent, except in a JSON Merge Patch body ([Zalando #123][zalando]).
+2. **A missing value is absent.** A response leaves out a property that has no value. No schema that a public operation's responses reach has a `null` type. A request may leave out an optional property, and `null` means the same as absent, except in a JSON Merge Patch body ([Zalando #123][zalando]).
 3. **An enum that a public operation returns is open everywhere it appears.** The spec writes it as `type: string` with the known values in `examples`, and its description starts with "Extensible enum:" and says that a client must accept other values ([Zalando #112][zalando]). The server checks a request value against the known values and answers 400 for an unknown one. Removing a known value is a break. The closed enums that the policy names (observation outcomes, practice problem severities) keep `enum`, and a new value in them is a break.
 4. **Every Java enum is one named schema.** A type that crosses operations has one name in every generated client.
 5. **A client tolerates what it does not know.** It ignores an unknown response property, accepts an unknown value of an open enum, falls back on the status for an unknown problem `type`, and skips an unknown stream event name or property ([RFC 9457 §3.1.1, §3.2](https://www.rfc-editor.org/rfc/rfc9457#section-3.2)). Each stream event payload is a schema of the spec. A problem `type` is a fixed absolute URI under the release docs. It identifies the problem in every build, so it does not follow a build's docs site as the server's other docs links do.
@@ -65,11 +65,9 @@ Before 1.0, each break that these rules cause is listed in ADR 0096 with its mig
 
 ## Confirmation
 
-The pull requests that implement this ADR add these checks. The status stays Proposed until they run in CI.
-
-- Rules 1, 2 and 3: `vp run gate:api-compatibility` fails, against the previous release, on a removal, on a `null` type in a schema that a public operation reaches, on an `enum` in a public response outside the closed set, and on a new value of a closed enum.
-- Rules 3, 4 and 7: an OpenAPI linter checks the spec on every pull request: OpenAPI 3.1 structure (unique tags, a schema on every header), no inline enum, the "Extensible enum" description, and a `Deprecation` header on every deprecated operation.
-- Rules 2, 3 and 5: a round-trip job generates and compiles a Swift client (swift-openapi-generator) and a Kotlin client (OpenAPI Generator `kotlin`) from the unmodified spec. It fails on a dropped property, and it decodes a fixture with an unknown property and an unknown enum value.
+- Rules 1, 2 and 3: `vp run gate:api-compatibility` fails, for any base, on a `null` type in a schema that a public operation's responses reach. From a 1.0 base it also fails on a removal, on a closed enum in a public response that gains a value or becomes open, on an open enum that becomes closed, and on a known value that an open enum drops.
+- Rules 3, 4 and 7: the spec build fails when two enums, or an enum and a DTO, would share a schema name (`NamedEnumModelConverter`, `OpenAPIConfiguration`). `vp run gate:openapi-lint` runs Redocly CLI on the spec: OpenAPI 3.1 structure, a schema on every header, unique and declared tags, unique operation IDs, no unresolved or unused schema, and a `Deprecation` header on every deprecated operation.
+- Rules 2, 3 and 5: `vp run gate:client-generators` generates and compiles a Swift client (swift-openapi-generator) and a Kotlin client (OpenAPI Generator `kotlin`) from the unmodified spec. It fails when Swift skips a schema that a public response reaches, and it decodes a fixture with an unknown property and an unknown value of an open enum.
 - Rules 6 and 8: not enforced. Review of each pull request that adds a public operation catches them.
 
 ## Revisit trigger
