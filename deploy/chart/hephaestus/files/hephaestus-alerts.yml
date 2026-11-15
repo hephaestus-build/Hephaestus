@@ -932,7 +932,7 @@ groups:
           severity: warning
         annotations:
           summary: A container's anonymous memory stayed above 85 % of its limit for 10 minutes
-
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       # Three restarts of a container in an hour show repeated instability, mostly a loop: the kubelet's backoff doubles from
       # 10 s to 5 min. The container name selects the server, because the chart shortens a long release name and drops
       # "-server" from the Pod name. Like HephaestusContainerOomKilled, the rule reads every namespace. A replacement Pod
