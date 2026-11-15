@@ -339,39 +339,45 @@ function withCheckout(
 	];
 }
 
-void test("a quote of code is refused unless the checkout admission verifies it against was captured", () => {
-	const submission = normalizeSubmission(baseSubmission());
+void test("a quote of the change needs no checkout, and a quote of a repository file needs its own", () => {
 	const diff = [["inputs/context/diff.patch", "scm.pull-request.diff"]] as const;
+	const change = normalizeSubmission(baseSubmission());
+	// Admission reads a quote of the change from the change's captured texts, as the session reads diff.patch.
 	assert.doesNotThrow(() =>
-		validateEvidenceSources(submission, ...withCheckout(["scm.pull-request.diff"], diff)),
+		validateEvidenceSources(change, new Set(["scm.pull-request.diff"]), new Map(diff)),
 	);
-	assert.throws(
-		() => validateEvidenceSources(submission, new Set(["scm.pull-request.diff"]), new Map(diff)),
-		/a quote of code needs the captured checkout repos\/reviewed\//u,
+	assert.doesNotThrow(() =>
+		validateEvidenceSources(change, ...withCheckout(["scm.pull-request.diff"], diff)),
+	);
+
+	const file = normalizeSubmission(
+		baseSubmission({
+			citations: [
+				citationFixture({
+					sourceKind: "scm.repository.tree",
+					sourcePath: "repos/reviewed/.git/HEAD",
+					side: undefined,
+				}),
+			],
+		}),
+	);
+	assert.doesNotThrow(() =>
+		validateEvidenceSources(file, ...withCheckout(["scm.pull-request.diff"], diff)),
 	);
 	const [available, sourceFiles] = withCheckout(["scm.pull-request.diff"], diff);
 	sourceFiles.delete("repos/reviewed/.git/hephaestus-captured-refs");
 	assert.throws(
-		() => validateEvidenceSources(submission, available, sourceFiles),
-		/needs the captured checkout/u,
+		() => validateEvidenceSources(file, available, sourceFiles),
+		/a quote of code needs the captured checkout repos\/reviewed\//u,
 	);
 	assert.throws(
 		() =>
 			validateEvidenceSources(
-				submission,
+				file,
 				new Set(["scm.pull-request.diff"]),
 				new Map([...diff, ...CHECKOUT_WITNESSES]),
 			),
-		/needs the captured checkout/u,
-	);
-	assert.throws(
-		() =>
-			validateEvidenceSources(
-				submission,
-				...withCheckout(["scm.pull-request.diff"], diff),
-				"repos/primary/",
-			),
-		/needs the captured checkout repos\/primary\//u,
+		/evidence source 'scm\.repository\.tree' was not available/u,
 	);
 	assert.match(
 		refusal(
@@ -387,7 +393,7 @@ void test("a quote of code is refused unless the checkout admission verifies it 
 	);
 });
 
-void test("a quote of the change requires its captured checkout witness", () => {
+void test("a quote of the change is checked without the checkout, on the live manifest", () => {
 	const { availableSourceKinds, sourceFileSources } = folderCitationIndex(
 		JSON.parse(
 			readFileSync(new URL("../practice-results/live-manifest.json", import.meta.url), "utf8"),
@@ -403,9 +409,8 @@ void test("a quote of the change requires its captured checkout witness", () => 
 	const withoutCheckout = new Map(
 		[...sourceFileSources].filter(([, kind]) => kind !== "scm.repository.tree"),
 	);
-	assert.throws(
-		() => validateEvidenceSources(submission, availableSourceKinds, withoutCheckout),
-		/needs the captured checkout repos\/reviewed\//u,
+	assert.doesNotThrow(() =>
+		validateEvidenceSources(submission, availableSourceKinds, withoutCheckout),
 	);
 });
 

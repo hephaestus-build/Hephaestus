@@ -25,7 +25,6 @@ export const CHECKOUT_WITNESS = /^(?<root>repos\/[a-zA-Z0-9_-]+\/)\.git\/HEAD$/u
  * The reviewed checkout as the server stages it (`SandboxLayout.REPO_MOUNT_RELATIVE`): a quote of the change is verified
  * against it. The runner passes its task's repository root, which is this path in every sandbox.
  */
-export const REVIEWED_CHECKOUT = "repos/reviewed/";
 const CAPTURED_REFS = ".git/hephaestus-captured-refs";
 
 /** Which side of a diff hunk a citation quotes. It is absent on every source that is not a diff. */
@@ -669,21 +668,14 @@ export function validateEvidenceSources(
 	submission: NormalizedSubmission,
 	availableSourceKinds: ReadonlySet<string>,
 	sourceFileSources: ReadonlyMap<string, string> = new Map(),
-	reviewedCheckout = REVIEWED_CHECKOUT,
 ): void {
-	validateCitationSources(
-		submissionCitations(submission),
-		availableSourceKinds,
-		sourceFileSources,
-		reviewedCheckout,
-	);
+	validateCitationSources(submissionCitations(submission), availableSourceKinds, sourceFileSources);
 }
 
 export function validateCitationSources(
 	citations: readonly Citation[],
 	availableSourceKinds: ReadonlySet<string>,
 	sourceFileSources: ReadonlyMap<string, string>,
-	reviewedCheckout: string,
 ): void {
 	for (const citation of citations) {
 		const { sourceKind } = citation;
@@ -710,12 +702,13 @@ export function validateCitationSources(
 				`sourceFile '${citation.sourcePath}' belongs to evidence source '${sourceFileSource}', not '${sourceKind}'`,
 			);
 		}
-		const checkout = checkoutOf(citation, reviewedCheckout);
+		const checkout = checkoutOf(citation);
 		if (checkout === undefined) {
 			continue;
 		}
-		// Admission verifies a quote of code against the captured checkout; without it, the whole
-		// submission is refused as an unavailable source.
+		// Admission verifies a quote of a repository file against the captured checkout; without it, the
+		// whole submission is refused as an unavailable source. A quote of the change needs no checkout:
+		// admission reads the change's own captured texts (context/citable/), as the session reads diff.patch.
 		const captured =
 			availableSourceKinds.has(TREE_SOURCE) &&
 			[`${checkout}.git/HEAD`, `${checkout}${CAPTURED_REFS}`].every(
@@ -731,10 +724,7 @@ export function validateCitationSources(
 	}
 }
 
-function checkoutOf(citation: Citation, reviewedCheckout: string): string | undefined {
-	if (citation.sourceKind === DIFF_SOURCE) {
-		return reviewedCheckout;
-	}
+function checkoutOf(citation: Citation): string | undefined {
 	return citation.sourceKind === TREE_SOURCE
 		? CHECKOUT_WITNESS.exec(citation.sourcePath)?.groups?.root
 		: undefined;

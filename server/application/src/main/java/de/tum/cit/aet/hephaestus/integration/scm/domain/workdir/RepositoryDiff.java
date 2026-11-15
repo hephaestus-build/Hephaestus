@@ -71,7 +71,11 @@ public final class RepositoryDiff {
         return Set.copyOf(paths);
     }
 
-    /** The change as {@code git diff -M50%} prints it, for a literal search; never shown to a review. */
+    /**
+     * The change as {@code git diff -M50%} prints it, for a literal search. A review that captured no checkout reads its
+     * change view from it ({@code writeCapturedChangeView} in {@code pi-change.ts}); one with a checkout derives the view
+     * there with Git.
+     */
     public static String unifiedDiff(Repository repo, ObjectId base, ObjectId head) throws IOException {
         var out = new ByteArrayOutputStream();
         try (DiffFormatter formatter = formatter(repo, out)) {

@@ -1,4 +1,5 @@
-// Build the change view from the captured checkout and pinned range before any script reads it.
+// Build the change view from the captured checkout and pinned range before any script reads it. A review whose practices
+// read the change but not the repository has no checkout: its view comes from the diff that the server captured.
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
@@ -371,19 +372,56 @@ export function writeChangeView(
 	change: { base: string; head: string },
 	description: string | null = null,
 ) {
+	const range = [change.base, change.head];
+	writeView(
+		root,
+		annotateDiff(git(repository, ["diff", "--no-color", "--no-ext-diff", RENAMES, ...range])),
+		git(repository, ["diff", "--no-color", "--no-ext-diff", "--stat=200", RENAMES, ...range]),
+		parseNameStatus(
+			git(repository, ["diff", "--no-color", "--name-status", "-z", RENAMES, ...range]),
+		),
+		description === null
+			? null
+			: renderAuthoredDescription(
+					description,
+					authoredDescription(description, descriptionTemplates(repository, change.head)),
+				),
+	);
+}
+
+/**
+ * The change view from the diff that the server captured (`diff` in `change.json`), for a review that has no checkout:
+ * the server diffed the same pinned range with renames found at 50 %, and admission checks a quote of the change against
+ * the same diff. No authored view of the description is written: its templates are files of the repository, so a form's
+ * lines cannot be told apart here, and a practice then reads `description.md` as it is.
+ */
+export function writeCapturedChangeView(root: string, diff: string) {
+	const patch = withPlainPaths(diff);
+	const files = patchFiles(patch);
+	writeView(root, annotateDiff(Buffer.from(patch, "utf8")), patchStat(patch, files), files, null);
+}
+
+/** The diff that `change.json` holds, or null when it holds none. */
+export function readCapturedDiff(contextRoot: string): string | null {
+	const parsed: unknown = JSON.parse(
+		readFileSync(path.resolve(contextRoot, "change.json"), "utf8"),
+	);
+	const diff: unknown =
+		typeof parsed === "object" && parsed !== null ? Reflect.get(parsed, "diff") : null;
+	return typeof diff === "string" ? diff : null;
+}
+
+function writeView(
+	root: string,
+	annotated: Buffer,
+	stat: Buffer | string,
+	files: { status: string; path: string; oldPath?: string }[],
+	authored: string | null,
+) {
 	const out = path.resolve(root, CHANGE_ROOT);
 	mkdirSync(out, { recursive: true });
-	const range = [change.base, change.head];
-	const patch = git(repository, ["diff", "--no-color", "--no-ext-diff", RENAMES, ...range]);
-	const annotated = annotateDiff(patch);
 	writeFileSync(path.resolve(out, "diff.patch"), annotated);
-	writeFileSync(
-		path.resolve(out, "diff_stat.txt"),
-		git(repository, ["diff", "--no-color", "--no-ext-diff", "--stat=200", RENAMES, ...range]),
-	);
-	const files = parseNameStatus(
-		git(repository, ["diff", "--no-color", "--name-status", "-z", RENAMES, ...range]),
-	);
+	writeFileSync(path.resolve(out, "diff_stat.txt"), stat);
 	const sections = diffSections(annotated.toString("utf8"));
 	const indexed = files.map((file) => {
 		const lines = sections.get(`a/${file.oldPath ?? file.path} b/${file.path}`);
@@ -393,13 +431,252 @@ export function writeChangeView(
 		path.resolve(out, "files.json"),
 		`${JSON.stringify({ files: indexed }, null, 2)}\n`,
 	);
-	if (description !== null) {
-		const view = authoredDescription(description, descriptionTemplates(repository, change.head));
-		writeFileSync(
-			path.resolve(out, "description.authored.md"),
-			renderAuthoredDescription(description, view),
-		);
+	if (authored !== null) {
+		writeFileSync(path.resolve(out, "description.authored.md"), authored);
 	}
+}
+
+/** The header lines of a file's section of a unified diff, outside its hunks, that name a path. */
+const PATH_HEADER =
+	/^(?<prefix>--- |\+\+\+ |rename from |rename to |copy from |copy to )(?<path>.*)$/u;
+
+/**
+ * The diff with every quoted path written as itself, as the checkout's view prints it: JGit quotes a path outside
+ * printable ASCII in octal (`"a/W\303\266rdle.md"`). Hunk lines stay as they are.
+ */
+export function withPlainPaths(diff: string): string {
+	const out: string[] = [];
+	let oldLeft = 0;
+	let newLeft = 0;
+	for (const line of diff.split("\n")) {
+		if (oldLeft > 0 || newLeft > 0) {
+			if (line.startsWith("+")) {
+				newLeft -= 1;
+			} else if (line.startsWith("-")) {
+				oldLeft -= 1;
+			} else if (line.startsWith(" ")) {
+				oldLeft -= 1;
+				newLeft -= 1;
+			}
+			out.push(line);
+			continue;
+		}
+		const hunk = /^@@ -\d+(?:,(?<oldCount>\d+))? \+\d+(?:,(?<newCount>\d+))? @@/u.exec(line);
+		if (hunk) {
+			oldLeft = hunk.groups?.oldCount === undefined ? 1 : Number(hunk.groups.oldCount);
+			newLeft = hunk.groups?.newCount === undefined ? 1 : Number(hunk.groups.newCount);
+			out.push(line);
+			continue;
+		}
+		if (line.startsWith("diff --git ")) {
+			const [from, to] = gitPathPair(line.slice("diff --git ".length));
+			out.push(`diff --git ${from} ${to}`);
+			continue;
+		}
+		const header = PATH_HEADER.exec(line);
+		const prefix = header?.groups?.prefix;
+		out.push(prefix === undefined ? line : `${prefix}${unquoted(header?.groups?.path ?? "")}`);
+	}
+	return out.join("\n");
+}
+
+/** The two paths of a `diff --git` header, unquoted: `a/<old> b/<new>`. */
+function gitPathPair(header: string): [string, string] {
+	if (header.startsWith('"')) {
+		const end = quotedEnd(header);
+		return [unquoted(header.slice(0, end)), unquoted(header.slice(end + 1))];
+	}
+	if (header.endsWith('"')) {
+		const start = header.lastIndexOf(' "');
+		return [header.slice(0, start), unquoted(header.slice(start + 1))];
+	}
+	// Unquoted, the two paths are equal unless the section says otherwise: split at the middle.
+	const half = (header.length - 1) / 2;
+	return Number.isInteger(half) && header.slice(2, half) === header.slice(half + 3)
+		? [header.slice(0, half), header.slice(half + 1)]
+		: [header.slice(0, header.indexOf(" b/")), header.slice(header.indexOf(" b/") + 1)];
+}
+
+/** The index just past the closing quote of the quoted path that `text` starts with. */
+function quotedEnd(text: string): number {
+	for (let index = 1; index < text.length; index += 1) {
+		if (text[index] === "\\") {
+			index += 1;
+		} else if (text[index] === '"') {
+			return index + 1;
+		}
+	}
+	throw new Error(`git diff: unterminated quoted path: ${JSON.stringify(text.slice(0, 80))}`);
+}
+
+const ESCAPES: Readonly<Record<string, number>> = {
+	a: 7,
+	b: 8,
+	t: 9,
+	n: 10,
+	v: 11,
+	f: 12,
+	r: 13,
+	'"': 34,
+	"\\": 92,
+};
+
+/**
+ * A path as Git writes it, quoted or not, as the UTF-8 text it names. A path with a control character stays quoted, as
+ * Git prints it with `core.quotePath=false`, so a header stays one line.
+ */
+function unquoted(text: string): string {
+	const plain = decoded(text);
+	for (let index = 0; index < plain.length; index += 1) {
+		const code = plain.codePointAt(index) ?? 0;
+		if (code < 0x20 || code === 0x7f) {
+			return text;
+		}
+	}
+	return plain;
+}
+
+function decoded(text: string): string {
+	if (!text.startsWith('"') || !text.endsWith('"') || text.length < 2) {
+		return text;
+	}
+	const bytes: number[] = [];
+	const body = text.slice(1, -1);
+	for (let index = 0; index < body.length; index += 1) {
+		const char = body[index] ?? "";
+		if (char !== "\\") {
+			bytes.push(...Buffer.from(char, "utf8"));
+			continue;
+		}
+		const octal = /^[0-7]{3}/u.exec(body.slice(index + 1));
+		if (octal) {
+			bytes.push(Number.parseInt(octal[0], 8));
+			index += 3;
+			continue;
+		}
+		const escaped = ESCAPES[body[index + 1] ?? ""];
+		if (escaped === undefined) {
+			throw new Error(`git diff: unknown escape in ${JSON.stringify(text)}`);
+		}
+		bytes.push(escaped);
+		index += 1;
+	}
+	return Buffer.from(bytes).toString("utf8");
+}
+
+/** Each file of a diff with plain paths, as `git diff --name-status` names it, in the diff's order. */
+export function patchFiles(patch: string): { status: string; path: string; oldPath?: string }[] {
+	const files: { status: string; path: string; oldPath?: string }[] = [];
+	let current: { status: string; path: string; oldPath?: string } | null = null;
+	let inHunk = false;
+	for (const line of patch.split("\n")) {
+		if (line.startsWith("diff --git ")) {
+			const [from, to] = gitPathPair(line.slice("diff --git ".length));
+			current = { status: "M", path: to.slice(2) };
+			if (from.slice(2) !== to.slice(2)) {
+				current.oldPath = from.slice(2);
+			}
+			files.push(current);
+			inHunk = false;
+		} else if (current !== null && !inHunk) {
+			if (line.startsWith("@@ ")) {
+				inHunk = true;
+			} else if (line.startsWith("new file mode")) {
+				current.status = "A";
+			} else if (line.startsWith("deleted file mode")) {
+				current.status = "D";
+			} else if (line.startsWith("rename from ")) {
+				current.status = "R";
+				current.oldPath = line.slice("rename from ".length);
+			} else if (line.startsWith("rename to ")) {
+				current.path = line.slice("rename to ".length);
+			} else if (line.startsWith("copy from ")) {
+				current.status = "C";
+				current.oldPath = line.slice("copy from ".length);
+			} else if (line.startsWith("copy to ")) {
+				current.path = line.slice("copy to ".length);
+			}
+		}
+	}
+	for (const file of files) {
+		if (file.status !== "R" && file.status !== "C") {
+			delete file.oldPath;
+		}
+	}
+	return files;
+}
+
+/** `count word` with the word plural unless the count is one, as `git diff --stat` writes its summary. */
+function plural(count: number, word: string): string {
+	return `${count} ${word}${count === 1 ? "" : "s"}`;
+}
+
+/** The lines of each file's section of a diff, from its `diff --git` header on. */
+function sectionsOf(patch: string): string[][] {
+	const sections: string[][] = [];
+	for (const line of patch.split("\n")) {
+		if (line.startsWith("diff --git ")) {
+			sections.push([]);
+		}
+		sections.at(-1)?.push(line);
+	}
+	return sections;
+}
+
+/** `git diff --stat`'s count of each file and its summary line, from the diff's hunks. */
+function patchStat(patch: string, files: { path: string; oldPath?: string }[]): string {
+	const counts: { added: number; removed: number }[] = [];
+	let count: { added: number; removed: number } | null = null;
+	let oldLeft = 0;
+	let newLeft = 0;
+	for (const line of patch.split("\n")) {
+		if (oldLeft > 0 || newLeft > 0) {
+			if (line.startsWith("+") && count !== null) {
+				count.added += 1;
+				newLeft -= 1;
+			} else if (line.startsWith("-") && count !== null) {
+				count.removed += 1;
+				oldLeft -= 1;
+			} else if (line.startsWith(" ")) {
+				oldLeft -= 1;
+				newLeft -= 1;
+			}
+			continue;
+		}
+		if (line.startsWith("diff --git ")) {
+			count = { added: 0, removed: 0 };
+			counts.push(count);
+			continue;
+		}
+		const hunk = /^@@ -\d+(?:,(?<oldCount>\d+))? \+\d+(?:,(?<newCount>\d+))? @@/u.exec(line);
+		if (hunk) {
+			oldLeft = hunk.groups?.oldCount === undefined ? 1 : Number(hunk.groups.oldCount);
+			newLeft = hunk.groups?.newCount === undefined ? 1 : Number(hunk.groups.newCount);
+		}
+	}
+	if (files.length === 0) {
+		return "";
+	}
+	const binary = sectionsOf(patch).map((section) =>
+		section.some((line) => line.startsWith("Binary files ")),
+	);
+	const rows = files.map((file, index) => {
+		const { added, removed } = counts[index] ?? { added: 0, removed: 0 };
+		const name = file.oldPath === undefined ? file.path : `${file.oldPath} => ${file.path}`;
+		if (binary[index] === true) {
+			return ` ${name} | Bin`;
+		}
+		const bar = `${"+".repeat(Math.min(added, 50))}${"-".repeat(Math.min(removed, 50))}`;
+		return ` ${name} | ${added + removed}${bar === "" ? "" : ` ${bar}`}`;
+	});
+	const added = counts.reduce((sum, entry) => sum + entry.added, 0);
+	const removed = counts.reduce((sum, entry) => sum + entry.removed, 0);
+	const summary = [
+		` ${plural(files.length, "file")} changed`,
+		...(added > 0 ? [`${plural(added, "insertion")}(+)`] : []),
+		...(removed > 0 ? [`${plural(removed, "deletion")}(-)`] : []),
+	].join(", ");
+	return `${[...rows, summary].join("\n")}\n`;
 }
 
 /** The description the server staged beside the change, or null when the review has none. */

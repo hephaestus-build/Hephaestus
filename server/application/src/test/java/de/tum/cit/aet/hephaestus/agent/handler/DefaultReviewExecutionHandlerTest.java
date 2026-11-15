@@ -605,6 +605,79 @@ class DefaultReviewExecutionHandlerTest extends BaseUnitTest {
         });
     }
 
+    /**
+     * A first attempt whose practices read the diff and not the repository, as a merge review of the issue-traceability
+     * group alone: merge-confirms-the-linked-issue-outcome and defers-review-asks-into-tracked-work read the diff, and
+     * merges-only-after-approval reads neither. It captures what they declare and no checkout; the sandbox derives the
+     * change view from the captured diff (pi-change.spec.ts).
+     */
+    @Test
+    void shouldCaptureOnlyTheDeclaredSourcesForAFirstAttemptWhosePracticesReadTheDiffButNotTheRepository() {
+        var job = RuntimeReviewTestData.job();
+        var original = RuntimeReviewTestData.assignment(5L, null);
+        var core = new SourceKind("scm.pull-request.core");
+        var diff = new SourceKind("scm.pull-request.diff");
+        var reads = new PracticeReads(
+                "3.0.0",
+                List.of(
+                        new PracticeReadSource(core, ReadNeed.REQUIRED),
+                        new PracticeReadSource(diff, ReadNeed.REQUIRED)));
+        var confirmsOutcome =
+                practice(original, PULL_REQUEST, original.practice().practiceId(), original.practiceSlug(), reads);
+        var defersAsks = practice(original, PULL_REQUEST, 42L, "defers-review-asks-into-tracked-work", reads);
+        var onlyAfterApproval = practice(
+                original,
+                PULL_REQUEST,
+                43L,
+                "merges-only-after-approval",
+                new PracticeReads("3.0.0", List.of(new PracticeReadSource(core, ReadNeed.REQUIRED))));
+        when(assignments.load(job)).thenReturn(List.of(confirmsOutcome, defersAsks, onlyAfterApproval));
+        when(assignments.review(job)).thenReturn(RuntimeReviewTestData.review(ReviewKind.ITEM, confirmsOutcome));
+        when(source.supports(confirmsOutcome.item())).thenReturn(true);
+        var snapshot = mock(ItemSnapshot.class);
+        when(source.pin(confirmsOutcome.item(), confirmsOutcome.version())).thenReturn(snapshot);
+        when(source.record(eq(snapshot), any()))
+                .thenReturn(mapper.createObjectNode().put("title", "Captured work"));
+        var manifest = new JobFolderIndex(
+                new SourceContractVersion("3.0.0"),
+                "a".repeat(64),
+                confirmsOutcome.item().kind().value(),
+                NOW,
+                List.of(core, diff).stream()
+                        .map(kind -> new SourceCapture(
+                                kind,
+                                new SourceCaptureState.Available(
+                                        SourceContentState.EMPTY,
+                                        SourceCompleteness.COMPLETE,
+                                        new SourceCaptureFacts(NOW, null, null, "head")),
+                                EvidenceSnapshotFixtures.citation(kind),
+                                List.of()))
+                        .toList(),
+                List.of(),
+                List.of(),
+                List.of());
+        when(context.prepare(eq(snapshot), any())).thenReturn(new PreparedEvidence(Map.of(), manifest));
+        when(files.prepare(eq(job), any(), any()))
+                .thenReturn(new PreparedJobInputs(Map.of(), List.of(), List.of(), manifest, null));
+
+        try (var prepared = handler.prepareInputs(job)) {
+            assertThat(prepared.folderIndex()).isNotNull();
+        }
+
+        ArgumentCaptor<CaptureRequest> request = ArgumentCaptor.captor();
+        verify(context).prepare(eq(snapshot), request.capture());
+        assertThat(request.getValue().sources())
+                .as("nothing beyond what the practices declare: no checkout, no consent of the repository's committers")
+                .containsExactlyInAnyOrder(core, diff);
+        ArgumentCaptor<List<ReviewCaptureDecision>> decisions = ArgumentCaptor.captor();
+        verify(members)
+                .capture(eq(1L), eq(job.getReviewId()), eq(job.getId()), eq(job.getAttempt()), decisions.capture());
+        assertThat(decisions.getValue())
+                .as("a diff without a tree is a normal input: every practice runs")
+                .hasSize(3)
+                .allSatisfy(decision -> assertThat(decision.status()).isEqualTo(ReviewPracticeStatus.READY));
+    }
+
     @Test
     void optionalCaptureAbsenceDoesNotWithholdAnOtherwiseReadyPractice() {
         var job = prepare(ReadNeed.OPTIONAL, null);
