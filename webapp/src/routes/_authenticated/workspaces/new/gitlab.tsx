@@ -45,7 +45,6 @@ import {
 import { WizardStepIndicator } from "@/components/create-workspace/WizardStepIndicator";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { Spinner } from "@/components/ui/spinner";
 import { pageHead } from "@/lib/page-title";
 import { problemDetailOf } from "@/lib/problem-detail";
 import { firstNonBlank, hasText } from "@/lib/text";
