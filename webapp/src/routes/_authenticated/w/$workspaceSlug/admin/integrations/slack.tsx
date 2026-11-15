@@ -49,7 +49,7 @@ function SlackIntegrationPage() {
 				description: hasText(description) ? description : reason,
 			});
 		}
-		void navigate({ search: { repairConnection }, replace: true });
+		void navigate({ search: { repairConnection }, replace: true, resetScroll: false });
 	}, [status, reason, description, repairConnection, navigate]);
 	const slack = useSlackIntegration(slug);
 	const repairId = repairConnection ?? slack.repairConnectionId;

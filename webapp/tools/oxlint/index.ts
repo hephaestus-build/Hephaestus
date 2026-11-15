@@ -12,6 +12,7 @@ import { noUnsafeDefinitionLookup } from "./rules/no-unsafe-definition-lookup.ts
 import { noWithinCanvasElement } from "./rules/no-within-canvas-element.ts";
 import { playMustAssert } from "./rules/play-must-assert.ts";
 import { preferAutoStoryTitle } from "./rules/prefer-auto-story-title.ts";
+import { samePageSearchKeepsScroll } from "./rules/same-page-search-keeps-scroll.ts";
 import { svgNeedsAccessibleName } from "./rules/svg-needs-accessible-name.ts";
 import { typedStoryMeta } from "./rules/typed-story-meta.ts";
 
@@ -33,6 +34,7 @@ export default definePlugin({
 		"no-within-canvas-element": noWithinCanvasElement,
 		"play-must-assert": playMustAssert,
 		"prefer-auto-story-title": preferAutoStoryTitle,
+		"same-page-search-keeps-scroll": samePageSearchKeepsScroll,
 		"svg-needs-accessible-name": svgNeedsAccessibleName,
 		"typed-story-meta": typedStoryMeta,
 	},

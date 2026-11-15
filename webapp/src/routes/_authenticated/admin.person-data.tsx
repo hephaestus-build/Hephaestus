@@ -57,7 +57,7 @@ function PersonDataRoute() {
 		...adminPreviewPersonDataMutation(),
 		onError,
 		onSuccess: (data) => {
-			void navigate({ search: { requestId: data.id } });
+			void navigate({ search: { requestId: data.id }, resetScroll: false });
 		},
 	});
 	const erase = useMutation({

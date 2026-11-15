@@ -82,6 +82,7 @@ function AdminWorkspacesPage() {
 						void navigate({
 							search: { q: event.target.value || undefined },
 							replace: true,
+							resetScroll: false,
 						});
 					}}
 				/>

@@ -139,6 +139,7 @@ function AdminInstanceUsagePage() {
 								from={Route.fullPath}
 								to="/admin/usage"
 								search={(previous) => ({ ...previous, month: nextMonth })}
+								resetScroll={false}
 							/>
 						)}
 					/>

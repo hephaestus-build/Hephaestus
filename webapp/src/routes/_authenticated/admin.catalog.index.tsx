@@ -251,7 +251,11 @@ function AdminCatalogPage() {
 				pendingGroupSlugs={pendingGroupSlugs}
 				writePending={writePending}
 				onSearchChange={(next: CatalogSearch) => {
-					void navigate({ search: (previous) => ({ ...previous, ...next }), replace: true });
+					void navigate({
+						search: (previous) => ({ ...previous, ...next }),
+						replace: true,
+						resetScroll: false,
+					});
 				}}
 				onPracticeStatusChange={(practice: CatalogPractice, offered) => {
 					updatePracticeStatus.mutate(

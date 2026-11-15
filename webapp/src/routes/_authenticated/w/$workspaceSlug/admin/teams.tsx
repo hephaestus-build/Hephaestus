@@ -251,7 +251,7 @@ function AdminTeamsContainer() {
 			}
 			search={search.q ?? ""}
 			onSearchChange={(q) => {
-				void navigate({ search: { q: q || undefined }, replace: true });
+				void navigate({ search: { q: q || undefined }, replace: true, resetScroll: false });
 			}}
 			onRetry={retry}
 			onHideTeam={handleHideTeam}

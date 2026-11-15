@@ -83,6 +83,7 @@ export function ScanRows({ workspaceSlug, scans, filters }: ScanRowsProps) {
 									to="/w/$workspaceSlug/admin/practices/scans"
 									params={{ workspaceSlug }}
 									search={{ status: filters?.status, repositoryItemId: scan.repository.id }}
+									resetScroll={false}
 									aria-label={`Only this repository: ${repositoryName(scan.repository)}`}
 									className="text-xs text-muted-foreground hover:underline"
 								>
