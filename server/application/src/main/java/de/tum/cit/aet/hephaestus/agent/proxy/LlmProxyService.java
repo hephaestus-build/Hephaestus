@@ -200,19 +200,12 @@ class LlmProxyService {
      * Serves one call on a routing: the AI-choice, budget, connection, deadline and usage rules.
      * A null response serves a server step in-process: the call must not stream, and a
      * provider that answers with a stream anyway is refused.
+     *
+     * @param capture receives a copy of each chunk of a streamed answer, before the client does
      */
+    @SuppressWarnings("try") // The scope installs the current span and restores it on close.
     @Nullable
     ResponseEntity<?> serve(
-            ProxyRouting routing,
-            LlmApiProtocol protocol,
-            @Nullable HttpServletResponse response,
-            HttpHeaders incomingHeaders,
-            byte[] body) {
-        return serve(routing, protocol, response, incomingHeaders, body, null);
-    }
-
-    @SuppressWarnings("try") // The scope installs the current span and restores it on close.
-    private @Nullable ResponseEntity<?> serve(
             ProxyRouting routing,
             LlmApiProtocol protocol,
             @Nullable HttpServletResponse response,

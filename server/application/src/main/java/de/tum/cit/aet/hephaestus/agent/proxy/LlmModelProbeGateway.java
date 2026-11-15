@@ -56,7 +56,7 @@ public class LlmModelProbeGateway {
             if (model.workspaceId() == null) MDC.remove(StructuredLogKeys.WORKSPACE_ID);
             else MDC.put(StructuredLogKeys.WORKSPACE_ID, model.workspaceId().toString());
             var response = Objects.requireNonNull(
-                    proxy.serve(route, protocol, null, new HttpHeaders(), mapper.writeValueAsBytes(body)));
+                    proxy.serve(route, protocol, null, new HttpHeaders(), mapper.writeValueAsBytes(body), null));
             Object result = response.getBody();
             byte[] bytes = result instanceof byte[] raw
                     ? raw

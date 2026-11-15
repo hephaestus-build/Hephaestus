@@ -44,7 +44,7 @@ class ProductFeedbackModelGatewayTest extends BaseUnitTest {
                         .header(LlmProxyService.REFUSAL_HEADER, ProxyRefusal.CAPACITY.name())
                         .body("busy"))
                 .when(proxy)
-                .serve(any(), any(), isNull(), any(), any());
+                .serve(any(), any(), isNull(), any(), any(), isNull());
         UUID report = UUID.randomUUID();
         var answer = gateway.draft(
                 UUID.randomUUID(),
@@ -55,7 +55,7 @@ class ProductFeedbackModelGatewayTest extends BaseUnitTest {
                 new byte[0]);
         assertThat(answer.refusal()).isEqualTo(ProxyRefusal.CAPACITY);
         var route = ArgumentCaptor.forClass(ProxyRouting.class);
-        verify(proxy).serve(route.capture(), any(), isNull(), any(), any());
+        verify(proxy).serve(route.capture(), any(), isNull(), any(), any(), isNull());
         assertThat(route.getValue().workspaceId()).isNull();
         assertThat(route.getValue().attempt().runId()).isNull();
         assertThat(route.getValue().attempt().sourceType()).isEqualTo(UsageSourceType.PRODUCT_FEEDBACK_DRAFT);
