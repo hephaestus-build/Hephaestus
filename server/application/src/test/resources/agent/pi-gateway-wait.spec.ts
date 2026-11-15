@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { once } from "node:events";
 import { test } from "node:test";
 
 import { normalizeContext, type Model } from "@earendil-works/pi-ai";
@@ -242,9 +243,9 @@ await test("a refused gateway whose next attempt hangs until the work ends is th
 			}
 			const signal = init?.signal;
 			assert.ok(signal);
-			return new Promise<Response>((_resolve, reject) => {
-				signal.addEventListener("abort", () => reject(signal.reason), { once: true });
-			});
+			await once(signal, "abort");
+			signal.throwIfAborted();
+			return completed();
 		},
 	});
 	await eventsFrom(output);
@@ -272,16 +273,17 @@ await test("cancellation of a hanging attempt after a refusal is not the gateway
 			const signal = init?.signal;
 			assert.ok(signal);
 			hanging.resolve(undefined);
-			return new Promise<Response>((_resolve, reject) => {
-				signal.addEventListener("abort", () => reject(signal.reason), { once: true });
-			});
+			await once(signal, "abort");
+			signal.throwIfAborted();
+			return completed();
 		},
 	});
 	await hanging.promise;
 	abort.abort();
 	await eventsFrom(output);
 	assert.equal(interrupted, 0);
-	assert.equal((await output.result()).stopReason, "aborted");
+	const result = await output.result();
+	assert.equal(result.stopReason, "aborted");
 });
 
 await test("repeated lost responses stop as an infrastructure interruption without a model retry", async () => {
