@@ -217,12 +217,15 @@ public class SlackChannelHistorySyncService {
             BooleanSupplier cancelled) {
         String channelId = channel.getSlackChannelId();
         Instant announcedAt = channel.getConsentAnnouncedAt();
-        if (announcedAt == null) {
+        Instant ingestAfter = channel.getIngestAfter();
+        if (announcedAt == null || ingestAfter == null) {
             // An ACTIVE channel is always stamped at activation; a missing stamp fails closed, like ingest.
             return null;
         }
         String floor = SlackTs.max(
-                SlackTs.max(SlackTs.ofInstant(announcedAt), retentionFloor), channel.getLastHistorySyncedTs());
+                SlackTs.max(
+                        SlackTs.max(SlackTs.ofInstant(announcedAt), SlackTs.ofInstant(ingestAfter)), retentionFloor),
+                channel.getLastHistorySyncedTs());
         String latest = SlackTs.ofInstant(windowEnd);
         if (floor == null || SlackTs.compare(floor, latest) >= 0) {
             return null;

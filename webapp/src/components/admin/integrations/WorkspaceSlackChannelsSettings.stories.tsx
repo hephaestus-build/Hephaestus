@@ -74,6 +74,28 @@ const revoked: SlackMonitoredChannel = {
 	createdAt: daysBefore(10),
 };
 
+const activating: SlackMonitoredChannel = {
+	id: "5",
+	slackChannelId: "C05ACTIVAT05",
+	slackTeamId: "T0000000000",
+	channelName: "team-announcements",
+	consentState: "ACTIVATING",
+	optedOutMemberCount: 0,
+	consentAnnouncedAt: null,
+	createdAt: daysBefore(1),
+};
+
+const failed: SlackMonitoredChannel = {
+	id: "6",
+	slackChannelId: "C06FAILED006",
+	slackTeamId: "T0000000000",
+	channelName: "team-alerts",
+	consentState: "FAILED",
+	optedOutMemberCount: 0,
+	consentAnnouncedAt: null,
+	createdAt: daysBefore(1),
+};
+
 /** Mixed list — one of each active lifecycle state. */
 export const Default: Story = {
 	args: { channels: [pending, active, paused] },
@@ -94,12 +116,66 @@ export const Empty: Story = {
 
 /** Every consent state visible at once — badge word+icon per state. */
 export const AllStates: Story = {
-	args: { channels: [pending, active, paused, revoked] },
+	args: { channels: [pending, active, paused, revoked, activating, failed] },
 	play: async ({ canvas }) => {
 		await expect(canvas.getAllByText("Not started").length).toBeGreaterThan(0);
 		canvas.getByText("Monitoring");
 		canvas.getByText("Paused");
 		canvas.getByText("Revoked");
+		canvas.getByText("Activating");
+		canvas.getByText("Activation failed");
+	},
+};
+
+/**
+ * ACTIVATING — activation queued; the row offers no consent change while the outbox processes the
+ * announcement. The admin must wait; there is nothing to retry yet.
+ */
+export const ActivatingChannel: Story = {
+	args: { channels: [activating] },
+	play: async ({ canvas }) => {
+		canvas.getByText("Activating");
+		// The row waits for Slack to confirm the announcement. Its menu offers no consent change,
+		// only the history and the removal that every started channel has.
+		await userEvent.click(canvas.getByRole("button", { name: /actions for team-announcements/iu }));
+		await screen.findByRole("menuitem", { name: /view history/iu });
+		// `getByRole` fails on its own when the item is missing.
+		screen.getByRole("menuitem", { name: /remove and erase/iu });
+		for (const name of [
+			/activate monitoring/iu,
+			/retry activation/iu,
+			/^pause$/iu,
+			/^resume$/iu,
+			/set up again/iu,
+		]) {
+			await expect(screen.queryByRole("menuitem", { name })).not.toBeInTheDocument();
+		}
+	},
+};
+
+/**
+ * FAILED — the outbox delivery failed; the row exposes Retry activation via the activation dialog
+ * so the admin can queue another attempt. The retry opens the same activation dialog but with
+ * "Retry activation" title and button text.
+ */
+export const ActivationFailedChannel: Story = {
+	args: { channels: [failed] },
+	play: async ({ args, canvas }) => {
+		canvas.getByText("Activation failed");
+
+		await userEvent.click(canvas.getByRole("button", { name: /actions for team-alerts/iu }));
+		await userEvent.click(await screen.findByRole("menuitem", { name: /retry activation/iu }));
+		const dialog = await screen.findByRole("dialog");
+		within(dialog).getByText(/retry activation for/iu);
+
+		// Opening the dialog must not itself queue anything — the gate is the confirm.
+		await expect(args.onUpdateConsent).not.toHaveBeenCalled();
+
+		await userEvent.click(within(dialog).getByRole("button", { name: /^retry activation$/iu }));
+		await expect(args.onUpdateConsent).toHaveBeenCalledWith({
+			slackChannelId: failed.slackChannelId,
+			consentState: "ACTIVE",
+		});
 	},
 };
 

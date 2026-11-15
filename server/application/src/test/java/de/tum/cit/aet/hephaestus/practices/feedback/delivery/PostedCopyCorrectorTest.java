@@ -46,7 +46,8 @@ class PostedCopyCorrectorTest {
             1,
             false,
             null,
-            () -> true);
+            () -> true,
+            null);
 
     @Test
     void shouldUpdateOnlyTheRecordedSummaryHandleAndRetainItsMarker() {

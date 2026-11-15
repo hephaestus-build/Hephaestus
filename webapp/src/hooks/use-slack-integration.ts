@@ -17,7 +17,7 @@ import type { SlackScopes } from "@/api/types.gen";
 import { syncPollInterval } from "@/components/admin/integrations/sync-format";
 import type {
 	WorkspaceSlackChannelsSettingsProps,
-	SlackConsentState,
+	SlackConsentTarget,
 } from "@/components/admin/integrations/WorkspaceSlackChannelsSettings";
 import type {
 	SlackScopeCheck,
@@ -92,7 +92,10 @@ export function useSlackIntegration(workspaceSlug: string) {
 	const slackChannelsQuery = useQuery({
 		...slackChannelsQueryOptions,
 		enabled: hasSlackCredentials,
-		refetchInterval: syncPollInterval(sync.hasActiveJob, livePushUnavailable),
+		refetchInterval: (query) => {
+			const hasActivating = (query.state.data ?? []).some((c) => c.consentState === "ACTIVATING");
+			return hasActivating ? 5000 : syncPollInterval(sync.hasActiveJob, livePushUnavailable);
+		},
 	});
 	useQueryReadRefusal(
 		slackChannelsQueryOptions.queryKey,
@@ -142,9 +145,11 @@ export function useSlackIntegration(workspaceSlug: string) {
 
 	const updateSlackChannelConsent = useMutation({
 		...updateSlackChannelConsentMutation(),
-		onSuccess: (_data, variables) => {
+		onSuccess: (data, variables) => {
 			if (variables.body.consentState === "REVOKED") {
 				toast.success("Channel removed and its data erased");
+			} else if (data.consentState === "ACTIVATING") {
+				toast.success("Activation requested");
 			} else {
 				toast.success("Channel updated");
 			}
@@ -218,7 +223,7 @@ export function useSlackIntegration(workspaceSlug: string) {
 		reason,
 	}: {
 		slackChannelId: string;
-		consentState: SlackConsentState;
+		consentState: SlackConsentTarget;
 		reason?: string;
 	}) => {
 		await updateSlackChannelConsent.mutateAsync({

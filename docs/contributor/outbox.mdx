@@ -1,11 +1,31 @@
 ---
 title: The outbox
-description: How the server carries out every effect on the outside world, and how to add a kind of effect.
+description: How the server delivers durable outside effects, and how to add a kind of effect.
 page_type: reference
 ---
 
-An effect on the outside world is one action in the `agent_action` table.
-Email, product-feedback issues (`FILE_ISSUE`, `/publish` as `PUBLISH_REPORT`, the scrub after an erasure as `CLEANUP_ISSUE`, and **Make private** as `TRANSFER_ISSUE`), the model draft of a product-feedback report (`DRAFT_REPORT`), feedback on the reviewed work (`DELIVER_FEEDBACK`, `EDIT_FEEDBACK` and `RETRACT_FEEDBACK`) and Hephaestus's Slack posts (`SLACK_POST`) are the kinds of action in this release.
+## Effect boundary
+
+Every durable outside effect goes through the outbox, with its idempotency key and retry state.
+This includes a post, a DM, a consent announcement, an email and an SCM write.
+Only synchronous replies to the acting user's own interaction stay direct.
+These include Slack ephemeral replies and App Home views published in response to `app_home_opened`.
+Slash-command acknowledgements must meet Slack's three-second limit.
+
+`SlackInteractiveReplyAdapter` owns the direct Slack write calls for these replies.
+The outbox action adapters own durable Slack writes, and only `ActionExecutor` can execute an action adapter.
+The architecture tests enforce this boundary.
+
+A durable effect is one action in the `agent_action` table.
+Email uses `EMAIL`.
+Product-feedback issues use `FILE_ISSUE`, `PUBLISH_REPORT`, `CLEANUP_ISSUE` and `TRANSFER_ISSUE`.
+Model drafts use `DRAFT_REPORT`.
+Feedback on the reviewed work uses `DELIVER_FEEDBACK`, `EDIT_FEEDBACK` and `RETRACT_FEEDBACK`.
+
+Slack answers and digests use `SLACK_POST`.
+Refusal and account-link notices use `SLACK_NOTICE`.
+Channel joins use `SLACK_JOIN`, and consent announcements use `SLACK_CONSENT`.
+
 One executor carries out the actions on every server replica.
 [ADR 0079](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0079-one-agent-system.md) records why there is one outbox.
 The code is in `server/application/src/main/java/de/tum/cit/aet/hephaestus/core/action/`.
@@ -24,6 +44,7 @@ Then the action exists exactly when the change commits.
 | `idempotencyKey` | The natural key of the effect. A second enqueue with the same key returns the first action and changes nothing. |
 | `payload` | What the adapter needs, as JSON. Keep it to identifiers where the adapter can read the rest. |
 | `subjectAccountId` | The account that the effect addresses. The erasure of that account deletes the action. |
+| `nativeRecipient` | The verified `PersonIdentity` that the effect addresses. Set it for a provider recipient who can have no Hephaestus account. Erasure matches its exact provider, team and subject, including after the payload is cleared. |
 | `maxAttempts` | The attempts before the action ends `FAILED` with `ATTEMPTS_EXHAUSTED`. |
 | `expiresAt` | When an action that has not started is no longer worth carrying out. |
 
@@ -56,6 +77,7 @@ An admitted action also waits for an earlier action of its lane that has not sta
 A reclaim does not wait, so a lane whose holder crashed does not stall.
 This holds for a kind that the replica knows (see [Rows from a newer build](#rows-from-a-newer-build)).
 The unique index `ux_agent_action_lane_executing` allows one executing action per lane, also when two replicas claim at the same moment.
+
 Every time is the database clock, so replicas with different clocks agree on a lease.
 There is no leader.
 
@@ -121,6 +143,7 @@ Each feedback has one lane, `feedback:<feedback id>`, and its newest action is t
 `FeedbackSendQueue` enqueues the sends in the transaction that changes the feedback, under the feedback's row lock.
 A new send cancels a send of the lane that has not started.
 While a send runs, `queue` refuses a new send with 409. A caller that sees a running send leaves the correction to it.
+
 When a send ends, its `ended` hook decides, under the feedback's lock, whether the send owes a correction, and queues it.
 So a decision or a mark that commits while the send runs is never lost.
 
@@ -140,9 +163,11 @@ Its key is `draft:<report>:<generation>`. It has three attempts and expires ten 
 The request carries no tools, so the report's text can make the model answer but never act.
 The draft writes nothing outside Hephaestus. Thus, the adapter calls no fence and reads nothing back: a repeated call costs only tokens.
 A served answer is kept on the filing under the attempt's lease, and the action ends `DONE`.
+
 Capacity refusal returns `Defer` and applies `DRAFT_DEFERRED`, so the filing enters `DRAFT_WAITING` without spending an attempt. The next claim applies `DRAFT_CLAIMED`.
 A provider failure or rate limit returns `Retry`. A draft does not absorb provider throttles into another pool admission. A model that is gone or that the proxy refuses returns `Failed` with `NOT_CONFIGURED`.
 The `ended` hook moves the filing to `ANSWERED`, with the kept answer only when the action is `DONE`.
+
 [Product feedback architecture](./product-feedback.mdx#the-draft-action) describes the checks before the enqueue.
 
 ## Carry out an effect at once
@@ -164,10 +189,12 @@ Slack actions retain their outcome and idempotency key while their question or d
 The durable ledger change event removes the terminal action after source redaction commits.
 If an action is still live then, its settlement removes it after recording any feedback receipts.
 A turn notification never enqueues an action, so a late notification cannot repeat a removed post.
+
 The entry stores only the Slack message reference needed to open a thread. Delivery state has one home in the outbox.
 That is longer than any notice's expiry, so a late redelivery of the event still finds the idempotency key.
 
-`ActionPersonDataCatalog` deletes the actions whose `subject_account_id` is the erased account.
+`ActionPersonDataCatalog` deletes actions addressed to the erased account or its exact native provider identities.
+The native recipient stays after payload clearing, so erasure can find an unlinked Slack recipient's ended notice.
 Account purge and the instance-admin person job both reach it.
 A pending action is then never carried out.
 A write that already passed its fence still reaches the provider, as it would have a moment earlier.

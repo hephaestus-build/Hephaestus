@@ -74,6 +74,7 @@ class FileIssueAdapter implements ActionAdapter {
                 mapper.valueToTree(payload),
                 accountId,
                 FilingService.MAX_ATTEMPTS,
+                null,
                 null);
     }
 

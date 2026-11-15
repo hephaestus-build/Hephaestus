@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.core.action;
 
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
 import java.time.Duration;
 import java.util.Collection;
 import java.util.Map;
@@ -24,6 +25,18 @@ public class AgentActions {
     @Transactional
     public UUID enqueue(ActionRequest request) {
         return store.enqueue(request);
+    }
+
+    /** Erases live and ended actions addressed to this exact provider identity in the workspace. */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public int eraseRecipient(long workspaceId, PersonIdentity recipient) {
+        return store.eraseRecipient(workspaceId, recipient);
+    }
+
+    /** Erases a disconnected integration's live and ended effects in the caller's workspace transaction. */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public int eraseKinds(long workspaceId, Collection<ActionKind> kinds) {
+        return store.eraseKinds(workspaceId, kinds);
     }
 
     /**

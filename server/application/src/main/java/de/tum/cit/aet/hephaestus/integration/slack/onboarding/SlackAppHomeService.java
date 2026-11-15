@@ -24,7 +24,7 @@ import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannel.
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannelRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackParticipantConsentRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackWorkspaceResolver;
-import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackMessageService;
+import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackInteractiveReplyAdapter;
 import de.tum.cit.aet.hephaestus.practices.spi.ConversationReadinessQuery;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceSummaryQuery;
 import java.util.ArrayList;
@@ -52,7 +52,7 @@ public class SlackAppHomeService {
     private final SlackMonitoredChannelRepository monitoredChannelRepository;
     private final ConversationReadinessQuery conversationReadinessQuery;
     private final ConversationAdmission conversationAdmission;
-    private final SlackMessageService messageService;
+    private final SlackInteractiveReplyAdapter messageService;
     private final SlackOnboardingService onboardingService;
     private final SlackHephaestusUiLinks uiLinks;
     private final WorkspaceSummaryQuery workspaces;
@@ -64,7 +64,7 @@ public class SlackAppHomeService {
             SlackMonitoredChannelRepository monitoredChannelRepository,
             ConversationReadinessQuery conversationReadinessQuery,
             ConversationAdmission conversationAdmission,
-            SlackMessageService messageService,
+            SlackInteractiveReplyAdapter messageService,
             SlackOnboardingService onboardingService,
             SlackHephaestusUiLinks uiLinks,
             WorkspaceSummaryQuery workspaces) {

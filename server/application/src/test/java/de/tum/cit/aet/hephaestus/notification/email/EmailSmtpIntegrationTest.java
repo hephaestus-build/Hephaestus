@@ -79,7 +79,8 @@ class EmailSmtpIntegrationTest {
                                 1,
                                 false,
                                 null,
-                                () -> true));
+                                () -> true,
+                                null));
                         assertThat(result).isInstanceOf(ActionResult.Done.class);
 
                         String inboxUrl = "http://" + mailpit.getHost() + ":" + mailpit.getMappedPort(8025);

@@ -24,7 +24,7 @@ import { ConsentStateBadge } from "./consent-terms";
 
 export interface SlackChannelRowProps {
 	channel: SlackMonitoredChannel;
-	/** Open the activation confirmation dialog for this channel (PENDING only). */
+	/** Open the activation confirmation dialog for this channel (pending or failed activation). */
 	onActivate: (channel: SlackMonitoredChannel) => void;
 	/** Pause an ACTIVE channel (reversible, no confirm). */
 	onPause: (channel: SlackMonitoredChannel) => void;
@@ -101,6 +101,12 @@ export function SlackChannelRow({
 							<DropdownMenuItem onClick={() => onActivate(channel)}>
 								<PlayIcon className="size-4" />
 								Activate monitoring…
+							</DropdownMenuItem>
+						)}
+						{channel.consentState === "FAILED" && (
+							<DropdownMenuItem onClick={() => onActivate(channel)}>
+								<RotateCcwIcon className="size-4" />
+								Retry activation…
 							</DropdownMenuItem>
 						)}
 						{channel.consentState === "ACTIVE" && (

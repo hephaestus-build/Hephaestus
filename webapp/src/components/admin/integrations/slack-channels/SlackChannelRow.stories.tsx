@@ -136,6 +136,42 @@ export const Revoked: Story = {
 	},
 };
 
+/**
+ * ACTIVATING — activation queued, waiting for the outbox to deliver the announcement.
+ * Removal and history stay available while the announcement waits for confirmation.
+ */
+export const Activating: Story = {
+	args: { channel: { ...channel, consentState: "ACTIVATING", consentAnnouncedAt: null } },
+	play: async ({ canvas }) => {
+		canvas.getByText("Activating");
+		await userEvent.click(canvas.getByRole("button", { name: /actions for/iu }));
+		await screen.findByRole("menuitem", { name: /view history/iu });
+		screen.getByRole("menuitem", { name: /remove and erase/iu });
+		await expect(
+			screen.queryByRole("menuitem", { name: /activate monitoring|retry activation/iu }),
+		).not.toBeInTheDocument();
+	},
+};
+
+/**
+ * FAILED — the outbox delivery failed; the row exposes Retry activation via the activation dialog,
+ * plus View history and Remove, so the admin is never left with a channel they cannot clean up.
+ */
+export const ActivationFailed: Story = {
+	args: { channel: { ...channel, consentState: "FAILED", consentAnnouncedAt: null } },
+	play: async ({ canvas }) => {
+		canvas.getByText("Activation failed");
+
+		await userEvent.click(canvas.getByRole("button", { name: /actions for team-standup/iu }));
+		await expectSettledVisible(await screen.findByRole("menuitem", { name: /retry activation/iu }));
+		await expectSettledVisible(await screen.findByRole("menuitem", { name: /view history/iu }));
+		await expectSettledVisible(await screen.findByRole("menuitem", { name: /remove and erase/iu }));
+		await expect(
+			screen.queryByRole("menuitem", { name: /activate monitoring/iu }),
+		).not.toBeInTheDocument();
+	},
+};
+
 export const WithOptOuts: Story = {
 	args: { channel: { ...channel, optedOutMemberCount: 3 } },
 	play: async ({ canvas }) => {

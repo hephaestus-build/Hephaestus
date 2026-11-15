@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.slack.conversation;
 
+import com.slack.api.model.Message;
 import com.slack.api.model.block.LayoutBlock;
 import de.tum.cit.aet.hephaestus.agent.conversation.turn.ConversationTurnCompletion;
 import de.tum.cit.aet.hephaestus.conversation.ConversationSlackMessages;
@@ -25,6 +26,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Predicate;
 import java.util.stream.Stream;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
@@ -37,14 +39,6 @@ import tools.jackson.databind.ObjectMapper;
 @ConditionalOnServerRole
 @RequiredArgsConstructor
 class SlackPostAdapter implements ActionAdapter {
-    private static final Set<String> UNKNOWN_EFFECT = Set.of(
-            "transport_failure",
-            "invalid_receipt",
-            "internal_error",
-            "fatal_error",
-            "service_unavailable",
-            "request_timeout",
-            "unknown");
     private final ObjectProvider<SlackMessageService> slack;
     private final ObjectProvider<SlackWeeklyDigestPointer> digests;
     private final ConversationSlackReplies replies;
@@ -131,35 +125,53 @@ class SlackPostAdapter implements ActionAdapter {
 
     /** A write that may have reached Slack is only read back, never posted a second time. */
     ActionResult post(ActionAttempt attempt, UUID marker, Post post) {
+        return post(
+                attempt,
+                post,
+                SlackConversationPosts.metadata(marker),
+                message -> SlackConversationPosts.isPostOf(message, marker),
+                false,
+                1);
+    }
+
+    ActionResult postNotice(ActionAttempt attempt, Post post) {
+        return postNotice(attempt, attempt.id(), post, false, 1);
+    }
+
+    ActionResult postNotice(ActionAttempt attempt, UUID marker, Post post, boolean readBeforeWrite, int readbackPages) {
+        return post(
+                attempt,
+                post,
+                SlackConversationPosts.noticeMetadata(marker),
+                message -> SlackConversationPosts.isNoticeOf(message, marker),
+                readBeforeWrite,
+                readbackPages);
+    }
+
+    private ActionResult post(
+            ActionAttempt attempt,
+            Post post,
+            Message.Metadata metadata,
+            Predicate<Message> matches,
+            boolean readBeforeWrite,
+            int readbackPages) {
         var client = slack.getIfAvailable();
         long workspace = Objects.requireNonNull(attempt.workspaceId());
         if (client == null || !client.isConnected(workspace))
             return unavailable(attempt, ActionStopReason.RECIPIENT_UNAVAILABLE);
-        if (!attempt.fence().beginWrite()) return new ActionResult.Abandoned();
         if (attempt.writeStarted()) {
-            try {
-                var found = client.readWorkspaceMessages(
-                        workspace,
-                        post.channelId(),
-                        post.threadTs(),
-                        post.oldestTs(),
-                        message -> SlackConversationPosts.isPostOf(message, marker));
-                if (!found.ts().isEmpty())
-                    return done(new Receipt(post.channelId(), found.ts().getFirst(), post.recipient()));
-                if (found.more()) return new ActionResult.Reread(ConversationSlackReplies.REREAD);
-                return new ActionResult.Failed(ActionStopReason.REJECTED);
-            } catch (SlackSendException unreadable) {
-                return new ActionResult.Reread(ConversationSlackReplies.REREAD);
-            }
+            if (!attempt.fence().beginWrite()) return new ActionResult.Abandoned();
+            var found = readback(client, workspace, post, matches, readbackPages);
+            return found == null ? new ActionResult.Failed(ActionStopReason.REJECTED) : found;
         }
+        if (readBeforeWrite) {
+            var found = readback(client, workspace, post, matches, readbackPages);
+            if (found != null) return found;
+        }
+        if (!attempt.fence().beginWrite()) return new ActionResult.Abandoned();
         try {
             var posted = client.postMessage(
-                    workspace,
-                    post.channelId(),
-                    post.threadTs(),
-                    post.blocks(),
-                    post.text(),
-                    SlackConversationPosts.metadata(marker));
+                    workspace, post.channelId(), post.threadTs(), post.blocks(), post.text(), metadata);
             return done(new Receipt(posted.channelId(), posted.ts(), post.recipient()));
         } catch (SlackSendException failed) {
             if ("silent_mode_engaged".equals(failed.slackError()))
@@ -168,9 +180,25 @@ class SlackPostAdapter implements ActionAdapter {
             if (failed.isRateLimited())
                 return new ActionResult.Defer(Duration.ofMillis(
                         Math.max(ConversationSlackReplies.REREAD.toMillis(), failed.retryAfterMillis())));
-            return UNKNOWN_EFFECT.contains(failed.slackError())
+            return failed.isOutcomeUnknown()
                     ? new ActionResult.Reread(ConversationSlackReplies.REREAD)
                     : new ActionResult.Failed(ActionStopReason.REJECTED);
+        }
+    }
+
+    private @Nullable ActionResult readback(
+            SlackMessageService client, long workspace, Post post, Predicate<Message> matches, int readbackPages) {
+        try {
+            var found = readbackPages == 1
+                    ? client.readWorkspaceMessages(
+                            workspace, post.channelId(), post.threadTs(), post.oldestTs(), matches)
+                    : client.readWorkspaceMessages(
+                            workspace, post.channelId(), post.threadTs(), post.oldestTs(), matches, readbackPages);
+            if (!found.ts().isEmpty())
+                return done(new Receipt(post.channelId(), found.ts().getFirst(), post.recipient()));
+            return found.more() ? new ActionResult.Reread(ConversationSlackReplies.REREAD) : null;
+        } catch (SlackSendException unreadable) {
+            return new ActionResult.Reread(ConversationSlackReplies.REREAD);
         }
     }
 

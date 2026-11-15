@@ -42,9 +42,19 @@ Finish the connection in the same browser where you started it.
 4. Open the actions menu of the channel, and select **Activate monitoring…**.
 5. Read the dialog, then select **Activate monitoring**.
 
-Hephaestus posts a visible announcement in the channel and starts to read new messages.
+Hephaestus posts a visible announcement in the channel.
+While Slack confirms the announcement, the channel shows **Activating**, and Hephaestus reads no messages.
+When Slack confirms it, the channel shows **Monitoring**, and Hephaestus reads only the messages after the announcement.
 It never reads older messages.
-The channel then shows **Monitoring**.
+
+If Slack cannot confirm the announcement, the channel shows **Activation failed**.
+Check that Slack is still connected and that the Hephaestus app is still in the channel, then select **Retry activation**.
+A retry first looks for the earlier announcement, so it does not post a second one.
+If the retry still fails, check that the app can read the channel history, or remove the channel and add it again.
+Messages from the time that monitoring was off stay unread.
+
+You can remove a channel while it activates.
+An announcement that Slack is already posting can still appear, but monitoring stays off.
 
 Hephaestus posts no practice feedback in monitored channels or their threads.
 Feedback about a channel thread goes to the Practice profile of its author, and to their conversation with Hephaestus.
