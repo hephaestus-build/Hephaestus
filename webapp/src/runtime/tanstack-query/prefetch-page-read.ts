@@ -15,6 +15,10 @@ import {
  *
  * A read that fails with no data and no page watching it is removed afterwards, so the page reads it
  * again with its own retries and error state rather than opening on an old failure.
+ *
+ * A route loader loads with the entry chunk unless the route splits it off. A route that calls this
+ * sets `codeSplitGroupings` with `["loader"]` as a group of its own, so its query options load beside
+ * its page's code on hover instead of growing every page's first load.
  */
 export function prefetchPageRead<TQueryFnData, TError, TQueryKey extends QueryKey>(
 	queryClient: QueryClient,

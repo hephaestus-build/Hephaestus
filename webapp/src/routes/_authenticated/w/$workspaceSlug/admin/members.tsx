@@ -88,6 +88,7 @@ function membersRead(workspaceSlug: string, view: WorkspaceMembersTableView) {
 
 export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/admin/members")({
 	head: workspaceAdminHead("Members"),
+	codeSplitGroupings: [["loader"], ["component"], ["errorComponent"], ["notFoundComponent"]],
 	validateSearch: membersSearchSchema,
 	// No loader deps: a search, sort or page change is a search change on this page, which reads the
 	// new rows itself and keeps the current ones on screen meanwhile.

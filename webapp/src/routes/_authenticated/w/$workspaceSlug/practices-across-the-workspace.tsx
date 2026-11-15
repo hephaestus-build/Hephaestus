@@ -68,6 +68,7 @@ export const Route = createFileRoute(
 )({
 	component: PracticesAcrossTheWorkspace,
 	head: pageHead("Practices across the workspace"),
+	codeSplitGroupings: [["loader"], ["component"], ["errorComponent"], ["notFoundComponent"]],
 	validateSearch: searchSchema,
 	search: {
 		middlewares: [stripSearchParams({ window: DEFAULT_WINDOW })],

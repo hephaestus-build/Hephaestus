@@ -14,6 +14,7 @@ import { prefetchPageRead } from "@/runtime/tanstack-query/prefetch-page-read";
 
 export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/teams/")({
 	head: pageHead("Teams"),
+	codeSplitGroupings: [["loader"], ["component"], ["errorComponent"], ["notFoundComponent"]],
 	loader: ({ context, params }) => {
 		if (context.workspace) {
 			prefetchPageRead(
