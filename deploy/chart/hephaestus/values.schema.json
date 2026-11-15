@@ -174,10 +174,15 @@
 		"cache": {
 			"type": "object",
 			"additionalProperties": false,
-			"required": ["sizeLimit"],
+			"required": ["sizeLimit", "snapshotLimit"],
 			"properties": {
 				"sizeLimit": {
-					"description": "This role's Git cache volume, in whole Mi or Gi. Kubernetes reads this quantity as written. The chart converts it to bytes for the application's eviction threshold. Above 80 % of the limit, the role deletes the Git mirrors that it used least recently.",
+					"description": "This role's Git cache volume, in whole Mi or Gi. Kubernetes reads this quantity as written. The chart keeps one snapshotLimit of it for each review and each conversation load that the server runs at once, and gives the application the rest as its eviction budget. Everything on the volume counts against that budget: above 80 % of it, the server deletes the Git mirrors that it used least recently. The chart refuses a volume that leaves less than 1Gi for the mirrors.",
+					"type": "string",
+					"pattern": "^[1-9][0-9]*(?:Mi|Gi)$"
+				},
+				"snapshotLimit": {
+					"description": "The most disk that one snapshot may use, in whole Mi or Gi: a checkout with its history for a review, a conversation's context load, or a scan. A larger repository is refused whole, not captured in part.",
 					"type": "string",
 					"pattern": "^[1-9][0-9]*(?:Mi|Gi)$"
 				}

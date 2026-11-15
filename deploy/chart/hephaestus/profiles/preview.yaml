@@ -12,6 +12,8 @@ postgresql:
 server:
   gitCache:
     sizeLimit: 5Gi
+    # Small test repositories.
+    snapshotLimit: 384Mi
   resources:
     requests: { cpu: 250m, memory: 3Gi, ephemeral-storage: 256Mi }
     limits: { cpu: "2", memory: 3Gi, ephemeral-storage: 6Gi }

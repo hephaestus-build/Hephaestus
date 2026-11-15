@@ -25,7 +25,7 @@ import org.springframework.stereotype.Component;
  * workspace keeps a mirror while it monitors the repository or still indexes it, as a stopped GitLab project is kept
  * until its work is removed. Repository removal and workspace purge therefore reach every role's mirrors.
  *
- * <p>A kept mirror is still a cache. When the volume nears its size, the mirrors that a capture used longest ago go too,
+ * <p>A kept mirror is still a cache. When the volume nears its budget, the mirrors that a capture used longest ago go too,
  * because the kubelet would otherwise evict the whole Pod with its running attempts, and the next Pod would fill the same
  * mirrors again. Its next capture fetches it again, as after a restart.
  */
@@ -66,11 +66,12 @@ public class GitMirrorRetention {
                 .baseUnit("bytes")
                 .register(meterRegistry);
         Gauge.builder(ScmMetrics.GIT_CACHE_LIMIT_BYTES, () -> maxCacheBytes)
-                .description("Size of the volume of Git mirrors, review checkouts and staged archives")
+                .description(
+                        "The eviction budget on the volume: its size minus the room kept for the snapshots that run at once")
                 .baseUnit("bytes")
                 .register(meterRegistry);
         this.evictions = Counter.builder(ScmMetrics.GIT_MIRROR_EVICTIONS)
-                .description("Kept Git mirrors deleted because their volume neared its size")
+                .description("Kept Git mirrors deleted because their volume neared its budget")
                 .register(meterRegistry);
     }
 

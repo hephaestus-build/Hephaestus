@@ -681,9 +681,35 @@ PostgreSQL volume.
 {{- end -}}
 {{- end -}}
 
-{{/* The bytes of one role's Git cache volume, so the role evicts mirrors before the kubelet evicts the Pod. */}}
+{{/*
+The most disk that one snapshot may use, in bytes: a checkout with its history for a review, a conversation's
+context load, or a scan. server.gitCache.snapshotLimit.
+*/}}
+{{- define "hephaestus.gitSnapshotBytes" -}}
+{{- mul (include "hephaestus.memoryMi" (dict "value" .Values.server.gitCache.snapshotLimit "name" "server.gitCache.snapshotLimit") | int64) 1048576 -}}
+{{- end -}}
+
+{{/*
+The application's eviction budget on the server's cache volume. Everything on the volume counts against it, so the
+chart keeps one snapshot out of it for each review that the server runs at once and for each conversation load that
+it prepares at once (TurnContextLoads.LOADS_AT_ONCE). Those snapshots cannot be evicted: a budget of the whole volume
+let them fill it, and the kubelet evicted the Pod. Fails when less than 1Gi remains for the Git mirrors.
+*/}}
 {{- define "hephaestus.gitCacheBytes" -}}
-{{- mul (include "hephaestus.memoryMi" (dict "value" .gitCache.sizeLimit "name" (printf "%s.gitCache.sizeLimit" .role)) | int64) 1048576 -}}
+{{- $volume := mul (include "hephaestus.memoryMi" (dict "value" .Values.server.gitCache.sizeLimit "name" "server.gitCache.sizeLimit") | int64) 1048576 -}}
+{{- $reviews := 0 -}}
+{{- $loads := 0 -}}
+{{- if .Values.sandbox.enabled -}}
+{{- $reviews = int (include "hephaestus.serverReviews" .) -}}
+{{- if gt (int (include "hephaestus.conversationTurns" .)) 0 -}}{{- $loads = 2 -}}{{- end -}}
+{{- end -}}
+{{- $snapshot := include "hephaestus.gitSnapshotBytes" . | int64 -}}
+{{- $reserve := mul (add $reviews $loads) $snapshot -}}
+{{- $budget := sub $volume $reserve -}}
+{{- if lt $budget 1073741824 -}}
+{{- fail (printf "server.gitCache.sizeLimit (%s) leaves the Git mirrors less than 1Gi beside %d snapshots of server.gitCache.snapshotLimit (%s): %d reviews and %d conversation loads that a server runs at once. Set sizeLimit to at least %dMi and raise server.resources.limits.ephemeral-storage with it, or lower snapshotLimit." .Values.server.gitCache.sizeLimit (add $reviews $loads) .Values.server.gitCache.snapshotLimit $reviews $loads (add (div $reserve 1048576) 1024)) -}}
+{{- end -}}
+{{- $budget -}}
 {{- end -}}
 
 
@@ -771,6 +797,8 @@ are unchanged. Steady includes one backup; upgrade includes migration/stanza Job
 {{- $values := deepCopy .Values -}}
 {{- $_ := set $values.sandbox "conversationTurns" 0 -}}
 {{- $_ := set $values.sandbox "budget" dict -}}
+{{- /* This pass sums requests only. The real render checks the Git cache volume, with the conversation loads. */ -}}
+{{- $_ := set $values.server.gitCache "sizeLimit" "1048576Gi" -}}
 {{- $context := omit . "Values" -}}
 {{- $_ := set $context "Values" $values -}}
 {{- $totals := dict "steady" (dict "cpu" 0 "memory" 0) "upgrade" (dict "cpu" 0 "memory" 0) -}}

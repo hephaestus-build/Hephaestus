@@ -52,7 +52,6 @@ export function judge(required: ReadonlySet<string>, pageText: string): Verdict 
  */
 export const OFFERED_WITHOUT_CHART_VALUE: ReadonlySet<string> = new Set([
 	"AGENT_MAX_RETRIES",
-	"GIT_MAX_SNAPSHOT_BYTES",
 	"HEPHAESTUS_INTEGRATION_CONSUMER_DEAD_RETENTION",
 	"HEPHAESTUS_INTEGRATION_CONSUMER_REPLAY_WINDOW",
 	"HEPHAESTUS_LLM_EGRESS_ALLOW_LOOPBACK",

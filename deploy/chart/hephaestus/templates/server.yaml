@@ -119,8 +119,11 @@ spec:
               value: {{ .Values.server.jvm.headRoomPercent | quote }}
             - name: BPL_JVM_THREAD_COUNT
               value: {{ .Values.server.jvm.threadCount | quote }}
+            # The volume holds the mirrors and the snapshots that run at once: _helpers.tpl hephaestus.gitCacheBytes.
             - name: GIT_MAX_CACHE_BYTES
-              value: {{ include "hephaestus.gitCacheBytes" (dict "gitCache" .Values.server.gitCache "role" "server") | quote }}
+              value: {{ include "hephaestus.gitCacheBytes" . | quote }}
+            - name: GIT_MAX_SNAPSHOT_BYTES
+              value: {{ include "hephaestus.gitSnapshotBytes" . | quote }}
             # Practice reviews and conversation turns run only with their sandboxes.
             - name: AGENT_ENABLED
               value: {{ $sandbox.enabled | quote }}
