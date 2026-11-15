@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.core.database;
 
+import de.tum.cit.aet.hephaestus.core.web.DocsSite;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.time.Duration;
@@ -53,12 +54,15 @@ public class MigrationLock implements BeanPostProcessor, DisposableBean {
 
     private final Duration timeout;
     private final boolean migrateRunMode;
+    private final String migrationGuide;
     private final Map<String, Connection> held = new ConcurrentHashMap<>();
 
     /** Reads the environment rather than {@code @Value}: the run mode's context has no placeholder configurer. */
     public MigrationLock(Environment environment) {
         this.timeout = environment.getRequiredProperty("hephaestus.database.migration-wait", Duration.class);
         this.migrateRunMode = environment.acceptsProfiles(Profiles.of(DatabaseMigration.PROFILE));
+        this.migrationGuide =
+                DocsSite.page(environment.getProperty("spring.application.version", ""), DatabaseMigration.GUIDE);
     }
 
     @Override
@@ -118,7 +122,7 @@ public class MigrationLock implements BeanPostProcessor, DisposableBean {
                 if (System.nanoTime() - start >= timeout.toNanos()) {
                     throw new IllegalStateException("Another database migration still ran after " + timeout
                             + ". Wait until it ends, then start this process again. "
-                            + "https://docs.hephaestus.build/admin/runtime-roles#database-migrations");
+                            + migrationGuide);
                 }
                 if (!reported) {
                     log.atWarn()

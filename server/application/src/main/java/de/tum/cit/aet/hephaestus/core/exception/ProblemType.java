@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.core.exception;
 
+import de.tum.cit.aet.hephaestus.core.web.DocsSite;
 import java.net.URI;
 import java.util.Locale;
 import org.jspecify.annotations.Nullable;
@@ -40,8 +41,12 @@ public enum ProblemType {
     WORKSPACE_BUDGET_EXCEEDED,
     WORKSPACE_OWNER_REQUIRED;
 
-    /** The contributor guide lists each slug under this address. */
-    private static final String BASE = "https://docs.hephaestus.build/contributor/api-error-handling#";
+    /**
+     * The contributor guide lists each slug under this address. A type is an identifier that clients branch on
+     * (RFC 9457 §3.1.1, ADR 0103 rule 5), so it names the release docs in every build and never follows the
+     * build's docs site as other links do.
+     */
+    private static final String BASE = DocsSite.ROOT + "contributor/api-error-handling#";
 
     private final URI uri = URI.create(BASE + slug());
 
