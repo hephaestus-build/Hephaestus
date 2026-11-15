@@ -2619,7 +2619,7 @@ void describe("CI contract", () => {
 		);
 		const buildPreview = job(docs, "build-preview");
 		assert.match(buildPreview, /fetch-depth: 0/u);
-		assert.match(buildPreview, /render-preview-comment\.ts docs docs\/\.docusaurus/u);
+		assert.match(buildPreview, /render-preview-comment\.ts docs docs\/build/u);
 		assert.match(buildPreview, /github\.event\.pull_request\.base\.sha/u);
 		assert.match(
 			job(docs, "preview"),
@@ -6382,7 +6382,7 @@ void test("the prose gate ratchets on Linux and Windows with the base history", 
 		assert.ok(asArray(filters.tooling, "tooling paths").includes(file));
 	}
 	const dockerfile = await readFile("webapp/Dockerfile", "utf8");
-	for (const file of [".vale/", "docs/contributor/practice-feedback-language.md"]) {
+	for (const file of [".vale/", "docs/contributor/practice-feedback-language.mdx"]) {
 		assert.ok(
 			buildStageCopySources(dockerfile).includes(file),
 			`Copy ${file} before the webapp lint runs`,
@@ -6390,7 +6390,7 @@ void test("the prose gate ratchets on Linux and Windows with the base history", 
 	}
 	for (const file of [
 		".vale/**",
-		"docs/contributor/practice-feedback-language.md",
+		"docs/contributor/practice-feedback-language.mdx",
 		"scripts/lib/ste-words.ts",
 		"scripts/lib/json.ts",
 	]) {

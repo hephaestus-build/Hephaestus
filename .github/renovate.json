@@ -149,6 +149,23 @@
 			"groupName": "Hey API"
 		},
 		{
+			"description": "The docs site runs on 0.x packages whose Markdown compiler can change between minor releases (ADR 0109), so each one moves in its own pull request",
+			"matchManagers": ["npm"],
+			"matchFileNames": ["docs/package.json"],
+			"matchPackageNames": ["@fumadocs/astro", "@fumadocs/satteri", "satteri", "@astrojs/markdown-satteri"],
+			"groupName": null,
+			"prBodyNotes": [
+				"Run `vp run docs:build` and `node --test docs/src/lib/plugins.test.ts`. A changed compiler fails a plugin test before it changes a page."
+			]
+		},
+		{
+			"description": "`astro check` runs on the TypeScript 6 compiler API",
+			"matchManagers": ["npm"],
+			"matchFileNames": ["docs/package.json"],
+			"matchPackageNames": ["typescript"],
+			"allowedVersions": "6.x"
+		},
+		{
 			"description": "Both API clients use one stable generator; prerelease snapshots do not match npm advisory ranges",
 			"matchManagers": ["npm"],
 			"matchPackageNames": ["@hey-api/*"],

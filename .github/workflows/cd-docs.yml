@@ -57,21 +57,12 @@ jobs:
       - uses: ./.github/actions/setup-toolchain
         with:
           install: "frozen"
-      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: |
-            docs/.docusaurus
-            docs/node_modules/.cache
-          key: ${{ runner.os }}-docusaurus-preview-${{ hashFiles('pnpm-lock.yaml') }}-${{ hashFiles('docs/**/*.md', 'docs/**/*.mdx', 'docs/**/*.ts') }}
-          restore-keys: |
-            ${{ runner.os }}-docusaurus-preview-${{ hashFiles('pnpm-lock.yaml') }}-
-            ${{ runner.os }}-docusaurus-preview-
       - run: vp run --filter docs build
         env:
-          DOCUSAURUS_BASE_URL: "/"
+          DOCS_BASE_URL: "/"
       - name: Prepare preview links
         run: >-
-          node scripts/render-preview-comment.ts docs docs/.docusaurus
+          node scripts/render-preview-comment.ts docs docs/build
           "https://$PREVIEW_URL"
           ${{ github.event.pull_request.base.sha }} docs-preview-comment.json
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -141,18 +132,9 @@ jobs:
       - uses: ./.github/actions/setup-toolchain
         with:
           install: "frozen"
-      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: |
-            docs/.docusaurus
-            docs/node_modules/.cache
-          key: ${{ runner.os }}-docusaurus-latest-${{ hashFiles('pnpm-lock.yaml') }}-${{ hashFiles('docs/**/*.md', 'docs/**/*.mdx', 'docs/**/*.ts') }}
-          restore-keys: |
-            ${{ runner.os }}-docusaurus-latest-${{ hashFiles('pnpm-lock.yaml') }}-
-            ${{ runner.os }}-docusaurus-latest-
       - run: vp run --filter docs build
         env:
-          DOCUSAURUS_BASE_URL: "/"
+          DOCS_BASE_URL: "/"
           DOCS_CHANNEL: latest
           DOCS_RELEASE: ${{ needs.release-ref.outputs.tag }}
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -181,18 +163,9 @@ jobs:
       - uses: ./.github/actions/setup-toolchain
         with:
           install: "frozen"
-      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: |
-            docs/.docusaurus
-            docs/node_modules/.cache
-          key: ${{ runner.os }}-docusaurus-next-${{ hashFiles('pnpm-lock.yaml') }}-${{ hashFiles('docs/**/*.md', 'docs/**/*.mdx', 'docs/**/*.ts') }}
-          restore-keys: |
-            ${{ runner.os }}-docusaurus-next-${{ hashFiles('pnpm-lock.yaml') }}-
-            ${{ runner.os }}-docusaurus-next-
       - run: vp run --filter docs build
         env:
-          DOCUSAURUS_BASE_URL: "/next/"
+          DOCS_BASE_URL: "/next/"
           DOCS_CHANNEL: next
           DOCS_RELEASE: ${{ needs.release-ref.outputs.tag }}
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

@@ -23,7 +23,7 @@ mirrored rows on both admin disconnect and workspace purge. GitHub erased only o
 `installation.deleted` webhook — an admin disconnect erased nothing. GitLab, which has no
 vendor-side uninstall signal at all because it authenticates with a user PAT, erased nothing on any
 trigger: its mirror was un-erasable except by hand. Workspace purge cleared monitors and local git
-clones and left every mirrored row in Postgres. `docs/admin/dsms/record-of-processing.md` meanwhile
+clones and left every mirrored row in Postgres. `docs/admin/dsms/record-of-processing.mdx` meanwhile
 promised that repository artefacts are removed "when the last workspace stops monitoring the source
 repository" — true only for the App-uninstall webhook and single-repo monitor removal.
 

@@ -146,7 +146,7 @@ postgresql:
   # Optional: a postgres_exporter Deployment that reads PostgreSQL through the Service, with TLS, as the
   # role hephaestus_monitor, a member of pg_monitor only. Needs DATABASE_MONITOR_PASSWORD in secret.name.
   # With the bundled PostgreSQL, a Job of each release creates the role and sets its password.
-  # docs/admin/monitoring.md § Turn on database metrics.
+  # docs/admin/monitoring.mdx § Turn on database metrics.
   metrics:
     enabled: false
     # The statements with the most total execution time that it reports, by query id only.
@@ -163,7 +163,7 @@ postgresql:
 
 # The JVM Pods request all of their memory limit: the buildpack sizes the
 # heap from the limit, so a node that has only the request cannot hold what the JVM grows to. Each
-# size is a measured resident set plus headroom (docs/contributor/capacity-benchmark.md).
+# size is a measured resident set plus headroom (docs/contributor/capacity-benchmark.mdx).
 server:
   # The API, sync, delivery, and with sandbox.enabled the sandboxes' reviews and their gateway.
   # docs/admin/sizing.mdx § Database connections owns the connections that a review holds.
@@ -228,7 +228,7 @@ webapp:
     limits: { cpu: 500m, memory: 256Mi, ephemeral-storage: 256Mi }
 
 # The PriorityClasses of the Pods, highest first: roles, conversations, reviews
-# (docs/admin/sandboxes.md § Priorities). The chart creates them, which needs permission to create
+# (docs/admin/sandboxes.mdx § Priorities). The chart creates them, which needs permission to create
 # cluster-wide objects. Where that is not allowed, set create to false and name three classes that
 # exist, with their values in that order.
 # The release's alert rules, files/hephaestus-alerts.yml, as the rule evaluator of the cluster
@@ -250,7 +250,7 @@ observability:
     namespace: ""
   # A monitoring stack in the release's namespace: VictoriaMetrics scrapes the roles, vmalert evaluates
   # the alert rules, and Alertmanager sends the alerts. Node and cluster exporters are not part of it:
-  # docs/admin/monitoring.md § Run the monitoring stack.
+  # docs/admin/monitoring.mdx § Run the monitoring stack.
   stack:
     enabled: false
     # The node-exporter of each node as <IPv4 address>:<port>, such as 10.0.0.5:9100. The stack then
@@ -273,7 +273,7 @@ priorityClasses:
 
 # The agent sandboxes: practice reviews and conversation turns, which the server starts in their own namespace.
 # sandbox.enabled=true needs sandbox.namespace and networkPolicy.kubernetesApi. Before the release starts,
-# the platform isolation gate proves the sandbox boundary. docs/admin/sandboxes.md § Sandbox isolation gate.
+# the platform isolation gate proves the sandbox boundary. docs/admin/sandboxes.mdx § Sandbox isolation gate.
 sandbox:
   # The conversation turns that the whole installation runs at once. Auto uses the declared CPU
   # budget, role requests and sandbox reservations. An explicit count overrides it. 0 stops new turns.
@@ -286,7 +286,7 @@ sandbox:
   # Restricted Pod Security level. Not the release namespace, and no other release's.
   namespace: ""
   # The memory that the sandbox nodes give review Pods. The reviews that run at once are this over one
-  # review template's request (docs/admin/sandboxes.md § Sandbox sizes), and its RuntimeClass
+  # review template's request (docs/admin/sandboxes.mdx § Sandbox sizes), and its RuntimeClass
   # overhead. The reviews tier's quota and the compositions follow. 3840Mi holds seven 512Mi reviews.
   reviewMemory: 3840Mi
   # One quota for each tier of sandboxes, reviews and conversations, derived from reviewMemory, the
@@ -313,7 +313,7 @@ sandbox:
     resources:
       requests: { cpu: 10m, memory: 64Mi, ephemeral-storage: 64Mi }
       limits: { cpu: "1", memory: 256Mi, ephemeral-storage: 128Mi }
-  # The Pod of each sandbox kind (docs/admin/sandboxes.md § Sandbox templates): the agent loop,
+  # The Pod of each sandbox kind (docs/admin/sandboxes.mdx § Sandbox templates): the agent loop,
   # its tools and the workspace in one container. The workspace counts as ephemeral storage, and the
   # loop starts faster with at least one CPU as its limit.
   templates:
@@ -337,7 +337,7 @@ sandbox:
 # Application settings. docs/admin/configuration-reference.mdx maps each key to its setting.
 config:
   releaseCheckEnabled: true
-  # Corrects commit links from GitHub's or GitLab's own answer. docs/admin/correct-commit-links.md has the steps.
+  # Corrects commit links from GitHub's or GitLab's own answer. docs/admin/correct-commit-links.mdx has the steps.
   commitIdentityResolutionEnabled: true
   llmUsageRetention: P400D
   # Age at which what Hephaestus says about a person is erased: conversation entries, feedback and practice
@@ -356,7 +356,7 @@ config:
     existingSecret: ""
     key: ca.crt
   # A Git provider on a private network: host names, IP addresses or CIDR ranges that its server URL
-  # may use. Empty allows public hosts only. docs/admin/private-network.md.
+  # may use. Empty allows public hosts only. docs/admin/private-network.mdx.
   scmPrivateHosts: []
   # The organization that runs research on this instance, as the privacy notice names it.
   researchOrganization: ""

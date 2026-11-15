@@ -201,15 +201,15 @@ await test("the page keeps its anchors, imports every part, and every row reads 
 	// The page had these two anchors before the split, and links may name them.
 	assert.match(page, /^## Helm values$/mu);
 	assert.match(page, /^## Application environment$/mu);
-	assert.match(page, /^<HelmValues \/>$/mu);
-	assert.match(page, /^<ApplicationEnvironment \/>$/mu);
+	assert.match(page, /^::include\[\.\/_configuration-reference\/helm\.mdx\]$/mu);
+	assert.match(page, /^::include\[\.\/_configuration-reference\/environment\.mdx\]$/mu);
 	const indexes = [`${REFERENCE_PARTS}/helm.mdx`, `${REFERENCE_PARTS}/environment.mdx`]
 		.map((file) => files.get(file) ?? "")
 		.join("\n");
 	for (const file of files.keys()) {
 		const name = file.slice(REFERENCE_PARTS.length + 1, -".mdx".length);
 		if (file !== REFERENCE_PAGE && name !== "helm" && name !== "environment") {
-			assert.ok(indexes.includes(`./${name}.mdx`), `an index imports ${name}`);
+			assert.ok(indexes.includes(`./${name}.mdx`), `an index includes ${name}`);
 		}
 	}
 	// A new group changes an index, never the page.

@@ -18,7 +18,7 @@ Two questions decide the life of a mirror row. Is the work still there upstream?
 ADR 0024 answered them with two operations, and six updates moved its answer. ADR 0012 added identity rules for sync and was narrowed once.
 Some of that text no longer held. A GitHub 404 no longer removes a monitor, Slack now infers deletions, and person erasure runs in the app.
 
-This ADR states the mirror lifecycle at 1.0 as rules. [Sync lifecycle](../contributor/sync-lifecycle.md) keeps the detail for each provider.
+This ADR states the mirror lifecycle at 1.0 as rules. [Sync lifecycle](../contributor/sync-lifecycle.mdx) keeps the detail for each provider.
 A rule that main does not satisfy yet says "1.0 target".
 
 ## Decision drivers
@@ -70,7 +70,7 @@ A rule that main does not satisfy yet says "1.0 target".
     Enforced by: `PersonDataRecoveryIntegrationTest#shouldReapplyAnErasureLostByARestoreBeforeProcessingStarts`, `PersonDataRecoveryStartupIntegrationTest#shouldBindTheRecoveryProfileAndCompleteBeforeSchedulersAndConsumersStart`.
 16. **An erasure survives a backup restore.** The `erasure-recovery` profile reapplies every erasure after the recovery point. It reapplies disconnects, workspace purges and person erasures, also of accounts that their owners deleted.
     The operator lists them in a version 2 manifest outside the database. The profile runs with background work off and refuses to start beside it, so the purge needs no quiescence guard.
-    [Reapply erasures after a restore](../admin/erasure-recovery.md) owns the procedure.
+    [Reapply erasures after a restore](../admin/erasure-recovery.mdx) owns the procedure.
     Enforced by: `ErasureRecoveryRestoreIntegrationTest#shouldPurgeAgainAWorkspaceThatARestoreBroughtBack`, `ErasureRecoveryRestoreIntegrationTest#shouldDisconnectAgainAConnectionThatARestoreBroughtBack`, `PersonDataRecoveryIntegrationTest#shouldRefuseToRecoverBesideBackgroundWork`.
 
 ## What changed, and why

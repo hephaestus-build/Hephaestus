@@ -32,7 +32,7 @@ Your notice must cover at least these categories:
 - **Account settings and email**: preferences and the verified primary email address. With a mail relay, also notification subscriptions. Name the relay operator as a recipient.
 - **AI features**: messages to the configured model providers, stored conversations, and practice results.
 - **Server logs**: IP addresses and request metadata.
-- **Log collection**: if you ship container logs to a store such as Loki ([Collect logs](./monitoring.md#collect-logs)), name its operator and retention.
+- **Log collection**: if you ship container logs to a store such as Loki ([Collect logs](./monitoring.mdx#collect-logs)), name its operator and retention.
 - **Optional features** that you turn on: use the texts in [Notice texts for optional features](#notice-texts-for-optional-features).
 
 For each transfer outside the EU or EEA, document the Chapter V safeguard for the actual recipient, service, and destination.
@@ -181,7 +181,7 @@ also leave every total on the page.
 **`config.pageExperienceMetrics`** is off by default.
 When it is on, the browser of each signed-in reader measures how fast each page loaded and responded.
 It sends new measurements to your server when the reader leaves the page, and it sends each measurement once.
-The server adds them to counters that name no person, workspace or page address ([Page experience metrics](./metrics.md#page-experience-metrics)).
+The server adds them to counters that name no person, workspace or page address ([Page experience metrics](./metrics.mdx#page-experience-metrics)).
 It keeps no record of the report.
 The report is a request, so it carries the same request metadata as every other request.
 
@@ -219,7 +219,7 @@ the server with your IP address and browser information, which the server logs k
 When it is on, the browser of each reader reports the failures that it meets on a page, also before sign-in.
 A report names the kind of failure, the page type, the class of the error, the release and positions in the web app's scripts.
 For a failed request, it also names the request's reference and its status code.
-It names no person, workspace, page address or error message ([Browser faults](./metrics.md#browser-faults)).
+It names no person, workspace, page address or error message ([Browser faults](./metrics.mdx#browser-faults)).
 The browser stores nothing on the device for it.
 
 The server writes each failure to its log and counts it. It keeps no other record.

@@ -69,7 +69,7 @@ export const Default: Story = {
 export const PlaceWithoutQuote: Story = {
 	args: {
 		location: {
-			path: "docs/contributor/practice-catalog.md",
+			path: "docs/contributor/practice-catalog.mdx",
 			startLine: 31,
 			endLine: 44,
 			sourceKind: "scm.pull-request.diff",

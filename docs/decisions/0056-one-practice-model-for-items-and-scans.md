@@ -73,9 +73,9 @@ Incomplete or [suspect](../contributor/practice-review-pipeline.mdx#scans) inven
 File removal, marks and missed reads never prove repair or absence.
 Slack and Outline support their own item evidence but have no scan driver or on-work feedback writer.
 
-The [product vocabulary](../contributor/practice-feedback-language.md) owns product terms.
+The [product vocabulary](../contributor/practice-feedback-language.mdx) owns product terms.
 The [review glossary](../contributor/practice-review-glossary.mdx) owns operation terms and standard correspondence.
-The [data model](../contributor/practice-feedback-schema.md) owns durable relationships.
+The [data model](../contributor/practice-feedback-schema.mdx) owns durable relationships.
 The [pipeline](../contributor/practice-review-pipeline.mdx) owns stage boundaries.
 
 ## Consequences

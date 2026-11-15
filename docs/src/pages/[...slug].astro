@@ -1,0 +1,44 @@
+---
+import type { GetStaticPaths, InferGetStaticPropsType } from "astro";
+
+import { Docs } from "@/components/docs";
+import { mdxComponents } from "@/components/mdx";
+import Mermaid from "@/components/mermaid.astro";
+import Layout from "@/layouts/layout.astro";
+import { REPO_URL, SITE_URL } from "@/lib/site";
+import { markdownUrl, source } from "@/lib/source";
+
+export const getStaticPaths = (() =>
+	source.getPages().map((page) => ({
+		params: { slug: page.slugs.join("/") },
+		props: { page },
+	}))) satisfies GetStaticPaths;
+
+type Props = InferGetStaticPropsType<typeof getStaticPaths>;
+
+const { page } = Astro.props;
+const { body: Content, toc } = await page.data.load();
+const twin = markdownUrl(page.url);
+// `gate:docs-pages` requires a title on every page; the schema allows none only for partials.
+const title = page.data.title ?? page.url;
+const lastModified = page.data.lastModified instanceof Date ? page.data.lastModified.toISOString() : undefined;
+---
+
+<Layout title={title} description={page.data.description} canonical={page.url} markdown={twin}>
+	<Docs
+		client:load
+		transition:persist="docs"
+		pathname={Astro.url.pathname}
+		params={Astro.params}
+		title={title}
+		description={page.data.description}
+		toc={toc}
+		markdownUrl={twin}
+		pageUrl={`${SITE_URL}${page.url}`}
+		sourceUrl={`${REPO_URL}/blob/main/docs/${page.path}`}
+		editUrl={`${REPO_URL}/tree/main/docs/${page.path}`}
+		lastModified={lastModified}
+	>
+		<Content components={{ ...mdxComponents(page), Mermaid }} />
+	</Docs>
+</Layout>

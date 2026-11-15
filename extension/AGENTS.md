@@ -116,7 +116,7 @@ Labels, icons and sentences come from the webapp's registries, imported by path 
 (`webapp/src/components/practice-vocabulary/*-defs.ts`, `webapp/src/lib/item-kinds.ts`), and
 so do the brand marks and the `ui/spinner` and `ui/skeleton` primitives. `@/api/*` type-checks
 against this tree's own generated client. Do not copy a registry or component here. A missing one is
-a webapp change. The glossary is `docs/contributor/practice-feedback-language.md`.
+a webapp change. The glossary is `docs/contributor/practice-feedback-language.mdx`.
 
 Tailwind scans only this tree, so a webapp module whose classes the extension renders needs an
 `@source` in `src/ui/styles.css`. Every webapp file the extension imports is an extension input, including indirect imports through another webapp file.

@@ -1,6 +1,6 @@
 name: CI / Feedback eval panel
 
-# The model panel of the feedback eval gate: docs/contributor/feedback-quality-evals.md § Model panel.
+# The model panel of the feedback eval gate: docs/contributor/feedback-quality-evals.mdx § Model panel.
 # The checks that need no model gate every pull request in cicd.yml. With a configured provider, this
 # workflow composes the fixed panel each night on main, on a manual run, and on a pull request
 # labelled `eval:run`. Any other pull request that changes what the composer reads composes the
@@ -23,7 +23,7 @@ on:
       - "server/application/src/main/resources/practices/**"
       - "server/application/src/test/java/de/tum/cit/aet/hephaestus/agent/composer/CompositionEval*.java"
       - "server/application/src/test/java/de/tum/cit/aet/hephaestus/agent/composer/LiveChatTransport*.java"
-      - "docs/contributor/practice-feedback-language.md"
+      - "docs/contributor/practice-feedback-language.mdx"
       - "scripts/feedback-eval-gate.ts"
       - "scripts/feedback-eval/**"
       - ".github/workflows/feedback-eval-panel.yml"

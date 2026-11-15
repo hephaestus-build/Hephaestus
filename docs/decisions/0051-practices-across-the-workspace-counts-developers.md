@@ -147,7 +147,7 @@ The page has no smallest count, so it does not guard a count, a difference betwe
 
 ## Open decisions
 
-- **Source use.** The page reads observations of other developers under `PRACTICE_FEEDBACK_DELIVERY`. The maintainer and the controller decide if a count needs its own purpose. See `docs/admin/dsms/item-source-governance.md`.
+- **Source use.** The page reads observations of other developers under `PRACTICE_FEEDBACK_DELIVERY`. The maintainer and the controller decide if a count needs its own purpose. See `docs/admin/dsms/item-source-governance.mdx`.
 
 ## Revisit trigger
 

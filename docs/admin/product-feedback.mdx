@@ -189,7 +189,7 @@ Account erasure and workspace purge remove the applicable reports and start exte
 Cleanup moves public issues to private, replaces their title and body with “Erased at the reporter’s request”, and closes them.
 It first reconciles any uncertain create, including a create with no known issue number.
 If no private repository is available, cleanup scrubs and closes the public issue where it is.
-The [personal-data map](./dsms/personal-data-map.md) owns the store and export inventory.
+The [personal-data map](./dsms/personal-data-map.mdx) owns the store and export inventory.
 
 The app cannot delete an issue or its edit history.
 So each issue that cleanup scrubs becomes a manual step: its edit history still shows the erased text.

@@ -1,0 +1,10 @@
+{
+	"title": "Data-protection documentation",
+	"pages": [
+		"index",
+		"[Record of processing (Art. 30)](/admin/dsms/record-of-processing)",
+		"[Processor checklist (Art. 28)](/admin/dsms/processor-checklist)",
+		"[Artifact-source governance](/admin/dsms/item-source-governance)",
+		"[Personal-data map](/admin/dsms/personal-data-map)"
+	]
+}

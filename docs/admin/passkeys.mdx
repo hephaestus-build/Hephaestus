@@ -8,7 +8,7 @@ A passkey protects admin access after the sign-in provider identifies the accoun
 By default, the Helm chart requires a passkey for instance administration.
 Each admin registers their own passkeys and recovery codes, as the user guide's [Passkeys](/user/passkeys) describes.
 
-## Set the passkey policy {/*#configure-the-policy*/}
+## Set the passkey policy [#configure-the-policy]
 
 1. Add the policy to `site.yaml`.
    The block shows the defaults of the chart:
@@ -70,7 +70,7 @@ Do not use this value to recover a production account.
 3. Confirm with your passkey.
    The page opens.
 
-## Recover an admin who lost every passkey {/*#deployment-controlled-recovery*/}
+## Recover an admin who lost every passkey [#deployment-controlled-recovery]
 
 Use this procedure only when an admin lost every passkey and every recovery code.
 The first-admin bootstrap token cannot recover an existing admin.

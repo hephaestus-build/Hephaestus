@@ -248,4 +248,4 @@ container and without running one.
 - `reusable-docker-build.yml` (`agent-pi-build`'s head-SHA tag, which is what a preview derives against)
 - `docker/compose.app.yaml` (`release-pin-fetcher`, and the `HEPHAESTUS_AGENT_IMAGE_REFERENCE`
   passthrough it shares with `docker/compose.core.yaml` and `docker/preview/compose.app.yaml`),
-  [Release image lock](../admin/release-image-lock.md)
+  [Release image lock](../admin/release-image-lock.mdx)

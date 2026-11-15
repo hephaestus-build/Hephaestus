@@ -2,7 +2,7 @@
 # headroom) and 150 GiB of disk. Bundled PostgreSQL, one server that runs five reviews at a
 # time, and bounded caches; the chart derives the sandbox quotas. With the gVisor overhead of
 # k3s-values.yaml, the one-host install runs four reviews at a time.
-# docs/admin/helm-chart.md § Sandbox capacity budget gives the arithmetic; a chart test checks that the requests,
+# docs/admin/helm-chart.mdx § Sandbox capacity budget gives the arithmetic; a chart test checks that the requests,
 # one upgrade beside them, and the quota fit.
 #
 # The sandboxes are on: reviews are the product. The operator states sandbox.namespace and

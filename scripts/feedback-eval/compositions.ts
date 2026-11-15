@@ -1,6 +1,6 @@
 /**
  * The labelled composition set: cases of the review on the work, each with the decisions we expect, a reference
- * composition and labelled alternatives. `docs/contributor/composition-label-rubric.md` owns the codes and the
+ * composition and labelled alternatives. `docs/contributor/composition-label-rubric.mdx` owns the codes and the
  * measures. `CompositionEvalTest` renders each case through main's composer and writes the files this module reads.
  */
 import Ajv2020, { type ValidateFunction } from "ajv/dist/2020.js";

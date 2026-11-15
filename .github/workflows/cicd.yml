@@ -273,15 +273,10 @@ jobs:
               # The shared brand exporter also owns the extension's generated icons.
               - 'extension/public/icon/**'
               - 'docs/static/img/brand/chrome-extension-promo-440x280.png'
-              # gate:docs-tokens compares this stylesheet with webapp/src/styles/theme-tokens.css, so both
-              # halves of that pair have to reach the leg that runs it.
-              - 'docs/src/css/custom.css'
               - '.oxlintrc.json'
               - 'oxlint.react.jsonc'
               - 'oxlint.app.jsonc'
               - '.oxfmtrc.json'
-              - 'scripts/check-docs-tokens.ts'
-              - 'scripts/check-docs-tokens.test.ts'
               - 'scripts/check-presentational-components.ts'
               - 'scripts/check-presentational-components.test.ts'
               - 'scripts/check-story-prose.ts'
@@ -341,7 +336,7 @@ jobs:
               - 'pnpm-workspace.yaml'
             webapp-image:
               - '.vale/**'
-              - 'docs/contributor/practice-feedback-language.md'
+              - 'docs/contributor/practice-feedback-language.mdx'
               - 'scripts/lib/ste-words.ts'
               - 'scripts/lib/json.ts'
               - 'webapp/src/**'
@@ -368,7 +363,7 @@ jobs:
               - 'scripts/compile-agent-runtime.ts'
               - 'server/**'
               # The server packages the feedback writing guide into its jar.
-              - 'docs/contributor/practice-feedback-language.md'
+              - 'docs/contributor/practice-feedback-language.mdx'
               - 'scripts/check-gradle-verification-metadata.ts'
               - 'scripts/e2e-identity-seed-database.ts'
               - 'scripts/e2e-setup.ts'
@@ -462,7 +457,7 @@ jobs:
               - 'scripts/summarize-buildpack-log.ts'
               - 'server/application/src/main/**'
               # The server packages the feedback writing guide into its jar.
-              - 'docs/contributor/practice-feedback-language.md'
+              - 'docs/contributor/practice-feedback-language.mdx'
               - 'server/application/build.gradle.kts'
               - 'server/application/gradle.lockfile'
               - 'server/application/project.toml'
@@ -762,8 +757,8 @@ jobs:
               - 'server/application/src/test/java/de/tum/cit/aet/hephaestus/agent/composer/CompositionEval*.java'
               - 'server/application/src/test/java/de/tum/cit/aet/hephaestus/agent/composer/LiveChatTransport*.java'
               - '.github/workflows/feedback-eval-panel.yml'
-              - 'docs/contributor/practice-feedback-language.md'
-              - 'docs/contributor/composition-label-rubric.md'
+              - 'docs/contributor/practice-feedback-language.mdx'
+              - 'docs/contributor/composition-label-rubric.mdx'
               - 'scripts/feedback-eval-gate.ts'
               - 'scripts/feedback-eval/**'
               # G6 runs the practice-script corpus and its snapshots.
@@ -842,7 +837,7 @@ jobs:
           ZIZMOR_SARIF: ${{ steps.zizmor.outputs.output-file }}
         run: jq -e '[.runs[]?.results[]?] | length == 0' "$ZIZMOR_SARIF"
 
-  # Prompt regressions: docs/contributor/feedback-quality-evals.md § Feedback eval gate. These are
+  # Prompt regressions: docs/contributor/feedback-quality-evals.mdx § Feedback eval gate. These are
   # the checks that need no model; feedback-eval-panel.yml composes the model panel.
   feedback-eval:
     name: Feedback eval gate

@@ -1,6 +1,4 @@
 ---
-id: unified-pi-runtime
-sidebar_position: 3
 title: Conversation runtime
 description: How a conversation turn runs, from the ledger in PostgreSQL to its conversation sandbox, and how each turn rebuilds and limits its context.
 ---
@@ -22,7 +20,7 @@ Stored custom practice programs can still use TypeScript.
 
 ## The ledger
 
-[Practice feedback language § Conversation](./practice-feedback-language.md#conversation) defines the conversation, the thread, the message and the weekly digest.
+[Practice feedback language § Conversation](./practice-feedback-language.mdx#conversation) defines the conversation, the thread, the message and the weekly digest.
 [Practice review glossary § Runtime terms](./practice-review-glossary.mdx#runtime-terms) defines the turn, the conversation sandbox and the context document.
 
 PostgreSQL holds all Hephaestus state in three workspace-scoped tables:
@@ -246,7 +244,7 @@ The reaper on the server role logs a lost second attempt at `INFO`.
 
 ### Delivery of shown feedback
 
-[Practice feedback language § Destinations](./practice-feedback-language.md#destinations) owns the delivery rule for feedback in conversation.
+[Practice feedback language § Destinations](./practice-feedback-language.mdx#destinations) owns the delivery rule for feedback in conversation.
 This section tells how a turn applies it.
 
 Three tools put Hephaestus's words about practice feedback into the answer.
@@ -339,7 +337,7 @@ A `show_feedback` call for a piece of the digest gets `422`, because that feedba
 The ledger stores the complete admitted answer and enqueues one `SLACK_POST` action in the same transaction.
 `SlackConversationProjector` only wakes the outbox executor for a terminal turn.
 Its subscription is excluded from the `test` profile.
-The [outbox](./outbox.md) owns the post, its lease, retry, metadata readback and terminal outcome.
+The [outbox](./outbox.mdx) owns the post, its lease, retry, metadata readback and terminal outcome.
 Slack receives no model text while a turn runs.
 The app's live hub keeps its existing partial-answer path.
 
@@ -421,7 +419,7 @@ The loop sends it again with large tool results reduced to their notes ([Tool re
 
 `ContextFolder` stages the turn's fixed documents at `/workspace/work` from the archive in its context response.
 It removes all contents of `/workspace/work` first.
-Pi session files stay outside that folder, as defined in the [workspace ABI](./agent/workspace-abi.mdx#folder-layout).
+Pi session files stay outside that folder, as defined in the [workspace ABI](./agent/agent-workspace-abi.mdx#folder-layout).
 
 Pi's `read` and `bash` tools then use local files.
 An indexed item document is fetched on its first read and staged as a complete file before Pi opens it.
@@ -528,7 +526,7 @@ The loop rebuilds the Pi session of a turn from rows.
 Nothing about a conversation stays in the loop after the turn.
 The request has four parts, in this order:
 
-1. The system prompt `agent/conversation/system.md` and the [shared feedback writing guide](./practice-feedback-language.md#writing-feedback). They are the same for each turn.
+1. The system prompt `agent/conversation/system.md` and the [shared feedback writing guide](./practice-feedback-language.mdx#writing-feedback). They are the same for each turn.
    `ConversationTurnContexts.SYSTEM_PROMPT` joins them, and `GET context` returns it. `ConversationTurnControllerIntegrationTest` keeps the two together at 15 KiB or less, because each model call sends them again.
 2. The tools. They are the same for each turn.
 3. The path from the server (`ConversationContextPathBuilder`). It is the same bytes for each turn of one conversation, until it changes.

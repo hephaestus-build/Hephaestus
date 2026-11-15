@@ -20,7 +20,7 @@ metadata:
 
 # Land PR
 
-Follow the [writing standard](../../../docs/contributor/simplified-technical-english.md) for all prose.
+Follow the [writing standard](../../../docs/contributor/simplified-technical-english.mdx) for all prose.
 
 ## 1. See what changed
 

@@ -153,7 +153,7 @@ tasks.processResources {
     }
     exclude("agent/work/**")
     exclude("agent/*.ts")
-    from(rootProject.file("../docs/contributor/practice-feedback-language.md")) { into("agent") }
+    from(rootProject.file("../docs/contributor/practice-feedback-language.mdx")) { into("agent") }
 }
 
 tasks.withType<JavaCompile>().configureEach {

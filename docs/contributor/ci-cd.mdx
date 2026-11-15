@@ -1,6 +1,4 @@
 ---
-id: ci-cd
-sidebar_position: 4
 title: CI/CD Architecture
 description: Trunk-based CI/CD through the merge queue. Staging follows main, and production runs releases after approval.
 ---
@@ -128,7 +126,7 @@ The job's own limit cancels the run and can lose its log, so the list is the evi
 | Changesets → Verify changesets                                          | policy tests, verified-revert detection, release-note presence, `MIGRATION.md` freeze, [public contract](#public-contract-gate)                                                                                                                     | `vp run gate:changesets`, `gate:public-contract`                                                 |
 | Images → linux/amd64, linux/arm64, Manifest, Tag unchanged images                                   | One build job per platform builds every image of the run and scans it. The Dockerfile images use `docker buildx bake`. The Server image uses `pack build` from the packaged JAR. One manifest job merges, attests and signs them. Aliases for unchanged images           | —                                                                        |
 | Workflow lint                                                      | workflow lint with ShellCheck warnings. Zizmor at medium confidence                                                                                                                                       | —                                                                        |
-| Feedback eval gate | The deterministic checks of the [feedback eval gate](./feedback-quality-evals.md#feedback-eval-gate): valid fixtures and case lists, literal checks, practice occasions, practice-script snapshots and the call ceiling. Keeps the `feedback-eval-gate` artifact. The model panel and the prompt-safety subset run in `feedback-eval-panel.yml` | `node scripts/feedback-eval-gate.ts` |
+| Feedback eval gate | The deterministic checks of the [feedback eval gate](./feedback-quality-evals.mdx#feedback-eval-gate): valid fixtures and case lists, literal checks, practice occasions, practice-script snapshots and the call ceiling. Keeps the `feedback-eval-gate` artifact. The model panel and the prompt-safety subset run in `feedback-eval-panel.yml` | `node scripts/feedback-eval-gate.ts` |
 | PR → Validate PR                                                        | Conventional Commit title. Every commit’s primary author resolves to the PR author’s GitHub account (including bot accounts) or a listed review-policy maintainer. The title, body, and every commit message contain no `Claude-Session:` trailer, "Generated with" line, or session link (a `Co-authored-by:` trailer is allowed) | —                                                                        |
 
 `Build → Database migrations`, the PostgreSQL drills, both E2E rows and the integration shards other than `review` are
@@ -561,11 +559,11 @@ Record it here from the first merge group that fails after this rule reached `ma
 
 ## Security and supply-chain controls
 
-[Supply-chain security in CI](./supply-chain-security.md) lists each control, when it runs, what it blocks, and where it reports.
+[Supply-chain security in CI](./supply-chain-security.mdx) lists each control, when it runs, what it blocks, and where it reports.
 
 ### Gradle dependency inventory and the Vulnerabilities exclusion
 
-[Supply-chain security in CI](./supply-chain-security.md#gradle-dependency-inventory-and-the-vulnerabilities-exclusion) owns this exclusion.
+[Supply-chain security in CI](./supply-chain-security.mdx#gradle-dependency-inventory-and-the-vulnerabilities-exclusion) owns this exclusion.
 
 ## Environments
 
@@ -609,7 +607,7 @@ A workflow passes them to the live tests as the three `HEPHAESTUS_LIVE_LLM_*` va
 A job condition cannot read a secret, so a workflow checks the settings in a step.
 Without all three, that step names the missing settings in a notice and in its summary, and the workflow composes nothing and ends without failure.
 
-Today the [feedback eval panel](./feedback-quality-evals.md#model-panel) is the only such workflow. A night without `CI_LLM_MODEL` starts no panel job.
+Today the [feedback eval panel](./feedback-quality-evals.mdx#model-panel) is the only such workflow. A night without `CI_LLM_MODEL` starts no panel job.
 The tracking issue stays unchanged on a night that composes nothing.
 One panel run sends at most 240 model calls.
 
@@ -682,7 +680,7 @@ The required checks are job names, so a display name does not change them.
 | `semgrep.yml`                         | Pull request, push to main                                                    | Tests and scans the repository's own TLS rule pack                                                                                                                                                                               |
 | `kubernetes-nightly.yml`              | Nightly, manual                                                               | Runs every Kubernetes leg and the sandbox footprint benchmark on the newest main build that passed CI, with its chart and agent image. Reports a failure on one tracking issue                                              |
 | `chart-upgrade.yml` | Nightly through `kubernetes-nightly.yml`, PR touching the drill, manual | Installs the latest published release with its own chart and images, then upgrades it to a candidate with the candidate chart |
-| `feedback-eval-panel.yml` | Nightly, manual, PR that changes what the composer reads | Composes the [model panel](./feedback-quality-evals.md#when-the-panel-runs) of the feedback eval gate, or its prompt-safety subset on a PR without the `eval:run` label. Never a required check. Inactive without the [CI model connection](#ci-model-connection). A red or unfinished night comments on one tracking issue, and the next green night closes it |
+| `feedback-eval-panel.yml` | Nightly, manual, PR that changes what the composer reads | Composes the [model panel](./feedback-quality-evals.mdx#when-the-panel-runs) of the feedback eval gate, or its prompt-safety subset on a PR without the `eval:run` label. Never a required check. Inactive without the [CI model connection](#ci-model-connection). A red or unfinished night comments on one tracking issue, and the next green night closes it |
 | `extension-provider-slots.yml` | Nightly, manual | Checks the actual extension adapter against six public GitHub and GitLab report layouts and keeps each result |
 | `platform-pins.yml` | PR touching platform pins or their validator | Verifies the installer checksum and the images that both upstream charts render |
 | `rescan-images.yml`                   | Daily, manual                                                                | Rescans main's published images against the release vulnerability policy and keeps one tracking issue in step with the findings. A second job rescans the latest published release's images and reports drift on the vulnerability response issue|
@@ -1050,7 +1048,7 @@ Any other pull request builds no image. The merge group builds every changed ima
 | Quality → Extension        | `extension/**`. Webapp files imported by path: vocabulary registries, trace formatting, status definitions, sign-in providers, text helpers, and their imports. Webapp lint plugin and stylesheet. Root oxlint and oxfmt configs, `scripts/ci-browser.ts`, `.github/playwright-image.json`, and root package files                                                                                                                                       |
 | Quality → Server       | `server/**` except `AGENTS.md` and `CLAUDE.md`, `scripts/run-gradlew.ts`, `scripts/check-gradle-verification-metadata.ts`, root package files                                                                                                                                                                                                                                                                                     |
 | Quality → Tooling and docs | `scripts/**`, `docker/agents/**`, `server/application/src/{main,test}/resources/agent/**`, `load-tests/**`, `docs/**`, tsconfigs, oxlint and oxfmt configs, `.changeset/**`, `commitlint.config.ts`, instruction files, `.github/renovate.json`                                                                                                                                                                                                                               |
-| Feedback eval gate | `server/application/src/main/resources/agent/*.md`, `agent/conversation/**`, `agent/review-composer*.ts`, the composer package `agent/composer/**`, `practices/**`, the `CompositionEval*` tests, `docs/contributor/practice-feedback-language.md`, `docs/contributor/composition-label-rubric.md`, `scripts/feedback-eval-gate.ts`, `scripts/feedback-eval/**`, `docker/agents/practice-scripts/**` |
+| Feedback eval gate | `server/application/src/main/resources/agent/*.md`, `agent/conversation/**`, `agent/review-composer*.ts`, the composer package `agent/composer/**`, `practices/**`, the `CompositionEval*` tests, `docs/contributor/practice-feedback-language.mdx`, `docs/contributor/composition-label-rubric.mdx`, `scripts/feedback-eval-gate.ts`, `scripts/feedback-eval/**`, `docker/agents/practice-scripts/**` |
 | Every quality leg          | `vite.config.ts`, `scripts/lib/push-gates.ts`, `.vite-hooks/**`, `.java-version`, `cicd.yml`, `ci-quality-gates.yml` and the setup actions: the task graph, the hooks and the JDK decide every leg's verdict, so a change to one runs all of them                                                                                                                                                                                        |
 | Build artifact gates       | contracts: the Server paths, `docker/postgres/**`, or either generated client and its generator config (`api-clients`). E2E: webapp source and the server main sources. Extension E2E: `extension/**`, the vocabulary registries and the server main sources. Image: `server/application/src/main/**`, the Gradle build scripts, catalog, locks and wrapper, `server/application/project.toml`, `server/generated-clients/**` |
 | Docker images              | `webapp-image`: the webapp build inputs and non-test source. `agent-images`: `docker/agents/**` and the agent runtime files that the agent image copies. `postgres-image`: `docker/postgres/**`                                                                                                                                                                                                                                                                                           |
@@ -1279,13 +1277,13 @@ Right after a merge, that run is still building, so the pull request builds ever
   In this drill, a conversation turn runs `bash` in its conversation sandbox while the servers roll.
   The sandbox driver keeps the run lease and uses the gateway of the replacement server.
   The turn must end DONE on its first attempt in the same sandbox.
-  The fake model provider of the [capacity benchmark](./capacity-benchmark.md) scripts the turn.
+  The fake model provider of the [capacity benchmark](./capacity-benchmark.mdx) scripts the turn.
   Then the drill proves the Slack path of a turn.
   It uses a Slack Web API fake in the same Pod network (`scripts/slack-fake.ts`).
   The server installs the app through its own OAuth callback against the fake.
   A signed Events API message from the member's linked Slack identity must reach a turn in the same sandbox.
   The turn must end DONE, and the fake must receive the answer as `chat.postMessage` in the member's DM.
-  This drill is the CI proof of a conversation answer in the app and in Slack. [End-to-end testing](./e2e-testing.md#conversation-turns) lists the stand-ins.
+  This drill is the CI proof of a conversation answer in the app and in Slack. [End-to-end testing](./e2e-testing.mdx#conversation-turns) lists the stand-ins.
   It adds no job. A pull request does not run the drills job. `ci:full` or a dispatch does.
   arm64 runs only the lowest minor, the minor of the arm64 host.
   A push to `main` that a merge group tested runs no leg, because its commit is the group's commit.
@@ -1753,12 +1751,12 @@ vp run typecheck:agents      # Agent + practice script TypeScript
 
 ## Adding a new service
 
-[Add a service to CI](./add-a-ci-service.md) gives the steps.
+[Add a service to CI](./add-a-ci-service.mdx) gives the steps.
 
 ## Static preview comments
 
 Storybook and documentation previews list every published story or page from changed source files.
-They use the built Storybook index and Docusaurus metadata, not guessed routes. The lists are
+They use the built Storybook index and the built docs pages, not guessed routes. The lists are
 not a dependency-impact report: changing a component without changing its story file does not add
 that component's stories. Unpublished or deleted entries cannot link to a preview page.
 
@@ -1871,7 +1869,7 @@ same-repository branch. Do not expose project secrets to forks. No workflow runs
 
 ### Recovering quota and the baseline
 
-[Recover the Chromatic baseline](./recover-the-chromatic-baseline.md) gives the steps.
+[Recover the Chromatic baseline](./recover-the-chromatic-baseline.mdx) gives the steps.
 
 ### Snapshot consumption and global changes
 

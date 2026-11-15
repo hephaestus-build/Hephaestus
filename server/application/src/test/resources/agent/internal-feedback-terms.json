@@ -1,5 +1,5 @@
 {
-	"$comment": "Tokens that only Hephaestus's internals use, which the feedback writing guide keeps out of what a developer reads (docs/contributor/practice-feedback-language.md § Writing feedback): stored state and outcome spellings, identifiers, file, field and tool names. Each term matches as a whole token, case-sensitively, so ordinary English such as 'delivered' or 'pending' passes. InternalFeedbackTerms and the webapp's card copy test read this one list; every bundled practice slug is checked as well.",
+	"$comment": "Tokens that only Hephaestus's internals use, which the feedback writing guide keeps out of what a developer reads (docs/contributor/practice-feedback-language.mdx § Writing feedback): stored state and outcome spellings, identifiers, file, field and tool names. Each term matches as a whole token, case-sensitively, so ordinary English such as 'delivered' or 'pending' passes. InternalFeedbackTerms and the webapp's card copy test read this one list; every bundled practice slug is checked as well.",
 	"terms": [
 		"AWAITING_APPROVAL",
 		"UNCONFIRMED",

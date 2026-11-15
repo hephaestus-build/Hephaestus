@@ -1,0 +1,58 @@
+---
+import { BASE, PRODUCT_URL, REPO_URL } from "@/lib/site";
+
+const base = BASE;
+const columns = [
+	{
+		title: "Product",
+		items: [
+			{ label: "User guide", href: `${base}user/overview` },
+			{ label: "Admin guide", href: `${base}admin/overview` },
+			{ label: "Release notes", href: `${REPO_URL}/releases` },
+			{ label: "Accessibility", href: `${base}user/accessibility` },
+			{ label: "Open Hephaestus", href: PRODUCT_URL },
+		],
+	},
+	{
+		title: "Contribute",
+		items: [
+			{ label: "Contributor guide", href: `${base}contributor/overview` },
+			{ label: "Feature requests", href: `${REPO_URL}/discussions/categories/ideas` },
+			{ label: "Bug tracker", href: `${REPO_URL}/issues` },
+		],
+	},
+	{
+		title: "Project",
+		items: [
+			{ label: "Applied Education Technologies", href: "https://aet.cit.tum.de/" },
+			{ label: "GitHub repository", href: REPO_URL },
+			{ label: "Imprint", href: `${PRODUCT_URL}/imprint` },
+			{ label: "Privacy", href: `${PRODUCT_URL}/privacy` },
+		],
+	},
+];
+---
+
+<footer class="border-fd-border bg-fd-card text-fd-muted-foreground border-t px-4 py-10 text-sm">
+	<div class="mx-auto grid max-w-(--fd-layout-width) gap-8 sm:grid-cols-3">
+		{
+			columns.map((column) => (
+				<nav aria-label={column.title}>
+					<p class="text-fd-foreground mb-3 font-medium">{column.title}</p>
+					<ul class="space-y-2">
+						{column.items.map((item) => (
+							<li>
+								<a class="hover:text-fd-foreground" href={item.href}>
+									{item.label}
+								</a>
+							</li>
+						))}
+					</ul>
+				</nav>
+			))
+		}
+	</div>
+	<p class="mx-auto mt-8 max-w-(--fd-layout-width)">
+		Developed at the <a class="underline" href="https://www.tum.de/en/">Technical University of Munich</a>. There, Hephaestus is the research platform for a study of how AI-generated feedback can improve developers’ application of engineering practices. <a class="underline" href="https://aet.cit.tum.de/">Applied Education Technologies</a> maintains Hephaestus under the MIT license. Source on <a class="underline" href={REPO_URL}>GitHub</a>.
+	</p>
+</footer>

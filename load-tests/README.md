@@ -1,7 +1,7 @@
 # Deployment capacity qualification
 
 For an isolated Kubernetes course benchmark, use the
-[contributor procedure](../docs/contributor/capacity-benchmark.md).
+[contributor procedure](../docs/contributor/capacity-benchmark.mdx).
 It reuses these k6 adapters and adds open session arrivals, replay provenance and a stream observer.
 
 These [Grafana k6](https://grafana.com/docs/k6/latest/) scenarios measure the supported single-host

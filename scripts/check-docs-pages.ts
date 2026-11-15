@@ -1,4 +1,4 @@
-/** The page rules of `docs/contributor/documentation-guide.md` that a machine can hold. */
+/** The page rules of `docs/contributor/documentation-guide.mdx` that a machine can hold. */
 import { statSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
@@ -364,7 +364,7 @@ async function pagesOf(directory: string): Promise<string[]> {
 					.split(path.sep)
 					.join("/"),
 			)
-			// A leading `_` on a file or a directory marks a partial that pages import; Docusaurus
+			// A leading `_` on a file or a directory marks a partial that pages include; the site
 			// does not publish it.
 			.filter((file) => !file.split("/").some((segment) => segment.startsWith("_")))
 			.toSorted()
@@ -419,7 +419,7 @@ if (import.meta.main) {
 	problems.push(...migrationNoteProblems(notes, upgradeSources.join("\n"), anchorsOf));
 	if (problems.length > 0) {
 		process.stderr.write(
-			`${problems.join("\n")}\nThe rules: docs/contributor/documentation-guide.md.\n`,
+			`${problems.join("\n")}\nThe rules: docs/contributor/documentation-guide.mdx.\n`,
 		);
 		process.exit(1);
 	}

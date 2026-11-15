@@ -68,7 +68,7 @@ this key rather than comparing login names.
   two are separate.
 - **A user view never switches authentication.** An instance administrator reads a workspace
   member's private pages as themselves, even when the viewed user has no account — see
-  [read-only user views](./contributor/instance-admin.md#read-only-user-views).
+  [read-only user views](./contributor/instance-admin.mdx#read-only-user-views).
 - **GDPR.** `auth_event` is an append-only, monthly RANGE-partitioned (self-managed in-app by
   `pg_partman`, 12-month retention; see ADR 0018)
   audit log. Account deletion purges the account as soon as the deletion commits: the purge keeps an

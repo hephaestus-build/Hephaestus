@@ -22,7 +22,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
- * Makes {@code docs/admin/dsms/personal-data-map.md} enforceable: a new table has to be classified
+ * Makes {@code docs/admin/dsms/personal-data-map.mdx} enforceable: a new table has to be classified
  * before it can ship, and the map's evidence links cannot rot silently.
  *
  * <p>The authority is the migrated PostgreSQL schema, so a native table without a JPA mapping is
@@ -37,7 +37,7 @@ class PersonalDataMapArchTest extends BaseIntegrationTest {
 
     private static final Path REPOSITORY_ROOT = Path.of("../..");
     private static final Path PRODUCTION_SOURCES = Path.of("src/main/java/de/tum/cit/aet/hephaestus");
-    private static final Path MAP = REPOSITORY_ROOT.resolve("docs/admin/dsms/personal-data-map.md");
+    private static final Path MAP = REPOSITORY_ROOT.resolve("docs/admin/dsms/personal-data-map.mdx");
 
     private static final Pattern CODE_SPAN = Pattern.compile("`([^`]+)`");
 

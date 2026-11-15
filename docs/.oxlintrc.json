@@ -1,7 +1,7 @@
 {
 	"$schema": "../node_modules/oxlint/configuration_schema.json",
 
-	// The Docusaurus site adds to the repository base and the React layer; neither is repeated here.
+	// The docs site adds to the repository base and the React layer; neither is repeated here.
 	"extends": ["../.oxlintrc.json", "../oxlint.react.jsonc"],
 
 	// Named here because `load-config.ts` drops a base's `jsPlugins` on the object path (`AGENTS.md`
@@ -12,9 +12,18 @@
 	"env": { "browser": true, "node": true, "es2022": true },
 	"settings": { "react": { "version": "19.2" } },
 
-	"ignorePatterns": ["build/**", ".docusaurus/**"],
+	"ignorePatterns": ["build/**"],
 
 	"rules": {
+		"typescript/only-throw-error": [
+			"error",
+			{
+				"allow": [
+					{ "from": "package", "package": "@tanstack/router-core", "name": "Redirect" },
+					{ "from": "package", "package": "@tanstack/router-core", "name": "NotFoundError" }
+				]
+			}
+		],
 		// Both want `toSorted`/`toReversed`, which `tsconfig.json`'s `lib` (ES2022) does not declare.
 		// Copy before sorting an array a caller can observe.
 		"unicorn/no-array-sort": "off",
@@ -26,7 +35,18 @@
 			// The lint config loader lives with the house plugin under `webapp/tools/oxlint/`, which this
 			// tree already names by relative path in `jsPlugins`; there is no alias across the two trees.
 			"files": ["vite.config.ts"],
-			"rules": { "import/no-relative-parent-imports": "off" }
+			"rules": {
+				"typescript/only-throw-error": [
+					"error",
+					{
+						"allow": [
+							{ "from": "package", "package": "@tanstack/router-core", "name": "Redirect" },
+							{ "from": "package", "package": "@tanstack/router-core", "name": "NotFoundError" }
+						]
+					}
+				],
+				"import/no-relative-parent-imports": "off"
+			}
 		}
 	]
 }

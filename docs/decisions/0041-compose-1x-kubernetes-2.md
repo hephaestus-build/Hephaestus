@@ -207,7 +207,7 @@ reclaims only leftovers of a previous process.
 ### Bash and the sandbox boundary
 
 Practice sessions expose native shell and file tools; feedback composition uses read-only evidence
-tools and report tools. The [workspace ABI](../contributor/agent/workspace-abi.mdx#practice-review-tools)
+tools and report tools. The [workspace ABI](../contributor/agent/agent-workspace-abi.mdx#practice-review-tools)
 owns the tool sets. A tool allowlist is not a security boundary: precompute also executes child
 processes inside the sandbox.
 
@@ -358,7 +358,7 @@ It adds no replayable workspace snapshot, no database table, no API and no listi
   New dependent receipts do not reconstruct missing legacy ownership.
 - **Unavailable.** A parent SIGKILL, a Docker stop timeout before the upload, or a failed upload leaves no transcript.
 
-The [workspace ABI](../contributor/agent/workspace-abi.mdx#session-transcripts) owns the bounds and file formats.
+The [workspace ABI](../contributor/agent/agent-workspace-abi.mdx#session-transcripts) owns the bounds and file formats.
 
 ## Sources
 

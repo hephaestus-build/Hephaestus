@@ -25,7 +25,7 @@ class PracticeVocabularyArchitectureTest extends HephaestusArchitectureTest {
                 .that()
                 .resideOutsideOfPackage(GENERATED_GRAPHQL_PACKAGE)
                 .should(notBeNamedWithARetiredResultWord())
-                .because("docs/contributor/practice-feedback-language.md retires finding and detection for an "
+                .because("docs/contributor/practice-feedback-language.mdx retires finding and detection for an "
                         + "result, in Java as everywhere else")
                 .check(classes);
     }

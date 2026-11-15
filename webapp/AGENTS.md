@@ -25,7 +25,7 @@ It omits conventions that the tree or a lint message at the call site already ex
 
 Ask before you add a dependency, add a global style, or change `src/components/ui/` (below).
 Each is easy to add and expensive to reverse.
-A new dependency meets the bar in `docs/contributor/dependencies.md`.
+A new dependency meets the bar in `docs/contributor/dependencies.mdx`.
 
 ## `src/components/ui/` is a registry install, not a directory you own
 
@@ -200,7 +200,7 @@ Calendar controls retain the explicit locale prop.
 ## Name a component for the concept, not for the wire
 
 A component, its file, its props type, and its story title all name the same concept.
-Use the name in `docs/contributor/practice-feedback-language.md`, which is normative.
+Use the name in `docs/contributor/practice-feedback-language.mdx`, which is normative.
 A word it retires is retired in code, types and story titles as well as in copy.
 
 The record of reviewing one practice for one item is an **observation**.

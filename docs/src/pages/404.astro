@@ -1,0 +1,45 @@
+---
+import { Home } from "@/components/home";
+import Layout from "@/layouts/layout.astro";
+import { BASE, GUIDES, SITE_URL } from "@/lib/site";
+import { channel } from "@/lib/version";
+
+const base = BASE;
+const other =
+	channel === "latest"
+		? { label: "Look for it in the docs of the next release", href: `${SITE_URL}/next/` }
+		: { label: "Look for it in the docs of the latest release", href: `${SITE_URL}/` };
+---
+
+<Layout title="Page not found">
+	<Home client:load pathname={Astro.url.pathname} params={Astro.params}>
+		<main class="mx-auto w-full max-w-xl flex-1 px-4 py-16">
+			<h1 class="mb-4 text-3xl font-semibold">This page does not exist</h1>
+			<p class="text-fd-muted-foreground mb-6">The page may have moved when the guides changed. Search for it, or start from a guide.</p>
+			<p class="mb-6">
+				<a class="text-fd-primary underline" id="other-version" href={other.href} data-site={SITE_URL} data-channel={channel}>{other.label}</a>.
+			</p>
+			<ul class="space-y-2">
+				{
+					GUIDES.map((guide) => (
+						<li>
+							<a class="text-fd-primary font-medium underline" href={`${base}${guide.path}/overview`}>
+								{guide.label}
+							</a>
+							<span class="text-fd-muted-foreground"> — {guide.description}</span>
+						</li>
+					))
+				}
+			</ul>
+		</main>
+	</Home>
+</Layout>
+
+<script>
+	// GitHub Pages serves 404.html for every missing path of both versions: offer the same path in the other version.
+	const link = document.querySelector<HTMLAnchorElement>("#other-version");
+	if (link?.dataset.site !== undefined) {
+		const rest = location.pathname.replace(/^\/(?:next\/)?/u, "").replace(/^404(?:\.html)?$/u, "");
+		link.href = `${link.dataset.site}${link.dataset.channel === "latest" ? "/next/" : "/"}${rest}`;
+	}
+</script>

@@ -4,9 +4,6 @@ description: Helm values and application settings for a Kubernetes deployment.
 page_type: reference
 ---
 
-import HelmValues from "./_configuration-reference/helm.mdx";
-import ApplicationEnvironment from "./_configuration-reference/environment.mdx";
-
 The Helm chart owns the deployment configuration.
 This page comes from the chart schema, chart defaults, rendered workloads, application YAML, and Spring configuration metadata.
 
@@ -26,7 +23,7 @@ Other Kubernetes resource quantities are passed through as written.
 
 ## Helm values
 
-<HelmValues />
+::include[./_configuration-reference/helm.mdx]
 
 ## Application environment
 
@@ -38,4 +35,4 @@ A host `.env` file does not configure a Pod.
 Defaults below come from the application YAML. They are not the deployed values.
 [Configuration readiness](./configuration-readiness) reports incomplete instance configuration.
 
-<ApplicationEnvironment />
+::include[./_configuration-reference/environment.mdx]

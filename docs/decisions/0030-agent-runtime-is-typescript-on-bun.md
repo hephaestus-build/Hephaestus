@@ -127,6 +127,6 @@ pinned to the version the image installs, the root `.oxlintrc.json` for lint, an
 
 ## Contract locations
 
-- [Pi agent workspace ABI](../contributor/agent/workspace-abi.mdx)
+- [Pi agent workspace ABI](../contributor/agent/agent-workspace-abi.mdx)
 - `docker/agents/pi/Dockerfile`, `tsconfig.node.json`, `.oxlintrc.json`, `.oxfmtrc.json`
 - `PiRuntimeFactory`, `PiRunnerProfile`, `MentorRunnerProfile`, `PracticeRunnerProfile`

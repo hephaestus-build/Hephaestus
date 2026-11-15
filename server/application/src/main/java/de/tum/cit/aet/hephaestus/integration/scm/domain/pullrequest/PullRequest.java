@@ -104,7 +104,7 @@ public class PullRequest extends Issue {
      * The review decision state of the pull request.
      * Indicates whether the PR has been approved, changes requested, or review required.
      * Only the GraphQL sync states one; null where it has not, or, on GitLab, where it did not read every reviewer
-     * and approver or a webhook has since changed someone's review (docs/contributor/sync-lifecycle.md).
+     * and approver or a webhook has since changed someone's review (docs/contributor/sync-lifecycle.mdx).
      */
     @Nullable
     @Enumerated(EnumType.STRING)

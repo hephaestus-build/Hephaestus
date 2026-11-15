@@ -1,0 +1,43 @@
+---
+/*
+ * A Mermaid diagram, drawn in the browser like the old site. `gate:diagrams` checks its source. The script loads only
+ * on a page with a diagram, and draws again when the theme changes or the client router opens another page.
+ */
+interface Props {
+	chart: string;
+}
+const { chart } = Astro.props;
+---
+
+<pre class="mermaid not-prose my-6 flex justify-center bg-transparent [&_svg]:h-auto [&_svg]:max-w-full" data-pagefind-ignore data-chart={chart}>{chart}</pre>
+
+<script>
+	// Astro bundles this script as a module, so its names stay local to it.
+	const draw = async (): Promise<void> => {
+		const nodes = [...document.querySelectorAll<HTMLElement>("pre.mermaid[data-chart]")];
+		if (nodes.length === 0) {
+			return;
+		}
+		const { default: mermaid } = await import("mermaid");
+		// The neutral and dark themes are monochrome, and Roboto is the font of the HyLiMo views, so all diagrams read as one set.
+		// A diagram asks for ELK in its own front matter.
+		mermaid.initialize({
+			startOnLoad: false,
+			theme: document.documentElement.classList.contains("dark") ? "dark" : "neutral",
+			layout: "dagre",
+			look: "classic",
+			fontFamily: "Roboto, ui-sans-serif, system-ui, sans-serif",
+		});
+		for (const node of nodes) {
+			delete node.dataset.processed;
+			node.textContent = node.dataset.chart ?? "";
+		}
+		await mermaid.run({ nodes });
+	};
+	document.addEventListener("astro:page-load", () => {
+		void draw();
+	});
+	new MutationObserver(() => {
+		void draw();
+	}).observe(document.documentElement, { attributeFilter: ["class"] });
+</script>

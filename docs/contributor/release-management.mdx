@@ -1,6 +1,4 @@
 ---
-id: release-management
-sidebar_position: 3
 title: Release Management
 description: Deliberate releases with changesets — Version PR, curated changelog, docker tags.
 ---
@@ -14,7 +12,7 @@ Docker images. Staging follows `main`. Production moves to a release only throug
 promotion. We manage releases with [changesets](https://github.com/changesets/changesets).
 
 The [compatibility policy](https://docs.hephaestus.build/admin/compatibility-policy) defines what a released version number promises.
-A change to a bundled practice also needs the acceptance in [Practice catalog curation](./practice-catalog.md#accept-a-bundled-change).
+A change to a bundled practice also needs the acceptance in [Practice catalog curation](./practice-catalog.mdx#accept-a-bundled-change).
 
 :::note[Chart-only release]
 These instructions describe the chart-only release.
@@ -619,12 +617,12 @@ Only its complete version image alias moves.
 
 ### Feedback quality evidence
 
-Before qualifying a candidate, run the [release feedback eval](./feedback-quality-evals.md#release-feedback-eval) through the existing validation path.
+Before qualifying a candidate, run the [release feedback eval](./feedback-quality-evals.mdx#release-feedback-eval) through the existing validation path.
 Attach its `results.json` file to the release evidence.
 Check that its commit is the candidate source commit and that its model is the configured release model.
 Require complete outputs and AI-drafted labels bound to those outputs.
 Read every finding and each unmeasured destination before deciding whether to qualify the candidate.
-Do not qualify a candidate with a labelled defect on a case of the [prompt-safety subset](./feedback-quality-evals.md#prompt-safety-subset).
+Do not qualify a candidate with a labelled defect on a case of the [prompt-safety subset](./feedback-quality-evals.mdx#prompt-safety-subset).
 
 A failed, skipped or incomplete eval does not establish feedback quality.
 Record the decision with the release evidence. Do not change a check or label to obtain a passing result.
@@ -711,7 +709,7 @@ The host applies it on its next reconcile.
 
 [Pull-Based Deployment](../admin/pull-based-deployment) explains the mechanics.
 [CI/CD](./ci-cd.mdx#environments) lists the environments.
-Verify staging before production promotion: [Qualify a release](./qualify-a-release.md).
+Verify staging before production promotion: [Qualify a release](./qualify-a-release.mdx).
 Hotfixes use the normal process: PR → changeset → merge → merge the Version PR.
 
 ### Operator actions on the project's hosts
@@ -784,6 +782,6 @@ For the running release, follow the [runtime identity handoff](/admin/release-im
 
 ## Dependency management
 
-Renovate policy is in [Supply-chain security in CI](./supply-chain-security.md). `Verify changesets`
+Renovate policy is in [Supply-chain security in CI](./supply-chain-security.mdx). `Verify changesets`
 skips bot-authored pull requests. When a dependency bump is user-facing, a maintainer adds the
 changeset.

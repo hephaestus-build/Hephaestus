@@ -102,7 +102,7 @@ records withholding and preparation failures explicitly, while keeping observati
 
 This ADR owns the separation and its invariants, not field inventories. Current schemas live in:
 
-- [Practice feedback schema](../contributor/practice-feedback-schema.md)
+- [Practice feedback schema](../contributor/practice-feedback-schema.mdx)
 - [Practice review pipeline](../contributor/practice-review-pipeline.mdx)
 - [ADR 0029](0029-measurement-intervention-seam-and-channel-levels.md)
 - the generated [database schema](../contributor/database-schema.mdx) and OpenAPI specification

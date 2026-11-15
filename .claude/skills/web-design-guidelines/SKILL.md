@@ -9,7 +9,7 @@ metadata:
 
 # Web Interface Guidelines
 
-Follow the [writing standard](../../../docs/contributor/simplified-technical-english.md) for all prose.
+Follow the [writing standard](../../../docs/contributor/simplified-technical-english.mdx) for all prose.
 
 The rules are not in this file.
 Fetch them from this URL.

@@ -17,7 +17,7 @@ import org.springframework.stereotype.Component;
 
 /**
  * Serializes work by name across every server process, for work that calls a provider and so must not
- * hold a transaction (docs/contributor/transactions.md). An in-memory lock serializes only one process.
+ * hold a transaction (docs/contributor/transactions.mdx). An in-memory lock serializes only one process.
  *
  * <p>The lock is a PostgreSQL session lock on a connection of its own, without a transaction. PostgreSQL drops it with
  * the connection, so a process that dies leaves no lock behind. A waiting caller polls rather than blocks in

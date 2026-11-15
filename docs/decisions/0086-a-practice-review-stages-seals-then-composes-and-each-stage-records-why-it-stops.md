@@ -69,7 +69,7 @@ The [pipeline guide](../contributor/practice-review-pipeline.mdx) and the [revie
 17. **The review command is a request.** `/hephaestus review` goes through the request service with the checks of **Request review**. Only a new comment that is exactly the command counts. A redelivered comment starts no second review.
     Enforced by: `ReviewCommandListenerTest#shouldNotAnswerAgainForACommentDeliveredAgain` and `#shouldStartNoReviewWhenTheCommentHoldsMoreThanTheCommand`.
 18. **Tools check facts, and a model never checks its own facts.** A rubric critique pass is decided and ships off. It turns on only when the composition eval shows a gain.
-    Not enforced. The eval ([feedback quality evals](../contributor/feedback-quality-evals.md)) runs outside CI and has no rollout gate yet.
+    Not enforced. The eval ([feedback quality evals](../contributor/feedback-quality-evals.mdx)) runs outside CI and has no rollout gate yet.
 19. **Decided, not shipped.** Problem lineage (New, Unchanged, Updated, No longer present) and the server's resolve of a thread from complete proof stay decided. The same holds for repeat detection by problem identity, and the `reopened` and `converted_to_draft` events. No pull request delivers them yet.
     Not enforced. Today the composer sees its earlier feedback, and preparation withholds a word-for-word repeat with `REPEATS_DELIVERED_NOTE`.
 

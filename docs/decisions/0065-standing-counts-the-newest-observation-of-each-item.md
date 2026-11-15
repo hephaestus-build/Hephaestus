@@ -56,7 +56,7 @@ Feedback does not change. An ended result gets no new feedback (`FeedbackGate`).
 - A practice that runs only at open and ready keeps the item in standing after a push.
 - Standing can count an observation about an earlier version of the work. This is correct, because it is the newest decision about the item.
 - The change is in the read only. It needs no migration, and it applies to stored results at once.
-- The slice that ships this changes `liveRunOf`, with tests that assert standing over stored results. It also updates the Standing term in the [practice feedback language](../contributor/practice-feedback-language.md#people-and-product-surfaces) and the user guide.
+- The slice that ships this changes `liveRunOf`, with tests that assert standing over stored results. It also updates the Standing term in the [practice feedback language](../contributor/practice-feedback-language.mdx#people-and-product-surfaces) and the user guide.
 
 ## Revisit trigger
 

@@ -393,7 +393,7 @@ The guard is the critique's limit above, and the eval grades unsupported claims.
 ### The feedback rubric
 
 The rubric is for the composers only, not for Heph. Its home is `server/application/src/main/resources/agent/feedback-style.md`, which both composers read today.
-`critique_package` and the eval read the same file. Most criteria are already there or in [§ Writing feedback](../contributor/practice-feedback-language.md#writing-feedback). L13 adds only the new ones.
+`critique_package` and the eval read the same file. Most criteria are already there or in [§ Writing feedback](../contributor/practice-feedback-language.mdx#writing-feedback). L13 adds only the new ones.
 
 | Criterion | The feedback… | Home today | Source |
 | --- | --- | --- | --- |

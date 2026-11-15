@@ -15,7 +15,7 @@
 Three ADRs and four amendments described the practice model.
 ADR 0050 named outcome values and definition fields that main does not use. ADR 0069 replaced the currentness rule of ADR 0056, and ADR 0065 changed its standing rule.
 This ADR states the model at 1.0 as rules: practice, item, review, observation, outcome and standing.
-The [product vocabulary](../contributor/practice-feedback-language.md), the [review glossary](../contributor/practice-review-glossary.mdx) and the [data model](../contributor/practice-feedback-schema.md) own the terms and the tables. Code calls an observation `Result`.
+The [product vocabulary](../contributor/practice-feedback-language.mdx), the [review glossary](../contributor/practice-review-glossary.mdx) and the [data model](../contributor/practice-feedback-schema.mdx) own the terms and the tables. Code calls an observation `Result`.
 
 ## Decision drivers
 
@@ -44,7 +44,7 @@ The [product vocabulary](../contributor/practice-feedback-language.md), the [rev
    Enforced by: `ck_item_kind`, `PracticeReviewModuleBoundaryTest#shouldKeepDomainAndProviderTypesOutOfCoreProducts` and `PracticesIntegrationBoundaryTest#shouldReachIntegrationItemsOnlyThroughNeutralPorts`.
 6. **A review pins what it measures.** A review has a kind (ITEM or SCAN) and an origin (EVENT, REQUEST, SCHEDULE or BACKFILL). It pins the item version and each practice version with its method. Its membership records each practice and item pair. A membership state is not an outcome. Observations outlive runtime jobs.
    Enforced by: the trigger `result_insert` and `PracticeReviewModuleBoundaryTest#shouldKeepProductProofIndependentOfRetainedJobs`.
-7. **An observation has exactly one outcome:** `MET`, `NOT_MET`, `DOES_NOT_APPLY` or `COULD_NOT_DETERMINE`. Only Met and Not met are decided. The [outcome contract](../contributor/practice-feedback-language.md#observation-outcomes) states the evidence that each one needs.
+7. **An observation has exactly one outcome:** `MET`, `NOT_MET`, `DOES_NOT_APPLY` or `COULD_NOT_DETERMINE`. Only Met and Not met are decided. The [outcome contract](../contributor/practice-feedback-language.mdx#observation-outcomes) states the evidence that each one needs.
    Enforced by: `ck_result_outcome`, `ck_result_inapplicability`, `ck_result_open_questions` and `ResultAdmissionIntegrationTest#shouldAdmitTheOutcomeWithItsRequiredProblemShape`.
 8. **Only Not met has problems and severity.** A Not met observation has one or more problems, each with a severity, citations and a claim basis. The database copies the worst severity to the observation. Other outcomes have neither.
    Enforced by: the constraint trigger `result_children` and `PracticeV1ConstraintDatabaseTest#shouldEnforceCompleteChildrenAndRestoreTheSeverityCacheOnRollback`.
@@ -72,7 +72,7 @@ The [product vocabulary](../contributor/practice-feedback-language.md), the [rev
 
 ## What changed, and why
 
-- **The outcome names are the shipped names.** ADR 0050 wrote `NOT_APPLICABLE` and `UNDETERMINED`. The [product vocabulary](../contributor/practice-feedback-language.md#observations) retires both. The meaning is the same.
+- **The outcome names are the shipped names.** ADR 0050 wrote `NOT_APPLICABLE` and `UNDETERMINED`. The [product vocabulary](../contributor/practice-feedback-language.mdx#observations) retires both. The meaning is the same.
 - **The definition fields are the shipped fields.** `signals`, `evidenceRequirements`, `reviewWhen`, `subject` and `precondition` became `reviewOn`, `reads`, `about` and `appliesWhen`. The rule of ADR 0050 stays: scheduling is outside the judgment digest.
 - **Currentness follows source fingerprints, not the item version** ([ADR 0069 § Freshness by source fingerprints](0069-practices-run-when-ready-and-stay-current-by-their-sources.md#freshness-by-source-fingerprints)). A description edit no longer ends a diff observation, and a comment no longer leaves a stale one current.
 - **Dependency-based scan reuse is dropped.** ADR 0056 described it as a future contract. Nothing calls it. The update of ADR 0062 keeps the full input digest out of the 1.0 release. Decision 14 keeps reuse at equal inputs.

@@ -1,11 +1,7 @@
 ---
-id: database-schema
-sidebar_position: 7
 title: Database Schema
 description: Reference entity-relationship diagram generated from the current Liquibase migrations.
 ---
-
-import Modules from "./erd/_modules.mdx";
 
 `vp run db:generate-erd-docs` generates the diagrams below from the migrated schema.
 If you change Liquibase migrations, regenerate them.
@@ -16,10 +12,10 @@ A table belongs to the module whose entity maps it.
 A dashed entity is a table of another module, and its label names that module.
 A foreign key to it appears in this diagram, and the table itself appears in the diagram of its module.
 
-<Modules />
+::include[./erd/_modules.mdx]
 
 ## Practice model relationships
 
 The diagram below comes from the migrated schema.
-The [practice data model](./practice-feedback-schema.md) explains its invariants without repeating the column inventory.
+The [practice data model](./practice-feedback-schema.mdx) explains its invariants without repeating the column inventory.
 Product reviews and scan membership remain durable when execution jobs expire.

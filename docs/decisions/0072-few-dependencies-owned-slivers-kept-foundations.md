@@ -3,7 +3,7 @@
 **Status:** Accepted
 **Date:** 2026-10-31
 **Authors:** Felix T.J. Dietrich
-**Relates to:** [Dependencies](../contributor/dependencies.md) (the current rules) and [Supply-chain security in CI](../contributor/supply-chain-security.md) (the CI controls).
+**Relates to:** [Dependencies](../contributor/dependencies.mdx) (the current rules) and [Supply-chain security in CI](../contributor/supply-chain-security.mdx) (the CI controls).
 
 ## Context
 
@@ -55,9 +55,9 @@ The incidents teach five lessons:
 ## Decision
 
 1. **A platform feature comes first, a few owned lines second, a new package third.** A framework or platform feature is better than code that we write. A few owned lines are better than a new package for a sliver.
-2. **A new package answers a written bar in its pull request.** [Dependencies](../contributor/dependencies.md#the-bar-for-a-new-dependency) owns the bar.
-3. **Owned code keeps the license and the provenance of its upstream**, in its source and in the release SBOM. [Dependencies](../contributor/dependencies.md#how-owned-code-lives) owns the rules.
-4. **The package counts are a one-way ratchet that CI checks.** A count above the committed baseline fails, so an addition beyond it raises the baseline in the same pull request. A count below it passes. [Dependencies](../contributor/dependencies.md#the-dependency-baseline) describes it.
+2. **A new package answers a written bar in its pull request.** [Dependencies](../contributor/dependencies.mdx#the-bar-for-a-new-dependency) owns the bar.
+3. **Owned code keeps the license and the provenance of its upstream**, in its source and in the release SBOM. [Dependencies](../contributor/dependencies.mdx#how-owned-code-lives) owns the rules.
+4. **The package counts are a one-way ratchet that CI checks.** A count above the committed baseline fails, so an addition beyond it raises the baseline in the same pull request. A count below it passes. [Dependencies](../contributor/dependencies.mdx#the-dependency-baseline) describes it.
 5. **The install policy lives in `pnpm-workspace.yaml`**, with the reason for each setting in a comment.
 
 ## Consequences
@@ -74,7 +74,7 @@ The incidents teach five lessons:
 
 ## Update — 2026-11-10: two diagram tools, split by what the diagram is
 
-The maintainer decided how the docs draw diagrams. The rule is in [Documentation guide § Diagrams](../contributor/documentation-guide.md#diagrams).
+The maintainer decided how the docs draw diagrams. The rule is in [Documentation guide § Diagrams](../contributor/documentation-guide.mdx#diagrams).
 
 - **HyLiMo for the few structural maps.** These are the system context, the containers, the deployment and the components of the server. Readers come back to them, and they change rarely, so a hand layout pays off. [HyLiMo](https://github.com/hylimo/hylimo) draws UML with the layout that its source sets. The [C4 model](https://c4model.com/diagrams/notation) is independent of notation, so each C4 level is a UML component or deployment diagram.
 - **Mermaid for everything else.** A flow, a lifecycle, a few core tables or the steps on one page change with the code. An inline source that the diff shows is worth more there than a hand layout.
@@ -83,6 +83,6 @@ The maintainer decided how the docs draw diagrams. The rule is in [Documentation
 The cost of HyLiMo is a pinned development dependency, a render step and committed SVGs.
 
 `@hylimo/cli` is pinned to `3.0.0-alpha.2`, and its alpha status is accepted.
-One account publishes it, so [Exceptions to the bar](../contributor/dependencies.md#exceptions-to-the-bar) has its row.
+One account publishes it, so [Exceptions to the bar](../contributor/dependencies.mdx#exceptions-to-the-bar) has its row.
 It runs only in `scripts/render-diagrams.ts`. The docs build and the site never run it, and `gate:system-diagrams` fails when a committed SVG does not match its source.
 The cost of Mermaid is an automatic layout. Thus a Mermaid diagram stays small.

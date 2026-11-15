@@ -8,7 +8,7 @@ import java.util.regex.Pattern;
 
 /**
  * Shared constants for the Pi sandbox workspace ABI documented at
- * {@code docs/contributor/agent/workspace-abi.mdx}. Avoid duplicating these literals —
+ * {@code docs/contributor/agent/agent-workspace-abi.mdx}. Avoid duplicating these literals —
  * they are the wire contract between the server-side workspace materialiser and the in-container
  * runner.
  */

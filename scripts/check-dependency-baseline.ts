@@ -5,7 +5,7 @@
  * request, and the review sees the cost of the addition beside it. A count below the baseline passes with a
  * notice, so removals, Renovate's included, merge in parallel; any later change can lower the
  * baseline. An exact match would serialize every pull request that changes a count.
- * `docs/contributor/dependencies.md` gives the bar for an addition.
+ * `docs/contributor/dependencies.mdx` gives the bar for an addition.
  *
  * Usage: `node scripts/check-dependency-baseline.ts [--write]`.
  */
@@ -203,7 +203,7 @@ if (import.meta.main) {
 					`The npm dependency counts rise above ${BASELINE_FILE}:`,
 					...rises.map((line) => `  ${line}`),
 					"",
-					"An addition must meet the bar in docs/contributor/dependencies.md.",
+					"An addition must meet the bar in docs/contributor/dependencies.mdx.",
 					"Run `node scripts/check-dependency-baseline.ts --write` and commit the baseline with the change.",
 				].join("\n"),
 			);

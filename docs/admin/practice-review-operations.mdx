@@ -69,7 +69,7 @@ The item event records why an event waits or does not start a review:
 
 [Select a review](/contributor/practice-review-pipeline#select-a-review) explains the selection.
 
-### Temporary evidence on the server {/*#temporary-evidence-and-restarts*/}
+### Temporary evidence on the server [#temporary-evidence-and-restarts]
 
 Each server keeps its copies of reviewed work under `/data/git-repos`.
 The copies are a cache. A missing mirror is cloned again on the next sync or review.
@@ -92,13 +92,13 @@ Readiness does not include practice review, so a ready server can still run no r
 
 ### Review health
 
-An authorized request to `/actuator/health` on the [management listener](./monitoring.md#scrape-metrics) shows the `practiceReview` component:
+An authorized request to `/actuator/health` on the [management listener](./monitoring.mdx#scrape-metrics) shows the `practiceReview` component:
 
 | Status | Detail | Meaning |
 | --- | --- | --- |
 | `UP` | `reviewsEnabled=false` | `sandbox.enabled` is false. The server runs no reviews. |
 | `UP` | `reviewsEnabled=true` | The server can run reviews. |
-| `OUT_OF_SERVICE` | `reason=SOURCE_AUTHORIZATION_EXPIRED` | A source-use decision for automated practice review has expired. [Source governance](./dsms/item-source-governance.md) describes these decisions. |
+| `OUT_OF_SERVICE` | `reason=SOURCE_AUTHORIZATION_EXPIRED` | A source-use decision for automated practice review has expired. [Source governance](./dsms/item-source-governance.mdx) describes these decisions. |
 | `OUT_OF_SERVICE` | `reason=GIT_CHECKOUT_DISABLED` | Repository checkout is off. The chart always turns it on, so this status does not occur on the chart. |
 
 A workspace without a model for practice review does not change the server's health.
@@ -107,7 +107,7 @@ Its reviews show the refusal under **Practices → Practice reviews → Reviews*
 ### Queue health
 
 The server exports these meters.
-[Metrics](./metrics.md) gives the Prometheus names, and [Alert rules](./alert-rules.md) gives the rules that read them.
+[Metrics](./metrics.mdx) gives the Prometheus names, and [Alert rules](./alert-rules.mdx) gives the rules that read them.
 
 | Meter | Meaning |
 | --- | --- |
@@ -126,7 +126,7 @@ The server exports these meters.
 
 A growing share of `failed`, `not_reached` or `not_finished` in `agent.review.practice_scripts` means that scripts stop before they return a result.
 
-## Why practice scripts stop early {/*#the-trace-line*/}
+## Why practice scripts stop early [#the-trace-line]
 
 Each practice of a review runs one script: its practice script, or the built-in review.
 The review's sheet under **Practice reviews → Reviews** has one trace line for each practice that ran a script.

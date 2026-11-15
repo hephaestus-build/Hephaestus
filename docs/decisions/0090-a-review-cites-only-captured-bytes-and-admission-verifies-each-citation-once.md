@@ -61,7 +61,7 @@ A rule that main does not satisfy yet says "1.0 target" and names its pull reque
     Not enforced. Code review catches a new store.
 11. **Every server can verify every attempt.** Capture records each checkout's key (repository, commit and tree) and the folder's other files in PostgreSQL while the attempt runs. A server without the folder rebuilds it from its own mirror and checks the tree and the checkout digest. A rebuild that fails or differs is the capture failure `CHECKOUT_UNVERIFIED`, never a citation refusal.
     1.0 target: [#4094](https://github.com/hephaestus-build/Hephaestus/pull/4094), with `EvidenceAcrossServersIntegrationTest`. On main, only the process that captured an attempt holds its folder.
-12. **Erasure follows every copied person.** A person erasure removes each attempt folder, composition input and transcript that copied that person ([personal data map](../admin/dsms/personal-data-map.md)).
+12. **Erasure follows every copied person.** A person erasure removes each attempt folder, composition input and transcript that copied that person ([personal data map](../admin/dsms/personal-data-map.mdx)).
     1.0 target: on main, erasure waits for the acknowledgement of the process that holds each copy. [#4094](https://github.com/hephaestus-build/Hephaestus/pull/4094) marks copies `ERASED` in PostgreSQL, so erasure waits for no server. Each server then removes erased folders within 2 minutes.
     Enforced by: `EvidenceFolderAccountErasureIntegrationTest#waitsForTheRuntimeAndErasesEveryAttemptInTwoWorkspacesWithoutTouchingAnotherPerson`, `EvidenceReceiptRetentionIntegrationTest`.
 

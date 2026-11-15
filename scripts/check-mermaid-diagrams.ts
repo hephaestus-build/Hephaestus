@@ -2,7 +2,7 @@
  * Parses every committed diagram with the mermaid the docs site actually resolves — both the standalone
  * `.mmd` files and the ```mermaid blocks fenced inside `.md` and `.mdx`.
  *
- * Docusaurus renders mermaid in the browser, so a diagram it cannot parse builds green and publishes
+ * The docs site renders mermaid in the browser, so a diagram it cannot parse builds green and publishes
  * as an error box on the page. That is how the generated ER schema shipped unreadable: the resolved
  * mermaid rejected `NUMERIC(12,6)`, and nothing in the toolchain had an opinion about it.
  *

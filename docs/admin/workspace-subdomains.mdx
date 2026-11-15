@@ -18,7 +18,7 @@ The feature is off by default.
   Keep its credential in a Secret in the namespace of cert-manager, never in `site.yaml`.
 - A `host` of at most 189 characters, so that a full workspace label fits.
 
-## Prepare DNS and the certificate {/*#configure-dns-and-the-edge*/}
+## Prepare DNS and the certificate [#configure-dns-and-the-edge]
 
 1. Add a wildcard record `*.<host>` that points to the same address as the record of `<host>`.
    Keep the records of other services, such as `docs`, as separate records.
@@ -29,7 +29,7 @@ The feature is off by default.
 On one host with k3s, the installer requests that certificate.
 On another cluster, issue it on the Gateway as you issue the certificate of the host.
 
-## Turn on the Helm value {/*#helm-chart-and-k3s*/}
+## Turn on the Helm value [#helm-chart-and-k3s]
 
 1. Add the value to `site.yaml`:
 

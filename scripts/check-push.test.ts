@@ -656,7 +656,7 @@ void test("a migration fragment selects the changeset checks, and the first line
 	// Docs, tooling and a fragment: no file selects every scope.
 	const docsDrift = [
 		".migration/durable-compose-claim.md",
-		"docs/admin/alert-rules.md",
+		"docs/admin/alert-rules.mdx",
 		"scripts/check-alert-rules.ts",
 		"scripts/check-docs-pages.test.ts",
 	];

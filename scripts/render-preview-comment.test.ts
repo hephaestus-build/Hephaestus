@@ -169,47 +169,37 @@ void test("does not claim files are unchanged when they have no published storie
 	);
 });
 
-void test("renders safe changed Docusaurus routes once", async () => {
-	const { base, root } = await repository("docs/user/getting-started.mdx");
-	await mkdir(path.resolve(root, "metadata/nested"), { recursive: true });
+void test("links each changed page that the build published, by its title, once", async () => {
+	const { base, root } = await repository(
+		"docs/user/getting-started.mdx",
+		"docs/admin/dsms/index.mdx",
+	);
+	await mkdir(path.resolve(root, "build/user"), { recursive: true });
+	await mkdir(path.resolve(root, "build/admin"), { recursive: true });
 	await writeFile(
-		path.resolve(root, "metadata/nested/page.json"),
-		JSON.stringify({
-			permalink: "/user/start-(here)",
-			source: "@site/user/getting-started.mdx",
-			title: "Start [here]",
-		}),
+		path.resolve(root, "build/user/getting-started.html"),
+		"<html><head><title>Start [here] &amp; go | Hephaestus documentation</title></head></html>",
 	);
 	await writeFile(
-		path.resolve(root, "metadata/nested/duplicate.json"),
-		JSON.stringify({
-			permalink: "/user/start-(here)",
-			source: "@site/user/getting-started.mdx",
-			title: "Start [here]",
-		}),
+		path.resolve(root, "build/admin/dsms.html"),
+		"<title>Data protection | Hephaestus documentation</title>",
 	);
-	await writeFile(
-		path.resolve(root, "metadata/nested/unchanged.json"),
-		JSON.stringify({
-			permalink: "/user/other",
-			source: "@site/user/other.mdx",
-			title: "Unchanged",
-		}),
-	);
-	await writeFile(
-		path.resolve(root, "metadata/nested/external.json"),
-		JSON.stringify({
-			permalink: "https://attacker.example/phishing",
-			source: "@site/user/getting-started.mdx",
-			title: "External",
-		}),
-	);
-	const comment = await render(root, base, "docs", "metadata");
-	assert.match(comment, /Changed pages/u);
-	const link = String.raw`[Start \[here\]](<https://preview.example/user/start-(here)>)`;
+	const comment = await render(root, base, "docs", "build");
+	assert.match(comment, /Changed pages \(2\)/u);
+	const link = String.raw`[Start \[here\] &amp; go](<https://preview.example/user/getting-started>)`;
 	assert.equal(comment.split(link).length - 1, 1);
-	assert.doesNotMatch(comment, /attacker|External/u);
-	assert.doesNotMatch(comment, /Unchanged/u);
+	assert.match(comment, /\[Data protection\]\(<https:\/\/preview\.example\/admin\/dsms>\)/u);
+});
+
+void test("skips a changed partial, which is no page", async () => {
+	const { base, root } = await repository("docs/admin/_configuration-reference/helm.mdx");
+	await mkdir(path.resolve(root, "build/admin/_configuration-reference"), { recursive: true });
+	await writeFile(
+		path.resolve(root, "build/admin/_configuration-reference/helm.html"),
+		"<title>Partial</title>",
+	);
+	const comment = await render(root, base, "docs", "build");
+	assert.match(comment, /Changed pages\n\nNo published pages found in changed files\./u);
 });
 
 void test("rejects an invalid Storybook index instead of publishing an empty result", async () => {
@@ -231,36 +221,34 @@ void test("rejects an invalid Storybook index instead of publishing an empty res
 
 void test("does not claim docs are unchanged when a changed page is unpublished", async () => {
 	const { base, root } = await repository("docs/user/draft.mdx");
-	await mkdir(path.resolve(root, "metadata"));
-	const comment = await render(root, base, "docs", "metadata");
+	await mkdir(path.resolve(root, "build"));
+	const comment = await render(root, base, "docs", "build");
 	assert.match(comment, /Changed pages\n\nNo published pages found in changed files\./u);
 });
 
-void test("groups every changed documentation page by source directory, not its custom route", async () => {
+void test("groups every changed documentation page by source directory", async () => {
 	const sources = Array.from(
 		{ length: 35 },
 		(_, index) => `docs/${index % 2 ? "user" : "contributor/deep"}/page-${index}.mdx`,
 	);
 	const { base, root } = await repository(...sources);
-	await mkdir(path.resolve(root, "metadata"));
 	await Promise.all(
-		sources.map(async (source, index) =>
-			writeFile(
-				path.resolve(root, `metadata/${index}.json`),
-				JSON.stringify({
-					source: source.replace(/^docs\//u, "@site/"),
-					title: `Page ${index}`,
-					permalink: `/custom/${index}`,
-				}),
-			),
-		),
+		sources.map(async (source, index) => {
+			const file = path.resolve(
+				root,
+				source.replace(/^docs\//u, "build/").replace(/\.mdx$/u, ".html"),
+			);
+			await mkdir(path.dirname(file), { recursive: true });
+			await writeFile(file, `<title>Page ${index} | Hephaestus documentation</title>`);
+		}),
 	);
-	const comment = await render(root, base, "docs", "metadata");
+	const comment = await render(root, base, "docs", "build");
 	assert.match(comment, /Changed pages \(35\)/u);
 	assert.match(comment, /#### docs\/contributor\/deep \(18\)/u);
 	assert.match(comment, /#### docs\/user \(17\)/u);
-	for (let index = 0; index < sources.length; index += 1) {
-		assert.equal(comment.split(`https://preview.example/custom/${index}>`).length - 1, 1);
+	for (const source of sources) {
+		const route = source.replace(/^docs\//u, "").replace(/\.mdx$/u, "");
+		assert.equal(comment.split(`https://preview.example/${route}>`).length - 1, 1);
 	}
 });
 

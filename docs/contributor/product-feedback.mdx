@@ -69,7 +69,7 @@ A report enters `DRAFT_QUEUED` in four cases:
 In the same transaction, `FileIssueQueue.draft` makes three checks.
 The author was told about the model, the destination names a model, and the daily limits allow a draft.
 A report that fails a check goes to `ANSWERED` without a draft.
-Otherwise the report's generation rises by one, and one `DRAFT_REPORT` action is enqueued ([The outbox](./outbox.md#product-feedback-draft)).
+Otherwise the report's generation rises by one, and one `DRAFT_REPORT` action is enqueued ([The outbox](./outbox.mdx#product-feedback-draft)).
 
 The model call offers the model no tools. This is a security property, not a limit of the current drafter ([OWASP LLM06](https://genai.owasp.org/llmrisk/llm062025-excessive-agency/)).
 Before each call, the proxy checks that the destination still names the call's model.
@@ -360,7 +360,7 @@ cd server
 Any expected-private case that routes public fails the evaluation.
 Any forbidden string in output also fails it.
 Expected-public reports routed private count toward a separate rate.
-Each run records the model ID, prompt digest, and case-set hash under the [evaluation provenance rules](./evaluation-provenance.md).
+Each run records the model ID, prompt digest, and case-set hash under the [evaluation provenance rules](./evaluation-provenance.mdx).
 The routing evaluation reuses provenance conventions, not the practice feedback claim scorer.
 
 ## Design trade-offs

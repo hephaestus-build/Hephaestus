@@ -39,7 +39,7 @@ We tested version 1.1.0 by hand before this decision.
 ## Decision drivers
 
 - A developer has one place to talk to Heph. The app shows all of it, on every page.
-- Feedback in conversation counts as delivered only when the developer can see Heph's words ([feedback language](../contributor/practice-feedback-language.md#destinations)).
+- Feedback in conversation counts as delivered only when the developer can see Heph's words ([feedback language](../contributor/practice-feedback-language.mdx#destinations)).
   Unknown visibility never permits a second write.
 - A second question never fails because Heph is busy. Questions in different Heph threads run at the same time.
 - No state lives only in a process. Any worker can run any turn from rows in PostgreSQL.
@@ -516,7 +516,7 @@ There is no Slack session, stream or progress reaction, and the Slack app needs 
 The app continues to show live answer text and provides **Stop answer**.
 
 The outbox owns the lease, metadata readback, retries and terminal outcome. Entry rows retain only confirmed Slack message references.
-[The outbox](../contributor/outbox.md#carry-out-an-effect-at-once) owns the current contract.
+[The outbox](../contributor/outbox.mdx#carry-out-an-effect-at-once) owns the current contract.
 
 ## Consequences
 

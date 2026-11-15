@@ -3,7 +3,7 @@
 **Status:** Accepted
 **Date:** 2026-11-03
 **Authors:** Felix T.J. Dietrich
-**Relates to:** [ADR 0076](0076-reads-are-shaped-like-the-screen.md) (database reads), [Transactions and side effects](../contributor/transactions.md) (the rules).
+**Relates to:** [ADR 0076](0076-reads-are-shaped-like-the-screen.md) (database reads), [Transactions and side effects](../contributor/transactions.mdx) (the rules).
 
 ## Context
 
@@ -42,7 +42,7 @@ The code did not use these mechanisms in a consistent way.
 ## Decision
 
 We chose option 3.
-[Transactions and side effects](../contributor/transactions.md) is the single source for the rules and their sources.
+[Transactions and side effects](../contributor/transactions.mdx) is the single source for the rules and their sources.
 In short, one use case is one declarative transaction.
 A network call runs outside every transaction.
 Durable work after commit is an `@ApplicationModuleListener`, and each consumer is idempotent.

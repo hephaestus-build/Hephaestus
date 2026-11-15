@@ -1,6 +1,6 @@
 # Hephaestus
 
-All prose follows the [writing standard](docs/contributor/simplified-technical-english.md).
+All prose follows the [writing standard](docs/contributor/simplified-technical-english.mdx).
 It has two profiles.
 UI text, user-facing responses, and user docs use the product voice.
 Admin docs, contributor docs, and repository instructions use STE.
@@ -43,7 +43,7 @@ Then choose the smallest model that makes the correct behavior unsurprising.
 - Make the simplest maintainable change.
   Add no abstraction, configuration, or future-proofing that the current task does not need.
   Add no compatibility shim for a caller that does not exist.
-- A framework feature over a hand-rolled one, and a few owned lines over a new package for a sliver (`docs/contributor/dependencies.md`).
+- A framework feature over a hand-rolled one, and a few owned lines over a new package for a sliver (`docs/contributor/dependencies.mdx`).
 - Root causes over workarounds. A comment that documents a workaround is a flag that the fix is
   not done.
 - Give each fact one home.
@@ -60,7 +60,7 @@ Get a decision instead of silently bypassing the rule.
 
 ## Product vocabulary
 
-[Practice feedback language](docs/contributor/practice-feedback-language.md) owns product terms.
+[Practice feedback language](docs/contributor/practice-feedback-language.mdx) owns product terms.
 [Practice review glossary](docs/contributor/practice-review-glossary.mdx) owns review and runtime terms.
 Use their exact names in prose, code, HTTP and release notes.
 Define each term in one owning page and cite it elsewhere.
@@ -95,9 +95,9 @@ State which entries applied:
   See `webapp/AGENTS.md` § Which admin console a component belongs to.
 - **UI states.** Every component ships stories for its empty, loading, and error states.
   The loading rules in `webapp/DESIGN.md` decide skeleton versus spinner.
-- **Observability.** A new failure mode ships its signal, its alert or SLO, and its runbook row (`docs/contributor/observability-principles.md`).
+- **Observability.** A new failure mode ships its signal, its alert or SLO, and its runbook row (`docs/contributor/observability-principles.mdx`).
 - **Docs by audience.** Put each fact in the guide of the reader who acts on it.
-  `docs/contributor/documentation-guide.md` defines the three guides, their page types, and their templates.
+  `docs/contributor/documentation-guide.mdx` defines the three guides, their page types, and their templates.
   New vocabulary goes in the two glossaries.
 - **Release note.** A change to shipped code ships a changeset in the operator's or user's voice —
   `.changeset/README.md`.
@@ -219,8 +219,8 @@ Issues follow `CONTRIBUTING.md` § Issues.
 | Component | The component and its stories | `vp run test:webapp` and `test:webapp:stories` | `/storybook-components` |
 | Workflow | `.github/workflows/*.yml` | `node scripts/check-workflows.ts` | `docs/contributor/ci-cd.mdx` |
 | Agent guide or skill | `AGENTS.md` or `.claude/skills/` | `vp run gate:instructions` | `docs/contributor/ai-agent-workflow.mdx` |
-| Docs page | `docs/**` | `vp run docs:build` and `gate:prose` | `docs/contributor/simplified-technical-english.md` |
-| Screen that a user page shows | The route or component | `vp run generate:docs-screenshots`. Commit the images. | `docs/contributor/add-a-user-guide-screenshot.md` |
+| Docs page | `docs/**` | `vp run docs:build` and `gate:prose` | `docs/contributor/simplified-technical-english.mdx` |
+| Screen that a user page shows | The route or component | `vp run generate:docs-screenshots`. Commit the images. | `docs/contributor/add-a-user-guide-screenshot.mdx` |
 | Shipped behavior | A changeset too | `vp run gate:changesets` | `.changeset/README.md` |
 | Rebase onto `main` | Nothing by hand | `vp run pr:rebase-generated <n>`: it regenerates conflicted generated files and moves the branch's migrations after those of `main` and the merge queue | `docs/contributor/local-verification.mdx` § Rebase generated artifacts |
 

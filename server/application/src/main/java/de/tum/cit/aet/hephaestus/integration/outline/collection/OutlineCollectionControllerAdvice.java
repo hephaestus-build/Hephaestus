@@ -17,7 +17,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 /**
  * Error mapper for the Outline admin controllers. Scoped to the {@code integration.outline} package so
  * every Outline REST route returns RFC-7807 {@code ProblemDetail} for its domain violations, following
- * the {@code docs/contributor/api-error-handling.md} convention (mirrors
+ * the {@code docs/contributor/api-error-handling.mdx} convention (mirrors
  * {@code SlackChannelControllerAdvice}). Not-found / validation / auth flow through the global advice.
  *
  * <p>The live-proxy endpoints double as the connectivity probe, so the wire failures carry precise

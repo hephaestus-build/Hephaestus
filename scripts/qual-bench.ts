@@ -1,5 +1,5 @@
 /**
- * The capacity bench of a release: B3–B8, B10 and B11 of docs/contributor/qualify-a-release.md, over one or more
+ * The capacity bench of a release: B3–B8, B10 and B11 of docs/contributor/qualify-a-release.mdx, over one or more
  * measured windows.
  *
  *   node scripts/qual-bench.ts --target k3d|staging [--minutes 35] [--rounds 1] [--round-gap-minutes 0] [--fixture <file>]

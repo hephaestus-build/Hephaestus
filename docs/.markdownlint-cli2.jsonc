@@ -27,7 +27,6 @@
 	"ignores": [
 		"node_modules",
 		"build",
-		".docusaurus",
 		"venv",
 		".venv",
 		"contributor/erd",

@@ -7,7 +7,7 @@ import { expect, test as base } from "./fixtures";
 
 /**
  * The integrated half of the accessibility evaluation in
- * `docs/contributor/accessibility-audit-plan.md`: the built SPA against the real server, which no
+ * `docs/contributor/accessibility-audit-plan.mdx`: the built SPA against the real server, which no
  * story can see. A story proves a component in isolation; this proves what a person meets — the
  * title of each page, the landmarks around it, the order Tab walks it in, what a narrow or
  * magnified window does to it, and what a menu or dialog does with focus.

@@ -19,7 +19,7 @@ A workspace-admin audience would break what the product tells developers today:
 
 - `docs/user/privacy.mdx`, on reading a member's practice pages: "Workspace administrators do not have
   this access."
-- [Practice feedback language](../contributor/practice-feedback-language.md): feedback about a way of
+- [Practice feedback language](../contributor/practice-feedback-language.mdx): feedback about a way of
   working is "prepared for one developer about what recurs across their work, readable by nobody
   else — the `IN_APP` channel".
 - [ADR 0029](0029-measurement-intervention-seam-and-channel-levels.md): the audience of `IN_APP` is the

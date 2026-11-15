@@ -4,8 +4,6 @@ description: How the server, PostgreSQL and the sandboxes work together, from co
 page_type: explanation
 ---
 
-import SystemDiagram from "@site/src/components/SystemDiagram";
-
 Hephaestus is one server that runs as several replicas, with PostgreSQL as its only truth.
 The server receives provider events, syncs the work, and runs practice reviews and conversation turns in sandboxes.
 A sandbox runs the agent's code. It holds no application secret, only a token for its own subject, and it reaches only the server's gateway.
@@ -111,7 +109,7 @@ Each interface carries the name of its Java type or route. "Provider SPI" is the
 | Conversation | The conversation of each account, its turns and its digests ([Conversation runtime](./unified-pi-runtime)). | `conversation`, `agent.conversation` |
 | Agent control | The run queue behind `AgentRuns`, the sandbox of each subject and the reapers ([Agent runs](./agent-runs.mdx)). It writes the `SandboxClaim` to the Kubernetes API. | `agent.run`, `agent.sandbox` |
 | Sandbox gateway | Port 8081, for sandbox tokens only. `/internal/agent` serves the next run, its context, the lease, the proposals and the answer deltas. Each run kind plugs in as a `SandboxRunKind`. `/internal/llm` serves the LLM proxy, which holds the model API keys and the call permits, and the staging and sealing of review results. | `agent.gateway`, `agent.proxy` |
-| Action outbox | The `agent_action` table behind `AgentActions`, and its executor: every effect on the outside world ([The outbox](./outbox.md)). The view leaves out the `ActionAdapter` for email (`EmailAdapter`) and those for product feedback. | `core.action`, `notification.email` |
+| Action outbox | The `agent_action` table behind `AgentActions`, and its executor: every effect on the outside world ([The outbox](./outbox.mdx)). The view leaves out the `ActionAdapter` for email (`EmailAdapter`) and those for product feedback. | `core.action`, `notification.email` |
 
 Every part stores its state in PostgreSQL, so the view leaves that connection out.
 The view also leaves out `AgentRunHandler`: through it, the reaper moves a review or a turn together with its run ([Agent runs](./agent-runs.mdx)).
@@ -154,7 +152,7 @@ Events of one resource in one workspace run serially, including a replay.
 All GitHub installation control events share one system scope.
 [Ingest durability](./ingest-durability#claim-lease-and-order) owns the claim, renewal, retry and replay rules.
 
-Work that must run one at a time on every server takes a `ClusterLock` ([Transactions](./transactions.md#6-concurrent-writers)).
+Work that must run one at a time on every server takes a `ClusterLock` ([Transactions](./transactions.mdx#6-concurrent-writers)).
 The chart runs two servers by default.
 
 ## Module boundaries
@@ -163,7 +161,7 @@ The chart runs two servers by default.
 GitLab, Slack, and Outline each have their own adapter. A deployment syncs one configured GitLab
 instance.
 Additional login providers do not create additional GitLab sync instances.
-[Provider resource repair](./provider-resource-repair.md) owns removal dispatch and adoption fencing across these adapters.
+[Provider resource repair](./provider-resource-repair.mdx) owns removal dispatch and adoption fencing across these adapters.
 
 `agent` owns the run queue, the sandboxes, the gateway and the LLM proxy.
 `practices` owns definitions, durable reviews, assignments, results, problems and feedback.
@@ -239,7 +237,7 @@ Delivery checks the feedback mode and silent mode again before it posts.
 Workspace review history gives no access to a member's private Practice profile or Hephaestus feedback ([ADR 0047](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0047-the-practice-profile-has-one-reader.md)).
 
 The [review pipeline](./practice-review-pipeline) describes selection, capture, admission, composition and delivery.
-The [workspace ABI](./agent/workspace-abi.mdx) describes the job folder, the capture manifest and the output contract.
+The [workspace ABI](./agent/agent-workspace-abi.mdx) describes the job folder, the capture manifest and the output contract.
 
 ## Conversation
 
@@ -310,12 +308,12 @@ sequenceDiagram
 
 These are the parts of the turn that the arrows alone do not explain:
 
-- **Durability.** A Slack event is a row in the `provider_event` inbox before Slack gets its `202` ([Ingest durability](./ingest-durability.md)). A question from the app is a row before the server answers. A server can stop at any step, and the next one starts again from PostgreSQL.
+- **Durability.** A Slack event is a row in the `provider_event` inbox before Slack gets its `202` ([Ingest durability](./ingest-durability.mdx)). A question from the app is a row before the server answers. A server can stop at any step, and the next one starts again from PostgreSQL.
 - **The fence.** The lease raises the run's epoch. The gateway accepts a call on a run (`…/runs/{runId}/…`) only with the current epoch. A sandbox that lost its lease cannot write.
 - **Two streams.** The LLM proxy forwards the model's tokens to the sandbox and accounts for them in the usage row. The answer that a person sees is a separate stream of deltas that the sandbox sends.
 - **Any replica.** The server writes no row for a delta. It sends the delta to every server as PostgreSQL notification frames. Each server keeps the partial answer in memory (`ConversationTurnProgress`). The live hub of the server that holds the app's stream sends it on. The sandbox and the app can therefore use different server replicas.
 - **Only the end is stored.** The entries are stored once, when the turn ends. A server that misses a frame shows the partial answer again at the next whole snapshot. A whole snapshot comes at least every two seconds.
-- **Slack delivery.** The answer for Slack is an `agent_action` row that the outbox executes ([The outbox](./outbox.md)). The executor confirms the post with the message timestamp that Slack returns.
+- **Slack delivery.** The answer for Slack is an `agent_action` row that the outbox executes ([The outbox](./outbox.mdx)). The executor confirms the post with the message timestamp that Slack returns.
 - **Out of scope.** This success path leaves out a stopped turn and a retry. [Conversation runtime](./unified-pi-runtime) owns them.
 
 Each turn is a `TURN` run in band `INTERACTIVE`, keyed to its conversation.
@@ -331,7 +329,7 @@ No conversation state lives in a process, so any such server serves any call of 
 
 The app renders the stored messages and the partial answer from the generated client.
 
-Each account has one [Conversation](./practice-feedback-language.md#conversation) per workspace, with one level of threads.
+Each account has one [Conversation](./practice-feedback-language.mdx#conversation) per workspace, with one level of threads.
 The app shows the whole conversation. Slack shows what was asked there.
 
 Hephaestus is available to workspace members only, within their account-wide AI choice. It uses permitted
@@ -350,7 +348,7 @@ The [scan guide](/user/scans) describes how to run a scan and export its report.
 ## Diagram map
 
 Each architecture diagram answers one question.
-Every structural view uses one legend. [Documentation guide § Structural maps in HyLiMo](./documentation-guide.md#structural-maps-in-hylimo) explains it.
+Every structural view uses one legend. [Documentation guide § Structural maps in HyLiMo](./documentation-guide.mdx#structural-maps-in-hylimo) explains it.
 
 | Question | View | Page |
 | --- | --- | --- |

@@ -109,4 +109,4 @@ The consumer retries proven temporary failures without a delivery limit.
 Unknown failures exhaust a retry budget.
 Permanent failures and exhausted unknown failures have a metadata record in PostgreSQL before termination.
 The decision to avoid a second JetStream stream remains.
-[Webhook delivery and retry order](../contributor/ingest-durability.md) owns the current contract.
+[Webhook delivery and retry order](../contributor/ingest-durability.mdx) owns the current contract.

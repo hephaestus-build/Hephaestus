@@ -1,6 +1,4 @@
 ---
-id: testing
-sidebar_position: 4
 title: Testing Guide
 description: Choose the right test type and integrate with the Gradle-powered pipeline.
 ---
@@ -19,7 +17,7 @@ Apply two checks to each test that you add or change:
   A test that breaks anyway is a change detector. Rewrite it against the behavior, or delete it.
 - **Defect check.** A plausible bug in the behavior must break the test.
   A test that no bug can break is a tautology. A deliberate break shows it.
-  For security-boundary classes, a [mutation run](./security-mutation-testing.md) shows it too.
+  For security-boundary classes, a [mutation run](./security-mutation-testing.mdx) shows it too.
 
 Test through the surface that callers use:
 
@@ -62,7 +60,7 @@ Deterministic tests protect the contract that the code depends on:
 Do not test prompt wording.
 A wording pin fails on an improvement and on a removed rule alike, so it cannot tell them apart.
 
-Behavior quality is a measurement on labelled cases ([Feedback quality evaluation](./feedback-quality-evals.md)).
+Behavior quality is a measurement on labelled cases ([Feedback quality evaluation](./feedback-quality-evals.mdx)).
 Label each failure mode pass or fail. Validate a model judge against human labels before you use its result.
 A safety rule, such as the rule that quoted instructions are data, gets labelled cases, not a wording pin.
 
@@ -548,9 +546,9 @@ The database tenancy tests remain required.
 
 ### Offline feedback quality evaluation
 
-The [feedback quality harness](./feedback-quality-evals.md) replays stored evidence and exact outputs without provider credentials.
+The [feedback quality harness](./feedback-quality-evals.mdx) replays stored evidence and exact outputs without provider credentials.
 It checks selected claims and reports provisional labels, human judgments, and advisory rubric ratings separately.
-The [labelling guide](./label-feedback-quality.md) gives the independent human review procedure.
+The [labelling guide](./label-feedback-quality.mdx) gives the independent human review procedure.
 
 ### Live review runner image
 

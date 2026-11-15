@@ -6,7 +6,7 @@ description: Review operation terms, runtime terms and their correspondence with
 # Practice review glossary
 
 This page owns terms for the review operation and runtime.
-The [product vocabulary](./practice-feedback-language.md) owns practices, observations, problems, feedback and people.
+The [product vocabulary](./practice-feedback-language.mdx) owns practices, observations, problems, feedback and people.
 A term has one definition in one of these pages.
 
 ## The core data model
@@ -46,7 +46,7 @@ erDiagram
 ```
 
 Every table here except `Workspace` carries `workspace_id NOT NULL`, so each row belongs to exactly one workspace.
-The product calls a `Result` an observation, and the `Membership` that it concerns the developer ([product vocabulary](./practice-feedback-language.md#observations)).
+The product calls a `Result` an observation, and the `Membership` that it concerns the developer ([product vocabulary](./practice-feedback-language.mdx#observations)).
 [Database schema](./database-schema.mdx) has the full, generated schema.
 
 ## Review terms
@@ -112,7 +112,7 @@ The [pipeline](./practice-review-pipeline.mdx) owns ordering, eligibility and fe
 
 A practice version holds its definition.
 The editor labels Review on, Applies when, About and Reviewed by map to the fields above.
-The [catalog guide](./practice-catalog.md) owns definition identity and update behavior.
+The [catalog guide](./practice-catalog.mdx) owns definition identity and update behavior.
 The [review pipeline](./practice-review-pipeline.mdx#select-a-review) owns applicability checks and capture refusal behavior.
 
 HEPHAESTUS permits automated review.
@@ -311,9 +311,9 @@ A turn is not a job: it has no job row and no review.
 
 A job can expire without removing its review or observations.
 The [runtime guide](./practice-review-runtime.mdx) owns execution, retries and retention.
-The [workspace ABI](./agent/workspace-abi.mdx) owns file paths and capture records.
+The [workspace ABI](./agent/agent-workspace-abi.mdx) owns file paths and capture records.
 The [source contract](./item-source-contract.mdx) owns capture states.
-The [data model](./practice-feedback-schema.md) owns durable keys and guards.
+The [data model](./practice-feedback-schema.mdx) owns durable keys and guards.
 
 `USAGE_UNVERIFIABLE` stops a scan because the cost of earlier model calls cannot be verified.
 It does not mean that the scan used up its budget.
@@ -385,4 +385,4 @@ Preserve the recorded schema and criteria of an empirical record.
 A historical positive behavior label does not prove the complete practice standard was met.
 Recomputing a definition digest does not reassess the old work.
 Keep the original outcome and evidence qualification separate.
-The [evaluation provenance contract](./evaluation-provenance.md) owns these limits.
+The [evaluation provenance contract](./evaluation-provenance.mdx) owns these limits.
