@@ -34,6 +34,8 @@ They need these target labels from the scrape configuration:
 - `runtime_role="server"`.
 - A different `instance` on each target.
 
+The rules of the group `hephaestus-postgresql` need `job="postgresql"` on the PostgreSQL exporter target.
+
 `HephaestusMetricsUnavailable` fires only for a target that Prometheus still discovers.
 When service discovery loses all server targets, no `up` series remains.
 To detect that, add a rule for the server, for example `absent(up{job="hephaestus",runtime_role="server"})`.

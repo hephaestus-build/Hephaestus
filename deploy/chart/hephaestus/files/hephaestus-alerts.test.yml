@@ -3306,9 +3306,9 @@ tests:
         values: "100x40"
       - series: 'pg_settings_superuser_reserved_connections{job="postgresql",instance="exporter-a:9187",namespace="busy"}'
         values: "3x40"
-      # below: the chart's small profile at a rolling-update peak, 89 of 117 usable slots.
+      # below: the client total of the small profile at a rolling-update peak, 103 of 117 usable slots (sizing.mdx).
       - series: 'pg_stat_database_numbackends{job="postgresql",instance="exporter-a:9187",namespace="below",datid="16384",datname="hephaestus"}'
-        values: "89x40"
+        values: "103x40"
       - series: 'pg_settings_max_connections{job="postgresql",instance="exporter-a:9187",namespace="below"}'
         values: "120x40"
       - series: 'pg_settings_superuser_reserved_connections{job="postgresql",instance="exporter-a:9187",namespace="below"}'
@@ -3403,6 +3403,9 @@ tests:
         values: "0x5 1 1 2 2 3 3x30"
       - series: 'kube_pod_container_status_restarts_total{namespace="hephaestus",pod="hephaestus-server-7d9f-bbbbb",container="server"}'
         values: "0x10 1x30"
+      # Two restarts in an hour stay below the loop.
+      - series: 'kube_pod_container_status_restarts_total{namespace="hephaestus",pod="hephaestus-server-7d9f-eeeee",container="server"}'
+        values: "0x5 1 1 2 2x30"
       - series: 'kube_pod_container_status_restarts_total{namespace="hephaestus",pod="hephaestus-postgresql-0",container="postgresql"}'
         values: "0 1 2 3 4 5 6 7 8 9 10x30"
       # A replacement Pod starts its counter at 0, so no restart is counted.
