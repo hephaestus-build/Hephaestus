@@ -2,7 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.proxy;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
+import de.tum.cit.aet.hephaestus.conversation.ConversationTurn;
 import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Tag;
@@ -38,6 +38,7 @@ class ProviderOutageTest {
     @MethodSource("failures")
     void shouldTellAnOutageFromAnAnsweredFailure(
             String kind, @Nullable Integer status, @Nullable ProviderOutage expected) {
-        assertThat(ProviderOutage.of(new MentorTurn.FailedCall(kind, status))).isEqualTo(expected);
+        assertThat(ProviderOutage.of(new ConversationTurn.FailedCall(kind, status)))
+                .isEqualTo(expected);
     }
 }
