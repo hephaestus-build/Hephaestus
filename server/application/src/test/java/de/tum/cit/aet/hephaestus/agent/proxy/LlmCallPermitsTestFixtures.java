@@ -5,8 +5,12 @@ import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallPoolProperties;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallPoolRepository;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.sql.Timestamp;
 import java.time.Duration;
+import java.time.Instant;
+import java.util.Objects;
 import org.springframework.context.ApplicationContext;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.support.TransactionTemplate;
 
 public final class LlmCallPermitsTestFixtures {
@@ -16,6 +20,17 @@ public final class LlmCallPermitsTestFixtures {
     public static final Duration PERMIT_AGING = Duration.ofSeconds(30);
 
     private LlmCallPermitsTestFixtures() {}
+
+    /** A deadline no test reaches, for a call whose test is not about its deadline. */
+    static Instant laterThanAnyTest() {
+        return Instant.now().plus(Duration.ofHours(1));
+    }
+
+    /** The database's time. A pool's pause is stored and read in it, by every worker. */
+    static Instant databaseNow(JdbcTemplate jdbc) {
+        return Objects.requireNonNull(jdbc.queryForObject("SELECT clock_timestamp()", Timestamp.class))
+                .toInstant();
+    }
 
     public static LlmCallPermits worker(ApplicationContext context, String workerId) {
         return new LlmCallPermits(

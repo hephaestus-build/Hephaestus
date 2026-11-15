@@ -1,7 +1,12 @@
 package de.tum.cit.aet.hephaestus.agent.proxy;
 
+import static de.tum.cit.aet.hephaestus.agent.proxy.LlmCallPermitsTestFixtures.databaseNow;
+import static de.tum.cit.aet.hephaestus.agent.proxy.LlmCallPermitsTestFixtures.laterThanAnyTest;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
+import static org.mockito.AdditionalAnswers.delegatesTo;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
 
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallLimit;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallPermitRepository;
@@ -394,11 +399,16 @@ class LlmCallPoolLearningIntegrationTest extends BaseIntegrationTest {
     void shouldWaitForTheProvidersPauseAcrossWorkersEvenForAConversation() {
         long pool = ownPool();
         var call = admit(workerA, pool, AgentRunBand.BATCH, 1);
+        Instant asked = databaseNow(jdbc).plusSeconds(2);
         workerA.throttled(call, 429, pause(2), true);
         call.close();
+        assertThat(noCallBefore(pool)).isAfterOrEqualTo(asked);
 
-        assertThat(probe(workerB, pool, AgentRunBand.INTERACTIVE, 2, Duration.ofMillis(50)))
+        // The test holds the pause past any wait it makes, then ends it, both in the database's time.
+        jdbc.update("UPDATE llm_call_pool SET no_call_before=clock_timestamp()+interval '1 hour' WHERE id=?", pool);
+        assertThat(probe(workerB, pool, AgentRunBand.INTERACTIVE, 2, Duration.ofMillis(500)))
                 .isNull();
+        jdbc.update("UPDATE llm_call_pool SET no_call_before=clock_timestamp() WHERE id=?", pool);
         await().atMost(Duration.ofSeconds(5))
                 .untilAsserted(
                         () -> assertThat(probe(workerB, pool, AgentRunBand.INTERACTIVE, 2, Duration.ofMillis(300)))
@@ -410,9 +420,27 @@ class LlmCallPoolLearningIntegrationTest extends BaseIntegrationTest {
         long pool = ownPool();
         setMaximum(pool, 1);
         var held = admit(workerB, pool, AgentRunBand.BATCH, 2);
+        // The waiting worker's admission rounds, counted: each one locks the pool's admission once.
+        AtomicInteger rounds = new AtomicInteger();
+        var countedPools = mock(LlmCallPoolRepository.class, delegatesTo(pools));
+        doAnswer(invocation -> {
+                    rounds.incrementAndGet();
+                    return pools.lockAdmission(pool);
+                })
+                .when(countedPools)
+                .lockAdmission(pool);
+        var waiting = new LlmCallPermits(
+                countedPools,
+                rows,
+                transactions,
+                LlmCallPermitsTestFixtures.PROPERTIES,
+                LlmCallPermitsTestFixtures.PERMIT_AGING,
+                "held-" + UUID.randomUUID(),
+                new SimpleMeterRegistry(),
+                models);
         AtomicBoolean ended = new AtomicBoolean();
         try (var calls = Executors.newVirtualThreadPerTaskExecutor()) {
-            var waiter = calls.submit(() -> acquire(workerA, pool, AgentRunBand.BATCH, 1, UUID.randomUUID(), ended));
+            var waiter = calls.submit(() -> acquire(waiting, pool, AgentRunBand.BATCH, 1, UUID.randomUUID(), ended));
             await().atMost(Duration.ofSeconds(5))
                     .untilAsserted(() -> assertThat(waiting(pool)).isEqualTo(1));
             UUID queued = Objects.requireNonNull(jdbc.queryForObject(
@@ -424,17 +452,19 @@ class LlmCallPoolLearningIntegrationTest extends BaseIntegrationTest {
                         "UPDATE llm_call_permit SET state='ACTIVE',granted_at=clock_timestamp(),requests=1 WHERE id=? AND state='WAITING'",
                         queued);
                 jdbc.update(
-                        "UPDATE llm_call_pool SET no_call_before=clock_timestamp()+interval '2 seconds' WHERE id=?",
-                        pool);
+                        "UPDATE llm_call_pool SET no_call_before=clock_timestamp()+interval '1 hour' WHERE id=?", pool);
             });
 
-            TimeUnit.MILLISECONDS.sleep(1_000);
+            // Rounds run one at a time, so once two more have started, a whole round ran under the pause.
+            int before = rounds.get();
+            await().atMost(Duration.ofSeconds(15)).until(() -> rounds.get() >= before + 2);
             assertThat(waiter.isDone()).isFalse();
+            jdbc.update("UPDATE llm_call_pool SET no_call_before=clock_timestamp() WHERE id=?", pool);
             var permit = waiter.get(10, TimeUnit.SECONDS);
             assertThat(permit).isNotNull();
-            assertThat(Objects.requireNonNull(pools.findById(pool).orElseThrow().getNoCallBefore()))
-                    .isBefore(Instant.now());
             Objects.requireNonNull(permit).close();
+        } finally {
+            waiting.stop();
         }
     }
 
@@ -694,12 +724,13 @@ class LlmCallPoolLearningIntegrationTest extends BaseIntegrationTest {
     void shouldLetAWorkspaceCredentialSlowItsOwnModelsPool() {
         long pool = ownPool();
         var call = admit(workerA, pool, AgentRunBand.BATCH, 1);
+        Instant asked = databaseNow(jdbc).plusSeconds(30);
 
         assertThat(workerA.throttled(call, 429, pause(30), false)).isEqualTo(Duration.ofSeconds(30));
         call.close();
 
         var row = pools.findById(pool).orElseThrow();
-        assertThat(row.getNoCallBefore()).isAfter(Instant.now());
+        assertThat(row.getNoCallBefore()).isAfterOrEqualTo(asked);
         assertThat(row.getLearnedLimit()).isEqualTo(5);
     }
 
@@ -831,11 +862,11 @@ class LlmCallPoolLearningIntegrationTest extends BaseIntegrationTest {
     private static LlmCallPermits.Permit admit(
             LlmCallPermits worker, long pool, AgentRunBand kind, long workspace, UUID source) {
         return Objects.requireNonNull(worker.acquire(
-                pool,
-                kind,
-                new LlmCallPermits.Caller(workspace, source, 0, null),
-                () -> false,
-                Instant.now().plusSeconds(10)));
+                pool, kind, new LlmCallPermits.Caller(workspace, source, 0, null), () -> false, laterThanAnyTest()));
+    }
+
+    private Instant noCallBefore(long pool) {
+        return Objects.requireNonNull(pools.findById(pool).orElseThrow().getNoCallBefore());
     }
 
     private static LlmCallPermits.@Nullable Permit acquire(

@@ -1,5 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.proxy;
 
+import static de.tum.cit.aet.hephaestus.agent.proxy.LlmCallPermitsTestFixtures.databaseNow;
+import static de.tum.cit.aet.hephaestus.agent.proxy.LlmCallPermitsTestFixtures.laterThanAnyTest;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.awaitility.Awaitility.await;
@@ -320,9 +322,9 @@ class LlmCallPermitsIntegrationTest extends BaseIntegrationTest {
                 meters,
                 mock(LlmModelResolver.class));
         var overdue = Objects.requireNonNull(shortLease.acquire(
-                pool, AgentRunBand.BATCH, caller(1), () -> false, Instant.now().plusMillis(200)));
+                pool, AgentRunBand.BATCH, caller(1), () -> false, Instant.now().plusSeconds(2)));
         String slug = pools.findById(pool).orElseThrow().getSlug();
-        await().atMost(Duration.ofSeconds(3)).untilAsserted(() -> {
+        await().atMost(Duration.ofSeconds(10)).untilAsserted(() -> {
             shortLease.renew();
             assertThat(meters.get(AgentMetrics.LLM_POOL_SELF_FENCE_CANCELLED)
                             .tags("pool", slug, "reason", "past_deadline")
@@ -383,7 +385,7 @@ class LlmCallPermitsIntegrationTest extends BaseIntegrationTest {
             var rates = rows.rates(pool);
             assertThat(rates.getRequests()).isEqualTo(2);
             assertThat(rates.getTokens()).isEqualTo(17);
-            assertThat(workerA.beforeRetry(expired, () -> false, Instant.now().plusSeconds(1)))
+            assertThat(workerA.beforeRetry(expired, () -> false, laterThanAnyTest()))
                     .isFalse();
             expired.close();
             assertThat(rows.countActive(pool)).isEqualTo(1);
@@ -439,18 +441,10 @@ class LlmCallPermitsIntegrationTest extends BaseIntegrationTest {
         try (var occupied = admit(workerB, pool, AgentRunBand.BATCH, 1);
                 var calls = Executors.newVirtualThreadPerTaskExecutor()) {
             assertThat(occupied.isRevoked()).isFalse();
-            var first = calls.submit(() -> worker.acquire(
-                    pool,
-                    AgentRunBand.BATCH,
-                    caller(2),
-                    ended::get,
-                    Instant.now().plusSeconds(15)));
-            var second = calls.submit(() -> worker.acquire(
-                    pool,
-                    AgentRunBand.BATCH,
-                    caller(3),
-                    ended::get,
-                    Instant.now().plusSeconds(15)));
+            var first = calls.submit(
+                    () -> worker.acquire(pool, AgentRunBand.BATCH, caller(2), ended::get, laterThanAnyTest()));
+            var second = calls.submit(
+                    () -> worker.acquire(pool, AgentRunBand.BATCH, caller(3), ended::get, laterThanAnyTest()));
             try {
                 await().atMost(Duration.ofSeconds(5))
                         .untilAsserted(() -> assertThat(waiting(pool)).isEqualTo(2));
@@ -523,8 +517,7 @@ class LlmCallPermitsIntegrationTest extends BaseIntegrationTest {
     void shouldDebitPhysicalRetriesInTheSameRateAccount() {
         long pool = pool(4);
         var call = admit(workerA, pool, AgentRunBand.BATCH, 1);
-        assertThat(workerA.beforeRetry(call, () -> false, Instant.now().plusSeconds(2)))
-                .isTrue();
+        assertThat(workerA.beforeRetry(call, () -> false, laterThanAnyTest())).isTrue();
         assertThat(rows.rates(pool).getRequests()).isEqualTo(2);
         call.close();
     }
@@ -546,6 +539,7 @@ class LlmCallPermitsIntegrationTest extends BaseIntegrationTest {
     void shouldKeepTheLongerProviderCooldownAcrossWorkers() {
         long pool = pool(4);
         var call = admit(workerA, pool, AgentRunBand.BATCH, 1);
+        Instant asked = databaseNow(jdbc).plusSeconds(30);
         HttpHeaders longPause = new HttpHeaders();
         longPause.set(HttpHeaders.RETRY_AFTER, "30");
         workerA.throttled(call, 429, longPause, true);
@@ -555,7 +549,7 @@ class LlmCallPermitsIntegrationTest extends BaseIntegrationTest {
         call.close();
         assertThat(probe(workerB, pool, AgentRunBand.INTERACTIVE, 2)).isNull();
         var deadline = Objects.requireNonNull(pools.findById(pool).orElseThrow().getNoCallBefore());
-        assertThat(deadline).isAfter(Instant.now().plusSeconds(25));
+        assertThat(deadline).isAfterOrEqualTo(asked);
     }
 
     @Test
@@ -570,7 +564,7 @@ class LlmCallPermitsIntegrationTest extends BaseIntegrationTest {
                             if (checks.incrementAndGet() == 2) throw new IllegalStateException("ownership read failed");
                             return false;
                         },
-                        Instant.now().plusSeconds(5)))
+                        laterThanAnyTest()))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessage("ownership read failed");
         assertThat(rows.countActive(pool)).isZero();
@@ -630,12 +624,8 @@ class LlmCallPermitsIntegrationTest extends BaseIntegrationTest {
     void shouldLeaveNoWaitingRequestWhenABusyPoolDefersADraft() {
         long pool = pool(1);
         var draft = new LlmCallPermits.Caller(null, UUID.randomUUID(), 1, null);
-        try (var active = Objects.requireNonNull(workerA.acquire(
-                pool,
-                AgentRunBand.INTERACTIVE,
-                caller(1),
-                () -> false,
-                Instant.now().plusSeconds(5)))) {
+        try (var active = Objects.requireNonNull(
+                workerA.acquire(pool, AgentRunBand.INTERACTIVE, caller(1), () -> false, laterThanAnyTest()))) {
             assertThat(active.isRevoked()).isFalse();
             assertThat(workerB.tryAcquireBackground(
                             pool, draft, () -> false, Instant.now().plusSeconds(30)))
@@ -658,14 +648,10 @@ class LlmCallPermitsIntegrationTest extends BaseIntegrationTest {
         long primary = pool(1);
         long auxiliary = pool(1);
         var caller = caller(1);
-        try (var active = Objects.requireNonNull(workerA.acquire(
-                primary, AgentRunBand.BATCH, caller, () -> false, Instant.now().plusSeconds(2)))) {
-            try (var other = Objects.requireNonNull(workerA.acquire(
-                    auxiliary,
-                    AgentRunBand.BATCH,
-                    caller,
-                    () -> false,
-                    Instant.now().plusSeconds(2)))) {
+        try (var active = Objects.requireNonNull(
+                workerA.acquire(primary, AgentRunBand.BATCH, caller, () -> false, laterThanAnyTest()))) {
+            try (var other = Objects.requireNonNull(
+                    workerA.acquire(auxiliary, AgentRunBand.BATCH, caller, () -> false, laterThanAnyTest()))) {
                 assertThat(rows.countActive(primary)).isEqualTo(1);
                 assertThat(rows.countActive(auxiliary)).isEqualTo(1);
                 assertThat(active.isRevoked()).isFalse();
@@ -678,12 +664,8 @@ class LlmCallPermitsIntegrationTest extends BaseIntegrationTest {
     @Test
     void shouldRefuseToWaitForCapacityInsideAnOpenTransaction() {
         long pool = pool(1);
-        transactions.executeWithoutResult(status -> assertThatThrownBy(() -> workerA.acquire(
-                        pool,
-                        AgentRunBand.BATCH,
-                        caller(1),
-                        () -> false,
-                        Instant.now().plusSeconds(2)))
+        transactions.executeWithoutResult(status -> assertThatThrownBy(
+                        () -> workerA.acquire(pool, AgentRunBand.BATCH, caller(1), () -> false, laterThanAnyTest()))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessage("Model calls must acquire capacity outside a database transaction"));
         assertThat(rows.countActive(pool)).isZero();
@@ -954,8 +936,7 @@ class LlmCallPermitsIntegrationTest extends BaseIntegrationTest {
 
     private static LlmCallPermits.Permit admit(
             LlmCallPermits worker, long pool, AgentRunBand band, LlmCallPermits.Caller caller) {
-        return Objects.requireNonNull(
-                worker.acquire(pool, band, caller, () -> false, Instant.now().plusSeconds(10)));
+        return Objects.requireNonNull(worker.acquire(pool, band, caller, () -> false, laterThanAnyTest()));
     }
 
     /** Another server's call that has waited this long; its own server is not in the test. */
