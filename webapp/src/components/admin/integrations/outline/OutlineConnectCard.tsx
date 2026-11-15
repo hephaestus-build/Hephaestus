@@ -8,7 +8,7 @@ import {
 	type ConnectionState,
 } from "@/components/admin/integrations/sync-format";
 import { WorkspaceIntegrationCardHeading } from "@/components/admin/integrations/WorkspaceIntegrationCardHeading";
-import { DocLink } from "@/components/common/DocLink";
+import { WorkspaceIntegrationNotEnabled } from "@/components/admin/integrations/WorkspaceIntegrationNotEnabled";
 import { RelativeTime } from "@/components/common/RelativeTime";
 import { useNow } from "@/components/common/use-now";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -48,8 +48,8 @@ export interface OutlineConnectCardProps {
 	isConnecting?: boolean;
 	isDisconnecting?: boolean;
 	errorMessage?: string;
-	/** This instance has no Outline integration, so the connect form is a dead end and the card says so. */
-	connectUnavailable?: boolean;
+	/** This instance has not enabled Outline, so the card offers no connect form and says so instead. */
+	notEnabled?: boolean;
 	onConnect: (input: OutlineConnectInput) => void;
 	onDisconnect: () => void;
 	isReplacingToken?: boolean;
@@ -85,7 +85,7 @@ export function OutlineConnectCard({
 	isConnecting = false,
 	isDisconnecting = false,
 	errorMessage,
-	connectUnavailable = false,
+	notEnabled = false,
 	onConnect,
 	onDisconnect,
 	isReplacingToken = false,
@@ -118,7 +118,7 @@ export function OutlineConnectCard({
 				</CardHeader>
 
 				<CardContent className="space-y-4">
-					{connected ? (
+					{connected && (
 						<>
 							{/* Which Outline instance is linked — the one fact the connection plane above doesn't
 							    carry. The green check is a claim that syncing works, so it is spent only on ACTIVE;
@@ -150,69 +150,60 @@ export function OutlineConnectCard({
 								</p>
 							)}
 						</>
-					) : (
-						<FieldGroup>
-							<Field data-invalid={serverUrlInvalid}>
-								<FieldLabel htmlFor="outline-server-url">Server URL</FieldLabel>
-								<Input
-									id="outline-server-url"
-									value={serverUrl}
-									disabled={isConnecting}
-									onChange={(e) => setServerUrl(e.target.value)}
-									// Placeholder, never a default value: a prefilled cloud URL would ship a
-									// self-hoster's token to Outline Cloud if they only pasted the token.
-									placeholder={CLOUD_SERVER_URL}
-									autoComplete="off"
-									aria-invalid={serverUrlInvalid}
-								/>
-								<FieldDescription>
-									Your Outline host. Use <code>{CLOUD_SERVER_URL}</code> for Outline Cloud, or your
-									self-hosted URL.
-								</FieldDescription>
-								{serverUrlInvalid && <FieldError>Enter an https:// URL.</FieldError>}
-							</Field>
-
-							<Field>
-								<FieldLabel htmlFor="outline-token">API token</FieldLabel>
-								<Input
-									id="outline-token"
-									type="password"
-									value={token}
-									disabled={isConnecting}
-									onChange={(e) => setToken(e.target.value)}
-									placeholder="ol_api_…"
-									autoComplete="off"
-								/>
-								<FieldDescription>
-									Create it in Outline under <em>Settings → API Keys</em>.
-								</FieldDescription>
-							</Field>
-
-							{hasText(errorMessage) && <FieldError>{errorMessage}</FieldError>}
-
-							{connectUnavailable && (
-								<Alert variant="warning">
-									<TriangleAlertIcon />
-									<AlertTitle>Outline may not be enabled on this instance</AlertTitle>
-									<AlertDescription>
-										The server has no Outline integration configured, so connecting cannot succeed
-										here. If your URL and token are correct, ask your instance operator to{" "}
-										<DocLink doc="outlineIntegration">enable the Outline integration</DocLink> for
-										this deployment.
-									</AlertDescription>
-								</Alert>
-							)}
-
-							<Button
-								pending={isConnecting}
-								onClick={() => onConnect({ serverUrl: serverUrl.trim(), token: token.trim() })}
-								disabled={!canConnect}
-								className="w-full"
-							>
-								{isConnecting ? "Connecting…" : "Connect Outline"}
-							</Button>
-						</FieldGroup>
 					)}
+					{!connected &&
+						(notEnabled ? (
+							<WorkspaceIntegrationNotEnabled displayName="Outline" doc="outlineIntegration" />
+						) : (
+							<FieldGroup>
+								<Field data-invalid={serverUrlInvalid}>
+									<FieldLabel htmlFor="outline-server-url">Server URL</FieldLabel>
+									<Input
+										id="outline-server-url"
+										value={serverUrl}
+										disabled={isConnecting}
+										onChange={(e) => setServerUrl(e.target.value)}
+										// Placeholder, never a default value: a prefilled cloud URL would ship a
+										// self-hoster's token to Outline Cloud if they only pasted the token.
+										placeholder={CLOUD_SERVER_URL}
+										autoComplete="off"
+										aria-invalid={serverUrlInvalid}
+									/>
+									<FieldDescription>
+										Your Outline host. Use <code>{CLOUD_SERVER_URL}</code> for Outline Cloud, or
+										your self-hosted URL.
+									</FieldDescription>
+									{serverUrlInvalid && <FieldError>Enter an https:// URL.</FieldError>}
+								</Field>
+
+								<Field>
+									<FieldLabel htmlFor="outline-token">API token</FieldLabel>
+									<Input
+										id="outline-token"
+										type="password"
+										value={token}
+										disabled={isConnecting}
+										onChange={(e) => setToken(e.target.value)}
+										placeholder="ol_api_…"
+										autoComplete="off"
+									/>
+									<FieldDescription>
+										Create it in Outline under <em>Settings → API Keys</em>.
+									</FieldDescription>
+								</Field>
+
+								{hasText(errorMessage) && <FieldError>{errorMessage}</FieldError>}
+
+								<Button
+									pending={isConnecting}
+									onClick={() => onConnect({ serverUrl: serverUrl.trim(), token: token.trim() })}
+									disabled={!canConnect}
+									className="w-full"
+								>
+									{isConnecting ? "Connecting…" : "Connect Outline"}
+								</Button>
+							</FieldGroup>
+						))}
 				</CardContent>
 
 				{connected && (

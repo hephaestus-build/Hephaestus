@@ -48,7 +48,14 @@ it.each([
 ] satisfies { name: string; connections: Wire<ConnectionSummary>[]; unconfirmed: boolean }[])(
 	"reports an unconfirmed provider cleanup after a disconnect when $name",
 	async ({ connections, unconfirmed }) => {
-		server.use(http.get("*/workspaces/acme/connections", () => HttpResponse.json(connections)));
+		server.use(
+			http.get("*/workspaces/acme/connections", () => HttpResponse.json(connections)),
+			http.get("*/workspaces/acme/connections/catalog", () =>
+				HttpResponse.json([
+					{ kind: "OUTLINE", displayName: "Outline", connected: false, connectable: true },
+				]),
+			),
+		);
 		const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 		const { result, unmount } = renderHook(() => useOutlineIntegration("acme"), {
 			wrapper: ({ children }: { children: ReactNode }) => (

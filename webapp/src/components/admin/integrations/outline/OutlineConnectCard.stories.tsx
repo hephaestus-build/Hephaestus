@@ -79,23 +79,17 @@ export const ConnectError: Story = {
 };
 
 /**
- * The instance has no Outline integration enabled — the initiate 400 (no ConnectionStrategy for the
- * kind) is turned into a clear "not available here" hint so the admin does not keep retrying a
- * connect that can never succeed. The raw ProblemDetail stays visible above it.
+ * This instance has not enabled Outline: the card offers no connect form, so no request can fail, and
+ * it names the guide an operator follows to enable it.
  */
-export const ConnectUnavailable: Story = {
-	args: {
-		connected: false,
-		errorMessage: "No ConnectionStrategy registered for kind=OUTLINE",
-		connectUnavailable: true,
-	},
+export const NotEnabled: Story = {
+	args: { connected: false, notEnabled: true },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByText(/no connectionstrategy registered/iu)).toBeVisible();
-		await expect(canvas.getByText(/outline may not be enabled on this instance/iu)).toBeVisible();
-		await expect(canvas.getByText(/ask your instance operator/iu)).toBeVisible();
-		// The step to pass on to the operator, in the admin guide.
+		await expect(canvas.getByText("Outline is not enabled on this instance")).toBeVisible();
+		await expect(canvas.queryByRole("textbox", { name: "Server URL" })).not.toBeInTheDocument();
+		await expect(canvas.queryByRole("button", { name: "Connect Outline" })).not.toBeInTheDocument();
 		await expect(
-			canvas.getByRole("link", { name: "enable the Outline integration (opens in a new tab)" }),
+			canvas.getByRole("link", { name: "enables the Outline integration (opens in a new tab)" }),
 		).toHaveAttribute("href", expect.stringMatching(/\/admin\/connect-outline$/u));
 	},
 };

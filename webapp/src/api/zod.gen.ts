@@ -1567,6 +1567,7 @@ export const zConnectionSummary = z.object({
  */
 export const zIntegrationCatalogEntry = z.object({
 	attentionProblem: zIntegrationAttentionChangedEventProblem.optional(),
+	connectable: z.boolean(),
 	connected: z.boolean(),
 	connectionId: z.int().optional(),
 	connectionState: zIntegrationState.optional(),

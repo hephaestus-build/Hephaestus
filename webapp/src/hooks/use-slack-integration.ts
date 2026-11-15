@@ -244,6 +244,33 @@ export function useSlackIntegration(workspaceSlug: string) {
 		});
 	};
 
+	const disconnectSlack =
+		slackConnectionId == null
+			? undefined
+			: async () => {
+					await disconnect.mutateAsync({
+						path: { workspaceSlug, id: slackConnectionId },
+						body: { state: "UNINSTALLED" },
+					});
+				};
+	function connectionSettings(): WorkspaceSlackConnectionSettingsProps {
+		if (isConnectionActive) {
+			return {
+				state: "connected",
+				credentialsUnreadableSince: entry.credentialsUnreadableSince,
+				scopeCheck: slackScopeCheck(slackScopesQuery),
+				onReconnect: startSlackOAuth,
+				isReconnecting: connect.isPending,
+				onDisconnect: disconnectSlack,
+				isDisconnecting: disconnect.isPending,
+			};
+		}
+		if (entry?.connectable === false) {
+			return { state: "not-enabled" };
+		}
+		return { state: "disconnected", onConnect: startSlackOAuth, isConnecting: connect.isPending };
+	}
+
 	return {
 		repairConnectionId: entry?.connectionId,
 		connectionId,
@@ -258,29 +285,7 @@ export function useSlackIntegration(workspaceSlug: string) {
 		syncStatusHeaderProps: sync.syncStatusHeaderProps,
 		syncResourcesProps: sync.syncResourcesProps,
 		jobHistoryProps: sync.jobHistoryProps,
-		connectionSettingsProps: (isConnectionActive
-			? {
-					state: "connected",
-					credentialsUnreadableSince: entry.credentialsUnreadableSince,
-					scopeCheck: slackScopeCheck(slackScopesQuery),
-					onReconnect: startSlackOAuth,
-					isReconnecting: connect.isPending,
-					onDisconnect:
-						slackConnectionId == null
-							? undefined
-							: async () => {
-									await disconnect.mutateAsync({
-										path: { workspaceSlug, id: slackConnectionId },
-										body: { state: "UNINSTALLED" },
-									});
-								},
-					isDisconnecting: disconnect.isPending,
-				}
-			: {
-					state: "disconnected",
-					onConnect: startSlackOAuth,
-					isConnecting: connect.isPending,
-				}) satisfies WorkspaceSlackConnectionSettingsProps,
+		connectionSettingsProps: connectionSettings(),
 		channelsSettingsProps: {
 			hasSlackConnection: isConnectionActive,
 			channels: isConnectionActive && !channelsFailed ? (slackChannelsQuery.data ?? []) : [],

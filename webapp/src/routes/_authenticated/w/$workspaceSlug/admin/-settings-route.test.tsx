@@ -379,7 +379,13 @@ describe("the setup summary", () => {
 				body: { ...status, activeJob: initialSyncJob("PENDING") },
 			});
 			renderSettingsRoute(false, [
-				{ kind: "GITHUB", displayName: "GitHub", connected: true, connectionId: 3 },
+				{
+					kind: "GITHUB",
+					displayName: "GitHub",
+					connected: true,
+					connectable: true,
+					connectionId: 3,
+				},
 			]);
 
 			await screen.findByRole("list", { name: "Setup summary" }, ROUTE_RENDER_WAIT);

@@ -73,6 +73,7 @@ function mockConnection(kind: "GITHUB" | "GITLAB", installationId?: number) {
 		kind,
 		displayName: kind === "GITLAB" ? "GitLab" : "GitHub",
 		connected: true,
+		connectable: true,
 		connectionId: 7,
 		connectionState: "ACTIVE",
 		credentialsUnreadableSince: installationId == null ? listed.createdAt : undefined,
@@ -2414,6 +2415,7 @@ const slackEntry: Wire<IntegrationCatalogEntry> = {
 	kind: "SLACK",
 	displayName: "Slack",
 	connected: true,
+	connectable: true,
 	connectionId: 7,
 	connectionState: "ACTIVE",
 };

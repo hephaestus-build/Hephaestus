@@ -118,7 +118,7 @@ describe("workspace setup summary", () => {
 });
 
 const catalog: IntegrationCatalogEntry[] = [
-	{ kind: "GITHUB", displayName: "GitHub", connected: true, connectionId: 3 },
+	{ kind: "GITHUB", displayName: "GitHub", connected: true, connectable: true, connectionId: 3 },
 ];
 const job = (status: SyncJob["status"]): SyncJob => ({
 	id: 1,

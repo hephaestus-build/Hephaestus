@@ -64,6 +64,7 @@ The manifest sets these addresses:
    ```
 
    With `config.slack.enabled`, a server without `HEPHAESTUS_INTEGRATION_SLACK_SIGNING_SECRET` does not start.
+   While it is `false`, the Slack page of each workspace says that Slack is not enabled on this instance.
 
 4. Apply `site.yaml`.
    On a cluster, run the `helm upgrade` command of [Install](./kubernetes#install) again.

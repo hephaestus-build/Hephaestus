@@ -456,14 +456,15 @@ const workspaceDetail: Wire<Workspace> = {
 
 const integrations: IntegrationCatalogEntry[] = [
 	{
+		connectable: true,
 		connected: true,
 		connectionId: 1,
 		connectionState: "ACTIVE",
 		displayName: "GitHub",
 		kind: "GITHUB",
 	},
-	{ connected: false, displayName: "Slack", kind: "SLACK" },
-	{ connected: false, displayName: "Outline", kind: "OUTLINE" },
+	{ connectable: true, connected: false, displayName: "Slack", kind: "SLACK" },
+	{ connectable: true, connected: false, displayName: "Outline", kind: "OUTLINE" },
 ];
 
 const agents: ModelAssignment[] = [

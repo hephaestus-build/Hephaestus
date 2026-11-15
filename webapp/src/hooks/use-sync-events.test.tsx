@@ -348,8 +348,20 @@ describe("useSyncEvents", () => {
 		queryClient.setQueryData(
 			getIntegrationCatalogQueryKey({ path: { workspaceSlug: WORKSPACE } }),
 			[
-				{ kind: "OUTLINE", connected: true, connectionId: CONNECTION_ID, displayName: "Outline" },
-				{ kind: "SLACK", connected: true, connectionId: 99, displayName: "Slack" },
+				{
+					kind: "OUTLINE",
+					connected: true,
+					connectable: true,
+					connectionId: CONNECTION_ID,
+					displayName: "Outline",
+				},
+				{
+					kind: "SLACK",
+					connected: true,
+					connectable: true,
+					connectionId: 99,
+					displayName: "Slack",
+				},
 			],
 		);
 		const invalidate = vi.spyOn(queryClient, "invalidateQueries");
@@ -484,7 +496,13 @@ describe("repository reads after a resources hint", () => {
 		{
 			kind: "GITLAB",
 			catalog: [
-				{ kind: "GITLAB", connected: true, connectionId: CONNECTION_ID, displayName: "GitLab" },
+				{
+					kind: "GITLAB",
+					connected: true,
+					connectable: true,
+					connectionId: CONNECTION_ID,
+					displayName: "GitLab",
+				},
 			],
 			siblingReads: 1,
 		},

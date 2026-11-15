@@ -168,6 +168,36 @@ interface OverviewBodyProps {
 	onRetryStatus: (() => void) | undefined;
 }
 
+/** What a card offers for a kind with no connection: SCM is chosen at creation, and a kind the instance has not enabled has no connect page. */
+function DisconnectedAction({
+	entry,
+	isScm,
+	detailTo,
+	workspaceSlug,
+}: {
+	entry: IntegrationCatalogEntry;
+	isScm: boolean;
+	detailTo: (typeof DETAIL_ROUTE)[IntegrationCatalogEntry["kind"]];
+	workspaceSlug: string;
+}) {
+	if (isScm) {
+		return (
+			<p className="text-sm text-muted-foreground">
+				Source control is selected when the workspace is created.
+			</p>
+		);
+	}
+	if (!entry.connectable) {
+		return <p className="text-sm text-muted-foreground">Not enabled on this instance.</p>;
+	}
+	return (
+		<Link to={detailTo} params={{ workspaceSlug }} className={buttonVariants({ size: "sm" })}>
+			Connect <span className="sr-only">{entry.displayName}</span>
+			<ArrowRightIcon className="size-3.5" />
+		</Link>
+	);
+}
+
 function OverviewBody({
 	workspaceSlug,
 	entry,
@@ -195,16 +225,12 @@ function OverviewBody({
 						displayName={entry.displayName}
 					/>
 				)}
-				{isScm ? (
-					<p className="text-sm text-muted-foreground">
-						Source control is selected when the workspace is created.
-					</p>
-				) : (
-					<Link to={detailTo} params={{ workspaceSlug }} className={buttonVariants({ size: "sm" })}>
-						Connect<span className="sr-only"> {entry.displayName}</span>
-						<ArrowRightIcon className="size-3.5" />
-					</Link>
-				)}
+				<DisconnectedAction
+					entry={entry}
+					isScm={isScm}
+					detailTo={detailTo}
+					workspaceSlug={workspaceSlug}
+				/>
 			</div>
 		);
 	}

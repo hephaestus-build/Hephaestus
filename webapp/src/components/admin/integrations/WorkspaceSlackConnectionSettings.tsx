@@ -26,6 +26,7 @@ import {
 } from "@/components/ui/item";
 
 import { WorkspaceIntegrationCardHeading } from "./WorkspaceIntegrationCardHeading";
+import { WorkspaceIntegrationNotEnabled } from "./WorkspaceIntegrationNotEnabled";
 
 /** What Slack said about the scopes the token holds; only a reconnect grants a missing one. */
 export type SlackScopeCheck =
@@ -34,6 +35,8 @@ export type SlackScopeCheck =
 	| { state: "checked"; missingScopes: readonly string[] };
 
 export type WorkspaceSlackConnectionSettingsProps =
+	/** This instance has not enabled Slack, so the card offers no connect action. */
+	| { state: "not-enabled" }
 	| {
 			state: "disconnected";
 			/** Starts Slack's OAuth; the page leaves for Slack when it succeeds. */
@@ -73,9 +76,13 @@ export function WorkspaceSlackConnectionSettings(props: WorkspaceSlackConnection
 				</CardDescription>
 			</CardHeader>
 
-			{props.state === "connected" ? (
-				<SlackConnected {...props} />
-			) : (
+			{props.state === "connected" && <SlackConnected {...props} />}
+			{props.state === "not-enabled" && (
+				<CardFooter>
+					<WorkspaceIntegrationNotEnabled displayName="Slack" doc="slackIntegration" />
+				</CardFooter>
+			)}
+			{props.state === "disconnected" && (
 				<CardFooter>
 					<Button pending={props.isConnecting} onClick={props.onConnect} className="w-full">
 						{props.isConnecting ? (

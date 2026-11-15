@@ -397,7 +397,7 @@ class SyncControllerIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     @Test
     @WithAdminUser
-    void catalog_listsGithubAsConnected() {
+    void catalog_listsGithubAsConnectedAndOutlineAsNotConnectable() {
         ensureAdminMembership(workspace);
 
         List<IntegrationCatalogEntryDTO> catalog = webTestClient
@@ -418,6 +418,13 @@ class SyncControllerIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 .orElseThrow(() -> new AssertionError("GITHUB missing from catalog"));
         assertThat(github.connected()).isTrue();
         assertThat(github.connectionId()).isEqualTo(connection.getId());
+        assertThat(github.connectable()).isTrue();
+        // Outline is off unless the operator enables it, so this deployment cannot connect it.
+        IntegrationCatalogEntryDTO outline = catalog.stream()
+                .filter(e -> e.kind() == IntegrationKind.OUTLINE)
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("OUTLINE missing from catalog"));
+        assertThat(outline.connectable()).isFalse();
     }
 
     @Test

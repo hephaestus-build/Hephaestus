@@ -2648,6 +2648,10 @@ export type IntegrationCatalogEntry = {
 	 */
 	attentionProblem?: IntegrationAttentionChangedEventProblem;
 	/**
+	 * Whether this deployment can connect this kind. False when the operator has not enabled it, so a connect request cannot succeed
+	 */
+	connectable: boolean;
+	/**
 	 * Whether this workspace has a (non-UNINSTALLED) connection for this kind
 	 */
 	connected: boolean;

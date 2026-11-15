@@ -5297,6 +5297,11 @@ export const IntegrationCatalogEntrySchema = {
 			description:
 				"A problem with the connection that an admin should act on; absent while there is none",
 		},
+		connectable: {
+			type: "boolean",
+			description:
+				"Whether this deployment can connect this kind. False when the operator has not enabled it, so a connect request cannot succeed",
+		},
 		connected: {
 			type: "boolean",
 			description: "Whether this workspace has a (non-UNINSTALLED) connection for this kind",
@@ -5325,7 +5330,7 @@ export const IntegrationCatalogEntrySchema = {
 			description: "Integration kind",
 		},
 	},
-	required: ["connected", "displayName", "kind"],
+	required: ["connectable", "connected", "displayName", "kind"],
 } as const;
 
 export const IntegrationFamilySchema = {

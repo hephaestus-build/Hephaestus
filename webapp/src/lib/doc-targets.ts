@@ -28,6 +28,7 @@ export const DOC_TARGETS = {
 	githubAppSetup: { path: "admin/github-integration", anchor: "github-app-mode" },
 	outlineIntegration: { path: "admin/connect-outline" },
 	slackPermissions: { path: "admin/connect-slack", anchor: "create-the-slack-app" },
+	slackIntegration: { path: "admin/connect-slack" },
 	unreadableCredential: {
 		path: "admin/credential-key-rotation",
 		anchor: "a-credential-the-running-key-cannot-read",

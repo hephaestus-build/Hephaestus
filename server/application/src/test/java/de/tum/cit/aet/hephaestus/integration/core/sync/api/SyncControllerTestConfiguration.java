@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.integration.core.sync.api;
 import static org.mockito.Mockito.mock;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.api.ConnectionAdminService;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionStrategy;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionSyncStateProvider;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationSyncRunner;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider;
@@ -32,7 +33,8 @@ public class SyncControllerTestConfiguration {
             SyncJobRepository syncJobRepository,
             ConnectionActivityRepository connectionActivityRepository,
             @Qualifier("syncJobExecutor") AsyncTaskExecutor taskExecutor,
-            SyncControllerTestDriver driver) {
+            SyncControllerTestDriver driver,
+            List<ConnectionStrategy> connectionStrategies) {
         return new SyncStatusService(
                 connectionAdminService,
                 syncJobService,
@@ -41,7 +43,8 @@ public class SyncControllerTestConfiguration {
                 taskExecutor,
                 List.of(driver.stateProvider()),
                 List.of(driver.runner()),
-                mock(SyncTargetProvider.class));
+                mock(SyncTargetProvider.class),
+                connectionStrategies);
     }
 
     public record SyncControllerTestDriver(ConnectionSyncStateProvider stateProvider, IntegrationSyncRunner runner) {}
