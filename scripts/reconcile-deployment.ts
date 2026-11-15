@@ -1066,6 +1066,22 @@ function matchesChartValues(
 	});
 }
 
+/**
+ * Whether the installed values hold every server stopped for a stopped upgrade. A chart with
+ * `server.stopped` states it there, and `server.replicas` stays the capacity. `helm get values --all`
+ * includes the chart's defaults, so the key is present whenever the installed chart has it.
+ *
+ * A chart without the key (1.0.0-rc.8 and earlier) stops the servers with `server.replicas: 0`. This
+ * tooling meets such a chart only when an operator installed it by hand on that host
+ * (docs/admin/pull-based-deployment.mdx § Install newer reconciler tooling).
+ */
+export function writersStopped(server: Readonly<Record<string, unknown>>): boolean {
+	if ("stopped" in server) {
+		return server.stopped === true;
+	}
+	return server.replicas === 0;
+}
+
 async function checkStoppedUpgrade(
 	settings: ChartSettings,
 	imagesFile: string,
@@ -1101,13 +1117,13 @@ async function checkStoppedUpgrade(
 		);
 	}
 	// Helm can finish before applied.json is renamed. Resume only the verified target, already
-	// deployed; an operator can already have restored replicas before this tick.
+	// deployed; an operator can already have changed its server count before this tick.
 	if (status === "deployed" && matchesChartValues(values, expected)) {
 		return "applied";
 	}
-	if (asRecord(values.server, "server values").replicas !== 0) {
+	if (!writersStopped(asRecord(values.server, "server values"))) {
 		throw new OperatorActionRequiredError(
-			"A major upgrade requires stopped writers. Pause reconciliation and complete phase 1 of Database maintenance before promoting the next chart.",
+			"A major upgrade requires stopped writers. Pause reconciliation and complete phase 1 of Database maintenance before promoting the next chart: set `server.stopped=true`, or `server.replicas=0` on a chart without `server.stopped`.",
 		);
 	}
 	const sandbox = asRecord(values.sandbox, "sandbox values");
@@ -1389,7 +1405,8 @@ async function applyChart(
 				packaged,
 				!stopped,
 			),
-			...(stopped ? ["--set", "server.replicas=1"] : []),
+			// The target starts its servers at the capacity of the site values.
+			...(stopped ? ["--set", "server.stopped=false"] : []),
 		],
 		{
 			cwd: releaseTree,
