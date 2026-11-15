@@ -2435,6 +2435,13 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 							scope.currentTurn.compactions += 1;
 							// A compaction calls the model outside the agent loop, so no assistant message charges its prompt.
 							scope.currentTurn.inputTokens += callPromptTokens(event.result?.usage);
+							// Pi can compact after the loop's last turn ends; no later check would see that it spent the budget.
+							if (
+								scope.currentTurn.stoppedBy === null &&
+								spent(workOf(scope.currentTurn), scope.currentTurn.budget)
+							) {
+								stopTurn("budget");
+							}
 						}
 					}
 					// The SDK rides out a retryable provider failure on its own. A run that took longer, or that

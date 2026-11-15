@@ -1503,7 +1503,9 @@ if (scenario !== undefined && scenario !== "") {
 											result,
 										});
 									}
+									emit({ type: "turn_end" });
 									if (compacts && !recording) {
+										// After the turn ends, as Pi compacts once the loop is done: no later model call follows.
 										emit({
 											type: "compaction_end",
 											reason: "threshold",
@@ -1516,7 +1518,6 @@ if (scenario !== undefined && scenario !== "") {
 											aborted: false,
 										});
 									}
-									emit({ type: "turn_end" });
 								}
 								return;
 							}
@@ -2932,6 +2933,7 @@ if (scenario !== undefined && scenario !== "") {
 								/turn\.finished .*calls=1 .*input_tokens=4500 input_token_budget=4000 stopped_by=budget/u,
 							);
 							reached({ "test-practice": "NOT_REACHED", "second-practice": "EVALUATED" });
+							ran({ "second-practice": "ok", "test-practice": "failed (budget)" });
 							break;
 						}
 						case "scope-stop-hangs":
