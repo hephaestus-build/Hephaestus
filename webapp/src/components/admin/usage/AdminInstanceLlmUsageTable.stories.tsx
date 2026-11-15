@@ -391,6 +391,27 @@ export const ExpandedNearCap: Story = {
 	},
 };
 
+/** Totals leave this usage out, so the panel says how much is missing and where shared rates are set. */
+export const ExpandedWithUnavailableCost: Story = {
+	args: {
+		expandedWorkspaceSlug: nearingItsOwnProviderCap.workspaceSlug,
+		detailReport: { ...detailReportFor(nearingItsOwnProviderCap), unpricedEventCount: 7 },
+	},
+	play: async ({ canvas }) => {
+		const panel = within(await expandedPanelFor(canvas, nearingItsOwnProviderCap.displayName));
+		const alert = panel.getByRole("note");
+		await expect(alert).toHaveTextContent("7 uses have unavailable cost");
+		await expect(alert).toHaveTextContent(
+			`${nearingItsOwnProviderCap.displayName}’s admins set rates for its own models.`,
+		);
+		await expect(within(alert).getByRole("link", { name: "AI models" })).toHaveAttribute(
+			"href",
+			"/admin/models",
+		);
+		await expect(panel.getByRole("status")).toHaveTextContent(/of its provider cap/u);
+	},
+};
+
 export const DisplayCurrencyThisMonth: Story = {
 	args: {
 		fx: {

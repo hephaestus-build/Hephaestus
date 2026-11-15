@@ -1,19 +1,18 @@
 import { CircleDollarSignIcon, CircleOffIcon, GaugeIcon, LockIcon, UnplugIcon } from "lucide-react";
 
+import type { LlmModel } from "@/api/types.gen";
 import type { StatusDefs } from "@/components/common/status-def";
 
-/**
- * Why a registered model, or the provider it runs on, cannot be used now. A model that can run is
- * the normal case and draws nothing.
- */
-export type ModelReadiness =
-	| "OFF"
-	| "CONNECTION_OFF"
-	| "PRICE_MISSING"
-	| "LIMITS_MISSING"
-	| "NO_WORKSPACE_ACCESS";
+/** Whether a registered model can run now, or the first reason it cannot. The server decides it for both consoles. */
+export type ModelReadiness = LlmModel["readiness"];
 
-export const MODEL_READINESS_DEFS: StatusDefs<ModelReadiness> = {
+/**
+ * Why a model, or the provider it runs on, cannot be used now. A model that can run is the normal
+ * case and draws no badge.
+ */
+export type ModelNotReady = Exclude<ModelReadiness, "READY">;
+
+export const MODEL_READINESS_DEFS: StatusDefs<ModelNotReady> = {
 	OFF: {
 		label: "Off",
 		icon: CircleOffIcon,
@@ -30,7 +29,7 @@ export const MODEL_READINESS_DEFS: StatusDefs<ModelReadiness> = {
 		label: "Price missing",
 		icon: CircleDollarSignIcon,
 		badgeVariant: "warning",
-		description: "Workspaces cannot use it until it has a price or is marked as having no cost.",
+		description: "It cannot be turned on until it has a price or is marked as having no cost.",
 	},
 	LIMITS_MISSING: {
 		label: "Limits missing",
