@@ -10,8 +10,8 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserTeamsDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.workspace.settings.WorkspaceTeamSettingsService;
 import de.tum.cit.aet.hephaestus.integration.scm.workspace.team.TeamService;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
-import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceLookup;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -28,7 +28,7 @@ public class WorkspaceTeamLabelService {
 
     private static final Logger log = LoggerFactory.getLogger(WorkspaceTeamLabelService.class);
 
-    private final WorkspaceRepository workspaceRepository;
+    private final WorkspaceLookup workspaceLookup;
     private final TeamRepository teamRepository;
     private final ScmMemberRepository workspaceMembershipRepository;
     private final WorkspaceTeamSettingsService workspaceTeamSettingsService;
@@ -36,13 +36,13 @@ public class WorkspaceTeamLabelService {
     private final TeamService teamService;
 
     public WorkspaceTeamLabelService(
-            WorkspaceRepository workspaceRepository,
+            WorkspaceLookup workspaceLookup,
             TeamRepository teamRepository,
             ScmMemberRepository workspaceMembershipRepository,
             WorkspaceTeamSettingsService workspaceTeamSettingsService,
             WorkspaceTeamScopeResolver workspaceTeamScopeResolver,
             TeamService teamService) {
-        this.workspaceRepository = workspaceRepository;
+        this.workspaceLookup = workspaceLookup;
         this.teamRepository = teamRepository;
         this.workspaceMembershipRepository = workspaceMembershipRepository;
         this.workspaceTeamSettingsService = workspaceTeamSettingsService;
@@ -113,9 +113,7 @@ public class WorkspaceTeamLabelService {
         if (isBlank(slug)) {
             throw new IllegalArgumentException("Workspace slug must not be blank.");
         }
-        return workspaceRepository
-                .findByWorkspaceSlug(slug)
-                .orElseThrow(() -> new EntityNotFoundException("Workspace", slug));
+        return workspaceLookup.findBySlug(slug).orElseThrow(() -> new EntityNotFoundException("Workspace", slug));
     }
 
     private String requireSlug(WorkspaceContext workspaceContext) {

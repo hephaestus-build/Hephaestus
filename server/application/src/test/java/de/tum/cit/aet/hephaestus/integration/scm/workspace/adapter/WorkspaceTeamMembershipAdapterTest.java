@@ -18,6 +18,7 @@ import de.tum.cit.aet.hephaestus.testconfig.TestEntities;
 import de.tum.cit.aet.hephaestus.workspace.MembershipService;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import de.tum.cit.aet.hephaestus.workspace.adapter.WorkspaceRootsAdapter;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.Set;
@@ -52,7 +53,11 @@ class WorkspaceTeamMembershipAdapterTest extends BaseUnitTest {
     @BeforeEach
     void setUp() {
         adapter = new WorkspaceTeamMembershipAdapter(
-                workspaceRepository, organizations, membershipService, teamMembershipRepository, organizationAdapter);
+                new WorkspaceRootsAdapter(workspaceRepository, membershipService),
+                organizations,
+                membershipService,
+                teamMembershipRepository,
+                organizationAdapter);
         Organization group = new Organization();
         group.setId(5L);
         group.setLogin(ROOT);

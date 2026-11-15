@@ -36,6 +36,13 @@ public class WorkspaceMembershipsAdapter implements WorkspaceMemberships {
     }
 
     @Override
+    public boolean hasMembership(long workspaceId, long accountId) {
+        return memberships
+                .findByWorkspace_IdAndId_AccountId(workspaceId, accountId)
+                .isPresent();
+    }
+
+    @Override
     @Transactional(propagation = Propagation.MANDATORY)
     public long accountIdForUser(long scmUserId) {
         return memberVisibility.accountIdForUser(scmUserId);

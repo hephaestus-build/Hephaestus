@@ -14,5 +14,8 @@ public interface WorkspaceProviderAccounts {
 
     boolean bindsOrganization(long workspaceId, long organizationId);
 
+    /** The active workspaces other than {@code workspaceId} that bind the organization. */
+    long otherActiveWorkspacesOfOrganization(long organizationId, long workspaceId);
+
     record ProviderAccount(String accountLogin, @Nullable RepositorySelection repositorySelection) {}
 }

@@ -12,6 +12,12 @@ public interface RepositoryMonitorCommands {
      */
     RepositoryToMonitor add(long workspaceId, String nameWithOwner, long nativeId);
 
-    /** Joins the caller's transaction. */
+    /** Renames the monitor and writes it at once. Joins the caller's transaction. */
     void rename(long workspaceId, long monitorId, String nameWithOwner);
+
+    /** Removes the monitor and writes it at once. Joins the caller's transaction. */
+    void remove(long workspaceId, long monitorId);
+
+    /** Removes every monitor of the workspace and writes it at once. Joins the caller's transaction. */
+    void clear(long workspaceId);
 }

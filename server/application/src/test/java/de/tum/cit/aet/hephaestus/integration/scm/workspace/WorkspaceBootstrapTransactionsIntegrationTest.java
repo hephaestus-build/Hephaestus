@@ -15,13 +15,15 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SelectedRepositoryVerifier;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
-import de.tum.cit.aet.hephaestus.workspace.MembershipRepository;
 import de.tum.cit.aet.hephaestus.workspace.MembershipService;
-import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceProperties;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceService;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceSlugService;
+import de.tum.cit.aet.hephaestus.workspace.spi.RepositoryMonitorCommands;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceLookup;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceMemberships;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceRoots;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
@@ -148,14 +150,15 @@ class WorkspaceBootstrapTransactionsIntegrationTest extends BaseIntegrationTest 
                 null);
         return new WorkspaceProvisioningService(
                 settings,
-                workspaces,
-                context.getBean(RepositoryToMonitorRepository.class),
+                context.getBean(WorkspaceRoots.class),
+                context.getBean(WorkspaceLookup.class),
+                context.getBean(RepositoryMonitorCommands.class),
                 context.getBean(WorkspaceService.class),
                 context.getBean(WorkspaceSlugService.class),
                 context.getBean(UserRepository.class),
                 context.getBean(IdentityProviderLookup.class),
                 context.getBean(SourceProviderNamespaces.class),
-                context.getBean(MembershipRepository.class),
+                context.getBean(WorkspaceMemberships.class),
                 context.getBean(MembershipService.class),
                 owner,
                 List.of(),

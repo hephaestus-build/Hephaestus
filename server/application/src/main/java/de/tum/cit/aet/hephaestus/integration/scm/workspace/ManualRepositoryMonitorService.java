@@ -19,9 +19,10 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.workspace.RepositorySelection;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitor;
-import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
-import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import de.tum.cit.aet.hephaestus.workspace.spi.RepositoryMonitorCommands;
+import de.tum.cit.aet.hephaestus.workspace.spi.RepositoryMonitorSources;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceRepositoryMonitors;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
@@ -38,8 +39,9 @@ import org.springframework.transaction.support.TransactionTemplate;
 public class ManualRepositoryMonitorService {
     private static final String GITHUB_SERVER_URL = "https://github.com";
 
-    private final WorkspaceRepository workspaceRepository;
-    private final RepositoryToMonitorRepository repositoryToMonitorRepository;
+    private final WorkspaceRepositoryMonitors monitors;
+    private final RepositoryMonitorSources monitorSources;
+    private final RepositoryMonitorCommands monitorCommands;
     private final RepositoryRepository repositoryRepository;
     private final IdentityProviderLookup identityProviders;
     private final ConnectionService connectionService;
@@ -51,8 +53,9 @@ public class ManualRepositoryMonitorService {
     private final ApplicationEventPublisher eventPublisher;
 
     public ManualRepositoryMonitorService(
-            WorkspaceRepository workspaceRepository,
-            RepositoryToMonitorRepository repositoryToMonitorRepository,
+            WorkspaceRepositoryMonitors monitors,
+            RepositoryMonitorSources monitorSources,
+            RepositoryMonitorCommands monitorCommands,
             RepositoryRepository repositoryRepository,
             IdentityProviderLookup identityProviders,
             ConnectionService connectionService,
@@ -62,8 +65,9 @@ public class ManualRepositoryMonitorService {
             List<RepositoryIdentityLookup> repositoryIdentityLookupList,
             GitLabRepositorySelectionService selection,
             ApplicationEventPublisher eventPublisher) {
-        this.workspaceRepository = workspaceRepository;
-        this.repositoryToMonitorRepository = repositoryToMonitorRepository;
+        this.monitors = monitors;
+        this.monitorSources = monitorSources;
+        this.monitorCommands = monitorCommands;
         this.repositoryRepository = repositoryRepository;
         this.identityProviders = identityProviders;
         this.connectionService = connectionService;
@@ -103,7 +107,7 @@ public class ManualRepositoryMonitorService {
                 .isEmpty()) {
             throw new RepositoryOriginNotSupportedException(slug);
         }
-        if (repositoryToMonitorRepository.existsByWorkspaceIdAndNameWithOwner(workspaceId, nameWithOwner)) {
+        if (monitors.monitorsPath(workspaceId, nameWithOwner)) {
             throw new RepositoryAlreadyMonitoredException(nameWithOwner);
         }
         Long answeredVersion = connection.version();
@@ -119,7 +123,7 @@ public class ManualRepositoryMonitorService {
             if (!Objects.equals(current.getVersion(), answeredVersion)) {
                 throw new RepositorySelectionChangedException();
             }
-            if (repositoryToMonitorRepository.existsByWorkspaceIdAndNameWithOwner(workspaceId, nameWithOwner)) {
+            if (monitors.monitorsPath(workspaceId, nameWithOwner)) {
                 throw new RepositoryAlreadyMonitoredException(nameWithOwner);
             }
             Long providerId = sourceProviderId(IntegrationKind.GITHUB, config)
@@ -129,22 +133,12 @@ public class ManualRepositoryMonitorService {
                     .findByNameWithOwnerAndProviderId(nameWithOwner, providerId)
                     .filter(mirrored -> Objects.equals(mirrored.getNativeId(), reported.nativeId()))
                     .orElseThrow(() -> new EntityNotFoundException("Repository", nameWithOwner));
-            if (repositoryToMonitorRepository
-                    .findOneByWorkspaceIdAndNativeId(workspaceId, repository.getNativeId())
-                    .isPresent()) {
+            if (monitors.monitorOf(workspaceId, repository.getNativeId()).isPresent()) {
                 throw new RepositoryAlreadyMonitoredException(nameWithOwner);
             }
-            Workspace owner = workspaceRepository
-                    .findById(workspaceId)
-                    .orElseThrow(() -> new EntityNotFoundException("Workspace", workspaceId));
-            RepositoryToMonitor created = new RepositoryToMonitor();
-            created.setNameWithOwner(nameWithOwner);
-            created.setNativeId(repository.getNativeId());
-            created.setWorkspace(owner);
-            owner.getRepositoriesToMonitor().add(created);
-            RepositoryToMonitor saved = insertMonitor(created, nameWithOwner);
+            RepositoryToMonitor saved = insertMonitor(workspaceId, nameWithOwner, repository.getNativeId());
             eventPublisher.publishEvent(new RepositoryMonitoringChangedEvent(
-                    owner.getId(), repositoryToMonitorRepository.findSourceRepositoryIdsOfMonitor(saved.getId())));
+                    workspaceId, monitorSources.sourceRepositoryIds(saved.getId())));
             return saved;
         });
         return Objects.requireNonNull(monitor);
@@ -160,11 +154,8 @@ public class ManualRepositoryMonitorService {
         if (!(connection.config() instanceof ConnectionConfig.GitLabConfig initialConfig)) {
             throw new RepositoryProviderNotConnectedException(workspace.getWorkspaceSlug());
         }
-        boolean selected = workspaceRepository
-                .findMonitorPolicy(workspaceId)
-                .filter(policy -> policy.getRepositorySelection() == RepositorySelection.SELECTED)
-                .isPresent();
-        if (repositoryToMonitorRepository.existsByWorkspaceIdAndNameWithOwner(workspaceId, nameWithOwner)) {
+        boolean selected = selection.storedSelection(workspaceId) == RepositorySelection.SELECTED;
+        if (monitors.monitorsPath(workspaceId, nameWithOwner)) {
             throw new RepositoryAlreadyMonitoredException(nameWithOwner);
         }
         Long answeredVersion = connection.version();
@@ -193,31 +184,21 @@ public class ManualRepositoryMonitorService {
                     .isEmpty()) {
                 throw new RepositoryProviderNotConnectedException(workspace.getWorkspaceSlug());
             }
-            if (repositoryToMonitorRepository.existsByWorkspaceIdAndNameWithOwner(workspaceId, nameWithOwner)
-                    || !repositoryToMonitorRepository
-                            .findByWorkspaceIdAndNativeId(workspaceId, nativeId)
-                            .isEmpty()) {
+            if (monitors.monitorsPath(workspaceId, nameWithOwner)
+                    || !monitors.monitorsOf(workspaceId, nativeId).isEmpty()) {
                 throw new RepositoryAlreadyMonitoredException(nameWithOwner);
             }
-            Workspace owner = workspaceRepository
-                    .findById(workspaceId)
-                    .orElseThrow(() -> new EntityNotFoundException("Workspace", workspaceId));
-            RepositoryToMonitor created = new RepositoryToMonitor();
-            created.setNameWithOwner(nameWithOwner);
-            created.setNativeId(nativeId);
-            created.setWorkspace(owner);
-            owner.getRepositoriesToMonitor().add(created);
-            RepositoryToMonitor saved = insertMonitor(created, nameWithOwner);
+            RepositoryToMonitor saved = insertMonitor(workspaceId, nameWithOwner, nativeId);
             eventPublisher.publishEvent(new RepositoryMonitoringChangedEvent(
-                    owner.getId(), repositoryToMonitorRepository.findSourceRepositoryIdsOfMonitor(saved.getId())));
+                    workspaceId, monitorSources.sourceRepositoryIds(saved.getId())));
             return saved;
         });
         return Objects.requireNonNull(monitor);
     }
 
-    private RepositoryToMonitor insertMonitor(RepositoryToMonitor monitor, String nameWithOwner) {
+    private RepositoryToMonitor insertMonitor(long workspaceId, String nameWithOwner, long nativeId) {
         try {
-            return repositoryToMonitorRepository.saveAndFlush(monitor);
+            return monitorCommands.add(workspaceId, nameWithOwner, nativeId);
         } catch (DataIntegrityViolationException exception) {
             if (DataIntegrityViolationConstraints.hasName(exception, "uk_repository_to_monitor_workspace_name")) {
                 throw new RepositoryAlreadyMonitoredException(nameWithOwner, exception);
