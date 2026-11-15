@@ -118,9 +118,9 @@ Choose the procedure for the destination:
 - [Isolated restore drill](#isolated-restore-drill): a disposable, isolated clone. It locks down the clone before any migration or server starts.
 - [Recover the live installation](#recover-the-live-installation): the production instance. Do not lock down the live database.
 
-Before you set `server.replicas` to 0, record `SHOW max_connections` and set `postgresql.parameters.max_connections` to that value.
-Keep this override until WAL replay finishes. Include it in the recovery set for a replacement host.
-The chart derives a lower connection limit when fewer servers run, but PostgreSQL refuses recovery below the source setting.
+Stop the servers with `server.stopped=true`, not with `server.replicas=0`.
+The chart sizes `max_connections` from `server.replicas`, and PostgreSQL rejects recovery below the source setting.
+On a replacement host, use the source's `server.replicas`, or set `postgresql.parameters.max_connections` to the source's `SHOW max_connections` until WAL replay finishes.
 The [PostgreSQL recovery requirements](https://www.postgresql.org/docs/18/hot-standby.html#HOT-STANDBY-ADMIN) describe this constraint.
 
 The restored database has the role passwords that it had at the backup.
@@ -131,7 +131,7 @@ If `DATABASE_ADMIN_PASSWORD` changed after the backup, put the old value back in
 ### Prepare replacement storage
 
 On a replacement host, restore the release keys, TLS Secrets, verified chart and site values first.
-Keep migration disabled and `server.replicas` at 0.
+Keep migration disabled, set `server.stopped=true`, and keep the source's `server.replicas`.
 Keep the failed volume until the recovery is verified.
 
 Before you enable the restore, provision an empty claim named `data-<release>-postgresql-0` in the release namespace.
@@ -192,7 +192,7 @@ Its lockdown SQL changes the control settings of the clone.
    ```
 
    The Job retries while PostgreSQL still shuts down.
-4. Upgrade with `postgresql.backup.restore.enabled=false`, `migration.enabled=false` and `server.replicas=0`.
+4. Upgrade with `postgresql.backup.restore.enabled=false`, `migration.enabled=false` and `server.stopped=true`.
    PostgreSQL alone replays the WAL up to the target.
 5. Wait until this command prints `f`. Readiness does not prove that the replay finished.
 
@@ -212,7 +212,7 @@ Its lockdown SQL changes the control settings of the clone.
    It turns on silent mode, pauses feedback and review triggers in each workspace, and turns off each conversation model.
    If it prints `restore clone lockdown did not engage`, stop.
 7. Resolve provider write receipts before the server starts.
-8. Upgrade with `migration.enabled=true` and `server.replicas=1`. Verify the migration, readiness and authenticated reads.
+8. Upgrade with `migration.enabled=true` and `server.stopped=false`. Verify the migration, readiness and authenticated reads.
 9. To run test reviews on the clone, use only controlled providers.
    Follow [Prove silence](./silent-deployment#prove-silence) before you open any external destination.
 
@@ -225,7 +225,7 @@ Sessions issued after the backup must sign in again. Sessions revoked after it c
 PostgreSQL loses the delivery history after the backup. Thus, the server cannot prevent duplicate external writes.
 Scheduled sync cannot recover every event in the gap.
 
-1. Set `server.replicas=0`, remove the sandbox workloads as step 4 of [Planned node maintenance](./maintenance#planned-node-maintenance) describes, and pause reconciliation.
+1. Set `server.stopped=true`, remove the sandbox workloads as step 4 of [Planned node maintenance](./maintenance#planned-node-maintenance) describes, and pause reconciliation.
    This stops traffic and provider reception.
 2. Keep a copy of the failed data. Record the chosen recovery point and the expected lost writes.
 3. Add the values of [Deny external egress](#deny-external-egress) to your site values.
@@ -250,10 +250,10 @@ Scheduled sync cannot recover every event in the gap.
 
    The last line prints `t`.
    Check the delivery status, the review triggers and the conversation models of each workspace against the intended live settings.
-6. Upgrade with `migration.enabled=true` and `server.replicas=0`. Wait until the migration Job of the revision is `Complete`.
+6. Upgrade with `migration.enabled=true` and `server.stopped=true`. Wait until the migration Job of the revision is `Complete`.
 7. Reapply the erasures after the recovery point, as [Reapply erasures after a restore](./erasure-recovery) describes.
    Do this also when no erasure occurred: the manifest then declares that no erasure followed the recovery point.
-8. Upgrade with your site values, the values of step 3 and the recorded `server.replicas`.
+8. Upgrade with your site values, the values of step 3 and `server.stopped=false`.
    Verify readiness, authenticated reads and encrypted values.
    If a value cannot be decrypted, keep the signing keys. Diagnose a missing encryption key apart from corrupt signing data.
 9. From the restricted incident record, reapply the account suspensions, session revocations and consent withdrawals after the backup.

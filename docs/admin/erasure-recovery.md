@@ -15,7 +15,7 @@ A missing or invalid manifest, a manifest of version 1, an unknown provider inst
 
 ## Before you start
 
-- You restored the database and completed its migration with `server.replicas=0`, as steps 1 to 6 of [Recover the live installation](./backup-restore#recover-the-live-installation) describe.
+- You restored the database and completed its migration with `server.stopped=true`, as steps 1 to 6 of [Recover the live installation](./backup-restore#recover-the-live-installation) describe.
 - External egress stays denied, as step 3 of the same procedure describes.
 - You have the restricted incident record that lists each erasure after the recovery point.
 - You have `kubectl` access to the release namespace, and `jq`.

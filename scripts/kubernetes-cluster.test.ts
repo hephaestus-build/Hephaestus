@@ -275,7 +275,7 @@ await test("a backup drill install keeps the installed release's capacity and th
 					)
 				: change;
 		const releaseValues = asRecord(merge(prepared, gvisor), "release values");
-		const paused = ["--set", "migration.enabled=false,server.replicas=0"];
+		const paused = ["--set", "migration.enabled=false,server.stopped=true"];
 		for (const [name, restore, layers] of [
 			["backup", { enabled: false, time: "" }, []],
 			["backup", { enabled: false, time: "" }, paused],

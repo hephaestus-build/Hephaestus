@@ -1,0 +1,80 @@
+name: CI / Chart upgrade
+
+# A self-hoster's release change: the latest published release, installed with its own chart, images and scripts,
+# upgraded to a candidate with the candidate's chart. scripts/chart-upgrade-drill.ts owns the procedure.
+
+on:
+  workflow_call:
+    inputs:
+      commit:
+        description: The candidate commit whose images the Docker jobs published under its tag
+        type: string
+        required: true
+  # A change to the drill runs it on its pull request, with the images of the base commit, a main build.
+  pull_request:
+    paths:
+      - scripts/chart-upgrade-drill.ts
+      - .github/workflows/chart-upgrade.yml
+  workflow_dispatch:
+    inputs:
+      commit:
+        description: The candidate commit whose images exist under its tag (defaults to this workflow commit)
+        required: false
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  upgrade:
+    name: Upgrade the chart from the latest release
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    permissions:
+      contents: read
+      packages: read
+    env:
+      # The candidate's images; a pull request's own images may not exist yet, so it uses its base commit's.
+      COMMIT: ${{ inputs.commit || github.event.pull_request.base.sha || github.sha }}
+      # The candidate's chart and scripts.
+      CHECKOUT: ${{ inputs.commit || github.sha }}
+      NODE_IMAGE: docker.io/rancher/k3s:v1.37.2-k3s1@sha256:21ea6e0fac4e3930c2ce8aa40ddd41a8b18cb3e9a0222c030dc005e7e88c4332
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.CHECKOUT }}
+          # The release tags select the previous release, and its checkout comes from the same history.
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: ./.github/actions/setup-toolchain
+        with:
+          install: "frozen"
+      - uses: ./.github/actions/setup-helm
+      - uses: ./.github/actions/setup-kubernetes-tools
+      - name: Resolve the candidate's images
+        run: node scripts/resolve-release-images.ts "$COMMIT" release-images.tsv
+      - name: Free disk space for the cluster
+        run: node scripts/prepare-kubernetes-runner.ts
+      - name: Create a server and an agent node
+        run: |
+          set -euo pipefail
+          echo "Node image: \`$NODE_IMAGE\`" >> "$GITHUB_STEP_SUMMARY"
+          k3d cluster create hephaestus --agents 1 --image "$NODE_IMAGE" --wait \
+            --k3s-arg "--kubelet-arg=pod-max-pids=4096@all" --port "127.0.0.1:443:443@loadbalancer"
+      - name: Install the latest release, then upgrade to the candidate
+        run: node scripts/chart-upgrade-drill.ts --work "$RUNNER_TEMP/kubernetes-cluster" --images release-images.tsv --commit "$COMMIT"
+      - name: Record the cluster state
+        if: ${{ failure() }}
+        run: |
+          kubectl get pods -A -o wide || true
+          kubectl -n hephaestus describe pods || true
+          kubectl -n hephaestus logs -l app.kubernetes.io/component=migration --all-containers --tail=400 --prefix || true
+          kubectl -n hephaestus logs -l app.kubernetes.io/component=postgresql --all-containers --tail=200 --prefix || true
+          kubectl -n hephaestus logs -l app.kubernetes.io/component=server --tail=300 --prefix || true
+          kubectl -n hephaestus get jobs,cronjobs -o wide || true
+          kubectl -n hephaestus-sandboxes get pods,jobs -o wide || true
+          kubectl -n hephaestus-sandboxes get sandboxtemplates,sandboxwarmpools,sandboxclaims,sandboxes -o wide || true
+          kubectl -n agent-sandbox-system logs deployment/agent-sandbox-controller --tail=200 || true
+          helm -n hephaestus history hephaestus || true

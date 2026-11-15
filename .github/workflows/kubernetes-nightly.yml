@@ -54,6 +54,17 @@ jobs:
       arm64: true
       backup-drill: true
 
+  # A self-hoster's release change: the latest published release's chart upgraded to the newest main build.
+  chart-upgrade:
+    name: "Chart upgrade"
+    needs: build
+    uses: ./.github/workflows/chart-upgrade.yml
+    permissions:
+      contents: read
+      packages: read
+    with:
+      commit: ${{ needs.build.outputs.commit }}
+
   # Two reviews of a large repository run against main's agent image with a credential-free model stand-in.
   footprint:
     name: "Sandbox footprint"
@@ -151,7 +162,7 @@ jobs:
   # A scheduled run has no pull request to fail, so each failed job reports on its own tracking issue.
   report:
     name: "Report a failure"
-    needs: [build, Kubernetes, footprint]
+    needs: [build, Kubernetes, chart-upgrade, footprint]
     if: failure()
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -167,6 +178,7 @@ jobs:
           BUILD: ${{ needs.build.result }}
           KUBERNETES: ${{ needs.Kubernetes.result }}
           FOOTPRINT: ${{ needs.footprint.result }}
+          CHART_UPGRADE: ${{ needs.chart-upgrade.result }}
         run: |
           set -euo pipefail
           report() {
@@ -182,6 +194,10 @@ jobs:
           if [ "$BUILD" = failure ] || [ "$KUBERNETES" = failure ]; then
             report "The nightly Kubernetes run failed" \
               "The nightly cluster run on \`${COMMIT:-no commit}\` failed: $RUN_URL"
+          fi
+          if [ "$CHART_UPGRADE" = failure ]; then
+            report "The nightly chart upgrade failed" \
+              "The upgrade from the latest published release's chart to \`${COMMIT:-no commit}\` failed: $RUN_URL"
           fi
           if [ "$FOOTPRINT" = failure ]; then
             report "The nightly sandbox footprint run failed" \

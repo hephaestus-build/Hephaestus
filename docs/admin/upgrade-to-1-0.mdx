@@ -197,6 +197,7 @@ Entries of § v1.0.0-rc.6 apply only to a host on 1.0.0-rc.5 or earlier.
 
 | Migration entry | Section | When | Action |
 | --- | --- | --- | --- |
+| *Use server.stopped instead of server.replicas=0* | Target | Every stopped phase | Stop the servers with `server.stopped=true` where the procedure set `server.replicas=0`. From 1.0.0-rc.8 or earlier, follow [Stopped schema upgrades](./upgrade#stopped-schema-upgrades). |
 | *Stop every role before the provider resource repair upgrade* | Target | Before the window, and after the upgrade | Finish connection authorizations before the window, or start them again after. After the upgrade, open **Instance administration → Provider removals**, and confirm at the provider each removal before you release its block. Replace `integration_provider_teardown_total` with `integration_provider_repair_attempts_total` and `integration_provider_repair_open`. Route `HephaestusProviderRemovalNeedsConfirmation` to an instance admin. |
 | *Stop every role before clearing personal logins from GitHub App installation records* | Target | The window | Stop every server before the migration. The previous server cannot read an installation record without a login. |
 | *Stop every role before the repository enumeration upgrade* | Target | The window | Stop every server before the upgrade. Every replica must record repository access events in the same connection revision. |

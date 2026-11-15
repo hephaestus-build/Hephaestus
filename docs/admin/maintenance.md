@@ -27,7 +27,7 @@ Keep PostgreSQL running until the servers have drained:
 1. Suspend [pull-based reconciliation](./pull-based-deployment#operating-it) and wait for an active reconciliation to finish.
    Suspend any other automation that restores the release.
    Record the replica counts and take the [database backup](./backup-restore#back-up-the-database).
-2. Stop the servers: run `helm upgrade` with the verified chart, your saved values and `server.replicas=0`.
+2. Stop the servers: run `helm upgrade` with the verified chart, your saved values and `server.stopped=true`.
    Wait for their Pods to disappear: `kubectl --namespace hephaestus wait --for=delete pod -l app.kubernetes.io/instance=hephaestus,app.kubernetes.io/component=server --timeout=35m`.
    Their termination grace is the configured drain plus 120 seconds.
 3. Cordon the node: `kubectl cordon <node>`.
@@ -48,7 +48,7 @@ Keep PostgreSQL running until the servers have drained:
    The emptyDir data is disposable sandbox and cache data. Persistent volumes remain.
    If another workload's budget blocks the drain, follow its maintenance procedure.
 7. Complete the host work and uncordon the node: `kubectl uncordon <node>`.
-   Reapply the verified release with its saved values and replica counts, as [Upgrade](./upgrade#upgrade-a-schema-compatible-release) describes.
+   Reapply the verified release with its saved values and `server.stopped=false`, as [Upgrade](./upgrade#upgrade-a-schema-compatible-release) describes.
    This restores the budgets. Verify that the Pods and budgets are ready before you resume reconciliation.
 
 If you set a longer drain in `server.drainTimeoutSeconds`, increase the wait timeout of step 2.
@@ -60,27 +60,28 @@ After a reboot or an interrupted drain, the next server queues the reviews that 
 Use this procedure before you change PostgreSQL itself, its configuration, or the CA in its TLS Secret.
 The server writes to the database and receives provider deliveries. Reception stops during these phases.
 GitHub redelivers failed deliveries, Slack retries them, and the routine sync repairs GitLab and Outline.
-Each phase is one `helm upgrade` with the replica counts of that phase:
+Each phase is one `helm upgrade` with the `server.stopped` value of that phase:
 
-| Phase | `server.replicas` | Before the next phase |
+| Phase | `server.stopped` | Before the next phase |
 | --- | --- | --- |
-| 1. Stop the server | 0 | The old server Pods and their sandbox Pods are gone. |
-| 2. Change the database | 0 | PostgreSQL is ready and accepts connections. |
-| 3. Migrate | 0 | The migration Job of the revision completed. |
-| 4. Restore | The prior count | The server is ready and receives provider deliveries. |
+| 1. Stop the server | `true` | The old server Pods and their sandbox Pods are gone. |
+| 2. Change the database | `true` | PostgreSQL is ready and accepts connections. |
+| 3. Migrate | `true` | The migration Job of the revision completed. |
+| 4. Restore | `false` | The server is ready and receives provider deliveries. |
 
-Phase 1 uses the verified chart and the values of the current release, with only the server count changed.
+Phase 1 uses the verified chart and the values of the current release, with only `server.stopped` changed.
 After the servers stop, remove the remaining sandbox workloads as in step 4 of [Planned node maintenance](#planned-node-maintenance) before phase 2.
 Phase 2 applies the change: a new PostgreSQL configuration, or a new CA in the TLS Secret and a restart of PostgreSQL.
 Phase 3 waits for the migration Job that each revision runs, while the server stays stopped.
 
-Before phase 1, record the current `server.replicas`, and back up the database.
+Before phase 1, back up the database.
 On a host with [pull-based reconciliation](./pull-based-deployment#settings-for-the-chart), pause the timer before phase 1 and resume it after phase 4.
-A tick applies `/etc/hephaestus/chart.yaml` with its own replica counts.
+A tick applies `/etc/hephaestus/chart.yaml` with its own values.
 
-A count of 0 is a desired state.
 Before the next phase, check on the cluster that the Pods stopped, that the sandbox Pods are gone, and that the migration Job completed.
-Set `server.replicas=0` to stop the servers. Do not use `sandbox.enabled=false`: it removes the sandbox objects and keeps the server running.
+Set `server.stopped=true` to stop the servers. It keeps `server.replicas`, which sizes PostgreSQL's connections.
+A current release from 1.0.0-rc.8 or earlier has no `server.stopped`. For that case, follow [Stopped schema upgrades](./upgrade#stopped-schema-upgrades).
+Do not use `sandbox.enabled=false`: it removes the sandbox objects and keeps the server running.
 
 ## Check that it worked
 

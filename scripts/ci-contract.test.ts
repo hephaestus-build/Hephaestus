@@ -7567,6 +7567,7 @@ void test("a nightly eviction failure opens or updates the existing Kubernetes t
 				BUILD: "success",
 				KUBERNETES: "failure",
 				FOOTPRINT: "success",
+				CHART_UPGRADE: "success",
 			}),
 		});
 		assert.equal(result.status, 0, result.stderr);
