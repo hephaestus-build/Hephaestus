@@ -9,7 +9,6 @@ import {
 } from "@/components/admin/integrations/sync-format";
 import { WorkspaceIntegrationCardHeading } from "@/components/admin/integrations/WorkspaceIntegrationCardHeading";
 import { WorkspaceIntegrationNotEnabled } from "@/components/admin/integrations/WorkspaceIntegrationNotEnabled";
-import { DocLink } from "@/components/common/DocLink";
 import { RelativeTime } from "@/components/common/RelativeTime";
 import { useNow } from "@/components/common/use-now";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
