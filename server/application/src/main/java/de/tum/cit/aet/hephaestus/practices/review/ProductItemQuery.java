@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.practices.review;
 
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
+import de.tum.cit.aet.hephaestus.core.exception.InvalidInputException;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureException;
@@ -82,7 +83,7 @@ public class ProductItemQuery {
 
     private ItemSource source(ItemRef item) {
         var matched = sources.stream().filter(s -> s.supports(item)).toList();
-        if (matched.size() != 1) throw new IllegalArgumentException("The item has no unambiguous source.");
+        if (matched.size() != 1) throw new InvalidInputException("The item has no unambiguous source.");
         return matched.getFirst();
     }
 

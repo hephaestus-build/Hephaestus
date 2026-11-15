@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.practices;
 
+import de.tum.cit.aet.hephaestus.core.exception.InvalidInputException;
 import de.tum.cit.aet.hephaestus.integration.core.framework.ItemDescriptorRegistry;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemDescriptor;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemEventDefinition;
@@ -16,8 +17,7 @@ public class PracticeItemOptions {
     private final ItemDescriptorRegistry items;
 
     public ItemDescriptor require(ItemKind kind) {
-        return items.descriptorFor(kind)
-                .orElseThrow(() -> new IllegalArgumentException("Choose a supported item kind."));
+        return items.descriptorFor(kind).orElseThrow(() -> new InvalidInputException("Choose a supported item kind."));
     }
 
     /** How an occasion of {@code name} reaches its readiness edge; a name the kind does not declare is immediate. */

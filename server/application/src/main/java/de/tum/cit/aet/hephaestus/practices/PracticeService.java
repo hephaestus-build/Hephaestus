@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditEntityType;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditEntry;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditPort;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
+import de.tum.cit.aet.hephaestus.core.exception.InvalidInputException;
 import de.tum.cit.aet.hephaestus.core.security.SecurityUtils;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
 import de.tum.cit.aet.hephaestus.practices.catalog.CatalogPracticeDocument;
@@ -122,11 +123,11 @@ public class PracticeService {
         if (practices.existsByWorkspaceIdAndSlug(ctx.id(), slug))
             throw new PracticeSlugConflictException("This practice slug already exists.");
         if (!slug.matches("[a-z0-9]+(?:-[a-z0-9]+)*") || slug.length() > 64)
-            throw new IllegalArgumentException("Use a lowercase practice slug with single hyphens.");
+            throw new InvalidInputException("Use a lowercase practice slug with single hyphens.");
         PracticeGroup group = group(ctx, groupSlug);
         Long groupId = group == null ? null : group.getId();
         int order = position == null ? practices.findMaxPosition(ctx.id(), groupId) + 1 : position;
-        if (order < 0) throw new IllegalArgumentException("Use a nonnegative position.");
+        if (order < 0) throw new InvalidInputException("Use a nonnegative position.");
         Practice practice = versions.create(
                 new PracticeVersionService.NewPractice(ctx.id(), slug, kind, definition, groupId, order, creator));
         practice.setFeedbackMode(mode);

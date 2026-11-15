@@ -17,6 +17,7 @@ import de.tum.cit.aet.hephaestus.conversation.ConversationTurnDTO;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurnService;
 import de.tum.cit.aet.hephaestus.core.RecentSignInExempt;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
+import de.tum.cit.aet.hephaestus.core.exception.InvalidInputException;
 import de.tum.cit.aet.hephaestus.core.web.CursorPageDTO;
 import de.tum.cit.aet.hephaestus.practices.spi.CurrentDeveloperLookup;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
@@ -128,7 +129,7 @@ public class ConversationController {
         long workspaceId = workspace.id();
         long account = account();
         if (request.text().length() > properties.maxPromptChars()) {
-            throw new IllegalArgumentException(
+            throw new InvalidInputException(
                     "Your message is too long. The maximum is " + properties.maxPromptChars() + " characters.");
         }
         admission.refusal(workspaceId, account).ifPresent(refusal -> {
@@ -167,7 +168,7 @@ public class ConversationController {
             @PathVariable UUID turnId,
             @Valid @RequestBody ConversationTurnStatusRequestDTO request) {
         if (request.status() != ConversationTurn.Status.STOPPED) {
-            throw new IllegalArgumentException("A turn can only be stopped.");
+            throw new InvalidInputException("A turn can only be stopped.");
         }
         long account = account();
         timeline.requireOwnedTurn(workspace.id(), account, turnId);

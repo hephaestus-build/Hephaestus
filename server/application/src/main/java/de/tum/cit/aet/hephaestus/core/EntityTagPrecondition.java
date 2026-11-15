@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.core;
 
+import de.tum.cit.aet.hephaestus.core.exception.InvalidInputException;
 import de.tum.cit.aet.hephaestus.core.exception.PreconditionFailedException;
 import de.tum.cit.aet.hephaestus.core.exception.PreconditionRequiredException;
 import java.util.List;
@@ -11,7 +12,7 @@ public record EntityTagPrecondition(List<ETag> candidates) {
     public static EntityTagPrecondition parse(String value) {
         List<ETag> candidates = ETag.parse(value);
         if (candidates.isEmpty()) {
-            throw new IllegalArgumentException("The If-Match header must contain at least one valid entity tag.");
+            throw new InvalidInputException("The If-Match header must contain at least one valid entity tag.");
         }
         return new EntityTagPrecondition(List.copyOf(candidates));
     }

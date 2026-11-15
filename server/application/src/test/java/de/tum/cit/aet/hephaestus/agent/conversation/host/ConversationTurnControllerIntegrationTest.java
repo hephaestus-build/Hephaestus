@@ -477,7 +477,8 @@ class ConversationTurnControllerIntegrationTest extends AbstractWorkspaceIntegra
         call("POST", "partial", turn.getAttempt(), """
                         {"sequence":1,"baseSequence":0,"prefix":0,"suffix":0,"text":"{}"}""")
                 .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.detail").value("A started turn's run has a deadline"));
+                .andExpect(jsonPath("$.detail")
+                        .value("This request does not fit the current data. Reload and try again."));
 
         assertThat(reloaded().getStatus()).isEqualTo(ConversationTurn.Status.RUNNING);
     }

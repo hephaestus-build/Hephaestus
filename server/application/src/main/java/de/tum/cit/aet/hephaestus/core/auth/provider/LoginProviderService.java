@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.auth.AuthProperties;
 import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEvent;
 import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEventLogger;
+import de.tum.cit.aet.hephaestus.core.exception.InvalidInputException;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.security.OutlineOriginPolicy;
 import de.tum.cit.aet.hephaestus.core.security.ScmServerEndpointPolicy;
@@ -377,9 +378,11 @@ public class LoginProviderService implements SystemSecretOwner {
         try {
             if (type == LoginProvider.ProviderType.GITLAB) scmEndpoints.validate(value);
             else ServerUrlValidator.validate(value);
+        } catch (InvalidInputException e) {
+            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_CONTENT, e.getMessage(), e);
         } catch (IllegalArgumentException e) {
             throw new ResponseStatusException(
-                    HttpStatus.UNPROCESSABLE_CONTENT, "The base URL is not valid: " + e.getMessage(), e);
+                    HttpStatus.UNPROCESSABLE_CONTENT, "This base URL is not valid. Check it and try again.", e);
         }
         if (type == LoginProvider.ProviderType.OUTLINE && !outlineOriginPolicy.allows(value)) {
             throw new ResponseStatusException(

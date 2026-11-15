@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.scm.gitlab.connect;
 
+import de.tum.cit.aet.hephaestus.core.exception.InvalidInputException;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.identity.GitLabWorkspaceInstance;
@@ -61,24 +62,24 @@ public class GitLabConnectionStrategy implements ConnectionStrategy {
     public ConnectInitiation initiate(InitiateRequest request) {
         String token = request.userInput().get("personalAccessToken");
         if (token == null || token.isBlank()) {
-            throw new IllegalArgumentException("Enter a personal access token to reconnect GitLab.");
+            throw new InvalidInputException("Enter a personal access token to reconnect GitLab.");
         }
         String serverUrl = instance.require(null);
         var previous = connections
                 .findReferenced(new IntegrationRef(IntegrationKind.GITLAB, request.workspaceId(), serverUrl))
                 .filter(connection -> connection.state() == IntegrationState.UNINSTALLED)
                 .orElseThrow(
-                        () -> new IllegalArgumentException(
+                        () -> new InvalidInputException(
                                 "This workspace has no disconnected GitLab connection. Create a GitLab workspace to connect one."));
         if (!(previous.config() instanceof ConnectionConfig.GitLabConfig config)) {
             throw new IllegalStateException("The disconnected GitLab connection has no group configuration.");
         }
         var account = providerAccounts
                 .providerAccount(request.workspaceId())
-                .orElseThrow(() -> new IllegalArgumentException("This workspace no longer exists."));
+                .orElseThrow(() -> new InvalidInputException("This workspace no longer exists."));
         long groupId = preflight.resolveAccountId(token, serverUrl, account.accountLogin());
         if (groupId != config.gitlabGroupId()) {
-            throw new IllegalArgumentException("The GitLab group has changed. Create a workspace for the new group.");
+            throw new InvalidInputException("The GitLab group has changed. Create a workspace for the new group.");
         }
         return new ConnectInitiation.AcceptInline(new BearerToken(token, null), serverUrl);
     }

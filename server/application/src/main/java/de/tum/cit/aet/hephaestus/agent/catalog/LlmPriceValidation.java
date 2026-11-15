@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.catalog;
 
+import de.tum.cit.aet.hephaestus.core.exception.InvalidInputException;
 import java.math.BigDecimal;
 import java.util.Arrays;
 import java.util.List;
@@ -34,32 +35,32 @@ final class LlmPriceValidation {
 
         if (pricingMode == PricingMode.PRICED) {
             if (per1mInputUsd == null || per1mOutputUsd == null) {
-                throw new IllegalArgumentException(
+                throw new InvalidInputException(
                         "A price needs at least an input rate and an output rate (per 1M tokens).");
             }
             boolean anyNegative = rates.stream().anyMatch(rate -> rate != null && rate.signum() < 0);
             if (anyNegative) {
-                throw new IllegalArgumentException("Rates must be zero or greater.");
+                throw new InvalidInputException("Rates must be zero or greater.");
             }
             boolean anyPositive = rates.stream().anyMatch(rate -> rate != null && rate.signum() > 0);
             if (!anyPositive) {
-                throw new IllegalArgumentException(
+                throw new InvalidInputException(
                         "A price needs at least one rate greater than zero. For a model without usage charges, choose"
                                 + " No metered API cost.");
             }
             boolean anyTooLarge =
                     rates.stream().anyMatch(rate -> rate != null && rate.compareTo(MAX_RATE_EXCLUSIVE) >= 0);
             if (anyTooLarge) {
-                throw new IllegalArgumentException(
+                throw new InvalidInputException(
                         "Rates must be below " + MAX_RATE_EXCLUSIVE.toPlainString() + " per 1M tokens.");
             }
         } else {
             if (anyRatePresent) {
-                throw new IllegalArgumentException(
+                throw new InvalidInputException(
                         "You can set rates only when the model has a price. Clear the rates, or set a price first.");
             }
             if (pricingMode == PricingMode.NO_CHARGE && !StringUtils.hasText(note)) {
-                throw new IllegalArgumentException(
+                throw new InvalidInputException(
                         "Explain why this model has no metered API cost, for example because it is self-hosted.");
             }
         }

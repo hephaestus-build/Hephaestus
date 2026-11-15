@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.practices;
 
+import de.tum.cit.aet.hephaestus.core.exception.InvalidInputException;
 import java.io.IOException;
 import java.io.StringReader;
 import java.nio.charset.StandardCharsets;
@@ -124,32 +125,32 @@ public final class PracticeGuidanceRules {
     public static void validate(PracticeVisual visual) {
         validateSvg("The visual", visual.svg());
         if (visual.alt().isEmpty()) {
-            throw new IllegalArgumentException(
+            throw new InvalidInputException(
                     "Describe what the visual shows, for people who cannot see it. Add a" + " description.");
         }
         if (visual.alt().length() > MAX_ALT_LENGTH) {
-            throw new IllegalArgumentException(
+            throw new InvalidInputException(
                     "Shorten the visual's description to " + MAX_ALT_LENGTH + " characters or fewer.");
         }
     }
 
     public static void validate(PracticeGuide guide) {
         if (guide.markdown().isBlank()) {
-            throw new IllegalArgumentException("Write the guide, or remove it.");
+            throw new InvalidInputException("Write the guide, or remove it.");
         }
         if (guide.markdown().length() > MAX_GUIDE_LENGTH) {
-            throw new IllegalArgumentException("Shorten the guide to " + MAX_GUIDE_LENGTH + " characters or fewer.");
+            throw new InvalidInputException("Shorten the guide to " + MAX_GUIDE_LENGTH + " characters or fewer.");
         }
         if (guide.figures().size() > MAX_FIGURES) {
-            throw new IllegalArgumentException("A guide shows at most " + MAX_FIGURES + " figures. Remove one.");
+            throw new InvalidInputException("A guide shows at most " + MAX_FIGURES + " figures. Remove one.");
         }
         Markdown markdown = Markdown.parse(guide.markdown());
         if (markdown.html) {
-            throw new IllegalArgumentException("The guide uses HTML. Write it in Markdown only.");
+            throw new InvalidInputException("The guide uses HTML. Write it in Markdown only.");
         }
         for (String destination : markdown.links) {
             if (!WEB_LINK.matcher(destination).matches()) {
-                throw new IllegalArgumentException("The guide links to “"
+                throw new InvalidInputException("The guide links to “"
                         + destination
                         + "”. Link only to web pages, with addresses that start with"
                         + " https:// or http://.");
@@ -159,18 +160,18 @@ public final class PracticeGuidanceRules {
         for (Image image : markdown.images) {
             Matcher figure = FIGURE_SOURCE.matcher(image.getDestination());
             if (!figure.matches()) {
-                throw new IllegalArgumentException("The guide shows the image “"
+                throw new InvalidInputException("The guide shows the image “"
                         + image.getDestination()
                         + "”. A guide shows only its own figures. Add the picture as a"
                         + " figure, then show it with ![description](figures/name.svg).");
             }
             String name = figure.group(1);
             if (!guide.figures().containsKey(name)) {
-                throw new IllegalArgumentException(
+                throw new InvalidInputException(
                         "The guide shows the figure “" + name + "”, but it has no such figure. Add it.");
             }
             if (alt(image).isBlank()) {
-                throw new IllegalArgumentException("Describe the figure “"
+                throw new InvalidInputException("Describe the figure “"
                         + name
                         + "” for people who cannot see it. Write the description between"
                         + " the brackets.");
@@ -179,13 +180,13 @@ public final class PracticeGuidanceRules {
         }
         for (Map.Entry<String, String> figure : guide.figures().entrySet()) {
             if (!FIGURE_NAME.matcher(figure.getKey()).matches()) {
-                throw new IllegalArgumentException("Name the figure “"
+                throw new InvalidInputException("Name the figure “"
                         + figure.getKey()
                         + "” with lowercase letters, digits and single hyphens, for example"
                         + " split-order.");
             }
             if (!shown.contains(figure.getKey())) {
-                throw new IllegalArgumentException(
+                throw new InvalidInputException(
                         "The guide never shows the figure “" + figure.getKey() + "”. Show it, or remove it.");
             }
             validateSvg("The figure “" + figure.getKey() + "”", figure.getValue());
@@ -274,19 +275,18 @@ public final class PracticeGuidanceRules {
 
     private static void validateSvg(String subject, String svg) {
         if (svg.getBytes(StandardCharsets.UTF_8).length > MAX_SVG_BYTES) {
-            throw new IllegalArgumentException(
+            throw new InvalidInputException(
                     subject + " is larger than " + MAX_SVG_BYTES / 1024 + " KB. Simplify the drawing.");
         }
         Document document = parse(subject, svg);
         Element root = document.getDocumentElement();
         if (!SVG_NAMESPACE.equals(root.getNamespaceURI()) || !"svg".equals(root.getLocalName())) {
-            throw new IllegalArgumentException(subject
+            throw new InvalidInputException(subject
                     + " is not an SVG. Start it with <svg"
                     + " xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"…\">.");
         }
         if (!root.hasAttribute("viewBox")) {
-            throw new IllegalArgumentException(
-                    subject + " has no viewBox. Add one, for example viewBox=\"0 0 640 320\".");
+            throw new InvalidInputException(subject + " has no viewBox. Add one, for example viewBox=\"0 0 640 320\".");
         }
         for (Node child = document.getFirstChild(); child != null; child = child.getNextSibling()) {
             if (!(child instanceof Element)) {
@@ -298,7 +298,7 @@ public final class PracticeGuidanceRules {
 
     private static void check(String subject, Element element) {
         if (!SVG_NAMESPACE.equals(element.getNamespaceURI()) || !ELEMENTS.contains(element.getLocalName())) {
-            throw new IllegalArgumentException(subject
+            throw new InvalidInputException(subject
                     + " uses <"
                     + element.getTagName()
                     + ">. A picture can only draw shapes and text: "
@@ -317,7 +317,7 @@ public final class PracticeGuidanceRules {
                     ? ATTRIBUTES.contains(attribute.getLocalName())
                     : XMLConstants.XML_NS_URI.equals(namespace) && "space".equals(attribute.getLocalName());
             if (!allowed) {
-                throw new IllegalArgumentException(subject
+                throw new InvalidInputException(subject
                         + " uses the attribute “"
                         + attribute.getName()
                         + "”. Remove it. Color shapes with the pv-* classes, and use no"
@@ -325,13 +325,13 @@ public final class PracticeGuidanceRules {
             }
             String value = attribute.getValue();
             if (value.toLowerCase(Locale.ROOT).contains("url(")) {
-                throw new IllegalArgumentException(subject
+                throw new InvalidInputException(subject
                         + " refers to something outside itself in “"
                         + attribute.getName()
                         + "”. Use plain numbers, colors or the pv-* classes.");
             }
             if (!PLAIN_VALUE.matcher(value).matches()) {
-                throw new IllegalArgumentException(subject
+                throw new InvalidInputException(subject
                         + " uses a character Hephaestus does not accept in “"
                         + attribute.getName()
                         + "”. Use only letters, digits, spaces and # . , % + ( ) / - _.");
@@ -353,7 +353,7 @@ public final class PracticeGuidanceRules {
                         && !node.getNodeValue().contains("<")
                         && !node.getNodeValue().contains(">"));
         if (!plain) {
-            throw new IllegalArgumentException(
+            throw new InvalidInputException(
                     subject + " contains markup a picture cannot use. Keep only shapes, text and" + " plain comments.");
         }
     }
@@ -365,7 +365,7 @@ public final class PracticeGuidanceRules {
             builder.setErrorHandler(new DefaultHandler());
             return builder.parse(new InputSource(new StringReader(svg)));
         } catch (SAXException | IOException exception) {
-            throw new IllegalArgumentException(
+            throw new InvalidInputException(
                     subject + " is not valid SVG markup. Export it again from your drawing tool.", exception);
         } catch (ParserConfigurationException exception) {
             throw new IllegalStateException("the XML parser cannot be configured safely", exception);

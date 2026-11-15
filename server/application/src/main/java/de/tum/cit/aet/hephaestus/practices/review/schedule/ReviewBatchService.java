@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditEntityType;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditEntry;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditPort;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
+import de.tum.cit.aet.hephaestus.core.exception.InvalidInputException;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.security.SecurityUtils;
 import de.tum.cit.aet.hephaestus.integration.core.framework.ItemDescriptorRegistry;
@@ -66,14 +67,14 @@ public class ReviewBatchService {
         var descriptor = requireKind(request.itemKind());
         // A scan enumerates its root through a lister. Graph members, such as a pull request's reviews, do not.
         if (listers.stream().anyMatch(lister -> lister.containerKind().equals(descriptor.kind())))
-            throw new IllegalArgumentException("Use the scan API to review a repository.");
+            throw new InvalidInputException("Use the scan API to review a repository.");
         validateWindow(request.from(), request.to());
         if (request.budgetUsd() != null)
-            throw new IllegalArgumentException("A dated-work batch does not take a scan budget.");
+            throw new InvalidInputException("A dated-work batch does not take a scan budget.");
         var selected =
                 scope.select(context.id(), request.itemKind(), request.from(), request.to(), properties.maxItems() + 1);
         if (selected.size() > properties.maxItems())
-            throw new IllegalArgumentException("The selected batch is too large.");
+            throw new InvalidInputException("The selected batch is too large.");
         var now = clock.instant();
         var batch = ReviewBatch.builder()
                 .id(UUID.randomUUID())
@@ -98,7 +99,7 @@ public class ReviewBatchService {
     public ItemDescriptor requireKind(String kind) {
         return catalog.descriptorFor(new ItemKind(kind))
                 .filter(ItemDescriptor::reviewable)
-                .orElseThrow(() -> new IllegalArgumentException("Choose a reviewable item kind."));
+                .orElseThrow(() -> new InvalidInputException("Choose a reviewable item kind."));
     }
 
     private void validateWindow(@Nullable Instant from, @Nullable Instant to) {
@@ -106,7 +107,7 @@ public class ReviewBatchService {
                 || to == null
                 || !from.isBefore(to)
                 || Duration.between(from, to).compareTo(properties.maxWindow()) > 0)
-            throw new IllegalArgumentException("Choose a valid review window within the batch limit.");
+            throw new InvalidInputException("Choose a valid review window within the batch limit.");
     }
 
     public void freezeTargets(ReviewBatch batch, List<Long> ids) {
@@ -128,7 +129,7 @@ public class ReviewBatchService {
         if (next != ReviewBatchStatus.RUNNING
                 && next != ReviewBatchStatus.PAUSED
                 && next != ReviewBatchStatus.CANCELLED)
-            throw new IllegalArgumentException("Choose running, paused or cancelled.");
+            throw new InvalidInputException("Choose running, paused or cancelled.");
         if (batch.getStatus().isTerminal()) throw new ReviewBatchConflictException("This batch has ended.");
         if (next == ReviewBatchStatus.PAUSED || next == ReviewBatchStatus.CANCELLED) {
             for (var review : reviews.findByWorkspaceIdAndBatchIdOrderByCreatedAtAsc(context.id(), id)) {
@@ -153,7 +154,7 @@ public class ReviewBatchService {
             }
             case PAUSED -> batch.pause(ReviewBatchPauseReason.PAUSED_BY_ADMIN);
             case CANCELLED -> batch.cancel(clock.instant());
-            default -> throw new IllegalArgumentException("Choose running, paused or cancelled.");
+            default -> throw new InvalidInputException("Choose running, paused or cancelled.");
         }
         batch.setUpdatedAt(clock.instant());
         batches.saveAndFlush(batch);

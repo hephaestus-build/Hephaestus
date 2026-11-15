@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditEntityType;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditEntry;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditPort;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
+import de.tum.cit.aet.hephaestus.core.exception.InvalidInputException;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeGroup;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackMode;
@@ -60,7 +61,7 @@ public class PracticeGroupService {
             @Nullable GroupDefinition catalogDefinition) {
         lock(ctx);
         if (!slug.matches("[a-z0-9]+(?:-[a-z0-9]+)*") || slug.length() > 64)
-            throw new IllegalArgumentException("Use a lowercase group slug with single hyphens.");
+            throw new InvalidInputException("Use a lowercase group slug with single hyphens.");
         if (groups.existsByWorkspaceIdAndSlug(ctx.id(), slug))
             throw new PracticeGroupSlugConflictException("This practice group slug already exists.");
         PracticeGroup group = new PracticeGroup();
@@ -135,7 +136,7 @@ public class PracticeGroupService {
                 || !new HashSet<>(slugs)
                         .equals(new HashSet<>(
                                 all.stream().map(PracticeGroup::getSlug).toList()))) {
-            throw new IllegalArgumentException("List every practice group once in the order.");
+            throw new InvalidInputException("List every practice group once in the order.");
         }
         for (int i = 0; i < slugs.size(); i++) {
             PracticeGroup group = getGroup(ctx, slugs.get(i));
@@ -202,7 +203,7 @@ public class PracticeGroupService {
         group.setIcon(attributes.icon());
         group.setColor(attributes.color());
         if (attributes.position() != null) {
-            if (attributes.position() < 0) throw new IllegalArgumentException("Use a nonnegative position.");
+            if (attributes.position() < 0) throw new InvalidInputException("Use a nonnegative position.");
             group.setPosition(attributes.position());
         }
     }

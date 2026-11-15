@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.practices.review;
 
+import de.tum.cit.aet.hephaestus.core.exception.InvalidInputException;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewWriteGuard;
 import java.util.UUID;
@@ -18,6 +19,6 @@ public class ReviewWriteGuardService implements ReviewWriteGuard {
     @Transactional(propagation = Propagation.MANDATORY)
     public void lock(long workspaceId, UUID reviewId) {
         if (reviews.lockByIdAndWorkspaceId(reviewId, workspaceId).isEmpty())
-            throw new IllegalArgumentException("The review does not belong to this workspace.");
+            throw new InvalidInputException("The review does not belong to this workspace.");
     }
 }

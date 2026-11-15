@@ -22,12 +22,9 @@ class SyncControllerAdvice {
 
     @ExceptionHandler(NoSuchElementException.class)
     ProblemDetail handleNotFound(NoSuchElementException exception) {
-        // The response carries the message; the log names the failure only.
+        // An empty Optional throws this type with a message for developers, so the response carries fixed text.
         log.info("Sync lookup failed: {}", exception.getClass().getSimpleName());
-        return problem(
-                HttpStatus.NOT_FOUND,
-                "Resource not found",
-                Objects.requireNonNullElse(exception.getMessage(), "Resource not found"));
+        return problem(HttpStatus.NOT_FOUND, "Resource not found", "We could not find this resource.");
     }
 
     @ExceptionHandler(SyncStateConflictException.class)

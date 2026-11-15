@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.practices.review;
 
+import de.tum.cit.aet.hephaestus.core.exception.InvalidInputException;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemMergeTimeQuery;
@@ -31,7 +32,7 @@ public class ReviewTimingFactsQueryService implements ReviewTimingFactsQuery {
 
     @Override
     public List<ReviewTimingFact> window(long workspaceId, Instant from, Instant to) {
-        if (!from.isBefore(to)) throw new IllegalArgumentException("Use a nonempty timing range.");
+        if (!from.isBefore(to)) throw new InvalidInputException("Use a nonempty timing range.");
         var output = new ArrayList<ReviewTimingFact>();
         ReviewTimingRepository.CursorRow after = null;
         while (true) {
@@ -52,7 +53,7 @@ public class ReviewTimingFactsQueryService implements ReviewTimingFactsQuery {
 
     @Override
     public ReviewTimingFacts facts(long workspaceId, List<UUID> reviewIds, Instant from, Instant to) {
-        if (!from.isBefore(to)) throw new IllegalArgumentException("Use a nonempty timing range.");
+        if (!from.isBefore(to)) throw new InvalidInputException("Use a nonempty timing range.");
         double asked = 0;
         double finishedAsked = 0;
         long afterMerge = 0;

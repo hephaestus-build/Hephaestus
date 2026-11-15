@@ -29,11 +29,25 @@ A problem has the RFC 9457 members `type`, `title`, `status` and `detail`.
 - The webapp reads the `type` through `isProblemType` and `stepUpChallengeOf` in `webapp/src/lib/problem-detail.ts`.
   It shows `detail`, or `title` when `detail` is absent.
 
+## Which message reaches the client
+
+A `detail` is a sentence written for the person who sent the request.
+An exception message is written for developers, so it reaches the client only from a type whose messages are written for that person.
+
+- A domain exception that its own advice maps keeps its message. Write that message for the reader.
+- `InvalidInputException` (`core/exception`) carries a value that the sender must change. `GlobalControllerAdvice` returns its message in a 400 problem.
+- A `ResponseStatusException` keeps its reason.
+- `IllegalArgumentException`, `IllegalStateException`, `NoSuchElementException` and every other generic type get a fixed `detail`. Any code, a library included, throws them, and their messages can name internal values. The advice logs the exception class, never the message.
+- The OAuth callback sends a reason code with a fixed sentence for that code. For a failed finalization, it sends the reason from `ConnectFinalization.Failed`. A connection strategy writes that reason for the reader. The callback never shows the provider's `error` or `error_description`.
+
+The Semgrep rule `java-generic-exception-message-to-client` (`security/semgrep/errors.yaml`) refuses the message of a generic type in a problem detail, a `ResponseStatusException`, or an argument of a call in an `@ExceptionHandler` method.
+The rule sees one method at a time. It does not see a helper that reads `getMessage()` itself, so review such a helper by hand.
+
 ## How `WorkspaceControllerAdvice` works
 
-1. `@RestControllerAdvice(basePackages = "de.tum.cit.aet.hephaestus.workspace")` scopes the advice to workspace endpoints only, but covers the entire workspace package (controllers for repositories, labels, lifecycle, etc.). One mapper handles every route in that package, which guarantees consistency.
+1. The advice has no `basePackages` and has the highest precedence. Thus, it applies to every controller before `GlobalControllerAdvice`. Do not map a generic type, such as `IllegalArgumentException`, in it. That handler would take each `InvalidInputException` first and hide its message.
 2. Each `@ExceptionHandler` method matches a domain exception (for example `EntityNotFoundException`) and returns a configured `ProblemDetail` object. Spring automatically serializes it to JSON with the proper status code.
-3. The private helpers sanitize exception messages through `LoggingUtils` before they return them. This prevents leaks of stack traces or SQL fragments. The server logs any unexpected `IllegalStateException` as a server error. Domain-specific violations, such as slug conflicts and lifecycle issues, have their own exception classes. Thus, the advice can return the correct HTTP semantics.
+3. The advice returns the message of a workspace domain exception only. An `IllegalArgumentException` goes to `GlobalControllerAdvice`, which returns a fixed detail. The server logs any unexpected `IllegalStateException` as a server error. Domain-specific violations, such as slug conflicts and lifecycle issues, have their own exception classes. Thus, the advice can return the correct HTTP semantics.
 4. Controllers simply throw exceptions (or let services throw) and never build ad-hoc `Map.of("error", ...)` responses again.
 
 ## Rolling the pattern out elsewhere

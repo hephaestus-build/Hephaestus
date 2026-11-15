@@ -1,5 +1,7 @@
 package de.tum.cit.aet.hephaestus.core.exception;
 
+import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.not;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -7,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import de.tum.cit.aet.hephaestus.workspace.WorkspaceControllerAdvice;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import org.junit.jupiter.api.Tag;
@@ -74,8 +77,44 @@ class GlobalControllerAdviceHttpTest {
         if (statusCode == 429) response.andExpect(header().string(HttpHeaders.RETRY_AFTER, "60"));
     }
 
+    /**
+     * The workspace advice runs first for every controller, so both advices take part: a handler for a generic type
+     * there would take each {@link InvalidInputException} before the global advice could return its message.
+     */
+    @Test
+    void shouldReturnTheMessageOfAnInvalidInputButNotOfAGenericArgumentError() throws Exception {
+        var mvc = MockMvcBuilders.standaloneSetup(new RefusingController())
+                .setControllerAdvice(new WorkspaceControllerAdvice(), new GlobalControllerAdvice())
+                .build();
+
+        mvc.perform(get("/input"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.title").value("Invalid request"))
+                .andExpect(jsonPath("$.detail").value("Choose a supported item kind."));
+        mvc.perform(get("/argument"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.detail").value("We could not accept this request. Check it and try again."))
+                .andExpect(content().string(not(containsString("internal.example"))));
+        mvc.perform(get("/state")).andExpect(content().string(not(containsString("internal.example"))));
+    }
+
     @RestController
     static class RefusingController {
+        @GetMapping("/input")
+        void input() {
+            throw new InvalidInputException("Choose a supported item kind.");
+        }
+
+        @GetMapping("/argument")
+        void argument() {
+            throw new IllegalArgumentException("https://internal.example/x id=42");
+        }
+
+        @GetMapping("/state")
+        void state() {
+            throw new IllegalStateException("https://internal.example/x id=42");
+        }
+
         @PostMapping("/validated")
         ValidationInputDTO validate(@Valid @RequestBody ValidationInputDTO input) {
             return input;

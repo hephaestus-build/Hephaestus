@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.outline.connect;
 
+import de.tum.cit.aet.hephaestus.core.exception.InvalidInputException;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionCommands;
@@ -68,17 +69,17 @@ public class OutlineConnectionAdminService {
                     ? wire.getStatusCode().value()
                     : 0;
             if (status == 401) {
-                throw new IllegalArgumentException(
+                throw new InvalidInputException(
                         "Outline does not accept this key. Check that you copied all of it.", e);
             }
             if (status == 403) {
-                throw new IllegalArgumentException(
+                throw new InvalidInputException(
                         "Outline refused this key for reading. Give the key read access to the API.", e);
             }
             throw e;
         }
         if (!identity.teamId().equals(connection.getInstanceKey())) {
-            throw new IllegalArgumentException(
+            throw new InvalidInputException(
                     "This key belongs to another Outline team. Use a key of the connected team.");
         }
         // The key was checked against the connection read before the call to Outline. The fence stores it only on that
@@ -91,7 +92,7 @@ public class OutlineConnectionAdminService {
             Connection replaced = connectionService
                     .rotateBearerToken(workspaceId, IntegrationKind.OUTLINE, new BearerToken(token, null), fence)
                     .orElseThrow(
-                            () -> new IllegalArgumentException(
+                            () -> new InvalidInputException(
                                     "The Outline connection changed while Hephaestus checked the key. Reload the page and try again."))
                     .connection();
             connectionCommands.recordAdministrativeChange(

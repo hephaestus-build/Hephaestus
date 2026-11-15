@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.core.auth.spi.PeopleRegistry;
 import de.tum.cit.aet.hephaestus.core.auth.spi.WorkspaceOwnerChangeAssurance;
 import de.tum.cit.aet.hephaestus.core.auth.web.CurrentAccount;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
+import de.tum.cit.aet.hephaestus.core.exception.InvalidInputException;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
 import de.tum.cit.aet.hephaestus.core.settings.spi.PublicActivityPolicy;
 import de.tum.cit.aet.hephaestus.workspace.audit.WorkspaceAuditSnapshots;
@@ -56,7 +57,7 @@ public class MembershipService {
         var actor = providers
                 .actor(scmUserId)
                 .filter(GitProviderRegistry.ActorProfile::human)
-                .orElseThrow(() -> new IllegalArgumentException("A human provider account is required."));
+                .orElseThrow(() -> new InvalidInputException("A human provider account is required."));
         return accountIdFor(actor);
     }
 
@@ -192,7 +193,7 @@ public class MembershipService {
         var existing = memberships.findByWorkspace_IdAndId_AccountId(workspace.getId(), accountId);
         if (existing.isPresent()) {
             var member = existing.get();
-            if (member.getLeftAt() == null) throw new IllegalArgumentException("This account is already a member.");
+            if (member.getLeftAt() == null) throw new InvalidInputException("This account is already a member.");
             member.setLeftAt(null);
             member.setRoleSource(Membership.RoleSource.PROVIDER);
             member.setRole(role);

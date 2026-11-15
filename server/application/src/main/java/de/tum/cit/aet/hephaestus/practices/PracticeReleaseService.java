@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditEntityType;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditEntry;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditPort;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
+import de.tum.cit.aet.hephaestus.core.exception.InvalidInputException;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.security.SecurityUtils;
 import de.tum.cit.aet.hephaestus.practices.catalog.CatalogLock;
@@ -129,7 +130,7 @@ public class PracticeReleaseService {
         var document = catalog.practice(Objects.requireNonNull(practice.getCatalogSlug()))
                 .effective();
         if (!practice.getKind().equals(document.kind()))
-            throw new IllegalArgumentException("A catalog reset cannot change the practice's item kind.");
+            throw new InvalidInputException("A catalog reset cannot change the practice's item kind.");
         groups.restoreCatalogBinding(ctx, practice, document.groupSlug());
         versions.append(
                 practice,

@@ -19,6 +19,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Collectors;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.Ordered;
@@ -53,8 +54,8 @@ public class WorkspaceControllerAdvice {
                 Objects.requireNonNullElse(exception.getMessage(), "Unexpected error"));
     }
 
-    @ExceptionHandler({InvalidWorkspaceSlugException.class, IllegalArgumentException.class})
-    ProblemDetail handleBadRequest(RuntimeException exception) {
+    @ExceptionHandler(InvalidWorkspaceSlugException.class)
+    ProblemDetail handleBadRequest(InvalidWorkspaceSlugException exception) {
         return problem(
                 HttpStatus.BAD_REQUEST,
                 "Invalid workspace request",
@@ -93,16 +94,26 @@ public class WorkspaceControllerAdvice {
                 userFacingDetail(Objects.requireNonNullElse(exception.getMessage(), "The workspace needs an owner.")));
     }
 
-    @ExceptionHandler({
-        WorkspaceLifecycleViolationException.class,
-        WorkspacePurgeBlockedException.class,
-        WorkspaceResumeBlockedException.class
-    })
-    ProblemDetail handleLifecycleViolation(RuntimeException exception) {
+    @ExceptionHandler(WorkspaceLifecycleViolationException.class)
+    ProblemDetail handleLifecycleViolation(WorkspaceLifecycleViolationException exception) {
+        return lifecycleConflict(exception.getMessage());
+    }
+
+    @ExceptionHandler(WorkspacePurgeBlockedException.class)
+    ProblemDetail handlePurgeBlocked(WorkspacePurgeBlockedException exception) {
+        return lifecycleConflict(exception.getMessage());
+    }
+
+    @ExceptionHandler(WorkspaceResumeBlockedException.class)
+    ProblemDetail handleResumeBlocked(WorkspaceResumeBlockedException exception) {
+        return lifecycleConflict(exception.getMessage());
+    }
+
+    private ProblemDetail lifecycleConflict(@Nullable String message) {
         return problem(
                 HttpStatus.CONFLICT,
                 "Workspace lifecycle violation",
-                userFacingDetail(Objects.requireNonNullElse(exception.getMessage(), "Unexpected error")));
+                userFacingDetail(Objects.requireNonNullElse(message, "Unexpected error")));
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)

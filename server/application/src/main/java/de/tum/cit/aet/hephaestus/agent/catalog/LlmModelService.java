@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.auth.spi.LlmModelAudit;
 import de.tum.cit.aet.hephaestus.core.exception.DataIntegrityViolationConstraints;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
+import de.tum.cit.aet.hephaestus.core.exception.InvalidInputException;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.security.SystemSecrets;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceSummaryQuery;
@@ -89,7 +90,7 @@ public class LlmModelService {
     @Transactional
     public LlmModel create(Long connectionId, CreateLlmModelRequestDTO request) {
         if (Boolean.TRUE.equals(request.enabled())) {
-            throw new IllegalArgumentException("Create the model disabled, set its price, then activate it.");
+            throw new InvalidInputException("Create the model disabled, set its price, then activate it.");
         }
         LlmConnection connection = connectionRepository
                 .findById(connectionId)
@@ -165,7 +166,7 @@ public class LlmModelService {
                 connection.apiKey(secrets),
                 connection.getApiProtocol());
         if (!upstream.equals(model.getUpstreamModelId()) || !target.equals(current))
-            throw new IllegalArgumentException("The model connection changed. Test it again.");
+            throw new InvalidInputException("The model connection changed. Test it again.");
         model.setForcedToolChoice(capability.forcedToolChoice());
         llmModelAudit.modelUpdated(model.getId(), connection.getId(), model.getSlug());
     }
@@ -191,7 +192,7 @@ public class LlmModelService {
                 .orElseThrow(() -> new EntityNotFoundException("LlmModel", modelId));
         validatePriceRequest(request);
         if (model.isEnabled() && request.pricingMode() == PricingMode.UNPRICED) {
-            throw new IllegalArgumentException("Disable the model before you change its price to UNPRICED.");
+            throw new InvalidInputException("Disable the model before you change its price to UNPRICED.");
         }
 
         Instant now = Instant.now();
@@ -288,8 +289,7 @@ public class LlmModelService {
         Set<Long> unknown = new LinkedHashSet<>(workspaceIds);
         unknown.removeAll(found);
         if (!unknown.isEmpty()) {
-            throw new IllegalArgumentException("Cannot share with unknown workspaces: "
-                    + unknown.stream().map(String::valueOf).collect(Collectors.joining(", ")));
+            throw new InvalidInputException("One of the chosen workspaces no longer exists. Reload and choose again.");
         }
     }
 

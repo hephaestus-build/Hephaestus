@@ -51,6 +51,13 @@ import org.springframework.web.util.UriComponentsBuilder;
 @RequestMapping("/oauth/callback")
 public class OAuthCallbackController {
 
+    /**
+     * Each failure sends its reason code and a sentence written for this page. An exception message never reaches the
+     * browser: a provider or library writes it for developers, and it can name internal values.
+     */
+    private static final String TRANSITION_CONFLICT =
+            "The connection changed while you connected it. Reload the integration page and try again.";
+
     private static final Logger log = LoggerFactory.getLogger(OAuthCallbackController.class);
 
     private final IntegrationKindRouting kindRouting;
@@ -86,14 +93,7 @@ public class OAuthCallbackController {
             @RequestParam Map<String, String> allParams,
             HttpServletRequest request,
             HttpServletResponse response) {
-        return handleCallback(
-                kind,
-                allParams.get("state"),
-                allParams.get("error"),
-                allParams.get("error_description"),
-                allParams,
-                request,
-                response);
+        return handleCallback(kind, allParams.get("state"), allParams.get("error"), allParams, request, response);
     }
 
     @PostMapping("/{kind}")
@@ -103,14 +103,7 @@ public class OAuthCallbackController {
             @RequestParam Map<String, String> allParams,
             HttpServletRequest request,
             HttpServletResponse response) {
-        return handleCallback(
-                kind,
-                allParams.get("state"),
-                allParams.get("error"),
-                allParams.get("error_description"),
-                allParams,
-                request,
-                response);
+        return handleCallback(kind, allParams.get("state"), allParams.get("error"), allParams, request, response);
     }
 
     /** Shared core for GET + POST callbacks. Package-visible for unit tests. */
@@ -118,7 +111,6 @@ public class OAuthCallbackController {
             String kindPathSegment,
             @Nullable String state,
             @Nullable String vendorError,
-            @Nullable String vendorErrorDescription,
             Map<String, String> allParams,
             HttpServletRequest request,
             HttpServletResponse response) {
@@ -133,15 +125,25 @@ public class OAuthCallbackController {
             return failure(
                     kindPathSegment,
                     "unknown_kind",
-                    "No integration is registered for the path segment: " + sanitize(kindPathSegment),
+                    "This integration is not available on this instance.",
                     HttpStatus.NOT_FOUND,
                     wantsJson);
         }
         IntegrationKind kind = kindOpt.get();
 
         if (vendorError != null && !vendorError.isBlank()) {
-            var cancelled =
-                    failure(kind.name(), vendorError, vendorErrorDescription, HttpStatus.BAD_REQUEST, wantsJson);
+            // The provider's error and its description arrive in the query, so anyone can write them into a link.
+            // The page shows a code and a sentence of its own; the log keeps the provider's code.
+            log.info("OAuth callback for kind={} carried a provider error: {}", kind, sanitize(vendorError));
+            boolean denied = "access_denied".equals(vendorError);
+            var cancelled = failure(
+                    kind.name(),
+                    denied ? "access_denied" : "provider_error",
+                    denied
+                            ? "You cancelled the connection. Start it again to connect."
+                            : "The provider refused the connection. Start it again.",
+                    HttpStatus.BAD_REQUEST,
+                    wantsJson);
             // Cancellation needs no state; only a verified binding can supply workspace return context.
             if (kind == IntegrationKind.SLACK
                     && !wantsJson
@@ -197,7 +199,12 @@ public class OAuthCallbackController {
                     "OAuth callback for kind={} rejected state: {}",
                     kind,
                     e.getClass().getSimpleName());
-            return failure(kind.name(), "invalid_state", e.getMessage(), HttpStatus.BAD_REQUEST, wantsJson);
+            return failure(
+                    kind.name(),
+                    "invalid_state",
+                    "This connection link expired or was already used. Start the connection again.",
+                    HttpStatus.BAD_REQUEST,
+                    wantsJson);
         }
 
         if (binding.kind() != kind) {
@@ -209,9 +216,7 @@ public class OAuthCallbackController {
             return failure(
                     kind.name(),
                     "kind_mismatch",
-                    "The state was issued for kind=" + binding.kind()
-                            + ". The request replayed it against the callback path /oauth/callback/"
-                            + kindPathSegment + ".",
+                    "This connection link belongs to another integration. Start the connection again.",
                     HttpStatus.BAD_REQUEST,
                     wantsJson);
         }
@@ -223,7 +228,7 @@ public class OAuthCallbackController {
             // to a broken flow they'll just retry.
             return problemDetail(
                     "no_strategy",
-                    "No ConnectionStrategy registered for kind=" + kind,
+                    "This integration is not available on this instance.",
                     HttpStatus.INTERNAL_SERVER_ERROR);
         }
 
@@ -254,7 +259,9 @@ public class OAuthCallbackController {
                             refused instanceof OAuthCallbackService.InstanceConnectedElsewhereException
                                     ? "connected_elsewhere"
                                     : "transition_conflict",
-                            refused.getMessage(),
+                            refused instanceof OAuthCallbackService.InstanceConnectedElsewhereException elsewhere
+                                    ? elsewhere.getMessage()
+                                    : TRANSITION_CONFLICT,
                             HttpStatus.CONFLICT,
                             wantsJson),
                     binding);
@@ -274,7 +281,13 @@ public class OAuthCallbackController {
                     binding.workspaceId(),
                     e.getClass().getSimpleName());
             return workspaceRedirect(
-                    failure(kind.name(), "strategy_error", e.getMessage(), HttpStatus.BAD_REQUEST, wantsJson), binding);
+                    failure(
+                            kind.name(),
+                            "strategy_error",
+                            "The provider did not finish the connection. Start it again.",
+                            HttpStatus.BAD_REQUEST,
+                            wantsJson),
+                    binding);
         }
 
         return workspaceRedirect(
@@ -308,7 +321,7 @@ public class OAuthCallbackController {
                     "OAuth complete rejected by transition guard for connection={}: {}",
                     connection.getId(),
                     e.getClass().getSimpleName());
-            return failure(kind.name(), "transition_conflict", e.getMessage(), HttpStatus.CONFLICT, wantsJson);
+            return failure(kind.name(), "transition_conflict", TRANSITION_CONFLICT, HttpStatus.CONFLICT, wantsJson);
         }
         return redirect(properties.successRedirect());
     }
@@ -316,6 +329,7 @@ public class OAuthCallbackController {
     private ResponseEntity<?> handleFailed(
             IntegrationKind kind, StateBinding binding, ConnectFinalization.Failed failed, boolean wantsJson) {
         log.warn("OAuth callback failed for kind={} workspace={}: {}", kind, binding.workspaceId(), failed.reason());
+        // Each connection strategy writes its failure reasons for the person who connects.
         return failure(kind.name(), "finalize_failed", failed.reason(), HttpStatus.BAD_REQUEST, wantsJson);
     }
 

@@ -5,6 +5,8 @@
         allowedDependencies = {
             "activity::spi",
             "core",
+            // Reconnect checks throw InvalidInputException, whose message the global advice returns.
+            "core::exception",
             // One token check per workspace across servers, held without a transaction (GitLabTokenLifecycleService).
             "core::lock",
             "core::logging",

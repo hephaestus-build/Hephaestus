@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.practices;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import de.tum.cit.aet.hephaestus.core.exception.InvalidInputException;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemEventName;
 import java.util.Collections;
 import java.util.Comparator;
@@ -17,7 +18,7 @@ public record ReviewOn(
         implements ClosedPracticeInput {
     public ReviewOn {
         if (events.size() > 100 || events.size() != Set.copyOf(events).size()) {
-            throw new IllegalArgumentException("Choose each event once.");
+            throw new InvalidInputException("Choose each event once.");
         }
         events = events.stream()
                 .sorted(Comparator.comparing(ItemEventName::value))
@@ -28,7 +29,7 @@ public record ReviewOn(
                     || values.isEmpty()
                     || values.size() > 100
                     || values.stream().anyMatch(value -> value.isBlank() || value.length() > 200))
-                throw new IllegalArgumentException(
+                throw new InvalidInputException(
                         "Use nonempty review state dimensions and distinct supported" + " values.");
             copy.put(key, Collections.unmodifiableSet(new TreeSet<>(values)));
         });
@@ -42,7 +43,7 @@ public record ReviewOn(
         var sets = new TreeMap<String, Set<String>>();
         state.forEach((key, values) -> {
             if (values.size() != Set.copyOf(values).size())
-                throw new IllegalArgumentException("Choose each review state value once.");
+                throw new InvalidInputException("Choose each review state value once.");
             sets.put(key, Set.copyOf(values));
         });
         return new ReviewOn(events, sets);

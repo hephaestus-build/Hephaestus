@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditEntityType;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditEntry;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditPort;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
+import de.tum.cit.aet.hephaestus.core.exception.InvalidInputException;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
 import de.tum.cit.aet.hephaestus.practices.CanonicalDigest;
@@ -79,7 +80,7 @@ public class CatalogCustomizationService {
         var current = catalog.practice(slug);
         ItemKind kind = document.kind();
         if (current.isPresent() && !current.get().effective().kind().equals(kind))
-            throw new IllegalArgumentException("A catalog practice keeps its item kind.");
+            throw new InvalidInputException("A catalog practice keeps its item kind.");
         validator.validate(kind, document.definition());
         if (document.groupSlug() != null) group(catalog, document.groupSlug());
         var entry = authoredEntry(catalog, CatalogEntryType.PRACTICE, slug, position, document.groupSlug());
@@ -179,7 +180,7 @@ public class CatalogCustomizationService {
         CatalogSnapshot before = snapshot(current);
         CatalogEntry entry = row(type, slug);
         if (current.shipped() == null) {
-            throw new IllegalArgumentException("This entry has no shipped definition to restore.");
+            throw new InvalidInputException("This entry has no shipped definition to restore.");
         }
         if (type == CatalogEntryType.PRACTICE) {
             var practice = practice(catalog, slug);
@@ -203,7 +204,7 @@ public class CatalogCustomizationService {
         CatalogSnapshot before = snapshot(current);
         CatalogEntry entry = row(type, slug);
         Object shipped = current.shipped();
-        if (shipped == null) throw new IllegalArgumentException("This entry has no shipped definition.");
+        if (shipped == null) throw new InvalidInputException("This entry has no shipped definition.");
         if (entry.getDefinition() != null) {
             entry.setBase(mapper.valueToTree(shipped));
             entries.saveAndFlush(entry);
@@ -219,7 +220,7 @@ public class CatalogCustomizationService {
         var existing = catalog.groups().stream().map(CatalogOffer::slug).toList();
         var requested = Set.copyOf(slugs);
         if (slugs.size() != requested.size() || !requested.equals(Set.copyOf(existing))) {
-            throw new IllegalArgumentException("List every catalog group once in the order.");
+            throw new InvalidInputException("List every catalog group once in the order.");
         }
         for (int position = 0; position < slugs.size(); position++) {
             CatalogEntry entry = row(CatalogEntryType.GROUP, slugs.get(position));

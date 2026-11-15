@@ -325,7 +325,7 @@ class ConnectionControllerTest extends BaseUnitTest {
     void exceptionHandler_notFound_to404ProblemDetail() {
         ProblemDetail problem = controller.handleNotFound(new NoSuchElementException("Connection not found: id=999"));
         assertThat(problem.getStatus()).isEqualTo(404);
-        assertThat(problem.getDetail()).contains("999");
+        assertThat(problem.getDetail()).isEqualTo("We could not find this connection.");
         assertThat(problem.getTitle()).isEqualTo("Resource not found");
     }
 
