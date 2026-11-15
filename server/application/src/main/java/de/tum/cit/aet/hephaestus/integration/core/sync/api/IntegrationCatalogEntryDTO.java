@@ -23,7 +23,8 @@ public record IntegrationCatalogEntryDTO(
         @NonNull @Schema(description = "Whether this workspace has a (non-UNINSTALLED) connection for this kind")
         Boolean connected,
 
-        @NonNull @Schema(
+        @NonNull
+        @Schema(
                 description =
                         "Whether this deployment can connect this kind. False when the operator has not enabled it, so a connect request cannot succeed")
         Boolean connectable,
