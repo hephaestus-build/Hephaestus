@@ -43,7 +43,7 @@ declare const chrome: {
 export const EXTENSION_ID = "ijkajblcbajjpjbknfgdiiiljipafiko";
 const BUNDLE = path.resolve(import.meta.dirname, "../.output/chrome-mv3-e2e");
 
-/** The real Hephaestus server under the `e2e` profile; its API has no `/api` prefix locally. */
+/** The real Hephaestus server under the `e2e` profile; it serves its API under `/api`. */
 export const SERVER_URL = process.env.E2E_SERVER_URL ?? "http://127.0.0.1:8080";
 /** Only used for links out; the suite never loads it. */
 export const WEB_APP_URL = process.env.E2E_WEB_APP_URL ?? "http://localhost:4200";

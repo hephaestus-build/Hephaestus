@@ -631,7 +631,7 @@ These metrics count the refusals:
 | --- | --- |
 | Above the rate limit (429) | `auth_ratelimit_blocked_total{bucket="browser-reports"}` |
 | A body above 16 KiB (413), or a body without a length (411) | `browser_faults_refused_total{reason}`, with `payload-too-large` or `length-required` |
-| A value outside the sets (400), or a report from another site (403) | `http_server_requests_seconds_count{uri="/browser-faults"}`, by `status` |
+| A value outside the sets (400), or a report from another site (403) | `http_server_requests_seconds_count{uri="/api/browser-faults"}`, by `status` |
 | Another origin or no CSRF token (403) | `http_server_requests_seconds_count{uri="UNKNOWN",status="403"}`, together with these refusals of every other endpoint |
 
 The server writes each failure as one log record and counts it:

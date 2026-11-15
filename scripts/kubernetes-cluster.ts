@@ -2108,7 +2108,8 @@ async function sendSlackMessage(base: string, signingSecret: string): Promise<st
 		ts: `${sent}.000100`,
 		eventId: `Ev${randomUUID().replaceAll("-", "").slice(0, 16)}`,
 	});
-	const delivery = await fetch(`${base}/webhooks/slack`, {
+	// Provider webhooks stay at the server root, outside `/api`.
+	const delivery = await fetch(new URL("/webhooks/slack", base), {
 		method: "POST",
 		headers: {
 			"content-type": "application/json",
@@ -2673,7 +2674,7 @@ async function gatewayAnswer(
 
 /**
  * The routes of docs/admin/helm-chart.md § Gateway routes, through Traefik: the redirect to HTTPS,
- * the webapp, the server behind the `/api` rewrite, and the webhook path, over TLS that the
+ * the webapp, the server's `/api` routes, and the webhook path, over TLS that the
  * certificate of the Gateway's listener carries.
  */
 async function gatewayRequests(

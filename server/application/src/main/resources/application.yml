@@ -329,7 +329,7 @@ hephaestus:
         # (no crash). Seeding is seed-if-absent, so admin edits survive reboots. Multiple providers per
         # instance are supported — add more keyed entries here or in the local .env (one per (type,
         # base-url) SCM instance), or at runtime in Instance admin → Login providers. Register this
-        # callback on each upstream OAuth app: {server-url}/login/oauth2/code/{registrationId}.
+        # callback on each upstream OAuth app: {server-url}/api/login/oauth2/code/{registrationId}.
         login-providers:
             github:
                 type: GITHUB
