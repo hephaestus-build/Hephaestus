@@ -186,16 +186,51 @@ public class ResultSourceAuthorization implements ResultProofAccess {
                 .toList();
         if (owned.isEmpty()) return Set.of();
         var lookups = lookups(workspaceId);
-        lookups.prefetch(workspaceId, owned);
+        var custody = prefetchedCustody(workspaceId, owned, lookups);
         Set<UUID> permitted = new HashSet<>();
         for (var result : owned) {
-            var facts = custody(result, lookups);
+            var facts = Objects.requireNonNull(custody.get(result.getId()));
             boolean admitted = (history && result.isMigratedHistory())
                     ? historyAuthorized(result, facts, purpose, audience, lookups)
                     : authorized(result, facts, purpose, audience, lookups);
             if (admitted) permitted.add(result.getId());
         }
         return permitted;
+    }
+
+    /** One row's {@link #custody}, and whether {@link #authorized} admits it. */
+    public record Check(HistoryCustody custody, boolean permitted) {}
+
+    /**
+     * {@link #custody} and {@link #authorized} of each of {@code rows} for {@code purpose}, decided as one read like
+     * {@link #permitsAll}: every row passes every fence, and the rows share only the lookups. Rows of another
+     * workspace are left out.
+     */
+    @Transactional(readOnly = true)
+    public Map<UUID, Check> checkAll(long workspaceId, Collection<Result> rows, SourceUsePurpose purpose) {
+        var owned = rows.stream()
+                .filter(result -> result.getWorkspaceId() == workspaceId)
+                .toList();
+        if (owned.isEmpty()) return Map.of();
+        var lookups = lookups(workspaceId);
+        var custody = prefetchedCustody(workspaceId, owned, lookups);
+        Map<UUID, Check> checked = new HashMap<>();
+        for (var result : owned) {
+            var facts = Objects.requireNonNull(custody.get(result.getId()));
+            checked.put(
+                    result.getId(),
+                    new Check(facts, authorized(result, facts, purpose, SourceReadAudience.PROCESSING, lookups)));
+        }
+        return checked;
+    }
+
+    /** Each row's custody, read after the rows' assignments and problems and before what its checks read. */
+    private Map<UUID, HistoryCustody> prefetchedCustody(long workspaceId, List<Result> owned, Lookups lookups) {
+        lookups.prefetch(workspaceId, owned);
+        Map<UUID, HistoryCustody> custody = new HashMap<>();
+        for (var result : owned) custody.put(result.getId(), custody(result, lookups));
+        lookups.prefetchChecks(workspaceId, owned, custody.values());
+        return custody;
     }
 
     /** The read that {@link #asOneRead} opened on this thread, if any. */
@@ -297,6 +332,49 @@ public class ResultSourceAuthorization implements ResultProofAccess {
                         .forEach(
                                 problem -> children.computeIfAbsent(problem.getResultId(), ignored -> new ArrayList<>())
                                         .add(problem));
+            }
+        }
+
+        /**
+         * Reads, in chunked collection queries, what the checks of {@code owned} and their {@code custody} ask and this
+         * read has not seen: the rows' work items and those items' parents, and whether each capture job is
+         * suppressed. An item that a read does not return is kept as absent, as its single lookup finds it.
+         */
+        void prefetchChecks(long workspaceId, List<Result> owned, Collection<HistoryCustody> custody) {
+            prefetchItems(workspaceId, owned.stream().map(Result::getItemId).toList());
+            prefetchItems(
+                    workspaceId,
+                    owned.stream()
+                            .map(result -> items.getOrDefault(result.getItemId(), Optional.empty()))
+                            .flatMap(Optional::stream)
+                            .map(ItemRef::parentId)
+                            .filter(Objects::nonNull)
+                            .toList());
+            var jobs = new ArrayList<UUID>();
+            custody.forEach(facts -> jobs.addAll(facts.sourceJobIds()));
+            // A row recorded before the current result model is checked by its review as a job.
+            owned.stream()
+                    .filter(Result::isMigratedHistory)
+                    .map(Result::getReviewId)
+                    .forEach(jobs::add);
+            var unread = jobs.stream()
+                    .distinct()
+                    .filter(job -> !suppressedJobs.containsKey(job))
+                    .toList();
+            for (var chunk : chunks(unread)) {
+                var suppressed = suppression.suppressedReviewJobs(chunk);
+                chunk.forEach(job -> suppressedJobs.put(job, suppressed.contains(job)));
+            }
+        }
+
+        private void prefetchItems(long workspaceId, List<Long> itemIds) {
+            var unread = itemIds.stream()
+                    .distinct()
+                    .filter(id -> !items.containsKey(id))
+                    .toList();
+            for (var chunk : chunks(unread)) {
+                var found = ResultSourceAuthorization.this.items.findAll(workspaceId, chunk);
+                chunk.forEach(id -> items.put(id, Optional.ofNullable(found.get(id))));
             }
         }
 

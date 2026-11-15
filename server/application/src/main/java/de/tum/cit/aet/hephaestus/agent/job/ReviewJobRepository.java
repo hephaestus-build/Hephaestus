@@ -76,6 +76,24 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
     @Query("SELECT j FROM ReviewJob j  WHERE j.id = :id AND j.workspaceId = :workspaceId")
     Optional<ReviewJob> findByIdAndWorkspaceId(@Param("id") UUID id, @Param("workspaceId") Long workspaceId);
 
+    /** The capture manifest that each job retains, read without the rest of its capture, input and output. */
+    @Query(value = """
+        SELECT j.id,j.review_id AS "reviewId",CAST(j.capture->'manifest' AS text) AS manifest
+        FROM review_job j WHERE j.workspace_id=:workspaceId AND j.id IN (:ids)
+        """, nativeQuery = true)
+    List<CaptureManifest> findCaptureManifests(
+            @Param("workspaceId") long workspaceId, @Param("ids") Collection<UUID> ids);
+
+    interface CaptureManifest {
+        UUID getId();
+
+        UUID getReviewId();
+
+        /** The manifest as JSON text, or {@code null} when the job retains no capture or no manifest. */
+        @Nullable
+        String getManifest();
+    }
+
     /** The job that a run drives, in the run's workspace. */
     Optional<ReviewJob> findByRunIdAndWorkspaceId(UUID runId, long workspaceId);
 

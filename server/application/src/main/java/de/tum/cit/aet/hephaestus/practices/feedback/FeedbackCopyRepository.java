@@ -53,14 +53,23 @@ public interface FeedbackCopyRepository extends JpaRepository<FeedbackCopy, UUID
                    AND traced.value ->> 'kind' = c.kind AND (traced.value ->> 'position')::int = c.position)))
         """;
 
+    /** The copies of these pieces of feedback that rest on a result marked incorrect. */
     @Query(
             value = "SELECT c.id FROM feedback_copy c"
-                    + " WHERE c.workspace_id = :workspaceId AND c.feedback_id = :feedbackId AND"
+                    + " WHERE c.workspace_id = :workspaceId AND c.feedback_id IN (:feedbackIds) AND"
                     + RESTS_ON_INCORRECT_RESULT,
             nativeQuery = true)
-    Set<UUID> incorrectCopyIds(@Param("workspaceId") long workspaceId, @Param("feedbackId") UUID feedbackId);
+    Set<UUID> incorrectCopyIdsOf(
+            @Param("workspaceId") long workspaceId, @Param("feedbackIds") Collection<UUID> feedbackIds);
+
+    default Set<UUID> incorrectCopyIds(long workspaceId, UUID feedbackId) {
+        return incorrectCopyIdsOf(workspaceId, List.of(feedbackId));
+    }
 
     List<FeedbackCopy> findByWorkspaceIdAndFeedbackIdOrderByPositionAsc(long workspaceId, UUID feedbackId);
+
+    List<FeedbackCopy> findByWorkspaceIdAndFeedbackIdInOrderByPositionAsc(
+            long workspaceId, Collection<UUID> feedbackIds);
 
     Optional<FeedbackCopy> findByIdAndWorkspaceId(UUID id, long workspaceId);
 
