@@ -166,7 +166,11 @@ final class ReviewSandboxStub implements SandboxClaims {
                 upload(runtime, token, Map.of(), SandboxLayout.EXIT_SERVER_UNREACHABLE);
                 return false;
             }
-            var completion = mapper.createObjectNode().put("model", "review").put("max_tokens", 16);
+            // As the runner's model calls do: the proxy serves only streamed chat calls.
+            var completion = mapper.createObjectNode()
+                    .put("model", "review")
+                    .put("max_tokens", 16)
+                    .put("stream", true);
             completion.putArray("messages").addObject().put("role", "user").put("content", "Review " + slug);
             post(proxy + "/chat/completions", token, completion);
             var result = results.addObject()
