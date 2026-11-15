@@ -833,24 +833,24 @@ public class JobEvidenceFiles implements SandboxResultListener {
      * Removes the folder, with its staging remainder and marker, if no attempt reads it: under the runtime's shared
      * lease, one removal at a time with admission, or under an exclusive lease of its own. Each claim names a new folder
      * (its attempt counts the run's leases), so a folder that no attempt reads never becomes read; the decision is
-     * still made from the job as it is recorded under the lease.
+     * still made from the job as it is recorded under the lease. The folder of a job with an erased copy is erasure's
+     * to remove and count.
      *
      * @return false when another holder keeps the lease to itself, and the folder stays for a later pass
      */
     private boolean retire(Path root) throws IOException {
         Path jobDirectory = Objects.requireNonNull(root.getParent());
         Path workspaceDirectory = Objects.requireNonNull(jobDirectory.getParent());
-        return EvidenceFolderLease.removeAsOwner(
-                layout.root(),
-                Long.parseLong(
-                        Objects.requireNonNull(workspaceDirectory.getFileName()).toString()),
-                UUID.fromString(
-                        Objects.requireNonNull(jobDirectory.getFileName()).toString()),
-                () -> {
-                    if (!present(root)) return;
-                    var job = recordedJob(root);
-                    if (job.isEmpty() || !readsFolder(root, job.get())) deleteAttempt(root);
-                });
+        long workspaceId = Long.parseLong(
+                Objects.requireNonNull(workspaceDirectory.getFileName()).toString());
+        UUID jobId = UUID.fromString(
+                Objects.requireNonNull(jobDirectory.getFileName()).toString());
+        return EvidenceFolderLease.removeAsOwner(layout.root(), workspaceId, jobId, () -> {
+            if (!present(root)) return;
+            if (!personCopies.erasedJobs(Map.of(jobId, workspaceId)).isEmpty()) return;
+            var job = recordedJob(root);
+            if (job.isEmpty() || !readsFolder(root, job.get())) deleteAttempt(root);
+        });
     }
 
     /** Admission has committed; recheck ownership before removing the verified bytes. */
@@ -1178,6 +1178,7 @@ public class JobEvidenceFiles implements SandboxResultListener {
     /**
      * Removes every attempt folder that no attempt reads: the folders of ended, admitted and superseded attempts, and
      * of deleted jobs. Only the running attempt of its job reads its folder; a retry or a composition takes a new one.
+     * The folders of a job with an erased copy are erasure's: the same reconcile pass removes and counts them.
      *
      * @return the folders that remain although no attempt reads them, because their lease is held or their removal
      *     failed, and the expired transcripts that could not be removed: the reconcile counts them, and a later pass
@@ -1203,8 +1204,11 @@ public class JobEvidenceFiles implements SandboxResultListener {
                             roots.add(path);
                         }
                     });
+            // Erasure removes and counts the folders of a job with an erased copy; this sweep leaves them to it.
+            var erased = erasedJobs(roots, traces);
             for (Path root : roots) {
                 if (!root.getFileName().toString().matches("[0-9]+-[0-9a-f]{64}")) continue;
+                if (ofErasedJob(erased, root)) continue;
                 // A capture holds this lease until its inputs are released, after retiring its own folder; erasure
                 // and the other sweep take it too. Whoever holds it owns the job's folders, and a later pass retries.
                 Optional<EvidenceFolderLease> acquired;
@@ -1241,19 +1245,51 @@ public class JobEvidenceFiles implements SandboxResultListener {
                     remaining++;
                 }
             }
-            for (Path trace : traces) if (!cleanTrace(trace)) remaining++;
-            removeEmptyJobFolders();
+            for (Path trace : traces) if (!ofErasedJob(erased, trace) && !cleanTrace(trace)) remaining++;
+            removeEmptyJobFolders(erased);
         } catch (IOException exception) {
             throw new UncheckedIOException(exception);
         }
         return remaining;
     }
 
+    /** The jobs of these attempt folders and transcripts that have an erased copy. */
+    private Set<UUID> erasedJobs(Set<Path> roots, Set<Path> traces) {
+        var jobs = new HashMap<UUID, Long>();
+        for (Path entry : roots) addJob(jobs, entry);
+        for (Path entry : traces) addJob(jobs, entry);
+        return personCopies.erasedJobs(jobs);
+    }
+
+    private static void addJob(Map<UUID, Long> jobs, Path entry) {
+        Path jobDirectory = Objects.requireNonNull(entry.getParent());
+        Path workspaceDirectory = Objects.requireNonNull(jobDirectory.getParent());
+        try {
+            jobs.put(
+                    UUID.fromString(
+                            Objects.requireNonNull(jobDirectory.getFileName()).toString()),
+                    Long.parseLong(Objects.requireNonNull(workspaceDirectory.getFileName())
+                            .toString()));
+        } catch (IllegalArgumentException notAJobFolder) {
+            // Not a job's folder: the sweep skips its entries by their names.
+        }
+    }
+
+    private static boolean ofErasedJob(Set<UUID> erased, Path entry) {
+        try {
+            return erased.contains(UUID.fromString(Objects.requireNonNull(
+                            Objects.requireNonNull(entry.getParent()).getFileName())
+                    .toString()));
+        } catch (IllegalArgumentException notAJobFolder) {
+            return false;
+        }
+    }
+
     /**
      * Removes each job folder that holds nothing more: no attempt, staging copy or transcript. A capture holds the job's
      * lease while it creates the folder, so the folder is removed only under that lease.
      */
-    private void removeEmptyJobFolders() throws IOException {
+    private void removeEmptyJobFolders(Set<UUID> erased) throws IOException {
         try (var workspaces = Files.list(layout.jobsRoot())) {
             for (Path workspace : workspaces.toList()) {
                 if (!workspace.getFileName().toString().matches("[0-9]+")
@@ -1267,6 +1303,7 @@ public class JobEvidenceFiles implements SandboxResultListener {
                         } catch (IllegalArgumentException notAJobFolder) {
                             continue;
                         }
+                        if (erased.contains(jobId)) continue;
                         var acquired = EvidenceFolderLease.tryAcquire(
                                 layout.root(),
                                 Long.parseLong(workspace.getFileName().toString()),

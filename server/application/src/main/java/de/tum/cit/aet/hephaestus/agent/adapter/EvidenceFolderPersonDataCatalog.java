@@ -981,14 +981,25 @@ public class EvidenceFolderPersonDataCatalog implements PersonEvidenceErasure, W
     }
 
     /**
-     * Cancels the selected copies' running jobs, marks the copies erased and deletes their jobs' attempt inputs. From
-     * the commit on, no attempt can admit or retain the copies, and each server removes its folders of their jobs
-     * in a later reconcile pass once leases are released and cleanup succeeds.
+     * Marks the selected copies erased, then cancels their running jobs and deletes their jobs' attempt inputs. From
+     * then on, no attempt can admit or retain the copies, and only {@link #removeErasedFolders} removes the folders
+     * of their jobs, in a later reconcile pass once leases are released. The copies are erased before the jobs stop,
+     * so an attempt that a cancellation ends never finds its folder unclaimed: its release and the sweep leave the
+     * folder to erasure, which removes and counts it.
      */
     private void requestRemoval(PersonDataSelection selection) {
         var jobs = new LinkedHashMap<UUID, Long>();
         for (var key : selection.rows())
             jobs.putIfAbsent(
+                    UUID.fromString(key.columns().get("job_id")),
+                    Long.parseLong(key.columns().get("workspace_id")));
+        for (var key : selection.rows())
+            jdbc.update(
+                    """
+                    UPDATE person_evidence_copy SET state='ERASED'
+                    WHERE id=CAST(? AS uuid) AND job_id=? AND workspace_id=? AND state<>'ERASED'
+                    """,
+                    key.columns().get("copy_id"),
                     UUID.fromString(key.columns().get("job_id")),
                     Long.parseLong(key.columns().get("workspace_id")));
         jobs.forEach((jobId, workspaceId) -> {
@@ -1001,15 +1012,6 @@ public class EvidenceFolderPersonDataCatalog implements PersonEvidenceErasure, W
             }
             jdbc.update("DELETE FROM review_attempt_input WHERE job_id=? AND workspace_id=?", jobId, workspaceId);
         });
-        for (var key : selection.rows())
-            jdbc.update(
-                    """
-                    UPDATE person_evidence_copy SET state='ERASED'
-                    WHERE id=CAST(? AS uuid) AND job_id=? AND workspace_id=? AND state<>'ERASED'
-                    """,
-                    key.columns().get("copy_id"),
-                    UUID.fromString(key.columns().get("job_id")),
-                    Long.parseLong(key.columns().get("workspace_id")));
         if (!jobs.isEmpty()) notifyErased();
     }
 
@@ -1017,6 +1019,25 @@ public class EvidenceFolderPersonDataCatalog implements PersonEvidenceErasure, W
     private void notifyErased() {
         jdbc.queryForObject(
                 "SELECT 1 FROM (SELECT pg_notify(?, '')) sent", Integer.class, EvidenceErasureNotifications.CHANNEL);
+    }
+
+    /**
+     * The given jobs that have an erased copy, keyed by job id with their workspace. Their folders are erasure's to
+     * remove ({@link #removeErasedFolders}); no other cleanup touches them.
+     */
+    public Set<UUID> erasedJobs(Map<UUID, Long> jobs) {
+        if (jobs.isEmpty()) return Set.of();
+        var ids = new ArrayList<UUID>(jobs.keySet());
+        return Set.copyOf(jdbc.queryForList(
+                """
+                SELECT DISTINCT c.job_id FROM person_evidence_copy c
+                JOIN unnest(CAST(? AS uuid[]), CAST(? AS bigint[])) AS f(job_id, workspace_id)
+                  ON f.job_id=c.job_id AND f.workspace_id=c.workspace_id
+                WHERE c.state='ERASED'
+                """,
+                UUID.class,
+                new SqlArrayValue("uuid", ids.toArray()),
+                new SqlArrayValue("bigint", ids.stream().map(jobs::get).toArray())));
     }
 
     private boolean running(UUID jobId, long workspaceId) {

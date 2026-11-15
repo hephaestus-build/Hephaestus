@@ -1251,6 +1251,49 @@ class EvidenceFolderAccountErasureIntegrationTest extends BaseIntegrationTest {
         }
     }
 
+    /**
+     * Erasure cancels a running job, and the job's runtime then releases its folder. The release and the sweep both run
+     * before erasure's pass here: they leave the folder to erasure, which removes and counts it.
+     */
+    @Test
+    void shouldLeaveAnErasedJobsFolderToErasureWhenItsAttemptEndsAndASweepRunsFirst() throws Exception {
+        databaseTestUtils.cleanDatabase();
+        var provider = providers.saveAndFlush(
+                new IdentityProvider(IdentityProviderType.GITLAB, "https://erased-sweep.example"));
+        var recorder = new ExactPersonDataCopyRecorder();
+        var catalog = catalog(root, recorder);
+        var store = catalog.contributors().getFirst();
+        var job = job("erased-sweep");
+        var inputs = copy(
+                root,
+                catalog,
+                recorder,
+                job,
+                new PersonCopyIdentity("GITLAB", "https://erased-sweep.example", "42", null));
+        var folder = root.resolve("jobs")
+                .resolve(Long.toString(job.getWorkspaceId()))
+                .resolve(job.getId().toString());
+        var files = new JobEvidenceFiles(
+                new FabricLayout(root.toString()), jobs, Clock.systemUTC(), catalog, mock(AttemptInputs.class));
+        var person = new PersonScope(
+                null, List.of(new PersonIdentity(Objects.requireNonNull(provider.getId()), "42", null)), List.of());
+        try {
+            store.prepareErasure(store.select(person));
+            assertThat(jobs.findById(job.getId()).orElseThrow().getStatus()).isEqualTo(ReviewJobStatus.CANCELLED);
+
+            inputs.close();
+            assertThat(files.cleanEndedAttempts())
+                    .as("the sweep leaves the erased job's folder to erasure and does not count it")
+                    .isZero();
+            assertThat(folder).exists();
+
+            assertThat(catalog.removeErasedFolders()).isEqualTo(new ErasedFolders(1, 0));
+            assertThat(folder).doesNotExist();
+        } finally {
+            inputs.close();
+        }
+    }
+
     @Autowired
     private WorkspaceLifecycleService workspaceLifecycle;
 
