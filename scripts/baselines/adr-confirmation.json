@@ -1,17 +1,5 @@
 [
 	{
-		"id": "docs/decisions/0001-flat-top-level-layout.md: Confirmation names no existing executable check",
-		"owner": "ADR-QUALITY",
-		"reason": "The accepted decision has no resolvable confirmation for this reference.",
-		"removeWhen": "Name an existing executable check in Confirmation."
-	},
-	{
-		"id": "docs/decisions/0002-java-package-rename-to-aet-cit-tum.md: Confirmation names no existing executable check",
-		"owner": "ADR-QUALITY",
-		"reason": "The accepted decision has no resolvable confirmation for this reference.",
-		"removeWhen": "Name an existing executable check in Confirmation."
-	},
-	{
 		"id": "docs/decisions/0014-per-row-aes-gcm-aad-binding.md: missing Confirmation section",
 		"owner": "ADR-QUALITY",
 		"reason": "The accepted decision has no resolvable confirmation for this reference.",

@@ -36,6 +36,41 @@ void test("an Accepted ADR needs a Confirmation with an existing test, task or s
 	]);
 });
 
+void test("Not enforced with a reason stands in for a check, and a named check must still exist", () => {
+	for (const section of [
+		"Not enforced. Review catches a new top-level directory.",
+		"Not enforced.\nReview catches a new top-level directory.",
+		"- Not enforced. The relay implementation pull request adds RelaySealTest.",
+		"`Not enforced.` Review catches it.",
+	]) {
+		assert.deepEqual(check(`## Confirmation\n\n${section}`), [], section);
+	}
+	for (const section of [
+		"Not enforced.",
+		"Not enforced.   ",
+		"Not enforced..",
+		"Not enforced.x",
+		"Not enforced. ...",
+		"Review catches it. Not enforced.",
+	]) {
+		assert.deepEqual(
+			check(`## Confirmation\n\n${section}`),
+			[`${file}: Confirmation names no existing executable check`],
+			section,
+		);
+	}
+	assert.deepEqual(check("## Confirmation\n\nNot enforced.\n\nReview catches it."), [
+		`${file}: Confirmation names no existing executable check`,
+	]);
+	assert.deepEqual(
+		check("## Confirmation\n\nNot enforced. Review catches it.\n\n`MissingTest` will check it."),
+		[`${file}: missing check MissingTest`],
+	);
+	assert.deepEqual(check("## Confirmation\n\n```md\nNot enforced. Review catches it.\n```"), [
+		`${file}: Confirmation names no existing executable check`,
+	]);
+});
+
 void test("every named check resolves even if another check exists", () => {
 	assert.deepEqual(check("## Confirmation\n`BoundaryTest` and `MissingTest`."), [
 		`${file}: missing check MissingTest`,
