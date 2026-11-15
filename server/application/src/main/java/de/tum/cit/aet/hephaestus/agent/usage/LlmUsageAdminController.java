@@ -33,7 +33,7 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @RestController
 @RequestMapping("/admin")
-@Tag(name = "Admin", description = "Instance-admin account management")
+@Tag(name = "Admin")
 @RecentSignInExempt(reason = "sets a spending budget; grants no access and stores no credential")
 @RequireInstanceAdmin
 @ConditionalOnServerRole

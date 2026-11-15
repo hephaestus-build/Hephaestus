@@ -36,7 +36,7 @@ import org.springframework.web.server.ResponseStatusException;
 @ConditionalOnServerRole
 @RestController
 @RequestMapping("/user/exports")
-@Tag(name = "Account", description = "GDPR Art. 20 self-service data export")
+@Tag(name = "Account")
 @PreAuthorize("isAuthenticated()")
 public class AccountExportController {
 

@@ -11,6 +11,8 @@ import de.tum.cit.aet.hephaestus.testconfig.WorkspaceEchoControllers;
 import de.tum.cit.aet.hephaestus.workspace.dto.WorkspaceDTO;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -62,6 +64,12 @@ class WorkspaceContextFilterIntegrationTest extends AbstractWorkspaceIntegration
 
         assertThat(problem).isNotNull();
         assertThat(problem.getDetail()).contains("The workspace slug is not valid");
+        // The spec declares `errors` as a list of messages for each field.
+        assertThat(problem.getProperties()).isNotNull();
+        assertThat(problem.getProperties().get("errors"))
+                .isEqualTo(Map.of(
+                        "workspaceSlug",
+                        List.of("The workspace path must contain a lowercase slug with at most 64 characters.")));
     }
 
     @Test

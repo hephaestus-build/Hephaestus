@@ -8,7 +8,7 @@ import { getOwnItemTrace } from "../../sdk/getOwnItemTrace.gen.js";
 import type { GetOwnItemTraceData, GetOwnItemTraceResponse } from "../../types.gen.js";
 
 export const getOwnItemTraceQueryKey = (options: Options<GetOwnItemTraceData>) =>
-	createQueryKey("getOwnItemTrace", options, false, ["item-trace"]);
+	createQueryKey("getOwnItemTrace", options, false, ["Practice review trace"]);
 
 /**
  * Trace your results from an item review

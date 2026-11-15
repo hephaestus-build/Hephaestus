@@ -12,7 +12,7 @@ import type {
 
 export const getNotificationPreferencesQueryKey = (
 	options?: Options<GetNotificationPreferencesData>,
-) => createQueryKey("getNotificationPreferences", options, false, ["notification-preferences"]);
+) => createQueryKey("getNotificationPreferences", options, false, ["Notification preferences"]);
 
 /**
  * Get your email subscriptions

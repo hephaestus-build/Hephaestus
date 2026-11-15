@@ -19,7 +19,7 @@ import org.springframework.web.bind.annotation.RestController;
 @Validated
 @RestController
 @RequestMapping("/user")
-@Tag(name = "Account", description = "User preferences")
+@Tag(name = "Account")
 @PreAuthorize("isAuthenticated()")
 public class AccountController {
 
