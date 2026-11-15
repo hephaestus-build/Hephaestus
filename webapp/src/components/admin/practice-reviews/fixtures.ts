@@ -1929,7 +1929,8 @@ const COPY_STATE_OF: Record<FeedbackState, FeedbackCopy["state"]> = {
 	REPLACED: "POSTED",
 	UNCONFIRMED: "WRITE_STARTED",
 	WITHHELD: "WITHHELD",
-	REJECTED: "WITHHELD",
+	// A rejection sends nothing but keeps the package, which an approval after all then posts.
+	REJECTED: "PLANNED",
 	FAILED: "FAILED",
 };
 

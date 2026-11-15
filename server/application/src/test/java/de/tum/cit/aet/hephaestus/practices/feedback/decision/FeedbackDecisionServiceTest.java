@@ -140,6 +140,30 @@ class FeedbackDecisionServiceTest {
     }
 
     @Test
+    void shouldApproveRejectedFeedbackAfterAllAndQueueItsPost() {
+        var approved = gate.evaluate(row, FeedbackCheckStage.APPROVED, false);
+        row = Feedback.builder()
+                .id(id)
+                .workspaceId(1)
+                .reviewId(row.getReviewId())
+                .developerId(2)
+                .destination(FeedbackDestination.ON_WORK)
+                .state(FeedbackState.REJECTED)
+                .body("Add a regression test.")
+                .build();
+        when(feedback.lockByIdAndWorkspaceId(id, 1)).thenReturn(Optional.of(row));
+        when(gate.evaluate(row, FeedbackCheckStage.APPROVED, false)).thenReturn(approved);
+        var outcome = service.decide(
+                1, id, 3, new FeedbackDecisionInput(FeedbackDecisionAction.APPROVE, null, null, digest()));
+        assertThat(outcome.state()).isEqualTo(FeedbackState.READY);
+        assertThat(saved().getAction()).isEqualTo(FeedbackDecisionAction.APPROVE);
+        verify(feedback).updateDelivery(1, id, FeedbackState.READY, null, null);
+        var capture = ArgumentCaptor.forClass(ActionRequest.class);
+        verify(actions).enqueue(capture.capture());
+        assertThat(capture.getValue().idempotencyKey()).isEqualTo("feedback:" + id + ":1:POST");
+    }
+
+    @Test
     void shouldCommitAChangedPublicationContextAsAWithholdingInsteadOfAnApproval() {
         when(publication.refusal(row)).thenReturn(Optional.of(FeedbackStopReason.PUBLIC_HISTORY_CHANGED));
         var outcome = service.decide(

@@ -74,7 +74,12 @@ import { FeedbackBody } from "./FeedbackBody";
 import { FeedbackLocationLabel } from "./FeedbackLocationLabel";
 import { levelFoldKey } from "./level-folds";
 import { LevelBodySkeleton } from "./LevelBodySkeleton";
-import { type ApprovalQueue, ProposalDecision, ProposalPackage } from "./ProposalDecision";
+import {
+	type ApprovalQueue,
+	ApproveRejectedFeedback,
+	ProposalDecision,
+	ProposalPackage,
+} from "./ProposalDecision";
 import {
 	ERASED_ACCOUNT,
 	type SheetEvent,
@@ -296,6 +301,14 @@ export function FeedbackLevel({
 							queue={queue}
 						/>
 					</div>
+				</DrawerFooter>
+			) : canApproveAfterAll(record) ? (
+				<DrawerFooter>
+					<ApproveRejectedFeedback
+						destination={record.destination}
+						isDeciding={isDeciding}
+						onApprove={onApprove}
+					/>
 				</DrawerFooter>
 			) : (
 				canChangeWithdrawal(record) && (
@@ -868,6 +881,11 @@ function feedbackTechnical(feedback: FeedbackRecord): TechnicalFact[] {
 		}
 	}
 	return facts;
+}
+
+/** The server approves rejected feedback that still has a package to send, so the sheet offers it. */
+function canApproveAfterAll(feedback: FeedbackRecord): boolean {
+	return feedback.state === "REJECTED" && !feedback.withdrawn && feedback.copies.length > 0;
 }
 
 function canChangeWithdrawal(feedback: FeedbackRecord): boolean {

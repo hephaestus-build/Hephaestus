@@ -554,6 +554,61 @@ export const Rejected: Story = {
 		events.getByText("by Grace Hopper");
 		await expect(events.getByText(/Not useful to the developer/u)).toBeVisible();
 		events.getByText(/The long comment already covers the test names/u);
+		await expect(
+			within(panelElement).getByRole("button", { name: "Approve after all" }),
+		).toBeEnabled();
+	},
+};
+
+/** Approving rejected feedback says what it sends and where before anything is decided. */
+export const ApproveRejectedAfterAll: Story = {
+	args: { feedback: ready(rejectedFeedbackDetail) },
+	parameters: { chromatic: { disableSnapshot: true } },
+	play: async ({ args, userEvent }) => {
+		const panel = within(await settledDrawerPanel());
+		await userEvent.click(panel.getByRole("button", { name: "Approve after all" }));
+		const dialog = await screen.findByRole("dialog", { name: "Approve this feedback after all" });
+		await expectSettledVisible(dialog);
+		within(dialog).getByText(
+			"Hephaestus posts every copy above on the work once the feedback checks pass. The rejection stays in the history.",
+		);
+		await expect(args.onApprove).not.toHaveBeenCalled();
+		await userEvent.click(within(dialog).getByRole("button", { name: "Approve for delivery" }));
+		await expect(args.onApprove).toHaveBeenCalledOnce();
+	},
+};
+
+/** Feedback for the practice page is approved without its private text, and says where it goes. */
+export const ApproveRejectedPracticePageCard: Story = {
+	args: {
+		feedback: ready({ ...rejectedFeedbackDetail, destination: "PRACTICE_PAGE", body: null }),
+	},
+	parameters: { chromatic: { disableSnapshot: true } },
+	play: async ({ userEvent }) => {
+		const panel = within(await settledDrawerPanel());
+		await userEvent.click(panel.getByRole("button", { name: "Approve after all" }));
+		const dialog = await screen.findByRole("dialog", { name: "Approve this feedback after all" });
+		within(dialog).getByText(
+			"It appears on the developer’s practice pages once the feedback checks pass. The rejection stays in the history.",
+		);
+	},
+};
+
+/** While the approval is saved, it cannot be sent twice. */
+export const ApprovingRejected: Story = {
+	args: { feedback: ready(rejectedFeedbackDetail), isDeciding: true },
+	play: async () => {
+		const panel = within(await settledDrawerPanel());
+		await expectGenuinelyDisabled(panel.getByRole("button", { name: "Approve after all" }));
+	},
+};
+
+/** Rejected feedback with no package has nothing to approve, so no approval is offered. */
+export const RejectedWithoutPackage: Story = {
+	args: { feedback: ready({ ...rejectedFeedbackDetail, copies: [] }) },
+	play: async () => {
+		const panel = within(await settledDrawerPanel());
+		await expect(panel.queryByRole("button", { name: "Approve after all" })).toBeNull();
 	},
 };
 
