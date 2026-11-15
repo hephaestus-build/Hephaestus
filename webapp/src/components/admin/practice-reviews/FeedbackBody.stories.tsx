@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, waitFor, within } from "storybook/test";
 
 import { ModelLinkHostsContext } from "@/components/common/model-links";
+import { WRITTEN_BY_HEPHAESTUS } from "@/components/common/WrittenByHephaestusNote";
 
 import { FeedbackBody } from "./FeedbackBody";
 
@@ -39,6 +40,7 @@ export const OnTheWork: Story = {
 		await canvas.findByRole("heading", { level: 4, name: "What worked" });
 		await expect(canvas.queryByText("Delivered")).not.toBeInTheDocument();
 		canvas.getByRole("tablist", { name: "How to show the feedback" });
+		await expect(canvas.getByText(WRITTEN_BY_HEPHAESTUS)).toBeVisible();
 	},
 };
 
@@ -107,6 +109,7 @@ export const NoRecordedText: Story = {
 	},
 	play: async ({ canvas }) => {
 		canvas.getByText("No feedback text is recorded here.");
+		await expect(canvas.queryByText(WRITTEN_BY_HEPHAESTUS)).toBeNull();
 	},
 };
 

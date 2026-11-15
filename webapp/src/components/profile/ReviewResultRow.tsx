@@ -14,6 +14,7 @@ import { SectionLabel } from "@/components/common/SectionLabel";
 import { definitionFor, statusToneClass } from "@/components/common/status-def";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { UNTRUSTED_MARKDOWN_PROSE, UntrustedMarkdown } from "@/components/common/UntrustedMarkdown";
+import { WrittenByHephaestusNote } from "@/components/common/WrittenByHephaestusNote";
 import { ProblemList } from "@/components/practice-problems/ProblemList";
 import {
 	claimCurrentnessNote,
@@ -344,6 +345,7 @@ export function ReviewResultDetails({
 			)}
 			<CurrentnessNotice freshness={result} />
 			<ReasonSections reasons={reasons} />
+			{hasReasons(reasons) && <WrittenByHephaestusNote />}
 			{feedback.length > 0 && (
 				<DetailSection label="Feedback from this observation" className="gap-2">
 					{/* Which feedback this observation gave, where it went and its delivery state, each in a

@@ -16,7 +16,11 @@ import {
 	WEB_APP,
 	WORK_FEEDBACK,
 } from "~/components/report/fixtures";
-import { PageReport, type PageReportProps } from "~/components/report/PageReport";
+import {
+	PageReport,
+	type PageReportProps,
+	WRITTEN_BY_HEPHAESTUS,
+} from "~/components/report/PageReport";
 import { REPORT_ROW_HEIGHT } from "~/shared/frame-messages";
 import { expectNoHorizontalOverflow } from "~/stories/reflow";
 
@@ -147,6 +151,8 @@ export const Opened: Story = {
 		await expect(canvas.getAllByRole("button", { expanded: true })).toHaveLength(1);
 		await expect(canvas.queryByRole("button", { expanded: false })).toBeNull();
 		await expect(canvas.queryByRole("heading", { name: /Feedback for you/u })).toBeNull();
+		// Hephaestus wrote the observations and comments, and the report says so in words.
+		await expect(canvas.getByText(WRITTEN_BY_HEPHAESTUS)).toBeVisible();
 		const comments = canvas.getByRole("list", { name: "Comments for you" });
 		const links = within(comments).getAllByRole("link");
 		// Where each comment is, is the link to it; the provider's page shows it, never this report.
@@ -223,6 +229,8 @@ export const ReviewStatusUnavailable: Story = {
 		await expect(canvas.getByRole("button", { expanded: true })).toHaveAccessibleName(
 			"Practice review No recorded comments for you · review status unavailable",
 		);
+		// No comment and no observation shows, so nothing is labelled as written by Hephaestus.
+		await expect(canvas.queryByText(WRITTEN_BY_HEPHAESTUS)).toBeNull();
 		await expect(
 			canvas.getByText("No review history is available for your account on this work."),
 		).toBeVisible();

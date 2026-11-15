@@ -26,6 +26,7 @@ import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackParticipantConsen
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackWorkspaceResolver;
 import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackMessageService;
 import de.tum.cit.aet.hephaestus.practices.spi.ConversationReadinessQuery;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceSummaryQuery;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -54,6 +55,7 @@ public class SlackAppHomeService {
     private final SlackMessageService messageService;
     private final SlackOnboardingService onboardingService;
     private final SlackHephaestusUiLinks uiLinks;
+    private final WorkspaceSummaryQuery workspaces;
 
     public SlackAppHomeService(
             SlackWorkspaceResolver workspaceResolver,
@@ -64,7 +66,8 @@ public class SlackAppHomeService {
             ConversationAdmission conversationAdmission,
             SlackMessageService messageService,
             SlackOnboardingService onboardingService,
-            SlackHephaestusUiLinks uiLinks) {
+            SlackHephaestusUiLinks uiLinks,
+            WorkspaceSummaryQuery workspaces) {
         this.workspaceResolver = workspaceResolver;
         this.identityResolver = identityResolver;
         this.participantConsentRepository = participantConsentRepository;
@@ -74,6 +77,7 @@ public class SlackAppHomeService {
         this.messageService = messageService;
         this.onboardingService = onboardingService;
         this.uiLinks = uiLinks;
+        this.workspaces = workspaces;
     }
 
     public void onHomeOpened(String teamId, String slackUserId) {
@@ -92,7 +96,11 @@ public class SlackAppHomeService {
     View buildHomeView(long workspaceId, String teamId, String slackUserId) {
         List<LayoutBlock> blocks = new ArrayList<>();
         blocks.add(header(h -> h.text(plainText("Hephaestus"))));
-        blocks.add(SlackConversationPosts.aiLabel().getFirst());
+        blocks.add(SlackConversationPosts.aiLabelBlocks(workspaces
+                        .findById(workspaceId)
+                        .map(WorkspaceSummaryQuery.WorkspaceSummary::displayName)
+                        .orElse(null))
+                .getFirst());
         boolean conversationReady = conversationReadinessQuery.isReady(workspaceId);
         Optional<AccountSummaryQuery.AccountSummary> developer =
                 identityResolver.resolveDeveloper(workspaceId, teamId, slackUserId);

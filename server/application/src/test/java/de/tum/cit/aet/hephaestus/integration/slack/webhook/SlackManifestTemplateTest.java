@@ -49,6 +49,20 @@ class SlackManifestTemplateTest extends BaseUnitTest {
     }
 
     /**
+     * Slack shows the app's description and agent description before anyone writes to it, so both say that
+     * Hephaestus is an AI system. "AI assistant" is a generic label and a retired product term.
+     */
+    @Test
+    void manifestDescribesHephaestusAsAnAiSystem() throws Exception {
+        String manifest = Files.readString(MANIFEST, StandardCharsets.UTF_8);
+
+        assertThat(manifest)
+                .contains("  description: Hephaestus is an AI system that answers")
+                .contains("    agent_description: Hephaestus is an AI system.")
+                .doesNotContainIgnoringCase("assistant");
+    }
+
+    /**
      * The manifest's {@code bot_events} list and the registered inbox handlers must describe the same event set:
      * a subscribed event with no handler is silently dropped traffic; a handler for an unsubscribed event is dead
      * code that "works" in tests and never fires in production. The handled set is derived from the REAL handler

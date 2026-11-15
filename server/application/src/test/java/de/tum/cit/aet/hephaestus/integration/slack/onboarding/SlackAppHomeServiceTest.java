@@ -27,6 +27,7 @@ import de.tum.cit.aet.hephaestus.integration.slack.events.SlackWorkspaceResolver
 import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackMessageService;
 import de.tum.cit.aet.hephaestus.practices.spi.ConversationReadinessQuery;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceSummaryQuery;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
@@ -65,6 +66,9 @@ class SlackAppHomeServiceTest extends BaseUnitTest {
     @Mock
     private SlackHephaestusUiLinks uiLinks;
 
+    @Mock
+    private WorkspaceSummaryQuery workspaces;
+
     private SlackAppHomeService service;
 
     @BeforeEach
@@ -78,12 +82,25 @@ class SlackAppHomeServiceTest extends BaseUnitTest {
                 conversationAdmission,
                 messageService,
                 onboardingService,
-                uiLinks);
+                uiLinks,
+                workspaces);
         lenient().when(conversationReadinessQuery.isReady(7L)).thenReturn(true);
         lenient()
                 .when(monitoredChannelRepository.countByWorkspaceIdAndConsentState(7L, ConsentState.ACTIVE))
                 .thenReturn(1L);
         lenient().when(uiLinks.userSettingsUrl()).thenReturn("https://heph.example/settings");
+        lenient()
+                .when(workspaces.findById(7L))
+                .thenReturn(Optional.of(new WorkspaceSummaryQuery.WorkspaceSummary(7L, "team", "Team Alpha")));
+    }
+
+    @Test
+    void shouldSayThatAnAiSystemAnswersAndWhichWorkspaceUsesIt() {
+        String rendered = service.buildHomeView(7L, "T1", "U1").getBlocks().toString();
+
+        assertThat(rendered)
+                .contains("Hephaestus is an AI system that the Team Alpha workspace in Hephaestus uses."
+                        + " Its answers can be wrong.");
     }
 
     @Test

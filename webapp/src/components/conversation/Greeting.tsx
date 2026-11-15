@@ -24,7 +24,10 @@ function exampleQuestions(provider?: ItemProvider): string[] {
 	];
 }
 
-/** Hephaestus's welcome on a conversation that has not started. */
+/**
+ * Hephaestus's welcome on a conversation that has not started. The AI disclosure under the
+ * conversation stays after the first message, so the welcome does not repeat it.
+ */
 export function Greeting({ onAsk }: GreetingProps) {
 	const provider = useWorkProvider();
 	return (
@@ -34,8 +37,7 @@ export function Greeting({ onAsk }: GreetingProps) {
 				<div className="flex min-w-0 flex-col gap-2">
 					<p className="text-2xl font-semibold">Ask Hephaestus about your work</p>
 					<p className="max-w-prose text-sm text-muted-foreground">
-						Ask why you got feedback, what a practice means, or what to try next. Answers come from
-						an AI model and can be wrong.
+						Ask why you got feedback, what a practice means, or what to try next.
 					</p>
 					{onAsk !== undefined && (
 						<ul aria-label="Example questions" className="mt-2 flex flex-col items-start gap-2">

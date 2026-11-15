@@ -32,11 +32,14 @@ import {
 	SLACK_ANSWER,
 	SLACK_QUESTION,
 	turn,
+	WORKSPACE_NAME,
 	WORKSPACE_SLUG,
 } from "./fixtures";
 import { Greeting } from "./Greeting";
 
 const BEFORE_FOLLOW_UP = CONVERSATION.slice(0, 4);
+
+const DISCLOSURE = `Hephaestus is an AI system that the ${WORKSPACE_NAME} workspace uses. Its answers can be wrong, so check anything important before you rely on it.`;
 
 /**
  * A page older than the conversation fixture, on the same day as its first message, headed by the
@@ -158,6 +161,7 @@ const meta = {
 	args: {
 		label: "Your conversation",
 		workspaceSlug: WORKSPACE_SLUG,
+		workspaceName: WORKSPACE_NAME,
 		state: ready(),
 		developer: DEVELOPER,
 		onCopy: fn(),
@@ -200,6 +204,8 @@ export const Default: Story = {
 		await expect(canvas.getByText("Yesterday")).toBeVisible();
 		await expect(canvas.getByText("Today")).toBeVisible();
 		await expect(canvas.getAllByText("Slack")).toHaveLength(2);
+		// After the first message as before it: the disclosure is not only the greeting's.
+		await expect(canvas.getByText(DISCLOSURE)).toBeVisible();
 		const summary = canvas.getByRole("button", { name: /^3 replies/u });
 		// The visible words first, then the message, so two equal summaries keep apart.
 		await expect(summary).toHaveAccessibleName(
@@ -229,11 +235,16 @@ export const ReplyInThread: Story = {
 	},
 };
 
-/** Read, with no message yet: the greeting, and the composer to start with. */
+/**
+ * Read, with no message yet: the greeting, and the composer to start with. The AI disclosure is
+ * there before the first message, and the composer names it as its description.
+ */
 export const Empty: Story = {
 	args: { state: ready({ entries: [] }) },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("textbox", { name: "Message Hephaestus" })).toBeVisible();
+		const composer = canvas.getByRole("textbox", { name: "Message Hephaestus" });
+		await expect(composer).toBeVisible();
+		await expect(composer).toHaveAccessibleDescription(DISCLOSURE);
 	},
 };
 
@@ -249,7 +260,8 @@ export const Loading: Story = {
 			await canvas.findByText("Loading the conversation…", undefined, { timeout: 3000 }),
 		).toBeVisible();
 		await expect(canvas.queryByRole("textbox", { name: "Message Hephaestus" })).toBeNull();
-		await expect(canvas.queryByText(/^Hephaestus can make mistakes/u)).toBeNull();
+		// The AI disclosure does not wait for the messages.
+		await expect(canvas.getByText(DISCLOSURE)).toBeVisible();
 	},
 };
 
@@ -265,7 +277,7 @@ export const LoadError: Story = {
 	play: async ({ canvas, userEvent }) => {
 		await expect(canvas.getByText("We could not load these messages")).toBeVisible();
 		await expect(canvas.queryByRole("textbox", { name: "Message Hephaestus" })).toBeNull();
-		await expect(canvas.queryByText(/^Hephaestus can make mistakes/u)).toBeNull();
+		await expect(canvas.getByText(DISCLOSURE)).toBeVisible();
 		await userEvent.click(await canvas.findByRole("button", { name: "Retry" }));
 		await expect(retryLoad).toHaveBeenCalledOnce();
 	},
@@ -1300,6 +1312,8 @@ export const ReadOnly: Story = {
 	args: { actions: undefined, composer: undefined },
 	play: async ({ canvas }) => {
 		await expect(canvas.queryByRole("textbox")).toBeNull();
+		// A reader with no composer still reads answers, so the disclosure stays.
+		await expect(canvas.getByText(DISCLOSURE)).toBeVisible();
 		await expect(canvas.queryByRole("button", { name: /^Helpful/u })).toBeNull();
 		await expect(canvas.queryByRole("button", { name: /^Reply in thread/u })).toBeNull();
 		await expect(canvas.getByRole("button", { name: /^3 replies/u })).toBeVisible();

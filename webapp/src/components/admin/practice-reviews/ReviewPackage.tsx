@@ -3,6 +3,7 @@ import { definitionFor } from "@/components/common/status-def";
 
 import type { FeedbackCopy, ReviewFeedbackDetail } from "@/api/types.gen";
 import { UNTRUSTED_MARKDOWN_PROSE, UntrustedMarkdown } from "@/components/common/UntrustedMarkdown";
+import { WrittenByHephaestusNote } from "@/components/common/WrittenByHephaestusNote";
 import {
 	FEEDBACK_COPY_KIND_DEFS,
 	FEEDBACK_COPY_STATE_DEFS,
@@ -76,6 +77,7 @@ export function ReviewPackage({ feedback, defaultExpanded = false }: ReviewPacka
 					))}
 				</Accordion>
 			) : null}
+			{notes.length > 0 && <WrittenByHephaestusNote />}
 		</div>
 	);
 }

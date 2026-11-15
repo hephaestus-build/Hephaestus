@@ -27,7 +27,7 @@ public class ConversationSlackMessages {
      * @param messages Hephaestus's stored messages of the turn as the app shows them, with the feedback each showed; none
      *     while the turn runs
      * @param firstAnswer whether this is Hephaestus's first answer in Slack in this DM or thread, the one that says it
-     *     answers with an AI model
+     *     is an AI system
      */
     public record SlackTurn(
             ConversationTurn turn,

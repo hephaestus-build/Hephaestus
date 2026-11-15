@@ -3,6 +3,7 @@ import { expect, fn, screen, waitFor, within } from "storybook/test";
 import { RESULT_WORDS_UNAVAILABLE } from "./result-words";
 
 import type { AccountRef, ResultMark, ReviewResultDetail } from "@/api/types.gen";
+import { WRITTEN_BY_HEPHAESTUS } from "@/components/common/WrittenByHephaestusNote";
 import {
 	DELIVERY_STATE_DEFS,
 	deliveryOutcome,
@@ -192,6 +193,8 @@ export const MarkdownExplanation: Story = {
 export const Problems: Story = {
 	play: async () => {
 		const panel = within(await settledDrawerPanel());
+		// The admin reads the same words the developer does, with the same AI label.
+		await expect(panel.getByText(WRITTEN_BY_HEPHAESTUS)).toBeVisible();
 		const rows = [...panel.getByRole("list", { name: "Problems" }).children].filter(
 			(row): row is HTMLElement => row instanceof HTMLElement,
 		);

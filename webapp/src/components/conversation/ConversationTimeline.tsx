@@ -3,6 +3,7 @@ import {
 	type ReactNode,
 	type RefObject,
 	useEffect,
+	useId,
 	useLayoutEffect,
 	useRef,
 	useState,
@@ -34,6 +35,8 @@ import {
 import type { PendingMessage } from "@/lib/conversation-entry";
 import { hasText } from "@/lib/text";
 
+import { AskHephaestusDisclosure } from "./AskHephaestusDisclosure";
+import { ComposerDescription } from "./composer-description";
 import { type MessageAuthor, messageSubject } from "./ConversationMessage";
 import { DayMarker, ConversationTimelineRow } from "./ConversationTimelineRow";
 import { ConversationTimelineSkeleton } from "./ConversationTimelineSkeleton";
@@ -109,6 +112,11 @@ export interface ConversationTimelineProps {
 	label: string;
 	/** The workspace the links in messages and weekly digests open in. */
 	workspaceSlug: string;
+	/**
+	 * The name of that workspace, which the AI disclosure under the messages names as the one that
+	 * uses Hephaestus. Absent while it is not read yet.
+	 */
+	workspaceName?: string;
 	state: ConversationTimelineState;
 	developer: MessageAuthor;
 	onCopy: (text: string) => void;
@@ -521,7 +529,8 @@ function useOpeningWindow(
  * status line speaks from its own live region outside the log, so the finished answer is read once.
  */
 export function ConversationTimeline(props: ConversationTimelineProps) {
-	const { label, state, developer, lead, empty, livePaused = false, jumpTo } = props;
+	const { label, state, developer, lead, empty, livePaused = false, jumpTo, workspaceName } = props;
+	const disclosureId = useId();
 	const composer = state.status === "ready" ? props.composer : undefined;
 	const [deleting, setDeleting] = useState<ConversationEntry | null>(null);
 	const rows = state.status === "ready" ? timelineRows(state) : [];
@@ -633,12 +642,9 @@ export function ConversationTimeline(props: ConversationTimelineProps) {
 							/>
 						)}
 					</div>
-					{composer}
-					{composer !== undefined && (
-						<p className="text-center text-xs text-balance text-muted-foreground">
-							Hephaestus can make mistakes. Check anything important before you rely on it.
-						</p>
-					)}
+					<ComposerDescription value={disclosureId}>{composer}</ComposerDescription>
+					{/* In every state, with or without a composer: a reader who cannot ask still reads answers. */}
+					<AskHephaestusDisclosure id={disclosureId} workspaceName={workspaceName} />
 				</KeepsEndInView>
 			</div>
 			<ConfirmDialog
