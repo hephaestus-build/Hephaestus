@@ -130,8 +130,7 @@ public class HephTurnContexts {
      * work). So a caller in a transaction is refused.
      */
     public Context context(TurnAttempt turn) {
-        if (TransactionSynchronizationManager.isActualTransactionActive())
-            throw new IllegalStateException("A turn's context is built outside any transaction");
+        requireNoTransaction();
         ZoneId zone = zone(turn);
         MentorContextPathBuilder.TurnContext path = paths.forTurn(turn.workspaceId(), turn.turnId(), zone);
         MentorTurnAdmission admitted = MentorTurnAdmission.read(
@@ -167,8 +166,17 @@ public class HephTurnContexts {
         return pretty;
     }
 
-    /** Reads an item document from its owning source, with that source's workspace and developer checks. */
+    private static void requireNoTransaction() {
+        if (TransactionSynchronizationManager.isActualTransactionActive())
+            throw new IllegalStateException("A turn's context is built outside any transaction");
+    }
+
+    /**
+     * Reads an item document from its owning source, with that source's workspace and developer checks. Like
+     * {@link #context}, it refuses a caller in a transaction.
+     */
     public Optional<byte[]> document(TurnAttempt turn, String path) {
+        requireNoTransaction();
         return ContextFolderPaths.requestedDocument(path)
                 .flatMap(relative -> contextBuilder.read(turn.workspaceId(), turn.accountId(), relative))
                 .map(item -> mapper.writerWithDefaultPrettyPrinter()

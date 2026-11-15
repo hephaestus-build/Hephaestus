@@ -382,17 +382,17 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                         "systemPrompt");
     }
 
-    /**
-     * Inside one read-write transaction, Hibernate checks every entity the build has loaded before each query, and the
-     * build held the run's locks: a context build of minutes. Each part of the build reads in its own transaction.
-     */
+    /** The build's guard against a caller's transaction ({@link HephTurnContexts#context}). */
     @Test
-    void shouldRefuseToBuildATurnContextInsideATransaction() {
+    void shouldRefuseToBuildATurnContextOrDocumentInsideATransaction() {
         var contexts = HephTurnFixtures.contexts(beans);
-        assertThatThrownBy(() -> beans.getBean(TransactionTemplate.class).execute(tx -> contexts.context(attempt)))
+        var transactions = beans.getBean(TransactionTemplate.class);
+        assertThatThrownBy(() -> transactions.execute(tx -> contexts.context(attempt)))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("outside any transaction");
-        assertThat(contexts.context(attempt).systemPrompt()).isEqualTo(HephTurnContexts.SYSTEM_PROMPT);
+        assertThatThrownBy(() -> transactions.execute(tx -> contexts.document(attempt, "inputs/context/user.json")))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("outside any transaction");
     }
 
     /**

@@ -2,4 +2,4 @@
 "hephaestus": patch
 ---
 
-Ask Hephaestus gathers the workspace context for a question with fewer database reads: each repository a result names is looked up once per question instead of once per result.
+Practice pages, feedback history and Ask Hephaestus check each repository a result names once per read instead of once per result, so they load with fewer database reads.

@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -246,6 +247,36 @@ class ResultSourceAuthorizationTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldReadEachRepositoryOncePerReadAndRefuseARemovedOne() {
+        var history =
+                resultBuilder(result).evidenceVersion((short) 0).reviewId(job).build();
+        var purpose = SourceUsePurpose.OPERATOR_EVIDENCE_REVIEW;
+        when(results.findByIdAndWorkspaceId(history.getId(), 1)).thenReturn(Optional.of(history));
+        when(source.permits(item, purpose)).thenReturn(true);
+        when(assignments.findByWorkspaceIdAndReviewIdAndPracticeIdAndItemId(1, job, history.getPracticeId(), 2))
+                .thenReturn(Optional.of(ReviewItem.builder()
+                        .resultId(history.getId())
+                        .jobId(job)
+                        .build()));
+        when(custody.find(1, List.of(job)))
+                .thenReturn(new HistoryCustody(false, false, List.of(), List.of(9L), List.of(job)));
+        when(itemRows.activeRepositoryIds(1, 9)).thenReturn(List.of(2L));
+        // Two checks of the same result in one read: the second reuses the first one's repository read.
+        assertThat(authorization.asOneRead(
+                        1,
+                        () -> List.of(
+                                authorization.permitsHistory(1, history.getId(), purpose),
+                                authorization.permitsHistory(1, history.getId(), purpose))))
+                .containsExactly(true, true);
+        verify(itemRows, times(1)).activeRepositoryIds(1, 9);
+
+        // A new read asks again, and a removed repository refuses the result.
+        when(itemRows.activeRepositoryIds(1, 9)).thenReturn(List.of());
+        assertThat(authorization.permitsHistory(1, history.getId(), purpose)).isFalse();
+        verify(itemRows, times(2)).activeRepositoryIds(1, 9);
+    }
+
+    @Test
     void shouldRetainPrivacyChecksWhenMigratedCustodyIsIncomplete() {
         var history =
                 resultBuilder(result).evidenceVersion((short) 0).reviewId(job).build();
@@ -275,7 +306,6 @@ class ResultSourceAuthorizationTest extends BaseUnitTest {
                 .thenReturn(new HistoryCustody(false, false, List.of(), List.of(9L), List.of(job)));
         assertThat(authorization.permitsHistory(1, history.getId(), purpose)).isFalse();
         when(itemRows.activeRepositoryIds(1, 9)).thenReturn(List.of(2L));
-        when(items.require(1, 2)).thenReturn(item);
         assertThat(authorization.permitsHistory(1, history.getId(), purpose)).isTrue();
 
         var copiedJob = UUID.randomUUID();
