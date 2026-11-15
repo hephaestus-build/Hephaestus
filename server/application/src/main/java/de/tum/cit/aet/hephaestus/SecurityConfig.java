@@ -462,14 +462,13 @@ public class SecurityConfig {
 
     /** The MCP authorization endpoint: a safe GET that only redirects. */
     static final RequestMatcher MCP_AUTHORIZE_MATCHER =
-            PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.GET, "/mcp/oauth/authorize");
+            ApiPath.matchers().matcher(HttpMethod.GET, "/mcp/oauth/authorize");
 
     /**
      * The MCP token endpoint acts only on the code or refresh secret in its form body, like the installed-client
      * session endpoints, so it is CSRF-exempt only when the request carries no session cookie.
      */
-    static final RequestMatcher MCP_TOKEN_MATCHER =
-            PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/mcp/oauth/token");
+    static final RequestMatcher MCP_TOKEN_MATCHER = ApiPath.matchers().matcher(HttpMethod.POST, "/mcp/oauth/token");
 
     /** An installed client's dev sign-in (a safe GET ending in a handoff redirect); absent in production. */
     static final RequestMatcher DEV_CLIENT_LOGIN_MATCHER =

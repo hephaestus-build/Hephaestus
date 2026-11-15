@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.core.mcp;
 
 import de.tum.cit.aet.hephaestus.core.auth.mcp.McpGrantGuard;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.core.web.ApiPath;
 import io.modelcontextprotocol.json.jackson3.JacksonMcpJsonMapper;
 import io.modelcontextprotocol.server.McpServer;
 import io.modelcontextprotocol.server.McpStatelessServerFeatures;
@@ -23,7 +24,7 @@ import org.springframework.web.servlet.function.ServerResponse;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * The workspace MCP endpoint, {@code POST /workspaces/{workspaceSlug}/mcp}, in stateless mode: any
+ * The workspace MCP endpoint, {@code POST /api/workspaces/{workspaceSlug}/mcp}, in stateless mode: any
  * replica answers any request, and the server never calls the client.
  */
 @Slf4j
@@ -32,7 +33,7 @@ import tools.jackson.databind.json.JsonMapper;
 @ConditionalOnBooleanProperty("hephaestus.mcp.enabled")
 class McpServerConfiguration {
 
-    static final String ENDPOINT = "/workspaces/{workspaceSlug}/mcp";
+    static final String ENDPOINT = ApiPath.of("/workspaces/{workspaceSlug}/mcp");
 
     @Bean
     WebMvcStatelessServerTransport mcpTransport(

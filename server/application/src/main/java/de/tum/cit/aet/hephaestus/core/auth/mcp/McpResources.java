@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.core.auth.mcp;
 
 import de.tum.cit.aet.hephaestus.core.auth.AuthProperties;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.core.web.ApiPath;
 import java.util.Optional;
 import java.util.regex.Pattern;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
@@ -47,8 +48,7 @@ public class McpResources {
     public String resourceMetadataFor(String slug) {
         String origin =
                 properties.issuer().getScheme() + "://" + properties.issuer().getRawAuthority();
-        return origin + "/.well-known/oauth-protected-resource" + properties.apiBasePath() + "/workspaces/" + slug
-                + "/mcp";
+        return origin + "/.well-known/oauth-protected-resource" + ApiPath.PREFIX + "/workspaces/" + slug + "/mcp";
     }
 
     public String authorizationEndpoint() {

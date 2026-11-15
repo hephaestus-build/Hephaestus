@@ -1,7 +1,7 @@
 package de.tum.cit.aet.hephaestus.core.auth.mcp;
 
-import de.tum.cit.aet.hephaestus.core.auth.AuthProperties;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.core.web.ApiPath;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.LinkedHashMap;
@@ -27,11 +27,9 @@ import org.springframework.web.bind.annotation.RestController;
 public class McpMetadataController {
 
     private final McpResources resources;
-    private final AuthProperties properties;
 
-    McpMetadataController(McpResources resources, AuthProperties properties) {
+    McpMetadataController(McpResources resources) {
         this.resources = resources;
-        this.properties = properties;
     }
 
     @GetMapping(value = "/.well-known/oauth-authorization-server", produces = MediaType.APPLICATION_JSON_VALUE)
@@ -61,7 +59,7 @@ public class McpMetadataController {
             operationId = "getMcpResourceMetadata")
     public ResponseEntity<Map<String, Object>> protectedResource(@PathVariable String resourcePath) {
         // RFC 9728 § 3.1 inserts the resource's path after the well-known prefix.
-        String prefix = properties.apiBasePath() + "/workspaces/";
+        String prefix = ApiPath.PREFIX + "/workspaces/";
         if (!resourcePath.startsWith(prefix) || !resourcePath.endsWith("/mcp")) {
             return ResponseEntity.notFound().build();
         }

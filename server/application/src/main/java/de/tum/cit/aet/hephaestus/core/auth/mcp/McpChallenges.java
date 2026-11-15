@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.core.auth.mcp;
 
+import de.tum.cit.aet.hephaestus.core.web.ApiPath;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.util.regex.Matcher;
@@ -53,7 +54,10 @@ public final class McpChallenges implements AuthenticationEntryPoint {
     }
 
     static @Nullable String slugOf(HttpServletRequest request) {
-        String path = request.getRequestURI().substring(request.getContextPath().length());
+        String path = ApiPath.relative(request);
+        if (path == null) {
+            return null;
+        }
         Matcher matcher = ENDPOINT.matcher(path);
         return matcher.matches() ? matcher.group(1) : null;
     }

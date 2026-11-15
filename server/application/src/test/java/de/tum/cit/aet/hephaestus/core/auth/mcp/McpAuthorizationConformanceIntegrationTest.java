@@ -11,6 +11,7 @@ import de.tum.cit.aet.hephaestus.core.auth.jwt.HephaestusJwtIssuer;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwt;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.TokenConstraints;
 import de.tum.cit.aet.hephaestus.core.exception.ProblemType;
+import de.tum.cit.aet.hephaestus.testconfig.ApiWebTestClient;
 import de.tum.cit.aet.hephaestus.testconfig.RealAuthIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Membership;
@@ -35,6 +36,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.ApplicationContext;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -72,6 +74,9 @@ class McpAuthorizationConformanceIntegrationTest extends RealAuthIntegrationTest
 
     @Autowired
     private JdbcTemplate jdbc;
+
+    @Autowired
+    private ApplicationContext context;
 
     @Autowired
     private ClientSessionService clientSessions;
@@ -527,7 +532,8 @@ class McpAuthorizationConformanceIntegrationTest extends RealAuthIntegrationTest
     void shouldServeMetadataThatPointsAClientToThisIssuer() {
         webTestClient
                 .get()
-                .uri("/.well-known/oauth-protected-resource/api/workspaces/{slug}/mcp", slug)
+                .uri(ApiWebTestClient.root(
+                        context, "/.well-known/oauth-protected-resource/api/workspaces/" + slug + "/mcp"))
                 .exchange()
                 .expectStatus()
                 .isOk()
@@ -538,7 +544,7 @@ class McpAuthorizationConformanceIntegrationTest extends RealAuthIntegrationTest
                 .isEqualTo(McpAuthorizationFlow.ISSUER);
         webTestClient
                 .get()
-                .uri("/.well-known/oauth-authorization-server")
+                .uri(ApiWebTestClient.root(context, "/.well-known/oauth-authorization-server"))
                 .exchange()
                 .expectStatus()
                 .isOk()

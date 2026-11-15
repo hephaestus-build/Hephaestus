@@ -2,11 +2,11 @@ package de.tum.cit.aet.hephaestus.core.auth.config;
 
 import de.tum.cit.aet.hephaestus.core.WebClientConnectors;
 import de.tum.cit.aet.hephaestus.core.auth.AuthProperties;
+import de.tum.cit.aet.hephaestus.core.auth.OAuthLoginPaths;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.RevocationAwareJwtDecoder;
 import de.tum.cit.aet.hephaestus.core.auth.mcp.McpChallenges;
 import de.tum.cit.aet.hephaestus.core.auth.mcp.McpResources;
 import de.tum.cit.aet.hephaestus.core.auth.mcp.McpTokenValidators;
-import de.tum.cit.aet.hephaestus.core.auth.OAuthLoginPaths;
 import de.tum.cit.aet.hephaestus.core.auth.oauth.AuthIntentCookie;
 import de.tum.cit.aet.hephaestus.core.auth.oauth.CookieOAuth2AuthorizationRequestRepository;
 import de.tum.cit.aet.hephaestus.core.auth.oauth.GitHubEmailOAuth2UserService;
@@ -330,7 +330,7 @@ public class AuthSecurityConfig {
             throws Exception {
         JwtDecoder decoder = webAppDecoder.forAudience(McpTokenValidators.mcpAudience(resources));
         McpChallenges challenges = new McpChallenges(resources);
-        http.securityMatcher("/workspaces/*/mcp")
+        http.securityMatcher(ApiPath.matchers().matcher("/workspaces/*/mcp"))
                 .sessionManagement(sessions -> sessions.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .csrf(csrf -> csrf.disable())
                 .exceptionHandling(exceptions -> exceptions.authenticationEntryPoint(challenges))
