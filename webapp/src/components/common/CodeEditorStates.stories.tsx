@@ -1,11 +1,10 @@
 import type { Meta, StoryObj } from "@storybook/react";
 import { expect, fn, waitFor } from "storybook/test";
 
-import { CodeEditorError, CodeEditorSkeleton } from "./CodeEditor";
+import { CodeEditorError, CodeEditorSkeleton } from "./CodeEditorStates";
 
 /**
- * The states the code editor shows while it is not ready. Stories never load the editor itself:
- * `.storybook/main.ts` replaces it with a text area.
+ * The states the code editor shows while it is not ready.
  */
 const meta = {
 	component: CodeEditorError,

@@ -4,7 +4,8 @@ import * as monaco from "monaco-editor";
 import { useId, useLayoutEffect, useRef } from "react";
 import { flushSync } from "react-dom";
 
-import { type CodeEditorProps, CodeEditorError, CodeEditorSkeleton } from "./CodeEditor";
+import type { CodeEditorProps } from "./CodeEditor";
+import { CodeEditorError, CodeEditorSkeleton } from "./CodeEditorStates";
 
 self.MonacoEnvironment = {
 	async getWorker(_workerId, label) {
