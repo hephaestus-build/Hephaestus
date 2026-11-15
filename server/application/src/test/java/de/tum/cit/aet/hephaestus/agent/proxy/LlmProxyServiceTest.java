@@ -55,10 +55,10 @@ import io.opentelemetry.sdk.trace.export.SimpleSpanProcessor;
 import io.opentelemetry.sdk.trace.export.SpanExporter;
 import io.opentelemetry.sdk.trace.samplers.Sampler;
 import jakarta.servlet.ServletOutputStream;
+import jakarta.servlet.WriteListener;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpServletResponseWrapper;
 import java.io.IOException;
-import java.io.OutputStream;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.URI;
@@ -73,7 +73,10 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -107,9 +110,11 @@ import org.springframework.web.reactive.function.client.ClientResponse;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.core.publisher.Sinks;
 import reactor.core.scheduler.Schedulers;
 import reactor.netty.http.server.HttpServer;
 import reactor.test.StepVerifier;
+import reactor.test.scheduler.VirtualTimeScheduler;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
@@ -168,7 +173,7 @@ class LlmProxyServiceTest extends BaseUnitTest {
                 new ProxyCallsInFlight(12),
                 new LlmConnectionHealth(CircuitBreakerRegistry.ofDefaults()),
                 admittingPermits(),
-                new ConversationCallProperties(CONVERSATION_FIRST_BYTE, CONVERSATION_IDLE));
+                SILENCE_NEVER_REACHED);
     }
 
     @Test
@@ -472,7 +477,7 @@ class LlmProxyServiceTest extends BaseUnitTest {
                     new ProxyCallsInFlight(12),
                     new LlmConnectionHealth(CircuitBreakerRegistry.ofDefaults()),
                     admittingPermits(),
-                    new ConversationCallProperties(CONVERSATION_FIRST_BYTE, CONVERSATION_IDLE));
+                    SILENCE_NEVER_REACHED);
             var routing = routing("openai-completions");
             authenticate(routing);
             when(resolver.resolveProxyCredential(any()))
@@ -548,8 +553,12 @@ class LlmProxyServiceTest extends BaseUnitTest {
         }
 
         private LlmProxyService controllerWith(WebClient client, Tracer tracer) {
-            return controllerWith(
-                    client, tracer, new ConversationCallProperties(CONVERSATION_FIRST_BYTE, CONVERSATION_IDLE));
+            return controllerWith(client, tracer, SILENCE_NEVER_REACHED);
+        }
+
+        /** A controller that ends a call on {@code silence}: a test of a silence bound reaches only its own. */
+        private LlmProxyService controllerWith(ConversationCallProperties silence) {
+            return controllerWith(WebClient.builder().build(), Tracer.NOOP, silence);
         }
 
         private LlmProxyService controllerWith(WebClient client, Tracer tracer, ConversationCallProperties silence) {
@@ -571,6 +580,106 @@ class LlmProxyServiceTest extends BaseUnitTest {
         @AfterEach
         void stopUpstream() throws IOException {
             upstream.close();
+        }
+
+        /**
+         * A provider that reads the request and sends nothing, not even its headers, until the test closes it. Reactor
+         * Netty owns the first-byte timer, so a test of it needs a real socket; nothing ever arrives to race it.
+         */
+        private static final class SilentProvider implements AutoCloseable {
+            private final CountDownLatch closed = new CountDownLatch(1);
+            private final com.sun.net.httpserver.HttpServer server;
+
+            SilentProvider() throws IOException {
+                server = com.sun.net.httpserver.HttpServer.create(
+                        new InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0);
+                server.createContext("/v1/chat/completions", exchange -> {
+                    try {
+                        exchange.getRequestBody().readAllBytes();
+                        closed.await();
+                    } catch (InterruptedException interrupted) {
+                        Thread.currentThread().interrupt();
+                    } finally {
+                        exchange.close();
+                    }
+                });
+                server.start();
+            }
+
+            String baseUrl() {
+                return "http://127.0.0.1:" + server.getAddress().getPort() + "/v1";
+            }
+
+            @Override
+            public void close() {
+                closed.countDown();
+                server.stop(0);
+            }
+        }
+
+        /**
+         * One call of {@code routing} whose provider body is {@code provider}, with the idle bound on virtual time.
+         * Virtual time moves only when the test advances it, after {@link #relayed()}, so no chunk is ever late and no
+         * bound fires early, however slowly the test runs.
+         */
+        private final class VirtualCall implements AutoCloseable {
+            final VirtualTimeScheduler time = VirtualTimeScheduler.getOrSet();
+            private final ExecutorService caller = Executors.newSingleThreadExecutor();
+            private final Semaphore flushed = new Semaphore(0);
+            private final MockHttpServletResponse response = flushCounting(flushed);
+            private final Future<?> call;
+
+            VirtualCall(ProxyRouting routing, Flux<DataBuffer> provider) {
+                AtomicBoolean consumed = new AtomicBoolean();
+                // An HTTP body is consumed once; the client's cleanup after a failure must not subscribe to it again.
+                Flux<DataBuffer> body = Flux.defer(() -> consumed.compareAndSet(false, true) ? provider : Flux.empty());
+                streamingController = controllerWith(answering(new AtomicInteger(), body), Tracer.NOOP, IDLE_ONLY);
+                stubStreamCredential(routing);
+                call = caller.submit(() -> {
+                    authenticate(routing);
+                    try {
+                        controllerProxy(response);
+                    } finally {
+                        SecurityContextHolder.clearContext();
+                    }
+                });
+            }
+
+            /**
+             * Waits until the proxy relayed the provider's next chunk. The proxy reads a chunk, which arms the idle
+             * timer again, before it writes and flushes it, so a flush is the point after which time may move.
+             */
+            void relayed() throws InterruptedException {
+                assertThat(flushed.tryAcquire(10, TimeUnit.SECONDS)).isTrue();
+            }
+
+            MockHttpServletResponse finished() throws Exception {
+                call.get(10, TimeUnit.SECONDS);
+                return response;
+            }
+
+            @Override
+            public void close() {
+                caller.shutdownNow();
+                try {
+                    assertThat(caller.awaitTermination(10, TimeUnit.SECONDS)).isTrue();
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                    throw new AssertionError(interrupted);
+                } finally {
+                    VirtualTimeScheduler.reset();
+                }
+            }
+        }
+
+        /** What a call of {@code routing} relayed when its provider sent {@code sent}, then nothing for the idle bound. */
+        private MockHttpServletResponse stalledAfter(ProxyRouting routing, String sent) throws Exception {
+            try (VirtualCall call =
+                    new VirtualCall(routing, Flux.just(sse(sent)).concatWith(Flux.never()))) {
+                call.relayed();
+                call.time.advanceTimeBy(CONVERSATION_IDLE);
+                return call.finished();
+            }
         }
 
         private ProxyRouting streamingRouting() {
@@ -642,7 +751,7 @@ class LlmProxyServiceTest extends BaseUnitTest {
                     4096L);
         }
 
-        /** A conversation turn's call to {@code baseUrl}, which the proxy cuts after {@link #CONVERSATION_IDLE} without a byte. */
+        /** A conversation turn's call to {@code baseUrl}, through the current {@code streamingController}. */
         private MockHttpServletResponse proxyConversationTurn(String baseUrl) {
             ProxyRouting routing = conversationTurnRouting(baseUrl);
             authenticate(routing);
@@ -663,39 +772,66 @@ class LlmProxyServiceTest extends BaseUnitTest {
         @Test
         @DisplayName("keep-alive comments keep a slow Hephaestus call alive past the idle bound until it answers")
         void keepAliveCommentsKeepASlowConversationCallAlive() throws Exception {
-            // A gateway that schedules the answer: comments for about 1.5 seconds, nearly 4 idle bounds, then the
-            // whole answer at once.
-            com.sun.net.httpserver.HttpServer gateway = com.sun.net.httpserver.HttpServer.create(
-                    new InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0);
-            gateway.createContext("/v1/chat/completions", exchange -> {
-                exchange.getRequestBody().readAllBytes();
-                exchange.getResponseHeaders().add("Content-Type", "text/event-stream");
-                exchange.sendResponseHeaders(200, 0);
-                try (OutputStream body = exchange.getResponseBody()) {
-                    for (int comment = 0; comment < 10; comment++) {
-                        body.write(": scheduled\n\n".getBytes(StandardCharsets.UTF_8));
-                        body.flush();
-                        Thread.sleep(150);
-                    }
-                    body.write(
-                            ("data: {\"choices\":[{\"delta\":{\"content\":\"late answer\"}}]}\n\n" + "data: [DONE]\n\n")
-                                    .getBytes(StandardCharsets.UTF_8));
-                } catch (InterruptedException interrupted) {
-                    Thread.currentThread().interrupt();
+            // Each comment comes 100 ms inside the idle bound; together they span nearly 4 idle bounds.
+            Sinks.Many<DataBuffer> provider = Sinks.many().unicast().onBackpressureBuffer();
+            try (VirtualCall call =
+                    new VirtualCall(conversationTurnRouting(upstream.url("/v1").toString()), provider.asFlux())) {
+                for (int comment = 0; comment < 5; comment++) {
+                    provider.emitNext(sse(": scheduled\n\n"), Sinks.EmitFailureHandler.FAIL_FAST);
+                    call.relayed();
+                    call.time.advanceTimeBy(CONVERSATION_IDLE.minusMillis(100));
                 }
-            });
-            gateway.start();
-            try {
-                MockHttpServletResponse response = proxyConversationTurn(
-                        "http://127.0.0.1:" + gateway.getAddress().getPort() + "/v1");
+                provider.emitNext(
+                        sse("data: {\"choices\":[{\"delta\":{\"content\":\"late answer\"}}]}\n\n" + "data: [DONE]\n\n"),
+                        Sinks.EmitFailureHandler.FAIL_FAST);
+                provider.emitComplete(Sinks.EmitFailureHandler.FAIL_FAST);
 
-                assertThat(response.getContentAsString())
+                assertThat(call.finished().getContentAsString())
                         .contains("late answer")
                         .contains("[DONE]")
                         .doesNotContain("upstream_stalled");
-            } finally {
-                gateway.stop(0);
             }
+        }
+
+        private static DataBuffer sse(String text) {
+            return DefaultDataBufferFactory.sharedInstance.wrap(text.getBytes(StandardCharsets.UTF_8));
+        }
+
+        /** A servlet response that releases {@code flushed} each time the proxy flushes what it relayed. */
+        private static MockHttpServletResponse flushCounting(Semaphore flushed) {
+            return new MockHttpServletResponse() {
+                @Override
+                public ServletOutputStream getOutputStream() {
+                    ServletOutputStream relayed = super.getOutputStream();
+                    return new ServletOutputStream() {
+                        @Override
+                        public boolean isReady() {
+                            return true;
+                        }
+
+                        @Override
+                        public void setWriteListener(WriteListener listener) {
+                            throw new UnsupportedOperationException();
+                        }
+
+                        @Override
+                        public void write(int value) throws IOException {
+                            relayed.write(value);
+                        }
+
+                        @Override
+                        public void write(byte[] bytes, int offset, int length) throws IOException {
+                            relayed.write(bytes, offset, length);
+                        }
+
+                        @Override
+                        public void flush() throws IOException {
+                            relayed.flush();
+                            flushed.release();
+                        }
+                    };
+                }
+            };
         }
 
         @Test
@@ -703,54 +839,37 @@ class LlmProxyServiceTest extends BaseUnitTest {
                 "a review stream whose provider sends its headers and one comment, then nothing, ends at the idle bound")
         void aReviewStreamThatGoesSilentAfterAKeepAliveCommentEndsAtTheIdleBound() throws Exception {
             // The shape of a gateway that schedules the call and never answers: headers, one comment, then silence.
-            CountDownLatch released = new CountDownLatch(1);
-            com.sun.net.httpserver.HttpServer gateway = com.sun.net.httpserver.HttpServer.create(
-                    new InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0);
-            gateway.createContext("/v1/chat/completions", exchange -> {
-                exchange.getRequestBody().readAllBytes();
-                exchange.getResponseHeaders().add("Content-Type", "text/event-stream");
-                exchange.sendResponseHeaders(200, 0);
-                try (OutputStream body = exchange.getResponseBody()) {
-                    body.write(": logos-schedule\n\n".getBytes(StandardCharsets.UTF_8));
-                    body.flush();
-                    released.await(30, TimeUnit.SECONDS);
-                } catch (InterruptedException interrupted) {
-                    Thread.currentThread().interrupt();
-                }
-            });
-            gateway.start();
-            try {
-                // The attempt's deadline is far off, so only the idle bound can end the call.
-                LlmCallPermits.Permit permit = mock(LlmCallPermits.Permit.class);
-                when(permit.revoked()).thenReturn(Mono.never());
-                Answer answer = proxyPooledStream(
-                        "http://127.0.0.1:" + gateway.getAddress().getPort() + "/v1", permit);
+            // The attempt's deadline is far off, so only the idle bound can end the call.
+            LlmCallPermits.Permit permit = mock(LlmCallPermits.Permit.class);
+            when(permit.revoked()).thenReturn(Mono.never());
+            when(routingService.band(any())).thenReturn(AgentRunBand.BATCH);
+            when(streamingPermits.acquire(eq(42L), eq(AgentRunBand.BATCH), any(), any(), any()))
+                    .thenReturn(permit);
 
-                assertThat(answer.status()).isEqualTo(200);
-                JsonNode last = OBJECT_MAPPER.readTree(answer.body()
-                        .strip()
-                        .lines()
-                        .reduce((first, second) -> second)
-                        .orElseThrow()
-                        .substring("data: ".length()));
-                assertThat(last.path("error").path("code").asString()).isEqualTo("upstream_stalled");
-                // The review runner's model client retries an error that says it timed out.
-                assertThat(last.path("error").path("message").asString())
-                        .contains("timed out: it sent nothing for 0 seconds");
-                assertThat(streamingMeterRegistry
-                                .counter("llm.proxy.upstream.stalled", "apiProtocol", "openai-completions")
-                                .count())
-                        .isEqualTo(1.0);
-            } finally {
-                released.countDown();
-                gateway.stop(0);
-            }
+            MockHttpServletResponse response = stalledAfter(streamingRouting(), ": logos-schedule\n\n");
+
+            assertThat(response.getStatus()).isEqualTo(200);
+            JsonNode last = OBJECT_MAPPER.readTree(response.getContentAsString()
+                    .strip()
+                    .lines()
+                    .reduce((first, second) -> second)
+                    .orElseThrow()
+                    .substring("data: ".length()));
+            assertThat(last.path("error").path("code").asString()).isEqualTo("upstream_stalled");
+            // The review runner's model client retries an error that says it timed out.
+            assertThat(last.path("error").path("message").asString())
+                    .contains("timed out: it sent nothing for 0 seconds");
+            assertThat(streamingMeterRegistry
+                            .counter("llm.proxy.upstream.stalled", "apiProtocol", "openai-completions")
+                            .count())
+                    .isEqualTo(1.0);
         }
 
         @Test
         @DisplayName(
                 "a review call without a stream keeps the client's read bound when its provider pauses past the idle bound")
         void aReviewCallWithoutAStreamIsNotCutAtTheIdleBound() throws Exception {
+            streamingController = controllerWith(IDLE_ONLY);
             upstream.enqueue(new MockResponse.Builder()
                     .code(200)
                     .addHeader("Content-Type", "application/json")
@@ -789,6 +908,7 @@ class LlmProxyServiceTest extends BaseUnitTest {
         @DisplayName(
                 "a provider that queues a Hephaestus call past the idle bound still answers within the first-byte bound")
         void aQueuedConversationCallAnswersWithinTheFirstByteBound() throws Exception {
+            streamingController = controllerWith(IDLE_ONLY);
             MockHttpServletResponse response = proxyConversationTurn(new MockResponse.Builder()
                     .code(200)
                     .addHeader("Content-Type", "text/event-stream")
@@ -1104,12 +1224,9 @@ class LlmProxyServiceTest extends BaseUnitTest {
         @Test
         @DisplayName("a Hephaestus call whose provider goes silent after its headers ends with a stall error event")
         void aSilentConversationCallEndsWithAStallErrorEvent() throws Exception {
-            MockHttpServletResponse response = proxyConversationTurn(new MockResponse.Builder()
-                    .code(200)
-                    .addHeader("Content-Type", "text/event-stream")
-                    .body("data: {\"choices\":[{\"delta\":{\"content\":\"Let me\"}}]}\n\n")
-                    .bodyDelay(3, TimeUnit.SECONDS)
-                    .build());
+            MockHttpServletResponse response = stalledAfter(
+                    conversationTurnRouting(upstream.url("/v1").toString()),
+                    "data: {\"choices\":[{\"delta\":{\"content\":\"Let me\"}}]}\n\n");
 
             JsonNode last = OBJECT_MAPPER.readTree(response.getContentAsString()
                     .strip()
@@ -1130,106 +1247,62 @@ class LlmProxyServiceTest extends BaseUnitTest {
         @DisplayName("a provider that goes silent inside an event ends with a stall event the client can read")
         void aStallInsideAnEventEndsWithAWholeStallEvent() throws Exception {
             // A gateway that flushes at a buffer boundary: one whole event, then half of the next, then nothing.
-            com.sun.net.httpserver.HttpServer gateway = com.sun.net.httpserver.HttpServer.create(
-                    new InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0);
-            gateway.createContext("/v1/chat/completions", exchange -> {
-                exchange.getRequestBody().readAllBytes();
-                exchange.getResponseHeaders().add("Content-Type", "text/event-stream");
-                exchange.sendResponseHeaders(200, 0);
-                try (OutputStream body = exchange.getResponseBody()) {
-                    body.write(("data: {\"choices\":[{\"delta\":{\"content\":\"Let me\"}}]}\n\n"
-                                    + "data: {\"choices\":[{\"delta\":{\"con")
-                            .getBytes(StandardCharsets.UTF_8));
-                    body.flush();
-                    Thread.sleep(3_000);
-                } catch (InterruptedException interrupted) {
-                    Thread.currentThread().interrupt();
-                } catch (IOException proxyLeft) {
-                    // The proxy cut the call at its idle bound.
-                }
-            });
-            gateway.start();
-            try {
-                MockHttpServletResponse response = proxyConversationTurn(
-                        "http://127.0.0.1:" + gateway.getAddress().getPort() + "/v1");
+            MockHttpServletResponse response = stalledAfter(
+                    conversationTurnRouting(upstream.url("/v1").toString()),
+                    "data: {\"choices\":[{\"delta\":{\"content\":\"Let me\"}}]}\n\n"
+                            + "data: {\"choices\":[{\"delta\":{\"con");
 
-                List<String> events = List.of(response.getContentAsString().split("\n\n"));
-                assertThat(events).hasSize(2);
-                for (String event : events) {
-                    assertThat(event).startsWith("data: ");
-                    // Every event the client receives is whole JSON.
-                    OBJECT_MAPPER.readTree(event.substring("data: ".length()));
-                }
-                assertThat(OBJECT_MAPPER
-                                .readTree(events.get(1).substring("data: ".length()))
-                                .path("error")
-                                .path("code")
-                                .asString())
-                        .isEqualTo("upstream_stalled");
-            } finally {
-                gateway.stop(0);
+            List<String> events = List.of(response.getContentAsString().split("\n\n"));
+            assertThat(events).hasSize(2);
+            for (String event : events) {
+                assertThat(event).startsWith("data: ");
+                // Every event the client receives is whole JSON.
+                OBJECT_MAPPER.readTree(event.substring("data: ".length()));
             }
+            assertThat(OBJECT_MAPPER
+                            .readTree(events.get(1).substring("data: ".length()))
+                            .path("error")
+                            .path("code")
+                            .asString())
+                    .isEqualTo("upstream_stalled");
         }
 
         @Test
         @DisplayName("a stream with CR line endings keeps its whole events when it stalls after one")
         void aCarriageReturnStreamKeepsItsWholeEventsWhenItStalls() throws Exception {
-            com.sun.net.httpserver.HttpServer gateway = com.sun.net.httpserver.HttpServer.create(
-                    new InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0);
-            gateway.createContext("/v1/chat/completions", exchange -> {
-                exchange.getRequestBody().readAllBytes();
-                exchange.getResponseHeaders().add("Content-Type", "text/event-stream");
-                exchange.sendResponseHeaders(200, 0);
-                try (OutputStream body = exchange.getResponseBody()) {
-                    body.write("data: {\"choices\":[{\"delta\":{\"content\":\"Let me\"}}]}\r\r"
-                            .getBytes(StandardCharsets.UTF_8));
-                    body.flush();
-                    Thread.sleep(3_000);
-                } catch (InterruptedException interrupted) {
-                    Thread.currentThread().interrupt();
-                } catch (IOException proxyLeft) {
-                    // The proxy cut the call at its idle bound.
-                }
-            });
-            gateway.start();
-            try {
-                String relayed = proxyConversationTurn(
-                                "http://127.0.0.1:" + gateway.getAddress().getPort() + "/v1")
-                        .getContentAsString();
+            String relayed = stalledAfter(
+                            conversationTurnRouting(upstream.url("/v1").toString()),
+                            "data: {\"choices\":[{\"delta\":{\"content\":\"Let me\"}}]}\r\r")
+                    .getContentAsString();
 
-                assertThat(relayed).startsWith("data: {\"choices\":[{\"delta\":{\"content\":\"Let me\"}}]}\r\r");
-                assertThat(relayed).contains("upstream_stalled");
-            } finally {
-                gateway.stop(0);
-            }
+            assertThat(relayed).startsWith("data: {\"choices\":[{\"delta\":{\"content\":\"Let me\"}}]}\r\r");
+            assertThat(relayed).contains("upstream_stalled");
         }
 
         @Test
         @DisplayName("a Hephaestus call whose provider sends no headers gets a gateway timeout the host can name")
         void aConversationCallWithoutHeadersGetsAGatewayTimeout() throws Exception {
-            upstream.enqueue(new MockResponse.Builder()
-                    .code(200)
-                    .addHeader("Content-Type", "text/event-stream")
-                    .headersDelay(3, TimeUnit.SECONDS)
-                    .body("data: [DONE]\n\n")
-                    .build());
-            ProxyRouting routing = conversationTurnRouting(upstream.url("/v1").toString());
-            authenticate(routing);
-            stubCredential(
-                    routing,
-                    new LlmModelResolver.ProxyCredential(
-                            upstream.url("/v1").toString(),
-                            "openai-completions",
-                            LlmAuthMode.BEARER,
-                            "catalog-model",
-                            "secret",
-                            42L));
+            streamingController = controllerWith(FIRST_BYTE_ONLY);
+            ResponseEntity<?> result;
+            try (SilentProvider provider = new SilentProvider()) {
+                ProxyRouting routing = conversationTurnRouting(provider.baseUrl());
+                authenticate(routing);
+                stubCredential(
+                        routing,
+                        new LlmModelResolver.ProxyCredential(
+                                provider.baseUrl(),
+                                "openai-completions",
+                                LlmAuthMode.BEARER,
+                                "catalog-model",
+                                "secret",
+                                42L));
 
-            ResponseEntity<?> result = streamingController.proxy(
-                    request("POST", "/internal/llm/chat/completions"),
-                    new MockHttpServletResponse(),
-                    new HttpHeaders(),
-                    "{\"stream\":true,\"messages\":[]}".getBytes(StandardCharsets.UTF_8));
+                result = streamingController.proxy(
+                        request("POST", "/internal/llm/chat/completions"),
+                        new MockHttpServletResponse(),
+                        new HttpHeaders(),
+                        "{\"stream\":true,\"messages\":[]}".getBytes(StandardCharsets.UTF_8));
+            }
 
             assertThat(Objects.requireNonNull(result).getStatusCode().value()).isEqualTo(504);
             assertThat(OBJECT_MAPPER
@@ -1273,13 +1346,8 @@ class LlmProxyServiceTest extends BaseUnitTest {
                     .body("{\"error\":{\"message\":\"overloaded\"}}")
                     .build());
             controllerProxy(new MockHttpServletResponse());
-            upstream.enqueue(new MockResponse.Builder()
-                    .code(200)
-                    .addHeader("Content-Type", "text/event-stream")
-                    .body("data: {\"choices\":[{\"delta\":{\"content\":\"Let me\"}}]}\n\n")
-                    .bodyDelay(3, TimeUnit.SECONDS)
-                    .build());
-            controllerProxy(new MockHttpServletResponse());
+            // The same turn's next call goes silent after its headers, so only the idle bound can end it.
+            stalledAfter(routing, "data: {\"choices\":[{\"delta\":{\"content\":\"Let me\"}}]}\n\n");
 
             ArgumentCaptor<ConversationTurn.FailedCall> failures =
                     ArgumentCaptor.forClass(ConversationTurn.FailedCall.class);
@@ -1536,7 +1604,7 @@ class LlmProxyServiceTest extends BaseUnitTest {
                     calls,
                     new LlmConnectionHealth(CircuitBreakerRegistry.ofDefaults()),
                     admittingPermits(),
-                    new ConversationCallProperties(CONVERSATION_FIRST_BYTE, CONVERSATION_IDLE));
+                    SILENCE_NEVER_REACHED);
             upstream.enqueue(new MockResponse.Builder()
                     .code(200)
                     .addHeader("Content-Type", "text/event-stream")
@@ -2164,9 +2232,10 @@ class LlmProxyServiceTest extends BaseUnitTest {
                                     // The review's stream is silent for 600 seconds, so only the conversation keeps its
                                     // idle
                                     // bound.
-                                    var service = conversation
-                                            ? controllerWith(answering(requests, body), tracer)
-                                            : controllerWith(answering(requests, body), tracer, SILENCE_NEVER_REACHED);
+                                    var service = controllerWith(
+                                            answering(requests, body),
+                                            tracer,
+                                            conversation ? IDLE_ONLY : SILENCE_NEVER_REACHED);
                                     authenticate(routing);
                                     try {
                                         assertThat(service.proxy(
@@ -2344,9 +2413,15 @@ class LlmProxyServiceTest extends BaseUnitTest {
     // How long a conversation turn's stream, or a review's stream, may send no byte in these tests.
     private static final Duration CONVERSATION_IDLE = Duration.ofMillis(400);
 
-    // Silence bounds that no test reaches, for a test of another bound.
+    // Silence bounds that no test reaches: under any load, only the bound a test is about can end its call.
     private static final ConversationCallProperties SILENCE_NEVER_REACHED =
             new ConversationCallProperties(Duration.ofHours(1), Duration.ofHours(1));
+
+    private static final ConversationCallProperties IDLE_ONLY =
+            new ConversationCallProperties(Duration.ofHours(1), CONVERSATION_IDLE);
+
+    private static final ConversationCallProperties FIRST_BYTE_ONLY =
+            new ConversationCallProperties(CONVERSATION_FIRST_BYTE, Duration.ofHours(1));
 
     // The review cap at practice concurrency 3: 2 × (3 + 1) + 4.
     private static final int REVIEW_CALLS_AT_THREE = 12;
