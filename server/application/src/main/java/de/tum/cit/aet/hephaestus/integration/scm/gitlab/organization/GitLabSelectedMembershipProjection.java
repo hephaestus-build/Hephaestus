@@ -21,10 +21,12 @@ import de.tum.cit.aet.hephaestus.workspace.Membership;
 import de.tum.cit.aet.hephaestus.workspace.MembershipService;
 import de.tum.cit.aet.hephaestus.workspace.RepositorySelection;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitor;
-import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceActorSelector;
-import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceLocks;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceLookup;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceProviderAccounts;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceRepositoryMonitors;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import java.util.ArrayList;
@@ -104,8 +106,11 @@ public class GitLabSelectedMembershipProjection {
         }
     }
 
-    private final WorkspaceRepository workspaces;
-    private final RepositoryToMonitorRepository monitors;
+    private final WorkspaceLocks workspaceLocks;
+
+    private final WorkspaceLookup workspaceLookup;
+    private final WorkspaceProviderAccounts providerAccounts;
+    private final WorkspaceRepositoryMonitors monitors;
     private final ConnectionCommands connections;
     private final ConnectionQueries connectionQueries;
     private final WorkspaceActorSelector actorSelector;
@@ -120,8 +125,10 @@ public class GitLabSelectedMembershipProjection {
     private @Nullable EntityManager entityManager;
 
     public GitLabSelectedMembershipProjection(
-            WorkspaceRepository workspaces,
-            RepositoryToMonitorRepository monitors,
+            WorkspaceLocks workspaceLocks,
+            WorkspaceLookup workspaceLookup,
+            WorkspaceProviderAccounts providerAccounts,
+            WorkspaceRepositoryMonitors monitors,
             ConnectionCommands connections,
             ConnectionQueries connectionQueries,
             WorkspaceActorSelector actorSelector,
@@ -131,7 +138,9 @@ public class GitLabSelectedMembershipProjection {
             GitLabUserService userService,
             MembershipService membershipService,
             TransactionTemplate transactionTemplate) {
-        this.workspaces = workspaces;
+        this.workspaceLocks = workspaceLocks;
+        this.workspaceLookup = workspaceLookup;
+        this.providerAccounts = providerAccounts;
         this.monitors = monitors;
         this.connections = connections;
         this.connectionQueries = connectionQueries;
@@ -177,14 +186,14 @@ public class GitLabSelectedMembershipProjection {
     }
 
     private Capture capture(long workspaceId) {
-        WorkspaceRepository.MonitorPolicy policy =
-                workspaces.findMonitorPolicy(workspaceId).orElse(null);
+        WorkspaceProviderAccounts.ProviderAccount policy =
+                providerAccounts.providerAccount(workspaceId).orElse(null);
         ConnectionQueries.ConnectionSnapshot connection = connectionQueries
                 .findActive(workspaceId, IntegrationKind.GITLAB)
                 .orElse(null);
-        Workspace workspace = workspaces.findById(workspaceId).orElse(null);
+        Workspace workspace = workspaceLookup.find(workspaceId).orElse(null);
         if (policy == null
-                || policy.getRepositorySelection() != RepositorySelection.SELECTED
+                || policy.repositorySelection() != RepositorySelection.SELECTED
                 || connection == null
                 || workspace == null) {
             return Capture.skip(Outcome.NOT_SELECTED);
@@ -195,7 +204,7 @@ public class GitLabSelectedMembershipProjection {
             return Capture.skip(Outcome.NOT_SELECTED);
         }
         Optional<Long> providerId = actorSelector.connectedProviderId(workspaceId);
-        Optional<Map<Long, Monitored>> monitored = monitored(workspaceId, policy.getAccountLogin());
+        Optional<Map<Long, Monitored>> monitored = monitored(workspaceId, policy.accountLogin());
         if (providerId.isEmpty() || monitored.isEmpty()) {
             log.warn("Skipped selected membership changes: reason=unresolvedMonitor, workspaceId={}", workspaceId);
             return Capture.skip(Outcome.UNKNOWN);
@@ -206,7 +215,7 @@ public class GitLabSelectedMembershipProjection {
                 connection.version(),
                 config.serverUrl(),
                 providerId.get(),
-                policy.getAccountLogin(),
+                policy.accountLogin(),
                 workspace.getOrganizationId(),
                 monitored.get()));
     }
@@ -219,7 +228,7 @@ public class GitLabSelectedMembershipProjection {
         EntityManager em = Objects.requireNonNull(entityManager);
         String root = group.toLowerCase(Locale.ROOT) + "/";
         Map<Long, Monitored> monitored = new HashMap<>();
-        for (RepositoryToMonitor monitor : monitors.findByWorkspaceId(workspaceId)) {
+        for (RepositoryToMonitor monitor : monitors.monitors(workspaceId)) {
             em.refresh(monitor);
             Long nativeId = monitor.getNativeId();
             String path = monitor.getNameWithOwner();
@@ -275,7 +284,7 @@ public class GitLabSelectedMembershipProjection {
 
     private Outcome apply(Snapshot snapshot, Collection<GitLabUserLookup> granted, TransactionStatus status) {
         long workspaceId = snapshot.workspaceId();
-        Workspace workspace = workspaces.findByIdForUpdate(workspaceId).orElse(null);
+        Workspace workspace = workspaceLocks.lock(workspaceId).orElse(null);
         if (workspace == null) {
             return Outcome.STALE;
         }
@@ -331,10 +340,10 @@ public class GitLabSelectedMembershipProjection {
                         .findActive(workspaceId, IntegrationKind.GITLAB)
                         .filter(active -> active.id() == snapshot.connectionId())
                         .isPresent()
-                && workspaces
-                        .findMonitorPolicy(workspaceId)
-                        .filter(policy -> policy.getRepositorySelection() == RepositorySelection.SELECTED
-                                && policy.getAccountLogin().equals(snapshot.group()))
+                && providerAccounts
+                        .providerAccount(workspaceId)
+                        .filter(policy -> policy.repositorySelection() == RepositorySelection.SELECTED
+                                && policy.accountLogin().equals(snapshot.group()))
                         .isPresent()
                 && actorSelector
                         .connectedProviderId(workspaceId)

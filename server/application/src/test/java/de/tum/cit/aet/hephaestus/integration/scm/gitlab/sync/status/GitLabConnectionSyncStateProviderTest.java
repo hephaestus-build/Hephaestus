@@ -24,7 +24,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.sync.status.ScmResourceCountRea
 import de.tum.cit.aet.hephaestus.integration.scm.sync.status.ScmResourceCountReader.ScmResourceCounts;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitor;
-import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceRepositoryMonitors;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -66,7 +66,7 @@ class GitLabConnectionSyncStateProviderTest extends BaseUnitTest {
     private GitLabRateLimitTracker rateLimitTracker;
 
     @Mock
-    private RepositoryToMonitorRepository repositoryToMonitorRepository;
+    private WorkspaceRepositoryMonitors monitors;
 
     @Mock
     private RepositoryRepository repositoryRepository;
@@ -97,7 +97,7 @@ class GitLabConnectionSyncStateProviderTest extends BaseUnitTest {
                 connectionService,
                 rateLimitTrackerProvider,
                 properties,
-                repositoryToMonitorRepository,
+                monitors,
                 repositoryRepository,
                 countReader,
                 clock);
@@ -219,7 +219,7 @@ class GitLabConnectionSyncStateProviderTest extends BaseUnitTest {
         @Test
         void shouldReportBackfillNotStartedWhenEnabledButNoMonitoredRepos() {
             when(connectionService.findActiveGitLabConfig(WORKSPACE_ID)).thenReturn(Optional.empty());
-            when(repositoryToMonitorRepository.findByWorkspaceId(WORKSPACE_ID)).thenReturn(List.of());
+            when(monitors.monitors(WORKSPACE_ID)).thenReturn(List.of());
 
             ConnectionSyncDetails details = backfillEnabledProvider().describe(ref, CONNECTION_ID);
 
@@ -236,7 +236,7 @@ class GitLabConnectionSyncStateProviderTest extends BaseUnitTest {
             rtm.setIssueBackfillCheckpoint(0);
             rtm.setPullRequestBackfillHighWaterMark(0);
             rtm.setPullRequestBackfillCheckpoint(0);
-            when(repositoryToMonitorRepository.findByWorkspaceId(WORKSPACE_ID)).thenReturn(List.of(rtm));
+            when(monitors.monitors(WORKSPACE_ID)).thenReturn(List.of(rtm));
 
             ConnectionSyncDetails details = backfillEnabledProvider().describe(ref, CONNECTION_ID);
 
@@ -254,7 +254,7 @@ class GitLabConnectionSyncStateProviderTest extends BaseUnitTest {
             rtm.setIssueBackfillCheckpoint(25);
             rtm.setPullRequestBackfillHighWaterMark(0);
             rtm.setPullRequestBackfillCheckpoint(0);
-            when(repositoryToMonitorRepository.findByWorkspaceId(WORKSPACE_ID)).thenReturn(List.of(rtm));
+            when(monitors.monitors(WORKSPACE_ID)).thenReturn(List.of(rtm));
 
             ConnectionSyncDetails details = backfillEnabledProvider().describe(ref, CONNECTION_ID);
 
@@ -288,7 +288,7 @@ class GitLabConnectionSyncStateProviderTest extends BaseUnitTest {
 
         @Test
         void shouldReturnEmptyWhenNoMonitors() {
-            when(repositoryToMonitorRepository.findByWorkspaceId(WORKSPACE_ID)).thenReturn(List.of());
+            when(monitors.monitors(WORKSPACE_ID)).thenReturn(List.of());
 
             List<SyncResourceState> resources = provider.resources(ref, CONNECTION_ID);
 
@@ -299,7 +299,7 @@ class GitLabConnectionSyncStateProviderTest extends BaseUnitTest {
         void shouldMapSyncedRepositoryWithItemCount() {
             RepositoryToMonitor monitor = monitor(1L, "group/synced-repo");
             monitor.setHistoricalBackfillSyncError("Historical issue backfill aborted");
-            when(repositoryToMonitorRepository.findByWorkspaceId(WORKSPACE_ID)).thenReturn(List.of(monitor));
+            when(monitors.monitors(WORKSPACE_ID)).thenReturn(List.of(monitor));
 
             Repository repo = new Repository();
             ReflectionTestUtils.setField(repo, "id", 500L);
@@ -328,7 +328,7 @@ class GitLabConnectionSyncStateProviderTest extends BaseUnitTest {
         @Test
         void shouldMapUnsyncedRepositoryAsPendingWithNullItemCount() {
             RepositoryToMonitor monitor = monitor(2L, "group/new-repo");
-            when(repositoryToMonitorRepository.findByWorkspaceId(WORKSPACE_ID)).thenReturn(List.of(monitor));
+            when(monitors.monitors(WORKSPACE_ID)).thenReturn(List.of(monitor));
             when(repositoryRepository.findAllByWorkspaceMonitors(WORKSPACE_ID)).thenReturn(List.of());
 
             List<SyncResourceState> resources = provider.resources(ref, CONNECTION_ID);
@@ -343,7 +343,7 @@ class GitLabConnectionSyncStateProviderTest extends BaseUnitTest {
         @Test
         void shouldDefaultItemCountToZeroWhenRepositoryHasNoIssuesOrMrs() {
             RepositoryToMonitor monitor = monitor(3L, "group/empty-repo");
-            when(repositoryToMonitorRepository.findByWorkspaceId(WORKSPACE_ID)).thenReturn(List.of(monitor));
+            when(monitors.monitors(WORKSPACE_ID)).thenReturn(List.of(monitor));
 
             Repository repo = new Repository();
             ReflectionTestUtils.setField(repo, "id", 501L);
@@ -361,7 +361,7 @@ class GitLabConnectionSyncStateProviderTest extends BaseUnitTest {
         @Test
         void shouldReportAllSixEntityClassesWithCountsRollingUpToItemCount() {
             RepositoryToMonitor monitor = monitor(4L, "group/full-repo");
-            when(repositoryToMonitorRepository.findByWorkspaceId(WORKSPACE_ID)).thenReturn(List.of(monitor));
+            when(monitors.monitors(WORKSPACE_ID)).thenReturn(List.of(monitor));
 
             Repository repo = new Repository();
             ReflectionTestUtils.setField(repo, "id", 502L);
@@ -394,7 +394,7 @@ class GitLabConnectionSyncStateProviderTest extends BaseUnitTest {
             // phase, keyed by this monitor row — so the provider must read them rather than discard them.
             monitor.setIssuesSyncedAt(Instant.parse("2026-07-10T03:00:00Z"));
             monitor.setPullRequestsSyncedAt(Instant.parse("2026-07-14T03:00:00Z"));
-            when(repositoryToMonitorRepository.findByWorkspaceId(WORKSPACE_ID)).thenReturn(List.of(monitor));
+            when(monitors.monitors(WORKSPACE_ID)).thenReturn(List.of(monitor));
 
             Repository repo = new Repository();
             ReflectionTestUtils.setField(repo, "id", 503L);

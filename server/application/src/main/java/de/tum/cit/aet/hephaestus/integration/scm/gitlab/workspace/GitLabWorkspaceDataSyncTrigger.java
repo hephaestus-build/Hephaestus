@@ -11,7 +11,7 @@ import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobService;
 import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobTrigger;
 import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
-import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceLookup;
 import java.util.Optional;
 import java.util.function.BooleanSupplier;
 import org.jspecify.annotations.Nullable;
@@ -53,17 +53,17 @@ public class GitLabWorkspaceDataSyncTrigger implements WorkspaceDataSyncTrigger 
     private static final Logger log = LoggerFactory.getLogger(GitLabWorkspaceDataSyncTrigger.class);
 
     private final GitLabWorkspaceInitializationService gitLabInitService;
-    private final WorkspaceRepository workspaceRepository;
+    private final WorkspaceLookup workspaceLookup;
     private final ConnectionQueries connectionQueries;
     private final SyncJobService syncJobService;
 
     public GitLabWorkspaceDataSyncTrigger(
             GitLabWorkspaceInitializationService gitLabInitService,
-            WorkspaceRepository workspaceRepository,
+            WorkspaceLookup workspaceLookup,
             ConnectionQueries connectionQueries,
             SyncJobService syncJobService) {
         this.gitLabInitService = gitLabInitService;
-        this.workspaceRepository = workspaceRepository;
+        this.workspaceLookup = workspaceLookup;
         this.connectionQueries = connectionQueries;
         this.syncJobService = syncJobService;
     }
@@ -129,7 +129,7 @@ public class GitLabWorkspaceDataSyncTrigger implements WorkspaceDataSyncTrigger 
 
     private SyncResult syncAllRepositoriesBody(
             long workspaceId, BooleanSupplier cancelled, @Nullable SyncExecutionHandle handle) {
-        Workspace workspace = workspaceRepository.findById(workspaceId).orElse(null);
+        Workspace workspace = workspaceLookup.find(workspaceId).orElse(null);
         if (workspace == null) {
             log.warn("Skipped GitLab data sync: reason=workspaceNotFound, workspaceId={}", workspaceId);
             return SyncResult.abortedError(0);

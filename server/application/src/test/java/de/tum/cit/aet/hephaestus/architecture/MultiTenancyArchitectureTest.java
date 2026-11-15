@@ -423,6 +423,7 @@ class MultiTenancyArchitectureTest extends HephaestusArchitectureTest {
 
                             boolean hasWorkspaceAwareDependency = dependencies.contains("SyncTargetProvider")
                                     || dependencies.contains("SyncContextProvider")
+                                    || dependencies.contains("WorkspaceLookup")
                                     || dependencies.contains("WorkspaceRepository")
                                     || dependencies.contains("WorkspaceService")
                                     ||
@@ -435,7 +436,7 @@ class MultiTenancyArchitectureTest extends HephaestusArchitectureTest {
                                         String.format(
                                                 "SCHEDULED JOB CONTEXT: %s has @Scheduled methods but no workspace"
                                                         + " iteration dependencies. Add SyncTargetProvider or"
-                                                        + " WorkspaceRepository to iterate workspaces and set context, or"
+                                                        + " WorkspaceLookup to iterate workspaces and set context, or"
                                                         + " mark it @WorkspaceAgnostic if truly system-wide.",
                                                 javaClass.getSimpleName())));
                             }

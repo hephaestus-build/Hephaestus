@@ -80,6 +80,10 @@ import de.tum.cit.aet.hephaestus.workspace.settings.ReviewRepositoryTarget;
 import de.tum.cit.aet.hephaestus.workspace.settings.ReviewScopeMode;
 import de.tum.cit.aet.hephaestus.workspace.settings.WorkspaceReviewScope;
 import de.tum.cit.aet.hephaestus.workspace.spi.MembershipReviewSelection;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceLocks;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceLookup;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceProviderAccounts;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceRepositoryMonitors;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayDeque;
@@ -217,6 +221,18 @@ class GitLabMembershipReconciliationIntegrationTest extends BaseIntegrationTest 
     private RepositoryToMonitorRepository monitors;
 
     @Autowired
+    private WorkspaceLocks workspaceLocks;
+
+    @Autowired
+    private WorkspaceLookup workspaceLookup;
+
+    @Autowired
+    private WorkspaceProviderAccounts providerAccounts;
+
+    @Autowired
+    private WorkspaceRepositoryMonitors monitorPort;
+
+    @Autowired
     private WorkspaceActorSelector actorSelector;
 
     @Autowired
@@ -315,8 +331,10 @@ class GitLabMembershipReconciliationIntegrationTest extends BaseIntegrationTest 
                 workspaceLinkService,
                 projectAdmission);
         projection = new GitLabSelectedMembershipProjection(
-                workspaces,
-                monitors,
+                workspaceLocks,
+                workspaceLookup,
+                providerAccounts,
+                monitorPort,
                 connectionCommands,
                 connectionQueries,
                 actorSelector,

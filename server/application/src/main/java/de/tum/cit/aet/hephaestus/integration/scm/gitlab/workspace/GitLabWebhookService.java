@@ -17,7 +17,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.credentials.GitLabTokenL
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.webhook.GitLabConnectionWebhookController;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.webhook.GitLabRouteCredential;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
-import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceLookup;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
@@ -59,7 +59,7 @@ public class GitLabWebhookService {
     private final ObjectProvider<GitLabWebhookClient> webhookClientProvider;
     private final PublicApiUrls publicApiUrls;
     private final GitLabRouteCredential routeCredential;
-    private final WorkspaceRepository workspaceRepository;
+    private final WorkspaceLookup workspaceLookup;
     private final ConnectionService connectionService;
     private final ProviderResourceRepairs repairs;
     private final ObjectProvider<GitLabTokenLifecycleService> tokenLifecycle;
@@ -68,14 +68,14 @@ public class GitLabWebhookService {
             ObjectProvider<GitLabWebhookClient> webhookClientProvider,
             PublicApiUrls publicApiUrls,
             GitLabRouteCredential routeCredential,
-            WorkspaceRepository workspaceRepository,
+            WorkspaceLookup workspaceLookup,
             ConnectionService connectionService,
             ProviderResourceRepairs repairs,
             ObjectProvider<GitLabTokenLifecycleService> tokenLifecycle) {
         this.webhookClientProvider = webhookClientProvider;
         this.publicApiUrls = publicApiUrls;
         this.routeCredential = routeCredential;
-        this.workspaceRepository = workspaceRepository;
+        this.workspaceLookup = workspaceLookup;
         this.connectionService = connectionService;
         this.repairs = repairs;
         this.tokenLifecycle = tokenLifecycle;
@@ -307,24 +307,22 @@ public class GitLabWebhookService {
 
         record GitLabHealthCandidate(Workspace workspace, long connectionId, Long groupId, Long webhookId) {}
 
-        List<GitLabHealthCandidate> gitLabWorkspaces =
-                workspaceRepository.findByStatus(Workspace.WorkspaceStatus.ACTIVE).stream()
-                        .map(ws -> {
-                            Connection connection = connectionService
-                                    .findActive(ws.getId(), IntegrationKind.GITLAB)
-                                    .orElse(null);
-                            Long connectionId = connection != null ? connection.getId() : null;
-                            if (connection == null
-                                    || connectionId == null
-                                    || !(connection.getConfig() instanceof GitLabConfig cfg)
-                                    || cfg.gitlabWebhookId() == null) {
-                                return null;
-                            }
-                            return new GitLabHealthCandidate(
-                                    ws, connectionId, cfg.gitlabGroupId(), cfg.gitlabWebhookId());
-                        })
-                        .filter(Objects::nonNull)
-                        .toList();
+        List<GitLabHealthCandidate> gitLabWorkspaces = workspaceLookup.active().stream()
+                .map(ws -> {
+                    Connection connection = connectionService
+                            .findActive(ws.getId(), IntegrationKind.GITLAB)
+                            .orElse(null);
+                    Long connectionId = connection != null ? connection.getId() : null;
+                    if (connection == null
+                            || connectionId == null
+                            || !(connection.getConfig() instanceof GitLabConfig cfg)
+                            || cfg.gitlabWebhookId() == null) {
+                        return null;
+                    }
+                    return new GitLabHealthCandidate(ws, connectionId, cfg.gitlabGroupId(), cfg.gitlabWebhookId());
+                })
+                .filter(Objects::nonNull)
+                .toList();
 
         if (gitLabWorkspaces.isEmpty()) return;
 

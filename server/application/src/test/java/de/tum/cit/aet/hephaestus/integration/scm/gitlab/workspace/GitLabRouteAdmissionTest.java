@@ -41,9 +41,9 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.user.GitLabUserService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.webhook.GitLabRouteCredential;
 import de.tum.cit.aet.hephaestus.testconfig.ProviderEvents;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitor;
-import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceScopeFilter;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceRepositoryMonitors;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -82,7 +82,7 @@ class GitLabRouteAdmissionTest {
     private final ConnectionCommands connectionCommands = mock(ConnectionCommands.class);
     private final IdentityProviderLookup identityProviders = mock(IdentityProviderLookup.class);
     private final RepositoryRepository repositoryRepository = mock(RepositoryRepository.class);
-    private final RepositoryToMonitorRepository monitors = mock(RepositoryToMonitorRepository.class);
+    private final WorkspaceRepositoryMonitors monitors = mock(WorkspaceRepositoryMonitors.class);
     private final WorkspaceScopeFilter scopeFilter = mock(WorkspaceScopeFilter.class);
     private final GitLabRepositoryMonitors repositoryMonitors = mock(GitLabRepositoryMonitors.class);
     private final GitLabProjectSyncService projectSync = mock(GitLabProjectSyncService.class);
@@ -228,8 +228,7 @@ class GitLabRouteAdmissionTest {
             var monitored = repository(PROJECT_A, GROUP + "/a");
             when(repositoryRepository.findByNameWithOwnerAndProviderId(GROUP + "/a", PROVIDER_ID))
                     .thenReturn(Optional.of(monitored));
-            when(monitors.existsByWorkspaceIdAndNameWithOwner(WORKSPACE_ID, GROUP + "/a"))
-                    .thenReturn(true);
+            when(monitors.monitorsPath(WORKSPACE_ID, GROUP + "/a")).thenReturn(true);
 
             when(repositoryRepository.findByNativeIdAndProviderId(PROJECT_A, PROVIDER_ID))
                     .thenReturn(Optional.of(monitored));
@@ -299,7 +298,7 @@ class GitLabRouteAdmissionTest {
         void shouldStopPublicationWhenProjectEventConfirmsAccessLoss() {
             var own = monitor(60L);
             own.setNativeId(PROJECT_A);
-            when(monitors.findByWorkspaceIdAndNativeId(WORKSPACE_ID, PROJECT_A)).thenReturn(List.of(own));
+            when(monitors.monitorsOf(WORKSPACE_ID, PROJECT_A)).thenReturn(List.of(own));
             when(projectSync.fetchProjectById(WORKSPACE_ID, PROJECT_A))
                     .thenThrow(new RepositoryNotFoundOnGitProviderException("course/project"));
             assertProjectNotAdmitted(projectEvent("project_update", PROJECT_A, GROUP + "/a"));
@@ -313,7 +312,7 @@ class GitLabRouteAdmissionTest {
             first.setNativeId(PROJECT_A);
             RepositoryToMonitor second = monitor(61L);
             second.setNativeId(PROJECT_A);
-            when(monitors.findByWorkspaceIdAndNativeId(WORKSPACE_ID, PROJECT_A)).thenReturn(List.of(first, second));
+            when(monitors.monitorsOf(WORKSPACE_ID, PROJECT_A)).thenReturn(List.of(first, second));
             when(projectSync.fetchProjectById(WORKSPACE_ID, PROJECT_A))
                     .thenReturn(Optional.of(reported(PROJECT_A, "elsewhere/a")));
 
@@ -326,7 +325,7 @@ class GitLabRouteAdmissionTest {
         void shouldOnlyStopMonitoringAProjectGitLabReportsElsewhereOrNotAtAll() {
             var own = monitor(56L, GROUP + "/a");
             own.setNativeId(PROJECT_A);
-            when(monitors.findByWorkspaceIdAndNativeId(WORKSPACE_ID, PROJECT_A)).thenReturn(List.of(own));
+            when(monitors.monitorsOf(WORKSPACE_ID, PROJECT_A)).thenReturn(List.of(own));
             when(projectSync.fetchProjectById(WORKSPACE_ID, PROJECT_A))
                     .thenReturn(Optional.of(reported(PROJECT_A, "elsewhere/a")))
                     .thenReturn(Optional.empty());
@@ -461,8 +460,7 @@ class GitLabRouteAdmissionTest {
 
         @Test
         void shouldKeepHandlingAMonitoredRepositoryTheFilterStillAllows() {
-            when(monitors.existsByWorkspaceIdAndNameWithOwner(WORKSPACE_ID, GROUP + "/selected"))
-                    .thenReturn(true);
+            when(monitors.monitorsPath(WORKSPACE_ID, GROUP + "/selected")).thenReturn(true);
             when(scopeFilter.isRepositoryAllowed(workspace, GROUP + "/selected"))
                     .thenReturn(true);
 

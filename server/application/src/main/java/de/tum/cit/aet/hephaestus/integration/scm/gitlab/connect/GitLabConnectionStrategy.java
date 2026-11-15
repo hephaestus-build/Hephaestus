@@ -11,7 +11,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabPreflightService;
 import de.tum.cit.aet.hephaestus.integration.scm.workspace.ScmWorkspaceContentEraser;
-import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceProviderAccounts;
 import java.util.Map;
 import org.springframework.stereotype.Component;
 
@@ -35,19 +35,19 @@ public class GitLabConnectionStrategy implements ConnectionStrategy {
 
     private final ScmWorkspaceContentEraser contentEraser;
     private final ConnectionQueries connections;
-    private final WorkspaceRepository workspaces;
+    private final WorkspaceProviderAccounts providerAccounts;
     private final GitLabWorkspaceInstance instance;
     private final GitLabPreflightService preflight;
 
     public GitLabConnectionStrategy(
             ScmWorkspaceContentEraser contentEraser,
             ConnectionQueries connections,
-            WorkspaceRepository workspaces,
+            WorkspaceProviderAccounts providerAccounts,
             GitLabWorkspaceInstance instance,
             GitLabPreflightService preflight) {
         this.contentEraser = contentEraser;
         this.connections = connections;
-        this.workspaces = workspaces;
+        this.providerAccounts = providerAccounts;
         this.instance = instance;
         this.preflight = preflight;
     }
@@ -73,10 +73,10 @@ public class GitLabConnectionStrategy implements ConnectionStrategy {
         if (!(previous.config() instanceof ConnectionConfig.GitLabConfig config)) {
             throw new IllegalStateException("The disconnected GitLab connection has no group configuration.");
         }
-        var workspace = workspaces
-                .findById(request.workspaceId())
+        var account = providerAccounts
+                .providerAccount(request.workspaceId())
                 .orElseThrow(() -> new IllegalArgumentException("This workspace no longer exists."));
-        long groupId = preflight.resolveAccountId(token, serverUrl, workspace.getAccountLogin());
+        long groupId = preflight.resolveAccountId(token, serverUrl, account.accountLogin());
         if (groupId != config.gitlabGroupId()) {
             throw new IllegalArgumentException("The GitLab group has changed. Create a workspace for the new group.");
         }

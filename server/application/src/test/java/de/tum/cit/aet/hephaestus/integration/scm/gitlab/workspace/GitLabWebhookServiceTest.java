@@ -33,7 +33,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.webhook.GitLabRouteCrede
 import de.tum.cit.aet.hephaestus.observability.ShippedLogEncoder;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
-import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceLookup;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -75,7 +75,7 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
     private GitLabWebhookClient webhookClient;
 
     @Mock
-    private WorkspaceRepository workspaceRepository;
+    private WorkspaceLookup workspaceLookup;
 
     @Mock
     private ConnectionService connectionService;
@@ -116,7 +116,7 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
                 webhookClientProvider,
                 new PublicApiUrls(AuthPropertiesFixture.withApiBase(URI.create(API_ORIGIN + "/api"), "/api")),
                 credential,
-                workspaceRepository,
+                workspaceLookup,
                 connectionService,
                 repairs,
                 tokenLifecycle);
@@ -532,7 +532,7 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
                     webhookClientProvider,
                     new PublicApiUrls(AuthPropertiesFixture.withApiBase(URI.create(API_ORIGIN), "/api")),
                     new GitLabRouteCredential(unconfigured),
-                    workspaceRepository,
+                    workspaceLookup,
                     connectionService,
                     mock(ProviderResourceRepairs.class),
                     tokenLifecycle);
@@ -550,8 +550,7 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
         @BeforeEach
         void bindActiveHookedWorkspace() {
             fakeGroupHooks();
-            when(workspaceRepository.findByStatus(Workspace.WorkspaceStatus.ACTIVE))
-                    .thenReturn(List.of(workspace));
+            when(workspaceLookup.active()).thenReturn(List.of(workspace));
         }
 
         @Test
