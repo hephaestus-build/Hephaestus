@@ -114,8 +114,6 @@ public class JwtSigningKeyService implements JWKSource<SecurityContext>, SystemS
      */
     @Transactional(readOnly = true)
     public void verifyActiveKeysOpen() {
-        // No guard for a missing system key, unlike StoredSystemSecrets#verifyAllOpen: a server that cannot open its
-        // signing keys cannot sign or verify a session, so it stops even in development.
         for (JwtSigningKey row : repository.findActive()) {
             try {
                 row.privateKey(secrets);

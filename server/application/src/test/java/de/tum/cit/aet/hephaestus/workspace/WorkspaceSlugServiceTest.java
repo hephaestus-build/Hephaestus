@@ -56,7 +56,7 @@ class WorkspaceSlugServiceTest extends BaseUnitTest {
         var storedSecrets = mock(StoredSystemSecrets.class);
         when(storedSecrets.find(WorkspaceNamespaceReservation.KEY_NAME)).thenReturn(Optional.of(new byte[32]));
         var erased = new WorkspaceNamespaceReservation(storedSecrets);
-        String token = erased.slugToken("ada").orElseThrow();
+        String token = erased.slugToken("ada");
         var reservations = mock(WorkspaceSlugReservationRepository.class);
         when(reservations.existsById(anyString())).thenAnswer(call -> token.equals(call.getArgument(0)));
         var service = new WorkspaceSlugService(

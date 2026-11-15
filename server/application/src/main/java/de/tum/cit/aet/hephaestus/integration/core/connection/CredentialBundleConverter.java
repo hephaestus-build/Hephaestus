@@ -78,9 +78,10 @@ public class CredentialBundleConverter {
         this.objectMapper = objectMapper;
         // As for the system key: a missing key stops the start in every profile.
         if (encryptionKey == null || encryptionKey.isBlank()) {
-            throw new IllegalStateException(
-                    "No credential encryption key. Set"
-                            + " hephaestus.security.credential-encryption-key (HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY).");
+            throw new IllegalStateException("No credential encryption key. Set"
+                    + " hephaestus.security.credential-encryption-key (HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY),"
+                    + " as https://docs.hephaestus.build/admin/secret-custody#keep-the-required-keys-outside-the-cluster"
+                    + " describes.");
         }
         SecretKey active = parseKey(encryptionKey, "credential-encryption-key");
         this.keys = priorCredentialEncryptionKey == null

@@ -516,8 +516,8 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
         assertThat(jdbc.queryForList("SELECT slug FROM workspace_slug_reservation", String.class))
                 .doesNotContain("personal-install", "target-login")
                 .contains(
-                        namespaceReservations.slugToken("personal-install").orElseThrow(),
-                        namespaceReservations.slugToken("target-login").orElseThrow(),
+                        namespaceReservations.slugToken("personal-install"),
+                        namespaceReservations.slugToken("target-login"),
                         erasedSlug);
         assertThat(workspaceSlugs.isAvailable("personal-install"))
                 .as("the erased slug stays reserved")

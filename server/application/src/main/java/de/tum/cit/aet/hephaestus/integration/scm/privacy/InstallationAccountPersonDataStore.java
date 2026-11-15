@@ -10,7 +10,6 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.jdbc.support.SqlArrayValue;
 import tools.jackson.databind.JsonNode;
@@ -96,7 +95,7 @@ final class InstallationAccountPersonDataStore extends JdbcPersonDataStore {
                         + " WHERE id=:workspace AND status='PURGED'",
                 parameters);
         for (String reserved : new LinkedHashSet<>(List.of(namespace.slug(), slugs.label(namespace.login())))) {
-            var reservation = Map.of("reserved", reserved, "token", required(reservations.slugToken(reserved)));
+            var reservation = Map.of("reserved", reserved, "token", reservations.slugToken(reserved));
             if (jdbc.update("DELETE FROM workspace_slug_reservation WHERE slug=:reserved", reservation) > 0) {
                 jdbc.update(
                         "INSERT INTO workspace_slug_reservation(slug) VALUES (:token) ON CONFLICT DO NOTHING",
@@ -106,11 +105,6 @@ final class InstallationAccountPersonDataStore extends JdbcPersonDataStore {
         return jdbc.update(
                 "UPDATE connection SET display_name=:erasedSlug, config=config - 'orgLogin' WHERE id = ANY(:connections)",
                 parameters);
-    }
-
-    private static String required(Optional<String> token) {
-        return token.orElseThrow(() ->
-                new IllegalStateException("Erasing a personal workspace namespace needs the system encryption key"));
     }
 
     private record Namespace(long workspace, String login, String slug, List<Long> connections) {

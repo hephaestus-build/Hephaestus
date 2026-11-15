@@ -59,7 +59,9 @@ public final class SystemSecrets {
         // One rule in every profile: a missing key stops the start here, not later inside a migration or a request.
         if (active == null) {
             throw new IllegalStateException("No system encryption key. Set hephaestus.security.encryption-key"
-                    + " (HEPHAESTUS_SECURITY_ENCRYPTION_KEY), as docs/admin/secret-custody.mdx describes.");
+                    + " (HEPHAESTUS_SECURITY_ENCRYPTION_KEY), as"
+                    + " https://docs.hephaestus.build/admin/secret-custody#keep-the-required-keys-outside-the-cluster"
+                    + " describes.");
         }
         Map<Integer, SecretKey> configured = new HashMap<>();
         SecretKey activeKey = parseKey(active, "encryption-key");

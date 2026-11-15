@@ -4,7 +4,6 @@ import de.tum.cit.aet.hephaestus.core.security.StoredSystemSecrets;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.util.Base64;
-import java.util.Optional;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import org.springframework.stereotype.Component;
@@ -28,15 +27,16 @@ public class WorkspaceNamespaceReservation {
         this.storedSecrets = storedSecrets;
     }
 
-    /** The token that keeps an erased slug reserved; empty without a system key. Creates the key on first use. */
-    public Optional<String> slugToken(String slug) {
-        return storedSecrets
+    /** The token that keeps an erased slug reserved. Creates the key on first use. */
+    public String slugToken(String slug) {
+        byte[] key = storedSecrets
                 .find(KEY_NAME)
                 .or(() -> {
                     storedSecrets.ensure(KEY_NAME, 32);
                     return storedSecrets.find(KEY_NAME);
                 })
-                .map(key -> token(key, "slug", slug));
+                .orElseThrow(() -> new IllegalStateException("The namespace reservation key was not stored"));
+        return token(key, "slug", slug);
     }
 
     private static String token(byte[] key, String kind, String value) {

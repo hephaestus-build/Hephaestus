@@ -58,7 +58,17 @@ const child = spawn(
 		`--hephaestus.sandbox.gateway.port=${sandboxPort}`,
 		"--management.server.port=0",
 	],
-	{ cwd: serverDirectory, stdio: ["ignore", "inherit", "inherit"] },
+	{
+		cwd: serverDirectory,
+		// The server refuses to start without both keys. The spec run seals nothing, so fixture keys do; the profile
+		// files carry none, so no shipped profile can start with a known key.
+		env: {
+			...process.env,
+			HEPHAESTUS_SECURITY_ENCRYPTION_KEY: "specsFixtureSystemKeyNotForUse01",
+			HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY: "specsFixtureCredentialKeyNotUse1",
+		},
+		stdio: ["ignore", "inherit", "inherit"],
+	},
 );
 const exited = once(child, "exit");
 try {

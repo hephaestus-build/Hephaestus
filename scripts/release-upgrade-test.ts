@@ -65,7 +65,11 @@ let application = `${runId}-previous`;
 function docker(...args: string[]): string {
 	const result = spawnSync("docker", args, { encoding: "utf8", maxBuffer: CAPTURE_LIMIT_BYTES });
 	if (result.status !== 0) {
-		throw new Error(`docker ${args.join(" ")} failed:\n${result.stdout}${result.stderr}`);
+		// The arguments carry the run's keys; a failure message names the variables, not the values.
+		const shown = args.map((arg) =>
+			arg.replace(/^(?<name>HEPHAESTUS_SECURITY_[A-Z_]+)=.*/u, "$<name>=<redacted>"),
+		);
+		throw new Error(`docker ${shown.join(" ")} failed:\n${result.stdout}${result.stderr}`);
 	}
 	return (args[0] === "logs" ? result.stdout + result.stderr : result.stdout).trim();
 }
