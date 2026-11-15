@@ -1,7 +1,19 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
+import { once } from "node:events";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { createServer } from "node:http";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { test } from "node:test";
 
-import { staleComponents, withoutComponents } from "./check-gradle-verification-metadata.ts";
+import {
+	cachedFile,
+	serveRestoredCache,
+	staleComponents,
+	trustedChecksums,
+	withoutComponents,
+} from "./check-gradle-verification-metadata.ts";
 
 const metadata = `<?xml version="1.0" encoding="UTF-8"?>
 <verification-metadata>
@@ -77,4 +89,83 @@ void test("refuses a file that is not in Gradle's layout", () => {
 			),
 		/not in the layout Gradle writes/u,
 	);
+});
+
+const sha256 = (content: string) => createHash("sha256").update(content).digest("hex");
+
+/** A `files-2.1` holding `kept-1.0.pom` once per content, as two repositories can leave it. */
+async function cacheWith(...contents: string[]): Promise<string> {
+	const files = await mkdtemp(path.join(tmpdir(), "files-2.1-"));
+	for (const content of contents) {
+		const directory = path.join(files, "com.example", "kept", "1.0", sha256(content).slice(0, 8));
+		await mkdir(directory, { recursive: true });
+		await writeFile(path.join(directory, "kept-1.0.pom"), content);
+	}
+	return files;
+}
+
+const trusting = (content: string) =>
+	new Map([["com.example:kept:1.0/kept-1.0.pom", new Set([sha256(content)])]]);
+
+void test("reads the checksum that the metadata trusts for each artifact", () => {
+	const trusted = trustedChecksums(metadata);
+	assert.deepEqual(trusted.get("com.example:kept:1.0/kept-1.0.jar"), new Set(["aa"]));
+	assert.deepEqual(trusted.get("com.example:kept:0.9/kept-0.9.pom"), new Set(["bb"]));
+	assert.equal(trusted.get("com.example:kept:1.0/kept-1.0.pom"), undefined);
+});
+
+void test("answers a repository path only with a cached file whose checksum is trusted", async (t) => {
+	// The Plugin Portal and Maven Central publish different plugin-marker POMs under one name.
+	const files = await cacheWith("<project>central</project>", "<project>portal</project>");
+	t.after(async () => rm(files, { recursive: true, force: true }));
+	const pom = "com/example/kept/1.0/kept-1.0.pom";
+	const answer = await cachedFile(files, pom, trusting("<project>portal</project>"));
+	assert.equal(answer?.toString(), "<project>portal</project>");
+	assert.equal(await cachedFile(files, pom, trusting("<project>other</project>")), undefined);
+	assert.equal(await cachedFile(files, pom, new Map()), undefined);
+	// A path that leaves the cache, or names no component, has no cached file.
+	const trusted = trusting("<project>portal</project>");
+	assert.equal(await cachedFile(files, "com/../example/kept/1.0/kept-1.0.pom", trusted), undefined);
+	assert.equal(await cachedFile(files, "kept/1.0/kept-1.0.pom", trusted), undefined);
+});
+
+void test("serves trusted cached files locally and forwards only the rest upstream", async (t) => {
+	const files = await cacheWith("<project>cached</project>");
+	t.after(async () => rm(files, { recursive: true, force: true }));
+	const requested: string[] = [];
+	const upstream = createServer((request, response) => {
+		requested.push(request.url ?? "");
+		response.writeHead(request.url?.endsWith(".jar") === true ? 200 : 404).end("remote");
+	});
+	upstream.listen(0, "127.0.0.1");
+	await once(upstream, "listening");
+	const address = upstream.address();
+	assert.ok(typeof address === "object" && address !== null);
+	const endpoint = await serveRestoredCache(files, trusting("<project>cached</project>"), {
+		central: `http://127.0.0.1:${String(address.port)}/maven2`,
+	});
+	try {
+		const cached = await fetch(`${endpoint.url}/central/com/example/kept/1.0/kept-1.0.pom`);
+		assert.equal(cached.status, 200);
+		assert.equal(await cached.text(), "<project>cached</project>");
+		const checksum = await fetch(`${endpoint.url}/central/com/example/kept/1.0/kept-1.0.pom.sha1`);
+		assert.equal(
+			await checksum.text(),
+			createHash("sha1").update("<project>cached</project>").digest("hex"),
+		);
+		const forwarded = await fetch(`${endpoint.url}/central/com/example/kept/1.0/kept-1.0.jar`);
+		assert.equal(await forwarded.text(), "remote");
+		const missing = await fetch(`${endpoint.url}/central/com/example/gone/1.0/gone-1.0.pom`);
+		assert.equal(missing.status, 404);
+		const unknown = await fetch(`${endpoint.url}/elsewhere/com/example/kept/1.0/kept-1.0.pom`);
+		assert.equal(unknown.status, 404);
+		assert.deepEqual(requested, [
+			"/maven2/com/example/kept/1.0/kept-1.0.jar",
+			"/maven2/com/example/gone/1.0/gone-1.0.pom",
+		]);
+		assert.deepEqual(endpoint.served, { cache: 2, upstream: 2 });
+	} finally {
+		await endpoint.close();
+		upstream.close();
+	}
 });
