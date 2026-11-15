@@ -2,8 +2,7 @@ package de.tum.cit.aet.hephaestus.activity;
 
 import de.tum.cit.aet.hephaestus.activity.metrics.ActivityMetrics;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.spi.ActivityScmFacts;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceActorSelector;
 import io.micrometer.core.instrument.MeterRegistry;
 import lombok.RequiredArgsConstructor;
@@ -23,8 +22,7 @@ public class ActivityFactDelivery {
     private final ActivityPersonWriteAdmission admission;
     private final ActivityLedgerRepository ledger;
     private final WorkspaceActorSelector actors;
-    private final UserRepository users;
-    private final RepositoryRepository repositories;
+    private final ActivityScmFacts scm;
     private final MeterRegistry meters;
 
     @Transactional(propagation = Propagation.MANDATORY)
@@ -45,7 +43,7 @@ public class ActivityFactDelivery {
                     return;
                 }
             }
-            var actor = fact.actorId() != null ? users.findById(fact.actorId()).orElse(null) : null;
+            var actor = fact.actorId() != null ? scm.user(fact.actorId()).orElse(null) : null;
             if (fact.actorId() != null && actor == null) {
                 meters.counter(ActivityMetrics.ACTIVITY_EVENTS_FAILED).increment();
                 return;
@@ -55,7 +53,7 @@ public class ActivityFactDelivery {
                     fact.eventType(),
                     fact.occurredAt(),
                     actor,
-                    fact.repositoryId() != null ? repositories.getReferenceById(fact.repositoryId()) : null,
+                    fact.repositoryId() != null ? scm.repositoryReference(fact.repositoryId()) : null,
                     fact.targetType(),
                     fact.targetId(),
                     fact.sourceKey());

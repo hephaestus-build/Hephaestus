@@ -7,7 +7,7 @@ import de.tum.cit.aet.hephaestus.activity.overview.dto.WorkItemDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserInfoDTO;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.spi.ActivityScmFacts;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -30,7 +30,7 @@ class ActivityWorkAssembler {
     private static final String WORK = "work:";
 
     private final WorkItemQueryRepository workItems;
-    private final UserRepository users;
+    private final ActivityScmFacts scm;
 
     List<ActivityWorkDTO> assemble(List<WorkGroup> groups) {
         Set<Long> workIds = groups.stream()
@@ -42,11 +42,13 @@ class ActivityWorkAssembler {
                 ? Map.of()
                 : workItems.findAllByIdIn(workIds).stream()
                         .collect(Collectors.toMap(Issue::getId, Function.identity()));
-        Map<Long, User> userById = users
-                .findAllById(
-                        groups.stream().flatMap(ActivityWorkAssembler::actorIds).collect(Collectors.toSet()))
-                .stream()
-                .collect(Collectors.toMap(User::getId, Function.identity()));
+        Map<Long, User> userById =
+                scm
+                        .users(groups.stream()
+                                .flatMap(ActivityWorkAssembler::actorIds)
+                                .collect(Collectors.toSet()))
+                        .stream()
+                        .collect(Collectors.toMap(User::getId, Function.identity()));
 
         return groups.stream()
                 .map(group -> new ActivityWorkDTO(

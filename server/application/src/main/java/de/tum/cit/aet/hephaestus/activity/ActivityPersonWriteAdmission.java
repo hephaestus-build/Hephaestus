@@ -3,7 +3,7 @@ package de.tum.cit.aet.hephaestus.activity;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.spi.ActivityScmFacts;
 import java.util.List;
 import java.util.Objects;
 import lombok.RequiredArgsConstructor;
@@ -13,7 +13,7 @@ import org.springframework.stereotype.Service;
 @Service
 @RequiredArgsConstructor
 public class ActivityPersonWriteAdmission {
-    private final UserRepository users;
+    private final ActivityScmFacts scm;
     private final PersonDataWriteFence fence;
 
     public boolean hold(User actor) {
@@ -21,12 +21,12 @@ public class ActivityPersonWriteAdmission {
     }
 
     public boolean holdActor(long actorId) {
-        return users.findById(actorId).map(this::hold).orElse(false);
+        return scm.user(actorId).map(this::hold).orElse(false);
     }
 
     public List<Long> holdActors(List<Long> actorIds) {
         if (actorIds.isEmpty()) return List.of();
-        var actors = users.findAllById(actorIds);
+        var actors = scm.users(actorIds);
         var identities =
                 actors.stream().map(ActivityPersonWriteAdmission::identity).toList();
         if (identities.isEmpty()) return List.of();
