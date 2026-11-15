@@ -2,12 +2,23 @@ package de.tum.cit.aet.hephaestus.agent.sandbox.claim;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptKeyFixtures;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptSigningKey;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenIssuer;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenVerifier;
+import de.tum.cit.aet.hephaestus.agent.composer.ComposerTranscript;
+import de.tum.cit.aet.hephaestus.agent.composer.CompositionSessions;
+import de.tum.cit.aet.hephaestus.agent.composer.ReviewComposeSandboxKind;
+import de.tum.cit.aet.hephaestus.agent.conversation.host.ConversationTurnContexts;
+import de.tum.cit.aet.hephaestus.agent.conversation.host.ConversationTurnController;
+import de.tum.cit.aet.hephaestus.agent.conversation.host.ConversationTurns;
+import de.tum.cit.aet.hephaestus.agent.conversation.host.TurnContextController;
+import de.tum.cit.aet.hephaestus.agent.conversation.sandbox.TurnContextLoads;
+import de.tum.cit.aet.hephaestus.agent.conversation.turn.ConversationTurnCompletion;
 import de.tum.cit.aet.hephaestus.agent.gateway.AgentRunController;
+import de.tum.cit.aet.hephaestus.agent.gateway.CompositionController;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewayConfiguration;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewayConnector;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
@@ -16,6 +27,8 @@ import de.tum.cit.aet.hephaestus.agent.gateway.SandboxRunArgumentResolver;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxRunKind;
 import de.tum.cit.aet.hephaestus.agent.gateway.testing.AgentReviewDrainFixtures;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
+import de.tum.cit.aet.hephaestus.agent.job.ReviewSandboxController;
+import de.tum.cit.aet.hephaestus.agent.job.ReviewSandboxRuns;
 import de.tum.cit.aet.hephaestus.agent.proxy.ProxyAccounting;
 import de.tum.cit.aet.hephaestus.agent.proxy.ProxyAttempt;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunBand;
@@ -25,6 +38,7 @@ import de.tum.cit.aet.hephaestus.agent.run.AgentRunRef;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunState;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunStopReason;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
+import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRecorder;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurnRepository;
 import de.tum.cit.aet.hephaestus.core.auth.ratelimit.BucketResolver;
 import de.tum.cit.aet.hephaestus.core.exception.GlobalControllerAdvice;
@@ -38,6 +52,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -111,10 +126,26 @@ class SandboxTokenOutOfTurnIntegrationTest extends BaseIntegrationTest {
 
     private int gatewayPort;
     private long workspace;
+    private long otherWorkspace;
+
+    /** The collaborators of the run routes that this harness does not drive; a refused call must touch none. */
+    private final ReviewComposeSandboxKind composeKind = mock(ReviewComposeSandboxKind.class);
+
+    private final CompositionSessions compositionSessions = mock(CompositionSessions.class);
+    private final ComposerTranscript composerTranscript = mock(ComposerTranscript.class);
+    private final ReviewSandboxRuns reviewRuns = mock(ReviewSandboxRuns.class);
+    private final ConversationTurnContexts turnContexts = mock(ConversationTurnContexts.class);
+    private final ConversationTurnCompletion turnCompletion = mock(ConversationTurnCompletion.class);
+    private final ConversationTurns turns = mock(ConversationTurns.class);
+    private final LlmUsageRecorder usage = mock(LlmUsageRecorder.class);
+    private final TurnContextLoads contextLoads = mock(TurnContextLoads.class);
 
     @BeforeEach
     void startTheGateway() throws Exception {
         workspace = workspaces
+                .save(TestEntities.activeWorkspace("out-of-turn-" + UUID.randomUUID()))
+                .getId();
+        otherWorkspace = workspaces
                 .save(TestEntities.activeWorkspace("out-of-turn-" + UUID.randomUUID()))
                 .getId();
         sandboxes = new AgentSandboxes(
@@ -135,6 +166,16 @@ class SandboxTokenOutOfTurnIntegrationTest extends BaseIntegrationTest {
         application.addInitializers(context -> {
             var factory = context.getBeanFactory();
             factory.registerSingleton("agentRunController", controller);
+            factory.registerSingleton(
+                    "compositionController",
+                    new CompositionController(composeKind, compositionSessions, composerTranscript));
+            factory.registerSingleton("reviewSandboxController", new ReviewSandboxController(reviewRuns, runs));
+            factory.registerSingleton(
+                    "conversationTurnController",
+                    new ConversationTurnController(turnContexts, turnCompletion, turns, usage));
+            factory.registerSingleton(
+                    "turnContextController",
+                    new TurnContextController(turnContexts, turns, contextLoads, Clock.systemUTC()));
             factory.registerSingleton("modelRoute", new ModelRoute());
             factory.registerSingleton("fencedReview", review);
             factory.registerSingleton("sandboxRunArguments", new WebMvcConfigurer() {
@@ -176,11 +217,12 @@ class SandboxTokenOutOfTurnIntegrationTest extends BaseIntegrationTest {
     private record Sandbox(AgentSandboxes.LiveSandbox live, String token) {}
 
     private Sandbox sandbox() {
+        return sandbox(workspace, "review:" + UUID.randomUUID());
+    }
+
+    private Sandbox sandbox(long workspaceId, String subjectKey) {
         var live = sandboxes.ensure(
-                workspace,
-                "review:" + UUID.randomUUID(),
-                AgentSandboxKind.REVIEW,
-                Instant.now().plus(Duration.ofHours(1)));
+                workspaceId, subjectKey, AgentSandboxKind.REVIEW, Instant.now().plus(Duration.ofHours(1)));
         String token = Objects.requireNonNull(claims.created.get(AgentSandboxes.claimName(live.id())))
                 .env()
                 .get(AgentSandboxes.TOKEN_ENV);
@@ -201,12 +243,17 @@ class SandboxTokenOutOfTurnIntegrationTest extends BaseIntegrationTest {
     }
 
     private int call(String method, Sandbox caller, UUID run, int epoch, String route, String body) throws Exception {
+        return call(method, caller, run, epoch, route, body, "application/json");
+    }
+
+    private int call(String method, Sandbox caller, UUID run, int epoch, String route, String body, String type)
+            throws Exception {
         var request = HttpRequest.newBuilder(
                         URI.create("http://localhost:" + gatewayPort + "/internal/agent/runs/" + run + "/" + route))
                 .header("Authorization", "Bearer " + caller.token())
                 .header(SandboxRunArgumentResolver.RUN_HEADER, run.toString())
                 .header(SandboxRunArgumentResolver.EPOCH_HEADER, Integer.toString(epoch))
-                .header("Content-Type", "application/json")
+                .header("Content-Type", type)
                 .method(method, HttpRequest.BodyPublishers.ofString(body))
                 .build();
         return http.send(request, HttpResponse.BodyHandlers.discarding()).statusCode();
@@ -280,6 +327,76 @@ class SandboxTokenOutOfTurnIntegrationTest extends BaseIntegrationTest {
                         new AttemptTokenVerifier(AttemptKeyFixtures.keyring(KEY), new SimpleMeterRegistry())
                                 .verifySandbox(other.token())))
                 .isPresent();
+    }
+
+    /** Every run endpoint of the gateway: the method, the route below the run and its content type. */
+    private static final List<String[]> RUN_ROUTES = List.of(
+            new String[] {"GET", "context", "application/json"},
+            new String[] {"POST", "lease", "application/json"},
+            new String[] {"POST", "end", "application/json"},
+            new String[] {"POST", "composition/next", "application/json"},
+            new String[] {"POST", "composition/tools/read", "application/json"},
+            new String[] {"POST", "composition/stop", "application/json"},
+            new String[] {"POST", "composition/close", "application/json"},
+            new String[] {"GET", "runtime", "application/json"},
+            new String[] {"GET", "runtime/workspace", "application/json"},
+            new String[] {"POST", "runtime/result", "application/x-tar"},
+            new String[] {"POST", "turn/link-result", "application/json"},
+            new String[] {"POST", "turn/link-problem", "application/json"},
+            new String[] {"POST", "turn/show-feedback", "application/json"},
+            new String[] {"POST", "turn/search", "application/json"},
+            new String[] {"POST", "turn/partial", "application/json"},
+            new String[] {"POST", "turn/end", "application/json"},
+            new String[] {"POST", "turn/sandbox/document", "application/json"},
+            new String[] {"POST", "turn/sandbox/load", "application/json"});
+
+    @Test
+    void shouldAnswerARunOfAnotherWorkspaceAsNoRouteOnEveryRunEndpointAndWriteNothing() throws Exception {
+        var owner = sandbox();
+        var lease = leased(owner);
+        // A live sandbox of another workspace with the same subject key: only the workspace tells the two apart.
+        var intruder = sandbox(otherWorkspace, owner.live().subjectKey());
+        // The intruder authenticates: its 404s come from the run's workspace, not from a refused token.
+        assertThat(sandboxes.authenticate(
+                        new AttemptTokenVerifier(AttemptKeyFixtures.keyring(KEY), new SimpleMeterRegistry())
+                                .verifySandbox(intruder.token())))
+                .isPresent();
+        var leasedUntil = runs.find(new AgentRunRef(lease.runId(), workspace))
+                .orElseThrow()
+                .getLeasedUntil();
+
+        for (String[] route : RUN_ROUTES) {
+            assertThat(call(route[0], intruder, lease.runId(), lease.epoch(), route[1], body(route), route[2]))
+                    .as("%s %s of another workspace's run", route[0], route[1])
+                    .isEqualTo(404);
+        }
+
+        verifyNoInteractions(
+                composeKind,
+                compositionSessions,
+                composerTranscript,
+                reviewRuns,
+                turnContexts,
+                turnCompletion,
+                turns,
+                usage,
+                contextLoads);
+        assertThat(state(lease)).isEqualTo(AgentRunState.LEASED);
+        assertThat(runs.find(new AgentRunRef(lease.runId(), workspace))
+                        .orElseThrow()
+                        .getLeasedUntil())
+                .isEqualTo(leasedUntil);
+        assertThat(renew(owner, lease.runId(), lease.epoch())).isEqualTo(200);
+        // The routes exist: the run's own sandbox reaches each of them.
+        for (String[] route : RUN_ROUTES) {
+            assertThat(call(route[0], owner, lease.runId(), lease.epoch(), route[1], body(route), route[2]))
+                    .as("%s %s of the sandbox's own run", route[0], route[1])
+                    .isNotEqualTo(404);
+        }
+    }
+
+    private static String body(String[] route) {
+        return route[0].equals("GET") || route[2].equals("application/x-tar") ? "" : "{}";
     }
 
     @Test

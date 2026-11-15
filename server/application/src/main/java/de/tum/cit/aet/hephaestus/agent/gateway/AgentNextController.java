@@ -2,7 +2,6 @@ package de.tum.cit.aet.hephaestus.agent.gateway;
 
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxes;
-import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import de.tum.cit.aet.hephaestus.observability.StructuredLogKeys;
 import java.time.Instant;
@@ -31,7 +30,6 @@ import org.springframework.web.bind.annotation.RestController;
 @PreAuthorize("isAuthenticated()")
 @ConditionalOnAgentRuntime
 @Profile("!specs & !cds-training")
-@WorkspaceAgnostic("The sandbox token names the workspace, and the gateway checked it against the sandbox's live row")
 public class AgentNextController {
 
     private final AgentSandboxes sandboxes;

@@ -16,6 +16,12 @@ import com.tngtech.archunit.lang.ConditionEvents;
 import com.tngtech.archunit.lang.SimpleConditionEvent;
 import de.tum.cit.aet.hephaestus.account.AccountController;
 import de.tum.cit.aet.hephaestus.activity.overview.PublicActivityController;
+import de.tum.cit.aet.hephaestus.agent.conversation.host.ConversationTurnController;
+import de.tum.cit.aet.hephaestus.agent.conversation.host.TurnContextController;
+import de.tum.cit.aet.hephaestus.agent.gateway.AgentNextController;
+import de.tum.cit.aet.hephaestus.agent.gateway.AgentRunController;
+import de.tum.cit.aet.hephaestus.agent.gateway.CompositionController;
+import de.tum.cit.aet.hephaestus.agent.job.ReviewSandboxController;
 import de.tum.cit.aet.hephaestus.architecture.conditions.WorkspaceParameters;
 import de.tum.cit.aet.hephaestus.architecture.conditions.WorkspaceQueryParameters;
 import de.tum.cit.aet.hephaestus.core.RequireInstanceAdmin;
@@ -26,15 +32,21 @@ import de.tum.cit.aet.hephaestus.feature.FeatureFlagController;
 import de.tum.cit.aet.hephaestus.integration.core.oauth.OAuthCallbackController;
 import de.tum.cit.aet.hephaestus.integration.core.webhook.WebhookController;
 import de.tum.cit.aet.hephaestus.integration.outline.webhook.OutlineWebhookController;
+import de.tum.cit.aet.hephaestus.integration.scm.github.installation.adoption.GitHubInstallationClaimController;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.webhook.GitLabConnectionWebhookController;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabPreflightController;
+import de.tum.cit.aet.hephaestus.integration.slack.interactivity.SlackInteractivityController;
+import de.tum.cit.aet.hephaestus.notification.preferences.NotificationPreferencesController;
 import de.tum.cit.aet.hephaestus.practices.result.ResultRepository;
+import de.tum.cit.aet.hephaestus.productfeedback.InstanceFeedbackController;
+import de.tum.cit.aet.hephaestus.productfeedback.MyProductFeedbackController;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRegistryController;
 import de.tum.cit.aet.hephaestus.workspace.authorization.RequireAtLeastWorkspaceAdmin;
 import de.tum.cit.aet.hephaestus.workspace.authorization.RequireWorkspaceOwner;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceScopedController;
 import de.tum.cit.aet.hephaestus.workspace.onboarding.AccountAiChoiceController;
+import de.tum.cit.aet.hephaestus.workspace.onboarding.PublicActivityOnboardingController;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
 import java.util.Arrays;
@@ -262,7 +274,9 @@ class MultiTenancyArchitectureTest extends HephaestusArchitectureTest {
     /**
      * The annotations that let a controller endpoint go without a {@code WorkspaceContext} parameter, on the endpoint or
      * on its controller. Matched by exact type, so a look-alike, such as OpenAPI's {@code @SecurityRequirements} or
-     * {@code @RequiresRecentSignIn}, scopes nothing. {@code ControllerWorkspaceScopeTest} pins this.
+     * {@code @RequiresRecentSignIn}, scopes nothing. {@code ControllerWorkspaceScopeTest} pins this. A type-level
+     * {@code @WorkspaceAgnostic} is for a controller that reads no workspace data (docs/contributor/workspace-context.mdx
+     * § Global Routes).
      */
     private static final List<Class<? extends Annotation>> WORKSPACE_SCOPE_ANNOTATIONS = List.of(
             WorkspaceScopedController.class,
@@ -281,6 +295,14 @@ class MultiTenancyArchitectureTest extends HephaestusArchitectureTest {
             AccountController.class,
             AccountAiChoiceController.class,
             FeatureFlagController.class,
+            // The caller's own account or membership: their notification choices across their memberships, their own
+            // product feedback reports (to read them, and to count them for the rate limit of a new one), and their own
+            // membership row in the public workspace that the path's slug names, which must be opted in and ACTIVE
+            // (ActivityControllerIntegrationTest).
+            NotificationPreferencesController.class,
+            MyProductFeedbackController.class,
+            InstanceFeedbackController.class,
+            PublicActivityOnboardingController.class,
             // Create and list workspaces, and check a GitLab token, before a workspace exists.
             WorkspaceRegistryController.class,
             GitLabPreflightController.class,
@@ -290,6 +312,21 @@ class MultiTenancyArchitectureTest extends HephaestusArchitectureTest {
             GitLabConnectionWebhookController.class,
             OutlineWebhookController.class,
             OAuthCallbackController.class,
+            // The Slack request signature: the workspace is the one active connection of the signed team. An unbound
+            // team resolves to none (SlackWorkspaceResolverIntegrationTest), and so do two matches
+            // (ConnectionServiceTest), which the database refuses to store.
+            SlackInteractivityController.class,
+            // GitHub's own authorization: the caller's linked GitHub user must reach the installation in the path.
+            GitHubInstallationClaimController.class,
+            // The sandbox token: the sandbox's own row names the workspace, and a run in the path resolves only
+            // within that workspace and subject (SandboxRunArgumentResolver). SandboxTokenOutOfTurnIntegrationTest
+            // proves a run of another workspace is no route on every run endpoint.
+            AgentNextController.class,
+            AgentRunController.class,
+            CompositionController.class,
+            ReviewSandboxController.class,
+            ConversationTurnController.class,
+            TurnContextController.class,
             // Anonymous public pages of a workspace. Each read needs the instance switch on, and one query must
             // find the slug opted in and ACTIVE; every read then binds that workspace's id.
             // ActivityControllerIntegrationTest proves the not-found answers and that two public workspaces never

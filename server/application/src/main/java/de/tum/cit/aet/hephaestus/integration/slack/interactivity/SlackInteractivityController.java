@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.integration.slack.interactivity;
 
-import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackSignatureVerifier;
 import io.swagger.v3.oas.annotations.Hidden;
@@ -35,7 +34,6 @@ import tools.jackson.databind.ObjectMapper;
 @RestController
 @ConditionalOnServerRole
 @ConditionalOnProperty(name = "hephaestus.integration.slack.enabled", havingValue = "true")
-@WorkspaceAgnostic("Slack interactivity; the workspace is resolved from the payload's team_id, not the URL")
 public class SlackInteractivityController {
 
     private static final Logger log = LoggerFactory.getLogger(SlackInteractivityController.class);

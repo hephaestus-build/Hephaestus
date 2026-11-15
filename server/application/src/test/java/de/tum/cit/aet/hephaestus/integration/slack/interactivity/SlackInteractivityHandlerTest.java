@@ -104,6 +104,34 @@ class SlackInteractivityHandlerTest extends BaseUnitTest {
         return payload;
     }
 
+    /**
+     * The signed team names the workspace. When it names none, because no connection holds it or more than one does,
+     * no action writes anything: the resolver answers empty for both (ConnectionServiceTest).
+     */
+    @ParameterizedTest
+    @ValueSource(
+            strings = {
+                SlackAppHomeService.ACTION_CHANNEL_MESSAGES_OPT_OUT,
+                SlackAppHomeService.ACTION_CHANNEL_MESSAGES_OPT_IN,
+                SlackConsentBlocks.ACTION_PARTICIPANT_OPT_OUT,
+                SlackConversationPosts.FEEDBACK_ACTION,
+                SlackWeeklyDigestPointer.TURN_OFF_ACTION
+            })
+    void shouldWriteNothingWhenTheSignedTeamNamesNoWorkspace(String action) {
+        when(workspaceResolver.resolveWorkspaceId(TEAM)).thenReturn(Optional.empty());
+
+        handler.handleBlockActions(blockActions(action, "HELPFUL:" + ANSWER_ID));
+
+        verifyNoInteractions(
+                identityResolver,
+                appHomeService,
+                participantConsentService,
+                personErasureService,
+                messageService,
+                conversationService,
+                weeklyDigests);
+    }
+
     @ParameterizedTest
     @ValueSource(strings = {"research_opt_in", "research_opt_out"})
     void shouldNotWriteAnIndependentResearchDecisionFromOldSlackControls(String action) {

@@ -6,7 +6,6 @@ import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxOutputArchive;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxResult;
-import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
 import jakarta.servlet.http.HttpServletRequest;
@@ -34,7 +33,6 @@ import org.springframework.web.server.ResponseStatusException;
 @ConditionalOnAgentRuntime
 @ConditionalOnBooleanProperty(RuntimeRole.AGENT_ENABLED_PROPERTY)
 @Profile("!specs & !cds-training")
-@WorkspaceAgnostic("The sandbox token and the run's own row name the workspace, and the resolver checks both")
 public class ReviewSandboxController {
 
     /** How the runner ended, as the run program reports it with the result (gateway-run.ts). */

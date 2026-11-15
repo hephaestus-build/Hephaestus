@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.integration.scm.github.installation.adoption;
 
-import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.security.SecurityUtils;
 import io.swagger.v3.oas.annotations.Operation;
@@ -16,7 +15,6 @@ import org.springframework.web.bind.annotation.RestController;
 /** The setup page that GitHub returns a person to after they install the app. */
 @RestController
 @ConditionalOnServerRole
-@WorkspaceAgnostic("A GitHub App installation that has no workspace yet")
 @RequestMapping("/github-installations")
 public class GitHubInstallationClaimController {
     private final GitHubInstallationClaimService claims;

@@ -2,7 +2,6 @@ package de.tum.cit.aet.hephaestus.notification.preferences;
 
 import de.tum.cit.aet.hephaestus.core.EntityTagPrecondition;
 import de.tum.cit.aet.hephaestus.core.RecentSignInExempt;
-import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.auth.web.CurrentAccount;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import io.swagger.v3.oas.annotations.Operation;
@@ -36,7 +35,6 @@ import org.springframework.web.server.ResponseStatusException;
 @Tag(name = "Notification preferences")
 @PreAuthorize("isAuthenticated()")
 @RecentSignInExempt(reason = "Changes only the current account's optional email subscriptions")
-@WorkspaceAgnostic("Current-account subscriptions are independent of workspace membership")
 public class NotificationPreferencesController {
     private final NotificationSubscriptionService subscriptions;
 

@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.workspace.onboarding;
 
-import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.auth.web.CurrentAccount;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import io.swagger.v3.oas.annotations.Operation;
@@ -21,7 +20,6 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @ConditionalOnServerRole
 @RequestMapping("/user/public-activity/workspaces/{slug}/onboarding")
-@WorkspaceAgnostic("Public-workspace visitors need no membership; the account always comes from authentication")
 @PreAuthorize("isAuthenticated()")
 @RequiredArgsConstructor
 public class PublicActivityOnboardingController {
