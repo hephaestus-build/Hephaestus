@@ -205,24 +205,41 @@ public final class SlackConversationPosts {
     }
 
     /**
-     * Says once per DM or thread that a model writes the answers (EU AI Act Art. 50(1): at the first interaction).
-     * Slack already shows Hephaestus as an agent, so later answers do not repeat it.
+     * Says that the reader talks with an AI system (EU AI Act Art. 50(1); 50(5) asks for it clearly, at the first
+     * interaction at the latest). It also names the Hephaestus workspace that uses it, so the reader knows which
+     * workspace's work it answers about. It shows on the App Home and on the first answer of each DM and thread; Slack shows Hephaestus
+     * as an app, so later answers do not repeat it. "Workspace" alone would read as the Slack workspace, so the label
+     * says "in Hephaestus". The web app's disclosure under the conversation says the same.
+     *
+     * @param workspaceName the Hephaestus workspace's name; {@code null} when it cannot be read
      */
-    public static final String AI_LABEL = "Hephaestus answers with an AI model and can be wrong.";
+    public static String aiLabel(@Nullable String workspaceName) {
+        String workspace = workspaceName == null || workspaceName.isBlank()
+                ? "this workspace"
+                : "the " + workspaceName.strip() + " workspace";
+        return "Hephaestus is an AI system that " + workspace + " in Hephaestus uses. Its answers can be wrong.";
+    }
 
-    /** The {@link #AI_LABEL} line, in Slack's small context text. */
-    public static List<LayoutBlock> aiLabel() {
+    /** Slack reads {@code &}, {@code <} and {@code >} in mrkdwn and in a message's fallback text as markup. */
+    static String escape(String text) {
+        return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
+    }
+
+    /** The {@link #aiLabel} line, in Slack's small context text. Plain text, so a workspace name is never markup. */
+    public static List<LayoutBlock> aiLabelBlocks(@Nullable String workspaceName) {
         return List.of(ContextBlock.builder()
-                .elements(List.of(PlainTextObject.builder().text(AI_LABEL).build()))
+                .elements(List.of(
+                        PlainTextObject.builder().text(aiLabel(workspaceName)).build()))
                 .build());
     }
 
     /**
      * What closes an answer: the AI label on the first answer of a DM or thread, then in a thread the feedback buttons.
      */
-    static List<LayoutBlock> answerFooter(UUID answerId, boolean firstAnswer, boolean inThread) {
+    static List<LayoutBlock> answerFooter(
+            UUID answerId, boolean firstAnswer, boolean inThread, @Nullable String workspaceName) {
         return Stream.concat(
-                        (firstAnswer ? aiLabel() : List.<LayoutBlock>of()).stream(),
+                        (firstAnswer ? aiLabelBlocks(workspaceName) : List.<LayoutBlock>of()).stream(),
                         (inThread ? feedbackButtons(answerId) : List.<LayoutBlock>of()).stream())
                 .toList();
     }

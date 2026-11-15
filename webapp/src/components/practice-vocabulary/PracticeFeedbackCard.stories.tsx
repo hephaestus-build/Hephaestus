@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react";
 import { expect, fn, screen, userEvent, waitFor, within } from "storybook/test";
 
+import { WRITTEN_BY_HEPHAESTUS } from "@/components/common/WrittenByHephaestusNote";
 import { expectSettledVisible } from "@/stories/overlay";
 import { NEW_FEEDBACK_CARD } from "@/stories/practice-feedback-cards-story-mock-data";
 import { conversation, issue, pullRequest } from "@/stories/practice-profile-story-mock-data";
@@ -76,6 +77,8 @@ export const New: Story = {
 	play: async ({ args, canvas }) => {
 		const article = canvas.getByRole("article", { name: args.card.headline });
 		await expect(canvas.getByText("New")).toBeVisible();
+		// Hephaestus wrote the words, and the card says so in a sentence.
+		await expect(within(article).getByText(WRITTEN_BY_HEPHAESTUS)).toBeVisible();
 		await expect(canvas.queryByText("Open")).toBeNull();
 		// The number rule and the two day rules of `feedback-text` and `lib/dates`: a word below ten,
 		// the short day on the timeline, the full day and the minute in the footer.
@@ -1031,6 +1034,8 @@ export const Withdrawn: Story = {
 		).toBeVisible();
 		await expect(canvas.getByText("Withdrawn 12 September")).toBeVisible();
 		await expect(canvas.queryByText("Next step")).toBeNull();
+		// None of its words show, so there is nothing to label as written by Hephaestus.
+		await expect(canvas.queryByText(WRITTEN_BY_HEPHAESTUS)).toBeNull();
 		await expect(canvas.queryByRole("meter")).toBeNull();
 		await expect(canvas.queryByText("Resolved")).toBeNull();
 		await expect(canvas.queryByRole("group", { name: "Or mark it yourself" })).toBeNull();

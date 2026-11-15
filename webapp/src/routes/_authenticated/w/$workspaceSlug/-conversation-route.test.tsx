@@ -165,6 +165,28 @@ it("leaves an unsent draft behind in its own workspace", async () => {
 	expect(beta.submissions).toStrictEqual([]);
 });
 
+it("says under the conversation that an AI system answers, naming the workspace from the reader's list", async () => {
+	const fake = new ConversationFake("acme");
+	fake.add({ kind: "USER", text: "A question" });
+	fake.add({ kind: "ANSWER", text: "An answer" });
+	serve(fake);
+
+	renderRouteAtWithRouter("/w/acme/conversation");
+	const composer = await screen.findByRole(
+		"textbox",
+		{ name: "Message Hephaestus" },
+		ROUTE_RENDER_WAIT,
+	);
+	await screen.findByText("An answer");
+	const described = composer.getAttribute("aria-describedby");
+	assert(described !== null, "The composer names its description");
+	await waitFor(() =>
+		expect(document.getElementById(described)?.textContent).toBe(
+			"Hephaestus is an AI system that the acme workspace uses. Its answers can be wrong, so check anything important before you rely on it.",
+		),
+	);
+});
+
 it("opens at the newest messages and reads older ones above them", async () => {
 	const fake = new ConversationFake("acme", { pageSize: 2 });
 	fake.add({ kind: "USER", text: "The oldest question" });

@@ -14,6 +14,7 @@ import type { PanelState } from "@/components/common/panel-state";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { UNTRUSTED_MARKDOWN_PROSE, UntrustedMarkdown } from "@/components/common/UntrustedMarkdown";
+import { WrittenByHephaestusNote } from "@/components/common/WrittenByHephaestusNote";
 import type { LevelPath } from "@/components/layout/detail-drawer/DetailPath";
 import { DetailStackLink } from "@/components/layout/detail-drawer/DetailStackLink";
 import { Section } from "@/components/layout/Section";
@@ -227,6 +228,9 @@ export function ResultLevel({
 										))}
 									</ul>
 								</Section>
+							)}
+							{(hasText(record.explanation) || problems.length > 0 || openQuestions.length > 0) && (
+								<WrittenByHephaestusNote />
 							)}
 							{/* A not met result's passages are its problems'. Its own section stands only when it
 						    cites something of its own, or when nothing else on the sheet would say that

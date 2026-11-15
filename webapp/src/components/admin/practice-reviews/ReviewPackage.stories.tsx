@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect } from "storybook/test";
 import type { FeedbackCopy } from "@/api/types.gen";
+import { WRITTEN_BY_HEPHAESTUS } from "@/components/common/WrittenByHephaestusNote";
 import { expectNoPageOverflow } from "@/stories/reflow";
 import { PRIVATE_FEEDBACK_TEXT, reviewFeedbackDetail } from "./fixtures";
 import { ReviewPackage } from "./ReviewPackage";
@@ -75,6 +76,8 @@ export const ExactSummaryAndInlinePackage: Story = {
 			canvas.getByRole("heading", { name: "Keep the retry boundary explicit" }),
 		).toBeVisible();
 		await expect(canvas.getByText(longPath)).toBeVisible();
+		// The summary and the line notes each carry the AI label.
+		await expect(canvas.getAllByText(WRITTEN_BY_HEPHAESTUS)).toHaveLength(2);
 		await expect(
 			canvas.getByText(
 				"Catch only the provider failure that is safe to retry; programming errors must still surface.",
@@ -98,6 +101,7 @@ export const PrivatePlaceNeverShown: Story = {
 			canvas.getByText(/written for the developer’s own practice pages and is withheld/u),
 		).toBeVisible();
 		await expect(canvas.queryByText(PRIVATE_FEEDBACK_TEXT)).toBeNull();
+		await expect(canvas.queryByText(WRITTEN_BY_HEPHAESTUS)).toBeNull();
 		await expect(canvas.queryByText(longPath)).toBeNull();
 	},
 };

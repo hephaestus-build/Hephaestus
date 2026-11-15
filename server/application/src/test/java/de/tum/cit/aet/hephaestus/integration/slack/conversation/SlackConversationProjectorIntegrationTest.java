@@ -42,6 +42,7 @@ import de.tum.cit.aet.hephaestus.testconfig.HeldTransaction;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceSummaryQuery;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
@@ -93,6 +94,9 @@ class SlackConversationProjectorIntegrationTest extends AbstractWorkspaceIntegra
     private ObjectMapper mapper;
 
     @Autowired
+    private WorkspaceSummaryQuery workspaceSummaries;
+
+    @Autowired
     private JdbcTemplate jdbc;
 
     @Autowired
@@ -122,7 +126,8 @@ class SlackConversationProjectorIntegrationTest extends AbstractWorkspaceIntegra
                 messages,
                 completion,
                 linkHosts,
-                mapper);
+                mapper,
+                workspaceSummaries);
         executor = ActionTestSupport.withAdapter(context, adapter);
         projector = new SlackConversationProjector(messages, replies, executor);
     }
@@ -459,7 +464,12 @@ class SlackConversationProjectorIntegrationTest extends AbstractWorkspaceIntegra
         changed(nextRunning);
         verify(slack)
                 .postMessage(
-                        anyLong(), anyString(), any(), anyList(), contains(SlackConversationPosts.AI_LABEL), any());
+                        anyLong(),
+                        anyString(),
+                        any(),
+                        anyList(),
+                        contains(SlackConversationPosts.aiLabel(workspace.getDisplayName())),
+                        any());
     }
 
     @Test

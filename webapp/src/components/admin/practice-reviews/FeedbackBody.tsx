@@ -1,5 +1,6 @@
 import type { ReviewFeedback } from "@/api/types.gen";
 import { UNTRUSTED_MARKDOWN_PROSE, LazyMarkdown } from "@/components/common/UntrustedMarkdown";
+import { WrittenByHephaestusNote } from "@/components/common/WrittenByHephaestusNote";
 import { ADMIN_WITHHELD_TEXT } from "@/components/practice-vocabulary/feedback-destination-defs";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import {
@@ -87,6 +88,7 @@ export function FeedbackBody({ feedback, className }: FeedbackBodyProps) {
 							<CodeBlockContent wrap>{body}</CodeBlockContent>
 						</CodeBlock>
 					</TabsContent>
+					<WrittenByHephaestusNote className="mt-3" />
 				</CardContent>
 			</Tabs>
 		</Card>

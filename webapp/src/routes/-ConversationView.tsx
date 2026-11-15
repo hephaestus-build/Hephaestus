@@ -17,6 +17,7 @@ import { liveTurnOf } from "@/components/conversation/timeline-rows";
 import { WeeklyDigestCard } from "@/components/conversation/WeeklyDigestCard";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
 import { Marker, MarkerContent } from "@/components/ui/marker";
+import { useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";
 import {
 	type ConversationActions,
 	useConversationActions,
@@ -35,6 +36,15 @@ import { useAuth } from "@/runtime/auth/AuthContext";
  */
 
 const copy = (text: string) => copyToClipboard(text, "Message copied");
+
+/**
+ * The name of the workspace whose conversation this is, for the AI disclosure. The workspace list is
+ * the reader's own, so a workspace it does not hold leaves the name unknown.
+ */
+function useWorkspaceName(workspaceSlug: string): string | undefined {
+	const { workspaces } = useActiveWorkspaceSlug();
+	return workspaces.find((workspace) => workspace.workspaceSlug === workspaceSlug)?.displayName;
+}
 
 /** Signs the developer's messages: the viewed member's in a user view, else the signed-in account's. */
 function useDeveloper(): MessageAuthor {
@@ -124,6 +134,7 @@ export function MainConversation({
 	focusComposer = false,
 }: MainConversationProps) {
 	const developer = useDeveloper();
+	const workspaceName = useWorkspaceName(workspaceSlug);
 	const state = useConversationTimeline(workspaceSlug, readOnly);
 	const actions = useConversationActions(workspaceSlug);
 	// Reading the conversation here, on the conversation page or in the Hephaestus panel, clears the launcher's dot,
@@ -144,6 +155,7 @@ export function MainConversation({
 		<ConversationTimeline
 			label="Your conversation"
 			workspaceSlug={workspaceSlug}
+			workspaceName={workspaceName}
 			state={state}
 			developer={developer}
 			onCopy={copy}
@@ -194,6 +206,7 @@ export function ThreadConversation({
 	jumpTo,
 }: ThreadConversationProps) {
 	const developer = useDeveloper();
+	const workspaceName = useWorkspaceName(workspaceSlug);
 	const thread = useConversationThread(workspaceSlug, parentEntryId, readOnly);
 	const actions = useConversationActions(workspaceSlug);
 	switch (thread.status) {
@@ -208,6 +221,7 @@ export function ThreadConversation({
 				<ConversationTimeline
 					label="Thread"
 					workspaceSlug={workspaceSlug}
+					workspaceName={workspaceName}
 					state={thread}
 					developer={developer}
 					onCopy={copy}
@@ -226,6 +240,7 @@ export function ThreadConversation({
 				<ConversationTimeline
 					label="Thread"
 					workspaceSlug={workspaceSlug}
+					workspaceName={workspaceName}
 					state={timeline}
 					developer={developer}
 					onCopy={copy}

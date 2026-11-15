@@ -379,7 +379,10 @@ await test("the fake accepts the blocks that the server sends", () => {
 		[markdown("an answer")],
 		[
 			markdown("an answer"),
-			{ type: "context", elements: [plain("Hephaestus answers with an AI model.")] },
+			{
+				type: "context",
+				elements: [plain("Hephaestus is an AI system that the AET workspace in Hephaestus uses.")],
+			},
 		],
 		[markdown("an answer"), { type: "context_actions", elements: [feedbackButtons] }],
 		[

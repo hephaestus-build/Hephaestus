@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, screen, within } from "storybook/test";
 
 import type { ResultDetail, ResultList } from "@/api/types.gen";
+import { WRITTEN_BY_HEPHAESTUS } from "@/components/common/WrittenByHephaestusNote";
 import { SEVERITY_DEFS } from "@/components/practice-vocabulary/severity-defs";
 import { formatDate, formatDay, formatTime } from "@/lib/dates";
 import { expectSettledVisible } from "@/stories/overlay";
@@ -309,6 +310,8 @@ export const NotMetWithProblems: Story = {
 		const problems = canvas.getByRole("list", { name: "Problems" });
 		const items = within(problems).getAllByRole("listitem");
 		await expect(items).toHaveLength(3);
+		// The open observation says once that Hephaestus wrote its words.
+		await expect(canvas.getByText(WRITTEN_BY_HEPHAESTUS)).toBeVisible();
 		await expect(
 			within(items[0] ?? problems).getByText("The caching change hides inside the package move"),
 		).toBeVisible();

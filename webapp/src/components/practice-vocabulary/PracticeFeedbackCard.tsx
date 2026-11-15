@@ -14,6 +14,7 @@ import { StatusBadge } from "@/components/common/StatusBadge";
 import { TipPopover } from "@/components/common/TipPopover";
 import { UNTRUSTED_MARKDOWN_PROSE, UntrustedMarkdown } from "@/components/common/UntrustedMarkdown";
 import { useNow } from "@/components/common/use-now";
+import { WrittenByHephaestusNote } from "@/components/common/WrittenByHephaestusNote";
 import {
 	type GroupMark,
 	groupMark,
@@ -466,6 +467,8 @@ export function PracticeFeedbackCard({
 							{body}
 						</UntrustedMarkdown>
 					</div>
+					{/* The headline, this explanation and the next step are one text that Hephaestus wrote. */}
+					<WrittenByHephaestusNote />
 				</div>
 				{onLearnMore && (
 					// Muted at rest; while the card is hovered or this link focused it is a link as the app draws

@@ -233,13 +233,8 @@ public class SlackWeeklyDigestPointer implements WeeklyDigestTransport {
                 .build());
         return List.of(
                 section(s -> s.text(markdownText("*Your weekly digest is ready*\n" + note.weekDays() + " · "
-                        + escape(workspace.displayName())))),
+                        + SlackConversationPosts.escape(workspace.displayName())))),
                 actions(a -> a.elements(buttons)),
                 context(c -> c.elements(List.of(markdownText("Reply in this thread to go through it.")))));
-    }
-
-    /** Slack reads {@code &}, {@code <} and {@code >} in mrkdwn as markup. */
-    private static String escape(String text) {
-        return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
     }
 }

@@ -19,6 +19,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.ModelLinkHosts;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackTs;
 import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackMessageService;
 import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackSendException;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceSummaryQuery;
 import java.time.Duration;
 import java.util.List;
 import java.util.Objects;
@@ -51,6 +52,7 @@ class SlackPostAdapter implements ActionAdapter {
     private final ConversationTurnCompletion completion;
     private final ModelLinkHosts linkHosts;
     private final ObjectMapper mapper;
+    private final WorkspaceSummaryQuery workspaces;
 
     record Recipient(String teamId, String userId) {}
 
@@ -98,13 +100,23 @@ class SlackPostAdapter implements ActionAdapter {
         String text = answered
                 ? reply.text()
                 : SlackConversationPosts.failedReply(turn.turn().getError());
+        // Only the first answer of a DM or thread names the workspace, so only it reads the name.
+        String workspaceName = answered && turn.firstAnswer()
+                ? workspaces
+                        .findById(workspace)
+                        .map(WorkspaceSummaryQuery.WorkspaceSummary::displayName)
+                        .orElse(null)
+                : null;
         var footer = answered && turn.answerId() != null
-                ? SlackConversationPosts.answerFooter(turn.answerId(), turn.firstAnswer(), turn.inThread())
+                ? SlackConversationPosts.answerFooter(
+                        turn.answerId(), turn.firstAnswer(), turn.inThread(), workspaceName)
                 : List.<LayoutBlock>of();
         var blocks = Stream.concat(SlackConversationPosts.markdown(text).stream(), footer.stream())
                 .toList();
         String fallback = SlackConversationPosts.notification(text)
-                + (answered && turn.firstAnswer() ? " " + SlackConversationPosts.AI_LABEL : "");
+                + (answered && turn.firstAnswer()
+                        ? " " + SlackConversationPosts.escape(SlackConversationPosts.aiLabel(workspaceName))
+                        : "");
         return post(
                 attempt,
                 payload.entryId(),

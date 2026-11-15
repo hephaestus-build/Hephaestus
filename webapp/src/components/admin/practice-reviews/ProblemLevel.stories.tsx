@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, within } from "storybook/test";
 
+import { WRITTEN_BY_HEPHAESTUS } from "@/components/common/WrittenByHephaestusNote";
 import { withPageBehind } from "@/stories/decorators";
 import { InLevelStack } from "@/stories/level-stack";
 import { settledDrawerPanel } from "@/stories/overlay";
@@ -46,6 +47,7 @@ export const Default: Story = {
 		const panelElement = await settledDrawerPanel();
 		const panel = within(panelElement);
 		panel.getByText(reviewProblemDetail.summary);
+		await expect(panel.getByText(WRITTEN_BY_HEPHAESTUS)).toBeVisible();
 		// The facts open the sheet as its "What it is", as on every other sheet.
 		await expect(panel.getAllByRole("heading", { level: 3 })[0]).toHaveTextContent("What it is");
 		panel.getByRole("heading", { name: "Evidence", level: 3 });
@@ -113,6 +115,8 @@ export const EvidenceHidden: Story = {
 		const panelElement = await settledDrawerPanel();
 		const panel = within(panelElement);
 		panel.getByText("The evidence of this problem is hidden.");
+		// Its explanation and next step are hidden too, so nothing is labelled.
+		await expect(panel.queryByText(WRITTEN_BY_HEPHAESTUS)).toBeNull();
 		// Only the facts stand, so no line is drawn.
 		await expectSectionLines(panelElement, 0);
 		panel.getByRole("heading", { name: "What it is", level: 3 });

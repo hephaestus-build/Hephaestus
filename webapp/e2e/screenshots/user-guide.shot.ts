@@ -81,10 +81,11 @@ async function open(
 		(url) => url.origin !== new URL(BASE_URL).origin && url.origin !== API,
 		async (route) => route.abort(),
 	);
+	// A production build without a deployment name shows "Unknown" in the header, which reads as a fault.
 	await context.route("**/env-config.js", async (route) =>
 		route.fulfill({
 			contentType: "application/javascript",
-			body: `window.__ENV__ = ${JSON.stringify({ APPLICATION_SERVER_URL: API, APPLICATION_CLIENT_URL: BASE_URL })};`,
+			body: `window.__ENV__ = ${JSON.stringify({ APPLICATION_SERVER_URL: API, APPLICATION_CLIENT_URL: BASE_URL, DEPLOYMENT_ENVIRONMENT: "local" })};`,
 		}),
 	);
 	await context.route(`${API}/**`, async (route) => {

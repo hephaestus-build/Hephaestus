@@ -12,6 +12,7 @@ import type { MessageAuthor } from "./ConversationMessage";
 export const DEVELOPER: MessageAuthor = { name: "Ada Lovelace" };
 
 export const WORKSPACE_SLUG = "aet";
+export const WORKSPACE_NAME = "AET";
 
 const CONVERSATION_ID = "0a7c4f3e-6b1d-4e25-9c8a-1f2e3d4c5b6a";
 

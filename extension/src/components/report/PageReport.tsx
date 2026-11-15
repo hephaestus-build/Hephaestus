@@ -65,14 +65,20 @@ function reviewedSentence(context: ReadyContext): string {
 	return `Reviewed ${formatDateTime(reviewed) ?? reviewed}${version === undefined ? "" : ` at ${version}`}.`;
 }
 
+/** The AI label, in the words the web app uses. */
+export const WRITTEN_BY_HEPHAESTUS = "Written by Hephaestus, an AI system. It can be wrong.";
+
 function Footer({
 	context,
 	webAppOrigin,
 	request,
+	labelled,
 }: {
 	context: ReadyContext;
 	webAppOrigin: string;
 	request: ReactNode;
+	/** The report shows words that Hephaestus wrote, so the footer says who wrote them. */
+	labelled: boolean;
 }) {
 	return (
 		<div
@@ -81,6 +87,7 @@ function Footer({
 				"flex flex-wrap items-center gap-x-3 gap-y-1.5 border-t border-border py-2 text-xs text-muted-foreground",
 			)}
 		>
+			{labelled ? <span className="min-w-0 basis-full">{WRITTEN_BY_HEPHAESTUS}</span> : null}
 			<span className="min-w-0 basis-full @lg:mr-auto @lg:basis-auto">
 				{reviewedSentence(context)}
 			</span>
@@ -94,6 +101,17 @@ function Footer({
 				</ExternalLink>
 			)}
 		</div>
+	);
+}
+
+/** Whether the report shows a comment that Hephaestus posted or an observation it wrote. */
+function showsHephaestusWords(
+	results: Loadable<ResultPage> | undefined,
+	feedback: Loadable<WorkFeedback> | undefined,
+): boolean {
+	return (
+		(feedback?.status === "ready" && feedback.data.comments.length > 0) ||
+		(results?.status === "ready" && results.data.rows.length > 0)
 	);
 }
 
@@ -157,6 +175,7 @@ function Ready({
 			<Footer
 				context={context}
 				webAppOrigin={webAppOrigin}
+				labelled={showsHephaestusWords(results, feedback)}
 				request={
 					offer ? (
 						// The line carries the request; only where the line is too narrow for it does it move here.

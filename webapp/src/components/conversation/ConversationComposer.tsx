@@ -1,5 +1,5 @@
 import { ArrowUpIcon, SquareIcon } from "lucide-react";
-import { type ReactNode, type SubmitEvent, useRef, useState } from "react";
+import { type ReactNode, type SubmitEvent, use, useRef, useState } from "react";
 import { useMediaQuery } from "usehooks-ts";
 
 import {
@@ -12,6 +12,8 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { readDraft, writeDraft } from "@/lib/composer-drafts";
 import { rendersContent } from "@/lib/react-node";
 import { hasText } from "@/lib/text";
+
+import { ComposerDescription } from "./composer-description";
 
 export interface ConversationComposerProps {
 	/** Names the field, so the main composer and a thread's are told apart on one screen. */
@@ -67,6 +69,8 @@ export function ConversationComposer({
 		onDraftChange?.(text);
 	};
 	const canSend = hasText(input.trim());
+	// The conversation's AI disclosure, read with the field's name when it takes focus.
+	const describedBy = use(ComposerDescription);
 	const touch = useMediaQuery(TOUCH);
 
 	const handleSubmit = (event: SubmitEvent<HTMLFormElement>) => {
@@ -89,6 +93,7 @@ export function ConversationComposer({
 				<InputGroupTextarea
 					ref={textareaRef}
 					aria-label={label}
+					aria-describedby={describedBy}
 					className="max-h-48 min-h-0"
 					placeholder={placeholder}
 					value={input}

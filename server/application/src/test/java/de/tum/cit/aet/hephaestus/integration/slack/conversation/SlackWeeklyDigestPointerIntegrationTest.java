@@ -145,7 +145,8 @@ class SlackWeeklyDigestPointerIntegrationTest extends AbstractWorkspaceIntegrati
                 messages,
                 completion,
                 linkHosts,
-                objectMapper);
+                objectMapper,
+                workspaces);
         beans.addBean("post", adapter);
         executor = ActionTestSupport.withAdapter(context, adapter);
         pointer = new SlackWeeklyDigestPointer(

@@ -164,15 +164,29 @@ class SlackConversationPostsTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldSayOnlyOnTheFirstAnswerOfAConversationThatAnAiModelAnswers() {
+    void shouldSayOnlyOnTheFirstAnswerOfAConversationThatAnAiSystemAnswersForTheWorkspace() {
         UUID answerId = UUID.randomUUID();
-        var label = SlackConversationPosts.aiLabel().getFirst();
+        var label = SlackConversationPosts.aiLabelBlocks("AET").getFirst();
         var buttons = SlackConversationPosts.feedbackButtons(answerId).getFirst();
 
-        assertThat(SlackConversationPosts.answerFooter(answerId, true, true)).containsExactly(label, buttons);
-        assertThat(SlackConversationPosts.answerFooter(answerId, false, true)).containsExactly(buttons);
-        assertThat(SlackConversationPosts.answerFooter(answerId, true, false)).containsExactly(label);
-        assertThat(SlackConversationPosts.answerFooter(answerId, false, false)).isEmpty();
-        assertThat(label.toString()).contains("Hephaestus answers with an AI model and can be wrong.");
+        assertThat(SlackConversationPosts.answerFooter(answerId, true, true, "AET"))
+                .containsExactly(label, buttons);
+        assertThat(SlackConversationPosts.answerFooter(answerId, false, true, "AET"))
+                .containsExactly(buttons);
+        assertThat(SlackConversationPosts.answerFooter(answerId, true, false, "AET"))
+                .containsExactly(label);
+        assertThat(SlackConversationPosts.answerFooter(answerId, false, false, "AET"))
+                .isEmpty();
+        assertThat(label.toString())
+                .contains("Hephaestus is an AI system that the AET workspace in Hephaestus uses."
+                        + " Its answers can be wrong.");
+    }
+
+    @Test
+    void shouldStillNameTheWorkspaceWhenItsNameIsUnknown() {
+        assertThat(SlackConversationPosts.aiLabel(null))
+                .isEqualTo("Hephaestus is an AI system that this workspace in Hephaestus uses."
+                        + " Its answers can be wrong.");
+        assertThat(SlackConversationPosts.aiLabel("  ")).startsWith("Hephaestus is an AI system that this workspace");
     }
 }

@@ -112,3 +112,11 @@ Hephaestus reads no reactions.
 When a later release needs another scope, its release notes say so.
 Then apply the new manifest to the app, and a workspace admin selects **Reconnect Slack** in each workspace.
 Until then, the Slack page of the workspace shows **Permissions missing** and names each missing scope.
+
+## What the app says about itself
+
+The manifest describes Hephaestus as an AI system.
+Slack shows the app's description and agent description before a person writes to the app.
+An app made from an earlier manifest can still call Hephaestus an AI assistant.
+To update it, copy `display_information.description` and `features.agent_view.agent_description` from the current manifest into the app settings.
+A description change needs no new scope and no reinstall.
