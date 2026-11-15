@@ -23,7 +23,7 @@ export const sectionTitleVariants = cva("text-foreground", {
 	defaultVariants: { size: "md" },
 });
 
-export interface SectionProps
+interface SectionOwnProps
 	extends Omit<ComponentProps<"section">, "title">, VariantProps<typeof sectionTitleVariants> {
 	title: ReactNode;
 	description?: ReactNode;
@@ -40,10 +40,25 @@ export interface SectionProps
 	/**
 	 * Lets the reader fold the section away: the heading becomes a button and the choice is kept in
 	 * this browser under this key, one per page and section ("practice-reviews-overview:queue").
-	 * Only for admin pages; a developer's practice surface never hides its feedback.
+	 * Only for admin pages and for guidance such as Get started; a developer's practice surface never
+	 * hides its feedback.
 	 */
 	foldKey?: string;
 }
+
+/** One owner of a fold: this browser's record under `foldKey`, or the caller's state under `fold`. */
+export type SectionProps = SectionOwnProps &
+	(
+		| { fold?: never }
+		| {
+				foldKey?: never;
+				/**
+				 * Folds the section from the caller's state, for a page that changes what it shows while
+				 * the section is folded. The caller keeps the choice, such as with `useSectionOpen`.
+				 */
+				fold: { open: boolean; onOpenChange: (open: boolean) => void };
+		  }
+	);
 
 const HEADINGS = { 2: "h2", 3: "h3", 4: "h4" } as const;
 
@@ -61,13 +76,16 @@ export function Section({
 	className,
 	id,
 	foldKey,
+	fold,
 	children,
 	...props
 }: SectionProps) {
 	const generatedId = useId();
 	const base = id ?? generatedId;
 	const Heading = HEADINGS[level];
-	const [open, setOpen] = useSectionOpen(foldKey);
+	const stored = useSectionOpen(fold === undefined ? foldKey : undefined);
+	const [open, setOpen] = fold === undefined ? stored : [fold.open, fold.onOpenChange];
+	const fixed = foldKey === undefined && fold === undefined;
 
 	return (
 		<section
@@ -83,7 +101,7 @@ export function Section({
 							id={`${base}-title`}
 							className={cn(sectionTitleVariants({ size }), "break-words")}
 						>
-							{foldKey === undefined ? (
+							{fixed ? (
 								title
 							) : (
 								// The heading keeps its level; the button inside it folds what the section holds.
@@ -118,7 +136,7 @@ export function Section({
 				</div>
 				{actions}
 			</div>
-			{foldKey === undefined ? (
+			{fixed ? (
 				children
 			) : (
 				<div id={`${base}-content`} hidden={!open} className="space-y-3">

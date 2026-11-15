@@ -12,15 +12,26 @@ import { lazy, type ReactNode, Suspense, useState, useTransition } from "react";
 
 import {
 	getOwnResultOptions,
+	getMemberOnboardingOptions,
 	getPublicActivityOnboardingOptions,
 } from "@/api/@tanstack/react-query.gen";
-import type { GroupRef, ResultDetail, ResultList } from "@/api/types.gen";
+import type { GroupRef, ResultDetail, ResultList, WorkspaceOnboarding } from "@/api/types.gen";
 import { InlineLink } from "@/components/common/InlineLink";
-import { combinePanelStates, queryLoadState } from "@/components/common/panel-state";
+import {
+	combinePanelStates,
+	type LoadState,
+	queryLoadState,
+} from "@/components/common/panel-state";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { parseDetailStack } from "@/components/layout/detail-drawer/detail-stack";
 import { DetailStackLink } from "@/components/layout/detail-drawer/DetailStackLink";
 import { useDetailStack } from "@/components/layout/detail-drawer/use-detail-stack";
+import { useSectionOpen } from "@/components/layout/section-folds";
+import {
+	getStartedFoldKey,
+	type GetStartedReview,
+	reviewFromOverview,
+} from "@/components/onboarding/get-started-open";
 import { isFocusSwitchStep } from "@/components/practice-focus/practice-focus";
 import { ProfileFocusFooter } from "@/components/practice-focus/profile-focus-footer";
 import { usePracticeFocusSwitch } from "@/components/practice-focus/use-practice-focus-switch";
@@ -54,6 +65,7 @@ import {
 	PracticeProfilePage,
 	type PracticeProfilePageProps,
 } from "@/components/practice-profile/PracticeProfilePage";
+import { firstRunContent } from "@/components/practice-profile/ProfileFirstRun";
 import { ReviewRequestedNotice } from "@/components/practice-trace/ReviewRequestedNotice";
 import { ROW_LINK_CLASS, RowLinkArrow } from "@/components/practice-vocabulary/PracticeTable";
 import {
@@ -61,9 +73,11 @@ import {
 	ReviewResultDetails,
 } from "@/components/profile/ReviewResultRow";
 import type { TourChapterId } from "@/components/tour/tour-chapters";
+import { useTourProgress } from "@/components/tour/tour-progress";
 import { TOUR_START_PROPS, tourOffered } from "@/components/tour/tour-start";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";
+import { useGetStartedShown } from "@/hooks/use-get-started-shown";
 import { REVIEW_PAGE_SIZE, usePracticeGroupDetail } from "@/hooks/use-practice-group-detail";
 import { usePracticePageFeedback } from "@/hooks/use-practice-page-feedback";
 import { usePracticeProfileOverview } from "@/hooks/use-practice-profile-overview";
@@ -143,6 +157,91 @@ function useFirstVisitOffer(accountId: string | undefined) {
 	return [due === true, () => setDue(false)] as const;
 }
 
+const GetStartedSection = lazy(async () => {
+	const { GetStartedSection: component } =
+		await import("@/components/onboarding/GetStartedSection");
+	return { default: component };
+});
+
+/**
+ * Get started on the reader's own Practice profile: their setup from the member onboarding read, their
+ * first review from the overview the page already polls, and the tour chapters they finished here.
+ * The list loads only once a setup step is open, and then stays, so the step that closes it is still
+ * announced. A list that cannot load shows nothing: it is optional guidance.
+ */
+function practiceProfileGetStarted({
+	mounted,
+	shown,
+	workspaceSlug,
+	workspaceName,
+	memberOnboarding,
+	review,
+	overviewState,
+	pageProps,
+	provider,
+	finished,
+	fold,
+	onStartChapter,
+}: {
+	mounted: boolean;
+	shown: boolean;
+	workspaceSlug: string;
+	workspaceName: string;
+	memberOnboarding: UseQueryResult<WorkspaceOnboarding>;
+	review: GetStartedReview | undefined;
+	overviewState: LoadState;
+	pageProps: Pick<PracticeProfilePageProps, "firstRun">;
+	provider: ReturnType<typeof useWorkProvider>;
+	finished: readonly string[];
+	fold: { open: boolean; onOpenChange: (open: boolean) => void };
+	onStartChapter: (chapter: TourChapterId) => void;
+}): PracticeProfilePageProps["getStarted"] {
+	if (!mounted) {
+		return undefined;
+	}
+	const inputs = {
+		workspaceName,
+		onboarding: { state: queryLoadState(memberOnboarding), data: memberOnboarding.data },
+		review: {
+			state: overviewState,
+			facts: review,
+			content:
+				pageProps.firstRun === undefined
+					? undefined
+					: firstRunContent({ ...pageProps.firstRun, reviewed: false }, provider),
+		},
+		finished,
+		links: {
+			setup: (
+				<Link
+					to="/w/$workspaceSlug/onboarding"
+					params={{ workspaceSlug }}
+					search={{ returnTo: `/w/${workspaceSlug}/practice-profile` }}
+				/>
+			),
+			startChapter: (chapter: TourChapterId) => (
+				<button
+					type="button"
+					onClick={() => onStartChapter(chapter)}
+					onPointerEnter={preloadTour}
+					onFocus={preloadTour}
+				/>
+			),
+			conversation: <Link to="/w/$workspaceSlug/conversation" params={{ workspaceSlug }} />,
+		},
+	};
+	return {
+		shown: shown && fold.open,
+		list: (
+			<CatchBoundary getResetKey={() => "get-started"} errorComponent={() => null}>
+				<Suspense fallback={null}>
+					<GetStartedSection inputs={inputs} fold={fold} />
+				</Suspense>
+			</CatchBoundary>
+		),
+	};
+}
+
 function PracticeProfile() {
 	// A user view reads the developer's page and answers nothing on their behalf.
 	const auth = useAuth();
@@ -153,12 +252,24 @@ function PracticeProfile() {
 		null,
 	);
 	const [offerDue, offerMade] = useFirstVisitOffer(accountId);
+	// The tour's record for this account, which the tour and Get started's learn steps share.
+	const tourProgress = useTourProgress(accountId);
 	const [tourLoading, startTourTransition] = useTransition();
 	const workProvider = useWorkProvider();
 	// From the reader's own membership: an admin read here would ask an admin for a passkey step-up.
 	const { isAdmin } = useWorkspaceAccess();
 	const { workspaceSlug } = Route.useParams();
 	const search = Route.useSearch();
+	// The reader's choice to hide Get started, kept here: while the list is hidden, the page shows the
+	// first-run state again, so the reason a review cannot run never disappears with it.
+	const [getStartedOpen, setGetStartedOpen] = useSectionOpen(
+		getStartedFoldKey(accountId, workspaceSlug),
+	);
+	// The workspace layout holds this read already; Get started takes the reader's setup from it.
+	const memberOnboarding = useQuery({
+		...getMemberOnboardingOptions({ path: { workspaceSlug } }),
+		enabled: !readOnly,
+	});
 
 	const detailStack = parseDetailStack(search.detail, PRACTICE_PROFILE_LEVEL_KINDS);
 	const stackControls = useDetailStack({
@@ -180,6 +291,12 @@ function PracticeProfile() {
 		...standings
 	} = usePracticeStandings(workspaceSlug);
 	const { overview, ...overviewQuery } = usePracticeProfileOverview(workspaceSlug);
+	const reviewFacts = reviewFromOverview(overview);
+	const getStartedView = useGetStartedShown({
+		userView: readOnly,
+		onboarding: memberOnboarding.data,
+		review: reviewFacts,
+	});
 	const workspace = useActiveWorkspaceSlug().workspaces.find(
 		(each) => each.workspaceSlug === workspaceSlug,
 	);
@@ -375,11 +492,26 @@ function PracticeProfile() {
 		startTourTransition(() => setTour({ startChapter: chapter }));
 	};
 	const closeTour = () => setTour(null);
+	const getStarted = practiceProfileGetStarted({
+		mounted: getStartedView.mounted,
+		shown: getStartedView.shown,
+		workspaceSlug,
+		workspaceName,
+		memberOnboarding,
+		review: reviewFacts,
+		overviewState: overviewQuery.state,
+		pageProps,
+		provider: workProvider,
+		finished: tourProgress.progress.done,
+		fold: { open: getStartedOpen, onOpenChange: setGetStartedOpen },
+		onStartChapter: startTour,
+	});
 
 	return (
 		<>
 			<PracticeProfilePage
 				{...pageProps}
+				getStarted={getStarted}
 				firstRun={
 					pageProps.firstRun && {
 						...pageProps.firstRun,

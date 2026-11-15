@@ -136,7 +136,7 @@ export const FirstReviewRunning: Story = {
 	},
 	play: async ({ canvas }) => {
 		await expect(canvas.getByText("Your first review is running")).toBeVisible();
-		await expect(canvas.getByText(/appears here when it finishes/u)).toBeVisible();
+		await expect(canvas.getByText(/appears on this page when it finishes/u)).toBeVisible();
 		await expect(canvas.getByRole("link", { name: /#12/u })).toHaveAttribute(
 			"href",
 			pullRequest(12).url ?? "",

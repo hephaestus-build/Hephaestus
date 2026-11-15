@@ -45,3 +45,13 @@ export const ConversationHidden: Story = {
 		await expect(canvas.getByRole("link", { name: "Practice profile" })).toBeVisible();
 	},
 };
+/** A new member with a setup step open: the sidebar points at Get started on their home page. */
+export const GetStartedOpen: Story = {
+	args: { getStarted: true },
+	play: async ({ canvas }) => {
+		await expect(canvas.getByRole("link", { name: "Get started" })).toHaveAttribute(
+			"href",
+			"/w/aet/practice-profile#get-started",
+		);
+	},
+};

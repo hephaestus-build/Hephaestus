@@ -23,7 +23,9 @@ import { lazy, type ReactNode, Suspense, useEffect, useState, useSyncExternalSto
 import {
 	getIntegrationCatalogOptions,
 	getMemberOnboardingOptions,
+	getOwnPracticeProfileOverviewQueryKey,
 } from "@/api/@tanstack/react-query.gen";
+import type { PracticeProfileOverview, WorkspaceOnboarding } from "@/api/types.gen";
 import { UserViewBanner } from "@/components/admin/users/UserViewBanner";
 import { ConfirmAccessDialog } from "@/components/auth/ConfirmAccessDialog";
 import { LoginDialog } from "@/components/auth/LoginDialog";
@@ -34,6 +36,7 @@ import { RouteAnnouncer } from "@/components/layout/RouteAnnouncer";
 import { AppSidebar, type SidebarContext } from "@/components/layout/sidebar/AppSidebar";
 import { SkipToContent } from "@/components/layout/SkipToContent";
 import { StandardPageSurface } from "@/components/layout/StandardPageSurface";
+import { getStartedSetupOpen, reviewFromOverview } from "@/components/onboarding/get-started-open";
 import { ProductFeedbackButton } from "@/components/product-feedback/ProductFeedbackButton";
 import { Kbd } from "@/components/ui/kbd";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
@@ -290,6 +293,29 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 	notFoundComponent: NotFound,
 });
 
+/**
+ * Whether the sidebar points at the reader's Get started list: practices are on, so the Practice
+ * profile holds it, and a setup step is open there. Nothing without the member's own onboarding read,
+ * which a user view never makes.
+ */
+function getStartedPointer({
+	onboarding,
+	overview,
+	practicesEnabled,
+}: {
+	onboarding: WorkspaceOnboarding | undefined;
+	overview: PracticeProfileOverview | undefined;
+	practicesEnabled: boolean;
+}): boolean {
+	if (onboarding === undefined || !practicesEnabled) {
+		return false;
+	}
+	return getStartedSetupOpen({
+		onboarding,
+		review: overview === undefined ? undefined : reviewFromOverview(overview),
+	});
+}
+
 function NotFound() {
 	return <PageError cause="not-found" />;
 }
@@ -512,6 +538,21 @@ function AppSidebarContainer() {
 		(Boolean(userView) ||
 			(onboarding.data !== undefined && !isConversationOutOfReach(onboarding.data)));
 
+	// The overview as the Practice profile last read it: the sidebar never asks for it itself, so a
+	// page without the list makes no read for it. Until the profile has read it, only the setup counts.
+	const overview = useQuery<PracticeProfileOverview>({
+		queryKey: getOwnPracticeProfileOverviewQueryKey({
+			path: { workspaceSlug: chromeWorkspaceSlug ?? "" },
+		}),
+		enabled: false,
+	});
+	const getStarted = getStartedPointer({
+		// A user view reads someone else's page: the viewer's own next steps have no place there.
+		onboarding: userView ? undefined : onboarding.data,
+		overview: overview.data,
+		practicesEnabled: chromeWorkspace?.practicesEnabled === true,
+	});
+
 	// Read only where the sidebar says "No workspace".
 	const workspaceCreation = useWorkspaceCreation({
 		enabled: isAuthenticated && !workspaceAccess.isLoading && workspaces.length === 0,
@@ -539,6 +580,7 @@ function AppSidebarContainer() {
 			isAppAdmin={isAppAdmin}
 			waitingReports={waitingReports}
 			showConversation={showConversation}
+			getStarted={getStarted}
 			readOnly={Boolean(userView)}
 			integrationKinds={integrationKinds}
 			awaitingApproval={awaitingApproval}
