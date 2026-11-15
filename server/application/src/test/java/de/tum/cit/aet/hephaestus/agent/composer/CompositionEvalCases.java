@@ -257,12 +257,17 @@ final class CompositionEvalCases {
         var requests = new ArrayList<JsonNode>();
         var answers = new ArrayList<JsonNode>();
         long started = System.nanoTime();
-        var outcome = ComposerReplay.node(basis, body -> {
-            requests.add(MAPPER.readTree(body));
-            var answer = model.apply(body);
-            answers.add(answer.status() == 200 ? MAPPER.readTree(answer.body()) : JSON.nullNode());
-            return answer;
-        });
+        // An eval never sends a failed request again: one provider failure is one recorded call and the case's
+        // failure, so that the endpoint's health cannot pass as the model's.
+        var outcome = ComposerReplay.node(
+                basis,
+                body -> {
+                    requests.add(MAPPER.readTree(body));
+                    var answer = model.apply(body);
+                    answers.add(answer.status() == 200 ? MAPPER.readTree(answer.body()) : JSON.nullNode());
+                    return answer;
+                },
+                false);
         var results = new HashMap<String, String>();
         for (JsonNode request : requests)
             for (JsonNode message : request.path("messages"))

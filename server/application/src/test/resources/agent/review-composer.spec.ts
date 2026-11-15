@@ -96,3 +96,53 @@ void test("a run the driver aborts stops at its next await and closes nothing", 
 function toolCall() {
 	return { id: "call-1", type: "function", function: { name: "check_package", arguments: "{}" } };
 }
+
+void test("a provider failure is sent once when the gateway turns retries off", async () => {
+	let modelCalls = 0;
+	const { fetch } = gateway((path) => {
+		if (path.endsWith("/next")) {
+			return next();
+		}
+		if (path.endsWith("/chat/completions")) {
+			modelCalls += 1;
+			return new Response(null, { status: 503 });
+		}
+		return json({});
+	});
+
+	const outcome = await composeReview({
+		compositionUrl: "http://gateway/composition",
+		proxyUrl: "http://gateway/llm",
+		headers: {},
+		fetch,
+		retryPauseMs: 0,
+		retryProviderFailures: false,
+	});
+
+	assert.equal(modelCalls, 1);
+	assert.equal(outcome.leaseLost, false);
+});
+
+void test("a provider failure is sent again by default", async () => {
+	let modelCalls = 0;
+	const { fetch } = gateway((path) => {
+		if (path.endsWith("/next")) {
+			return next();
+		}
+		if (path.endsWith("/chat/completions")) {
+			modelCalls += 1;
+			return new Response(null, { status: 503 });
+		}
+		return json({});
+	});
+
+	await composeReview({
+		compositionUrl: "http://gateway/composition",
+		proxyUrl: "http://gateway/llm",
+		headers: {},
+		fetch,
+		retryPauseMs: 0,
+	});
+
+	assert.ok(modelCalls > 1, String(modelCalls));
+});

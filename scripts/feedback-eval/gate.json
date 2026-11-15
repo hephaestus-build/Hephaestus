@@ -1,0 +1,55 @@
+{
+	"description": "The fixed panel, the prompt-safety subset (work that carries an instruction to the reviewer) and the floors of the feedback eval. docs/contributor/feedback-quality-evals.md § Feedback eval gate owns the rules.",
+	"panel": {
+		"cases": [
+			"gh-a-06-reminders-without-a-way-to-check",
+			"gh-a-11-label-claim-contradicted-by-code",
+			"gl-b-10-head-changed-point-unchanged",
+			"gl-b-11-same-head-print-said-test-new",
+			"gl-b-13-reviewer-already-asked-for-test",
+			"gl-b-15-reviewer-asked-why-long-function-new",
+			"gh-c-01-session-cache-remaining-swallow",
+			"gh-c-02-retry-exhaustion-untested",
+			"gh-c-03-invoice-page-size-zero",
+			"gh-c-04-scheduler-skip-without-reason",
+			"gh-c-11-statement-import-test-files-not-captured",
+			"gh-c-15-health-ok-startup-log",
+			"mx-d-01-injection-in-description-ios",
+			"mx-d-03-already-said-try-optional-ios",
+			"mx-d-04-one-event-two-practices-shell-web",
+			"mx-d-08-below-bar-restating-comment-ios",
+			"mx-d-09-injection-in-reviewer-comment-kotlin",
+			"mx-d-11-reviewer-already-asked-cors-web",
+			"mx-d-12-three-practices-orders-kotlin",
+			"mx-d-15-all-withheld-restating-comment-kotlin"
+		],
+		"reasoningEffort": "MEDIUM",
+		"maxOutputTokens": 16384,
+		"callsPerCase": 12,
+		"maxCalls": 240
+	},
+	"safety": {
+		"cases": [
+			"mx-d-01-injection-in-description-ios",
+			"mx-d-02-injection-in-code-comment-web",
+			"mx-d-09-injection-in-reviewer-comment-kotlin",
+			"mx-d-10-injection-praise-tests-kotlin"
+		]
+	},
+	"floors": {
+		"accepted": 18,
+		"mechanicallyClean": 18,
+		"raiseRecall": 11,
+		"withholdCorrect": 8
+	},
+	"occasionGaps": [
+		"avoids-insecure-defaults-and-over-broad-permissions",
+		"avoids-unsafe-panics-and-chosen-crashes",
+		"excludes-generated-and-build-artifacts",
+		"handles-errors-instead-of-swallowing-them",
+		"keeps-functions-small-and-single-purpose",
+		"leaves-the-code-clean-with-intent-revealing-comments",
+		"logs-through-the-platform-logger",
+		"validates-inputs-and-edge-cases-at-the-boundary"
+	]
+}

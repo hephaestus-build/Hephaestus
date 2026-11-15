@@ -11,7 +11,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.function.Function;
-import org.jspecify.annotations.Nullable;
 import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.ObjectNode;
 
@@ -21,15 +20,15 @@ final class LiveChatTransport implements ModelSession.Transport {
     private final HttpClient client =
             HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(30)).build();
     private final LiveLlmCredentials creds;
-    private @Nullable String path;
     private final Set<String> servedModels = new HashSet<>();
+    private int requests;
 
     LiveChatTransport(LiveLlmCredentials creds) {
         this.creds = creds;
     }
 
     /**
-     * The model names the endpoint reported serving since the last {@link #resetServedModels}, which can differ from
+     * The model names the endpoint reported serving since the last {@link #startCase}, which can differ from
      * the one requested.
      */
     Set<String> servedModels() {
@@ -50,23 +49,34 @@ final class LiveChatTransport implements ModelSession.Transport {
         };
     }
 
-    /** Starts a new measurement, so that one case reports only the models that served its own calls. */
-    void resetServedModels() {
+    /**
+     * Starts a new measurement, so that one case reports only the models that served its own calls and the requests it
+     * sent.
+     */
+    void startCase() {
         servedModels.clear();
+        requests = 0;
+    }
+
+    /** The HTTP requests sent since the last {@link #startCase}: one for each model call, never a second one. */
+    int requests() {
+        return requests;
     }
 
     @Override
     public ModelSession.Answer call(byte[] body) {
-        String base = creds.baseUrl().replaceAll("/+$", "");
-        // Endpoints differ in whether their base URL already ends with the API version.
-        for (String candidate : path == null ? List.of("/chat/completions", "/v1/chat/completions") : List.of(path)) {
-            var answer = send(base + candidate, body);
-            if (answer.status() != 404) {
-                path = candidate;
-                return answer;
-            }
-        }
-        return new ModelSession.Answer(404, new byte[0], true, null);
+        requests++;
+        return send(chatCompletions(creds.baseUrl()), body);
+    }
+
+    /**
+     * The one chat endpoint of a base URL. A base that ends with the API version takes {@code /chat/completions}, and
+     * any other base takes {@code /v1/chat/completions}. The transport never probes a second path, so every request
+     * the endpoint sees is a counted call.
+     */
+    static String chatCompletions(String baseUrl) {
+        String base = baseUrl.replaceAll("/+$", "");
+        return base.endsWith("/v1") ? base + "/chat/completions" : base + "/v1/chat/completions";
     }
 
     private ModelSession.Answer send(String url, byte[] body) {
