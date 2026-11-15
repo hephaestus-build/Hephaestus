@@ -47,7 +47,7 @@ Instance admin access without a membership does not count.
 2. Start the client's sign-in. The client opens a browser.
 3. Sign in to Hephaestus if you are not signed in.
 4. Read the consent page. It shows the host that publishes the client's metadata, the name that the client gives itself, the workspace, and what the client may read.
-5. Select **Allow** to approve, or **Deny** to refuse. If you signed in more than 5 minutes ago (`HEPHAESTUS_AUTH_STEP_UP_MAX_AGE`), Hephaestus asks you to confirm access first and then returns you to the same request.
+5. Select **Allow** to approve, or **Deny** to refuse. If you signed in more than 5 minutes ago, Hephaestus asks you to confirm access first and then returns you to the same request.
 
 The client then calls the endpoint until its session ends.
 It signs in again after the absolute session deadline that also applies to the web app.
@@ -74,7 +74,7 @@ A demotion or removal from the workspace takes effect on the client's next call.
 
 ## Limits
 
-Calls to a workspace MCP endpoint share one budget for each account: 120 calls a minute by default (`HEPHAESTUS_RATE_LIMIT_MCP_CALL_CAPACITY` and `_PERIOD`).
+Calls to a workspace MCP endpoint share one budget for each account: 120 calls a minute.
 The sign-in endpoints share the budgets of web sign-in and of installed clients.
 Each replica keeps its own budget, so the real limit is the replica count times this number.
 
