@@ -186,6 +186,9 @@ The webapp build takes seconds, and the browser suites in CI build the same bund
 A change under `scripts/` selects the tooling checks and each tree whose CI path filter in `cicd.yml` names the file.
 Pull request CI runs the same trees for that change.
 
+A generated file selects the trees that read it. The ERD selects docs. A generated API client selects its own tree. `server/openapi.yaml` selects the server, the webapp and the extension.
+The check that regenerates them from their sources runs only in CI.
+
 An unknown path selects every scoped check.
 The hook does not fetch, install tools, start a browser or build an artifact other than the webapp bundle.
 If a pinned tool is absent from the shared cache, run `vp run check` once in any worktree of the clone.

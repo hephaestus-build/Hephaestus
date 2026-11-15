@@ -477,7 +477,8 @@ export default defineConfig({
 			"affected:agents": group([...agentGates, "gate:adr-confirmation"]),
 			"affected:changesets": group(changesetGates),
 			"affected:docs": group([...docsGates, "gate:instructions", "gate:prose"]),
-			"affected:server": group([...serverGates, "gate:adr-confirmation"]),
+			// The pagination policy reads only server/openapi.yaml, which selects this scope.
+			"affected:server": group([...serverGates, "gate:adr-confirmation", "gate:api-pagination"]),
 			"affected:webapp": group([...webappGates, "gate:prose", "gate:adr-confirmation"]),
 			"affected:extension": group([...extensionGates, "gate:adr-confirmation"]),
 
