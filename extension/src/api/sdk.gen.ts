@@ -370,6 +370,8 @@ import type {
 	GetProductFeedbackDestinationsResponses,
 	GetProductFeedbackSharingData,
 	GetProductFeedbackSharingResponses,
+	GetProvenanceKeysData,
+	GetProvenanceKeysResponses,
 	GetProvidersData,
 	GetProvidersResponses,
 	GetPublicActivityChoiceData,
@@ -819,6 +821,18 @@ export type Options<
 	 */
 	meta?: keyof ClientMeta extends never ? Record<string, unknown> : ClientMeta;
 };
+
+/**
+ * Public keys of the provenance records
+ */
+export const getProvenanceKeys = <ThrowOnError extends boolean = false>(
+	options?: Options<GetProvenanceKeysData, ThrowOnError>,
+): RequestResult<GetProvenanceKeysResponses, unknown, ThrowOnError> =>
+	(options?.client ?? client).get<GetProvenanceKeysResponses, unknown, ThrowOnError>({
+		security: [{ scheme: "bearer", type: "http" }],
+		url: "/.well-known/hephaestus-provenance-keys.json",
+		...options,
+	});
 
 /**
  * JWK set (public keys only)

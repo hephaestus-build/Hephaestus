@@ -464,6 +464,10 @@ export {
 	getProductFeedbackSharingOptions,
 	getProductFeedbackSharingQueryKey,
 } from "./react-query/getProductFeedbackSharing.gen.js";
+export {
+	getProvenanceKeysOptions,
+	getProvenanceKeysQueryKey,
+} from "./react-query/getProvenanceKeys.gen.js";
 export { getProvidersOptions, getProvidersQueryKey } from "./react-query/getProviders.gen.js";
 export {
 	getPublicActivityOptions,

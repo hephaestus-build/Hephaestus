@@ -182,6 +182,7 @@ export { getPracticeWorkspaceOverview } from "./sdk/getPracticeWorkspaceOverview
 export { getPracticeWorkspaceTiles } from "./sdk/getPracticeWorkspaceTiles.gen.js";
 export { getProductFeedbackDestinations } from "./sdk/getProductFeedbackDestinations.gen.js";
 export { getProductFeedbackSharing } from "./sdk/getProductFeedbackSharing.gen.js";
+export { getProvenanceKeys } from "./sdk/getProvenanceKeys.gen.js";
 export { getProviders } from "./sdk/getProviders.gen.js";
 export { getPublicActivity } from "./sdk/getPublicActivity.gen.js";
 export { getPublicActivityChoice } from "./sdk/getPublicActivityChoice.gen.js";
