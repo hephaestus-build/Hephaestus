@@ -28,7 +28,7 @@ import { ciToolPin } from "./lib/ci-tool-catalog.ts";
 import { isSet } from "./lib/env.ts";
 import { environmentForGitFixture } from "./lib/git-environment.ts";
 import { committedShards } from "./lib/integration-durations.ts";
-import { asArray, asRecord, asString, asStringArray, isRecord } from "./lib/json.ts";
+import { asArray, asRecord, asString, asStringArray, at as valueAt, isRecord } from "./lib/json.ts";
 import { exitStatus } from "./lib/process.ts";
 import { commandsOf, loadTasks } from "./lib/task-graph.ts";
 import { INSTALL_ARGUMENTS, INSTALL_ENVIRONMENT } from "./maintain-version-pr.ts";
@@ -2164,6 +2164,47 @@ void describe("CI contract", () => {
 		]) {
 			assert.ok(paths.includes(input), `PMD canary must include ${input}`);
 		}
+	});
+
+	void test("every database job resolves PostgreSQL behind its setup and waits before it runs", async () => {
+		const resolver = "./.github/actions/postgres-image";
+		let jobs = 0;
+		for (const file of ["ci-tests.yml", "ci-build.yml", "ci-browser-tests.yml"]) {
+			const workflow: unknown = parseDocument(
+				await readFile(`.github/workflows/${file}`, "utf8"),
+			).toJS();
+			for (const [name, definition] of Object.entries(
+				asRecord(valueAt(workflow, ["jobs"], file), file),
+			)) {
+				const where = `${file} ${name}`;
+				const steps = asArray(asRecord(definition, where).steps ?? [], where).map((item) =>
+					asRecord(item, where),
+				);
+				const phases = steps.flatMap((item, index) =>
+					item.uses === resolver ? [{ phase: valueAt(item, ["with", "phase"], where), index }] : [],
+				);
+				if (phases.length > 0) {
+					jobs += 1;
+					assert.deepEqual(
+						phases.map(({ phase }) => phase),
+						["start", "wait"],
+						`${where} starts the image once and waits for it once`,
+					);
+					const [start, wait] = phases.map(({ index }) => index);
+					assert.match(
+						String(steps.at((start ?? 0) - 1)?.uses),
+						/^actions\/checkout@/u,
+						`${where} starts the image right after checkout, so it overlaps the setup`,
+					);
+					const firstRun = steps.findIndex((item) => item.run !== undefined);
+					assert.ok(
+						wait !== undefined && wait < firstRun,
+						`${where} waits for the image before its first command`,
+					);
+				}
+			}
+		}
+		assert.ok(jobs >= 6, "the database jobs are still found");
 	});
 
 	void test("runs the integration tier once, under the status gate, off an untemplated command", async () => {

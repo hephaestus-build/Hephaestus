@@ -1,26 +1,32 @@
 name: Resolve the PostgreSQL image
 description: >-
   Makes the PostgreSQL image the database legs run available under a local tag, by pulling the one
-  published for a commit or by building the same Dockerfile.
+  published for a commit or by building the same Dockerfile. `start` begins that in the background
+  so it overlaps the job's setup; `wait` blocks until it is done and fails as it failed.
 inputs:
+  phase:
+    description: >-
+      `start` right after checkout, then `wait` before the first step that needs the image.
+    required: true
   base-sha:
     description: >-
       The commit whose published image to reuse. A run resolves the commit it is a diff from, which
-      is the caller's to know.
-    required: true
+      is the caller's to know. `start` only.
+    required: false
   image-changed:
     description: >-
       Whether this run changed the image's own inputs, in which case the published one is stale and
-      the Dockerfile is built instead.
+      the Dockerfile is built instead. `start` only.
     required: false
     default: "false"
   tag:
-    description: The local tag the resolved image is made available under.
-    required: true
+    description: The local tag the resolved image is made available under. `start` only.
+    required: false
 runs:
   using: composite
   steps:
-    - name: Resolve the PostgreSQL image
+    - name: Start resolving the PostgreSQL image
+      if: inputs.phase == 'start'
       shell: bash
       env:
         BASE_SHA: ${{ inputs.base-sha }}
@@ -29,11 +35,39 @@ runs:
       # A published image is a pull rather than an install of pg_partman over the same base, so it
       # is worth reaching for; the base commit's own run may not have finished publishing it yet,
       # and a run whose diff reaches no published commit at all has nothing to pull.
+      # The runner keeps a step's background processes alive until the job ends. The background
+      # subshell inherits the locked descriptor and holds it until it exits, after it wrote the
+      # status, so `wait` cannot read too early. Its output goes to a file: a background process
+      # that kept the step's stdout open would hold the step open.
       run: |
         set -euo pipefail
-        source="ghcr.io/hephaestus-build/postgres:$BASE_SHA"
-        if [ "$IMAGE_CHANGED" = "true" ] || ! docker pull "$source"; then
-          docker build -t "$TAG" docker/postgres
-        else
-          docker tag "$source" "$TAG"
+        : "${BASE_SHA:?start needs base-sha}" "${TAG:?start needs tag}"
+        dir="$RUNNER_TEMP/postgres-image"
+        mkdir -p "$dir"
+        exec 9>"$dir/lock"
+        flock 9
+        (
+          set +e
+          source="ghcr.io/hephaestus-build/postgres:$BASE_SHA"
+          if [ "$IMAGE_CHANGED" != "true" ] && docker pull "$source"; then
+            docker tag "$source" "$TAG"
+          else
+            docker build -t "$TAG" docker/postgres
+          fi
+          echo $? >"$dir/status"
+        ) </dev/null >"$dir/log" 2>&1 &
+        exec 9>&-
+    - name: Wait for the PostgreSQL image
+      if: inputs.phase == 'wait'
+      shell: bash
+      run: |
+        set -euo pipefail
+        dir="$RUNNER_TEMP/postgres-image"
+        [ -e "$dir/lock" ] || { echo "::error::postgres-image wait ran without start"; exit 1; }
+        flock "$dir/lock" true
+        cat "$dir/log"
+        status="$(cat "$dir/status")"
+        if [ "$status" != 0 ]; then
+          echo "::error::Resolving the PostgreSQL image failed with exit code $status"
         fi
+        exit "$status"
