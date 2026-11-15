@@ -40,8 +40,7 @@ public class CredentialBundleConverter {
     private final ObjectMapper objectMapper;
 
     @Autowired
-    public CredentialBundleConverter(
-            SecurityProperties properties, ObjectMapper objectMapper) {
+    public CredentialBundleConverter(SecurityProperties properties, ObjectMapper objectMapper) {
         this(
                 properties.credentialEncryptionKey(),
                 properties.credentialEncryptionKeyVersion(),
@@ -79,8 +78,9 @@ public class CredentialBundleConverter {
         this.objectMapper = objectMapper;
         // As for the system key: a missing key stops the start in every profile.
         if (encryptionKey == null || encryptionKey.isBlank()) {
-            throw new IllegalStateException("No credential encryption key. Set"
-                    + " hephaestus.security.credential-encryption-key (HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY).");
+            throw new IllegalStateException(
+                    "No credential encryption key. Set"
+                            + " hephaestus.security.credential-encryption-key (HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY).");
         }
         SecretKey active = parseKey(encryptionKey, "credential-encryption-key");
         this.keys = priorCredentialEncryptionKey == null

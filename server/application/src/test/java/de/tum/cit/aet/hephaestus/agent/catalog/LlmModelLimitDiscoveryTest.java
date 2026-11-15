@@ -36,8 +36,7 @@ import tools.jackson.databind.ObjectMapper;
 
 class LlmModelLimitDiscoveryTest extends BaseUnitTest {
 
-    private static final SystemSecrets SECRETS =
-            TestSystemSecrets.systemSecrets("0123456789abcdef0123456789abcdef");
+    private static final SystemSecrets SECRETS = TestSystemSecrets.systemSecrets("0123456789abcdef0123456789abcdef");
 
     private MockWebServer upstream;
     private LlmConnectionRepository connections;

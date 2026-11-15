@@ -184,8 +184,8 @@ class JwtSigningKeyServiceSealingTest extends BaseUnitTest {
         serviceWith(repo, systemSecrets(KEY)).ensureActiveKey();
         when(repo.findActive()).thenReturn(List.of(saved.getValue()));
 
-        var rotating = serviceWith(
-                repo, TestSystemSecrets.systemSecretsWithPrior("fedcba9876543210fedcba9876543210", KEY));
+        var rotating =
+                serviceWith(repo, TestSystemSecrets.systemSecretsWithPrior("fedcba9876543210fedcba9876543210", KEY));
 
         assertThatCode(rotating::verifyActiveKeysOpen).doesNotThrowAnyException();
     }

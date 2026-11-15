@@ -158,8 +158,8 @@ class CredentialReaderTest extends BaseUnitTest {
     void shouldMarkTheConnectionAndNameItWhenTheKeyCannotReadTheCredential() {
         connection.setCredentials(TOKEN, new CredentialBundleConverter(KEY_A));
 
-        assertThatThrownBy(() ->
-                        readerWith(new CredentialBundleConverter(KEY_B)).credentialsOf(connection))
+        assertThatThrownBy(
+                        () -> readerWith(new CredentialBundleConverter(KEY_B)).credentialsOf(connection))
                 .isInstanceOf(CredentialUnreadableException.class)
                 .satisfies(e -> {
                     CredentialUnreadableException unreadable = (CredentialUnreadableException) e;
@@ -189,8 +189,8 @@ class CredentialReaderTest extends BaseUnitTest {
         // not a credential to give up on.
         connection.setCredentials(TOKEN, new CredentialBundleConverter(KEY_A, 2, null, null));
 
-        assertThatThrownBy(() ->
-                        readerWith(new CredentialBundleConverter(KEY_A)).credentialsOf(connection))
+        assertThatThrownBy(
+                        () -> readerWith(new CredentialBundleConverter(KEY_A)).credentialsOf(connection))
                 .isInstanceOf(MissingCredentialKeyException.class);
         verify(connectionRepository, never()).markCredentialsUnreadable(any(), any(), any(), any());
     }

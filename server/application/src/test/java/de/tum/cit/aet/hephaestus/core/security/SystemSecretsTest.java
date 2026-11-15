@@ -140,8 +140,7 @@ class SystemSecretsTest extends BaseUnitTest {
                 .contains("sealed by the system key with id " + sealedWith.activeKeyId())
                 .contains("the active key " + holder.activeKeyId())
                 .contains("the prior key "
-                        + systemSecrets("abcdefabcdefabcdefabcdefabcdefab")
-                                .activeKeyId())
+                        + systemSecrets("abcdefabcdefabcdefabcdefabcdefab").activeKeyId())
                 .doesNotContain(OLD_KEY)
                 .doesNotContain(NEW_KEY);
     }
