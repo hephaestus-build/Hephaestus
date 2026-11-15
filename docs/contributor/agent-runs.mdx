@@ -578,6 +578,11 @@ Thus, a server restart costs a wait, not the attempt.
 A sandbox reaches the servers by the address of the `sandbox-gateway` ClusterIP Service, with no proxy between them.
 A server that is gone therefore refuses the connection or lets it time out. It never answers with a status, so a 502, 503 or 504 always comes from a server itself.
 A model call, a practice's start, staging, admission, a composition's calls and a turn's calls share this rule.
+A practice's start, staging and admission also wait out a 503 until their work ends.
+The server answers 503 when it could not finish the call: a write waited past its lock bound, an evidence folder is not ready, or the server lost its database connection (`AgentGatewayErrors`).
+The call may have been recorded before the failure. Each of these routes accepts an identical replay, so sending it again is safe.
+A 503 that does not clear holds the call until the work ends, and the attempt then ends retryable.
+Thus, a PostgreSQL restart also costs a wait, not the attempt.
 The workspace download's reads are safe to repeat, so `fetchGatewayInput` waits out every transport failure, a refused connection included.
 A reset during a call can follow a request that the server already recorded. Only a caller that can replay its request sends it again.
 When a parallel review session loses its gateway, or meets the server's own error, the runner throws that failure after the coverage log. It then exits with the same code as the serial path. Another session failure leaves what the other sessions staged to the partial exit.

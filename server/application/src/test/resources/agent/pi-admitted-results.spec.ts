@@ -99,7 +99,7 @@ void test("an explicit admission refusal is terminal", async () => {
 	assert.equal(calls, 1);
 });
 
-void test("a server error is reported once as the server's own, and a gateway that cannot reach it is retried as unreachable", async () => {
+void test("a server error is reported once as the server's own, and a busy server after the work ended fails as unreachable", async () => {
 	let calls = 0;
 	await assert.rejects(
 		admit(
@@ -124,11 +124,49 @@ void test("a server error is reported once as the server's own, and a gateway th
 				calls += 1;
 				return new Response("", { status: 503 });
 			},
+			AbortSignal.abort(),
+		),
+		(error) => error instanceof AdmissionUnreachableError && /HTTP 503/u.test(error.message),
+	);
+	assert.equal(calls, 1, "after the work's end, the attempt ends at once");
+});
+
+void test("a 503 that has not cleared when the work ends fails as unreachable, so the attempt ends retryable", async () => {
+	const work = new AbortController();
+	let calls = 0;
+	await assert.rejects(
+		startPractice(
+			"names",
+			async () => {
+				calls += 1;
+				work.abort();
+				return new Response("", { status: 503 });
+			},
+			work.signal,
+		),
+		(error) => error instanceof AdmissionUnreachableError && /HTTP 503/u.test(error.message),
+	);
+	assert.equal(calls, 1);
+});
+
+void test("a server that answers 503 while its database is gone is asked again until it takes the call", async () => {
+	let busy = 0;
+	assert.equal(
+		await startPractice(
+			"names",
+			async () => {
+				// More 503s than the four attempts of an unreachable admission: only the wait outlasts them.
+				if (busy < 5) {
+					busy += 1;
+					return Response.json({ title: "Database unavailable" }, { status: 503 });
+				}
+				return Response.json({ practiceSlug: "names", current: true });
+			},
 			patience,
 		),
-		(error) => error instanceof AdmissionUnreachableError,
+		true,
 	);
-	assert.equal(calls, 4);
+	assert.equal(busy, 5);
 });
 
 for (const [field, value, path] of [
