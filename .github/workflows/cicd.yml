@@ -62,6 +62,8 @@ jobs:
       # merge group, which runs everything, is the verdict on the stack: ci-cd.mdx § Light tier for
       # stacked layers.
       light-tier: ${{ steps.opt_in.outputs.light == 'true' }}
+      # The pull request's base when the run read it. A re-run replays the event, whose base may be old.
+      pull-request-base: ${{ steps.opt_in.outputs.base }}
       tooling: ${{ steps.filter.outputs.tooling }}
       windows: ${{ steps.filter.outputs.windows }}
       application-server-image: ${{ steps.filter.outputs.application-server-image == 'true' || steps.filter.outputs.docker-config == 'true' || steps.filter.outputs.build-config == 'true' || steps.filter.outputs.image-scan == 'true' }}
@@ -208,6 +210,7 @@ jobs:
           echo "preview=$(jq -r '[.labels[].name] | any(. == "preview")' <<< "$pull_request")" >> "$GITHUB_OUTPUT"
           echo "armed=$(jq -r '.auto_merge != null' <<< "$pull_request")" >> "$GITHUB_OUTPUT"
           base=$(jq -er .base.ref <<< "$pull_request")
+          echo "base=$base" >> "$GITHUB_OUTPUT"
           light=false
           if [ "$base" != "$DEFAULT_BRANCH" ] && [ "$full" != true ] && [ "$RELEASE_CANDIDATE" != true ]; then light=true; fi
           echo "light=$light" >> "$GITHUB_OUTPUT"
@@ -1533,12 +1536,19 @@ jobs:
   report-full-integration:
     name: "Report full integration"
     needs: [detect-changes, Test]
-    # Every same-repository pull request gets it, a stacked layer included: a stack enters the queue
-    # whole, and each layer must meet the rules of `main`. A fork's token cannot write statuses.
+    # Every pull request gets it, a stacked layer included: a stack enters the queue whole, and each
+    # layer must meet the rules of `main`. A fork's token cannot write statuses, so a fork's job runs
+    # only when it has a verdict and ends in it; full-integration-fork.yml publishes that conclusion.
+    # A fork's verdict counts only against the default branch: one fork branch can head a pull request
+    # into each base, and full-integration-fork.yml finds the one into the default branch.
     if: >-
       always() && needs.detect-changes.result == 'success' && (github.event_name == 'merge_group' ||
       (github.event_name == 'pull_request' &&
-      github.event.pull_request.head.repo.full_name == github.repository))
+      (github.event.pull_request.head.repo.full_name == github.repository ||
+      (needs.detect-changes.outputs.pull-request-base == github.event.repository.default_branch &&
+      (needs.detect-changes.outputs.server-changed != 'true' ||
+      (needs.detect-changes.outputs.full-integration == 'true' &&
+      (needs.Test.result == 'success' || needs.Test.result == 'failure')))))))
     runs-on: ubuntu-slim
     timeout-minutes: 15
     permissions:
@@ -1557,15 +1567,26 @@ jobs:
             const { SERVER_CHANGED, FULL_INTEGRATION, TESTS } = process.env;
             const target_url = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
             const passed = 'The server tests passed, every integration shard included';
-            const post = (state, description) =>
-              github.rest.repos.createCommitStatus({
-                ...context.repo,
-                sha,
-                state,
-                description,
-                target_url,
-                context: 'Full integration',
-              });
+            const fork = context.payload.pull_request !== undefined &&
+              context.payload.pull_request.head.repo?.full_name !== `${context.repo.owner}/${context.repo.repo}`;
+            const post = async (state, description) => {
+              if (!fork) {
+                await github.rest.repos.createCommitStatus({
+                  ...context.repo,
+                  sha,
+                  state,
+                  description,
+                  target_url,
+                  context: 'Full integration',
+                });
+              } else if (state === 'success') {
+                core.notice(description);
+              } else {
+                // A failure, or a pending state the condition above does not let a fork reach: both keep
+                // the pull request out of the queue, as the missing status would.
+                core.setFailed(description);
+              }
+            };
             if (context.eventName === 'merge_group') {
               await post('success', 'The merge group runs every integration shard');
             } else if (SERVER_CHANGED !== 'true') {

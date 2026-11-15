@@ -2832,6 +2832,8 @@ void describe("CI contract", () => {
 			event: string,
 			pullRequest: Record<string, unknown> = {},
 			changes = "success",
+			outputs?: Record<string, string>,
+			tests = "success",
 		) => {
 			const context: unknown = JSON.parse(
 				JSON.stringify({
@@ -2840,7 +2842,13 @@ void describe("CI contract", () => {
 						repository: "owner/repo",
 						event: { repository: { default_branch: "main" }, pull_request: pullRequest },
 					},
-					needs: { "detect-changes": { result: changes } },
+					needs: {
+						"detect-changes": {
+							result: changes,
+							outputs: outputs ?? { "server-changed": "true", "full-integration": "false" },
+						},
+						Test: { result: tests },
+					},
 				}),
 				data.reviver,
 			);
@@ -2850,11 +2858,30 @@ void describe("CI contract", () => {
 		const ownPullRequest = { base: { ref: "main" }, head: { repo: { full_name: "owner/repo" } } };
 		assert.ok(reports("merge_group"));
 		assert.ok(reports("pull_request", ownPullRequest));
-		// A stacked layer enters the queue with its stack. A fork's token cannot write statuses.
+		// A stacked layer enters the queue with its stack.
 		assert.ok(reports("pull_request", { ...ownPullRequest, base: { ref: "layer" } }));
-		assert.ok(
-			!reports("pull_request", { ...ownPullRequest, head: { repo: { full_name: "fork/repo" } } }),
-		);
+		// A fork's job runs only when it has a verdict, because its conclusion is that verdict.
+		const fork = { ...ownPullRequest, head: { repo: { full_name: "fork/repo" } } };
+		const base = { "pull-request-base": "main" };
+		const armedRun = { ...base, "server-changed": "true", "full-integration": "true" };
+		const noServerChange = { ...base, "server-changed": "false" };
+		assert.ok(!reports("pull_request", fork, "success", { ...base, "server-changed": "true" }));
+		assert.ok(reports("pull_request", fork, "success", noServerChange));
+		assert.ok(reports("pull_request", fork, "success", armedRun, "success"));
+		assert.ok(reports("pull_request", fork, "success", armedRun, "failure"));
+		for (const tests of ["cancelled", "skipped"]) {
+			assert.ok(!reports("pull_request", fork, "success", armedRun, tests), tests);
+		}
+		// One fork branch can head a pull request into each base: only the run into the default
+		// branch, as the run read it, has a verdict. An unreadable base has none.
+		for (const other of ["feature", ""]) {
+			const into = { "pull-request-base": other };
+			assert.ok(!reports("pull_request", fork, "success", { ...noServerChange, ...into }), other);
+			assert.ok(
+				!reports("pull_request", fork, "success", { ...armedRun, ...into }, "success"),
+				other,
+			);
+		}
 		assert.ok(!reports("pull_request", ownPullRequest, "failure"));
 		assert.ok(!reports("push"));
 
@@ -2880,16 +2907,30 @@ void describe("CI contract", () => {
 		}
 		const script = String(stepInputs(publisher).get("script"));
 		const head = "b".repeat(40);
+		const outcome = { notice: 0, failed: 0 };
 		const published = async (
 			eventName: string,
 			environment: Record<string, string>,
 			existing: { context: string; state: string; description: string }[] = [],
+			repository: string | null = "owner/repo",
 		) => {
 			const calls: Record<string, unknown>[] = [];
+			outcome.notice = 0;
+			outcome.failed = 0;
 			const sandbox = {
 				context: {
 					eventName,
-					payload: eventName === "pull_request" ? { pull_request: { head: { sha: head } } } : {},
+					payload:
+						eventName === "pull_request"
+							? {
+									pull_request: {
+										head: {
+											sha: head,
+											repo: repository === null ? null : { full_name: repository },
+										},
+									},
+								}
+							: {},
 					sha: "a".repeat(40),
 					repo: { owner: "owner", repo: "repo" },
 					serverUrl: "https://github.com",
@@ -2907,7 +2948,15 @@ void describe("CI contract", () => {
 						},
 					},
 				},
-				core: { info: () => undefined },
+				core: {
+					info: () => undefined,
+					notice: () => {
+						outcome.notice += 1;
+					},
+					setFailed: () => {
+						outcome.failed += 1;
+					},
+				},
 				process: { env: environment },
 				done: Promise.resolve(),
 			};
@@ -2960,6 +3009,163 @@ void describe("CI contract", () => {
 			]),
 			"pending",
 		);
+		// A fork's token cannot write statuses: its job ends in the verdict instead of publishing it.
+		for (const [environment, notices, failures] of [
+			[{ ...armed, TESTS: "success" }, 1, 0],
+			[{ SERVER_CHANGED: "false" }, 1, 0],
+			[{ ...armed, TESTS: "failure" }, 0, 1],
+			[unarmed, 0, 1],
+		] as const) {
+			assert.equal(await published("pull_request", environment, [], "fork/repo"), null);
+			assert.deepEqual(outcome, { notice: notices, failed: failures }, JSON.stringify(environment));
+		}
+		// A deleted fork leaves no head repository; the run is still a fork's and publishes nothing.
+		assert.equal(await published("pull_request", { SERVER_CHANGED: "false" }, [], null), null);
+		assert.deepEqual(outcome, { notice: 1, failed: 0 });
+	});
+
+	void test("a fork's verdict reaches its head commit without running fork code", async () => {
+		const source = await readFile(".github/workflows/full-integration-fork.yml", "utf8");
+		const workflow = parseDocument(source);
+		assert.equal(hasWorkflowTrigger(workflow, "pull_request_target"), false);
+		const plain = asRecord(workflow.toJS(), "full-integration-fork.yml");
+		assert.deepEqual(asRecord(plain.on, "on").workflow_run, {
+			workflows: ["CI/CD"],
+			types: ["completed"],
+		});
+		assert.deepEqual(plain.permissions, {});
+		const jobs = asRecord(plain.jobs, "jobs");
+		assert.deepEqual(Object.keys(jobs), ["report"]);
+		assert.deepEqual(asRecord(jobs.report, "report").permissions, {
+			actions: "read",
+			"pull-requests": "read",
+			statuses: "write",
+		});
+		const jobPath = ["jobs", "report"];
+		assert.match(
+			String(workflow.getIn([...jobPath, "if"])),
+			/github\.event\.workflow_run\.event == 'pull_request' &&\s+github\.event\.workflow_run\.path == '\.github\/workflows\/cicd\.yml' &&\s+github\.event\.workflow_run\.head_repository\.full_name != github\.repository/u,
+		);
+		// No checkout, no shell: the job reads one job's conclusion through the API and nothing else.
+		const steps = workflow.getIn([...jobPath, "steps"]);
+		assert.ok(isSeq(steps) && steps.items.length === 1);
+		const publisher = namedStep(workflow, jobPath, "Create commit status");
+		assert.match(String(publisher.get("uses")), /^actions\/github-script@[0-9a-f]{40}$/u);
+		assert.equal(publisher.get("run"), undefined);
+		assert.doesNotMatch(source, /actions\/checkout|actions\/download-artifact/u);
+		for (const [name, value] of [
+			["RUN_ID", "github.event.workflow_run.id"],
+			["RUN_ATTEMPT", "github.event.workflow_run.run_attempt"],
+			["HEAD_SHA", "github.event.workflow_run.head_sha"],
+			["HEAD_REPOSITORY", "github.event.workflow_run.head_repository.full_name"],
+			["HEAD_BRANCH", "github.event.workflow_run.head_branch"],
+			["DEFAULT_BRANCH", "github.event.repository.default_branch"],
+			["RUN_URL", "github.event.workflow_run.html_url"],
+		] as const) {
+			assert.equal(publisher.getIn(["env", name]), `\${{ ${value} }}`);
+		}
+		const script = String(stepInputs(publisher).get("script"));
+		assert.doesNotMatch(
+			script,
+			/\$\{\{/u,
+			"event data reaches the script only through its environment",
+		);
+		// It reads the job that the fork's own run ends in its verdict, by the name cicd.yml gives it.
+		const orchestrator = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
+		const name = String(orchestrator.getIn(["jobs", "report-full-integration", "name"]));
+		assert.ok(script.includes(`job.name === '${name}'`));
+		const head = "c".repeat(40);
+		const fork = "fork/repo";
+		const intoMain = { head: { sha: head, repo: { full_name: fork } }, base: { ref: "main" } };
+		const published = async (
+			conclusion: string | undefined,
+			pulls: unknown[] = [intoMain],
+			latestAttempt = 2,
+		) => {
+			const calls: Record<string, unknown>[] = [];
+			const listed: unknown[] = [];
+			const searched: unknown[] = [];
+			const sandbox = {
+				context: { repo: { owner: "owner", repo: "repo" } },
+				github: {
+					paginate: async (_method: unknown, parameters: unknown) => {
+						listed.push(parameters);
+						return [
+							{ name: "Server tests / Integration (1 of 8)", conclusion: "success" },
+							...(conclusion === undefined ? [] : [{ name, conclusion }]),
+						];
+					},
+					rest: {
+						actions: {
+							listJobsForWorkflowRunAttempt: {},
+							getWorkflowRun: async () => ({ data: { run_attempt: latestAttempt } }),
+						},
+						pulls: {
+							list: async (parameters: unknown) => {
+								searched.push(parameters);
+								return { data: pulls };
+							},
+						},
+						repos: {
+							createCommitStatus: async (payload: unknown) => {
+								calls.push(asRecord(payload, "commit status"));
+							},
+						},
+					},
+				},
+				core: { info: () => undefined },
+				process: {
+					env: {
+						RUN_ID: "7",
+						RUN_ATTEMPT: "2",
+						HEAD_SHA: head,
+						HEAD_REPOSITORY: fork,
+						HEAD_BRANCH: "topic",
+						DEFAULT_BRANCH: "main",
+						RUN_URL: "https://run",
+					},
+				},
+				done: Promise.resolve(),
+			};
+			runInNewContext(`done = (async () => {\n${script}\n})();`, sandbox);
+			await sandbox.done;
+			// The sandbox builds its objects in another realm, so compare them as data.
+			assert.deepEqual(structuredClone(searched), [
+				{ owner: "owner", repo: "repo", state: "open", head: "fork:topic", per_page: 100 },
+			]);
+			assert.ok(listed.length <= 1);
+			if (listed.length === 1) {
+				assert.deepEqual(structuredClone(listed), [
+					{ owner: "owner", repo: "repo", run_id: 7, attempt_number: 2, per_page: 100 },
+				]);
+			}
+			assert.ok(calls.length <= 1);
+			const [call] = calls;
+			if (call === undefined) {
+				return null;
+			}
+			assert.equal(call.sha, head);
+			assert.equal(call.context, "Full integration");
+			return call.state;
+		};
+		assert.equal(await published("success"), "success");
+		assert.equal(await published("failure"), "failure");
+		for (const conclusion of ["skipped", "cancelled", undefined]) {
+			assert.equal(await published(conclusion), null, String(conclusion));
+		}
+		// A shared commit heads another pull request too: only a fork pull request into the default
+		// branch whose head is this commit takes the verdict.
+		for (const pull of [
+			{ ...intoMain, base: { ref: "feature" } },
+			{ ...intoMain, head: { ...intoMain.head, sha: "d".repeat(40) } },
+			{ ...intoMain, head: { ...intoMain.head, repo: { full_name: "other/repo" } } },
+			{ ...intoMain, head: { ...intoMain.head, repo: null } },
+		]) {
+			assert.equal(await published("success", [pull]), null, JSON.stringify(pull));
+		}
+		assert.equal(await published("success", []), null);
+		// A later attempt of the run decides instead.
+		assert.equal(await published("success", [intoMain], 3), null);
 	});
 
 	void test("reports a failed merge-group run on its pull request, and only a failure", async () => {
