@@ -1138,11 +1138,13 @@ tests:
               summary: The database is approaching its volume size, or the server cannot read the database size
               runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
-  # An external database has no volume capacity, so only the failures can fire.
+  # An external database has a NaN volume capacity, so only the failures can fire.
   # A server reads every five minutes, so its failure counter steps once each five minutes.
   - name: a database size that cannot be read for half an hour fires, one failed read does not
     interval: 1m
     input_series:
+      - series: 'database_volume_capacity_bytes{job="hephaestus",instance="server:9090",runtime_role="server"}'
+        values: "NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN"
       - series: 'database_size_bytes{job="hephaestus",instance="server:9090",runtime_role="server"}'
         values: "1000 NaN 1000x8 NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN"
       - series: 'database_size_sampler_failures_total{job="hephaestus",instance="server:9090",runtime_role="server"}'

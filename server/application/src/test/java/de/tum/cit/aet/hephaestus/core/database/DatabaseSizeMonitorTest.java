@@ -51,7 +51,7 @@ class DatabaseSizeMonitorTest extends BaseUnitTest {
                         .counter()
                         .count())
                 .isEqualTo(1);
-        // An external database has no volume that the chart sized.
-        assertThat(meters.find(CoreMetrics.DATABASE_VOLUME_CAPACITY).gauge()).isNull();
+        // An external database has no volume that the chart sized, and the gauge still exists for the rules.
+        assertThat(gauge(CoreMetrics.DATABASE_VOLUME_CAPACITY)).isNaN();
     }
 }

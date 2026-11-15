@@ -492,7 +492,7 @@ The size is an approximation of how full the volume is.
 It does not include the WAL, temporary files or the space of the filesystem.
 
 - Before the first read, and after a read that failed, `database_size_bytes` is `NaN`.
-- With an external database, the chart sets no volume size, and the server does not export `database_volume_capacity_bytes`.
+- With an external database, the chart sets no volume size, and `database_volume_capacity_bytes` is `NaN`.
 
 ## HTTP route metrics
 
