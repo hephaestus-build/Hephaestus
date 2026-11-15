@@ -11,6 +11,8 @@ import { test, type TestContext } from "node:test";
 import {
 	focusedTests,
 	frontendCommands,
+	parsePushArguments,
+	pushFailures,
 	pushScopeReason,
 	pushScopes,
 	pushTasks,
@@ -569,4 +571,46 @@ void test("a migration fragment selects the changeset checks, and the first line
 		/^all scopes \(.*\), because README\.md selects them$/u,
 	);
 	assert.match(pushScopeReason(undefined), /because no merge base was found$/u);
+});
+
+void test("--keep-going stands beside --base in any order, and anything else is a usage error", () => {
+	assert.deepEqual(parsePushArguments([]), { base: "origin/main", keepGoing: false });
+	assert.deepEqual(parsePushArguments(["--keep-going"]), { base: "origin/main", keepGoing: true });
+	assert.deepEqual(parsePushArguments(["--base", "HEAD~2", "--keep-going"]), {
+		base: "HEAD~2",
+		keepGoing: true,
+	});
+	assert.deepEqual(parsePushArguments(["--keep-going", "--base", "HEAD~2"]), {
+		base: "HEAD~2",
+		keepGoing: true,
+	});
+	assert.throws(() => parsePushArguments(["--keep-gong"]), /\[--keep-going\]/u);
+});
+
+/** Stands in for process.exit, so the test sees each exit as an error with its status. */
+const exitStub = (status: number): never => {
+	throw new Error(`exit ${status}`);
+};
+
+void test("the hook stops at the first failed check; --keep-going runs them all, lists each, and exits like the first", (t: TestContext) => {
+	const errors = t.mock.method(console, "error", () => undefined);
+	const failFast = pushFailures(false, exitStub);
+	failFast.record("gate:prose", 0);
+	assert.throws(() => failFast.record("gate:webapp", 3), { message: "exit 3" });
+
+	const keepGoing = pushFailures(true, exitStub);
+	keepGoing.record("gate:webapp", 3);
+	keepGoing.record("gate:prose", 0);
+	keepGoing.record("focused Node tests", 1);
+	assert.throws(() => keepGoing.finish(), { message: "exit 3" });
+	const summary = String(errors.mock.calls.at(-1)?.arguments[0]);
+	assert.match(
+		summary,
+		/^2 push checks failed:\n- gate:webapp \(exit 3\)\n- focused Node tests \(exit 1\)$/u,
+	);
+
+	// Nothing failed, so the run goes on to say what it did.
+	const passing = pushFailures(true, exitStub);
+	passing.record("gate:prose", 0);
+	assert.doesNotThrow(() => passing.finish());
 });
