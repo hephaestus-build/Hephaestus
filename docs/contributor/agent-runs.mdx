@@ -382,7 +382,12 @@ The server logs the cut call and the failure with the reason `STALLED` and the b
 For a practice review, the review runner retries the cut call up to 5 times.
 When two sessions in a row end with their calls unanswered, the review starts no new session.
 The attempt then ends early.
-If no call of the attempt was answered, the review runs again under the normal retry rules.
+If no call of the attempt was answered, the review runs again after the backoff of its attempt number, and it spends no retry (`ProviderOutages`).
+A rate limit from the provider counts the same.
+`hephaestus.agent.capacity.model-outage-window` bounds these attempts from the submission of the review.
+A composition that such an outage stopped continues on a fresh run, with a fresh work deadline. The same window bounds it.
+Only a hand-on for a provider failure can be such an outage: the composer loop echoes the cause that the server closed the attempt with (`/end` `cause`).
+Past its bound, the review ends with `PROVIDER_UNAVAILABLE`.
 `llm_proxy_upstream_stalled_total` counts each cut call.
 
 `LlmCallPermitState` owns the transition table of a permit.

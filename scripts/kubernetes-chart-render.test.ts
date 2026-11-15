@@ -1327,6 +1327,7 @@ await test("a server with sandboxes receives its runtime settings, its sandbox n
 	});
 	const spec = podSpec(server);
 	assert.equal(envValue(server, "HEPHAESTUS_AGENT_DRAIN_TIMEOUT"), "600s");
+	assert.equal(envValue(server, "HEPHAESTUS_AGENT_CAPACITY_MODEL_OUTAGE_WINDOW"), "7200s");
 	assert.equal(get(spec, "terminationGracePeriodSeconds"), 600 + 120);
 	assert.deepEqual(
 		list(get(spec, "volumes")).find((volume) => get(volume, "name") === "git-cache"),

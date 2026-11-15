@@ -404,11 +404,11 @@ groups:
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusReviewUnreachable
         expr: >-
-          sum by (cause) (increase(agent_job_infra_retry_requeued_total{job="hephaestus",cause=~"server_unreachable|provider_unreachable"}[1h])) >= 3
+          sum by (cause) (increase(agent_job_infra_retry_requeued_total{job="hephaestus",cause=~"server_unreachable|provider_unreachable|rate_limited"}[1h])) >= 3
         labels:
           severity: warning
         annotations:
-          summary: Review sandboxes failed to reach the server or the model provider at least three times in one hour
+          summary: Review sandboxes failed to reach the server or the model provider, or the provider limited their rate, at least three times in one hour
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusReviewServerError
         expr: sum(increase(agent_job_server_error_total{job="hephaestus"}[1h])) > 0

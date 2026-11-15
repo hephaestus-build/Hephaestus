@@ -182,6 +182,9 @@ server:
   # 10 to 16 minutes, and its bound is 3 hours. When the drain ends, a review that still runs stops and is tried
   # again, within its separate limit on drains.
   drainTimeoutSeconds: 1800
+  # How long a review waits through a model provider outage or rate limit, counted from its submission. Its attempts
+  # spend no retry while it waits; past this window it ends as provider-unavailable.
+  modelOutageWindowSeconds: 7200
   # Commit ingestion mirrors and review clones under the fabric root, on node storage. A cache: the server
   # rebuilds it.
   gitCache:

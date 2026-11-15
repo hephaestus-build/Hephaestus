@@ -30,5 +30,10 @@ public enum ReviewStopReason {
     CONTRACT_CHANGED,
     NO_SANDBOX_ROOM,
     /** The results were admitted, but the attempts ended before they could confirm a decision for each destination. */
-    COMPOSITION_UNCONFIRMED;
+    COMPOSITION_UNCONFIRMED,
+    /**
+     * The model provider answered none of the review's calls, or limited their rate, until the review's bound passed. It
+     * describes the provider, never the work.
+     */
+    PROVIDER_UNAVAILABLE;
 }

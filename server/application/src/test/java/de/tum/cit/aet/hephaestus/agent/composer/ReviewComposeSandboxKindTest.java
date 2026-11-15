@@ -13,6 +13,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import ch.qos.logback.classic.Logger;
@@ -24,6 +25,7 @@ import de.tum.cit.aet.hephaestus.agent.gateway.SandboxRunKind;
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.handler.RuntimeReviewTestData;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedJobInputs;
+import de.tum.cit.aet.hephaestus.agent.job.ProviderOutages;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewCompositionClaim;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewCompositionContinuation;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobClaimService;
@@ -70,7 +72,7 @@ class ReviewComposeSandboxKindTest {
     private final ReviewCompositionContinuation continuation = mock(ReviewCompositionContinuation.class);
     private final CompositionSessions sessions = mock(CompositionSessions.class);
     private final ReviewJobTerminal terminal = mock(ReviewJobTerminal.class);
-    private final ReviewRunKind reviewRuns = mock(ReviewRunKind.class);
+    private final ProviderOutages outages = mock(ProviderOutages.class);
     private final SimpleMeterRegistry meters = new SimpleMeterRegistry();
     private final JsonMapper mapper = JsonMapper.builder().build();
     private final PlatformTransactionManager transactionManager = mock(PlatformTransactionManager.class);
@@ -87,7 +89,7 @@ class ReviewComposeSandboxKindTest {
                 continuation,
                 sessions,
                 terminal,
-                reviewRuns,
+                outages,
                 runs,
                 gateway,
                 meters,
@@ -170,7 +172,7 @@ class ReviewComposeSandboxKindTest {
         });
 
         verify(sessions, never()).withholdOpen(any(), any(), any());
-        verify(reviewRuns, never()).requeue(any(), any(), any(), any(), any());
+        verifyNoInteractions(outages);
     }
 
     @Test
@@ -246,7 +248,7 @@ class ReviewComposeSandboxKindTest {
 
         assertThat(other.attempt(run)).isEmpty();
         verify(sessions).withholdOpen(composing.job(), composing.identity(), CompositionStop.BUDGET);
-        verify(reviewRuns, never()).requeue(any(), any(), any(), any(), any());
+        verifyNoInteractions(outages);
     }
 
     @Test
@@ -258,7 +260,7 @@ class ReviewComposeSandboxKindTest {
                         ResponseStatusException.class,
                         failure -> assertThat(failure.getStatusCode().value()).isEqualTo(503));
 
-        verify(reviewRuns, never()).requeue(any(), any(), any(), any(), any());
+        verifyNoInteractions(outages);
         verify(continuation, never()).restore(any());
         verify(sessions, never()).withholdOpen(any(), any(), any());
     }
@@ -322,11 +324,12 @@ class ReviewComposeSandboxKindTest {
     }
 
     @Test
-    void shouldSpendAnAttemptWhenTheRunIsHandedOn() {
+    void shouldLetTheProviderOutageCheckChargeTheRunWhenItIsHandedOn() {
         claim(null);
-        when(reviewRuns.retryComposition(composing.identity().jobId(), fence)).thenReturn(true);
+        when(outages.handOnComposition(composing.job(), fence, true)).thenReturn(true);
 
-        assertThat(kind.end(run, SandboxRunKind.Outcome.HANDED_ON)).isTrue();
+        assertThat(kind.end(run, SandboxRunKind.Outcome.HANDED_ON, CompositionStop.PROVIDER.name()))
+                .isTrue();
 
         verify(terminal, never()).completeComposed(any(), any());
     }

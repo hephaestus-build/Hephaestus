@@ -386,7 +386,8 @@ final class ComposerReplay {
                 Duration.ofSeconds(30),
                 Duration.ofMinutes(2),
                 Duration.ofMinutes(1),
-                Duration.ofMinutes(15));
+                Duration.ofMinutes(15),
+                Duration.ofHours(2));
         final PracticeReviewProperties properties =
                 new PracticeReviewProperties(false, 15, 5, null, 12, 16000, 342_000, Duration.ofMinutes(10));
         final ReviewJob job = RuntimeReviewTestData.job();

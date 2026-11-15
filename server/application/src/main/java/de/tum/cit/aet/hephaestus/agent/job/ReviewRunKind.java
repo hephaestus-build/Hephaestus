@@ -247,21 +247,47 @@ public class ReviewRunKind implements AgentRunHandler {
         return Optional.of(composing);
     }
 
-    /** Hands a passing composition failure to a fresh run, spending one retry with its usual backoff. */
+    /**
+     * Hands a passing composition failure to a fresh run, with a fresh work deadline. A charged hand-on spends one
+     * retry and waits its usual backoff; a free one, for a provider outage ({@link ProviderOutages#handOnComposition}),
+     * spends none and waits {@code delay}.
+     */
     @Transactional(propagation = Propagation.MANDATORY)
-    public boolean retryComposition(UUID jobId, AgentRunFence fence) {
+    public boolean retryComposition(
+            UUID jobId, AgentRunFence fence, AgentRuns.Charge charge, @Nullable Duration delay) {
         files.holdCopyAdmission();
         jobs.lockParentOfJob(jobId);
         var job = jobs.lockById(jobId).orElse(null);
         if (job == null || !holds(job, fence) || !ResultAdmissionService.isAdmitted(job)) return false;
         if (runs.end(fence, AgentRunStopReason.FAILED) != AgentRuns.EndOutcome.ENDED) return false;
         var ended = fence.run();
-        var delay = AgentRuns.backoff(job.spentAttempts() + 1);
-        var next = runs.continueAfter(ended, fence.epoch(), delay, compositionExecutionWindow());
+        var wait =
+                charge == AgentRuns.Charge.SPEND || delay == null ? AgentRuns.backoff(job.spentAttempts() + 1) : delay;
+        var next = runs.continueAfter(ended, fence.epoch(), charge, wait, compositionExecutionWindow());
         if (jobs.queueOnNextRun(jobId, fence.runId(), job.getAttempt(), next.id()) == 0)
             throw new IllegalStateException("The attempt's job moved under its lock");
         reviewStart.requeue(job.getWorkspaceId(), job.getReviewId());
         runs.retire(ended);
+        return true;
+    }
+
+    /**
+     * Ends an admitted review whose composition a provider outage stopped and whose deadline leaves no time for another
+     * attempt. Its results stay, and settlement closes the review as provider-unavailable.
+     *
+     * @return whether the attempt still held its job
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public boolean endProviderUnavailable(UUID jobId, AgentRunFence fence) {
+        files.holdCopyAdmission();
+        jobs.lockParentOfJob(jobId);
+        var job = jobs.lockById(jobId).orElse(null);
+        if (job == null || !holds(job, fence) || !ResultAdmissionService.isAdmitted(job)) return false;
+        var output = mapper.createObjectNode().put("outcome", RefusalOutcome.PROVIDER_UNAVAILABLE.name());
+        if (jobs.failCompositionUnconfirmed(jobId, fence.runId(), job.getAttempt(), Instant.now(), output) == 0)
+            return false;
+        ReviewJobTerminal.endRun(runs, fence, ReviewJobStatus.FAILED);
+        log.warn("The model provider stayed unavailable past the review's outage window: jobId={}", jobId);
         return true;
     }
 
@@ -307,7 +333,12 @@ public class ReviewRunKind implements AgentRunHandler {
         // A review that composed on its review run, before composition had a run of its own, resumes on one. That run
         // ended COMPLETED long ago and does not change, so it is resumed work like any other, not a hand-off.
         AgentRunRef next = runs.find(ended).map(AgentRun::getKind).orElseThrow() == AgentRunKind.REVIEW_COMPOSE
-                ? runs.continueAfter(ended, resumable.getEpoch(), Duration.ZERO, compositionExecutionWindow())
+                ? runs.continueAfter(
+                        ended,
+                        resumable.getEpoch(),
+                        AgentRuns.Charge.SPEND,
+                        Duration.ZERO,
+                        compositionExecutionWindow())
                 : runs.continueAs(
                         ended, resumable.getEpoch(), AgentRunKind.REVIEW_COMPOSE, compositionExecutionWindow());
         jobs.queueOnRun(resumable.getId(), workspaceId, next.id());

@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedJobInputs;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.ReviewSourceNotReadyException;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.practice.PracticePiAdapter;
+import de.tum.cit.aet.hephaestus.agent.proxy.ProviderOutage;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunFence;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.runtime.AgentResult;
@@ -74,6 +75,7 @@ public class ReviewAttemptResults {
     private final ReviewAttemptPreparation preparation;
     private final ReviewJobTerminal terminal;
     private final ReviewRunKind reviewRuns;
+    private final ProviderOutages outages;
     private final PracticeScriptRunRecorder practiceScriptRuns;
     private final TransactionTemplate transactionTemplate;
     private final ObjectMapper objectMapper;
@@ -90,6 +92,7 @@ public class ReviewAttemptResults {
             ReviewAttemptPreparation preparation,
             ReviewJobTerminal terminal,
             ReviewRunKind reviewRuns,
+            ProviderOutages outages,
             PracticeScriptRunRecorder practiceScriptRuns,
             TransactionTemplate transactionTemplate,
             ObjectMapper objectMapper,
@@ -101,6 +104,7 @@ public class ReviewAttemptResults {
         this.preparation = preparation;
         this.terminal = terminal;
         this.reviewRuns = reviewRuns;
+        this.outages = outages;
         this.practiceScriptRuns = practiceScriptRuns;
         this.transactionTemplate = transactionTemplate;
         this.objectMapper = objectMapper;
@@ -109,15 +113,17 @@ public class ReviewAttemptResults {
         serverErrors = Counter.builder(AgentMetrics.AGENT_JOB_SERVER_ERROR)
                 .description("Attempts that ended because this server answered their results with its own error")
                 .register(meterRegistry);
-        for (RequeueCause cause : RequeueCause.values()) {
-            infraRetryRequeued.put(
-                    cause,
-                    Counter.builder(AgentMetrics.AGENT_JOB_INFRA_RETRY_REQUEUED)
-                            .description("Jobs requeued (not failed) after a retryable preparation or infrastructure"
-                                    + " failure, by cause")
-                            .tag("cause", cause.tag())
-                            .register(meterRegistry));
-        }
+        for (RequeueCause cause : RequeueCause.values())
+            infraRetryRequeued.put(cause, infraRetryCounter(meterRegistry, cause.tag()));
+    }
+
+    /** The count of attempts requeued for {@code cause}: a requeue cause, or a provider outage. */
+    static Counter infraRetryCounter(MeterRegistry meterRegistry, String cause) {
+        return Counter.builder(AgentMetrics.AGENT_JOB_INFRA_RETRY_REQUEUED)
+                .description("Jobs requeued (not failed) after a retryable preparation or infrastructure failure, or a"
+                        + " provider outage, by cause")
+                .tag("cause", cause)
+                .register(meterRegistry);
     }
 
     /** What a measuring attempt that ended with {@code status} reports as its error; null for a completed one. */
@@ -212,10 +218,20 @@ public class ReviewAttemptResults {
             serverErrors.increment();
             log.error("The server refused a review's results with its own error, so the attempt ends: jobId={}", jobId);
         }
+        // The provider answered none of the run's calls, and the proxy's record of them shows an outage, not an
+        // answered
+        // error. The outage is not the review's: it keeps what it staged and spends no retry until its outage window
+        // ends, and then makes no claim about the work.
+        ProviderOutage outage = result.exitCode() == SandboxLayout.EXIT_PROVIDER_UNREACHABLE
+                ? transactionTemplate.execute(status -> outages.outageOf(fence))
+                : null;
+        boolean providerUnreachable = outage != null;
         if (!ResultAdmissionService.isAdmitted(retained)
                 && handler.hasStaged(retained)
                 && !handler.completeStaged(retained)) {
-            if (!serverError) {
+            if (outage != null) {
+                if (awaitProvider(retained, fence, outage)) return null;
+            } else if (!serverError) {
                 // A slow provider can take many attempts. Each one that moved the review on keeps the retries for
                 // the attempts that move nothing.
                 if (handler.endedPractices(retained) > endedBefore && continueProgressed(retained, fence)) return null;
@@ -225,19 +241,36 @@ public class ReviewAttemptResults {
                     retained,
                     serverError
                             ? ReviewStopReason.EXECUTION_FAILED
-                            : result.timedOut() ? ReviewStopReason.DEADLINE : ReviewStopReason.EXECUTION_INCOMPLETE);
+                            : providerUnreachable
+                                    ? ReviewStopReason.PROVIDER_UNAVAILABLE
+                                    : result.timedOut()
+                                            ? ReviewStopReason.DEADLINE
+                                            : ReviewStopReason.EXECUTION_INCOMPLETE);
         }
 
-        // An infrastructure or provider failure can leave the run without deliverable work. A bounded retry keeps
-        // staged practices and makes no claim about the reviewed work. Past the cap, the attempt ends here.
-        RequeueCause unreachable = unreachableReason(result.exitCode());
-        if (unreachable != null && requeueForAnotherAttempt(job, fence, unreachable)) {
-            log.warn(
-                    "Requeuing job {} ({}): nothing it measured can be delivered from here (attempt {})",
-                    jobId,
-                    unreachable.tag(),
-                    job.getAttempt() + 1);
-            return null;
+        if (outage != null) {
+            ReviewJob unanswered;
+            try {
+                unanswered = preparation.owned(jobId, fence);
+            } catch (ResultAdmissionService.StaleAttemptException lost) {
+                return null;
+            }
+            if (!ResultAdmissionService.isAdmitted(unanswered)) {
+                if (!awaitProvider(unanswered, fence, outage)) endProviderUnavailable(unanswered, fence);
+                return null;
+            }
+        } else {
+            // The server was unreachable, or the provider answered every call with an error. A bounded retry keeps
+            // staged practices and makes no claim about the reviewed work. Past the cap, the attempt ends here.
+            RequeueCause unreachable = unreachableReason(result.exitCode());
+            if (unreachable != null && requeueForAnotherAttempt(job, fence, unreachable)) {
+                log.warn(
+                        "Requeuing job {} ({}): nothing it measured can be delivered from here (attempt {})",
+                        jobId,
+                        unreachable.tag(),
+                        job.getAttempt() + 1);
+                return null;
+            }
         }
         // The sandbox has ended. A review that admitted results keeps what this attempt measured and is handed on to
         // the run that composes its feedback in the review's sandbox.
@@ -320,13 +353,22 @@ public class ReviewAttemptResults {
     }
 
     private static @Nullable RequeueCause unreachableReason(int exitCode) {
-        if (exitCode == SandboxLayout.EXIT_SERVER_UNREACHABLE) {
-            return RequeueCause.SERVER_UNREACHABLE;
-        }
-        if (exitCode == SandboxLayout.EXIT_PROVIDER_UNREACHABLE) {
-            return RequeueCause.PROVIDER_UNREACHABLE;
-        }
+        if (exitCode == SandboxLayout.EXIT_SERVER_UNREACHABLE) return RequeueCause.SERVER_UNREACHABLE;
+        if (exitCode == SandboxLayout.EXIT_PROVIDER_UNREACHABLE) return RequeueCause.PROVIDER_UNREACHABLE;
         return null;
+    }
+
+    /** @return false past the review's outage window; true when the attempt was requeued or lost its job */
+    private boolean awaitProvider(ReviewJob job, AgentRunFence fence, ProviderOutage outage) {
+        return Boolean.TRUE.equals(transactionTemplate.execute(status -> outages.awaitMeasurement(job, fence, outage)));
+    }
+
+    /** Ends an attempt whose provider stayed unavailable past the outage window. Settlement reads its outcome. */
+    private void endProviderUnavailable(ReviewJob job, AgentRunFence fence) {
+        JsonNode output = objectMapper.createObjectNode().put("outcome", RefusalOutcome.PROVIDER_UNAVAILABLE.name());
+        Integer ended = transactionTemplate.execute(status -> terminal.refuse(job.getId(), fence, output));
+        if (ended != null && ended > 0)
+            log.warn("The model provider stayed unavailable past the review's outage window: jobId={}", job.getId());
     }
 
     /**
@@ -482,7 +524,7 @@ public class ReviewAttemptResults {
         SANDBOX,
         /** The sandbox could not reach the server's gateway. */
         SERVER_UNREACHABLE,
-        /** No model call of the run was answered. */
+        /** The provider answered every model call of the run with an error: a retry is spent, unlike an outage. */
         PROVIDER_UNREACHABLE;
 
         String tag() {

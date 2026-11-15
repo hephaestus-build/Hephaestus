@@ -229,3 +229,12 @@ This update supersedes the call counts in the paragraph above that starts "The p
 Practice scripts make no direct model call any more (ADR 0055 and ADR 0026, updates of 2026-11-10).
 Thus, the limit is 170 calls for each attempt: 85 sessions, each with one open call and one that an abort left closing.
 The gateway's rate limit for each sandbox stays four times that limit: 680 requests per minute.
+
+## Update — 2026-11-14: a provider outage spends no retry
+
+This update amends the paragraph above that starts "Waiting is not work".
+An attempt with no reply at all exits as provider unreachable, and it spends no retry.
+A rate limit from the provider counts the same.
+The attempt runs again after the backoff of its attempt number.
+`hephaestus.agent.capacity.model-outage-window` bounds these attempts from the submission of the review, 2 hours by default.
+After that bound, the review ends with `PROVIDER_UNAVAILABLE` and makes no claim about the work.

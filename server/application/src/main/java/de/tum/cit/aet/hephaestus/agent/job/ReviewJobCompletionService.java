@@ -75,15 +75,19 @@ public class ReviewJobCompletionService {
                         && job.getProcessingStatus() != ProcessingStatus.PENDING)) return;
         var review = assignments.review(job);
         boolean admitted = ResultAdmissionService.isAdmitted(job);
+        var output = job.getOutput();
+        var outcome = output == null ? "" : output.path("outcome").asString();
         var reason = job.getStatus() == ReviewJobStatus.CANCELLED
                 ? job.getCancellationReason() == ReviewJobCancellationReason.NO_SANDBOX_ROOM
                         ? ReviewStopReason.NO_SANDBOX_ROOM
                         : ReviewStopReason.CANCELLED
                 : job.getStatus() == ReviewJobStatus.TIMED_OUT
                         ? ReviewStopReason.TIMED_OUT
-                        : job.getExecutionStartedAt() == null
-                                ? ReviewStopReason.PREPARATION_FAILED
-                                : ReviewStopReason.EXECUTION_FAILED;
+                        : RefusalOutcome.PROVIDER_UNAVAILABLE.name().equals(outcome)
+                                ? ReviewStopReason.PROVIDER_UNAVAILABLE
+                                : job.getExecutionStartedAt() == null
+                                        ? ReviewStopReason.PREPARATION_FAILED
+                                        : ReviewStopReason.EXECUTION_FAILED;
         // A cancel for room ends the practices whether or not a server claimed the job, so a scan stops binding them.
         if (!admitted
                 && (job.getStatus() != ReviewJobStatus.CANCELLED
@@ -120,14 +124,8 @@ public class ReviewJobCompletionService {
         job.setProcessingStatus(completed ? ProcessingStatus.DONE : ProcessingStatus.FAILED);
         jobs.saveAndFlush(job);
         if (review.kind() == ReviewKind.SCAN) return;
-        var output = job.getOutput();
-        boolean readinessRefused = output != null
-                && (RefusalOutcome.INSUFFICIENT_EVIDENCE
-                                .name()
-                                .equals(output.path("outcome").asString())
-                        || RefusalOutcome.WORKSPACE_REFUSED
-                                .name()
-                                .equals(output.path("outcome").asString()));
+        boolean readinessRefused = RefusalOutcome.INSUFFICIENT_EVIDENCE.name().equals(outcome)
+                || RefusalOutcome.WORKSPACE_REFUSED.name().equals(outcome);
         var status = job.getStatus() == ReviewJobStatus.CANCELLED
                 ? ReviewStatus.CANCELLED
                 : readinessRefused
@@ -137,10 +135,7 @@ public class ReviewJobCompletionService {
                                 : admitted || job.getExecutionStartedAt() != null
                                         ? ReviewStatus.PARTIAL
                                         : ReviewStatus.FAILED;
-        boolean unconfirmed = output != null
-                && RefusalOutcome.COMPOSITION_UNCONFIRMED
-                        .name()
-                        .equals(output.path("outcome").asString());
+        boolean unconfirmed = RefusalOutcome.COMPOSITION_UNCONFIRMED.name().equals(outcome);
         var stop = readinessRefused
                 ? ReviewStopReason.READINESS_REFUSED
                 : unconfirmed

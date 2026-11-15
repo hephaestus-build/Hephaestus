@@ -35,6 +35,9 @@ import org.springframework.validation.annotation.Validated;
  *     covers the step from one run of a subject to its next, such as a review's measuring to its composing.
  * @param conversationSandboxIdle how long a conversation's sandbox stays warm after its last call to the gateway while
  *     its conversation has no queued or leased run. The next turn after it starts a cold sandbox.
+ * @param modelOutageWindow how long after its submission a review keeps waiting for a model provider that answers none
+ *     of its calls or limits their rate. An attempt that meets such an outage spends no retry, so this bounds its
+ *     measurement and its composition together; the review then ends as provider-unavailable.
  */
 @Validated
 @ConfigurationProperties(prefix = "hephaestus.agent.capacity")
@@ -48,7 +51,8 @@ public record AgentCapacityProperties(
         @DefaultValue("30s") @NotNull Duration permitAging,
         @DefaultValue("2m") @NotNull Duration sandboxStart,
         @DefaultValue("1m") @NotNull Duration sandboxIdle,
-        @DefaultValue("15m") @NotNull Duration conversationSandboxIdle) {
+        @DefaultValue("15m") @NotNull Duration conversationSandboxIdle,
+        @DefaultValue("2h") @NotNull Duration modelOutageWindow) {
 
     public AgentCapacityProperties {
         for (Duration limit : List.of(sandboxStart, sandboxIdle, conversationSandboxIdle))
@@ -65,6 +69,8 @@ public record AgentCapacityProperties(
         if (turnLeaseTtl.compareTo(Duration.ofSeconds(15)) < 0)
             throw new IllegalArgumentException(
                     "hephaestus.agent.capacity.turn-lease-ttl must be at least 15s: the turn's holder renews every 5s");
+        if (modelOutageWindow.isNegative())
+            throw new IllegalArgumentException("hephaestus.agent.capacity.model-outage-window must not be negative");
         if (leaseRenewal.multipliedBy(2).compareTo(leaseTtl) > 0)
             throw new IllegalArgumentException(
                     "hephaestus.agent.capacity.lease-renewal must be at most half of lease-ttl, so a holder survives"

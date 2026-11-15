@@ -383,6 +383,7 @@ class ReviewPreparationRecoveryIntegrationTest extends BaseIntegrationTest {
                 preparation,
                 terminal,
                 reviewRuns,
+                context.getBean(ProviderOutages.class),
                 mock(PracticeScriptRunRecorder.class),
                 transactions,
                 mapper,

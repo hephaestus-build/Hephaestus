@@ -734,6 +734,12 @@
 					"maximum": 86400,
 					"description": "Whole seconds. The chart emits a Spring Boot Duration for the server's drain and an integer Kubernetes termination grace period."
 				},
+				"modelOutageWindowSeconds": {
+					"type": "integer",
+					"minimum": 0,
+					"maximum": 604800,
+					"description": "Whole seconds from a review's submission that it waits through a model provider outage or rate limit without spending a retry."
+				},
 				"inboxClaimers": {
 					"type": "integer",
 					"minimum": 0

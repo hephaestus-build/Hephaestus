@@ -801,6 +801,13 @@ The new attempt checks the inputs before it stages anything:
   So do inputs of an earlier basis version or of another admission.
 
 The handed-on attempts use the job's retry limit with its backoff.
+
+A hand-on after a provider outage spends no attempt. In such an outage, the provider answered none of the calls, or limited their rate.
+Only a hand-on for a provider failure can count as an outage.
+That attempt continues on a fresh run with a fresh work deadline, after the backoff of its attempt number.
+`hephaestus.agent.capacity.model-outage-window` bounds these attempts from the submission of the review.
+Past it, the job fails with its results kept, and the review closes as Partial with [Provider unavailable](./practice-review-glossary.mdx#runtime-terms).
+
 Attempts after the limit compose nothing and withhold each open destination as Not composed.
 A lost attempt or a refused withholding hands on again, up to three attempts after the limit.
 If those end too, the job fails with its results kept, and the review closes as Partial with [Composition unconfirmed](./practice-review-glossary.mdx#runtime-terms).

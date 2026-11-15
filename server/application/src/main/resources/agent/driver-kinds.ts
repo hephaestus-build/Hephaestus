@@ -17,7 +17,9 @@ const reviewCompose: KindRunner = async ({ assignment, gateway, signal }) => {
 	if (outcome.leaseLost) {
 		return { leaseLost: true };
 	}
-	return { leaseLost: false, outcome: outcome.handedOn === null ? "completed" : "handed_on" };
+	return outcome.handedOn === null
+		? { leaseLost: false, outcome: "completed" }
+		: { leaseLost: false, outcome: "handed_on", cause: outcome.handedOn };
 };
 
 const conversation = turnRunner();

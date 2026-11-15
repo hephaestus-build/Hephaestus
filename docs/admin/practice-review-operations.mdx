@@ -41,6 +41,7 @@ Each one explains a review that starts late, is refused, or stops early.
 | Input tokens for each practice | 342,000 |
 | Model use of one review attempt | Twice the sum of its practices' budgets. Past it, the model proxy refuses the next call with `403`. |
 | Attempts of a review after a retryable failure | 5 |
+| Time from submission that a review waits through a provider outage or rate limit, without spending a retry | 2 hours (`hephaestus.agent.capacity.model-outage-window`). After it, the review closes as Partial with Provider unavailable. |
 
 Input tokens count every prompt that the practice's model calls send, cached or not.
 A practice that spends one of its budgets ends as `NOT_REACHED` with reason `BUDGET`, and the other practices go on.
@@ -115,7 +116,7 @@ The server exports these meters.
 | `agent.run.runs` | Runs that have not ended, by `kind`, `band`, `state` (`queued` or `leased`) and `hold_reason` (`none`, `budget` or `sandbox_room`). `state="queued",hold_reason="budget"` separates a workspace that spent its budget from an idle instance. |
 | `agent.run.sampler.failure` | Samples that failed. The gauges then keep their last values. |
 | `agent.run.claim.wait` | By `kind` and `band`: the time from a run's `available_at` to its claim. A run that returns to the queue waits again from its new `available_at`. |
-| `agent.job.infra.retry.requeued` | Attempts that run again after a retryable failure, by `cause`: `preparation`, `sandbox`, `server_unreachable` or `provider_unreachable`. |
+| `agent.job.infra.retry.requeued` | Attempts that run again after a retryable failure, by `cause`: `preparation`, `sandbox`, `server_unreachable`, `provider_unreachable` or `rate_limited`. A requeue for `provider_unreachable` or `rate_limited` spends no retry. |
 | `agent.run.reaped` | Runs that the server took back. `kind=review,outcome=attempts_exhausted` counts reviews that failed because each attempt's holder stopped. |
 | `agent.job.composition.stopped` | Destinations whose feedback the server did not write, by `cause` and `outcome`. |
 | `agent.job.retention.stripped`, `agent.job.retention.deleted` | Rows that the retention sweep pruned. |

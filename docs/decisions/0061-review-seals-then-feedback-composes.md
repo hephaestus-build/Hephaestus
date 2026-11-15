@@ -120,3 +120,20 @@ The update of 2026-11-09 is implemented.
 
 [ADR 0079](0079-one-agent-system.md#update--2026-11-11-compose-deadlines-and-expired-run-continuation) defines composition's fixed work deadline, closing reserve and atomic continuation after a lost lease.
 The retry budget still spans the review and its composition.
+
+## Update — 2026-11-14: a provider outage spends no attempt
+
+This update amends § Decision, item Retry.
+A hand-on after a provider outage spends no attempt.
+An outage is a model call that the provider did not answer, or answered with 5xx, 408 or 429.
+It counts only when the server closed the attempt for a provider failure: the loop echoes that cause when it ends the run.
+The server then reads the proxy's record of the newest failed call of the composing claim.
+Every replica can read that record, so the replica that ends the claim decides.
+A hand-on for a deadline, routing or capacity cause spends one attempt, also after a passing outage.
+The composition continues on a fresh run, with a fresh work deadline of the usual length.
+Its backoff counts its own attempts from the measuring attempt that admitted its results.
+The outage window bounds these free hand-ons, counted from the submission of the review, as it bounds a measurement.
+Past the window, the review closes as Partial with `PROVIDER_UNAVAILABLE`, and its results stay.
+A hand-on after a failure that the provider answered still spends one attempt.
+Reason: an outage says nothing about the review.
+The attempts that an outage spent were then missing for the failures that a new attempt can fix.
