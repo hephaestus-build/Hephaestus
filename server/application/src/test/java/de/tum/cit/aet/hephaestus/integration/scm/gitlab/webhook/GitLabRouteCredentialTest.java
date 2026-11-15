@@ -13,6 +13,7 @@ import com.nimbusds.jwt.SignedJWT;
 import de.tum.cit.aet.hephaestus.core.webhook.WebhookProperties;
 import de.tum.cit.aet.hephaestus.core.webhook.WebhookPropertiesFixture;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.Set;
 import java.util.function.Consumer;
 import java.util.function.UnaryOperator;
@@ -78,6 +79,8 @@ class GitLabRouteCredentialTest {
         GitLabRouteCredential rotating = credential(NEXT_KEY, KEY);
         GitLabRouteCredential.Issued next = rotating.issue(ROUTE);
         assertThat(next.keyId()).isNotEqualTo(old.keyId());
+        assertThat(rotating.isAccepted(next.keyId())).isTrue();
+        assertThat(rotating.isAccepted(old.keyId())).isTrue();
         assertThat(rotating.verify(old.token(), 7L, old.keyId(), old.routeId())).contains(ROUTE);
         assertThat(rotating.verify(old.token(), 7L, next.keyId(), old.routeId()))
                 .isEmpty();
@@ -154,6 +157,29 @@ class GitLabRouteCredentialTest {
         assertThatThrownBy(() -> credential.issue(
                         new GitLabRouteCredential.Route(7L, 0L, "https://gitlab.lrz.de", 42L, "group")))
                 .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void shouldIssueAndVerifyRoutesAtTheEdgeOfWhatItAccepts() {
+        GitLabRouteCredential credential = credential(KEY, null);
+        assertThat(credential.isConfigured()).isTrue();
+
+        // The smallest ids and the longest group path are still a route.
+        var smallest = new GitLabRouteCredential.Route(1L, 1L, "https://gitlab.lrz.de", 1L, "g");
+        GitLabRouteCredential.Issued issued = credential.issue(smallest);
+        assertThat(credential.verify(issued.token(), 1L, issued.keyId(), issued.routeId()))
+                .contains(smallest);
+        var longest = new GitLabRouteCredential.Route(7L, 3L, "https://gitlab.lrz.de", 42L, "g".repeat(512));
+        GitLabRouteCredential.Issued longIssued = credential.issue(longest);
+        assertThat(credential.verify(longIssued.token(), 7L, longIssued.keyId(), longIssued.routeId()))
+                .contains(longest);
+
+        // A zero id in any position is no route.
+        for (var zero : List.of(
+                new GitLabRouteCredential.Route(0L, 3L, "https://gitlab.lrz.de", 42L, "group"),
+                new GitLabRouteCredential.Route(7L, 0L, "https://gitlab.lrz.de", 42L, "group"),
+                new GitLabRouteCredential.Route(7L, 3L, "https://gitlab.lrz.de", 0L, "group")))
+            assertThatThrownBy(() -> credential.issue(zero)).isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
