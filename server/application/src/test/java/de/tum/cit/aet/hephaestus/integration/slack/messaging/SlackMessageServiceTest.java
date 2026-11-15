@@ -21,7 +21,8 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CountDownLatch;
 import java.util.stream.Stream;
 import mockwebserver3.Dispatcher;
 import mockwebserver3.MockResponse;
@@ -47,9 +48,13 @@ class SlackMessageServiceTest extends BaseUnitTest {
     /** Read by the guard on the test's thread, and set by a local Slack server's thread in one test. */
     private volatile boolean silentModeEngaged;
 
+    /** The time of the local gateways' throttle budgets, so no throttle wait takes real time. */
+    private VirtualSlackTime time;
+
     @BeforeEach
     void setUp() {
         silentModeEngaged = false;
+        time = new VirtualSlackTime();
         service = new SlackMessageService(
                 credentialProvider,
                 new SlackRateLimitTracker(new SimpleMeterRegistry()),
@@ -157,42 +162,47 @@ class SlackMessageServiceTest extends BaseUnitTest {
 
     @Test
     void shouldFailAWriteOnceAsATransportFailureWhenSlackAnswersAfterTheCallDeadline() throws Exception {
+        CountDownLatch released = new CountDownLatch(1);
         try (MockWebServer slackApi = new MockWebServer()) {
+            // Slack answers the write only after the test ends, so only the call deadline can end the call: no answer
+            // races the deadline, however slowly the test runs.
+            slackApi.setDispatcher(new Dispatcher() {
+                @Override
+                public MockResponse dispatch(RecordedRequest request) throws InterruptedException {
+                    released.await();
+                    return json("{\"ok\":true,\"channel\":\"D1ABCDEFGH\",\"ts\":\"171234.5678\"}");
+                }
+            });
             slackApi.start();
-            slackApi.enqueue(json("{\"ok\":true,\"team_id\":\"T1\"}"));
-            slackApi.enqueue(new MockResponse.Builder()
-                    .code(200)
-                    .addHeader("Content-Type", "application/json")
-                    .body("{\"ok\":true,\"channel\":\"D1ABCDEFGH\",\"ts\":\"171234.5678\"}")
-                    .headersDelay(5, TimeUnit.SECONDS)
-                    .build());
-            SlackMessageService local = localService(slackApi, 300);
+            SlackConfig config = localConfig(slackApi, 300);
+            // Without the SDK's stats, no auth.test comes before the write; the deadline would bound that call too.
+            config.getMethodsConfig().setStatsEnabled(false);
+            SlackMessageService local = localService(config);
             try {
                 assertThatThrownBy(() -> local.postMessage(7L, "D1ABCDEFGH", null, List.of(), "hi", null))
                         .isInstanceOfSatisfying(
                                 SlackSendException.class,
                                 e -> assertThat(e.slackError()).isEqualTo("transport_failure"));
             } finally {
+                released.countDown();
                 local.close();
             }
 
-            assertThat(slackApi.takeRequest().getUrl().encodedPath()).isEqualTo("/api/auth.test");
-            assertThat(slackApi.takeRequest().getUrl().encodedPath()).isEqualTo("/api/chat.postMessage");
-            assertThat(slackApi.getRequestCount()).isEqualTo(2);
+            // The deadline may end the call before the request reaches the server, so the server holds at most the one
+            // write: a failed transport is not tried again.
+            assertThat(slackApi.getRequestCount()).isLessThanOrEqualTo(1);
         }
     }
 
-    // Slack's 429 here asks for no wait (Retry-After: 0), so the budget waits its fallback of about a second.
-
     @Test
     void shouldPostAThrottledWriteOnceAfterTheWholeWait() throws Exception {
+        // Slack's 429 here asks for no wait (Retry-After: 0), so the budget waits its fallback of at least a second.
         try (MockWebServer slackApi = new MockWebServer()) {
             slackApi.start();
             slackApi.enqueue(json("{\"ok\":true,\"team_id\":\"T1\"}"));
             slackApi.enqueue(throttled());
             slackApi.enqueue(json("{\"ok\":true,\"channel\":\"D1ABCDEFGH\",\"ts\":\"171234.5678\"}"));
             SlackMessageService local = localService(slackApi, SlackMessageService.NATIVE_CALL_TIMEOUT_MS);
-            long started = System.nanoTime();
             SlackMessageService.Posted posted;
             try {
                 posted = local.postMessage(7L, "D1ABCDEFGH", null, List.of(), "hi", null);
@@ -201,8 +211,9 @@ class SlackMessageServiceTest extends BaseUnitTest {
             }
 
             assertThat(posted).isEqualTo(new SlackMessageService.Posted("D1ABCDEFGH", "171234.5678"));
-            assertThat(TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started))
-                    .isGreaterThanOrEqualTo(1_000);
+            assertThat(time.waits())
+                    .singleElement()
+                    .satisfies(wait -> assertThat(wait).isGreaterThanOrEqualTo(1_000L));
             assertThat(slackApi.takeRequest().getUrl().encodedPath()).isEqualTo("/api/auth.test");
             assertThat(slackApi.takeRequest().getUrl().encodedPath()).isEqualTo("/api/chat.postMessage");
             assertThat(slackApi.takeRequest().getUrl().encodedPath()).isEqualTo("/api/chat.postMessage");
@@ -212,10 +223,12 @@ class SlackMessageServiceTest extends BaseUnitTest {
 
     @Test
     void shouldNotTryAThrottledWriteAgainWhenSilentModeEngagesDuringTheWait() throws Exception {
+        List<String> paths = new CopyOnWriteArrayList<>();
         try (MockWebServer slackApi = new MockWebServer()) {
             slackApi.setDispatcher(new Dispatcher() {
                 @Override
                 public MockResponse dispatch(RecordedRequest request) {
+                    paths.add(request.getUrl().encodedPath());
                     if (request.getUrl().encodedPath().equals("/api/auth.test")) {
                         return json("{\"ok\":true,\"team_id\":\"T1\"}");
                     }
@@ -235,9 +248,7 @@ class SlackMessageServiceTest extends BaseUnitTest {
                 local.close();
             }
 
-            assertThat(slackApi.takeRequest().getUrl().encodedPath()).isEqualTo("/api/auth.test");
-            assertThat(slackApi.takeRequest().getUrl().encodedPath()).isEqualTo("/api/chat.postMessage");
-            assertThat(slackApi.getRequestCount()).isEqualTo(2);
+            assertThat(paths).containsExactly("/api/auth.test", "/api/chat.postMessage");
         }
     }
 
@@ -250,10 +261,6 @@ class SlackMessageServiceTest extends BaseUnitTest {
                 .build();
     }
 
-    /**
-     * A gateway whose own Slack client calls {@code slackApi} with a deadline of {@code callTimeoutMs}. The test closes
-     * it.
-     */
     @Test
     void shouldRefuseAHistoryPageThatHasMoreButNoCursor() throws Exception {
         try (MockWebServer slackApi = new MockWebServer()) {
@@ -277,10 +284,22 @@ class SlackMessageServiceTest extends BaseUnitTest {
         }
     }
 
+    /**
+     * A gateway whose own Slack client calls {@code slackApi} with a deadline of {@code callTimeoutMs}. The test closes
+     * it.
+     */
     private SlackMessageService localService(MockWebServer slackApi, int callTimeoutMs) {
+        return localService(localConfig(slackApi, callTimeoutMs));
+    }
+
+    private static SlackConfig localConfig(MockWebServer slackApi, int callTimeoutMs) {
         SlackConfig config = new SlackConfig();
         config.setHttpClientCallTimeoutMillis(callTimeoutMs);
         config.setMethodsEndpointUrlPrefix(slackApi.url("/api/").toString());
+        return config;
+    }
+
+    private SlackMessageService localService(SlackConfig config) {
         // A token the SDK has not seen, so its team id cache asks auth.test first, as for a new workspace.
         when(credentialProvider.resolve(any(IntegrationRef.class)))
                 .thenReturn(Optional.of(new BearerToken("xoxb-" + UUID.randomUUID(), null)));
@@ -288,7 +307,8 @@ class SlackMessageServiceTest extends BaseUnitTest {
                 Slack.getInstance(config),
                 credentialProvider,
                 new SlackRateLimitTracker(new SimpleMeterRegistry()),
-                new OutboundEgressGuard(() -> silentModeEngaged));
+                new OutboundEgressGuard(() -> silentModeEngaged),
+                time);
     }
 
     private static MockResponse json(String body) {

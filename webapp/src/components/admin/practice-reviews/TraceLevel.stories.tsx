@@ -483,12 +483,11 @@ export const RichReview: Story = {
 		await screen.findByRole("heading", { name: "What it says" });
 		let feedbackPanel = screen.getByRole("dialog");
 		await expectSettledVisible(feedbackPanel);
-		await expect(
-			within(feedbackPanel).getAllByText(
-				"Name the failed operation at boundary 2, then explain its recovery step.",
-				{ exact: true },
-			)[0],
-		).toBeVisible();
+		const [said] = await within(feedbackPanel).findAllByText(
+			"Name the failed operation at boundary 2, then explain its recovery step.",
+			{ exact: true },
+		);
+		await expect(said).toBeVisible();
 		await expect(
 			within(feedbackPanel).getAllByRole("link", { name: "Failures lose their context" }),
 		).toHaveLength(2);
@@ -520,12 +519,11 @@ export const RichReview: Story = {
 			await screen.findByRole("heading", { name: "What it says" });
 			feedbackPanel = screen.getByRole("dialog");
 			await expectSettledVisible(feedbackPanel);
-			await expect(
-				within(feedbackPanel).getAllByText(
-					"Name the failed operation at boundary 2, then explain its recovery step.",
-					{ exact: true },
-				)[0],
-			).toBeVisible();
+			const [saidAgain] = await within(feedbackPanel).findAllByText(
+				"Name the failed operation at boundary 2, then explain its recovery step.",
+				{ exact: true },
+			);
+			await expect(saidAgain).toBeVisible();
 		}
 		await userEvent.keyboard("{Escape}");
 		await screen.findByRole("group", { name: "How this came about" });

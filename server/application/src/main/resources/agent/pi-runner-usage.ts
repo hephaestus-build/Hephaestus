@@ -50,6 +50,22 @@ export function outputTokensOf(msg: ReportedMessage): number {
 	return msg.role === "assistant" ? (msg.usage?.output ?? 0) : 0;
 }
 
+/** The whole prompt that one model call read: uncached input and cache reads and writes alike. */
+export function callPromptTokens(usage: Partial<AssistantMessage["usage"]> | undefined): number {
+	if (!usage) {
+		return 0;
+	}
+	return (usage.input ?? 0) + (usage.cacheRead ?? 0) + (usage.cacheWrite ?? 0);
+}
+
+/** Input tokens one assistant message read; zero for a failed call that reported none. */
+export function inputTokensOf(msg: ReportedMessage): number {
+	if (msg.role !== "assistant") {
+		return 0;
+	}
+	return callPromptTokens(msg.usage);
+}
+
 export function addAssistantUsage(
 	ledger: UsageLedger,
 	msg: ReportedMessage | null | undefined,

@@ -205,7 +205,9 @@ function AdminLlmPage() {
 	const updateConnection = useMutation({
 		...filedUnder(CONNECTION_WRITE_MUTATION_KEY, adminUpdateLlmConnectionMutation()),
 		onSuccess: () => {
+			// A model's readiness depends on its connection being on, and the server decides it.
 			void invalidateConnections();
+			void invalidateModels();
 			toast.success("Connection updated");
 		},
 		onError: (error) => reportConnectionError(error, "We could not update the connection"),
@@ -236,6 +238,7 @@ function AdminLlmPage() {
 		...filedUnder(CONNECTION_WRITE_MUTATION_KEY, adminDeleteLlmConnectionMutation()),
 		onSuccess: (_data, variables) => {
 			void invalidateConnections();
+			void invalidateModels();
 			if (variables.path.id === selectedConnectionId) {
 				setSelectedConnectionId(null);
 			}

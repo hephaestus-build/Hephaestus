@@ -35,7 +35,8 @@ type Story = StoryObj<typeof meta>;
  */
 export const OnTheWork: Story = {
 	play: async ({ canvas }) => {
-		canvas.getByRole("heading", { level: 4, name: "What worked" });
+		// The renderer loads on first use, so the Markdown arrives after the card.
+		await canvas.findByRole("heading", { level: 4, name: "What worked" });
 		await expect(canvas.queryByText("Delivered")).not.toBeInTheDocument();
 		canvas.getByRole("tablist", { name: "How to show the feedback" });
 	},
@@ -48,6 +49,7 @@ export const OnTheWork: Story = {
  */
 export const SwitchToSource: Story = {
 	play: async ({ canvas, userEvent }) => {
+		await canvas.findByRole("heading", { level: 4, name: "What worked" });
 		const views = within(canvas.getByRole("tablist", { name: "How to show the feedback" }));
 		const rendered = views.getByRole("tab", { name: "Rendered" });
 		const source = views.getByRole("tab", { name: "Source" });
@@ -76,7 +78,7 @@ export const SwitchToSource: Story = {
 		// The arrow keys walk the views and Enter opens one, which is what a tab list promises a
 		// keyboard user; switching back is never a state in which the body shows nothing.
 		await userEvent.keyboard("{ArrowLeft}{Enter}");
-		canvas.getByRole("heading", { level: 4, name: "What worked" });
+		await canvas.findByRole("heading", { level: 4, name: "What worked" });
 		await expect(rendered).toHaveAttribute("aria-selected", "true");
 	},
 };
@@ -131,7 +133,7 @@ export const AsPostedOnTheWork: Story = {
 	play: async ({ canvas, userEvent }) => {
 		const rendered = canvas.getByRole("tabpanel", { name: "Rendered" });
 		await expect(
-			within(rendered).getByRole("link", { name: "Hephaestus (opens in a new tab)" }),
+			await within(rendered).findByRole("link", { name: "Hephaestus (opens in a new tab)" }),
 		).toHaveAttribute("href", "https://example.com/respond");
 		within(rendered).getByRole("link", {
 			name: "Why you see this and how to stop it (opens in a new tab)",
@@ -166,8 +168,8 @@ export const UntrustedMarkdown: Story = {
 		},
 	},
 	play: async ({ canvas, canvasElement }) => {
+		await canvas.findByText("unsafe link");
 		await expect(canvasElement.querySelector("img")).toBeNull();
-		canvas.getByText("unsafe link");
 		await expect(canvas.queryByRole("link", { name: "unsafe link" })).not.toBeInTheDocument();
 		await expect(
 			canvas.getByRole("link", { name: "safe link (opens in a new tab)" }),

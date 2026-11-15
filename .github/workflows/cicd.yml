@@ -15,9 +15,8 @@ on:
     branches: ["main"]
   pull_request:
     branches: ["**"]
-    # The default types plus the end of a draft, which starts the run a draft skipped, and the arm
-    # point: enabling auto-merge runs the full integration tier before the PR enters the queue.
-    types: [opened, synchronize, reopened, ready_for_review, auto_merge_enabled]
+    # The default types plus the end of a draft, which starts the run a draft skipped.
+    types: [opened, synchronize, reopened, ready_for_review]
   merge_group:
 
 # The Version PR has two possible triggers but one pre-merge verdict. Forks, ordinary PRs,
@@ -32,10 +31,7 @@ concurrency:
       && (github.head_ref || github.ref_name) == format('changeset-release/{0}', github.event.repository.default_branch)
       && format('version-pr-{0}', github.head_ref || github.ref_name)
       || format('{0}-{1}{2}', github.ref, github.event_name, github.event_name == 'push' && format('-{0}', github.sha) || '') }}
-  # Enabling auto-merge starts a run on the commit that the running one already tests. It waits for
-  # that run instead of cancelling it: GitHub marks every job of a cancelled run cancelled, which
-  # leaves the head red until the new run's jobs reach the same names. A push still cancels both.
-  cancel-in-progress: ${{ (github.event_name == 'pull_request' && github.event.action != 'auto_merge_enabled') || github.event_name == 'workflow_dispatch' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' }}
 
 permissions: {}
 
@@ -53,8 +49,7 @@ jobs:
       extension: ${{ steps.filter.outputs.extension }}
       application-server: ${{ steps.filter.outputs.application-server }}
       # Whether the server suites run. The package job reads it too, because the suites run its classes.
-      # A stacked layer runs them only once it is armed: ci-cd.mdx § Full integration at the arm point.
-      server-tests: ${{ (steps.opt_in.outputs.light != 'true' || steps.opt_in.outputs.armed == 'true') && (steps.filter.outputs.application-server == 'true' || steps.filter.outputs.test-config == 'true' || github.event_name == 'push' || github.event_name == 'workflow_dispatch') }}
+      server-tests: ${{ steps.opt_in.outputs.light != 'true' && (steps.filter.outputs.application-server == 'true' || steps.filter.outputs.test-config == 'true' || github.event_name == 'push' || github.event_name == 'workflow_dispatch') }}
       # Whether the diff changes the server suites' inputs, whatever the tier runs.
       server-changed: ${{ steps.filter.outputs.application-server == 'true' || steps.filter.outputs.test-config == 'true' }}
       migrations-changed: ${{ steps.filter.outputs.migrations }}
@@ -124,10 +119,9 @@ jobs:
       # the full tier. Release evidence selection is separate. Every merge group still runs the
       # queue tier: ci-cd.mdx § Two verification tiers.
       queue-tier: ${{ github.event_name != 'pull_request' || (steps.opt_in.outputs.light != 'true' && steps.opt_in.outputs.full != 'false') }}
-      # The numbered integration shards: the queue tier, and a pull request with auto-merge enabled,
-      # a stacked layer included, so that it passes them before it enters the queue. An unreadable
-      # read selects them. ci-cd.mdx § Full integration at the arm point.
-      full-integration: ${{ github.event_name != 'pull_request' || steps.opt_in.outputs.armed != 'false' || (steps.opt_in.outputs.light != 'true' && steps.opt_in.outputs.full != 'false') }}
+      # The numbered integration shards, which the `Full integration` status reports on. Today they
+      # run in the queue tier only. ci-cd.mdx § Full integration status.
+      full-integration: ${{ github.event_name != 'pull_request' || (steps.opt_in.outputs.light != 'true' && steps.opt_in.outputs.full != 'false') }}
       # A draft runs the fast tier and builds no image: no cluster jobs, no image scan, unless it
       # carries `preview`. A release candidate always builds its evidence. Marking it
       # ready starts the ordinary run. ci-cd.mdx § Two verification tiers.
@@ -149,8 +143,7 @@ jobs:
       # A run with the `preview` label repeats a tree whose earlier run may have built no image.
       # A re-run was asked for, by a person or after a retarget, so it is never a duplicate: its tree's
       # earlier run may have run only the light tier.
-      # An armed run repeats a tree whose earlier run skipped the numbered shards.
-      should_skip: ${{ github.run_attempt == 1 && steps.skip_check.outputs.should_skip == 'true' && steps.release_candidate.outputs.release-candidate != 'true' && steps.opt_in.outputs.full == 'false' && steps.opt_in.outputs.preview == 'false' && steps.opt_in.outputs.armed == 'false' && github.event.action != 'ready_for_review' }}
+      should_skip: ${{ github.run_attempt == 1 && steps.skip_check.outputs.should_skip == 'true' && steps.release_candidate.outputs.release-candidate != 'true' && steps.opt_in.outputs.full == 'false' && steps.opt_in.outputs.preview == 'false' && github.event.action != 'ready_for_review' }}
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -211,7 +204,6 @@ jobs:
           full=$(jq -r '[.labels[].name] | any(. == "ci:full")' <<< "$pull_request")
           echo "full=$full" >> "$GITHUB_OUTPUT"
           echo "preview=$(jq -r '[.labels[].name] | any(. == "preview")' <<< "$pull_request")" >> "$GITHUB_OUTPUT"
-          echo "armed=$(jq -r '.auto_merge != null' <<< "$pull_request")" >> "$GITHUB_OUTPUT"
           base=$(jq -er .base.ref <<< "$pull_request")
           echo "base=$base" >> "$GITHUB_OUTPUT"
           light=false
@@ -1047,7 +1039,7 @@ jobs:
     needs: [detect-changes, Security]
     if: |
       !cancelled() && needs.detect-changes.result == 'success' && (needs.Security.result == 'success' || needs.Security.result == 'skipped') &&
-      (needs.detect-changes.outputs.light-tier != 'true' || needs.detect-changes.outputs.server-tests == 'true') &&
+      needs.detect-changes.outputs.light-tier != 'true' &&
       needs.detect-changes.outputs.should_skip != 'true' && needs.detect-changes.outputs.queue-images-complete != 'true' && (
         needs.detect-changes.outputs.unfiltered == 'true' ||
         needs.detect-changes.outputs.head-images == 'true' ||
@@ -1531,16 +1523,14 @@ jobs:
               context: 'All CI Passed'
             });
 
-  # The required `Full integration` status, which keeps a server pull request out of the queue until
-  # it passed the numbered integration shards. Only an armed run's passed server tests make it
-  # success. A missing status blocks a merge as a pending one does, so a run that cannot tell posts
-  # nothing. The job has another name: a check run named like the status would satisfy the rule.
-  # ci-cd.mdx § Full integration at the arm point.
+  # The `Full integration` status: whether this commit passed the numbered integration shards. Only
+  # a run that ran them passes or fails it, and a run that did not posts nothing. The job has another
+  # name: a check run named like the status would satisfy a rule that requires it.
+  # ci-cd.mdx § Full integration status.
   report-full-integration:
     name: "Report full integration"
     needs: [detect-changes, Test]
-    # Every pull request gets it, a stacked layer included: a stack enters the queue whole, and each
-    # layer must meet the rules of `main`. A fork's token cannot write statuses, so a fork's job runs
+    # A fork's token cannot write statuses, so a fork's job runs
     # only when it has a verdict and ends in it; full-integration-fork.yml publishes that conclusion.
     # A fork's verdict counts only against the default branch: one fork branch can head a pull request
     # into each base, and full-integration-fork.yml finds the one into the default branch.
@@ -1585,8 +1575,7 @@ jobs:
               } else if (state === 'success') {
                 core.notice(description);
               } else {
-                // A failure, or a pending state the condition above does not let a fork reach: both keep
-                // the pull request out of the queue, as the missing status would.
+                // The fork's run ends in its failure, which full-integration-fork.yml publishes.
                 core.setFailed(description);
               }
             };
@@ -1598,16 +1587,6 @@ jobs:
               if (TESTS === 'success') await post('success', passed);
               else if (TESTS === 'failure') await post('failure', 'The server tests failed');
               else core.info(`The server tests ended ${TESTS}, so this run has no verdict`);
-            } else {
-              // An armed run's verdict on this commit stays: it is the verdict on the same tree. A
-              // "No server change" holds only against the base it was computed for, so it does not.
-              const { data } = await github.rest.repos.getCombinedStatusForRef({ ...context.repo, ref: sha });
-              const verdict = data.statuses.some(
-                (status) =>
-                  status.context === 'Full integration' &&
-                  (status.state === 'failure' || (status.state === 'success' && status.description === passed)),
-              );
-              if (!verdict) await post('pending', 'Runs when auto-merge is enabled');
             }
 
   report-unsuccessful-merge-group:
@@ -1656,9 +1635,8 @@ jobs:
           message: >-
             The [combined merge-queue CI run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
             failed, so this pull request left the queue. Inspect the run before re-queueing it.
-            A pull request runs the numbered integration shards only once auto-merge is enabled, and
-            no database, drill or browser suite, so such a failure first shows here; add the `ci:full`
-            label to reproduce it on the pull request.
+            A pull request runs only the fast tier, so an integration, database, drill or browser
+            failure first shows here; add the `ci:full` label to reproduce it on the pull request.
             An image build or scan failure also first shows here; add the `preview` label to build
             the images on the pull request.
 
@@ -1674,208 +1652,110 @@ jobs:
     name: Stop the merge group early
     needs: [vulnerability-database]
     if: ${{ always() && github.event_name == 'merge_group' && contains(needs.*.result, 'failure') }}
-    runs-on: ubuntu-slim
-    timeout-minutes: 15
     permissions:
       actions: write
-    steps:
-      - name: Cancel this run
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RUN_ID: ${{ github.run_id }}
-        run: gh run cancel "$RUN_ID" --repo "$GITHUB_REPOSITORY"
+    uses: ./.github/workflows/merge-group-cancel.yml
 
   fail-fast-workflow-lint:
     name: Stop the merge group early
     needs: [workflow-lint]
     if: ${{ always() && github.event_name == 'merge_group' && contains(needs.*.result, 'failure') }}
-    runs-on: ubuntu-slim
-    timeout-minutes: 15
     permissions:
       actions: write
-    steps:
-      - name: Cancel this run
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RUN_ID: ${{ github.run_id }}
-        run: gh run cancel "$RUN_ID" --repo "$GITHUB_REPOSITORY"
+    uses: ./.github/workflows/merge-group-cancel.yml
 
   fail-fast-feedback-eval:
     name: Stop the merge group early
     needs: [feedback-eval]
     if: ${{ always() && github.event_name == 'merge_group' && contains(needs.*.result, 'failure') }}
-    runs-on: ubuntu-slim
-    timeout-minutes: 15
     permissions:
       actions: write
-    steps:
-      - name: Cancel this run
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RUN_ID: ${{ github.run_id }}
-        run: gh run cancel "$RUN_ID" --repo "$GITHUB_REPOSITORY"
+    uses: ./.github/workflows/merge-group-cancel.yml
 
   fail-fast-Quality:
     name: Stop the merge group early
     needs: [Quality]
     if: ${{ always() && github.event_name == 'merge_group' && contains(needs.*.result, 'failure') }}
-    runs-on: ubuntu-slim
-    timeout-minutes: 15
     permissions:
       actions: write
-    steps:
-      - name: Cancel this run
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RUN_ID: ${{ github.run_id }}
-        run: gh run cancel "$RUN_ID" --repo "$GITHUB_REPOSITORY"
+    uses: ./.github/workflows/merge-group-cancel.yml
 
   fail-fast-server-package:
     name: Stop the merge group early
     needs: [server-package]
     if: ${{ always() && github.event_name == 'merge_group' && contains(needs.*.result, 'failure') }}
-    runs-on: ubuntu-slim
-    timeout-minutes: 15
     permissions:
       actions: write
-    steps:
-      - name: Cancel this run
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RUN_ID: ${{ github.run_id }}
-        run: gh run cancel "$RUN_ID" --repo "$GITHUB_REPOSITORY"
+    uses: ./.github/workflows/merge-group-cancel.yml
 
   fail-fast-Build:
     name: Stop the merge group early
     needs: [Build]
     if: ${{ always() && github.event_name == 'merge_group' && contains(needs.*.result, 'failure') }}
-    runs-on: ubuntu-slim
-    timeout-minutes: 15
     permissions:
       actions: write
-    steps:
-      - name: Cancel this run
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RUN_ID: ${{ github.run_id }}
-        run: gh run cancel "$RUN_ID" --repo "$GITHUB_REPOSITORY"
+    uses: ./.github/workflows/merge-group-cancel.yml
 
   fail-fast-upstream-images:
     name: Stop the merge group early
     needs: [upstream-images]
     if: ${{ always() && github.event_name == 'merge_group' && contains(needs.*.result, 'failure') }}
-    runs-on: ubuntu-slim
-    timeout-minutes: 15
     permissions:
       actions: write
-    steps:
-      - name: Cancel this run
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RUN_ID: ${{ github.run_id }}
-        run: gh run cancel "$RUN_ID" --repo "$GITHUB_REPOSITORY"
+    uses: ./.github/workflows/merge-group-cancel.yml
 
   fail-fast-Test:
     name: Stop the merge group early
     needs: [Test]
     if: ${{ always() && github.event_name == 'merge_group' && contains(needs.*.result, 'failure') }}
-    runs-on: ubuntu-slim
-    timeout-minutes: 15
     permissions:
       actions: write
-    steps:
-      - name: Cancel this run
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RUN_ID: ${{ github.run_id }}
-        run: gh run cancel "$RUN_ID" --repo "$GITHUB_REPOSITORY"
+    uses: ./.github/workflows/merge-group-cancel.yml
 
   fail-fast-Docker:
     name: Stop the merge group early
     needs: [Docker]
     if: ${{ always() && github.event_name == 'merge_group' && contains(needs.*.result, 'failure') }}
-    runs-on: ubuntu-slim
-    timeout-minutes: 15
     permissions:
       actions: write
-    steps:
-      - name: Cancel this run
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RUN_ID: ${{ github.run_id }}
-        run: gh run cancel "$RUN_ID" --repo "$GITHUB_REPOSITORY"
+    uses: ./.github/workflows/merge-group-cancel.yml
 
   fail-fast-Kubernetes:
     name: Stop the merge group early
     needs: [Kubernetes]
     if: ${{ always() && github.event_name == 'merge_group' && contains(needs.*.result, 'failure') }}
-    runs-on: ubuntu-slim
-    timeout-minutes: 15
     permissions:
       actions: write
-    steps:
-      - name: Cancel this run
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RUN_ID: ${{ github.run_id }}
-        run: gh run cancel "$RUN_ID" --repo "$GITHUB_REPOSITORY"
+    uses: ./.github/workflows/merge-group-cancel.yml
 
   fail-fast-Database-upgrade:
     name: Stop the merge group early
     needs: [Database-upgrade]
     if: ${{ always() && github.event_name == 'merge_group' && contains(needs.*.result, 'failure') }}
-    runs-on: ubuntu-slim
-    timeout-minutes: 15
     permissions:
       actions: write
-    steps:
-      - name: Cancel this run
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RUN_ID: ${{ github.run_id }}
-        run: gh run cancel "$RUN_ID" --repo "$GITHUB_REPOSITORY"
+    uses: ./.github/workflows/merge-group-cancel.yml
 
   fail-fast-Release-preflight:
     name: Stop the merge group early
     needs: [Release-preflight]
     if: ${{ always() && github.event_name == 'merge_group' && contains(needs.*.result, 'failure') }}
-    runs-on: ubuntu-slim
-    timeout-minutes: 15
     permissions:
       actions: write
-    steps:
-      - name: Cancel this run
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RUN_ID: ${{ github.run_id }}
-        run: gh run cancel "$RUN_ID" --repo "$GITHUB_REPOSITORY"
+    uses: ./.github/workflows/merge-group-cancel.yml
 
   fail-fast-Security:
     name: Stop the merge group early
     needs: [Security]
     if: ${{ always() && github.event_name == 'merge_group' && contains(needs.*.result, 'failure') }}
-    runs-on: ubuntu-slim
-    timeout-minutes: 15
     permissions:
       actions: write
-    steps:
-      - name: Cancel this run
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RUN_ID: ${{ github.run_id }}
-        run: gh run cancel "$RUN_ID" --repo "$GITHUB_REPOSITORY"
+    uses: ./.github/workflows/merge-group-cancel.yml
 
   fail-fast-Browser-tests:
     name: Stop the merge group early
     needs: [Browser-tests]
     if: ${{ always() && github.event_name == 'merge_group' && contains(needs.*.result, 'failure') }}
-    runs-on: ubuntu-slim
-    timeout-minutes: 15
     permissions:
       actions: write
-    steps:
-      - name: Cancel this run
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RUN_ID: ${{ github.run_id }}
-        run: gh run cancel "$RUN_ID" --repo "$GITHUB_REPOSITORY"
+    uses: ./.github/workflows/merge-group-cancel.yml
