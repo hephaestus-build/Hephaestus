@@ -55,7 +55,7 @@ code {
 
 /*
  * GitHub's palette for the provider colors below. These are the values that GitHub Primer
- * (@primer/primitives 11.10.0, `light.css` and `dark.css`) gives these 26 tokens, copied once:
+ * (@primer/primitives 11.10.0, `light.css` and `dark.css`) gives these 37 tokens, copied once:
  * importing the whole theme put every Primer token in the CSS that every page loads. The root's
  * `.dark` class picks the dark values, as it does for `theme-tokens.css`.
  */
@@ -86,6 +86,17 @@ code {
 	--fgColor-done: #8250df;
 	--fgColor-upsell: var(--fgColor-done);
 	--fgColor-sponsors: #bf3989;
+	--bgColor-accent-muted: #ddf4ff;
+	--bgColor-attention-muted: #fff8c5;
+	--bgColor-danger-muted: #ffebe9;
+	--bgColor-closed-muted: var(--bgColor-danger-muted);
+	--bgColor-done-muted: #fbefff;
+	--bgColor-upsell-muted: var(--bgColor-done-muted);
+	--bgColor-neutral-muted: #818b981f;
+	--bgColor-severe-muted: #fff1e5;
+	--bgColor-sponsors-muted: #ffeff7;
+	--bgColor-success-muted: #dafbe1;
+	--bgColor-open-muted: var(--bgColor-success-muted);
 }
 
 :root.dark {
@@ -115,6 +126,17 @@ code {
 	--fgColor-done: #ab7df8;
 	--fgColor-upsell: var(--fgColor-done);
 	--fgColor-sponsors: #db61a2;
+	--bgColor-accent-muted: #388bfd1a;
+	--bgColor-attention-muted: #bb800926;
+	--bgColor-danger-muted: #f851491a;
+	--bgColor-closed-muted: var(--bgColor-danger-muted);
+	--bgColor-done-muted: #ab7df826;
+	--bgColor-upsell-muted: var(--bgColor-done-muted);
+	--bgColor-neutral-muted: #656c7633;
+	--bgColor-severe-muted: #db6d281a;
+	--bgColor-sponsors-muted: #db61a21a;
+	--bgColor-success-muted: #2ea04326;
+	--bgColor-open-muted: var(--bgColor-success-muted);
 }
 
 /*
@@ -138,29 +160,29 @@ code {
 	--color-provider-oninverse-foreground: var(--fgColor-onInverse);
 	--color-provider-disabled: var(--bgColor-disabled);
 	--color-provider-disabled-foreground: var(--fgColor-disabled);
-	--color-provider-link: var(--bgColor-link);
+	--color-provider-link: var(--bgColor-accent-muted);
 	--color-provider-link-foreground: var(--fgColor-link);
-	--color-provider-neutral: var(--bgColor-neutral);
+	--color-provider-neutral: var(--bgColor-neutral-muted);
 	--color-provider-neutral-foreground: var(--fgColor-neutral);
-	--color-provider-accent: var(--bgColor-accent);
+	--color-provider-accent: var(--bgColor-accent-muted);
 	--color-provider-accent-foreground: var(--fgColor-accent);
-	--color-provider-success: var(--bgColor-success);
+	--color-provider-success: var(--bgColor-success-muted);
 	--color-provider-success-foreground: var(--fgColor-success);
-	--color-provider-open: var(--bgColor-open);
+	--color-provider-open: var(--bgColor-open-muted);
 	--color-provider-open-foreground: var(--fgColor-open);
-	--color-provider-attention: var(--bgColor-attention);
+	--color-provider-attention: var(--bgColor-attention-muted);
 	--color-provider-attention-foreground: var(--fgColor-attention);
-	--color-provider-severe: var(--bgColor-severe);
+	--color-provider-severe: var(--bgColor-severe-muted);
 	--color-provider-severe-foreground: var(--fgColor-severe);
-	--color-provider-danger: var(--bgColor-danger);
+	--color-provider-danger: var(--bgColor-danger-muted);
 	--color-provider-danger-foreground: var(--fgColor-danger);
-	--color-provider-closed: var(--bgColor-closed);
+	--color-provider-closed: var(--bgColor-closed-muted);
 	--color-provider-closed-foreground: var(--fgColor-closed);
-	--color-provider-done: var(--bgColor-done);
+	--color-provider-done: var(--bgColor-done-muted);
 	--color-provider-done-foreground: var(--fgColor-done);
-	--color-provider-upsell: var(--bgColor-upsell);
+	--color-provider-upsell: var(--bgColor-upsell-muted);
 	--color-provider-upsell-foreground: var(--fgColor-upsell);
-	--color-provider-sponsors: var(--bgColor-sponsors);
+	--color-provider-sponsors: var(--bgColor-sponsors-muted);
 	--color-provider-sponsors-foreground: var(--fgColor-sponsors);
 }
 
