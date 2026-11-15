@@ -29,9 +29,11 @@ It requires a sibling story that sets each state that a component's props carry:
 - **Error:** a prop `error` or `isError`, a prop that ends in `Error` (`serverError`), or a `status` or `state` of `"error"`.
 - **Empty:** a `status` or `state` of `"empty"`.
 
-A story covers a state when its args, or the props that its `render` passes to the component under test, set that state by the same rules.
+A story covers a state when its args set that state by the same rules.
+The props that its `render` passes to the component under test count too.
 Data for a child part, a control in `argTypes` and a `play` function set nothing.
 Its name decides nothing, so a story keeps the name of its domain state, such as `Checking` or `CheckRefused`.
+
 A component whose props cannot show a state needs no story for it. Do not add a prop to get one.
 Cover a state that the parent owns in the parent's story.
 
