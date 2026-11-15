@@ -30,7 +30,6 @@ import {
 	FieldTitle,
 } from "@/components/ui/field";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
 import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
 
@@ -316,11 +315,11 @@ function SettingsForm({ workspaceSlug, settings, links, submission, onSave }: Se
 			)}
 			<div className="flex flex-wrap gap-3">
 				<Button
+					pending={saving}
 					type="submit"
 					disabled={saving || !changed || conflicted}
 					aria-describedby={conflicted ? `${id}-conflict` : undefined}
 				>
-					{saving && <Spinner />}
 					{saving ? "Saving…" : "Save onboarding settings"}
 				</Button>
 				<Button

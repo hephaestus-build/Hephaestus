@@ -86,7 +86,10 @@ export const Deleting: Story = {
 	args: { isDeleting: true },
 	play: async ({ args }) => {
 		const dialog = within(await screen.findByRole("alertdialog"));
-		await expect(dialog.getByRole("button", { name: /deleting/iu })).toBeDisabled();
+		await expect(dialog.getByRole("button", { name: /deleting/iu })).toHaveAttribute(
+			"aria-disabled",
+			"true",
+		);
 		await expect(dialog.getByLabelText(/to confirm/iu)).toBeDisabled();
 		await userEvent.keyboard("{Escape}");
 		await expect(args.onOpenChange).not.toHaveBeenCalled();

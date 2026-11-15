@@ -125,7 +125,10 @@ export const Filing: Story = {
 		filingIds: new Set([bugReport.id]),
 	},
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("button", { name: "Filing…" })).toBeDisabled();
+		await expect(canvas.getByRole("button", { name: "Filing…" })).toHaveAttribute(
+			"aria-disabled",
+			"true",
+		);
 	},
 };
 
@@ -144,7 +147,10 @@ export const Saving: Story = {
 		pendingIds: new Set([bugReport.id]),
 	},
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("button", { name: "Saving…" })).toBeDisabled();
+		await expect(canvas.getByRole("button", { name: "Saving…" })).toHaveAttribute(
+			"aria-disabled",
+			"true",
+		);
 		await expect(canvas.getAllByRole("button", { name: "Mark resolved" })).toHaveLength(3);
 	},
 };

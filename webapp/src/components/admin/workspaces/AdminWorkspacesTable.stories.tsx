@@ -157,7 +157,10 @@ export const RefreshFailed: Story = {
 export const RefreshRetrying: Story = {
 	args: { refreshFailure: { error: { status: 503 }, onRetry: fn(), pending: true } },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("button", { name: "Retrying…" })).toBeDisabled();
+		await expect(canvas.getByRole("button", { name: "Retrying…" })).toHaveAttribute(
+			"aria-disabled",
+			"true",
+		);
 		await expect(canvas.getByRole("button", { name: "View as user in AET" })).toBeEnabled();
 	},
 };

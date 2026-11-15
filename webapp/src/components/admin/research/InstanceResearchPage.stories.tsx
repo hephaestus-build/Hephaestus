@@ -85,7 +85,10 @@ export const NoResearchProgram: Story = {
 export const Releasing: Story = {
 	args: { release: { pending: true, completed: 0, onRelease: fn() } },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("button", { name: "Exporting…" })).toBeDisabled();
+		await expect(canvas.getByRole("button", { name: "Exporting…" })).toHaveAttribute(
+			"aria-disabled",
+			"true",
+		);
 	},
 };
 

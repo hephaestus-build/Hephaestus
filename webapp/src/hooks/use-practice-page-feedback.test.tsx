@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { HttpResponse, http } from "msw";
 import type { ReactNode } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import type { FeedbackResponse, PracticePageFeedback } from "@/api/types.gen";
 import {
@@ -193,34 +193,20 @@ describe("usePracticePageFeedback", () => {
 		await waitFor(() => expect(result.current.ratingProps(feedbackId).isPending).toBe(false));
 	});
 
-	it("names the control that wrote only once the write outlasts the delay, and clears it when it settles", async () => {
-		// Advance timeout-only fake timers while network reads and waits use real time.
-		vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"], shouldAdvanceTime: true });
-		try {
-			const reread = deferred();
-			const { result } = renderFeedback(undefined, true, reread.promise);
-			await vi.waitFor(() => expect(result.current.cards).toHaveLength(1));
+	it("names the control that wrote while the write is in flight, and clears it when it settles", async () => {
+		const reread = deferred();
+		const { result } = renderFeedback(undefined, true, reread.promise);
+		await waitFor(() => expect(result.current.cards).toHaveLength(1));
 
-			act(() => {
-				result.current.ratingProps(feedbackId).onResolve?.("ADDRESSED");
-			});
-			await vi.waitFor(() => expect(result.current.ratingProps(feedbackId).isPending).toBe(true));
-			expect(result.current.ratingProps(feedbackId).saving).toBeUndefined();
+		act(() => {
+			result.current.ratingProps(feedbackId).onResolve?.("ADDRESSED");
+		});
+		await waitFor(() => expect(result.current.ratingProps(feedbackId).isPending).toBe(true));
+		expect(result.current.ratingProps(feedbackId).saving).toBe("answer");
 
-			await act(async () => {
-				await vi.advanceTimersByTimeAsync(1000);
-			});
-			expect(result.current.ratingProps(feedbackId).saving).toBe("answer");
-
-			reread.resolve();
-			await vi.waitFor(() => expect(result.current.ratingProps(feedbackId).isPending).toBe(false));
-			await act(async () => {
-				await vi.advanceTimersByTimeAsync(500);
-			});
-			expect(result.current.ratingProps(feedbackId).saving).toBeUndefined();
-		} finally {
-			vi.useRealTimers();
-		}
+		reread.resolve();
+		await waitFor(() => expect(result.current.ratingProps(feedbackId).isPending).toBe(false));
+		expect(result.current.ratingProps(feedbackId).saving).toBeUndefined();
 	});
 
 	it("writes the answer over a disagreement and shows it until the cards have been read again", async () => {

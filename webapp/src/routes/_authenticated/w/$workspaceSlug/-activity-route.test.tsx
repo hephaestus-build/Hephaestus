@@ -609,10 +609,10 @@ describe("Activity", () => {
 					// Busy while the work is looked up, and still while the review is asked for.
 					await waitFor(() => expect(contexts).toStrictEqual([url]));
 					expect(
-						screen.getByRole<HTMLButtonElement>("button", {
-							name: `Requesting review…: ${reference}`,
-						}).disabled,
-					).toBe(true);
+						screen
+							.getByRole("button", { name: `Requesting review…: ${reference}` })
+							.getAttribute("aria-disabled"),
+					).toBe("true");
 					expect(
 						screen.getByRole<HTMLButtonElement>("button", { name: `Request review: ${other}` })
 							.disabled,
@@ -620,10 +620,10 @@ describe("Activity", () => {
 					resolved.resolve();
 					await waitFor(() => expect(asks).toStrictEqual([{ itemId }]));
 					expect(
-						screen.getByRole<HTMLButtonElement>("button", {
-							name: `Requesting review…: ${reference}`,
-						}).disabled,
-					).toBe(true);
+						screen
+							.getByRole("button", { name: `Requesting review…: ${reference}` })
+							.getAttribute("aria-disabled"),
+					).toBe("true");
 				} finally {
 					resolved.resolve();
 					asked.resolve();
@@ -775,13 +775,13 @@ describe("Activity", () => {
 				);
 				expect({
 					note: screen.queryByRole("note"),
-					betaBusy: screen.getByRole<HTMLButtonElement>("button", {
-						name: "Requesting review…: #52",
-					}).disabled,
+					betaBusy: screen
+						.getByRole("button", { name: "Requesting review…: #52" })
+						.getAttribute("aria-disabled"),
 					requests,
 				}).toStrictEqual({
 					note: null,
-					betaBusy: true,
+					betaBusy: "true",
 					requests: [
 						"GET /workspaces/acme/practices/review-context",
 						"GET /workspaces/beta/practices/review-context",
@@ -1517,7 +1517,7 @@ describe("Workspace activity", () => {
 			await user.click(screen.getByRole("button", { name: /^Retry$/u }));
 			try {
 				const retrying = await screen.findByRole("button", { name: "Retrying…" });
-				expect(retrying.hasAttribute("disabled")).toBe(true);
+				expect(retrying.getAttribute("aria-disabled")).toBe("true");
 			} finally {
 				response.resolve(HttpResponse.json(freshFacets));
 			}

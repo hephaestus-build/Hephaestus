@@ -24,7 +24,6 @@ import {
 	FieldSeparator,
 	FieldSet,
 } from "@/components/ui/field";
-import { Spinner } from "@/components/ui/spinner";
 import type { AdminLlmModelSaveBody } from "@/lib/admin-llm-model-save";
 import type { FieldErrors, LlmModelFormField } from "@/lib/llm-form-validation";
 
@@ -202,8 +201,7 @@ function AdminLlmModelFormDialogContent({
 					<Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
 						Cancel
 					</Button>
-					<Button type="submit" disabled={isSubmitting}>
-						{isSubmitting && <Spinner aria-hidden />}
+					<Button pending={isSubmitting} type="submit">
 						{isSubmitting ? "Saving…" : submitLabel}
 					</Button>
 				</DialogFooter>

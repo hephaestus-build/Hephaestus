@@ -21,7 +21,6 @@ import {
 	UNASSIGNED_GROUP_VISUAL,
 } from "@/components/practice-vocabulary/group-visuals";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Spinner } from "@/components/ui/spinner";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { formatDay, formatDayTime, formatShortDay } from "@/lib/dates";
 import { hasText } from "@/lib/text";
@@ -609,10 +608,11 @@ export function PracticeFeedbackCard({
 										description={def.description}
 										tone={toneOf(def.badgeVariant)}
 										pressed={pressed}
+										pending={savingHere}
 										disabled={isPending}
 										onClick={() => onRate(value)}
 									>
-										{savingHere ? <Spinner /> : <def.icon aria-hidden />}
+										<def.icon aria-hidden />
 									</Reaction>
 								);
 							})}
@@ -622,10 +622,11 @@ export function PracticeFeedbackCard({
 								description={DISAGREE.description}
 								tone={toneOf(FEEDBACK_RESOLUTION_DEFS.DISAGREE.badgeVariant)}
 								pressed={resolution === "DISAGREE"}
+								pending={saving === "disagree"}
 								disabled={isPending}
 								onClick={onDisagree}
 							>
-								{saving === "disagree" ? <Spinner /> : <DisagreeIcon aria-hidden />}
+								<DisagreeIcon aria-hidden />
 							</Reaction>
 						)}
 					</div>
@@ -867,6 +868,7 @@ function Answer({
 				<TooltipTrigger
 					render={
 						<ResponseButton
+							pending={saving}
 							tone={tone}
 							pressed={pressed}
 							disabled={disabled}
@@ -876,7 +878,6 @@ function Answer({
 						/>
 					}
 				>
-					{saving && <Spinner />}
 					{saving ? "Saving…" : label}
 				</TooltipTrigger>
 				<TooltipContent className="max-w-xs">{description}</TooltipContent>
@@ -894,6 +895,7 @@ function Reaction({
 	description,
 	tone,
 	pressed,
+	pending,
 	disabled,
 	onClick,
 	children,
@@ -902,6 +904,7 @@ function Reaction({
 	description: string;
 	tone: ReturnType<typeof toneOf>;
 	pressed: boolean;
+	pending: boolean;
 	disabled: boolean;
 	onClick: () => void;
 	children: ReactNode;
@@ -917,6 +920,7 @@ function Reaction({
 							size="icon-sm"
 							tone={tone}
 							pressed={pressed}
+							pending={pending}
 							disabled={disabled}
 							aria-label={label}
 							aria-describedby={descriptionId}

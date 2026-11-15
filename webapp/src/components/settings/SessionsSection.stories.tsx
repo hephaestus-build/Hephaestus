@@ -44,7 +44,7 @@ export const Revoking: Story = {
 		const revoking = canvas.getByRole("listitem", { name: "Firefox on Linux" });
 		await expect(
 			within(revoking).getByRole("button", { name: "Sign out Firefox on Linux" }),
-		).toBeDisabled();
+		).toHaveAttribute("aria-disabled", "true");
 		const other = canvas.getByRole("listitem", { name: "Safari on iOS" });
 		await expect(
 			within(other).getByRole("button", { name: "Sign out Safari on iOS" }),

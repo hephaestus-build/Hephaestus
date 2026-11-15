@@ -22,7 +22,6 @@ import {
 	FieldSet,
 } from "@/components/ui/field";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import { SEND_SHORTCUT_ARIA, SEND_SHORTCUT_LABEL } from "@/lib/keyboard-shortcuts";
 import { formatNumber } from "@/lib/numbers";
@@ -213,8 +212,7 @@ export function ProductFeedbackDialog({
 						)}
 					</DialogBody>
 					<DialogFooter>
-						<Button type="submit" disabled={isSubmitting} aria-keyshortcuts={SEND_SHORTCUT_ARIA}>
-							{isSubmitting && <Spinner />}
+						<Button pending={isSubmitting} type="submit" aria-keyshortcuts={SEND_SHORTCUT_ARIA}>
 							{isSubmitting ? "Sending…" : "Send"}
 							{!isSubmitting && (
 								<span aria-hidden className="text-xs opacity-70 pointer-coarse:hidden">

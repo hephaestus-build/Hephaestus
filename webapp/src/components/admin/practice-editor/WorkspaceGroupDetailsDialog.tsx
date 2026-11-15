@@ -16,7 +16,6 @@ import {
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { ItemGroup } from "@/components/ui/item";
-import { Spinner } from "@/components/ui/spinner";
 
 import { GroupVisualPicker } from "./GroupVisualPicker";
 
@@ -145,8 +144,12 @@ function GroupDetailsForm({
 				<DialogClose render={<Button type="button" variant="outline" disabled={pending} />}>
 					Cancel
 				</DialogClose>
-				<Button type="submit" className="min-w-20" disabled={pending || trimmed.length === 0}>
-					{pending && <Spinner className="size-4" aria-hidden />}
+				<Button
+					pending={pending}
+					type="submit"
+					className="min-w-20"
+					disabled={pending || trimmed.length === 0}
+				>
 					{submitLabel}
 				</Button>
 			</DialogFooter>

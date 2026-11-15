@@ -45,7 +45,6 @@ import {
 import { WizardStepIndicator } from "@/components/create-workspace/WizardStepIndicator";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { Spinner } from "@/components/ui/spinner";
 import { pageHead } from "@/lib/page-title";
 import { problemDetailOf } from "@/lib/problem-detail";
 import { firstNonBlank, hasText } from "@/lib/text";
@@ -523,6 +522,7 @@ function GitLabWizard({ serverUrl }: { serverUrl: string }) {
 				)}
 				{state.step < 3 && (
 					<Button
+						pending={isTransitioning}
 						onClick={handleNext}
 						disabled={
 							(state.step === 1 && !canAdvanceFromStep1) ||
@@ -530,15 +530,13 @@ function GitLabWizard({ serverUrl }: { serverUrl: string }) {
 							isTransitioning
 						}
 					>
-						{isTransitioning && <Spinner className="mr-2" />}
 						Next
 					</Button>
 				)}
 				{state.step === 3 && (
 					// The name and slug fields join this form by `formId`; `ConfigureWorkspaceStep` says why.
 					<form id={detailsFormId} noValidate onSubmit={handleSubmit} className="contents">
-						<Button type="submit" disabled={!canSubmit || isCreating}>
-							{isCreating && <Spinner className="mr-2" />}
+						<Button pending={isCreating} type="submit" disabled={!canSubmit || isCreating}>
 							Create workspace
 						</Button>
 					</form>

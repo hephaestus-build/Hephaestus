@@ -4,7 +4,6 @@ import { useId } from "react";
 import { cn } from "cn";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Spinner } from "@/components/ui/spinner";
 
 import {
 	type CatalogEntryStatus,
@@ -97,25 +96,25 @@ export function HephaestusVersionPanel({
 						<div className="mt-3 flex flex-wrap items-center gap-2">
 							{canReset && (
 								<Button
+									pending={isResetPending}
 									type="button"
 									variant="outline"
 									size="sm"
 									disabled={busy}
 									onClick={onUseHephaestusVersion}
 								>
-									{isResetPending && <Spinner className="mr-1.5 size-3.5" />}
 									{isResetPending ? usePendingLabel : useLabel}
 								</Button>
 							)}
 							{canKeep && (
 								<Button
+									pending={isKeepPending}
 									type="button"
 									variant="ghost"
 									size="sm"
 									disabled={busy}
 									onClick={onKeepCurrentDefinition}
 								>
-									{isKeepPending && <Spinner className="mr-1.5 size-3.5" />}
 									{isKeepPending ? "Keeping saved version…" : keepLabel}
 								</Button>
 							)}

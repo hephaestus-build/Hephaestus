@@ -28,7 +28,6 @@ import {
 	EmptyMedia,
 	EmptyTitle,
 } from "@/components/ui/empty";
-import { Spinner } from "@/components/ui/spinner";
 import { TableCell } from "@/components/ui/table";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { formatDayTime, formatTime } from "@/lib/dates";
@@ -330,13 +329,13 @@ function ReviewRow({
 					{review.kind === "ITEM" && onReviewNow && (
 						<RowActionTip label={isRequesting ? "Requesting review…" : REQUEST_AGAIN}>
 							<ActionButton
+								pending={isRequesting}
 								type="button"
 								size="icon"
-								disabled={isRequesting}
 								onClick={() => onReviewNow(item.id)}
 								aria-label={`${isRequesting ? "Requesting review…" : REQUEST_AGAIN}: ${workName}`}
 							>
-								{isRequesting ? <Spinner /> : <PlayIcon aria-hidden />}
+								<PlayIcon aria-hidden />
 							</ActionButton>
 						</RowActionTip>
 					)}

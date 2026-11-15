@@ -63,7 +63,10 @@ export const Pending: Story = {
 	args: { user: regularUser, icon: ShieldCheck, isPending: true },
 	play: async ({ args }) => {
 		await screen.findByRole("alertdialog");
-		await expect(screen.getByRole("button", { name: /grant instance admin/iu })).toBeDisabled();
+		await expect(screen.getByRole("button", { name: /grant instance admin/iu })).toHaveAttribute(
+			"aria-disabled",
+			"true",
+		);
 		await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
 		await expect(args.onOpenChange).toHaveBeenCalledWith(false, expect.anything());
 	},

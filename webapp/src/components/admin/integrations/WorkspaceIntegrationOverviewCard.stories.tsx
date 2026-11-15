@@ -284,7 +284,10 @@ export const StoppingBackfill: Story = {
 		status: { ...status, activeJob: { ...runningJob, type: "BACKFILL", cancelRequested: true } },
 	},
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("button", { name: "Stopping…" })).toBeDisabled();
+		await expect(canvas.getByRole("button", { name: "Stopping…" })).toHaveAttribute(
+			"aria-disabled",
+			"true",
+		);
 		await expect(canvas.getByRole("link", { name: /view details/iu })).toBeVisible();
 	},
 };

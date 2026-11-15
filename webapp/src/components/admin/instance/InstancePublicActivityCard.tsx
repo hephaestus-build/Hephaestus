@@ -5,7 +5,6 @@ import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, FieldContent, FieldDescription, FieldLabel } from "@/components/ui/field";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
 import type { RefreshFailure } from "@/runtime/tanstack-query/infinite-list";
 
@@ -67,12 +66,11 @@ export function InstancePublicActivityCard({
 										: "Off. No workspace can publish a page."}
 								</FieldDescription>
 							</FieldContent>
-							{state.pending && <Spinner />}
 							<Switch
 								id={id}
 								checked={state.allowed}
 								onCheckedChange={(next) => onAllowedChange(next)}
-								readOnly={state.pending}
+								pending={state.pending}
 							/>
 						</Field>
 					</div>

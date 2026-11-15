@@ -25,7 +25,6 @@ import {
 } from "@/components/ui/empty";
 import { InputGroup, InputGroupButton, InputGroupInput } from "@/components/ui/input-group";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
 import {
 	Table,
@@ -183,12 +182,11 @@ export function LoginProvidersTable({
 									<div className="flex items-center gap-2">
 										<Switch
 											checked={provider.enabled}
-											disabled={busy}
+											pending={busy}
 											aria-busy={busy}
 											aria-label={`${provider.enabled === true ? "Disable" : "Enable"} ${provider.displayName}`}
 											onCheckedChange={(checked) => onToggleEnabled(provider, checked)}
 										/>
-										{busy && <Spinner className="size-3.5 text-muted-foreground" />}
 									</div>
 								</TableCell>
 								<TableCell className="text-right">

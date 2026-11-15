@@ -28,7 +28,6 @@ import {
 	FieldSet,
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
 import { capitalise, hasText } from "@/lib/text";
 import type { BindingTarget, BindingWrite } from "./ModelAssignmentsPage";
@@ -412,27 +411,20 @@ function RowActions({ bound, pendingWrite, forRow, onClear }: RowActionsProps) {
 	return (
 		<div className="flex flex-wrap items-center justify-end gap-2 md:mt-7 md:h-8">
 			{bound && (
-				<Button type="button" variant="outline" size="sm" onClick={onClear} disabled={pending}>
-					{pendingWrite === "CLEAR" ? (
-						<>
-							<Spinner />
-							Clearing…
-						</>
-					) : (
-						"Clear assignment"
-					)}
+				<Button
+					pending={pendingWrite === "CLEAR"}
+					type="button"
+					variant="outline"
+					size="sm"
+					onClick={onClear}
+					disabled={pending}
+				>
+					{pendingWrite === "CLEAR" ? "Clearing…" : "Clear assignment"}
 					{forRow}
 				</Button>
 			)}
-			<Button type="submit" size="sm" disabled={pending}>
-				{pendingWrite === "SAVE" ? (
-					<>
-						<Spinner />
-						Saving…
-					</>
-				) : (
-					"Save assignment"
-				)}
+			<Button pending={pendingWrite === "SAVE"} type="submit" size="sm" disabled={pending}>
+				{pendingWrite === "SAVE" ? "Saving…" : "Save assignment"}
 				{forRow}
 			</Button>
 		</div>

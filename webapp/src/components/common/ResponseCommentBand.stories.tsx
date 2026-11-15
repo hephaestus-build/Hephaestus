@@ -66,7 +66,10 @@ export const Required: Story = {
 export const Pending: Story = {
 	args: { isPending: true, sending: true },
 	play: async ({ args, canvas }) => {
-		await expect(canvas.getByRole("button", { name: "Sending…" })).toBeDisabled();
+		await expect(canvas.getByRole("button", { name: "Sending…" })).toHaveAttribute(
+			"aria-disabled",
+			"true",
+		);
 		await expect(canvas.getByRole("button", { name: "Skip" })).toBeDisabled();
 		await expect(canvas.getByRole("textbox", { name: args.label })).toBeDisabled();
 	},

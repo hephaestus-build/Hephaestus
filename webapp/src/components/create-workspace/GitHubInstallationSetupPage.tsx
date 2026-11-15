@@ -1,5 +1,4 @@
 import { Link } from "@tanstack/react-router";
-import { useSpinDelay } from "spin-delay";
 
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
@@ -11,6 +10,7 @@ import {
 	CardTitle,
 } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
+import { usePendingSpinner } from "@/lib/use-pending-spinner";
 
 export type GitHubInstallationSetupState =
 	/** Signed in, with GitHub's code: Continue asks Hephaestus to confirm the installation with GitHub. */
@@ -92,7 +92,7 @@ function copyOf(state: GitHubInstallationSetupState): { title: string; descripti
 
 /** Where GitHub sends a person after they install the GitHub App on an account. */
 export function GitHubInstallationSetupPage({ state }: { state: GitHubInstallationSetupState }) {
-	const showSpinner = useSpinDelay(state.status === "pending", { delay: 300, minDuration: 500 });
+	const showSpinner = usePendingSpinner(state.status === "pending");
 	const { title, description } = copyOf(state);
 
 	return (
@@ -116,10 +116,11 @@ export function GitHubInstallationSetupPage({ state }: { state: GitHubInstallati
 				<CardFooter className="gap-2">
 					{state.status === "confirm" && <Button onClick={state.onConfirm}>Continue</Button>}
 					{state.status === "pending" && (
-						<Button disabled>
+						// A status, not an action: nothing to press while the check runs.
+						<p className="flex items-center gap-2 text-sm text-muted-foreground">
 							{showSpinner && <Spinner />}
 							Checking…
-						</Button>
+						</p>
 					)}
 					{(state.status === "awaiting-approval" || state.status === "declined") &&
 						state.canApprove && (

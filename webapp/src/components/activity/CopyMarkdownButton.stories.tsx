@@ -36,7 +36,10 @@ export const Copying: Story = {
 	},
 	play: async ({ args, canvas, userEvent }) => {
 		await userEvent.click(canvas.getByRole("button", { name: "Copy as Markdown" }));
-		await expect(canvas.getByRole("button", { name: "Copying…" })).toBeDisabled();
+		await expect(canvas.getByRole("button", { name: "Copying…" })).toHaveAttribute(
+			"aria-disabled",
+			"true",
+		);
 		await expect(args.onCopy).toHaveBeenCalledOnce();
 	},
 };

@@ -248,7 +248,10 @@ export const Saving: Story = {
 	play: async ({ canvas, userEvent }) => {
 		await userEvent.click(canvas.getByRole("switch", { name: SWITCH }));
 		await userEvent.click(canvas.getByRole("button", { name: "Save onboarding settings" }));
-		await expectGenuinelyDisabled(canvas.getByRole("button", { name: "Saving…" }));
+		await expect(canvas.getByRole("button", { name: "Saving…" })).toHaveAttribute(
+			"aria-disabled",
+			"true",
+		);
 		await expectGenuinelyDisabled(canvas.getByRole("button", { name: "Discard changes" }));
 		await expectUnavailable(canvas.getByRole("switch", { name: SWITCH }));
 	},

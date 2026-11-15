@@ -12,7 +12,6 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { Spinner } from "@/components/ui/spinner";
 
 export interface DeleteWorkspaceAlertDialogProps {
 	open: boolean;
@@ -121,8 +120,7 @@ export function DeleteWorkspaceAlertDialog({
 
 					<AlertDialogFooter>
 						<AlertDialogCancel disabled={isDeleting}>Keep workspace</AlertDialogCancel>
-						<AlertDialogAction type="submit" variant="destructive" disabled={isDeleting}>
-							{isDeleting && <Spinner aria-hidden />}
+						<AlertDialogAction pending={isDeleting} type="submit" variant="destructive">
 							{isDeleting ? "Deleting…" : "Delete workspace"}
 						</AlertDialogAction>
 					</AlertDialogFooter>

@@ -15,7 +15,6 @@ import {
 	EmptyMedia,
 	EmptyTitle,
 } from "@/components/ui/empty";
-import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
 import {
 	Table,
@@ -167,7 +166,8 @@ export function AdminLlmConnectionsTable({
 									<div className="flex items-center gap-2">
 										<Switch
 											checked={connection.enabled}
-											disabled={busy || (connection.enabled && !modelCountsAvailable)}
+											pending={busy}
+											disabled={connection.enabled && !modelCountsAvailable}
 											aria-busy={busy}
 											// Names the object, not the action: the switch already carries its state in
 											// `aria-checked`, and a label that flips reads as part of that state.
@@ -181,7 +181,6 @@ export function AdminLlmConnectionsTable({
 												}
 											}}
 										/>
-										{busy && <Spinner className="size-3.5 text-muted-foreground" />}
 									</div>
 								</TableCell>
 								<TableCell className="text-right">

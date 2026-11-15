@@ -58,7 +58,10 @@ export const Idle: Story = {
 export const Triggering: Story = {
 	args: { triggeringType: "RECONCILIATION" },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("button", { name: /starting/iu })).toBeDisabled();
+		await expect(canvas.getByRole("button", { name: /starting/iu })).toHaveAttribute(
+			"aria-disabled",
+			"true",
+		);
 		canvas.getByText("Starting reconciliation");
 	},
 };
@@ -78,7 +81,10 @@ export const TriggeringBackfill: Story = {
 export const ActiveJob: Story = {
 	args: { activeJob: runningJob },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("button", { name: /syncing/iu })).toBeDisabled();
+		await expect(canvas.getByRole("button", { name: /syncing/iu })).toHaveAttribute(
+			"aria-disabled",
+			"true",
+		);
 		canvas.getByText("Reconciliation in progress");
 	},
 };
@@ -99,7 +105,10 @@ export const ActiveBackfill: Story = {
 export const Stopping: Story = {
 	args: { activeJob: { ...runningBackfill, cancelRequested: true } },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("button", { name: /stopping/iu })).toBeDisabled();
+		await expect(canvas.getByRole("button", { name: /stopping/iu })).toHaveAttribute(
+			"aria-disabled",
+			"true",
+		);
 		canvas.getByText("Backfill stopping");
 	},
 };
@@ -124,6 +133,9 @@ export const StoppingRecoveryPending: Story = {
 		triggeringType: "RECONCILIATION",
 	},
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("button", { name: /checking/iu })).toBeDisabled();
+		await expect(canvas.getByRole("button", { name: /checking/iu })).toHaveAttribute(
+			"aria-disabled",
+			"true",
+		);
 	},
 };

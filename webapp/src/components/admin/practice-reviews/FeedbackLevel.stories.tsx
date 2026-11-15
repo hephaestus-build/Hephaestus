@@ -1363,7 +1363,10 @@ export const Deciding: Story = {
 	args: { feedback: ready(awaitingApprovalFeedbackDetail), isDeciding: true },
 	play: async () => {
 		const panel = within(await settledDrawerPanel());
-		await expectGenuinelyDisabled(panel.getByRole("button", { name: "Approve for delivery" }));
+		await expect(panel.getByRole("button", { name: "Approve for delivery" })).toHaveAttribute(
+			"aria-disabled",
+			"true",
+		);
 		await expectGenuinelyDisabled(panel.getByRole("button", { name: "Reject feedback" }));
 	},
 };

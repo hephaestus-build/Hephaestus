@@ -31,7 +31,6 @@ import {
 	EmptyTitle,
 } from "@/components/ui/empty";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Spinner } from "@/components/ui/spinner";
 import { hasText } from "@/lib/text";
 
 import { FEEDBACK_KIND_DEFS } from "./feedback-kind-defs";
@@ -248,8 +247,13 @@ function FeedbackCard({ item, pending, filing, onTriage, onFile }: FeedbackCardP
 							<AlertDialog>
 								<AlertDialogTrigger
 									render={
-										<Button type="button" variant="outline" size="sm" disabled={pending || filing}>
-											{filing && <Spinner className="size-4" />}
+										<Button
+											pending={filing}
+											type="button"
+											variant="outline"
+											size="sm"
+											disabled={pending || filing}
+										>
 											{filing ? "Filing…" : "File on GitHub"}
 										</Button>
 									}
@@ -276,13 +280,13 @@ function FeedbackCard({ item, pending, filing, onTriage, onFile }: FeedbackCardP
 						)}
 						{item.canTriage && (
 							<Button
+								pending={pending}
 								type="button"
 								variant="outline"
 								size="sm"
 								disabled={pending || filing}
 								onClick={() => onTriage(item, !resolved)}
 							>
-								{pending && <Spinner className="size-4" />}
 								{triageLabel}
 							</Button>
 						)}

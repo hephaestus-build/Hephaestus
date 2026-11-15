@@ -144,8 +144,7 @@ export function AdminUsersTable({
 					)}
 				</p>
 				{hasNextPage && loadMoreError === undefined && (
-					<Button variant="outline" size="sm" onClick={onLoadMore} disabled={isFetchingNextPage}>
-						{isFetchingNextPage ? <Spinner className="size-4" /> : null}
+					<Button pending={isFetchingNextPage} variant="outline" size="sm" onClick={onLoadMore}>
 						Load more
 					</Button>
 				)}

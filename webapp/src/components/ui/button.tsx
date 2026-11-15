@@ -2,6 +2,8 @@ import { Button as ButtonPrimitive } from "@base-ui/react/button";
 import { cva, type VariantProps } from "class-variance-authority";
 
 import { cn } from "cn";
+import { Spinner } from "@/components/ui/spinner";
+import { usePendingSpinner } from "@/lib/use-pending-spinner";
 
 /**
  * ⚠️ Diverges from the shadcn registry — `shadcn add button` drops the following; re-apply them.
@@ -18,6 +20,9 @@ import { cn } from "cn";
  * 7. The transition lists the colour and shadow properties that change on hover and focus, not
  *    `all`. `all` also transitions `visibility` and `opacity`, so a button inside a container that
  *    turns visible stays hidden for one frame, and a button that becomes disabled fades to it.
+ * 8. `pending`, for a button whose action is in flight. Upstream leaves a caller to disable the
+ *    button and render a `<Spinner />` in it, so each call site timed its own spinner or flashed it
+ *    for a quick action. `webapp/DESIGN.md` § Loading and errors owns the rule; see `Button`.
  */
 const buttonVariants = cva(
 	"group/button inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-[color,background-color,border-color,text-decoration-color,box-shadow] outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
@@ -76,19 +81,41 @@ const buttonVariants = cva(
 	},
 );
 
+/**
+ * `pending` acts at once and shows itself late. At once, the button ignores activation, so a second
+ * press cannot send the action twice. It stays focusable through Base UI's `focusableWhenDisabled`
+ * (https://base-ui.com/react/components/button#loading-states): a native `disabled` would drop the
+ * focus of the reader who just pressed it. The caller's label confirms the press at once ("Saving…").
+ * The `<Spinner />` takes the place of the leading icon only after a second, then stays for at least
+ * half a second (`usePendingSpinner`), because a spinner that appears and vanishes reads as a fault.
+ */
 function Button({
 	className,
 	variant = "default",
 	size = "default",
 	shape = "default",
+	pending = false,
+	disabled = false,
+	focusableWhenDisabled = false,
+	children,
 	...props
-}: ButtonPrimitive.Props & VariantProps<typeof buttonVariants>) {
+}: ButtonPrimitive.Props & VariantProps<typeof buttonVariants> & { pending?: boolean }) {
+	const showSpinner = usePendingSpinner(pending);
 	return (
 		<ButtonPrimitive
 			data-slot="button"
-			className={cn(buttonVariants({ variant, size, shape, className }))}
+			className={cn(
+				buttonVariants({ variant, size, shape }),
+				"[&>[data-slot=spinner]+svg]:hidden",
+				className,
+			)}
+			disabled={disabled || pending}
+			focusableWhenDisabled={focusableWhenDisabled || pending}
 			{...props}
-		/>
+		>
+			{showSpinner && <Spinner data-slot="spinner" data-icon="inline-start" />}
+			{children}
+		</ButtonPrimitive>
 	);
 }
 

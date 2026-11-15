@@ -1,5 +1,3 @@
-import { useSpinDelay } from "spin-delay";
-
 import { Button } from "@/components/ui/button";
 import {
 	Card,
@@ -9,16 +7,14 @@ import {
 	CardHeader,
 	CardTitle,
 } from "@/components/ui/card";
-import { Spinner } from "@/components/ui/spinner";
 
 export type EmailUnsubscribeState =
 	| { status: "confirm" | "pending" | "error"; onConfirm: () => void }
 	| { status: "complete" | "invalid" };
 
 export function EmailUnsubscribePage({ state }: { state: EmailUnsubscribeState }) {
-	const showSpinner = useSpinDelay(state.status === "pending", { delay: 1000, minDuration: 500 });
-	const busy = state.status === "pending" || showSpinner;
-	const complete = state.status === "complete" && !showSpinner;
+	const pending = state.status === "pending";
+	const complete = state.status === "complete";
 
 	return (
 		<div className="mx-auto flex min-h-svh w-full max-w-lg items-center p-4">
@@ -38,25 +34,17 @@ export function EmailUnsubscribePage({ state }: { state: EmailUnsubscribeState }
 						<p>This link is incomplete. Open the unsubscribe link from your email again.</p>
 					</CardContent>
 				)}
-				{state.status === "error" && !showSpinner && (
+				{state.status === "error" && (
 					<CardContent>
 						<p role="alert" className="text-sm text-destructive">
 							We could not confirm the result. You can safely try again.
 						</p>
 					</CardContent>
 				)}
-				{("onConfirm" in state || showSpinner) && (
+				{"onConfirm" in state && (
 					<CardFooter>
-						<Button
-							disabled={busy}
-							onClick={() => {
-								if (!busy && "onConfirm" in state) {
-									state.onConfirm();
-								}
-							}}
-						>
-							{showSpinner && <Spinner />}
-							{showSpinner ? "Unsubscribing…" : "Unsubscribe"}
+						<Button pending={pending} onClick={state.onConfirm}>
+							{pending ? "Unsubscribing…" : "Unsubscribe"}
 						</Button>
 					</CardFooter>
 				)}

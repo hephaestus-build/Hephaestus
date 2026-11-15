@@ -25,7 +25,6 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Spinner } from "@/components/ui/spinner";
 import {
 	Table,
 	TableBody,
@@ -175,12 +174,21 @@ export function PracticeReleaseReview({
 				</TableBody>
 			</Table>
 			<div className="flex flex-wrap gap-2">
-				<Button type="button" disabled={!ready || pending !== null} onClick={submit}>
-					{pending === "accept" && <Spinner className="mr-1.5 size-4" />}
+				<Button
+					pending={pending === "accept"}
+					type="button"
+					disabled={!ready || pending !== null}
+					onClick={submit}
+				>
 					{pending === "accept" ? "Accepting selected fields…" : "Accept selected fields"}
 				</Button>
-				<Button type="button" variant="outline" disabled={pending !== null} onClick={onDecline}>
-					{pending === "decline" && <Spinner className="mr-1.5 size-4" />}
+				<Button
+					pending={pending === "decline"}
+					type="button"
+					variant="outline"
+					disabled={pending !== null}
+					onClick={onDecline}
+				>
 					{pending === "decline" ? "Declining update…" : "Decline this update"}
 				</Button>
 			</div>

@@ -24,7 +24,6 @@ import {
 	ItemMedia,
 	ItemTitle,
 } from "@/components/ui/item";
-import { Spinner } from "@/components/ui/spinner";
 
 import { WorkspaceIntegrationCardHeading } from "./WorkspaceIntegrationCardHeading";
 
@@ -78,12 +77,9 @@ export function WorkspaceSlackConnectionSettings(props: WorkspaceSlackConnection
 				<SlackConnected {...props} />
 			) : (
 				<CardFooter>
-					<Button onClick={props.onConnect} disabled={props.isConnecting} className="w-full">
+					<Button pending={props.isConnecting} onClick={props.onConnect} className="w-full">
 						{props.isConnecting ? (
-							<>
-								<Spinner />
-								Redirecting to Slack…
-							</>
+							"Redirecting to Slack…"
 						) : (
 							<>
 								Connect Slack workspace
@@ -200,27 +196,18 @@ function SlackConnected({
 
 			<CardFooter className="justify-end gap-2">
 				{scopeCheck.state === "failed" && status === "check-failed" && (
-					<Button variant="outline" onClick={scopeCheck.onRetry} disabled={scopeCheck.isRetrying}>
-						{scopeCheck.isRetrying ? (
-							<>
-								<Spinner />
-								Checking…
-							</>
-						) : (
-							"Check again"
-						)}
+					<Button pending={scopeCheck.isRetrying} variant="outline" onClick={scopeCheck.onRetry}>
+						{scopeCheck.isRetrying ? "Checking…" : "Check again"}
 					</Button>
 				)}
 				<Button
+					pending={isReconnecting}
 					variant={needsReconnect ? "default" : "outline"}
 					onClick={onReconnect}
 					disabled={isReconnecting || isDisconnecting}
 				>
 					{isReconnecting ? (
-						<>
-							<Spinner />
-							Redirecting to Slack…
-						</>
+						"Redirecting to Slack…"
 					) : (
 						<>
 							Reconnect Slack

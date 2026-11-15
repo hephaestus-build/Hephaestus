@@ -101,14 +101,20 @@ export const EmptyNameCannotBeSubmitted: Story = {
 export const Pending: Story = {
 	args: { pending: true },
 	play: async () => {
-		await expectGenuinelyDisabled(await screen.findByRole("button", { name: "Creating…" }));
+		await expect(await screen.findByRole("button", { name: "Creating…" })).toHaveAttribute(
+			"aria-disabled",
+			"true",
+		);
 	},
 };
 
 export const SavingAnEdit: Story = {
 	args: { group: reviewReadyGroup, pending: true },
 	play: async () => {
-		await expectGenuinelyDisabled(await screen.findByRole("button", { name: "Saving…" }));
+		await expect(await screen.findByRole("button", { name: "Saving…" })).toHaveAttribute(
+			"aria-disabled",
+			"true",
+		);
 	},
 };
 

@@ -784,7 +784,10 @@ export const Saving: Story = {
 		const noAi = canvas.getByRole("radio", { name: NO_AI });
 		await userEvent.click(noAi);
 		await userEvent.click(canvas.getByRole("button", { name: "Save AI choice" }));
-		await expectGenuinelyDisabled(canvas.getByRole("button", { name: "Saving…" }));
+		await expect(canvas.getByRole("button", { name: "Saving…" })).toHaveAttribute(
+			"aria-disabled",
+			"true",
+		);
 		for (const radio of canvas.getAllByRole("radio")) {
 			await expect(radio.closest("label")).toBeVisible();
 			await expect(radio).toBeDisabled();

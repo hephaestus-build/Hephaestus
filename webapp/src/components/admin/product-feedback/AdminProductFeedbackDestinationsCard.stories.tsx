@@ -108,7 +108,10 @@ export const ChecksFailing: Story = {
 export const Saving: Story = {
 	args: { state: { status: "ready", destinations: configured, models, saving: true, onSave } },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("button", { name: "Saving…" })).toBeDisabled();
+		await expect(canvas.getByRole("button", { name: "Saving…" })).toHaveAttribute(
+			"aria-disabled",
+			"true",
+		);
 	},
 };
 

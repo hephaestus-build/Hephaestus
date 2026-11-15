@@ -192,19 +192,12 @@ export function WorkspaceGitLabProjectSelection({
 					<AlertDialogFooter>
 						<AlertDialogCancel disabled={isSaving}>Cancel</AlertDialogCancel>
 						<AlertDialogAction
-							disabled={isSaving}
+							pending={isSaving}
 							onClick={() => {
 								void widen();
 							}}
 						>
-							{isSaving ? (
-								<>
-									<Spinner className="size-4" aria-hidden />
-									Saving…
-								</>
-							) : (
-								"Add new projects"
-							)}
+							{isSaving ? "Saving…" : "Add new projects"}
 						</AlertDialogAction>
 					</AlertDialogFooter>
 				</AlertDialogContent>

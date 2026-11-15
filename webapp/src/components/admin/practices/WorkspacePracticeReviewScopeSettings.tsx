@@ -1,6 +1,6 @@
 import deepEqual from "fast-deep-equal";
 import { AlertCircle, ChevronDownIcon } from "lucide-react";
-import { type ReactNode, useId, useState } from "react";
+import { useId, useState } from "react";
 import type {
 	PracticeReviewScopePreview,
 	PracticeReviewSettings,
@@ -39,7 +39,6 @@ import {
 	ItemTitle,
 } from "@/components/ui/item";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Spinner } from "@/components/ui/spinner";
 import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
 import type { MorePages } from "@/runtime/tanstack-query/infinite-list";
 
@@ -216,23 +215,11 @@ export function WorkspacePracticeReviewScopeSettings({
 		}
 	};
 
-	let reviewButtonContent: ReactNode;
+	let reviewButtonLabel = "Review changes";
 	if (workflow.status === "checking") {
-		reviewButtonContent = (
-			<>
-				<Spinner />
-				Checking impact…
-			</>
-		);
+		reviewButtonLabel = "Checking impact…";
 	} else if (workflow.status === "saving") {
-		reviewButtonContent = (
-			<>
-				<Spinner />
-				Saving…
-			</>
-		);
-	} else {
-		reviewButtonContent = "Review changes";
+		reviewButtonLabel = "Saving…";
 	}
 
 	return (
@@ -455,12 +442,13 @@ export function WorkspacePracticeReviewScopeSettings({
 					</Button>
 					<Button
 						className="min-w-36"
+						pending={busy}
 						disabled={!dirty || busy || conflicted}
 						onClick={() => {
 							void review();
 						}}
 					>
-						{reviewButtonContent}
+						{reviewButtonLabel}
 					</Button>
 				</div>
 			</div>

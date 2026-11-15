@@ -32,7 +32,6 @@ import {
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Spinner } from "@/components/ui/spinner";
 
 export interface ConsentChoice {
 	noticeVersion: string;
@@ -261,11 +260,11 @@ export function ConsentPage({ state, onSignOut, onReload }: ConsentPageProps) {
 							)}
 							{state.status === "ready" && !stale && (
 								<Button
+									pending={submitting}
 									type="submit"
 									disabled={!ready || submitting}
 									aria-describedby={hint ? `${id}-hint` : undefined}
 								>
-									{submitting && <Spinner />}
 									{submitting ? "Saving…" : "Save and continue"}
 								</Button>
 							)}

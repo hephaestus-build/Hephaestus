@@ -96,7 +96,7 @@ describe("a refresh of the teams page", () => {
 		server.use(http.get("*/workspaces/acme/teams", async () => retryResponse.promise));
 		await user.click(screen.getByRole("button", { name: "Retry" }));
 		const retrying = await screen.findByRole("button", { name: "Retrying…" });
-		expect(retrying.hasAttribute("disabled")).toBe(true);
+		expect(retrying.getAttribute("aria-disabled")).toBe("true");
 		screen.getByRole("heading", { level: 2, name: "Frontend" });
 		screen.getByText("Jane Doe");
 		retryResponse.resolve(HttpResponse.json([team(1, "Frontend", "Jane Doe")]));

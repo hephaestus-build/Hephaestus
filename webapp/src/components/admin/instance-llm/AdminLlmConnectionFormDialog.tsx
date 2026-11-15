@@ -19,7 +19,6 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "@/components/ui/dialog";
-import { Spinner } from "@/components/ui/spinner";
 import type { FieldErrors, LlmConnectionFormField } from "@/lib/llm-form-validation";
 import type { LlmApiProtocol, LlmAuthMode } from "@/lib/llm-provider-type";
 import { hasText } from "@/lib/text";
@@ -265,8 +264,7 @@ function AdminLlmConnectionFormDialogContent({
 					<Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
 						Cancel
 					</Button>
-					<Button type="submit" disabled={isSubmitting}>
-						{isSubmitting && <Spinner aria-hidden />}
+					<Button pending={isSubmitting} type="submit">
 						{isSubmitting ? "Saving…" : submitLabel}
 					</Button>
 				</DialogFooter>

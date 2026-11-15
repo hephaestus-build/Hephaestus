@@ -32,7 +32,6 @@ import {
 import { Item, ItemActions, ItemContent, ItemGroup, ItemTitle } from "@/components/ui/item";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Spinner } from "@/components/ui/spinner";
 import { problemDetailOf } from "@/lib/problem-detail";
 import type { RefreshFailure } from "@/runtime/tanstack-query/infinite-list";
 
@@ -122,18 +121,11 @@ function RepositoryRow({
 						<AlertDialogFooter>
 							<AlertDialogCancel disabled={isRemoving}>Cancel</AlertDialogCancel>
 							<AlertDialogAction
+								pending={isRemoving}
 								variant={keepsWork ? "default" : "destructive"}
-								disabled={isRemoving}
 								onClick={handleRemove}
 							>
-								{isRemoving ? (
-									<>
-										<Spinner className="size-4" aria-hidden />
-										Stopping…
-									</>
-								) : (
-									"Stop monitoring"
-								)}
+								{isRemoving ? "Stopping…" : "Stop monitoring"}
 							</AlertDialogAction>
 						</AlertDialogFooter>
 					</AlertDialogContent>

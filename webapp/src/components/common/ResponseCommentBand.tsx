@@ -5,7 +5,6 @@ import { cn } from "cn";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Spinner } from "@/components/ui/spinner";
 import { hasText } from "@/lib/text";
 
 /** `FeedbackResponseRequestDTO.comment` caps the comment; a disagreement has to carry one. */
@@ -83,8 +82,7 @@ export function ResponseCommentBand({
 				>
 					Skip
 				</Button>
-				<Button variant="highlight" type="submit" disabled={isPending}>
-					{sending && <Spinner />}
+				<Button pending={sending} variant="highlight" type="submit" disabled={isPending}>
 					{sending ? "Sending…" : "Send"}
 				</Button>
 			</div>

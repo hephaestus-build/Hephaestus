@@ -14,7 +14,6 @@ import {
 } from "@/components/ui/dialog";
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { Spinner } from "@/components/ui/spinner";
 
 import { type Fx, FxApprox, fxCapHint } from "./fx";
 
@@ -177,8 +176,7 @@ function BudgetAmountDialogContent({
 					<DialogClose render={<Button type="button" variant="outline" disabled={isPending} />}>
 						Cancel
 					</DialogClose>
-					<Button type="submit" disabled={isPending}>
-						{isPending ? <Spinner className="size-4" /> : null}
+					<Button pending={isPending} type="submit">
 						{submitLabel}
 					</Button>
 				</DialogFooter>

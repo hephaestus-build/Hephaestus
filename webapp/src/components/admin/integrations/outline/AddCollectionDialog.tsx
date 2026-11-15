@@ -31,7 +31,6 @@ import {
 	EmptyTitle,
 } from "@/components/ui/empty";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Spinner } from "@/components/ui/spinner";
 import { problemDetailOf } from "@/lib/problem-detail";
 import { hasText } from "@/lib/text";
 
@@ -158,8 +157,7 @@ export function AddCollectionDialog({
 						<DialogClose render={<Button type="button" variant="outline" disabled={submitting} />}>
 							Cancel
 						</DialogClose>
-						<Button type="submit" disabled={!canSubmit}>
-							{submitting && <Spinner />}
+						<Button pending={submitting} type="submit" disabled={!canSubmit}>
 							{submitting
 								? "Adding…"
 								: `Add ${total > 0 ? `${total} ` : ""}collection${total === 1 ? "" : "s"}`}

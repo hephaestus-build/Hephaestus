@@ -3,7 +3,6 @@ import { PlayIcon } from "lucide-react";
 import { cn } from "cn";
 import { ROW_CONTROL_FOCUS } from "@/components/common/focus";
 import { Button } from "@/components/ui/button";
-import { Spinner } from "@/components/ui/spinner";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 /** Request review's icon, which the actions column's (i) also leads its line with. */
@@ -61,7 +60,7 @@ export function RequestReviewAction({ request, label }: RequestReviewActionProps
 	);
 	const content = (
 		<>
-			{requesting ? <Spinner /> : <RequestReviewIcon aria-hidden />}
+			<RequestReviewIcon aria-hidden />
 			{label !== undefined && (requesting ? REQUESTING : label)}
 		</>
 	);
@@ -77,6 +76,7 @@ export function RequestReviewAction({ request, label }: RequestReviewActionProps
 						type="button"
 						variant="outline"
 						size={size}
+						pending={requesting}
 						disabled={reason !== undefined}
 						// Focusable while disabled, so a keyboard reaches the reason too.
 						focusableWhenDisabled={reason !== undefined}

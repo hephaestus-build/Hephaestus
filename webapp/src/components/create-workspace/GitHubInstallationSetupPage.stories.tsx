@@ -27,7 +27,9 @@ export const Confirm: Story = {
 export const Pending: Story = {
 	args: { state: { status: "pending" } },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("button", { name: "Checking…" })).toBeDisabled();
+		await expect(canvas.getByText("Checking…")).toBeVisible();
+		// A status, not a button: nothing to press while the check runs.
+		await expect(canvas.queryByRole("button", { name: "Checking…" })).toBeNull();
 	},
 };
 

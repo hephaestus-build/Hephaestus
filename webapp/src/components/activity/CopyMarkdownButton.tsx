@@ -2,7 +2,6 @@ import { CopyIcon } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
-import { Spinner } from "@/components/ui/spinner";
 
 export interface CopyMarkdownButtonProps {
 	/**
@@ -17,9 +16,9 @@ export function CopyMarkdownButton({ onCopy }: CopyMarkdownButtonProps) {
 	const [copying, setCopying] = useState(false);
 	return (
 		<Button
+			pending={copying}
 			variant="outline"
 			size="sm"
-			disabled={copying}
 			onClick={() => {
 				setCopying(true);
 				void onCopy().finally(() => {
@@ -27,7 +26,7 @@ export function CopyMarkdownButton({ onCopy }: CopyMarkdownButtonProps) {
 				});
 			}}
 		>
-			{copying ? <Spinner /> : <CopyIcon data-icon="inline-start" />}
+			<CopyIcon data-icon="inline-start" />
 			{copying ? "Copying…" : "Copy as Markdown"}
 		</Button>
 	);

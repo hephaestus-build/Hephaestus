@@ -70,7 +70,10 @@ export const LoadingMoreRepositories: Story = {
 		// The name, the summary and the press of a repository row.
 		await expectListPlaceholders(list, { bars: 3 });
 		await expect(list.lastElementChild).toHaveAttribute("data-loading-row");
-		await expect(canvas.getByRole("button", { name: "Loading repositories…" })).toBeDisabled();
+		await expect(canvas.getByRole("button", { name: "Loading repositories…" })).toHaveAttribute(
+			"aria-disabled",
+			"true",
+		);
 	},
 };
 export const FailedRepositories: Story = {
@@ -85,7 +88,10 @@ export const Saving: Story = {
 		await userEvent.click(
 			canvas.getByRole("button", { name: "Save generated paths for owner/repo" }),
 		);
-		await expect(canvas.getByRole("button", { name: "Saving…" })).toBeDisabled();
+		await expect(canvas.getByRole("button", { name: "Saving…" })).toHaveAttribute(
+			"aria-disabled",
+			"true",
+		);
 		await expect(canvas.getByRole("textbox", { name: "owner/repo" })).toBeDisabled();
 	},
 };

@@ -38,7 +38,10 @@ export const Testing: Story = {
 	args: { test: { status: "testing" } },
 	play: async ({ canvas }) => {
 		await expect(canvas.getByRole("status")).toHaveTextContent("Testing tool choice…");
-		await expect(canvas.getByRole("button", { name: "Testing…" })).toBeDisabled();
+		await expect(canvas.getByRole("button", { name: "Testing…" })).toHaveAttribute(
+			"aria-disabled",
+			"true",
+		);
 	},
 };
 export const TestFailed: Story = {

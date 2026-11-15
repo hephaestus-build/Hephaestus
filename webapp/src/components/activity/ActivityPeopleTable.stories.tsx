@@ -271,7 +271,10 @@ export const RefreshRetrying: Story = {
 		},
 	},
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("button", { name: "Retrying…" })).toBeDisabled();
+		await expect(canvas.getByRole("button", { name: "Retrying…" })).toHaveAttribute(
+			"aria-disabled",
+			"true",
+		);
 		await expect(canvas.getByRole("table", { name: "People" })).toBeVisible();
 	},
 };

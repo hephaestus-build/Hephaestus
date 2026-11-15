@@ -27,7 +27,6 @@ import {
 	SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Spinner } from "@/components/ui/spinner";
 import {
 	Table,
 	TableBody,
@@ -428,20 +427,20 @@ function RequestCard({
 					<div className="flex flex-wrap gap-2">
 						{request.state === "PREVIEW" && (
 							<Button
+								pending={pendingAction === "export"}
 								variant="outline"
 								disabled={pendingAction !== undefined}
 								onClick={state.onExport}
 							>
-								{pendingAction === "export" && <Spinner aria-hidden />}
 								{pendingAction === "export" ? "Downloading…" : "Download JSON export"}
 							</Button>
 						)}
 						<Button
+							pending={pendingAction === "erase"}
 							variant="destructive"
 							disabled={pendingAction !== undefined}
 							onClick={() => setEraseOpen(true)}
 						>
-							{pendingAction === "erase" && <Spinner aria-hidden />}
 							{pendingAction === "erase" && "Starting erasure…"}
 							{pendingAction !== "erase" &&
 								(request.state === "FAILED" ? "Resume erasure…" : "Erase data…")}

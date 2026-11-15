@@ -21,7 +21,6 @@ import {
 import { type ComponentProps, type ReactElement, useMemo, useRef, useState } from "react";
 import { useSpinDelay } from "spin-delay";
 import { TableRowsSkeleton } from "@/components/common/TableRowsSkeleton";
-import { Spinner } from "@/components/ui/spinner";
 
 import type { TeamInfo } from "@/api/types.gen";
 import { ACCOUNT_STATUS_LABELS } from "@/components/admin/users/account-labels";
@@ -162,8 +161,12 @@ function MemberRoleSelect({ member, items, onRoleChange }: MemberRoleSelectProps
 				}
 			}}
 		>
-			<SelectTrigger ref={trigger} size="sm" aria-label={`Role of ${member.name}`}>
-				{pending && <Spinner />}
+			<SelectTrigger
+				ref={trigger}
+				size="sm"
+				pending={pending}
+				aria-label={`Role of ${member.name}`}
+			>
 				<SelectValue />
 			</SelectTrigger>
 			<SelectContent aria-label={`Role of ${member.name}`}>
@@ -195,13 +198,12 @@ function RoleSourceNote({ member, providerLabel, onFollowProvider, pending }: Ro
 			<span>Set in Hephaestus</span>
 			{onFollowProvider && role !== "OWNER" && (
 				<Button
+					pending={pending}
 					variant="link"
 					size="inline"
-					disabled={pending}
 					aria-label={`Use ${providerLabel} role for ${member.name}`}
 					onClick={() => onFollowProvider(member)}
 				>
-					{pending && <Spinner />}
 					Use {providerLabel} role
 				</Button>
 			)}
@@ -245,9 +247,9 @@ interface MemberActionsProps {
 }
 
 /**
- * Remove for a current member, Add back for one who left. While the change is out, the trigger
- * stays focusable, so the confirmation dialog can return focus to it: Base UI's menu trigger has no
- * focusable disabled state, and a disabled button drops focus to the page. The item waits instead.
+ * Remove for a current member, Add back for one who left. While the change is out, the trigger is a
+ * pending button: it does not open, and it stays focusable, so the confirmation dialog can return
+ * focus to it. A natively disabled button would drop focus to the page.
  */
 function MemberActions({ member, onRemove, onAddBack }: MemberActionsProps) {
 	const trigger = useRef<HTMLButtonElement>(null);
@@ -262,15 +264,21 @@ function MemberActions({ member, onRemove, onAddBack }: MemberActionsProps) {
 			<DropdownMenuTrigger
 				ref={trigger}
 				aria-busy={pending || undefined}
-				render={<Button variant="ghost" size="icon-xs" aria-label={`Actions for ${member.name}`} />}
+				render={
+					<Button
+						pending={pending}
+						variant="ghost"
+						size="icon-xs"
+						aria-label={`Actions for ${member.name}`}
+					/>
+				}
 			>
-				{pending ? <Spinner /> : <MoreHorizontal className="size-4" />}
+				<MoreHorizontal className="size-4" />
 			</DropdownMenuTrigger>
 			<DropdownMenuContent align="end">
 				<DropdownMenuGroup>
 					<DropdownMenuItem
 						variant={left ? "default" : "destructive"}
-						disabled={pending}
 						onClick={() => {
 							if (trigger.current !== null) {
 								act(member, trigger.current);
@@ -279,7 +287,6 @@ function MemberActions({ member, onRemove, onAddBack }: MemberActionsProps) {
 					>
 						{left ? <UserPlus className="size-4" /> : <UserMinus className="size-4" />}
 						{left ? "Add back to workspace" : "Remove from workspace"}
-						{pending && <Spinner />}
 					</DropdownMenuItem>
 				</DropdownMenuGroup>
 			</DropdownMenuContent>

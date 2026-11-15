@@ -37,7 +37,6 @@ import {
 	SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
 
 import { REPOSITORY_CHECK_DEFS } from "./repository-check-defs";
@@ -276,8 +275,11 @@ function DestinationsForm({
 				<DestinationsHealth saved={saved} />
 			</CardContent>
 			<CardFooter className="justify-end">
-				<Button type="submit" disabled={publicInvalid || privateInvalid || limitInvalid || saving}>
-					{saving && <Spinner />}
+				<Button
+					pending={saving}
+					type="submit"
+					disabled={publicInvalid || privateInvalid || limitInvalid || saving}
+				>
 					{saving ? "Saving…" : "Save destinations"}
 				</Button>
 			</CardFooter>

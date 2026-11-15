@@ -208,8 +208,8 @@ export const RemoveMember: Story = {
 };
 
 /**
- * Only the members whose removal is in flight wait. Their menu stays reachable, so focus can return
- * to it, but it offers nothing to fire twice, and their role waits too.
+ * Only the members whose removal is in flight wait. Their menu button keeps focus, so focus can return
+ * to it, but it does not open, so nothing fires twice; their role waits too.
  */
 export const RemovalPending: Story = {
 	args: { removingAccountIds: new Set([unclaimedMember.account.id]) },
@@ -218,10 +218,9 @@ export const RemovalPending: Story = {
 		await expect(canvas.getByRole("combobox", { name: "Role of Alice Johnson" })).toBeEnabled();
 		const actions = canvas.getByRole("button", { name: "Actions for Bob Smith" });
 		await expect(actions).toHaveAttribute("aria-busy", "true");
+		await expect(actions).toHaveAttribute("aria-disabled", "true");
 		await userEvent.click(actions);
-		await expect(
-			await screen.findByRole("menuitem", { name: "Remove from workspace" }),
-		).toHaveAttribute("aria-disabled", "true");
+		await expect(screen.queryByRole("menu")).not.toBeInTheDocument();
 	},
 };
 
@@ -314,7 +313,7 @@ export const FollowProviderPending: Story = {
 	play: async ({ canvas }) => {
 		await expect(
 			canvas.getByRole("button", { name: "Use GitHub role for Alice Johnson" }),
-		).toBeDisabled();
+		).toHaveAttribute("aria-disabled", "true");
 	},
 };
 

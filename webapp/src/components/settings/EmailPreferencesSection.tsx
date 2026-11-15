@@ -1,5 +1,4 @@
 import { useId } from "react";
-import { useSpinDelay } from "spin-delay";
 
 import type { NotificationPreferences, UpdateNotificationPreferences } from "@/api/types.gen";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
@@ -13,6 +12,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
+import { usePendingSpinner } from "@/lib/use-pending-spinner";
 
 export type EmailNotificationChoices = UpdateNotificationPreferences;
 
@@ -63,10 +63,7 @@ export function hasEmailPreferences(state: EmailPreferencesState) {
 
 export function EmailPreferencesSection({ state, isAppAdmin }: EmailPreferencesSectionProps) {
 	const id = useId();
-	const showSpinner = useSpinDelay(state.status === "ready" && state.isPending, {
-		delay: 1000,
-		minDuration: 500,
-	});
+	const showSpinner = usePendingSpinner(state.status === "ready" && state.isPending);
 	const busy = state.status === "ready" && (state.isPending || showSpinner);
 	const optOutOnly = state.status === "ready" && !state.preferences.deliveryConfigured;
 	const visibleChoices = choices.filter((choice) => {

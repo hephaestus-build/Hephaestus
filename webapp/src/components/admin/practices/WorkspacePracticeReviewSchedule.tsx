@@ -35,7 +35,6 @@ import {
 	SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
 import { asDate } from "@/lib/dates";
 import { ITEM_KIND, itemKindLabel, itemKindNoun } from "@/lib/item-kinds";
@@ -529,8 +528,7 @@ function ScheduleForm({
 			</FieldGroup>
 
 			<div className="flex flex-wrap items-center gap-3">
-				<Button disabled={isSaving || disabled} onClick={submit}>
-					{isSaving ? <Spinner /> : null}
+				<Button pending={isSaving} disabled={isSaving || disabled} onClick={submit}>
 					{initial === null ? `Start checking ${chosenKind}` : "Save schedule"}
 				</Button>
 				{onCancel ? (

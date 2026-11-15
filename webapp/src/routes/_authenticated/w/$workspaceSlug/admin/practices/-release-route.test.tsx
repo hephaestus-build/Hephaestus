@@ -172,11 +172,9 @@ it.each(decisions)(
 		);
 		try {
 			await waitFor(() => expect(refreshes).toBe(1));
-			expect(
-				screen.getByRole("button", {
-					name: progress,
-				}),
-			).toHaveProperty("disabled", true);
+			expect(screen.getByRole("button", { name: progress }).getAttribute("aria-disabled")).toBe(
+				"true",
+			);
 			expect(
 				screen.getByRole("button", {
 					name: other,

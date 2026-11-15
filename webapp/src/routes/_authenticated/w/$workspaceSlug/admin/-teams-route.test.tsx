@@ -444,7 +444,7 @@ describe("a read of a workspace's teams", () => {
 			queryKey: getAllTeamsQueryKey({ path: { workspaceSlug: "acme" } }),
 		});
 		const retrying = await screen.findByRole("button", { name: "Retrying…" }, SETTLE);
-		expect(retrying.hasAttribute("disabled")).toBe(true);
+		expect(retrying.getAttribute("aria-disabled")).toBe("true");
 		screen.getByRole("heading", { name: "Frontend Team" });
 		screen.getByRole("button", { name: "Add bug label" });
 		expect(screen.getByLabelText<HTMLInputElement>("Search teams").value).toBe("Frontend");

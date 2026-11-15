@@ -94,7 +94,10 @@ export const MakingPrivate: Story = {
 		pending: { [publicIssue.id]: "make-private" },
 	},
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("button", { name: "Making private…" })).toBeDisabled();
+		await expect(canvas.getByRole("button", { name: "Making private…" })).toHaveAttribute(
+			"aria-disabled",
+			"true",
+		);
 	},
 };
 

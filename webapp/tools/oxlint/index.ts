@@ -7,6 +7,7 @@ import { noNonAsciiFilename } from "./rules/no-non-ascii-filename.ts";
 import { noNondeterministicRender } from "./rules/no-nondeterministic-render.ts";
 import { noRawDocsUrl } from "./rules/no-raw-docs-url.ts";
 import { noRedundantInTheDocument } from "./rules/no-redundant-in-the-document.ts";
+import { noSpinnerInButton } from "./rules/no-spinner-in-button.ts";
 import { noStoryA11yOverride } from "./rules/no-story-a11y-override.ts";
 import { noUnsafeDefinitionLookup } from "./rules/no-unsafe-definition-lookup.ts";
 import { noWithinCanvasElement } from "./rules/no-within-canvas-element.ts";
@@ -30,6 +31,7 @@ export default definePlugin({
 		"no-raw-docs-url": noRawDocsUrl,
 		"focus-outline-in-forced-colors": focusOutlineInForcedColors,
 		"no-redundant-in-the-document": noRedundantInTheDocument,
+		"no-spinner-in-button": noSpinnerInButton,
 		"no-story-a11y-override": noStoryA11yOverride,
 		"no-within-canvas-element": noWithinCanvasElement,
 		"play-must-assert": playMustAssert,

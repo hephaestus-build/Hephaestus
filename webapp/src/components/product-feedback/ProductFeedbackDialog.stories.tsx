@@ -60,7 +60,10 @@ export const Sending: Story = {
 	args: { isSubmitting: true },
 	play: async () => {
 		const dialog = within(await screen.findByRole("dialog"));
-		await expect(dialog.getByRole("button", { name: "Sending…" })).toBeDisabled();
+		await expect(dialog.getByRole("button", { name: "Sending…" })).toHaveAttribute(
+			"aria-disabled",
+			"true",
+		);
 		await expect(dialog.getByRole("textbox", { name: "Your feedback" })).toBeDisabled();
 	},
 };

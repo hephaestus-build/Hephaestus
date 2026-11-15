@@ -30,7 +30,6 @@ import {
 	DialogTitle,
 } from "@/components/ui/dialog";
 import { Field, FieldContent, FieldDescription, FieldLabel } from "@/components/ui/field";
-import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
 import type { FieldErrors, LlmConnectionFormField } from "@/lib/llm-form-validation";
 
@@ -151,8 +150,7 @@ function WorkspaceLlmConnectionFormDialogContent({
 				</DialogBody>
 				<DialogFooter>
 					<DialogClose render={<Button type="button" variant="outline" />}>Cancel</DialogClose>
-					<Button type="submit" disabled={isSubmitting}>
-						{isSubmitting && <Spinner aria-hidden />}
+					<Button pending={isSubmitting} type="submit">
 						{isSubmitting ? "Saving…" : submitLabel}
 					</Button>
 				</DialogFooter>

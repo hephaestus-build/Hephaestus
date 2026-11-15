@@ -1,6 +1,5 @@
 import { Link } from "@tanstack/react-router";
 import { FingerprintIcon, KeyRoundIcon } from "lucide-react";
-import { useSpinDelay } from "spin-delay";
 
 import { StepMarker } from "@/components/auth/StepMarker";
 import { HephaestusLogo } from "@/components/brand/HephaestusLogo";
@@ -8,7 +7,6 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Spinner } from "@/components/ui/spinner";
 
 export type PasskeyChallengeState =
 	| { status: "loading" }
@@ -53,7 +51,6 @@ export function PasskeyChallengePage(props: PasskeyChallengePageProps) {
 
 function ChallengeBody({ state, onAdd, onConfirm, onLeave }: PasskeyChallengePageProps) {
 	const pending = state.status === "ready" ? state.pending : undefined;
-	const showSpinner = useSpinDelay(pending !== undefined, { delay: 1000, minDuration: 500 });
 	const notNow = (
 		<Button variant="quiet" className="w-full" onClick={onLeave}>
 			Not now
@@ -149,14 +146,12 @@ function ChallengeBody({ state, onAdd, onConfirm, onLeave }: PasskeyChallengePag
 						// Focusable while the browser prompt is open, so focus returns here when it closes;
 						// a pending button refuses a second press, so one prompt runs at a time.
 						<Button
+							pending={pending !== undefined}
 							className="w-full"
 							size="lg"
-							disabled={pending !== undefined}
-							focusableWhenDisabled
 							aria-busy={pending !== undefined}
 							onClick={step === "add" ? onAdd : onConfirm}
 						>
-							{showSpinner && <Spinner />}
 							{pendingLabel(pending) ?? (step === "add" ? "Add passkey" : "Confirm with passkey")}
 						</Button>
 					) : (

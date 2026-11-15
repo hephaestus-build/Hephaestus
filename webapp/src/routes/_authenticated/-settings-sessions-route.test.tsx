@@ -80,7 +80,7 @@ describe("active sessions on the settings page", () => {
 
 		fireEvent.click(clicked);
 
-		await waitFor(() => expect(clicked.disabled).toBe(true));
+		await waitFor(() => expect(clicked.getAttribute("aria-disabled")).toBe("true"));
 		expect(other.disabled).toBe(false);
 		deletion.resolve();
 	});

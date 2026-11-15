@@ -204,7 +204,8 @@
 		// Each states in its own `meta.docs.description` what it asks.
 		"hephaestus/no-context-provider": "error",
 		"hephaestus/no-manual-query-key": "error",
-		"hephaestus/no-unsafe-definition-lookup": "error"
+		"hephaestus/no-unsafe-definition-lookup": "error",
+		"hephaestus/no-spinner-in-button": "error"
 		// The rules that read a Storybook story object are scoped to story files in `overrides`.
 	},
 

@@ -29,7 +29,6 @@ import {
 	PopoverTrigger,
 } from "@/components/ui/popover";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 
 import { FeedbackBody } from "./FeedbackBody";
@@ -123,8 +122,8 @@ export function ProposalDecision({
 		<>
 			{queue && queue.total > 1 && <QueueSteps queue={queue} />}
 			<RejectFeedbackPopover disabled={isDeciding} onReject={onReject} />
-			<Button disabled={isDeciding || !canApprove} onClick={onApprove}>
-				{isDeciding ? <Spinner /> : <CheckIcon />} {approveLabel}
+			<Button pending={isDeciding} disabled={isDeciding || !canApprove} onClick={onApprove}>
+				<CheckIcon /> {approveLabel}
 			</Button>
 		</>
 	);
@@ -278,8 +277,8 @@ export function ApproveRejectedFeedback({ isDeciding, onApprove }: ApproveReject
 					<Button variant="ghost" size="sm" onClick={() => setOpen(false)}>
 						Cancel
 					</Button>
-					<Button size="sm" disabled={isDeciding} onClick={onApprove}>
-						{isDeciding ? <Spinner /> : <CheckIcon />} Approve for delivery
+					<Button size="sm" pending={isDeciding} onClick={onApprove}>
+						<CheckIcon /> Approve for delivery
 					</Button>
 				</div>
 			</PopoverContent>

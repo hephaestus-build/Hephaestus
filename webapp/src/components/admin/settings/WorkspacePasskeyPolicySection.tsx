@@ -1,5 +1,4 @@
 import { useId } from "react";
-import { useSpinDelay } from "spin-delay";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -12,6 +11,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
+import { usePendingSpinner } from "@/lib/use-pending-spinner";
 
 export interface WorkspacePasskeyPolicySectionProps {
 	assuranceEnforced?: boolean;
@@ -38,7 +38,7 @@ export function WorkspacePasskeyPolicySection({
 }: WorkspacePasskeyPolicySectionProps) {
 	const id = useId();
 	const instanceEnforced = assuranceEnforced && instanceRequired;
-	const showSpinner = useSpinDelay(pending, { delay: 1000, minDuration: 500 });
+	const showSpinner = usePendingSpinner(pending);
 	let description =
 		"This policy is saved, but extra authentication checks are disabled on this instance.";
 	if (assuranceEnforced) {

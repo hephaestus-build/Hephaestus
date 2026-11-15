@@ -108,7 +108,10 @@ export const Resetting: Story = {
 	play: async () => {
 		const dialog = await screen.findByRole("alertdialog");
 		await expectSettledVisible(dialog);
-		await expect(within(dialog).getByRole("button", { name: "Resetting…" })).toBeDisabled();
+		await expect(within(dialog).getByRole("button", { name: "Resetting…" })).toHaveAttribute(
+			"aria-disabled",
+			"true",
+		);
 		await expect(within(dialog).getByRole("button", { name: "Keep yours" })).toBeDisabled();
 	},
 };

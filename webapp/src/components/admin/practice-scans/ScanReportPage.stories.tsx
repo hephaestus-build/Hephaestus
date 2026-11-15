@@ -177,7 +177,10 @@ export const Canceling: Story = {
 		cancel: { pending: true, onRun: fn() },
 	},
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("button", { name: "Canceling scan…" })).toBeDisabled();
+		await expect(canvas.getByRole("button", { name: "Canceling scan…" })).toHaveAttribute(
+			"aria-disabled",
+			"true",
+		);
 	},
 };
 
@@ -405,7 +408,10 @@ export const Expired: Story = {
 export const Exporting: Story = {
 	args: { exportSarif: { pending: true, onRun: fn() } },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("button", { name: "Exporting SARIF…" })).toBeDisabled();
+		await expect(canvas.getByRole("button", { name: "Exporting SARIF…" })).toHaveAttribute(
+			"aria-disabled",
+			"true",
+		);
 	},
 };
 

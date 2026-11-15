@@ -1053,7 +1053,10 @@ export const RatingPending: Story = {
 		saving: "rating",
 	},
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("button", { name: "Saving…" })).toBeDisabled();
+		await expect(canvas.getByRole("button", { name: "Saving…" })).toHaveAttribute(
+			"aria-disabled",
+			"true",
+		);
 		await expect(canvas.getByRole("button", { name: "Not helpful" })).toBeDisabled();
 		await expect(canvas.getByRole("button", { name: "Send" })).toBeDisabled();
 	},

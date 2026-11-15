@@ -498,8 +498,14 @@ export const Marking: Story = {
 	args: { isMarking: true },
 	play: async () => {
 		const panel = within(await settledDrawerPanel());
-		await expectGenuinelyDisabled(panel.getByRole("button", { name: "Mark incorrect" }));
-		await expectGenuinelyDisabled(panel.getByRole("button", { name: "Mark accepted" }));
+		await expect(panel.getByRole("button", { name: "Mark incorrect" })).toHaveAttribute(
+			"aria-disabled",
+			"true",
+		);
+		await expect(panel.getByRole("button", { name: "Mark accepted" })).toHaveAttribute(
+			"aria-disabled",
+			"true",
+		);
 	},
 };
 

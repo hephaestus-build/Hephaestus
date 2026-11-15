@@ -194,7 +194,10 @@ export const ReplacingKey: Story = {
 		isReplacingToken: true,
 	},
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("button", { name: "Replacing key…" })).toBeDisabled();
+		await expect(canvas.getByRole("button", { name: "Replacing key…" })).toHaveAttribute(
+			"aria-disabled",
+			"true",
+		);
 		await expect(canvas.getByLabelText("Replace API key")).toBeDisabled();
 	},
 };

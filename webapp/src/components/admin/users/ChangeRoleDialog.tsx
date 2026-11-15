@@ -13,7 +13,6 @@ import {
 	AlertDialogMedia,
 	AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Spinner } from "@/components/ui/spinner";
 import { hasText } from "@/lib/text";
 
 import { APP_ROLE_LABELS, type AppRole } from "./account-labels";
@@ -87,15 +86,14 @@ export function ChangeRoleDialog({
 				<AlertDialogFooter>
 					<AlertDialogCancel>Cancel</AlertDialogCancel>
 					<AlertDialogAction
+						pending={isPending}
 						variant={granting ? "destructive" : "default"}
-						disabled={isPending}
 						onClick={() => {
 							if (user !== null) {
 								onConfirm(user, nextRole);
 							}
 						}}
 					>
-						{isPending ? <Spinner className="size-4" /> : null}
 						{granting ? "Grant instance admin" : "Revoke instance admin"}
 					</AlertDialogAction>
 				</AlertDialogFooter>

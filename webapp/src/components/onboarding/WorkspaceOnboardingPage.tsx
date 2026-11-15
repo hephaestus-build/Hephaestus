@@ -39,7 +39,6 @@ import {
 } from "@/components/ui/questionnaire";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Spinner } from "@/components/ui/spinner";
 import { openRequiredLinks } from "@/lib/onboarding-links";
 import { type WorkspaceCoverage, workspaceCoverage } from "@/lib/workspace-coverage";
 
@@ -358,16 +357,17 @@ export function WorkspaceOnboardingPage({ focus, state }: WorkspaceOnboardingPag
 									)}
 									{ready !== undefined && (
 										<Button
+											pending={savingAction === "save"}
 											type="submit"
 											disabled={!canSubmit || saving}
 											aria-describedby={hasText(hint) ? `${id}-hint` : undefined}
 										>
-											{savingAction === "save" && <Spinner />}
 											{saveLabel}
 										</Button>
 									)}
 								</div>
 								<Button
+									pending={savingAction === "continue"}
 									type="button"
 									aria-describedby={firstVisit ? `${id}-skip-hint` : undefined}
 									variant="ghost"
@@ -375,7 +375,6 @@ export function WorkspaceOnboardingPage({ focus, state }: WorkspaceOnboardingPag
 									onClick={state.onLeave}
 									className="self-start text-muted-foreground sm:-ml-3"
 								>
-									{savingAction === "continue" && <Spinner />}
 									{leaveLabel}
 								</Button>
 							</footer>

@@ -127,6 +127,9 @@ export const LoadFailed: Story = {
 export const Exporting: Story = {
 	args: { exporting: true },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("button", { name: /export csv/iu })).toBeDisabled();
+		await expect(canvas.getByRole("button", { name: /export csv/iu })).toHaveAttribute(
+			"aria-disabled",
+			"true",
+		);
 	},
 };

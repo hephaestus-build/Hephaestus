@@ -12,7 +12,6 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Spinner } from "@/components/ui/spinner";
 
 export interface LeavableWorkspace {
 	slug: string;
@@ -57,10 +56,9 @@ export function LeaveWorkspaceSection({
 				<Button
 					variant="outline"
 					size="sm"
-					disabled={loadFailure.retrying}
+					pending={loadFailure.retrying}
 					onClick={loadFailure.onRetry}
 				>
-					{loadFailure.retrying && <Spinner aria-hidden />}
 					{loadFailure.retrying ? "Retrying…" : "Retry"}
 				</Button>
 			</div>
@@ -131,7 +129,7 @@ export function LeaveWorkspaceSection({
 						<AlertDialogCancel disabled={leaving}>Cancel</AlertDialogCancel>
 						<AlertDialogAction
 							variant="destructive"
-							disabled={leaving}
+							pending={leaving}
 							onClick={() => {
 								if (confirming === undefined) {
 									return;
@@ -142,7 +140,6 @@ export function LeaveWorkspaceSection({
 									.catch(() => undefined);
 							}}
 						>
-							{leaving && <Spinner aria-hidden />}
 							{leaving ? "Leaving…" : "Leave workspace"}
 						</AlertDialogAction>
 					</AlertDialogFooter>

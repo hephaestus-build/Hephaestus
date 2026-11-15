@@ -18,7 +18,6 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Spinner } from "@/components/ui/spinner";
 import { asDate, formatDayTime } from "@/lib/dates";
 import { hasText } from "@/lib/text";
 
@@ -176,6 +175,7 @@ export function SessionsSection({ state }: SessionsSectionProps) {
 								</Button>
 							) : (
 								<Button
+									pending={isRevokingThis}
 									variant="outline"
 									size="sm"
 									disabled={isRevokingThis || !hasText(session.jti)}
@@ -186,7 +186,6 @@ export function SessionsSection({ state }: SessionsSectionProps) {
 									}}
 									aria-label={`Sign out ${deviceLabel}`}
 								>
-									{isRevokingThis ? <Spinner className="mr-1.5" /> : null}
 									Sign out
 								</Button>
 							)}
@@ -213,12 +212,11 @@ export function SessionsSection({ state }: SessionsSectionProps) {
 						<AlertDialogTrigger
 							render={
 								<Button
+									pending={state.revokingOthers}
 									variant="outline"
 									size="sm"
-									disabled={state.revokingOthers}
 									className="mt-1 shrink-0"
 								>
-									{state.revokingOthers ? <Spinner className="mr-1.5" /> : null}
 									Sign out {otherSessionCount} other{" "}
 									{otherSessionCount === 1 ? "session" : "sessions"}
 								</Button>

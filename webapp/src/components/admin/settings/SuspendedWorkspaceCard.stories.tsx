@@ -36,7 +36,10 @@ export const Suspended: Story = {
 export const Resuming: Story = {
 	args: { resuming: true },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("button", { name: "Resuming…" })).toBeDisabled();
+		await expect(canvas.getByRole("button", { name: "Resuming…" })).toHaveAttribute(
+			"aria-disabled",
+			"true",
+		);
 	},
 };
 

@@ -3,7 +3,6 @@ import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Spinner } from "@/components/ui/spinner";
 
 import {
 	ConfirmAccessDialog,
@@ -86,12 +85,11 @@ export function WorkspaceDangerZoneSettings({
 						)}
 						{ownerCheck.status === "failed" && (
 							<Button
+								pending={ownerCheck.retrying}
 								variant="outline"
 								className="w-full shrink-0 sm:mt-1 sm:w-auto"
-								disabled={ownerCheck.retrying}
 								onClick={ownerCheck.onRetry}
 							>
-								{ownerCheck.retrying && <Spinner aria-hidden />}
 								{ownerCheck.retrying ? "Retrying…" : "Retry"}
 							</Button>
 						)}

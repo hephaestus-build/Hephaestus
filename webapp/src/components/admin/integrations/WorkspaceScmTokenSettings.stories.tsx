@@ -54,7 +54,10 @@ export const ReconnectGitLabError: Story = {
 export const Saving: Story = {
 	args: { isSaving: true },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("button", { name: "Replacing token…" })).toBeDisabled();
+		await expect(canvas.getByRole("button", { name: "Replacing token…" })).toHaveAttribute(
+			"aria-disabled",
+			"true",
+		);
 		await expect(canvas.getByLabelText("New personal access token")).toBeDisabled();
 	},
 };
