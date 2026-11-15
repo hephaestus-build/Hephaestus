@@ -42,6 +42,7 @@ const meta = {
 			kind: "GITHUB",
 			displayName: "GitHub",
 			connected: true,
+			connectable: true,
 			connectionId: 7,
 			connectionState: "ACTIVE",
 		},
@@ -187,6 +188,7 @@ export const ConnectionSuspended: Story = {
 			kind: "GITHUB",
 			displayName: "GitHub",
 			connected: true,
+			connectable: true,
 			connectionId: 7,
 			connectionState: "SUSPENDED",
 		},
@@ -205,6 +207,7 @@ export const ConnectionPending: Story = {
 			kind: "SLACK",
 			displayName: "Slack",
 			connected: true,
+			connectable: true,
 			connectionId: 9,
 			connectionState: "PENDING",
 		},
@@ -222,6 +225,7 @@ export const ConnectionUninstalled: Story = {
 			kind: "SLACK",
 			displayName: "Slack",
 			connected: true,
+			connectable: true,
 			connectionId: 9,
 			connectionState: "UNINSTALLED",
 		},
@@ -235,7 +239,7 @@ export const ConnectionUninstalled: Story = {
 
 export const ScmNotConnected: Story = {
 	args: {
-		entry: { kind: "GITHUB", displayName: "GitHub", connected: false },
+		entry: { kind: "GITHUB", displayName: "GitHub", connected: false, connectable: true },
 		status: undefined,
 	},
 	play: async ({ canvas }) => {
@@ -246,7 +250,7 @@ export const ScmNotConnected: Story = {
 
 export const Disconnected: Story = {
 	args: {
-		entry: { kind: "OUTLINE", displayName: "Outline", connected: false },
+		entry: { kind: "OUTLINE", displayName: "Outline", connected: false, connectable: true },
 		status: undefined,
 	},
 };
@@ -258,6 +262,7 @@ export const DisconnectedWithCleanupUnconfirmed: Story = {
 			kind: "SLACK",
 			displayName: "Slack",
 			connected: false,
+			connectable: true,
 			connectionId: 9,
 			connectionState: "UNINSTALLED",
 			attentionProblem: "PROVIDER_CLEANUP_UNCONFIRMED",

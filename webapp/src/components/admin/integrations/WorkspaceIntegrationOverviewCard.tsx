@@ -203,7 +203,7 @@ function OverviewBody({
 					<p className="text-sm text-muted-foreground">Not enabled on this instance.</p>
 				) : (
 					<Link to={detailTo} params={{ workspaceSlug }} className={buttonVariants({ size: "sm" })}>
-						Connect<span className="sr-only"> {entry.displayName}</span>
+						Connect <span className="sr-only">{entry.displayName}</span>
 						<ArrowRightIcon className="size-3.5" />
 					</Link>
 				)}
