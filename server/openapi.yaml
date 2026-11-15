@@ -16014,6 +16014,10 @@ components:
           $ref: "#/components/schemas/IntegrationAttentionChangedEventProblem"
           description: A problem with the connection that an admin should act on;
             absent while there is none
+        connectable:
+          type: boolean
+          description: "Whether this deployment can connect this kind. False when\
+            \ the operator has not enabled it, so a connect request cannot succeed"
         connected:
           type: boolean
           description: Whether this workspace has a (non-UNINSTALLED) connection for
@@ -16037,6 +16041,7 @@ components:
           $ref: "#/components/schemas/IntegrationKind"
           description: Integration kind
       required:
+      - connectable
       - connected
       - displayName
       - kind
