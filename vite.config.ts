@@ -112,6 +112,13 @@ if (nodeTestShard !== "" && !/^[1-9]\d*\/[1-9]\d*$/u.test(nodeTestShard)) {
 	throw new Error(`HEPHAESTUS_NODE_TEST_SHARD must be <index>/<total>, not '${nodeTestShard}'`);
 }
 const nodeTestFiles = `--test-concurrency=${nodeTestConcurrency}${nodeTestShard === "" ? "" : ` --test-shard=${nodeTestShard}`}`;
+// The web app's unit tests take the same shard with Vitest's own sharding. Each shard writes a blob
+// report without the coverage floors; ci:webapp-test-report merges them and checks the floors on the
+// whole suite (docs/contributor/testing.mdx § Web app coverage).
+const webappTestShard = nodeTestShard === "" ? "1/1" : nodeTestShard;
+const noCoverageFloors = ["statements", "branches", "functions", "lines"]
+	.map((metric) => `--coverage.thresholds.${metric}=0`)
+	.join(" ");
 // The gates, by the tree they judge. `quality` runs all of them; each CI job runs one tree's set.
 const policyGates = [
 	"gate:toolchain",
@@ -454,11 +461,15 @@ export default defineConfig({
 				],
 			}),
 			"ci:tooling-tests": group(["gate:tooling-tests", "gate:agent-tests"]),
-			"ci:webapp:static": group([
-				...webappGates,
-				"gate:adr-confirmation",
-				"gate:owned-code",
-				"verification:webapp-tests",
+			"ci:webapp:static": group([...webappGates, "gate:adr-confirmation", "gate:owned-code"]),
+			"ci:webapp-tests": run(
+				`vp -C webapp test --run --coverage ${noCoverageFloors} --exclude 'tools/oxlint/rules/**' --maxWorkers=4 --shard=${webappTestShard} --reporter=default --reporter=blob --outputFile.blob=./test-results/blobs/blob-${webappTestShard.replace("/", "-of-")}.json`,
+			),
+			// The merged report keeps the configured reporters and coverage floors, so the junit file and
+			// the floors cover every shard.
+			"ci:webapp-test-report": run([
+				"vp -C webapp test --run --merge-reports=./test-results/blobs --coverage",
+				"vp run --filter webapp test:lint-rules",
 			]),
 			// The build regenerates the route tree, so it never runs beside a gate that reads it. A
 			// second name after `vp run` is an argument, not a second task, so the two are separate.
