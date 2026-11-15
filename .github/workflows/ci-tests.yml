@@ -27,7 +27,7 @@ on:
         required: true
         type: string
       full_integration:
-        description: "Whether the numbered integration shards run: the queue tier and an armed pull request"
+        description: "Whether the numbered integration shards run (docs/contributor/ci-cd.mdx § Full integration status)"
         required: true
         type: string
 
