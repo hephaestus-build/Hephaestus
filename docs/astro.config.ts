@@ -6,7 +6,7 @@ import fumadocs from "@fumadocs/astro";
 import { remarkMdxMermaid } from "@fumadocs/satteri/remark-mdx-mermaid";
 import tailwindcss from "@tailwindcss/vite";
 import type { AstroIntegration, ViteUserConfig } from "astro";
-import { defineConfig } from "astro/config";
+import { defineConfig, passthroughImageService } from "astro/config";
 import { loader, type VirtualFile } from "fumadocs-core/source";
 import { metaSchema } from "fumadocs-core/source/schema";
 import { parse } from "yaml";
@@ -118,6 +118,8 @@ export default defineConfig({
 	build: { format: "file" },
 	trailingSlash: "never",
 	outDir: "./build",
+	// The site ships its images as committed. Without a transform, the build needs no `sharp`, which pnpm leaves out.
+	image: { service: passthroughImageService() },
 	// Directives carry the callouts and `::include`. Quotes stay as the author typed them, as the old site showed them.
 	markdown: { processor: satteri({ features: { directive: true, smartPunctuation: false } }) },
 	// The user-guide screenshots, the system diagrams and the practice visual templates keep their URLs.
