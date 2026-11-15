@@ -12,11 +12,9 @@ import de.tum.cit.aet.hephaestus.workspace.Membership;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
-import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
 /** The workspace MCP endpoint over real HTTP: routing, the workspace filter, and method security on a tool. */
-@TestPropertySource(properties = "hephaestus.mcp.enabled=true")
 class McpEndpointIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     private static final String LIST_PRACTICES = """

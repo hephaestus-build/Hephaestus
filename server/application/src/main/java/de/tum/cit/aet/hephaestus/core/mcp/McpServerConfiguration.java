@@ -1,7 +1,6 @@
 package de.tum.cit.aet.hephaestus.core.mcp;
 
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
-import de.tum.cit.aet.hephaestus.core.security.SecurityHeaders;
 import io.modelcontextprotocol.json.jackson3.JacksonMcpJsonMapper;
 import io.modelcontextprotocol.server.McpServer;
 import io.modelcontextprotocol.server.McpStatelessServerFeatures;
@@ -15,19 +14,9 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.core.Ordered;
-import org.springframework.core.annotation.Order;
-import org.springframework.core.convert.converter.Converter;
 import org.springframework.security.access.AccessDeniedException;
-import org.springframework.security.authentication.AbstractAuthenticationToken;
-import org.springframework.security.config.annotation.web.builders.HttpSecurity;
-import org.springframework.security.config.http.SessionCreationPolicy;
-import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.security.oauth2.jwt.JwtDecoder;
-import org.springframework.security.oauth2.server.resource.web.DefaultBearerTokenResolver;
-import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.web.servlet.function.RouterFunction;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.web.servlet.function.RouterFunction;
 import org.springframework.web.servlet.function.ServerResponse;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -43,7 +32,8 @@ class McpServerConfiguration {
     static final String ENDPOINT = "/workspaces/{workspaceSlug}/mcp";
 
     @Bean
-    WebMvcStatelessServerTransport mcpTransport(JsonMapper jsonMapper, @Value("${hephaestus.host-url}") String hostUrl) {
+    WebMvcStatelessServerTransport mcpTransport(
+            JsonMapper jsonMapper, @Value("${hephaestus.host-url}") String hostUrl) {
         return WebMvcStatelessServerTransport.builder()
                 .jsonMapper(new JacksonMcpJsonMapper(jsonMapper))
                 .messageEndpoint(ENDPOINT)
@@ -60,16 +50,17 @@ class McpServerConfiguration {
     }
 
     @Bean(destroyMethod = "close")
-    McpStatelessSyncServer mcpServer(WebMvcStatelessServerTransport mcpTransport, JsonMapper jsonMapper, List<McpTool> tools) {
+    McpStatelessSyncServer mcpServer(
+            WebMvcStatelessServerTransport mcpTransport, JsonMapper jsonMapper, List<McpTool> tools) {
         List<McpStatelessServerFeatures.SyncToolSpecification> specifications = tools.stream()
                 .map(tool -> new McpStatelessServerFeatures.SyncToolSpecification(
-                        tool.definition(),
-                        (context, request) -> invoke(tool, request)))
+                        tool.definition(), (context, request) -> invoke(tool, request)))
                 .toList();
         return McpServer.sync(mcpTransport)
                 .jsonMapper(new JacksonMcpJsonMapper(jsonMapper))
                 .serverInfo("hephaestus", "1")
-                .capabilities(McpSchema.ServerCapabilities.builder().tools(false).build())
+                .capabilities(
+                        McpSchema.ServerCapabilities.builder().tools(false).build())
                 // Tools run on the request thread, where the security and workspace contexts live.
                 .immediateExecution(true)
                 .tools(specifications)
@@ -92,28 +83,9 @@ class McpServerConfiguration {
     }
 
     static McpSchema.CallToolResult error(String message) {
-        return McpSchema.CallToolResult.builder().addTextContent(message).isError(true).build();
-    }
-
-    /**
-     * Bearer tokens only. The session cookie is ignored, so a browser cannot carry a signed-in user's
-     * cookie into a tool call, and CSRF does not apply.
-     */
-    @Bean
-    @Order(Ordered.HIGHEST_PRECEDENCE + 5)
-    SecurityFilterChain mcpSecurityFilterChain(
-            HttpSecurity http,
-            JwtDecoder jwtDecoder,
-            Converter<Jwt, AbstractAuthenticationToken> authenticationConverter)
-            throws Exception {
-        http.securityMatcher("/workspaces/*/mcp")
-                .sessionManagement(sessions -> sessions.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .csrf(csrf -> csrf.disable())
-                .oauth2ResourceServer(resourceServer -> resourceServer
-                        .bearerTokenResolver(new DefaultBearerTokenResolver())
-                        .jwt(jwt -> jwt.decoder(jwtDecoder).jwtAuthenticationConverter(authenticationConverter)))
-                .authorizeHttpRequests(requests -> requests.anyRequest().authenticated());
-        SecurityHeaders.apply(http);
-        return http.build();
+        return McpSchema.CallToolResult.builder()
+                .addTextContent(message)
+                .isError(true)
+                .build();
     }
 }

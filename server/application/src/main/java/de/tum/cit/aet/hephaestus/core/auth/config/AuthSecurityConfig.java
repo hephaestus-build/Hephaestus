@@ -1,5 +1,11 @@
 package de.tum.cit.aet.hephaestus.core.auth.config;
 
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
+import org.springframework.core.convert.converter.Converter;
+import org.springframework.security.authentication.AbstractAuthenticationToken;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.server.resource.web.DefaultBearerTokenResolver;
 import de.tum.cit.aet.hephaestus.core.WebClientConnectors;
 import de.tum.cit.aet.hephaestus.core.auth.AuthProperties;
 import de.tum.cit.aet.hephaestus.core.auth.OAuthLoginPaths;
@@ -283,5 +289,28 @@ public class AuthSecurityConfig {
                             + "In-flight logins do not survive a restart. Set the env var for stable behavior.");
         }
         return ephemeral;
+    }
+
+    /**
+     * The workspace MCP endpoint (ADR 0110) accepts bearer tokens only. The session cookie is ignored,
+     * so a browser cannot carry a signed-in user's cookie into a tool call, and CSRF does not apply.
+     */
+    @Bean
+    @Order(Ordered.HIGHEST_PRECEDENCE + 5)
+    @ConditionalOnBooleanProperty("hephaestus.mcp.enabled")
+    public SecurityFilterChain mcpSecurityFilterChain(
+            HttpSecurity http,
+            JwtDecoder jwtDecoder,
+            Converter<Jwt, AbstractAuthenticationToken> authenticationConverter)
+            throws Exception {
+        http.securityMatcher("/workspaces/*/mcp")
+                .sessionManagement(sessions -> sessions.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .csrf(csrf -> csrf.disable())
+                .oauth2ResourceServer(resourceServer -> resourceServer
+                        .bearerTokenResolver(new DefaultBearerTokenResolver())
+                        .jwt(jwt -> jwt.decoder(jwtDecoder).jwtAuthenticationConverter(authenticationConverter)))
+                .authorizeHttpRequests(requests -> requests.anyRequest().authenticated());
+        SecurityHeaders.apply(http);
+        return http.build();
     }
 }

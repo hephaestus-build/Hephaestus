@@ -54,6 +54,9 @@ spring:
 
 # Disable workspace bootstrapping during tests to prevent API calls
 hephaestus:
+    # The workspace MCP endpoint is on in the shared test context, so its tests reuse the cached context.
+    mcp:
+        enabled: true
     # Tests run background work by calling it, so no scheduler or claimer races them (ConditionalOnBackgroundWork).
     background-work:
         enabled: false
