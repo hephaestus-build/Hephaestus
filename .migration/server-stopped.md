@@ -1,6 +1,6 @@
 #### 🔴 Use server.stopped instead of server.replicas=0
 
-In a stopped upgrade, in database maintenance and in a restore, set `server.stopped=true` where the procedure set `server.replicas=0`, and `server.stopped=false` where it restored the count.
+In a stopped upgrade, in database maintenance, in a restore, when you contain an incident and when you decommission an instance, set `server.stopped=true` where the procedure set `server.replicas=0`, and `server.stopped=false` where it restored the count.
 `server.stopped` keeps `server.replicas`, which sizes PostgreSQL's connections, so PostgreSQL keeps running.
 
 For the next upgrade from 1.0.0-rc.8 or earlier, whose chart has no `server.stopped`, follow [Stopped schema upgrades](https://docs.hephaestus.build/admin/upgrade#stopped-schema-upgrades).

@@ -24,7 +24,7 @@ Each switch stops one kind of work:
 | `sandbox.enabled: false` | Practice reviews and conversation turns. The chart sets `AGENT_ENABLED` from this value. | The API, sync and provider deliveries |
 | `sandbox.conversationTurns: 0` | New conversation turns | Practice reviews |
 | `config.slack.enabled: false` | Slack deliveries, conversations in Slack, channel reading and Slack messages | GitHub, GitLab and Outline |
-| `server.replicas: 0` | The server: the API, provider deliveries, reviews and every write | The web app and PostgreSQL |
+| `server.stopped: true` | The server: the API, provider deliveries, reviews and every write | The web app and PostgreSQL |
 
 For one workspace, a workspace admin can pause sending or set the feedback mode to **Off**, as [Feedback mode, review scope and delivery](/user/practice-reviews#feedback-mode) describes.
 Silent mode does not stop model calls or spending.
@@ -65,11 +65,11 @@ To stop all model calls at once, stop reviews and conversations, as the next sec
 Stop the server and its sandboxes first.
 `sandbox.enabled: false` also removes the network policies of the sandbox namespace, so no sandbox may run when you apply it.
 
-1. In your site values, set `server.replicas: 0`.
+1. In your site values, set `server.stopped: true`.
 2. Run `helm upgrade` with your site values.
 3. Remove the sandboxes that still run, as step 4 of [Planned node maintenance](./maintenance#planned-node-maintenance) describes.
 4. Wait until no server Pod and no sandbox Pod runs.
-5. In your site values, set `sandbox.enabled: false`, and restore `server.replicas`.
+5. In your site values, set `sandbox.enabled: false` and `server.stopped: false`.
 6. Run `helm upgrade` with your site values.
 
    The server starts again and runs no review and no conversation turn.
@@ -81,7 +81,7 @@ To stop only Slack, set `config.slack.enabled: false` and run `helm upgrade`.
 
 Stop the server when every write must stop at once, or when you cannot trust the server.
 
-1. In your site values, set `server.replicas: 0`.
+1. In your site values, set `server.stopped: true`.
 2. Run `helm upgrade` with your site values.
 
 Provider deliveries fail while no server runs.
@@ -156,7 +156,7 @@ Record the action in your incident record.
    The next completed review posts its feedback, in every workspace.
 
 6. Restore the budgets, provider caps, connections and review settings that you changed.
-7. In your site values, restore `sandbox.enabled`, `sandbox.conversationTurns`, `config.slack.enabled` and `server.replicas`.
+7. In your site values, restore `sandbox.enabled`, `sandbox.conversationTurns`, `config.slack.enabled` and `server.stopped`.
 8. Run `helm upgrade` with your site values.
 
 Ended sessions cannot be restored.
