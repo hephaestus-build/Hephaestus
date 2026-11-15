@@ -78,7 +78,7 @@ Calls to a workspace MCP endpoint share one budget for each account: 120 calls a
 The sign-in endpoints share the budgets of web sign-in and of installed clients.
 Each replica keeps its own budget, so the real limit is the replica count times this number.
 
-## Check the setup
+## Check that it worked
 
 - `GET https://<instance host>/.well-known/oauth-authorization-server` answers with the issuer and the sign-in endpoints.
 - `POST https://<instance host>/api/workspaces/<slug>/mcp` without a token answers 401 with a `resource_metadata` link.

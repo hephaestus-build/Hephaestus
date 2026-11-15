@@ -1,10 +1,10 @@
 ---
 title: Add an MCP tool
-description: Add a tool to the workspace MCP endpoint that maps onto one HTTP handler, returns only contract fields, and keeps the handler's authorization.
+description: Add a tool to the workspace MCP endpoint that maps onto one HTTP handler, returns only contract fields, and requires the workspace admin role.
 page_type: how-to
 ---
 
-The workspace MCP endpoint lets an MCP client, such as Claude Code, configure a workspace for an admin.
+The workspace MCP endpoint lets an MCP client, such as Claude Code, read a workspace's practice configuration for an admin.
 [ADR 0110](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0110-a-workspace-admins-mcp-client-configures-practices-through-the-workspace-mcp-endpoint.md) owns the design, the tool list and the data contract.
 The [admin guide](/admin/mcp-clients) tells operators how to turn it on.
 
@@ -38,3 +38,16 @@ The tool runs on the request thread, so the workspace context and the authentica
 A tool does what its name says, or it refuses and says why.
 A refused role check or a `ResponseStatusException` from the service becomes a tool result with `isError: true` and the reason as its text.
 Never map a request to a different effect.
+
+## Check that it worked
+
+From `server/`, run the tests that guard every tool:
+
+```bash
+./gradlew :application:architectureTest --tests '*McpToolHandlerParityArchTest'
+./gradlew :application:integrationTest --tests '*McpPracticeToolsIntegrationTest'
+```
+
+The architecture test fails when the tool lacks the admin role or stands for a handler that needs more.
+The integration test fails when an output schema leaves an object open or a property optional.
+Your own integration test shows that a client finds the tool when it lists the tools, and that a call returns only contract fields.

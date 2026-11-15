@@ -234,6 +234,7 @@ The consent page shows the client's self-declared name as plain text below the h
 - Bad: we own the OAuth endpoints' request validation, the metadata document resolver and the consent flow. They are small, follow stable RFCs, and are tested over HTTP against PostgreSQL.
 - Bad: an MCP client cannot inspect outcomes or feedback, and it cannot work in a workspace that requires an admin passkey. Admins use the web app for both.
 - Bad: consent on every authorization. An admin approves again after the session ends.
+- Neutral: the write tools and their audit column, `check_practice_setup`, and the actor of every cancel path arrive with the write-tools pull request, with its own integration test.
 
 ## Confirmation
 
@@ -244,8 +245,6 @@ The consent page shows the client's self-declared name as plain text below the h
 - `McpProjectionsTest` fails when an item reference carries a title, a path or a channel name instead of a number.
 - `scripts/kubernetes-chart-render.test.ts` fails when the chart, with MCP on, does not route the two discovery paths to the server unchanged.
 - `DataIsolationArchitectureTest`, `WorkspaceTableColumnIntegrationTest` and `PersonalDataMapArchTest` cover `mcp_client_grant`.
-
-Decided, not shipped: the write tools and their audit column, `check_practice_setup`, and the actor of every cancel path arrive with the write-tools pull request, which adds `McpWriteToolsIntegrationTest`.
 
 ## Revisit trigger
 
