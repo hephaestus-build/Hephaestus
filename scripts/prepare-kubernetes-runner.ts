@@ -1,10 +1,10 @@
-import { appendFile, statfs } from "node:fs/promises";
+import { appendFile } from "node:fs/promises";
 
 import { output, run } from "./lib/process.ts";
-import { removeUnusedSdks, requireHostedRunner } from "./lib/runner-disk.ts";
+import { availableBytes, freeDiskFor, requireHostedRunner } from "./lib/runner-disk.ts";
 
 // Node containers unpack separate copies of the application and sandbox images on Docker's filesystem.
-const MINIMUM_FREE_BYTES = 25 * 1024 ** 3;
+export const MINIMUM_FREE_BYTES = 25 * 1024 ** 3;
 
 export function checkFreeSpace(available: number): string {
 	if (!Number.isSafeInteger(available) || available < 0) {
@@ -25,10 +25,9 @@ async function main(): Promise<void> {
 		throw new Error("Docker did not return an absolute data directory");
 	}
 	await run("df", ["-h", "--", root]);
-	await removeUnusedSdks();
+	await freeDiskFor(root);
 	await run("df", ["-h", "--", root]);
-	const { bavail, bsize } = await statfs(root);
-	const message = checkFreeSpace(bavail * bsize);
+	const message = checkFreeSpace(await availableBytes(root));
 	console.log(message);
 	if (process.env.GITHUB_STEP_SUMMARY !== undefined) {
 		await appendFile(process.env.GITHUB_STEP_SUMMARY, `${message}\n`);

@@ -1263,11 +1263,13 @@ Right after a merge, that run is still building, so the pull request builds ever
 - A Kubernetes cluster leg is named for its distribution, minor and architecture, such as
   `k3s 1.37 amd64`. Its check history thus survives an image update. The job summary names the
   pinned node image. Renovate updates the image within its minor. A new minor is a workflow change.
-  Before cluster creation, each leg removes unused SDKs from its GitHub-hosted runner.
-  `scripts/prepare-kubernetes-runner.ts` checks free space on Docker's filesystem before each cluster starts.
-- Before its vulnerability scans, each image build job removes the same unused SDKs and logs the free space.
-  Trivy copies each image layer to a temporary file after the builds have filled the root volume.
+  Before cluster creation, `scripts/prepare-kubernetes-runner.ts` checks free space on Docker's filesystem.
+  It removes unused SDKs from the GitHub-hosted runner only if less than 40 GiB is free.
+  The deletion takes minutes on an x64 runner.
+- Before its vulnerability scans, each image build job logs the free space.
+  Trivy copies each image layer to a temporary file after the builds have used part of the root volume.
   Thus, `scripts/prepare-image-scan-runner.ts` gives the scans' temporary files the volume with the most free space.
+  It removes the same unused SDKs only if that volume has less than 40 GiB free.
 - A pull request that matches the `kubernetes` filter runs the latest k3s on amd64. Its server first lints the chart and validates its schemas.
   The merge queue also runs the lowest supported minor on amd64 and `kind 1.35 Calico`.
   Only the nightly run adds the lowest supported minor on arm64.

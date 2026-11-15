@@ -9,7 +9,7 @@ import path from "node:path";
 
 import { requiredEnv } from "./lib/env.ts";
 import { run } from "./lib/process.ts";
-import { removeUnusedSdks, requireHostedRunner } from "./lib/runner-disk.ts";
+import { KEEP_SDKS_FREE_BYTES, removeUnusedSdks, requireHostedRunner } from "./lib/runner-disk.ts";
 
 export interface Volume {
 	readonly mount: string;
@@ -35,16 +35,32 @@ async function available(mount: string): Promise<Volume | undefined> {
 	return stats === undefined ? undefined : { mount, available: stats.bavail * stats.bsize };
 }
 
+/**
+ * The roomiest volume for the scans. Only if it is short are the SDKs removed, and the volumes
+ * measured again: the deletion frees the root volume, which can then be the roomiest.
+ */
+export async function scanVolume(
+	measure: () => Promise<readonly Volume[]>,
+	removeSdks: () => Promise<void>,
+): Promise<Volume> {
+	const chosen = roomiest(await measure());
+	if (chosen.available >= KEEP_SDKS_FREE_BYTES) {
+		return chosen;
+	}
+	await removeSdks();
+	return roomiest(await measure());
+}
+
 async function main(): Promise<void> {
 	requireHostedRunner();
 	const runnerTemp = requiredEnv(process.env, "RUNNER_TEMP");
 	// Hosted x64 runners mount a second disk at /mnt; arm64 runners may not.
 	const candidates = [runnerTemp, "/mnt"];
 	await run("df", ["-h"]);
-	await removeUnusedSdks();
-	const measured = await Promise.all(candidates.map(available));
-	const volumes = measured.filter((volume): volume is Volume => volume !== undefined);
-	const chosen = roomiest(volumes);
+	const chosen = await scanVolume(async () => {
+		const measured = await Promise.all(candidates.map(available));
+		return measured.filter((volume): volume is Volume => volume !== undefined);
+	}, removeUnusedSdks);
 	const directory = path.join(chosen.mount, "image-scan-tmp");
 	const { uid, gid } = userInfo();
 	await run("sudo", ["install", "-d", "-o", String(uid), "-g", String(gid), directory]);
