@@ -8,7 +8,7 @@ import { getItemTrace } from "../../sdk/getItemTrace.gen.js";
 import type { GetItemTraceData, GetItemTraceResponse } from "../../types.gen.js";
 
 export const getItemTraceQueryKey = (options: Options<GetItemTraceData>) =>
-	createQueryKey("getItemTrace", options, false, ["item-trace"]);
+	createQueryKey("getItemTrace", options, false, ["Practice review trace"]);
 
 /**
  * Trace reviews of an item

@@ -4,9 +4,11 @@ export type ClientOptions = {
 	baseUrl: `${string}://${string}/api` | (string & {});
 };
 
+export type AboutRole = "AUTHOR" | "REVIEWER" | "ASSIGNEE" | "MERGER";
+
 export type AcceptPracticeReleaseRequest = {
 	choices: {
-		[key: string]: "CURRENT" | "OFFERED";
+		[key: string]: PracticeReleaseChoice;
 	};
 };
 
@@ -14,21 +16,27 @@ export type AcceptPracticeReleaseRequest = {
  * One account-wide answer; model names belong only to workspace-specific views.
  */
 export type AccountAiChoice = {
-	choice: "NO_AI" | "IN_HOUSE_ONLY" | "CLOUD" | null;
+	choice: AiChoice | null;
 	updatedAt: Date | null;
 };
 
 export type AccountAiChoiceRequest = {
-	choice: "NO_AI" | "IN_HOUSE_ONLY" | "CLOUD";
+	choice: AiChoice;
 };
+
+export type AccountAppRole = "USER" | "APP_ADMIN";
 
 export type AccountRef = {
 	avatarUrl: string | null;
 	displayName: string | null;
 	id: string;
 	identities: Array<ProviderIdentityRef>;
-	status: "UNCLAIMED" | "ACTIVE" | "BLOCKED" | "DELETING" | "DELETED";
+	status: AccountStatus;
 };
+
+export type AccountStatus = "UNCLAIMED" | "ACTIVE" | "BLOCKED" | "DELETING" | "DELETED";
+
+export type AccountType = "ORG" | "USER";
 
 /**
  * How often one kind of activity happened on a piece of work
@@ -41,17 +49,7 @@ export type ActivityAction = {
 	/**
 	 * What was done
 	 */
-	kind:
-		| "PULL_REQUEST_OPENED"
-		| "PULL_REQUEST_MERGED"
-		| "PULL_REQUEST_CLOSED"
-		| "REVIEW_APPROVED"
-		| "REVIEW_CHANGES_REQUESTED"
-		| "REVIEW_COMMENTED"
-		| "COMMENTED"
-		| "CODE_COMMENTED"
-		| "ISSUE_OPENED"
-		| "ISSUE_CLOSED";
+	kind: ActivityKind;
 };
 
 export type ActivityBreakdown = {
@@ -63,6 +61,8 @@ export type ActivityBreakdown = {
 	issuesClosed: number;
 	pullRequestsClosed: number;
 };
+
+export type ActivityContributorKind = "PERSON" | "BOT" | "AUTOMATION";
 
 export type ActivityCounts = {
 	activeWeeks: number;
@@ -99,6 +99,18 @@ export type ActivityHighlights = {
 	firstContributors: Array<number>;
 };
 
+export type ActivityKind =
+	| "PULL_REQUEST_OPENED"
+	| "PULL_REQUEST_MERGED"
+	| "PULL_REQUEST_CLOSED"
+	| "REVIEW_APPROVED"
+	| "REVIEW_CHANGES_REQUESTED"
+	| "REVIEW_COMMENTED"
+	| "COMMENTED"
+	| "CODE_COMMENTED"
+	| "ISSUE_OPENED"
+	| "ISSUE_CLOSED";
+
 export type ActivityPeople = {
 	automation: Array<ActivityPerson>;
 	coverage: ActivityCoverage;
@@ -113,7 +125,7 @@ export type ActivityPeople = {
 export type ActivityPerson = {
 	counts: ActivityCounts;
 	firstContributionAt?: Date;
-	kind: "PERSON" | "BOT" | "AUTOMATION";
+	kind: ActivityContributorKind;
 	person: UserInfo;
 	weeks: Array<ActivitySparklineWeek>;
 };
@@ -123,7 +135,7 @@ export type ActivityPersonDetail = {
 	counts: ActivityCounts;
 	firstContributionAt?: Date;
 	from: Date;
-	kind: "PERSON" | "BOT" | "AUTOMATION";
+	kind: ActivityContributorKind;
 	person: UserInfo;
 	repositories: Array<ActivityRepositoryCounts>;
 	to: Date;
@@ -190,11 +202,11 @@ export type ActivityWork = {
 };
 
 export type AdminAccountView = {
-	appRole: "USER" | "APP_ADMIN";
+	appRole: AccountAppRole;
 	displayName?: string;
 	id?: number;
 	primaryEmail?: string;
-	status: "UNCLAIMED" | "ACTIVE" | "BLOCKED" | "DELETING" | "DELETED";
+	status: AccountStatus;
 };
 
 /**
@@ -227,7 +239,7 @@ export type AdminWorkspaceLlmUsage = {
 	/**
 	 * Whether shared-model spend is within the instance cap, has reached it, or cannot be confirmed because shared-model rates are missing or usage measurements are unverified.
 	 */
-	instanceBudgetVerdict: "WITHIN" | "EXHAUSTED" | "UNVERIFIABLE";
+	instanceBudgetVerdict: LlmBudgetVerdict;
 	/**
 	 * Monthly cap in USD on this workspace's spend on shared (instance) models — the money this instance pays for; null = uncapped. Yours to set.
 	 */
@@ -247,7 +259,7 @@ export type AdminWorkspaceLlmUsage = {
 	/**
 	 * The same verdict for the workspace's own-provider spend against its own cap.
 	 */
-	ownProviderBudgetVerdict: "WITHIN" | "EXHAUSTED" | "UNVERIFIABLE";
+	ownProviderBudgetVerdict: LlmBudgetVerdict;
 	/**
 	 * Whether this month has an own-provider purse to show for the workspace. Same rule as WorkspaceLlmUsageReport.ownProviderInUse.
 	 */
@@ -284,18 +296,38 @@ export type AdminWorkspaceView = {
 	id: number;
 	memberCount: number;
 	ownerLogin?: string;
-	providerType?: "GITHUB" | "GITLAB" | "SLACK" | "OUTLINE";
-	status: "ACTIVE" | "SUSPENDED" | "PURGED";
+	providerType?: IdentityProviderType;
+	status: WorkspaceStatus;
 	workspaceSlug: string;
 };
 
+export type AiChoice = "NO_AI" | "IN_HOUSE_ONLY" | "CLOUD";
+
 export type AiChoiceRequest = {
-	choice: "NO_AI" | "IN_HOUSE_ONLY" | "CLOUD";
+	choice: AiChoice;
 };
+
+export type AiModelBrand =
+	| "OPENAI"
+	| "ANTHROPIC"
+	| "GEMINI"
+	| "GEMMA"
+	| "META"
+	| "MISTRAL"
+	| "QWEN"
+	| "DEEPSEEK"
+	| "XAI"
+	| "COHERE"
+	| "Z_AI"
+	| "MOONSHOT";
+
+export type AiRefusalReason = "PERSON_ERASED" | "NO_AI" | "CHOICE_REQUIRED" | "UNAVAILABLE";
 
 export type AllowPublic = {
 	allowPublic: boolean;
 };
+
+export type ApplicabilityClauseKind = "CHANGED_PATH" | "DIFF_CONTAINS" | "HAS_ITEMS" | "MERGED";
 
 export type AppliesWhen = {
 	anyOf: Array<AppliesWhenClause>;
@@ -311,7 +343,7 @@ export type AppliesWhenClause = {
 
 export type AssignRoleRequest = {
 	accountId: string;
-	role: "OWNER" | "ADMIN" | "MEMBER";
+	role: MembershipWorkspaceRole;
 };
 
 /**
@@ -323,6 +355,56 @@ export type AuthAuditAccount = {
 	email?: string;
 	id: number;
 };
+
+export type AuthEventEventType =
+	| "USER_VIEW"
+	| "LOGIN"
+	| "PASSKEY_CHANGED"
+	| "PASSKEY_VERIFIED"
+	| "LOGIN_FAILED"
+	| "LOGOUT"
+	| "TOKEN_REFRESH"
+	| "JWT_REVOKED"
+	| "IDENTITY_LINKED"
+	| "IDENTITY_UNLINKED"
+	| "IMPERSONATION_BEGIN"
+	| "IMPERSONATION_END"
+	| "ACCOUNT_DELETED"
+	| "EXPORT_REQUESTED"
+	| "PERSON_DATA_PREVIEWED"
+	| "PERSON_DATA_EXPORTED"
+	| "PERSON_DATA_ERASURE_REQUESTED"
+	| "APP_ROLE_CHANGED"
+	| "ACCOUNT_STATUS_CHANGED"
+	| "RESEARCH_CONSENT_REVOKED"
+	| "WORKSPACE_ELEVATION"
+	| "INSTALLATION_EVENT_REPLAYED"
+	| "GITHUB_INSTALLATION_ADOPTED"
+	| "GITHUB_INSTALLATION_DECLINED"
+	| "WORKSPACE_OWNER_CHANGE"
+	| "WORKSPACE_DELETION"
+	| "PROVIDER_RESOURCE_RELEASE"
+	| "LLM_CONNECTION_CREATED"
+	| "LLM_CONNECTION_UPDATED"
+	| "LLM_CONNECTION_DELETED"
+	| "LLM_MODEL_CREATED"
+	| "LLM_MODEL_UPDATED"
+	| "LLM_MODEL_DELETED"
+	| "LLM_MODEL_PRICE_CHANGED"
+	| "LLM_MODEL_SHARING_CHANGED"
+	| "LLM_SETTINGS_CHANGED"
+	| "LOGIN_PROVIDER_CREATED"
+	| "LOGIN_PROVIDER_UPDATED"
+	| "LOGIN_PROVIDER_DELETED"
+	| "SILENT_MODE_CHANGED"
+	| "PUBLIC_ACTIVITY_CHANGED"
+	| "PRODUCT_FEEDBACK_DESTINATIONS_CHANGED"
+	| "PRODUCT_FEEDBACK_CLEANUP_CONFIRMED"
+	| "PRODUCT_FEEDBACK_FILED_BY_ADMIN"
+	| "RESEARCH_DATASET_RELEASED"
+	| "RESEARCH_REMOVAL_RECORDED";
+
+export type AuthEventResult = "SUCCESS" | "FAILURE";
 
 /**
  * One audit row, flattened for the admin viewer.
@@ -353,19 +435,7 @@ export type AvailableLlmModel = {
 	/**
 	 * Model brand declared by an admin; display only
 	 */
-	brand?:
-		| "OPENAI"
-		| "ANTHROPIC"
-		| "GEMINI"
-		| "GEMMA"
-		| "META"
-		| "MISTRAL"
-		| "QWEN"
-		| "DEEPSEEK"
-		| "XAI"
-		| "COHERE"
-		| "Z_AI"
-		| "MOONSHOT";
+	brand?: AiModelBrand;
 	/**
 	 * Owning connection's display name
 	 */
@@ -373,7 +443,7 @@ export type AvailableLlmModel = {
 	/**
 	 * Data-handling tier derived from the admin's declared facts
 	 */
-	dataHandlingTier: "IN_HOUSE" | "CLOUD" | "UNDECLARED";
+	dataHandlingTier: DataHandlingTier;
 	/**
 	 * Human-readable name
 	 */
@@ -401,19 +471,19 @@ export type AvailableLlmModel = {
 	/**
 	 * Pricing mode
 	 */
-	pricingMode: "PRICED" | "NO_CHARGE" | "UNPRICED";
+	pricingMode: PricingMode;
 	/**
 	 * The purposes a binding may assign this model to, from its connection's protocol
 	 */
-	purposes: Array<"PRACTICE_REVIEW" | "CONVERSATION">;
+	purposes: Array<ModelPurpose>;
 	/**
 	 * Reasoning effort requested of the model; null sends none, the provider's default applies
 	 */
-	reasoningEffort?: "NONE" | "MINIMAL" | "LOW" | "MEDIUM" | "HIGH" | "XHIGH" | "MAX";
+	reasoningEffort?: ReasoningEffort;
 	/**
 	 * SHARED (instance catalog) or WORKSPACE (your own provider)
 	 */
-	scope: "SHARED" | "WORKSPACE";
+	scope: LlmModelScope;
 };
 
 /**
@@ -435,7 +505,7 @@ export type BindPracticeGroupRequest = {
 };
 
 export type BoundModelSlot = {
-	kind: "CHAT" | "DECISION" | "EMBEDDING" | "RERANKING";
+	kind: ModelKind;
 	model: FrozenModel | null;
 	slot: string;
 };
@@ -448,30 +518,10 @@ export type BrowserFault = {
 	 * How often the same failure happened, at most 100
 	 */
 	count: number;
-	errorType:
-		| "TYPE_ERROR"
-		| "REFERENCE_ERROR"
-		| "SYNTAX_ERROR"
-		| "RANGE_ERROR"
-		| "OTHER"
-		| "CHUNK"
-		| "HTTP_5XX"
-		| "NETWORK";
+	errorType: BrowserFaultsErrorType;
 	frames: Array<Frame>;
-	kind:
-		| "UNCAUGHT_ERROR"
-		| "UNHANDLED_REJECTION"
-		| "RENDER_ERROR"
-		| "RECOVERED_ERROR"
-		| "CHUNK_LOAD_FAILED"
-		| "REQUEST_FAILED";
-	page:
-		| "PRACTICE_PROFILE"
-		| "ASK_HEPHAESTUS"
-		| "FEEDBACK"
-		| "FEEDBACK_APPROVAL"
-		| "ACTIVITY"
-		| "OTHER";
+	kind: BrowserFaultsKind;
+	page: WebVitalsPage;
 	/**
 	 * The web app's release: a version or a commit
 	 */
@@ -485,6 +535,24 @@ export type BrowserFault = {
 	 */
 	traceId?: string;
 };
+
+export type BrowserFaultsErrorType =
+	| "TYPE_ERROR"
+	| "REFERENCE_ERROR"
+	| "SYNTAX_ERROR"
+	| "RANGE_ERROR"
+	| "OTHER"
+	| "CHUNK"
+	| "HTTP_5XX"
+	| "NETWORK";
+
+export type BrowserFaultsKind =
+	| "UNCAUGHT_ERROR"
+	| "UNHANDLED_REJECTION"
+	| "RENDER_ERROR"
+	| "RECOVERED_ERROR"
+	| "CHUNK_LOAD_FAILED"
+	| "REQUEST_FAILED";
 
 /**
  * The failures that one page met since its last report
@@ -502,14 +570,27 @@ export type Catalog = {
 	practices: Array<CatalogPractice>;
 };
 
+export type CatalogAdoptionAction = "ADD" | "MOVE_TO_GROUP" | "KEEP" | "BLOCKED";
+
+export type CatalogAdoptionAvailability = "AVAILABLE" | "ADOPTED" | "SLUG_CONFLICT";
+
 export type CatalogAdoptionGroup = {
 	definition?: GroupDefinition;
-	disposition?: "UNASSIGNED" | "REUSE_EXISTING_GROUP" | "CREATE_CATALOG_GROUP";
+	disposition?: CatalogGroupDisposition;
 	slug?: string;
 };
 
+export type CatalogChangeKind = "NONE" | "WORDING" | "PRESENTATION" | "REVIEW";
+
+export type CatalogEntryState =
+	| "FROM_HEPHAESTUS"
+	| "EDITED_HERE"
+	| "UPDATE_WAITING"
+	| "YOURS"
+	| "NO_LONGER_SHIPPED";
+
 export type CatalogGroup = {
-	changeKind: "NONE" | "WORDING" | "PRESENTATION" | "REVIEW";
+	changeKind: CatalogChangeKind;
 	color: string | null;
 	description: string | null;
 	etag: string;
@@ -520,13 +601,13 @@ export type CatalogGroup = {
 	position: number;
 	shipped: GroupDefinition | null;
 	slug: string;
-	state: "FROM_HEPHAESTUS" | "EDITED_HERE" | "UPDATE_WAITING" | "YOURS" | "NO_LONGER_SHIPPED";
+	state: CatalogEntryState;
 };
 
 export type CatalogGroupAdoptionPreview = {
 	actions?: Array<CatalogGroupPracticeAction>;
 	definition?: GroupDefinition;
-	disposition?: "UNASSIGNED" | "REUSE_EXISTING_GROUP" | "CREATE_CATALOG_GROUP";
+	disposition?: CatalogGroupDisposition;
 	etag?: string;
 	practices?: Array<CatalogPracticePreview>;
 	slug?: string;
@@ -536,6 +617,11 @@ export type CatalogGroupAdoptionResult = {
 	added: Array<Practice>;
 	moved: Array<Practice>;
 };
+
+export type CatalogGroupDisposition =
+	| "UNASSIGNED"
+	| "REUSE_EXISTING_GROUP"
+	| "CREATE_CATALOG_GROUP";
 
 export type CatalogGroupInput = {
 	color: string | null;
@@ -547,7 +633,7 @@ export type CatalogGroupInput = {
 };
 
 export type CatalogGroupPracticeAction = {
-	action: "ADD" | "MOVE_TO_GROUP" | "KEEP" | "BLOCKED";
+	action: CatalogAdoptionAction;
 	slug: string;
 };
 
@@ -561,25 +647,13 @@ export type CatalogGroupUpdate = {
 
 export type CatalogOrigin = {
 	catalogSlug: string | null;
-	localEdits: Array<
-		| "NAME"
-		| "REVIEW_ON"
-		| "APPLIES_WHEN"
-		| "ABOUT"
-		| "READS"
-		| "REVIEWED_BY"
-		| "CRITERIA"
-		| "SCRIPT"
-		| "SCAN"
-		| "LINE_NOTES"
-		| "GUIDANCE"
-	>;
+	localEdits: Array<PracticeDefinitionField>;
 	offeredDigest: string | null;
-	state: "FROM_HEPHAESTUS" | "EDITED_HERE" | "UPDATE_WAITING" | "YOURS" | "NO_LONGER_SHIPPED";
+	state: CatalogEntryState;
 };
 
 export type CatalogPractice = {
-	changeKind: "NONE" | "WORDING" | "PRESENTATION" | "REVIEW";
+	changeKind: CatalogChangeKind;
 	definition: PracticeDefinition;
 	etag: string;
 	excluded: boolean;
@@ -589,7 +663,7 @@ export type CatalogPractice = {
 	position: number;
 	shipped: PracticeDefinition | null;
 	slug: string;
-	state: "FROM_HEPHAESTUS" | "EDITED_HERE" | "UPDATE_WAITING" | "YOURS" | "NO_LONGER_SHIPPED";
+	state: CatalogEntryState;
 };
 
 export type CatalogPracticeInput = {
@@ -601,18 +675,18 @@ export type CatalogPracticeInput = {
 };
 
 export type CatalogPracticePreview = {
-	availability?: "AVAILABLE" | "ADOPTED" | "SLUG_CONFLICT";
+	availability?: CatalogAdoptionAvailability;
 	definition?: PracticeDefinition;
 	etag?: string;
 	group?: CatalogAdoptionGroup;
-	initialFeedbackMode?: "OFF" | "APPROVE_FIRST" | "AUTOMATIC";
+	initialFeedbackMode?: FeedbackMode;
 	kind?: string;
 	offeredDigest?: string;
 	slug?: string;
 };
 
 export type CatalogPracticeSummary = {
-	availability?: "AVAILABLE" | "ADOPTED" | "SLUG_CONFLICT";
+	availability?: CatalogAdoptionAvailability;
 	groupName?: string;
 	groupSlug?: string;
 	kind?: string;
@@ -629,9 +703,18 @@ export type CatalogPracticeUpdate = {
 	position: null | number;
 };
 
+export type CheckState =
+	| "SUCCESS"
+	| "FAILURE"
+	| "PENDING"
+	| "CANCELLED"
+	| "NONE"
+	| "NO_PIPELINE"
+	| "SKIPPED";
+
 export type CitationCapabilities = {
-	commit?: "REQUIRED" | "OPTIONAL" | "FORBIDDEN";
-	side?: "REQUIRED" | "OPTIONAL" | "FORBIDDEN";
+	commit?: CitationRequirement;
+	side?: CitationRequirement;
 };
 
 export type CitationProof = {
@@ -639,6 +722,10 @@ export type CitationProof = {
 	quoteSha256: string;
 	status: "VERIFIED";
 };
+
+export type CitationRequirement = "REQUIRED" | "OPTIONAL" | "FORBIDDEN";
+
+export type CitationSide = "OLD" | "NEW";
 
 export type ClaimBasis = {
 	type: string;
@@ -667,8 +754,20 @@ export type ClientTokenRequest = {
 };
 
 export type CloseResearchDisclosure = {
-	closure: "DESTROYED" | "ANONYMIZED";
+	closure: ResearchDisclosureClosure;
 };
+
+export type Comparison =
+	| "COMPARABLE"
+	| "FIRST_SCAN"
+	| "METHOD_CHANGED"
+	| "STANDARD_CHANGED"
+	| "INCOMPLETE"
+	| "MIXED";
+
+export type ConfigAuditAction = "CREATED" | "UPDATED" | "DELETED";
+
+export type ConfigAuditActorKind = "USER" | "SYSTEM" | "IMPERSONATED";
 
 /**
  * A human-readable actor identity on an audit row. Resolved at read time, so an erased account
@@ -685,6 +784,35 @@ export type ConfigAuditActorRef = {
 	id: number;
 };
 
+export type ConfigAuditEntityType =
+	| "PROVIDER_RESOURCE_RELEASE"
+	| "PRACTICE_REVIEW_SETTINGS"
+	| "MODEL_ASSIGNMENT"
+	| "AGENT_BINDING"
+	| "AGENT_CONFIG"
+	| "AI_CONFIG_BINDING"
+	| "WORKSPACE_ROLE"
+	| "ACTIVITY_AUTOMATION"
+	| "WORKSPACE_FEATURES"
+	| "WORKSPACE_STATUS"
+	| "WORKSPACE_TOKEN"
+	| "WORKSPACE_VISIBILITY"
+	| "PRACTICE_ACTIVE"
+	| "PRACTICE_USAGE"
+	| "PRACTICE_DEFINITION"
+	| "PRACTICE_GROUP"
+	| "CATALOG_PRACTICE"
+	| "CATALOG_GROUP"
+	| "WORKSPACE_INSTANCE_LLM_BUDGET"
+	| "WORKSPACE_OWN_PROVIDER_LLM_BUDGET"
+	| "WORKSPACE_LLM_BUDGET"
+	| "WORKSPACE_BYO_LLM_BUDGET"
+	| "REVIEW_BATCH"
+	| "REVIEW_SCHEDULE"
+	| "FEEDBACK_DELIVERY_RECHECK"
+	| "WORKSPACE_LLM_CONNECTION"
+	| "WORKSPACE_LLM_MODEL";
+
 /**
  * One audit row, flattened for a viewer. Crosses the module boundary, so it carries no entity.
  */
@@ -694,7 +822,7 @@ export type ConfigAuditEntryView = {
 	 * resolved impersonator, present only for {@link ConfigAuditActorKind#IMPERSONATED ConfigAuditActorKind#IMPERSONATED}
 	 */
 	actingActor?: ConfigAuditActorRef;
-	action?: "CREATED" | "UPDATED" | "DELETED";
+	action?: ConfigAuditAction;
 	/**
 	 * resolved identity of <code>actorAccountId</code>; null for SYSTEM rows or once the
 	 * account is gone. Read together with <code>actorKind</code> — that is what keeps
@@ -702,7 +830,7 @@ export type ConfigAuditEntryView = {
 	 */
 	actor?: ConfigAuditActorRef;
 	actorAccountId?: number;
-	actorKind?: "USER" | "SYSTEM" | "IMPERSONATED";
+	actorKind?: ConfigAuditActorKind;
 	/**
 	 * dot-paths that differ between <code>oldValue</code> and <code>newValue</code>
 	 */
@@ -712,34 +840,7 @@ export type ConfigAuditEntryView = {
 	 */
 	elevatedViaInstanceAdmin: boolean;
 	entityId?: string;
-	entityType?:
-		| "PROVIDER_RESOURCE_RELEASE"
-		| "PRACTICE_REVIEW_SETTINGS"
-		| "MODEL_ASSIGNMENT"
-		| "AGENT_BINDING"
-		| "AGENT_CONFIG"
-		| "AI_CONFIG_BINDING"
-		| "WORKSPACE_ROLE"
-		| "ACTIVITY_AUTOMATION"
-		| "WORKSPACE_FEATURES"
-		| "WORKSPACE_STATUS"
-		| "WORKSPACE_TOKEN"
-		| "WORKSPACE_VISIBILITY"
-		| "PRACTICE_ACTIVE"
-		| "PRACTICE_USAGE"
-		| "PRACTICE_DEFINITION"
-		| "PRACTICE_GROUP"
-		| "CATALOG_PRACTICE"
-		| "CATALOG_GROUP"
-		| "WORKSPACE_INSTANCE_LLM_BUDGET"
-		| "WORKSPACE_OWN_PROVIDER_LLM_BUDGET"
-		| "WORKSPACE_LLM_BUDGET"
-		| "WORKSPACE_BYO_LLM_BUDGET"
-		| "REVIEW_BATCH"
-		| "REVIEW_SCHEDULE"
-		| "FEEDBACK_DELIVERY_RECHECK"
-		| "WORKSPACE_LLM_CONNECTION"
-		| "WORKSPACE_LLM_MODEL";
+	entityType?: ConfigAuditEntityType;
 	id?: number;
 	newValue?: string;
 	occurredAt?: Date;
@@ -751,11 +852,19 @@ export type ConfigurationFact = {
 	documentationUrl: string;
 	explanation: string;
 	id: string;
-	requirement: "REQUIRED" | "RECOMMENDED" | "OPTIONAL";
-	roles: Array<"SERVER">;
-	status: "SATISFIED" | "ACTION_REQUIRED" | "NOT_CONFIGURED" | "NOT_APPLICABLE";
+	requirement: ConfigurationRequirement;
+	roles: Array<RuntimeRole>;
+	status: ConfigurationStatus;
 	subject: string;
 };
+
+export type ConfigurationRequirement = "REQUIRED" | "RECOMMENDED" | "OPTIONAL";
+
+export type ConfigurationStatus =
+	| "SATISFIED"
+	| "ACTION_REQUIRED"
+	| "NOT_CONFIGURED"
+	| "NOT_APPLICABLE";
 
 /**
  * Detailed view of a single Connection — extends {@link ConnectionSummaryDTO ConnectionSummaryDTO} with the
@@ -777,25 +886,23 @@ export type ConfigurationFact = {
  * object.
  */
 export type ConnectionDetail = {
-	attentionProblem?:
-		| "CREDENTIAL_EXPIRING"
-		| "CREDENTIAL_REVOKED"
-		| "PROVIDER_SUSPENDED"
-		| "PROVIDER_CLEANUP_UNCONFIRMED";
+	attentionProblem?: IntegrationAttentionChangedEventProblem;
 	config?: {
 		[key: string]: unknown;
 	};
 	createdAt?: Date;
 	credentialsUnreadableSince?: Date;
 	displayName?: string;
-	family?: "SCM" | "MESSAGING" | "DOCUMENTATION";
+	family?: IntegrationFamily;
 	id?: number;
-	kind?: "GITHUB" | "GITLAB" | "SLACK" | "OUTLINE";
-	state?: "PENDING" | "ACTIVE" | "SUSPENDED" | "UNINSTALLED";
+	kind?: IntegrationKind;
+	state?: IntegrationState;
 	tokenExpiresAt?: Date;
 	tokenExpiryCheckedAt?: Date;
 	updatedAt?: Date;
 };
+
+export type ConnectionHealth = "PENDING" | "HEALTHY" | "DEGRADED" | "FAILED" | "SUSPENDED";
 
 /**
  * Wire shape returned by the <code>GET /workspaces/{workspaceSlug</code>/connections}
@@ -803,18 +910,14 @@ export type ConnectionDetail = {
  * credentials, no audit.
  */
 export type ConnectionSummary = {
-	attentionProblem?:
-		| "CREDENTIAL_EXPIRING"
-		| "CREDENTIAL_REVOKED"
-		| "PROVIDER_SUSPENDED"
-		| "PROVIDER_CLEANUP_UNCONFIRMED";
+	attentionProblem?: IntegrationAttentionChangedEventProblem;
 	createdAt?: Date;
 	credentialsUnreadableSince?: Date;
 	displayName?: string;
-	family?: "SCM" | "MESSAGING" | "DOCUMENTATION";
+	family?: IntegrationFamily;
 	id?: number;
-	kind?: "GITHUB" | "GITLAB" | "SLACK" | "OUTLINE";
-	state?: "PENDING" | "ACTIVE" | "SUSPENDED" | "UNINSTALLED";
+	kind?: IntegrationKind;
+	state?: IntegrationState;
 	updatedAt?: Date;
 };
 
@@ -841,15 +944,15 @@ export type ConnectionSyncStatus = {
 	/**
 	 * Raw connection lifecycle state
 	 */
-	connectionState: "PENDING" | "ACTIVE" | "SUSPENDED" | "UNINSTALLED";
+	connectionState: IntegrationState;
 	/**
 	 * Derived health
 	 */
-	health: "PENDING" | "HEALTHY" | "DEGRADED" | "FAILED" | "SUSPENDED";
+	health: ConnectionHealth;
 	/**
 	 * Integration kind
 	 */
-	kind: "GITHUB" | "GITLAB" | "SLACK" | "OUTLINE";
+	kind: IntegrationKind;
 	/**
 	 * When the last inbound webhook/event was processed for this connection, if any
 	 */
@@ -989,7 +1092,7 @@ export type ConversationEntry = {
 	 */
 	editedAt?: Date;
 	id: string;
-	kind: "USER" | "ANSWER" | "DIGEST";
+	kind: ConversationEntryKind;
 	/**
 	 * The results, problems and prepared feedback Hephaestus showed in this message, in order
 	 */
@@ -1009,11 +1112,11 @@ export type ConversationEntry = {
 	/**
 	 * Only on a question asked in Slack: whether Hephaestus's reply reached Slack. FAILED means Slack does not show the whole reply: it is not there, or a stream showed only part of it before Slack or Silent Mode refused the rest; the full reply is in the app. UNCERTAIN means Slack cannot tell.
 	 */
-	slackDelivery?: "PENDING" | "DELIVERED" | "UNCERTAIN" | "FAILED";
+	slackDelivery?: ConversationEntrySlackDelivery;
 	/**
 	 * Where the message was written; SYSTEM for a weekly digest
 	 */
-	surface: "APP" | "SLACK" | "SYSTEM";
+	surface: ConversationEntrySurface;
 	/**
 	 * The developer's words or Hephaestus's answer; for a weekly digest, the note that points Hephaestus to it; empty when the message was deleted
 	 */
@@ -1033,12 +1136,20 @@ export type ConversationEntry = {
 	/**
 	 * The status of the turn this question asked; only on the developer's messages
 	 */
-	turnStatus?: "QUEUED" | "RUNNING" | "DONE" | "FAILED" | "STOPPED";
+	turnStatus?: ConversationTurnStatus;
 	/**
 	 * The developer's vote; only on Hephaestus's messages
 	 */
-	vote?: "HELPFUL" | "NOT_HELPFUL";
+	vote?: ConversationEntryVote;
 };
+
+export type ConversationEntryKind = "USER" | "ANSWER" | "DIGEST";
+
+export type ConversationEntrySlackDelivery = "PENDING" | "DELIVERED" | "UNCERTAIN" | "FAILED";
+
+export type ConversationEntrySurface = "APP" | "SLACK" | "SYSTEM";
+
+export type ConversationEntryVote = "HELPFUL" | "NOT_HELPFUL";
 
 /**
  * A practice result, problem or prepared feedback Hephaestus showed in a message
@@ -1052,7 +1163,7 @@ export type ConversationLink = {
 	 * The item (pull request, issue, conversation or document) it is about, when the developer may still read it: a problem's through its result
 	 */
 	itemId?: number;
-	kind: "RESULT" | "PROBLEM" | "FEEDBACK";
+	kind: ConversationLinkKind;
 	/**
 	 * The practice it is about: a problem's through its result, feedback's when it is about one practice; absent when the developer can no longer read it
 	 */
@@ -1062,6 +1173,8 @@ export type ConversationLink = {
 	 */
 	text: string;
 };
+
+export type ConversationLinkKind = "RESULT" | "PROBLEM" | "FEEDBACK";
 
 /**
  * How far the developer read their Hephaestus conversation
@@ -1154,19 +1267,19 @@ export type ConversationTurn = {
 	 * The submission or schedule key; the stimulus entry carries the same value
 	 */
 	requestId: string;
-	status: "QUEUED" | "RUNNING" | "DONE" | "FAILED" | "STOPPED";
-	surface: "APP" | "SLACK" | "SYSTEM";
+	status: ConversationTurnStatus;
+	surface: ConversationTurnSurface;
 	/**
 	 * Why a queued turn has not started. CAPACITY: a server may start it, and every conversation slot of the deployment is taken, so it starts when one is free. Absent when the turn does not wait, waits for an earlier question of its conversation, or waits for a reason that the server does not know, such as a server without a configured conversation turn capacity.
 	 */
-	waitingFor?: "CAPACITY";
+	waitingFor?: ConversationTurnWaitingFor;
 };
 
 /**
  * What Hephaestus is doing in a running turn
  */
 export type ConversationTurnPartial = {
-	activity: "THINKING" | "WRITING" | "TOOL";
+	activity: ConversationTurnPartialActivity;
 	/**
 	 * What Hephaestus is doing, in the developer's words, for example "Reading your practice feedback…"
 	 */
@@ -1180,6 +1293,8 @@ export type ConversationTurnPartial = {
 	 */
 	tool?: string;
 };
+
+export type ConversationTurnPartialActivity = "THINKING" | "WRITING" | "TOOL";
 
 /**
  * A question to Hephaestus from the app
@@ -1203,6 +1318,8 @@ export type ConversationTurnRequest = {
 	text: string;
 };
 
+export type ConversationTurnStatus = "QUEUED" | "RUNNING" | "DONE" | "FAILED" | "STOPPED";
+
 /**
  * A status change the developer asks for on a turn
  */
@@ -1210,44 +1327,32 @@ export type ConversationTurnStatusRequest = {
 	/**
 	 * STOPPED stops a queued or running turn. Hephaestus keeps what it already wrote.
 	 */
-	status: "STOPPED";
+	status: ConversationTurnStatus;
 };
+
+export type ConversationTurnSurface = "APP" | "SLACK" | "SYSTEM";
+
+export type ConversationTurnWaitingFor = "CAPACITY";
 
 /**
  * The developer's vote on one of Hephaestus's messages
  */
 export type ConversationVoteRequest = {
-	vote: "HELPFUL" | "NOT_HELPFUL";
+	vote: ConversationEntryVote;
 };
 
 export type CoverageOmission = {
 	count?: number;
 	items?: Array<string>;
-	reason?:
-		| "selection"
-		| "truncated"
-		| "unavailable"
-		| "budget"
-		| "deadline"
-		| "too-large"
-		| "off-format"
-		| "refused"
-		| "error"
-		| "cancelled";
+	reason?: OmissionReason;
 	what?: string;
 };
 
 export type CreateFeedbackDecisionRequest = {
-	action: "APPROVE" | "REJECT" | "WITHDRAW" | "RESTORE";
+	action: FeedbackDecisionAction;
 	contentDigest?: string;
 	note?: string;
-	reasonCode?:
-		| "INCORRECT"
-		| "MISSING_CONTEXT"
-		| "UNHELPFUL"
-		| "DUPLICATE"
-		| "INAPPROPRIATE_LOCATION"
-		| "OTHER";
+	reasonCode?: FeedbackDecisionReason;
 };
 
 /**
@@ -1261,11 +1366,11 @@ export type CreateLlmConnectionRequest = {
 	/**
 	 * Wire protocol
 	 */
-	apiProtocol: "anthropic-messages" | "openai-completions" | "openai-responses";
+	apiProtocol: LlmApiProtocol;
 	/**
 	 * Credential shape (default BEARER)
 	 */
-	authMode?: "BEARER" | "API_KEY";
+	authMode?: LlmAuthMode;
 	/**
 	 * Provider base URL
 	 */
@@ -1273,24 +1378,7 @@ export type CreateLlmConnectionRequest = {
 	/**
 	 * Admin-declared connection platform; null when not declared
 	 */
-	connectionPlatform?:
-		| "LOGOS"
-		| "VLLM"
-		| "OLLAMA"
-		| "AZURE"
-		| "AWS_BEDROCK"
-		| "GOOGLE_VERTEX"
-		| "OPENAI"
-		| "GOOGLE_AI_STUDIO"
-		| "ALIBABA_CLOUD"
-		| "GROQ"
-		| "FIREWORKS"
-		| "TOGETHER_AI"
-		| "DEEPINFRA"
-		| "NEBIUS"
-		| "OPENROUTER"
-		| "CLOUDFLARE_AI_GATEWAY"
-		| "VERCEL_AI_GATEWAY";
+	connectionPlatform?: LlmConnectionPlatform;
 	/**
 	 * Human-readable name
 	 */
@@ -1312,19 +1400,7 @@ export type CreateLlmModelRequest = {
 	/**
 	 * Model brand declared by an admin; display only
 	 */
-	brand?:
-		| "OPENAI"
-		| "ANTHROPIC"
-		| "GEMINI"
-		| "GEMMA"
-		| "META"
-		| "MISTRAL"
-		| "QWEN"
-		| "DEEPSEEK"
-		| "XAI"
-		| "COHERE"
-		| "Z_AI"
-		| "MOONSHOT";
+	brand?: AiModelBrand;
 	/**
 	 * Context window in tokens
 	 */
@@ -1348,11 +1424,11 @@ export type CreateLlmModelRequest = {
 	/**
 	 * Who operates the systems the work is sent to; omit to leave the model undeclared
 	 */
-	operatedBy?: "OWN_ORGANISATION" | "PROVIDER";
+	operatedBy?: LlmDataOperator;
 	/**
 	 * Reasoning effort to request; null sends none, so the provider's own default applies
 	 */
-	reasoningEffort?: "NONE" | "MINIMAL" | "LOW" | "MEDIUM" | "HIGH" | "XHIGH" | "MAX";
+	reasoningEffort?: ReasoningEffort;
 	/**
 	 * Optional internal slug; generated from displayName when omitted
 	 */
@@ -1385,7 +1461,7 @@ export type CreateLoginProviderRequest = {
 	 * Space-separated scopes; defaulted by provider type if omitted
 	 */
 	scopes?: string;
-	type: "GITHUB" | "GITLAB" | "SLACK" | "OUTLINE";
+	type: LoginProviderProviderType;
 };
 
 export type CreatePracticeGroupRequest = {
@@ -1407,7 +1483,7 @@ export type CreatePracticeRequest = {
 };
 
 export type CreateResultMarkRequest = {
-	kind: "INCORRECT" | "ACCEPTED";
+	kind: ResultMarkKind;
 	reason: string;
 };
 
@@ -1433,11 +1509,11 @@ export type CreateWorkspaceLlmConnectionRequest = {
 	/**
 	 * Wire protocol
 	 */
-	apiProtocol: "anthropic-messages" | "openai-completions" | "openai-responses";
+	apiProtocol: LlmApiProtocol;
 	/**
 	 * Credential shape (default BEARER)
 	 */
-	authMode?: "BEARER" | "API_KEY";
+	authMode?: LlmAuthMode;
 	/**
 	 * Provider base URL
 	 */
@@ -1445,24 +1521,7 @@ export type CreateWorkspaceLlmConnectionRequest = {
 	/**
 	 * Admin-declared connection platform; null when not declared
 	 */
-	connectionPlatform?:
-		| "LOGOS"
-		| "VLLM"
-		| "OLLAMA"
-		| "AZURE"
-		| "AWS_BEDROCK"
-		| "GOOGLE_VERTEX"
-		| "OPENAI"
-		| "GOOGLE_AI_STUDIO"
-		| "ALIBABA_CLOUD"
-		| "GROQ"
-		| "FIREWORKS"
-		| "TOGETHER_AI"
-		| "DEEPINFRA"
-		| "NEBIUS"
-		| "OPENROUTER"
-		| "CLOUDFLARE_AI_GATEWAY"
-		| "VERCEL_AI_GATEWAY";
+	connectionPlatform?: LlmConnectionPlatform;
 	/**
 	 * Human-readable name
 	 */
@@ -1484,19 +1543,7 @@ export type CreateWorkspaceLlmModelRequest = {
 	/**
 	 * Model brand declared by an admin; display only
 	 */
-	brand?:
-		| "OPENAI"
-		| "ANTHROPIC"
-		| "GEMINI"
-		| "GEMMA"
-		| "META"
-		| "MISTRAL"
-		| "QWEN"
-		| "DEEPSEEK"
-		| "XAI"
-		| "COHERE"
-		| "Z_AI"
-		| "MOONSHOT";
+	brand?: AiModelBrand;
 	/**
 	 * Context window in tokens
 	 */
@@ -1520,7 +1567,7 @@ export type CreateWorkspaceLlmModelRequest = {
 	/**
 	 * Who operates the systems the work is sent to; omit to leave the model undeclared
 	 */
-	operatedBy?: "OWN_ORGANISATION" | "PROVIDER";
+	operatedBy?: LlmDataOperator;
 	/**
 	 * Cache-read rate per 1M tokens (USD), if applicable
 	 */
@@ -1544,11 +1591,11 @@ export type CreateWorkspaceLlmModelRequest = {
 	/**
 	 * Pricing mode (default UNPRICED)
 	 */
-	pricingMode?: "PRICED" | "NO_CHARGE" | "UNPRICED";
+	pricingMode?: PricingMode;
 	/**
 	 * Reasoning effort to request; null sends none, so the provider's own default applies
 	 */
-	reasoningEffort?: "NONE" | "MINIMAL" | "LOW" | "MEDIUM" | "HIGH" | "XHIGH" | "MAX";
+	reasoningEffort?: ReasoningEffort;
 	/**
 	 * Optional internal slug; generated from displayName when omitted
 	 */
@@ -1570,7 +1617,7 @@ export type CreateWorkspaceRequest = {
 	/**
 	 * Type of account (USER or ORG)
 	 */
-	accountType: "ORG" | "USER";
+	accountType: AccountType;
 	/**
 	 * Human-readable name of the workspace
 	 */
@@ -1578,7 +1625,7 @@ export type CreateWorkspaceRequest = {
 	/**
 	 * Integration kind to provision. SLACK flows through OAuth, not this endpoint.
 	 */
-	kind: "GITHUB" | "GITLAB";
+	kind: IntegrationKind;
 	/**
 	 * Personal Access Token. Required for both kinds (GitLab API or GitHub PAT). Stored encrypted at rest.
 	 */
@@ -1586,7 +1633,7 @@ export type CreateWorkspaceRequest = {
 	/**
 	 * GitLab only. ALL monitors every project of the group, including ones created later; SELECTED monitors only selectedProjectIds. Omitted means ALL.
 	 */
-	repositorySelection?: "ALL" | "SELECTED";
+	repositorySelection?: RepositorySelection;
 	/**
 	 * GitLab project IDs to monitor. Required, and only allowed, when repositorySelection is SELECTED. The server checks each with the token.
 	 */
@@ -1625,6 +1672,8 @@ export type CurrentUserView = {
 	status?: string;
 	username?: string;
 };
+
+export type Currentness = "CURRENT" | "STALE" | "UNVERIFIABLE";
 
 /**
  * One page of a list that a client reads forward with a cursor
@@ -1725,6 +1774,8 @@ export type CursorPageDtoScanReportProblem = {
 	nextCursor?: string;
 };
 
+export type DataHandlingTier = "IN_HOUSE" | "CLOUD" | "UNDECLARED";
+
 export type DeliveredFeedbackPractice = {
 	name: string;
 	slug: string;
@@ -1740,10 +1791,10 @@ export type DeliveredWorkFeedbackCopy = {
 	externalRef: string | null;
 	externalUrl: string | null;
 	id: string;
-	kind: "SUMMARY" | "LINE_NOTE" | "FILE_NOTE" | "CHAT_TURN";
+	kind: FeedbackCopyKind;
 	path: string | null;
 	postedAt: Date;
-	side: "OLD" | "NEW" | null;
+	side: CitationSide | null;
 	startLine: null | number;
 };
 
@@ -1765,6 +1816,19 @@ export type EditProductFeedbackDraft = {
 	description: string;
 	title: string;
 };
+
+export type EmailDeliveryResultOutcome =
+	| "SENT"
+	| "EXPIRED"
+	| "NOT_CONFIGURED"
+	| "SILENT_MODE"
+	| "NO_RECIPIENT"
+	| "UNSUBSCRIBED"
+	| "INVALID_ADDRESS"
+	| "REJECTED"
+	| "UNAVAILABLE"
+	| "RATE_LIMITED"
+	| "UNCONFIRMED";
 
 export type EmailStatus = {
 	/**
@@ -1788,18 +1852,7 @@ export type EmailTestResponse = {
 	/**
 	 * what became of the test email; <code>SENT</code> is the only success
 	 */
-	outcome:
-		| "SENT"
-		| "EXPIRED"
-		| "NOT_CONFIGURED"
-		| "SILENT_MODE"
-		| "NO_RECIPIENT"
-		| "UNSUBSCRIBED"
-		| "INVALID_ADDRESS"
-		| "REJECTED"
-		| "UNAVAILABLE"
-		| "RATE_LIMITED"
-		| "UNCONFIRMED";
+	outcome: EmailDeliveryResultOutcome;
 	/**
 	 * the address it went to, or <code>null</code> when there was no recipient to resolve
 	 */
@@ -1815,7 +1868,7 @@ export type EvidenceCitation = {
 	endLine: null | number;
 	path: string | null;
 	quote: string | null;
-	side: "OLD" | "NEW" | null;
+	side: CitationSide | null;
 	sourceKind: string;
 	sourcePath: string | null;
 	startLine: null | number;
@@ -1878,7 +1931,7 @@ export type FeedbackAnswer = {
 	 */
 	comment: string | null;
 	createdAt: Date;
-	resolution: "ADDRESSED" | "DISAGREE" | "NOT_APPLICABLE";
+	resolution: FeedbackResolution;
 };
 
 export type FeedbackBasis = {
@@ -1892,48 +1945,8 @@ export type FeedbackCheck = {
 	allowed: boolean;
 	checkedAt: Date;
 	facts: FeedbackCheckFacts;
-	reason:
-		| "VOLUME_CAPPED"
-		| "COMPOSER_WITHHELD"
-		| "NOTHING_NEW"
-		| "REPEATS_DELIVERED_NOTE"
-		| "REACTED_DISAGREE"
-		| "REACTED_NOT_APPLICABLE"
-		| "CONVERSATION_EXPIRED"
-		| "DELIVERY_UNCONFIRMED"
-		| "ITEM_GONE"
-		| "ITEM_CLOSED"
-		| "ITEM_MERGED"
-		| "ITEM_STATE_INELIGIBLE"
-		| "ISSUE_SNAPSHOT_CHANGED"
-		| "PUBLIC_SUBJECT_INELIGIBLE"
-		| "NO_AI"
-		| "DELIVERY_OFF"
-		| "PERSON_SUPPRESSED"
-		| "RECIPIENT_UNAVAILABLE"
-		| "EMPTY_AFTER_SANITIZE"
-		| "INSTANCE_SILENCED"
-		| "FEEDBACK_OFF"
-		| "WORKSPACE_DISABLED"
-		| "WORKSPACE_DELIVERY_PAUSED"
-		| "STALE_ROLLOUT_REVISION"
-		| "OUTSIDE_CURRENT_SCOPE"
-		| "APPROVAL_STALE"
-		| "APPROVAL_NO_LONGER_ELIGIBLE"
-		| "PRACTICE_REQUIRES_APPROVAL"
-		| "BACKFILL_QUIET"
-		| "RESULT_MARKED_INCORRECT"
-		| "REVIEWED_VERSION_CHANGED"
-		| "REVIEW_CANCELLED"
-		| "EVIDENCE_NOT_PERMITTED"
-		| "NO_EVIDENCE"
-		| "UNCORROBORATED"
-		| "PUBLIC_HISTORY_CHANGED"
-		| "PUBLIC_DELIVERY_UNRESOLVED"
-		| "STEP_LIMIT"
-		| "NOT_COMPOSED"
-		| null;
-	stage: "COMPOSITION" | "AUTOMATIC" | "APPROVED" | "EGRESS";
+	reason: FeedbackStopReason | null;
+	stage: FeedbackCheckStage;
 };
 
 export type FeedbackCheckFacts = {
@@ -1949,6 +1962,10 @@ export type FeedbackCheckFacts = {
 	writeStarted: boolean;
 };
 
+export type FeedbackCheckStage = "COMPOSITION" | "AUTOMATIC" | "APPROVED" | "EGRESS";
+
+export type FeedbackClosedBy = "WORK" | "DEVELOPER" | "PRACTICE_CHANGED";
+
 export type FeedbackCopy = {
 	body: string | null;
 	/**
@@ -1959,56 +1976,16 @@ export type FeedbackCopy = {
 	externalRef: string | null;
 	externalUrl: string | null;
 	id: string;
-	kind: "SUMMARY" | "LINE_NOTE" | "FILE_NOTE" | "CHAT_TURN";
+	kind: FeedbackCopyKind;
 	lastError: string | null;
 	path: string | null;
 	position: number;
 	postedAt: Date | null;
-	readback: "ABSENT" | "TRANSIENT" | "UNKNOWN" | null;
-	side: "OLD" | "NEW" | null;
+	readback: FeedbackCopyReadback | null;
+	side: CitationSide | null;
 	startLine: null | number;
-	state: "PLANNED" | "WRITE_STARTED" | "POSTED" | "FAILED" | "WITHHELD" | "RETRACTED";
-	stopReason:
-		| "VOLUME_CAPPED"
-		| "COMPOSER_WITHHELD"
-		| "NOTHING_NEW"
-		| "REPEATS_DELIVERED_NOTE"
-		| "REACTED_DISAGREE"
-		| "REACTED_NOT_APPLICABLE"
-		| "CONVERSATION_EXPIRED"
-		| "DELIVERY_UNCONFIRMED"
-		| "ITEM_GONE"
-		| "ITEM_CLOSED"
-		| "ITEM_MERGED"
-		| "ITEM_STATE_INELIGIBLE"
-		| "ISSUE_SNAPSHOT_CHANGED"
-		| "PUBLIC_SUBJECT_INELIGIBLE"
-		| "NO_AI"
-		| "DELIVERY_OFF"
-		| "PERSON_SUPPRESSED"
-		| "RECIPIENT_UNAVAILABLE"
-		| "EMPTY_AFTER_SANITIZE"
-		| "INSTANCE_SILENCED"
-		| "FEEDBACK_OFF"
-		| "WORKSPACE_DISABLED"
-		| "WORKSPACE_DELIVERY_PAUSED"
-		| "STALE_ROLLOUT_REVISION"
-		| "OUTSIDE_CURRENT_SCOPE"
-		| "APPROVAL_STALE"
-		| "APPROVAL_NO_LONGER_ELIGIBLE"
-		| "PRACTICE_REQUIRES_APPROVAL"
-		| "BACKFILL_QUIET"
-		| "RESULT_MARKED_INCORRECT"
-		| "REVIEWED_VERSION_CHANGED"
-		| "REVIEW_CANCELLED"
-		| "EVIDENCE_NOT_PERMITTED"
-		| "NO_EVIDENCE"
-		| "UNCORROBORATED"
-		| "PUBLIC_HISTORY_CHANGED"
-		| "PUBLIC_DELIVERY_UNRESOLVED"
-		| "STEP_LIMIT"
-		| "NOT_COMPOSED"
-		| null;
+	state: FeedbackCopyState;
+	stopReason: FeedbackStopReason | null;
 	writeStartedAt: Date | null;
 };
 
@@ -2021,30 +1998,49 @@ export type FeedbackCopyCounts = {
 	writeStarted: number;
 };
 
+export type FeedbackCopyKind = "SUMMARY" | "LINE_NOTE" | "FILE_NOTE" | "CHAT_TURN";
+
+export type FeedbackCopyReadback = "ABSENT" | "TRANSIENT" | "UNKNOWN";
+
+export type FeedbackCopyState =
+	| "PLANNED"
+	| "WRITE_STARTED"
+	| "POSTED"
+	| "FAILED"
+	| "WITHHELD"
+	| "RETRACTED";
+
 export type FeedbackDecision = {
-	action: "APPROVE" | "REJECT" | "WITHDRAW" | "RESTORE";
+	action: FeedbackDecisionAction;
 	actor: AccountRef | null;
 	contentDigest: string | null;
 	decidedAt: Date;
 	feedbackId: string;
 	id: string;
 	note: string | null;
-	reasonCode:
-		| "INCORRECT"
-		| "MISSING_CONTEXT"
-		| "UNHELPFUL"
-		| "DUPLICATE"
-		| "INAPPROPRIATE_LOCATION"
-		| "OTHER"
-		| null;
+	reasonCode: FeedbackDecisionReason | null;
 };
+
+export type FeedbackDecisionAction = "APPROVE" | "REJECT" | "WITHDRAW" | "RESTORE";
+
+export type FeedbackDecisionReason =
+	| "INCORRECT"
+	| "MISSING_CONTEXT"
+	| "UNHELPFUL"
+	| "DUPLICATE"
+	| "INAPPROPRIATE_LOCATION"
+	| "OTHER";
+
+export type FeedbackDestination = "ON_WORK" | "PRACTICE_PAGE" | "CONVERSATION";
 
 export type FeedbackDisagreement = {
 	comment: string;
-	destination: "ON_WORK" | "PRACTICE_PAGE" | "CONVERSATION";
+	destination: FeedbackDestination;
 	feedbackId: string;
 	respondedAt: Date;
 };
+
+export type FeedbackFilter = "OPEN" | "IN_FLIGHT" | "ON_GITHUB" | "RESOLVED" | "ALL";
 
 export type FeedbackItem = {
 	account?: FeedbackAccountRef;
@@ -2058,31 +2054,44 @@ export type FeedbackItem = {
 	issueText?: string;
 	issueTitle?: string;
 	issueUrl?: string;
-	kind: "IDEA" | "BUG" | "FEEDBACK";
+	kind: ProductFeedbackKind;
 	message: string;
 	pagePath?: string;
 	reason?: string;
 	resolvedAt?: Date;
 	resolvedBy?: FeedbackAccountRef;
-	route: "PUBLIC" | "PRIVATE" | "ADMINS";
+	route: FilingReportRoute;
 	savedBeforeDisclosure: boolean;
-	state: "SAVED_FOR_ADMINS" | "DRAFTING" | "HELD" | "FILING" | "FILED" | "STOPPED";
+	state: FilingReportState;
 	userAgent?: string;
 	workspace?: FeedbackWorkspaceRef;
 };
 
+export type FeedbackLocation =
+	| "GITHUB"
+	| "GITLAB"
+	| "OTHER_WORK"
+	| "APP"
+	| "SLACK"
+	| "NEXT_CONVERSATION"
+	| "PRACTICE_PAGES";
+
+export type FeedbackMode = "OFF" | "APPROVE_FIRST" | "AUTOMATIC";
+
 export type FeedbackModeAssignment = {
-	effective: "OFF" | "APPROVE_FIRST" | "AUTOMATIC";
-	override: "OFF" | "APPROVE_FIRST" | "AUTOMATIC" | null;
-	source: "PRACTICE" | "GROUP" | "WORKSPACE" | "INSTANCE";
+	effective: FeedbackMode;
+	override: FeedbackMode | null;
+	source: FeedbackModeSource;
 };
 
 export type FeedbackModeRollup = {
 	approveFirst: number;
 	automatic: number;
-	defaultMode: "OFF" | "APPROVE_FIRST" | "AUTOMATIC";
+	defaultMode: FeedbackMode;
 	off: number;
 };
+
+export type FeedbackModeSource = "PRACTICE" | "GROUP" | "WORKSPACE" | "INSTANCE";
 
 export type FeedbackReceipt = {
 	/**
@@ -2093,23 +2102,25 @@ export type FeedbackReceipt = {
 	/**
 	 * where the report is going now; it can still change while the state is DRAFTING or HELD
 	 */
-	route: "PUBLIC" | "PRIVATE" | "ADMINS";
-	state: "SAVED_FOR_ADMINS" | "DRAFTING" | "HELD" | "FILING" | "FILED" | "STOPPED";
+	route: FilingReportRoute;
+	state: FilingReportState;
 };
 
 export type FeedbackRequest = {
-	kind: "IDEA" | "BUG" | "FEEDBACK";
+	kind: ProductFeedbackKind;
 	message: string;
 	pagePath?: string;
 	share?: boolean;
 	userAgent?: string;
 };
 
+export type FeedbackResolution = "ADDRESSED" | "DISAGREE" | "NOT_APPLICABLE";
+
 export type FeedbackResponse = {
 	comment: string | null;
 	createdAt: Date | null;
-	resolution: "ADDRESSED" | "DISAGREE" | "NOT_APPLICABLE" | null;
-	usefulness: "HELPFUL" | "UNHELPFUL" | null;
+	resolution: FeedbackResolution | null;
+	usefulness: FeedbackUsefulness | null;
 };
 
 /**
@@ -2123,32 +2134,89 @@ export type FeedbackResponseRequest = {
 	/**
 	 * What the recipient decided to do with the feedback
 	 */
-	resolution?: "ADDRESSED" | "DISAGREE" | "NOT_APPLICABLE";
+	resolution?: FeedbackResolution;
 	/**
 	 * How useful the feedback was
 	 */
-	usefulness?: "HELPFUL" | "UNHELPFUL";
+	usefulness?: FeedbackUsefulness;
 };
 
 export type FeedbackSend = {
-	action: "POST" | "EDIT" | "READBACK" | "RETRACT";
+	action: FeedbackSendAction;
 	attemptCount: number;
 	createdAt: Date;
 	feedbackId: string;
 	lastError: string | null;
 	nextAttemptAt: Date;
-	state: "PENDING" | "SENDING" | "UNCERTAIN" | "DONE";
+	state: FeedbackSendState;
 	updatedAt: Date;
 };
+
+export type FeedbackSendAction = "POST" | "EDIT" | "READBACK" | "RETRACT";
+
+export type FeedbackSendState = "PENDING" | "SENDING" | "UNCERTAIN" | "DONE";
 
 export type FeedbackSourceCount = {
 	count: number;
 	itemKind: string;
 };
 
+export type FeedbackState =
+	| "AWAITING_APPROVAL"
+	| "READY"
+	| "DELIVERED"
+	| "UNCONFIRMED"
+	| "WITHHELD"
+	| "REJECTED"
+	| "REPLACED"
+	| "FAILED";
+
+export type FeedbackStopReason =
+	| "VOLUME_CAPPED"
+	| "COMPOSER_WITHHELD"
+	| "NOTHING_NEW"
+	| "REPEATS_DELIVERED_NOTE"
+	| "REACTED_DISAGREE"
+	| "REACTED_NOT_APPLICABLE"
+	| "CONVERSATION_EXPIRED"
+	| "DELIVERY_UNCONFIRMED"
+	| "ITEM_GONE"
+	| "ITEM_CLOSED"
+	| "ITEM_MERGED"
+	| "ITEM_STATE_INELIGIBLE"
+	| "ISSUE_SNAPSHOT_CHANGED"
+	| "PUBLIC_SUBJECT_INELIGIBLE"
+	| "NO_AI"
+	| "DELIVERY_OFF"
+	| "PERSON_SUPPRESSED"
+	| "RECIPIENT_UNAVAILABLE"
+	| "EMPTY_AFTER_SANITIZE"
+	| "INSTANCE_SILENCED"
+	| "FEEDBACK_OFF"
+	| "WORKSPACE_DISABLED"
+	| "WORKSPACE_DELIVERY_PAUSED"
+	| "STALE_ROLLOUT_REVISION"
+	| "OUTSIDE_CURRENT_SCOPE"
+	| "APPROVAL_STALE"
+	| "APPROVAL_NO_LONGER_ELIGIBLE"
+	| "PRACTICE_REQUIRES_APPROVAL"
+	| "BACKFILL_QUIET"
+	| "RESULT_MARKED_INCORRECT"
+	| "REVIEWED_VERSION_CHANGED"
+	| "REVIEW_CANCELLED"
+	| "EVIDENCE_NOT_PERMITTED"
+	| "NO_EVIDENCE"
+	| "UNCORROBORATED"
+	| "PUBLIC_HISTORY_CHANGED"
+	| "PUBLIC_DELIVERY_UNRESOLVED"
+	| "STEP_LIMIT"
+	| "NOT_COMPOSED";
+
 export type FeedbackTriage = {
 	resolved: boolean;
 };
+
+export type FeedbackUsefulness = "HELPFUL" | "UNHELPFUL";
 
 /**
  * The workspace a record was submitted from; absent for instance-level submissions.
@@ -2158,6 +2226,24 @@ export type FeedbackWorkspaceRef = {
 	id: number;
 	slug: string;
 };
+
+export type FilingReportRoute = "PUBLIC" | "PRIVATE" | "ADMINS";
+
+export type FilingReportState =
+	| "SAVED_FOR_ADMINS"
+	| "DRAFTING"
+	| "HELD"
+	| "FILING"
+	| "FILED"
+	| "STOPPED";
+
+export type FilingRepositoryCheck =
+	| "UNSET"
+	| "INSTALLED"
+	| "MISSING"
+	| "NOT_PRIVATE"
+	| "NOT_PUBLIC"
+	| "DIFFERENT_OWNER";
 
 export type FirstLoginConsent = {
 	noticeVersion: string;
@@ -2171,6 +2257,8 @@ export type FirstLoginConsent = {
 	researchOrganization?: string;
 	termsAccepted: boolean;
 };
+
+export type FoundBy = "WEBHOOK" | "SYNC" | "REQUEST" | "BACKFILL" | "SCHEDULE";
 
 /**
  * One frame of the stack, in a script that the server's own web app ships
@@ -2231,16 +2319,24 @@ export type GeneratedPathReview = {
 	withheld: boolean;
 };
 
+export type GitHubInstallationAccountKind = "USER" | "ORGANIZATION";
+
 /**
  * What happens next with the GitHub App installation that the signed-in person set up
  */
 export type GitHubInstallationClaim = {
-	outcome: "READY" | "AWAITING_APPROVAL" | "DECLINED" | "SETTING_UP";
+	outcome: GitHubInstallationClaimOutcome;
 	/**
 	 * The installation's workspace, given only to its members and to instance admins
 	 */
 	workspaceSlug?: string;
 };
+
+export type GitHubInstallationClaimOutcome =
+	| "READY"
+	| "AWAITING_APPROVAL"
+	| "DECLINED"
+	| "SETTING_UP";
 
 export type GitHubInstallationClaimRequest = {
 	/**
@@ -2253,7 +2349,7 @@ export type GitHubInstallationClaimRequest = {
  * A GitHub App installation and an instance admin's decision on it
  */
 export type GitHubInstallationRequest = {
-	accountKind: "USER" | "ORGANIZATION";
+	accountKind: GitHubInstallationAccountKind;
 	/**
 	 * Absent for a personal account whose adopted workspace was deleted, or whose person was erased
 	 */
@@ -2261,12 +2357,14 @@ export type GitHubInstallationRequest = {
 	decidedAt?: Date;
 	installationId: number;
 	receivedAt: Date;
-	status: "PENDING" | "DECLINED" | "ADOPTED";
+	status: GitHubInstallationRequestStatus;
 	/**
 	 * The workspace that the adoption created; absent once that workspace is deleted
 	 */
 	workspaceSlug?: string;
 };
+
+export type GitHubInstallationRequestStatus = "PENDING" | "DECLINED" | "ADOPTED";
 
 /**
  * GitHub provider configuration
@@ -2387,7 +2485,7 @@ export type GitLabRepositorySelection = {
 	/**
 	 * ALL admits projects that discovery later finds in the group, except stopped ones. SELECTED admits only the projects the workspace monitors.
 	 */
-	repositorySelection: "ALL" | "SELECTED";
+	repositorySelection: RepositorySelection;
 };
 
 /**
@@ -2419,6 +2517,8 @@ export type GroupRef = {
 	slug: string;
 };
 
+export type GuidanceSource = "RULE_BASED";
+
 export type HostCoverage = Omit<ResultCoverage, "source"> & {
 	complete?: boolean;
 	failedReads?: number;
@@ -2434,6 +2534,8 @@ export type Identity = {
 	subject: string;
 	teamId?: string;
 };
+
+export type IdentityProviderType = "GITHUB" | "GITLAB" | "SLACK" | "OUTLINE";
 
 /**
  * One row per sign-in option. <code>providerType</code> drives the SPA's icon choice; <code>baseUrl</code> is
@@ -2478,7 +2580,7 @@ export type InapplicabilityWarrant = {
  * needs nothing because the install URL is server-configured).
  */
 export type InitiateConnectionRequest = {
-	kind: "GITHUB" | "GITLAB" | "SLACK" | "OUTLINE";
+	kind: IntegrationKind;
 	userInput?: {
 		[key: string]: string;
 	};
@@ -2503,9 +2605,11 @@ export type InitiateConnectionRequest = {
  */
 export type InitiateConnectionResponse = {
 	connectionId?: number;
-	type: "REDIRECT" | "LINKED";
+	type: InitiateConnectionResponseType;
 	vendorUrl?: string;
 };
+
+export type InitiateConnectionResponseType = "REDIRECT" | "LINKED";
 
 /**
  * Instance-wide LLM governance settings
@@ -2529,6 +2633,12 @@ export type InstanceSettings = {
 	silentModeReason?: string;
 };
 
+export type IntegrationAttentionChangedEventProblem =
+	| "CREDENTIAL_EXPIRING"
+	| "CREDENTIAL_REVOKED"
+	| "PROVIDER_SUSPENDED"
+	| "PROVIDER_CLEANUP_UNCONFIRMED";
+
 /**
  * Integration kind availability + connection status for this workspace
  */
@@ -2536,11 +2646,7 @@ export type IntegrationCatalogEntry = {
 	/**
 	 * A problem with the connection that an admin should act on; absent while there is none
 	 */
-	attentionProblem?:
-		| "CREDENTIAL_EXPIRING"
-		| "CREDENTIAL_REVOKED"
-		| "PROVIDER_SUSPENDED"
-		| "PROVIDER_CLEANUP_UNCONFIRMED";
+	attentionProblem?: IntegrationAttentionChangedEventProblem;
 	/**
 	 * Whether this workspace has a (non-UNINSTALLED) connection for this kind
 	 */
@@ -2552,7 +2658,7 @@ export type IntegrationCatalogEntry = {
 	/**
 	 * Connection state, if connected
 	 */
-	connectionState?: "PENDING" | "ACTIVE" | "SUSPENDED" | "UNINSTALLED";
+	connectionState?: IntegrationState;
 	/**
 	 * When the stored credential was first found unreadable with the server's keys; absent while it reads
 	 */
@@ -2564,8 +2670,14 @@ export type IntegrationCatalogEntry = {
 	/**
 	 * Integration kind
 	 */
-	kind: "GITHUB" | "GITLAB" | "SLACK" | "OUTLINE";
+	kind: IntegrationKind;
 };
+
+export type IntegrationFamily = "SCM" | "MESSAGING" | "DOCUMENTATION";
+
+export type IntegrationKind = "GITHUB" | "GITLAB" | "SLACK" | "OUTLINE";
+
+export type IntegrationState = "PENDING" | "ACTIVE" | "SUSPENDED" | "UNINSTALLED";
 
 export type IntroducedBasis = Omit<ClaimBasis, "type"> & {
 	explanation?: string;
@@ -2573,57 +2685,32 @@ export type IntroducedBasis = Omit<ClaimBasis, "type"> & {
 	type: "IntroducedBasis";
 };
 
+export type IssueState = "OPEN" | "CLOSED" | "MERGED";
+
 export type ItemEvent = {
 	decidedAt: Date | null;
-	foundBy: "WEBHOOK" | "SYNC" | "REQUEST" | "BACKFILL" | "SCHEDULE";
+	foundBy: FoundBy;
 	id: string;
 	itemId: string;
 	itemVersion: string | null;
 	name: string;
 	occurredAt: Date;
-	reason:
-		| "GATE_WITHHELD"
-		| "COOLDOWN_ACTIVE"
-		| "REQUEST_COOLDOWN_ACTIVE"
-		| "REQUESTER_QUOTA_EXHAUSTED"
-		| "CONCURRENT_DUPLICATE"
-		| "COALESCED"
-		| "OUT_OF_REVIEW_SCOPE"
-		| "BOT_AUTHOR"
-		| "BOT_REVIEWER"
-		| "STALE_ROLLOUT_REVISION"
-		| "WORKSPACE_INACTIVE"
-		| "PRACTICES_DISABLED"
-		| "NO_ACTIVE_PRACTICE"
-		| "REVIEW_MODEL_UNBOUND"
-		| "MEMBER_AI_DECLINED"
-		| "PERSON_DATA_ERASED"
-		| "FEEDBACK_MODE_OFF"
-		| "SUBJECT_UNLINKED"
-		| "MERGE_ACTOR_UNAVAILABLE"
-		| "MODEL_UNAVAILABLE"
-		| "BUDGET_EXHAUSTED"
-		| "ITEM_NOT_VISIBLE"
-		| "VERSION_SUPERSEDED"
-		| "PENDING_DEADLINE_EXCEEDED"
-		| "ITEM_GONE"
-		| "LEGACY_REVIEW_UNBOUND"
-		| "OCCASION_EVIDENCE_UNAVAILABLE"
-		| "QUIET_WINDOW"
-		| "REVIEW_IN_PROGRESS"
-		| "ALREADY_CURRENT"
-		| null;
+	reason: ReviewRequestReason | null;
 	reviewId: string | null;
-	state: "RECORDED" | "WAITING" | "STARTED" | "WITHHELD" | "EXPIRED";
+	state: ItemEventState;
 };
 
 export type ItemEventOption = {
 	connected: boolean;
 	label: string;
 	name: string;
-	raisedBy: Array<"GITHUB" | "GITLAB" | "SLACK" | "OUTLINE">;
+	raisedBy: Array<IntegrationKind>;
 	recommended: boolean;
 };
+
+export type ItemEventState = "RECORDED" | "WAITING" | "STARTED" | "WITHHELD" | "EXPIRED";
+
+export type ItemExclusionReason = "FILE_TOO_LARGE" | "BINARY_FILE";
 
 export type ItemFact = {
 	name: string;
@@ -2643,7 +2730,7 @@ export type ItemRef = {
 	label: string;
 	parentId: string | null;
 	path: string | null;
-	provider: "GITHUB" | "GITLAB" | "SLACK" | "OUTLINE" | null;
+	provider: IntegrationKind | null;
 	removedAt: Date | null;
 	title: string | null;
 	url: string | null;
@@ -2657,16 +2744,16 @@ export type ItemTrace = {
 };
 
 export type JudgedScanReportItem = {
-	currentness: "CURRENT" | "STALE" | "UNVERIFIABLE";
+	currentness: Currentness;
 	item: ItemRef;
 	itemVersion: string;
-	outcome: "MET" | "NOT_MET" | "DOES_NOT_APPLY" | "COULD_NOT_DETERMINE";
+	outcome: ResultOutcome;
 	practiceName: string;
 	practiceSlug: string;
 	problemCount: number;
 	recordedAt: Date;
 	resultId: string;
-	severity: "CRITICAL" | "MAJOR" | "MINOR" | "TRIVIAL" | null;
+	severity: Severity | null;
 	sourceReviewId: string;
 	status: "JUDGED";
 	summary: string | null;
@@ -2706,6 +2793,8 @@ export type LatestRelease = {
 	version: string;
 };
 
+export type LineageKind = "ITEM" | "REVIEW" | "RESULT" | "PROBLEM" | "FEEDBACK";
+
 /**
  * A provider instance the current user is linked to: its type + server-url origin.
  */
@@ -2723,6 +2812,12 @@ export type ListedScanReportItem = {
 	reason: string | null;
 	status: "LISTED";
 };
+
+export type LlmApiProtocol = "anthropic-messages" | "openai-completions" | "openai-responses";
+
+export type LlmAuthMode = "BEARER" | "API_KEY";
+
+export type LlmBudgetVerdict = "WITHIN" | "EXHAUSTED" | "UNVERIFIABLE";
 
 /**
  * Provider capacity that the models in it share
@@ -2816,7 +2911,7 @@ export type LlmCallPoolModel = {
 	/**
 	 * INSTANCE for the instance catalog, WORKSPACE for a workspace's own model
 	 */
-	scope: "INSTANCE" | "WORKSPACE";
+	scope: UsageFundingSource;
 	/**
 	 * Slug of the workspace that owns the model; null for an instance model
 	 */
@@ -2834,11 +2929,11 @@ export type LlmConnection = {
 	/**
 	 * Wire protocol
 	 */
-	apiProtocol: "anthropic-messages" | "openai-completions" | "openai-responses";
+	apiProtocol: LlmApiProtocol;
 	/**
 	 * Credential shape
 	 */
-	authMode: "BEARER" | "API_KEY";
+	authMode: LlmAuthMode;
 	/**
 	 * Provider base URL
 	 */
@@ -2846,24 +2941,7 @@ export type LlmConnection = {
 	/**
 	 * Admin-declared connection platform
 	 */
-	connectionPlatform?:
-		| "LOGOS"
-		| "VLLM"
-		| "OLLAMA"
-		| "AZURE"
-		| "AWS_BEDROCK"
-		| "GOOGLE_VERTEX"
-		| "OPENAI"
-		| "GOOGLE_AI_STUDIO"
-		| "ALIBABA_CLOUD"
-		| "GROQ"
-		| "FIREWORKS"
-		| "TOGETHER_AI"
-		| "DEEPINFRA"
-		| "NEBIUS"
-		| "OPENROUTER"
-		| "CLOUDFLARE_AI_GATEWAY"
-		| "VERCEL_AI_GATEWAY";
+	connectionPlatform?: LlmConnectionPlatform;
 	/**
 	 * Creation timestamp
 	 */
@@ -2887,7 +2965,7 @@ export type LlmConnection = {
 	/**
 	 * The purposes a model on this connection can serve, from its protocol
 	 */
-	purposes: Array<"PRACTICE_REVIEW" | "CONVERSATION">;
+	purposes: Array<ModelPurpose>;
 	/**
 	 * Unique slug
 	 */
@@ -2898,6 +2976,29 @@ export type LlmConnection = {
 	updatedAt?: Date;
 };
 
+export type LlmConnectionPlatform =
+	| "LOGOS"
+	| "VLLM"
+	| "OLLAMA"
+	| "AZURE"
+	| "AWS_BEDROCK"
+	| "GOOGLE_VERTEX"
+	| "OPENAI"
+	| "GOOGLE_AI_STUDIO"
+	| "ALIBABA_CLOUD"
+	| "GROQ"
+	| "FIREWORKS"
+	| "TOGETHER_AI"
+	| "DEEPINFRA"
+	| "NEBIUS"
+	| "OPENROUTER"
+	| "CLOUDFLARE_AI_GATEWAY"
+	| "VERCEL_AI_GATEWAY";
+
+export type LlmDataOperator = "OWN_ORGANISATION" | "PROVIDER";
+
+export type LlmLimitSource = "ADMIN" | "DISCOVERED" | "CATALOG" | "DERIVED";
+
 /**
  * Instance catalog model
  */
@@ -2905,19 +3006,7 @@ export type LlmModel = {
 	/**
 	 * Model brand declared by an admin; display only
 	 */
-	brand?:
-		| "OPENAI"
-		| "ANTHROPIC"
-		| "GEMINI"
-		| "GEMMA"
-		| "META"
-		| "MISTRAL"
-		| "QWEN"
-		| "DEEPSEEK"
-		| "XAI"
-		| "COHERE"
-		| "Z_AI"
-		| "MOONSHOT";
+	brand?: AiModelBrand;
 	/**
 	 * The pool whose capacity the model's calls share; a model has its own by default
 	 */
@@ -2949,7 +3038,7 @@ export type LlmModel = {
 	/**
 	 * Data-handling tier derived from the operator; UNDECLARED until it is set
 	 */
-	dataHandlingTier: "IN_HOUSE" | "CLOUD" | "UNDECLARED";
+	dataHandlingTier: DataHandlingTier;
 	/**
 	 * Human-readable name
 	 */
@@ -2981,21 +3070,15 @@ export type LlmModel = {
 	/**
 	 * Who operates the systems the work is sent to; null until declared
 	 */
-	operatedBy?: "OWN_ORGANISATION" | "PROVIDER";
+	operatedBy?: LlmDataOperator;
 	/**
 	 * Whether the model can run now, or the first reason it cannot
 	 */
-	readiness:
-		| "READY"
-		| "PRICE_MISSING"
-		| "CONNECTION_OFF"
-		| "OFF"
-		| "LIMITS_MISSING"
-		| "NO_WORKSPACE_ACCESS";
+	readiness: LlmModelReadiness;
 	/**
 	 * Reasoning effort requested of the model; null sends none, the provider's default applies
 	 */
-	reasoningEffort?: "NONE" | "MINIMAL" | "LOW" | "MEDIUM" | "HIGH" | "XHIGH" | "MAX";
+	reasoningEffort?: ReasoningEffort;
 	/**
 	 * Unique slug within the connection
 	 */
@@ -3011,7 +3094,7 @@ export type LlmModel = {
 	/**
 	 * Share with all workspaces (PUBLIC) or only selected ones (GRANTED)
 	 */
-	visibility: "PUBLIC" | "GRANTED";
+	visibility: ModelVisibility;
 };
 
 /**
@@ -3039,7 +3122,7 @@ export type LlmModelLimits = {
 	/**
 	 * Where the context window comes from; null when unknown
 	 */
-	contextWindowSource?: "ADMIN" | "DISCOVERED" | "CATALOG" | "DERIVED";
+	contextWindowSource?: LlmLimitSource;
 	/**
 	 * Maximum output tokens of one call; null when unknown
 	 */
@@ -3047,7 +3130,7 @@ export type LlmModelLimits = {
 	/**
 	 * Where the maximum output comes from; null when unknown
 	 */
-	maxOutputTokensSource?: "ADMIN" | "DISCOVERED" | "CATALOG" | "DERIVED";
+	maxOutputTokensSource?: LlmLimitSource;
 };
 
 /**
@@ -3093,8 +3176,18 @@ export type LlmModelPrice = {
 	/**
 	 * Pricing mode
 	 */
-	pricingMode: "PRICED" | "NO_CHARGE" | "UNPRICED";
+	pricingMode: PricingMode;
 };
+
+export type LlmModelReadiness =
+	| "READY"
+	| "PRICE_MISSING"
+	| "CONNECTION_OFF"
+	| "OFF"
+	| "LIMITS_MISSING"
+	| "NO_WORKSPACE_ACCESS";
+
+export type LlmModelScope = "SHARED" | "WORKSPACE";
 
 /**
  * Result of testing an LLM connection's /models endpoint
@@ -3186,6 +3279,8 @@ export type LlmUsageByJobType = {
 	unpricedEventCount: number;
 };
 
+export type LoginProviderProviderType = "GITHUB" | "GITLAB" | "SLACK" | "OUTLINE";
+
 /**
  * Admin view of a login provider. The client secret is never included.
  */
@@ -3216,32 +3311,25 @@ export type MemberReviewReadiness = {
 	/**
 	 * The first reason, in the enum's order, why no review of the member's work runs now; null when work activity can start one. Repository coverage and a practice's state filters depend on the work and are not judged here.
 	 */
-	blocker:
-		| "WORKSPACE_INACTIVE"
-		| "REVIEWS_OFF"
-		| "PERSON_ERASED"
-		| "NO_AI"
-		| "OUTSIDE_REVIEW_SCOPE"
-		| "NOT_ELIGIBLE"
-		| "CHOICE_REQUIRED"
-		| "NO_MODEL"
-		| "NO_PRACTICE"
-		| "ON_REQUEST_ONLY"
-		| null;
+	blocker: ReviewReadinessBlocker | null;
 	/**
 	 * The sorted, distinct item events (such as scm.pull_request.opened) that can start a review of the member's work, from the practices that Hephaestus reviews about the person who did the work. A review also needs the work's repository and the practice's own conditions to match, and a null blocker.
 	 */
 	events: Array<string>;
 };
 
+export type MembershipRoleSource = "PROVIDER" | "PERSON";
+
+export type MembershipWorkspaceRole = "OWNER" | "ADMIN" | "MEMBER";
+
 /**
  * A workspace's model assignment for one purpose
  */
 export type ModelAssignment = {
-	dataHandlingTier: "IN_HOUSE" | "CLOUD" | "UNDECLARED";
+	dataHandlingTier: DataHandlingTier;
 	enabled: boolean;
 	instanceModelId?: number;
-	purpose: "PRACTICE_REVIEW" | "CONVERSATION";
+	purpose: ModelPurpose;
 	/**
 	 * True when the bound model is available to run right now
 	 */
@@ -3249,7 +3337,7 @@ export type ModelAssignment = {
 	/**
 	 * The members this binding serves now, named by the tier of their choice: IN_HOUSE and CLOUD for the members who chose them, UNDECLARED for the members who have not chosen. Empty when the binding serves no member.
 	 */
-	servedTiers: Array<"IN_HOUSE" | "CLOUD" | "UNDECLARED">;
+	servedTiers: Array<DataHandlingTier>;
 	timeoutSeconds?: number;
 	workspaceModelId?: number;
 };
@@ -3275,6 +3363,12 @@ export type ModelAssignmentRequest = {
 	 */
 	workspaceModelId?: number;
 };
+
+export type ModelKind = "CHAT" | "DECISION" | "EMBEDDING" | "RERANKING";
+
+export type ModelPurpose = "PRACTICE_REVIEW" | "CONVERSATION";
+
+export type ModelVisibility = "PUBLIC" | "GRANTED";
 
 export type MovePracticeRequest = {
 	groupSlug: string | null;
@@ -3312,7 +3406,7 @@ export type MyProductFeedback = {
 	 * the issue the person can open: a public one, or a private one for an instance admin
 	 */
 	issueUrl?: string;
-	kind: "IDEA" | "BUG" | "FEEDBACK";
+	kind: ProductFeedbackKind;
 	message: string;
 	/**
 	 * why the report is not public, in words; null for a public one
@@ -3322,8 +3416,8 @@ export type MyProductFeedback = {
 	 * what redaction removed, in words
 	 */
 	removed?: string;
-	route: "PUBLIC" | "PRIVATE" | "ADMINS";
-	state: "SAVED_FOR_ADMINS" | "DRAFTING" | "HELD" | "FILING" | "FILED" | "STOPPED";
+	route: FilingReportRoute;
+	state: FilingReportState;
 };
 
 export type NotReviewedScanReportItem = {
@@ -3704,6 +3798,18 @@ export type OffsetPageDtoWorkspaceMembership = {
 	totalPages: number;
 };
 
+export type OmissionReason =
+	| "selection"
+	| "truncated"
+	| "unavailable"
+	| "budget"
+	| "deadline"
+	| "too-large"
+	| "off-format"
+	| "refused"
+	| "error"
+	| "cancelled";
+
 export type OpenQuestion = {
 	citation: EvidenceCitation | null;
 	openQuestion: string;
@@ -3794,11 +3900,11 @@ export type OutlineCollection = {
 	/**
 	 * Mirror lifecycle state (PAUSED freezes sync but keeps documents)
 	 */
-	state: "ENABLED" | "PAUSED";
+	state: OutlineCollectionMirrorState;
 	/**
 	 * Whether a clean full pass has completed since registration or the last resume
 	 */
-	syncStatus: "PENDING" | "COMPLETE";
+	syncStatus: OutlineCollectionSyncStatus;
 	/**
 	 * Outline url id (the short slug in collection URLs)
 	 */
@@ -3839,6 +3945,10 @@ export type OutlineCollectionCandidate = {
 	urlId?: string;
 };
 
+export type OutlineCollectionMirrorState = "ENABLED" | "PAUSED";
+
+export type OutlineCollectionSyncStatus = "PENDING" | "COMPLETE";
+
 /**
  * Live state of the API token behind the workspace's Outline connection
  */
@@ -3873,25 +3983,17 @@ export type OverviewWindow = {
 export type OwnFeedbackCopyRef = {
 	externalUrl: string | null;
 	id: string;
-	kind: "SUMMARY" | "LINE_NOTE" | "FILE_NOTE" | "CHAT_TURN";
+	kind: FeedbackCopyKind;
 	postedAt: Date;
 };
 
 export type OwnFeedbackRef = {
 	copies: Array<OwnFeedbackCopyRef>;
 	deliveredAt: Date | null;
-	destination: "ON_WORK" | "PRACTICE_PAGE" | "CONVERSATION";
+	destination: FeedbackDestination;
 	id: string;
 	response: FeedbackResponse | null;
-	state:
-		| "AWAITING_APPROVAL"
-		| "READY"
-		| "DELIVERED"
-		| "UNCONFIRMED"
-		| "WITHHELD"
-		| "REJECTED"
-		| "REPLACED"
-		| "FAILED";
+	state: FeedbackState;
 };
 
 export type OwnItemEvent = {
@@ -3960,8 +4062,10 @@ export type PersonDataRequest = {
 	failureCode?: string;
 	id: string;
 	scope?: PersonDataScope;
-	state: "PREVIEW" | "ERASING" | "FAILED" | "COMPLETE" | "EXPIRED";
+	state: PersonDataRequestState;
 };
+
+export type PersonDataRequestState = "PREVIEW" | "ERASING" | "FAILED" | "COMPLETE" | "EXPIRED";
 
 export type PersonDataScope = {
 	accountId?: number;
@@ -3982,7 +4086,7 @@ export type Practice = {
 };
 
 export type PracticeDefinition = {
-	about: "AUTHOR" | "REVIEWER" | "ASSIGNEE" | "MERGER" | null;
+	about: AboutRole | null;
 	appliesWhen: AppliesWhen | null;
 	criteria: string;
 	guidance: PracticeGuidance;
@@ -3995,8 +4099,21 @@ export type PracticeDefinition = {
 	script: string | null;
 };
 
+export type PracticeDefinitionField =
+	| "NAME"
+	| "REVIEW_ON"
+	| "APPLIES_WHEN"
+	| "ABOUT"
+	| "READS"
+	| "REVIEWED_BY"
+	| "CRITERIA"
+	| "SCRIPT"
+	| "SCAN"
+	| "LINE_NOTES"
+	| "GUIDANCE";
+
 export type PracticeDefinitionInput = {
-	about: "AUTHOR" | "REVIEWER" | "ASSIGNEE" | "MERGER" | null;
+	about: AboutRole | null;
 	appliesWhen: AppliesWhen | null;
 	criteria: string;
 	guidance: PracticeGuidance;
@@ -4013,6 +4130,8 @@ export type PracticeDefinitionOptions = {
 	itemTypes: Array<PracticeItemTypeOption>;
 	sourceContract: string;
 };
+
+export type PracticeDeliveryStatus = "ACTIVE" | "PAUSED";
 
 export type PracticeGroup = {
 	catalogOrigin: CatalogOrigin;
@@ -4033,8 +4152,8 @@ export type PracticeGroupStanding = {
 	/**
 	 * The weakest basis among the practice verdicts the group standing averages. Absent without a verdict
 	 */
-	basis: "CURRENT_REVIEWS" | "EARLIER_REVIEWS" | "EARLIER_REVIEWS_CRITERIA_UNKNOWN" | null;
-	direction: "IMPROVING" | "DECLINING" | "UNCERTAIN" | "INSUFFICIENT_EVIDENCE" | null;
+	basis: StandingBasis | null;
+	direction: TrendDirection | null;
 	feedbackSince: Date | null;
 	feedbackSpanDays: null | number;
 	groupColor: string | null;
@@ -4043,10 +4162,10 @@ export type PracticeGroupStanding = {
 	groupName: string;
 	groupSlug: string;
 	guidance: string | null;
-	guidanceSource: "RULE_BASED" | null;
+	guidanceSource: GuidanceSource | null;
 	results: Array<PracticeStandingResult>;
 	sources: Array<FeedbackSourceCount>;
-	standing: "DEVELOPING" | "STRENGTH" | "MIXED" | "NOT_OBSERVED" | "NO_OPPORTUNITY";
+	standing: Standing;
 	trendSupport: TrendSupport | null;
 };
 
@@ -4081,8 +4200,8 @@ export type PracticeGuide = {
 };
 
 export type PracticeItemTypeOption = {
-	aboutRoles: Array<"AUTHOR" | "REVIEWER" | "ASSIGNEE" | "MERGER">;
-	applicabilityClauses: Array<"CHANGED_PATH" | "DIFF_CONTAINS" | "HAS_ITEMS" | "MERGED">;
+	aboutRoles: Array<AboutRole>;
+	applicabilityClauses: Array<ApplicabilityClauseKind>;
 	applicabilitySources: Array<ReadSourceOption>;
 	events: Array<ItemEventOption>;
 	/**
@@ -4117,7 +4236,7 @@ export type PracticePageFeedback = {
 	cleanNeeded: number;
 	cleanWork: Array<PracticePageCleanWork>;
 	closedAt: Date | null;
-	closedBy: "WORK" | "DEVELOPER" | "PRACTICE_CHANGED" | null;
+	closedBy: FeedbackClosedBy | null;
 	evidence: Array<PracticePageEvidence>;
 	groupName: string | null;
 	groupSlug: string | null;
@@ -4151,7 +4270,7 @@ export type PracticeProfileOverview = {
 };
 
 export type PracticeReadSource = {
-	need: "REQUIRED" | "COMPLETE" | "OPTIONAL";
+	need: ReadNeed;
 	source: string;
 };
 
@@ -4160,21 +4279,12 @@ export type PracticeReads = {
 	sources: Array<PracticeReadSource>;
 };
 
+export type PracticeReleaseChoice = "CURRENT" | "OFFERED";
+
 export type PracticeReleaseField = {
 	changedLocally: boolean;
 	conflict: boolean;
-	field:
-		| "NAME"
-		| "REVIEW_ON"
-		| "APPLIES_WHEN"
-		| "ABOUT"
-		| "READS"
-		| "REVIEWED_BY"
-		| "CRITERIA"
-		| "SCRIPT"
-		| "SCAN"
-		| "LINE_NOTES"
-		| "GUIDANCE";
+	field: PracticeDefinitionField;
 	offeredChanged: boolean;
 };
 
@@ -4188,6 +4298,12 @@ export type PracticeReleaseProposal = {
 	offeredDigest: string;
 	practiceSlug: string;
 };
+
+export type PracticeReviewField =
+	| "DELIVER_TO_MERGED"
+	| "COOLDOWN_MINUTES"
+	| "REVIEW_SCOPE"
+	| "DEFAULT_FEEDBACK_MODE";
 
 export type PracticeReviewScopePreview = {
 	/**
@@ -4246,11 +4362,11 @@ export type PracticeReviewSettings = {
 	/**
 	 * The default feedback mode when neither the practice nor its group selects one.
 	 */
-	defaultFeedbackMode: "OFF" | "APPROVE_FIRST" | "AUTOMATIC";
+	defaultFeedbackMode: FeedbackMode;
 	/**
 	 * Raw override; null inherits APPROVE_FIRST
 	 */
-	defaultFeedbackModeOverride: "OFF" | "APPROVE_FIRST" | "AUTOMATIC" | null;
+	defaultFeedbackModeOverride: FeedbackMode | null;
 	/**
 	 * Effective: deliver feedback to merged PRs/MRs
 	 */
@@ -4262,7 +4378,7 @@ export type PracticeReviewSettings = {
 	/**
 	 * Whether new external practice feedback may be sent
 	 */
-	deliveryStatus: "ACTIVE" | "PAUSED";
+	deliveryStatus: PracticeDeliveryStatus;
 	/**
 	 * Strong entity tag to send in If-Match when updating this rollout
 	 */
@@ -4293,42 +4409,30 @@ export type PracticeScriptRun = {
 	/**
 	 * Why a run that stopped as OFF_FORMAT has no result, when the runner's counts or the built-in's contract prove it. Absent otherwise; then the stop reason stands alone.
 	 */
-	noResultCause: "EVIDENCE_NOT_READ" | "SESSION_ENDED" | null;
+	noResultCause: ScriptNoResultCause | null;
 	practiceId: string;
 	practiceVersionId: string;
 	/**
 	 * Model calls of the practice's review sessions, as the runner counted them. Not the calls the proxy billed: those are counted for the whole review. Absent when the runner did not record them.
 	 */
 	reviewModelCalls: null | number;
-	scriptKind: "BUILTIN" | "CUSTOM";
-	status: "OK" | "WITHHELD" | "FAILED" | "NOT_REACHED" | "NOT_FINISHED";
-	stopReason:
-		| "UNAVAILABLE"
-		| "BUDGET"
-		| "DEADLINE"
-		| "TOO_LARGE"
-		| "OFF_FORMAT"
-		| "REFUSED"
-		| "ERROR"
-		| "CANCELLED"
-		| "INVALID_SCRIPT"
-		| "INVALID_CANDIDATE"
-		| "UNREAD_EVIDENCE"
-		| null;
+	scriptKind: ScriptKind;
+	status: ScriptRunStatus;
+	stopReason: ScriptStopReason | null;
 };
 
 export type PracticeStanding = {
 	/**
 	 * What a verdict was read from: current reviews, or only outcomes recorded by earlier reviews, which carry no current proof, also when the criteria they were assessed against are unknown. Absent without a verdict
 	 */
-	basis: "CURRENT_REVIEWS" | "EARLIER_REVIEWS" | "EARLIER_REVIEWS_CRITERIA_UNKNOWN" | null;
-	direction: "IMPROVING" | "DECLINING" | "UNCERTAIN" | "INSUFFICIENT_EVIDENCE" | null;
+	basis: StandingBasis | null;
+	direction: TrendDirection | null;
 	doesNotApplyOnly: boolean;
 	groupName: string | null;
 	groupSlug: string | null;
 	name: string;
 	slug: string;
-	standing: "DEVELOPING" | "STRENGTH" | "MIXED" | "NOT_OBSERVED" | "NO_OPPORTUNITY";
+	standing: Standing;
 	strengths: Array<PracticeStandingResult>;
 	toWorkOn: Array<PracticeStandingResult>;
 	trendSupport: TrendSupport | null;
@@ -4339,16 +4443,16 @@ export type PracticeStanding = {
 export type PracticeStandingResult = {
 	deliveredFeedback: string | null;
 	item: ItemRef;
-	origin: "EVENT" | "REQUEST" | "SCHEDULE" | "BACKFILL";
-	outcome: "MET" | "NOT_MET" | "DOES_NOT_APPLY" | "COULD_NOT_DETERMINE";
+	origin: ReviewOrigin;
+	outcome: ResultOutcome;
 	resultId: string;
-	severity: "CRITICAL" | "MAJOR" | "MINOR" | "TRIVIAL" | null;
+	severity: Severity | null;
 	title: string;
 };
 
 export type PracticeTraceEntry = {
-	about: "AUTHOR" | "REVIEWER" | "ASSIGNEE" | "MERGER" | null;
-	feedbackMode: "OFF" | "APPROVE_FIRST" | "AUTOMATIC";
+	about: AboutRole | null;
+	feedbackMode: FeedbackMode;
 	practiceSlug: string;
 	results: ReviewResultCounts;
 	review: ReviewRef | null;
@@ -4357,19 +4461,7 @@ export type PracticeTraceEntry = {
 };
 
 export type PracticeVersion = {
-	changed: Array<
-		| "NAME"
-		| "REVIEW_ON"
-		| "APPLIES_WHEN"
-		| "ABOUT"
-		| "READS"
-		| "REVIEWED_BY"
-		| "CRITERIA"
-		| "SCRIPT"
-		| "SCAN"
-		| "LINE_NOTES"
-		| "GUIDANCE"
-	>;
+	changed: Array<PracticeDefinitionField>;
 	createdAt: Date;
 	createdBy: AccountRef | null;
 	definition: PracticeDefinition | null;
@@ -4439,17 +4531,21 @@ export type PracticesAcrossWorkspaceTiles = {
 	/**
 	 * The window the tiles read evidence over
 	 */
-	window: "ALL_TIME" | "DAYS_7" | "DAYS_30" | "DAYS_90";
+	window: PracticesAcrossWorkspaceWindow;
 	/**
 	 * The practices the reader's profile lists, the denominator of the practice tiles
 	 */
 	yourPractices: number;
 };
 
+export type PracticesAcrossWorkspaceWindow = "ALL_TIME" | "DAYS_7" | "DAYS_30" | "DAYS_90";
+
 export type PreviewRequest = {
 	accountId?: number;
 	identities: Array<Identity>;
 };
+
+export type PricingMode = "PRICED" | "NO_CHARGE" | "UNPRICED";
 
 /**
  * Draft connection probe using a supplied (never-persisted) credential
@@ -4462,11 +4558,11 @@ export type ProbeLlmConnectionRequest = {
 	/**
 	 * Wire protocol
 	 */
-	apiProtocol: "anthropic-messages" | "openai-completions" | "openai-responses";
+	apiProtocol: LlmApiProtocol;
 	/**
 	 * Credential shape (default BEARER)
 	 */
-	authMode?: "BEARER" | "API_KEY";
+	authMode?: LlmAuthMode;
 	/**
 	 * Provider base URL
 	 */
@@ -4482,9 +4578,11 @@ export type Problem = {
 	nextStep: string | null;
 	position: number;
 	resultId: string;
-	severity: "CRITICAL" | "MAJOR" | "MINOR" | "TRIVIAL";
+	severity: Severity;
 	summary: string;
 };
+
+export type ProblemBaselineState = "NEW" | "UNCHANGED" | "UPDATED" | "ABSENT";
 
 export type ProblemChanges = {
 	absent: number;
@@ -4494,23 +4592,47 @@ export type ProblemChanges = {
 };
 
 export type ProblemDetail = {
+	activeScanId?: string;
+	callbackError?: string;
+	connectionId?: number;
+	currentVersion?: string;
+	currentVersionId?: string;
+	declaredTier?: string;
 	detail?: string;
+	/**
+	 * Validation messages for each field that needs a change
+	 */
+	errors?: {
+		[key: string]: Array<string>;
+	};
 	instance?: string;
+	jobId?: number;
+	maxAgeSeconds?: number;
 	/**
 	 * The request's trace id, the same as the X-Request-Id header
 	 */
 	requestId?: string;
+	retryAfterSeconds?: number;
+	scanId?: string;
+	slackError?: string;
+	state?: string;
 	status?: number;
+	stop?: string;
+	supportedRef?: string;
 	title?: string;
 	type?: string;
-	[key: string]: unknown;
+	withholdingReason?: string;
+	workspaceByteBudget?: number;
+	workspaceBytes?: number;
 };
 
 export type ProblemSummary = {
 	id: string;
-	severity: "CRITICAL" | "MAJOR" | "MINOR" | "TRIVIAL";
+	severity: Severity;
 	summary: string;
 };
+
+export type ProcessingStatus = "NONE" | "PENDING" | "DONE" | "FAILED";
 
 /**
  * An erased report's GitHub issue that only a maintainer can finish removing.
@@ -4535,8 +4657,10 @@ export type ProductFeedbackCleanupAction = {
 	 * when the step started to wait for a maintainer
 	 */
 	since: Date;
-	step: "EDIT_HISTORY" | "UNFINISHED";
+	step: ProductFeedbackCleanupManualStep;
 };
+
+export type ProductFeedbackCleanupManualStep = "EDIT_HISTORY" | "UNFINISHED";
 
 /**
  * The instance's product feedback destinations and their health.
@@ -4559,15 +4683,9 @@ export type ProductFeedbackDestinations = {
 	 */
 	oldestWaitingSince?: Date;
 	paused: boolean;
-	privateCheck:
-		| "UNSET"
-		| "INSTALLED"
-		| "MISSING"
-		| "NOT_PRIVATE"
-		| "NOT_PUBLIC"
-		| "DIFFERENT_OWNER";
+	privateCheck: FilingRepositoryCheck;
 	privateRepository?: string;
-	publicCheck: "UNSET" | "INSTALLED" | "MISSING" | "NOT_PRIVATE" | "NOT_PUBLIC" | "DIFFERENT_OWNER";
+	publicCheck: FilingRepositoryCheck;
 	publicRepository?: string;
 	/**
 	 * saved reports that the private repository can take now; 0 without one or while paused
@@ -4575,6 +4693,8 @@ export type ProductFeedbackDestinations = {
 	reportsToMove: number;
 	snapshotAt?: Date;
 };
+
+export type ProductFeedbackKind = "IDEA" | "BUG" | "FEEDBACK";
 
 export type ProductFeedbackMove = {
 	/**
@@ -4589,10 +4709,10 @@ export type ProductFeedbackMove = {
 export type ProductFeedbackNeedsAction = {
 	createdAt: Date;
 	id: string;
-	kind: "IDEA" | "BUG" | "FEEDBACK";
+	kind: ProductFeedbackKind;
 	reason: string;
 	repository?: string;
-	route: "PUBLIC" | "PRIVATE" | "ADMINS";
+	route: FilingReportRoute;
 	stoppedAt: Date;
 };
 
@@ -4638,7 +4758,7 @@ export type ProductFeedbackSharing = {
 export type ProfileChange = {
 	at: Date;
 	cleanNeeded: null | number;
-	direction: "UP" | "DOWN" | null;
+	direction: ProfileChangeDirection | null;
 	evidence: Array<ItemRef>;
 	feedbackId: string | null;
 	from: string | null;
@@ -4646,17 +4766,23 @@ export type ProfileChange = {
 	groupSlug: string | null;
 	practiceName: string | null;
 	practiceSlug: string | null;
-	resolvedBy: "WORK" | "DEVELOPER" | null;
+	resolvedBy: ProfileChangeResolvedBy | null;
 	to: string | null;
-	type:
-		| "FEEDBACK_NEW"
-		| "FEEDBACK_RESOLVED"
-		| "FEEDBACK_RESET"
-		| "STANDING_MOVED"
-		| "TREND_TURNED"
-		| "GROUP_MOVED"
-		| "FIRST_RECORDED";
+	type: ProfileChangeType;
 };
+
+export type ProfileChangeDirection = "UP" | "DOWN";
+
+export type ProfileChangeResolvedBy = "WORK" | "DEVELOPER";
+
+export type ProfileChangeType =
+	| "FEEDBACK_NEW"
+	| "FEEDBACK_RESOLVED"
+	| "FEEDBACK_RESET"
+	| "STANDING_MOVED"
+	| "TREND_TURNED"
+	| "GROUP_MOVED"
+	| "FIRST_RECORDED";
 
 export type ProfileReview = {
 	feedback: Array<OwnFeedbackRef>;
@@ -4685,10 +4811,7 @@ export type ProfileReviewRef = {
 	item: ItemRef;
 	progress: ReviewProgress | null;
 	reviewId: string;
-	/**
-	 * Where the review stands.
-	 */
-	status: "QUEUED" | "RUNNING" | "COMPLETE" | "PARTIAL" | "FAILED" | "CANCELLED" | null;
+	status: ReviewStatus | null;
 };
 
 export type ProviderIdentityRef = {
@@ -4698,6 +4821,15 @@ export type ProviderIdentityRef = {
 	provider: "GITHUB" | "GITLAB" | "SLACK" | "OUTLINE";
 };
 
+export type ProviderResourceAdapterResourceType =
+	| "INSTALLATION"
+	| "GROUP_HOOK"
+	| "BOT_TOKEN"
+	| "BOT_USER"
+	| "SUBSCRIPTION"
+	| "REGISTRATION"
+	| "OAUTH_EXCHANGE";
+
 /**
  * A repair's provider identity is pseudonymous security data, never an authorization credential.
  */
@@ -4705,29 +4837,24 @@ export type ProviderResourceRepair = {
 	createdAt: Date;
 	id: string;
 	identityHash: string;
-	kind: "GITHUB" | "GITLAB" | "SLACK" | "OUTLINE";
+	kind: IntegrationKind;
 	origin: string;
 	owners: Array<Owner>;
 	parentId: string;
 	replacementInUse: boolean;
 	resourceId?: string;
-	resourceType:
-		| "INSTALLATION"
-		| "GROUP_HOOK"
-		| "BOT_TOKEN"
-		| "BOT_USER"
-		| "SUBSCRIPTION"
-		| "REGISTRATION"
-		| "OAUTH_EXCHANGE";
-	state:
-		| "REGISTERING"
-		| "PENDING"
-		| "CHECKING"
-		| "DISPATCHING"
-		| "AWAITING_CONFIRMATION"
-		| "NEEDS_AUTHORIZATION"
-		| "CONFIRMATION_REQUIRED";
+	resourceType: ProviderResourceAdapterResourceType;
+	state: ProviderResourceRepairState;
 };
+
+export type ProviderResourceRepairState =
+	| "REGISTERING"
+	| "PENDING"
+	| "CHECKING"
+	| "DISPATCHING"
+	| "AWAITING_CONFIRMATION"
+	| "NEEDS_AUTHORIZATION"
+	| "CONFIRMATION_REQUIRED";
 
 /**
  * The public contract excludes account details, teams, automation and private activity.
@@ -4741,7 +4868,7 @@ export type PublicActivity = {
 	/**
 	 * The source-control provider the repositories and people belong to
 	 */
-	providerType?: "GITHUB" | "GITLAB" | "SLACK" | "OUTLINE";
+	providerType?: IdentityProviderType;
 	repositories: Array<PublicActivityRepository>;
 	to: Date;
 	/**
@@ -4802,18 +4929,7 @@ export type PublicActivityPersonDetail = {
 	from: Date;
 	person: PublicActivityPersonIdentity;
 	repositories: Array<PublicActivityPersonRepository>;
-	supportedKinds: Array<
-		| "PULL_REQUEST_OPENED"
-		| "PULL_REQUEST_MERGED"
-		| "PULL_REQUEST_CLOSED"
-		| "REVIEW_APPROVED"
-		| "REVIEW_CHANGES_REQUESTED"
-		| "REVIEW_COMMENTED"
-		| "COMMENTED"
-		| "CODE_COMMENTED"
-		| "ISSUE_OPENED"
-		| "ISSUE_CLOSED"
-	>;
+	supportedKinds: Array<ActivityKind>;
 	to: Date;
 	weeks: Array<PublicActivityPersonWeek>;
 };
@@ -4867,9 +4983,9 @@ export type PublicActivityWorkSummary = {
 	isDraft: boolean;
 	number: number;
 	repository: PublicActivityRepository;
-	state: "OPEN" | "CLOSED" | "MERGED";
+	state: IssueState;
 	title: string;
-	type: "PULL_REQUEST" | "ISSUE";
+	type: WorkItemType;
 };
 
 export type PublicActivityWorkspaceSettings = {
@@ -4907,6 +5023,8 @@ export type RateLimitSnapshot = {
 	throttledUntil?: Date;
 };
 
+export type ReadNeed = "REQUIRED" | "COMPLETE" | "OPTIONAL";
+
 export type ReadReceipt = {
 	contentDigest?: string;
 	endLine?: number;
@@ -4922,14 +5040,22 @@ export type ReadReceipt = {
 	sourceKind?: string;
 	sourcePath?: string;
 	startLine?: number;
-	status?: "COMPLETE" | "TRUNCATED" | "FAILED" | "BINARY" | "ABSENT" | "SEARCHED";
+	status?: ReadReceiptStatus;
 	version?: string;
 };
+
+export type ReadReceiptStatus =
+	| "COMPLETE"
+	| "TRUNCATED"
+	| "FAILED"
+	| "BINARY"
+	| "ABSENT"
+	| "SEARCHED";
 
 export type ReadSourceOption = {
 	citation: CitationCapabilities;
 	label: string;
-	needs: Array<"REQUIRED" | "COMPLETE" | "OPTIONAL">;
+	needs: Array<ReadNeed>;
 	source: string;
 };
 
@@ -4938,6 +5064,8 @@ export type ReasonCount = {
 	description: string;
 	reason: string;
 };
+
+export type ReasoningEffort = "NONE" | "MINIMAL" | "LOW" | "MEDIUM" | "HIGH" | "XHIGH" | "MAX";
 
 export type RecordResearchRemovals = {
 	participantKeys: Array<string>;
@@ -4977,6 +5105,18 @@ export type RegisterSlackChannelRequest = {
 	slackChannelId: string;
 };
 
+export type ReleaseChannel = "RELEASE" | "COMMIT" | "DEVELOPMENT";
+
+export type ReleaseCheckFailure = "RATE_LIMITED" | "UNAVAILABLE" | "MALFORMED";
+
+export type ReleaseCheckStatus =
+	| "DISABLED"
+	| "NOT_APPLICABLE"
+	| "NEVER_CHECKED"
+	| "CURRENT"
+	| "UPDATE_AVAILABLE"
+	| "FAILED";
+
 export type ReleaseProviderResourceRepairRequest = {
 	confirmedGone: boolean;
 	identityHash: string;
@@ -4993,7 +5133,7 @@ export type ReleaseResearchDataset = {
  * A release the server role started on this instance.
  */
 export type ReleaseStart = {
-	channel: "RELEASE" | "COMMIT" | "DEVELOPMENT";
+	channel: ReleaseChannel;
 	commit?: string;
 	environment: string;
 	image?: string;
@@ -5012,7 +5152,7 @@ export type ReleaseStatus = {
 	/**
 	 * why the last attempt did not complete, when <code>status</code> is <code>FAILED</code>
 	 */
-	failure?: "RATE_LIMITED" | "UNAVAILABLE" | "MALFORMED";
+	failure?: ReleaseCheckFailure;
 	/**
 	 * the releases this instance ran, newest first
 	 */
@@ -5048,20 +5188,16 @@ export type ReleaseStatus = {
 	/**
 	 * the verdict an administrator reads first
 	 */
-	status:
-		| "DISABLED"
-		| "NOT_APPLICABLE"
-		| "NEVER_CHECKED"
-		| "CURRENT"
-		| "UPDATE_AVAILABLE"
-		| "FAILED";
+	status: ReleaseCheckStatus;
 };
 
 export type RemovalGuard = {
 	previousFiles: number;
-	state: "APPLIED" | "NOT_NEEDED" | "INCOMPLETE_LISTING" | "SUSPECT_LISTING";
+	state: RemovalGuardState;
 	wouldRemove: number;
 };
+
+export type RemovalGuardState = "APPLIED" | "NOT_NEEDED" | "INCOMPLETE_LISTING" | "SUSPECT_LISTING";
 
 export type RemoveResultMarkRequest = {
 	reason: string;
@@ -5115,6 +5251,8 @@ export type RepositoryInfo = {
 	nameWithOwner: string;
 };
 
+export type RepositorySelection = "ALL" | "SELECTED";
+
 export type ResearchConsent = {
 	granted: boolean;
 	noticeVersion: string;
@@ -5123,6 +5261,14 @@ export type ResearchConsent = {
 	 */
 	researchOrganization?: string;
 };
+
+export type ResearchDisclosureClosure = "DESTROYED" | "ANONYMIZED";
+
+export type ResearchDisclosureSubjectRemovalReason =
+	| "CONSENT_WITHDRAWN"
+	| "CONSENT_SUPERSEDED"
+	| "QUESTION_CHANGED"
+	| "ACCOUNT_ERASED";
 
 export type ResearchRemovalDisclosure = {
 	createdAt: Date;
@@ -5135,7 +5281,7 @@ export type ResearchRemovalDisclosure = {
 
 export type ResearchRemovalObligation = {
 	participantKey: string;
-	reason: "CONSENT_WITHDRAWN" | "CONSENT_SUPERSEDED" | "QUESTION_CHANGED" | "ACCOUNT_ERASED";
+	reason: ResearchDisclosureSubjectRemovalReason;
 	requiredAt: Date;
 };
 
@@ -5176,8 +5322,8 @@ export type ResultDetail = {
 	 */
 	capturedAt: Date | null;
 	coverage: HostCoverage | null;
-	currentness: "CURRENT" | "STALE" | "UNVERIFIABLE";
-	endReason: "REPLACED" | "OUTRANKED" | "WORK_CHANGED" | "REPAIRED" | "REMOVED" | null;
+	currentness: Currentness;
+	endReason: ResultEndReason | null;
 	endedAt: Date | null;
 	evidence: ResultEvidence | null;
 	example: ResultExample | null;
@@ -5187,8 +5333,8 @@ export type ResultDetail = {
 	item: ItemRef;
 	itemVersion: string | null;
 	markedIncorrectAt: Date | null;
-	origin: "EVENT" | "REQUEST" | "SCHEDULE" | "BACKFILL";
-	outcome: "MET" | "NOT_MET" | "DOES_NOT_APPLY" | "COULD_NOT_DETERMINE";
+	origin: ReviewOrigin;
+	outcome: ResultOutcome;
 	practiceName: string;
 	practiceSlug: string;
 	practiceVersionId: string | null;
@@ -5196,13 +5342,15 @@ export type ResultDetail = {
 	problems: Array<Problem>;
 	recordedAt: Date;
 	reviewId: string;
-	severity: "CRITICAL" | "MAJOR" | "MINOR" | "TRIVIAL" | null;
+	severity: Severity | null;
 	summary: string | null;
 	/**
 	 * Why an unverifiable observation cannot be checked against the work; null unless currentness is UNVERIFIABLE.
 	 */
-	unverifiableReason: "RECORD_MISSING" | "WORK_UNREADABLE" | null;
+	unverifiableReason: UnverifiableReason | null;
 };
+
+export type ResultEndReason = "REPLACED" | "OUTRANKED" | "WORK_CHANGED" | "REPAIRED" | "REMOVED";
 
 export type ResultEvidence = {
 	citations: Array<EvidenceCitation>;
@@ -5222,30 +5370,30 @@ export type ResultList = {
 	 * When the observation's capture read the work: the work as of that time. A later check that found the work unchanged is not recorded. Null when the capture record is missing.
 	 */
 	capturedAt: Date | null;
-	currentness: "CURRENT" | "STALE" | "UNVERIFIABLE";
+	currentness: Currentness;
 	id: string;
 	item: ItemRef;
 	markedIncorrectAt: Date | null;
-	origin: "EVENT" | "REQUEST" | "SCHEDULE" | "BACKFILL";
-	outcome: "MET" | "NOT_MET" | "DOES_NOT_APPLY" | "COULD_NOT_DETERMINE";
+	origin: ReviewOrigin;
+	outcome: ResultOutcome;
 	practiceName: string;
 	practiceSlug: string;
 	problems: Array<ProblemSummary>;
 	recordedAt: Date;
 	reviewId: string;
-	severity: "CRITICAL" | "MAJOR" | "MINOR" | "TRIVIAL" | null;
+	severity: Severity | null;
 	summary: string | null;
 	/**
 	 * Why an unverifiable observation cannot be checked against the work; null unless currentness is UNVERIFIABLE.
 	 */
-	unverifiableReason: "RECORD_MISSING" | "WORK_UNREADABLE" | null;
+	unverifiableReason: UnverifiableReason | null;
 };
 
 export type ResultMark = {
 	createdAt: Date;
 	createdBy: AccountRef | null;
 	id: string;
-	kind: "INCORRECT" | "ACCEPTED";
+	kind: ResultMarkKind;
 	reason: string;
 	removalReason: string | null;
 	removedAt: Date | null;
@@ -5253,17 +5401,23 @@ export type ResultMark = {
 	resultId: string;
 };
 
+export type ResultMarkKind = "INCORRECT" | "ACCEPTED";
+
+export type ResultOutcome = "MET" | "NOT_MET" | "DOES_NOT_APPLY" | "COULD_NOT_DETERMINE";
+
+export type ResultSort = "NEWEST" | "OLDEST" | "ACTIONABILITY";
+
 export type ReusedScanReportItem = {
-	currentness: "CURRENT" | "STALE" | "UNVERIFIABLE";
+	currentness: Currentness;
 	item: ItemRef;
 	itemVersion: string;
-	outcome: "MET" | "NOT_MET" | "DOES_NOT_APPLY" | "COULD_NOT_DETERMINE";
+	outcome: ResultOutcome;
 	practiceName: string;
 	practiceSlug: string;
 	problemCount: number;
 	recordedAt: Date;
 	resultId: string;
-	severity: "CRITICAL" | "MAJOR" | "MINOR" | "TRIVIAL" | null;
+	severity: Severity | null;
 	sourceReviewId: string;
 	status: "REUSED";
 	summary: string | null;
@@ -5279,48 +5433,17 @@ export type Review = {
 	item: ItemRef;
 	itemVersion: string | null;
 	jobCount: number;
-	kind: "ITEM" | "SCAN";
+	kind: ReviewKind;
 	model: string | null;
 	orderedAt: Date;
-	origin: "EVENT" | "REQUEST" | "SCHEDULE" | "BACKFILL";
+	origin: ReviewOrigin;
 	practices: Array<ReviewPractice>;
 	progress: ReviewProgress | null;
 	requestedBy: AccountRef | null;
 	results: ReviewResultCounts;
 	startedBy: ItemEvent | null;
-	/**
-	 * Where the review stands.
-	 */
-	status: "QUEUED" | "RUNNING" | "COMPLETE" | "PARTIAL" | "FAILED" | "CANCELLED";
-	stopReason:
-		| "TIMED_OUT"
-		| "EXECUTION_FAILED"
-		| "PREPARATION_FAILED"
-		| "PROCESSING_FAILED"
-		| "PERSON_DATA_ERASED"
-		| "STALE_ROLLOUT_REVISION"
-		| "CANCELLED_BY_ADMIN"
-		| "REPLACED"
-		| "LEGACY_FAILURE"
-		| "EXECUTION_INCOMPLETE"
-		| "RESULT_WITHHELD"
-		| "READINESS_REFUSED"
-		| "SUSPECT_LISTING"
-		| "BUDGET"
-		| "USAGE_UNVERIFIABLE"
-		| "DEADLINE"
-		| "CANCELLED"
-		| "ENUMERATION_FAILED"
-		| "ENUMERATION_LIMIT"
-		| "NO_SCAN_PRACTICES"
-		| "MODEL_CHANGED"
-		| "MODEL_UNAVAILABLE"
-		| "ERROR"
-		| "LEGACY_SCOPE_UNKNOWN"
-		| "CONTRACT_CHANGED"
-		| "NO_SANDBOX_ROOM"
-		| "COMPOSITION_UNCONFIRMED"
-		| null;
+	status: ReviewStatus;
+	stopReason: ReviewStopReason | null;
 };
 
 export type ReviewBatch = {
@@ -5335,44 +5458,41 @@ export type ReviewBatch = {
 	from: Date | null;
 	id: string;
 	itemKind: string;
-	origin: "BACKFILL" | "SCHEDULE";
-	pauseReason:
-		| "BUDGET_EXHAUSTED"
-		| "REVIEW_MODEL_UNBOUND"
-		| "WORKSPACE_UNAVAILABLE"
-		| "PAUSED_BY_ADMIN"
-		| null;
+	origin: ReviewBatchOrigin;
+	pauseReason: ReviewBatchPauseReason | null;
 	requestedBy: AccountRef | null;
 	reviewIds: Array<string>;
 	scheduleId: string | null;
 	skippedCount: number;
 	startedAt: Date | null;
-	status:
-		| "AWAITING_CONFIRMATION"
-		| "RUNNING"
-		| "PAUSED"
-		| "COMPLETED"
-		| "CANCELLED"
-		| "BUDGET_EXHAUSTED";
+	status: ReviewBatchStatus;
 	submittedCount: number;
 	targetItemIds: string;
 	to: Date | null;
 	version: string;
 };
 
+export type ReviewBatchOrigin = "BACKFILL" | "SCHEDULE";
+
+export type ReviewBatchPauseReason =
+	| "BUDGET_EXHAUSTED"
+	| "REVIEW_MODEL_UNBOUND"
+	| "WORKSPACE_UNAVAILABLE"
+	| "PAUSED_BY_ADMIN";
+
+export type ReviewBatchStatus =
+	| "AWAITING_CONFIRMATION"
+	| "RUNNING"
+	| "PAUSED"
+	| "COMPLETED"
+	| "CANCELLED"
+	| "BUDGET_EXHAUSTED";
+
 export type ReviewBoundFeedback = {
 	deliveredAt: Date | null;
-	destination: "ON_WORK" | "PRACTICE_PAGE" | "CONVERSATION";
+	destination: FeedbackDestination;
 	id: string;
-	state:
-		| "AWAITING_APPROVAL"
-		| "READY"
-		| "DELIVERED"
-		| "UNCONFIRMED"
-		| "WITHHELD"
-		| "REJECTED"
-		| "REPLACED"
-		| "FAILED";
+	state: FeedbackState;
 	withdrawn: boolean;
 };
 
@@ -5381,21 +5501,21 @@ export type ReviewBoundResult = {
 	 * When the observation's capture read the work: the work as of that time. A later check that found the work unchanged is not recorded. Null when the capture record is missing.
 	 */
 	capturedAt: Date | null;
-	currentness: "CURRENT" | "STALE" | "UNVERIFIABLE";
+	currentness: Currentness;
 	developer: ReviewDeveloper | null;
 	id: string;
 	item: ItemRef;
-	outcome: "MET" | "NOT_MET" | "DOES_NOT_APPLY" | "COULD_NOT_DETERMINE";
+	outcome: ResultOutcome;
 	practiceName: string;
 	practiceSlug: string;
 	recordedAt: Date;
 	reviewId: string;
-	severity: "CRITICAL" | "MAJOR" | "MINOR" | "TRIVIAL" | null;
+	severity: Severity | null;
 	summary: string | null;
 	/**
 	 * Why an unverifiable observation cannot be checked against the work; null unless currentness is UNVERIFIABLE.
 	 */
-	unverifiableReason: "RECORD_MISSING" | "WORK_UNREADABLE" | null;
+	unverifiableReason: UnverifiableReason | null;
 };
 
 export type ReviewBucket = {
@@ -5405,6 +5525,8 @@ export type ReviewBucket = {
 	start: Date;
 };
 
+export type ReviewCadence = "DAILY" | "WEEKLY";
+
 export type ReviewContext = {
 	canInspectReviewDetails: boolean;
 	item: ItemRef | null;
@@ -5413,6 +5535,8 @@ export type ReviewContext = {
 	workspaceId: string;
 	workspaceSlug: string;
 };
+
+export type ReviewDecision = "APPROVED" | "CHANGES_REQUESTED" | "REVIEW_REQUIRED";
 
 export type ReviewDetail = {
 	activeJobCount: number;
@@ -5425,49 +5549,18 @@ export type ReviewDetail = {
 	item: ItemRef;
 	itemVersion: string | null;
 	jobCount: number;
-	kind: "ITEM" | "SCAN";
+	kind: ReviewKind;
 	model: string | null;
 	orderedAt: Date;
-	origin: "EVENT" | "REQUEST" | "SCHEDULE" | "BACKFILL";
+	origin: ReviewOrigin;
 	practices: Array<ReviewPractice>;
 	progress: ReviewProgress | null;
 	requestedBy: AccountRef | null;
 	results: ReviewResultCounts;
 	runtime: ReviewRuntime | null;
 	startedBy: ItemEvent | null;
-	/**
-	 * Where the review stands.
-	 */
-	status: "QUEUED" | "RUNNING" | "COMPLETE" | "PARTIAL" | "FAILED" | "CANCELLED";
-	stopReason:
-		| "TIMED_OUT"
-		| "EXECUTION_FAILED"
-		| "PREPARATION_FAILED"
-		| "PROCESSING_FAILED"
-		| "PERSON_DATA_ERASED"
-		| "STALE_ROLLOUT_REVISION"
-		| "CANCELLED_BY_ADMIN"
-		| "REPLACED"
-		| "LEGACY_FAILURE"
-		| "EXECUTION_INCOMPLETE"
-		| "RESULT_WITHHELD"
-		| "READINESS_REFUSED"
-		| "SUSPECT_LISTING"
-		| "BUDGET"
-		| "USAGE_UNVERIFIABLE"
-		| "DEADLINE"
-		| "CANCELLED"
-		| "ENUMERATION_FAILED"
-		| "ENUMERATION_LIMIT"
-		| "NO_SCAN_PRACTICES"
-		| "MODEL_CHANGED"
-		| "MODEL_UNAVAILABLE"
-		| "ERROR"
-		| "LEGACY_SCOPE_UNKNOWN"
-		| "CONTRACT_CHANGED"
-		| "NO_SANDBOX_ROOM"
-		| "COMPOSITION_UNCONFIRMED"
-		| null;
+	status: ReviewStatus;
+	stopReason: ReviewStopReason | null;
 	usage: ReviewUsage;
 };
 
@@ -5484,72 +5577,17 @@ export type ReviewFeedback = {
 	copyCounts: FeedbackCopyCounts;
 	createdAt: Date;
 	deliveredAt: Date | null;
-	destination: "ON_WORK" | "PRACTICE_PAGE" | "CONVERSATION";
+	destination: FeedbackDestination;
 	developer: ReviewDeveloper;
 	disagreedAt: Date | null;
 	id: string;
 	item: ItemRef | null;
-	location:
-		| "GITHUB"
-		| "GITLAB"
-		| "OTHER_WORK"
-		| "APP"
-		| "SLACK"
-		| "NEXT_CONVERSATION"
-		| "PRACTICE_PAGES";
+	location: FeedbackLocation;
 	replacesId: string | null;
 	resultCount: number;
 	reviewId: string;
-	state:
-		| "AWAITING_APPROVAL"
-		| "READY"
-		| "DELIVERED"
-		| "UNCONFIRMED"
-		| "WITHHELD"
-		| "REJECTED"
-		| "REPLACED"
-		| "FAILED";
-	stopReason:
-		| "VOLUME_CAPPED"
-		| "COMPOSER_WITHHELD"
-		| "NOTHING_NEW"
-		| "REPEATS_DELIVERED_NOTE"
-		| "REACTED_DISAGREE"
-		| "REACTED_NOT_APPLICABLE"
-		| "CONVERSATION_EXPIRED"
-		| "DELIVERY_UNCONFIRMED"
-		| "ITEM_GONE"
-		| "ITEM_CLOSED"
-		| "ITEM_MERGED"
-		| "ITEM_STATE_INELIGIBLE"
-		| "ISSUE_SNAPSHOT_CHANGED"
-		| "PUBLIC_SUBJECT_INELIGIBLE"
-		| "NO_AI"
-		| "DELIVERY_OFF"
-		| "PERSON_SUPPRESSED"
-		| "RECIPIENT_UNAVAILABLE"
-		| "EMPTY_AFTER_SANITIZE"
-		| "INSTANCE_SILENCED"
-		| "FEEDBACK_OFF"
-		| "WORKSPACE_DISABLED"
-		| "WORKSPACE_DELIVERY_PAUSED"
-		| "STALE_ROLLOUT_REVISION"
-		| "OUTSIDE_CURRENT_SCOPE"
-		| "APPROVAL_STALE"
-		| "APPROVAL_NO_LONGER_ELIGIBLE"
-		| "PRACTICE_REQUIRES_APPROVAL"
-		| "BACKFILL_QUIET"
-		| "RESULT_MARKED_INCORRECT"
-		| "REVIEWED_VERSION_CHANGED"
-		| "REVIEW_CANCELLED"
-		| "EVIDENCE_NOT_PERMITTED"
-		| "NO_EVIDENCE"
-		| "UNCORROBORATED"
-		| "PUBLIC_HISTORY_CHANGED"
-		| "PUBLIC_DELIVERY_UNRESOLVED"
-		| "STEP_LIMIT"
-		| "NOT_COMPOSED"
-		| null;
+	state: FeedbackState;
+	stopReason: FeedbackStopReason | null;
 	textHidden: boolean;
 	unverifiedHistory: boolean;
 	withdrawn: boolean;
@@ -5582,77 +5620,24 @@ export type ReviewFeedbackDetail = {
 	createdAt: Date;
 	decisions: Array<FeedbackDecision>;
 	deliveredAt: Date | null;
-	destination: "ON_WORK" | "PRACTICE_PAGE" | "CONVERSATION";
+	destination: FeedbackDestination;
 	developer: ReviewDeveloper;
 	disagreedAt: Date | null;
 	id: string;
 	item: ItemRef | null;
-	location:
-		| "GITHUB"
-		| "GITLAB"
-		| "OTHER_WORK"
-		| "APP"
-		| "SLACK"
-		| "NEXT_CONVERSATION"
-		| "PRACTICE_PAGES";
+	location: FeedbackLocation;
 	replacesId: string | null;
 	resultCount: number;
 	reviewId: string;
 	sends: Array<FeedbackSend>;
-	state:
-		| "AWAITING_APPROVAL"
-		| "READY"
-		| "DELIVERED"
-		| "UNCONFIRMED"
-		| "WITHHELD"
-		| "REJECTED"
-		| "REPLACED"
-		| "FAILED";
-	stopReason:
-		| "VOLUME_CAPPED"
-		| "COMPOSER_WITHHELD"
-		| "NOTHING_NEW"
-		| "REPEATS_DELIVERED_NOTE"
-		| "REACTED_DISAGREE"
-		| "REACTED_NOT_APPLICABLE"
-		| "CONVERSATION_EXPIRED"
-		| "DELIVERY_UNCONFIRMED"
-		| "ITEM_GONE"
-		| "ITEM_CLOSED"
-		| "ITEM_MERGED"
-		| "ITEM_STATE_INELIGIBLE"
-		| "ISSUE_SNAPSHOT_CHANGED"
-		| "PUBLIC_SUBJECT_INELIGIBLE"
-		| "NO_AI"
-		| "DELIVERY_OFF"
-		| "PERSON_SUPPRESSED"
-		| "RECIPIENT_UNAVAILABLE"
-		| "EMPTY_AFTER_SANITIZE"
-		| "INSTANCE_SILENCED"
-		| "FEEDBACK_OFF"
-		| "WORKSPACE_DISABLED"
-		| "WORKSPACE_DELIVERY_PAUSED"
-		| "STALE_ROLLOUT_REVISION"
-		| "OUTSIDE_CURRENT_SCOPE"
-		| "APPROVAL_STALE"
-		| "APPROVAL_NO_LONGER_ELIGIBLE"
-		| "PRACTICE_REQUIRES_APPROVAL"
-		| "BACKFILL_QUIET"
-		| "RESULT_MARKED_INCORRECT"
-		| "REVIEWED_VERSION_CHANGED"
-		| "REVIEW_CANCELLED"
-		| "EVIDENCE_NOT_PERMITTED"
-		| "NO_EVIDENCE"
-		| "UNCORROBORATED"
-		| "PUBLIC_HISTORY_CHANGED"
-		| "PUBLIC_DELIVERY_UNRESOLVED"
-		| "STEP_LIMIT"
-		| "NOT_COMPOSED"
-		| null;
+	state: FeedbackState;
+	stopReason: FeedbackStopReason | null;
 	textHidden: boolean;
 	unverifiedHistory: boolean;
 	withdrawn: boolean;
 };
+
+export type ReviewFeedbackSort = "NEWEST" | "OLDEST";
 
 export type ReviewItemCounts = {
 	listed: number;
@@ -5669,11 +5654,21 @@ export type ReviewJob = {
 	errorMessage: string | null;
 	exitCode: null | number;
 	id: string;
-	processingStatus: "NONE" | "PENDING" | "DONE" | "FAILED";
+	processingStatus: ProcessingStatus;
 	startedAt: Date | null;
-	status: "QUEUED" | "RUNNING" | "COMPLETED" | "FAILED" | "TIMED_OUT" | "CANCELLED";
+	status: ReviewJobStatus;
 	traceId: string;
 };
+
+export type ReviewJobStatus =
+	| "QUEUED"
+	| "RUNNING"
+	| "COMPLETED"
+	| "FAILED"
+	| "TIMED_OUT"
+	| "CANCELLED";
+
+export type ReviewKind = "ITEM" | "SCAN";
 
 export type ReviewLimit = {
 	code: string;
@@ -5701,11 +5696,15 @@ export type ReviewLineageNode = {
 	feedback: ReviewBoundFeedback | null;
 	id: string;
 	item: ItemRef | null;
-	kind: "ITEM" | "REVIEW" | "RESULT" | "PROBLEM" | "FEEDBACK";
+	kind: LineageKind;
 	problem: ProblemSummary | null;
 	result: ReviewBoundResult | null;
 	review: ReviewRef | null;
 };
+
+export type ReviewListOrder = "NEWEST" | "OLDEST";
+
+export type ReviewListSort = "NEWEST" | "OLDEST";
 
 export type ReviewMethod = {
 	epoch: number;
@@ -5720,8 +5719,10 @@ export type ReviewOn = {
 	};
 };
 
+export type ReviewOrigin = "EVENT" | "REQUEST" | "SCHEDULE" | "BACKFILL";
+
 export type ReviewOverview = {
-	bucket: "DAY" | "WEEK" | "MONTH";
+	bucket: TimeBucketSize;
 	buckets: Array<ReviewBucket>;
 	feedback: ReviewFeedbackCounts;
 	from: Date;
@@ -5741,7 +5742,7 @@ export type ReviewPractice = {
 	reason: string | null;
 	results: ReviewResultCounts;
 	script: PracticeScriptRun | null;
-	status: "QUEUED" | "READY" | "RUNNING" | "DONE" | "WITHHELD" | "FAILED";
+	status: ReviewPracticeStatus;
 };
 
 export type ReviewPracticeCounts = {
@@ -5753,13 +5754,15 @@ export type ReviewPracticeCounts = {
 	resultsMarkedIncorrect: number;
 };
 
+export type ReviewPracticeStatus = "QUEUED" | "READY" | "RUNNING" | "DONE" | "WITHHELD" | "FAILED";
+
 export type ReviewProblem = {
 	acceptedAt: Date | null;
 	/**
 	 * When the observation's capture read the work: the work as of that time. A later check that found the work unchanged is not recorded. Null when the capture record is missing.
 	 */
 	capturedAt: Date | null;
-	currentness: "CURRENT" | "STALE" | "UNVERIFIABLE";
+	currentness: Currentness;
 	developer: ReviewDeveloper | null;
 	disagreedAt: Date | null;
 	endLine: null | number;
@@ -5774,15 +5777,15 @@ export type ReviewProblem = {
 	recordedAt: Date;
 	resultId: string;
 	reviewId: string;
-	severity: "CRITICAL" | "MAJOR" | "MINOR" | "TRIVIAL";
-	side: "OLD" | "NEW" | null;
+	severity: Severity;
+	side: CitationSide | null;
 	sourceKind: string | null;
 	startLine: null | number;
 	summary: string;
 	/**
 	 * Why an unverifiable observation cannot be checked against the work; null unless currentness is UNVERIFIABLE.
 	 */
-	unverifiableReason: "RECORD_MISSING" | "WORK_UNREADABLE" | null;
+	unverifiableReason: UnverifiableReason | null;
 };
 
 export type ReviewProblemDetail = {
@@ -5791,7 +5794,7 @@ export type ReviewProblemDetail = {
 	 * When the observation's capture read the work: the work as of that time. A later check that found the work unchanged is not recorded. Null when the capture record is missing.
 	 */
 	capturedAt: Date | null;
-	currentness: "CURRENT" | "STALE" | "UNVERIFIABLE";
+	currentness: Currentness;
 	developer: ReviewDeveloper | null;
 	disagreedAt: Date | null;
 	endLine: null | number;
@@ -5808,15 +5811,15 @@ export type ReviewProblemDetail = {
 	result: ReviewBoundResult;
 	resultId: string;
 	reviewId: string;
-	severity: "CRITICAL" | "MAJOR" | "MINOR" | "TRIVIAL";
-	side: "OLD" | "NEW" | null;
+	severity: Severity;
+	side: CitationSide | null;
 	sourceKind: string | null;
 	startLine: null | number;
 	summary: string;
 	/**
 	 * Why an unverifiable observation cannot be checked against the work; null unless currentness is UNVERIFIABLE.
 	 */
-	unverifiableReason: "RECORD_MISSING" | "WORK_UNREADABLE" | null;
+	unverifiableReason: UnverifiableReason | null;
 };
 
 /**
@@ -5857,8 +5860,22 @@ export type ReviewQueueItem = {
 	progress: ReviewProgress | null;
 	reviewId: string;
 	since: Date;
-	status: "QUEUED" | "RUNNING" | "COMPLETED" | "FAILED" | "TIMED_OUT" | "CANCELLED";
+	status: ReviewJobStatus;
 };
+
+export type ReviewQueueState = "WAITING" | "HELD" | "RUNNING";
+
+export type ReviewReadinessBlocker =
+	| "WORKSPACE_INACTIVE"
+	| "REVIEWS_OFF"
+	| "PERSON_ERASED"
+	| "NO_AI"
+	| "OUTSIDE_REVIEW_SCOPE"
+	| "NOT_ELIGIBLE"
+	| "CHOICE_REQUIRED"
+	| "NO_MODEL"
+	| "NO_PRACTICE"
+	| "ON_REQUEST_ONLY";
 
 export type ReviewRef = {
 	completedAt: Date | null;
@@ -5866,50 +5883,50 @@ export type ReviewRef = {
 	id: string;
 	item: ItemRef;
 	itemVersion: string | null;
-	kind: "ITEM" | "SCAN";
-	origin: "EVENT" | "REQUEST" | "SCHEDULE" | "BACKFILL";
-	/**
-	 * Where the review stands.
-	 */
-	status: "QUEUED" | "RUNNING" | "COMPLETE" | "PARTIAL" | "FAILED" | "CANCELLED";
+	kind: ReviewKind;
+	origin: ReviewOrigin;
+	status: ReviewStatus;
 };
 
 export type ReviewRequestOutcome = {
-	reason:
-		| "GATE_WITHHELD"
-		| "COOLDOWN_ACTIVE"
-		| "REQUEST_COOLDOWN_ACTIVE"
-		| "REQUESTER_QUOTA_EXHAUSTED"
-		| "CONCURRENT_DUPLICATE"
-		| "COALESCED"
-		| "OUT_OF_REVIEW_SCOPE"
-		| "BOT_AUTHOR"
-		| "BOT_REVIEWER"
-		| "STALE_ROLLOUT_REVISION"
-		| "WORKSPACE_INACTIVE"
-		| "PRACTICES_DISABLED"
-		| "NO_ACTIVE_PRACTICE"
-		| "REVIEW_MODEL_UNBOUND"
-		| "MEMBER_AI_DECLINED"
-		| "PERSON_DATA_ERASED"
-		| "FEEDBACK_MODE_OFF"
-		| "SUBJECT_UNLINKED"
-		| "MERGE_ACTOR_UNAVAILABLE"
-		| "MODEL_UNAVAILABLE"
-		| "BUDGET_EXHAUSTED"
-		| "ITEM_NOT_VISIBLE"
-		| "VERSION_SUPERSEDED"
-		| "PENDING_DEADLINE_EXCEEDED"
-		| "ITEM_GONE"
-		| "LEGACY_REVIEW_UNBOUND"
-		| "OCCASION_EVIDENCE_UNAVAILABLE"
-		| "QUIET_WINDOW"
-		| "REVIEW_IN_PROGRESS"
-		| "ALREADY_CURRENT"
-		| null;
+	reason: ReviewRequestReason | null;
 	reviewId: string | null;
-	status: "SUBMITTED" | "REFUSED";
+	status: ReviewRequestStatus;
 };
+
+export type ReviewRequestReason =
+	| "GATE_WITHHELD"
+	| "COOLDOWN_ACTIVE"
+	| "REQUEST_COOLDOWN_ACTIVE"
+	| "REQUESTER_QUOTA_EXHAUSTED"
+	| "CONCURRENT_DUPLICATE"
+	| "COALESCED"
+	| "OUT_OF_REVIEW_SCOPE"
+	| "BOT_AUTHOR"
+	| "BOT_REVIEWER"
+	| "STALE_ROLLOUT_REVISION"
+	| "WORKSPACE_INACTIVE"
+	| "PRACTICES_DISABLED"
+	| "NO_ACTIVE_PRACTICE"
+	| "REVIEW_MODEL_UNBOUND"
+	| "MEMBER_AI_DECLINED"
+	| "PERSON_DATA_ERASED"
+	| "FEEDBACK_MODE_OFF"
+	| "SUBJECT_UNLINKED"
+	| "MERGE_ACTOR_UNAVAILABLE"
+	| "MODEL_UNAVAILABLE"
+	| "BUDGET_EXHAUSTED"
+	| "ITEM_NOT_VISIBLE"
+	| "VERSION_SUPERSEDED"
+	| "PENDING_DEADLINE_EXCEEDED"
+	| "ITEM_GONE"
+	| "LEGACY_REVIEW_UNBOUND"
+	| "OCCASION_EVIDENCE_UNAVAILABLE"
+	| "QUIET_WINDOW"
+	| "REVIEW_IN_PROGRESS"
+	| "ALREADY_CURRENT";
+
+export type ReviewRequestStatus = "SUBMITTED" | "REFUSED";
 
 export type ReviewResult = {
 	acceptedAt: Date | null;
@@ -5917,26 +5934,26 @@ export type ReviewResult = {
 	 * When the observation's capture read the work: the work as of that time. A later check that found the work unchanged is not recorded. Null when the capture record is missing.
 	 */
 	capturedAt: Date | null;
-	currentness: "CURRENT" | "STALE" | "UNVERIFIABLE";
+	currentness: Currentness;
 	developer: ReviewDeveloper | null;
 	feedback: ReviewFeedbackCounts;
 	id: string;
 	item: ItemRef;
 	markedIncorrectAt: Date | null;
-	origin: "EVENT" | "REQUEST" | "SCHEDULE" | "BACKFILL";
-	outcome: "MET" | "NOT_MET" | "DOES_NOT_APPLY" | "COULD_NOT_DETERMINE";
+	origin: ReviewOrigin;
+	outcome: ResultOutcome;
 	practiceName: string;
 	practiceSlug: string;
 	problemCount: number;
 	problems: Array<ProblemSummary>;
 	recordedAt: Date;
 	reviewId: string;
-	severity: "CRITICAL" | "MAJOR" | "MINOR" | "TRIVIAL" | null;
+	severity: Severity | null;
 	summary: string | null;
 	/**
 	 * Why an unverifiable observation cannot be checked against the work; null unless currentness is UNVERIFIABLE.
 	 */
-	unverifiableReason: "RECORD_MISSING" | "WORK_UNREADABLE" | null;
+	unverifiableReason: UnverifiableReason | null;
 };
 
 export type ReviewResultCounts = {
@@ -5953,10 +5970,10 @@ export type ReviewResultDetail = {
 	 */
 	capturedAt: Date | null;
 	coverage: HostCoverage | null;
-	currentness: "CURRENT" | "STALE" | "UNVERIFIABLE";
+	currentness: Currentness;
 	developer: ReviewDeveloper | null;
 	disagreements: Array<FeedbackDisagreement>;
-	endReason: "REPLACED" | "OUTRANKED" | "WORK_CHANGED" | "REPAIRED" | "REMOVED" | null;
+	endReason: ResultEndReason | null;
 	endedAt: Date | null;
 	evidence: ResultEvidence | null;
 	evidenceHidden: boolean;
@@ -5969,8 +5986,8 @@ export type ReviewResultDetail = {
 	itemVersion: string | null;
 	markedIncorrectAt: Date | null;
 	marks: Array<ResultMark>;
-	origin: "EVENT" | "REQUEST" | "SCHEDULE" | "BACKFILL";
-	outcome: "MET" | "NOT_MET" | "DOES_NOT_APPLY" | "COULD_NOT_DETERMINE";
+	origin: ReviewOrigin;
+	outcome: ResultOutcome;
 	practiceName: string;
 	practiceSlug: string;
 	practiceVersionId: string | null;
@@ -5978,12 +5995,12 @@ export type ReviewResultDetail = {
 	problems: Array<Problem>;
 	recordedAt: Date;
 	reviewId: string;
-	severity: "CRITICAL" | "MAJOR" | "MINOR" | "TRIVIAL" | null;
+	severity: Severity | null;
 	summary: string | null;
 	/**
 	 * Why an unverifiable observation cannot be checked against the work; null unless currentness is UNVERIFIABLE.
 	 */
-	unverifiableReason: "RECORD_MISSING" | "WORK_UNREADABLE" | null;
+	unverifiableReason: UnverifiableReason | null;
 };
 
 export type ReviewRuntime = {
@@ -5992,7 +6009,7 @@ export type ReviewRuntime = {
 
 export type ReviewSchedule = {
 	budgetUsd: string | null;
-	cadence: "DAILY" | "WEEKLY";
+	cadence: ReviewCadence;
 	createdAt: Date;
 	createdBy: AccountRef | null;
 	enabled: boolean;
@@ -6007,16 +6024,23 @@ export type ReviewSchedule = {
 
 export type ReviewScheduleInput = {
 	budgetUsd: string | null;
-	cadence: "DAILY" | "WEEKLY";
+	cadence: ReviewCadence;
 	enabled: boolean;
 	itemKind: string;
 	lookbackDays: null | number;
 };
 
+export type ReviewScopeMode = "ALL" | "SELECTED";
+
 export type ReviewScopeRepository = {
 	baseBranches: Array<string>;
 	repositoryItemId: string;
 };
+
+/**
+ * Where the review stands.
+ */
+export type ReviewStatus = "QUEUED" | "RUNNING" | "COMPLETE" | "PARTIAL" | "FAILED" | "CANCELLED";
 
 export type ReviewStatusCounts = {
 	cancelled: number;
@@ -6026,6 +6050,35 @@ export type ReviewStatusCounts = {
 	queued: number;
 	running: number;
 };
+
+export type ReviewStopReason =
+	| "TIMED_OUT"
+	| "EXECUTION_FAILED"
+	| "PREPARATION_FAILED"
+	| "PROCESSING_FAILED"
+	| "PERSON_DATA_ERASED"
+	| "STALE_ROLLOUT_REVISION"
+	| "CANCELLED_BY_ADMIN"
+	| "REPLACED"
+	| "LEGACY_FAILURE"
+	| "EXECUTION_INCOMPLETE"
+	| "RESULT_WITHHELD"
+	| "READINESS_REFUSED"
+	| "SUSPECT_LISTING"
+	| "BUDGET"
+	| "USAGE_UNVERIFIABLE"
+	| "DEADLINE"
+	| "CANCELLED"
+	| "ENUMERATION_FAILED"
+	| "ENUMERATION_LIMIT"
+	| "NO_SCAN_PRACTICES"
+	| "MODEL_CHANGED"
+	| "MODEL_UNAVAILABLE"
+	| "ERROR"
+	| "LEGACY_SCOPE_UNKNOWN"
+	| "CONTRACT_CHANGED"
+	| "NO_SANDBOX_ROOM"
+	| "COMPOSITION_UNCONFIRMED";
 
 export type ReviewSummary = {
 	activeJobCount: number;
@@ -6037,48 +6090,17 @@ export type ReviewSummary = {
 	item: ItemRef;
 	itemVersion: string | null;
 	jobCount: number;
-	kind: "ITEM" | "SCAN";
+	kind: ReviewKind;
 	model: string | null;
 	orderedAt: Date;
-	origin: "EVENT" | "REQUEST" | "SCHEDULE" | "BACKFILL";
+	origin: ReviewOrigin;
 	practices: Array<ReviewPractice>;
 	progress: ReviewProgress | null;
 	requestedBy: AccountRef | null;
 	results: ReviewResultCounts;
 	startedBy: ItemEvent | null;
-	/**
-	 * Where the review stands.
-	 */
-	status: "QUEUED" | "RUNNING" | "COMPLETE" | "PARTIAL" | "FAILED" | "CANCELLED";
-	stopReason:
-		| "TIMED_OUT"
-		| "EXECUTION_FAILED"
-		| "PREPARATION_FAILED"
-		| "PROCESSING_FAILED"
-		| "PERSON_DATA_ERASED"
-		| "STALE_ROLLOUT_REVISION"
-		| "CANCELLED_BY_ADMIN"
-		| "REPLACED"
-		| "LEGACY_FAILURE"
-		| "EXECUTION_INCOMPLETE"
-		| "RESULT_WITHHELD"
-		| "READINESS_REFUSED"
-		| "SUSPECT_LISTING"
-		| "BUDGET"
-		| "USAGE_UNVERIFIABLE"
-		| "DEADLINE"
-		| "CANCELLED"
-		| "ENUMERATION_FAILED"
-		| "ENUMERATION_LIMIT"
-		| "NO_SCAN_PRACTICES"
-		| "MODEL_CHANGED"
-		| "MODEL_UNAVAILABLE"
-		| "ERROR"
-		| "LEGACY_SCOPE_UNKNOWN"
-		| "CONTRACT_CHANGED"
-		| "NO_SANDBOX_ROOM"
-		| "COMPOSITION_UNCONFIRMED"
-		| null;
+	status: ReviewStatus;
+	stopReason: ReviewStopReason | null;
 };
 
 export type ReviewTimeShares = {
@@ -6141,21 +6163,23 @@ export type ReviewUsageAttempt = {
 	inputTokens: number;
 	jobId: string;
 	outputTokens: number;
-	pricingState: "PRICED" | "NO_CHARGE" | "UNPRICED";
+	pricingState: UsagePricingState;
 	reasoningTokens: number;
 };
 
 export type ReviewedBy = {
-	by: "HEPHAESTUS" | "PEOPLE" | "NOBODY";
+	by: ReviewedByKind;
 	humanReason: ReviewLimit | null;
 	limits: Array<ReviewLimit>;
 };
 
 export type ReviewedByInput = {
-	by: "HEPHAESTUS" | "PEOPLE" | "NOBODY";
+	by: ReviewedByKind;
 	humanReason: ReviewLimitInput | null;
 	limits: Array<ReviewLimitInput>;
 };
+
+export type ReviewedByKind = "HEPHAESTUS" | "PEOPLE" | "NOBODY";
 
 export type ReviewedPractice = {
 	group: GroupRef | null;
@@ -6172,12 +6196,14 @@ export type Reviewer = {
 	/**
 	 * REQUESTED while a review is asked of them, otherwise the verdict of their latest review that was not dismissed
 	 */
-	state: "CHANGES_REQUESTED" | "APPROVED" | "COMMENTED" | "REQUESTED";
+	state: ReviewerState;
 	/**
 	 * The reviewer
 	 */
 	user: UserInfo;
 };
+
+export type ReviewerState = "CHANGES_REQUESTED" | "APPROVED" | "COMMENTED" | "REQUESTED";
 
 export type RevokeSessionsResult = {
 	revoked: number;
@@ -6192,7 +6218,7 @@ export type RunningRelease = {
 	/**
 	 * what kind of build that version names
 	 */
-	channel: "RELEASE" | "COMMIT" | "DEVELOPMENT";
+	channel: ReleaseChannel;
 	/**
 	 * the source commit the lock names
 	 */
@@ -6208,12 +6234,14 @@ export type RunningRelease = {
 	/**
 	 * the runtime roles this process booted with
 	 */
-	roles: Array<"SERVER">;
+	roles: Array<RuntimeRole>;
 	/**
 	 * the version the deployment passed as <code>APP_VERSION</code>
 	 */
 	version: string;
 };
+
+export type RuntimeRole = "SERVER";
 
 /**
  * Create or change a pool of provider capacity
@@ -6286,7 +6314,7 @@ export type ScanDetail = {
 	createdAt: Date;
 	id: string;
 	itemVersion: string;
-	origin: "EVENT" | "REQUEST" | "SCHEDULE" | "BACKFILL";
+	origin: ReviewOrigin;
 	practiceCount: number;
 	practices: Array<ScanPracticeRef>;
 	progress: ScanProgress;
@@ -6294,45 +6322,14 @@ export type ScanDetail = {
 	repository: ItemRef;
 	requestedBy: AccountRef | null;
 	startedAt: Date | null;
-	/**
-	 * Where the review stands.
-	 */
-	status: "QUEUED" | "RUNNING" | "COMPLETE" | "PARTIAL" | "FAILED" | "CANCELLED";
-	stopReason:
-		| "TIMED_OUT"
-		| "EXECUTION_FAILED"
-		| "PREPARATION_FAILED"
-		| "PROCESSING_FAILED"
-		| "PERSON_DATA_ERASED"
-		| "STALE_ROLLOUT_REVISION"
-		| "CANCELLED_BY_ADMIN"
-		| "REPLACED"
-		| "LEGACY_FAILURE"
-		| "EXECUTION_INCOMPLETE"
-		| "RESULT_WITHHELD"
-		| "READINESS_REFUSED"
-		| "SUSPECT_LISTING"
-		| "BUDGET"
-		| "USAGE_UNVERIFIABLE"
-		| "DEADLINE"
-		| "CANCELLED"
-		| "ENUMERATION_FAILED"
-		| "ENUMERATION_LIMIT"
-		| "NO_SCAN_PRACTICES"
-		| "MODEL_CHANGED"
-		| "MODEL_UNAVAILABLE"
-		| "ERROR"
-		| "LEGACY_SCOPE_UNKNOWN"
-		| "CONTRACT_CHANGED"
-		| "NO_SANDBOX_ROOM"
-		| "COMPOSITION_UNCONFIRMED"
-		| null;
+	status: ReviewStatus;
+	stopReason: ReviewStopReason | null;
 };
 
 export type ScanExcludedFile = {
 	itemId: string;
 	path: string;
-	reason: "FILE_TOO_LARGE" | "BINARY_FILE";
+	reason: ItemExclusionReason;
 	sizeBytes: number;
 };
 
@@ -6346,13 +6343,7 @@ export type ScanPracticeRef = {
 };
 
 export type ScanPracticeReport = {
-	comparison:
-		| "COMPARABLE"
-		| "FIRST_SCAN"
-		| "METHOD_CHANGED"
-		| "STANDARD_CHANGED"
-		| "INCOMPLETE"
-		| "MIXED";
+	comparison: Comparison;
 	counts: ScanCounts;
 	listingComplete: boolean;
 	method: ReviewMethod;
@@ -6363,7 +6354,7 @@ export type ScanPracticeReport = {
 	practiceVersionId: string;
 	reason: string | null;
 	reviewDigest: string;
-	status: "QUEUED" | "READY" | "RUNNING" | "DONE" | "WITHHELD" | "FAILED";
+	status: ReviewPracticeStatus;
 };
 
 export type ScanProgress = {
@@ -6376,13 +6367,7 @@ export type ScanProgress = {
 export type ScanReport = {
 	availability: ScanAvailability;
 	baselineScanId: string | null;
-	comparison:
-		| "COMPARABLE"
-		| "FIRST_SCAN"
-		| "METHOD_CHANGED"
-		| "STANDARD_CHANGED"
-		| "INCOMPLETE"
-		| "MIXED";
+	comparison: Comparison;
 	complete: boolean;
 	counts: ScanCounts;
 	exclusions: null | Array<ScanExcludedFile>;
@@ -6408,7 +6393,7 @@ export type ScanReportItem = (
 
 export type ScanReportProblem = {
 	absentReason: "REPAIRED" | null;
-	baselineState: "NEW" | "UNCHANGED" | "UPDATED" | "ABSENT" | null;
+	baselineState: ProblemBaselineState | null;
 	item: ItemRef;
 	practiceName: string;
 	practiceSlug: string;
@@ -6424,46 +6409,34 @@ export type ScanSummary = {
 	createdAt: Date;
 	id: string;
 	itemVersion: string;
-	origin: "EVENT" | "REQUEST" | "SCHEDULE" | "BACKFILL";
+	origin: ReviewOrigin;
 	practiceCount: number;
 	ref: string;
 	repository: ItemRef;
 	requestedBy: AccountRef | null;
 	startedAt: Date | null;
-	/**
-	 * Where the review stands.
-	 */
-	status: "QUEUED" | "RUNNING" | "COMPLETE" | "PARTIAL" | "FAILED" | "CANCELLED";
-	stopReason:
-		| "TIMED_OUT"
-		| "EXECUTION_FAILED"
-		| "PREPARATION_FAILED"
-		| "PROCESSING_FAILED"
-		| "PERSON_DATA_ERASED"
-		| "STALE_ROLLOUT_REVISION"
-		| "CANCELLED_BY_ADMIN"
-		| "REPLACED"
-		| "LEGACY_FAILURE"
-		| "EXECUTION_INCOMPLETE"
-		| "RESULT_WITHHELD"
-		| "READINESS_REFUSED"
-		| "SUSPECT_LISTING"
-		| "BUDGET"
-		| "USAGE_UNVERIFIABLE"
-		| "DEADLINE"
-		| "CANCELLED"
-		| "ENUMERATION_FAILED"
-		| "ENUMERATION_LIMIT"
-		| "NO_SCAN_PRACTICES"
-		| "MODEL_CHANGED"
-		| "MODEL_UNAVAILABLE"
-		| "ERROR"
-		| "LEGACY_SCOPE_UNKNOWN"
-		| "CONTRACT_CHANGED"
-		| "NO_SANDBOX_ROOM"
-		| "COMPOSITION_UNCONFIRMED"
-		| null;
+	status: ReviewStatus;
+	stopReason: ReviewStopReason | null;
 };
+
+export type ScriptKind = "BUILTIN" | "CUSTOM";
+
+export type ScriptNoResultCause = "EVIDENCE_NOT_READ" | "SESSION_ENDED";
+
+export type ScriptRunStatus = "OK" | "WITHHELD" | "FAILED" | "NOT_REACHED" | "NOT_FINISHED";
+
+export type ScriptStopReason =
+	| "UNAVAILABLE"
+	| "BUDGET"
+	| "DEADLINE"
+	| "TOO_LARGE"
+	| "OFF_FORMAT"
+	| "REFUSED"
+	| "ERROR"
+	| "CANCELLED"
+	| "INVALID_SCRIPT"
+	| "INVALID_CANDIDATE"
+	| "UNREAD_EVIDENCE";
 
 export type SearchWarrant = {
 	boundary?: string;
@@ -6475,11 +6448,13 @@ export type SearchWarrant = {
 	lookedFor?: string;
 };
 
+export type SessionClient = "WEB" | "BROWSER_EXTENSION";
+
 export type SessionView = {
 	/**
 	 * what signed in
 	 */
-	client: "WEB" | "BROWSER_EXTENSION";
+	client: SessionClient;
 	current: boolean;
 	/**
 	 * when the token expires; for an installed client, the session's own deadline
@@ -6496,7 +6471,7 @@ export type SetCatalogStatusRequest = {
 };
 
 export type SetFeedbackModeRequest = {
-	feedbackMode: "OFF" | "APPROVE_FIRST" | "AUTOMATIC" | null;
+	feedbackMode: FeedbackMode | null;
 };
 
 export type SetMemberHiddenRequest = {
@@ -6506,6 +6481,8 @@ export type SetMemberHiddenRequest = {
 export type SetReviewScheduleEnabledRequest = {
 	enabled?: boolean;
 };
+
+export type Severity = "CRITICAL" | "MAJOR" | "MINOR" | "TRIVIAL";
 
 /**
  * A Slack channel the app can offer in the workspace channel picker
@@ -6522,7 +6499,7 @@ export type SlackChannelCandidate = {
 	/**
 	 * Existing Hephaestus monitoring state, if already allow-listed
 	 */
-	consentState?: "PENDING" | "ACTIVE" | "PAUSED" | "REVOKED";
+	consentState?: SlackMonitoredChannelConsentState;
 	/**
 	 * Whether the app bot is already a member
 	 */
@@ -6552,7 +6529,7 @@ export type SlackChannelConsentEvent = {
 	/**
 	 * State the channel left (absent for the very first record)
 	 */
-	fromState: "PENDING" | "ACTIVE" | "PAUSED" | "REVOKED" | null;
+	fromState: SlackMonitoredChannelConsentState | null;
 	/**
 	 * Audit entry id
 	 */
@@ -6568,7 +6545,7 @@ export type SlackChannelConsentEvent = {
 	/**
 	 * State the channel entered
 	 */
-	toState: "PENDING" | "ACTIVE" | "PAUSED" | "REVOKED";
+	toState: SlackMonitoredChannelConsentState;
 };
 
 /**
@@ -6586,7 +6563,7 @@ export type SlackMonitoredChannel = {
 	/**
 	 * Current per-channel consent lifecycle state
 	 */
-	consentState: "PENDING" | "ACTIVE" | "PAUSED" | "REVOKED";
+	consentState: SlackMonitoredChannelConsentState;
 	/**
 	 * When the channel was first discovered / allow-listed
 	 */
@@ -6608,6 +6585,8 @@ export type SlackMonitoredChannel = {
 	 */
 	slackTeamId: string;
 };
+
+export type SlackMonitoredChannelConsentState = "PENDING" | "ACTIVE" | "PAUSED" | "REVOKED";
 
 /**
  * The Slack scopes that Hephaestus requests and the workspace's Slack token does not hold
@@ -6631,6 +6610,13 @@ export type SlackUserWorkspacePreferences = {
 	workspaceName: string;
 	workspaceSlug: string;
 };
+
+export type Standing = "DEVELOPING" | "STRENGTH" | "MIXED" | "NOT_OBSERVED" | "NO_OPPORTUNITY";
+
+export type StandingBasis =
+	| "CURRENT_REVIEWS"
+	| "EARLIER_REVIEWS"
+	| "EARLIER_REVIEWS_CRITERIA_UNKNOWN";
 
 export type StartScanRequest = {
 	budgetUsd: string;
@@ -6697,11 +6683,11 @@ export type SyncJob = {
 	/**
 	 * Job status
 	 */
-	status: "PENDING" | "RUNNING" | "SUCCEEDED" | "SUCCEEDED_WITH_WARNINGS" | "FAILED" | "CANCELLED";
+	status: SyncJobStatus;
 	/**
 	 * What initiated this job
 	 */
-	trigger: "SCHEDULED" | "MANUAL" | "LIFECYCLE" | "SYSTEM";
+	trigger: SyncJobTrigger;
 	/**
 	 * Account id of the admin who triggered this job, if MANUAL
 	 */
@@ -6709,8 +6695,20 @@ export type SyncJob = {
 	/**
 	 * What kind of pass this is
 	 */
-	type: "INITIAL" | "RECONCILIATION" | "BACKFILL";
+	type: SyncJobType;
 };
+
+export type SyncJobStatus =
+	| "PENDING"
+	| "RUNNING"
+	| "SUCCEEDED"
+	| "SUCCEEDED_WITH_WARNINGS"
+	| "FAILED"
+	| "CANCELLED";
+
+export type SyncJobTrigger = "SCHEDULED" | "MANUAL" | "LIFECYCLE" | "SYSTEM";
+
+export type SyncJobType = "INITIAL" | "RECONCILIATION" | "BACKFILL";
 
 /**
  * One entity class mirrored within a resource (issues, pull requests, comments, messages, …)
@@ -6789,12 +6787,14 @@ export type SyncResourceState = {
 	/**
 	 * Resource kind
 	 */
-	type: "REPOSITORY" | "CHANNEL" | "COLLECTION";
+	type: SyncResourceStateType;
 	/**
 	 * Vendor-reported upstream count, if cheaply available
 	 */
 	upstreamCount?: number;
 };
+
+export type SyncResourceStateType = "REPOSITORY" | "CHANNEL" | "COLLECTION";
 
 /**
  * Detailed information about a team including members, repositories, and labels
@@ -6843,7 +6843,7 @@ export type TeamInfo = {
 	/**
 	 * Privacy level of the team (SECRET or VISIBLE)
 	 */
-	privacy?: "SECRET" | "VISIBLE";
+	privacy?: TeamPrivacy;
 	/**
 	 * Count of repository permissions
 	 */
@@ -6857,6 +6857,8 @@ export type TeamInfo = {
 	 */
 	slug: string;
 };
+
+export type TeamPrivacy = "SECRET" | "VISIBLE";
 
 /**
  * A team, by name
@@ -6907,8 +6909,10 @@ export type TeamSummary = {
 	/**
 	 * Privacy level of the team (SECRET or VISIBLE)
 	 */
-	privacy?: "SECRET" | "VISIBLE";
+	privacy?: TeamPrivacy;
 };
+
+export type TimeBucketSize = "DAY" | "WEEK" | "MONTH";
 
 /**
  * How many rows match
@@ -6916,6 +6920,8 @@ export type TeamSummary = {
 export type TotalCount = {
 	total: number;
 };
+
+export type TrendDirection = "IMPROVING" | "DECLINING" | "UNCERTAIN" | "INSUFFICIENT_EVIDENCE";
 
 export type TrendSupport = {
 	bundleSize: number;
@@ -6942,8 +6948,10 @@ export type TriggerSyncJobRequest = {
 	/**
 	 * RECONCILIATION for a full re-sync, BACKFILL for historical data
 	 */
-	type: "INITIAL" | "RECONCILIATION" | "BACKFILL";
+	type: SyncJobType;
 };
+
+export type UnverifiableReason = "RECORD_MISSING" | "WORK_UNREADABLE";
 
 export type UpdateAccountRequest = {
 	appRole?: string;
@@ -6953,8 +6961,10 @@ export type UpdateAccountRequest = {
  * <code>BLOCKED</code> blocks the account; <code>ACTIVE</code> unblocks it.
  */
 export type UpdateAccountStatusRequest = {
-	status: "ACTIVE" | "BLOCKED";
+	status: UpdateAccountStatusRequestTargetStatus;
 };
+
+export type UpdateAccountStatusRequestTargetStatus = "ACTIVE" | "BLOCKED";
 
 /**
  * Request to update a connection's lifecycle status
@@ -6967,7 +6977,7 @@ export type UpdateConnectionStatusRequest = {
 	/**
 	 * Target lifecycle state. Admin-settable: ACTIVE, SUSPENDED, UNINSTALLED.
 	 */
-	state: "PENDING" | "ACTIVE" | "SUSPENDED" | "UNINSTALLED";
+	state: IntegrationState;
 };
 
 /**
@@ -7027,24 +7037,7 @@ export type UpdateLlmConnectionRequest = {
 	/**
 	 * Admin-declared connection platform
 	 */
-	connectionPlatform?:
-		| "LOGOS"
-		| "VLLM"
-		| "OLLAMA"
-		| "AZURE"
-		| "AWS_BEDROCK"
-		| "GOOGLE_VERTEX"
-		| "OPENAI"
-		| "GOOGLE_AI_STUDIO"
-		| "ALIBABA_CLOUD"
-		| "GROQ"
-		| "FIREWORKS"
-		| "TOGETHER_AI"
-		| "DEEPINFRA"
-		| "NEBIUS"
-		| "OPENROUTER"
-		| "CLOUDFLARE_AI_GATEWAY"
-		| "VERCEL_AI_GATEWAY";
+	connectionPlatform?: LlmConnectionPlatform;
 	/**
 	 * Human-readable name
 	 */
@@ -7082,7 +7075,7 @@ export type UpdateLlmModelPriceRequest = {
 	/**
 	 * PRICED shows the price itself; NO_CHARGE is a deliberate no-cost declaration; UNPRICED shows "No price set"
 	 */
-	pricingMode: "PRICED" | "NO_CHARGE" | "UNPRICED";
+	pricingMode: PricingMode;
 };
 
 /**
@@ -7092,19 +7085,7 @@ export type UpdateLlmModelRequest = {
 	/**
 	 * Model brand declared by an admin; null keeps current
 	 */
-	brand?:
-		| "OPENAI"
-		| "ANTHROPIC"
-		| "GEMINI"
-		| "GEMMA"
-		| "META"
-		| "MISTRAL"
-		| "QWEN"
-		| "DEEPSEEK"
-		| "XAI"
-		| "COHERE"
-		| "Z_AI"
-		| "MOONSHOT";
+	brand?: AiModelBrand;
 	/**
 	 * Clear the declared model brand
 	 */
@@ -7148,11 +7129,11 @@ export type UpdateLlmModelRequest = {
 	/**
 	 * Who operates the systems the work is sent to; omit to leave the declaration unchanged
 	 */
-	operatedBy?: "OWN_ORGANISATION" | "PROVIDER";
+	operatedBy?: LlmDataOperator;
 	/**
 	 * Reasoning effort to request; null keeps the current one (see clearReasoningEffort)
 	 */
-	reasoningEffort?: "NONE" | "MINIMAL" | "LOW" | "MEDIUM" | "HIGH" | "XHIGH" | "MAX";
+	reasoningEffort?: ReasoningEffort;
 };
 
 /**
@@ -7162,7 +7143,7 @@ export type UpdateLlmModelSharingRequest = {
 	/**
 	 * Share with all workspaces (PUBLIC) or only the selected ones (GRANTED)
 	 */
-	visibility: "PUBLIC" | "GRANTED";
+	visibility: ModelVisibility;
 	/**
 	 * Workspace ids to share with when visibility is GRANTED; empty or omitted stages the model without workspace access
 	 */
@@ -7201,7 +7182,7 @@ export type UpdateOutlineCollectionStateRequest = {
 	/**
 	 * Target mirror state
 	 */
-	state: "ENABLED" | "PAUSED";
+	state: OutlineCollectionMirrorState;
 };
 
 export type UpdatePracticeGroupRequest = {
@@ -7228,7 +7209,7 @@ export type UpdatePracticeReviewSettingsRequest = {
 	/**
 	 * The default feedback mode. Null leaves it unchanged; DEFAULT_FEEDBACK_MODE in reset restores inheritance.
 	 */
-	defaultFeedbackMode?: "OFF" | "APPROVE_FIRST" | "AUTOMATIC";
+	defaultFeedbackMode?: FeedbackMode;
 	/**
 	 * Deliver feedback to already-merged PRs/MRs
 	 */
@@ -7236,7 +7217,7 @@ export type UpdatePracticeReviewSettingsRequest = {
 	/**
 	 * Pause or activate external feedback. Resume never releases work from an older revision.
 	 */
-	deliveryStatus?: "ACTIVE" | "PAUSED";
+	deliveryStatus?: PracticeDeliveryStatus;
 	/**
 	 * Patch generated-path patterns per monitored repository. An empty list clears that repository. Null leaves all unchanged.
 	 */
@@ -7246,9 +7227,7 @@ export type UpdatePracticeReviewSettingsRequest = {
 	/**
 	 * Fields to reset back to inherit
 	 */
-	reset?: Array<
-		"DELIVER_TO_MERGED" | "COOLDOWN_MINUTES" | "REVIEW_SCOPE" | "DEFAULT_FEEDBACK_MODE"
-	>;
+	reset?: Array<PracticeReviewField>;
 	/**
 	 * Replaces repository and person coverage wholesale. Null leaves it unchanged.
 	 */
@@ -7273,13 +7252,7 @@ export type UpdateProductFeedbackSharing = {
 };
 
 export type UpdateReviewBatchStatusRequest = {
-	status:
-		| "AWAITING_CONFIRMATION"
-		| "RUNNING"
-		| "PAUSED"
-		| "COMPLETED"
-		| "CANCELLED"
-		| "BUDGET_EXHAUSTED";
+	status: ReviewBatchStatus;
 };
 
 export type UpdateSilentModeRequest = {
@@ -7294,7 +7267,7 @@ export type UpdateSlackChannelConsentRequest = {
 	/**
 	 * Target consent state
 	 */
-	consentState: "PENDING" | "ACTIVE" | "PAUSED" | "REVOKED";
+	consentState: SlackMonitoredChannelConsentState;
 	/**
 	 * Optional free-text reason recorded in the immutable audit trail
 	 */
@@ -7360,24 +7333,7 @@ export type UpdateWorkspaceLlmConnectionRequest = {
 	/**
 	 * Admin-declared connection platform
 	 */
-	connectionPlatform?:
-		| "LOGOS"
-		| "VLLM"
-		| "OLLAMA"
-		| "AZURE"
-		| "AWS_BEDROCK"
-		| "GOOGLE_VERTEX"
-		| "OPENAI"
-		| "GOOGLE_AI_STUDIO"
-		| "ALIBABA_CLOUD"
-		| "GROQ"
-		| "FIREWORKS"
-		| "TOGETHER_AI"
-		| "DEEPINFRA"
-		| "NEBIUS"
-		| "OPENROUTER"
-		| "CLOUDFLARE_AI_GATEWAY"
-		| "VERCEL_AI_GATEWAY";
+	connectionPlatform?: LlmConnectionPlatform;
 	/**
 	 * Human-readable name
 	 */
@@ -7395,19 +7351,7 @@ export type UpdateWorkspaceLlmModelRequest = {
 	/**
 	 * Model brand declared by an admin; null keeps current
 	 */
-	brand?:
-		| "OPENAI"
-		| "ANTHROPIC"
-		| "GEMINI"
-		| "GEMMA"
-		| "META"
-		| "MISTRAL"
-		| "QWEN"
-		| "DEEPSEEK"
-		| "XAI"
-		| "COHERE"
-		| "Z_AI"
-		| "MOONSHOT";
+	brand?: AiModelBrand;
 	/**
 	 * Clear the declared model brand
 	 */
@@ -7451,7 +7395,7 @@ export type UpdateWorkspaceLlmModelRequest = {
 	/**
 	 * Who operates the systems the work is sent to; omit to leave the declaration unchanged
 	 */
-	operatedBy?: "OWN_ORGANISATION" | "PROVIDER";
+	operatedBy?: LlmDataOperator;
 	/**
 	 * Cache-read rate per 1M tokens (USD), if applicable
 	 */
@@ -7475,11 +7419,11 @@ export type UpdateWorkspaceLlmModelRequest = {
 	/**
 	 * Pricing mode; when given, replaces the price wholesale (see class docs)
 	 */
-	pricingMode?: "PRICED" | "NO_CHARGE" | "UNPRICED";
+	pricingMode?: PricingMode;
 	/**
 	 * Reasoning effort to request; null keeps the current one (see clearReasoningEffort)
 	 */
-	reasoningEffort?: "NONE" | "MINIMAL" | "LOW" | "MEDIUM" | "HIGH" | "XHIGH" | "MAX";
+	reasoningEffort?: ReasoningEffort;
 };
 
 export type UpdateWorkspacePasskeyPolicy = {
@@ -7502,7 +7446,7 @@ export type UpdateWorkspaceStatusRequest = {
 	/**
 	 * Target lifecycle status. PURGED is not a status transition: purge is irreversible and owner-only, so it lives at DELETE /workspaces/{workspaceSlug}.
 	 */
-	status: "ACTIVE" | "SUSPENDED";
+	status: WorkspaceStatus;
 };
 
 /**
@@ -7514,6 +7458,10 @@ export type UpdateWorkspaceTokenRequest = {
 	 */
 	personalAccessToken: string;
 };
+
+export type UsageFundingSource = "INSTANCE" | "WORKSPACE";
+
+export type UsagePricingState = "PRICED" | "NO_CHARGE" | "UNPRICED";
 
 /**
  * Information about a user from the git provider
@@ -7596,21 +7544,27 @@ export type VisibilityUpdate = {
  * One measurement of a page visit
  */
 export type WebVital = {
-	navigation: "LOAD" | "ROUTE";
-	page:
-		| "PRACTICE_PROFILE"
-		| "ASK_HEPHAESTUS"
-		| "FEEDBACK"
-		| "FEEDBACK_APPROVAL"
-		| "ACTIVITY"
-		| "OTHER";
-	region: "SIDEBAR" | "HEADER" | "PAGE" | "OTHER";
+	navigation: WebVitalsNavigation;
+	page: WebVitalsPage;
+	region: WebVitalsRegion;
 	/**
 	 * Milliseconds for LCP, INP and TTFB; the unitless layout-shift score for CLS, at most 100
 	 */
 	value: number;
-	vital: "LCP" | "INP" | "CLS" | "TTFB";
+	vital: WebVitalsVital;
 };
+
+export type WebVitalsNavigation = "LOAD" | "ROUTE";
+
+export type WebVitalsPage =
+	| "PRACTICE_PROFILE"
+	| "ASK_HEPHAESTUS"
+	| "FEEDBACK"
+	| "FEEDBACK_APPROVAL"
+	| "ACTIVITY"
+	| "OTHER";
+
+export type WebVitalsRegion = "SIDEBAR" | "HEADER" | "PAGE" | "OTHER";
 
 /**
  * Measurements of a document's page load and route views, each sent once when the page hides
@@ -7618,6 +7572,8 @@ export type WebVital = {
 export type WebVitalsReport = {
 	vitals: Array<WebVital>;
 };
+
+export type WebVitalsVital = "LCP" | "INP" | "CLS" | "TTFB";
 
 /**
  * A weekly digest as it reads now, from the live facts
@@ -7669,7 +7625,7 @@ export type WeeklyDigestFeedback = {
 	/**
 	 * Where it was delivered: on the work (ON_WORK) or in the conversation with Hephaestus (CONVERSATION). Practice page feedback is never listed; the waiting count covers it
 	 */
-	destination: "ON_WORK" | "PRACTICE_PAGE" | "CONVERSATION";
+	destination: FeedbackDestination;
 	feedbackId: string;
 	groupName?: string;
 	groupSlug?: string;
@@ -7709,7 +7665,7 @@ export type WorkItem = {
 	/**
 	 * What the checks said about the pull request's current head, when known
 	 */
-	checks?: "SUCCESS" | "FAILURE" | "PENDING" | "CANCELLED" | "NONE" | "NO_PIPELINE" | "SKIPPED";
+	checks?: CheckState;
 	/**
 	 * When it was created
 	 */
@@ -7741,7 +7697,7 @@ export type WorkItem = {
 	/**
 	 * The pull request's review decision, when the provider reported one
 	 */
-	reviewDecision?: "APPROVED" | "CHANGES_REQUESTED" | "REVIEW_REQUIRED";
+	reviewDecision?: ReviewDecision;
 	/**
 	 * The pull request's reviewers besides its author, where each review stands; only open work lists them
 	 */
@@ -7749,7 +7705,7 @@ export type WorkItem = {
 	/**
 	 * Current state
 	 */
-	state: "OPEN" | "CLOSED" | "MERGED";
+	state: IssueState;
 	/**
 	 * Title
 	 */
@@ -7757,7 +7713,7 @@ export type WorkItem = {
 	/**
 	 * Whether this is a pull request or an issue
 	 */
-	type: "PULL_REQUEST" | "ISSUE";
+	type: WorkItemType;
 	/**
 	 * When it was last updated
 	 */
@@ -7777,6 +7733,8 @@ export type WorkItemList = {
 	 */
 	hasMore: boolean;
 };
+
+export type WorkItemType = "PULL_REQUEST" | "ISSUE";
 
 /**
  * Complete workspace information including configuration and settings
@@ -7837,7 +7795,7 @@ export type Workspace = {
 	/**
 	 * High-level git provider type for the workspace's SCM connection (null if none bound)
 	 */
-	providerType?: "GITHUB" | "GITLAB" | "SLACK" | "OUTLINE";
+	providerType?: IdentityProviderType;
 	/**
 	 * Whether this workspace has enabled its public activity page
 	 */
@@ -7853,7 +7811,7 @@ export type Workspace = {
 	/**
 	 * Current lifecycle status of the workspace
 	 */
-	status: "ACTIVE" | "SUSPENDED" | "PURGED";
+	status: WorkspaceStatus;
 	/**
 	 * Timestamp when the workspace was last updated
 	 */
@@ -7872,43 +7830,14 @@ export type Workspace = {
  * A model this answer would use here.
  */
 export type WorkspaceAiModel = {
-	brand?:
-		| "OPENAI"
-		| "ANTHROPIC"
-		| "GEMINI"
-		| "GEMMA"
-		| "META"
-		| "MISTRAL"
-		| "QWEN"
-		| "DEEPSEEK"
-		| "XAI"
-		| "COHERE"
-		| "Z_AI"
-		| "MOONSHOT";
-	connectionPlatform?:
-		| "LOGOS"
-		| "VLLM"
-		| "OLLAMA"
-		| "AZURE"
-		| "AWS_BEDROCK"
-		| "GOOGLE_VERTEX"
-		| "OPENAI"
-		| "GOOGLE_AI_STUDIO"
-		| "ALIBABA_CLOUD"
-		| "GROQ"
-		| "FIREWORKS"
-		| "TOGETHER_AI"
-		| "DEEPINFRA"
-		| "NEBIUS"
-		| "OPENROUTER"
-		| "CLOUDFLARE_AI_GATEWAY"
-		| "VERCEL_AI_GATEWAY";
-	dataHandlingTier: "IN_HOUSE" | "CLOUD" | "UNDECLARED";
+	brand?: AiModelBrand;
+	connectionPlatform?: LlmConnectionPlatform;
+	dataHandlingTier: DataHandlingTier;
 	name: string;
 };
 
 export type WorkspaceAiOption = {
-	choice: "NO_AI" | "IN_HOUSE_ONLY" | "CLOUD";
+	choice: AiChoice;
 	conversationReady: boolean;
 	models: Array<WorkspaceAiModel>;
 	practiceReviewsReady: boolean;
@@ -7945,11 +7874,11 @@ export type WorkspaceGroupSplit = {
 	/**
 	 * What the reader's group verdict was read from, as their practice profile says. Absent without one
 	 */
-	yourBasis: "CURRENT_REVIEWS" | "EARLIER_REVIEWS" | "EARLIER_REVIEWS_CRITERIA_UNKNOWN" | null;
+	yourBasis: StandingBasis | null;
 	/**
 	 * The reader's current standing in the group, the one their practice profile shows: the part they are marked in. Absent unless the split counts the reader
 	 */
-	yourStanding: "DEVELOPING" | "STRENGTH" | "MIXED" | "NOT_OBSERVED" | "NO_OPPORTUNITY" | null;
+	yourStanding: Standing | null;
 };
 
 /**
@@ -7983,7 +7912,7 @@ export type WorkspaceListItem = {
 	/**
 	 * High-level git provider type (GITHUB or GITLAB), or null if no SCM connection bound
 	 */
-	providerType?: "GITHUB" | "GITLAB" | "SLACK" | "OUTLINE";
+	providerType?: IdentityProviderType;
 	/**
 	 * Whether the public activity page is live: the instance allows it and the workspace turned it on
 	 */
@@ -7991,7 +7920,7 @@ export type WorkspaceListItem = {
 	/**
 	 * Current lifecycle status of the workspace
 	 */
-	status: "ACTIVE" | "SUSPENDED" | "PURGED";
+	status: WorkspaceStatus;
 	/**
 	 * Canonical workspace address. Uses the apex path when subdomains are off.
 	 */
@@ -8013,11 +7942,11 @@ export type WorkspaceLlmConnection = {
 	/**
 	 * Wire protocol
 	 */
-	apiProtocol: "anthropic-messages" | "openai-completions" | "openai-responses";
+	apiProtocol: LlmApiProtocol;
 	/**
 	 * Credential shape
 	 */
-	authMode: "BEARER" | "API_KEY";
+	authMode: LlmAuthMode;
 	/**
 	 * Provider base URL
 	 */
@@ -8025,24 +7954,7 @@ export type WorkspaceLlmConnection = {
 	/**
 	 * Admin-declared connection platform
 	 */
-	connectionPlatform?:
-		| "LOGOS"
-		| "VLLM"
-		| "OLLAMA"
-		| "AZURE"
-		| "AWS_BEDROCK"
-		| "GOOGLE_VERTEX"
-		| "OPENAI"
-		| "GOOGLE_AI_STUDIO"
-		| "ALIBABA_CLOUD"
-		| "GROQ"
-		| "FIREWORKS"
-		| "TOGETHER_AI"
-		| "DEEPINFRA"
-		| "NEBIUS"
-		| "OPENROUTER"
-		| "CLOUDFLARE_AI_GATEWAY"
-		| "VERCEL_AI_GATEWAY";
+	connectionPlatform?: LlmConnectionPlatform;
 	/**
 	 * Creation timestamp
 	 */
@@ -8066,7 +7978,7 @@ export type WorkspaceLlmConnection = {
 	/**
 	 * The purposes a model on this connection can serve, from its protocol
 	 */
-	purposes: Array<"PRACTICE_REVIEW" | "CONVERSATION">;
+	purposes: Array<ModelPurpose>;
 	/**
 	 * Unique slug within the workspace
 	 */
@@ -8084,19 +7996,7 @@ export type WorkspaceLlmModel = {
 	/**
 	 * Model brand declared by an admin; display only
 	 */
-	brand?:
-		| "OPENAI"
-		| "ANTHROPIC"
-		| "GEMINI"
-		| "GEMMA"
-		| "META"
-		| "MISTRAL"
-		| "QWEN"
-		| "DEEPSEEK"
-		| "XAI"
-		| "COHERE"
-		| "Z_AI"
-		| "MOONSHOT";
+	brand?: AiModelBrand;
 	/**
 	 * The instance pool whose capacity the model's calls share; only an instance admin sets it
 	 */
@@ -8128,7 +8028,7 @@ export type WorkspaceLlmModel = {
 	/**
 	 * Data-handling tier derived from the operator; UNDECLARED until it is set
 	 */
-	dataHandlingTier: "IN_HOUSE" | "CLOUD" | "UNDECLARED";
+	dataHandlingTier: DataHandlingTier;
 	/**
 	 * Human-readable name
 	 */
@@ -8156,7 +8056,7 @@ export type WorkspaceLlmModel = {
 	/**
 	 * Who operates the systems the work is sent to; null until declared
 	 */
-	operatedBy?: "OWN_ORGANISATION" | "PROVIDER";
+	operatedBy?: LlmDataOperator;
 	/**
 	 * Cache-read rate per 1M tokens (USD)
 	 */
@@ -8180,21 +8080,15 @@ export type WorkspaceLlmModel = {
 	/**
 	 * Pricing mode
 	 */
-	pricingMode: "PRICED" | "NO_CHARGE" | "UNPRICED";
+	pricingMode: PricingMode;
 	/**
 	 * Whether the model can run now, or the first reason it cannot
 	 */
-	readiness:
-		| "READY"
-		| "PRICE_MISSING"
-		| "CONNECTION_OFF"
-		| "OFF"
-		| "LIMITS_MISSING"
-		| "NO_WORKSPACE_ACCESS";
+	readiness: LlmModelReadiness;
 	/**
 	 * Reasoning effort requested of the model; null sends none, the provider's default applies
 	 */
-	reasoningEffort?: "NONE" | "MINIMAL" | "LOW" | "MEDIUM" | "HIGH" | "XHIGH" | "MAX";
+	reasoningEffort?: ReasoningEffort;
 	/**
 	 * Unique slug within the workspace
 	 */
@@ -8254,7 +8148,7 @@ export type WorkspaceLlmUsageReport = {
 	/**
 	 * Whether host-funded (shared-model) spend is within its cap, has reached it, or cannot be confirmed because shared-model rates are missing or usage measurements are unverified.
 	 */
-	instanceBudgetVerdict: "WITHIN" | "EXHAUSTED" | "UNVERIFIABLE";
+	instanceBudgetVerdict: LlmBudgetVerdict;
 	/**
 	 * Monthly cap in USD on spend the host pays for (shared models); null = uncapped. Set by instance admins only — a workspace admin can see it but not change it.
 	 */
@@ -8278,7 +8172,7 @@ export type WorkspaceLlmUsageReport = {
 	/**
 	 * The same verdict for spend on this workspace's own provider, against its own cap.
 	 */
-	ownProviderBudgetVerdict: "WITHIN" | "EXHAUSTED" | "UNVERIFIABLE";
+	ownProviderBudgetVerdict: LlmBudgetVerdict;
 	/**
 	 * Whether this month has an own-provider purse to show. True when the month has at least one own-provider call, priced or not, so a month of confirmed $0.00 calls counts. For the current month, also true when the workspace has an enabled own-provider model on an enabled connection, so its admins can set a provider cap before the first call. The spend and cap fields cannot answer this.
 	 */
@@ -8319,11 +8213,11 @@ export type WorkspaceMembership = {
 	 * Whether the member answered the public activity question in this workspace, without the answer. Null unless the reader is a workspace admin, the workspace publishes public activity, and the member has not left.
 	 */
 	publicActivityAnswered: boolean | null;
-	role: "OWNER" | "ADMIN" | "MEMBER";
+	role: MembershipWorkspaceRole;
 	/**
 	 * Who decided the role: PROVIDER while the organization or group roster sets it at each sync, PERSON after a person set it. An owner role is always PERSON.
 	 */
-	roleSource: "PROVIDER" | "PERSON";
+	roleSource: MembershipRoleSource;
 };
 
 /**
@@ -8332,13 +8226,13 @@ export type WorkspaceMembership = {
  * what differs between workspaces. <code>conversationRefusal</code> is this member's own answer from Hephaestus's admission.
  */
 export type WorkspaceOnboarding = {
-	aiChoice?: "NO_AI" | "IN_HOUSE_ONLY" | "CLOUD";
+	aiChoice?: AiChoice;
 	aiChoiceRequired: boolean;
 	aiOptions: Array<WorkspaceAiOption>;
 	/**
 	 * Why Hephaestus declines this member here, by the rule that admits each question; null when Hephaestus can answer
 	 */
-	conversationRefusal?: "PERSON_ERASED" | "NO_AI" | "CHOICE_REQUIRED" | "UNAVAILABLE";
+	conversationRefusal?: AiRefusalReason;
 	enabled: boolean;
 	links: Array<WorkspaceOnboardingLink>;
 	needsSetup: boolean;
@@ -8392,12 +8286,14 @@ export type WorkspacePracticeSplit = {
 	/**
 	 * What the reader's verdict was read from, as their practice profile says. Absent without one
 	 */
-	yourBasis: "CURRENT_REVIEWS" | "EARLIER_REVIEWS" | "EARLIER_REVIEWS_CRITERIA_UNKNOWN" | null;
+	yourBasis: StandingBasis | null;
 	/**
 	 * The reader's current standing in the practice, the one their practice profile shows: the part they are marked in. Absent unless the split counts the reader
 	 */
-	yourStanding: "DEVELOPING" | "STRENGTH" | "MIXED" | "NOT_OBSERVED" | "NO_OPPORTUNITY" | null;
+	yourStanding: Standing | null;
 };
+
+export type WorkspacePropertiesCreationPolicy = "ADMIN_ONLY" | "SELF_SERVICE";
 
 /**
  * Available workspace creation providers and their configuration
@@ -8406,7 +8302,7 @@ export type WorkspaceProviders = {
 	/**
 	 * Who may create workspaces — ADMIN_ONLY restricts creation to instance admins
 	 */
-	creationPolicy?: "ADMIN_ONLY" | "SELF_SERVICE";
+	creationPolicy?: WorkspacePropertiesCreationPolicy;
 	/**
 	 * GitHub workspace provider config, null if not available
 	 */
@@ -8433,8 +8329,8 @@ export type WorkspaceRange = {
 
 export type WorkspaceReviewScope = {
 	accountIds: Array<string>;
-	people: "ALL" | "SELECTED";
-	repositories: "ALL" | "SELECTED";
+	people: ReviewScopeMode;
+	repositories: ReviewScopeMode;
 	selectedRepositories: Array<ReviewScopeRepository>;
 };
 
@@ -8467,8 +8363,12 @@ export type WorkspaceSplitPart = {
 	/**
 	 * The verdict the part counts
 	 */
-	standing: "DEVELOPING" | "MIXED" | "STRENGTH";
+	standing: WorkspaceSplitsVerdict;
 };
+
+export type WorkspaceSplitsVerdict = "DEVELOPING" | "MIXED" | "STRENGTH";
+
+export type WorkspaceStatus = "ACTIVE" | "SUSPENDED" | "PURGED";
 
 /**
  * What a workspace member may know about syncing
@@ -8527,55 +8427,8 @@ export type AdminListAuthEventsData = {
 		size?: number;
 		accountId?: number;
 		actingAccountId?: number;
-		eventType?: Array<
-			| "USER_VIEW"
-			| "LOGIN"
-			| "PASSKEY_CHANGED"
-			| "PASSKEY_VERIFIED"
-			| "LOGIN_FAILED"
-			| "LOGOUT"
-			| "TOKEN_REFRESH"
-			| "JWT_REVOKED"
-			| "IDENTITY_LINKED"
-			| "IDENTITY_UNLINKED"
-			| "IMPERSONATION_BEGIN"
-			| "IMPERSONATION_END"
-			| "ACCOUNT_DELETED"
-			| "EXPORT_REQUESTED"
-			| "PERSON_DATA_PREVIEWED"
-			| "PERSON_DATA_EXPORTED"
-			| "PERSON_DATA_ERASURE_REQUESTED"
-			| "APP_ROLE_CHANGED"
-			| "ACCOUNT_STATUS_CHANGED"
-			| "RESEARCH_CONSENT_REVOKED"
-			| "WORKSPACE_ELEVATION"
-			| "INSTALLATION_EVENT_REPLAYED"
-			| "GITHUB_INSTALLATION_ADOPTED"
-			| "GITHUB_INSTALLATION_DECLINED"
-			| "WORKSPACE_OWNER_CHANGE"
-			| "WORKSPACE_DELETION"
-			| "PROVIDER_RESOURCE_RELEASE"
-			| "LLM_CONNECTION_CREATED"
-			| "LLM_CONNECTION_UPDATED"
-			| "LLM_CONNECTION_DELETED"
-			| "LLM_MODEL_CREATED"
-			| "LLM_MODEL_UPDATED"
-			| "LLM_MODEL_DELETED"
-			| "LLM_MODEL_PRICE_CHANGED"
-			| "LLM_MODEL_SHARING_CHANGED"
-			| "LLM_SETTINGS_CHANGED"
-			| "LOGIN_PROVIDER_CREATED"
-			| "LOGIN_PROVIDER_UPDATED"
-			| "LOGIN_PROVIDER_DELETED"
-			| "SILENT_MODE_CHANGED"
-			| "PUBLIC_ACTIVITY_CHANGED"
-			| "PRODUCT_FEEDBACK_DESTINATIONS_CHANGED"
-			| "PRODUCT_FEEDBACK_CLEANUP_CONFIRMED"
-			| "PRODUCT_FEEDBACK_FILED_BY_ADMIN"
-			| "RESEARCH_DATASET_RELEASED"
-			| "RESEARCH_REMOVAL_RECORDED"
-		>;
-		result?: Array<"SUCCESS" | "FAILURE">;
+		eventType?: Array<AuthEventEventType>;
+		result?: Array<AuthEventResult>;
 		from?: Date;
 		to?: Date;
 	};
@@ -8598,55 +8451,8 @@ export type AdminCountAuthEventsData = {
 	query?: {
 		accountId?: number;
 		actingAccountId?: number;
-		eventType?: Array<
-			| "USER_VIEW"
-			| "LOGIN"
-			| "PASSKEY_CHANGED"
-			| "PASSKEY_VERIFIED"
-			| "LOGIN_FAILED"
-			| "LOGOUT"
-			| "TOKEN_REFRESH"
-			| "JWT_REVOKED"
-			| "IDENTITY_LINKED"
-			| "IDENTITY_UNLINKED"
-			| "IMPERSONATION_BEGIN"
-			| "IMPERSONATION_END"
-			| "ACCOUNT_DELETED"
-			| "EXPORT_REQUESTED"
-			| "PERSON_DATA_PREVIEWED"
-			| "PERSON_DATA_EXPORTED"
-			| "PERSON_DATA_ERASURE_REQUESTED"
-			| "APP_ROLE_CHANGED"
-			| "ACCOUNT_STATUS_CHANGED"
-			| "RESEARCH_CONSENT_REVOKED"
-			| "WORKSPACE_ELEVATION"
-			| "INSTALLATION_EVENT_REPLAYED"
-			| "GITHUB_INSTALLATION_ADOPTED"
-			| "GITHUB_INSTALLATION_DECLINED"
-			| "WORKSPACE_OWNER_CHANGE"
-			| "WORKSPACE_DELETION"
-			| "PROVIDER_RESOURCE_RELEASE"
-			| "LLM_CONNECTION_CREATED"
-			| "LLM_CONNECTION_UPDATED"
-			| "LLM_CONNECTION_DELETED"
-			| "LLM_MODEL_CREATED"
-			| "LLM_MODEL_UPDATED"
-			| "LLM_MODEL_DELETED"
-			| "LLM_MODEL_PRICE_CHANGED"
-			| "LLM_MODEL_SHARING_CHANGED"
-			| "LLM_SETTINGS_CHANGED"
-			| "LOGIN_PROVIDER_CREATED"
-			| "LOGIN_PROVIDER_UPDATED"
-			| "LOGIN_PROVIDER_DELETED"
-			| "SILENT_MODE_CHANGED"
-			| "PUBLIC_ACTIVITY_CHANGED"
-			| "PRODUCT_FEEDBACK_DESTINATIONS_CHANGED"
-			| "PRODUCT_FEEDBACK_CLEANUP_CONFIRMED"
-			| "PRODUCT_FEEDBACK_FILED_BY_ADMIN"
-			| "RESEARCH_DATASET_RELEASED"
-			| "RESEARCH_REMOVAL_RECORDED"
-		>;
-		result?: Array<"SUCCESS" | "FAILURE">;
+		eventType?: Array<AuthEventEventType>;
+		result?: Array<AuthEventResult>;
 		from?: Date;
 		to?: Date;
 	};
@@ -8669,55 +8475,8 @@ export type AdminExportAuthEventsData = {
 	query?: {
 		accountId?: number;
 		actingAccountId?: number;
-		eventType?: Array<
-			| "USER_VIEW"
-			| "LOGIN"
-			| "PASSKEY_CHANGED"
-			| "PASSKEY_VERIFIED"
-			| "LOGIN_FAILED"
-			| "LOGOUT"
-			| "TOKEN_REFRESH"
-			| "JWT_REVOKED"
-			| "IDENTITY_LINKED"
-			| "IDENTITY_UNLINKED"
-			| "IMPERSONATION_BEGIN"
-			| "IMPERSONATION_END"
-			| "ACCOUNT_DELETED"
-			| "EXPORT_REQUESTED"
-			| "PERSON_DATA_PREVIEWED"
-			| "PERSON_DATA_EXPORTED"
-			| "PERSON_DATA_ERASURE_REQUESTED"
-			| "APP_ROLE_CHANGED"
-			| "ACCOUNT_STATUS_CHANGED"
-			| "RESEARCH_CONSENT_REVOKED"
-			| "WORKSPACE_ELEVATION"
-			| "INSTALLATION_EVENT_REPLAYED"
-			| "GITHUB_INSTALLATION_ADOPTED"
-			| "GITHUB_INSTALLATION_DECLINED"
-			| "WORKSPACE_OWNER_CHANGE"
-			| "WORKSPACE_DELETION"
-			| "PROVIDER_RESOURCE_RELEASE"
-			| "LLM_CONNECTION_CREATED"
-			| "LLM_CONNECTION_UPDATED"
-			| "LLM_CONNECTION_DELETED"
-			| "LLM_MODEL_CREATED"
-			| "LLM_MODEL_UPDATED"
-			| "LLM_MODEL_DELETED"
-			| "LLM_MODEL_PRICE_CHANGED"
-			| "LLM_MODEL_SHARING_CHANGED"
-			| "LLM_SETTINGS_CHANGED"
-			| "LOGIN_PROVIDER_CREATED"
-			| "LOGIN_PROVIDER_UPDATED"
-			| "LOGIN_PROVIDER_DELETED"
-			| "SILENT_MODE_CHANGED"
-			| "PUBLIC_ACTIVITY_CHANGED"
-			| "PRODUCT_FEEDBACK_DESTINATIONS_CHANGED"
-			| "PRODUCT_FEEDBACK_CLEANUP_CONFIRMED"
-			| "PRODUCT_FEEDBACK_FILED_BY_ADMIN"
-			| "RESEARCH_DATASET_RELEASED"
-			| "RESEARCH_REMOVAL_RECORDED"
-		>;
-		result?: Array<"SUCCESS" | "FAILURE">;
+		eventType?: Array<AuthEventEventType>;
+		result?: Array<AuthEventResult>;
 		from?: Date;
 		to?: Date;
 	};
@@ -8741,38 +8500,10 @@ export type AdminListConfigAuditEventsData = {
 		workspaceId?: number;
 		cursor?: string;
 		size?: number;
-		entityType?: Array<
-			| "PROVIDER_RESOURCE_RELEASE"
-			| "PRACTICE_REVIEW_SETTINGS"
-			| "MODEL_ASSIGNMENT"
-			| "AGENT_BINDING"
-			| "AGENT_CONFIG"
-			| "AI_CONFIG_BINDING"
-			| "WORKSPACE_ROLE"
-			| "ACTIVITY_AUTOMATION"
-			| "WORKSPACE_FEATURES"
-			| "WORKSPACE_STATUS"
-			| "WORKSPACE_TOKEN"
-			| "WORKSPACE_VISIBILITY"
-			| "PRACTICE_ACTIVE"
-			| "PRACTICE_USAGE"
-			| "PRACTICE_DEFINITION"
-			| "PRACTICE_GROUP"
-			| "CATALOG_PRACTICE"
-			| "CATALOG_GROUP"
-			| "WORKSPACE_INSTANCE_LLM_BUDGET"
-			| "WORKSPACE_OWN_PROVIDER_LLM_BUDGET"
-			| "WORKSPACE_LLM_BUDGET"
-			| "WORKSPACE_BYO_LLM_BUDGET"
-			| "REVIEW_BATCH"
-			| "REVIEW_SCHEDULE"
-			| "FEEDBACK_DELIVERY_RECHECK"
-			| "WORKSPACE_LLM_CONNECTION"
-			| "WORKSPACE_LLM_MODEL"
-		>;
+		entityType?: Array<ConfigAuditEntityType>;
 		entityId?: string;
 		changedKey?: string;
-		action?: Array<"CREATED" | "UPDATED" | "DELETED">;
+		action?: Array<ConfigAuditAction>;
 		actorId?: number;
 		from?: Date;
 		to?: Date;
@@ -8795,38 +8526,10 @@ export type AdminCountConfigAuditEventsData = {
 	path?: never;
 	query?: {
 		workspaceId?: number;
-		entityType?: Array<
-			| "PROVIDER_RESOURCE_RELEASE"
-			| "PRACTICE_REVIEW_SETTINGS"
-			| "MODEL_ASSIGNMENT"
-			| "AGENT_BINDING"
-			| "AGENT_CONFIG"
-			| "AI_CONFIG_BINDING"
-			| "WORKSPACE_ROLE"
-			| "ACTIVITY_AUTOMATION"
-			| "WORKSPACE_FEATURES"
-			| "WORKSPACE_STATUS"
-			| "WORKSPACE_TOKEN"
-			| "WORKSPACE_VISIBILITY"
-			| "PRACTICE_ACTIVE"
-			| "PRACTICE_USAGE"
-			| "PRACTICE_DEFINITION"
-			| "PRACTICE_GROUP"
-			| "CATALOG_PRACTICE"
-			| "CATALOG_GROUP"
-			| "WORKSPACE_INSTANCE_LLM_BUDGET"
-			| "WORKSPACE_OWN_PROVIDER_LLM_BUDGET"
-			| "WORKSPACE_LLM_BUDGET"
-			| "WORKSPACE_BYO_LLM_BUDGET"
-			| "REVIEW_BATCH"
-			| "REVIEW_SCHEDULE"
-			| "FEEDBACK_DELIVERY_RECHECK"
-			| "WORKSPACE_LLM_CONNECTION"
-			| "WORKSPACE_LLM_MODEL"
-		>;
+		entityType?: Array<ConfigAuditEntityType>;
 		entityId?: string;
 		changedKey?: string;
-		action?: Array<"CREATED" | "UPDATED" | "DELETED">;
+		action?: Array<ConfigAuditAction>;
 		actorId?: number;
 		from?: Date;
 		to?: Date;
@@ -10068,7 +9771,7 @@ export type AdminListProductFeedbackData = {
 	body?: never;
 	path?: never;
 	query?: {
-		status?: "OPEN" | "IN_FLIGHT" | "ON_GITHUB" | "RESOLVED" | "ALL";
+		status?: FeedbackFilter;
 		/**
 		 * Zero-based page index (0..N)
 		 */
@@ -11145,18 +10848,7 @@ export type GetPublicActivityPersonWorkData = {
 		/**
 		 * Kinds of activity to list (repeatable); omit for every kind
 		 */
-		kinds?: Array<
-			| "PULL_REQUEST_OPENED"
-			| "PULL_REQUEST_MERGED"
-			| "PULL_REQUEST_CLOSED"
-			| "REVIEW_APPROVED"
-			| "REVIEW_CHANGES_REQUESTED"
-			| "REVIEW_COMMENTED"
-			| "COMMENTED"
-			| "CODE_COMMENTED"
-			| "ISSUE_OPENED"
-			| "ISSUE_CLOSED"
-		>;
+		kinds?: Array<ActivityKind>;
 		/**
 		 * The previous page's nextCursor; omit for the first page
 		 */
@@ -12127,18 +11819,7 @@ export type GetOwnActivityWorkData = {
 		/**
 		 * Kinds of activity to list (repeatable); omit for every kind
 		 */
-		kinds?: Array<
-			| "PULL_REQUEST_OPENED"
-			| "PULL_REQUEST_MERGED"
-			| "PULL_REQUEST_CLOSED"
-			| "REVIEW_APPROVED"
-			| "REVIEW_CHANGES_REQUESTED"
-			| "REVIEW_COMMENTED"
-			| "COMMENTED"
-			| "CODE_COMMENTED"
-			| "ISSUE_OPENED"
-			| "ISSUE_CLOSED"
-		>;
+		kinds?: Array<ActivityKind>;
 		/**
 		 * The previous page's nextCursor; omit for the first page
 		 */
@@ -12424,18 +12105,7 @@ export type GetActivityPersonWorkData = {
 		/**
 		 * Kinds of activity to list (repeatable); omit for every kind
 		 */
-		kinds?: Array<
-			| "PULL_REQUEST_OPENED"
-			| "PULL_REQUEST_MERGED"
-			| "PULL_REQUEST_CLOSED"
-			| "REVIEW_APPROVED"
-			| "REVIEW_CHANGES_REQUESTED"
-			| "REVIEW_COMMENTED"
-			| "COMMENTED"
-			| "CODE_COMMENTED"
-			| "ISSUE_OPENED"
-			| "ISSUE_CLOSED"
-		>;
+		kinds?: Array<ActivityKind>;
 		/**
 		 * The previous page's nextCursor; omit for the first page
 		 */
@@ -12537,18 +12207,7 @@ export type GetActivityWorkData = {
 		/**
 		 * Kinds of activity to list (repeatable); omit for every kind
 		 */
-		kinds?: Array<
-			| "PULL_REQUEST_OPENED"
-			| "PULL_REQUEST_MERGED"
-			| "PULL_REQUEST_CLOSED"
-			| "REVIEW_APPROVED"
-			| "REVIEW_CHANGES_REQUESTED"
-			| "REVIEW_COMMENTED"
-			| "COMMENTED"
-			| "CODE_COMMENTED"
-			| "ISSUE_OPENED"
-			| "ISSUE_CLOSED"
-		>;
+		kinds?: Array<ActivityKind>;
 		/**
 		 * The previous page's nextCursor; omit for the first page
 		 */
@@ -12598,38 +12257,10 @@ export type ListWorkspaceConfigAuditEventsData = {
 	query?: {
 		cursor?: string;
 		size?: number;
-		entityType?: Array<
-			| "PROVIDER_RESOURCE_RELEASE"
-			| "PRACTICE_REVIEW_SETTINGS"
-			| "MODEL_ASSIGNMENT"
-			| "AGENT_BINDING"
-			| "AGENT_CONFIG"
-			| "AI_CONFIG_BINDING"
-			| "WORKSPACE_ROLE"
-			| "ACTIVITY_AUTOMATION"
-			| "WORKSPACE_FEATURES"
-			| "WORKSPACE_STATUS"
-			| "WORKSPACE_TOKEN"
-			| "WORKSPACE_VISIBILITY"
-			| "PRACTICE_ACTIVE"
-			| "PRACTICE_USAGE"
-			| "PRACTICE_DEFINITION"
-			| "PRACTICE_GROUP"
-			| "CATALOG_PRACTICE"
-			| "CATALOG_GROUP"
-			| "WORKSPACE_INSTANCE_LLM_BUDGET"
-			| "WORKSPACE_OWN_PROVIDER_LLM_BUDGET"
-			| "WORKSPACE_LLM_BUDGET"
-			| "WORKSPACE_BYO_LLM_BUDGET"
-			| "REVIEW_BATCH"
-			| "REVIEW_SCHEDULE"
-			| "FEEDBACK_DELIVERY_RECHECK"
-			| "WORKSPACE_LLM_CONNECTION"
-			| "WORKSPACE_LLM_MODEL"
-		>;
+		entityType?: Array<ConfigAuditEntityType>;
 		entityId?: string;
 		changedKey?: string;
-		action?: Array<"CREATED" | "UPDATED" | "DELETED">;
+		action?: Array<ConfigAuditAction>;
 		actorId?: number;
 		from?: Date;
 		to?: Date;
@@ -12656,38 +12287,10 @@ export type CountWorkspaceConfigAuditEventsData = {
 		workspaceSlug: string;
 	};
 	query?: {
-		entityType?: Array<
-			| "PROVIDER_RESOURCE_RELEASE"
-			| "PRACTICE_REVIEW_SETTINGS"
-			| "MODEL_ASSIGNMENT"
-			| "AGENT_BINDING"
-			| "AGENT_CONFIG"
-			| "AI_CONFIG_BINDING"
-			| "WORKSPACE_ROLE"
-			| "ACTIVITY_AUTOMATION"
-			| "WORKSPACE_FEATURES"
-			| "WORKSPACE_STATUS"
-			| "WORKSPACE_TOKEN"
-			| "WORKSPACE_VISIBILITY"
-			| "PRACTICE_ACTIVE"
-			| "PRACTICE_USAGE"
-			| "PRACTICE_DEFINITION"
-			| "PRACTICE_GROUP"
-			| "CATALOG_PRACTICE"
-			| "CATALOG_GROUP"
-			| "WORKSPACE_INSTANCE_LLM_BUDGET"
-			| "WORKSPACE_OWN_PROVIDER_LLM_BUDGET"
-			| "WORKSPACE_LLM_BUDGET"
-			| "WORKSPACE_BYO_LLM_BUDGET"
-			| "REVIEW_BATCH"
-			| "REVIEW_SCHEDULE"
-			| "FEEDBACK_DELIVERY_RECHECK"
-			| "WORKSPACE_LLM_CONNECTION"
-			| "WORKSPACE_LLM_MODEL"
-		>;
+		entityType?: Array<ConfigAuditEntityType>;
 		entityId?: string;
 		changedKey?: string;
-		action?: Array<"CREATED" | "UPDATED" | "DELETED">;
+		action?: Array<ConfigAuditAction>;
 		actorId?: number;
 		from?: Date;
 		to?: Date;
@@ -14008,10 +13611,10 @@ export type RemoveModelAssignmentData = {
 		 * Workspace slug
 		 */
 		workspaceSlug: string;
-		purpose: "PRACTICE_REVIEW" | "CONVERSATION";
+		purpose: ModelPurpose;
 	};
 	query?: {
-		dataHandlingTier?: "IN_HOUSE" | "CLOUD" | "UNDECLARED";
+		dataHandlingTier?: DataHandlingTier;
 	};
 	url: "/workspaces/{workspaceSlug}/model-assignments/{purpose}";
 };
@@ -14033,10 +13636,10 @@ export type AssignModelData = {
 		 * Workspace slug
 		 */
 		workspaceSlug: string;
-		purpose: "PRACTICE_REVIEW" | "CONVERSATION";
+		purpose: ModelPurpose;
 	};
 	query?: {
-		dataHandlingTier?: "IN_HOUSE" | "CLOUD" | "UNDECLARED";
+		dataHandlingTier?: DataHandlingTier;
 	};
 	url: "/workspaces/{workspaceSlug}/model-assignments/{purpose}";
 };
@@ -14843,12 +14446,12 @@ export type ListOwnReviewsData = {
 		/**
 		 * Only reviews in these statuses
 		 */
-		status?: Array<"QUEUED" | "RUNNING" | "COMPLETE" | "PARTIAL" | "FAILED" | "CANCELLED">;
+		status?: Array<ReviewStatus>;
 		since?: Date;
 		/**
 		 * OLDEST lists the oldest review first; NEWEST, the default, the newest
 		 */
-		order?: "NEWEST" | "OLDEST";
+		order?: ReviewListOrder;
 		page?: number;
 		size?: number;
 	};
@@ -14895,7 +14498,7 @@ export type ListPracticesData = {
 		workspaceSlug: string;
 	};
 	query?: {
-		feedbackMode?: "OFF" | "APPROVE_FIRST" | "AUTOMATIC";
+		feedbackMode?: FeedbackMode;
 	};
 	url: "/workspaces/{workspaceSlug}/practices";
 };
@@ -15345,12 +14948,12 @@ export type ListOwnResultsData = {
 	query?: {
 		practiceSlug?: string;
 		groupSlug?: string;
-		outcome?: "MET" | "NOT_MET" | "DOES_NOT_APPLY" | "COULD_NOT_DETERMINE";
+		outcome?: ResultOutcome;
 		itemKind?: string;
 		itemId?: string;
-		severity?: Array<"CRITICAL" | "MAJOR" | "MINOR" | "TRIVIAL">;
+		severity?: Array<Severity>;
 		displayableOnly?: boolean;
-		sort?: "NEWEST" | "OLDEST" | "ACTIONABILITY";
+		sort?: ResultSort;
 		page?: number;
 		size?: number;
 	};
@@ -15404,7 +15007,7 @@ export type ListReviewBatchesData = {
 		workspaceSlug: string;
 	};
 	query?: {
-		origin?: "BACKFILL" | "SCHEDULE";
+		origin?: ReviewBatchOrigin;
 		page?: number;
 		size?: number;
 	};
@@ -15759,8 +15362,8 @@ export type ListReviewsData = {
 	query?: {
 		page?: number;
 		size?: number;
-		status?: Array<"QUEUED" | "RUNNING" | "COMPLETE" | "PARTIAL" | "FAILED" | "CANCELLED">;
-		kind?: "ITEM" | "SCAN";
+		status?: Array<ReviewStatus>;
+		kind?: ReviewKind;
 		reviewId?: string;
 		itemId?: string;
 		developerId?: number;
@@ -15768,8 +15371,8 @@ export type ListReviewsData = {
 		groupSlug?: string;
 		from?: Date;
 		to?: Date;
-		sort?: "NEWEST" | "OLDEST";
-		queueState?: "WAITING" | "HELD" | "RUNNING";
+		sort?: ReviewListSort;
+		queueState?: ReviewQueueState;
 	};
 	url: "/workspaces/{workspaceSlug}/practices/reviews";
 };
@@ -15807,70 +15410,14 @@ export type ListReviewFeedbackData = {
 		practiceSlug?: string;
 		groupSlug?: string;
 		developerId?: string;
-		destination?: Array<"ON_WORK" | "PRACTICE_PAGE" | "CONVERSATION">;
-		state?: Array<
-			| "AWAITING_APPROVAL"
-			| "READY"
-			| "DELIVERED"
-			| "UNCONFIRMED"
-			| "WITHHELD"
-			| "REJECTED"
-			| "REPLACED"
-			| "FAILED"
-		>;
-		location?:
-			| "GITHUB"
-			| "GITLAB"
-			| "OTHER_WORK"
-			| "APP"
-			| "SLACK"
-			| "NEXT_CONVERSATION"
-			| "PRACTICE_PAGES";
-		stopReason?: Array<
-			| "VOLUME_CAPPED"
-			| "COMPOSER_WITHHELD"
-			| "NOTHING_NEW"
-			| "REPEATS_DELIVERED_NOTE"
-			| "REACTED_DISAGREE"
-			| "REACTED_NOT_APPLICABLE"
-			| "CONVERSATION_EXPIRED"
-			| "DELIVERY_UNCONFIRMED"
-			| "ITEM_GONE"
-			| "ITEM_CLOSED"
-			| "ITEM_MERGED"
-			| "ITEM_STATE_INELIGIBLE"
-			| "ISSUE_SNAPSHOT_CHANGED"
-			| "PUBLIC_SUBJECT_INELIGIBLE"
-			| "NO_AI"
-			| "DELIVERY_OFF"
-			| "PERSON_SUPPRESSED"
-			| "RECIPIENT_UNAVAILABLE"
-			| "EMPTY_AFTER_SANITIZE"
-			| "INSTANCE_SILENCED"
-			| "FEEDBACK_OFF"
-			| "WORKSPACE_DISABLED"
-			| "WORKSPACE_DELIVERY_PAUSED"
-			| "STALE_ROLLOUT_REVISION"
-			| "OUTSIDE_CURRENT_SCOPE"
-			| "APPROVAL_STALE"
-			| "APPROVAL_NO_LONGER_ELIGIBLE"
-			| "PRACTICE_REQUIRES_APPROVAL"
-			| "BACKFILL_QUIET"
-			| "RESULT_MARKED_INCORRECT"
-			| "REVIEWED_VERSION_CHANGED"
-			| "REVIEW_CANCELLED"
-			| "EVIDENCE_NOT_PERMITTED"
-			| "NO_EVIDENCE"
-			| "UNCORROBORATED"
-			| "PUBLIC_HISTORY_CHANGED"
-			| "PUBLIC_DELIVERY_UNRESOLVED"
-			| "STEP_LIMIT"
-			| "NOT_COMPOSED"
-		>;
+		destination?: Array<FeedbackDestination>;
+		state?: Array<FeedbackState>;
+		location?: FeedbackLocation;
+		stopReason?: Array<FeedbackStopReason>;
 		withdrawn?: boolean;
 		disagreed?: boolean;
 		partlyDelivered?: boolean;
-		sort?: "NEWEST" | "OLDEST";
+		sort?: ReviewFeedbackSort;
 		from?: Date;
 		to?: Date;
 		page?: number;
@@ -15904,70 +15451,14 @@ export type CountReviewFeedbackByLocationData = {
 		practiceSlug?: string;
 		groupSlug?: string;
 		developerId?: string;
-		destination?: Array<"ON_WORK" | "PRACTICE_PAGE" | "CONVERSATION">;
-		state?: Array<
-			| "AWAITING_APPROVAL"
-			| "READY"
-			| "DELIVERED"
-			| "UNCONFIRMED"
-			| "WITHHELD"
-			| "REJECTED"
-			| "REPLACED"
-			| "FAILED"
-		>;
-		location?:
-			| "GITHUB"
-			| "GITLAB"
-			| "OTHER_WORK"
-			| "APP"
-			| "SLACK"
-			| "NEXT_CONVERSATION"
-			| "PRACTICE_PAGES";
-		stopReason?: Array<
-			| "VOLUME_CAPPED"
-			| "COMPOSER_WITHHELD"
-			| "NOTHING_NEW"
-			| "REPEATS_DELIVERED_NOTE"
-			| "REACTED_DISAGREE"
-			| "REACTED_NOT_APPLICABLE"
-			| "CONVERSATION_EXPIRED"
-			| "DELIVERY_UNCONFIRMED"
-			| "ITEM_GONE"
-			| "ITEM_CLOSED"
-			| "ITEM_MERGED"
-			| "ITEM_STATE_INELIGIBLE"
-			| "ISSUE_SNAPSHOT_CHANGED"
-			| "PUBLIC_SUBJECT_INELIGIBLE"
-			| "NO_AI"
-			| "DELIVERY_OFF"
-			| "PERSON_SUPPRESSED"
-			| "RECIPIENT_UNAVAILABLE"
-			| "EMPTY_AFTER_SANITIZE"
-			| "INSTANCE_SILENCED"
-			| "FEEDBACK_OFF"
-			| "WORKSPACE_DISABLED"
-			| "WORKSPACE_DELIVERY_PAUSED"
-			| "STALE_ROLLOUT_REVISION"
-			| "OUTSIDE_CURRENT_SCOPE"
-			| "APPROVAL_STALE"
-			| "APPROVAL_NO_LONGER_ELIGIBLE"
-			| "PRACTICE_REQUIRES_APPROVAL"
-			| "BACKFILL_QUIET"
-			| "RESULT_MARKED_INCORRECT"
-			| "REVIEWED_VERSION_CHANGED"
-			| "REVIEW_CANCELLED"
-			| "EVIDENCE_NOT_PERMITTED"
-			| "NO_EVIDENCE"
-			| "UNCORROBORATED"
-			| "PUBLIC_HISTORY_CHANGED"
-			| "PUBLIC_DELIVERY_UNRESOLVED"
-			| "STEP_LIMIT"
-			| "NOT_COMPOSED"
-		>;
+		destination?: Array<FeedbackDestination>;
+		state?: Array<FeedbackState>;
+		location?: FeedbackLocation;
+		stopReason?: Array<FeedbackStopReason>;
 		withdrawn?: boolean;
 		disagreed?: boolean;
 		partlyDelivered?: boolean;
-		sort?: "NEWEST" | "OLDEST";
+		sort?: ReviewFeedbackSort;
 		from?: Date;
 		to?: Date;
 	};
@@ -15999,70 +15490,14 @@ export type CountReviewFeedbackByReasonData = {
 		practiceSlug?: string;
 		groupSlug?: string;
 		developerId?: string;
-		destination?: Array<"ON_WORK" | "PRACTICE_PAGE" | "CONVERSATION">;
-		state?: Array<
-			| "AWAITING_APPROVAL"
-			| "READY"
-			| "DELIVERED"
-			| "UNCONFIRMED"
-			| "WITHHELD"
-			| "REJECTED"
-			| "REPLACED"
-			| "FAILED"
-		>;
-		location?:
-			| "GITHUB"
-			| "GITLAB"
-			| "OTHER_WORK"
-			| "APP"
-			| "SLACK"
-			| "NEXT_CONVERSATION"
-			| "PRACTICE_PAGES";
-		stopReason?: Array<
-			| "VOLUME_CAPPED"
-			| "COMPOSER_WITHHELD"
-			| "NOTHING_NEW"
-			| "REPEATS_DELIVERED_NOTE"
-			| "REACTED_DISAGREE"
-			| "REACTED_NOT_APPLICABLE"
-			| "CONVERSATION_EXPIRED"
-			| "DELIVERY_UNCONFIRMED"
-			| "ITEM_GONE"
-			| "ITEM_CLOSED"
-			| "ITEM_MERGED"
-			| "ITEM_STATE_INELIGIBLE"
-			| "ISSUE_SNAPSHOT_CHANGED"
-			| "PUBLIC_SUBJECT_INELIGIBLE"
-			| "NO_AI"
-			| "DELIVERY_OFF"
-			| "PERSON_SUPPRESSED"
-			| "RECIPIENT_UNAVAILABLE"
-			| "EMPTY_AFTER_SANITIZE"
-			| "INSTANCE_SILENCED"
-			| "FEEDBACK_OFF"
-			| "WORKSPACE_DISABLED"
-			| "WORKSPACE_DELIVERY_PAUSED"
-			| "STALE_ROLLOUT_REVISION"
-			| "OUTSIDE_CURRENT_SCOPE"
-			| "APPROVAL_STALE"
-			| "APPROVAL_NO_LONGER_ELIGIBLE"
-			| "PRACTICE_REQUIRES_APPROVAL"
-			| "BACKFILL_QUIET"
-			| "RESULT_MARKED_INCORRECT"
-			| "REVIEWED_VERSION_CHANGED"
-			| "REVIEW_CANCELLED"
-			| "EVIDENCE_NOT_PERMITTED"
-			| "NO_EVIDENCE"
-			| "UNCORROBORATED"
-			| "PUBLIC_HISTORY_CHANGED"
-			| "PUBLIC_DELIVERY_UNRESOLVED"
-			| "STEP_LIMIT"
-			| "NOT_COMPOSED"
-		>;
+		destination?: Array<FeedbackDestination>;
+		state?: Array<FeedbackState>;
+		location?: FeedbackLocation;
+		stopReason?: Array<FeedbackStopReason>;
 		withdrawn?: boolean;
 		disagreed?: boolean;
 		partlyDelivered?: boolean;
-		sort?: "NEWEST" | "OLDEST";
+		sort?: ReviewFeedbackSort;
 		from?: Date;
 		to?: Date;
 	};
@@ -16202,7 +15637,7 @@ export type GetReviewLineageData = {
 		workspaceSlug: string;
 	};
 	query: {
-		kind: "ITEM" | "REVIEW" | "RESULT" | "PROBLEM" | "FEEDBACK";
+		kind: LineageKind;
 		itemId?: string;
 		reviewId?: string;
 		resultId?: string;
@@ -16284,9 +15719,9 @@ export type ListReviewProblemsData = {
 		practiceSlug?: string;
 		groupSlug?: string;
 		developerId?: number;
-		outcome?: Array<"MET" | "NOT_MET" | "DOES_NOT_APPLY" | "COULD_NOT_DETERMINE">;
-		severity?: Array<"CRITICAL" | "MAJOR" | "MINOR" | "TRIVIAL">;
-		currentness?: "CURRENT" | "STALE" | "UNVERIFIABLE";
+		outcome?: Array<ResultOutcome>;
+		severity?: Array<Severity>;
+		currentness?: Currentness;
 		markedIncorrect?: boolean;
 		accepted?: boolean;
 		disagreed?: boolean;
@@ -16295,7 +15730,7 @@ export type ListReviewProblemsData = {
 		resultId?: string;
 		path?: string;
 		openOnly?: boolean;
-		sort?: "NEWEST" | "OLDEST";
+		sort?: ReviewListSort;
 		page?: number;
 		size?: number;
 	};
@@ -16370,15 +15805,15 @@ export type ListReviewResultsData = {
 		practiceSlug?: string;
 		groupSlug?: string;
 		developerId?: number;
-		outcome?: Array<"MET" | "NOT_MET" | "DOES_NOT_APPLY" | "COULD_NOT_DETERMINE">;
-		severity?: Array<"CRITICAL" | "MAJOR" | "MINOR" | "TRIVIAL">;
-		currentness?: "CURRENT" | "STALE" | "UNVERIFIABLE";
+		outcome?: Array<ResultOutcome>;
+		severity?: Array<Severity>;
+		currentness?: Currentness;
 		markedIncorrect?: boolean;
 		accepted?: boolean;
 		disagreed?: boolean;
 		from?: Date;
 		to?: Date;
-		sort?: "NEWEST" | "OLDEST" | "ACTIONABILITY";
+		sort?: ResultSort;
 		page?: number;
 		size?: number;
 	};
@@ -16608,10 +16043,7 @@ export type ListScansData = {
 	};
 	query?: {
 		repositoryItemId?: string;
-		/**
-		 * Where the review stands.
-		 */
-		status?: "QUEUED" | "RUNNING" | "COMPLETE" | "PARTIAL" | "FAILED" | "CANCELLED";
+		status?: ReviewStatus;
 		page?: number;
 		size?: number;
 	};
@@ -16708,7 +16140,7 @@ export type ListScanReportItemsData = {
 		cursor?: string;
 		size?: number;
 		practiceSlug?: string;
-		outcome?: "MET" | "NOT_MET" | "DOES_NOT_APPLY" | "COULD_NOT_DETERMINE";
+		outcome?: ResultOutcome;
 		status?: string;
 		reused?: boolean;
 		path?: string;
@@ -16739,9 +16171,9 @@ export type ListScanReportProblemsData = {
 		cursor?: string;
 		size?: number;
 		practiceSlug?: string;
-		severity?: "CRITICAL" | "MAJOR" | "MINOR" | "TRIVIAL";
+		severity?: Severity;
 		path?: string;
-		baselineState?: "NEW" | "UNCHANGED" | "UPDATED" | "ABSENT";
+		baselineState?: ProblemBaselineState;
 		openOnly?: boolean;
 	};
 	url: "/workspaces/{workspaceSlug}/practices/scans/{scanId}/report/problems";
@@ -16836,7 +16268,7 @@ export type GetPracticeWorkspaceTilesData = {
 		workspaceSlug: string;
 	};
 	query: {
-		window: "ALL_TIME" | "DAYS_7" | "DAYS_30" | "DAYS_90";
+		window: PracticesAcrossWorkspaceWindow;
 	};
 	url: "/workspaces/{workspaceSlug}/practices/tiles";
 };

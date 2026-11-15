@@ -1,6 +1,8 @@
 package de.tum.cit.aet.hephaestus;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.groups.Tuple.tuple;
 
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import io.swagger.v3.oas.models.Components;
@@ -16,6 +18,7 @@ import io.swagger.v3.oas.models.media.Schema;
 import io.swagger.v3.oas.models.parameters.Parameter;
 import io.swagger.v3.oas.models.responses.ApiResponse;
 import io.swagger.v3.oas.models.responses.ApiResponses;
+import java.util.List;
 import java.util.Objects;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Tag;
@@ -31,7 +34,9 @@ class OpenAPIConfigurationTest {
         new OpenAPIConfiguration().schemaCustomizer("test").customise(api);
 
         assertThat(problem.getProperties()).containsKeys("detail", "requestId").doesNotContainKey("properties");
-        assertThat(problem.getAdditionalProperties()).isEqualTo(true);
+        // The extension members are listed: `additionalProperties: true` breaks OpenAPI Generator's Kotlin client.
+        assertThat(problem.getAdditionalProperties()).isNull();
+        assertThat(problem.getProperties()).containsKeys("errors", "maxAgeSeconds", "withholdingReason");
         assertThat(Stream.of("instance", "type")
                         .map(name -> Objects.requireNonNull(
                                         problem.getProperties().get(name))
@@ -124,6 +129,98 @@ class OpenAPIConfigurationTest {
         });
         assertThat(child.getProperties()).containsKey("item");
         assertThat(child.getRequired()).contains("item");
+    }
+
+    @Test
+    void shouldListEachOperationTagOnceWithItsOneDescription() {
+        var account = new Operation().tags(List.of("Account"));
+        // The operation carries the stripped name; springdoc's tag list keeps the controller suffix.
+        var preflight = new Operation().tags(List.of("git-lab-preflight"));
+        var api = new OpenAPI()
+                .paths(new Paths()
+                        .addPathItem("/user", new PathItem().get(account))
+                        .addPathItem("/user/sessions", new PathItem().get(new Operation().tags(List.of("Account"))))
+                        .addPathItem("/workspaces/gitlab", new PathItem().get(preflight)))
+                .tags(List.of(
+                        new io.swagger.v3.oas.models.tags.Tag().name("Account").description("The signed-in account"),
+                        new io.swagger.v3.oas.models.tags.Tag().name("Account"),
+                        new io.swagger.v3.oas.models.tags.Tag()
+                                .name("git-lab-preflight-controller")
+                                .description("GitLab checks"),
+                        new io.swagger.v3.oas.models.tags.Tag().name("Unused").description("No operation")));
+
+        OpenAPIConfiguration.normalizeTags(api);
+
+        assertThat(api.getTags())
+                .extracting(
+                        io.swagger.v3.oas.models.tags.Tag::getName, io.swagger.v3.oas.models.tags.Tag::getDescription)
+                .containsExactly(
+                        tuple("Account", "The signed-in account"), tuple("git-lab-preflight", "GitLab checks"));
+    }
+
+    @Test
+    void shouldRefuseATagWithTwoDescriptions() {
+        var api = new OpenAPI()
+                .paths(new Paths().addPathItem("/user", new PathItem().get(new Operation().tags(List.of("Admin")))))
+                .tags(List.of(
+                        new io.swagger.v3.oas.models.tags.Tag().name("Admin").description("Instance administration"),
+                        new io.swagger.v3.oas.models.tags.Tag().name("Admin").description("Account management")));
+
+        assertThatThrownBy(() -> OpenAPIConfiguration.normalizeTags(api))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Admin");
+    }
+
+    @Test
+    void shouldKeepAnEnumThatOnlyAQueryParameterReferences() {
+        var operation = responseOperation("ResultListDTO")
+                .addParametersItem(new Parameter()
+                        .name("sort")
+                        .in("query")
+                        .schema(new Schema<>().$ref("#/components/schemas/ResultSort")));
+        var api = api(
+                new Components()
+                        .addSchemas("ResultListDTO", objectWithFields("practiceSlug"))
+                        .addSchemas("ResultSort", new Schema<>().type("string")),
+                operation);
+
+        new OpenAPIConfiguration().schemaCustomizer("test").customise(api);
+
+        assertThat(api.getComponents().getSchemas()).containsKeys("ResultList", "ResultSort");
+    }
+
+    @Test
+    void shouldNotPublishTheWorkspaceContextParameterSchema() {
+        var operation = responseOperation("ResultListDTO")
+                .addParametersItem(new Parameter()
+                        .name("workspaceContext")
+                        .in("query")
+                        .schema(new Schema<>().$ref("#/components/schemas/WorkspaceContext")));
+        var api = api(
+                new Components()
+                        .addSchemas("ResultListDTO", objectWithFields("practiceSlug"))
+                        .addSchemas("WorkspaceContext", objectWithFields("installationId")),
+                operation);
+
+        new OpenAPIConfiguration().schemaCustomizer("test").customise(api);
+
+        assertThat(api.getComponents().getSchemas()).containsKey("ResultList").doesNotContainKey("WorkspaceContext");
+    }
+
+    @Test
+    void shouldRefuseAnEnumThatTakesTheNameOfADto() {
+        Schema<Object> standing = new Schema<>();
+        standing.addEnumItemObject("STRENGTH");
+        var api = api(
+                new Components()
+                        .addSchemas("PracticeStandingDTO", objectWithFields("standing"))
+                        .addSchemas("PracticeStanding", standing),
+                responseOperation("PracticeStandingDTO"));
+
+        assertThatThrownBy(() ->
+                        new OpenAPIConfiguration().schemaCustomizer("test").customise(api))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("PracticeStanding");
     }
 
     private static Schema<?> responseSchema(Operation operation) {

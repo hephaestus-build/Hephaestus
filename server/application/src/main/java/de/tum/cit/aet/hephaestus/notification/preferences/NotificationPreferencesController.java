@@ -11,6 +11,7 @@ import io.swagger.v3.oas.annotations.headers.Header;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
@@ -32,6 +33,7 @@ import org.springframework.web.server.ResponseStatusException;
 @ConditionalOnServerRole
 @RequiredArgsConstructor
 @RequestMapping("/user/notification-preferences")
+@Tag(name = "Notification preferences")
 @PreAuthorize("isAuthenticated()")
 @RecentSignInExempt(reason = "Changes only the current account's optional email subscriptions")
 @WorkspaceAgnostic("Current-account subscriptions are independent of workspace membership")

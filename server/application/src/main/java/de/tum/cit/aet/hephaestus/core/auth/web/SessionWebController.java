@@ -32,7 +32,7 @@ import org.springframework.web.bind.annotation.RestController;
 @ConditionalOnServerRole
 @RestController
 @RequestMapping("/user/sessions")
-@Tag(name = "Account", description = "Active sessions")
+@Tag(name = "Account")
 @PreAuthorize("isAuthenticated()")
 public class SessionWebController {
 
@@ -43,6 +43,7 @@ public class SessionWebController {
     }
 
     /** What signed in: the web app, or an installed client. */
+    @Schema(name = "SessionClient")
     public enum SessionClient {
         WEB,
         BROWSER_EXTENSION,

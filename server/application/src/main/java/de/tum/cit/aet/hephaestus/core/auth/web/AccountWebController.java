@@ -38,7 +38,7 @@ import org.springframework.web.server.ResponseStatusException;
 @ConditionalOnServerRole
 @RestController
 @RequestMapping("/user")
-@Tag(name = "Account", description = "Current user identity, linked accounts, deletion")
+@Tag(name = "Account")
 @PreAuthorize("isAuthenticated()")
 public class AccountWebController {
 
