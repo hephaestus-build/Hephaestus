@@ -7,6 +7,7 @@ import path from "node:path";
 
 import { parseAllDocuments } from "yaml";
 
+import { defaultPort, MANAGEMENT_OFFSET } from "./dev-env.ts";
 import {
 	ensureDevCluster,
 	requireDevCluster,
@@ -76,10 +77,16 @@ export function hostPorts(settings: NodeJS.ProcessEnv): {
 	gateway: number;
 	management: number;
 } {
-	const server = positivePort(settings.SERVER_PORT ?? "8080", "SERVER_PORT");
-	const gateway = positivePort(settings.SANDBOX_API_PORT ?? "8081", "SANDBOX_API_PORT");
+	const server = positivePort(
+		settings.SERVER_PORT ?? String(defaultPort("SERVER_PORT")),
+		"SERVER_PORT",
+	);
+	const gateway = positivePort(
+		settings.SANDBOX_API_PORT ?? String(defaultPort("SANDBOX_API_PORT")),
+		"SANDBOX_API_PORT",
+	);
 	const management = positivePort(
-		settings.MANAGEMENT_PORT ?? String(server + 1010),
+		settings.MANAGEMENT_PORT ?? String(server + MANAGEMENT_OFFSET),
 		"MANAGEMENT_PORT",
 	);
 	if (new Set([server, gateway, management]).size !== 3) {

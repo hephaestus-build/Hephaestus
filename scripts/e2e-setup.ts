@@ -2,6 +2,7 @@ import { fileURLToPath } from "node:url";
 
 import { Client } from "pg";
 
+import { defaultPort } from "./dev-env.ts";
 import {
 	type Api,
 	type E2eLlmRoute,
@@ -115,7 +116,11 @@ export function loadConfig(env: Record<string, string | undefined>, args: string
 		"E2E_LLM_PRICING_MODE must be PRICED or NO_CHARGE",
 	);
 	const appUrl = loopbackUrl(
-		get("--app-url", "E2E_APP_URL", "http://localhost:8080"),
+		get(
+			"--app-url",
+			"E2E_APP_URL",
+			`http://localhost:${env.SERVER_PORT ?? String(defaultPort("SERVER_PORT"))}`,
+		),
 		["http:"],
 		"E2E_APP_URL must be a loopback URL",
 	);
@@ -127,7 +132,7 @@ export function loadConfig(env: Record<string, string | undefined>, args: string
 	}
 	const databaseUrl = loopbackUrl(
 		env.E2E_DB_URL ??
-			`postgresql://${encodeURIComponent(env.POSTGRES_USER ?? "root")}:${encodeURIComponent(databasePassword ?? "")}@localhost:${env.POSTGRES_PORT ?? "5432"}/${env.POSTGRES_DB ?? "hephaestus"}`,
+			`postgresql://${encodeURIComponent(env.POSTGRES_USER ?? "root")}:${encodeURIComponent(databasePassword ?? "")}@localhost:${env.POSTGRES_PORT ?? String(defaultPort("POSTGRES_PORT"))}/${env.POSTGRES_DB ?? "hephaestus"}`,
 		["postgres:", "postgresql:"],
 		"E2E_DB_URL must be a loopback PostgreSQL URL",
 	);
