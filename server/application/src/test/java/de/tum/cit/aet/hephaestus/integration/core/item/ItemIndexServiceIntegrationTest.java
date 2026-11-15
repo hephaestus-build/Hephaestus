@@ -11,6 +11,7 @@ import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.sql.SQLException;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.Test;
@@ -60,6 +61,23 @@ class ItemIndexServiceIntegrationTest extends BaseIntegrationTest {
         assertThatThrownBy(
                         () -> transactions.executeWithoutResult(status -> writer.lock(foreignWorkspace, item.itemId())))
                 .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void shouldReadItemsOnlyInTheirWorkspaceAndReportARemovedOne() {
+        long workspace = workspace();
+        long foreign = workspace();
+        var kept = writer.upsert(new ItemRegistration(workspace, new ItemKind("scm.issue"), 900000101L, null, null));
+        var removed = writer.upsert(new ItemRegistration(workspace, new ItemKind("scm.issue"), 900000102L, null, null));
+        var other = writer.upsert(new ItemRegistration(foreign, new ItemKind("scm.issue"), 900000103L, null, null));
+        assertThat(writer.remove(workspace, removed.itemId(), Instant.now())).isTrue();
+
+        assertThat(writer.findAll(workspace, List.of(kept.itemId(), removed.itemId(), other.itemId())))
+                .containsOnlyKeys(kept.itemId(), removed.itemId())
+                .containsEntry(kept.itemId(), kept);
+        assertThat(writer.find(workspace, kept.itemId())).contains(new ItemIndexService.IndexedItem(kept, false));
+        assertThat(writer.find(workspace, removed.itemId())).contains(new ItemIndexService.IndexedItem(removed, true));
+        assertThat(writer.find(workspace, other.itemId())).isEmpty();
     }
 
     @Test

@@ -1,7 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.scm.domain.item;
 
-import de.tum.cit.aet.hephaestus.integration.core.item.Item;
-import de.tum.cit.aet.hephaestus.integration.core.item.ItemRepository;
+import de.tum.cit.aet.hephaestus.integration.core.api.ItemIndexService;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureCode;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureException;
@@ -22,7 +21,7 @@ import org.springframework.stereotype.Component;
 @Component
 @RequiredArgsConstructor
 public class ScmItemAccess {
-    private final ItemRepository repository;
+    private final ItemIndexService items;
     private static final ScmItemQueryRepository.KindNames KINDS = new ScmItemQueryRepository.KindNames(
             ScmItemEvents.REPOSITORY.value(),
             ScmItemEvents.FILE.value(),
@@ -34,8 +33,7 @@ public class ScmItemAccess {
     public void requireAll(long workspaceId, Collection<ItemRef> refs) {
         if (refs.isEmpty()) return;
         var ids = refs.stream().map(ItemRef::itemId).distinct().toList();
-        var actual = new HashMap<Long, ItemRef>();
-        repository.findByWorkspaceIdAndIdIn(workspaceId, ids).forEach(item -> actual.put(item.getId(), ref(item)));
+        var actual = items.findAll(workspaceId, ids);
         for (var ref : refs)
             if (ref.workspaceId() != workspaceId || !ref.equals(actual.get(ref.itemId())))
                 throw new ItemCaptureException(
@@ -65,21 +63,10 @@ public class ScmItemAccess {
     }
 
     public Optional<ItemRef> find(long workspaceId, long itemId) {
-        return repository.findByIdAndWorkspaceId(itemId, workspaceId).map(item -> {
-            if (item.getRemovedAt() != null)
-                throw new ItemCaptureException(ItemCaptureCode.ITEM_REMOVED, "Item has been removed");
-            return ref(item);
+        return items.find(workspaceId, itemId).map(item -> {
+            if (item.removed()) throw new ItemCaptureException(ItemCaptureCode.ITEM_REMOVED, "Item has been removed");
+            return item.ref();
         });
-    }
-
-    private static ItemRef ref(Item item) {
-        return new ItemRef(
-                item.getWorkspaceId(),
-                item.getId(),
-                item.getKind(),
-                item.getSourceId(),
-                item.getParentId(),
-                item.getPath());
     }
 
     public ItemRef parent(ItemRef item, ItemKind kind) {
