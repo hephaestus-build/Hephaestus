@@ -3,7 +3,7 @@ import { RefreshCwIcon } from "lucide-react";
 import type { SyncJob } from "@/api/types.gen";
 import { Button } from "@/components/ui/button";
 
-import { JOB_TYPE_LABEL, type SyncTriggerType } from "./sync-format";
+import { JOB_TYPE_LABEL, jobTypeLabel, type SyncTriggerType } from "./sync-format";
 
 export interface WorkspaceSyncNowButtonProps {
 	onClick: () => void;
@@ -48,10 +48,10 @@ export function WorkspaceSyncNowButton({
 		} else {
 			text = "Checking…";
 		}
-		announcement = `${JOB_TYPE_LABEL[activeJob.type]} stopping`;
+		announcement = `${jobTypeLabel(activeJob.type)} stopping`;
 	} else if (activeJob != null) {
 		text = "Syncing…";
-		announcement = `${JOB_TYPE_LABEL[activeJob.type]} in progress`;
+		announcement = `${jobTypeLabel(activeJob.type)} in progress`;
 	} else if (triggeringType != null) {
 		text = "Starting…";
 		announcement = `Starting ${JOB_TYPE_LABEL[triggeringType].toLowerCase()}`;

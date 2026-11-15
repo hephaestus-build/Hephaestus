@@ -127,22 +127,31 @@ function FeedbackWhere({
 			</p>
 		);
 	}
-	const target =
-		feedback.destination === "PRACTICE_PAGE"
-			? links?.practicePage?.(feedback.id)
-			: links?.conversation;
-	if (target === undefined) {
+	const place = readingPlace(feedback, links);
+	if (place?.target == null) {
 		return null;
 	}
 	return (
 		<p className="text-sm">
-			<InlineLink render={target} className={LINK_AT_REST}>
-				{feedback.destination === "PRACTICE_PAGE"
-					? "Read it on this practice’s Feedback tab"
-					: "Read it in your conversation"}
+			<InlineLink render={place.target} className={LINK_AT_REST}>
+				{place.text}
 			</InlineLink>
 		</p>
 	);
+}
+
+/** Where the reader reads a piece; a destination that this build does not know has no place here. */
+function readingPlace(feedback: OwnFeedbackRef, links: ObservationFeedbackLinks | undefined) {
+	if (feedback.destination === "PRACTICE_PAGE") {
+		return {
+			target: links?.practicePage?.(feedback.id),
+			text: "Read it on this practice’s Feedback tab",
+		};
+	}
+	if (feedback.destination === "CONVERSATION") {
+		return { target: links?.conversation, text: "Read it in your conversation" };
+	}
+	return null;
 }
 
 /** A response already given, read only: what was said, not a control to say it again. */

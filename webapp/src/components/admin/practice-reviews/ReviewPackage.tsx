@@ -8,7 +8,7 @@ import {
 	FEEDBACK_COPY_KIND_DEFS,
 	FEEDBACK_COPY_STATE_DEFS,
 } from "@/components/practice-vocabulary/feedback-copy-defs";
-import { ADMIN_WITHHELD_TEXT } from "@/components/practice-vocabulary/feedback-destination-defs";
+import { adminWithheldText } from "@/components/practice-vocabulary/feedback-destination-defs";
 import { StatusLabel } from "@/components/practice-vocabulary/StatusTooltip";
 import {
 	Accordion,
@@ -26,7 +26,7 @@ export interface ReviewPackageProps {
 
 // Private destinations must hide copy text and counts even when the caller supplies them.
 export function ReviewPackage({ feedback, defaultExpanded = false }: ReviewPackageProps) {
-	if (feedback.textHidden || ADMIN_WITHHELD_TEXT[feedback.destination] !== undefined) {
+	if (feedback.textHidden || adminWithheldText(feedback.destination) !== undefined) {
 		return <FeedbackBody feedback={feedback} />;
 	}
 	const copies = [...feedback.copies].sort((a, b) => a.position - b.position);

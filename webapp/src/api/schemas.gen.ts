@@ -83,7 +83,8 @@ export const AccountRefSchema = {
 
 export const AccountStatusSchema = {
 	type: "string",
-	enum: ["UNCLAIMED", "ACTIVE", "BLOCKED", "DELETING", "DELETED"],
+	description: "Extensible enum: a client accepts a value that the examples do not name.",
+	examples: ["UNCLAIMED", "ACTIVE", "BLOCKED", "DELETING", "DELETED"],
 } as const;
 
 export const AccountTypeSchema = {
@@ -1675,7 +1676,8 @@ export const CitationRequirementSchema = {
 
 export const CitationSideSchema = {
 	type: "string",
-	enum: ["OLD", "NEW"],
+	description: "Extensible enum: a client accepts a value that the examples do not name.",
+	examples: ["OLD", "NEW"],
 } as const;
 
 export const ClaimBasisSchema = {
@@ -1934,12 +1936,14 @@ export const ConfigurationFactSchema = {
 
 export const ConfigurationRequirementSchema = {
 	type: "string",
-	enum: ["REQUIRED", "RECOMMENDED", "OPTIONAL"],
+	description: "Extensible enum: a client accepts a value that the examples do not name.",
+	examples: ["REQUIRED", "RECOMMENDED", "OPTIONAL"],
 } as const;
 
 export const ConfigurationStatusSchema = {
 	type: "string",
-	enum: ["SATISFIED", "ACTION_REQUIRED", "NOT_CONFIGURED", "NOT_APPLICABLE"],
+	description: "Extensible enum: a client accepts a value that the examples do not name.",
+	examples: ["SATISFIED", "ACTION_REQUIRED", "NOT_CONFIGURED", "NOT_APPLICABLE"],
 } as const;
 
 export const ConnectionDetailSchema = {
@@ -2365,22 +2369,26 @@ export const ConversationEntrySchema = {
 
 export const ConversationEntryKindSchema = {
 	type: "string",
-	enum: ["USER", "ANSWER", "DIGEST"],
+	description: "Extensible enum: a client accepts a value that the examples do not name.",
+	examples: ["USER", "ANSWER", "DIGEST"],
 } as const;
 
 export const ConversationEntrySlackDeliverySchema = {
 	type: "string",
-	enum: ["PENDING", "DELIVERED", "UNCERTAIN", "FAILED"],
+	description: "Extensible enum: a client accepts a value that the examples do not name.",
+	examples: ["PENDING", "DELIVERED", "UNCERTAIN", "FAILED"],
 } as const;
 
 export const ConversationEntrySurfaceSchema = {
 	type: "string",
-	enum: ["APP", "SLACK", "SYSTEM"],
+	description: "Extensible enum: a client accepts a value that the examples do not name.",
+	examples: ["APP", "SLACK", "SYSTEM"],
 } as const;
 
 export const ConversationEntryVoteSchema = {
 	type: "string",
-	enum: ["HELPFUL", "NOT_HELPFUL"],
+	description: "Extensible enum: a client accepts a value that the examples do not name.",
+	examples: ["HELPFUL", "NOT_HELPFUL"],
 } as const;
 
 export const ConversationLinkSchema = {
@@ -2416,7 +2424,8 @@ export const ConversationLinkSchema = {
 
 export const ConversationLinkKindSchema = {
 	type: "string",
-	enum: ["RESULT", "PROBLEM", "FEEDBACK"],
+	description: "Extensible enum: a client accepts a value that the examples do not name.",
+	examples: ["RESULT", "PROBLEM", "FEEDBACK"],
 } as const;
 
 export const ConversationReadSchema = {
@@ -2594,7 +2603,8 @@ export const ConversationTurnSchema = {
 
 export const ConversationTurnFailureReasonSchema = {
 	type: "string",
-	enum: [
+	description: "Extensible enum: a client accepts a value that the examples do not name.",
+	examples: [
 		"START_WAIT_EXPIRED",
 		"ATTEMPTS_EXHAUSTED",
 		"MODEL_UNAVAILABLE",
@@ -2629,12 +2639,14 @@ export const ConversationTurnPartialSchema = {
 
 export const ConversationTurnPartialActivitySchema = {
 	type: "string",
-	enum: ["THINKING", "WRITING", "TOOL"],
+	description: "Extensible enum: a client accepts a value that the examples do not name.",
+	examples: ["THINKING", "WRITING", "TOOL"],
 } as const;
 
 export const ConversationTurnPhaseSchema = {
 	type: "string",
-	enum: ["STARTING", "WORKING"],
+	description: "Extensible enum: a client accepts a value that the examples do not name.",
+	examples: ["STARTING", "WORKING"],
 } as const;
 
 export const ConversationTurnRequestSchema = {
@@ -2669,7 +2681,8 @@ export const ConversationTurnRequestSchema = {
 
 export const ConversationTurnStatusSchema = {
 	type: "string",
-	enum: ["QUEUED", "RUNNING", "DONE", "FAILED", "STOPPED"],
+	description: "Extensible enum: a client accepts a value that the examples do not name.",
+	examples: ["QUEUED", "RUNNING", "DONE", "FAILED", "STOPPED"],
 } as const;
 
 export const ConversationTurnStatusRequestSchema = {
@@ -2688,12 +2701,14 @@ export const ConversationTurnStatusRequestSchema = {
 
 export const ConversationTurnSurfaceSchema = {
 	type: "string",
-	enum: ["APP", "SLACK", "SYSTEM"],
+	description: "Extensible enum: a client accepts a value that the examples do not name.",
+	examples: ["APP", "SLACK", "SYSTEM"],
 } as const;
 
 export const ConversationTurnWaitingForSchema = {
 	type: "string",
-	enum: ["CAPACITY"],
+	description: "Extensible enum: a client accepts a value that the examples do not name.",
+	examples: ["CAPACITY"],
 } as const;
 
 export const ConversationVoteRequestSchema = {
@@ -3295,7 +3310,8 @@ export const CurrentUserViewSchema = {
 
 export const CurrentnessSchema = {
 	type: "string",
-	enum: ["CURRENT", "STALE", "UNVERIFIABLE"],
+	description: "Extensible enum: a client accepts a value that the examples do not name.",
+	examples: ["CURRENT", "STALE", "UNVERIFIABLE"],
 } as const;
 
 export const CursorPageDTOActivityWorkSchema = {
@@ -4090,7 +4106,8 @@ export const FeedbackCopyCountsSchema = {
 
 export const FeedbackCopyKindSchema = {
 	type: "string",
-	enum: ["SUMMARY", "LINE_NOTE", "FILE_NOTE", "CHAT_TURN"],
+	description: "Extensible enum: a client accepts a value that the examples do not name.",
+	examples: ["SUMMARY", "LINE_NOTE", "FILE_NOTE", "CHAT_TURN"],
 } as const;
 
 export const FeedbackCopyReadbackSchema = {
@@ -4179,7 +4196,8 @@ export const FeedbackDecisionReasonSchema = {
 
 export const FeedbackDestinationSchema = {
 	type: "string",
-	enum: ["ON_WORK", "PRACTICE_PAGE", "CONVERSATION"],
+	description: "Extensible enum: a client accepts a value that the examples do not name.",
+	examples: ["ON_WORK", "PRACTICE_PAGE", "CONVERSATION"],
 } as const;
 
 export const FeedbackDisagreementSchema = {
@@ -4411,7 +4429,8 @@ export const FeedbackRequestSchema = {
 
 export const FeedbackResolutionSchema = {
 	type: "string",
-	enum: ["ADDRESSED", "DISAGREE", "NOT_APPLICABLE"],
+	description: "Extensible enum: a client accepts a value that the examples do not name.",
+	examples: ["ADDRESSED", "DISAGREE", "NOT_APPLICABLE"],
 } as const;
 
 export const FeedbackResponseSchema = {
@@ -4525,7 +4544,8 @@ export const FeedbackSourceCountSchema = {
 
 export const FeedbackStateSchema = {
 	type: "string",
-	enum: [
+	description: "Extensible enum: a client accepts a value that the examples do not name.",
+	examples: [
 		"AWAITING_APPROVAL",
 		"READY",
 		"DELIVERED",
@@ -4594,7 +4614,8 @@ export const FeedbackTriageSchema = {
 
 export const FeedbackUsefulnessSchema = {
 	type: "string",
-	enum: ["HELPFUL", "UNHELPFUL"],
+	description: "Extensible enum: a client accepts a value that the examples do not name.",
+	examples: ["HELPFUL", "UNHELPFUL"],
 } as const;
 
 export const FeedbackWorkspaceRefSchema = {
@@ -5123,7 +5144,8 @@ export const IdentitySchema = {
 
 export const IdentityProviderTypeSchema = {
 	type: "string",
-	enum: ["GITHUB", "GITLAB", "SLACK", "OUTLINE"],
+	description: "Extensible enum: a client accepts a value that the examples do not name.",
+	examples: ["GITHUB", "GITLAB", "SLACK", "OUTLINE"],
 } as const;
 
 export const IdentityProviderViewSchema = {
@@ -5237,7 +5259,8 @@ export const InitiateConnectionResponseSchema = {
 
 export const InitiateConnectionResponseTypeSchema = {
 	type: "string",
-	enum: ["REDIRECT", "LINKED"],
+	description: "Extensible enum: a client accepts a value that the examples do not name.",
+	examples: ["REDIRECT", "LINKED"],
 } as const;
 
 export const InstanceLlmSettingsSchema = {
@@ -5344,7 +5367,8 @@ export const IntegrationFamilySchema = {
 
 export const IntegrationKindSchema = {
 	type: "string",
-	enum: ["GITHUB", "GITLAB", "SLACK", "OUTLINE"],
+	description: "Extensible enum: a client accepts a value that the examples do not name.",
+	examples: ["GITHUB", "GITLAB", "SLACK", "OUTLINE"],
 } as const;
 
 export const IntegrationStateSchema = {
@@ -10027,17 +10051,20 @@ export const ProfileChangeSchema = {
 
 export const ProfileChangeDirectionSchema = {
 	type: "string",
-	enum: ["UP", "DOWN"],
+	description: "Extensible enum: a client accepts a value that the examples do not name.",
+	examples: ["UP", "DOWN"],
 } as const;
 
 export const ProfileChangeResolvedBySchema = {
 	type: "string",
-	enum: ["WORK", "DEVELOPER"],
+	description: "Extensible enum: a client accepts a value that the examples do not name.",
+	examples: ["WORK", "DEVELOPER"],
 } as const;
 
 export const ProfileChangeTypeSchema = {
 	type: "string",
-	enum: [
+	description: "Extensible enum: a client accepts a value that the examples do not name.",
+	examples: [
 		"FEEDBACK_NEW",
 		"FEEDBACK_RESOLVED",
 		"FEEDBACK_RESET",
@@ -10161,7 +10188,8 @@ export const ProviderIdentityRefSchema = {
 		},
 		provider: {
 			type: "string",
-			enum: ["GITHUB", "GITLAB", "SLACK", "OUTLINE"],
+			description: "Extensible enum: a client accepts a value that the examples do not name.",
+			examples: ["GITHUB", "GITLAB", "SLACK", "OUTLINE"],
 		},
 	},
 	required: ["provider"],
@@ -10887,17 +10915,27 @@ export const RegisterSlackChannelRequestSchema = {
 
 export const ReleaseChannelSchema = {
 	type: "string",
-	enum: ["RELEASE", "COMMIT", "DEVELOPMENT"],
+	description: "Extensible enum: a client accepts a value that the examples do not name.",
+	examples: ["RELEASE", "COMMIT", "DEVELOPMENT"],
 } as const;
 
 export const ReleaseCheckFailureSchema = {
 	type: "string",
-	enum: ["RATE_LIMITED", "UNAVAILABLE", "MALFORMED"],
+	description: "Extensible enum: a client accepts a value that the examples do not name.",
+	examples: ["RATE_LIMITED", "UNAVAILABLE", "MALFORMED"],
 } as const;
 
 export const ReleaseCheckStatusSchema = {
 	type: "string",
-	enum: ["DISABLED", "NOT_APPLICABLE", "NEVER_CHECKED", "CURRENT", "UPDATE_AVAILABLE", "FAILED"],
+	description: "Extensible enum: a client accepts a value that the examples do not name.",
+	examples: [
+		"DISABLED",
+		"NOT_APPLICABLE",
+		"NEVER_CHECKED",
+		"CURRENT",
+		"UPDATE_AVAILABLE",
+		"FAILED",
+	],
 } as const;
 
 export const ReleaseProviderResourceRepairRequestSchema = {
@@ -11159,7 +11197,8 @@ export const ResearchDisclosureClosureSchema = {
 
 export const ResearchDisclosureSubjectRemovalReasonSchema = {
 	type: "string",
-	enum: ["CONSENT_WITHDRAWN", "CONSENT_SUPERSEDED", "QUESTION_CHANGED", "ACCOUNT_ERASED"],
+	description: "Extensible enum: a client accepts a value that the examples do not name.",
+	examples: ["CONSENT_WITHDRAWN", "CONSENT_SUPERSEDED", "QUESTION_CHANGED", "ACCOUNT_ERASED"],
 } as const;
 
 export const ResearchRemovalDisclosureSchema = {
@@ -12769,7 +12808,8 @@ export const ReviewJobStatusSchema = {
 
 export const ReviewKindSchema = {
 	type: "string",
-	enum: ["ITEM", "SCAN"],
+	description: "Extensible enum: a client accepts a value that the examples do not name.",
+	examples: ["ITEM", "SCAN"],
 } as const;
 
 export const ReviewLimitSchema = {
@@ -12959,7 +12999,8 @@ export const ReviewOnSchema = {
 
 export const ReviewOriginSchema = {
 	type: "string",
-	enum: ["EVENT", "REQUEST", "SCHEDULE", "BACKFILL"],
+	description: "Extensible enum: a client accepts a value that the examples do not name.",
+	examples: ["EVENT", "REQUEST", "SCHEDULE", "BACKFILL"],
 } as const;
 
 export const ReviewOverviewSchema = {
@@ -13621,7 +13662,8 @@ export const ReviewRequestOutcomeSchema = {
 
 export const ReviewRequestReasonSchema = {
 	type: "string",
-	enum: [
+	description: "Extensible enum: a client accepts a value that the examples do not name.",
+	examples: [
 		"GATE_WITHHELD",
 		"COOLDOWN_ACTIVE",
 		"REQUEST_COOLDOWN_ACTIVE",
@@ -13657,7 +13699,8 @@ export const ReviewRequestReasonSchema = {
 
 export const ReviewRequestStatusSchema = {
 	type: "string",
-	enum: ["SUBMITTED", "REFUSED"],
+	description: "Extensible enum: a client accepts a value that the examples do not name.",
+	examples: ["SUBMITTED", "REFUSED"],
 } as const;
 
 export const ReviewResultSchema = {
@@ -14146,8 +14189,9 @@ export const ReviewScopeRepositorySchema = {
 
 export const ReviewStatusSchema = {
 	type: "string",
-	description: "Where the review stands.",
-	enum: ["QUEUED", "RUNNING", "COMPLETE", "PARTIAL", "FAILED", "CANCELLED"],
+	description:
+		"Extensible enum: a client accepts a value that the examples do not name. Where the review stands.",
+	examples: ["QUEUED", "RUNNING", "COMPLETE", "PARTIAL", "FAILED", "CANCELLED"],
 } as const;
 
 export const ReviewStatusCountsSchema = {
@@ -14183,7 +14227,8 @@ export const ReviewStatusCountsSchema = {
 
 export const ReviewStopReasonSchema = {
 	type: "string",
-	enum: [
+	description: "Extensible enum: a client accepts a value that the examples do not name.",
+	examples: [
 		"TIMED_OUT",
 		"EXECUTION_FAILED",
 		"PREPARATION_FAILED",
@@ -14749,7 +14794,8 @@ export const RunningReleaseSchema = {
 
 export const RuntimeRoleSchema = {
 	type: "string",
-	enum: ["SERVER"],
+	description: "Extensible enum: a client accepts a value that the examples do not name.",
+	examples: ["SERVER"],
 } as const;
 
 export const SaveLlmCallPoolRequestSchema = {
@@ -15884,17 +15930,20 @@ export const SyncJobSchema = {
 
 export const SyncJobStatusSchema = {
 	type: "string",
-	enum: ["PENDING", "RUNNING", "SUCCEEDED", "SUCCEEDED_WITH_WARNINGS", "FAILED", "CANCELLED"],
+	description: "Extensible enum: a client accepts a value that the examples do not name.",
+	examples: ["PENDING", "RUNNING", "SUCCEEDED", "SUCCEEDED_WITH_WARNINGS", "FAILED", "CANCELLED"],
 } as const;
 
 export const SyncJobTriggerSchema = {
 	type: "string",
-	enum: ["SCHEDULED", "MANUAL", "LIFECYCLE", "SYSTEM"],
+	description: "Extensible enum: a client accepts a value that the examples do not name.",
+	examples: ["SCHEDULED", "MANUAL", "LIFECYCLE", "SYSTEM"],
 } as const;
 
 export const SyncJobTypeSchema = {
 	type: "string",
-	enum: ["INITIAL", "RECONCILIATION", "BACKFILL"],
+	description: "Extensible enum: a client accepts a value that the examples do not name.",
+	examples: ["INITIAL", "RECONCILIATION", "BACKFILL"],
 } as const;
 
 export const SyncResourceCountSchema = {
@@ -16278,7 +16327,8 @@ export const TriggerSyncJobRequestSchema = {
 
 export const UnverifiableReasonSchema = {
 	type: "string",
-	enum: ["RECORD_MISSING", "WORK_UNREADABLE"],
+	description: "Extensible enum: a client accepts a value that the examples do not name.",
+	examples: ["RECORD_MISSING", "WORK_UNREADABLE"],
 } as const;
 
 export const UpdateAccountRequestSchema = {
@@ -17033,7 +17083,8 @@ export const UpdateWorkspaceTokenRequestSchema = {
 
 export const UsageFundingSourceSchema = {
 	type: "string",
-	enum: ["INSTANCE", "WORKSPACE"],
+	description: "Extensible enum: a client accepts a value that the examples do not name.",
+	examples: ["INSTANCE", "WORKSPACE"],
 } as const;
 
 export const UsagePricingStateSchema = {
@@ -18517,7 +18568,8 @@ export const WorkspaceSplitsVerdictSchema = {
 
 export const WorkspaceStatusSchema = {
 	type: "string",
-	enum: ["ACTIVE", "SUSPENDED", "PURGED"],
+	description: "Extensible enum: a client accepts a value that the examples do not name.",
+	examples: ["ACTIVE", "SUSPENDED", "PURGED"],
 } as const;
 
 export const WorkspaceSyncProgressSchema = {

@@ -3,6 +3,7 @@ import { Building2, Settings, Users } from "lucide-react";
 
 import type { AdminWorkspaceView } from "@/api/types.gen";
 import { QueryErrorAlert, type QueryErrorAlertProps } from "@/components/common/QueryErrorAlert";
+import { definitionFor, isKnownValue, UNKNOWN_STATUS_DEF } from "@/components/common/status-def";
 import { TableRowsSkeleton } from "@/components/common/TableRowsSkeleton";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -16,6 +17,7 @@ import {
 } from "@/components/ui/table";
 import { asDate, formatDate } from "@/lib/dates";
 import { getProviderLabel } from "@/lib/provider/provider-labels";
+import { hasText } from "@/lib/text";
 import type { RefreshFailure } from "@/runtime/tanstack-query/infinite-list";
 
 export interface AdminWorkspacesTableProps {
@@ -35,14 +37,17 @@ type WorkspaceStatus = AdminWorkspaceView["status"];
  * A workspace's status in words, keyed on the wire's enum so a status the server adds fails the build
  * here rather than reaching an admin as a constant name.
  */
-const WORKSPACE_STATUS_LABELS: Record<WorkspaceStatus, string> = {
+export const WORKSPACE_STATUS_LABELS = {
 	ACTIVE: "Active",
 	SUSPENDED: "Suspended",
 	PURGED: "Being deleted",
-};
+} satisfies Record<string, string>;
 
-function statusVariant(status: WorkspaceStatus): "secondary" | "destructive" {
-	return status === "ACTIVE" ? "secondary" : "destructive";
+function statusVariant(status: WorkspaceStatus): "secondary" | "destructive" | "outline" {
+	if (status === "ACTIVE") {
+		return "secondary";
+	}
+	return isKnownValue(WORKSPACE_STATUS_LABELS, status) ? "destructive" : "outline";
 }
 
 function formatCreatedAt(value: AdminWorkspaceView["createdAt"]): string {
@@ -127,11 +132,11 @@ export function AdminWorkspacesTable({
 							</TableCell>
 							<TableCell>
 								<Badge variant={statusVariant(ws.status)}>
-									{WORKSPACE_STATUS_LABELS[ws.status]}
+									{definitionFor(WORKSPACE_STATUS_LABELS, ws.status, UNKNOWN_STATUS_DEF.label)}
 								</Badge>
 							</TableCell>
 							<TableCell>
-								{ws.providerType ? (
+								{hasText(ws.providerType) ? (
 									<Badge variant="outline">
 										{getProviderLabel(ws.providerType, "Another provider")}
 									</Badge>

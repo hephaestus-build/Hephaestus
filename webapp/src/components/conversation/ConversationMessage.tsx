@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import type { ConversationEntry, ConversationLink } from "@/api/types.gen";
 import { HephaestusMark } from "@/components/brand/HephaestusMark";
 import { InlineLink } from "@/components/common/InlineLink";
+import { UNKNOWN_STATUS_DEF } from "@/components/common/status-def";
 import { UNTRUSTED_MARKDOWN_PROSE, UntrustedMarkdown } from "@/components/common/UntrustedMarkdown";
 import { SlackIcon } from "@/components/icons/brand";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -52,6 +53,10 @@ function authorName(message: Pick<ShownMessage, "kind">, developer: MessageAutho
 		case "ANSWER": {
 			return "Hephaestus";
 		}
+		// A kind that this build does not know: name no author for it.
+		default: {
+			return "Message";
+		}
 	}
 }
 
@@ -80,15 +85,22 @@ function authorOf(message: ShownMessage, developer: MessageAuthor) {
 		avatar: (
 			<Avatar>
 				<AvatarFallback className="bg-background text-foreground">
-					{message.kind === "DIGEST" ? (
-						<CalendarDays aria-hidden className="size-5" />
-					) : (
-						<HephaestusMark size={24} pad={2} />
-					)}
+					<AuthorMark kind={message.kind} />
 				</AvatarFallback>
 			</Avatar>
 		),
 	};
+}
+
+function AuthorMark({ kind }: Pick<ShownMessage, "kind">) {
+	if (kind === "DIGEST") {
+		return <CalendarDays aria-hidden className="size-5" />;
+	}
+	if (kind === "ANSWER") {
+		return <HephaestusMark size={24} pad={2} />;
+	}
+	const UnknownIcon = UNKNOWN_STATUS_DEF.icon;
+	return <UnknownIcon aria-hidden className="size-5" />;
 }
 
 /** One below the `h2` that heads each place a message shows: the conversation page, the thread panel and the Hephaestus panel. */

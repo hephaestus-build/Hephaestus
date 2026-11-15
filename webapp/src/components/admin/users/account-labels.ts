@@ -1,4 +1,5 @@
 import type { AccountRef, AdminAccountView, ProviderIdentityRef } from "@/api/types.gen";
+import { definitionFor, UNKNOWN_STATUS_DEF } from "@/components/common/status-def";
 import { firstNonBlank } from "@/lib/text";
 
 export type AppRole = AdminAccountView["appRole"];
@@ -13,13 +14,17 @@ export const APP_ROLE_LABELS: Record<AppRole, string> = {
 	APP_ADMIN: "Instance admin",
 };
 
-export const ACCOUNT_STATUS_LABELS: Record<AccountRef["status"], string> = {
+export const ACCOUNT_STATUS_LABELS = {
 	UNCLAIMED: "Unclaimed",
 	ACTIVE: "Active",
 	BLOCKED: "Blocked",
 	DELETING: "Being deleted",
 	DELETED: "Deleted",
-};
+} satisfies Record<string, string>;
+
+/** An account status in words, or "Unknown" for one that this build does not know. */
+export const accountStatusLabel = (status: AccountRef["status"]) =>
+	definitionFor(ACCOUNT_STATUS_LABELS, status, UNKNOWN_STATUS_DEF.label);
 
 /**
  * The identity a workspace knows an account by: the one from the workspace's provider, else the

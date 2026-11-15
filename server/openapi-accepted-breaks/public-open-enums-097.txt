@@ -1,0 +1,3 @@
+# ADR 0103 rule 3: an enum that a public operation returns is open, written as a string with examples.
+# The wire values are unchanged; a client already accepts a value that it does not know.
+in API GET /workspaces/{workspaceSlug}/practices/items/{itemId}/trace removed the enum constraint from the `practices/items/review/anyOf[#/components/schemas/ReviewRef]/kind` response property for the response status `200` (shared schema: `ReviewRef`, also at `reviews/items/kind`)

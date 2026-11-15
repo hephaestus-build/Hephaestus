@@ -13,13 +13,13 @@ import {
 
 import type { FeedbackCopy, FeedbackCopyCounts } from "@/api/types.gen";
 
-import type { StatusDefs } from "@/components/common/status-def";
+import { definitionFor, type StatusDefs } from "@/components/common/status-def";
 import { andList } from "@/lib/text";
 
 export type FeedbackCopyKind = FeedbackCopy["kind"];
 export type FeedbackCopyState = FeedbackCopy["state"];
 
-export const FEEDBACK_COPY_KIND_DEFS: StatusDefs<FeedbackCopyKind> = {
+export const FEEDBACK_COPY_KIND_DEFS = {
 	SUMMARY: {
 		label: "Summary",
 		icon: MessageSquareTextIcon,
@@ -44,7 +44,7 @@ export const FEEDBACK_COPY_KIND_DEFS: StatusDefs<FeedbackCopyKind> = {
 		badgeVariant: "outline",
 		description: "Raised by Hephaestus in an answer in the developer’s conversation.",
 	},
-};
+} satisfies StatusDefs<string>;
 
 // Unconfirmed writes require provider readback before another write can be attempted.
 export const FEEDBACK_COPY_STATE_DEFS: StatusDefs<FeedbackCopyState> = {
@@ -108,12 +108,12 @@ export function isPartialPackage(counts: FeedbackCopyCounts): boolean {
 	);
 }
 
-const KIND_NOUNS: Record<FeedbackCopyKind, [singular: string, plural: string]> = {
+export const KIND_NOUNS = {
 	SUMMARY: ["summary", "summaries"],
 	LINE_NOTE: ["line note", "line notes"],
 	FILE_NOTE: ["file note", "file notes"],
 	CHAT_TURN: ["conversation answer", "conversation answers"],
-};
+} satisfies Record<string, [singular: string, plural: string]>;
 
 export function copyKindsPhrase(copies: readonly Pick<FeedbackCopy, "kind">[]): string {
 	const counts = new Map<FeedbackCopyKind, number>();
@@ -122,7 +122,10 @@ export function copyKindsPhrase(copies: readonly Pick<FeedbackCopy, "kind">[]): 
 	}
 	return andList.format(
 		[...counts].map(([kind, count]) => {
-			const [singular, plural] = KIND_NOUNS[kind];
+			const [singular, plural] = definitionFor(KIND_NOUNS, kind, [
+				"copy of another kind",
+				"copies of another kind",
+			]);
 			return count === 1 ? `a ${singular}` : `${count} ${plural}`;
 		}),
 	);

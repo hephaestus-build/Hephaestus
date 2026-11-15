@@ -5,7 +5,9 @@ import type { FeedbackResponse } from "@/api/types.gen";
 import type { StatusDefs } from "@/components/common/status-def";
 
 export type FeedbackResolution = NonNullable<FeedbackResponse["resolution"]>;
-export const FEEDBACK_RESOLUTION_DEFS: StatusDefs<FeedbackResolution> = {
+/** A resolution that this build names, and the ones that it sends. The API can send others. */
+export type KnownFeedbackResolution = keyof typeof FEEDBACK_RESOLUTION_DEFS;
+export const FEEDBACK_RESOLUTION_DEFS = {
 	ADDRESSED: {
 		label: "Addressed",
 		icon: CircleCheckIcon,
@@ -24,4 +26,4 @@ export const FEEDBACK_RESOLUTION_DEFS: StatusDefs<FeedbackResolution> = {
 		badgeVariant: "outline",
 		description: "The feedback does not apply to this work.",
 	},
-};
+} satisfies StatusDefs<string>;

@@ -1,4 +1,5 @@
 import { formatDistance } from "date-fns";
+import { definitionFor } from "@/components/common/status-def";
 
 import type { ConnectionSyncStatus, IntegrationCatalogEntry, SyncJob } from "@/api/types.gen";
 import type { FreshnessTone } from "@/components/common/RelativeTime";
@@ -66,14 +67,14 @@ export const CONNECTION_STATE_LABEL: Record<ConnectionState, string> = {
 	UNINSTALLED: "removed",
 };
 
-export const JOB_STATUS_LABEL: Record<SyncJob["status"], string> = {
+export const JOB_STATUS_LABEL = {
 	PENDING: "Pending",
 	RUNNING: "Running",
 	SUCCEEDED: "Succeeded",
 	SUCCEEDED_WITH_WARNINGS: "Succeeded with warnings",
 	FAILED: "Failed",
 	CANCELLED: "Canceled",
-};
+} satisfies Record<string, string>;
 
 /**
  * Both `SyncResourceState.state` and `BackfillSummary.state` are free-form, integration-defined
@@ -94,13 +95,13 @@ export function stateLabel(state: string): string {
  * The job types an admin can trigger by hand. `INITIAL` is deliberately excluded: the server runs it
  * once when a connection is first established, and no UI offers it as a button.
  */
-export type SyncTriggerType = Extract<SyncJob["type"], "RECONCILIATION" | "BACKFILL">;
+export type SyncTriggerType = Extract<keyof typeof JOB_TYPE_LABEL, "RECONCILIATION" | "BACKFILL">;
 
-export const JOB_TYPE_LABEL: Record<SyncJob["type"], string> = {
+export const JOB_TYPE_LABEL = {
 	INITIAL: "Initial sync",
 	RECONCILIATION: "Reconciliation",
 	BACKFILL: "Backfill",
-};
+} satisfies Record<string, string>;
 
 /**
  * What the job a trigger returned says, never that this request created it: the server answers an
@@ -121,15 +122,26 @@ export function returnedJobMessage(
 	if (job.status === "RUNNING") {
 		return `${noun} in progress`;
 	}
-	return `${noun} ${JOB_STATUS_LABEL[job.status].toLowerCase()}`;
+	return `${noun} ${jobStatusLabel(job.status).toLowerCase()}`;
 }
 
-export const JOB_TRIGGER_LABEL: Record<SyncJob["trigger"], string> = {
+export const JOB_TRIGGER_LABEL = {
 	SCHEDULED: "Scheduled",
 	MANUAL: "Manual",
 	LIFECYCLE: "Lifecycle",
 	SYSTEM: "System",
-};
+} satisfies Record<string, string>;
+
+/**
+ * The words for a job's status, type or trigger. A newer server can name one that this build does
+ * not know; the label is then its own token in sentence case, the same rule as `stateLabel`.
+ */
+export const jobStatusLabel = (status: SyncJob["status"]) =>
+	definitionFor(JOB_STATUS_LABEL, status, stateLabel(status));
+export const jobTypeLabel = (type: SyncJob["type"]) =>
+	definitionFor(JOB_TYPE_LABEL, type, stateLabel(type));
+export const jobTriggerLabel = (trigger: SyncJob["trigger"]) =>
+	definitionFor(JOB_TRIGGER_LABEL, trigger, stateLabel(trigger));
 
 /**
  * The `progress` JSONB narrowed to the shape the server's `SyncProgress` record writes.

@@ -5,10 +5,14 @@ import {
 	type ReviewListTarget,
 	slotsTotal,
 } from "@/components/admin/practice-reviews/review-outcomes";
-import { statusValues } from "@/components/common/status-def";
+import { definitionFor, statusValues } from "@/components/common/status-def";
 
 import { DELIVERY_FAMILY_DEFS, DELIVERY_FAMILY_STATES } from "./delivery-family-defs";
-import { DELIVERY_STATE_DEFS, type DeliveryState } from "./delivery-state-defs";
+import {
+	DELIVERY_STATE_DEFS,
+	type DeliveryState,
+	type KnownDeliveryState,
+} from "./delivery-state-defs";
 
 /** The delivery states a count's link filters the Feedback list to. */
 function linkedStates(target: ReviewListTarget | undefined): readonly DeliveryState[] {
@@ -61,7 +65,7 @@ describe("delivery families", () => {
 			REJECTED: 32,
 			REPLACED: 64,
 			FAILED: 128,
-		} satisfies Record<DeliveryState, number>;
+		} satisfies Record<KnownDeliveryState, number>;
 		const slots = feedbackSlots(
 			{
 				awaitingApproval: weight.AWAITING_APPROVAL,
@@ -80,7 +84,7 @@ describe("delivery families", () => {
 		expect(slots.map(({ key, count }) => [key, count])).toStrictEqual(
 			slots.map(({ key, target }) => [
 				key,
-				linkedStates(target).reduce((sum, state) => sum + weight[state], 0),
+				linkedStates(target).reduce((sum, state) => sum + definitionFor(weight, state, 0), 0),
 			]),
 		);
 	});

@@ -87,7 +87,9 @@ function nounOf(kind: string | undefined, provider: ItemProvider | null | undefi
 	if (!isKnownItemKind(kind)) {
 		return OTHER_WORK;
 	}
-	return (provider ? PROVIDER_NOUNS[kind]?.[provider] : undefined) ?? ITEM_KIND_NOUNS[kind];
+	return (
+		(hasText(provider) ? PROVIDER_NOUNS[kind]?.[provider] : undefined) ?? ITEM_KIND_NOUNS[kind]
+	);
 }
 
 /**

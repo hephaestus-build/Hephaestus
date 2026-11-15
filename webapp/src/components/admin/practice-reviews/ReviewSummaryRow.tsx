@@ -10,7 +10,7 @@ import { RecordTimeCell } from "@/components/practice-vocabulary/RecordTable";
 import { REVIEW_ORIGIN_DEFS } from "@/components/practice-vocabulary/review-origin-defs";
 import {
 	REVIEW_STATUS_DEFS,
-	REVIEW_STOP_REASON_SENTENCES,
+	reviewStopReasonSentence,
 	reviewProgressWords,
 	shownReviewStatusDef,
 } from "@/components/practice-vocabulary/review-status-defs";
@@ -82,7 +82,7 @@ export function reviewMarkers(review: Pick<ReviewSummary, "status">): StatusDef[
 
 function ReviewMarkers({ review }: { review: ReviewSummary }) {
 	const reason =
-		review.stopReason === null ? undefined : REVIEW_STOP_REASON_SENTENCES[review.stopReason];
+		review.stopReason === null ? undefined : reviewStopReasonSentence(review.stopReason);
 	const progress = reviewProgressWords(review.progress);
 	return (
 		<>

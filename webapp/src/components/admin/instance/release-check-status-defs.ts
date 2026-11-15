@@ -13,7 +13,7 @@ import type { StatusDefs } from "@/components/common/status-def";
 export type ReleaseCheckStatus = ReleaseStatus["status"];
 
 /** Only `CURRENT` reads green; every other value is a reason not to conclude "up to date". */
-export const RELEASE_CHECK_STATUS_DEFS: StatusDefs<ReleaseCheckStatus> = {
+export const RELEASE_CHECK_STATUS_DEFS = {
 	CURRENT: {
 		label: "Up to date",
 		icon: CircleCheckIcon,
@@ -51,13 +51,13 @@ export const RELEASE_CHECK_STATUS_DEFS: StatusDefs<ReleaseCheckStatus> = {
 		badgeVariant: "outline",
 		description: "Outbound release checks are switched off.",
 	},
-};
+} satisfies StatusDefs<string>;
 
 export type ReleaseCheckFailure = NonNullable<ReleaseStatus["failure"]>;
 
 /** Each label reads as the start of a sentence that continues with when it happened. */
-export const RELEASE_CHECK_FAILURE_LABELS: Record<ReleaseCheckFailure, string> = {
+export const RELEASE_CHECK_FAILURE_LABELS = {
 	RATE_LIMITED: "GitHub rate-limited the request",
 	UNAVAILABLE: "GitHub could not be reached",
 	MALFORMED: "GitHub did not answer with a release",
-};
+} satisfies Record<string, string>;

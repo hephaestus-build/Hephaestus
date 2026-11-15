@@ -23,7 +23,7 @@ import {
 } from "@/components/ui/table";
 import { hasText } from "@/lib/text";
 
-import { ACCOUNT_STATUS_LABELS, accountName } from "./account-labels";
+import { accountStatusLabel, accountName } from "./account-labels";
 
 export type UserViewUsersState = PanelState<{ users: UserViewAccount[]; totalPages: number }>;
 
@@ -96,7 +96,7 @@ export function UserViewUsersTable({ state, page, onPageChange, onView }: UserVi
 										<span className="block text-muted-foreground">{user.providerLogin}</span>
 									)}
 								</TableCell>
-								<TableCell>{ACCOUNT_STATUS_LABELS[user.account.status]}</TableCell>
+								<TableCell>{accountStatusLabel(user.account.status)}</TableCell>
 								<TableCell className="text-right">
 									<Button
 										variant="outline"

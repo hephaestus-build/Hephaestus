@@ -61,9 +61,15 @@ import {
 	REVIEW_RANGE_DEFS,
 	reviewRangeStart,
 } from "@/components/admin/practice-reviews/review-range";
+import { definitionFor, isKnownValue } from "@/components/common/status-def";
 import { deniedFeedbackCheck, itemTrace } from "@/components/practice-trace/fixtures";
-import { ADMIN_WITHHELD_TEXT } from "@/components/practice-vocabulary/feedback-destination-defs";
+import type { KnownDeliveryState } from "@/components/practice-vocabulary/delivery-state-defs";
+import {
+	adminWithheldText,
+	type FEEDBACK_DESTINATION_DEFS,
+} from "@/components/practice-vocabulary/feedback-destination-defs";
 import { FEEDBACK_LOCATION_DEFS } from "@/components/practice-vocabulary/feedback-location-defs";
+import type { KnownReviewStatus } from "@/components/practice-vocabulary/review-status-defs";
 import { withholdingReasonSentence } from "@/components/practice-vocabulary/withholding-defs";
 import { toDayParam } from "@/lib/date-range-search";
 import { ITEM_KIND } from "@/lib/item-kinds";
@@ -453,7 +459,10 @@ function groupRefOf(practiceSlug: string) {
 		: { slug: found.slug, name: found.name, icon: found.icon, color: found.color };
 }
 
-type FeedbackState = ReviewFeedback["state"];
+// Fixtures build only the values that this build names; the API can send others.
+type FeedbackState = KnownDeliveryState;
+type Destination = keyof typeof FEEDBACK_DESTINATION_DEFS;
+type ReviewStatus = KnownReviewStatus;
 type StopReason = NonNullable<ReviewFeedback["stopReason"]>;
 type Severity = Problem["severity"];
 
@@ -483,7 +492,7 @@ interface ResponseSpec {
 interface FeedbackSpec {
 	id: string;
 	body?: string;
-	destination: ReviewFeedback["destination"];
+	destination: Destination;
 	conversation?: "APP" | "SLACK";
 	state: FeedbackState;
 	stopReason?: StopReason;
@@ -545,7 +554,7 @@ interface ReviewSpec {
 	id: string;
 	item: ItemRef;
 	kind?: ReviewSummary["kind"];
-	status: ReviewSummary["status"];
+	status: ReviewStatus;
 	stopReason?: NonNullable<ReviewSummary["stopReason"]>;
 	startedAt: string;
 	developer: ReviewDeveloper | null;
@@ -1586,7 +1595,7 @@ const BODY_PREVIEW_LENGTH = 320;
 const MINUTE = 60_000;
 
 function adminBody(spec: FeedbackSpec): string | null {
-	return ADMIN_WITHHELD_TEXT[spec.destination] === undefined ? (spec.body ?? null) : null;
+	return adminWithheldText(spec.destination) === undefined ? (spec.body ?? null) : null;
 }
 
 function preview(spec: FeedbackSpec) {
@@ -1594,7 +1603,7 @@ function preview(spec: FeedbackSpec) {
 	return {
 		bodyPreview: body?.slice(0, BODY_PREVIEW_LENGTH) ?? null,
 		bodyTruncated: (body?.length ?? 0) > BODY_PREVIEW_LENGTH,
-		textHidden: ADMIN_WITHHELD_TEXT[spec.destination] !== undefined,
+		textHidden: adminWithheldText(spec.destination) !== undefined,
 		unverifiedHistory: false,
 	};
 }
@@ -1667,7 +1676,7 @@ const COUNT_OF: Record<FeedbackState, keyof ReviewFeedbackCounts> = {
 	FAILED: "failed",
 };
 
-export function feedbackCounts(states: readonly FeedbackState[]): ReviewFeedbackCounts {
+export function feedbackCounts(states: readonly string[]): ReviewFeedbackCounts {
 	const counts: ReviewFeedbackCounts = {
 		awaitingApproval: 0,
 		ready: 0,
@@ -1679,7 +1688,9 @@ export function feedbackCounts(states: readonly FeedbackState[]): ReviewFeedback
 		failed: 0,
 	};
 	for (const state of states) {
-		counts[COUNT_OF[state]] += 1;
+		if (isKnownValue(COUNT_OF, state)) {
+			counts[COUNT_OF[state]] += 1;
+		}
 	}
 	return counts;
 }
@@ -2354,7 +2365,7 @@ function finishedAt(review: ReviewSpec): Date | null {
 		: new Date(new Date(review.startedAt).getTime() + 5 * MINUTE);
 }
 
-const PRACTICE_STATUS_OF: Record<ReviewSummary["status"], ReviewPractice["status"]> = {
+const PRACTICE_STATUS_OF: Record<ReviewStatus, ReviewPractice["status"]> = {
 	QUEUED: "QUEUED",
 	RUNNING: "RUNNING",
 	COMPLETE: "DONE",
@@ -2469,7 +2480,7 @@ export function reviewRefOf(review: ReviewSummary): ReviewRef {
 	};
 }
 
-const JOB_STATUS_OF: Record<ReviewSummary["status"], ReviewJob["status"]> = {
+const JOB_STATUS_OF: Record<ReviewStatus, ReviewJob["status"]> = {
 	QUEUED: "QUEUED",
 	RUNNING: "RUNNING",
 	COMPLETE: "COMPLETED",
@@ -2492,7 +2503,7 @@ function exitCodeOf(status: ReviewJob["status"]): number | null {
 
 function jobsOf(summary: ReviewSummary, count: number): ReviewJob[] {
 	const started = summary.createdAt.getTime();
-	const status = JOB_STATUS_OF[summary.status];
+	const status = definitionFor(JOB_STATUS_OF, summary.status, "CANCELLED");
 	return Array.from({ length: count }, (_, index) => {
 		const startedAt = new Date(started + 40_000 + index * 70_000);
 		const last = index === count - 1;

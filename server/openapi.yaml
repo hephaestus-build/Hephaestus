@@ -11816,7 +11816,9 @@ components:
       - status
     AccountStatus:
       type: string
-      enum:
+      description: "Extensible enum: a client accepts a value that the examples do\
+        \ not name."
+      examples:
       - UNCLAIMED
       - ACTIVE
       - BLOCKED
@@ -13140,7 +13142,9 @@ components:
       - FORBIDDEN
     CitationSide:
       type: string
-      enum:
+      description: "Extensible enum: a client accepts a value that the examples do\
+        \ not name."
+      examples:
       - OLD
       - NEW
     ClaimBasis:
@@ -13365,13 +13369,17 @@ components:
       - subject
     ConfigurationRequirement:
       type: string
-      enum:
+      description: "Extensible enum: a client accepts a value that the examples do\
+        \ not name."
+      examples:
       - REQUIRED
       - RECOMMENDED
       - OPTIONAL
     ConfigurationStatus:
       type: string
-      enum:
+      description: "Extensible enum: a client accepts a value that the examples do\
+        \ not name."
+      examples:
       - SATISFIED
       - ACTION_REQUIRED
       - NOT_CONFIGURED
@@ -13748,26 +13756,34 @@ components:
       - text
     ConversationEntryKind:
       type: string
-      enum:
+      description: "Extensible enum: a client accepts a value that the examples do\
+        \ not name."
+      examples:
       - USER
       - ANSWER
       - DIGEST
     ConversationEntrySlackDelivery:
       type: string
-      enum:
+      description: "Extensible enum: a client accepts a value that the examples do\
+        \ not name."
+      examples:
       - PENDING
       - DELIVERED
       - UNCERTAIN
       - FAILED
     ConversationEntrySurface:
       type: string
-      enum:
+      description: "Extensible enum: a client accepts a value that the examples do\
+        \ not name."
+      examples:
       - APP
       - SLACK
       - SYSTEM
     ConversationEntryVote:
       type: string
-      enum:
+      description: "Extensible enum: a client accepts a value that the examples do\
+        \ not name."
+      examples:
       - HELPFUL
       - NOT_HELPFUL
     ConversationLink:
@@ -13801,7 +13817,9 @@ components:
       - text
     ConversationLinkKind:
       type: string
-      enum:
+      description: "Extensible enum: a client accepts a value that the examples do\
+        \ not name."
+      examples:
       - RESULT
       - PROBLEM
       - FEEDBACK
@@ -13959,7 +13977,9 @@ components:
       - surface
     ConversationTurnFailureReason:
       type: string
-      enum:
+      description: "Extensible enum: a client accepts a value that the examples do\
+        \ not name."
+      examples:
       - START_WAIT_EXPIRED
       - ATTEMPTS_EXHAUSTED
       - MODEL_UNAVAILABLE
@@ -13987,13 +14007,17 @@ components:
       - text
     ConversationTurnPartialActivity:
       type: string
-      enum:
+      description: "Extensible enum: a client accepts a value that the examples do\
+        \ not name."
+      examples:
       - THINKING
       - WRITING
       - TOOL
     ConversationTurnPhase:
       type: string
-      enum:
+      description: "Extensible enum: a client accepts a value that the examples do\
+        \ not name."
+      examples:
       - STARTING
       - WORKING
     ConversationTurnRequest:
@@ -14025,7 +14049,9 @@ components:
       - text
     ConversationTurnStatus:
       type: string
-      enum:
+      description: "Extensible enum: a client accepts a value that the examples do\
+        \ not name."
+      examples:
       - QUEUED
       - RUNNING
       - DONE
@@ -14045,13 +14071,17 @@ components:
       - status
     ConversationTurnSurface:
       type: string
-      enum:
+      description: "Extensible enum: a client accepts a value that the examples do\
+        \ not name."
+      examples:
       - APP
       - SLACK
       - SYSTEM
     ConversationTurnWaitingFor:
       type: string
-      enum:
+      description: "Extensible enum: a client accepts a value that the examples do\
+        \ not name."
+      examples:
       - CAPACITY
     ConversationVoteRequest:
       type: object
@@ -14569,7 +14599,9 @@ components:
       - consent
     Currentness:
       type: string
-      enum:
+      description: "Extensible enum: a client accepts a value that the examples do\
+        \ not name."
+      examples:
       - CURRENT
       - STALE
       - UNVERIFIABLE
@@ -15196,7 +15228,9 @@ components:
       - writeStarted
     FeedbackCopyKind:
       type: string
-      enum:
+      description: "Extensible enum: a client accepts a value that the examples do\
+        \ not name."
+      examples:
       - SUMMARY
       - LINE_NOTE
       - FILE_NOTE
@@ -15273,7 +15307,9 @@ components:
       - OTHER
     FeedbackDestination:
       type: string
-      enum:
+      description: "Extensible enum: a client accepts a value that the examples do\
+        \ not name."
+      examples:
       - ON_WORK
       - PRACTICE_PAGE
       - CONVERSATION
@@ -15468,7 +15504,9 @@ components:
       - message
     FeedbackResolution:
       type: string
-      enum:
+      description: "Extensible enum: a client accepts a value that the examples do\
+        \ not name."
+      examples:
       - ADDRESSED
       - DISAGREE
       - NOT_APPLICABLE
@@ -15561,7 +15599,9 @@ components:
       - itemKind
     FeedbackState:
       type: string
-      enum:
+      description: "Extensible enum: a client accepts a value that the examples do\
+        \ not name."
+      examples:
       - AWAITING_APPROVAL
       - READY
       - DELIVERED
@@ -15621,7 +15661,9 @@ components:
       - resolved
     FeedbackUsefulness:
       type: string
-      enum:
+      description: "Extensible enum: a client accepts a value that the examples do\
+        \ not name."
+      examples:
       - HELPFUL
       - UNHELPFUL
     FeedbackWorkspaceRef:
@@ -16102,7 +16144,9 @@ components:
       - subject
     IdentityProviderType:
       type: string
-      enum:
+      description: "Extensible enum: a client accepts a value that the examples do\
+        \ not name."
+      examples:
       - GITHUB
       - GITLAB
       - SLACK
@@ -16212,7 +16256,9 @@ components:
       - type
     InitiateConnectionResponseType:
       type: string
-      enum:
+      description: "Extensible enum: a client accepts a value that the examples do\
+        \ not name."
+      examples:
       - REDIRECT
       - LINKED
     InstanceLlmSettings:
@@ -16302,7 +16348,9 @@ components:
       - DOCUMENTATION
     IntegrationKind:
       type: string
-      enum:
+      description: "Extensible enum: a client accepts a value that the examples do\
+        \ not name."
+      examples:
       - GITHUB
       - GITLAB
       - SLACK
@@ -20098,17 +20146,23 @@ components:
       - type
     ProfileChangeDirection:
       type: string
-      enum:
+      description: "Extensible enum: a client accepts a value that the examples do\
+        \ not name."
+      examples:
       - UP
       - DOWN
     ProfileChangeResolvedBy:
       type: string
-      enum:
+      description: "Extensible enum: a client accepts a value that the examples do\
+        \ not name."
+      examples:
       - WORK
       - DEVELOPER
     ProfileChangeType:
       type: string
-      enum:
+      description: "Extensible enum: a client accepts a value that the examples do\
+        \ not name."
+      examples:
       - FEEDBACK_NEW
       - FEEDBACK_RESOLVED
       - FEEDBACK_RESET
@@ -20203,7 +20257,9 @@ components:
           type: string
         provider:
           type: string
-          enum:
+          description: "Extensible enum: a client accepts a value that the examples\
+            \ do not name."
+          examples:
           - GITHUB
           - GITLAB
           - SLACK
@@ -20787,19 +20843,25 @@ components:
       - slackChannelId
     ReleaseChannel:
       type: string
-      enum:
+      description: "Extensible enum: a client accepts a value that the examples do\
+        \ not name."
+      examples:
       - RELEASE
       - COMMIT
       - DEVELOPMENT
     ReleaseCheckFailure:
       type: string
-      enum:
+      description: "Extensible enum: a client accepts a value that the examples do\
+        \ not name."
+      examples:
       - RATE_LIMITED
       - UNAVAILABLE
       - MALFORMED
     ReleaseCheckStatus:
       type: string
-      enum:
+      description: "Extensible enum: a client accepts a value that the examples do\
+        \ not name."
+      examples:
       - DISABLED
       - NOT_APPLICABLE
       - NEVER_CHECKED
@@ -21027,7 +21089,9 @@ components:
       - ANONYMIZED
     ResearchDisclosureSubjectRemovalReason:
       type: string
-      enum:
+      description: "Extensible enum: a client accepts a value that the examples do\
+        \ not name."
+      examples:
       - CONSENT_WITHDRAWN
       - CONSENT_SUPERSEDED
       - QUESTION_CHANGED
@@ -22278,7 +22342,9 @@ components:
       - CANCELLED
     ReviewKind:
       type: string
-      enum:
+      description: "Extensible enum: a client accepts a value that the examples do\
+        \ not name."
+      examples:
       - ITEM
       - SCAN
     ReviewLimit:
@@ -22417,7 +22483,9 @@ components:
       - state
     ReviewOrigin:
       type: string
-      enum:
+      description: "Extensible enum: a client accepts a value that the examples do\
+        \ not name."
+      examples:
       - EVENT
       - REQUEST
       - SCHEDULE
@@ -22934,7 +23002,9 @@ components:
       - status
     ReviewRequestReason:
       type: string
-      enum:
+      description: "Extensible enum: a client accepts a value that the examples do\
+        \ not name."
+      examples:
       - GATE_WITHHELD
       - COOLDOWN_ACTIVE
       - REQUEST_COOLDOWN_ACTIVE
@@ -22967,7 +23037,9 @@ components:
       - ALREADY_CURRENT
     ReviewRequestStatus:
       type: string
-      enum:
+      description: "Extensible enum: a client accepts a value that the examples do\
+        \ not name."
+      examples:
       - SUBMITTED
       - REFUSED
     ReviewResult:
@@ -23343,8 +23415,9 @@ components:
       - repositoryItemId
     ReviewStatus:
       type: string
-      description: Where the review stands.
-      enum:
+      description: "Extensible enum: a client accepts a value that the examples do\
+        \ not name. Where the review stands."
+      examples:
       - QUEUED
       - RUNNING
       - COMPLETE
@@ -23381,7 +23454,9 @@ components:
       - running
     ReviewStopReason:
       type: string
-      enum:
+      description: "Extensible enum: a client accepts a value that the examples do\
+        \ not name."
+      examples:
       - TIMED_OUT
       - EXECUTION_FAILED
       - PREPARATION_FAILED
@@ -23825,7 +23900,9 @@ components:
       - version
     RuntimeRole:
       type: string
-      enum:
+      description: "Extensible enum: a client accepts a value that the examples do\
+        \ not name."
+      examples:
       - SERVER
     SaveLlmCallPoolRequest:
       type: object
@@ -24736,7 +24813,9 @@ components:
       - type
     SyncJobStatus:
       type: string
-      enum:
+      description: "Extensible enum: a client accepts a value that the examples do\
+        \ not name."
+      examples:
       - PENDING
       - RUNNING
       - SUCCEEDED
@@ -24745,14 +24824,18 @@ components:
       - CANCELLED
     SyncJobTrigger:
       type: string
-      enum:
+      description: "Extensible enum: a client accepts a value that the examples do\
+        \ not name."
+      examples:
       - SCHEDULED
       - MANUAL
       - LIFECYCLE
       - SYSTEM
     SyncJobType:
       type: string
-      enum:
+      description: "Extensible enum: a client accepts a value that the examples do\
+        \ not name."
+      examples:
       - INITIAL
       - RECONCILIATION
       - BACKFILL
@@ -25086,7 +25169,9 @@ components:
       - type
     UnverifiableReason:
       type: string
-      enum:
+      description: "Extensible enum: a client accepts a value that the examples do\
+        \ not name."
+      examples:
       - RECORD_MISSING
       - WORK_UNREADABLE
     UpdateAccountRequest:
@@ -25698,7 +25783,9 @@ components:
       - personalAccessToken
     UsageFundingSource:
       type: string
-      enum:
+      description: "Extensible enum: a client accepts a value that the examples do\
+        \ not name."
+      examples:
       - INSTANCE
       - WORKSPACE
     UsagePricingState:
@@ -26953,7 +27040,9 @@ components:
       - STRENGTH
     WorkspaceStatus:
       type: string
-      enum:
+      description: "Extensible enum: a client accepts a value that the examples do\
+        \ not name."
+      examples:
       - ACTIVE
       - SUSPENDED
       - PURGED

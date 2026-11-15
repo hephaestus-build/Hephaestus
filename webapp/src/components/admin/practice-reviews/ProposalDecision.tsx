@@ -16,7 +16,7 @@ import {
 	FEEDBACK_DECISION_REASONS,
 	type FeedbackDecisionReason,
 } from "@/components/practice-vocabulary/feedback-decision-defs";
-import { ADMIN_WITHHELD_TEXT } from "@/components/practice-vocabulary/feedback-destination-defs";
+import { adminWithheldText } from "@/components/practice-vocabulary/feedback-destination-defs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
@@ -40,7 +40,7 @@ import { ReviewPackage } from "./ReviewPackage";
 export function ProposalPackage({ feedback }: { feedback: ReviewFeedbackDetail }) {
 	// A private destination's text is never shown here, nor counted: the destination's own words
 	// stand in.
-	if (ADMIN_WITHHELD_TEXT[feedback.destination] !== undefined) {
+	if (adminWithheldText(feedback.destination) !== undefined) {
 		return (
 			<Section
 				level={3}

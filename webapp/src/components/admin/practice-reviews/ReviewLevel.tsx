@@ -29,13 +29,13 @@ import { OUTCOME_DEFS, type Outcome } from "@/components/practice-vocabulary/out
 import { REVIEW_ORIGIN_DEFS } from "@/components/practice-vocabulary/review-origin-defs";
 import {
 	isActiveReview,
-	PARTIAL_REVIEW_SCOPE,
+	partialReviewScope,
 	reviewReasonSentence,
 	REVIEW_JOB_PROCESSING_DEFS,
 	REVIEW_JOB_STATUS_DEFS,
 	REVIEW_PRACTICE_STATUS_DEFS,
 	REVIEW_STATUS_DEFS,
-	REVIEW_STOP_REASON_SENTENCES,
+	reviewStopReasonSentence,
 	reviewProgressWords,
 	shownReviewStatusDef,
 } from "@/components/practice-vocabulary/review-status-defs";
@@ -116,7 +116,7 @@ function attemptLabel(attempt: number): string {
 
 function reviewNow(review: ReviewDetail): string | undefined {
 	if (review.status === "PARTIAL") {
-		return PARTIAL_REVIEW_SCOPE[review.kind];
+		return partialReviewScope(review.kind);
 	}
 	// The sentence names results, so a feedback count alone does not earn it.
 	if ((review.status === "FAILED" || review.status === "CANCELLED") && hasResults(review.results)) {
@@ -542,7 +542,7 @@ export function reviewHistory(review: ReviewDetail): SheetEvent[] {
 				<>
 					{elapsed !== undefined && <span className="block">{elapsed} after it was asked for</span>}
 					{review.stopReason !== null && (
-						<span className="block">{REVIEW_STOP_REASON_SENTENCES[review.stopReason]}</span>
+						<span className="block">{reviewStopReasonSentence(review.stopReason)}</span>
 					)}
 				</>
 			),

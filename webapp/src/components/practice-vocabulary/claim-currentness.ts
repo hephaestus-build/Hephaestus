@@ -41,6 +41,15 @@ const RECORD_MISSING: CurrentnessCopy = {
 	note: "We cannot verify what this observation was based on.",
 };
 
+/** For a currentness that this client does not know: claim neither current nor a reason. */
+export const UNKNOWN_CURRENTNESS: CurrentnessCopy = {
+	badge: "Status unknown",
+	badgeVariant: "outline",
+	description:
+		"This version of Hephaestus does not recognize how current this observation is. Treat it as not verified.",
+	note: "This version of Hephaestus cannot tell whether this observation is current.",
+};
+
 /** For a reason this client does not know: say only what every reason shares. */
 const UNVERIFIED: CurrentnessCopy = {
 	badge: "Unverified observation",
@@ -77,6 +86,9 @@ export function currentnessCopy(freshness: Freshness): CurrentnessCopy | undefin
 	}
 	if (freshness.currentness === "STALE") {
 		return STALE;
+	}
+	if (freshness.currentness !== "UNVERIFIABLE") {
+		return UNKNOWN_CURRENTNESS;
 	}
 	if (freshness.unverifiableReason === "RECORD_MISSING") {
 		return RECORD_MISSING;

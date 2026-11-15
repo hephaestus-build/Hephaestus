@@ -8,7 +8,7 @@ import {
 
 import type { ItemEvent } from "@/api/types.gen";
 
-import type { StatusDefs } from "@/components/common/status-def";
+import { definitionFor, type StatusDefs } from "@/components/common/status-def";
 
 import { BOT_REVIEW_REFUSAL_SENTENCE } from "./bot-review-refusal";
 import { REVIEW_ORIGIN_DEFS } from "./review-origin-defs";
@@ -51,7 +51,7 @@ export const ITEM_EVENT_STATE_DEFS: StatusDefs<ItemEventState> = {
 	},
 };
 
-export const ITEM_EVENT_REASON_SENTENCES: Record<ItemEventReason, string> = {
+export const ITEM_EVENT_REASON_SENTENCES = {
 	// One code for a start switch turned off and for older records of no usable model or
 	// practice, so it names the settings without saying which one.
 	GATE_WITHHELD: "The workspace’s settings did not allow a review to start.",
@@ -88,7 +88,16 @@ export const ITEM_EVENT_REASON_SENTENCES: Record<ItemEventReason, string> = {
 		"An earlier review of the same work, queued or running, still includes a practice that this event selects. This event is decided again after that review ends.",
 	ALREADY_CURRENT:
 		"Every practice that reviews on this event already has a current observation of this work.",
-};
+} satisfies Record<string, string>;
+
+/** Why a review did not start, or that the reason is one this build does not know. */
+export function itemEventReasonSentence(reason: ItemEventReason): string {
+	return definitionFor(
+		ITEM_EVENT_REASON_SENTENCES,
+		reason,
+		"It did not start, for a reason that this version of Hephaestus does not recognize.",
+	);
+}
 
 // Event discovery determines timestamp precision; shared origins use the review-origin wording.
 export const ITEM_EVENT_FOUND_BY: Record<ItemEventFoundBy, { label: string; description: string }> =

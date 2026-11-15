@@ -1,6 +1,7 @@
 import { ShieldAlertIcon } from "lucide-react";
 
 import type { EvidenceCitation } from "@/api/types.gen";
+import { definitionFor } from "@/components/common/status-def";
 import {
 	codeCitationLocator,
 	DIFF_SIDE_LABELS,
@@ -123,7 +124,7 @@ export function citationLocation(citation: CitationPlace): string | undefined {
 
 export function citationSide(citation: CitationPlace): string | undefined {
 	return evidenceSourceDef(citation.sourceKind).locator === "code" && citation.side !== null
-		? DIFF_SIDE_LABELS[citation.side]
+		? definitionFor(DIFF_SIDE_LABELS, citation.side, undefined)
 		: undefined;
 }
 

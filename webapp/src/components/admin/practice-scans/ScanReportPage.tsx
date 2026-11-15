@@ -14,7 +14,7 @@ import { StatusBadge } from "@/components/common/StatusBadge";
 import { PageLayout } from "@/components/layout/PageLayout";
 import {
 	REVIEW_STATUS_DEFS,
-	REVIEW_STOP_REASON_SENTENCES,
+	reviewStopReasonSentence,
 } from "@/components/practice-vocabulary/review-status-defs";
 import {
 	type ProblemBaselineState,
@@ -332,7 +332,7 @@ function Note({ title, children }: { title: string; children: ReactNode }) {
 function StoppedNote({ scan, nothingCounted }: { scan: ScanDetail; nothingCounted: boolean }) {
 	const failed = scan.status === "FAILED";
 	const reason =
-		scan.stopReason === undefined ? "" : ` ${REVIEW_STOP_REASON_SENTENCES[scan.stopReason]}`;
+		scan.stopReason === undefined ? "" : ` ${reviewStopReasonSentence(scan.stopReason)}`;
 	return (
 		<Alert variant={failed ? "destructive" : "warning"}>
 			<AlertCircleIcon />

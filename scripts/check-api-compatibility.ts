@@ -310,6 +310,78 @@ export function nullTypes(spec: unknown, operations: ReadonlySet<string>): strin
 	return found;
 }
 
+/** The component schemas that a public response reaches, by name. */
+function publicComponents(
+	spec: unknown,
+	operations: ReadonlySet<string>,
+): Map<string, Readonly<Record<string, unknown>>> {
+	const schemas = asRecord(
+		asRecord(asRecord(spec, "spec").components ?? {}, "components").schemas ?? {},
+		"schemas",
+	);
+	const reached = new Map<string, Readonly<Record<string, unknown>>>();
+	walkPublicResponses(spec, operations, (node, where) => {
+		if (Object.hasOwn(schemas, where)) {
+			reached.set(where, node);
+		}
+	});
+	return reached;
+}
+
+const listed = (
+	node: Readonly<Record<string, unknown>>,
+	key: "enum" | "examples",
+): unknown[] | undefined => (Array.isArray(node[key]) ? node[key] : undefined);
+
+/**
+ * What ADR 0103 rule 3 forbids within a major release, for the enums that a public response reaches in the base: a
+ * new value of a closed enum (`enum`), an open enum (`examples`) that becomes closed, and a known value of an open
+ * enum that goes away. oasdiff sees none of them: response enums are open for it, and it ignores `examples`.
+ */
+export function enumChanges(
+	base: unknown,
+	revision: unknown,
+	operations: ReadonlySet<string>,
+): string[] {
+	const after = publicComponents(revision, operations);
+	const problems: string[] = [];
+	for (const [name, before] of publicComponents(base, operations)) {
+		const now = after.get(name);
+		if (now === undefined) {
+			continue;
+		}
+		const closed = listed(before, "enum");
+		const open = listed(before, "examples");
+		const closedNow = listed(now, "enum");
+		if (closed !== undefined && closedNow === undefined) {
+			problems.push(
+				`The closed enum ${name} becomes open. A closed enum changes only in a major release.`,
+			);
+		} else if (closed !== undefined && closedNow !== undefined) {
+			const added = closedNow.filter((value) => !closed.includes(value));
+			if (added.length > 0) {
+				problems.push(
+					`The closed enum ${name} gains ${added.join(", ")}. A closed enum changes only in a major release.`,
+				);
+			}
+		} else if (open !== undefined && closed === undefined) {
+			if (closedNow === undefined) {
+				const gone = open.filter((value) => !(listed(now, "examples") ?? []).includes(value));
+				if (gone.length > 0) {
+					problems.push(
+						`The open enum ${name} drops the known values ${gone.join(", ")}. Keep them until a major release.`,
+					);
+				}
+			} else {
+				problems.push(
+					`The open enum ${name} becomes closed. Keep it open: a client of the base accepts other values.`,
+				);
+			}
+		}
+	}
+	return problems;
+}
+
 function oasdiffBreaking(oasdiff: string, args: readonly string[], cwd: string) {
 	const result = spawnSync(oasdiff, ["breaking", ...args], {
 		cwd,
@@ -388,6 +460,9 @@ export async function compareSpecs(options: {
 		}
 		const revisionSpec: unknown = parse(await readFile(path.resolve(cwd, revision), "utf8"));
 		const nulls = nullTypes(revisionSpec, publicOperations);
+		const baseSpec: unknown = parse(await readFile(path.resolve(cwd, base), "utf8"));
+		const enums =
+			stable && !majorRelease ? enumChanges(baseSpec, revisionSpec, publicOperations) : [];
 		const removed =
 			stable && !majorRelease
 				? removedFromContract(
@@ -405,6 +480,7 @@ export async function compareSpecs(options: {
 					(line) =>
 						`From 1.0 a removal needs a major release, also after a deprecation. Keep it: ${line}`,
 				),
+				...enums,
 				...nulls.map(
 					(where) =>
 						`A public response leaves out a missing value instead of sending null (ADR 0103 rule 2): ${where}`,

@@ -305,3 +305,28 @@ export const RefreshRetrying: Story = {
 		await expect(canvas.getByText("v1.2.3")).toBeVisible();
 	},
 };
+
+/** A newer server can name a status or a channel that this build does not know: the card says so. */
+export const UnrecognizedStatusAndChannel: Story = {
+	args: {
+		state: ready({
+			status: "PAUSED",
+			running: { ...running, channel: "NIGHTLY", version: "1.4.0-nightly.7" },
+		}),
+	},
+	play: async ({ canvas }) => {
+		await expect(canvas.getAllByText("Unknown")[0]).toBeVisible();
+		await expect(canvas.getAllByText(/does not recognize this value/u)[0]).toBeVisible();
+		await expect(canvas.getByText("1.4.0-nightly.7")).toBeVisible();
+	},
+};
+
+/** A failed check whose cause this build does not know still says that the check failed, and when. */
+export const UnrecognizedFailure: Story = {
+	args: {
+		state: ready({ status: "FAILED", failure: "TLS_REJECTED", lastAttempt: minutesBefore(5) }),
+	},
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText(/The check failed/u)).toBeVisible();
+	},
+};

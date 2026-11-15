@@ -85,6 +85,26 @@ export const RequestRefusedByServer: Story = {
 	},
 };
 
+/**
+ * A newer server can answer with a status that this version does not know. The window claims neither
+ * a started nor a refused review, and offers no second request.
+ */
+export const AnswerNotRecognized: Story = {
+	args: {
+		state: {
+			status: "done",
+			preview: REQUEST,
+			outcome: { kind: "request-review", status: "UNRECOGNIZED" },
+		},
+	},
+	play: async ({ canvas }) => {
+		await expect(canvas.getByRole("status", { name: "Answer not recognized" })).toHaveTextContent(
+			"Reload the page to see whether a review started.",
+		);
+		await expect(canvas.queryByRole("button", { name: /Retry|Request review/u })).toBeNull();
+	},
+};
+
 /** Refused before anything was sent: the reader may no longer ask, and nothing changed. */
 export const RefusedBeforeSending: Story = {
 	args: {

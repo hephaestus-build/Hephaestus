@@ -2,7 +2,14 @@ import { assert, describe, expect, it } from "vitest";
 
 import type { ReviewBoundFeedback } from "@/api/types.gen";
 
-import { branchOutcome, lineageRecords, silentNotMet, stageCounts } from "./lineage-chain";
+import {
+	branchOutcome,
+	feedbackLocationDef,
+	lineageRecords,
+	lowerFirst,
+	silentNotMet,
+	stageCounts,
+} from "./lineage-chain";
 import {
 	EARLIER_REVIEW_ID,
 	LINEAGE_FEEDBACK,
@@ -16,6 +23,7 @@ import {
 import { lineageStateCase, richReviewFixture } from "./lineage-state-fixtures";
 import { reviewStepState } from "./lineage-story";
 import { chainReview, ownResults, tracedBy } from "./review-trace";
+import { feedbackLoss } from "./trace-bottleneck";
 
 const whole = lineageRecords(wholeReview);
 const stateRecords = (key: string) => lineageRecords(lineageStateCase(key).lineage);
@@ -209,5 +217,47 @@ describe("what the chain lost", () => {
 		expect(counts.results).toBe(whole.results.length);
 		expect(counts.feedback).toBe(whole.feedback.length);
 		expect(counts.reached).toBeLessThan(counts.feedback);
+	});
+});
+
+// A newer server can send a destination, a state or a review status that this build does not know.
+describe("a trace value that this build does not know", () => {
+	it("names an unknown destination's place in words that read after a verb", () => {
+		const place = "in a place that this version of Hephaestus does not recognize";
+		expect(lowerFirst(feedbackLocationDef(piece({ destination: "EMAIL" }), undefined).label)).toBe(
+			place,
+		);
+		expect(branchOutcome(piece({ destination: "EMAIL" }), undefined).text).toBe(
+			`Delivered ${place}`,
+		);
+		expect(branchOutcome(piece({ destination: "EMAIL", withdrawn: true }), undefined).detail).toBe(
+			`Delivered ${place}, then taken off them.`,
+		);
+	});
+
+	it("does not call ready feedback for an unknown destination on its way to the work", () => {
+		const ready = branchOutcome(
+			piece({ destination: "EMAIL", state: "READY", deliveredAt: undefined }),
+			undefined,
+		);
+		expect(ready.text).toBe("Ready");
+		expect(ready.def.description).toBe(
+			"It is ready for a place that this version of Hephaestus does not recognize.",
+		);
+	});
+
+	it("shows a piece in an unknown state by its badge, and claims no loss for it", () => {
+		const unknown = piece({ state: "ARCHIVED" });
+		expect(branchOutcome(unknown, undefined)).toMatchObject({ text: "Unknown", kind: "other" });
+		expect(feedbackLoss(unknown)).toBeUndefined();
+	});
+
+	it("titles a review in an unknown status as such", () => {
+		const review = chainReview(lineageRecords(richReviewFixture.lineage));
+		assert(review !== undefined);
+		const step = reviewStepState({ ...review, status: "PAUSED" });
+		expect(step.title).toBe("Review status unknown");
+		expect(step.def.label).toBe("Unknown");
+		expect(step.assessedNothing).toBe("This review has recorded no observation.");
 	});
 });

@@ -13,7 +13,7 @@ import { SectionStack } from "@/components/layout/SectionStack";
 import { RefusalFixLink } from "@/components/practice-trace/RefusalFixLink";
 import {
 	ITEM_EVENT_FOUND_BY,
-	ITEM_EVENT_REASON_SENTENCES,
+	itemEventReasonSentence,
 	ITEM_EVENT_STATE_DEFS,
 } from "@/components/practice-vocabulary/item-event-defs";
 import { REVIEW_ORIGIN_DEFS } from "@/components/practice-vocabulary/review-origin-defs";
@@ -287,7 +287,7 @@ function itemEvent(
 				</span>
 				{event.reason !== null && (
 					<span className="block">
-						<span>{ITEM_EVENT_REASON_SENTENCES[event.reason]} </span>
+						<span>{itemEventReasonSentence(event.reason)} </span>
 						<RefusalFixLink workspaceSlug={workspaceSlug} reason={event.reason} />
 					</span>
 				)}
