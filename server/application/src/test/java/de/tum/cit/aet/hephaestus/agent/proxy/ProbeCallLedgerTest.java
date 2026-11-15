@@ -17,7 +17,7 @@ import de.tum.cit.aet.hephaestus.agent.usage.LlmPriceSnapshot;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRecorder;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
-import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
+import de.tum.cit.aet.hephaestus.mentor.spi.MentorTurnAccess;
 import de.tum.cit.aet.hephaestus.productfeedback.drafting.ProductFeedbackDraftCalls;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -58,7 +58,7 @@ class ProbeCallLedgerTest extends BaseUnitTest {
                 recorder,
                 runs,
                 mock(ReviewJobRepository.class),
-                mock(MentorTurnRepository.class),
+                mock(MentorTurnAccess.class),
                 mock(ProxyBudgetGate.class),
                 new ObjectMapper(),
                 new SimpleMeterRegistry(),

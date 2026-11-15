@@ -16,6 +16,7 @@ import de.tum.cit.aet.hephaestus.mentor.MentorConversationService;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnService;
+import de.tum.cit.aet.hephaestus.mentor.spi.MentorTurnAccess;
 import de.tum.cit.aet.hephaestus.testconfig.LlmCatalogTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
@@ -44,6 +45,9 @@ class MentorTurnStarterIntegrationTest extends AbstractWorkspaceIntegrationTest 
 
     @Autowired
     private MentorTurnRepository turnRepository;
+
+    @Autowired
+    private MentorTurnAccess turnAccess;
 
     @Autowired
     private MeterRegistry metrics;
@@ -160,13 +164,7 @@ class MentorTurnStarterIntegrationTest extends AbstractWorkspaceIntegrationTest 
 
     private MentorTurnStarter starter(MeterRegistry meters) {
         return new MentorTurnStarter(
-                turns,
-                admission,
-                beans.getBean(DigestAdmission.class),
-                turnRepository,
-                writeFence,
-                meters,
-                connections);
+                turns, admission, beans.getBean(DigestAdmission.class), turnAccess, writeFence, meters, connections);
     }
 
     private MentorTurn failedTurn() {

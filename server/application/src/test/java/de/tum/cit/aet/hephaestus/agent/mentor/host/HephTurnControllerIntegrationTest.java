@@ -58,6 +58,7 @@ import de.tum.cit.aet.hephaestus.mentor.MentorTurnClaims;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnProgress;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnService;
+import de.tum.cit.aet.hephaestus.mentor.spi.MentorTurnAccess;
 import de.tum.cit.aet.hephaestus.practices.spi.ConversationClaims;
 import de.tum.cit.aet.hephaestus.practices.spi.CopyWriteFence;
 import de.tum.cit.aet.hephaestus.practices.spi.ModelKind;
@@ -151,6 +152,9 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
     private MentorTurnRepository turnRepository;
 
     @Autowired
+    private MentorTurnAccess turnAccess;
+
+    @Autowired
     private MentorTurnCompletion completion;
 
     @Autowired
@@ -230,7 +234,7 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                 agentRuns,
                 hephTurns,
                 HephTurnFixtures.contexts(beans),
-                turnRepository,
+                turnAccess,
                 turns,
                 completion,
                 beans.getBean(Clock.class),

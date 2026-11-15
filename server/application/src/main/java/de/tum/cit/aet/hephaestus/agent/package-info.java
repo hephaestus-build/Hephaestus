@@ -34,7 +34,6 @@
             "mentor::spi",
             "practices",
             "practices::model",
-            "practices::result",
             "practices::review",
             "practices::spi",
             "practices::weekly-digest",

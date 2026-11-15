@@ -45,7 +45,6 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
 import de.tum.cit.aet.hephaestus.integration.core.sync.MutableClock;
 import de.tum.cit.aet.hephaestus.mentor.MentorConversation;
-import de.tum.cit.aet.hephaestus.mentor.MentorConversationRepository;
 import de.tum.cit.aet.hephaestus.mentor.MentorConversationService;
 import de.tum.cit.aet.hephaestus.mentor.MentorEntry;
 import de.tum.cit.aet.hephaestus.mentor.MentorEntryRepository;
@@ -53,6 +52,8 @@ import de.tum.cit.aet.hephaestus.mentor.MentorLedgerEvents;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnService;
+import de.tum.cit.aet.hephaestus.mentor.spi.MentorConversationAccess;
+import de.tum.cit.aet.hephaestus.mentor.spi.MentorTurnAccess;
 import de.tum.cit.aet.hephaestus.practices.spi.ConversationClaims;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultHistoryQuery;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
@@ -101,6 +102,9 @@ class TurnSandboxRunKindIntegrationTest extends AbstractWorkspaceIntegrationTest
     private MentorTurnRepository turnRows;
 
     @Autowired
+    private MentorTurnAccess turnAccess;
+
+    @Autowired
     private MentorTurnService turns;
 
     @Autowired
@@ -131,8 +135,8 @@ class TurnSandboxRunKindIntegrationTest extends AbstractWorkspaceIntegrationTest
         sandboxes = SandboxOwnerFixtures.owner(
                 beans, new AttemptTokenIssuer(AttemptKeyFixtures.keyring(AttemptSigningKey.generate())));
         held = new HephTurns(
-                turnRows,
-                beans.getBean(MentorConversationRepository.class),
+                turnAccess,
+                beans.getBean(MentorConversationAccess.class),
                 beans.getBean(PersonDataWriteFence.class),
                 beans.getBean(PersonDataCopyFence.class),
                 clock,
@@ -146,7 +150,7 @@ class TurnSandboxRunKindIntegrationTest extends AbstractWorkspaceIntegrationTest
                 runs,
                 held,
                 HephTurnFixtures.contexts(beans),
-                turnRows,
+                turnAccess,
                 turns,
                 beans.getBean(MentorTurnCompletion.class),
                 clock,
@@ -300,7 +304,7 @@ class TurnSandboxRunKindIntegrationTest extends AbstractWorkspaceIntegrationTest
                 runs,
                 held,
                 HephTurnFixtures.contexts(beans),
-                turnRows,
+                turnAccess,
                 turns,
                 beans.getBean(MentorTurnCompletion.class),
                 clock,
@@ -399,7 +403,7 @@ class TurnSandboxRunKindIntegrationTest extends AbstractWorkspaceIntegrationTest
                 runs,
                 held,
                 contexts,
-                turnRows,
+                turnAccess,
                 turns,
                 beans.getBean(MentorTurnCompletion.class),
                 clock,
@@ -416,8 +420,8 @@ class TurnSandboxRunKindIntegrationTest extends AbstractWorkspaceIntegrationTest
         var copyFence = mock(PersonDataCopyFence.class);
         when(copyFence.tryHoldForCapture()).thenReturn(true);
         var observed = new HephTurns(
-                turnRows,
-                beans.getBean(MentorConversationRepository.class),
+                turnAccess,
+                beans.getBean(MentorConversationAccess.class),
                 beans.getBean(PersonDataWriteFence.class),
                 copyFence,
                 clock,
@@ -506,8 +510,8 @@ class TurnSandboxRunKindIntegrationTest extends AbstractWorkspaceIntegrationTest
         var personFence = mock(PersonDataWriteFence.class);
         var copyFence = beans.getBean(PersonDataCopyFence.class);
         var observed = new HephTurns(
-                turnRows,
-                beans.getBean(MentorConversationRepository.class),
+                turnAccess,
+                beans.getBean(MentorConversationAccess.class),
                 personFence,
                 copyFence,
                 clock,
@@ -555,8 +559,8 @@ class TurnSandboxRunKindIntegrationTest extends AbstractWorkspaceIntegrationTest
                 .when(observedFence)
                 .holdForAccountWrite(conversation.getAccountId());
         var observed = new HephTurns(
-                turnRows,
-                beans.getBean(MentorConversationRepository.class),
+                turnAccess,
+                beans.getBean(MentorConversationAccess.class),
                 observedFence,
                 beans.getBean(PersonDataCopyFence.class),
                 clock,

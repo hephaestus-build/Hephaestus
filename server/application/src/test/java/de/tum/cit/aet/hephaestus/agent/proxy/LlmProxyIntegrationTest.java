@@ -70,7 +70,7 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.UsagePricingState;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
-import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
+import de.tum.cit.aet.hephaestus.mentor.spi.MentorTurnAccess;
 import de.tum.cit.aet.hephaestus.practices.DefinitionTestFixtures;
 import de.tum.cit.aet.hephaestus.practices.PracticeVersionService;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
@@ -172,7 +172,7 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
     private AgentRuns agentRuns;
 
     @Autowired
-    private MentorTurnRepository turnRepository;
+    private MentorTurnAccess turnAccess;
 
     @Autowired
     private WorkspaceAgentBindingRepository agentBindingRepository;
@@ -451,7 +451,7 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
                                 new LlmProperties.Fx(LlmProperties.ECB_DAILY_URL))),
                 mock(DigestAdmission.class),
                 jobRepository,
-                turnRepository,
+                turnAccess,
                 reviewAi,
                 memberAi);
     }
@@ -1360,7 +1360,7 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 usageRecorder,
                 agentRuns,
                 jobRepository,
-                turnRepository,
+                turnAccess,
                 gate,
                 objectMapper,
                 meterRegistry,
@@ -1374,7 +1374,7 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 policy,
                 mock(ScanCallGuard.class),
                 new ProxyRoutingService(
-                        jobRepository, turnRepository, objectMapper, reviewSnapshots, agentRuns, draftCalls),
+                        jobRepository, turnAccess, objectMapper, reviewSnapshots, agentRuns, draftCalls),
                 new ProxyCallsInFlight(12),
                 health,
                 capacity,
@@ -1443,8 +1443,7 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     private ProxyRouting routingOf(AuthenticationResult result) {
         Authentication authentication = Objects.requireNonNull(result.authentication(), "token did not authenticate");
-        return new ProxyRoutingService(
-                        jobRepository, turnRepository, objectMapper, reviewSnapshots, agentRuns, draftCalls)
+        return new ProxyRoutingService(jobRepository, turnAccess, objectMapper, reviewSnapshots, agentRuns, draftCalls)
                 .resolve((ProxyIdentity) Objects.requireNonNull(authentication.getPrincipal()));
     }
 

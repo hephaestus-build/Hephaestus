@@ -18,9 +18,13 @@ class MentorConversationAccessAdapter implements MentorConversationAccess {
 
     @Override
     public long accountId(long workspaceId, UUID conversationId) {
-        return conversations
-                .findAccountIdByIdAndWorkspaceId(conversationId, workspaceId)
+        return findAccountId(workspaceId, conversationId)
                 .orElseThrow(() -> new EntityNotFoundException("MentorConversation", conversationId.toString()));
+    }
+
+    @Override
+    public Optional<Long> findAccountId(long workspaceId, UUID conversationId) {
+        return conversations.findAccountIdByIdAndWorkspaceId(conversationId, workspaceId);
     }
 
     @Override

@@ -41,6 +41,7 @@ import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnProgress;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnService;
+import de.tum.cit.aet.hephaestus.mentor.spi.MentorTurnAccess;
 import de.tum.cit.aet.hephaestus.testconfig.LlmCatalogTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
@@ -172,7 +173,7 @@ class HephTurnGatewayIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 agentRuns,
                 served,
                 contexts,
-                beans.getBean(MentorTurnRepository.class),
+                beans.getBean(MentorTurnAccess.class),
                 beans.getBean(MentorTurnService.class),
                 completion,
                 beans.getBean(Clock.class),

@@ -6,22 +6,19 @@ import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.evidence.ClasspathSourceCatalogRegistry;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
-import de.tum.cit.aet.hephaestus.practices.model.Problem;
 import de.tum.cit.aet.hephaestus.practices.model.Result;
-import de.tum.cit.aet.hephaestus.practices.result.ProblemRepository;
-import de.tum.cit.aet.hephaestus.practices.result.ResultCitations;
 import de.tum.cit.aet.hephaestus.practices.spi.EvidenceAuthorization;
+import de.tum.cit.aet.hephaestus.practices.spi.ResultEvidenceQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultProofAccess;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Supplier;
-import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.node.JsonNodeFactory;
 
 /** Delivery checks retained proof and live visibility without requiring a retained runtime job. */
@@ -31,7 +28,7 @@ import tools.jackson.databind.node.JsonNodeFactory;
 public class EvidenceDeliveryAuthorization implements EvidenceAuthorization {
     private final ClasspathSourceCatalogRegistry sourceCatalogs;
     private final CitedSourceAccess access;
-    private final ProblemRepository problems;
+    private final ResultEvidenceQuery evidence;
 
     @Override
     public boolean permits(long workspaceId, Result result, SourceUsePurpose purpose) {
@@ -73,23 +70,15 @@ public class EvidenceDeliveryAuthorization implements EvidenceAuthorization {
         var live = access.permitsAll(workspaceId, current, purpose);
         var proven =
                 current.stream().filter(result -> live.contains(result.getId())).toList();
-        Map<UUID, List<Problem>> problemsByResult = proven.isEmpty()
-                ? Map.of()
-                : problems
-                        .findByWorkspaceIdAndResultIdInOrderByResultIdAscPositionAsc(
-                                workspaceId, proven.stream().map(Result::getId).toList())
-                        .stream()
-                        .collect(Collectors.groupingBy(Problem::getResultId));
+        var citations = evidence.citations(workspaceId, proven);
         for (var result : proven) {
-            if (citationsPermit(result, problemsByResult.getOrDefault(result.getId(), List.of()), purpose, newDelivery))
+            if (citationsPermit(citations.getOrDefault(result.getId(), List.of()), purpose, newDelivery))
                 permitted.add(result.getId());
         }
         return Set.copyOf(permitted);
     }
 
-    private boolean citationsPermit(
-            Result result, List<Problem> resultProblems, SourceUsePurpose purpose, boolean newDelivery) {
-        var citations = ResultCitations.all(result, resultProblems);
+    private boolean citationsPermit(List<JsonNode> citations, SourceUsePurpose purpose, boolean newDelivery) {
         if (citations.isEmpty()) return false;
         if (newDelivery) {
             var proof = JsonNodeFactory.instance.arrayNode();
