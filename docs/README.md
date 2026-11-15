@@ -4,8 +4,13 @@
 
 **Live Site:** [https://docs.hephaestus.build/](https://docs.hephaestus.build/)
 
-The site is [Fumadocs](https://fumadocs.dev/) on [TanStack Start](https://tanstack.com/start), prerendered to static HTML ([ADR 0109](decisions/0109-the-docs-site-is-a-static-fumadocs-build-on-tanstack-start.md)).
-`vite.config.ts` configures the build, `source.config.ts` the Markdown, and `src/` holds the routes and components.
+The site is [Fumadocs](https://fumadocs.dev/) on [Astro](https://astro.build/), built to static HTML ([ADR 0109](decisions/0109-the-docs-site-is-a-static-fumadocs-build-on-astro.md)).
+`astro.config.ts` configures the build and the Markdown plugins, `src/content.config.ts` the content collections, and `src/` holds the pages, layouts and components.
+`vite.config.ts` holds only the lint configuration for `vp lint`.
+
+The content of a page is static HTML. Only the layout (sidebar, table of contents, search, theme and page actions) is a React island that runs in the browser.
+The island imports the sidebar's page tree from one module (`virtual:docs-page-tree` in `astro.config.ts`), so the browser loads the tree once for all pages.
+
 The content is split into three guides:
 
 - **User guide** (`user/`): end-user workflows, such as practice feedback, activity, Hephaestus, and workspace management.
@@ -14,11 +19,14 @@ The content is split into three guides:
 
 Those three directories are the whole site.
 Each one is a root folder with its own sidebar in its `meta.json`.
+Every page is an `.mdx` file: the Fumadocs integration compiles only `.mdx`.
 A file or a folder whose name starts with `_` is a partial: a page inlines it with `::include[./_file.mdx]`, and it is no page.
+The callouts, the guard against an unparsed callout, the text of unused directives, and Mermaid are plugins of the Sätteri compiler (`src/lib/plugins.ts`).
+`src/lib/plugins.test.ts` tests each one on a fixture page.
 
 ## URLs
 
-The URL of a page is its path in its guide: `admin/upgrade.mdx` is `/admin/upgrade`, and `admin/dsms/index.md` is `/admin/dsms`.
+The URL of a page is its path in its guide: `admin/upgrade.mdx` is `/admin/upgrade`, and `admin/dsms/index.mdx` is `/admin/dsms`.
 The build writes `admin/upgrade.html`, which GitHub Pages serves at `/admin/upgrade`, with no trailing slash.
 The site has no redirects.
 A rename changes a URL, so rename a page only in a change to the structure of a guide.
@@ -58,11 +66,11 @@ A twin is the processed Markdown of the page: an `::include` is inlined, and a c
 Mermaid draws its diagrams in the browser, so a twin holds the diagram source.
 
 The **Copy Markdown** button on each page copies the twin, and its menu opens the twin in an assistant.
-The twins exist only in a build, not in `docs:dev`.
+The dev server serves them too.
 
 ## Search
 
-[Pagefind](https://pagefind.app/) indexes the built pages after the prerender (`pagefind --site build`).
+[Pagefind](https://pagefind.app/) indexes the built pages after the build (`pagefind --site build`).
 The browser loads only the parts of the index that a query needs, and no hosted service runs.
 The index exists only in a build, not in `docs:dev`.
 
@@ -109,8 +117,8 @@ vp run docs:serve   # Preview the production build
 vp run docs:lint    # TypeScript check and markdownlint
 ```
 
-TanStack Router generates the route tree (`src/routeTree.gen.ts`) in every dev and build run.
-Git ignores it, and `docs:lint` generates it before the type check.
+Every docs script starts Astro through `scripts/docs-astro.ts`, which turns off Astro's anonymous telemetry.
+`docs:lint` runs `astro check`, which type-checks the `.astro` files and writes the content types (`.astro/`, ignored by Git) that the lint's type check reads.
 
 `docs:lint` is part of `vp run check`; `docs:build` is part of `vp run verify`, and the deployment
 workflow runs the same package script.
