@@ -41,6 +41,7 @@ import {
 	requestIdentity,
 	serializeChannel,
 	syncUnits,
+	writersStopped,
 } from "./reconcile-deployment.ts";
 
 // `ensureReleaseTree` runs `git worktree add` in the environment it inherits, which under a hook
@@ -725,6 +726,13 @@ await test("release cutovers distinguish major changes, first installs and an un
 		/Pause reconciliation.*Database maintenance/u,
 	);
 	assert.equal(isMajorCutover("v1.0.0", "c".repeat(40), "1.0.0"), false);
+});
+
+await test("a stopped upgrade reads server.stopped, and replicas only from a chart without it", () => {
+	assert.equal(writersStopped({ replicas: 2, stopped: true }), true);
+	assert.equal(writersStopped({ replicas: 0, stopped: false }), false);
+	assert.equal(writersStopped({ replicas: 0 }), true);
+	assert.equal(writersStopped({ replicas: 1 }), false);
 });
 
 await test("a host on a release candidate stops for its major's stable release", () => {
@@ -1986,6 +1994,8 @@ for (const failure of [
 	"unitcopy",
 	"downgrade",
 	"writers",
+	"writers despite zero replicas",
+	"stopped at capacity",
 	"sandbox",
 ] as const) {
 	await test(`signed release channel: ${failure}`, reconcilerSubprocess, async () => {
@@ -2034,6 +2044,14 @@ for (const failure of [
 				pending: { HELM_STATUS: "pending-upgrade" },
 				reload: { FAIL_RELOAD: "1" },
 				writers: { HELM_VALUES: '{"server":{"replicas":1},"sandbox":{"namespace":"sandboxes"}}' },
+				"writers despite zero replicas": {
+					HELM_VALUES:
+						'{"server":{"replicas":0,"stopped":false},"sandbox":{"namespace":"sandboxes"}}',
+				},
+				"stopped at capacity": {
+					HELM_VALUES:
+						'{"server":{"replicas":2,"stopped":true},"sandbox":{"namespace":"sandboxes"}}',
+				},
 				sandbox: {
 					CHART_WORKLOADS:
 						'{"items":[{"metadata":{"labels":{"hephaestus.build/sandbox-kind":"review"}}}]}',
@@ -2057,6 +2075,7 @@ for (const failure of [
 			if (
 				failure === "none" ||
 				failure === "sandboxes disabled" ||
+				failure === "stopped at capacity" ||
 				failure === "completed before record" ||
 				failure === "completed with every role" ||
 				failure === "reload" ||
@@ -2069,7 +2088,8 @@ for (const failure of [
 					assert.equal(upgrade, "", "a completed cutover does not run migration hooks again");
 				} else {
 					assert.match(upgrade, /chart\/hephaestus-1\.0\.0\.tgz/u);
-					assert.match(upgrade, /--set server.replicas=1/u);
+					assert.match(upgrade, /--set server.stopped=false/u);
+					assert.doesNotMatch(upgrade, /--set server.replicas/u);
 					assert.doesNotMatch(upgrade, /--set worker/u);
 					assert.doesNotMatch(upgrade, /rollback-on-failure/u);
 				}
