@@ -33,7 +33,7 @@ export function waitForGateway(
 		const transport = options?.fetch ?? globalThis.fetch;
 		let failure: "connection" | "response" | undefined;
 		const failureKind = () => failure;
-		// The work ended while the gateway still refused: that is the gateway's loss, not a cancelled call.
+		// The work ended after the gateway refused the call: that is the gateway's loss, not a cancelled call.
 		let lostAtWorkEnd = false;
 		const lostWithWork = () => lostAtWorkEnd;
 		let waits = 0;
@@ -46,16 +46,25 @@ export function waitForGateway(
 		};
 		const fetchGateway: typeof fetch = async (input, init) => {
 			failure = undefined;
+			// The deadline can cut a retry that hangs instead of refusing; the earlier refusal still makes it the gateway's loss.
+			let refused = false;
 			let response: Response;
 			try {
 				// A refused connection reached no server, so the call waits here until the gateway takes it.
-				response = await untilGatewayTakes(async () => transport(input, init), signal, waited);
+				response = await untilGatewayTakes(
+					async () => transport(input, init),
+					signal,
+					() => {
+						refused = true;
+						waited();
+					},
+				);
 			} catch (error) {
 				failure = isAborted() ? undefined : gatewayConnectionFailure(error);
 				lostAtWorkEnd =
 					deadline.aborted &&
 					options?.signal?.aborted !== true &&
-					gatewayConnectionFailure(error) === "connection";
+					(refused || gatewayConnectionFailure(error) === "connection");
 				throw error;
 			}
 			if (response.body === null) {

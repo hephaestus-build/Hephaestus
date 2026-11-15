@@ -226,6 +226,64 @@ await test("a gateway that still refuses when the work ends is the gateway's los
 	assert.equal(interrupted, 1);
 });
 
+await test("a refused gateway whose next attempt hangs until the work ends is the gateway's loss", async () => {
+	let calls = 0;
+	let interrupted = 0;
+	const output = await waitForGateway(stream, Date.now() + 1500, {
+		unavailable: () => {
+			interrupted += 1;
+		},
+	})(model, context, {
+		...options,
+		fetch: async (_input, init) => {
+			calls += 1;
+			if (calls === 1) {
+				throw new TypeError("fetch failed", { cause: { code: "ECONNREFUSED" } });
+			}
+			const signal = init?.signal;
+			assert.ok(signal);
+			return new Promise<Response>((_resolve, reject) => {
+				signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+			});
+		},
+	});
+	await eventsFrom(output);
+	assert.equal(calls, 2);
+	assert.equal(interrupted, 1);
+});
+
+await test("cancellation of a hanging attempt after a refusal is not the gateway's loss", async () => {
+	const abort = new AbortController();
+	const hanging = Promise.withResolvers<undefined>();
+	let calls = 0;
+	let interrupted = 0;
+	const output = await waitForGateway(stream, Date.now() + 5000, {
+		unavailable: () => {
+			interrupted += 1;
+		},
+	})(model, context, {
+		...options,
+		signal: abort.signal,
+		fetch: async (_input, init) => {
+			calls += 1;
+			if (calls === 1) {
+				throw new TypeError("fetch failed", { cause: { code: "ECONNREFUSED" } });
+			}
+			const signal = init?.signal;
+			assert.ok(signal);
+			hanging.resolve(undefined);
+			return new Promise<Response>((_resolve, reject) => {
+				signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+			});
+		},
+	});
+	await hanging.promise;
+	abort.abort();
+	await eventsFrom(output);
+	assert.equal(interrupted, 0);
+	assert.equal((await output.result()).stopReason, "aborted");
+});
+
 await test("repeated lost responses stop as an infrastructure interruption without a model retry", async () => {
 	let calls = 0;
 	let interrupted = false;
