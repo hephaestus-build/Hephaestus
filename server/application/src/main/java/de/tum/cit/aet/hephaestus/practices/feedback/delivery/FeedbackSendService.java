@@ -118,7 +118,9 @@ public class FeedbackSendService {
                 copy.getId(),
                 Objects.requireNonNull(attempt.feedback().getBody()),
                 Objects.requireNonNull(copy.getWriteKey()),
-                Objects.requireNonNull(copy.getWriteMarker()));
+                Objects.requireNonNull(copy.getWriteMarker()),
+                null,
+                attempt.feedback().getProvenance());
         if (copy.getState() == FeedbackCopyState.WRITE_STARTED) {
             var lookup = writer.findExistingSummary(target, content);
             readbacks.record(target.integration().kind(), lookup.presence());
@@ -233,7 +235,9 @@ public class FeedbackSendService {
                         copy.getId(),
                         Objects.requireNonNull(attempt.feedback().getBody()),
                         Objects.requireNonNull(copy.getWriteKey()),
-                        Objects.requireNonNull(copy.getWriteMarker())))
+                        Objects.requireNonNull(copy.getWriteMarker()),
+                        null,
+                        attempt.feedback().getProvenance()))
                 .orElse(null);
         return new OnWorkPackage(
                 summary,
@@ -250,6 +254,7 @@ public class FeedbackSendService {
                         Objects.requireNonNull(copy.getPath()), copy.getStartLine(), copy.getEndLine(), copy.getSide()),
                 Objects.requireNonNull(copy.getBody()),
                 Objects.requireNonNull(copy.getWriteKey()),
-                Objects.requireNonNull(copy.getWriteMarker()));
+                Objects.requireNonNull(copy.getWriteMarker()),
+                copy.getProvenance());
     }
 }

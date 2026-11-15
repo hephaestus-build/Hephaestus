@@ -55,6 +55,8 @@ public class WorkspaceScopedTables {
             "system_secret",
             // Signatures of the instance's Slack app, held until a signed request can no longer arrive again.
             "slack_request_claim",
+            // Instance keys that sign the provenance records of generated text.
+            "provenance_signing_key",
             // Installed-client sessions and their single-use sign-in handoffs;
             // account-scoped like issued_jwt
             "client_session",

@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1794717638507-1" author="hephaestus">
+        <createTable tableName="provenance_signing_key">
+            <column name="kid" type="VARCHAR(64)">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="provenance_signing_keyPK"/>
+            </column>
+            <column name="created_at" type="TIMESTAMP(6) WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="public_key" type="BYTEA">
+                <constraints nullable="false"/>
+            </column>
+            <column name="private_key" type="BYTEA">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+    <changeSet id="1794717638507-2" author="hephaestus">
+        <addColumn tableName="feedback">
+            <column name="provenance" type="TEXT"/>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1794717638507-3" author="hephaestus">
+        <addColumn tableName="feedback_copy">
+            <column name="provenance" type="TEXT"/>
+        </addColumn>
+    </changeSet>
+</databaseChangeLog>

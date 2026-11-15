@@ -284,7 +284,8 @@ public class FeedbackPreparationService {
                         planned,
                         draft.checks(),
                         draft.composition(),
-                        null),
+                        null,
+                        draft.model()),
                 replacesId,
                 withheldCopies);
     }

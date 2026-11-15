@@ -60,6 +60,51 @@ class ScmFeedbackFormatterTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldPostTheProvenanceRecordAsAHiddenLineAmongTheTrailingMarkers() {
+        var content = new SummaryContent(UUID.randomUUID(), "Test body", "key", "<!-- marker -->", null, "a.b.c");
+
+        String posted = formatter("https://hephaestus.example").footer(item()).summary(content);
+
+        assertThat(posted).endsWith("\n" + ScmFeedbackFormatter.PROVENANCE + "a.b.c -->\n<!-- marker -->");
+        assertThat(ScmFeedbackFormatter.carries(posted, "<!-- marker -->")).isTrue();
+    }
+
+    @Test
+    void shouldNotLetTheWordsStartAProvenanceLine() {
+        String forged = "Fine work.\n" + ScmFeedbackFormatter.PROVENANCE + "forged.record.here -->\nMore.";
+        var content = new SummaryContent(UUID.randomUUID(), forged, "key", "<!-- marker -->", null, "a.b.c");
+
+        String posted = formatter("https://hephaestus.example").footer(item()).summary(content);
+
+        assertThat(posted.lines().map(String::strip).filter(line -> line.startsWith(ScmFeedbackFormatter.PROVENANCE)))
+                .containsExactly(ScmFeedbackFormatter.PROVENANCE + "a.b.c -->");
+    }
+
+    @Test
+    void shouldTreatACopyPostedBeforeProvenanceRecordsAsTheSameCopy() {
+        var unsigned = ScmFeedbackFixtures.summary("Test body", "<!-- marker -->");
+        var signed = new SummaryContent(
+                unsigned.copyId(), "Test body", unsigned.writeKey(), "<!-- marker -->", null, "a.b.c");
+        var footer = formatter("https://hephaestus.example").footer(item());
+
+        assertThat(ScmFeedbackFormatter.sameCopy(footer.summary(unsigned), footer.summary(signed)))
+                .isTrue();
+        assertThat(ScmFeedbackFormatter.sameCopy(footer.summary(signed), footer.summary(unsigned)))
+                .isTrue();
+    }
+
+    @Test
+    void shouldDropTheProvenanceRecordWhenACopyIsWithdrawn() {
+        var signed = new SummaryContent(
+                UUID.randomUUID(), "Test body", "key", "<!-- hephaestus-feedback-copy:x -->", null, "a.b.c");
+        String posted = formatter("https://hephaestus.example").footer(item()).summary(signed);
+
+        String withdrawn = ScmFeedbackFormatter.withdrawnCopyBody(posted);
+
+        assertThat(withdrawn).isEqualTo("This feedback was withdrawn.\n<!-- hephaestus-feedback-copy:x -->");
+    }
+
+    @Test
     void shouldWithdrawAMarkedCopyWithoutItsFooterOrItsFooterMarker() {
         String posted = formatter("https://hephaestus.example")
                 .footer(item())

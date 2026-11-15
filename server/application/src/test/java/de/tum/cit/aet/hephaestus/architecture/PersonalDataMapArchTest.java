@@ -81,6 +81,9 @@ class PersonalDataMapArchTest extends BaseIntegrationTest {
             // Signatures of handled Slack requests: opaque HMAC values with no Slack user or payload, deleted after
             // 15 minutes by a scheduled job.
             "slack_request_claim",
+            // Instance keys that sign provenance records: key material with no person, kept for the life of the
+            // instance.
+            "provenance_signing_key",
             "label",
             "llm_call_permit",
             "llm_call_pool",

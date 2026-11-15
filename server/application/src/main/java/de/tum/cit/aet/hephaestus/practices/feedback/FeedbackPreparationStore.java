@@ -2,6 +2,8 @@ package de.tum.cit.aet.hephaestus.practices.feedback;
 
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
+import de.tum.cit.aet.hephaestus.core.provenance.ProvenanceRecord;
+import de.tum.cit.aet.hephaestus.core.provenance.ProvenanceSigner;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.evidence.CitationSide;
 import de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackAnchor;
@@ -78,6 +80,7 @@ public class FeedbackPreparationStore implements PreparedReviewQuery {
     private final FeedbackLedgerRecorder ledger;
     private final FeedbackContentDigest digests;
     private final FeedbackDeliveryPolicy policy;
+    private final ProvenanceSigner provenance;
 
     @Transactional(readOnly = true)
     public void checkPackage(long workspaceId, UUID reviewId, List<FeedbackDraft> drafts) {
@@ -341,6 +344,7 @@ public class FeedbackPreparationStore implements PreparedReviewQuery {
                 throw conflict("This feedback id already has different content.");
             return preparedReceipt(existing.get(), preparedAt);
         }
+        sign(row, planned, draft.model(), preparedAt);
         ledger.record(row, edges, planned);
         outcomes.created(row);
         policy.prepared(row);
@@ -348,6 +352,25 @@ public class FeedbackPreparationStore implements PreparedReviewQuery {
                 prepared,
                 feedback.findByIdAndWorkspaceId(draft.id(), draft.workspaceId()).orElseThrow());
         return preparedReceipt(row, preparedAt);
+    }
+
+    /**
+     * Signs the words that this preparation fixes: the feedback's body and each note's own words. They do not change
+     * afterwards, so each record holds for every copy that carries them.
+     */
+    private void sign(Feedback row, List<FeedbackCopy> planned, @Nullable String model, Instant preparedAt) {
+        String body = row.getBody();
+        if (body != null)
+            row.setProvenance(provenance
+                    .sign(ProvenanceRecord.Kind.FEEDBACK, body, model, preparedAt)
+                    .jws());
+        for (var copy : planned) {
+            String words = copy.getBody();
+            if (words != null)
+                copy.setProvenance(provenance
+                        .sign(ProvenanceRecord.Kind.FEEDBACK, words, model, preparedAt)
+                        .jws());
+        }
     }
 
     private PreparedFeedback preparedReceipt(Feedback row, Instant preparedAt) {

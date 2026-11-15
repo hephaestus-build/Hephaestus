@@ -43,6 +43,23 @@ class ModuleDeclarationTest {
         assertThat(logging).extracting(JavaClass::getName).containsExactly(LoggingUtils.class.getName());
     }
 
+    /** Only the start-up bootstrap makes a provenance key, so no module outside core may reach the key material. */
+    @Test
+    void shouldKeepTheProvenanceKeysOutOfTheProvenanceInterface() {
+        var core = ModulithVerificationTest.applicationModules()
+                .getModuleByName("core")
+                .orElseThrow();
+        var provenance = core.getNamedInterfaces().getByName("provenance").orElseThrow();
+        String keys = "de.tum.cit.aet.hephaestus.core.provenance.";
+        assertThat(provenance)
+                .extracting(JavaClass::getName)
+                .doesNotContain(
+                        keys + "ProvenanceKeys",
+                        keys + "ProvenanceSigningKey",
+                        keys + "ProvenanceSigningKeyRepository",
+                        keys + "ProvenanceStartupConfiguration");
+    }
+
     @Test
     void shouldKeepOnlyTheIntegrationKernelsAndAdaptersOpenAsAdr0095Decides() {
         var open = ModulithVerificationTest.applicationModules().stream()

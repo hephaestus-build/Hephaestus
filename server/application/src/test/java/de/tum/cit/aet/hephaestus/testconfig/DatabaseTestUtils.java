@@ -24,7 +24,12 @@ import org.springframework.transaction.support.TransactionTemplate;
 public class DatabaseTestUtils {
 
     // ShedLock caches known lock rows; truncating them can strand acquisition until the context restarts.
-    private static final Set<String> IGNORED_TABLES = Set.of("databasechangelog", "databasechangeloglock", "shedlock");
+    /**
+     * Kept between tests. {@code provenance_signing_key} holds the key that the start-up bootstrap made for this
+     * context; only the bootstrap makes one, so a wiped table would leave every later signature without a key.
+     */
+    private static final Set<String> IGNORED_TABLES =
+            Set.of("databasechangelog", "databasechangeloglock", "shedlock", "provenance_signing_key");
 
     @PersistenceContext
     private @Nullable EntityManager entityManager;

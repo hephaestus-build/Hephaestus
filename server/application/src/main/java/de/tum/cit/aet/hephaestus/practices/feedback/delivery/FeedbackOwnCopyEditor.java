@@ -117,7 +117,9 @@ public class FeedbackOwnCopyEditor {
                                     copy.getId(),
                                     Objects.requireNonNull(attempt.feedback().getBody()),
                                     Objects.requireNonNull(copy.getWriteKey()),
-                                    copy.getWriteMarker()));
+                                    copy.getWriteMarker(),
+                                    null,
+                                    attempt.feedback().getProvenance()));
         }
         var matching = notes.stream()
                 .filter(writer -> writer.kind() == target.integration().kind())

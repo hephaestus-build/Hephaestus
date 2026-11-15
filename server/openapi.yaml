@@ -90,6 +90,8 @@ tags:
 - description: "Workspace-admin access to reviews, results, and feedback delivery\
     \ history"
   name: Practice reviews
+- description: Public keys that verify the provenance records of generated text
+  name: Provenance
 - description: Instance-admin research disclosures and downstream removal receipts
   name: Research
 - description: Current user's Slack privacy preferences
@@ -161,6 +163,20 @@ tags:
 - name: workspace-passkey-policy
 - name: workspace-registry
 paths:
+  /.well-known/hephaestus-provenance-keys.json:
+    get:
+      operationId: getProvenanceKeys
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: OK
+      summary: Public keys of the provenance records
+      tags:
+      - Provenance
   /.well-known/jwks.json:
     get:
       operationId: getJwks

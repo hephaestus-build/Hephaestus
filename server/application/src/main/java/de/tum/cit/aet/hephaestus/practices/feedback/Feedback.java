@@ -84,6 +84,11 @@ public class Feedback {
     @Column(name = "body", nullable = true, columnDefinition = "TEXT")
     private @Nullable String body;
 
+    /** The signed provenance record of {@link #body}, a compact JWS made when the feedback was prepared. */
+    @Column(name = "provenance", nullable = true, columnDefinition = "TEXT")
+    @Setter(AccessLevel.PACKAGE)
+    private @Nullable String provenance;
+
     @JdbcTypeCode(SqlTypes.JSON)
     @Default
     @ColumnDefault("'{}'")

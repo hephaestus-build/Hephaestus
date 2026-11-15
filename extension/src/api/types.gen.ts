@@ -8405,6 +8405,25 @@ export type WorsenedBasis = Omit<ClaimBasis, "type"> & {
 	type: "WorsenedBasis";
 };
 
+export type GetProvenanceKeysData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/.well-known/hephaestus-provenance-keys.json";
+};
+
+export type GetProvenanceKeysResponses = {
+	/**
+	 * OK
+	 */
+	200: {
+		[key: string]: unknown;
+	};
+};
+
+export type GetProvenanceKeysResponse =
+	GetProvenanceKeysResponses[keyof GetProvenanceKeysResponses];
+
 export type GetJwksData = {
 	body?: never;
 	path?: never;

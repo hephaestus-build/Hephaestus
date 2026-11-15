@@ -67,9 +67,10 @@ public class ScmFeedbackFormatter {
         public String summary(SummaryContent content) {
             String body = PostedText.summary(content);
             String marker = Objects.requireNonNullElse(content.writeMarker(), "");
-            if (marker.isBlank()) return appendDisclosure(body).stripTrailing();
+            String provenance = provenanceLine(content.provenance());
+            if (marker.isBlank()) return (appendDisclosure(body) + "\n" + provenance).stripTrailing();
             body = body.substring(0, body.length() - marker.length()).stripTrailing();
-            return appendDisclosure(body) + "\n" + marker;
+            return appendDisclosure(body) + "\n" + provenance + marker;
         }
 
         private String appendDisclosure(String sanitizedBody) {
@@ -111,6 +112,18 @@ public class ScmFeedbackFormatter {
                 .build()
                 .encode()
                 .toUriString();
+    }
+
+    /**
+     * Starts the hidden line that carries the signed provenance record of a copy's words (EU AI Act Art. 50(2)). It sits
+     * among the trailing markers. Copy comparison ignores it, as it ignores the footer, so a copy posted before records
+     * existed stays the same copy. A withdrawn copy drops it, because its words are no longer generated.
+     */
+    public static final String PROVENANCE = "<!-- hephaestus-provenance:1 ";
+
+    /** The provenance line of a record, ending in a line break; empty without a record. */
+    public static String provenanceLine(@Nullable String jws) {
+        return jws == null ? "" : PROVENANCE + jws + " -->\n";
     }
 
     /**
@@ -176,6 +189,7 @@ public class ScmFeedbackFormatter {
                 lines.subList(end, lines.size()).stream()
                         .filter(line -> !line.isBlank())
                         .map(String::strip)
+                        .filter(line -> !line.startsWith(PROVENANCE))
                         .toList());
         return BLANK_LINES.matcher(String.join("\n", words)).replaceAll("\n\n").strip() + "\n\0" + markers;
     }
@@ -204,7 +218,8 @@ public class ScmFeedbackFormatter {
                         || MARKER_LINE.matcher(lines.get(first - 1).strip()).matches())) first--;
         var body = new StringBuilder("This feedback was withdrawn.");
         for (String line : lines.subList(first, lines.size()))
-            if (!line.isBlank()) body.append("\n").append(line.strip());
+            if (!line.isBlank() && !line.strip().startsWith(PROVENANCE))
+                body.append("\n").append(line.strip());
         return body.toString();
     }
 }

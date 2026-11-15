@@ -273,7 +273,8 @@ public class FeedbackRepairService implements FeedbackRepair {
                 revised,
                 proposal.checks(),
                 proposal.composition(),
-                proposal.page());
+                proposal.page(),
+                proposal.model());
     }
 
     @Override

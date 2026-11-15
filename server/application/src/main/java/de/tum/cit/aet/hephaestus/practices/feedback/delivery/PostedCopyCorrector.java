@@ -94,7 +94,13 @@ public class PostedCopyCorrector {
                         target,
                         new SummaryHandle(Objects.requireNonNull(copy.getExternalRef()), copy.getExternalUrl()),
                         new SummaryContent(
-                                copy.getId(), body, Objects.requireNonNull(copy.getWriteKey()), copy.getWriteMarker()));
+                                copy.getId(),
+                                body,
+                                Objects.requireNonNull(copy.getWriteKey()),
+                                copy.getWriteMarker(),
+                                null,
+                                // A withdrawal's words are not generated, so they carry no record.
+                                remove ? null : feedback.getProvenance()));
         apply(copy, result, remove, owner);
     }
 

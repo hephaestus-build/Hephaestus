@@ -177,6 +177,7 @@ Rejected options are never deleted. A superseded ADR keeps them, and the new ADR
 | [0101](0101-a-connection-cannot-adopt-an-upstream-resource-whose-removal-is-unresolved.md) | A connection cannot adopt an upstream resource whose removal is unresolved | Accepted |
 | [0103](0103-the-public-api-grows-only-by-addition-and-every-client-tolerates-what-it-does-not-know.md) | The public API grows only by addition, and every client tolerates what it does not know | Proposed |
 | [0104](0104-the-system-key-and-the-signing-key-rotate-without-a-stop.md) | The system key and the signing key rotate without a stop | Accepted |
+| [0105](0105-generated-text-carries-a-signed-provenance-record.md) | Generated text carries a signed provenance record | Accepted |
 | [0113](0113-the-mobile-apps-are-native-clients-of-the-server-api.md) | The mobile apps are native SwiftUI and Jetpack Compose clients of the server API | Accepted |
 | [0114](0114-one-store-app-signs-in-to-any-instance-by-its-address.md) | One store app for each platform signs in to any instance by its address, through a claimed HTTPS redirect and a checked issuer | Accepted |
 | [0115](0115-the-mobile-apps-release-with-the-stores-own-tools.md) | The mobile apps build and code-sign in GitHub Actions with the stores' own tools, and release on a version line of their own | Accepted |
