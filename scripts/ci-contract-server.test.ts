@@ -26,6 +26,7 @@ import {
 	workflowSources,
 } from "./ci-contract-support.ts";
 import { isSet } from "./lib/env.ts";
+import { environmentWithoutGitRepository } from "./lib/git-environment.ts";
 import { asArray, asRecord, asString } from "./lib/json.ts";
 
 void describe("ci-contract: server", () => {
@@ -802,7 +803,7 @@ void describe("ci-contract: server", () => {
 				":(glob).github/workflows/**",
 				":(glob).github/actions/**",
 			],
-			{ encoding: "utf8" },
+			{ encoding: "utf8", env: environmentWithoutGitRepository() },
 		);
 		assert.equal(tracked.status, 0, tracked.stderr);
 		const manifests = tracked.stdout.trim().split("\n");
