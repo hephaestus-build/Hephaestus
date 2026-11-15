@@ -1,7 +1,7 @@
 {
 	"pnpm-lock.yaml": {
 		"envPackages": 15,
-		"packages": 1941,
+		"packages": 1940,
 		"importers": {
 			".": {
 				"direct": {
@@ -46,11 +46,11 @@
 			"webapp": {
 				"direct": {
 					"prod": 33,
-					"dev": 45
+					"dev": 44
 				},
 				"transitive": {
 					"prod": 222,
-					"all": 1186
+					"all": 1185
 				}
 			}
 		}
