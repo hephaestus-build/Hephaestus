@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { once } from "node:events";
 import { test } from "node:test";
 
 import { normalizeContext, type Model } from "@earendil-works/pi-ai";
@@ -210,6 +211,81 @@ await test("the work deadline bounds a gateway wait", async () => {
 	assert.equal(modelFailure(result).source, "ADAPTER");
 });
 
+await test("a gateway that still refuses when the work ends is the gateway's loss, not a cancelled call", async () => {
+	let interrupted = 0;
+	const output = await waitForGateway(stream, Date.now() + 1200, {
+		unavailable: () => {
+			interrupted += 1;
+		},
+	})(model, context, {
+		...options,
+		fetch: async () => {
+			throw new TypeError("fetch failed", { cause: { code: "ECONNREFUSED" } });
+		},
+	});
+	await eventsFrom(output);
+	assert.equal(interrupted, 1);
+});
+
+await test("a refused gateway whose next attempt hangs until the work ends is the gateway's loss", async () => {
+	let calls = 0;
+	let interrupted = 0;
+	const output = await waitForGateway(stream, Date.now() + 1500, {
+		unavailable: () => {
+			interrupted += 1;
+		},
+	})(model, context, {
+		...options,
+		fetch: async (_input, init) => {
+			calls += 1;
+			if (calls === 1) {
+				throw new TypeError("fetch failed", { cause: { code: "ECONNREFUSED" } });
+			}
+			const signal = init?.signal;
+			assert.ok(signal);
+			await once(signal, "abort");
+			signal.throwIfAborted();
+			return completed();
+		},
+	});
+	await eventsFrom(output);
+	assert.equal(calls, 2);
+	assert.equal(interrupted, 1);
+});
+
+await test("cancellation of a hanging attempt after a refusal is not the gateway's loss", async () => {
+	const abort = new AbortController();
+	const hanging = Promise.withResolvers<undefined>();
+	let calls = 0;
+	let interrupted = 0;
+	const output = await waitForGateway(stream, Date.now() + 5000, {
+		unavailable: () => {
+			interrupted += 1;
+		},
+	})(model, context, {
+		...options,
+		signal: abort.signal,
+		fetch: async (_input, init) => {
+			calls += 1;
+			if (calls === 1) {
+				throw new TypeError("fetch failed", { cause: { code: "ECONNREFUSED" } });
+			}
+			const signal = init?.signal;
+			assert.ok(signal);
+			hanging.resolve(undefined);
+			await once(signal, "abort");
+			signal.throwIfAborted();
+			return completed();
+		},
+	});
+	await hanging.promise;
+	abort.abort();
+	await eventsFrom(output);
+	assert.equal(interrupted, 0);
+	const result = await output.result();
+	assert.equal(result.stopReason, "aborted");
+});
+
 await test("repeated lost responses stop as an infrastructure interruption without a model retry", async () => {
 	let calls = 0;
 	let interrupted = false;
@@ -241,11 +317,14 @@ await test("repeated lost responses stop as an infrastructure interruption witho
 });
 
 for (const providerCase of [
+	{ api: "openai-completions", provider },
 	{ api: "openai-responses", provider: openAIResponsesApi() },
 	{ api: "anthropic-messages", provider: anthropicMessagesApi() },
 ] as const) {
-	await test(`${providerCase.api} waits for a connection, then preserves a provider failure`, async () => {
+	await test(`${providerCase.api} waits for a connection, sends the same request again, then preserves a provider failure`, async () => {
 		let calls = 0;
+		// The wait sends the provider's own request again: its body must be one that can be read twice.
+		const bodies: unknown[] = [];
 		const native = (...args: Parameters<typeof providerCase.provider.streamSimple>) =>
 			providerCase.provider.streamSimple(...args);
 		const output = await waitForGateway(native, Date.now() + 5000)(
@@ -253,8 +332,9 @@ for (const providerCase of [
 			context,
 			{
 				...options,
-				fetch: async () => {
+				fetch: async (_input, init) => {
 					calls += 1;
+					bodies.push(init?.body);
 					if (calls === 1) {
 						throw new TypeError("fetch failed", { cause: { code: "ECONNREFUSED" } });
 					}
@@ -265,6 +345,8 @@ for (const providerCase of [
 		const events = await eventsFrom(output);
 		const result = await output.result();
 		assert.equal(calls, 2);
+		assert.equal(typeof bodies[0], "string");
+		assert.equal(bodies[1], bodies[0]);
 		assert.equal(events.filter((event) => event.type === "error").length, 1);
 		assert.equal(result.stopReason, "error");
 	});

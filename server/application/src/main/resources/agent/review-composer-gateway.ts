@@ -1,3 +1,4 @@
+import { untilGatewayTakes } from "./gateway-connection.ts";
 import {
 	type Answer,
 	type ModelSettings,
@@ -137,7 +138,11 @@ export interface Client {
 }
 
 export function compositionClient(gateway: Gateway): Client {
-	const send = gateway.fetch ?? globalThis.fetch;
+	const transport = gateway.fetch ?? globalThis.fetch;
+	const patience = gateway.signal ?? new AbortController().signal;
+	// A refused connection reached no server: a call waits for the gateway while the run's lease lasts.
+	const send: typeof fetch = async (input, init) =>
+		untilGatewayTakes(async () => transport(input, init), patience);
 	const headers = { ...gateway.headers, "content-type": "application/json" };
 
 	async function post(path: string, body: unknown): Promise<Response> {

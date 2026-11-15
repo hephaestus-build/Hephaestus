@@ -3,13 +3,15 @@ import { setTimeout as sleep } from "node:timers/promises";
 import { createAssistantMessageEventStream, type AssistantMessage } from "@earendil-works/pi-ai";
 import type { AgentSession } from "@earendil-works/pi-coding-agent";
 
-import { diagnose } from "./pi-diagnostics.ts";
-import { errorText } from "./pi-error-text.ts";
 import {
 	gatewayConnectionFailure,
 	GatewayUnavailableError,
+	GATEWAY_RECONNECT_MS,
 	MAX_GATEWAY_RESPONSE_REPLAYS,
-} from "./work/practice-scripts/lib/core/gateway-connection.ts";
+	untilGatewayTakes,
+} from "./gateway-connection.ts";
+import { diagnose } from "./pi-diagnostics.ts";
+import { errorText } from "./pi-error-text.ts";
 
 type Stream = AgentSession["agent"]["streamFunction"];
 
@@ -31,13 +33,38 @@ export function waitForGateway(
 		const transport = options?.fetch ?? globalThis.fetch;
 		let failure: "connection" | "response" | undefined;
 		const failureKind = () => failure;
+		// The work ended after the gateway refused the call: that is the gateway's loss, not a cancelled call.
+		let lostAtWorkEnd = false;
+		const lostWithWork = () => lostAtWorkEnd;
+		let waits = 0;
+		const waited = () => {
+			waits += 1;
+			observer.waiting?.();
+			if (Number.isInteger(Math.log2(waits))) {
+				diagnose("gateway.waiting", { waits });
+			}
+		};
 		const fetchGateway: typeof fetch = async (input, init) => {
 			failure = undefined;
+			// The deadline can cut a retry that hangs instead of refusing; the earlier refusal makes it the gateway's loss.
+			let refusals = 0;
 			let response: Response;
 			try {
-				response = await transport(input, init);
+				// A refused connection reached no server, so the call waits here until the gateway takes it.
+				response = await untilGatewayTakes(
+					async () => transport(input, init),
+					signal,
+					() => {
+						refusals += 1;
+						waited();
+					},
+				);
 			} catch (error) {
 				failure = isAborted() ? undefined : gatewayConnectionFailure(error);
+				lostAtWorkEnd =
+					deadline.aborted &&
+					options?.signal?.aborted !== true &&
+					(refusals > 0 || gatewayConnectionFailure(error) === "connection");
 				throw error;
 			}
 			if (response.body === null) {
@@ -86,7 +113,6 @@ export function waitForGateway(
 		void (async () => {
 			let started = false;
 			let lastFailure: AssistantMessage | undefined;
-			let waits = 0;
 			let lostResponses = 0;
 			function countResponseLoss(): void {
 				if (failureKind() !== "response") {
@@ -107,6 +133,9 @@ export function waitForGateway(
 				for (;;) {
 					let again = false;
 					for await (const event of current) {
+						if (event.type === "error" && lostWithWork()) {
+							observer.unavailable?.();
+						}
 						if (event.type === "error" && failureKind() !== undefined && !isAborted()) {
 							lastFailure = event.error;
 							countResponseLoss();
@@ -124,12 +153,8 @@ export function waitForGateway(
 						output.end(await current.result());
 						return;
 					}
-					waits += 1;
-					observer.waiting?.();
-					if (Number.isInteger(Math.log2(waits))) {
-						diagnose("gateway.waiting", { waits });
-					}
-					await sleep(1000, undefined, { signal });
+					waited();
+					await sleep(GATEWAY_RECONNECT_MS, undefined, { signal });
 					current = await call();
 				}
 			} catch (error) {

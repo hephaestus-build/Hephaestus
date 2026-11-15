@@ -29,6 +29,7 @@ import {
 	SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 
+import { GatewayUnavailableError } from "./gateway-connection.ts";
 import {
 	SANDBOX_RESOURCE_LOADER_OPTIONS,
 	SANDBOX_SETTINGS_MANAGER_OPTIONS,
@@ -45,7 +46,6 @@ import {
 	roomForSession,
 	SessionPace,
 } from "./pi-session-pace.ts";
-import { GatewayUnavailableError } from "./work/practice-scripts/lib/core/gateway-connection.ts";
 
 import {
 	type DeclaredSources,
@@ -656,6 +656,20 @@ export async function runReviewJob(): Promise<void> {
 	// The instant the watchdog below counts from. Every stage deadline starts later than this, so it is
 	// the only reading against which the process budget means anything.
 	const PROCESS_START_MS = Date.now();
+	// The sandbox stops the runner at its work deadline (gateway-run.ts), which counts from before the workspace download.
+	// A wait for the gateway ends early enough for the unreachable attempts (1 + 2 + 4 s) and the output, so an outage
+	// that outlasts the work exits retryable, not as a work timeout.
+	const GATEWAY_EXIT_RESERVE_MS = 15_000;
+	const sandboxWorkDeadline = Number(process.env.SANDBOX_WORK_DEADLINE_MS);
+	const gatewayPatienceEnd = Math.min(
+		PROCESS_START_MS + AGENT_BUDGET_MS,
+		Number.isSafeInteger(sandboxWorkDeadline)
+			? sandboxWorkDeadline - GATEWAY_EXIT_RESERVE_MS
+			: Number.POSITIVE_INFINITY,
+	);
+	/** Until then, a gateway call waits out a refused connection (gateway-connection.ts). */
+	const gatewayPatience = (): AbortSignal =>
+		AbortSignal.timeout(Math.max(0, gatewayPatienceEnd - Date.now()));
 
 	// Node's fetch gives up after 5 minutes without response headers, but a model call can wait longer
 	// for its pool's grant. The proxy answers or refuses every waiting call by the attempt's deadline,
@@ -807,6 +821,8 @@ export async function runReviewJob(): Promise<void> {
 	const skippedPractices = new Set<string>();
 	let stagingFailure: { error: unknown } | undefined;
 	let gatewayFailure: GatewayUnavailableError | undefined;
+	/** The failure that ended the first parallel session; a lost gateway exits retryable on both paths. */
+	let sessionFailure: { error: unknown } | undefined;
 	const runtimeReasons: Partial<Record<NonNullable<ProgramOutcome["stopReason"]>, string>> = {
 		budget: "BUDGET",
 		deadline: "DEADLINE",
@@ -851,6 +867,7 @@ export async function runReviewJob(): Promise<void> {
 						},
 						body,
 					}),
+				gatewayPatience(),
 			);
 			stagedPractices.add(practiceSlug);
 		} catch (error) {
@@ -1953,15 +1970,17 @@ export async function runReviewJob(): Promise<void> {
 
 	const RECORD_NUDGE = `This turn has the work left to write its result and no more. Stop exploring. Submit what the inspected evidence supports for this session's practice with submit_result. ${PERSIST_DISCIPLINE}`;
 
-	// The server interprets exit 75 as unreachable admission and retries the review.
+	// SandboxLayout owns each exit and what the server does with it; docs/contributor/agent-runs.mdx has the table.
+	// The gateway stayed unreachable until the work ended: the server retries the review.
 	const SERVER_UNREACHABLE_EXIT = 75;
-	// The server interprets exit 76 as provider failure without a recorded result and retries the review.
+	// No model call was answered and no result recorded: the server retries the review.
 	const PROVIDER_UNREACHABLE_EXIT = 76;
-	// The server answered staging or admission with its own error and ends the attempt, with no retry.
+	// The server answered staging or admission with its own error.
 	const SERVER_ERROR_EXIT = 77;
-	// The review staged what it could and left at least one practice without a result. The server decides from what is
-	// staged whether another attempt continues it; the code only tells this designed end from a failure.
+	// The review staged what it could and left at least one practice without a result.
 	const PARTIAL_REVIEW_EXIT = 78;
+	// An error that the runner has no class for.
+	const FATAL_EXIT = 2;
 
 	function readTaskEnvelope(): TaskEnvelope {
 		let raw: string;
@@ -2628,16 +2647,12 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 				thinkingLevel,
 			});
 			const scope = sessionState();
-			fresh.agent.streamFunction = waitForGateway(
-				fresh.agent.streamFunction,
-				PROCESS_START_MS + AGENT_BUDGET_MS,
-				{
-					waiting: () => {
-						scope.servedTurn ??= scope.modelWait.call();
-					},
-					unavailable: gatewayUnavailable,
+			fresh.agent.streamFunction = waitForGateway(fresh.agent.streamFunction, gatewayPatienceEnd, {
+				waiting: () => {
+					scope.servedTurn ??= scope.modelWait.call();
 				},
-			);
+				unavailable: gatewayUnavailable,
+			});
 			if (scope.currentTurn?.practiceSlug !== undefined) {
 				const stream = fresh.agent.streamFunction;
 				fresh.agent.streamFunction = (
@@ -2725,7 +2740,7 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 		const measuringEnded = new AbortController();
 		function gatewayUnavailable(): void {
 			gatewayFailure ??= new GatewayUnavailableError(
-				"The gateway repeatedly disconnected a model response",
+				"The gateway stayed unreachable until the work ended, or repeatedly disconnected a model response",
 			);
 			measuringEnded.abort(gatewayFailure);
 		}
@@ -2750,6 +2765,7 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 				processStartMs: PROCESS_START_MS,
 				measureEnd,
 				measuringEnded: measuringEnded.signal,
+				gatewayPatience,
 			},
 			practices: {
 				practiceAt,
@@ -2850,6 +2866,8 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 							stalledStarts.abort();
 						}
 					} catch (error) {
+						// The first failure in time is the cause; the abort below can fail the other sessions after it.
+						sessionFailure ??= { error };
 						measurementClosed = true;
 						unreachedReason = "error";
 						measuringEnded.abort(
@@ -2931,6 +2949,11 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 		if (gatewayFailure !== undefined) {
 			throw gatewayFailure;
 		}
+		// A lost gateway or our server's own error decides the exit, as on the serial path. Any other session failure
+		// leaves what the other sessions staged to the partial exit.
+		if (sessionFailure !== undefined && exitCodeOf(sessionFailure.error) !== FATAL_EXIT) {
+			throw sessionFailure.error;
+		}
 		if (stagingFailure !== undefined) {
 			throw stagingFailure.error;
 		}
@@ -2982,6 +3005,7 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 					},
 					body,
 				}),
+			gatewayPatience(),
 		);
 		diagnose("review.succeeded", { results: reviewState.size });
 		finalizeOutput();
@@ -3013,7 +3037,7 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 		if (error instanceof AdmissionUnreachableError || error instanceof GatewayUnavailableError) {
 			return SERVER_UNREACHABLE_EXIT;
 		}
-		return isAdmissionServerError(error) ? SERVER_ERROR_EXIT : 2;
+		return isAdmissionServerError(error) ? SERVER_ERROR_EXIT : FATAL_EXIT;
 	}
 
 	async function run(): Promise<void> {

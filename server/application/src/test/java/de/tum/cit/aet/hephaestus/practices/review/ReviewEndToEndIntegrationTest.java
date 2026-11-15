@@ -85,6 +85,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.atomic.AtomicReference;
 import mockwebserver3.Dispatcher;
 import mockwebserver3.MockResponse;
 import mockwebserver3.MockWebServer;
@@ -293,6 +294,33 @@ class ReviewEndToEndIntegrationTest extends AbstractWorkspaceIntegrationTest {
     @Test
     void shouldMeasureThePracticeWhenTheWorkDidNotChange() {
         assertMeasured(review(Between.NOTHING));
+    }
+
+    /**
+     * The only server is lost while the sandbox measures. The runner exits retryable once its work ends, so the attempt
+     * runs again: a lost server is never a finding about the work, nor a failed review.
+     */
+    @Test
+    void shouldRunTheAttemptAgainWhenItsServerIsLostDuringExecution() {
+        var lost = new AtomicReference<Map<String, @Nullable Object>>();
+        sandbox.loseGatewayDuringNextMeasurement(runId -> lost.set(jdbc.queryForMap(
+                "SELECT j.status AS job, j.exit_code, j.capture IS NOT NULL AS prepared, r.state AS run, r.attempt,"
+                        + " v.status AS review, v.stop_reason FROM review_job j JOIN agent_run r ON r.id = j.run_id"
+                        + " JOIN review v ON v.id = j.review_id WHERE j.run_id = ?::uuid",
+                runId)));
+
+        var reviewed = review(Between.NOTHING);
+
+        assertThat(lost.get())
+                .as("the lost attempt waits for its next one, with one retry spent: %s", reviewed.calls())
+                .containsEntry("job", "QUEUED")
+                .containsEntry("exit_code", null)
+                .containsEntry("prepared", true)
+                .containsEntry("run", "QUEUED")
+                .containsEntry("attempt", 1)
+                .containsEntry("stop_reason", null);
+        assertThat(lost.get().get("review")).isIn("QUEUED", "RUNNING");
+        assertMeasured(reviewed);
     }
 
     @Test

@@ -31,6 +31,7 @@ public final class PracticeRunnerProfile implements PiRunnerProfile {
             "pi-practice-scripts-report.js",
             "pi-error-text.js",
             "pi-gateway-wait.js",
+            "gateway-connection.js",
             "pi-model-failure.js",
             "pi-text.js",
             "pi-result-normalize.js",
