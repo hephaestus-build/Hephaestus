@@ -12,6 +12,8 @@ import { initialize, mswLoader } from "msw-storybook-addon";
 import { createContext, type ReactNode, useContext, useState } from "react";
 import { sb } from "storybook/test";
 
+import { loadFeedbackMarkdown } from "@/components/admin/practice-reviews/FeedbackBody";
+import { loadMarkdownRenderer } from "@/components/common/UntrustedMarkdown";
 import { stackInSearch } from "@/components/layout/detail-drawer/detail-stack";
 import { Toaster } from "@/components/ui/sonner";
 import { ROUTER_SEARCH } from "@/lib/router-search";
@@ -187,11 +189,10 @@ const preview: Preview = {
 	},
 	loaders: [
 		mswLoader,
-		// The app fetches the Markdown renderer on first use. Loading it before a story keeps that fetch,
-		// and the dev server's first transform of it, out of whichever story renders Markdown first, so
-		// a story waits only for React to resolve the lazy component.
+		// The app loads the Markdown renderers on first use. Loading them before each story renders its
+		// Markdown in the same pass as the rest of it, so a play function can read it at once.
 		async () => {
-			await import("@/components/common/UntrustedMarkdownRenderer");
+			await Promise.all([loadMarkdownRenderer(), loadFeedbackMarkdown()]);
 			return {};
 		},
 	],

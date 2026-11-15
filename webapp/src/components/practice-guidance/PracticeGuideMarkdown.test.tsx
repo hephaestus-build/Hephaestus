@@ -1,6 +1,8 @@
 import { render, screen } from "@testing-library/react";
 import { beforeAll, describe, expect, it } from "vitest";
 
+import { loadMarkdownRenderer } from "@/components/common/UntrustedMarkdown";
+
 import { PracticeGuideMarkdown } from "./PracticeGuideMarkdown";
 
 const FIGURE = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><rect class="pv-fill-accent" width="10" height="10"/></svg>`;
@@ -16,10 +18,9 @@ Split by goal.
 ![A figure the guide does not carry](figures/missing.svg)
 `;
 
-// Loaded up front, as on a page that showed Markdown before: a test waits only for React to resolve
-// the lazy renderer, not for its first import.
+// Loaded up front, as on a page that showed Markdown before, so the Markdown renders in the same pass.
 beforeAll(async () => {
-	await import("@/components/common/UntrustedMarkdownRenderer");
+	await loadMarkdownRenderer();
 });
 
 describe("PracticeGuideMarkdown", () => {
