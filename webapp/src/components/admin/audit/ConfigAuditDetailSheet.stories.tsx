@@ -100,6 +100,13 @@ export const RawSnapshotsRevealed: Story = {
 		await expect(trigger).toHaveAttribute("aria-expanded", "false");
 		await userEvent.click(trigger);
 		await expect(trigger).toHaveAttribute("aria-expanded", "true");
+		// Each snapshot is titled with its side of the change and copies as stored.
+		await expectSettledVisible(await body.findByText("Before"));
+		await expect(body.getByRole("button", { name: "Copy before snapshot" })).toBeEnabled();
+		await expect(body.getByRole("button", { name: "Copy after snapshot" })).toBeEnabled();
+		await expect(body.getByText("After").closest("[data-slot=code-block]")).toHaveTextContent(
+			'"timeoutSeconds": 900',
+		);
 	},
 };
 

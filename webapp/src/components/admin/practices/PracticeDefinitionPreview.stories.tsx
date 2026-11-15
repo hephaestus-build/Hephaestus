@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect, userEvent, within } from "storybook/test";
+import { expect, userEvent, waitFor, within } from "storybook/test";
 
 import {
 	definitionOf,
@@ -56,7 +56,11 @@ export const Complete: Story = {
 		await expect(row("Version")).toHaveTextContent("Version 4");
 		await expect(canvas.queryByText(/definePracticeScript/u)).not.toBeInTheDocument();
 		await userEvent.click(canvas.getByRole("button", { name: "Practice script" }));
-		await expect(canvas.getByText(/definePracticeScript/u)).toBeVisible();
+		// Each source line is separate; both the import and the call name the helper.
+		await waitFor(async () => {
+			await expect(canvas.getAllByText(/definePracticeScript/u)[0]).toBeVisible();
+		});
+		await expect(canvas.getByRole("button", { name: "Copy practice script" })).toBeEnabled();
 		const decides = canvas.getByRole("button", { name: "How it decides" });
 		await expect(precedes(settings, decides)).toBe(true);
 	},

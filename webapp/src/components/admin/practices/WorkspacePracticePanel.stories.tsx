@@ -207,7 +207,7 @@ export const PracticeScriptSource: Story = {
 	args: { state: scripted },
 	play: async () => {
 		await openScript();
-		const source = await screen.findByText(/definePracticeScript/u);
+		const source = await screen.findByText(/export default definePracticeScript/u);
 		await expectSettledVisible(source);
 		await expect(source.closest("pre")).toHaveAttribute("tabindex", "0");
 	},

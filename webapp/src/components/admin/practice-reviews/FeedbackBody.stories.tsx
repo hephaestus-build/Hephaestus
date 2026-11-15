@@ -63,6 +63,7 @@ export const SwitchToSource: Story = {
 		await expect(canvas.getByRole("tabpanel", { name: "Source" }).textContent).toContain(
 			"## What worked",
 		);
+		await expect(canvas.getByRole("button", { name: "Copy source" })).toBeEnabled();
 		await expect(source).toHaveAttribute("aria-selected", "true");
 		await expect(rendered).toHaveAttribute("aria-selected", "false");
 		// The view left behind goes: one panel, and no heading from the Markdown it was showing.

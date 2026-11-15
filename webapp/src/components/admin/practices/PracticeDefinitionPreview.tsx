@@ -20,6 +20,12 @@ import {
 	AccordionTrigger,
 } from "@/components/ui/accordion";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import {
+	CodeBlock,
+	CodeBlockActions,
+	CodeBlockContent,
+	CodeBlockCopyButton,
+} from "@/components/ui/code-block";
 import { Separator } from "@/components/ui/separator";
 
 export interface PracticeDefinitionPreviewProps {
@@ -183,13 +189,14 @@ export function PracticeDefinitionPreview({
 					<AccordionItem value="practice-script">
 						<AccordionTrigger headingLevel={headingLevel}>Practice script</AccordionTrigger>
 						<AccordionContent>
-							<pre
-								// oxlint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- Keyboard users must be able to scroll this region.
-								tabIndex={0}
-								className="max-h-80 overflow-auto rounded-md bg-muted p-3 text-xs"
-							>
-								<code>{script}</code>
-							</pre>
+							<CodeBlock size="sm">
+								<CodeBlockActions>
+									<CodeBlockCopyButton value={script} aria-label="Copy practice script" />
+								</CodeBlockActions>
+								<CodeBlockContent lineNumbers className="max-h-80">
+									{script}
+								</CodeBlockContent>
+							</CodeBlock>
 						</AccordionContent>
 					</AccordionItem>
 				)}

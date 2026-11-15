@@ -1,8 +1,9 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect } from "storybook/test";
+import { expect, waitFor } from "storybook/test";
 
 import { definitionOf, mockScan } from "@/components/admin/practice-editor/fixtures";
 
+import { practiceScript } from "./fixtures";
 import { PracticeDefinitionFieldValue } from "./PracticeDefinitionFieldValue";
 
 const meta = {
@@ -24,6 +25,21 @@ export const BuiltInScript: Story = {
 	args: { field: "SCRIPT" },
 	play: async ({ canvas }) => {
 		await expect(canvas.getByText("Built-in")).toBeVisible();
+	},
+};
+
+/**
+ * A practice script is the one field that is code, so it is numbered by line and can be copied.
+ * Every other field is prose and keeps the reading face.
+ */
+export const Script: Story = {
+	args: { field: "SCRIPT", definition: definitionOf({ script: practiceScript() }) },
+	play: async ({ canvas }) => {
+		await expect(canvas.getByRole("button", { name: "Copy practice script" })).toBeEnabled();
+		await waitFor(async () => {
+			// One line per element: the import names it, and so does the call.
+			await expect(canvas.getAllByText(/definePracticeScript/u)[0]).toBeVisible();
+		});
 	},
 };
 
