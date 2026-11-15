@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -19,14 +20,20 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRep
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubExceptionClassifier;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubGraphQlClientProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubGraphQlSyncCoordinator;
+import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubGraphQlSyncCoordinator.GraphQlClassificationContext;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubSyncProperties;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.GitHubGraphQlTestMapper;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.testconfig.TestEntities;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.net.SocketTimeoutException;
 import java.time.Duration;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import mockwebserver3.MockResponse;
 import mockwebserver3.MockWebServer;
 import org.junit.jupiter.api.AfterEach;
@@ -35,6 +42,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.ArgumentCaptor;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.graphql.client.HttpGraphQlClient;
@@ -49,6 +57,8 @@ import org.springframework.web.reactive.function.client.ClientResponse;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Scheduler;
+import reactor.test.scheduler.VirtualTimeScheduler;
 
 class GitHubRepositorySyncServiceTest extends BaseUnitTest {
     private MockWebServer upstream;
@@ -90,7 +100,8 @@ class GitHubRepositorySyncServiceTest extends BaseUnitTest {
                 webClient,
                 new TransactionTemplate(mock(PlatformTransactionManager.class)),
                 List.of(),
-                List.of());
+                List.of(),
+                VirtualTimeScheduler.create());
     }
 
     @ParameterizedTest
@@ -309,7 +320,95 @@ class GitHubRepositorySyncServiceTest extends BaseUnitTest {
                 webClient,
                 new TransactionTemplate(mock(PlatformTransactionManager.class)),
                 filters,
-                targets);
+                targets,
+                VirtualTimeScheduler.create());
+    }
+
+    /** The timeout counts on {@code timeouts}: a virtual clock fires it only when a test advances it. */
+    private static GitHubRepositorySyncService syncService(
+            GitHubGraphQlClientProvider clients,
+            GitHubGraphQlSyncCoordinator coordinator,
+            RepositoryRepository repositories,
+            OrganizationRepository organizations,
+            WebClient webClient,
+            Scheduler timeouts) {
+        var properties = mock(GitHubSyncProperties.class);
+        lenient().when(properties.graphqlTimeout()).thenReturn(Duration.ofSeconds(2));
+        return new GitHubRepositorySyncService(
+                clients,
+                repositories,
+                organizations,
+                properties,
+                new GitHubExceptionClassifier(new SimpleMeterRegistry()),
+                coordinator,
+                webClient,
+                new TransactionTemplate(mock(PlatformTransactionManager.class)),
+                List.of(),
+                List.of(),
+                timeouts);
+    }
+
+    @Test
+    void shouldRetryAFailureOutsideTheResponseAsItsPolicySaysThenSkipTheRound() {
+        var clients = mock(GitHubGraphQlClientProvider.class);
+        when(clients.forScope(7L))
+                .thenThrow(new UncheckedIOException(new SocketTimeoutException("installation token request")));
+        var coordinator = mock(GitHubGraphQlSyncCoordinator.class);
+        // The policy, not this test, owns the backoff: it allows two retries and then gives up.
+        when(coordinator.handleGraphQlClassification(any())).thenReturn(true, true, false);
+        var repositories = mock(RepositoryRepository.class);
+        var organizations = mock(OrganizationRepository.class);
+        var service = syncService(
+                clients, coordinator, repositories, organizations, WebClient.create(), VirtualTimeScheduler.create());
+
+        assertThat(service.syncRepository(
+                        7L, "course/project", TestEntities.gitProvider(100L, IdentityProviderType.GITHUB), 123L))
+                .isEmpty();
+
+        var asked = ArgumentCaptor.forClass(GraphQlClassificationContext.class);
+        verify(coordinator, times(3)).handleGraphQlClassification(asked.capture());
+        assertThat(asked.getAllValues())
+                .extracting(GraphQlClassificationContext::retryAttempt)
+                .containsExactly(0, 1, 2);
+        assertThat(asked.getAllValues())
+                .extracting(context -> context.classification().category())
+                .containsOnly(GitHubExceptionClassifier.Category.RETRYABLE);
+        verify(clients, times(3)).forScope(7L);
+        verifyNoInteractions(repositories, organizations);
+    }
+
+    @Test
+    void shouldTreatAGitHubThatDoesNotAnswerWithinTheTimeoutAsRetryable() throws Exception {
+        var requested = new CountDownLatch(1);
+        var webClient = WebClient.builder()
+                .exchangeFunction(request -> {
+                    requested.countDown();
+                    return Mono.never();
+                })
+                .build();
+        var clients = mock(GitHubGraphQlClientProvider.class);
+        when(clients.forScope(7L))
+                .thenReturn(HttpGraphQlClient.builder(webClient)
+                        .documentSource(new ResourceDocumentSource(new ClassPathResource("graphql/github/operations/")))
+                        .build());
+        var coordinator = mock(GitHubGraphQlSyncCoordinator.class);
+        var repositories = mock(RepositoryRepository.class);
+        var organizations = mock(OrganizationRepository.class);
+        var clock = VirtualTimeScheduler.create();
+        var service = syncService(clients, coordinator, repositories, organizations, webClient, clock);
+
+        var synced = CompletableFuture.supplyAsync(() -> service.syncRepository(
+                7L, "course/project", TestEntities.gitProvider(100L, IdentityProviderType.GITHUB), 123L));
+        // The exchange is under way: only the virtual clock can end it now. The waits keep a broken test from hanging.
+        assertThat(requested.await(1, TimeUnit.MINUTES)).isTrue();
+        clock.advanceTimeBy(Duration.ofSeconds(2));
+
+        assertThat(synced.get(1, TimeUnit.MINUTES)).isEmpty();
+        var asked = ArgumentCaptor.forClass(GraphQlClassificationContext.class);
+        verify(coordinator).handleGraphQlClassification(asked.capture());
+        assertThat(asked.getValue().classification().category())
+                .isEqualTo(GitHubExceptionClassifier.Category.RETRYABLE);
+        verifyNoInteractions(repositories, organizations);
     }
 
     @ParameterizedTest
