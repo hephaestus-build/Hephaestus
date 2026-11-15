@@ -2,6 +2,7 @@ import { render, screen, within } from "@testing-library/react";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 
 import type { EvidenceCitation, ResultDetail } from "@/api/types.gen";
+import { loadMarkdownRenderer } from "@/components/common/UntrustedMarkdown";
 import { detailResult, listedResult } from "@/stories/practice-detail-story-mock-data";
 
 import { ReviewResultRow, type ReviewResultRowProps } from "./ReviewResultRow";
@@ -47,10 +48,9 @@ const core = (quote: string): EvidenceCitation => ({
 
 const NO_EVIDENCE = { citations: [], openQuestions: [], search: null, inapplicability: null };
 
-// Loaded up front, as on a page that showed Markdown before: a test waits only for React to resolve
-// the lazy renderer, not for its first import.
+// Loaded up front, as on a page that showed Markdown before, so the Markdown renders in the same pass.
 beforeAll(async () => {
-	await import("@/components/common/UntrustedMarkdownRenderer");
+	await loadMarkdownRenderer();
 });
 
 describe("ReviewResultRow", () => {

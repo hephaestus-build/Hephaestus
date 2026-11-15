@@ -1,17 +1,21 @@
 import { CatchBoundary } from "@tanstack/react-router";
-import { lazy, type ReactNode, Suspense } from "react";
+import { type ReactNode, Suspense } from "react";
 import { useSpinDelay } from "spin-delay";
 
 import { Skeleton } from "@/components/ui/skeleton";
+import { lazyComponent, useLazyComponent } from "@/lib/lazy-component";
 
 /**
  * The Markdown stack (the parser, the HTML tree tools and the renderer) loads the first time a page
  * shows Markdown, so a page without formatted text does not carry it.
  */
-const UntrustedMarkdownRenderer = lazy(async () => {
+const markdownRenderer = lazyComponent<UntrustedMarkdownProps>(async () => {
 	const renderer = await import("@/components/common/UntrustedMarkdownRenderer");
-	return { default: renderer.UntrustedMarkdownRenderer };
+	return renderer.UntrustedMarkdownRenderer;
 });
+
+/** Loads the Markdown renderer ahead of its first use, so Markdown then renders in the same pass. */
+export const loadMarkdownRenderer = markdownRenderer.preload;
 
 /**
  * Two departures from Tailwind Typography's defaults, which are sized for an article rather than a
@@ -86,9 +90,10 @@ export function UntrustedMarkdownLoading() {
  * they already have, so the prose scope cannot end up nested inside itself.
  */
 export function UntrustedMarkdown(props: UntrustedMarkdownProps) {
+	const Renderer = useLazyComponent(markdownRenderer);
 	return (
 		<LazyMarkdown source={props.children}>
-			<UntrustedMarkdownRenderer {...props} />
+			<Renderer {...props} />
 		</LazyMarkdown>
 	);
 }

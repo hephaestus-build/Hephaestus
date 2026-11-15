@@ -1,5 +1,3 @@
-import { lazy } from "react";
-
 import type { ReviewFeedback } from "@/api/types.gen";
 import { UNTRUSTED_MARKDOWN_PROSE, LazyMarkdown } from "@/components/common/UntrustedMarkdown";
 import { ADMIN_WITHHELD_TEXT } from "@/components/practice-vocabulary/feedback-destination-defs";
@@ -11,12 +9,16 @@ import {
 	CodeBlockCopyButton,
 } from "@/components/ui/code-block";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { lazyComponent, useLazyComponent } from "@/lib/lazy-component";
 import { hasText } from "@/lib/text";
 
-const FeedbackMarkdown = lazy(async () => {
+const feedbackMarkdown = lazyComponent<{ body: string }>(async () => {
 	const markdown = await import("./FeedbackMarkdown");
-	return { default: markdown.FeedbackMarkdown };
+	return markdown.FeedbackMarkdown;
 });
+
+/** Loads the feedback renderer ahead of its first use, so a body then renders in the same pass. */
+export const loadFeedbackMarkdown = feedbackMarkdown.preload;
 
 export type FeedbackBodyFeedback = Pick<ReviewFeedback, "destination" | "textHidden"> & {
 	body: string | null;
@@ -29,6 +31,7 @@ export interface FeedbackBodyProps {
 
 export function FeedbackBody({ feedback, className }: FeedbackBodyProps) {
 	const { body } = feedback;
+	const FeedbackMarkdown = useLazyComponent(feedbackMarkdown);
 	const withheld = ADMIN_WITHHELD_TEXT[feedback.destination];
 
 	// Private-destination text must stay hidden even if the caller supplies it.

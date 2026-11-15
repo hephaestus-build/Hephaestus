@@ -187,11 +187,15 @@ const preview: Preview = {
 	},
 	loaders: [
 		mswLoader,
-		// The app fetches the Markdown renderer on first use. Loading it before a story keeps that fetch,
-		// and the dev server's first transform of it, out of whichever story renders Markdown first, so
-		// a story waits only for React to resolve the lazy component.
+		// The app loads the Markdown renderers on first use. Loading them before each story renders its
+		// Markdown in the same pass as the rest of it, so a play function can read it at once. The
+		// modules load dynamically so they stay out of the preview runtime chunk and its size budget.
 		async () => {
-			await import("@/components/common/UntrustedMarkdownRenderer");
+			const [{ loadMarkdownRenderer }, { loadFeedbackMarkdown }] = await Promise.all([
+				import("@/components/common/UntrustedMarkdown"),
+				import("@/components/admin/practice-reviews/FeedbackBody"),
+			]);
+			await Promise.all([loadMarkdownRenderer(), loadFeedbackMarkdown()]);
 			return {};
 		},
 	],

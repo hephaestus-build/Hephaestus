@@ -12,6 +12,8 @@ import { act, render } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, expect, vi } from "vitest";
 
+import { loadFeedbackMarkdown } from "@/components/admin/practice-reviews/FeedbackBody";
+import { loadMarkdownRenderer } from "@/components/common/UntrustedMarkdown";
 import { PageSkeleton } from "@/components/layout/PageSkeleton";
 import { ROUTER_SEARCH } from "@/lib/router-search";
 import { routeTree } from "@/routeTree.gen";
@@ -97,8 +99,8 @@ export async function loadRouteCode(...paths: string[]): Promise<void> {
 	// These React.lazy modules load outside the router's split route chunks: the root layout mounts
 	// the conversation panel, and any page that shows Markdown mounts the renderers.
 	await import("@/routes/-GlobalConversationPanel");
-	await import("@/components/common/UntrustedMarkdownRenderer");
-	await import("@/components/admin/practice-reviews/FeedbackMarkdown");
+	await loadMarkdownRenderer();
+	await loadFeedbackMarkdown();
 	const router = createRouter({
 		...ROUTER_SEARCH,
 		routeTree,
