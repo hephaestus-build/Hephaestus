@@ -23,6 +23,11 @@ public final class AgentMetrics {
     public static final String AGENT_RUN_SAMPLER_FAILURE = "agent.run.sampler.failure";
     /** From a run's {@code available_at} to its claim, by kind and band; recorded after the claim committed. */
     public static final String AGENT_RUN_CLAIM_WAIT = "agent.run.claim.wait";
+    /**
+     * Claims that could not start their run and deferred it, by kind and reason: {@code locked} while a lifecycle write
+     * holds its domain row, {@code model_pool} while its model pool has review calls waiting.
+     */
+    public static final String AGENT_RUN_DEFERRED = "agent.run.deferred";
 
     public static final String EVIDENCE_RECONCILE_LAST_SUCCESS = "evidence.reconcile.last.success";
     public static final String EVIDENCE_RECONCILE_FAILURES = "evidence.reconcile.failures";

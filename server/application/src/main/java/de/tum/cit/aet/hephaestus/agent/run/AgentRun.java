@@ -91,6 +91,13 @@ public class AgentRun {
     private @Nullable AgentRunHold holdReason;
 
     /**
+     * Until when no claim takes the queued run, because its last claim could not start it ({@link AgentRuns#defer}). It
+     * stays due since {@code available_at}, so it keeps its place in the claim order and its wait counts.
+     */
+    @Column(name = "deferred_until")
+    private @Nullable Instant deferredUntil;
+
+    /**
      * How long the run may wait to start once it is due ({@code available_at}) and nothing of its subject is ahead of
      * it; past that it ends as {@link AgentRunStopReason#NOT_STARTED}. A requeue makes it due again, so a retry gets
      * the same wait.

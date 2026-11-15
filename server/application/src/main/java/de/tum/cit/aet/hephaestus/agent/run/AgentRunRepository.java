@@ -87,6 +87,11 @@ interface AgentRunRepository extends JpaRepository<AgentRun, UUID> {
                                      ))))
             """;
 
+    /** A deferred run waits for its {@code deferred_until}; the run gauges still count it as due. */
+    String NOT_DEFERRED = """
+              AND (r.deferred_until IS NULL OR r.deferred_until <= clock_timestamp())
+            """;
+
     String ORDER = """
             ORDER BY CASE WHEN r.band = 'INTERACTIVE' THEN 0
                           ELSE GREATEST(1, (CASE r.band WHEN 'BATCH' THEN 1 ELSE 2 END)
@@ -121,7 +126,7 @@ interface AgentRunRepository extends JpaRepository<AgentRun, UUID> {
     @Query(value = """
             SELECT r.id AS id, r.workspace_id AS "workspaceId", r.kind AS kind,
                    r.concurrency_key AS "concurrencyKey"
-            """ + CLAIMABLE + """
+            """ + CLAIMABLE + NOT_DEFERRED + """
                 AND r.kind IN (:kinds)
             """ + ORDER + """
             LIMIT :limit
@@ -132,7 +137,7 @@ interface AgentRunRepository extends JpaRepository<AgentRun, UUID> {
             @Param("agingSeconds") long agingSeconds);
 
     String LEASE = """
-            UPDATE agent_run r SET state = 'LEASED', lease_epoch = r.lease_epoch + 1, hold_reason = NULL,
+            UPDATE agent_run r SET state = 'LEASED', lease_epoch = r.lease_epoch + 1, hold_reason = NULL, deferred_until = NULL,
                    leased_until = clock_timestamp() + make_interval(secs =>""" + LEASE_SECONDS + """
             ),
                    started_at = COALESCE(r.started_at, clock_timestamp())
@@ -144,10 +149,12 @@ interface AgentRunRepository extends JpaRepository<AgentRun, UUID> {
             """;
 
     @WorkspaceAgnostic("The claim offers the queued runs of every workspace, in fair-share order")
-    @Query(value = "WITH picked AS (SELECT r.id " + CLAIMABLE + """
+    @Query(
+            value = "WITH picked AS (SELECT r.id " + CLAIMABLE + NOT_DEFERRED + """
                 AND r.kind IN (:kinds)
                 AND (:#{#excluded.isEmpty()} OR r.id NOT IN (:excluded))
-            """ + CLAIM_ORDER + ")" + LEASE, nativeQuery = true)
+            """ + CLAIM_ORDER + ")" + LEASE,
+            nativeQuery = true)
     Optional<LeaseRow> claim(
             @Param("kinds") Collection<String> kinds,
             @Param("excluded") Collection<UUID> excluded,
@@ -156,9 +163,11 @@ interface AgentRunRepository extends JpaRepository<AgentRun, UUID> {
             @Param("agingSeconds") long agingSeconds);
 
     /** The claim of one subject, for the sandbox that serves only it: the same rule and order, within one subject. */
-    @Query(value = "WITH picked AS (SELECT r.id " + CLAIMABLE + """
+    @Query(
+            value = "WITH picked AS (SELECT r.id " + CLAIMABLE + NOT_DEFERRED + """
                 AND r.workspace_id = :workspaceId AND r.concurrency_key = :concurrencyKey AND r.kind IN (:kinds)
-            """ + CLAIM_ORDER + ")" + LEASE, nativeQuery = true)
+            """ + CLAIM_ORDER + ")" + LEASE,
+            nativeQuery = true)
     Optional<LeaseRow> claimSubject(
             @Param("workspaceId") long workspaceId,
             @Param("concurrencyKey") String concurrencyKey,
@@ -286,6 +295,33 @@ interface AgentRunRepository extends JpaRepository<AgentRun, UUID> {
             @Param("delaySeconds") long delaySeconds,
             @Param("hold") @Nullable String hold);
 
+    /** A deferred run, as {@link #defer} left it: its kind, its subject and how long it has been due. */
+    interface DeferredRow {
+        String getKind();
+
+        String getConcurrencyKey();
+
+        double getDueSeconds();
+    }
+
+    /**
+     * The holder's requeue of a run that it could not start ({@link AgentRuns#defer}): {@code available_at} stays, and
+     * no claim takes the run for {@code :waitSeconds}.
+     */
+    @Query(value = """
+            UPDATE agent_run SET state = 'QUEUED', leased_until = NULL,
+                   deadline = CASE WHEN kind = 'REVIEW_COMPOSE' THEN deadline ELSE NULL END,
+                   deferred_until = clock_timestamp() + make_interval(secs => :waitSeconds)
+             WHERE id = :runId AND workspace_id = :workspaceId AND lease_epoch = :epoch AND state = 'LEASED'
+            RETURNING kind AS kind, concurrency_key AS "concurrencyKey",
+                      EXTRACT(EPOCH FROM clock_timestamp() - available_at)::double precision AS "dueSeconds"
+            """, nativeQuery = true)
+    Optional<DeferredRow> defer(
+            @Param("runId") UUID runId,
+            @Param("workspaceId") long workspaceId,
+            @Param("epoch") int epoch,
+            @Param("waitSeconds") long waitSeconds);
+
     /**
      * A holder's end. It keeps the caller's persistence context: a holder ends its run with its domain row, and the
      * row's later writes in the same transaction must not land on a detached entity.
@@ -304,7 +340,7 @@ interface AgentRunRepository extends JpaRepository<AgentRun, UUID> {
 
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query(value = """
-            UPDATE agent_run SET state = 'ENDED', leased_until = NULL, hold_reason = NULL, stop_reason = 'CANCELLED',
+            UPDATE agent_run SET state = 'ENDED', leased_until = NULL, hold_reason = NULL, deferred_until = NULL, stop_reason = 'CANCELLED',
                    ended_at = clock_timestamp()
              WHERE id = :runId AND workspace_id = :workspaceId AND state <> 'ENDED'
             """, nativeQuery = true)
@@ -313,7 +349,7 @@ interface AgentRunRepository extends JpaRepository<AgentRun, UUID> {
     @WorkspaceAgnostic("A fleet-wide verdict ends the runs it selected in every workspace")
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query(value = """
-            UPDATE agent_run SET state = 'ENDED', leased_until = NULL, hold_reason = NULL, stop_reason = 'CANCELLED',
+            UPDATE agent_run SET state = 'ENDED', leased_until = NULL, hold_reason = NULL, deferred_until = NULL, stop_reason = 'CANCELLED',
                    ended_at = clock_timestamp()
              WHERE id IN (:runIds) AND state <> 'ENDED'
             """, nativeQuery = true)
@@ -449,7 +485,7 @@ interface AgentRunRepository extends JpaRepository<AgentRun, UUID> {
 
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query(value = """
-            UPDATE agent_run SET state = 'ENDED', leased_until = NULL, hold_reason = NULL, stop_reason = :reason,
+            UPDATE agent_run SET state = 'ENDED', leased_until = NULL, hold_reason = NULL, deferred_until = NULL, stop_reason = :reason,
                    attempt = attempt + CASE WHEN state = 'LEASED' THEN 1 ELSE 0 END, ended_at = clock_timestamp()
              WHERE id = :runId AND workspace_id = :workspaceId AND lease_epoch = :epoch
                AND ((state = 'LEASED' AND (leased_until < clock_timestamp() OR deadline <= clock_timestamp()))

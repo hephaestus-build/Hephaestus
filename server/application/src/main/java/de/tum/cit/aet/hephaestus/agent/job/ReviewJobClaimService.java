@@ -44,8 +44,6 @@ public class ReviewJobClaimService {
     private static final Logger log = LoggerFactory.getLogger(ReviewJobClaimService.class);
     private static final Duration BUDGET_HOLD_INTERVAL = Duration.ofHours(1);
     private static final Duration BUDGET_HOLD_MAX_JOB_AGE = Duration.ofDays(7);
-    /** How long a run waits when a lifecycle write or its model pool held its claim. */
-    private static final Duration LOCKED_RETRY = Duration.ofSeconds(2);
 
     private final ReviewJobRepository jobRepository;
     private final ReviewMemberAiPolicy memberAiPolicy;
@@ -132,8 +130,8 @@ public class ReviewJobClaimService {
                         ? Optional.empty()
                         : jobRepository.lockQueuedByRun(fence.runId(), fence.workspaceId());
         if (locked.isEmpty()) {
-            // A lifecycle write holds the review or its job; the run waits for the next pull.
-            runs.requeue(fence, AgentRuns.Charge.FREE, LOCKED_RETRY, null);
+            // A lifecycle write holds the review or its job; the run waits for a later pull.
+            runs.defer(fence, AgentRuns.Deferral.LOCKED);
             return Optional.empty();
         }
         ReviewJob job = locked.get();
@@ -153,7 +151,7 @@ public class ReviewJobClaimService {
                     yield Optional.empty();
                 }
                 case PoolWait waiting -> {
-                    runs.requeue(fence, AgentRuns.Charge.FREE, LOCKED_RETRY, null);
+                    runs.defer(fence, AgentRuns.Deferral.MODEL_POOL);
                     yield Optional.empty();
                 }
                 case ClaimOutcome held -> {

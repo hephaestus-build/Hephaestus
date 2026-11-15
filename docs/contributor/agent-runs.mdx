@@ -53,12 +53,12 @@ config:
 stateDiagram-v2
     direction TB
     accTitle: Lifecycle of an agent run
-    accDescr: enqueue or a continuation creates a run in QUEUED. A hold, a release of holds or a move to another subject keeps it QUEUED. A claim leases it and raises its epoch. A renewal keeps it LEASED. The holder's requeue, or the reaper for an expired lease with attempts left, queues it again. It ends by the holder's end, by a cancel, by a replacement when its continuation takes over an expired lease, or by the reaper at its attempt limit or deadline. A queued run ends by a cancel, or by the reaper past its deadline or start limit.
+    accDescr: enqueue or a continuation creates a run in QUEUED. A hold, a release of holds or a move to another subject keeps it QUEUED. A claim leases it and raises its epoch. A renewal keeps it LEASED. The holder's requeue or deferral, or the reaper for an expired lease with attempts left, queues it again. It ends by the holder's end, by a cancel, by a replacement when its continuation takes over an expired lease, or by the reaper at its attempt limit or deadline. A queued run ends by a cancel, or by the reaper past its deadline or start limit.
     [*] --> QUEUED: enqueue, continueAfter, continueAs, continueExpired
     QUEUED --> QUEUED: hold, releaseHolds, moveQueued
     QUEUED --> LEASED: claim, epoch + 1
     LEASED --> LEASED: renew
-    LEASED --> QUEUED: requeue
+    LEASED --> QUEUED: requeue, defer
     LEASED --> QUEUED: reaper [expired, attempts left]
     LEASED --> ENDED: end, cancel, continueExpired
     LEASED --> ENDED: reaper [attempt limit or deadline]
@@ -95,6 +95,17 @@ It never rises into `INTERACTIVE`. Thus scheduled work waits a bounded time behi
 A run of a workspace that is not active is not offered.
 
 A queued run sends a PostgreSQL notification on the channel `agent_run`, which wakes an idle claimer.
+
+A claim that cannot start its run now defers it (`AgentRuns.defer`), as while the run's review is locked or its model pool has review calls waiting.
+A deferral spends no attempt and keeps the run's `available_at`, so the run gauges count its wait and its start window keeps counting.
+No claim takes it before `deferred_until`, 5 seconds later.
+
+The wait does not grow, so the runs that wait for one pool try it at the same rate.
+Among the runs that a claim can take, a deferred run keeps its age in the claim order.
+
+`agent_run_deferred_total` counts each deferral by kind and reason, and each writes `agent.run.deferred`.
+`deferred_until` matters only while the run is queued, and the claim and every end clear it.
+It has no check constraint, so a server of the previous release can still lease or end a deferred run during an upgrade.
 
 `AgentRuns.claimCapped` leases no run of a kind beyond a cap, such as the installation's turns (`hephaestus.agent.capacity.turns`).
 The capped claims of one kind take an advisory lock in turn, so the cap holds across workers.
@@ -271,7 +282,7 @@ One database statement grants all the calls of a round. Interactive calls are gr
 
 Before a review starts capture or creates a Pod, its claim checks the review quota and its model's endpoint pool.
 The parent review and its job start in one transaction after those checks pass.
-The claim stays queued while the quota has no room or the pool has a live review call waiting.
+The claim defers the run while the quota has no room or the pool has a live review call waiting ([Claim](#claim)).
 A review call is a batch or background call that has a workspace.
 It is a call of a requested, event, scheduled or backfill review, or of a composition.
 Conversation and product feedback waiters do not block a review claim.
