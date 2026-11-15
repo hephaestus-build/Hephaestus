@@ -448,13 +448,13 @@ For durable logs, configure a [log collector](./monitoring#ship-logs-to-a-log-st
 | A new Pod restarts during an upgrade, and its log names a pending change set | It waited 10 minutes for the schema. Check the migration Job's log. A longer migration needs the [database maintenance](./maintenance#database-maintenance) procedure. |
 | A backup Job fails with `unable to find primary cluster` | The Job cannot reach pgBackRest's TLS server on port 8432 of the PostgreSQL Service, or its client certificate is not for `hephaestus-backup` from `ca.crt`. |
 | PostgreSQL's volume fills | A failed WAL archive keeps the WAL on the volume. Check the latest backup Job's log and the bucket's credentials. |
-| A practice review fails with "The sandbox could not prepare its workspace." | The sandbox's initializer failed before any model call. The job runs again within its retry limit, so a failure that repeats on every attempt uses all of them. The server log names the initializer's exit code. After the last attempt, read the exit code and the last lines of the initializer's log with the command below this table. Known credential formats in those lines are masked. |
+| A practice review stops as a preparation failure, and its job's exit code is 44 | The sandbox's initializer could not prepare the review's workspace, for a cause that every attempt meets. The archive exceeds its budget or has no valid length, tar refuses it, or the change view fails. The review spends no retry on it. It keeps the results that it staged and ends the rest. The server log has `agent.job.preparation_failed` with `job.preparation.stage` `workspace`. The sandbox's log names the cause. Any other failure of the initializer, such as a download that a restart cuts, runs the attempt again within its retry limit. Read the job's exit code with the command below this table. |
 
 Replace `<job id>` with the ID of the review job:
 
 ```bash
 kubectl --namespace hephaestus exec -i hephaestus-postgresql-0 -c postgresql -- \
   sh -c 'exec psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"' <<'SQL'
-SELECT capture->'initializationFailure' FROM review_job WHERE id = '<job id>';
+SELECT status, exit_code FROM review_job WHERE id = '<job id>';
 SQL
 ```

@@ -24,6 +24,11 @@ const WORKSPACE = "/workspace";
 const SDK_LINK = "/workspace/node_modules";
 /** gateway-run.ts's exit after it could not upload the result. */
 const EXIT_UPLOAD_FAILED = 43;
+/**
+ * gateway-init.ts's exit for a workspace that another attempt could not prepare either. It reported that as the
+ * attempt's result, so the server ends the attempt itself.
+ */
+const EXIT_WORKSPACE_UNPREPARED = 44;
 
 /** What the server gives a measurement: the runner it starts, and when its work and its upload end. */
 export interface MeasureContext {
@@ -194,7 +199,11 @@ export const measureReview: KindRunner = async (run): Promise<RunOutcome> => {
 	if (!existsSync(SDK_LINK)) {
 		symlinkSync(`${SDK}/node_modules`, SDK_LINK);
 	}
-	if ((await runToEnd("node", [`${SDK}/gateway-init.js`], env, signal)) !== 0) {
+	const prepared = await runToEnd("node", [`${SDK}/gateway-init.js`], env, signal);
+	if (prepared === EXIT_WORKSPACE_UNPREPARED) {
+		return { leaseLost: false, outcome: "completed" };
+	}
+	if (prepared !== 0) {
 		throw new Error("the workspace could not be prepared");
 	}
 	const exit = await runToEnd("node", [`${SDK}/gateway-run.js`, ...context.command], env, signal);

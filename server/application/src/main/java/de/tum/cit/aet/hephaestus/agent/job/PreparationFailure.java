@@ -39,7 +39,9 @@ record PreparationFailure(
         CREDENTIAL("while issuing the run credential"),
         SPEC("while building the sandbox specification"),
         PROVENANCE("while recording the input provenance"),
-        EXECUTION_FENCE("while marking execution as started");
+        EXECUTION_FENCE("while marking execution as started"),
+        /** In the sandbox, before the runner starts: its initializer downloads and extracts the captured workspace. */
+        WORKSPACE("while preparing the sandbox's workspace");
 
         private final String phrase;
 

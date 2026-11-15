@@ -45,6 +45,16 @@ class SandboxLayoutSyncTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldExitTheWorkspaceInitializerWithTheCodeTheServerReads() throws IOException {
+        String expected = Integer.toString(SandboxLayout.EXIT_WORKSPACE_UNPREPARED);
+
+        assertThat(constant(resource("agent/gateway-init.js"), "EXIT_WORKSPACE_UNPREPARED"))
+                .isEqualTo(expected);
+        assertThat(constant(resource("agent/review-measure.js"), "EXIT_WORKSPACE_UNPREPARED"))
+                .isEqualTo(expected);
+    }
+
+    @Test
     void shouldLetEverySessionCiteTheSourcesTheRunnerReadsThroughGit() throws IOException {
         String sources = Files.readString(
                 repoFile("docker/agents/practice-scripts/kits/scm/sources.ts"), StandardCharsets.UTF_8);

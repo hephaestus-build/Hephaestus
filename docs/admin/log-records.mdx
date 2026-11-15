@@ -159,7 +159,7 @@ Lifecycle records contain `event.name`, `job.id`, `workspace.id`, `review.id`, `
 | `agent.job.started`  | A server starts a claimed job | `queue`     | `started`                                       | Creation to start             |
 | `agent.job.terminal` | A terminal transition commits | `total`     | `completed`, `failed`, `timed_out`, `cancelled` | Creation to terminal emission |
 
-An attempt that fails before its sandbox starts logs `agent.job.preparation_failed` at `WARN`.
+An attempt that fails before its sandbox starts, or whose sandbox cannot prepare its workspace, logs `agent.job.preparation_failed` at `WARN`.
 It has no phase, outcome or duration.
 `job.preparation.stage` names the stage that failed.
 `job.preparation.kind` and `job.preparation.reason` name the kind and the reason of the failure.
