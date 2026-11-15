@@ -1,4 +1,4 @@
 ---
 ---
 
-The agent reads mentor turns, conversation owners and result problems through the mentor and practices modules. This internal ownership refactor leaves turns, model calls and evidence delivery unchanged.
+The agent reads conversation turns, conversation owners and result problems through the conversation and practices modules. This internal ownership refactor leaves turns, model calls and evidence delivery unchanged.

@@ -1011,8 +1011,8 @@ export const NeverApplied: Story = {
 };
 
 /**
- * The standing includes earlier assessments whose criterion version is unavailable. The level marks
- * that basis beside the badge; those assessments provide no trend or quoted feedback.
+ * The standing includes earlier observations whose criterion version is unavailable. The level marks
+ * that basis beside the badge; those observations provide no trend or quoted feedback.
  */
 export const EarlierReviewsCriteriaUnknown: Story = {
 	args: {

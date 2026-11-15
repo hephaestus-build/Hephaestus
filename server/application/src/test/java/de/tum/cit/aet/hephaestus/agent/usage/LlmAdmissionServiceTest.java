@@ -17,9 +17,9 @@ import de.tum.cit.aet.hephaestus.agent.catalog.PricingMode;
 import de.tum.cit.aet.hephaestus.agent.catalog.ResolvedLlmModel;
 import de.tum.cit.aet.hephaestus.agent.catalog.WorkspaceLlmModel;
 import de.tum.cit.aet.hephaestus.agent.catalog.WorkspaceLlmModelRepository;
-import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
-import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBinding;
-import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBindingRepository;
+import de.tum.cit.aet.hephaestus.agent.config.ModelPurpose;
+import de.tum.cit.aet.hephaestus.agent.config.WorkspaceModelAssignment;
+import de.tum.cit.aet.hephaestus.agent.config.WorkspaceModelAssignmentRepository;
 import de.tum.cit.aet.hephaestus.integration.core.spi.UsagePricingState;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
@@ -31,13 +31,13 @@ import org.mockito.Mock;
 
 class LlmAdmissionServiceTest extends BaseUnitTest {
 
-    private static WorkspaceLlmModel workspaceModel(WorkspaceAgentBinding binding) {
+    private static WorkspaceLlmModel workspaceModel(WorkspaceModelAssignment binding) {
         WorkspaceLlmModel model = binding.getWorkspaceModel();
         assertThat(model).isNotNull();
         return model;
     }
 
-    private static LlmModel instanceModel(WorkspaceAgentBinding binding) {
+    private static LlmModel instanceModel(WorkspaceModelAssignment binding) {
         LlmModel model = binding.getInstanceModel();
         assertThat(model).isNotNull();
         return model;
@@ -47,7 +47,7 @@ class LlmAdmissionServiceTest extends BaseUnitTest {
     private LlmModelResolver resolver;
 
     @Mock
-    private WorkspaceAgentBindingRepository bindingRepository;
+    private WorkspaceModelAssignmentRepository bindingRepository;
 
     @Mock
     private LlmModelPriceRepository priceRepository;
@@ -67,10 +67,10 @@ class LlmAdmissionServiceTest extends BaseUnitTest {
         return model;
     }
 
-    private static WorkspaceAgentBinding binding(AgentPurpose purpose) {
+    private static WorkspaceModelAssignment binding(ModelPurpose purpose) {
         Workspace workspace = new Workspace();
         workspace.setId(30L);
-        WorkspaceAgentBinding binding = new WorkspaceAgentBinding();
+        WorkspaceModelAssignment binding = new WorkspaceModelAssignment();
         binding.setId(1L);
         binding.setWorkspace(workspace);
         binding.setPurpose(purpose);
@@ -79,8 +79,8 @@ class LlmAdmissionServiceTest extends BaseUnitTest {
         return binding;
     }
 
-    private static WorkspaceAgentBinding byoBinding() {
-        WorkspaceAgentBinding binding = binding(AgentPurpose.PRACTICE_REVIEW);
+    private static WorkspaceModelAssignment byoBinding() {
+        WorkspaceModelAssignment binding = binding(ModelPurpose.PRACTICE_REVIEW);
         binding.setInstanceModel(null);
         WorkspaceLlmModel model = new WorkspaceLlmModel();
         model.setId(21L);
@@ -93,7 +93,7 @@ class LlmAdmissionServiceTest extends BaseUnitTest {
 
     @Test
     void freezesAuthoritativeInstancePriceAtAdmission() {
-        WorkspaceAgentBinding binding = binding(AgentPurpose.PRACTICE_REVIEW);
+        WorkspaceModelAssignment binding = binding(ModelPurpose.PRACTICE_REVIEW);
         when(bindingRepository.findByWorkspaceIdAndIdForUpdate(30L, binding.getId()))
                 .thenReturn(Optional.of(binding));
         when(modelRepository.findByIdForUpdate(20L)).thenReturn(Optional.of(instanceModel(binding)));
@@ -125,7 +125,7 @@ class LlmAdmissionServiceTest extends BaseUnitTest {
      */
     @Test
     void freezesTheWorkspacesOwnPriceAndFundingSourceForABoundByoModel() {
-        WorkspaceAgentBinding binding = byoBinding();
+        WorkspaceModelAssignment binding = byoBinding();
         when(bindingRepository.findByWorkspaceIdAndIdForUpdate(30L, binding.getId()))
                 .thenReturn(Optional.of(binding));
         // The row lock the instance arm takes on llm_model is taken on workspace_llm_model here, and
@@ -158,7 +158,7 @@ class LlmAdmissionServiceTest extends BaseUnitTest {
      */
     @Test
     void refusesToAdmitAModelWhosePriceIsUnknown() {
-        WorkspaceAgentBinding binding = byoBinding();
+        WorkspaceModelAssignment binding = byoBinding();
         workspaceModel(binding).setPricingMode(PricingMode.UNPRICED);
         when(bindingRepository.findByWorkspaceIdAndIdForUpdate(30L, binding.getId()))
                 .thenReturn(Optional.of(binding));
@@ -179,7 +179,7 @@ class LlmAdmissionServiceTest extends BaseUnitTest {
 
     @Test
     void rejectsBeforePricingWhenBoundModelIsUnavailable() {
-        WorkspaceAgentBinding binding = binding(AgentPurpose.MENTOR);
+        WorkspaceModelAssignment binding = binding(ModelPurpose.CONVERSATION);
         when(bindingRepository.findByWorkspaceIdAndIdForUpdate(30L, binding.getId()))
                 .thenReturn(Optional.of(binding));
         when(modelRepository.findByIdForUpdate(20L)).thenReturn(Optional.of(instanceModel(binding)));
@@ -191,7 +191,7 @@ class LlmAdmissionServiceTest extends BaseUnitTest {
 
     @Test
     void rejectsADisabledBindingWithoutResolvingOrPricingIt() {
-        WorkspaceAgentBinding binding = binding(AgentPurpose.MENTOR);
+        WorkspaceModelAssignment binding = binding(ModelPurpose.CONVERSATION);
         binding.setEnabled(false);
         when(bindingRepository.findByWorkspaceIdAndIdForUpdate(30L, binding.getId()))
                 .thenReturn(Optional.of(binding));
@@ -202,7 +202,7 @@ class LlmAdmissionServiceTest extends BaseUnitTest {
 
     @Test
     void shouldFreezeThePriceWhenAModelIsAdmittedIfAvailable() {
-        WorkspaceAgentBinding binding = binding(AgentPurpose.PRACTICE_REVIEW);
+        WorkspaceModelAssignment binding = binding(ModelPurpose.PRACTICE_REVIEW);
         when(bindingRepository.findByWorkspaceIdAndIdForUpdate(30L, binding.getId()))
                 .thenReturn(Optional.of(binding));
         when(resolver.isAvailable(binding)).thenReturn(true);
@@ -228,7 +228,7 @@ class LlmAdmissionServiceTest extends BaseUnitTest {
     // A failure escaping the transactional proxy would mark the claim rollback-only.
     @Test
     void shouldAdmitNothingWithoutThrowingWhenAModelHasNoPrice() {
-        WorkspaceAgentBinding binding = byoBinding();
+        WorkspaceModelAssignment binding = byoBinding();
         workspaceModel(binding).setPricingMode(PricingMode.UNPRICED);
         when(bindingRepository.findByWorkspaceIdAndIdForUpdate(30L, binding.getId()))
                 .thenReturn(Optional.of(binding));
@@ -248,7 +248,7 @@ class LlmAdmissionServiceTest extends BaseUnitTest {
 
     @Test
     void shouldAdmitNothingWithoutResolvingWhenAModelIsUnavailable() {
-        WorkspaceAgentBinding binding = binding(AgentPurpose.PRACTICE_REVIEW);
+        WorkspaceModelAssignment binding = binding(ModelPurpose.PRACTICE_REVIEW);
         when(bindingRepository.findByWorkspaceIdAndIdForUpdate(30L, binding.getId()))
                 .thenReturn(Optional.of(binding));
         when(resolver.isAvailable(binding)).thenReturn(false);

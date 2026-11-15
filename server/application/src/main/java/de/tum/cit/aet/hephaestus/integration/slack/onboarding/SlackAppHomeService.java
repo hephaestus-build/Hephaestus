@@ -12,20 +12,20 @@ import static com.slack.api.model.block.element.BlockElements.button;
 import com.slack.api.model.block.LayoutBlock;
 import com.slack.api.model.block.composition.ConfirmationDialogObject;
 import com.slack.api.model.view.View;
-import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorAdmission;
-import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorRefusal;
+import de.tum.cit.aet.hephaestus.agent.conversation.turn.ConversationAdmission;
+import de.tum.cit.aet.hephaestus.agent.conversation.turn.ConversationRefusal;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountSummaryQuery;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.slack.SlackHephaestusUiLinks;
 import de.tum.cit.aet.hephaestus.integration.slack.channel.SlackConsentBlocks;
+import de.tum.cit.aet.hephaestus.integration.slack.conversation.SlackConversationIdentityResolver;
+import de.tum.cit.aet.hephaestus.integration.slack.conversation.SlackConversationPosts;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannel.ConsentState;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannelRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackParticipantConsentRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackWorkspaceResolver;
-import de.tum.cit.aet.hephaestus.integration.slack.mentor.SlackMentorIdentityResolver;
-import de.tum.cit.aet.hephaestus.integration.slack.mentor.SlackMentorPosts;
 import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackMessageService;
-import de.tum.cit.aet.hephaestus.practices.spi.MentorReadinessQuery;
+import de.tum.cit.aet.hephaestus.practices.spi.ConversationReadinessQuery;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -46,22 +46,22 @@ public class SlackAppHomeService {
     public static final String ACTION_OPEN_HEPHAESTUS = "open_hephaestus_ui";
 
     private final SlackWorkspaceResolver workspaceResolver;
-    private final SlackMentorIdentityResolver identityResolver;
+    private final SlackConversationIdentityResolver identityResolver;
     private final SlackParticipantConsentRepository participantConsentRepository;
     private final SlackMonitoredChannelRepository monitoredChannelRepository;
-    private final MentorReadinessQuery mentorReadinessQuery;
-    private final MentorAdmission mentorAdmission;
+    private final ConversationReadinessQuery conversationReadinessQuery;
+    private final ConversationAdmission conversationAdmission;
     private final SlackMessageService messageService;
     private final SlackOnboardingService onboardingService;
     private final SlackHephaestusUiLinks uiLinks;
 
     public SlackAppHomeService(
             SlackWorkspaceResolver workspaceResolver,
-            SlackMentorIdentityResolver identityResolver,
+            SlackConversationIdentityResolver identityResolver,
             SlackParticipantConsentRepository participantConsentRepository,
             SlackMonitoredChannelRepository monitoredChannelRepository,
-            MentorReadinessQuery mentorReadinessQuery,
-            MentorAdmission mentorAdmission,
+            ConversationReadinessQuery conversationReadinessQuery,
+            ConversationAdmission conversationAdmission,
             SlackMessageService messageService,
             SlackOnboardingService onboardingService,
             SlackHephaestusUiLinks uiLinks) {
@@ -69,8 +69,8 @@ public class SlackAppHomeService {
         this.identityResolver = identityResolver;
         this.participantConsentRepository = participantConsentRepository;
         this.monitoredChannelRepository = monitoredChannelRepository;
-        this.mentorReadinessQuery = mentorReadinessQuery;
-        this.mentorAdmission = mentorAdmission;
+        this.conversationReadinessQuery = conversationReadinessQuery;
+        this.conversationAdmission = conversationAdmission;
         this.messageService = messageService;
         this.onboardingService = onboardingService;
         this.uiLinks = uiLinks;
@@ -92,13 +92,13 @@ public class SlackAppHomeService {
     View buildHomeView(long workspaceId, String teamId, String slackUserId) {
         List<LayoutBlock> blocks = new ArrayList<>();
         blocks.add(header(h -> h.text(plainText("Hephaestus"))));
-        blocks.add(SlackMentorPosts.aiLabel().getFirst());
-        boolean mentorReady = mentorReadinessQuery.isReady(workspaceId);
+        blocks.add(SlackConversationPosts.aiLabel().getFirst());
+        boolean conversationReady = conversationReadinessQuery.isReady(workspaceId);
         Optional<AccountSummaryQuery.AccountSummary> developer =
                 identityResolver.resolveDeveloper(workspaceId, teamId, slackUserId);
         Optional<String> login = developer.map(AccountSummaryQuery.AccountSummary::displayName);
-        Optional<MentorRefusal> refusal = mentorReady
-                ? developer.flatMap(user -> mentorAdmission.refusal(workspaceId, user.id()))
+        Optional<ConversationRefusal> refusal = conversationReady
+                ? developer.flatMap(user -> conversationAdmission.refusal(workspaceId, user.id()))
                 : Optional.empty();
         boolean channelMessagesAllowed =
                 !participantConsentRepository.existsByWorkspaceIdAndSlackUserIdAndIngestionOptedOutTrue(
@@ -107,7 +107,7 @@ public class SlackAppHomeService {
                 monitoredChannelRepository.countByWorkspaceIdAndConsentState(workspaceId, ConsentState.ACTIVE);
 
         blocks.addAll(overviewBlocks(
-                new HomeOverviewState(mentorReady, login, refusal, channelMessagesAllowed, activeChannels)));
+                new HomeOverviewState(conversationReady, login, refusal, channelMessagesAllowed, activeChannels)));
         blocks.addAll(openHephaestusBlocks(uiLinks.userSettingsUrl()));
         blocks.add(divider());
         blocks.addAll(channelMessageBlocks(channelMessagesAllowed));
@@ -121,20 +121,20 @@ public class SlackAppHomeService {
     }
 
     List<LayoutBlock> overviewBlocks(HomeOverviewState state) {
-        String mentorState;
-        if (!state.mentorReady()) {
-            mentorState = "Unavailable";
+        String conversationState;
+        if (!state.conversationReady()) {
+            conversationState = "Unavailable";
         } else if (state.login().isEmpty()) {
-            mentorState = "Check account access";
+            conversationState = "Check account access";
         } else if (state.refusal().isPresent()) {
-            mentorState = switch (state.refusal().get()) {
+            conversationState = switch (state.refusal().get()) {
                 case PERSON_ERASED -> "Personal data erased";
                 case NO_AI -> "Off for you";
                 case CHOICE_REQUIRED -> "Choose your AI";
                 case UNAVAILABLE -> "Unavailable for your AI choice";
             };
         } else {
-            mentorState = "Enabled for you";
+            conversationState = "Enabled for you";
         }
         String accountState =
                 state.login().map(value -> "Linked as `" + value + "`").orElse("No active linked workspace member");
@@ -144,11 +144,11 @@ public class SlackAppHomeService {
                 section(s -> s.text(markdownText(leadText(state)))),
                 section(s -> s.fields(List.of(
                         markdownText("*Hephaestus*\n"
-                                + stateIcon(state.mentorReady()
+                                + stateIcon(state.conversationReady()
                                         && state.login().isPresent()
                                         && state.refusal().isEmpty())
                                 + " "
-                                + mentorState),
+                                + conversationState),
                         markdownText("*Account*\n" + stateIcon(state.login().isPresent()) + " " + accountState),
                         markdownText("*Channel context*\n"
                                 + stateIcon(state.channelMessagesAllowed() && state.activeChannels() > 0)
@@ -163,9 +163,9 @@ public class SlackAppHomeService {
     }
 
     record HomeOverviewState(
-            boolean mentorReady,
+            boolean conversationReady,
             Optional<String> login,
-            Optional<MentorRefusal> refusal,
+            Optional<ConversationRefusal> refusal,
             boolean channelMessagesAllowed,
             long activeChannels) {}
 
@@ -185,7 +185,7 @@ public class SlackAppHomeService {
     }
 
     private static String leadText(HomeOverviewState state) {
-        if (!state.mentorReady()) {
+        if (!state.conversationReady()) {
             return "*Hephaestus unavailable.* Hephaestus is turned off or not set up for this workspace. You can still manage your privacy here.";
         }
         if (state.login().isEmpty()) {

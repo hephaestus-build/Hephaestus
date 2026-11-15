@@ -10,7 +10,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderTyp
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.item.ScmItemEvents;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
-import de.tum.cit.aet.hephaestus.integration.slack.SlackConversationTestSupport;
+import de.tum.cit.aet.hephaestus.integration.slack.SlackThreadTestSupport;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackThread;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackThreadRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeVersionService;
@@ -233,7 +233,7 @@ class SlackRetentionErasureIntegrationTest extends BaseIntegrationTest {
     }
 
     private UUID seedBoundConversation(long threadId) {
-        var bound = SlackConversationTestSupport.seedBoundConversation(
+        var bound = SlackThreadTestSupport.seedBoundConversation(
                 reviews,
                 assignments,
                 reviewItems,
@@ -250,7 +250,7 @@ class SlackRetentionErasureIntegrationTest extends BaseIntegrationTest {
     }
 
     private UUID seedResult(ItemKind kind, long sourceId) {
-        return SlackConversationTestSupport.seedResult(
+        return SlackThreadTestSupport.seedResult(
                 reviews,
                 assignments,
                 reviewItems,
@@ -264,6 +264,6 @@ class SlackRetentionErasureIntegrationTest extends BaseIntegrationTest {
     }
 
     private Practice savePractice(Workspace ws) {
-        return SlackConversationTestSupport.newPractice(practiceVersions, ws, "retain-practice");
+        return SlackThreadTestSupport.newPractice(practiceVersions, ws, "retain-practice");
     }
 }

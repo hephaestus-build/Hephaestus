@@ -22,7 +22,7 @@ export function workspaceCoverage(
 	}
 	const option = data.aiOptions.find((entry) => entry.choice === choice);
 	const practiceReviews = option?.practiceReviewsReady === true;
-	const conversations = option?.mentorReady === true;
+	const conversations = option?.conversationReady === true;
 	if (!practiceReviews && !conversations) {
 		return {
 			level: "none",

@@ -52,7 +52,7 @@ void test("the vocabulary rejects untrusted text, also when it has the shape of 
 	for (const line of [
 		`[pi-runner] review practice-a tool error: bash — cat: .env: API_KEY=${CANARY}`,
 		`[pi-runner] review provider call failed for good after 3 retries: 401 ${CANARY}`,
-		`[heph-host 2026-10-31T00:00:00Z] ${CANARY}`,
+		`[conversation-host 2026-10-31T00:00:00Z] ${CANARY}`,
 		`[pi-runner] assistant.message raw_stop_reason=${CANARY}`,
 		`[pi-runner] session.leaked secret=${CANARY}`,
 		`[pi-runner] assistant.message stop_reason=${CANARY}`,

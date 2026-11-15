@@ -19,10 +19,10 @@ it("keeps an existing conversation readable under No AI and restores its compose
 	let preference: WorkspaceOnboarding = {
 		...workspaceOnboarding(),
 		aiChoice: "NO_AI",
-		mentorRefusal: "NO_AI",
+		conversationRefusal: "NO_AI",
 	};
 	const conversation = new ConversationFake();
-	conversation.add({ kind: "HEPH", text: "Earlier guidance remains readable." });
+	conversation.add({ kind: "ANSWER", text: "Earlier guidance remains readable." });
 	server.use(
 		http.get("*/workspaces", () => HttpResponse.json([workspaceListItem("acme")])),
 		http.get("*/user/features", () => HttpResponse.json(mockFeatureFlags())),
@@ -43,7 +43,7 @@ it("keeps an existing conversation readable under No AI and restores its compose
 		...workspaceOnboarding(),
 		aiChoice: "IN_HOUSE_ONLY",
 		aiOptions: [
-			{ choice: "IN_HOUSE_ONLY", mentorReady: true, practiceReviewsReady: true, models: [] },
+			{ choice: "IN_HOUSE_ONLY", conversationReady: true, practiceReviewsReady: true, models: [] },
 		],
 	};
 	await act(async () => {
@@ -65,10 +65,15 @@ it("names the saved choice when no conversation model is set up for it", async (
 			HttpResponse.json({
 				...workspaceOnboarding(),
 				aiChoice: "CLOUD",
-				mentorRefusal: "UNAVAILABLE",
+				conversationRefusal: "UNAVAILABLE",
 				aiOptions: [
-					{ choice: "CLOUD", mentorReady: false, practiceReviewsReady: true, models: [] },
-					{ choice: "IN_HOUSE_ONLY", mentorReady: true, practiceReviewsReady: true, models: [] },
+					{ choice: "CLOUD", conversationReady: false, practiceReviewsReady: true, models: [] },
+					{
+						choice: "IN_HOUSE_ONLY",
+						conversationReady: true,
+						practiceReviewsReady: true,
+						models: [],
+					},
 				],
 			}),
 		),
@@ -99,10 +104,15 @@ it("says Hephaestus is not set up, and offers no choice to change, to a member w
 		http.get("*/workspaces/acme/onboarding/me", () =>
 			HttpResponse.json({
 				...workspaceOnboarding(),
-				mentorRefusal: "UNAVAILABLE",
+				conversationRefusal: "UNAVAILABLE",
 				aiOptions: [
-					{ choice: "CLOUD", mentorReady: false, practiceReviewsReady: true, models: [] },
-					{ choice: "IN_HOUSE_ONLY", mentorReady: false, practiceReviewsReady: false, models: [] },
+					{ choice: "CLOUD", conversationReady: false, practiceReviewsReady: true, models: [] },
+					{
+						choice: "IN_HOUSE_ONLY",
+						conversationReady: false,
+						practiceReviewsReady: false,
+						models: [],
+					},
 				],
 			}),
 		),
@@ -129,7 +139,12 @@ it("opens Hephaestus for a member whose account carries no feature flags", async
 				...workspaceOnboarding(),
 				aiChoice: "IN_HOUSE_ONLY",
 				aiOptions: [
-					{ choice: "IN_HOUSE_ONLY", mentorReady: true, practiceReviewsReady: true, models: [] },
+					{
+						choice: "IN_HOUSE_ONLY",
+						conversationReady: true,
+						practiceReviewsReady: true,
+						models: [],
+					},
 				],
 			}),
 		),
@@ -151,8 +166,13 @@ it("offers Hephaestus to a member who has not chosen, whom the workspace's undec
 			HttpResponse.json({
 				...workspaceOnboarding(),
 				aiOptions: [
-					{ choice: "IN_HOUSE_ONLY", mentorReady: false, practiceReviewsReady: false, models: [] },
-					{ choice: "CLOUD", mentorReady: false, practiceReviewsReady: false, models: [] },
+					{
+						choice: "IN_HOUSE_ONLY",
+						conversationReady: false,
+						practiceReviewsReady: false,
+						models: [],
+					},
+					{ choice: "CLOUD", conversationReady: false, practiceReviewsReady: false, models: [] },
 				],
 			} satisfies WorkspaceOnboarding),
 		),
@@ -203,9 +223,14 @@ it("offers Hephaestus in the navigation where a conversation model is ready, wha
 			HttpResponse.json({
 				...workspaceOnboarding(),
 				aiChoice: "NO_AI",
-				mentorRefusal: "NO_AI",
+				conversationRefusal: "NO_AI",
 				aiOptions: [
-					{ choice: "IN_HOUSE_ONLY", mentorReady: true, practiceReviewsReady: false, models: [] },
+					{
+						choice: "IN_HOUSE_ONLY",
+						conversationReady: true,
+						practiceReviewsReady: false,
+						models: [],
+					},
 				],
 			}),
 		),
@@ -218,7 +243,9 @@ it("keeps Hephaestus out of the navigation of a workspace where only practice re
 	const ready: WorkspaceOnboarding = {
 		...workspaceOnboarding(),
 		aiChoice: "CLOUD",
-		aiOptions: [{ choice: "CLOUD", mentorReady: true, practiceReviewsReady: true, models: [] }],
+		aiOptions: [
+			{ choice: "CLOUD", conversationReady: true, practiceReviewsReady: true, models: [] },
+		],
 	};
 	server.use(
 		http.get("*/workspaces", () =>
@@ -232,9 +259,9 @@ it("keeps Hephaestus out of the navigation of a workspace where only practice re
 		http.get("*/workspaces/other/onboarding/me", () =>
 			HttpResponse.json({
 				...ready,
-				mentorRefusal: "UNAVAILABLE",
+				conversationRefusal: "UNAVAILABLE",
 				aiOptions: [
-					{ choice: "CLOUD", mentorReady: false, practiceReviewsReady: true, models: [] },
+					{ choice: "CLOUD", conversationReady: false, practiceReviewsReady: true, models: [] },
 				],
 			}),
 		),

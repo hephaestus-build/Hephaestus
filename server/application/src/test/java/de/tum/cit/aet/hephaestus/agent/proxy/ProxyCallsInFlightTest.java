@@ -3,7 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.proxy;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
-import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
+import de.tum.cit.aet.hephaestus.conversation.ConversationTurn;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.util.ArrayList;
 import java.util.List;
@@ -63,7 +63,7 @@ class ProxyCallsInFlightTest extends BaseUnitTest {
     @Test
     @DisplayName("a conversation turn attempt keeps one call and one that a stop left closing")
     void shouldRefuseTheThirdCallWhenATurnAttemptHasTwo() {
-        ProxyRouting.BilledAttempt turn = attempt(UsageSourceType.MENTOR_TURN);
+        ProxyRouting.BilledAttempt turn = attempt(UsageSourceType.CONVERSATION_TURN);
 
         List<ProxyCallsInFlight.Call> open = begin(turn, ProxyCallsInFlight.TURN_CALLS);
 
@@ -74,7 +74,7 @@ class ProxyCallsInFlightTest extends BaseUnitTest {
     @Test
     @DisplayName("a call that ends frees its place for the next call of its attempt")
     void shouldAdmitTheNextCallWhenACallEnds() {
-        ProxyRouting.BilledAttempt turn = attempt(UsageSourceType.MENTOR_TURN);
+        ProxyRouting.BilledAttempt turn = attempt(UsageSourceType.CONVERSATION_TURN);
         List<ProxyCallsInFlight.Call> open = begin(turn, ProxyCallsInFlight.TURN_CALLS);
 
         open.getFirst().close();
@@ -85,7 +85,7 @@ class ProxyCallsInFlightTest extends BaseUnitTest {
     @Test
     @DisplayName("a refused call takes no place, and its end frees none")
     void shouldNotCountARefusedCallWhenItEnds() {
-        ProxyRouting.BilledAttempt turn = attempt(UsageSourceType.MENTOR_TURN);
+        ProxyRouting.BilledAttempt turn = attempt(UsageSourceType.CONVERSATION_TURN);
         begin(turn, ProxyCallsInFlight.TURN_CALLS);
 
         calls.begin(turn).close();
@@ -96,23 +96,23 @@ class ProxyCallsInFlightTest extends BaseUnitTest {
     @Test
     @DisplayName("each attempt has its own cap, also for the next attempt of the same turn")
     void shouldCountEachAttemptApartWhenAnotherAttemptIsFull() {
-        ProxyRouting.BilledAttempt first = attempt(UsageSourceType.MENTOR_TURN);
+        ProxyRouting.BilledAttempt first = attempt(UsageSourceType.CONVERSATION_TURN);
         ProxyRouting.BilledAttempt next = new ProxyRouting.BilledAttempt(
-                UsageSourceType.MENTOR_TURN, first.sourceId(), first.number() + 1, LEASE);
+                UsageSourceType.CONVERSATION_TURN, first.sourceId(), first.number() + 1, LEASE);
         begin(first, ProxyCallsInFlight.TURN_CALLS);
 
-        assertThat(calls.begin(attempt(UsageSourceType.MENTOR_TURN)).isOverCap())
+        assertThat(calls.begin(attempt(UsageSourceType.CONVERSATION_TURN)).isOverCap())
                 .isFalse();
         assertThat(calls.begin(next).isOverCap()).isFalse();
     }
 
     @Test
     void shouldKeepEachCallsFirstFailureUntilItsCompletion() {
-        var turn = attempt(UsageSourceType.MENTOR_TURN);
+        var turn = attempt(UsageSourceType.CONVERSATION_TURN);
         try (var call = calls.begin(turn)) {
-            var first = new MentorTurn.FailedCall("upstream_status", 503);
+            var first = new ConversationTurn.FailedCall("upstream_status", 503);
             call.failed(first);
-            call.failed(new MentorTurn.FailedCall("stream_failed", null));
+            call.failed(new ConversationTurn.FailedCall("stream_failed", null));
             assertThat(call.failure()).isEqualTo(first);
         }
         try (var next = calls.begin(turn)) {

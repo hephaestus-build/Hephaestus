@@ -6,7 +6,7 @@ import static org.mockito.Mockito.inOrder;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelWorkspaceGrantRepository;
 import de.tum.cit.aet.hephaestus.agent.catalog.WorkspaceLlmConnectionRepository;
 import de.tum.cit.aet.hephaestus.agent.catalog.WorkspaceLlmModelRepository;
-import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBindingRepository;
+import de.tum.cit.aet.hephaestus.agent.config.WorkspaceModelAssignmentRepository;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
@@ -21,7 +21,7 @@ class AgentWorkspacePurgeAdapterTest extends BaseUnitTest {
     private ReviewJobRepository jobRepository;
 
     @Mock
-    private WorkspaceAgentBindingRepository bindingRepository;
+    private WorkspaceModelAssignmentRepository bindingRepository;
 
     @Mock
     private WorkspaceLlmModelRepository modelRepository;

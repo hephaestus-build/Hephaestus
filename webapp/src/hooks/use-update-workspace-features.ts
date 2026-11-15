@@ -99,11 +99,11 @@ function selectWorkspaceFeatures(
 	request: UpdateWorkspaceFeaturesRequest = source,
 ): UpdateWorkspaceFeaturesRequest {
 	return {
-		...("practiceReviewAutoTriggerEnabled" in request
-			? { practiceReviewAutoTriggerEnabled: source.practiceReviewAutoTriggerEnabled }
+		...("practiceReviewEventEnabled" in request
+			? { practiceReviewEventEnabled: source.practiceReviewEventEnabled }
 			: {}),
-		...("practiceReviewManualTriggerEnabled" in request
-			? { practiceReviewManualTriggerEnabled: source.practiceReviewManualTriggerEnabled }
+		...("practiceReviewRequestEnabled" in request
+			? { practiceReviewRequestEnabled: source.practiceReviewRequestEnabled }
 			: {}),
 		...("practicesEnabled" in request ? { practicesEnabled: source.practicesEnabled } : {}),
 	};

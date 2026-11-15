@@ -12,7 +12,7 @@ import static org.mockito.Mockito.verify;
 
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemIndexService;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
-import de.tum.cit.aet.hephaestus.integration.slack.SlackConversationTestSupport;
+import de.tum.cit.aet.hephaestus.integration.slack.SlackThreadTestSupport;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackChannelConsentEventRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMessageRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannel;
@@ -211,7 +211,7 @@ class SlackChannelAdminControllerIntegrationTest extends AbstractWorkspaceIntegr
         messageRepository.insertIfAbsent(workspace.getId(), "T1", "C1", "100.1", null, "U1", null, "hello");
         long threadId = seedThread(workspace.getId(), "C1", "100.1");
         // Derived chat.thread result + feedback anchored to the thread id.
-        SlackConversationTestSupport.BoundConversation conv = seedBoundConversation(threadId);
+        SlackThreadTestSupport.BoundConversation conv = seedBoundConversation(threadId);
         UUID practiceResultId = conv.resultId();
         UUID feedbackId = conv.feedbackId();
 
@@ -347,9 +347,9 @@ class SlackChannelAdminControllerIntegrationTest extends AbstractWorkspaceIntegr
         return threadRepository.save(thread).getId();
     }
 
-    private SlackConversationTestSupport.BoundConversation seedBoundConversation(long threadId) {
-        Practice practice = SlackConversationTestSupport.newPractice(practiceVersions, workspace, "chan-practice");
-        return SlackConversationTestSupport.seedBoundConversation(
+    private SlackThreadTestSupport.BoundConversation seedBoundConversation(long threadId) {
+        Practice practice = SlackThreadTestSupport.newPractice(practiceVersions, workspace, "chan-practice");
+        return SlackThreadTestSupport.seedBoundConversation(
                 reviews,
                 assignments,
                 reviewItems,

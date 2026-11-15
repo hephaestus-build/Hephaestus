@@ -25,11 +25,11 @@ import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelRepository;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
 import de.tum.cit.aet.hephaestus.agent.catalog.PricingMode;
 import de.tum.cit.aet.hephaestus.agent.composer.CompositionStop;
-import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.config.MemberAiRoutingAdapter;
-import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBinding;
-import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBindingRepository;
+import de.tum.cit.aet.hephaestus.agent.config.ModelPurpose;
+import de.tum.cit.aet.hephaestus.agent.config.WorkspaceModelAssignment;
+import de.tum.cit.aet.hephaestus.agent.config.WorkspaceModelAssignmentRepository;
 import de.tum.cit.aet.hephaestus.agent.context.InsufficientEvidenceException;
 import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.ReviewAttemptCustody;
@@ -112,7 +112,7 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
     private WorkspaceRepository workspaces;
 
     @Autowired
-    private WorkspaceAgentBindingRepository bindings;
+    private WorkspaceModelAssignmentRepository bindings;
 
     @Autowired
     private LlmConnectionRepository connections;
@@ -163,7 +163,7 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
             var snapshot = ConfigSnapshot.fromJson(selected.getConfigSnapshot(), mapper);
             return bindings.findByWorkspaceIdAndPurposeAndDataHandlingTier(
                     selected.getWorkspaceId(),
-                    AgentPurpose.PRACTICE_REVIEW,
+                    ModelPurpose.PRACTICE_REVIEW,
                     Objects.requireNonNull(snapshot.model().dataHandlingTier()));
         });
     }
@@ -940,16 +940,16 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                 WorkspacePortFixtures.queries(workspaces),
                 mock(PersonProcessingSuppression.class));
 
-        assertThat(routing.binding(workspace.getId(), AgentPurpose.PRACTICE_REVIEW, 20L))
+        assertThat(routing.binding(workspace.getId(), ModelPurpose.PRACTICE_REVIEW, 20L))
                 .get()
-                .extracting(WorkspaceAgentBinding::getId)
+                .extracting(WorkspaceModelAssignment::getId)
                 .isEqualTo(inHouse.getId());
     }
 
-    private WorkspaceAgentBinding binding(DataHandlingTier tier) {
-        var binding = new WorkspaceAgentBinding();
+    private WorkspaceModelAssignment binding(DataHandlingTier tier) {
+        var binding = new WorkspaceModelAssignment();
         binding.setWorkspace(workspace);
-        binding.setPurpose(AgentPurpose.PRACTICE_REVIEW);
+        binding.setPurpose(ModelPurpose.PRACTICE_REVIEW);
         binding.setDataHandlingTier(tier);
         binding.setInstanceModel(model(tier));
         binding.setEnabled(true);
@@ -976,10 +976,10 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
         return model;
     }
 
-    private ReviewJob queued(WorkspaceAgentBinding binding) {
+    private ReviewJob queued(WorkspaceModelAssignment binding) {
         return Objects.requireNonNull(transactions.execute(status -> {
             var currentBinding = bindings.findByWorkspaceIdAndPurposeAndDataHandlingTier(
-                            workspace.getId(), AgentPurpose.PRACTICE_REVIEW, binding.getDataHandlingTier())
+                            workspace.getId(), ModelPurpose.PRACTICE_REVIEW, binding.getDataHandlingTier())
                     .orElseThrow();
             var job = new ReviewJob();
             RuntimeJobTestData.initialize(job, workspace.getId());

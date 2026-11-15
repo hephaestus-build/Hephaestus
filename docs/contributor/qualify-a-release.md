@@ -54,7 +54,7 @@ The turn smoke asks one Ask Hephaestus question and passes only when the turn co
 
    ```bash
    node scripts/qual-staging-hold.ts -- node scripts/qual-turn-smoke.ts --target staging \
-     --mentor-url https://<host>/api/workspaces/<slug>/mentor --token-file <file>
+     --conversation-url https://<host>/api/workspaces/<slug>/conversation --token-file <file>
    ```
 
 If no token can leave a browser, use `--await-workspace <workspace id>` in place of the URL and the token file.

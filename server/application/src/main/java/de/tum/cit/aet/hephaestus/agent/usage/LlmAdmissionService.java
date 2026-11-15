@@ -9,8 +9,8 @@ import de.tum.cit.aet.hephaestus.agent.catalog.ModelBindingSource;
 import de.tum.cit.aet.hephaestus.agent.catalog.PricingMode;
 import de.tum.cit.aet.hephaestus.agent.catalog.WorkspaceLlmModel;
 import de.tum.cit.aet.hephaestus.agent.catalog.WorkspaceLlmModelRepository;
-import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBinding;
-import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBindingRepository;
+import de.tum.cit.aet.hephaestus.agent.config.WorkspaceModelAssignment;
+import de.tum.cit.aet.hephaestus.agent.config.WorkspaceModelAssignmentRepository;
 import de.tum.cit.aet.hephaestus.integration.core.spi.UsagePricingState;
 import java.math.BigDecimal;
 import java.util.Optional;
@@ -25,15 +25,15 @@ import org.springframework.transaction.annotation.Transactional;
 public class LlmAdmissionService {
 
     private final LlmModelResolver resolver;
-    private final WorkspaceAgentBindingRepository bindingRepository;
+    private final WorkspaceModelAssignmentRepository bindingRepository;
     private final LlmModelPriceRepository priceRepository;
     private final LlmModelRepository modelRepository;
     private final WorkspaceLlmModelRepository workspaceModelRepository;
 
     /** Admit a per-purpose binding: row-lock it (against activation/reprice) and freeze its price. */
     @Transactional
-    public AdmittedLlmModel admit(WorkspaceAgentBinding binding) {
-        WorkspaceAgentBinding locked = binding.getId() != null
+    public AdmittedLlmModel admit(WorkspaceModelAssignment binding) {
+        WorkspaceModelAssignment locked = binding.getId() != null
                 ? bindingRepository
                         .findByWorkspaceIdAndIdForUpdate(binding.getWorkspace().getId(), binding.getId())
                         .orElseThrow(LlmAdmissionService::modelUnavailable)
@@ -47,8 +47,8 @@ public class LlmAdmissionService {
      * method checks availability first and turns only its own refusals into empty.
      */
     @Transactional
-    public Optional<AdmittedLlmModel> admitIfAvailable(WorkspaceAgentBinding binding) {
-        WorkspaceAgentBinding locked = binding.getId() != null
+    public Optional<AdmittedLlmModel> admitIfAvailable(WorkspaceModelAssignment binding) {
+        WorkspaceModelAssignment locked = binding.getId() != null
                 ? bindingRepository
                         .findByWorkspaceIdAndIdForUpdate(binding.getWorkspace().getId(), binding.getId())
                         .orElse(null)

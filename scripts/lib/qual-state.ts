@@ -260,7 +260,7 @@ export function parsePrometheus(text: string, keep?: RegExp): Sample[] {
 
 /** The counters and gauges the drills and the bench compare, by the metric names the server registers. */
 export const AGENT_METRICS =
-	/^(?:agent_run_|agent_sandbox_|action_|llm_pool_|llm_proxy_|llm_usage_|agent_job_|agent_queue_|mentor_turn_|gen_ai_|jvm_memory_used_bytes|jvm_gc_pause_seconds|jvm_gc_memory|process_cpu_usage|system_cpu_usage|hikaricp_connections|http_server_requests_seconds_count|executor_)/u;
+	/^(?:agent_run_|agent_sandbox_|action_|llm_pool_|llm_proxy_|llm_usage_|agent_job_|agent_queue_|conversation_turn_|gen_ai_|jvm_memory_used_bytes|jvm_gc_pause_seconds|jvm_gc_memory|process_cpu_usage|system_cpu_usage|hikaricp_connections|http_server_requests_seconds_count|executor_)/u;
 
 /** Each server and worker Pod's samples, by Pod name. A Pod whose scrape fails maps to its error. */
 export async function scrapeAll(

@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, waitFor, within } from "storybook/test";
 
-import type { AgentBinding } from "@/api/types.gen";
+import type { ModelAssignment } from "@/api/types.gen";
 import {
 	FeedbackModeSkeleton,
 	ReviewSettingsSkeleton,
@@ -31,7 +31,7 @@ const readyBinding = {
 	enabled: true,
 	ready: true,
 	servedTiers: ["IN_HOUSE", "CLOUD"],
-} satisfies AgentBinding;
+} satisfies ModelAssignment;
 
 const meta = {
 	component: ReviewPage,

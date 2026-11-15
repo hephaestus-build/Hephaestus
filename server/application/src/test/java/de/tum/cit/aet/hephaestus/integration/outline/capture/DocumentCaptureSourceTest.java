@@ -8,10 +8,10 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import de.tum.cit.aet.hephaestus.evidence.capture.MentorContextRequest;
+import de.tum.cit.aet.hephaestus.conversation.spi.ConversationMessageQuery;
+import de.tum.cit.aet.hephaestus.evidence.capture.ConversationContextRequest;
 import de.tum.cit.aet.hephaestus.integration.docs.item.DocumentProjection;
 import de.tum.cit.aet.hephaestus.integration.docs.item.DocumentProjection.ProjectedDocument;
-import de.tum.cit.aet.hephaestus.mentor.spi.MentorMessageQuery;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Instant;
 import java.util.LinkedHashMap;
@@ -38,17 +38,17 @@ class DocumentCaptureSourceTest extends BaseUnitTest {
     private DocumentProjection projection;
 
     @Mock
-    private MentorMessageQuery mentorMessages;
+    private ConversationMessageQuery conversationMessages;
 
     private DocumentCaptureSource provider;
 
     @BeforeEach
     void setUp() {
-        provider = new DocumentCaptureSource(projection, objectMapper, mentorMessages);
+        provider = new DocumentCaptureSource(projection, objectMapper, conversationMessages);
     }
 
-    private MentorContextRequest mentorRequest() {
-        return new MentorContextRequest(WORKSPACE_ID, 7L, UUID.randomUUID(), null);
+    private ConversationContextRequest conversationRequest() {
+        return new ConversationContextRequest(WORKSPACE_ID, 7L, UUID.randomUUID(), null);
     }
 
     private static ProjectedDocument doc(String collection, String slug, String title, String body) {
@@ -148,28 +148,28 @@ class DocumentCaptureSourceTest extends BaseUnitTest {
 
     @Test
     void shouldSayThatTheTeamHasMoreDocumentsThanTheListShows() throws Exception {
-        var many = IntStream.rangeClosed(0, DocumentCaptureSource.MAX_MENTOR_DOCUMENTS)
+        var many = IntStream.rangeClosed(0, DocumentCaptureSource.MAX_CONVERSATION_DOCUMENTS)
                 .mapToObj(index -> doc("Engineering", "doc-" + index, "Doc " + index, "Body."))
                 .toList();
         when(projection.documentsForWorkspace(WORKSPACE_ID)).thenReturn(many);
 
         Map<String, byte[]> files = new LinkedHashMap<>();
-        provider.contribute(mentorRequest(), files);
+        provider.contribute(conversationRequest(), files);
 
         JsonNode root = objectMapper.readTree(Objects.requireNonNull(files.get("inputs/context/outline_docs.json")));
-        assertThat(root.path("documents")).hasSize(DocumentCaptureSource.MAX_MENTOR_DOCUMENTS);
+        assertThat(root.path("documents")).hasSize(DocumentCaptureSource.MAX_CONVERSATION_DOCUMENTS);
         assertThat(root.path("hasMore").asBoolean()).isTrue();
     }
 
     @Test
-    void mentorPathEmitsSingleJsonArray() throws Exception {
+    void conversationPathEmitsSingleJsonArray() throws Exception {
         when(projection.documentsForWorkspace(WORKSPACE_ID))
                 .thenReturn(List.of(
                         doc("Engineering", "onboarding-guide", "Onboarding Guide", "Welcome."),
                         doc("Product", "roadmap", "Roadmap", "Q3 plans.")));
 
         Map<String, byte[]> files = new LinkedHashMap<>();
-        provider.contribute(mentorRequest(), files);
+        provider.contribute(conversationRequest(), files);
 
         assertThat(files.keySet()).containsExactly("inputs/context/outline_docs.json");
         JsonNode root = objectMapper
@@ -195,7 +195,7 @@ class DocumentCaptureSourceTest extends BaseUnitTest {
     }
 
     @Test
-    void mentorPathEmitsCollectionNameOnlyWhenCaptured() throws Exception {
+    void conversationPathEmitsCollectionNameOnlyWhenCaptured() throws Exception {
         when(projection.documentsForWorkspace(WORKSPACE_ID))
                 .thenReturn(List.of(
                         docWithCollectionName(
@@ -203,7 +203,7 @@ class DocumentCaptureSourceTest extends BaseUnitTest {
                         doc("product", "roadmap", "Roadmap", "Q3 plans.")));
 
         Map<String, byte[]> files = new LinkedHashMap<>();
-        provider.contribute(mentorRequest(), files);
+        provider.contribute(conversationRequest(), files);
 
         JsonNode root = objectMapper
                 .readTree(Objects.requireNonNull(files.get("inputs/context/outline_docs.json")))
@@ -215,7 +215,7 @@ class DocumentCaptureSourceTest extends BaseUnitTest {
     }
 
     @Test
-    void mentorPathEmitsAuthorNameAndResolvedAccountId() throws Exception {
+    void conversationPathEmitsAuthorNameAndResolvedAccountId() throws Exception {
         when(projection.documentsForWorkspace(WORKSPACE_ID))
                 .thenReturn(List.of(
                         authoredDoc(
@@ -228,7 +228,7 @@ class DocumentCaptureSourceTest extends BaseUnitTest {
                         authoredDoc("Product", "roadmap", "Roadmap", "Q3 plans.", "Grace Hopper", null)));
 
         Map<String, byte[]> files = new LinkedHashMap<>();
-        provider.contribute(mentorRequest(), files);
+        provider.contribute(conversationRequest(), files);
 
         JsonNode root = objectMapper
                 .readTree(Objects.requireNonNull(files.get("inputs/context/outline_docs.json")))
@@ -245,7 +245,7 @@ class DocumentCaptureSourceTest extends BaseUnitTest {
     }
 
     @Test
-    void mentorPathEmitsTimestampsAndCollaborators() throws Exception {
+    void conversationPathEmitsTimestampsAndCollaborators() throws Exception {
         when(projection.documentsForWorkspace(WORKSPACE_ID))
                 .thenReturn(List.of(
                         authoredDoc(
@@ -261,7 +261,7 @@ class DocumentCaptureSourceTest extends BaseUnitTest {
                         doc("Product", "roadmap", "Roadmap", "Q3 plans.")));
 
         Map<String, byte[]> files = new LinkedHashMap<>();
-        provider.contribute(mentorRequest(), files);
+        provider.contribute(conversationRequest(), files);
 
         JsonNode root = objectMapper
                 .readTree(Objects.requireNonNull(files.get("inputs/context/outline_docs.json")))
@@ -288,8 +288,8 @@ class DocumentCaptureSourceTest extends BaseUnitTest {
     }
 
     @Test
-    void mentorPathGivesTheDocumentLinkAndSaysWhenTheBodyWasCut() throws Exception {
-        String longBody = "a".repeat(DocumentCaptureSource.MENTOR_BODY_CHARS + 500);
+    void conversationPathGivesTheDocumentLinkAndSaysWhenTheBodyWasCut() throws Exception {
+        String longBody = "a".repeat(DocumentCaptureSource.CONVERSATION_BODY_CHARS + 500);
         ProjectedDocument linked = new ProjectedDocument(
                 "engineering",
                 "release-guide",
@@ -314,13 +314,13 @@ class DocumentCaptureSourceTest extends BaseUnitTest {
                 .thenReturn(List.of(linked, doc("Product", "roadmap", "Roadmap", "Q3 plans.")));
 
         Map<String, byte[]> files = new LinkedHashMap<>();
-        provider.contribute(mentorRequest(), files);
+        provider.contribute(conversationRequest(), files);
 
         JsonNode root = objectMapper
                 .readTree(Objects.requireNonNull(files.get("inputs/context/outline_docs.json")))
                 .path("documents");
         assertThat(root.path(0).path("url").asString()).isEqualTo("https://docs.example/doc/release-guide-abc123");
-        assertThat(root.path(0).path("body").asString()).hasSize(DocumentCaptureSource.MENTOR_BODY_CHARS);
+        assertThat(root.path(0).path("body").asString()).hasSize(DocumentCaptureSource.CONVERSATION_BODY_CHARS);
         assertThat(root.path(0).path("bodyTruncated").asBoolean()).isTrue();
         assertThat(root.path(0).path("bodyChars").asInt()).isEqualTo(longBody.length());
         assertThat(root.path(1).has("url")).as("no link was captured").isFalse();
@@ -328,11 +328,11 @@ class DocumentCaptureSourceTest extends BaseUnitTest {
     }
 
     @Test
-    void mentorPathWritesNothingWhenWorkspaceHasNoDocuments() {
+    void conversationPathWritesNothingWhenWorkspaceHasNoDocuments() {
         when(projection.documentsForWorkspace(WORKSPACE_ID)).thenReturn(List.of());
 
         Map<String, byte[]> files = new LinkedHashMap<>();
-        provider.contribute(mentorRequest(), files);
+        provider.contribute(conversationRequest(), files);
 
         assertThat(files).isEmpty();
     }
@@ -354,13 +354,14 @@ class DocumentCaptureSourceTest extends BaseUnitTest {
     }
 
     @Test
-    void mentorPathRanksByTheCurrentUserMessageWhenOneExists() throws Exception {
+    void conversationPathRanksByTheCurrentUserMessageWhenOneExists() throws Exception {
         UUID messageId = UUID.randomUUID();
-        MentorContextRequest request = new MentorContextRequest(WORKSPACE_ID, 7L, UUID.randomUUID(), messageId);
-        when(mentorMessages.textForMessage(WORKSPACE_ID, 7L, messageId))
+        ConversationContextRequest request =
+                new ConversationContextRequest(WORKSPACE_ID, 7L, UUID.randomUUID(), messageId);
+        when(conversationMessages.textForMessage(WORKSPACE_ID, 7L, messageId))
                 .thenReturn(Optional.of("How do we deploy the webhook server?"));
         when(projection.searchDocuments(
-                        eq(WORKSPACE_ID), anyString(), eq(DocumentCaptureSource.MAX_MENTOR_DOCUMENTS + 1)))
+                        eq(WORKSPACE_ID), anyString(), eq(DocumentCaptureSource.MAX_CONVERSATION_DOCUMENTS + 1)))
                 .thenReturn(List.of(doc("Ops", "deploy-guide", "Deploy Guide", "Steps.")));
 
         Map<String, byte[]> files = new LinkedHashMap<>();
@@ -375,12 +376,14 @@ class DocumentCaptureSourceTest extends BaseUnitTest {
     }
 
     @Test
-    void mentorPathFallsBackToRecencyWhenTheQueryMatchesNothing() {
+    void conversationPathFallsBackToRecencyWhenTheQueryMatchesNothing() {
         UUID messageId = UUID.randomUUID();
-        MentorContextRequest request = new MentorContextRequest(WORKSPACE_ID, 7L, UUID.randomUUID(), messageId);
-        when(mentorMessages.textForMessage(WORKSPACE_ID, 7L, messageId)).thenReturn(Optional.of("something niche"));
+        ConversationContextRequest request =
+                new ConversationContextRequest(WORKSPACE_ID, 7L, UUID.randomUUID(), messageId);
+        when(conversationMessages.textForMessage(WORKSPACE_ID, 7L, messageId))
+                .thenReturn(Optional.of("something niche"));
         when(projection.searchDocuments(
-                        eq(WORKSPACE_ID), anyString(), eq(DocumentCaptureSource.MAX_MENTOR_DOCUMENTS + 1)))
+                        eq(WORKSPACE_ID), anyString(), eq(DocumentCaptureSource.MAX_CONVERSATION_DOCUMENTS + 1)))
                 .thenReturn(List.of());
         when(projection.documentsForWorkspace(WORKSPACE_ID))
                 .thenReturn(List.of(doc("Engineering", "onboarding-guide", "Onboarding Guide", "Welcome.")));

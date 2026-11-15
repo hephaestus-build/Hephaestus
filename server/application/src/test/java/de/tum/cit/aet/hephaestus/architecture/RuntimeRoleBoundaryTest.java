@@ -111,7 +111,7 @@ class RuntimeRoleBoundaryTest extends HephaestusArchitectureTest {
                     "de.tum.cit.aet.hephaestus.productfeedback.ProductFeedbackNotificationQueryService",
                     RuntimeRole.SERVER_PROPERTY),
             // ServerSchedulingConfig silences the @Scheduled tick off-server, but an ungated BEAN still
-            // registers its gauges — permanent zeros in agent.run.* / mentor.in_flight.* from pods that
+            // registers its gauges — permanent zeros in agent.run.* / conversation.in_flight.* from pods that
             // never sample. Gate the bean, not just the tick.
             Map.entry("de.tum.cit.aet.hephaestus.agent.run.AgentRunSampler", RuntimeRole.SERVER_PROPERTY),
             Map.entry("de.tum.cit.aet.hephaestus.core.database.WalArchiveMonitor", RuntimeRole.SERVER_PROPERTY),
@@ -157,7 +157,8 @@ class RuntimeRoleBoundaryTest extends HephaestusArchitectureTest {
             Map.entry("de.tum.cit.aet.hephaestus.productfeedback.FeedbackAdminController", RuntimeRole.SERVER_PROPERTY),
             Map.entry("de.tum.cit.aet.hephaestus.productfeedback.FeedbackService", RuntimeRole.SERVER_PROPERTY),
             Map.entry(
-                    "de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnQueueSampler", RuntimeRole.SERVER_PROPERTY),
+                    "de.tum.cit.aet.hephaestus.agent.conversation.turn.ConversationTurnQueueSampler",
+                    RuntimeRole.SERVER_PROPERTY),
             // The config-audit viewer and retention sweep are server-only; the recorder deliberately is
             // not, because every role writes to the trail.
             Map.entry("de.tum.cit.aet.hephaestus.core.audit.ConfigAuditRetentionJob", RuntimeRole.SERVER_PROPERTY),
@@ -224,11 +225,11 @@ class RuntimeRoleBoundaryTest extends HephaestusArchitectureTest {
             "de.tum.cit.aet.hephaestus.agent.gateway.SandboxDispatchConfiguration",
             "de.tum.cit.aet.hephaestus.agent.sandbox.kubernetes.KubernetesSandboxConfiguration",
             "de.tum.cit.aet.hephaestus.agent.sandbox.SandboxRuntimeConfiguration",
-            "de.tum.cit.aet.hephaestus.agent.mentor.host.HephTurnConfiguration",
-            "de.tum.cit.aet.hephaestus.agent.mentor.host.TurnSandboxRunKind",
-            "de.tum.cit.aet.hephaestus.agent.mentor.host.TurnContextController",
-            "de.tum.cit.aet.hephaestus.agent.mentor.host.HephTurnController",
-            "de.tum.cit.aet.hephaestus.agent.mentor.host.HephTurnContexts",
+            "de.tum.cit.aet.hephaestus.agent.conversation.host.ConversationTurnConfiguration",
+            "de.tum.cit.aet.hephaestus.agent.conversation.host.TurnSandboxRunKind",
+            "de.tum.cit.aet.hephaestus.agent.conversation.host.TurnContextController",
+            "de.tum.cit.aet.hephaestus.agent.conversation.host.ConversationTurnController",
+            "de.tum.cit.aet.hephaestus.agent.conversation.host.ConversationTurnContexts",
             "de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenConfiguration",
             "de.tum.cit.aet.hephaestus.agent.proxy.LlmProxyController",
             "de.tum.cit.aet.hephaestus.agent.proxy.LlmProxySecurityConfig",
@@ -247,19 +248,20 @@ class RuntimeRoleBoundaryTest extends HephaestusArchitectureTest {
     }
 
     /**
-     * Beans that must wire <em>unconditionally</em> (no {@code @ConditionalOnProperty}): Heph is
+     * Beans that must wire <em>unconditionally</em> (no {@code @ConditionalOnProperty}): Hephaestus is
      * offered to every member of an active workspace, and whether it can answer is the workspace's
-     * mentor model binding in the DB, not a capability flag.
+     * conversation model binding in the DB, not a capability flag.
      */
-    private static final List<String> UNCONDITIONAL_MENTOR_BEANS = List.of(
-            "de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorAdmission",
-            "de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnCompletion",
-            "de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnStarter",
-            "de.tum.cit.aet.hephaestus.mentor.MentorTurnService");
+    private static final List<String> UNCONDITIONAL_CONVERSATION_BEANS = List.of(
+            "de.tum.cit.aet.hephaestus.agent.conversation.turn.ConversationAdmission",
+            "de.tum.cit.aet.hephaestus.agent.conversation.turn.ConversationTurnCompletion",
+            "de.tum.cit.aet.hephaestus.agent.conversation.turn.ConversationTurnStarter",
+            "de.tum.cit.aet.hephaestus.conversation.ConversationTurnService");
 
     @Test
-    void shouldNameOnlyExistingClassesInUnconditionalMentorBeans() {
-        AllowlistEntries.assertEachNamesAClass("UNCONDITIONAL_MENTOR_BEANS", UNCONDITIONAL_MENTOR_BEANS, classes);
+    void shouldNameOnlyExistingClassesInUnconditionalConversationBeans() {
+        AllowlistEntries.assertEachNamesAClass(
+                "UNCONDITIONAL_CONVERSATION_BEANS", UNCONDITIONAL_CONVERSATION_BEANS, classes);
     }
 
     @Test
@@ -407,8 +409,8 @@ class RuntimeRoleBoundaryTest extends HephaestusArchitectureTest {
     }
 
     @Test
-    void mentorBeansHaveNoCapabilityGate() {
-        List<String> stillGated = UNCONDITIONAL_MENTOR_BEANS.stream()
+    void conversationBeansHaveNoCapabilityGate() {
+        List<String> stillGated = UNCONDITIONAL_CONVERSATION_BEANS.stream()
                 .map(fqn -> classes.stream()
                         .filter(c -> c.getFullName().equals(fqn))
                         .findFirst()
@@ -420,8 +422,8 @@ class RuntimeRoleBoundaryTest extends HephaestusArchitectureTest {
                 .collect(Collectors.toList());
 
         assertThat(stillGated)
-                .as("Mentor availability uses the workspace model binding. Runtime roles control deployment; "
-                        + "a capability flag must not remove mentor support.")
+                .as("Conversation availability uses the workspace model binding. Runtime roles control deployment; "
+                        + "a capability flag must not remove conversation support.")
                 .isEmpty();
     }
 
@@ -438,7 +440,7 @@ class RuntimeRoleBoundaryTest extends HephaestusArchitectureTest {
 
     @Test
     void noBeanIsGatedOnTheRetiredSandboxEnabledFlag() {
-        // The Kubernetes sandbox is the agent runtime and Heph is always offered, so no capability flag may
+        // The Kubernetes sandbox is the agent runtime and Hephaestus is always offered, so no capability flag may
         // gate either, through @ConditionalOnProperty or @ConditionalOnExpression.
         List<String> violations = classes.stream()
                 .filter(c -> c.getFullName().startsWith("de.tum.cit.aet.hephaestus."))

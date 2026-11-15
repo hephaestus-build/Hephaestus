@@ -52,7 +52,7 @@ import tools.jackson.databind.json.JsonMapper;
  * workspace reads many developers at once, through the same selection, visibility and classification, so the two
  * pages cannot disagree about a developer.
  *
- * <p>Heph reads a processing-qualified snapshot on the server, so this service is available wherever reviews are
+ * <p>Hephaestus reads a processing-qualified snapshot on the server, so this service is available wherever reviews are
  * prepared.
  */
 @Service

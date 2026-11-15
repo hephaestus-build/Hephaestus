@@ -26,6 +26,6 @@ record ProxyIdentity(@Nullable ProxyAttempt job, @Nullable ProxyAttempt turn) {
     /** Names the caller for logs and rate limits, never with its credential. */
     String description() {
         if (job != null) return "job:" + job.id();
-        return "mentor-turn:" + Objects.requireNonNull(turn).id();
+        return "conversation-turn:" + Objects.requireNonNull(turn).id();
     }
 }

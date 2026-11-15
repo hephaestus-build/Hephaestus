@@ -1,10 +1,10 @@
 package de.tum.cit.aet.hephaestus.agent.usage;
 
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
+import de.tum.cit.aet.hephaestus.conversation.ConversationTurn;
 import de.tum.cit.aet.hephaestus.core.TimeOrderedIds;
 import de.tum.cit.aet.hephaestus.core.TransactionCallbacks;
 import de.tum.cit.aet.hephaestus.integration.core.spi.UsagePricingState;
-import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
 import de.tum.cit.aet.hephaestus.practices.spi.ModelKind;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.math.BigDecimal;
@@ -213,7 +213,7 @@ public class LlmUsageRecorder {
             UUID callId,
             @Nullable Long workspaceId,
             @Nullable CallUsage usage,
-            MentorTurn.@Nullable FailedCall failure) {
+            ConversationTurn.@Nullable FailedCall failure) {
         return completeCall(callId, workspaceId, usage, failure);
     }
 
@@ -221,7 +221,7 @@ public class LlmUsageRecorder {
             UUID callId,
             @Nullable Long workspaceId,
             @Nullable CallUsage usage,
-            MentorTurn.@Nullable FailedCall failure) {
+            ConversationTurn.@Nullable FailedCall failure) {
         LlmUsageEvent row = usageRepository.lockCall(callId, workspaceId).orElse(null);
         if (row == null) return false;
         if (failure != null) {
@@ -308,7 +308,7 @@ public class LlmUsageRecorder {
 
     /** Reads the failed call on any replica, scoped to the exact run claim that ends. */
     @Transactional(readOnly = true)
-    public MentorTurn.@Nullable FailedCall latestFailure(long workspaceId, UUID runId, int epoch) {
+    public ConversationTurn.@Nullable FailedCall latestFailure(long workspaceId, UUID runId, int epoch) {
         return usageRepository.latestFailure(workspaceId, runId, epoch).orElse(null);
     }
 

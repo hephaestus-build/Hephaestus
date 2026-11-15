@@ -20,7 +20,7 @@ import org.springframework.data.repository.Repository;
  * <ul>
  *   <li><b>integration.scm</b> - Shared kernel for git provider data sync (GitHub and GitLab)</li>
  *   <li><b>workspace</b> - Cross-cutting context (multi-tenancy)</li>
- *   <li><b>Feature modules</b> - activity, mentor, practices depend on both</li>
+ *   <li><b>Feature modules</b> - activity, conversation, practices depend on both</li>
  *   <li><b>Provider subpackages</b> - github/ and (future) gitlab/ isolate provider-specific logic</li>
  * </ul>
  *
@@ -168,7 +168,7 @@ class ModuleBoundaryTest extends HephaestusArchitectureTest {
                     .should()
                     .dependOnClassesThat()
                     .resideInAnyPackage(
-                            "..activity..", "..mentor..", "..notification..", "..account..", "..contributors..")
+                            "..activity..", "..conversation..", "..notification..", "..account..", "..contributors..")
                     .because("Vendor-neutral SCM domain must be isolated - use domain events for cross-cutting"
                             + " concerns");
             rule.check(classes);
@@ -350,19 +350,19 @@ class ModuleBoundaryTest extends HephaestusArchitectureTest {
     class FeatureModuleBoundaryTests {
 
         /**
-         * Mentor module should only depend on integration.scm and shared modules.
+         * Conversation module should only depend on integration.scm and shared modules.
          *
-         * <p>Mentor is a standalone feature that consumes pull request data.
+         * <p>Conversation is a standalone feature that consumes pull request data.
          */
         @Test
-        void mentorHasLimitedDependencies() {
+        void conversationHasLimitedDependencies() {
             ArchRule rule = noClasses()
                     .that()
-                    .resideInAPackage("..mentor..")
+                    .resideInAPackage("..conversation..")
                     .should()
                     .dependOnClassesThat()
                     .resideInAnyPackage("..activity..", "..notification..")
-                    .because("Mentor should be isolated from other feature modules");
+                    .because("Conversation should be isolated from other feature modules");
             rule.check(classes);
         }
     }

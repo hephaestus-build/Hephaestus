@@ -14,7 +14,7 @@ import org.jspecify.annotations.Nullable;
 /**
  * One member's view of setup in one workspace. {@code aiChoice} is the account's answer, the same in
  * every workspace; {@code aiOptions} says what this workspace has set up under each answer, which is
- * what differs between workspaces. {@code mentorRefusal} is this member's own answer from Hephaestus's admission.
+ * what differs between workspaces. {@code conversationRefusal} is this member's own answer from Hephaestus's admission.
  */
 public record WorkspaceOnboardingDTO(
         @NonNull String workspaceName,
@@ -29,11 +29,11 @@ public record WorkspaceOnboardingDTO(
                 description =
                         "Why Hephaestus declines this member here, by the rule that admits each question; null when Hephaestus can answer")
         @Nullable
-        AiRefusalReason mentorRefusal) {
+        AiRefusalReason conversationRefusal) {
     public record WorkspaceAiOptionDTO(
             @NonNull AiChoice choice,
             @Schema(requiredMode = RequiredMode.REQUIRED) boolean practiceReviewsReady,
-            @Schema(requiredMode = RequiredMode.REQUIRED) boolean mentorReady,
+            @Schema(requiredMode = RequiredMode.REQUIRED) boolean conversationReady,
             @NonNull List<WorkspaceAiModelDTO> models) {}
 
     /** A model this answer would use here. */

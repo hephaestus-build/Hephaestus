@@ -37,7 +37,7 @@ function trend(values: number[]) {
 }
 
 /**
- * Asks one question at `base`, a workspace's `/mentor` path, as the owner of `token`: the ids of the
+ * Asks one question at `base`, a workspace's `/conversation` path, as the owner of `token`: the ids of the
  * turn and of the question, or the refusal's `HTTP_<status>`.
  */
 export async function submitTurn(
@@ -350,16 +350,16 @@ export async function runCapacityChat(options: {
 			doneWithoutFirstText: done.length - firstText.length,
 		},
 		metrics: {
-			heph_first_text: trend(firstText),
-			heph_queue_wait: trend(
+			conversation_first_text: trend(firstText),
+			conversation_queue_wait: trend(
 				done.flatMap((row) => (row.running === undefined ? [] : [row.running - row.sent])),
 			),
-			heph_turn_duration: trend(
+			conversation_turn_duration: trend(
 				done.flatMap((row) => (row.ended === undefined ? [] : [row.ended - row.sent])),
 			),
-			heph_turns_finished: { values: { count: done.length } },
+			conversation_turns_finished: { values: { count: done.length } },
 			course_sessions_finished: { values: { count: completedSessions } },
-			heph_turn_refused: {
+			conversation_turn_refused: {
 				values: { count: measurements.filter((row) => row.status === "HTTP_409").length },
 			},
 		},

@@ -84,11 +84,11 @@ function stubWorkspace(extra: Parameters<typeof server.use>) {
 				slug: "acme",
 				displayName: "Acme",
 				practicesEnabled: true,
-				practiceReviewAutoTriggerEnabled: true,
-				practiceReviewManualTriggerEnabled: true,
+				practiceReviewEventEnabled: true,
+				practiceReviewRequestEnabled: true,
 			}),
 		),
-		http.get("*/workspaces/:workspaceSlug/agents", () => HttpResponse.json([])),
+		http.get("*/workspaces/:workspaceSlug/model-assignments", () => HttpResponse.json([])),
 		http.get("*/workspaces/:workspaceSlug/members", () =>
 			HttpResponse.json({
 				content: [membership({}), unclaimed],
@@ -203,8 +203,8 @@ describe("review route", () => {
 			displayName: "Tutors",
 			providerType: "GITLAB",
 			practicesEnabled: true,
-			practiceReviewAutoTriggerEnabled: true,
-			practiceReviewManualTriggerEnabled: true,
+			practiceReviewEventEnabled: true,
+			practiceReviewRequestEnabled: true,
 		};
 		stubWorkspace([
 			http.get("*/user", () => HttpResponse.json(currentUser)),
@@ -243,13 +243,13 @@ describe("review route", () => {
 		await waitFor(() => expect(changes).toHaveLength(1));
 		expect(changes[0]).toStrictEqual({
 			slug: "tutors",
-			body: { practiceReviewAutoTriggerEnabled: false },
+			body: { practiceReviewEventEnabled: false },
 		});
 		await userEvent.click(screen.getByRole("switch", { name: "Start requested reviews" }));
 		await waitFor(() => expect(changes).toHaveLength(2));
 		expect(changes[1]).toStrictEqual({
 			slug: "tutors",
-			body: { practiceReviewManualTriggerEnabled: false },
+			body: { practiceReviewRequestEnabled: false },
 		});
 		expect(target.practicesEnabled).toBe(true);
 		expect(queryClient.getQueryData(listWorkspacesQueryKey())).toStrictEqual([

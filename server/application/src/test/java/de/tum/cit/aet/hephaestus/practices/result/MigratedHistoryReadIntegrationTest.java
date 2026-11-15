@@ -621,19 +621,19 @@ class MigratedHistoryReadIntegrationTest extends BaseIntegrationTest {
         var message = UUID.randomUUID();
         if (destination == FeedbackDestination.CONVERSATION) {
             jdbc.update(
-                    "INSERT INTO mentor_conversation(id,workspace_id,account_id,created_at,last_activity_at) VALUES (?,?,?,now(),now())",
+                    "INSERT INTO conversation(id,workspace_id,account_id,created_at,last_activity_at) VALUES (?,?,?,now(),now())",
                     conversation,
                     scenario.workspace().getId(),
                     scenario.account().getId());
             jdbc.update(
-                    "INSERT INTO mentor_entry(id,workspace_id,conversation_id,seq,kind,surface,text,created_at) VALUES (?,?,?,1,'HEPH','APP',?,now())",
+                    "INSERT INTO conversation_entry(id,workspace_id,conversation_id,seq,kind,surface,text,created_at) VALUES (?,?,?,1,'ANSWER','APP',?,now())",
                     message,
                     scenario.workspace().getId(),
                     conversation,
                     body);
         }
         jdbc.update(
-                "INSERT INTO feedback_copy(id,workspace_id,feedback_id,kind,position,body,path,state,posted_at,mentor_entry_id) VALUES (?,?,?,?,0,?,?,'POSTED',now(),?)",
+                "INSERT INTO feedback_copy(id,workspace_id,feedback_id,kind,position,body,path,state,posted_at,conversation_entry_id) VALUES (?,?,?,?,0,?,?,'POSTED',now(),?)",
                 UUID.randomUUID(),
                 scenario.workspace().getId(),
                 feedbackId,
@@ -697,7 +697,7 @@ class MigratedHistoryReadIntegrationTest extends BaseIntegrationTest {
                     .jsonPath("$")
                     .isEmpty();
         } else if (destination == FeedbackDestination.CONVERSATION) {
-            get("/mentor/entries")
+            get("/conversation/entries")
                     .expectStatus()
                     .isOk()
                     .expectBody()
@@ -705,7 +705,7 @@ class MigratedHistoryReadIntegrationTest extends BaseIntegrationTest {
                     .isEqualTo(message.toString())
                     .jsonPath("$.content[0].text")
                     .isEqualTo(body);
-            get(operator, "/mentor/entries/" + message + "/thread")
+            get(operator, "/conversation/entries/" + message + "/thread")
                     .expectStatus()
                     .isNotFound()
                     .expectBody(Void.class);

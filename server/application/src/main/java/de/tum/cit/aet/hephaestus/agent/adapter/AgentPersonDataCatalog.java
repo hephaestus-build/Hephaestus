@@ -57,7 +57,7 @@ public class AgentPersonDataCatalog implements PersonDataCatalog {
 
     /** The ledger source kinds of a review job's calls: its own model and each model kind of its practice scripts. */
     private static final Object[] REVIEW_SOURCE_TYPES = Arrays.stream(UsageSourceType.values())
-            .filter(type -> type != UsageSourceType.MENTOR_TURN)
+            .filter(type -> type != UsageSourceType.CONVERSATION_TURN)
             .map(Enum::name)
             .distinct()
             .toArray();
@@ -90,8 +90,8 @@ public class AgentPersonDataCatalog implements PersonDataCatalog {
                         "t.source_id IN (" + SELECTED_JOBS
                                 + ") OR t.review_id IN (SELECT review_id FROM review_job WHERE id IN ("
                                 + SELECTED_JOBS
-                                + ")) OR (t.source_type='MENTOR_TURN' AND t.source_id IN (SELECT mt.id FROM"
-                                + " mentor_turn mt JOIN mentor_conversation mc ON mc.id=mt.conversation_id WHERE"
+                                + ")) OR (t.source_type='CONVERSATION_TURN' AND t.source_id IN (SELECT mt.id FROM"
+                                + " conversation_turn mt JOIN conversation mc ON mc.id=mt.conversation_id WHERE"
                                 + " mc.account_id=:account)) OR (t.source_type='PRODUCT_FEEDBACK_DRAFT'"
                                 + " AND t.workspace_id IS NULL AND t.source_id IN"
                                 + " (SELECT p.id FROM product_feedback p WHERE p.account_id=:account))",
@@ -259,7 +259,7 @@ public class AgentPersonDataCatalog implements PersonDataCatalog {
             return new PersonDataSelection(jdbc.query(
                     "SELECT DISTINCT s.source_id::text AS source_id, s.workspace_id::text AS workspace_id FROM ("
                             + "SELECT t.source_id, t.workspace_id FROM llm_usage_event t WHERE " + predicate
-                            + " UNION SELECT mt.id, mt.workspace_id FROM mentor_turn mt JOIN mentor_conversation mc"
+                            + " UNION SELECT mt.id, mt.workspace_id FROM conversation_turn mt JOIN conversation mc"
                             + " ON mc.id = mt.conversation_id AND mc.workspace_id = mt.workspace_id"
                             + " WHERE mc.account_id = :account UNION SELECT p.id, NULL::bigint"
                             + " FROM product_feedback p WHERE p.account_id = :account) s ORDER BY 1, 2",

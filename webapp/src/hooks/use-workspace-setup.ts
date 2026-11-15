@@ -6,7 +6,7 @@ import {
 	getIntegrationCatalogOptions,
 	getMemberOnboardingSettingsOptions,
 	getWorkspaceOptions,
-	listAgentsOptions,
+	listModelAssignmentsOptions,
 	listPracticesOptions,
 	listReviewsOptions,
 } from "@/api/@tanstack/react-query.gen";
@@ -54,8 +54,8 @@ function practiceReviewsFact(workspace: Workspace | undefined): PracticeReviewsF
 	return workspace.practicesEnabled
 		? {
 				status: "on",
-				automatic: workspace.practiceReviewAutoTriggerEnabled,
-				onRequest: workspace.practiceReviewManualTriggerEnabled,
+				automatic: workspace.practiceReviewEventEnabled,
+				onRequest: workspace.practiceReviewRequestEnabled,
 			}
 		: { status: "off" };
 }
@@ -93,7 +93,7 @@ export function useWorkspaceSetup(
 				: false,
 	});
 	const practicesQuery = useQuery({ ...listPracticesOptions({ path }), enabled });
-	const bindingsQuery = useQuery({ ...listAgentsOptions({ path }), enabled });
+	const bindingsQuery = useQuery({ ...listModelAssignmentsOptions({ path }), enabled });
 	const onboardingQuery = useQuery({ ...getMemberOnboardingSettingsOptions({ path }), enabled });
 	const rollupQuery = useQuery({ ...getFeedbackModeRollupOptions({ path }), enabled });
 	const finishedReviewsQuery = useQuery({

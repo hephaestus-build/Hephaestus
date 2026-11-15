@@ -7,8 +7,8 @@ import de.tum.cit.aet.hephaestus.integration.core.handler.EventPayloadDeserializ
 import de.tum.cit.aet.hephaestus.integration.core.handler.IntegrationMessageHandler;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackChannelJoinNoticeHandler;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackChannelLifecycleService;
+import de.tum.cit.aet.hephaestus.integration.slack.events.SlackConversationService;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackIngestService;
-import de.tum.cit.aet.hephaestus.integration.slack.events.SlackMentorService;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackUninstallService;
 import de.tum.cit.aet.hephaestus.integration.slack.onboarding.SlackAppHomeService;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
@@ -81,7 +81,7 @@ class SlackManifestTemplateTest extends BaseUnitTest {
         List<IntegrationMessageHandler> handlers = List.of(
                 new SlackChannelMessageHandler(
                         mock(SlackIngestService.class), deserializer, mock(TransactionTemplate.class)),
-                new SlackMentorDmMessageHandler(mock(SlackMentorService.class), deserializer),
+                new SlackConversationDmMessageHandler(mock(SlackConversationService.class), deserializer),
                 new SlackAppHomeOpenedMessageHandler(mock(SlackAppHomeService.class), deserializer),
                 new SlackMemberJoinedChannelMessageHandler(mock(SlackChannelJoinNoticeHandler.class), deserializer),
                 new SlackAppUninstalledMessageHandler(uninstall, deserializer),

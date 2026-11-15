@@ -47,7 +47,7 @@ Slack direct messages, within each member's AI choice. Workspace admins manage t
 
 ## Confirmation
 
-`DefaultMentorReadinessQueryTest` fails if Heph counts as ready without an enabled binding that resolves to a model.
+`DefaultConversationReadinessQueryTest` fails if Heph counts as ready without an enabled binding that resolves to a model.
 `-conversation-panel-availability-route.test.tsx` checks that the floating panel stays away where no Heph model is ready.
 `restore-clone-lockdown.sql` turns off every Heph model row. Review catches a new workspace switch for Heph.
 

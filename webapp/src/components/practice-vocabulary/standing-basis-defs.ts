@@ -10,8 +10,8 @@ export type StandingBasis = NonNullable<PracticeStanding["basis"]>;
 /** The two bases a standing reads only off results recorded before the current review records. */
 export type EarlierBasis = Exclude<StandingBasis, "CURRENT_REVIEWS">;
 
-const EARLIER_ASSESSMENTS =
-	"This standing includes earlier assessments. They do not show whether the current criteria are met.";
+const EARLIER_OBSERVATIONS =
+	"This standing includes earlier observations. They do not show whether the current criteria are met.";
 
 /** The words beside a standing read only off earlier reviews, with no tooltip behind them. */
 export const EARLIER_REVIEWS_LABEL = "Based on earlier reviews, the criteria might have changed";
@@ -31,7 +31,7 @@ export const STANDING_BASIS_DEFS: StatusDefs<StandingBasis> = {
 		label: EARLIER_REVIEWS_LABEL,
 		icon: HistoryIcon,
 		badgeVariant: "outline",
-		description: `${EARLIER_ASSESSMENTS} No trend or feedback quotes are shown for those assessments.`,
+		description: `${EARLIER_OBSERVATIONS} No trend or feedback quotes are shown for those observations.`,
 	},
 	EARLIER_REVIEWS_CRITERIA_UNKNOWN: {
 		// The same words: a mark cannot tell a changed criterion from a lost one, and either way the
@@ -39,7 +39,7 @@ export const STANDING_BASIS_DEFS: StatusDefs<StandingBasis> = {
 		label: EARLIER_REVIEWS_LABEL,
 		icon: ArchiveIcon,
 		badgeVariant: "outline",
-		description: `${EARLIER_ASSESSMENTS} The original criterion version is unavailable. No trend or feedback quotes are shown for those assessments.`,
+		description: `${EARLIER_OBSERVATIONS} The original criterion version is unavailable. No trend or feedback quotes are shown for those observations.`,
 	},
 };
 
@@ -51,5 +51,5 @@ export function isEarlierBasis(basis: StandingBasis | null | undefined): basis i
 export const EARLIER_REVIEWS_COUNTED = {
 	title: "Some standings here are based on earlier reviews",
 	description:
-		"Those assessments do not show whether the current criteria are met. Your Practice profile marks yours.",
+		"Those observations do not show whether the current criteria are met. Your Practice profile marks yours.",
 } as const;

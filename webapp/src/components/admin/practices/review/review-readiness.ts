@@ -5,7 +5,7 @@ import {
 	LoaderIcon,
 	TriangleAlertIcon,
 } from "lucide-react";
-import type { AgentBinding } from "@/api/types.gen";
+import type { ModelAssignment } from "@/api/types.gen";
 import { definitionFor, type StatusDefs } from "@/components/common/status-def";
 
 import {
@@ -18,7 +18,7 @@ import {
 export type ReviewModelState =
 	| { status: "loading" }
 	| { status: "error" }
-	| { status: "ready"; binding?: AgentBinding };
+	| { status: "ready"; binding?: ModelAssignment };
 
 export function reviewModelRunnable(model: ReviewModelState): boolean {
 	return model.status === "ready" && model.binding?.ready === true && model.binding.enabled;
@@ -99,7 +99,7 @@ export function reviewReadinessDescription(readiness: ReviewReadinessState): str
 	return `Practice reviews are on and ${model}. Each developer’s AI choice still decides whether it runs for them. Feedback mode decides separately where observations become feedback.`;
 }
 
-export function availableReviewBinding(bindings: AgentBinding[]): AgentBinding | undefined {
+export function availableReviewBinding(bindings: ModelAssignment[]): ModelAssignment | undefined {
 	const reviews = bindings.filter((binding) => binding.purpose === "PRACTICE_REVIEW");
 	const ready = reviews
 		.filter((binding) => binding.enabled && binding.ready)
@@ -121,7 +121,7 @@ export function memberTiers(aiChoiceRequired: boolean): DataHandlingTier[] {
 
 /** The member tiers that no practice review binding serves, judged by the server's served tiers. */
 export function unservedReviewTiers(
-	bindings: readonly AgentBinding[],
+	bindings: readonly ModelAssignment[],
 	aiChoiceRequired: boolean,
 ): DataHandlingTier[] {
 	const served = new Set(

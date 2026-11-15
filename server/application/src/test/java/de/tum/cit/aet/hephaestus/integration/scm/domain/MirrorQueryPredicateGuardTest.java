@@ -2,7 +2,7 @@ package de.tum.cit.aet.hephaestus.integration.scm.domain;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import de.tum.cit.aet.hephaestus.integration.scm.context.MentorContextQueryRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.context.ConversationContextQueryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment.IssueCommentRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReviewRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewcomment.PullRequestReviewCommentRepository;
@@ -59,22 +59,22 @@ class MirrorQueryPredicateGuardTest extends BaseUnitTest {
             "Issue", ".deletedAt IS NULL");
 
     @Nested
-    @DisplayName("mentor context")
-    class MentorContext {
+    @DisplayName("conversation context")
+    class ConversationContext {
 
         /**
          * Hephaestus answers about the developer's own work, so a pull request or issue deleted upstream must
-         * not reach it — the mentor would describe something the developer cannot open.
+         * not reach it — the conversation would describe something the developer cannot open.
          *
          * <p>Scanned per range declaration rather than per method name: a whole-query substring passes a
          * query that has two ranges and one predicate, and a method-name list goes quiet the moment a
          * tenth query is added. Every range over an artifact or one of its children must carry its own
-         * predicate, so a new unguarded mentor query fails here without anyone remembering to extend a
+         * predicate, so a new unguarded conversation query fails here without anyone remembering to extend a
          * list.
          */
         @Test
-        void everyMentorArtifactRangeExcludesTombstones() {
-            assertEveryRangeHasLivePredicate(MentorContextQueryRepository.class, Set.of());
+        void everyConversationArtifactRangeExcludesTombstones() {
+            assertEveryRangeHasLivePredicate(ConversationContextQueryRepository.class, Set.of());
         }
 
         /**
@@ -83,9 +83,9 @@ class MirrorQueryPredicateGuardTest extends BaseUnitTest {
          * contributions stays out of every list, as it does in Activity and the review history.
          */
         @Test
-        void everyMonitoredMentorRangeIsOnTheConnectedInstanceAndNotHidden() {
+        void everyMonitoredConversationRangeIsOnTheConnectedInstanceAndNotHidden() {
             Map<String, String> offenders = new LinkedHashMap<>();
-            for (Method method : MentorContextQueryRepository.class.getDeclaredMethods()) {
+            for (Method method : ConversationContextQueryRepository.class.getDeclaredMethods()) {
                 Query query = method.getAnnotation(Query.class);
                 if (query == null || query.nativeQuery()) {
                     continue;
@@ -100,7 +100,7 @@ class MirrorQueryPredicateGuardTest extends BaseUnitTest {
             }
 
             assertThat(offenders)
-                    .as("every monitored mentor range must be on the connected instance and not hidden. "
+                    .as("every monitored conversation range must be on the connected instance and not hidden. "
                             + "Offending method -> the predicate it is missing")
                     .isEmpty();
         }
@@ -113,17 +113,17 @@ class MirrorQueryPredicateGuardTest extends BaseUnitTest {
         /**
          * {@code Issue} and {@code PullRequest} share one table under single-table inheritance, so a
          * JPQL query rooted at {@code Issue} without {@code TYPE(i) = Issue} also returns merge
-         * requests. On a GitLab workspace that makes the mentor list a merge request as an assigned
+         * requests. On a GitLab workspace that makes the conversation list a merge request as an assigned
          * open issue — and disagrees with the typed open-issue count in the same repository.
          *
          * <p>Scanned generically over every {@code @Query} in the interface (subqueries included) so a
          * newly added issue query inherits the guard rather than needing a new test.
          */
         @Test
-        void everyIssueRootedMentorQueryRestrictsToTheIssueDiscriminator() {
+        void everyIssueRootedConversationQueryRestrictsToTheIssueDiscriminator() {
             Map<String, String> offenders = new LinkedHashMap<>();
 
-            for (Method method : MentorContextQueryRepository.class.getDeclaredMethods()) {
+            for (Method method : ConversationContextQueryRepository.class.getDeclaredMethods()) {
                 Query query = method.getAnnotation(Query.class);
                 if (query == null || query.nativeQuery()) {
                     continue;

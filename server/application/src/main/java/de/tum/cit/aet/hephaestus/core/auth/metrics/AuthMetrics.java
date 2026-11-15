@@ -10,7 +10,7 @@ import org.springframework.stereotype.Component;
 /**
  * Micrometer instruments for the auth module (ADR 0017 hardening — the A→A+ observability gap).
  *
- * <p>Naming follows the rest of the codebase ({@code mentor.turn.*}, {@code agent.job.*}): dot-case
+ * <p>Naming follows the rest of the codebase ({@code conversation.turn.*}, {@code agent.job.*}): dot-case
  * Java identifiers that Micrometer's Prometheus renderer maps to {@code auth_login_total{result=…}}
  * etc. Tag values are a fixed enum so cardinality stays bounded.
  *

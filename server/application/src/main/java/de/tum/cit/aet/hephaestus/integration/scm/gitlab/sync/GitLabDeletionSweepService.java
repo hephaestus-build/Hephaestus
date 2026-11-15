@@ -50,7 +50,7 @@ import org.springframework.transaction.support.TransactionTemplate;
  * locally forever. It is worse than for GitHub: GitLab emits <em>no issue- or merge-request-deletion
  * webhook at all</em>, so there is not even a missed event to blame — a deleted issue or MR simply has
  * no code path that would ever notice it, and its phantom row permanently inflates the per-project
- * counts the admin UI reports and keeps feeding practice-review and mentor context as if it were
+ * counts the admin UI reports and keeps feeding practice-review and conversation context as if it were
  * live. This sweep is the only mechanism that closes the gap.
  *
  * <p>The method is a set difference. For each project it enumerates the complete upstream IID set with

@@ -9,7 +9,7 @@ import org.junit.jupiter.api.Test;
 class ReviewContextReactionFirewallTest extends HephaestusArchitectureTest {
 
     private static final String CONTEXT_PROVIDERS = "..agent.context.providers..";
-    private static final String MENTOR_PROVIDERS = "..agent.context.providers.mentor..";
+    private static final String CONVERSATION_PROVIDERS = "..agent.context.providers.conversation..";
     private static final String REACTION_PACKAGE = "..practices.result.reaction..";
 
     @Test
@@ -18,7 +18,7 @@ class ReviewContextReactionFirewallTest extends HephaestusArchitectureTest {
                 .that()
                 .resideInAPackage(CONTEXT_PROVIDERS)
                 .and()
-                .resideOutsideOfPackage(MENTOR_PROVIDERS)
+                .resideOutsideOfPackage(CONVERSATION_PROVIDERS)
                 .should()
                 .dependOnClassesThat()
                 .resideInAPackage(REACTION_PACKAGE)

@@ -175,9 +175,9 @@ Integration tests must create a workspace and grant membership before hitting sc
 
 ```java
 @Test
-@WithMentorUser
+@WithConversationUser
 void canListTeams() {
-    User user = persistUser("mentor");
+    User user = persistUser("conversation");
     Workspace ws = createWorkspace("test-ws", "Test", "org", AccountType.ORG, user);
     addMembership(ws, user, WorkspaceRole.ADMIN);
 

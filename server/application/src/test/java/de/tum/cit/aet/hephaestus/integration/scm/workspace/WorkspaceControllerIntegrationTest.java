@@ -1491,8 +1491,8 @@ class WorkspaceControllerIntegrationTest extends AbstractWorkspaceIntegrationTes
 
         assertThat(dto).isNotNull();
         assertThat(dto.practicesEnabled()).isFalse();
-        assertThat(dto.practiceReviewAutoTriggerEnabled()).isTrue();
-        assertThat(dto.practiceReviewManualTriggerEnabled()).isTrue();
+        assertThat(dto.practiceReviewEventEnabled()).isTrue();
+        assertThat(dto.practiceReviewRequestEnabled()).isTrue();
     }
 
     @Test
@@ -1517,8 +1517,8 @@ class WorkspaceControllerIntegrationTest extends AbstractWorkspaceIntegrationTes
 
         assertThat(patchResponse).isNotNull();
         assertThat(patchResponse.practicesEnabled()).isTrue();
-        assertThat(patchResponse.practiceReviewAutoTriggerEnabled()).isFalse();
-        assertThat(patchResponse.practiceReviewManualTriggerEnabled()).isFalse();
+        assertThat(patchResponse.practiceReviewEventEnabled()).isFalse();
+        assertThat(patchResponse.practiceReviewRequestEnabled()).isFalse();
 
         WorkspaceDTO getResponse = webTestClient
                 .get()
@@ -1533,8 +1533,8 @@ class WorkspaceControllerIntegrationTest extends AbstractWorkspaceIntegrationTes
 
         assertThat(getResponse).isNotNull();
         assertThat(getResponse.practicesEnabled()).isTrue();
-        assertThat(getResponse.practiceReviewAutoTriggerEnabled()).isFalse();
-        assertThat(getResponse.practiceReviewManualTriggerEnabled()).isFalse();
+        assertThat(getResponse.practiceReviewEventEnabled()).isFalse();
+        assertThat(getResponse.practiceReviewRequestEnabled()).isFalse();
     }
 
     @Test
@@ -1558,9 +1558,9 @@ class WorkspaceControllerIntegrationTest extends AbstractWorkspaceIntegrationTes
                 .getResponseBody();
 
         assertThat(afterFirst).isNotNull();
-        assertThat(afterFirst.practiceReviewAutoTriggerEnabled()).isFalse();
+        assertThat(afterFirst.practiceReviewEventEnabled()).isFalse();
         assertThat(afterFirst.practicesEnabled()).isFalse();
-        assertThat(afterFirst.practiceReviewManualTriggerEnabled()).isTrue();
+        assertThat(afterFirst.practiceReviewRequestEnabled()).isTrue();
 
         // Turning practice reviews on leaves automatic reviews off
         WorkspaceDTO afterSecond = webTestClient
@@ -1578,8 +1578,8 @@ class WorkspaceControllerIntegrationTest extends AbstractWorkspaceIntegrationTes
 
         assertThat(afterSecond).isNotNull();
         assertThat(afterSecond.practicesEnabled()).isTrue();
-        assertThat(afterSecond.practiceReviewAutoTriggerEnabled()).isFalse();
-        assertThat(afterSecond.practiceReviewManualTriggerEnabled()).isTrue();
+        assertThat(afterSecond.practiceReviewEventEnabled()).isFalse();
+        assertThat(afterSecond.practiceReviewRequestEnabled()).isTrue();
     }
 
     @Test
@@ -1616,8 +1616,8 @@ class WorkspaceControllerIntegrationTest extends AbstractWorkspaceIntegrationTes
 
         assertThat(afterDisable).isNotNull();
         assertThat(afterDisable.practicesEnabled()).isFalse();
-        assertThat(afterDisable.practiceReviewAutoTriggerEnabled()).isTrue();
-        assertThat(afterDisable.practiceReviewManualTriggerEnabled()).isTrue();
+        assertThat(afterDisable.practiceReviewEventEnabled()).isTrue();
+        assertThat(afterDisable.practiceReviewRequestEnabled()).isTrue();
     }
 
     @Test
@@ -1643,8 +1643,8 @@ class WorkspaceControllerIntegrationTest extends AbstractWorkspaceIntegrationTes
                 .getResponseBody();
 
         assertThat(afterDisableAuto).isNotNull();
-        assertThat(afterDisableAuto.practiceReviewAutoTriggerEnabled()).isFalse();
-        assertThat(afterDisableAuto.practiceReviewManualTriggerEnabled()).isTrue();
+        assertThat(afterDisableAuto.practiceReviewEventEnabled()).isFalse();
+        assertThat(afterDisableAuto.practiceReviewRequestEnabled()).isTrue();
 
         // Disable manual, re-enable auto
         WorkspaceDTO afterToggle = webTestClient
@@ -1661,8 +1661,8 @@ class WorkspaceControllerIntegrationTest extends AbstractWorkspaceIntegrationTes
                 .getResponseBody();
 
         assertThat(afterToggle).isNotNull();
-        assertThat(afterToggle.practiceReviewAutoTriggerEnabled()).isTrue();
-        assertThat(afterToggle.practiceReviewManualTriggerEnabled()).isFalse();
+        assertThat(afterToggle.practiceReviewEventEnabled()).isTrue();
+        assertThat(afterToggle.practiceReviewRequestEnabled()).isFalse();
 
         WorkspaceDTO getResponse = webTestClient
                 .get()
@@ -1676,8 +1676,8 @@ class WorkspaceControllerIntegrationTest extends AbstractWorkspaceIntegrationTes
                 .getResponseBody();
 
         assertThat(getResponse).isNotNull();
-        assertThat(getResponse.practiceReviewAutoTriggerEnabled()).isTrue();
-        assertThat(getResponse.practiceReviewManualTriggerEnabled()).isFalse();
+        assertThat(getResponse.practiceReviewEventEnabled()).isTrue();
+        assertThat(getResponse.practiceReviewRequestEnabled()).isFalse();
     }
 
     @Test
@@ -1687,7 +1687,7 @@ class WorkspaceControllerIntegrationTest extends AbstractWorkspaceIntegrationTes
 
         User owner = persistUser("feature-auth-owner");
         Workspace workspace = createWorkspace("feature-auth", "Auth", "auth", AccountType.ORG, owner);
-        // Mentor is intentionally NOT added as a workspace member
+        // Conversation is intentionally NOT added as a workspace member
 
         webTestClient
                 .patch()

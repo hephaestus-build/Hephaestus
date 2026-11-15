@@ -1006,7 +1006,7 @@ await test("the route attaches to the platform Gateway and strips only /api", ()
 			candidate === rule("PathPrefix", "/api"),
 			"only /api is rewritten",
 		);
-		// Only /api asks the controller to disable both deadlines, for the Heph live stream.
+		// Only /api asks the controller to disable both deadlines, for the Hephaestus live stream.
 		assert.deepEqual(
 			get(candidate, "timeouts"),
 			candidate === rule("PathPrefix", "/api")
@@ -1312,7 +1312,7 @@ await test("a server with sandboxes receives its runtime settings, its sandbox n
 	assert.equal(get(container(server), "image"), prepared.images["application-server"]);
 	assert.equal(env(server, "HEPHAESTUS_CONVERSATION_LOOP_SECRET"), undefined);
 	assert.equal(
-		env(server, "HEPHAESTUS_WORKER_CAPACITY_MENTOR_MAX"),
+		env(server, "HEPHAESTUS_WORKER_CAPACITY_CONVERSATION_MAX"),
 		undefined,
 		"no cap per server",
 	);
@@ -1385,7 +1385,7 @@ await test("a server with sandboxes receives its runtime settings, its sandbox n
 	assert.equal(get(tierQuota(resources, "reviews"), "spec", "hard", "pods"), "5");
 	assert.equal(
 		get(tierQuota(resources, "conversations"), "spec", "hard", "pods"),
-		envValue(workload(resources, "server"), "HEPHAESTUS_MENTOR_TURN_CAPACITY"),
+		envValue(workload(resources, "server"), "HEPHAESTUS_CONVERSATION_TURN_CAPACITY"),
 	);
 
 	// Exactly the calls that the runtime makes, each in one namespace, and no cluster-wide authority.
@@ -2079,7 +2079,7 @@ await test("Slack callbacks use the canonical API origin in either workspace-hos
 	}
 });
 
-await test("practice reviews run exactly when the sandboxes run, with the installation's Heph turn capacity", () => {
+await test("practice reviews run exactly when the sandboxes run, with the installation's Hephaestus turn capacity", () => {
 	// Without sandboxes, a submitted review job would wait for a sandbox that never comes.
 	assert.equal(envValue(workload(rendered(layersFor("dev")), "server"), "AGENT_ENABLED"), "false");
 	// Every shipped profile, also the ones whose sandboxes the operator turns on.
@@ -2103,7 +2103,7 @@ await test("practice reviews run exactly when the sandboxes run, with the instal
 		}
 	}
 	const capacity = (layers: readonly Layer[]) =>
-		envValue(workload(rendered(layers), "server"), "HEPHAESTUS_MENTOR_TURN_CAPACITY");
+		envValue(workload(rendered(layers), "server"), "HEPHAESTUS_CONVERSATION_TURN_CAPACITY");
 	assert.equal(capacity(layersFor("small")), "11");
 	assert.equal(capacity([...layersFor("small"), { sandbox: { conversationTurns: 5 } }]), "5");
 	const exhausted = render([
@@ -2114,7 +2114,7 @@ await test("practice reviews run exactly when the sandboxes run, with the instal
 	assert.match(exhausted.stderr, /sandbox.budget|no room/u);
 	assert.equal(capacity([...layersFor("small"), { sandbox: { conversationTurns: 0 } }]), "0");
 	assert.equal(
-		env(workload(rendered(layersFor("dev")), "server"), "HEPHAESTUS_MENTOR_TURN_CAPACITY"),
+		env(workload(rendered(layersFor("dev")), "server"), "HEPHAESTUS_CONVERSATION_TURN_CAPACITY"),
 		undefined,
 	);
 });
@@ -2453,7 +2453,7 @@ await test("auto is the largest turn count whose rendered steady and drained-upg
 		const layers = [...layersFor("small"), scenario.values];
 		const resources = rendered(layers);
 		const turns = Number(
-			envValue(workload(resources, "server"), "HEPHAESTUS_MENTOR_TURN_CAPACITY"),
+			envValue(workload(resources, "server"), "HEPHAESTUS_CONVERSATION_TURN_CAPACITY"),
 		);
 		const budget = get(scenario.values, "sandbox", "budget");
 		const room = {
@@ -2559,7 +2559,7 @@ await test("the single-node profile's requests, one upgrade beside them and its 
 	assert.equal(get(workload(resources, "server"), "spec", "replicas"), 1);
 	// The backup's request comes out of the turns too.
 	assert.equal(
-		Number(envValue(workload(resources, "server"), "HEPHAESTUS_MENTOR_TURN_CAPACITY")),
+		Number(envValue(workload(resources, "server"), "HEPHAESTUS_CONVERSATION_TURN_CAPACITY")),
 		7,
 	);
 	assert.ok(cpu <= node.cpu, `${cpu.toFixed(2)} CPU requested, ${node.cpu} on the node`);
@@ -2601,8 +2601,8 @@ for (const name of profiles) {
 			const serverReviews = Math.min(held, replicas * perServer);
 			const review = sandboxRequests(resources, "review");
 			const conversation = sandboxRequests(resources, "conversation");
-			const turns = Number(envValue(server, "HEPHAESTUS_MENTOR_TURN_CAPACITY"));
-			assert.ok(Number.isInteger(turns), "the profile bounds the Heph turns");
+			const turns = Number(envValue(server, "HEPHAESTUS_CONVERSATION_TURN_CAPACITY"));
+			assert.ok(Number.isInteger(turns), "the profile bounds the Hephaestus turns");
 			const turnSandboxes = turns;
 			const expected = {
 				reviews: {
@@ -2807,7 +2807,7 @@ await test("the small profile fits its declared budget at steady state and the d
 	]);
 	const server = workload(resources, "server");
 	assert.equal(get(server, "spec", "replicas"), 1);
-	const turns = Number(envValue(server, "HEPHAESTUS_MENTOR_TURN_CAPACITY"));
+	const turns = Number(envValue(server, "HEPHAESTUS_CONVERSATION_TURN_CAPACITY"));
 	const reviewSlots = Number(envValue(server, "SANDBOX_MAX_CONCURRENT"));
 	const backup = get(
 		resources.find((resource) => kindOf(resource) === "CronJob"),
@@ -4040,7 +4040,10 @@ await test("the database budget holds the runtime pools, rollout, listeners and 
 		},
 	];
 
-	const loads = javaCapacityConstant("agent/mentor/sandbox/TurnContextLoads.java", "LOADS_AT_ONCE");
+	const loads = javaCapacityConstant(
+		"agent/conversation/sandbox/TurnContextLoads.java",
+		"LOADS_AT_ONCE",
+	);
 	const permits = javaCapacityConstant("agent/proxy/LlmCallPermits.java", "MAINTENANCE_THREADS");
 	const monitorSql = readFileSync(path.join(chart, "files/database-monitor.sql"), "utf8");
 	const monitorLimit = /CONNECTION LIMIT (?<count>\d+)/u.exec(monitorSql)?.groups?.count;

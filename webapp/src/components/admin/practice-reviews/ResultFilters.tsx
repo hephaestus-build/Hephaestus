@@ -26,7 +26,7 @@ const OUTCOME_OPTIONS = statusFacetOptions(OUTCOME_DEFS);
 const SEVERITY_OPTIONS = statusFacetOptions(SEVERITY_DEFS);
 const DISAGREEMENT_OPTIONS = statusFacetOptions(DISAGREEMENT_DEFS);
 
-export interface AssessmentSearch {
+export interface ObservationSearch {
 	markedIncorrect?: boolean;
 	accepted?: boolean;
 	disagreed?: boolean;
@@ -40,8 +40,8 @@ function disagreementSelection(disagreed: boolean | undefined): Disagreement[] {
 }
 
 export function disagreementFacet(
-	search: AssessmentSearch,
-	onPatch: (patch: AssessmentSearch) => void,
+	search: ObservationSearch,
+	onPatch: (patch: ObservationSearch) => void,
 ): ListFacet {
 	return listFacet(
 		"Disagreement",
@@ -57,8 +57,8 @@ const MARK_FILTERS: readonly { kind: ResultMarkKind; key: "markedIncorrect" | "a
 ];
 
 export function markFilterPills(
-	search: AssessmentSearch,
-	onPatch: (patch: AssessmentSearch) => void,
+	search: ObservationSearch,
+	onPatch: (patch: ObservationSearch) => void,
 ): ReactNode {
 	return MARK_FILTERS.map(({ kind, key }) => {
 		const value = search[key];
@@ -75,7 +75,7 @@ export function markFilterPills(
 	});
 }
 
-export function hasAssessmentFilter(search: AssessmentSearch): boolean {
+export function hasObservationFilter(search: ObservationSearch): boolean {
 	return (
 		search.markedIncorrect !== undefined ||
 		search.accepted !== undefined ||
@@ -122,7 +122,7 @@ function hasResultFacet(search: ResultsSearch): boolean {
 		(search.outcome?.length ?? 0) > 0 ||
 		(search.severity?.length ?? 0) > 0 ||
 		search.currentness !== undefined ||
-		hasAssessmentFilter(search)
+		hasObservationFilter(search)
 	);
 }
 

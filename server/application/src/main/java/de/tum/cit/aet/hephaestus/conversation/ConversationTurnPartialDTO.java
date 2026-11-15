@@ -1,0 +1,51 @@
+package de.tum.cit.aet.hephaestus.conversation;
+
+import io.swagger.v3.oas.annotations.media.Schema;
+import java.util.Locale;
+import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
+import tools.jackson.databind.JsonNode;
+
+/** What Hephaestus is doing in a running turn, and the text it has written in the turn so far. Reasoning is never sent. */
+@Schema(description = "What Hephaestus is doing in a running turn")
+public record ConversationTurnPartialDTO(
+        @NonNull Activity activity,
+
+        @Schema(description = "The tool Hephaestus runs, while the activity is TOOL") @Nullable
+        String tool,
+
+        @Schema(
+                description =
+                        "What Hephaestus is doing, in the developer's words, for example \"Reading your practice feedback…\"")
+        @NonNull
+        String stage,
+
+        @Schema(description = "The text Hephaestus has written in this turn so far") @NonNull
+        String text) {
+
+    /** {@code THINKING_STAGE} in {@code turn.ts}. */
+    static final String THINKING_STAGE = "Thinking…";
+
+    public enum Activity {
+        THINKING,
+        WRITING,
+        TOOL,
+    }
+
+    /** Reads the turn driver's whole snapshot: {@code activity}, {@code tool} and the turn's Pi messages so far. */
+    static ConversationTurnPartialDTO from(JsonNode snapshot) {
+        Activity activity;
+        try {
+            activity = Activity.valueOf(
+                    snapshot.path("activity").asString("thinking").toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException unknown) {
+            activity = Activity.THINKING;
+        }
+        String tool = snapshot.path("tool").isString() ? snapshot.path("tool").asString() : null;
+        // The turn driver names the stage; a snapshot without one uses the driver's default.
+        String stage =
+                snapshot.path("stage").isString() ? snapshot.path("stage").asString() : THINKING_STAGE;
+        return new ConversationTurnPartialDTO(
+                activity, tool, stage, ConversationPiEntries.partialText(snapshot, false));
+    }
+}

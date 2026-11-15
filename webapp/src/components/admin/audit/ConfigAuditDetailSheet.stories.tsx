@@ -11,7 +11,7 @@ const baseEntry: ConfigAuditEntryView = {
 	elevatedViaInstanceAdmin: false,
 	occurredAt: new Date("2026-07-24T09:14:32Z"),
 	action: "UPDATED",
-	entityType: "AGENT_BINDING",
+	entityType: "MODEL_ASSIGNMENT",
 	entityId: "PRACTICE_REVIEW",
 	actorKind: "USER",
 	actorAccountId: 7,

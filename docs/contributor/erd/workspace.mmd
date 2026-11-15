@@ -75,8 +75,8 @@ erDiagram
         TIMESTAMPTZ issue_types_synced_at
         TIMESTAMPTZ issue_dependencies_synced_at
         BOOLEAN practices_enabled "NOT NULL"
-        BOOLEAN practice_review_auto_trigger_enabled "NOT NULL"
-        BOOLEAN practice_review_manual_trigger_enabled "NOT NULL"
+        BOOLEAN practice_review_event_enabled "NOT NULL"
+        BOOLEAN practice_review_request_enabled "NOT NULL"
         BOOLEAN practice_deliver_to_merged
         INTEGER practice_cooldown_minutes
         NUMERIC(10,2) monthly_llm_budget_usd

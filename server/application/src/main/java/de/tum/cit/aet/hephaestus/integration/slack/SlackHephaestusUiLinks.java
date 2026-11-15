@@ -26,8 +26,8 @@ public class SlackHephaestusUiLinks {
         return webappUrl + "/settings";
     }
 
-    /** A message in the developer's Heph conversation; empty when the instance has no webapp address. */
-    public String mentorEntryUrl(String workspaceSlug, UUID entryId) {
+    /** A message in the developer's Hephaestus conversation; empty when the instance has no webapp address. */
+    public String conversationEntryUrl(String workspaceSlug, UUID entryId) {
         if (webappUrl.isBlank()) {
             return "";
         }

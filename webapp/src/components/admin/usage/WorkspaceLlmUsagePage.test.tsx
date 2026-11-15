@@ -14,7 +14,7 @@ const baseReport: WorkspaceLlmUsageReport = {
 	...pricedReport,
 	unpricedEventCount: 2,
 	byJobType: pricedReport.byJobType.map((row) =>
-		row.jobType === "MENTOR_TURN" ? { ...row, unpricedEventCount: 2 } : row,
+		row.jobType === "CONVERSATION_TURN" ? { ...row, unpricedEventCount: 2 } : row,
 	),
 	byDay: pricedReport.byDay.map((row, index) =>
 		index === pricedReport.byDay.length - 1 ? { ...row, unpricedEventCount: 2 } : row,

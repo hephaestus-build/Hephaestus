@@ -2,10 +2,10 @@ import { cn } from "cn";
 import { definitionFor } from "@/components/common/status-def";
 
 import {
-	UNKNOWN_AGENT_PURPOSE_DEF,
-	AGENT_PURPOSE_DEFS,
-	type AgentPurpose,
-} from "./agent-purpose-defs";
+	UNKNOWN_MODEL_PURPOSE_DEF,
+	MODEL_PURPOSE_DEFS,
+	type ModelPurpose,
+} from "./model-purpose-defs";
 
 const TILE = {
 	sm: "size-5 rounded-sm",
@@ -16,7 +16,7 @@ const TILE = {
 const GLYPH = { sm: 14, md: 16 };
 
 export interface ModelKindMarkProps {
-	purpose: AgentPurpose;
+	purpose: ModelPurpose;
 	size?: keyof typeof TILE;
 	/**
 	 * `visible` writes the kind's name beside the tile, in the surrounding text style. `sr-only`
@@ -44,7 +44,7 @@ export function ModelKindMark({
 		title,
 		icon: Icon,
 		tone,
-	} = definitionFor(AGENT_PURPOSE_DEFS, purpose, UNKNOWN_AGENT_PURPOSE_DEF);
+	} = definitionFor(MODEL_PURPOSE_DEFS, purpose, UNKNOWN_MODEL_PURPOSE_DEF);
 	return (
 		<span className={cn("inline-flex min-w-0 items-center gap-2", className)}>
 			<span

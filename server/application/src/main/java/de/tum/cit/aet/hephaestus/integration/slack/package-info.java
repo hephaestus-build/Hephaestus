@@ -3,9 +3,9 @@
         displayName = "Integration · Slack",
         type = org.springframework.modulith.ApplicationModule.Type.OPEN,
         allowedDependencies = {
-            // Heph's Slack surface asks Heph's admission (MentorAdmission) before it writes a question, and its
-            // projector reports what reached the developer (MentorTurnCompletion).
-            "agent::mentor-turn",
+            // The Slack surface asks the conversation admission (ConversationAdmission) before it writes a question,
+            // and its projector reports what reached the developer (ConversationTurnCompletion).
+            "agent::conversation-turn",
             // The weekly digest's Slack note: the event it answers, the digest it names and the account's choice,
             // which its Turn off button changes.
             "agent::weekly-digest",
@@ -15,11 +15,12 @@
             // Hephaestus's Slack posts are outbox actions.
             "core::action",
             "core::auth-reference",
-            // SlackMentorIdentityResolver resolves a Slack (team, user) to the workspace developer login through the
+            // SlackConversationIdentityResolver resolves a Slack (team, user) to the workspace developer login through
+            // the
             // auth SPI ports only (GitProviderRegistry + AccountIdentityQuery + AccountMembershipQuery) —
             // never core.auth domain types.
             "core::auth-spi",
-            // A paused or revoked channel tells running Heph turns that their context changed.
+            // A paused or revoked channel tells running Hephaestus turns that their context changed.
             "core::event",
             // SlackChannelConsentService throws the shared EntityNotFoundException (→ 404) for an unknown /
             // cross-workspace channel.
@@ -40,13 +41,14 @@
             "integration.core::handler",
             "integration.core::items",
             "integration.core::spi",
-            // Heph's Slack surface writes questions, edits, deletions, stops and votes into the developer's
+            // Hephaestus's Slack surface writes questions, edits, deletions, stops and votes into the developer's
             // conversation ledger, projects Slack turns into the DM, and erases Slack-written entries on a disconnect,
             // an uninstall or a revoked token.
-            "mentor",
+            "conversation",
             // SlackIngestService.eraseChannel completes the GDPR Art. 17 erasure of the results and feedback derived
             // from chat.conversation_thread items through the practices-owned ConversationFeedbackErasure port
-            // (one-way edge, no cycle). The App Home and the DM ingress ask MentorReadinessQuery whether Heph is ready.
+            // (one-way edge, no cycle). The App Home and the DM ingress ask ConversationReadinessQuery whether
+            // Hephaestus is ready.
             "practices::spi",
             // SlackChannelAdminController uses RequireAtLeastWorkspaceAdmin (authorization) and
             // resolves the workspace via @WorkspaceScopedController / WorkspaceContext (context).

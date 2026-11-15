@@ -15,8 +15,8 @@ import {
 	getMemberOnboardingOptions,
 	getMemberOnboardingSettingsOptions,
 	getWorkspaceOptions,
-	listAgentsOptions,
-	listAgentsQueryKey,
+	listModelAssignmentsOptions,
+	listModelAssignmentsQueryKey,
 	workspaceCreateLlmConnectionMutation,
 	workspaceCreateLlmModelMutation,
 	workspaceDeleteLlmConnectionMutation,
@@ -33,19 +33,19 @@ import {
 	workspaceUpdateLlmConnectionMutation,
 	workspaceUpdateLlmModelMutation,
 } from "@/api/@tanstack/react-query.gen";
-import { configureAgent, deleteAgent } from "@/api/sdk.gen";
+import { assignModel, removeModelAssignment } from "@/api/sdk.gen";
 import type {
-	AgentBindingRequest,
+	ModelAssignmentRequest,
 	WorkspaceLlmConnection,
 	WorkspaceLlmModel,
 } from "@/api/types.gen";
 import { currentMonthUtc } from "@/components/admin/usage/usage-utils";
 import {
-	AgentBindingsPage,
+	ModelAssignmentsPage,
 	type BindingTarget,
 	type BindingWrite,
 	bindingTargetKey,
-} from "@/components/admin/workspace-llm/AgentBindingsPage";
+} from "@/components/admin/workspace-llm/ModelAssignmentsPage";
 import { WorkspaceLlmConnectionFormDialog } from "@/components/admin/workspace-llm/WorkspaceLlmConnectionFormDialog";
 import { WorkspaceLlmModelFormDialog } from "@/components/admin/workspace-llm/WorkspaceLlmModelFormDialog";
 import {
@@ -55,17 +55,17 @@ import {
 } from "@/components/admin/workspace-llm/WorkspaceLlmProviderPanel";
 import type { LoadState } from "@/components/common/panel-state";
 import {
-	UNKNOWN_AGENT_PURPOSE_DEF,
-	AGENT_PURPOSE_DEFS,
-	AGENT_PURPOSES,
-	isAgentPurpose,
-} from "@/components/practice-vocabulary/agent-purpose-defs";
-import {
 	UNKNOWN_DATA_HANDLING_DEF,
 	DATA_HANDLING_DEFS,
 	DATA_HANDLING_TIERS,
 	type DataHandlingTier,
 } from "@/components/practice-vocabulary/data-handling-defs";
+import {
+	UNKNOWN_MODEL_PURPOSE_DEF,
+	MODEL_PURPOSE_DEFS,
+	MODEL_PURPOSES,
+	isModelPurpose,
+} from "@/components/practice-vocabulary/model-purpose-defs";
 import { filedUnder, pathNumber, usePendingMutationIds } from "@/hooks/use-pending-mutation-ids";
 import { isRecord } from "@/lib/is-record";
 import { workspaceAdminHead } from "@/lib/page-title";
@@ -73,7 +73,7 @@ import { problemDetailOf, problemStatusOf } from "@/lib/problem-detail";
 import { useSearchState } from "@/lib/search-params";
 
 const modelsSearchSchema = z.object({
-	purpose: z.enum(AGENT_PURPOSES).optional().catch(undefined),
+	purpose: z.enum(MODEL_PURPOSES).optional().catch(undefined),
 });
 
 export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/admin/models")({
@@ -93,7 +93,7 @@ interface BindingClear {
 }
 
 interface BindingSave extends BindingClear {
-	body: AgentBindingRequest;
+	body: ModelAssignmentRequest;
 }
 
 /** The mutation cache types `variables` as `unknown`; only a write that names a real row counts. */
@@ -102,7 +102,7 @@ function targetKeyOf(variables: unknown): string | undefined {
 		return undefined;
 	}
 	const { purpose, tier } = variables.target;
-	return typeof purpose === "string" && isAgentPurpose(purpose) && isDataHandlingTier(tier)
+	return typeof purpose === "string" && isModelPurpose(purpose) && isDataHandlingTier(tier)
 		? bindingTargetKey({ purpose, tier })
 		: undefined;
 }
@@ -127,7 +127,7 @@ function ModelsContainer() {
 	const saveKey = [...AGENT_WRITE_MUTATION_KEY, workspaceSlug, "save"];
 	const clearKey = [...AGENT_WRITE_MUTATION_KEY, workspaceSlug, "clear"];
 
-	const bindingsOptions = listAgentsOptions({ path: { workspaceSlug } });
+	const bindingsOptions = listModelAssignmentsOptions({ path: { workspaceSlug } });
 	const workspaceOptions = getWorkspaceOptions({ path: { workspaceSlug } });
 	const llmSettingsOptions = workspaceGetLlmSettingsOptions({ path: { workspaceSlug } });
 	const availableModelsOptions = workspaceListAvailableLlmModelsOptions({
@@ -185,7 +185,9 @@ function ModelsContainer() {
 
 	const invalidateBindings = async () =>
 		Promise.all([
-			queryClient.invalidateQueries({ queryKey: listAgentsQueryKey({ path: { workspaceSlug } }) }),
+			queryClient.invalidateQueries({
+				queryKey: listModelAssignmentsQueryKey({ path: { workspaceSlug } }),
+			}),
 			queryClient.invalidateQueries(getMemberOnboardingOptions({ path: { workspaceSlug } })),
 		]);
 
@@ -203,7 +205,7 @@ function ModelsContainer() {
 	const saveBinding = useMutation({
 		mutationKey: saveKey,
 		mutationFn: async ({ target, body }: BindingSave) => {
-			await configureAgent({
+			await assignModel({
 				path: { workspaceSlug, purpose: target.purpose },
 				query: { dataHandlingTier: target.tier },
 				body,
@@ -214,7 +216,7 @@ function ModelsContainer() {
 			await invalidateBindings();
 			bumpSaveRevision(target);
 			toast.success(
-				`Assignment saved for ${definitionFor(AGENT_PURPOSE_DEFS, target.purpose, UNKNOWN_AGENT_PURPOSE_DEF).title}`,
+				`Assignment saved for ${definitionFor(MODEL_PURPOSE_DEFS, target.purpose, UNKNOWN_MODEL_PURPOSE_DEF).title}`,
 			);
 		},
 		onError: (error, { target }) => {
@@ -230,7 +232,7 @@ function ModelsContainer() {
 				return;
 			}
 			toast.error(
-				`We could not save the assignment for ${definitionFor(AGENT_PURPOSE_DEFS, target.purpose, UNKNOWN_AGENT_PURPOSE_DEF).title}`,
+				`We could not save the assignment for ${definitionFor(MODEL_PURPOSE_DEFS, target.purpose, UNKNOWN_MODEL_PURPOSE_DEF).title}`,
 				{
 					description: problemDetailOf(error),
 				},
@@ -241,7 +243,7 @@ function ModelsContainer() {
 	const clearBinding = useMutation({
 		mutationKey: clearKey,
 		mutationFn: async ({ target }: BindingClear) => {
-			await deleteAgent({
+			await removeModelAssignment({
 				path: { workspaceSlug, purpose: target.purpose },
 				query: { dataHandlingTier: target.tier },
 				throwOnError: true,
@@ -251,12 +253,12 @@ function ModelsContainer() {
 			await invalidateBindings();
 			bumpSaveRevision(target);
 			toast.success(
-				`Assignment cleared for ${definitionFor(AGENT_PURPOSE_DEFS, target.purpose, UNKNOWN_AGENT_PURPOSE_DEF).title}`,
+				`Assignment cleared for ${definitionFor(MODEL_PURPOSE_DEFS, target.purpose, UNKNOWN_MODEL_PURPOSE_DEF).title}`,
 			);
 		},
 		onError: (error, { target }) => {
 			toast.error(
-				`We could not clear the assignment for ${definitionFor(AGENT_PURPOSE_DEFS, target.purpose, UNKNOWN_AGENT_PURPOSE_DEF).title}`,
+				`We could not clear the assignment for ${definitionFor(MODEL_PURPOSE_DEFS, target.purpose, UNKNOWN_MODEL_PURPOSE_DEF).title}`,
 				{
 					description: problemDetailOf(error),
 				},
@@ -286,7 +288,7 @@ function ModelsContainer() {
 				}
 			: undefined;
 	return (
-		<AgentBindingsPage
+		<ModelAssignmentsPage
 			workspaceSlug={workspaceSlug}
 			state={pageState}
 			refreshFailure={refreshFailure}

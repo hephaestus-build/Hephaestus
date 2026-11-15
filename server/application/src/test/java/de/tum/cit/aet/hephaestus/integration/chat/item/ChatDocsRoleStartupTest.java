@@ -16,13 +16,13 @@ import de.tum.cit.aet.hephaestus.integration.outline.documentation.OutlineDocume
 import de.tum.cit.aet.hephaestus.integration.outline.documentation.OutlineDocumentProjector;
 import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineDocumentRepository;
 import de.tum.cit.aet.hephaestus.integration.outline.item.DocumentItemSource;
-import de.tum.cit.aet.hephaestus.integration.slack.capture.ConversationCaptureSource;
+import de.tum.cit.aet.hephaestus.integration.slack.capture.SlackThreadsCaptureSource;
 import de.tum.cit.aet.hephaestus.integration.slack.capture.ThreadCaptureSource;
-import de.tum.cit.aet.hephaestus.integration.slack.conversation.SlackConversationProjector;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMessageRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackThreadRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackPersonErasureService;
 import de.tum.cit.aet.hephaestus.integration.slack.item.ThreadItemSource;
+import de.tum.cit.aet.hephaestus.integration.slack.thread.SlackThreadProjector;
 import de.tum.cit.aet.hephaestus.practices.spi.ConversationFeedbackErasure;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import jakarta.persistence.EntityManagerFactory;
@@ -76,7 +76,7 @@ class ChatDocsRoleStartupTest extends BaseUnitTest {
                         ThreadCaptureSource.class,
                         OutlineDocumentPermission.class,
                         OutlinePersonSourceIdentityContributor.class,
-                        ConversationCaptureSource.class,
+                        SlackThreadsCaptureSource.class,
                         SlackPersonErasureService.class)
                 .withPropertyValues(
                         "hephaestus.runtime.server.enabled=true",
@@ -84,7 +84,7 @@ class ChatDocsRoleStartupTest extends BaseUnitTest {
                         "hephaestus.integration.outline.enabled=true")
                 .withBean(SlackThreadRepository.class, () -> mock(SlackThreadRepository.class))
                 .withBean(SlackMessageRepository.class, () -> mock(SlackMessageRepository.class))
-                .withBean(SlackConversationProjector.class, () -> mock(SlackConversationProjector.class))
+                .withBean(SlackThreadProjector.class, () -> mock(SlackThreadProjector.class))
                 .withBean(OutlineDocumentRepository.class, () -> mock(OutlineDocumentRepository.class))
                 .withBean(OutlineDocumentProjector.class, () -> mock(OutlineDocumentProjector.class))
                 .withBean(ConnectionService.class, () -> mock(ConnectionService.class))
@@ -107,7 +107,7 @@ class ChatDocsRoleStartupTest extends BaseUnitTest {
                             .hasSingleBean(OutlineDocumentPermission.class)
                             .hasSingleBean(OutlinePersonSourceIdentityContributor.class)
                             .hasSingleBean(ThreadCaptureSource.class)
-                            .hasSingleBean(ConversationCaptureSource.class);
+                            .hasSingleBean(SlackThreadsCaptureSource.class);
                     assertThat(context).hasSingleBean(SlackPersonErasureService.class);
                 });
     }

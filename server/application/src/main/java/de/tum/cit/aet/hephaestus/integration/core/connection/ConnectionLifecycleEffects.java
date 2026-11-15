@@ -24,7 +24,7 @@ final class ConnectionLifecycleEffects {
         } else if (previous == IntegrationState.ACTIVE) {
             eventPublisher.publishEvent(
                     new ConnectionLifecycleEvent.Deactivated(connection.getId(), workspaceId, connection.getKind()));
-            // GitHub, GitLab, Slack or Outline: a running Heph turn may hold what the connection made readable.
+            // GitHub, GitLab, Slack or Outline: a running Hephaestus turn may hold what the connection made readable.
             eventPublisher.publishEvent(new AgentContextChangedEvent(workspaceId));
         }
     }

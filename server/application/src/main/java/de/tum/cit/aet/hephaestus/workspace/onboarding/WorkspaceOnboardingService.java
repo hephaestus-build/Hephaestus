@@ -76,7 +76,7 @@ class WorkspaceOnboardingService {
                         .map(option -> new WorkspaceOnboardingDTO.WorkspaceAiOptionDTO(
                                 option.choice(),
                                 option.practiceReviewsReady(),
-                                option.mentorReady(),
+                                option.conversationReady(),
                                 option.models().stream()
                                         .map(WorkspaceOnboardingService::toDTO)
                                         .toList()))

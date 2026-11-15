@@ -71,10 +71,10 @@ public record WorkspaceDTO(
         Boolean practicesEnabled,
 
         @NonNull @Schema(description = "Whether automatic practice reviews triggered by PR events are enabled")
-        Boolean practiceReviewAutoTriggerEnabled,
+        Boolean practiceReviewEventEnabled,
 
         @NonNull @Schema(description = "Whether manual practice reviews triggered through a bot command are enabled")
-        Boolean practiceReviewManualTriggerEnabled) {
+        Boolean practiceReviewRequestEnabled) {
     public static WorkspaceDTO from(
             Workspace workspace, ConnectionMetadataQuery.WorkspaceMetadata metadata, String workspaceAddress) {
         var kind = metadata.kind();
@@ -98,7 +98,7 @@ public record WorkspaceDTO(
                 metadata.slackConnectionId(),
                 metadata.gitlabWebhookRegistered(),
                 workspace.getFeatures().getPracticesEnabled(),
-                workspace.getFeatures().getPracticeReviewAutoTriggerEnabled(),
-                workspace.getFeatures().getPracticeReviewManualTriggerEnabled());
+                workspace.getFeatures().getPracticeReviewEventEnabled(),
+                workspace.getFeatures().getPracticeReviewRequestEnabled());
     }
 }

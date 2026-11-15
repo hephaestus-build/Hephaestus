@@ -21,7 +21,7 @@ const pullRequestReviewRow: LlmUsageByJobType = {
 const jobTypeRows: LlmUsageByJobType[] = [
 	pullRequestReviewRow,
 	{
-		jobType: "MENTOR_TURN",
+		jobType: "CONVERSATION_TURN",
 		events: 61,
 		inputTokens: 890_000,
 		outputTokens: 141_000,
@@ -125,7 +125,7 @@ export const CurrentRunTypes: Story = {
 					instanceTotalCostUsd: 4.6,
 				},
 				{
-					jobType: "MENTOR_TURN",
+					jobType: "CONVERSATION_TURN",
 					events: 7,
 					inputTokens: 84_000,
 					outputTokens: 12_600,

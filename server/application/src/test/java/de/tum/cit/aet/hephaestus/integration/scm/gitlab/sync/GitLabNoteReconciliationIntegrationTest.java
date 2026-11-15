@@ -134,7 +134,7 @@ class GitLabNoteReconciliationIntegrationTest extends AbstractWorkspaceIntegrati
                 .isEqualTo(1);
         assertThat(comments.findById(deleted.getId())).isEmpty();
         assertThat(comments.findById(other.getId())).isPresent();
-        // The live-content query used by Heph and evidence reads has no deleted body left to capture.
+        // The live-content query used by Hephaestus and evidence reads has no deleted body left to capture.
         assertThat(comments.findRecentByIssueIdWithAuthor(issue.getId(), PageRequest.of(0, 10)))
                 .isEmpty();
     }

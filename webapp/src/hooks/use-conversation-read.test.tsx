@@ -4,8 +4,8 @@ import { http, HttpResponse, type PathParams } from "msw";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
-import { getMentorConversationQueryKey } from "@/api/@tanstack/react-query.gen";
-import type { MentorConversation } from "@/api/types.gen";
+import { getConversationQueryKey } from "@/api/@tanstack/react-query.gen";
+import type { Conversation } from "@/api/types.gen";
 import { server } from "@/mocks/server";
 
 import { applyRead } from "./conversation-cache";
@@ -25,8 +25,8 @@ function wrapper({ children }: { children: ReactNode }) {
 
 /** The conversation as this device holds it: one answer, read before it landed. */
 function seed() {
-	queryClient.setQueryData<MentorConversation>(
-		getMentorConversationQueryKey({ path: { workspaceSlug: SLUG } }),
+	queryClient.setQueryData<Conversation>(
+		getConversationQueryKey({ path: { workspaceSlug: SLUG } }),
 		{
 			id: "c0000000-0000-4000-8000-000000000000",
 			latestSeq: 2,
@@ -41,12 +41,9 @@ function seed() {
 /** The server answers the read with these statuses in turn, then with the marker it keeps. */
 function serveRead(failures: number[], keeps?: string) {
 	server.use(
-		http.get(
-			`*/workspaces/${SLUG}/mentor/conversation`,
-			() => new HttpResponse(null, { status: 500 }),
-		),
+		http.get(`*/workspaces/${SLUG}/conversation`, () => new HttpResponse(null, { status: 500 })),
 		http.put<PathParams, { at: string }>(
-			`*/workspaces/${SLUG}/mentor/conversation/read`,
+			`*/workspaces/${SLUG}/conversation/read`,
 			async ({ request }) => {
 				const body = await request.json();
 				puts.push(body.at);
@@ -62,9 +59,7 @@ function serveRead(failures: number[], keeps?: string) {
 /** The server's marker as this device holds it. */
 const confirmed = () =>
 	queryClient
-		.getQueryData<MentorConversation>(
-			getMentorConversationQueryKey({ path: { workspaceSlug: SLUG } }),
-		)
+		.getQueryData<Conversation>(getConversationQueryKey({ path: { workspaceSlug: SLUG } }))
 		?.lastReadAt?.toISOString();
 
 /** Marks the conversation read, and says whether this device shows it unread. */

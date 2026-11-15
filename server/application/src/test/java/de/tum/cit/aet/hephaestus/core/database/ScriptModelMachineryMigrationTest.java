@@ -11,9 +11,9 @@ import static org.mockito.Mockito.when;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
 import de.tum.cit.aet.hephaestus.agent.catalog.ResolvedLlmModel;
-import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
 import de.tum.cit.aet.hephaestus.agent.config.MemberAiRoutingAdapter;
-import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBinding;
+import de.tum.cit.aet.hephaestus.agent.config.ModelPurpose;
+import de.tum.cit.aet.hephaestus.agent.config.WorkspaceModelAssignment;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewMethodVerifier;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewModelBindingsAdapter;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
@@ -120,7 +120,7 @@ class ScriptModelMachineryMigrationTest {
                     .isZero();
             assertThat(sql.queryForList(
                             "SELECT purpose FROM workspace_agent_binding WHERE workspace_id=978001", String.class))
-                    .containsExactly(AgentPurpose.PRACTICE_REVIEW.name());
+                    .containsExactly(ModelPurpose.PRACTICE_REVIEW.name());
             assertThat(count(sql, "SELECT count(*) FROM pg_class WHERE relname='review_job_script_usage'"))
                     .isZero();
             assertThat(count(
@@ -158,7 +158,7 @@ class ScriptModelMachineryMigrationTest {
     /** What the server freezes now for the bound chat model, with the settings the seed's options came from. */
     private static ReviewModelBindingsAdapter bindings() {
         var resolver = mock(LlmModelResolver.class);
-        var binding = mock(WorkspaceAgentBinding.class);
+        var binding = mock(WorkspaceModelAssignment.class);
         when(resolver.resolve(binding))
                 .thenReturn(new ResolvedLlmModel(
                         "https://chat.example/v1", "openai-completions", "chat-1", 32000, 16000, null, false));
@@ -166,7 +166,7 @@ class ScriptModelMachineryMigrationTest {
                 .thenReturn(
                         new LlmModelResolver.ConnectionRef(UsageFundingSource.INSTANCE, 978202L, CHAT_MODEL, 978001L));
         var routing = mock(MemberAiRoutingAdapter.class);
-        when(routing.bindingForPeople(anyLong(), eq(AgentPurpose.PRACTICE_REVIEW), anyList()))
+        when(routing.bindingForPeople(anyLong(), eq(ModelPurpose.PRACTICE_REVIEW), anyList()))
                 .thenReturn(Optional.of(binding));
         var verifier = new ReviewMethodVerifier(
                 resolver, new PracticeReviewProperties(false, 15, 5, null, 36, 48000, Duration.ofMinutes(10)));

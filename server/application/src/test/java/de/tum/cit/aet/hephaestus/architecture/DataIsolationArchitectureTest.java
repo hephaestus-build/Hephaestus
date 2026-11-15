@@ -76,10 +76,10 @@ class DataIsolationArchitectureTest extends HephaestusArchitectureTest {
             // Practice catalog entities
             "Practice", // has direct Workspace field
             "Result", // direct workspace_id scalar
-            // Heph conversation ledger — every table carries a direct workspace_id scalar
-            "MentorConversation",
-            "MentorEntry",
-            "MentorTurn",
+            // Hephaestus conversation ledger — every table carries a direct workspace_id scalar
+            "Conversation",
+            "ConversationEntry",
+            "ConversationTurn",
             // Through Workspace.organizationId (ID-based relationship via JOIN)
             "OrganizationMembership", // organizationId -> Workspace.organizationId
             // Through project owner (ID-based: ownerId -> Organization/Repository/User)

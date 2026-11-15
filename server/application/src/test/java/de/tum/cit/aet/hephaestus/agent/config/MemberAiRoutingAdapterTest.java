@@ -37,7 +37,7 @@ import org.mockito.Mock;
 
 class MemberAiRoutingAdapterTest extends BaseUnitTest {
     @Mock
-    private WorkspaceAgentBindingRepository bindings;
+    private WorkspaceModelAssignmentRepository bindings;
 
     @Mock
     private MemberAiPreferences preferences;
@@ -59,15 +59,15 @@ class MemberAiRoutingAdapterTest extends BaseUnitTest {
                 bindings, preferences, models, WorkspacePortFixtures.queries(workspaces), suppression);
     }
 
-    private WorkspaceAgentBinding ready(DataHandlingTier tier) {
-        var binding = new WorkspaceAgentBinding();
+    private WorkspaceModelAssignment ready(DataHandlingTier tier) {
+        var binding = new WorkspaceModelAssignment();
         binding.setDataHandlingTier(tier);
         binding.setEnabled(true);
         lenient().when(models.isAvailable(binding)).thenReturn(true);
         return binding;
     }
 
-    private WorkspaceAgentBinding ready(AgentPurpose purpose, DataHandlingTier tier) {
+    private WorkspaceModelAssignment ready(ModelPurpose purpose, DataHandlingTier tier) {
         var binding = ready(tier);
         binding.setPurpose(purpose);
         return binding;
@@ -80,8 +80,8 @@ class MemberAiRoutingAdapterTest extends BaseUnitTest {
     @Test
     void shouldNeverResolveAModelWhenMemberChoosesNoAi() {
         chose(AiChoice.NO_AI);
-        assertThat(routing.binding(1L, AgentPurpose.PRACTICE_REVIEW, 20L)).isEmpty();
-        assertThat(routing.binding(1L, AgentPurpose.MENTOR, 20L)).isEmpty();
+        assertThat(routing.binding(1L, ModelPurpose.PRACTICE_REVIEW, 20L)).isEmpty();
+        assertThat(routing.binding(1L, ModelPurpose.CONVERSATION, 20L)).isEmpty();
         assertThat(routing.allows(1L, 20L, LlmModelResolver.ConnectionRef.NONE)).isFalse();
         verifyNoInteractions(bindings, models);
     }
@@ -92,11 +92,11 @@ class MemberAiRoutingAdapterTest extends BaseUnitTest {
         var binding = ready(DataHandlingTier.IN_HOUSE);
         var reference = new LlmModelResolver.ConnectionRef(UsageFundingSource.INSTANCE, 8L, 9L, 1L);
         lenient()
-                .when(bindings.findByWorkspaceIdAndPurpose(1L, AgentPurpose.PRACTICE_REVIEW))
+                .when(bindings.findByWorkspaceIdAndPurpose(1L, ModelPurpose.PRACTICE_REVIEW))
                 .thenReturn(List.of(binding));
         lenient().when(models.connectionRef(binding)).thenReturn(reference);
         lenient().when(models.dataHandlingTier(reference)).thenReturn(Optional.of(DataHandlingTier.IN_HOUSE));
-        assertThat(routing.binding(1L, AgentPurpose.PRACTICE_REVIEW, null)).isEmpty();
+        assertThat(routing.binding(1L, ModelPurpose.PRACTICE_REVIEW, null)).isEmpty();
         verifyNoInteractions(bindings, models);
     }
 
@@ -106,9 +106,9 @@ class MemberAiRoutingAdapterTest extends BaseUnitTest {
         var inHouse = ready(DataHandlingTier.IN_HOUSE);
         var cloud = ready(DataHandlingTier.CLOUD);
         var undeclared = ready(DataHandlingTier.UNDECLARED);
-        when(bindings.findByWorkspaceIdAndPurpose(1L, AgentPurpose.PRACTICE_REVIEW))
+        when(bindings.findByWorkspaceIdAndPurpose(1L, ModelPurpose.PRACTICE_REVIEW))
                 .thenReturn(List.of(undeclared, inHouse, cloud));
-        assertThat(routing.binding(1L, AgentPurpose.PRACTICE_REVIEW, 20L)).contains(cloud);
+        assertThat(routing.binding(1L, ModelPurpose.PRACTICE_REVIEW, 20L)).contains(cloud);
     }
 
     @Test
@@ -116,8 +116,9 @@ class MemberAiRoutingAdapterTest extends BaseUnitTest {
         chose(AiChoice.CLOUD);
         var inHouse = ready(DataHandlingTier.IN_HOUSE);
         var undeclared = ready(DataHandlingTier.UNDECLARED);
-        when(bindings.findByWorkspaceIdAndPurpose(1L, AgentPurpose.MENTOR)).thenReturn(List.of(undeclared, inHouse));
-        assertThat(routing.binding(1L, AgentPurpose.MENTOR, 20L)).contains(inHouse);
+        when(bindings.findByWorkspaceIdAndPurpose(1L, ModelPurpose.CONVERSATION))
+                .thenReturn(List.of(undeclared, inHouse));
+        assertThat(routing.binding(1L, ModelPurpose.CONVERSATION, 20L)).contains(inHouse);
     }
 
     @Test
@@ -125,9 +126,9 @@ class MemberAiRoutingAdapterTest extends BaseUnitTest {
         chose(AiChoice.IN_HOUSE_ONLY);
         var cloud = ready(DataHandlingTier.CLOUD);
         var undeclared = ready(DataHandlingTier.UNDECLARED);
-        when(bindings.findByWorkspaceIdAndPurpose(1L, AgentPurpose.PRACTICE_REVIEW))
+        when(bindings.findByWorkspaceIdAndPurpose(1L, ModelPurpose.PRACTICE_REVIEW))
                 .thenReturn(List.of(cloud, undeclared));
-        assertThat(routing.binding(1L, AgentPurpose.PRACTICE_REVIEW, 20L)).isEmpty();
+        assertThat(routing.binding(1L, ModelPurpose.PRACTICE_REVIEW, 20L)).isEmpty();
     }
 
     @Test
@@ -136,8 +137,9 @@ class MemberAiRoutingAdapterTest extends BaseUnitTest {
         var off = ready(DataHandlingTier.CLOUD);
         off.setEnabled(false);
         var inHouse = ready(DataHandlingTier.IN_HOUSE);
-        when(bindings.findByWorkspaceIdAndPurpose(1L, AgentPurpose.MENTOR)).thenReturn(List.of(off, inHouse));
-        assertThat(routing.binding(1L, AgentPurpose.MENTOR, 20L)).contains(inHouse);
+        when(bindings.findByWorkspaceIdAndPurpose(1L, ModelPurpose.CONVERSATION))
+                .thenReturn(List.of(off, inHouse));
+        assertThat(routing.binding(1L, ModelPurpose.CONVERSATION, 20L)).contains(inHouse);
     }
 
     @Test
@@ -146,8 +148,9 @@ class MemberAiRoutingAdapterTest extends BaseUnitTest {
         var unavailable = ready(DataHandlingTier.CLOUD);
         when(models.isAvailable(unavailable)).thenReturn(false);
         var inHouse = ready(DataHandlingTier.IN_HOUSE);
-        when(bindings.findByWorkspaceIdAndPurpose(1L, AgentPurpose.MENTOR)).thenReturn(List.of(unavailable, inHouse));
-        assertThat(routing.binding(1L, AgentPurpose.MENTOR, 20L)).contains(inHouse);
+        when(bindings.findByWorkspaceIdAndPurpose(1L, ModelPurpose.CONVERSATION))
+                .thenReturn(List.of(unavailable, inHouse));
+        assertThat(routing.binding(1L, ModelPurpose.CONVERSATION, 20L)).contains(inHouse);
     }
 
     @Test
@@ -155,9 +158,10 @@ class MemberAiRoutingAdapterTest extends BaseUnitTest {
         chose(AiChoice.NO_AI);
         when(preferences.forDeveloper(2L, 20L)).thenReturn(new MemberAiPreferences.Decision(true, AiChoice.CLOUD));
         var binding = ready(DataHandlingTier.CLOUD);
-        when(bindings.findByWorkspaceIdAndPurpose(2L, AgentPurpose.MENTOR)).thenReturn(List.of(binding));
-        assertThat(routing.binding(1L, AgentPurpose.MENTOR, 20L)).isEmpty();
-        assertThat(routing.binding(2L, AgentPurpose.MENTOR, 20L)).contains(binding);
+        when(bindings.findByWorkspaceIdAndPurpose(2L, ModelPurpose.CONVERSATION))
+                .thenReturn(List.of(binding));
+        assertThat(routing.binding(1L, ModelPurpose.CONVERSATION, 20L)).isEmpty();
+        assertThat(routing.binding(2L, ModelPurpose.CONVERSATION, 20L)).contains(binding);
     }
 
     @Test
@@ -180,11 +184,11 @@ class MemberAiRoutingAdapterTest extends BaseUnitTest {
         var model = new LlmModel();
         binding.setInstanceModel(model);
         when(bindings.findByWorkspaceIdAndPurposeAndDataHandlingTier(
-                        1L, AgentPurpose.MENTOR, DataHandlingTier.UNDECLARED))
+                        1L, ModelPurpose.CONVERSATION, DataHandlingTier.UNDECLARED))
                 .thenReturn(Optional.of(binding));
-        assertThat(routing.binding(1L, AgentPurpose.MENTOR, 20L)).contains(binding);
+        assertThat(routing.binding(1L, ModelPurpose.CONVERSATION, 20L)).contains(binding);
         model.setDataHandling(DataHandlingFacts.of(LlmDataOperator.PROVIDER, null));
-        assertThat(routing.binding(1L, AgentPurpose.MENTOR, 20L)).isEmpty();
+        assertThat(routing.binding(1L, ModelPurpose.CONVERSATION, 20L)).isEmpty();
         var ref = new LlmModelResolver.ConnectionRef(UsageFundingSource.INSTANCE, 8L, 9L, 1L);
         when(models.dataHandlingTier(ref))
                 .thenReturn(Optional.of(DataHandlingTier.UNDECLARED))
@@ -202,14 +206,15 @@ class MemberAiRoutingAdapterTest extends BaseUnitTest {
         when(workspaces.findById(1L)).thenReturn(Optional.of(workspace));
         var cloud = ready(DataHandlingTier.CLOUD);
         var undeclared = ready(DataHandlingTier.UNDECLARED);
-        when(bindings.findByWorkspaceIdAndPurpose(1L, AgentPurpose.MENTOR)).thenReturn(List.of(cloud, undeclared));
+        when(bindings.findByWorkspaceIdAndPurpose(1L, ModelPurpose.CONVERSATION))
+                .thenReturn(List.of(cloud, undeclared));
         assertThat(routing.options(1L))
                 .containsExactly(
                         new WorkspaceAiAvailability.Option(AiChoice.IN_HOUSE_ONLY, false, false, List.of()),
                         new WorkspaceAiAvailability.Option(AiChoice.CLOUD, false, true, List.of()));
         // One query per purpose, shared by both choices; reviews that are off load nothing.
-        verify(bindings, times(1)).findByWorkspaceIdAndPurpose(1L, AgentPurpose.MENTOR);
-        verify(bindings, never()).findByWorkspaceIdAndPurpose(1L, AgentPurpose.PRACTICE_REVIEW);
+        verify(bindings, times(1)).findByWorkspaceIdAndPurpose(1L, ModelPurpose.CONVERSATION);
+        verify(bindings, never()).findByWorkspaceIdAndPurpose(1L, ModelPurpose.PRACTICE_REVIEW);
     }
 
     @Test
@@ -219,7 +224,7 @@ class MemberAiRoutingAdapterTest extends BaseUnitTest {
         when(workspaces.findById(1L)).thenReturn(Optional.of(workspace));
         assertThat(routing.options(1L)).allSatisfy(option -> {
             assertThat(option.practiceReviewsReady()).isFalse();
-            assertThat(option.mentorReady()).isFalse();
+            assertThat(option.conversationReady()).isFalse();
         });
     }
 
@@ -239,14 +244,15 @@ class MemberAiRoutingAdapterTest extends BaseUnitTest {
         azureModel.getConnection().setConnectionPlatform(LlmConnectionPlatform.AZURE);
         azureModel.setDataHandling(DataHandlingFacts.of(LlmDataOperator.PROVIDER, null));
         cloud.setInstanceModel(azureModel);
-        when(bindings.findByWorkspaceIdAndPurpose(1L, AgentPurpose.PRACTICE_REVIEW))
+        when(bindings.findByWorkspaceIdAndPurpose(1L, ModelPurpose.PRACTICE_REVIEW))
                 .thenReturn(List.of(inHouse, cloud));
-        when(bindings.findByWorkspaceIdAndPurpose(1L, AgentPurpose.MENTOR)).thenReturn(List.of(inHouse));
+        when(bindings.findByWorkspaceIdAndPurpose(1L, ModelPurpose.CONVERSATION))
+                .thenReturn(List.of(inHouse));
         var options = routing.options(1L);
         assertThat(options.get(0).models())
                 .containsExactly(new WorkspaceAiAvailability.Model(
                         "Llama 3.3", AiModelBrand.META, LlmConnectionPlatform.AZURE, DataHandlingTier.IN_HOUSE));
-        // Cloud serves reviews from the cloud row and Heph from the in-house row, each named once.
+        // Cloud serves reviews from the cloud row and Hephaestus from the in-house row, each named once.
         assertThat(options.get(1).models())
                 .containsExactly(
                         new WorkspaceAiAvailability.Model(
@@ -266,7 +272,8 @@ class MemberAiRoutingAdapterTest extends BaseUnitTest {
         var cloudModel = model("Custom model", "gpt-5", "https://api.openai.com/v1", null);
         cloudModel.setDataHandling(DataHandlingFacts.of(LlmDataOperator.PROVIDER, null));
         cloud.setInstanceModel(cloudModel);
-        when(bindings.findByWorkspaceIdAndPurpose(1L, AgentPurpose.MENTOR)).thenReturn(List.of(cloud));
+        when(bindings.findByWorkspaceIdAndPurpose(1L, ModelPurpose.CONVERSATION))
+                .thenReturn(List.of(cloud));
         assertThat(routing.options(1L).get(1).models())
                 .containsExactly(new WorkspaceAiAvailability.Model("Custom model", null, null, DataHandlingTier.CLOUD));
     }
@@ -285,28 +292,29 @@ class MemberAiRoutingAdapterTest extends BaseUnitTest {
     @Test
     void shouldNameTheMembersEachBindingServesAtTheirOwnCeiling() {
         when(preferences.forDeveloper(1L, null)).thenReturn(new MemberAiPreferences.Decision(false, null));
-        var review = ready(AgentPurpose.PRACTICE_REVIEW, DataHandlingTier.IN_HOUSE);
-        var undeclaredReview = ready(AgentPurpose.PRACTICE_REVIEW, DataHandlingTier.UNDECLARED);
-        var cloudHeph = ready(AgentPurpose.MENTOR, DataHandlingTier.CLOUD);
-        when(bindings.findByWorkspaceIdWithModels(1L)).thenReturn(List.of(review, undeclaredReview, cloudHeph));
+        var review = ready(ModelPurpose.PRACTICE_REVIEW, DataHandlingTier.IN_HOUSE);
+        var undeclaredReview = ready(ModelPurpose.PRACTICE_REVIEW, DataHandlingTier.UNDECLARED);
+        var cloudConversation = ready(ModelPurpose.CONVERSATION, DataHandlingTier.CLOUD);
+        when(bindings.findByWorkspaceIdWithModels(1L)).thenReturn(List.of(review, undeclaredReview, cloudConversation));
 
         assertThat(routing.servedTiers(1L))
-                .containsOnlyKeys(AgentPurpose.PRACTICE_REVIEW, AgentPurpose.MENTOR)
+                .containsOnlyKeys(ModelPurpose.PRACTICE_REVIEW, ModelPurpose.CONVERSATION)
                 .containsEntry(
-                        AgentPurpose.PRACTICE_REVIEW,
+                        ModelPurpose.PRACTICE_REVIEW,
                         Map.of(
                                 DataHandlingTier.IN_HOUSE,
                                 List.of(DataHandlingTier.IN_HOUSE, DataHandlingTier.CLOUD),
                                 DataHandlingTier.UNDECLARED,
                                 List.of(DataHandlingTier.UNDECLARED)))
-                .containsEntry(AgentPurpose.MENTOR, Map.of(DataHandlingTier.CLOUD, List.of(DataHandlingTier.CLOUD)));
+                .containsEntry(
+                        ModelPurpose.CONVERSATION, Map.of(DataHandlingTier.CLOUD, List.of(DataHandlingTier.CLOUD)));
     }
 
     @Test
-    void shouldNotRouteErasedIdentityToReviewsOrHephEvenWhenAiChoiceIsOptional() {
+    void shouldNotRouteErasedIdentityToReviewsOrHephaestusEvenWhenAiChoiceIsOptional() {
         when(suppression.isAccountSuppressed(20L)).thenReturn(true);
-        assertThat(routing.binding(1L, AgentPurpose.PRACTICE_REVIEW, 20L)).isEmpty();
-        assertThat(routing.binding(1L, AgentPurpose.MENTOR, 20L)).isEmpty();
+        assertThat(routing.binding(1L, ModelPurpose.PRACTICE_REVIEW, 20L)).isEmpty();
+        assertThat(routing.binding(1L, ModelPurpose.CONVERSATION, 20L)).isEmpty();
         assertThat(routing.allows(1L, 20L, LlmModelResolver.ConnectionRef.NONE)).isFalse();
         verifyNoInteractions(preferences, bindings, models);
     }

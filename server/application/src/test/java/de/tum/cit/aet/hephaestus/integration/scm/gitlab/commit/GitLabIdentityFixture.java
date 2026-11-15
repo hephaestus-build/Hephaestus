@@ -28,8 +28,7 @@ final class GitLabIdentityFixture implements AutoCloseable {
     private final ObjectMapper mapper;
     private final String server;
     private final String token;
-    private final String unique =
-            "heph-identity-" + UUID.randomUUID().toString().substring(0, 8);
+    private final String unique = "ask-identity-" + UUID.randomUUID().toString().substring(0, 8);
     private String connectionToken = "";
     private long groupTokenId;
     private long userId;

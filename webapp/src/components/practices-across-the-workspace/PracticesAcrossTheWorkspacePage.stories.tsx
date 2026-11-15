@@ -189,7 +189,7 @@ export const EarlierReviews: Story = {
 		// One quiet line, not an alert: nothing is wrong, so a screen reader is not interrupted.
 		await expect(canvas.getByText(EARLIER_NOTE)).toBeVisible();
 		await expect(canvas.queryByRole("alert")).toBeNull();
-		// Earlier assessments do not establish whether the current criteria are met; the words say so.
+		// Earlier observations do not establish whether the current criteria are met; the words say so.
 		const mark = groupsTable(canvas).getByText(
 			"Based on earlier reviews, the criteria might have changed",
 		);

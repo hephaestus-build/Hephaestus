@@ -1,6 +1,6 @@
 package de.tum.cit.aet.hephaestus.notification.preferences;
 
-import de.tum.cit.aet.hephaestus.agent.mentor.weeklydigest.WeeklyDigestAvailability;
+import de.tum.cit.aet.hephaestus.agent.conversation.weeklydigest.WeeklyDigestAvailability;
 import de.tum.cit.aet.hephaestus.core.EntityTagPrecondition;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountContactQuery;
@@ -88,9 +88,9 @@ public class NotificationSubscriptionService {
             EntityTagPrecondition precondition,
             boolean admin) {
         List<NotificationSubscription> rows = new ArrayList<>(subscriptions.findForUpdate(accountId));
-        // The weekly digest is not an email kind (NotificationSubscriptionKind.MENTOR_DIGEST).
+        // The weekly digest is not an email kind (NotificationSubscriptionKind.WEEKLY_DIGEST).
         boolean enablingEmail = Arrays.stream(NotificationSubscriptionKind.values())
-                .filter(kind -> kind != NotificationSubscriptionKind.MENTOR_DIGEST)
+                .filter(kind -> kind != NotificationSubscriptionKind.WEEKLY_DIGEST)
                 .anyMatch(kind -> requested(update, rows, kind) && !enabled(rows, kind));
         if (enablingEmail && contacts.activeVerifiedPrimaryEmail(accountId).isEmpty()) {
             throw new ResponseStatusException(
@@ -125,7 +125,7 @@ public class NotificationSubscriptionService {
                 contacts.activeVerifiedPrimaryEmail(accountId).isPresent(),
                 emails.configured(),
                 enabled(rows, NotificationSubscriptionKind.WORKSPACE_ALERTS),
-                enabled(rows, NotificationSubscriptionKind.MENTOR_DIGEST),
+                enabled(rows, NotificationSubscriptionKind.WEEKLY_DIGEST),
                 weeklyDigests.availableFor(accountId),
                 EntityTagPrecondition.format(version(rows)),
                 enabled(rows, NotificationSubscriptionKind.PRODUCT_FEEDBACK_UPDATES));
@@ -142,7 +142,7 @@ public class NotificationSubscriptionService {
                 Boolean updates = update.productFeedbackUpdates();
                 yield updates == null ? enabled(rows, kind) : updates;
             }
-            case MENTOR_DIGEST -> {
+            case WEEKLY_DIGEST -> {
                 Boolean weeklyDigest = update.weeklyDigest();
                 yield weeklyDigest == null ? enabled(rows, kind) : weeklyDigest;
             }

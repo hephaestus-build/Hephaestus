@@ -138,7 +138,7 @@ class ReviewUsageBulkQueryIntegrationTest extends AbstractWorkspaceIntegrationTe
                         workspace,
                         null,
                         UUID.randomUUID(),
-                        UsageSourceType.MENTOR_TURN,
+                        UsageSourceType.CONVERSATION_TURN,
                         0,
                         77,
                         7700,
@@ -384,7 +384,7 @@ class ReviewUsageBulkQueryIntegrationTest extends AbstractWorkspaceIntegrationTe
         var event = new LlmUsageEvent();
         event.setId(UUID.randomUUID());
         event.setWorkspaceId(workspace.getId());
-        event.setJobType(type == UsageSourceType.MENTOR_TURN ? "MENTOR_CHAT" : "PRACTICE_REVIEW");
+        event.setJobType(type == UsageSourceType.CONVERSATION_TURN ? "CONVERSATION_CHAT" : "PRACTICE_REVIEW");
         event.setSourceType(type);
         event.setSourceId(source);
         event.setSourceAttempt(attempt);

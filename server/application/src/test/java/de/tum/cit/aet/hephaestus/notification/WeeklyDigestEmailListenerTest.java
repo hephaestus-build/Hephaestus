@@ -7,8 +7,8 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import de.tum.cit.aet.hephaestus.agent.mentor.weeklydigest.WeeklyDigestPointer;
-import de.tum.cit.aet.hephaestus.agent.mentor.weeklydigest.WeeklyDigestWritten;
+import de.tum.cit.aet.hephaestus.agent.conversation.weeklydigest.WeeklyDigestPointer;
+import de.tum.cit.aet.hephaestus.agent.conversation.weeklydigest.WeeklyDigestWritten;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountContactQuery;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountMembershipQuery;
 import de.tum.cit.aet.hephaestus.notification.email.EmailDeliveryResult.Outcome;
@@ -54,7 +54,7 @@ class WeeklyDigestEmailListenerTest extends BaseUnitTest {
 
     @BeforeEach
     void setUp() {
-        when(subscriptions.unsubscribeToken(ACCOUNT_ID, NotificationSubscriptionKind.MENTOR_DIGEST, NOW))
+        when(subscriptions.unsubscribeToken(ACCOUNT_ID, NotificationSubscriptionKind.WEEKLY_DIGEST, NOW))
                 .thenReturn(Optional.of("token"));
         when(contacts.activeVerifiedPrimaryEmail(ACCOUNT_ID)).thenReturn(Optional.of("dev@example.org"));
         when(memberships.membershipsForAccount(ACCOUNT_ID))
@@ -68,7 +68,7 @@ class WeeklyDigestEmailListenerTest extends BaseUnitTest {
     @Test
     void shouldSendOneNoteWithoutContentsAndWithOneClickUnsubscribeWhenTheDigestPointsToEmail() {
         EmailMessage message = sent(listener.prepare(written(WeeklyDigestPointer.EMAIL, NOW)));
-        assertThat(message.kind()).isEqualTo(EmailKind.MENTOR_DIGEST);
+        assertThat(message.kind()).isEqualTo(EmailKind.WEEKLY_DIGEST);
         assertThat(message.to()).isEqualTo("dev@example.org");
         assertThat(message.subject()).isEqualTo("Your weekly digest is ready");
         assertThat(message.unsubscribeUrl()).isEqualTo("https://hephaestus.example/notifications/unsubscribe/token");
@@ -82,7 +82,7 @@ class WeeklyDigestEmailListenerTest extends BaseUnitTest {
 
     @Test
     void shouldSendNothingWhenTheAccountTurnedTheDigestOffOrTheNoteIsForSlack() {
-        when(subscriptions.unsubscribeToken(ACCOUNT_ID, NotificationSubscriptionKind.MENTOR_DIGEST, NOW))
+        when(subscriptions.unsubscribeToken(ACCOUNT_ID, NotificationSubscriptionKind.WEEKLY_DIGEST, NOW))
                 .thenReturn(Optional.empty());
 
         assertThat(listener.prepare(written(WeeklyDigestPointer.EMAIL, NOW)))

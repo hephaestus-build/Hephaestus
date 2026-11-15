@@ -72,7 +72,7 @@ class ReviewGateIntegrationTest extends BaseIntegrationTest {
                         scenario.item().getId(),
                         account))
                 .isEmpty();
-        scenario.workspace().getFeatures().setPracticeReviewManualTriggerEnabled(false);
+        scenario.workspace().getFeatures().setPracticeReviewRequestEnabled(false);
         workspaces.saveAndFlush(scenario.workspace());
         assertThat(requests.refusal(
                         workspaceQueries.findById(ws).orElseThrow(),

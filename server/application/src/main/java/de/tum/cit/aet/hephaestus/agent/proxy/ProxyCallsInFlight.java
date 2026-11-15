@@ -2,8 +2,8 @@ package de.tum.cit.aet.hephaestus.agent.proxy;
 
 import de.tum.cit.aet.hephaestus.agent.practice.PracticeRunnerProfile;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
+import de.tum.cit.aet.hephaestus.conversation.ConversationTurn;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
-import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -25,9 +25,9 @@ public class ProxyCallsInFlight {
 
     public interface Call extends AutoCloseable {
         /** Keeps the first failure until this call writes its durable completion. */
-        void failed(MentorTurn.FailedCall failure);
+        void failed(ConversationTurn.FailedCall failure);
 
-        MentorTurn.@Nullable FailedCall failure();
+        ConversationTurn.@Nullable FailedCall failure();
 
         boolean isOverCap();
 
@@ -56,16 +56,16 @@ public class ProxyCallsInFlight {
             if (!overCap) calls.put(attempt, open + 1);
         }
         return new Call() {
-            private final AtomicReference<MentorTurn.@Nullable FailedCall> failure = new AtomicReference<>();
+            private final AtomicReference<ConversationTurn.@Nullable FailedCall> failure = new AtomicReference<>();
             private final AtomicBoolean closed = new AtomicBoolean();
 
             @Override
-            public void failed(MentorTurn.FailedCall failed) {
+            public void failed(ConversationTurn.FailedCall failed) {
                 failure.compareAndSet(null, failed);
             }
 
             @Override
-            public MentorTurn.@Nullable FailedCall failure() {
+            public ConversationTurn.@Nullable FailedCall failure() {
                 return failure.get();
             }
 
@@ -88,7 +88,7 @@ public class ProxyCallsInFlight {
 
     private int cap(UsageSourceType sourceType) {
         return switch (sourceType) {
-            case MENTOR_TURN -> TURN_CALLS;
+            case CONVERSATION_TURN -> TURN_CALLS;
             case PRODUCT_FEEDBACK_DRAFT, PROBE -> 1;
             default -> reviewCalls;
         };

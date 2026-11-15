@@ -38,7 +38,7 @@ class AuthRateLimitPropertiesTest extends BaseUnitTest {
                         "userView",
                         "deleteUser",
                         "export",
-                        "mentorTurns",
+                        "conversationTurns",
                         "reviewRequest",
                         "syncTrigger",
                         "publicActivity",

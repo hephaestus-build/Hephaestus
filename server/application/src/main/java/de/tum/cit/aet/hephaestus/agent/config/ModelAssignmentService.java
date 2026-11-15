@@ -1,0 +1,211 @@
+package de.tum.cit.aet.hephaestus.agent.config;
+
+import de.tum.cit.aet.hephaestus.agent.catalog.LlmModel;
+import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelRepository;
+import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
+import de.tum.cit.aet.hephaestus.agent.catalog.ModelLimits;
+import de.tum.cit.aet.hephaestus.agent.catalog.WorkspaceLlmModel;
+import de.tum.cit.aet.hephaestus.agent.catalog.WorkspaceLlmModelRepository;
+import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditEntityType;
+import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditEntry;
+import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditPort;
+import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditSnapshot;
+import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
+import de.tum.cit.aet.hephaestus.workspace.Workspace;
+import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
+import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceQueries;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
+import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
+import lombok.RequiredArgsConstructor;
+import org.jspecify.annotations.Nullable;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+/**
+ * Reads and writes each workspace's per-purpose {@link WorkspaceModelAssignment}s — the single source
+ * the runtime resolves a model from.
+ */
+@Service
+@RequiredArgsConstructor
+public class ModelAssignmentService {
+
+    private final WorkspaceModelAssignmentRepository bindingRepository;
+    private final WorkspaceQueries workspaceQueries;
+    private final LlmModelRepository llmModelRepository;
+    private final WorkspaceLlmModelRepository workspaceLlmModelRepository;
+    private final LlmModelResolver llmModelResolver;
+    private final ConfigAuditPort configAudit;
+
+    @PersistenceContext
+    private @Nullable EntityManager entityManager;
+
+    @Transactional(readOnly = true)
+    public List<WorkspaceModelAssignment> getBindings(WorkspaceContext workspaceContext) {
+        // Fetch-joins the model + connection graph, which isReady walks after this transaction closes.
+        return bindingRepository.findByWorkspaceIdWithModels(workspaceContext.id());
+    }
+
+    /**
+     * True when the binding resolves to an available model right now (UI readiness). The binding must
+     * arrive with its model graph already fetched — this walks it outside any transaction.
+     */
+    public boolean isReady(WorkspaceModelAssignment binding) {
+        return binding.isEnabled() && llmModelResolver.isAvailable(binding);
+    }
+
+    /**
+     * Create or replace the workspace's binding for one purpose and tier slot from a direct write: bind
+     * exactly one available model whose declared tier fills the slot, and set the execution limits.
+     */
+    @Transactional
+    public WorkspaceModelAssignment upsertBinding(
+            WorkspaceContext workspaceContext,
+            ModelPurpose purpose,
+            DataHandlingTier tier,
+            ModelAssignmentRequestDTO request) {
+        Long workspaceId = workspaceContext.id();
+        if (workspaceQueries.findByIdForUpdate(workspaceId).isEmpty())
+            throw new EntityNotFoundException("Workspace", workspaceContext.slug());
+
+        WorkspaceModelAssignment binding = bindingRepository
+                .findByWorkspaceIdAndPurposeAndDataHandlingTier(workspaceId, purpose, tier)
+                .orElseGet(() -> newBinding(workspaceId, purpose, tier));
+        BindingSnapshot before = BindingSnapshot.of(binding);
+
+        applyModel(binding, workspaceId, request.instanceModelId(), request.workspaceModelId());
+        requireModelFillsSlot(binding);
+        if (purpose == ModelPurpose.CONVERSATION) {
+            requireModelFitsConversation(binding);
+        }
+        if (request.timeoutSeconds() != null) {
+            if (purpose == ModelPurpose.CONVERSATION
+                    && request.timeoutSeconds() > ModelAssignmentLimits.MAX_CONVERSATION_TURN_SECONDS)
+                throw new IllegalArgumentException("Hephaestus stops an answer after %s seconds, so enter %s or less."
+                        .formatted(
+                                ModelAssignmentLimits.MAX_CONVERSATION_TURN_SECONDS,
+                                ModelAssignmentLimits.MAX_CONVERSATION_TURN_SECONDS));
+            binding.setTimeoutSeconds(request.timeoutSeconds());
+        }
+        if (request.enabled() != null) {
+            binding.setEnabled(request.enabled());
+        }
+
+        WorkspaceModelAssignment saved = bindingRepository.save(binding);
+        audit(purpose, workspaceId, before, BindingSnapshot.of(saved));
+        return saved;
+    }
+
+    /** Remove the workspace's binding for a purpose and tier slot (that slot off). */
+    @Transactional
+    public void deleteBinding(WorkspaceContext workspaceContext, ModelPurpose purpose, DataHandlingTier tier) {
+        Long workspaceId = workspaceContext.id();
+        // Taken for the row lock and the 404 only; nothing below writes the workspace row.
+        if (workspaceQueries.findByIdForUpdate(workspaceId).isEmpty()) {
+            throw new EntityNotFoundException("Workspace", workspaceContext.slug());
+        }
+        bindingRepository
+                .findByWorkspaceIdAndPurposeAndDataHandlingTier(workspaceId, purpose, tier)
+                .ifPresent(binding -> {
+                    BindingSnapshot before = BindingSnapshot.of(binding);
+                    bindingRepository.delete(binding);
+                    configAudit.record(ConfigAuditEntry.deleted(
+                            ConfigAuditEntityType.MODEL_ASSIGNMENT, purpose.name(), workspaceId, before));
+                });
+    }
+
+    private void applyModel(
+            WorkspaceModelAssignment binding,
+            Long workspaceId,
+            @Nullable Long instanceModelId,
+            @Nullable Long workspaceModelId) {
+        if ((instanceModelId == null) == (workspaceModelId == null)) {
+            throw new IllegalArgumentException(
+                    "A binding must reference exactly one model. Use a shared model or a model from your own"
+                            + " provider.");
+        }
+        if (instanceModelId != null) {
+            LlmModel model = llmModelRepository
+                    .findById(instanceModelId)
+                    .orElseThrow(() -> new EntityNotFoundException("LlmModel", instanceModelId));
+            binding.setInstanceModel(model);
+            binding.setWorkspaceModel(null);
+        } else {
+            WorkspaceLlmModel model = workspaceLlmModelRepository
+                    .findByIdAndWorkspaceId(workspaceModelId, workspaceId)
+                    .orElseThrow(() -> new EntityNotFoundException("WorkspaceLlmModel", workspaceModelId));
+            binding.setWorkspaceModel(model);
+            binding.setInstanceModel(null);
+        }
+    }
+
+    private void requireModelFillsSlot(WorkspaceModelAssignment binding) {
+        DataHandlingTier slot = binding.getDataHandlingTier();
+        if (slot != DataHandlingTier.UNDECLARED) {
+            DataHandlingTier declared = declaredTier(binding);
+            if (declared == DataHandlingTier.UNDECLARED) {
+                throw ModelAssignmentSlotMismatchException.undeclared();
+            }
+            if (declared != slot) {
+                throw ModelAssignmentSlotMismatchException.declaredAs(declared);
+            }
+        }
+        if (!llmModelResolver.isAvailable(binding)) {
+            throw new IllegalArgumentException("This model is not available to this workspace.");
+        }
+    }
+
+    private static void requireModelFitsConversation(WorkspaceModelAssignment binding) {
+        LlmModel instance = binding.getInstanceModel();
+        WorkspaceLlmModel own = binding.getWorkspaceModel();
+        ModelLimits limits = instance != null ? instance.limits() : own != null ? own.limits() : ModelLimits.NONE;
+        Optional<String> tooSmall =
+                ModelAssignmentLimits.tooSmallForConversation(limits.contextWindow(), limits.maxOutputTokens());
+        tooSmall.ifPresent(reason -> {
+            throw new IllegalArgumentException(reason);
+        });
+    }
+
+    private static DataHandlingTier declaredTier(WorkspaceModelAssignment binding) {
+        LlmModel instance = binding.getInstanceModel();
+        if (instance != null) {
+            return instance.getDataHandlingTier();
+        }
+        WorkspaceLlmModel own = binding.getWorkspaceModel();
+        return own != null ? own.getDataHandlingTier() : DataHandlingTier.UNDECLARED;
+    }
+
+    private void audit(ModelPurpose purpose, Long workspaceId, BindingSnapshot before, BindingSnapshot after) {
+        configAudit.record(ConfigAuditEntry.updated(
+                ConfigAuditEntityType.MODEL_ASSIGNMENT, purpose.name(), workspaceId, before, after));
+    }
+
+    private WorkspaceModelAssignment newBinding(long workspaceId, ModelPurpose purpose, DataHandlingTier tier) {
+        WorkspaceModelAssignment binding = new WorkspaceModelAssignment();
+        binding.setWorkspace(Objects.requireNonNull(entityManager).getReference(Workspace.class, workspaceId));
+        binding.setPurpose(purpose);
+        binding.setDataHandlingTier(tier);
+        if (purpose == ModelPurpose.CONVERSATION)
+            binding.setTimeoutSeconds(ModelAssignmentLimits.MAX_CONVERSATION_TURN_SECONDS);
+        return binding;
+    }
+
+    /** Audit projection of a binding's effective model + enabled state. */
+    private record BindingSnapshot(
+            DataHandlingTier dataHandlingTier,
+            @Nullable Long instanceModelId,
+            @Nullable Long workspaceModelId,
+            @Nullable Boolean enabled)
+            implements ConfigAuditSnapshot {
+        static BindingSnapshot of(WorkspaceModelAssignment b) {
+            return new BindingSnapshot(
+                    b.getDataHandlingTier(),
+                    b.getInstanceModel() == null ? null : b.getInstanceModel().getId(),
+                    b.getWorkspaceModel() == null ? null : b.getWorkspaceModel().getId(),
+                    b.isEnabled());
+        }
+    }
+}

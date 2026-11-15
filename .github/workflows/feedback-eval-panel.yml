@@ -17,7 +17,7 @@ on:
     # path inside the feedback-eval filter of cicd.yml.
     paths:
       - "server/application/src/main/resources/agent/*.md"
-      - "server/application/src/main/resources/agent/mentor/**"
+      - "server/application/src/main/resources/agent/conversation/**"
       - "server/application/src/main/resources/agent/review-composer*.ts"
       - "server/application/src/main/java/de/tum/cit/aet/hephaestus/agent/composer/**"
       - "server/application/src/main/resources/practices/**"

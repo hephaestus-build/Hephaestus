@@ -16,7 +16,7 @@ import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import de.tum.cit.aet.hephaestus.evidence.capture.CaptureContribution;
 import de.tum.cit.aet.hephaestus.evidence.capture.CaptureRequest;
 import de.tum.cit.aet.hephaestus.evidence.capture.ContentSource;
-import de.tum.cit.aet.hephaestus.evidence.capture.MentorContextRequest;
+import de.tum.cit.aet.hephaestus.evidence.capture.ConversationContextRequest;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemSnapshot;
@@ -36,7 +36,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import tools.jackson.databind.json.JsonMapper;
 
 class WorkspaceContextBuilderTest extends BaseUnitTest {
-    private final MentorContextRequest request = new MentorContextRequest(1, 2, UUID.randomUUID(), null);
+    private final ConversationContextRequest request = new ConversationContextRequest(1, 2, UUID.randomUUID(), null);
 
     private WorkspaceContextBuilder builder(ContentSource... sources) {
         return new WorkspaceContextBuilder(
@@ -49,12 +49,12 @@ class WorkspaceContextBuilderTest extends BaseUnitTest {
     private ContentSource source(String path, byte[] bytes) {
         return new ContentSource() {
             @Override
-            public boolean supports(MentorContextRequest request) {
+            public boolean supports(ConversationContextRequest request) {
                 return true;
             }
 
             @Override
-            public void contribute(MentorContextRequest request, Map<String, byte[]> files) {
+            public void contribute(ConversationContextRequest request, Map<String, byte[]> files) {
                 files.put(path, bytes);
             }
         };
@@ -83,7 +83,7 @@ class WorkspaceContextBuilderTest extends BaseUnitTest {
     void preservesOtherContextWhenAnOptionalSourceFails() {
         ContentSource failed = new ContentSource() {
             @Override
-            public boolean supports(MentorContextRequest request) {
+            public boolean supports(ConversationContextRequest request) {
                 return true;
             }
 
@@ -93,7 +93,7 @@ class WorkspaceContextBuilderTest extends BaseUnitTest {
             }
 
             @Override
-            public void contribute(MentorContextRequest request, Map<String, byte[]> files) {
+            public void contribute(ConversationContextRequest request, Map<String, byte[]> files) {
                 throw new IllegalStateException("unavailable");
             }
         };
@@ -125,23 +125,23 @@ class WorkspaceContextBuilderTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldSkipUnsupportedMentorSources() {
+    void shouldSkipUnsupportedConversationSources() {
         var unsupported = mock(ContentSource.class);
         assertThat(builder(unsupported).build(request)).isEmpty();
         verify(unsupported, never()).contribute(any(), any());
     }
 
     @Test
-    void shouldPropagateARequiredMentorSourceFailure() {
+    void shouldPropagateARequiredConversationSourceFailure() {
         var failure = new IllegalStateException("required source unavailable");
         ContentSource required = new ContentSource() {
             @Override
-            public boolean supports(MentorContextRequest request) {
+            public boolean supports(ConversationContextRequest request) {
                 return true;
             }
 
             @Override
-            public void contribute(MentorContextRequest request, Map<String, byte[]> files) {
+            public void contribute(ConversationContextRequest request, Map<String, byte[]> files) {
                 throw failure;
             }
         };

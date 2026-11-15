@@ -1,0 +1,2 @@
+# REN-1: enum values and fields take the 1.0 names that the 0.95 notes announced (HEPH -> ANSWER/APP, FREE_HEPH -> CAPACITY, MENTOR -> CONVERSATION, mentor* fields -> conversation*). Stopped 1.0 cutover (ADR 0070); the extension calls none of these operations.
+in API GET /workspaces/{workspaceSlug}/onboarding/me removed the required property `aiOptions/items/mentorReady` from the response with the `200` status

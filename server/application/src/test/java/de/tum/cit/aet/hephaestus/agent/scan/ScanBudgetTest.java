@@ -8,7 +8,7 @@ import static org.mockito.Mockito.when;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
 import de.tum.cit.aet.hephaestus.agent.catalog.ResolvedLlmModel;
-import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBinding;
+import de.tum.cit.aet.hephaestus.agent.config.WorkspaceModelAssignment;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewayProperties;
 import de.tum.cit.aet.hephaestus.agent.handler.RuntimeReviewTestData;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewMemberAiPolicy;
@@ -65,7 +65,7 @@ class ScanBudgetTest extends BaseUnitTest {
             0);
 
     private void admitPricedModel(LlmBudgetDecision monthlyDecision) {
-        var binding = mock(WorkspaceAgentBinding.class);
+        var binding = mock(WorkspaceModelAssignment.class);
         when(policy.binding(1L, scan.review().id(), List.of(assignment.id()))).thenReturn(Optional.of(binding));
         when(admission.admit(binding))
                 .thenReturn(new AdmittedLlmModel(

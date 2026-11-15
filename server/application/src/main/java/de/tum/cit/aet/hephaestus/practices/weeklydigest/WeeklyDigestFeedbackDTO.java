@@ -29,13 +29,13 @@ public record WeeklyDigestFeedbackDTO(
 
         @Nullable
         @Schema(description = "The Hephaestus message it appeared in; only for CONVERSATION, and never when withdrawn")
-        UUID mentorEntryId,
+        UUID conversationEntryId,
 
         @Nullable
         @Schema(
                 description = "The top-level message whose thread holds that Hephaestus message; only for CONVERSATION,"
                         + " and absent when the message is not in a thread")
-        UUID mentorParentEntryId,
+        UUID conversationParentEntryId,
 
         @NonNull Instant deliveredAt,
 

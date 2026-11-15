@@ -202,9 +202,9 @@ public interface SlackThreadRepository extends JpaRepository<SlackThread, Long> 
     }
 
     /**
-     * Agent-owned {@code ConversationSourceLiveness} SPI: the subset of {@code threadIds} whose source channel
+     * Agent-owned {@code ThreadSourceLiveness} SPI: the subset of {@code threadIds} whose source channel
      * consent is still {@code ACTIVE} in this workspace — the fail-closed allow-set a
-     * {@code chat.thread}-derived row must belong to before it may reach the mentor. Callers guard an
+     * {@code chat.thread}-derived row must belong to before it may reach the conversation. Callers guard an
      * empty {@code threadIds}.
      */
     @Query(
@@ -213,7 +213,7 @@ public interface SlackThreadRepository extends JpaRepository<SlackThread, Long> 
             @Param("workspaceId") long workspaceId, @Param("threadIds") Collection<Long> threadIds);
 
     /**
-     * Agent-owned {@code ConversationThreadProjection} SPI (participant-firewalled thread listing): threads in the
+     * Agent-owned {@code ThreadProjection} SPI (participant-firewalled thread listing): threads in the
      * workspace whose channel consent is {@code ACTIVE} and whose participant set contains {@code audienceAccountId},
      * newest-active first, capped at {@code limit}. Native — Postgres {@code = ANY(participant_account_ids)} GIN
      * array-membership has no portable JPQL form. Columns: {@code slack_channel_id}, {@code channel_name}

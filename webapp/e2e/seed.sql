@@ -1,7 +1,7 @@
 BEGIN;
 
 INSERT INTO workspace (id, account_login, account_type, created_at, display_name, public_activity_enabled, slug, status,
-  practices_enabled, practice_review_auto_trigger_enabled, practice_review_manual_trigger_enabled)
+  practices_enabled, practice_review_event_enabled, practice_review_request_enabled)
 SELECT 1, 'hephaestustest', 'ORG', now(), 'E2E Practice Review', false, 'e2e', 'ACTIVE',
   true, true, true
 WHERE NOT EXISTS (SELECT 1 FROM workspace WHERE id = 1);
@@ -18,12 +18,12 @@ INSERT INTO llm_model (id, connection_id, slug, display_name, upstream_model_id,
 VALUES (2, 1, 'gpt-oss-120b', 'GPT-OSS 120B', 'openai/gpt-oss-120b', 128000, 32000, 'PUBLIC', true, now())
 ON CONFLICT (id) DO NOTHING;
 
-INSERT INTO workspace_agent_binding (id, workspace_id, purpose, instance_model_id, enabled, timeout_seconds, created_at, updated_at)
+INSERT INTO workspace_model_assignment (id, workspace_id, purpose, instance_model_id, enabled, timeout_seconds, created_at, updated_at)
 VALUES (1, 1, 'PRACTICE_REVIEW', 1, true, 600, now(), now())
 ON CONFLICT (id) DO UPDATE SET purpose = EXCLUDED.purpose;
 
-INSERT INTO workspace_agent_binding (id, workspace_id, purpose, instance_model_id, enabled, timeout_seconds, created_at, updated_at)
-VALUES (2, 1, 'MENTOR', 2, true, 300, now(), now())
+INSERT INTO workspace_model_assignment (id, workspace_id, purpose, instance_model_id, enabled, timeout_seconds, created_at, updated_at)
+VALUES (2, 1, 'CONVERSATION', 2, true, 300, now(), now())
 ON CONFLICT (id) DO NOTHING;
 
 -- The Hephaestus page offers Hephaestus once a model is ready under some AI choice, and a developer who has not chosen is
@@ -32,8 +32,8 @@ ON CONFLICT (id) DO NOTHING;
 INSERT INTO llm_model (id, connection_id, slug, display_name, upstream_model_id, context_window, max_output_tokens, visibility, enabled, operated_by, created_at)
 VALUES (3, 1, 'in-house-model', 'In-house model', 'in-house-model', 128000, 32000, 'PUBLIC', true, 'OWN_ORGANISATION', now())
 ON CONFLICT (id) DO NOTHING;
-INSERT INTO workspace_agent_binding (id, workspace_id, purpose, data_handling_tier, instance_model_id, enabled, timeout_seconds, created_at, updated_at)
-VALUES (3, 1, 'MENTOR', 'IN_HOUSE', 3, true, 300, now(), now())
+INSERT INTO workspace_model_assignment (id, workspace_id, purpose, data_handling_tier, instance_model_id, enabled, timeout_seconds, created_at, updated_at)
+VALUES (3, 1, 'CONVERSATION', 'IN_HOUSE', 3, true, 300, now(), now())
 ON CONFLICT (id) DO NOTHING;
 
 -- A model with no price never starts a turn, and Hephaestus reads as not set up without one.
@@ -60,7 +60,7 @@ ON CONFLICT DO NOTHING;
 
 -- One answered exchange in the e2e developer's conversation: `conversation.spec.ts` votes on the answer. The
 -- question is older than anything a test asks, so every test's own messages are the newest.
-INSERT INTO mentor_conversation (id, workspace_id, account_id, created_at, last_activity_at)
+INSERT INTO conversation (id, workspace_id, account_id, created_at, last_activity_at)
 SELECT 'e2e0c0a0-0000-4000-8000-000000000001', 1, id, now() - interval '1 day', now() - interval '1 day'
 FROM account WHERE primary_email = 'e2e@dev.invalid'
 ON CONFLICT DO NOTHING;
@@ -71,23 +71,23 @@ VALUES ('e2e0c0a0-0000-4000-8000-000000000006', 1, 'TURN', 'INTERACTIVE',
         'conversation:e2e0c0a0-0000-4000-8000-000000000001', 'ENDED', 0, 1, 180, 'COMPLETED', now() - interval '1 day',
         now() - interval '1 day', now() - interval '1 day')
 ON CONFLICT DO NOTHING;
-INSERT INTO mentor_turn (id, workspace_id, conversation_id, request_id, status, surface, run_id, created_at, started_at,
+INSERT INTO conversation_turn (id, workspace_id, conversation_id, request_id, status, surface, run_id, created_at, started_at,
                          finished_at)
 VALUES ('e2e0c0a0-0000-4000-8000-000000000004', 1, 'e2e0c0a0-0000-4000-8000-000000000001',
         'e2e0c0a0-0000-4000-8000-000000000005', 'DONE', 'APP', 'e2e0c0a0-0000-4000-8000-000000000006',
         now() - interval '1 day', now() - interval '1 day', now() - interval '1 day')
 ON CONFLICT DO NOTHING;
-INSERT INTO mentor_entry (id, workspace_id, conversation_id, seq, kind, surface, text, turn_id, created_at)
+INSERT INTO conversation_entry (id, workspace_id, conversation_id, seq, kind, surface, text, turn_id, created_at)
 VALUES ('e2e0c0a0-0000-4000-8000-000000000002', 1, 'e2e0c0a0-0000-4000-8000-000000000001', 1, 'USER', 'APP',
         'How do I keep my pull requests small?', 'e2e0c0a0-0000-4000-8000-000000000004', now() - interval '1 day'),
-       ('e2e0c0a0-0000-4000-8000-000000000003', 1, 'e2e0c0a0-0000-4000-8000-000000000001', 2, 'HEPH', 'APP',
+       ('e2e0c0a0-0000-4000-8000-000000000003', 1, 'e2e0c0a0-0000-4000-8000-000000000001', 2, 'ANSWER', 'APP',
         'Split the work by behaviour: one pull request per change a reviewer can judge on its own.',
         'e2e0c0a0-0000-4000-8000-000000000004', now() - interval '1 day')
 ON CONFLICT DO NOTHING;
 
 SELECT setval(pg_get_serial_sequence('llm_connection', 'id'), 10, true);
 SELECT setval(pg_get_serial_sequence('llm_model', 'id'), 10, true);
-SELECT setval(pg_get_serial_sequence('workspace_agent_binding', 'id'), 10, true);
+SELECT setval(pg_get_serial_sequence('workspace_model_assignment', 'id'), 10, true);
 SELECT setval(pg_get_serial_sequence('workspace', 'id'), 10, true);
 
 -- Isolated public activity: two published repositories, one private repository and one hidden person.
@@ -97,7 +97,7 @@ VALUES (1, true, 0, true)
 ON CONFLICT (id) DO UPDATE SET public_activity_allowed = true;
 
 INSERT INTO workspace (id, account_login, account_type, created_at, display_name, public_activity_enabled, slug, status,
-  practices_enabled, practice_review_auto_trigger_enabled, practice_review_manual_trigger_enabled)
+  practices_enabled, practice_review_event_enabled, practice_review_request_enabled)
 SELECT 9, 'e2e-public', 'ORG', now(), 'E2E Public Workspace', true, 'e2e-public', 'ACTIVE',
   false, false, false
 WHERE NOT EXISTS (SELECT 1 FROM workspace WHERE id = 9);

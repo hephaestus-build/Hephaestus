@@ -16,8 +16,8 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRep
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
-import de.tum.cit.aet.hephaestus.integration.slack.SlackConversationTestSupport;
-import de.tum.cit.aet.hephaestus.integration.slack.SlackConversationTestSupport.BoundConversation;
+import de.tum.cit.aet.hephaestus.integration.slack.SlackThreadTestSupport;
+import de.tum.cit.aet.hephaestus.integration.slack.SlackThreadTestSupport.BoundConversation;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMessageRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackUninstallService;
 import de.tum.cit.aet.hephaestus.practices.PracticeVersionService;
@@ -119,10 +119,10 @@ class SlackDisconnectErasureIntegrationTest extends BaseIntegrationTest {
                         new IdentityProvider(IdentityProviderType.GITHUB, "https://github.com")));
         Workspace workspace = workspaceRepository.save(WorkspaceTestFixtures.activeWorkspace("slack-disconnect-erase"));
         workspaceId = workspace.getId();
-        memberId = SlackConversationTestSupport.accountWithIdentity(
-                accounts, identities, provider, 300L, "slack-erase-member");
+        memberId =
+                SlackThreadTestSupport.accountWithIdentity(accounts, identities, provider, 300L, "slack-erase-member");
         memberships.createMembership(workspace, memberId, Membership.WorkspaceRole.ADMIN);
-        practice = SlackConversationTestSupport.newPractice(practiceVersions, workspace, "disconnect-erase");
+        practice = SlackThreadTestSupport.newPractice(practiceVersions, workspace, "disconnect-erase");
         Connection slack = new Connection(
                 workspace, IntegrationKind.SLACK, TEAM, new ConnectionConfig.SlackConfig(TEAM, null, null, Set.of()));
         ConnectionFixtures.reachState(slack, IntegrationState.ACTIVE);
@@ -161,7 +161,7 @@ class SlackDisconnectErasureIntegrationTest extends BaseIntegrationTest {
     }
 
     private BoundConversation seedConversation() {
-        var seed = new SlackConversationTestSupport(jdbcTemplate);
+        var seed = new SlackThreadTestSupport(jdbcTemplate);
         seed.seedMessage(workspaceId, TEAM, CHANNEL, TS, TS, "a message in the thread");
         seed.seedThread(workspaceId, CHANNEL, TS, TS, 1, "{" + memberId + "}");
         Long threadId = jdbcTemplate.queryForObject(
@@ -170,7 +170,7 @@ class SlackDisconnectErasureIntegrationTest extends BaseIntegrationTest {
                 workspaceId,
                 CHANNEL);
         assertNotNull(threadId);
-        BoundConversation conversation = SlackConversationTestSupport.seedBoundConversation(
+        BoundConversation conversation = SlackThreadTestSupport.seedBoundConversation(
                 reviews,
                 assignments,
                 reviewItems,

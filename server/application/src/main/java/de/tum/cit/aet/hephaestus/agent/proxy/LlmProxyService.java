@@ -3,17 +3,17 @@ package de.tum.cit.aet.hephaestus.agent.proxy;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmConnectionHealth;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
-import de.tum.cit.aet.hephaestus.agent.config.AgentBindingLimits;
+import de.tum.cit.aet.hephaestus.agent.config.ModelAssignmentLimits;
 import de.tum.cit.aet.hephaestus.agent.proxy.ProxyRequestBody.PreparedBody;
 import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRecorder;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
+import de.tum.cit.aet.hephaestus.conversation.ConversationTurn;
 import de.tum.cit.aet.hephaestus.core.proxy.ProxyStreamingUtils;
 import de.tum.cit.aet.hephaestus.core.proxy.ProxyStreamingUtils.StreamOutcome;
 import de.tum.cit.aet.hephaestus.core.proxy.ProxyStreamingUtils.UpstreamResult;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
-import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
 import de.tum.cit.aet.hephaestus.observability.StructuredLogKeys;
 import de.tum.cit.aet.hephaestus.practices.spi.ModelKind;
 import io.micrometer.tracing.Span;
@@ -67,8 +67,9 @@ class LlmProxyService {
      * seconds, stops the turn and cancels the call; it gives the host 30 seconds to end the turn. A bound at the ceiling
      * could cut the call first, as a plain timeout that Pi retries, instead of a deadline.
      */
-    static final Duration HEPH_CALL_CEILING =
-            Duration.ofSeconds(AgentBindingLimits.MAX_HEPH_TURN_SECONDS).plusMinutes(1);
+    static final Duration CONVERSATION_CALL_CEILING = Duration.ofSeconds(
+                    ModelAssignmentLimits.MAX_CONVERSATION_TURN_SECONDS)
+            .plusMinutes(1);
 
     private static final String PROXY_PATH_PREFIX = "/internal/llm";
 
@@ -132,7 +133,7 @@ class LlmProxyService {
             ProxyCallsInFlight callsInFlight,
             LlmConnectionHealth health,
             LlmCallPermits callPermits,
-            HephCallProperties hephProperties) {
+            ConversationCallProperties conversationProperties) {
         this.tracer = tracer;
         this.webClient = llmProxyWebClient;
         this.resolver = llmModelResolver;
@@ -144,7 +145,8 @@ class LlmProxyService {
         this.routingService = routingService;
         this.callsInFlight = callsInFlight;
         this.health = health;
-        this.silenceBounds = new Bounds(hephProperties.modelFirstByteTimeout(), hephProperties.modelIdleTimeout());
+        this.silenceBounds =
+                new Bounds(conversationProperties.modelFirstByteTimeout(), conversationProperties.modelIdleTimeout());
         this.callPermits = callPermits;
     }
 
@@ -212,14 +214,15 @@ class LlmProxyService {
                 recordSpanError(span, e.getClass().getSimpleName());
                 throw e;
             } finally {
-                // One line per model call of a conversation turn, as for its tool calls (HephToolCalls): a turn that
+                // One line per model call of a conversation turn, as for its tool calls (ConversationToolCalls): a turn
+                // that
                 // keeps
                 // calling shows as a run of them. A retry of a failed call is its own line, and a failed call a
                 // warning.
-                if (routing.attempt().sourceType() == UsageSourceType.MENTOR_TURN) {
-                    MentorTurn.FailedCall failure = inFlight.failure();
+                if (routing.attempt().sourceType() == UsageSourceType.CONVERSATION_TURN) {
+                    ConversationTurn.FailedCall failure = inFlight.failure();
                     LoggingEventBuilder line = log.atLevel(failure == null ? Level.INFO : Level.WARN)
-                            .addKeyValue("event.name", "heph.turn.model_call")
+                            .addKeyValue("event.name", "conversation.turn.model_call")
                             .addKeyValue("turn.id", routing.attempt().sourceId())
                             .addKeyValue("turn.attempt", routing.attempt().number())
                             .addKeyValue("outcome", ended)
@@ -248,7 +251,7 @@ class LlmProxyService {
                 : result.getStatusCode().value();
         if (status >= 400 && call.failure() == null) {
             String refused = result == null ? null : result.getHeaders().getFirst(REFUSAL_HEADER);
-            call.failed(new MentorTurn.FailedCall(
+            call.failed(new ConversationTurn.FailedCall(
                     refused == null ? GATEWAY_ERROR : "refused_" + refused.toLowerCase(Locale.ROOT), status));
         }
         return status;
@@ -367,7 +370,8 @@ class LlmProxyService {
             // A provider's limit should slow a call, not fail it. It must still be heard: past this, or when the
             // provider
             // asks for longer, its answer reaches the caller as the failure it is.
-            Instant absorbUntil = Instant.now().plus(routing.hephTurn() ? TURN_ABSORB_WINDOW : REVIEW_ABSORB_WINDOW);
+            Instant absorbUntil =
+                    Instant.now().plus(routing.conversationTurn() ? TURN_ABSORB_WINDOW : REVIEW_ABSORB_WINDOW);
             ResponseEntity<?> answer;
             do {
                 answer = forwardWithinScanBudget(
@@ -376,7 +380,7 @@ class LlmProxyService {
             classifyFailure(answer, response, call);
             return answer;
         } catch (RuntimeException failure) {
-            call.failed(new MentorTurn.FailedCall(GATEWAY_ERROR, null));
+            call.failed(new ConversationTurn.FailedCall(GATEWAY_ERROR, null));
             throw failure;
         } finally {
             // Before the scan lease: the attempt's next scan call reads this call's spend.
@@ -482,7 +486,7 @@ class LlmProxyService {
             LlmConnectionHealth.Permit permit = health.acquire(routing.connectionScope(), routing.connectionId());
             if (permit == null) {
                 accounting.recordError(routing.apiProtocol());
-                call.failed(new MentorTurn.FailedCall(UPSTREAM_PAUSED, null));
+                call.failed(new ConversationTurn.FailedCall(UPSTREAM_PAUSED, null));
                 return errors.providerError(
                         HttpStatus.SERVICE_UNAVAILABLE,
                         UPSTREAM_PAUSED,
@@ -496,7 +500,7 @@ class LlmProxyService {
             Exchange exchange = new Exchange(
                     upstreamUri,
                     buildUpstreamHeaders(incomingHeaders, credential),
-                    attempt.sourceType() == UsageSourceType.MENTOR_TURN || reviewStream ? silenceBounds : null,
+                    attempt.sourceType() == UsageSourceType.CONVERSATION_TURN || reviewStream ? silenceBounds : null,
                     poolPermit.revoked(),
                     transports,
                     headers -> callPermits.served(poolPermit, headers, instanceCredential));
@@ -592,17 +596,17 @@ class LlmProxyService {
                     accounting.recordUpstreamStalled(routing.apiProtocol());
                     String stall =
                             FIRST_BYTE_STALLED.formatted(bounds.firstByte().toSeconds());
-                    if (!routing.hephTurn())
+                    if (!routing.conversationTurn())
                         log.warn("LLM upstream stalled for principal {}: {}", routing.principalDescription(), stall);
-                    call.failed(new MentorTurn.FailedCall(UPSTREAM_STALLED, null));
+                    call.failed(new ConversationTurn.FailedCall(UPSTREAM_STALLED, null));
                     return errors.providerError(HttpStatus.GATEWAY_TIMEOUT, UPSTREAM_STALLED, stall);
                 }
                 // An anonymous class has no simple name.
                 String failure = e.getClass().getSimpleName();
-                call.failed(new MentorTurn.FailedCall(
+                call.failed(new ConversationTurn.FailedCall(
                         failure.isEmpty() ? e.getClass().getName() : failure, null));
                 if (e instanceof WebClientRequestException) {
-                    if (!routing.hephTurn())
+                    if (!routing.conversationTurn())
                         log.warn(
                                 "LLM upstream unreachable for principal {}: reason={}",
                                 routing.principalDescription(),
@@ -610,7 +614,7 @@ class LlmProxyService {
                     accounting.recordError(routing.apiProtocol());
                     return ResponseEntity.status(502).body("Upstream provider unreachable");
                 }
-                if (!routing.hephTurn())
+                if (!routing.conversationTurn())
                     log.warn(
                             "LLM upstream request failed for principal {}: reason={}",
                             routing.principalDescription(),
@@ -664,7 +668,7 @@ class LlmProxyService {
             }
             // Report revocation in the stream; buffered responses still settle health and usage below.
             if (poolPermit.isRevoked() && upstream.streamOutcome() != null && response != null) {
-                call.failed(new MentorTurn.FailedCall(UPSTREAM_PAUSED, null));
+                call.failed(new ConversationTurn.FailedCall(UPSTREAM_PAUSED, null));
                 errors.writeErrorFrame(response, protocol, UPSTREAM_PAUSED, "The model capacity lease ended.");
             }
             if (attempt.sourceType() == UsageSourceType.PROBE) {
@@ -677,7 +681,7 @@ class LlmProxyService {
             if (bounds != null && upstream.streamOutcome() == StreamOutcome.UPSTREAM_IDLE) {
                 accounting.recordUpstreamStalled(routing.apiProtocol());
                 String stall = STREAM_STALLED.formatted(bounds.idle().toSeconds());
-                if (!routing.hephTurn())
+                if (!routing.conversationTurn())
                     log.warn("LLM upstream stalled for principal {}: {}", routing.principalDescription(), stall);
                 if (response != null) errors.writeStallFrame(response, protocol, stall);
             }
@@ -687,7 +691,7 @@ class LlmProxyService {
                         routing, attempt, row, span, upstream.status(), outcome, tap, call, poolPermit, protocol);
             boolean served = upstream.status() >= 200 && upstream.status() < 300;
             if (!served) {
-                call.failed(new MentorTurn.FailedCall(UPSTREAM_STATUS, upstream.status()));
+                call.failed(new ConversationTurn.FailedCall(UPSTREAM_STATUS, upstream.status()));
                 logUnserved(routing, upstream.status());
                 accounting.recordError(routing.apiProtocol());
             }
@@ -726,7 +730,7 @@ class LlmProxyService {
             LlmApiProtocol protocol) {
         boolean served = status >= 200 && status < 300;
         if (!served) {
-            call.failed(new MentorTurn.FailedCall(UPSTREAM_STATUS, status));
+            call.failed(new ConversationTurn.FailedCall(UPSTREAM_STATUS, status));
             logUnserved(routing, status);
         }
         span.tag("hephaestus.stream.outcome", outcome.name());
@@ -735,12 +739,12 @@ class LlmProxyService {
             accounting.recordError(routing.apiProtocol());
             // Names the caller beside the outcome; the shared stream code knows neither.
             if (outcome != ProxyStreamingUtils.StreamOutcome.CLIENT_DISCONNECTED) {
-                if (!routing.hephTurn())
+                if (!routing.conversationTurn())
                     log.warn(
                             "LLM stream for principal {} ended with outcome={}",
                             routing.principalDescription(),
                             outcome);
-                call.failed(new MentorTurn.FailedCall(outcome.name().toLowerCase(Locale.ROOT), status));
+                call.failed(new ConversationTurn.FailedCall(outcome.name().toLowerCase(Locale.ROOT), status));
             }
         }
         if (served) {
@@ -766,7 +770,7 @@ class LlmProxyService {
         // The sandbox only sees "error" from its model client; the trace carries the status on the
         // span and this is its log-side counterpart, for an operator reading logs rather than
         // traces. Status and principal only: the body can quote the request.
-        if (!routing.hephTurn())
+        if (!routing.conversationTurn())
             log.warn(
                     "LLM upstream answered a call for principal {} with status={}",
                     routing.principalDescription(),
@@ -879,7 +883,7 @@ class LlmProxyService {
      * that and the proxy's own ceiling.
      */
     static Duration exchangeWait(@Nullable Instant deadline, boolean reviewStream) {
-        if (deadline == null) return HEPH_CALL_CEILING;
+        if (deadline == null) return CONVERSATION_CALL_CEILING;
         Duration ceiling = BLOCK_TIMEOUT.plus(ProxyStreamingUtils.DEFAULT_SSE_TIMEOUT);
         Duration remaining = ProxyStreamingUtils.remainingUntil(deadline);
         return reviewStream || remaining.compareTo(ceiling) < 0 ? remaining : ceiling;
@@ -893,7 +897,7 @@ class LlmProxyService {
         }
     }
 
-    /** Whether the job attempt's work time is over. A mentor turn has no work deadline. */
+    /** Whether the job attempt's work time is over. A conversation turn has no work deadline. */
     private static boolean workTimeOver(ProxyRouting routing) {
         Instant deadline = routing.workDeadline();
         return deadline != null && !Instant.now().isBefore(deadline);

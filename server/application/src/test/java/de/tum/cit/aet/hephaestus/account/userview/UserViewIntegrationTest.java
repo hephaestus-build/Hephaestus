@@ -5,6 +5,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import de.tum.cit.aet.hephaestus.activity.ActivityEventRepository;
 import de.tum.cit.aet.hephaestus.activity.ActivityEventType;
 import de.tum.cit.aet.hephaestus.activity.ActivityTargetType;
+import de.tum.cit.aet.hephaestus.conversation.Conversation;
+import de.tum.cit.aet.hephaestus.conversation.ConversationEntryRepository;
+import de.tum.cit.aet.hephaestus.conversation.ConversationService;
+import de.tum.cit.aet.hephaestus.conversation.ConversationTurn;
+import de.tum.cit.aet.hephaestus.conversation.ConversationTurnService;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.security.UserViewContextHolder;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
@@ -13,11 +18,6 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
-import de.tum.cit.aet.hephaestus.mentor.MentorConversation;
-import de.tum.cit.aet.hephaestus.mentor.MentorConversationService;
-import de.tum.cit.aet.hephaestus.mentor.MentorEntryRepository;
-import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
-import de.tum.cit.aet.hephaestus.mentor.MentorTurnService;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinition;
 import de.tum.cit.aet.hephaestus.practices.PracticeGuidance;
 import de.tum.cit.aet.hephaestus.practices.PracticeGuide;
@@ -72,13 +72,13 @@ class UserViewIntegrationTest extends AbstractWorkspaceIntegrationTest {
     private JdbcTemplate jdbc;
 
     @Autowired
-    private MentorConversationService conversations;
+    private ConversationService conversations;
 
     @Autowired
-    private MentorTurnService turns;
+    private ConversationTurnService turns;
 
     @Autowired
-    private MentorEntryRepository entries;
+    private ConversationEntryRepository entries;
 
     @Autowired
     private ActivityEventRepository activityEvents;
@@ -206,12 +206,12 @@ class UserViewIntegrationTest extends AbstractWorkspaceIntegrationTest {
     void shouldListOnlyTheViewedUsersConversationWhenOthersExistInAndOutsideTheWorkspace() {
         User other = persistUser("another-view-user");
         ensureMembership(workspace, other, Membership.WorkspaceRole.MEMBER);
-        MentorTurnService.Submission own = question(workspace, viewed, "Viewed user's question");
-        MentorTurnService.Submission colleagues = question(workspace, other, "Other private question");
+        ConversationTurnService.Submission own = question(workspace, viewed, "Viewed user's question");
+        ConversationTurnService.Submission colleagues = question(workspace, other, "Other private question");
         Workspace elsewhere = createWorkspace("other-view", "Other view", other.getLogin(), AccountType.USER, other);
-        MentorTurnService.Submission foreign = question(elsewhere, viewed, "Other workspace question");
+        ConversationTurnService.Submission foreign = question(elsewhere, viewed, "Other workspace question");
 
-        sessionRequest("/workspaces/acme/mentor/entries")
+        sessionRequest("/workspaces/acme/conversation/entries")
                 .exchange()
                 .expectStatus()
                 .isOk()
@@ -230,9 +230,9 @@ class UserViewIntegrationTest extends AbstractWorkspaceIntegrationTest {
     void shouldNotDiscloseAConversationWhenItBelongsToAnotherMember() {
         User other = persistUser("another-view-user");
         ensureMembership(workspace, other, Membership.WorkspaceRole.MEMBER);
-        MentorTurnService.Submission colleagues = question(workspace, other, "Other private question");
+        ConversationTurnService.Submission colleagues = question(workspace, other, "Other private question");
 
-        sessionRequest("/workspaces/acme/mentor/entries/"
+        sessionRequest("/workspaces/acme/conversation/entries/"
                         + colleagues.question().getId() + "/thread")
                 .exchange()
                 .expectStatus()
@@ -244,9 +244,10 @@ class UserViewIntegrationTest extends AbstractWorkspaceIntegrationTest {
     void shouldNotDiscloseAConversationWhenItBelongsToAnotherWorkspace() {
         User other = persistUser("another-view-user");
         Workspace elsewhere = createWorkspace("other-view", "Other view", other.getLogin(), AccountType.USER, other);
-        MentorTurnService.Submission foreign = question(elsewhere, viewed, "Other workspace question");
+        ConversationTurnService.Submission foreign = question(elsewhere, viewed, "Other workspace question");
 
-        sessionRequest("/workspaces/acme/mentor/entries/" + foreign.question().getId() + "/thread")
+        sessionRequest("/workspaces/acme/conversation/entries/"
+                        + foreign.question().getId() + "/thread")
                 .exchange()
                 .expectStatus()
                 .isNotFound()
@@ -450,10 +451,10 @@ class UserViewIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     @Test
     void shouldRefuseToDeleteTheMessageAndRecordNothingWhenAnAdminViewsTheUser() {
-        MentorTurnService.Submission own = question(workspace, viewed, "Viewed user's question");
+        ConversationTurnService.Submission own = question(workspace, viewed, "Viewed user's question");
 
         client.delete()
-                .uri("/workspaces/acme/mentor/entries/" + own.question().getId())
+                .uri("/workspaces/acme/conversation/entries/" + own.question().getId())
                 .headers(viewHeaders(token(), accountId(viewed)))
                 .exchange()
                 .expectStatus()
@@ -639,14 +640,14 @@ class UserViewIntegrationTest extends AbstractWorkspaceIntegrationTest {
         };
     }
 
-    /** A question {@code author} asked Heph in {@code where}, with its queued turn. */
-    private MentorTurnService.Submission question(Workspace where, User author, String text) {
-        MentorConversation main = conversations.findOrCreateMain(where.getId(), accountId(author));
+    /** A question {@code author} asked Hephaestus in {@code where}, with its queued turn. */
+    private ConversationTurnService.Submission question(Workspace where, User author, String text) {
+        Conversation main = conversations.findOrCreateMain(where.getId(), accountId(author));
         return turns.submit(
                 where.getId(),
                 main.getId(),
-                new MentorTurnService.Question(
-                        MentorTurn.Surface.APP, text, UUID.randomUUID().toString(), null, null));
+                new ConversationTurnService.Question(
+                        ConversationTurn.Surface.APP, text, UUID.randomUUID().toString(), null, null));
     }
 
     /** One review event by {@code actor} in a connected repository of the viewed workspace. */

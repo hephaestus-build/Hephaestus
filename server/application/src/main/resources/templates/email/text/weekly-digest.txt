@@ -1,0 +1,12 @@
+[(#{email.weekly-digest.subject})]
+
+Your weekly digest for [(${weekDays})] in [(${workspaceName})] is ready in Hephaestus.
+
+Open in Hephaestus: [(${workspaceAddress})]/conversation?entry=[(${entryId})]
+
+Open it to go through it in Hephaestus. Replies to this email are not read.
+
+Turn off the weekly digest: [(${unsubscribeUrl})]
+
+--
+[(#{email.footer(${webappUrl})})]

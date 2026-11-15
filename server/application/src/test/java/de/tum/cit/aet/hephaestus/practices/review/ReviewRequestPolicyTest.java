@@ -48,7 +48,7 @@ class ReviewRequestPolicyTest {
 
     @Test
     void shouldRefuseDisabledRequestsBeforeConsentAndQuotaChecks() {
-        workspace.getFeatures().setPracticeReviewManualTriggerEnabled(false);
+        workspace.getFeatures().setPracticeReviewRequestEnabled(false);
         assertThat(policy.refusal(WorkspacePortFixtures.reviewWorkspace(workspace), 2, 3))
                 .contains(ReviewRequestReason.GATE_WITHHELD);
         verifyNoInteractions(coverage, reviews);

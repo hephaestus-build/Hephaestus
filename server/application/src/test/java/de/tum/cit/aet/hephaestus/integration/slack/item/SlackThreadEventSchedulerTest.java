@@ -9,7 +9,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
-import de.tum.cit.aet.hephaestus.integration.chat.item.ConversationThreadCandidate;
+import de.tum.cit.aet.hephaestus.integration.chat.item.ThreadCandidate;
 import de.tum.cit.aet.hephaestus.integration.chat.item.ThreadEvents;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemIndexService;
 import de.tum.cit.aet.hephaestus.integration.core.spi.FoundBy;
@@ -19,8 +19,8 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ItemEventInput;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemSnapshot;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemVersion;
-import de.tum.cit.aet.hephaestus.integration.slack.conversation.SlackConversationCandidateSource;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackThreadRepository;
+import de.tum.cit.aet.hephaestus.integration.slack.thread.SlackThreadCandidateSource;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewService;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.testconfig.ItemFixtures;
@@ -40,7 +40,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 class SlackThreadEventSchedulerTest extends BaseUnitTest {
     private static final Instant NOW = Instant.parse("2026-10-14T12:00:00Z");
-    private final SlackConversationCandidateSource candidates = mock(SlackConversationCandidateSource.class);
+    private final SlackThreadCandidateSource candidates = mock(SlackThreadCandidateSource.class);
     private final ThreadItemSource source = mock(ThreadItemSource.class);
     private final ItemIndexService items = mock(ItemIndexService.class);
     private final SlackThreadRepository threads = mock(SlackThreadRepository.class);
@@ -77,8 +77,8 @@ class SlackThreadEventSchedulerTest extends BaseUnitTest {
     @Test
     void settledThreadRecordsOneFrozenEventWithoutMovingItsWatermarkOrCloningParticipantReviews() {
         String last = (NOW.getEpochSecond() - 1200) + ".000000";
-        var candidate = new ConversationThreadCandidate(
-                7L, 19L, "C1", "Channel", "1690000000.000000", last, null, List.of(55L, 56L));
+        var candidate =
+                new ThreadCandidate(7L, 19L, "C1", "Channel", "1690000000.000000", last, null, List.of(55L, 56L));
         when(candidates.settledCandidates(4)).thenReturn(List.of(candidate));
         when(candidates.liveTurnCount(7L, "C1", candidate.threadTs())).thenReturn(4L);
         when(candidates.liveTurnCountSince(7L, "C1", candidate.threadTs(), null))
@@ -101,10 +101,8 @@ class SlackThreadEventSchedulerTest extends BaseUnitTest {
     @Test
     void shouldRecordTheOtherThreadsWhenOneThreadCannotBeRead() {
         String last = (NOW.getEpochSecond() - 1200) + ".000000";
-        var poisoned = new ConversationThreadCandidate(
-                8L, 20L, "C2", "Channel", "1680000000.000000", last, null, List.of(57L));
-        var healthy = new ConversationThreadCandidate(
-                7L, 19L, "C1", "Channel", "1690000000.000000", last, null, List.of(55L, 56L));
+        var poisoned = new ThreadCandidate(8L, 20L, "C2", "Channel", "1680000000.000000", last, null, List.of(57L));
+        var healthy = new ThreadCandidate(7L, 19L, "C1", "Channel", "1690000000.000000", last, null, List.of(55L, 56L));
         when(candidates.settledCandidates(4)).thenReturn(List.of(poisoned, healthy));
         when(candidates.liveTurnCount(8L, "C2", poisoned.threadTs()))
                 .thenThrow(new IllegalStateException("unreadable thread"));
@@ -125,10 +123,8 @@ class SlackThreadEventSchedulerTest extends BaseUnitTest {
     @Test
     void shouldStopThePassWhenTheDatabaseIsUnavailable() {
         String last = (NOW.getEpochSecond() - 1200) + ".000000";
-        var first = new ConversationThreadCandidate(
-                8L, 20L, "C2", "Channel", "1680000000.000000", last, null, List.of(57L));
-        var second = new ConversationThreadCandidate(
-                7L, 19L, "C1", "Channel", "1690000000.000000", last, null, List.of(55L, 56L));
+        var first = new ThreadCandidate(8L, 20L, "C2", "Channel", "1680000000.000000", last, null, List.of(57L));
+        var second = new ThreadCandidate(7L, 19L, "C1", "Channel", "1690000000.000000", last, null, List.of(55L, 56L));
         when(candidates.settledCandidates(4)).thenReturn(List.of(first, second));
         when(candidates.liveTurnCount(8L, "C2", first.threadTs()))
                 .thenThrow(new DataAccessResourceFailureException("database unavailable"));

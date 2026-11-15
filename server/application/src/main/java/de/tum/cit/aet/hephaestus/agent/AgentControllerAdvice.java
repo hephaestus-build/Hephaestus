@@ -7,14 +7,14 @@ import de.tum.cit.aet.hephaestus.agent.catalog.LlmConnectionSlugConflictExceptio
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelInUseException;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelSlugConflictException;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelUpstreamIdConflictException;
-import de.tum.cit.aet.hephaestus.agent.config.AgentBindingSlotMismatchException;
+import de.tum.cit.aet.hephaestus.agent.config.ModelAssignmentSlotMismatchException;
+import de.tum.cit.aet.hephaestus.agent.conversation.host.ConversationTurns;
+import de.tum.cit.aet.hephaestus.agent.conversation.turn.exception.ConversationRefusedException;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobStateConflictException;
-import de.tum.cit.aet.hephaestus.agent.mentor.host.HephTurns;
-import de.tum.cit.aet.hephaestus.agent.mentor.turn.exception.MentorRefusedException;
+import de.tum.cit.aet.hephaestus.conversation.ConversationLeaseLostException;
+import de.tum.cit.aet.hephaestus.conversation.ConversationRejectedException;
 import de.tum.cit.aet.hephaestus.core.LoggingUtils;
 import de.tum.cit.aet.hephaestus.core.exception.ProblemType;
-import de.tum.cit.aet.hephaestus.mentor.MentorLeaseLostException;
-import de.tum.cit.aet.hephaestus.mentor.MentorRejectedException;
 import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import java.util.Locale;
 import java.util.Optional;
@@ -56,11 +56,11 @@ public class AgentControllerAdvice {
     }
 
     /** {@code declaredTier} lets the client name the tier from its own label registry. */
-    @ExceptionHandler(AgentBindingSlotMismatchException.class)
-    ProblemDetail handleBindingSlotMismatch(AgentBindingSlotMismatchException exception) {
+    @ExceptionHandler(ModelAssignmentSlotMismatchException.class)
+    ProblemDetail handleBindingSlotMismatch(ModelAssignmentSlotMismatchException exception) {
         ProblemDetail problem = problem(
                 HttpStatus.CONFLICT,
-                ProblemType.AGENT_BINDING_SLOT_MISMATCH,
+                ProblemType.MODEL_ASSIGNMENT_SLOT_MISMATCH,
                 "Model does not fill this row",
                 exception);
         DataHandlingTier declaredTier = exception.declaredTier();
@@ -115,32 +115,32 @@ public class AgentControllerAdvice {
     }
 
     /** Hephaestus declines the member; the detail names the setting that changes it. */
-    @ExceptionHandler(MentorRefusedException.class)
-    ProblemDetail handleMentorRefused(MentorRefusedException exception) {
-        return ProblemType.MENTOR_REFUSED.problem(
+    @ExceptionHandler(ConversationRefusedException.class)
+    ProblemDetail handleConversationRefused(ConversationRefusedException exception) {
+        return ProblemType.CONVERSATION_REFUSED.problem(
                 HttpStatus.CONFLICT,
                 "Hephaestus cannot reply",
                 exception.reason().userMessage());
     }
 
     /** The ledger refused a write that conflicts with its state; the detail is worded for the developer. */
-    @ExceptionHandler(MentorRejectedException.class)
-    ProblemDetail handleMentorRejected(MentorRejectedException exception) {
-        return ProblemType.MENTOR_REJECTED.problem(
+    @ExceptionHandler(ConversationRejectedException.class)
+    ProblemDetail handleConversationRejected(ConversationRejectedException exception) {
+        return ProblemType.CONVERSATION_REJECTED.problem(
                 HttpStatus.CONFLICT, "Conversation conflict", exception.reason().userMessage());
     }
 
     /** A Hephaestus host wrote for a turn attempt that lost its lease. */
-    @ExceptionHandler(MentorLeaseLostException.class)
-    ProblemDetail handleMentorLeaseLost(MentorLeaseLostException exception) {
-        return problem(HttpStatus.CONFLICT, ProblemType.MENTOR_LEASE_LOST, "Turn lease lost", exception);
+    @ExceptionHandler(ConversationLeaseLostException.class)
+    ProblemDetail handleConversationLeaseLost(ConversationLeaseLostException exception) {
+        return problem(HttpStatus.CONFLICT, ProblemType.CONVERSATION_LEASE_LOST, "Turn lease lost", exception);
     }
 
     /** A turn attempt that must stop and end: the developer stopped it, or its deadline passed. */
-    @ExceptionHandler(HephTurns.StopException.class)
-    ProblemDetail handleTurnStop(HephTurns.StopException exception) {
+    @ExceptionHandler(ConversationTurns.StopException.class)
+    ProblemDetail handleTurnStop(ConversationTurns.StopException exception) {
         ProblemDetail problem =
-                problem(HttpStatus.CONFLICT, ProblemType.MENTOR_TURN_STOPPED, "Turn stopped", exception);
+                problem(HttpStatus.CONFLICT, ProblemType.CONVERSATION_TURN_STOPPED, "Turn stopped", exception);
         problem.setProperty("stop", exception.reason().name().toLowerCase(Locale.ROOT));
         return problem;
     }

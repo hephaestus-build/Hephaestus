@@ -12,18 +12,28 @@ import de.tum.cit.aet.hephaestus.agent.context.AttemptInputs;
 import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.PreparedEvidence;
 import de.tum.cit.aet.hephaestus.agent.context.ReviewAttemptCustody;
+import de.tum.cit.aet.hephaestus.agent.conversation.turn.ConversationAdmission;
+import de.tum.cit.aet.hephaestus.agent.conversation.turn.ConversationRefusal;
+import de.tum.cit.aet.hephaestus.agent.conversation.turn.ConversationTurnAdmission;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobLifecycleService;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.RuntimeJobTestData;
-import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorAdmission;
-import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorRefusal;
-import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnAdmission;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxes;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmPriceSnapshot;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRecorder;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
+import de.tum.cit.aet.hephaestus.conversation.Conversation;
+import de.tum.cit.aet.hephaestus.conversation.ConversationEntry;
+import de.tum.cit.aet.hephaestus.conversation.ConversationEntryDraft;
+import de.tum.cit.aet.hephaestus.conversation.ConversationEntryRepository;
+import de.tum.cit.aet.hephaestus.conversation.ConversationEntryService;
+import de.tum.cit.aet.hephaestus.conversation.ConversationLedgerFixtures;
+import de.tum.cit.aet.hephaestus.conversation.ConversationService;
+import de.tum.cit.aet.hephaestus.conversation.ConversationTurn;
+import de.tum.cit.aet.hephaestus.conversation.ConversationTurnClaims;
+import de.tum.cit.aet.hephaestus.conversation.ConversationTurnService;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AiChoice;
@@ -59,16 +69,6 @@ import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMessage;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMessageRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackThread;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackThreadRepository;
-import de.tum.cit.aet.hephaestus.mentor.MentorConversation;
-import de.tum.cit.aet.hephaestus.mentor.MentorConversationService;
-import de.tum.cit.aet.hephaestus.mentor.MentorEntry;
-import de.tum.cit.aet.hephaestus.mentor.MentorEntryDraft;
-import de.tum.cit.aet.hephaestus.mentor.MentorEntryRepository;
-import de.tum.cit.aet.hephaestus.mentor.MentorEntryService;
-import de.tum.cit.aet.hephaestus.mentor.MentorLedgerFixtures;
-import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
-import de.tum.cit.aet.hephaestus.mentor.MentorTurnClaims;
-import de.tum.cit.aet.hephaestus.mentor.MentorTurnService;
 import de.tum.cit.aet.hephaestus.practices.DefinitionTestFixtures;
 import de.tum.cit.aet.hephaestus.practices.PracticeVersionService;
 import de.tum.cit.aet.hephaestus.practices.ReviewOn;
@@ -135,7 +135,7 @@ import tools.jackson.databind.ObjectMapper;
 class AccountErasureIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
-    private MentorTurnClaims claims;
+    private ConversationTurnClaims claims;
 
     @Autowired
     private PracticeModelTestFixtures modelFixtures;
@@ -171,7 +171,7 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
     private PersonProcessingSuppression suppression;
 
     @Autowired
-    private MentorAdmission mentor;
+    private ConversationAdmission conversation;
 
     @Autowired
     private ResultMarkRepository resultMarks;
@@ -222,16 +222,16 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
     private SlackThreadRepository slackThreads;
 
     @Autowired
-    private MentorConversationService mentorConversations;
+    private ConversationService conversations;
 
     @Autowired
-    private MentorEntryService mentorEntries;
+    private ConversationEntryService conversationEntries;
 
     @Autowired
-    private MentorEntryRepository mentorEntryRepository;
+    private ConversationEntryRepository conversationEntryRepository;
 
     @Autowired
-    private MentorTurnService mentorTurns;
+    private ConversationTurnService conversationTurns;
 
     @Autowired
     private ReviewJobRepository agentJobRepository;
@@ -263,7 +263,7 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
             "slack_thread",
             "outline_document_content",
             // The frozen selection names workspaces, not entries.
-            MentorEntryRepository.COPIES_PERSON_DATA_STORE);
+            ConversationEntryRepository.COPIES_PERSON_DATA_STORE);
 
     @BeforeEach
     void clearRows() {
@@ -872,10 +872,10 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
                 workspaceId,
                 runId,
                 Math.max(1, epoch),
-                sourceType == UsageSourceType.MENTOR_TURN ? "MENTOR_TURN" : "PRACTICE_REVIEW",
+                sourceType == UsageSourceType.CONVERSATION_TURN ? "CONVERSATION_TURN" : "PRACTICE_REVIEW",
                 sourceType,
                 sourceId,
-                Math.max(0, sourceType == UsageSourceType.MENTOR_TURN ? epoch : epoch - 1),
+                Math.max(0, sourceType == UsageSourceType.CONVERSATION_TURN ? epoch : epoch - 1),
                 reviewId,
                 ModelKind.CHAT,
                 null,
@@ -1145,24 +1145,24 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
                 firstWorkspace, Objects.requireNonNull(outlineConnection.getId()), otherOutlineSubject, 999100L);
         var preservedSourceRows = otherSourceRows.snapshot();
         authoredVersion(workspaces.findById(firstWorkspace).orElseThrow(), "all-stores-authored", subject.account());
-        var ownConversation = mentorConversations.findOrCreateMain(firstWorkspace, subject.account());
-        mentorTurns.submit(
+        var ownConversation = conversations.findOrCreateMain(firstWorkspace, subject.account());
+        conversationTurns.submit(
                 firstWorkspace,
                 ownConversation.getId(),
-                new MentorTurnService.Question(
-                        MentorTurn.Surface.APP,
+                new ConversationTurnService.Question(
+                        ConversationTurn.Surface.APP,
                         "Retained question",
                         UUID.randomUUID().toString(),
                         null,
                         null));
         var ownedTurn = claims.claimNext().orElseThrow();
-        var model = LlmCatalogTestFixtures.admittedMentorConfig();
-        transactions.executeWithoutResult(tx -> mentorTurns.admit(
+        var model = LlmCatalogTestFixtures.admittedConversationConfig();
+        transactions.executeWithoutResult(tx -> conversationTurns.admit(
                 firstWorkspace,
                 ownedTurn.getId(),
                 ownedTurn.getAttempt(),
                 Objects.requireNonNull(ownedTurn.getRunId()),
-                MentorTurnAdmission.of(model, Objects.requireNonNull(model.priceSnapshot()))
+                ConversationTurnAdmission.of(model, Objects.requireNonNull(model.priceSnapshot()))
                         .toJson()));
 
         // A pending email to each person: the outbox holds it until it is sent or erased.
@@ -1253,11 +1253,14 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
                 .allSatisfy(row -> assertThat(row.path("reason").asString())
                         .isIn("Correction before access request", PersonErasureAllStoresFixture.CANARY));
         assertThat(counts.get("config_audit_event_membership_subject")).isEqualTo(3L);
-        assertThat(counts.get("mentor_conversation")).isEqualTo(2L);
-        assertThat(counts.get("mentor_entry")).isEqualTo(3L);
-        assertThat(counts.get(MentorEntryRepository.COPIES_PERSON_DATA_STORE)).isEqualTo(2L);
-        assertThat(counts.get("mentor_entry_feedback_copy")).isEqualTo(2L);
-        assertThat(export.path("stores").path("mentor_entry_feedback_copy").toString())
+        assertThat(counts.get("conversation")).isEqualTo(2L);
+        assertThat(counts.get("conversation_entry")).isEqualTo(3L);
+        assertThat(counts.get(ConversationEntryRepository.COPIES_PERSON_DATA_STORE))
+                .isEqualTo(2L);
+        assertThat(counts.get("conversation_entry_feedback_copy")).isEqualTo(2L);
+        assertThat(export.path("stores")
+                        .path("conversation_entry_feedback_copy")
+                        .toString())
                 .contains("Target guidance copied into another conversation")
                 .doesNotContain("Other reply to erased feedback", "account_id", "credential-canary");
         assertThat(counts.get("slack_message")).isEqualTo(2L);
@@ -1265,11 +1268,11 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
                         (long) export.path("stores").path(store).size())
                 .as("Frozen preview/export parity for %s", store)
                 // Tool results in another member's conversation are redacted, never exported.
-                .isEqualTo(store.equals(MentorEntryRepository.COPIES_PERSON_DATA_STORE) ? 0L : count));
-        assertThat(export.path("stores").path("mentor_entry"))
+                .isEqualTo(store.equals(ConversationEntryRepository.COPIES_PERSON_DATA_STORE) ? 0L : count));
+        assertThat(export.path("stores").path("conversation_entry"))
                 .allSatisfy(
                         row -> assertThat(row.path("text").asString()).isIn("Delivered guidance", "Retained question"));
-        assertThat(export.path("stores").path("mentor_entry").toString())
+        assertThat(export.path("stores").path("conversation_entry").toString())
                 .doesNotContain("payload", "runtime-credential-canary");
         assertThat(export.toString())
                 .doesNotContain(
@@ -1294,10 +1297,10 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
                         null))
                 .isFalse();
         for (var derived : targetDerived) {
-            assertThat(mentor.refusal(derived.workspaceId(), targetAccount.getId()))
-                    .contains(MentorRefusal.PERSON_ERASED);
-            assertThat(mentor.refusal(derived.workspaceId(), otherAccount.getId()))
-                    .isNotEqualTo(Optional.of(MentorRefusal.PERSON_ERASED));
+            assertThat(conversation.refusal(derived.workspaceId(), targetAccount.getId()))
+                    .contains(ConversationRefusal.PERSON_ERASED);
+            assertThat(conversation.refusal(derived.workspaceId(), otherAccount.getId()))
+                    .isNotEqualTo(Optional.of(ConversationRefusal.PERSON_ERASED));
         }
         for (long threadId : sharedThreads) {
             long workspaceId = Objects.requireNonNull(
@@ -1416,8 +1419,8 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
                     .isTrue();
         }
         for (var derived : targetDerived) {
-            assertThat(mentor.refusal(derived.workspaceId(), targetAccount.getId()))
-                    .contains(MentorRefusal.PERSON_ERASED);
+            assertThat(conversation.refusal(derived.workspaceId(), targetAccount.getId()))
+                    .contains(ConversationRefusal.PERSON_ERASED);
         }
         assertThat(jdbc.queryForObject(
                         "SELECT count(*) FROM config_audit_event WHERE actor_account_id=?"
@@ -1444,19 +1447,19 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
                     .isEqualTo(1);
         }
         for (var copy : copiedFeedback) {
-            MentorEntry erased =
-                    mentorEntryRepository.findById(copy.messageId()).orElseThrow();
+            ConversationEntry erased =
+                    conversationEntryRepository.findById(copy.messageId()).orElseThrow();
             assertThat(erased.isRedacted()).isTrue();
             assertThat(erased.getText()).isEmpty();
             assertThat(String.valueOf(erased.getPayload())).doesNotContain("Target guidance");
-            assertThat(mentorEntryRepository
+            assertThat(conversationEntryRepository
                             .findById(copy.replyId())
                             .orElseThrow()
                             .getText())
                     .isEqualTo("Other reply to erased feedback");
         }
         for (var contributor : registry.stores()) {
-            // Only the Heph messages that copied the erased person's feedback change in another conversation.
+            // Only the Hephaestus messages that copied the erased person's feedback change in another conversation.
             assertThat(withoutErasedCopies(
                             contributor.store(),
                             contributor.export(
@@ -1641,7 +1644,7 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
                         copiedJobs.stream().map(UUID::toString).toList());
         assertThat(export.path("stores").path("review_job"))
                 .allSatisfy(row -> assertThat(row.has("capture")).isFalse());
-        assertThat(export.path("stores").path(MentorEntryRepository.COPIES_PERSON_DATA_STORE))
+        assertThat(export.path("stores").path(ConversationEntryRepository.COPIES_PERSON_DATA_STORE))
                 .isEmpty();
         assertThat(export.toString())
                 .doesNotContain(
@@ -1677,30 +1680,34 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
                     .isPresent();
             assertThat(feedbackRepository.findById(derived.preparedId())).isEmpty();
             assertThat(feedbackRepository.findById(derived.deliveredId())).isPresent();
-            var answer = mentorEntryRepository.findById(derived.messageId()).orElseThrow();
+            var answer =
+                    conversationEntryRepository.findById(derived.messageId()).orElseThrow();
             assertThat(answer.isRedacted()).isTrue();
             assertThat(answer.getText()).isEmpty();
             assertThat(agentJobRepository.findById(derived.jobId())).isEmpty();
-            assertThat(mentorEntryRepository
+            assertThat(conversationEntryRepository
                             .findById(derived.toolResultId())
                             .orElseThrow()
                             .isRedacted())
                     .isTrue();
         }
-        assertThat(mentorEntryRepository.findById(laterToolResult).orElseThrow().isRedacted())
+        assertThat(conversationEntryRepository
+                        .findById(laterToolResult)
+                        .orElseThrow()
+                        .isRedacted())
                 .isTrue();
         assertThat(folderResults)
-                .allSatisfy(result -> assertThat(mentorEntryRepository
+                .allSatisfy(result -> assertThat(conversationEntryRepository
                                 .findById(result)
                                 .orElseThrow()
                                 .isRedacted())
                         .as("a context folder result is erased with the person")
                         .isTrue());
         // A safe tool result stays; its answer could still have used the earlier copied context.
-        var answer = mentorEntryRepository.findById(linkedAnswer).orElseThrow();
+        var answer = conversationEntryRepository.findById(linkedAnswer).orElseThrow();
         assertThat(answer.isRedacted()).isTrue();
         assertThat(jdbc.queryForList(
-                        "SELECT id FROM mentor_entry WHERE workspace_id=? AND turn_id=? AND kind='TOOL_RESULT'"
+                        "SELECT id FROM conversation_entry WHERE workspace_id=? AND turn_id=? AND kind='TOOL_RESULT'"
                                 + " AND payload->'message'->>'toolName'='show_feedback' AND redacted_at IS NULL",
                         UUID.class,
                         firstAffected.getId(),
@@ -1716,7 +1723,7 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
                         Integer.class,
                         unrelated.jobId()))
                 .isEqualTo(1);
-        assertThat(mentorEntryRepository
+        assertThat(conversationEntryRepository
                         .findById(unrelated.toolResultId())
                         .orElseThrow()
                         .isRedacted())
@@ -1735,28 +1742,28 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
     void shouldDetachTheCallsOfATurnThatOpenedAfterThePreviewWhenTheErasureRuns() {
         var provider = providers.saveAndFlush(
                 new IdentityProvider(IdentityProviderType.GITLAB, "https://heph-usage-erasure.example.test"));
-        var target = users.saveAndFlush(TestUserFactory.createUser(42L, "heph-usage-erasure", provider));
+        var target = users.saveAndFlush(TestUserFactory.createUser(42L, "ask-usage-erasure", provider));
         long accountId = Objects.requireNonNull(accountFor(target).getId());
         var administrator = new Account("Administrator");
         administrator.setAppRole(Account.AppRole.APP_ADMIN);
         administrator = accounts.saveAndFlush(administrator);
         long administratorId = Objects.requireNonNull(administrator.getId());
-        var workspace = workspaces.saveAndFlush(WorkspaceTestFixtures.activeWorkspace("heph-usage-erasure"));
+        var workspace = workspaces.saveAndFlush(WorkspaceTestFixtures.activeWorkspace("ask-usage-erasure"));
         long workspaceId = Objects.requireNonNull(workspace.getId());
         membership(workspace, target);
-        var conversation = mentorConversations.findOrCreateMain(workspaceId, accountId);
-        mentorTurns.submit(
+        var conversation = conversations.findOrCreateMain(workspaceId, accountId);
+        conversationTurns.submit(
                 workspaceId,
                 conversation.getId(),
-                new MentorTurnService.Question(
-                        MentorTurn.Surface.APP,
+                new ConversationTurnService.Question(
+                        ConversationTurn.Surface.APP,
                         "How did my review go?",
                         UUID.randomUUID().toString(),
                         null,
                         null));
-        MentorTurn turn = claims.claimNext().orElseThrow();
-        var llm = LlmCatalogTestFixtures.admittedMentorConfig();
-        var admitted = MentorTurnAdmission.of(llm, Objects.requireNonNull(llm.priceSnapshot()));
+        ConversationTurn turn = claims.claimNext().orElseThrow();
+        var llm = LlmCatalogTestFixtures.admittedConversationConfig();
+        var admitted = ConversationTurnAdmission.of(llm, Objects.requireNonNull(llm.priceSnapshot()));
 
         // The preview freezes the claimed turn before any call of it has a row.
         long providerId = Objects.requireNonNull(provider.getId());
@@ -1767,17 +1774,17 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
                 .isZero();
 
         // The admission commits before the erasure suppresses the account; one call ends and one is still out.
-        transactions.executeWithoutResult(tx -> mentorTurns.admit(
+        transactions.executeWithoutResult(tx -> conversationTurns.admit(
                 turn.getWorkspaceId(),
                 turn.getId(),
                 turn.getAttempt(),
                 Objects.requireNonNull(turn.getRunId()),
                 admitted.toJson()));
         UUID ended = openCall(
-                workspaceId, turn.getRunId(), UsageSourceType.MENTOR_TURN, turn.getId(), null, admitted.price());
+                workspaceId, turn.getRunId(), UsageSourceType.CONVERSATION_TURN, turn.getId(), null, admitted.price());
         completeCall(workspaceId, ended, 100_000, 0);
         UUID stillOut = openCall(
-                workspaceId, turn.getRunId(), UsageSourceType.MENTOR_TURN, turn.getId(), null, admitted.price());
+                workspaceId, turn.getRunId(), UsageSourceType.CONVERSATION_TURN, turn.getId(), null, admitted.price());
 
         personData.requestErasure(requestId, administratorId, false);
         personData.run(requestId);
@@ -1785,7 +1792,7 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
 
         // The turn's deletion settled the call still out; both rows keep their spend, detached together.
         String financial = "SELECT id, source_id, review_id, run_id, input_tokens, cost_usd, measurement_verification"
-                + " FROM llm_usage_event WHERE workspace_id=? AND source_type='MENTOR_TURN' ORDER BY input_tokens DESC";
+                + " FROM llm_usage_event WHERE workspace_id=? AND source_type='CONVERSATION_TURN' ORDER BY input_tokens DESC";
         var kept = jdbc.queryForList(financial, workspaceId);
         assertThat(kept).hasSize(2);
         assertThat(kept.getFirst().get("id")).isEqualTo(ended);
@@ -1916,10 +1923,10 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
 
     private record ConversationFeedbackCopy(UUID messageId, UUID replyId) {}
 
-    /** The export of another person's rows without the Heph messages that the erasure redacts. */
+    /** The export of another person's rows without the Hephaestus messages that the erasure redacts. */
     private static @Nullable Object withoutErasedCopies(
             String store, @Nullable Object rows, List<ConversationFeedbackCopy> copies, List<UUID> derivedAnswers) {
-        if (!store.equals("mentor_entry") || !(rows instanceof List<?> list)) return rows;
+        if (!store.equals("conversation_entry") || !(rows instanceof List<?> list)) return rows;
         var copiedIds = Stream.concat(copies.stream().map(ConversationFeedbackCopy::messageId), derivedAnswers.stream())
                 .map(UUID::toString)
                 .collect(Collectors.toSet());
@@ -1930,24 +1937,24 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
     }
 
     /**
-     * A Heph message in another person's conversation that carries the target's delivered feedback through a
+     * A Hephaestus message in another person's conversation that carries the target's delivered feedback through a
      * conversation copy, and that person's reply to it. The claim path cannot write such a copy; the store still
      * redacts it, because the feedback ledger names the message.
      */
     private ConversationFeedbackCopy seedFeedbackCopy(DerivedConversation target, DerivedConversation other) {
-        MentorEntry otherAnswer =
-                mentorEntryRepository.findById(other.messageId()).orElseThrow();
-        MentorEntry copied = mentorEntries.append(
+        ConversationEntry otherAnswer =
+                conversationEntryRepository.findById(other.messageId()).orElseThrow();
+        ConversationEntry copied = conversationEntries.append(
                 otherAnswer.getWorkspaceId(),
                 otherAnswer.getConversationId(),
                 entry(
-                        MentorEntry.Kind.HEPH,
+                        ConversationEntry.Kind.ANSWER,
                         "Target guidance copied into another conversation",
                         piAnswer("Target guidance copied into another conversation")));
-        MentorEntry reply = mentorEntries.append(
+        ConversationEntry reply = conversationEntries.append(
                 otherAnswer.getWorkspaceId(),
                 otherAnswer.getConversationId(),
-                entry(MentorEntry.Kind.USER, "Other reply to erased feedback", null));
+                entry(ConversationEntry.Kind.USER, "Other reply to erased feedback", null));
         UUID copyId = FeedbackIds.copy(target.deliveredId(), FeedbackCopyKind.CHAT_TURN, 1);
         feedbackCopyRepository.saveAndFlush(FeedbackCopy.builder()
                 .id(copyId)
@@ -1960,28 +1967,28 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
                 .state(FeedbackCopyState.POSTED)
                 .body("Target guidance copied into another conversation")
                 .writeStartedAt(Instant.now())
-                .mentorEntryId(copied.getId())
+                .conversationEntryId(copied.getId())
                 .postedAt(Instant.now())
                 .createdAt(Instant.now())
                 .build());
         return new ConversationFeedbackCopy(copied.getId(), reply.getId());
     }
 
-    private static MentorEntryDraft entry(MentorEntry.Kind kind, String text, @Nullable JsonNode payload) {
-        return new MentorEntryDraft(kind, MentorEntry.Surface.APP, text, payload, null, null, null);
+    private static ConversationEntryDraft entry(ConversationEntry.Kind kind, String text, @Nullable JsonNode payload) {
+        return new ConversationEntryDraft(kind, ConversationEntry.Surface.APP, text, payload, null, null, null);
     }
 
-    /** Heph's answer as the end of its turn stores it, with a tool call whose arguments hold a credential. */
+    /** Hephaestus's answer as the end of its turn stores it, with a tool call whose arguments hold a credential. */
     private JsonNode piAnswer(String text) {
-        return MentorLedgerFixtures.toolCall(
-                MentorLedgerFixtures.piId(),
+        return ConversationLedgerFixtures.toolCall(
+                ConversationLedgerFixtures.piId(),
                 "context-call",
                 "fetch_context",
                 mapper.createObjectNode().put("authorization", "credential-canary " + text));
     }
 
-    private MentorConversation conversationOf(Workspace workspace, User owner) {
-        return mentorConversations.findOrCreateMain(
+    private Conversation conversationOf(Workspace workspace, User owner) {
+        return conversations.findOrCreateMain(
                 workspace.getId(), Objects.requireNonNull(accountFor(owner).getId()));
     }
 
@@ -1991,15 +1998,15 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
     }
 
     private UUID seedToolResult(Workspace workspace, User owner, String tool) {
-        return mentorEntries
+        return conversationEntries
                 .append(
                         workspace.getId(),
                         conversationOf(workspace, owner).getId(),
                         entry(
-                                MentorEntry.Kind.TOOL_RESULT,
+                                ConversationEntry.Kind.TOOL_RESULT,
                                 "runtime-credential-canary unrelated-profile-canary",
-                                MentorLedgerFixtures.toolResult(
-                                        MentorLedgerFixtures.piId(),
+                                ConversationLedgerFixtures.toolResult(
+                                        ConversationLedgerFixtures.piId(),
                                         "context-call",
                                         tool,
                                         "runtime-credential-canary unrelated-profile-canary",
@@ -2008,32 +2015,32 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
     }
 
     /**
-     * A Heph message in the owner's conversation that showed prepared feedback, with its successful
+     * A Hephaestus message in the owner's conversation that showed prepared feedback, with its successful
      * {@code show_feedback} result, which copies no one's data.
      */
     private UUID seedFeedbackAnswer(Workspace workspace, User owner, UUID feedbackId) {
-        MentorConversation conversation = conversationOf(workspace, owner);
-        UUID turnId = mentorTurns
+        Conversation conversation = conversationOf(workspace, owner);
+        UUID turnId = conversationTurns
                 .submit(
                         workspace.getId(),
                         conversation.getId(),
-                        new MentorTurnService.Question(
-                                MentorTurn.Surface.APP,
+                        new ConversationTurnService.Question(
+                                ConversationTurn.Surface.APP,
                                 "What did my review say?",
                                 UUID.randomUUID().toString(),
                                 null,
                                 null))
                 .turn()
                 .getId();
-        MentorEntry answer = mentorEntries.append(
+        ConversationEntry answer = conversationEntries.append(
                 workspace.getId(),
                 conversation.getId(),
-                new MentorEntryDraft(
-                        MentorEntry.Kind.HEPH,
-                        MentorEntry.Surface.APP,
+                new ConversationEntryDraft(
+                        ConversationEntry.Kind.ANSWER,
+                        ConversationEntry.Surface.APP,
                         "",
-                        MentorLedgerFixtures.toolCall(
-                                MentorLedgerFixtures.piId(),
+                        ConversationLedgerFixtures.toolCall(
+                                ConversationLedgerFixtures.piId(),
                                 "show-call",
                                 "show_feedback",
                                 mapper.createObjectNode()
@@ -2042,15 +2049,15 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
                         turnId,
                         null,
                         null));
-        mentorEntries.append(
+        conversationEntries.append(
                 workspace.getId(),
                 conversation.getId(),
-                new MentorEntryDraft(
-                        MentorEntry.Kind.TOOL_RESULT,
-                        MentorEntry.Surface.APP,
+                new ConversationEntryDraft(
+                        ConversationEntry.Kind.TOOL_RESULT,
+                        ConversationEntry.Surface.APP,
                         "",
-                        MentorLedgerFixtures.toolResult(
-                                MentorLedgerFixtures.piId(),
+                        ConversationLedgerFixtures.toolResult(
+                                ConversationLedgerFixtures.piId(),
                                 "show-call",
                                 "show_feedback",
                                 "Shown to the developer: feedback " + feedbackId,
@@ -2068,10 +2075,10 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
     private DerivedConversation seedDerivedConversation(
             Workspace workspace, long threadId, User owner, boolean withProblem) {
         UUID toolResult = seedToolResult(workspace, owner);
-        MentorEntry message = mentorEntries.append(
+        ConversationEntry message = conversationEntries.append(
                 workspace.getId(),
                 conversationOf(workspace, owner).getId(),
-                entry(MentorEntry.Kind.HEPH, "Delivered guidance", piAnswer("Delivered guidance")));
+                entry(ConversationEntry.Kind.ANSWER, "Delivered guidance", piAnswer("Delivered guidance")));
 
         var work = modelFixtures.work(
                 workspace, "conv-practice-" + workspace.getId() + "-" + owner.getId(), "chat.thread", threadId);
@@ -2119,7 +2126,7 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
                 .state(FeedbackCopyState.POSTED)
                 .body("Delivered guidance")
                 .writeStartedAt(Instant.now())
-                .mentorEntryId(message.getId())
+                .conversationEntryId(message.getId())
                 .postedAt(Instant.now())
                 .createdAt(Instant.now())
                 .build());

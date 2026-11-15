@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useSpinDelay } from "spin-delay";
 
-import type { MentorTurn } from "@/api/types.gen";
+import type { ConversationTurn } from "@/api/types.gen";
 import { HephaestusMark } from "@/components/brand/HephaestusMark";
 import { Button } from "@/components/ui/button";
 import { Marker, MarkerContent, MarkerIcon } from "@/components/ui/marker";
@@ -9,12 +9,12 @@ import { hasText } from "@/lib/text";
 
 import { ConversationMessage } from "./ConversationMessage";
 
-type ShownTurn = Pick<MentorTurn, "status" | "surface" | "partial" | "waitingFor">;
+type ShownTurn = Pick<ConversationTurn, "status" | "surface" | "partial" | "waitingFor">;
 
 /** What the status line says while a turn runs, or while it `waiting` to start. */
 function turnStatusLabel(turn: ShownTurn, waiting: boolean): string {
 	if (waiting) {
-		return turn.waitingFor === "FREE_HEPH"
+		return turn.waitingFor === "CAPACITY"
 			? "Hephaestus is answering other questions. Yours starts when one finishes."
 			: "Waiting to start…";
 	}
@@ -39,7 +39,7 @@ export const LEAVE_NOTE = "You can leave. The answer stays here.";
  * shows progress either.
  */
 export function useWaitedSeconds(
-	turn: Pick<MentorTurn, "createdAt" | "surface"> | undefined,
+	turn: Pick<ConversationTurn, "createdAt" | "surface"> | undefined,
 ): number | undefined {
 	const [now, setNow] = useState<Date>();
 	const counting = turn !== undefined && turn.surface !== "SLACK";
@@ -83,7 +83,7 @@ export function useTurnStatusLabel(turn: ShownTurn | undefined): string {
 }
 
 export interface ConversationTurnStatusProps {
-	turn: Pick<MentorTurn, "createdAt" | "status" | "surface" | "partial" | "waitingFor">;
+	turn: Pick<ConversationTurn, "createdAt" | "status" | "surface" | "partial" | "waitingFor">;
 	/** Shown on a Slack turn too. `label` names the answer it ends, apart from another scope's. */
 	stop?: { label: string; onStop: () => void };
 }
@@ -101,7 +101,7 @@ export function ConversationTurnStatus({ turn, stop }: ConversationTurnStatusPro
 			{hasText(text) && (
 				<ConversationMessage
 					message={{
-						kind: "HEPH",
+						kind: "ANSWER",
 						surface: turn.surface,
 						text,
 						createdAt: turn.createdAt,

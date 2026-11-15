@@ -49,7 +49,7 @@ public class WorkspaceSecurityExpressions {
 
     /**
      * Like {@link #isMember()}, but instance-admin elevation does not count: for what a workspace
-     * offers its own members, such as Heph. Use in SpEL:
+     * offers its own members, such as Hephaestus. Use in SpEL:
      * {@code @PreAuthorize("@workspaceSecure.isMemberWithoutElevation()")}.
      *
      * @return true if the caller (or, in a user view, the viewed member) holds a workspace

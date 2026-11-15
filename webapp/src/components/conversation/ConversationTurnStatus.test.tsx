@@ -1,11 +1,11 @@
 import { act, render, renderHook, screen } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
-import type { MentorTurn } from "@/api/types.gen";
+import type { ConversationTurn } from "@/api/types.gen";
 
 import { ConversationTurnStatus, useTurnStatusLabel } from "./ConversationTurnStatus";
 
-type ShownTurn = Pick<MentorTurn, "status" | "surface" | "partial" | "waitingFor">;
+type ShownTurn = Pick<ConversationTurn, "status" | "surface" | "partial" | "waitingFor">;
 
 beforeEach(() => {
 	vi.useFakeTimers();
@@ -43,7 +43,7 @@ it("says a queued turn waits only once it has waited a second", () => {
 
 it("says why a queued turn waits only when the server says it waits for a free Hephaestus", () => {
 	const { result, rerender } = renderHook((turn: ShownTurn) => useTurnStatusLabel(turn), {
-		initialProps: { status: "QUEUED", surface: "APP", waitingFor: "FREE_HEPH" },
+		initialProps: { status: "QUEUED", surface: "APP", waitingFor: "CAPACITY" },
 	});
 	act(() => {
 		vi.advanceTimersByTime(1000);

@@ -36,7 +36,7 @@ beforeAll(
 const NO_CONVERSATION: WorkspaceOnboarding = {
 	...workspaceOnboarding(),
 	aiChoice: "NO_AI",
-	mentorRefusal: "NO_AI",
+	conversationRefusal: "NO_AI",
 };
 
 /**

@@ -7,9 +7,9 @@ import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
-import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBinding;
-import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBindingRepository;
+import de.tum.cit.aet.hephaestus.agent.config.ModelPurpose;
+import de.tum.cit.aet.hephaestus.agent.config.WorkspaceModelAssignment;
+import de.tum.cit.aet.hephaestus.agent.config.WorkspaceModelAssignmentRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.testconfig.LlmCatalogTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
@@ -55,7 +55,7 @@ class LlmModelAdminControllerIntegrationTest extends AbstractWorkspaceIntegratio
     private LlmConnectionRepository llmConnectionRepository;
 
     @Autowired
-    private WorkspaceAgentBindingRepository agentBindingRepository;
+    private WorkspaceModelAssignmentRepository modelAssignmentRepository;
 
     @Autowired
     private LlmModelRepository llmModelRepository;
@@ -526,11 +526,11 @@ class LlmModelAdminControllerIntegrationTest extends AbstractWorkspaceIntegratio
         User owner = persistUser("delete-guard-owner");
         Workspace workspace =
                 createWorkspace("delete-guard-ws", "Delete Guard", "delete-guard-org", AccountType.ORG, owner);
-        WorkspaceAgentBinding binding = new WorkspaceAgentBinding();
+        WorkspaceModelAssignment binding = new WorkspaceModelAssignment();
         binding.setWorkspace(workspace);
-        binding.setPurpose(AgentPurpose.PRACTICE_REVIEW);
+        binding.setPurpose(ModelPurpose.PRACTICE_REVIEW);
         binding.setInstanceModel(llmModelFromRepository(model.id()));
-        agentBindingRepository.save(binding);
+        modelAssignmentRepository.save(binding);
 
         webTestClient
                 .delete()

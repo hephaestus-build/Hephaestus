@@ -61,7 +61,7 @@ Finish the provider deletion before a workspace purge, a disconnect or a person 
    ```sql
    SELECT f.id, f.review_id, f.item_id, f.destination, f.state, f.replaces_id,
           p.id AS copy_id, p.kind, p.state AS copy_state, p.write_started_at, p.write_marker,
-          p.external_ref, p.external_url, p.mentor_entry_id, p.mentor_turn_id,
+          p.external_ref, p.external_url, p.conversation_entry_id, p.conversation_turn_id,
           p.path, p.start_line, p.end_line, p.side, p.posted_at
    FROM feedback f
    LEFT JOIN feedback_copy p ON p.feedback_id = f.id AND p.workspace_id = f.workspace_id
@@ -84,10 +84,10 @@ Finish the provider deletion before a workspace purge, a disconnect or a person 
    Do the same for each copy of a send that ended `UNCERTAIN`.
 6. For such a copy with a `write_marker`, search the provider for the marker.
    Hephaestus appends it to the posted text.
-7. For a copy with a `mentor_entry_id`, read `conversation_id`, `turn_id`, `surface` and `slack_ts` of that `mentor_entry` row.
+7. For a copy with a `conversation_entry_id`, read `conversation_id`, `turn_id`, `surface` and `slack_ts` of that `conversation_entry` row.
    The surface `APP` has no Slack copy.
 8. For a Slack copy, read `slack_team_id` and `slack_channel_id` of the main conversation.
-   For a thread, follow `mentor_conversation.parent_conversation_id` to the main conversation.
+   For a thread, follow `conversation.parent_conversation_id` to the main conversation.
 9. If a Slack copy has no `slack_ts`, find the bot reply with the Slack [conversations.replies](https://docs.slack.dev/reference/methods/conversations.replies/) API.
 10. If you cannot see the provider inventory, or it is not clear, record the gap and keep the workspace paused.
 

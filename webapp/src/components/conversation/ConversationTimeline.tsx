@@ -8,7 +8,7 @@ import {
 	useState,
 } from "react";
 
-import type { MentorEntry, MentorTurn } from "@/api/types.gen";
+import type { ConversationEntry, ConversationTurn } from "@/api/types.gen";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import { Button } from "@/components/ui/button";
 import {
@@ -53,11 +53,11 @@ export type EarlierMessages =
 export interface ReadyTimeline {
 	status: "ready";
 	/** Stored messages of this scope, oldest first. */
-	entries: MentorEntry[];
+	entries: ConversationEntry[];
 	/** The developer's messages the server has not stored yet. */
 	pending: PendingMessage[];
 	/** Queued and running turns of this scope, oldest first. */
-	turns: MentorTurn[];
+	turns: ConversationTurn[];
 	earlier: EarlierMessages;
 }
 
@@ -74,14 +74,14 @@ export type ConversationThreadState =
 	| { status: "loading" }
 	| { status: "error"; onRetry: () => void }
 	| { status: "missing" }
-	| { status: "ready"; parent: MentorEntry; timeline: ReadyTimeline };
+	| { status: "ready"; parent: ConversationEntry; timeline: ReadyTimeline };
 
 /** Where a thread opened from a message puts focus: its composer to reply, or its heading to read. */
 export type ThreadFocus = "composer" | "heading";
 
 export interface TimelineActions {
-	onVote: (entry: MentorEntry, vote: MessageVote | null) => void;
-	onDelete: (entry: MentorEntry) => void;
+	onVote: (entry: ConversationEntry, vote: MessageVote | null) => void;
+	onDelete: (entry: ConversationEntry) => void;
 	onStop: (turnId: string) => void;
 	/** Removes a message that the server did not store from this device. */
 	onDiscardSend: (requestId: string) => void;
@@ -92,7 +92,7 @@ export interface TimelineActions {
 	ask?: {
 		onRetrySend: (requestId: string) => void;
 		/** Asks a question again whose turn failed. */
-		onTryAgain: (question: MentorEntry) => void;
+		onTryAgain: (question: ConversationEntry) => void;
 	};
 }
 
@@ -283,7 +283,7 @@ function subjectsOf(rows: TimelineRow[], developer: MessageAuthor): Map<string, 
  * Says once, from its own live region, that the developer can leave a long wait. The visible line
  * also counts the seconds, which a screen reader would read out every second.
  */
-function LeaveNote({ turn }: { turn: MentorTurn | undefined }) {
+function LeaveNote({ turn }: { turn: ConversationTurn | undefined }) {
 	const waited = useWaitedSeconds(turn);
 	return (
 		<p role="status" className="sr-only">
@@ -376,7 +376,7 @@ function useAnchorKeys(rows: TimelineRow[], ready: boolean): AnchorKeys {
  * What deleting a message does, what it leaves (the replies in its thread, each with its own
  * Delete, and the copy in Slack of a message asked there), and that it is final.
  */
-function deleteDescription(entry: MentorEntry): string {
+function deleteDescription(entry: ConversationEntry): string {
 	return [
 		"Hephaestus forgets it. If it has not answered yet, it does not answer.",
 		(entry.thread?.replyCount ?? 0) > 0 ? "The replies in its thread stay." : undefined,
@@ -523,7 +523,7 @@ function useOpeningWindow(
 export function ConversationTimeline(props: ConversationTimelineProps) {
 	const { label, state, developer, lead, empty, livePaused = false, jumpTo } = props;
 	const composer = state.status === "ready" ? props.composer : undefined;
-	const [deleting, setDeleting] = useState<MentorEntry | null>(null);
+	const [deleting, setDeleting] = useState<ConversationEntry | null>(null);
 	const rows = state.status === "ready" ? timelineRows(state) : [];
 	const subjects = subjectsOf(rows, developer);
 	const last = rows.at(-1);

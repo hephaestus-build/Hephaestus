@@ -191,7 +191,7 @@ class ClientSessionConcurrencyIntegrationTest extends RealAuthIntegrationTest {
         ClientSignInFlow.Tokens tokens = flow.signIn("race-purge-b");
         Long accountId = accountOf(tokens);
         UUID sid = sidOf(tokens.accessToken());
-        accountFeatureRepository.save(new AccountFeature(accountId, "mentor_access"));
+        accountFeatureRepository.save(new AccountFeature(accountId, "conversation_access"));
 
         CountDownLatch featureHeld = new CountDownLatch(1);
         CountDownLatch release = new CountDownLatch(1);

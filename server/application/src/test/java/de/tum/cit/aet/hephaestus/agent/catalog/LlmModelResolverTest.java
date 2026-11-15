@@ -5,8 +5,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
-import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
-import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBinding;
+import de.tum.cit.aet.hephaestus.agent.config.ModelPurpose;
+import de.tum.cit.aet.hephaestus.agent.config.WorkspaceModelAssignment;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
 import de.tum.cit.aet.hephaestus.core.security.SystemSecrets;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
@@ -65,12 +65,12 @@ class LlmModelResolverTest extends BaseUnitTest {
         lenient().when(instanceModels.findById(20L)).thenReturn(Optional.of(model));
     }
 
-    private static WorkspaceAgentBinding binding() {
+    private static WorkspaceModelAssignment binding() {
         Workspace workspace = new Workspace();
         workspace.setId(30L);
-        WorkspaceAgentBinding binding = new WorkspaceAgentBinding();
+        WorkspaceModelAssignment binding = new WorkspaceModelAssignment();
         binding.setWorkspace(workspace);
-        binding.setPurpose(AgentPurpose.PRACTICE_REVIEW);
+        binding.setPurpose(ModelPurpose.PRACTICE_REVIEW);
         return binding;
     }
 
@@ -162,7 +162,7 @@ class LlmModelResolverTest extends BaseUnitTest {
     @Test
     void shouldRejectDisabledModelBeforeBuildingRuntimeConfiguration() {
         model.setEnabled(false);
-        WorkspaceAgentBinding binding = binding();
+        WorkspaceModelAssignment binding = binding();
         binding.setInstanceModel(model);
 
         assertThatThrownBy(() -> resolver.resolve(binding))
@@ -203,7 +203,7 @@ class LlmModelResolverTest extends BaseUnitTest {
 
     @Test
     void shouldRejectBindingWithoutACatalogModel() {
-        WorkspaceAgentBinding binding = binding(); // neither instance nor workspace model set
+        WorkspaceModelAssignment binding = binding(); // neither instance nor workspace model set
 
         assertThatThrownBy(() -> resolver.resolve(binding))
                 .isInstanceOf(IllegalStateException.class)
@@ -212,7 +212,7 @@ class LlmModelResolverTest extends BaseUnitTest {
 
     @Test
     void shouldNotResolveACredentialForABindingWithoutACatalogModel() {
-        WorkspaceAgentBinding binding = binding();
+        WorkspaceModelAssignment binding = binding();
 
         assertThat(resolver.resolveCredential(binding)).isNull();
     }
