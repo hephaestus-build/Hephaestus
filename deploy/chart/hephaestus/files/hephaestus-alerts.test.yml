@@ -1358,7 +1358,7 @@ tests:
         values: "2x20"
       - series: 'kube_deployment_labels{namespace="hephaestus",deployment="staging-server",label_app_kubernetes_io_name="hephaestus",label_app_kubernetes_io_component="server"}'
         values: "1x20"
-      # server.replicas=0 for maintenance.
+      # Stopped for maintenance.
       - series: 'kube_deployment_status_replicas_available{namespace="maintenance",deployment="hephaestus-server"}'
         values: "0x20"
       - series: 'kube_deployment_status_replicas_unavailable{namespace="maintenance",deployment="hephaestus-server"}'

@@ -23,7 +23,7 @@ Delete data only when your retention rules permit it.
 1. Turn on silent mode, as [Contain an incident](./contain-an-incident#stop-external-writes) describes.
 2. If feedback copies must go, remove them, as [Remove feedback from a provider](./remove-feedback-from-a-provider) describes.
 3. If pull-based deployment runs, stop its timer, as [Operating it](./pull-based-deployment#operating-it) describes.
-4. In your site values, set `server.replicas: 0`, and run `helm upgrade`.
+4. In your site values, set `server.stopped: true`, and run `helm upgrade`.
 5. If your retention rules require a final backup, take it, as [Back up the database](./backup-restore#back-up-the-database) describes.
 
 ## Revoke provider and model access

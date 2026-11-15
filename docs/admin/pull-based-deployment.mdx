@@ -304,8 +304,8 @@ A change does not wait for a new promotion, and a frozen channel does not stop i
 If that apply fails, the record keeps the old digest, and each tick tries again until you correct the file.
 
 Pause the timer while you edit the file, so that the tick does not read a half-written file.
-Also keep the timer paused while you hold replica counts by hand that the file does not carry, for example in [Database maintenance](./maintenance#database-maintenance).
-When you resume the timer, the next tick applies the file with its own counts.
+Also keep the timer paused while you hold values by hand that the file does not carry, such as `server.stopped` in [Database maintenance](./maintenance#database-maintenance).
+When you resume the timer, the next tick applies the file with its own values.
 
 A commit apply runs this command:
 

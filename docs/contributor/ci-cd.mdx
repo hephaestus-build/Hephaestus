@@ -669,6 +669,7 @@ The required checks are job names, so a display name does not change them.
 | `scorecard.yml`                       | Push to main, branch-protection change, weekly                                | Publishes the OpenSSF Scorecard                                                                                                                                                                                                  |
 | `semgrep.yml`                         | Pull request, push to main                                                    | Tests and scans the repository's own TLS rule pack                                                                                                                                                                               |
 | `kubernetes-nightly.yml`              | Nightly, manual                                                               | Runs every Kubernetes leg and the sandbox footprint benchmark on the newest main build that passed CI, with its chart and agent image. Reports a failure on one tracking issue                                              |
+| `chart-upgrade.yml` | Nightly through `kubernetes-nightly.yml`, PR touching the drill, manual | Installs the latest published release with its own chart and images, then upgrades it to a candidate with the candidate chart |
 | `feedback-eval-panel.yml` | Nightly, manual, PR that changes what the composer reads | Composes the [model panel](./feedback-quality-evals.md#when-the-panel-runs) of the feedback eval gate, or its prompt-safety subset on a PR without the `eval:run` label. Never a required check. Inactive without the [CI model connection](#ci-model-connection). A red or unfinished night comments on one tracking issue, and the next green night closes it |
 | `extension-provider-slots.yml` | Nightly, manual | Checks the actual extension adapter against six public GitHub and GitLab report layouts and keeps each result |
 | `platform-pins.yml` | PR touching platform pins or their validator | Verifies the installer checksum and the images that both upstream charts render |
@@ -855,6 +856,12 @@ Use `ci:full` to reproduce the queue legs on a PR, including the separate roll j
 The nightly run adds arm64 and eviction. A failed nightly eviction fails the Kubernetes stage.
 Its existing `Report a failure` job opens or updates the issue "The nightly Kubernetes run failed" and links the run.
 The release evidence preflight also requires that the newest nightly run on `main` passed its cluster legs within 48 hours (`scripts/check-nightly-kubernetes.ts`).
+
+The nightly run also upgrades the chart of the latest published release to the newest main build (`chart-upgrade.yml`, `scripts/chart-upgrade-drill.ts`).
+The previous release installs with its own chart, images and scripts.
+A release whose migration guide says **Stop every role** takes the three phases of the stopped upgrade.
+Any other release takes one rolling upgrade.
+Dispatch `chart-upgrade.yml` with a commit whose images exist to run it on a branch.
 
 The release also runs eviction against its captured candidate images before final publication.
 [Release qualification and recovery](release-management.mdx#release-qualification-and-recovery) defines its gate and failure recovery.

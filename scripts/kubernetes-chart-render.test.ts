@@ -3397,7 +3397,7 @@ await test("the database admits only the roles that hold its login", () => {
 	assert.ok(!admitted.has("webapp"));
 });
 
-await test("replica counts stop the server and restore the release", () => {
+await test("server.stopped stops the server and restores the release", () => {
 	const counts = (resources: Resource[]) => [
 		get(workload(resources, "server"), "spec", "replicas"),
 	];
@@ -3406,7 +3406,7 @@ await test("replica counts stop the server and restore the release", () => {
 	assert.deepEqual(counts(running), [1]);
 
 	// Stopped: the objects stay, so the server keeps its Deployment, its policies and the sandbox namespace's.
-	const stopped = rendered([...enabled, { server: { replicas: 0 } }]);
+	const stopped = rendered([...enabled, { server: { stopped: true } }]);
 	assert.deepEqual(counts(stopped), [0]);
 	assert.deepEqual(
 		stopped.map((resource) => `${String(kindOf(resource))}/${nameOf(resource)}`),
@@ -3883,7 +3883,7 @@ await test("a restore clone starts PostgreSQL alone before lockdown and migratio
 		operator,
 		reviews,
 		{
-			server: { replicas: 0 },
+			server: { stopped: true },
 			migration: { enabled: false },
 		},
 	]);
@@ -3991,10 +3991,13 @@ const maxConnections = (layers: readonly Layer[]) => {
 	return args.findLast((arg) => typeof arg === "string" && arg.startsWith("max_connections="));
 };
 
-await test("restore configuration preserves max_connections while application roles are paused", () => {
+await test("a restore that stops the servers keeps max_connections; a count of 0 needs the pin", () => {
 	const base = [prepared, operator, reviews, { sandbox: { enabled: true } }];
 	const source = maxConnections(base);
 	assert.ok(typeof source === "string");
+	const stopped = { migration: { enabled: false }, server: { stopped: true } };
+	assert.equal(maxConnections([...base, stopped]), source);
+	// A chart without server.stopped, or a replacement host, stops the servers with a count of 0.
 	const paused = {
 		migration: { enabled: false },
 		server: { replicas: 0 },
@@ -4802,5 +4805,28 @@ await test("retired broker settings are rejected instead of silently ignored", (
 		const result = render([...layersFor("small"), retired]);
 		assert.equal(result.ok, false);
 		assert.match(result.stderr, /additional properties 'nats' not allowed/iu);
+	}
+});
+
+await test("server.stopped stops the servers and changes no PostgreSQL value, at any replica count", () => {
+	// The small profile's sandbox budget holds one server; dev holds more.
+	for (const [name, counts] of [
+		["small", [1]],
+		["dev", [1, 2, 3]],
+	] as const) {
+		for (const replicas of counts) {
+			const running = rendered([...layersFor(name), { server: { replicas } }]);
+			const stopped = rendered([...layersFor(name), { server: { replicas, stopped: true } }]);
+			assert.equal(get(workload(stopped, "server"), "spec", "replicas"), 0, `${name} ${replicas}`);
+			assert.equal(
+				get(workload(running, "server"), "spec", "replicas"),
+				replicas,
+				`${name} ${replicas}`,
+			);
+			const postgresql = (resources: Resource[]) =>
+				resources.filter((resource) => componentOf(resource) === "postgresql");
+			assert.ok(postgresql(running).length > 0);
+			assert.deepEqual(postgresql(stopped), postgresql(running), `${name} ${replicas}`);
+		}
 	}
 });

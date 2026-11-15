@@ -96,6 +96,9 @@ The new Pods wait up to 10 minutes for the migrated schema, and the previous rel
 The server uses a rolling update: its replacement is ready before the old Pod stops serving.
 An old server drains for up to `server.drainTimeoutSeconds`: 30 minutes by default, and 10 minutes in the `small` profile.
 Any ready server serves the sandbox calls of running reviews. A connection that is open can finish on the old server during the drain.
+
+Each release builds its PostgreSQL image again with the current security fixes of its distribution.
+Thus, the upgrade usually restarts the bundled PostgreSQL once. While it restarts, requests that need the database fail.
 Ready replacements accept new claims.
 
 The Helm `--timeout` must cover the drain, 2 minutes of shutdown and up to 10 minutes of start.
@@ -124,21 +127,23 @@ Prepare a PostgreSQL backup, verify its restore, and keep the matching signed re
 Verify the new release's chart before you use it.
 Each phase is a separate `helm upgrade` with that phase's chart, profile and site values:
 
-| Phase | Chart | `migration.enabled` | `server.replicas` | Before the next phase |
+| Phase | Chart | `migration.enabled` | `server.stopped` | Before the next phase |
 | --- | --- | --- | --- | --- |
-| 1. Stop the server | Current release | `false` | 0 | Every old server Pod, including terminating Pods, and its sandbox Pods are gone. |
-| 2. Migrate | New release | `true` | 0 | The migration Job of this revision completed successfully. |
-| 3. Start the server | New release | `true` | Recorded count | Readiness, authenticated reads, a practice review and a conversation pass. |
+| 1. Stop the server | Current release | `false` | `true` | Every old server Pod, including terminating Pods, and its sandbox Pods are gone. |
+| 2. Migrate | New release | `true` | `true` | The migration Job of this revision completed successfully. |
+| 3. Start the server | New release | `true` | `false` | Readiness, authenticated reads, a practice review and a conversation pass. |
 
 1. Apply each phase's values after your profile and site values, so that they take precedence.
    Use `--wait=watcher --wait-for-jobs --timeout 45m`, without automatic rollback.
-   Keep PostgreSQL running through all phases.
-   Use `server.replicas=0`, not `sandbox.enabled=false`, to stop the server.
+   Do not stop PostgreSQL yourself in these phases.
+   Use `server.stopped=true` to stop the server, not `server.replicas=0` or `sandbox.enabled=false`.
+   `server.stopped` keeps `server.replicas`, which sizes PostgreSQL's connections, so the stop does not restart PostgreSQL.
 2. Do phase 1.
-   A server can drain for up to its configured timeout. If phase 1 times out, keep the count at zero and wait for every old Pod to stop.
+   A server can drain for up to its configured timeout. If phase 1 times out, keep `server.stopped=true` and wait for every old Pod to stop.
 3. Remove the remaining sandbox workloads, as step 4 of [Planned node maintenance](./maintenance#planned-node-maintenance) describes.
 4. Take and verify the final restore point while the server is stopped.
 5. Do phase 2.
+   Expect one PostgreSQL restart: each release builds its PostgreSQL image again with current security fixes.
    Find the migration Job of the new Helm revision. For the release `hephaestus`, its name is `hephaestus-migration-<revision>`.
 6. Save its log: `kubectl --namespace hephaestus logs job/<migration-job> -c migration > migration.log`.
 7. Require its `Complete` condition: `kubectl --namespace hephaestus wait --for=condition=complete job/<migration-job> --timeout=20m`.
@@ -149,6 +154,25 @@ Each phase is a separate `helm upgrade` with that phase's chart, profile and sit
    Phase 3 runs another migration Job for the same release, which has no change to apply.
 9. Resume deployment automation only after its release and replica counts match the verified installation.
    On one host, keep it paused through the final installer run of [Upgrade the host](./k3s#upgrade-the-host).
+
+A current release from 1.0.0-rc.8 or earlier has no `server.stopped`.
+In phase 1, set `server.replicas=0` instead. With the bundled PostgreSQL, also pin `postgresql.parameters.max_connections` for all three phases:
+
+1. Read the current value with `SHOW max_connections` in PostgreSQL.
+2. Read the value that the new chart derives for your site file:
+
+   ```bash
+   helm template hephaestus <new chart> --namespace <namespace> -f <profile> -f <site file> --set server.stopped=true \
+     | grep -o 'max_connections=[0-9]*'
+   ```
+
+3. Set `postgresql.parameters.max_connections` to the larger of the two values in each phase.
+   The new chart refuses a smaller value, and a reviewing server needs more connections in the new release.
+   On a host with pull-based reconciliation, put it in `/etc/hephaestus/chart.yaml`, because the reconciler applies only that file.
+
+If the new value is larger, PostgreSQL restarts once, in phase 1, while the servers stop.
+The connection count does not restart it in a later phase.
+Remove the setting at a later upgrade. The removal restarts PostgreSQL once.
 
 A refused migration can follow changesets that it already committed.
 An image or Helm rollback does not undo them.

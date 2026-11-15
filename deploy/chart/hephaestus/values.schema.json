@@ -671,7 +671,8 @@
 				"databasePool",
 				"drainTimeoutSeconds",
 				"inboxClaimers",
-				"jvm"
+				"jvm",
+				"stopped"
 			],
 			"properties": {
 				"jvm": {
@@ -718,7 +719,8 @@
 				},
 				"replicas": {
 					"type": "integer",
-					"minimum": 0
+					"minimum": 0,
+					"description": "Number of servers. It also sizes PostgreSQL's connections, so stop the servers with server.stopped, not with 0."
 				},
 				"gitCache": {
 					"$ref": "#/definitions/cache"
@@ -735,6 +737,10 @@
 				"inboxClaimers": {
 					"type": "integer",
 					"minimum": 0
+				},
+				"stopped": {
+					"type": "boolean",
+					"description": "Stops the servers without changing server.replicas, the count that sizes PostgreSQL's connections. Use it for a stopped upgrade and for database maintenance."
 				}
 			}
 		},
