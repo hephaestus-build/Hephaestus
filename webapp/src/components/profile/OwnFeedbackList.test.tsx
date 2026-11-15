@@ -20,7 +20,7 @@ function renderList(feedback = answered) {
 	const responses = {
 		write: vi.fn<FeedbackResponseControls["write"]>(),
 		clear: vi.fn<FeedbackResponseControls["clear"]>(),
-		responseOf: (_feedbackId: string, response: FeedbackResponse | null) =>
+		responseOf: (_feedbackId: string, response: FeedbackResponse | undefined) =>
 			responseRequestOf(response),
 		pendingResponses: new Map(),
 	} satisfies FeedbackResponseControls;
@@ -99,13 +99,19 @@ describe("OwnFeedbackList", () => {
 	});
 
 	it("offers no Clear response while there is nothing to clear", () => {
-		renderList({ ...detailFeedback, response: null });
+		renderList({ ...detailFeedback });
 
 		expect(screen.queryByRole("button", { name: "Clear response" })).toBeNull();
 	});
 
 	it("offers no response to feedback that was not delivered", () => {
-		renderList({ ...detailFeedback, state: "WITHHELD", deliveredAt: null, copies: [] });
+		renderList({
+			...detailFeedback,
+			deliveredAt: undefined,
+			response: undefined,
+			state: "WITHHELD",
+			copies: [],
+		});
 
 		expect(screen.queryByRole("group")).toBeNull();
 	});

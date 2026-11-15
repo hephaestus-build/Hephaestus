@@ -214,7 +214,7 @@ const withheldPairCounts = { ...EMPTY_COUNTS, files: 1, practiceItemPairs: 1, wi
 const partialWithheldScan = scanSummary({
 	...PARTIAL_SCAN,
 	stopReason: "RESULT_WITHHELD",
-	baselineScanId: null,
+	baselineScanId: undefined,
 	counts: { ...EMPTY_COUNTS, files: 1, practiceItemPairs: 2, reviewed: 1, met: 1, withheld: 1 },
 });
 const partialWithheldReport = scanReport(partialWithheldScan, {

@@ -9,6 +9,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
 import de.tum.cit.aet.hephaestus.practices.feedback.dto.FeedbackResponseDTO;
@@ -35,7 +36,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.web.server.ResponseStatusException;
-import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 
 @Tag("unit")
 class FeedbackResponseServiceTest {
@@ -157,9 +158,12 @@ class FeedbackResponseServiceTest {
     }
 
     @Test
-    void shouldKeepEveryRequiredNullableResponseFieldOnTheWire() {
-        var json = new ObjectMapper().valueToTree(FeedbackResponseDTO.empty());
-        assertThat(json.propertyNames()).containsExactlyInAnyOrder("resolution", "usefulness", "comment", "createdAt");
-        assertThat(json.path("createdAt").isNull()).isTrue();
+    void shouldLeaveEveryMissingFieldOffTheWire() {
+        // As the server's own mapper: a null property is left out.
+        var mapper = JsonMapper.builder()
+                .changeDefaultPropertyInclusion(inclusion -> inclusion.withValueInclusion(JsonInclude.Include.NON_NULL))
+                .build();
+        var json = mapper.valueToTree(FeedbackResponseDTO.empty());
+        assertThat(json.propertyNames()).isEmpty();
     }
 }

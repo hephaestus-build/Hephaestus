@@ -29,6 +29,7 @@ import {
 import {
 	type ObservationFilter,
 	observationLinkFilter,
+	listedResultOf,
 	type SelectedObservationState,
 } from "@/components/practice-profile/observation-filter";
 import {
@@ -533,12 +534,12 @@ function selectedObservationState(
 		return { status: "loading" };
 	}
 	return query.data.id === resultId && query.data.practiceSlug === practiceSlug
-		? { status: "ready", result: query.data }
+		? { status: "ready", result: listedResultOf(query.data) }
 		: { status: "elsewhere" };
 }
 
 /** A review row's "Open observation": the practice level filtered to its work, with it open. */
-function observationLinkSearch(result: ResultList) {
+function observationLinkSearch(result: Pick<ResultList, "id" | "item">) {
 	const filter = observationLinkFilter(result);
 	return {
 		observation: filter.observationId,

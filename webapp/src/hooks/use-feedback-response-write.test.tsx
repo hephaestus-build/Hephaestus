@@ -24,9 +24,6 @@ const feedbackId = "00000000-0000-0000-0000-000000000103";
 const RESPONSE_PATH = "*/workspaces/:workspaceSlug/practices/feedback/:feedbackId/response";
 
 const recorded = (response: Partial<FeedbackResponse>): FeedbackResponse => ({
-	usefulness: null,
-	resolution: null,
-	comment: null,
 	createdAt: new Date("2026-09-09T14:10:00Z"),
 	...response,
 });
@@ -103,11 +100,11 @@ describe("useFeedbackResponseWrite", () => {
 		const { result, written } = renderWrite(answer.promise);
 
 		act(() => {
-			result.current.write(feedbackId, null, { usefulness: "HELPFUL" });
+			result.current.write(feedbackId, undefined, { usefulness: "HELPFUL" });
 		});
 		await waitFor(() => expect(result.current.pendingResponses.has(feedbackId)).toBe(true));
 		act(() => {
-			result.current.write(feedbackId, null, { resolution: "NOT_APPLICABLE" });
+			result.current.write(feedbackId, undefined, { resolution: "NOT_APPLICABLE" });
 		});
 
 		answer.resolve();
@@ -173,7 +170,7 @@ describe("useFeedbackResponseWrite", () => {
 		}
 
 		act(() => {
-			result.current.write(feedbackId, null, { resolution: "ADDRESSED" });
+			result.current.write(feedbackId, undefined, { resolution: "ADDRESSED" });
 		});
 
 		await waitFor(() => expect(written).toHaveLength(1));

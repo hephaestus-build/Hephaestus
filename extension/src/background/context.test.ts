@@ -70,14 +70,10 @@ function itemRef(id: string, kind = "scm.pull_request"): ItemRef {
 	return {
 		id,
 		kind,
-		parentId: null,
 		provider: "GITLAB",
 		label: `!${id}`,
 		title: "Add login",
-		url: null,
 		container: "team/app",
-		path: null,
-		removedAt: null,
 	};
 }
 
@@ -88,7 +84,6 @@ function dto(id: string, kind = "scm.pull_request"): ReviewContextDTO {
 		item: itemRef(id, kind),
 		requestAllowed: true,
 		canInspectReviewDetails: false,
-		reasonDescription: null,
 	};
 }
 
@@ -197,7 +192,7 @@ describe("resolveContext", () => {
 	it("reports an answer that names no item as work nobody can see", async () => {
 		const { env, trace } = environment({
 			url: ISSUE,
-			resolved: { team: { ...dto("4"), item: null } },
+			resolved: { team: { ...dto("4"), item: undefined } },
 		});
 		await expect(resolveContext(env, 1)).resolves.toStrictEqual({
 			status: "not-found",
@@ -326,10 +321,7 @@ function ownRow(overrides: Partial<ResultList> = {}): ResultList {
 		item: ITEM,
 		reviewId: "0b7c1a52-0d3e-4c55-8a0b-1d2e3f4a5b6c",
 		origin: "EVENT",
-		acceptedAt: null,
-		markedIncorrectAt: null,
 		currentness: "CURRENT",
-		unverifiableReason: null,
 		capturedAt: "2026-09-26T10:55:00Z",
 		recordedAt: "2026-09-26T11:00:00Z",
 		practiceName: "Descriptive merge request",
@@ -423,7 +415,7 @@ describe("the reader's own results on the tab's item", () => {
 				outcome: "NOT_MET",
 				severity: "MAJOR",
 				currentness: "CURRENT",
-				unverifiableReason: null,
+				unverifiableReason: undefined,
 				capturedAt: "2026-09-26T10:55:00Z",
 				recordedAt: "2026-09-26T11:00:00Z",
 				problems: [
@@ -610,10 +602,6 @@ function summary(overrides: Partial<DeliveredWorkFeedbackCopy> = {}): DeliveredW
 		kind: "SUMMARY",
 		externalRef: "gid://gitlab/Note/1",
 		externalUrl: `${MR1}#note_1`,
-		path: null,
-		startLine: null,
-		endLine: null,
-		side: null,
 		postedAt: "2026-09-26T11:00:00Z",
 		...overrides,
 	};
@@ -639,7 +627,7 @@ describe("the reader's own feedback on the item", () => {
 					copies: [
 						summary({
 							id: "6d2a8b01-2c3d-4e5f-9a01-b2c3d4e5f607",
-							externalUrl: null,
+							externalUrl: undefined,
 							postedAt: "2026-09-26T11:30:00Z",
 						}),
 						summary({
@@ -665,7 +653,7 @@ describe("the reader's own feedback on the item", () => {
 						}),
 						summary({ kind: "CHAT_TURN", externalRef: "turn-1" }),
 						summary({ externalRef: " " }),
-						summary({ externalRef: null }),
+						summary({ externalRef: undefined }),
 					],
 				}),
 				delivered({ id: "c", copies: [] }),
@@ -753,7 +741,7 @@ describe("the reader's own feedback on the item", () => {
 		api.workFeedback.mockResolvedValue({
 			item: ITEM,
 			feedback: [
-				delivered({ id: "newer", copies: [summary({ externalUrl: null })] }),
+				delivered({ id: "newer", copies: [summary({ externalUrl: undefined })] }),
 				delivered({
 					id: "older",
 					deliveredAt: "2026-09-26T09:00:00Z",
@@ -836,7 +824,7 @@ describe("the reader's own feedback on the item", () => {
 
 	it.each([
 		["another item", OTHER_ITEM],
-		["no item", null],
+		["no item", undefined],
 	])("refuses an answer about %s", async (_name, item) => {
 		const { env, api } = detailsEnvironment();
 		api.workFeedback.mockResolvedValue({ item, feedback: [delivered({ copies: [summary()] })] });

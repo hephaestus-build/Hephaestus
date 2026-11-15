@@ -10,11 +10,7 @@ const pullRequest = (n: number): ItemRef => ({
 	label: `#${n}`,
 	url: `https://github.example/pr/${n}`,
 	container: "ls1intum/Hephaestus",
-	parentId: null,
-	path: null,
 	provider: "GITHUB",
-	removedAt: null,
-	title: null,
 });
 
 describe("linkWork", () => {

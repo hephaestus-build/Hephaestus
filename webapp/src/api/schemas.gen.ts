@@ -59,10 +59,10 @@ export const AccountRefSchema = {
 	type: "object",
 	properties: {
 		avatarUrl: {
-			type: ["string", "null"],
+			type: "string",
 		},
 		displayName: {
-			type: ["string", "null"],
+			type: "string",
 		},
 		id: {
 			type: "string",
@@ -78,7 +78,7 @@ export const AccountRefSchema = {
 			$ref: "#/components/schemas/AccountStatus",
 		},
 	},
-	required: ["avatarUrl", "displayName", "id", "identities", "status"],
+	required: ["id", "identities", "status"],
 } as const;
 
 export const AccountStatusSchema = {
@@ -3064,31 +3064,24 @@ export const DeliveredWorkFeedbackSchema = {
 			},
 		},
 		item: {
-			anyOf: [
-				{
-					$ref: "#/components/schemas/ItemRef",
-				},
-				{
-					type: "null",
-				},
-			],
+			$ref: "#/components/schemas/ItemRef",
 		},
 	},
-	required: ["feedback", "item"],
+	required: ["feedback"],
 } as const;
 
 export const DeliveredWorkFeedbackCopySchema = {
 	type: "object",
 	properties: {
 		endLine: {
-			type: ["null", "integer"],
+			type: "integer",
 			format: "int32",
 		},
 		externalRef: {
-			type: ["string", "null"],
+			type: "string",
 		},
 		externalUrl: {
-			type: ["string", "null"],
+			type: "string",
 		},
 		id: {
 			type: "string",
@@ -3098,38 +3091,21 @@ export const DeliveredWorkFeedbackCopySchema = {
 			$ref: "#/components/schemas/FeedbackCopyKind",
 		},
 		path: {
-			type: ["string", "null"],
+			type: "string",
 		},
 		postedAt: {
 			type: "string",
 			format: "date-time",
 		},
 		side: {
-			anyOf: [
-				{
-					$ref: "#/components/schemas/CitationSide",
-				},
-				{
-					type: "null",
-				},
-			],
+			$ref: "#/components/schemas/CitationSide",
 		},
 		startLine: {
-			type: ["null", "integer"],
+			type: "integer",
 			format: "int32",
 		},
 	},
-	required: [
-		"endLine",
-		"externalRef",
-		"externalUrl",
-		"id",
-		"kind",
-		"path",
-		"postedAt",
-		"side",
-		"startLine",
-	],
+	required: ["id", "kind", "postedAt"],
 } as const;
 
 export const DeliveredWorkFeedbackItemSchema = {
@@ -4018,34 +3994,19 @@ export const FeedbackResponseSchema = {
 	type: "object",
 	properties: {
 		comment: {
-			type: ["string", "null"],
+			type: "string",
 		},
 		createdAt: {
-			type: ["string", "null"],
+			type: "string",
 			format: "date-time",
 		},
 		resolution: {
-			anyOf: [
-				{
-					$ref: "#/components/schemas/FeedbackResolution",
-				},
-				{
-					type: "null",
-				},
-			],
+			$ref: "#/components/schemas/FeedbackResolution",
 		},
 		usefulness: {
-			anyOf: [
-				{
-					$ref: "#/components/schemas/FeedbackUsefulness",
-				},
-				{
-					type: "null",
-				},
-			],
+			$ref: "#/components/schemas/FeedbackUsefulness",
 		},
 	},
-	required: ["comment", "createdAt", "resolution", "usefulness"],
 } as const;
 
 export const FeedbackResponseRequestSchema = {
@@ -5117,7 +5078,7 @@ export const ItemRefSchema = {
 	type: "object",
 	properties: {
 		container: {
-			type: ["string", "null"],
+			type: "string",
 		},
 		id: {
 			type: "string",
@@ -5130,45 +5091,27 @@ export const ItemRefSchema = {
 			type: "string",
 		},
 		parentId: {
-			type: ["string", "null"],
+			type: "string",
 			pattern: "^[1-9][0-9]*$",
 		},
 		path: {
-			type: ["string", "null"],
+			type: "string",
 		},
 		provider: {
-			anyOf: [
-				{
-					$ref: "#/components/schemas/IntegrationKind",
-				},
-				{
-					type: "null",
-				},
-			],
+			$ref: "#/components/schemas/IntegrationKind",
 		},
 		removedAt: {
-			type: ["string", "null"],
+			type: "string",
 			format: "date-time",
 		},
 		title: {
-			type: ["string", "null"],
+			type: "string",
 		},
 		url: {
-			type: ["string", "null"],
+			type: "string",
 		},
 	},
-	required: [
-		"container",
-		"id",
-		"kind",
-		"label",
-		"parentId",
-		"path",
-		"provider",
-		"removedAt",
-		"title",
-		"url",
-	],
+	required: ["id", "kind", "label"],
 } as const;
 
 export const ItemTraceSchema = {
@@ -7617,7 +7560,7 @@ export const OwnFeedbackCopyRefSchema = {
 	type: "object",
 	properties: {
 		externalUrl: {
-			type: ["string", "null"],
+			type: "string",
 		},
 		id: {
 			type: "string",
@@ -7631,7 +7574,7 @@ export const OwnFeedbackCopyRefSchema = {
 			format: "date-time",
 		},
 	},
-	required: ["externalUrl", "id", "kind", "postedAt"],
+	required: ["id", "kind", "postedAt"],
 } as const;
 
 export const OwnFeedbackRefSchema = {
@@ -7644,7 +7587,7 @@ export const OwnFeedbackRefSchema = {
 			},
 		},
 		deliveredAt: {
-			type: ["string", "null"],
+			type: "string",
 			format: "date-time",
 		},
 		destination: {
@@ -7655,20 +7598,13 @@ export const OwnFeedbackRefSchema = {
 			format: "uuid",
 		},
 		response: {
-			anyOf: [
-				{
-					$ref: "#/components/schemas/FeedbackResponse",
-				},
-				{
-					type: "null",
-				},
-			],
+			$ref: "#/components/schemas/FeedbackResponse",
 		},
 		state: {
 			$ref: "#/components/schemas/FeedbackState",
 		},
 	},
-	required: ["copies", "deliveredAt", "destination", "id", "response", "state"],
+	required: ["copies", "destination", "id", "state"],
 } as const;
 
 export const OwnItemEventSchema = {
@@ -9894,18 +9830,11 @@ export const ProfileChangeSchema = {
 			format: "date-time",
 		},
 		cleanNeeded: {
-			type: ["null", "integer"],
+			type: "integer",
 			format: "int32",
 		},
 		direction: {
-			anyOf: [
-				{
-					$ref: "#/components/schemas/ProfileChangeDirection",
-				},
-				{
-					type: "null",
-				},
-			],
+			$ref: "#/components/schemas/ProfileChangeDirection",
 		},
 		evidence: {
 			type: "array",
@@ -9914,56 +9843,35 @@ export const ProfileChangeSchema = {
 			},
 		},
 		feedbackId: {
-			type: ["string", "null"],
+			type: "string",
 			format: "uuid",
 		},
 		from: {
-			type: ["string", "null"],
+			type: "string",
 		},
 		groupName: {
-			type: ["string", "null"],
+			type: "string",
 		},
 		groupSlug: {
-			type: ["string", "null"],
+			type: "string",
 		},
 		practiceName: {
-			type: ["string", "null"],
+			type: "string",
 		},
 		practiceSlug: {
-			type: ["string", "null"],
+			type: "string",
 		},
 		resolvedBy: {
-			anyOf: [
-				{
-					$ref: "#/components/schemas/ProfileChangeResolvedBy",
-				},
-				{
-					type: "null",
-				},
-			],
+			$ref: "#/components/schemas/ProfileChangeResolvedBy",
 		},
 		to: {
-			type: ["string", "null"],
+			type: "string",
 		},
 		type: {
 			$ref: "#/components/schemas/ProfileChangeType",
 		},
 	},
-	required: [
-		"at",
-		"cleanNeeded",
-		"direction",
-		"evidence",
-		"feedbackId",
-		"from",
-		"groupName",
-		"groupSlug",
-		"practiceName",
-		"practiceSlug",
-		"resolvedBy",
-		"to",
-		"type",
-	],
+	required: ["at", "evidence", "type"],
 } as const;
 
 export const ProfileChangeDirectionSchema = {
@@ -10092,20 +10000,20 @@ export const ProviderIdentityRefSchema = {
 	type: "object",
 	properties: {
 		avatarUrl: {
-			type: ["string", "null"],
+			type: "string",
 		},
 		displayName: {
-			type: ["string", "null"],
+			type: "string",
 		},
 		login: {
-			type: ["string", "null"],
+			type: "string",
 		},
 		provider: {
 			type: "string",
 			enum: ["GITHUB", "GITLAB", "SLACK", "OUTLINE"],
 		},
 	},
-	required: ["avatarUrl", "displayName", "login", "provider"],
+	required: ["provider"],
 } as const;
 
 export const ProviderResourceAdapterResourceTypeSchema = {
@@ -11428,14 +11336,14 @@ export const ResultListSchema = {
 	type: "object",
 	properties: {
 		acceptedAt: {
-			type: ["string", "null"],
+			type: "string",
 			format: "date-time",
 		},
 		capturedAt: {
-			type: ["string", "null"],
+			type: "string",
 			format: "date-time",
 			description:
-				"When the observation's capture read the work: the work as of that time. A later check that found the work unchanged is not recorded. Null when the capture record is missing.",
+				"When the observation's capture read the work: the work as of that time. A later check that found the work unchanged is not recorded. Absent when the capture record is missing.",
 		},
 		currentness: {
 			$ref: "#/components/schemas/Currentness",
@@ -11448,7 +11356,7 @@ export const ResultListSchema = {
 			$ref: "#/components/schemas/ItemRef",
 		},
 		markedIncorrectAt: {
-			type: ["string", "null"],
+			type: "string",
 			format: "date-time",
 		},
 		origin: {
@@ -11478,40 +11386,21 @@ export const ResultListSchema = {
 			format: "uuid",
 		},
 		severity: {
-			anyOf: [
-				{
-					$ref: "#/components/schemas/Severity",
-				},
-				{
-					type: "null",
-				},
-			],
+			$ref: "#/components/schemas/Severity",
 		},
 		summary: {
-			type: ["string", "null"],
+			type: "string",
 		},
 		unverifiableReason: {
-			anyOf: [
-				{
-					$ref: "#/components/schemas/UnverifiableReason",
-					description:
-						"Why an unverifiable observation cannot be checked against the work; null unless currentness is UNVERIFIABLE.",
-				},
-				{
-					type: "null",
-				},
-			],
+			$ref: "#/components/schemas/UnverifiableReason",
 			description:
-				"Why an unverifiable observation cannot be checked against the work; null unless currentness is UNVERIFIABLE.",
+				"Why an unverifiable observation cannot be checked against the work; absent unless currentness is UNVERIFIABLE.",
 		},
 	},
 	required: [
-		"acceptedAt",
-		"capturedAt",
 		"currentness",
 		"id",
 		"item",
-		"markedIncorrectAt",
 		"origin",
 		"outcome",
 		"practiceName",
@@ -11519,9 +11408,6 @@ export const ResultListSchema = {
 		"problems",
 		"recordedAt",
 		"reviewId",
-		"severity",
-		"summary",
-		"unverifiableReason",
 	],
 } as const;
 
@@ -12113,17 +11999,10 @@ export const ReviewContextSchema = {
 			type: "boolean",
 		},
 		item: {
-			anyOf: [
-				{
-					$ref: "#/components/schemas/ItemRef",
-				},
-				{
-					type: "null",
-				},
-			],
+			$ref: "#/components/schemas/ItemRef",
 		},
 		reasonDescription: {
-			type: ["string", "null"],
+			type: "string",
 		},
 		requestAllowed: {
 			type: "boolean",
@@ -12136,14 +12015,7 @@ export const ReviewContextSchema = {
 			type: "string",
 		},
 	},
-	required: [
-		"canInspectReviewDetails",
-		"item",
-		"reasonDescription",
-		"requestAllowed",
-		"workspaceId",
-		"workspaceSlug",
-	],
+	required: ["canInspectReviewDetails", "requestAllowed", "workspaceId", "workspaceSlug"],
 } as const;
 
 export const ReviewDecisionSchema = {
@@ -13534,7 +13406,7 @@ export const ReviewRefSchema = {
 	type: "object",
 	properties: {
 		completedAt: {
-			type: ["string", "null"],
+			type: "string",
 			format: "date-time",
 		},
 		createdAt: {
@@ -13549,7 +13421,7 @@ export const ReviewRefSchema = {
 			$ref: "#/components/schemas/ItemRef",
 		},
 		itemVersion: {
-			type: ["string", "null"],
+			type: "string",
 		},
 		kind: {
 			$ref: "#/components/schemas/ReviewKind",
@@ -13561,31 +13433,24 @@ export const ReviewRefSchema = {
 			$ref: "#/components/schemas/ReviewStatus",
 		},
 	},
-	required: ["completedAt", "createdAt", "id", "item", "itemVersion", "kind", "origin", "status"],
+	required: ["createdAt", "id", "item", "kind", "origin", "status"],
 } as const;
 
 export const ReviewRequestOutcomeSchema = {
 	type: "object",
 	properties: {
 		reason: {
-			anyOf: [
-				{
-					$ref: "#/components/schemas/ReviewRequestReason",
-				},
-				{
-					type: "null",
-				},
-			],
+			$ref: "#/components/schemas/ReviewRequestReason",
 		},
 		reviewId: {
-			type: ["string", "null"],
+			type: "string",
 			format: "uuid",
 		},
 		status: {
 			$ref: "#/components/schemas/ReviewRequestStatus",
 		},
 	},
-	required: ["reason", "reviewId", "status"],
+	required: ["status"],
 } as const;
 
 export const ReviewRequestReasonSchema = {
@@ -14809,7 +14674,7 @@ export const ScanCountsSchema = {
 			format: "int32",
 		},
 		files: {
-			type: ["null", "integer"],
+			type: "integer",
 			format: "int32",
 		},
 		met: {
@@ -14829,7 +14694,7 @@ export const ScanCountsSchema = {
 			format: "int32",
 		},
 		practiceItemPairs: {
-			type: ["null", "integer"],
+			type: "integer",
 			format: "int32",
 		},
 		problems: {
@@ -14852,12 +14717,10 @@ export const ScanCountsSchema = {
 	required: [
 		"couldNotDetermine",
 		"doesNotApply",
-		"files",
 		"met",
 		"notMet",
 		"notReviewed",
 		"openProblems",
-		"practiceItemPairs",
 		"problems",
 		"reused",
 		"reviewed",
@@ -14900,7 +14763,7 @@ export const ScanDetailSchema = {
 	type: "object",
 	properties: {
 		baselineScanId: {
-			type: ["string", "null"],
+			type: "string",
 			format: "uuid",
 		},
 		budgetUsd: {
@@ -14910,7 +14773,7 @@ export const ScanDetailSchema = {
 			type: ["string", "null"],
 		},
 		completedAt: {
-			type: ["string", "null"],
+			type: "string",
 			format: "date-time",
 		},
 		counts: {
@@ -14950,38 +14813,22 @@ export const ScanDetailSchema = {
 			$ref: "#/components/schemas/ItemRef",
 		},
 		requestedBy: {
-			anyOf: [
-				{
-					$ref: "#/components/schemas/AccountRef",
-				},
-				{
-					type: "null",
-				},
-			],
+			$ref: "#/components/schemas/AccountRef",
 		},
 		startedAt: {
-			type: ["string", "null"],
+			type: "string",
 			format: "date-time",
 		},
 		status: {
 			$ref: "#/components/schemas/ReviewStatus",
 		},
 		stopReason: {
-			anyOf: [
-				{
-					$ref: "#/components/schemas/ReviewStopReason",
-				},
-				{
-					type: "null",
-				},
-			],
+			$ref: "#/components/schemas/ReviewStopReason",
 		},
 	},
 	required: [
-		"baselineScanId",
 		"budgetUsd",
 		"chargedCostUsd",
-		"completedAt",
 		"counts",
 		"createdAt",
 		"id",
@@ -14992,10 +14839,7 @@ export const ScanDetailSchema = {
 		"progress",
 		"ref",
 		"repository",
-		"requestedBy",
-		"startedAt",
 		"status",
-		"stopReason",
 	],
 } as const;
 
@@ -15310,11 +15154,11 @@ export const ScanSummarySchema = {
 	type: "object",
 	properties: {
 		baselineScanId: {
-			type: ["string", "null"],
+			type: "string",
 			format: "uuid",
 		},
 		completedAt: {
-			type: ["string", "null"],
+			type: "string",
 			format: "date-time",
 		},
 		counts: {
@@ -15345,36 +15189,20 @@ export const ScanSummarySchema = {
 			$ref: "#/components/schemas/ItemRef",
 		},
 		requestedBy: {
-			anyOf: [
-				{
-					$ref: "#/components/schemas/AccountRef",
-				},
-				{
-					type: "null",
-				},
-			],
+			$ref: "#/components/schemas/AccountRef",
 		},
 		startedAt: {
-			type: ["string", "null"],
+			type: "string",
 			format: "date-time",
 		},
 		status: {
 			$ref: "#/components/schemas/ReviewStatus",
 		},
 		stopReason: {
-			anyOf: [
-				{
-					$ref: "#/components/schemas/ReviewStopReason",
-				},
-				{
-					type: "null",
-				},
-			],
+			$ref: "#/components/schemas/ReviewStopReason",
 		},
 	},
 	required: [
-		"baselineScanId",
-		"completedAt",
 		"counts",
 		"createdAt",
 		"id",
@@ -15383,10 +15211,7 @@ export const ScanSummarySchema = {
 		"practiceCount",
 		"ref",
 		"repository",
-		"requestedBy",
-		"startedAt",
 		"status",
-		"stopReason",
 	],
 } as const;
 

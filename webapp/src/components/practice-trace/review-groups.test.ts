@@ -11,7 +11,6 @@ const review = (id: string, createdAt: Date, itemId = "1423"): ReviewRef => ({
 	id,
 	kind: "ITEM",
 	item: tracedItem(itemId),
-	itemVersion: null,
 	origin: "EVENT",
 	status: "COMPLETE",
 	createdAt,

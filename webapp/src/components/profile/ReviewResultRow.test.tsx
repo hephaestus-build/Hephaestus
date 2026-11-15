@@ -151,6 +151,21 @@ describe("ReviewResultRow", () => {
 		expect(screen.queryByRole("group")).toBeNull();
 	});
 
+	it("marks a listed result incorrect only when the server names when", () => {
+		// A listed result leaves out a mark it does not have; the detail read sends null.
+		const listed = listedResult(result);
+		const { rerender } = renderOpen({ result: { ...listed, markedIncorrectAt: undefined } });
+		expect(screen.queryByText("Marked incorrect")).toBeNull();
+		rerender(
+			<ul>
+				<ReviewResultRow
+					result={{ ...listed, markedIncorrectAt: new Date("2026-09-01T10:00:00Z") }}
+				/>
+			</ul>,
+		);
+		expect(screen.getAllByText("Marked incorrect").length).toBeGreaterThan(0);
+	});
+
 	it("lists each piece of a result's feedback with where it went, and offers no response there", () => {
 		renderOpen({
 			result: {
@@ -162,7 +177,7 @@ describe("ReviewResultRow", () => {
 						destination: "PRACTICE_PAGE",
 						state: "DELIVERED",
 						deliveredAt: detailResult.recordedAt,
-						response: { resolution: "ADDRESSED", usefulness: null, comment: null, createdAt: null },
+						response: { resolution: "ADDRESSED" },
 						copies: [],
 					},
 				],

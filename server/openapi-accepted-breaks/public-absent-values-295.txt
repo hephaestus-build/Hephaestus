@@ -1,0 +1,3 @@
+# ADR 0103 rule 2: the public contract leaves out a missing value instead of sending null.
+# .migration/public-api-leaves-out-missing-values.md gives the client step.
+in API GET /workspaces/{workspaceSlug}/practices/reviews/lineage the response property `nodes/items/item/anyOf[#/components/schemas/ItemRef]/path` became optional for the status `200` (shared schema: `ItemRef`, also at `nodes/items/item/anyOf[#/components/schemas/ItemRef]`, `nodes/items/result/anyOf[#/components/schemas/ReviewBoundResult]/item`)

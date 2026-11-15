@@ -20,6 +20,7 @@ import { expectSettledVisible } from "@/stories/overlay";
 import {
 	detailPractices,
 	detailResult,
+	listedResult,
 	detailReviews,
 	focusedChanges,
 	metWithoutSummary,
@@ -252,7 +253,7 @@ const selectedArgs = {
 	tab: "results",
 	renderObservation: completeDetail,
 	observationFilter: observationLinkFilter(detailResult),
-	selectedObservation: { status: "ready", result: detailResult },
+	selectedObservation: { status: "ready", result: listedResult(detailResult) },
 } satisfies Partial<PracticeDetailLevelProps>;
 
 /**

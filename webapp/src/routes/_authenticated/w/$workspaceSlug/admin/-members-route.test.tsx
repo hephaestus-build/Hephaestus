@@ -42,8 +42,6 @@ function member(
 		account: {
 			id: accountId,
 			status: "ACTIVE",
-			displayName: null,
-			avatarUrl: null,
 			identities: [],
 			...account,
 		},
@@ -62,14 +60,14 @@ function member(
 const ADA = member("7", {
 	displayName: "Ada Lovelace",
 	identities: [
-		{ provider: "GITHUB", login: "ada", displayName: "Ada Lovelace", avatarUrl: null },
-		{ provider: "GITLAB", login: "ada-lrz", displayName: "Ada (LRZ)", avatarUrl: null },
+		{ provider: "GITHUB", login: "ada", displayName: "Ada Lovelace" },
+		{ provider: "GITLAB", login: "ada-lrz", displayName: "Ada (LRZ)" },
 	],
 });
 
 const SAM = member("8", {
 	status: "UNCLAIMED",
-	identities: [{ provider: "GITHUB", login: "sam", displayName: "Sam Unclaimed", avatarUrl: null }],
+	identities: [{ provider: "GITHUB", login: "sam", displayName: "Sam Unclaimed" }],
 });
 
 function membershipPage(
@@ -258,7 +256,6 @@ describe("workspace members route", () => {
 							provider: "GITHUB" as const,
 							login: "ada",
 							displayName: `${query} match`,
-							avatarUrl: null,
 						},
 					],
 				},
@@ -292,9 +289,7 @@ describe("workspace members route", () => {
 			...ADA,
 			account: {
 				...ADA.account,
-				identities: [
-					{ provider: "GITHUB" as const, login: "zzz", displayName: null, avatarUrl: null },
-				],
+				identities: [{ provider: "GITHUB" as const, login: "zzz" }],
 			},
 		};
 		const sam = {
@@ -306,7 +301,6 @@ describe("workspace members route", () => {
 						provider: "GITHUB" as const,
 						login: "aaa",
 						displayName: "Sam Unclaimed",
-						avatarUrl: null,
 					},
 				],
 			},

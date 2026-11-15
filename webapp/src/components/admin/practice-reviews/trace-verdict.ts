@@ -476,7 +476,9 @@ function reviewVerdict(records: LineageRecords): TraceVerdict {
 	const fates = own.map((entry) => feedbackFate(entry, records.item));
 	const recorded = countOf(results.length, "observation", "observations");
 	const took =
-		review.completedAt === null ? undefined : durationBetween(review.createdAt, review.completedAt);
+		review.completedAt === undefined
+			? undefined
+			: durationBetween(review.createdAt, review.completedAt);
 
 	if (review.status === "QUEUED") {
 		return {

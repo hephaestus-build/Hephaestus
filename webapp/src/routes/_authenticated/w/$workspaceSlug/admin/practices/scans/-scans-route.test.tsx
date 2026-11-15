@@ -65,11 +65,11 @@ describe("scans list route", () => {
 				requests.push(new URL(request.url));
 				return HttpResponse.json(
 					scanPage([
-						wireScan({ status: "RUNNING", completedAt: null, counts: RUNNING_COUNTS }),
+						wireScan({ status: "RUNNING", completedAt: undefined, counts: RUNNING_COUNTS }),
 						wireScan({
 							id: "a0000000-0000-4000-8000-000000000005",
 							status: "CANCELLED",
-							requestedBy: null,
+							requestedBy: undefined,
 							origin: "SCHEDULE",
 						}),
 					]),

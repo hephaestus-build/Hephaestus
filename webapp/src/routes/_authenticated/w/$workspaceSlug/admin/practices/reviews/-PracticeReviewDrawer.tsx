@@ -197,7 +197,7 @@ export function RequestOutcome({
 			<TraceRefusalAlert
 				refusal={refusal}
 				fix={
-					refusal.reason !== null && (
+					refusal.reason !== undefined && (
 						<RefusalFixLink workspaceSlug={workspaceSlug} reason={refusal.reason} />
 					)
 				}

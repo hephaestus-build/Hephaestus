@@ -24,8 +24,6 @@ export function memberAccount(id: string, overrides: Partial<AccountRef> = {}): 
 	return {
 		id,
 		status: "ACTIVE",
-		displayName: null,
-		avatarUrl: null,
 		identities: [],
 		...overrides,
 	};
@@ -53,8 +51,8 @@ export const multiProviderMember = membership(
 	memberAccount("11", {
 		displayName: "Alice Johnson",
 		identities: [
-			{ provider: "GITHUB", login: "alice", displayName: "Alice Johnson", avatarUrl: null },
-			{ provider: "GITLAB", login: "ajohnson", displayName: "Alice J.", avatarUrl: null },
+			{ provider: "GITHUB", login: "alice", displayName: "Alice Johnson" },
+			{ provider: "GITLAB", login: "ajohnson", displayName: "Alice J." },
 		],
 	}),
 	{ role: "ADMIN", roleSource: "PERSON" },
@@ -63,16 +61,14 @@ export const multiProviderMember = membership(
 export const unclaimedMember = membership(
 	memberAccount("12", {
 		status: "UNCLAIMED",
-		identities: [{ provider: "GITHUB", login: "bob", displayName: "Bob Smith", avatarUrl: null }],
+		identities: [{ provider: "GITHUB", login: "bob", displayName: "Bob Smith" }],
 	}),
 );
 
 export const ownerMember = membership(
 	memberAccount("13", {
 		displayName: "Charlie Brown",
-		identities: [
-			{ provider: "GITHUB", login: "charlie", displayName: "Charlie Brown", avatarUrl: null },
-		],
+		identities: [{ provider: "GITHUB", login: "charlie", displayName: "Charlie Brown" }],
 	}),
 	{ role: "OWNER", roleSource: "PERSON", joinedAt: new Date("2025-11-20T09:00:00Z") },
 );
@@ -80,7 +76,7 @@ export const ownerMember = membership(
 export const hiddenMember = membership(
 	memberAccount("14", {
 		displayName: "Diana Prince",
-		identities: [{ provider: "GITHUB", login: "diana", displayName: null, avatarUrl: null }],
+		identities: [{ provider: "GITHUB", login: "diana" }],
 	}),
 	{ hidden: true, reviewSelected: false, eligibleForPracticeReview: false },
 );

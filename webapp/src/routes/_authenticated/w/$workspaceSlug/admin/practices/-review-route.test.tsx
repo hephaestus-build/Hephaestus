@@ -67,9 +67,7 @@ const unclaimed = membership({
 	account: {
 		id: "9",
 		status: "UNCLAIMED",
-		displayName: null,
-		avatarUrl: null,
-		identities: [{ provider: "GITLAB", login: "grace", displayName: null, avatarUrl: null }],
+		identities: [{ provider: "GITLAB", login: "grace" }],
 	},
 });
 
@@ -105,13 +103,7 @@ function stubWorkspace(extra: Parameters<typeof server.use>) {
 						id: "101",
 						kind: "scm.repository",
 						label: "owner/repo",
-						title: null,
-						container: null,
-						parentId: null,
-						path: null,
 						provider: "GITHUB",
-						removedAt: null,
-						url: null,
 					},
 				],
 			}),
@@ -866,13 +858,8 @@ function repositoryItem(id: string, fields: { label: string; unnamed?: true; rem
 		id,
 		kind: "scm.repository",
 		label: fields.label,
-		title: null,
-		container: null,
-		parentId: null,
-		path: null,
-		provider: fields.unnamed === true ? null : "GITHUB",
-		removedAt: fields.removedAt ?? null,
-		url: null,
+		provider: fields.unnamed === true ? undefined : "GITHUB",
+		removedAt: fields.removedAt,
 	};
 }
 
