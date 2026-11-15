@@ -52,18 +52,27 @@ final class SlackBackoff {
 
     private static final long SYNC_RATE_LIMIT_TOTAL_BUDGET_MS = 150_000L;
 
+    private final SlackTime time;
     private final SlackRateLimitTracker tracker;
     private final long workspaceId;
     private final long maxWaitMs;
     private final long totalBudgetMs;
     private final long reserveMs;
-    private final long startedNanos = System.nanoTime();
+    private final long startedNanos;
     private int attempt;
 
     /**
      * @param reserveMs what the next call may take; {@link #NATIVE_OPERATION_RESERVE_MS} for an SDK call
      */
-    SlackBackoff(SlackRateLimitTracker tracker, long workspaceId, long maxWaitMs, long totalBudgetMs, long reserveMs) {
+    SlackBackoff(
+            SlackTime time,
+            SlackRateLimitTracker tracker,
+            long workspaceId,
+            long maxWaitMs,
+            long totalBudgetMs,
+            long reserveMs) {
+        this.time = time;
+        this.startedNanos = time.nanoTime();
         this.tracker = tracker;
         this.workspaceId = workspaceId;
         this.maxWaitMs = maxWaitMs;
@@ -72,14 +81,20 @@ final class SlackBackoff {
     }
 
     /** The budget of a call that someone waits on ({@link #RATE_LIMIT_TOTAL_BUDGET_MS}), from now. */
-    static SlackBackoff interactive(SlackRateLimitTracker tracker, long workspaceId) {
+    static SlackBackoff interactive(SlackTime time, SlackRateLimitTracker tracker, long workspaceId) {
         return new SlackBackoff(
-                tracker, workspaceId, RATE_LIMIT_MAX_WAIT_MS, RATE_LIMIT_TOTAL_BUDGET_MS, NATIVE_OPERATION_RESERVE_MS);
+                time,
+                tracker,
+                workspaceId,
+                RATE_LIMIT_MAX_WAIT_MS,
+                RATE_LIMIT_TOTAL_BUDGET_MS,
+                NATIVE_OPERATION_RESERVE_MS);
     }
 
     /** The budget of a history read that no one waits on ({@link #SYNC_RATE_LIMIT_TOTAL_BUDGET_MS}), from now. */
-    static SlackBackoff history(SlackRateLimitTracker tracker, long workspaceId) {
+    static SlackBackoff history(SlackTime time, SlackRateLimitTracker tracker, long workspaceId) {
         return new SlackBackoff(
+                time,
                 tracker,
                 workspaceId,
                 SYNC_RATE_LIMIT_MAX_WAIT_MS,
@@ -104,7 +119,7 @@ final class SlackBackoff {
             return false;
         }
         long waitMs = withJitter(retryAfterMs, ++attempt);
-        long budgetLeftMs = totalBudgetMs - TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedNanos);
+        long budgetLeftMs = totalBudgetMs - TimeUnit.NANOSECONDS.toMillis(time.nanoTime() - startedNanos);
         if (waitMs > maxWaitMs || waitMs + reserveMs > budgetLeftMs) {
             // Slack's wait is beyond the cap, or it and the next call do not fit in what is left.
             return false;
@@ -155,12 +170,12 @@ final class SlackBackoff {
         return base + ThreadLocalRandom.current().nextLong(0L, 250L);
     }
 
-    private static void sleep(long millis) {
+    private void sleep(long millis) {
         if (millis <= 0) {
             return;
         }
         try {
-            Thread.sleep(millis);
+            time.sleep(millis);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
