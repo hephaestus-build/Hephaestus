@@ -324,7 +324,9 @@ export default defineConfig({
 				"node scripts/check-presentational-components.ts",
 				"node --test scripts/check-presentational-components.test.ts",
 			]),
-			"gate:stories": cached("node scripts/check-story-prose.ts"),
+			"gate:stories": cached(
+				"node scripts/check-story-prose.ts && node scripts/check-story-states.ts",
+			),
 			"gate:docs-tokens": cached(
 				"node scripts/check-docs-tokens.ts && node --test scripts/check-docs-tokens.test.ts",
 			),

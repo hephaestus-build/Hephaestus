@@ -1805,6 +1805,8 @@ void describe("CI contract", () => {
 				"scripts/check-presentational-components.ts",
 				"scripts/check-presentational-components.test.ts",
 				"scripts/check-story-prose.ts",
+				"scripts/check-story-states.ts",
+				"scripts/check-story-states.test.ts",
 			]) {
 				assert.ok(inputs.includes(input), `${input} must select ${scope}`);
 			}

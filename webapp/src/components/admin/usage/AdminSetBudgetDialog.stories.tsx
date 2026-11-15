@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react";
-import { fn } from "storybook/test";
+import { expect, fn, screen, within } from "storybook/test";
 
 import { expectAmountRejected } from "@/stories/budget-amount-field";
 
@@ -57,6 +57,18 @@ export const Uncapped: Story = {
 
 export const Pending: Story = {
 	args: { isPending: true },
+};
+
+/** The server refused the amount; its reason sits at the field. */
+export const ServerRejectionSitsAtTheField: Story = {
+	args: { serverError: "Monthly budget must not exceed 99999999.99." },
+	play: async () => {
+		const dialog = within(await screen.findByRole("dialog"));
+		await expect(dialog.getByRole("alert")).toHaveTextContent(/must not exceed/iu);
+		const field = dialog.getByRole("spinbutton", { name: "Monthly budget (USD)" });
+		await expect(field).toHaveAttribute("aria-invalid", "true");
+		await expect(field).toHaveAccessibleDescription(/must not exceed/iu);
+	},
 };
 
 /** The caller names the field and the button; an empty amount is refused with the caller's words. */

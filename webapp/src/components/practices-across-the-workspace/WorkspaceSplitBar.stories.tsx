@@ -3,7 +3,7 @@ import { expect } from "storybook/test";
 
 import { split } from "@/stories/practices-across-the-workspace-story-data";
 
-import { WorkspaceSplitBar } from "./WorkspaceSplitBar";
+import { LevelSplit, WorkspaceSplitBar } from "./WorkspaceSplitBar";
 
 /**
  * One bar for a practice group and for a practice, each developer counted once. The text
@@ -98,6 +98,21 @@ export const ReaderInNoneYet: Story = {
 	play: async ({ canvas }) => {
 		await expect(canvas.getByRole("img")).toHaveAccessibleName(
 			/, 8 none yet\. You are in the part with no standing yet\.$/u,
+		);
+	},
+};
+
+/**
+ * A level's summary while the split loads. The bar's shape stands in with the heights of the loaded
+ * bar, and says nothing, so no count is claimed before it is known.
+ */
+export const Loading: Story = {
+	render: () => <LevelSplit state={{ status: "loading" }} />,
+	play: async ({ canvas, canvasElement }) => {
+		await expect(canvas.queryByRole("img")).toBeNull();
+		await expect(canvas.queryByText("You")).toBeNull();
+		await expect(canvasElement.querySelectorAll('[data-slot="skeleton"]').length).toBeGreaterThan(
+			0,
 		);
 	},
 };
