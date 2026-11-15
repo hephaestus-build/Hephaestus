@@ -3293,6 +3293,7 @@ tests:
               severity: warning
             exp_annotations:
               summary: Sync notification delivery is failing; clients fall back to REST polling
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
   - name: connections above 90 % of the usable slots fire for 15 minutes per PostgreSQL instance, a busy one below it and a short peak do not
     interval: 1m
