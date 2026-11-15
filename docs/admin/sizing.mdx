@@ -153,7 +153,7 @@ See the [Paketo memory calculator](https://paketo.io/docs/reference/java-referen
 | `server.jvm.headRoomPercent` | `BPL_JVM_HEAD_ROOM` | `15` | Native memory that the calculator does not count, such as the garbage collector's structures, grows with the heap. Under load it held about 290 MiB beside a 1 GiB heap. `0` restores the calculator's default. |
 | `server.jvm.threadCount` | `BPL_JVM_THREAD_COUNT` | `200` | A server under five reviews and a sync burst ran at most 153 platform threads. Its virtual threads ran on 7 to 13 carrier threads. |
 
-With the defaults and the 3 GiB limit, the server's heap maximum is about 1,914 MiB. Before this headroom, it was 2,167 MiB.
+With the defaults and the 3 GiB limit, the server's heap maximum is about 1,796 MiB.
 A higher memory limit also gives the heap more memory at the next start.
 With no headroom, the garbage collector grows the heap until the container exceeds its limit, and the kernel kills it with no Java error.
 `HephaestusContainerMemoryHigh` fires before that point ([Alert rules](./alert-rules)).
@@ -161,6 +161,20 @@ Measure the server's total memory use before you lower its memory limit or its h
 
 A socket call that blocks can pin its carrier thread, so the scheduler can add carriers up to its ceiling of gateway connections plus 256.
 `jvm_threads_live_threads` shows the count. If it comes near `server.jvm.threadCount`, raise the value.
+
+The 3 GiB default limit also applies to `small.yaml` and the one host.
+A smaller limit did not pass a measured round.
+On one host, under five reviews and a sync burst, a server with a 2,304 MiB limit and the default headroom gave these results:
+
+| Measure | Result |
+| --- | --- |
+| Peak anonymous and kernel memory | 1,759 MiB, 76 % of the limit |
+| Heap in use, of its maximum | 1,102 of 1,143 MiB, 96 % |
+| Garbage collections | 5.7 each minute, 27 % more than at the same limit with no headroom |
+| OOM kills and evictions | None |
+
+The server was not killed. But its heap was almost full, and garbage collection rose by more than the 25 % that the round allowed.
+Thus, `small.yaml` and the one host keep the 3 GiB limit.
 
 ## Disk
 
