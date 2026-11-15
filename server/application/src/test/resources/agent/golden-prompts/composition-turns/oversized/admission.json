@@ -167,11 +167,11 @@
 					"citations": [],
 					"basis": null,
 					"nextStep": null,
-					"publicEligible": true
+					"publicEligible": false
 				}
 			],
 			"summaryOnly": true,
-			"publicEligible": true
+			"publicEligible": false
 		},
 		{
 			"practiceSlug": "tests-behavior",

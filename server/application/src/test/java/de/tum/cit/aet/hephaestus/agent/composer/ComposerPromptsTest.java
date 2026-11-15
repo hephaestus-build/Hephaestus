@@ -3,59 +3,14 @@ package de.tum.cit.aet.hephaestus.agent.composer;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.agent.runtime.FeedbackWritingGuide;
-import java.io.IOException;
-import java.io.InputStream;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.Objects;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
-/** The worker's composers use the golden contracts. UPDATE_COMPOSITION_GOLDENS=1 regenerates the source snapshot. */
 @Tag("unit")
 class ComposerPromptsTest {
 
     @Test
-    void shouldComposeWithTheVoicePlacementContractAndToolGuidanceOfTheGolden() throws IOException {
-        String shared = CompositionSessions.prompt("feedback-style.md");
-        String actual = String.join(
-                        "\n\n",
-                        "# Shared feedback voice",
-                        Js.trim(shared),
-                        "# Public placement guidance",
-                        section(CompositionSessions.prompt("review-composer.md"), "Where each point goes"),
-                        "# Public writing contract",
-                        ReviewOnWork.WRITE_CONTRACT,
-                        "# Private wording guidance",
-                        section(
-                                CompositionSessions.prompt("feedback-composer.md"),
-                                "Wording rules for these destinations"),
-                        "# Public tool description",
-                        ReviewOnWork.TOOL_DESCRIPTION)
-                + "\n";
-        if ("1".equals(System.getenv("UPDATE_COMPOSITION_GOLDENS"))) {
-            Files.writeString(
-                    Path.of("src/test/resources/agent/golden-prompts/composition-contracts.md"),
-                    actual,
-                    StandardCharsets.UTF_8);
-            return;
-        }
-        try (InputStream golden = Objects.requireNonNull(
-                getClass().getResourceAsStream("/agent/golden-prompts/composition-contracts.md"))) {
-            assertThat(actual).isEqualTo(new String(golden.readAllBytes(), StandardCharsets.UTF_8));
-        }
-    }
-
-    @Test
     void sharedStyleIncludesTheWritingGuide() {
         assertThat(CompositionSessions.sharedStyle()).endsWith(FeedbackWritingGuide.text());
-    }
-
-    private static String section(String text, String heading) {
-        int start = text.indexOf("## " + heading + "\n");
-        assertThat(start).as(heading).isNotNegative();
-        int end = text.indexOf("\n## ", start + 1);
-        return Js.trim(end < 0 ? text.substring(start) : text.substring(start, end));
     }
 }

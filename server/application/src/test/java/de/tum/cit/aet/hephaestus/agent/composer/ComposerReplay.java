@@ -53,6 +53,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -61,6 +62,7 @@ import java.util.TreeMap;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
+import java.util.regex.Pattern;
 import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
 import org.mockito.Answers;
@@ -91,8 +93,10 @@ final class ComposerReplay {
     private static final Path SCENARIOS = Path.of("src/test/resources/agent/golden-prompts/composition-turns");
     static final UUID RUN = UUID.fromString("508d958c-100e-594f-8b4e-6d5c60e59470");
     private static final Instant PREPARED_AT = Instant.parse("2026-11-09T12:00:00Z");
-    /** A user turn longer than this is recorded by its digest: the golden scenarios hold the rendered text. */
-    private static final int SHOWN_TEXT = 2_000;
+
+    /** A result, problem or feedback id in a turn the server wrote. */
+    private static final Pattern ID =
+            Pattern.compile("\\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\\b");
 
     private ComposerReplay() {}
 
@@ -300,8 +304,9 @@ final class ComposerReplay {
     }
 
     /**
-     * What one model call added to its conversation, protocol-neutral: a call that starts a session names the digests
-     * of its system prompt and tools, and every message it did not send before.
+     * What one model call added to its conversation, protocol-neutral: whether it starts a session and with which
+     * tools, and every message it did not send before. A turn the server wrote keeps only the ids it names, so a
+     * prompt edit changes no case; ComposerTurnsTest asserts what the turns carry.
      */
     private static ObjectNode delta(JsonNode request, List<JsonNode> previous) {
         var messages = new ArrayList<JsonNode>();
@@ -312,8 +317,10 @@ final class ComposerReplay {
                 && previous.equals(messages.subList(0, previous.size()));
         int from = continues ? previous.size() : 0;
         if (!continues) {
-            call.put("system", sha256(messages.getFirst().path("content").asString()));
-            call.put("tools", sha256(request.path("tools").toString()));
+            var tools = call.putArray("starts");
+            request.path("tools")
+                    .forEach(
+                            tool -> tools.add(tool.path("function").path("name").asString()));
             from = 1;
         }
         var added = call.putArray("messages");
@@ -338,17 +345,13 @@ final class ComposerReplay {
                                         call.path("function").path("arguments").asString()));
         }
         JsonNode content = message.path("content");
-        if (content.isString()) {
-            String text = content.asString();
-            if (text.length() > SHOWN_TEXT)
-                shown.putObject("text").put("sha256", sha256(text)).put("length", text.length());
-            else shown.put("text", text);
-        }
+        if (content.isString() && role.equals("user")) {
+            var named = new LinkedHashSet<String>();
+            var ids = ID.matcher(content.asString());
+            while (ids.find()) named.add(ids.group());
+            if (!named.isEmpty()) named.forEach(shown.putArray("names")::add);
+        } else if (content.isString()) shown.put("text", content.asString());
         return shown;
-    }
-
-    private static String sha256(String text) {
-        return ProvenanceDigest.sha256Hex(text.getBytes(StandardCharsets.UTF_8));
     }
 
     /** The server side of one case: the sealed basis, and what preparation accepted. */
