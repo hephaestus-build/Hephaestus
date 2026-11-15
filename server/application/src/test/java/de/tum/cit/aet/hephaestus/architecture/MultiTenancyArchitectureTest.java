@@ -14,17 +14,33 @@ import com.tngtech.archunit.lang.ArchCondition;
 import com.tngtech.archunit.lang.ArchRule;
 import com.tngtech.archunit.lang.ConditionEvents;
 import com.tngtech.archunit.lang.SimpleConditionEvent;
+import de.tum.cit.aet.hephaestus.account.AccountController;
+import de.tum.cit.aet.hephaestus.activity.overview.PublicActivityController;
 import de.tum.cit.aet.hephaestus.architecture.conditions.WorkspaceParameters;
 import de.tum.cit.aet.hephaestus.architecture.conditions.WorkspaceQueryParameters;
 import de.tum.cit.aet.hephaestus.core.RequireInstanceAdmin;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.web.CursorPageDTO;
 import de.tum.cit.aet.hephaestus.core.web.OffsetPageDTO;
+import de.tum.cit.aet.hephaestus.feature.FeatureFlagController;
+import de.tum.cit.aet.hephaestus.integration.core.oauth.OAuthCallbackController;
+import de.tum.cit.aet.hephaestus.integration.core.webhook.WebhookController;
+import de.tum.cit.aet.hephaestus.integration.outline.webhook.OutlineWebhookController;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.webhook.GitLabConnectionWebhookController;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabPreflightController;
 import de.tum.cit.aet.hephaestus.practices.result.ResultRepository;
+import de.tum.cit.aet.hephaestus.workspace.WorkspaceRegistryController;
+import de.tum.cit.aet.hephaestus.workspace.authorization.RequireAtLeastWorkspaceAdmin;
+import de.tum.cit.aet.hephaestus.workspace.authorization.RequireWorkspaceOwner;
+import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
+import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceScopedController;
+import de.tum.cit.aet.hephaestus.workspace.onboarding.AccountAiChoiceController;
+import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -242,6 +258,43 @@ class MultiTenancyArchitectureTest extends HephaestusArchitectureTest {
                         .map(a -> INSTANCE_ADMIN_GATE.equals(a.value().trim()))
                         .orElse(false);
     }
+
+    /**
+     * The annotations that let a controller endpoint go without a {@code WorkspaceContext} parameter, on the endpoint or
+     * on its controller. Matched by exact type, so a look-alike, such as OpenAPI's {@code @SecurityRequirements} or
+     * {@code @RequiresRecentSignIn}, scopes nothing. {@code ControllerWorkspaceScopeTest} pins this.
+     */
+    private static final List<Class<? extends Annotation>> WORKSPACE_SCOPE_ANNOTATIONS = List.of(
+            WorkspaceScopedController.class,
+            RequireAtLeastWorkspaceAdmin.class,
+            RequireWorkspaceOwner.class,
+            WorkspaceAgnostic.class);
+
+    private static final String CORE_AUTH_PACKAGE = BASE_PACKAGE + ".core.auth";
+
+    /**
+     * Controllers that act before or outside any workspace. Named by class, so a new controller never inherits the
+     * exemption through its name. {@code ControllerWorkspaceScopeTest} pins this.
+     */
+    private static final List<Class<?>> OUTSIDE_ANY_WORKSPACE = List.of(
+            // A person's own account and settings, the same in every workspace.
+            AccountController.class,
+            AccountAiChoiceController.class,
+            FeatureFlagController.class,
+            // Create and list workspaces, and check a GitLab token, before a workspace exists.
+            WorkspaceRegistryController.class,
+            GitLabPreflightController.class,
+            // Unauthenticated provider deliveries and redirects. The workspace comes from the verified payload or the
+            // signed state, never from the request.
+            WebhookController.class,
+            GitLabConnectionWebhookController.class,
+            OutlineWebhookController.class,
+            OAuthCallbackController.class,
+            // Anonymous public pages of a workspace. Each read needs the instance switch on, and one query must
+            // find the slug opted in and ACTIVE; every read then binds that workspace's id.
+            // ActivityControllerIntegrationTest proves the not-found answers and that two public workspaces never
+            // see each other's rows.
+            PublicActivityController.class);
 
     @Nested
     class RepositoryWorkspaceFilteringTests {
@@ -770,6 +823,10 @@ class MultiTenancyArchitectureTest extends HephaestusArchitectureTest {
 
         @Test
         void dataEndpointsReceiveWorkspaceContext() {
+            dataEndpointsReceiveWorkspaceContextRule().check(classes);
+        }
+
+        static ArchRule dataEndpointsReceiveWorkspaceContextRule() {
             ArchCondition<JavaMethod> haveWorkspaceContextForDataEndpoints =
                     new ArchCondition<>("have WorkspaceContext for data endpoints") {
                         @Override
@@ -787,27 +844,11 @@ class MultiTenancyArchitectureTest extends HephaestusArchitectureTest {
                             String controllerName = method.getOwner().getSimpleName();
                             String methodName = method.getName();
 
-                            if (controllerName.contains("Health")
-                                    || controllerName.contains("Status")
-                                    || controllerName.contains("Actuator")) {
-                                return;
-                            }
-
-                            // Skip user account operations - these are USER-scoped, not WORKSPACE-scoped.
-                            // Users can access their account settings regardless of workspace context.
-                            if (controllerName.contains("Account")
-                                    || controllerName.contains("FeatureFlag")
-                                    || controllerName.contains("IdentityProvider")) {
-                                return;
-                            }
-
-                            // Skip the core.auth module (ADR 0017): authentication / session / OIDC
-                            // discovery endpoints are USER- or SYSTEM-scoped by definition, never
-                            // workspace-scoped. Login (AuthBegin), session lifecycle (AuthLifecycle),
-                            // session inventory (SessionWeb), and OIDC discovery (WellKnown) all
-                            // operate outside any single workspace. The module is annotated
-                            // @WorkspaceAgnostic at the package level.
-                            if (method.getOwner().getPackageName().startsWith("de.tum.cit.aet.hephaestus.core.auth")) {
+                            // The core.auth module (ADR 0017): sign-in, sessions and OIDC discovery belong to a person
+                            // or to the instance, never to one workspace. Matched as a package boundary, not a prefix.
+                            String packageName = method.getOwner().getPackageName();
+                            if (packageName.equals(CORE_AUTH_PACKAGE)
+                                    || packageName.startsWith(CORE_AUTH_PACKAGE + ".")) {
                                 return;
                             }
 
@@ -820,61 +861,18 @@ class MultiTenancyArchitectureTest extends HephaestusArchitectureTest {
                                 return;
                             }
 
-                            // Skip workspace registry operations - these are ADMIN operations that happen
-                            // BEFORE a workspace context exists (creating/listing workspaces).
-                            if (controllerName.contains("WorkspaceRegistry")) {
-                                return;
-                            }
-
-                            // Same exemption applies to vendor-specific preflight controllers under
-                            // /workspaces/<kind>/* — they validate PATs / list discoverable scopes
-                            // BEFORE a workspace exists, so there's no workspace context to enforce.
-                            if (controllerName.equals("GitLabPreflightController")) {
-                                return;
-                            }
-
-                            // Skip webhook ingress controllers — they receive unauthenticated vendor
-                            // deliveries. Workspace context is derived from the verified payload AFTER
-                            // the WebhookSignatureVerifier path, never from the inbound HTTP request.
-                            //
-                            // Same exemption applies to OAuthCallbackController — the vendor browser
-                            // redirect is unauthenticated; workspace identity is decoded from the
-                            // HMAC-signed state parameter, never from the inbound request URL.
-                            if (controllerName.equals("WebhookController")
-                                    || controllerName.endsWith("WebhookController")) {
-                                return;
-                            }
-                            if (controllerName.equals("OAuthCallbackController")) {
-                                return;
-                            }
-
-                            // Skip explicitly global endpoints that aggregate across all workspaces
-                            if (methodName.equals("listGlobalContributors")) {
+                            if (OUTSIDE_ANY_WORKSPACE.stream().anyMatch(method.getOwner()::isEquivalentTo)) {
                                 return;
                             }
 
                             boolean hasWorkspaceContext = method.getRawParameterTypes().stream()
-                                    .anyMatch(p -> p.getSimpleName().equals("WorkspaceContext"));
+                                    .anyMatch(p -> p.isEquivalentTo(WorkspaceContext.class));
 
-                            boolean hasWorkspaceSecurityAnnotation = method.getAnnotations().stream()
-                                            .anyMatch(a -> a.getRawType()
-                                                            .getSimpleName()
-                                                            .contains("Workspace")
-                                                    || a.getRawType()
-                                                            .getSimpleName()
-                                                            .contains("Ensure")
-                                                    || a.getRawType()
-                                                            .getSimpleName()
-                                                            .contains("Require"))
-                                    || method.getOwner().getAnnotations().stream()
-                                            .anyMatch(a -> a.getRawType()
-                                                            .getSimpleName()
-                                                            .contains("Workspace")
-                                                    || a.getRawType()
-                                                            .getSimpleName()
-                                                            .contains("Ensure"));
+                            boolean declaresWorkspaceScope = WORKSPACE_SCOPE_ANNOTATIONS.stream()
+                                    .anyMatch(scope -> method.isAnnotatedWith(scope)
+                                            || method.getOwner().isAnnotatedWith(scope));
 
-                            if (!hasWorkspaceContext && !hasWorkspaceSecurityAnnotation) {
+                            if (!hasWorkspaceContext && !declaresWorkspaceScope) {
                                 events.add(SimpleConditionEvent.violated(
                                         method,
                                         String.format(
@@ -886,7 +884,7 @@ class MultiTenancyArchitectureTest extends HephaestusArchitectureTest {
                         }
                     };
 
-            ArchRule rule = methods()
+            return methods()
                     .that()
                     .areDeclaredInClassesThat()
                     .areAnnotatedWith(RestController.class)
@@ -894,8 +892,6 @@ class MultiTenancyArchitectureTest extends HephaestusArchitectureTest {
                     .arePublic()
                     .should(haveWorkspaceContextForDataEndpoints)
                     .because("All data endpoints must have workspace context");
-
-            rule.check(classes);
         }
     }
 }

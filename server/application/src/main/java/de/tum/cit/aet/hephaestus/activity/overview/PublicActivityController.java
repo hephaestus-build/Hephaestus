@@ -22,9 +22,8 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-/**
- * Serves only active workspaces that opted in to public activity. The SQL of every activity read names its workspace.
- */
+// Anonymous by design: MultiTenancyArchitectureTest names the gates that keep each read to one workspace. A line
+// comment, not Javadoc: springdoc publishes a controller's Javadoc as its API tag description.
 @RestController
 @Validated
 @ConditionalOnServerRole

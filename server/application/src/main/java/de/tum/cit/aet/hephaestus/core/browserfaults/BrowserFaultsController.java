@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.core.browserfaults;
 
+import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.browserfaults.BrowserFaultsDTOs.BrowserFaultsReportDTO;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import io.swagger.v3.oas.annotations.Operation;
@@ -22,12 +23,11 @@ import org.springframework.web.bind.annotation.RestController;
  * Receives the failures that readers met in the browser, signed in or not: a broken sign-in page is a
  * failure too. Nothing is stored. A request that the browser marks as sent from another site is
  * refused. Workspace addresses call the API from a sibling host, which the browser marks `same-site`.
- *
- * <p>A browser fault names no workspace, so no workspace sees the faults of another.
  */
 @ConditionalOnServerRole
 @ConditionalOnBooleanProperty(BrowserFaultRecorder.ENABLED)
 @RestController
+@WorkspaceAgnostic("Counts browser faults in a meter and a log line; a fault names no workspace")
 @RequestMapping("/browser-faults")
 @Tag(name = "Browser faults", description = "Failures that readers met in the browser")
 public class BrowserFaultsController {

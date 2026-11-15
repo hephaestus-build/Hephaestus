@@ -18,7 +18,7 @@ import org.junit.jupiter.api.Test;
  */
 class WorkspaceAgnosticRatchetTest extends HephaestusArchitectureTest {
 
-    private static final int BYPASSES = 558;
+    private static final int BYPASSES = 561;
 
     @Test
     void shouldKeepTheExactCountOfWorkspaceAgnosticBypasses() {
