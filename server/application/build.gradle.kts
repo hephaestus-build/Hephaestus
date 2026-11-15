@@ -33,7 +33,6 @@ dependencies {
     implementation(libs.spring.boot.starter.security)
     implementation(libs.spring.boot.starter.validation)
     implementation(libs.spring.boot.starter.web)
-    implementation(libs.spring.boot.starter.websocket)
     implementation(libs.spring.boot.restclient)
     implementation(libs.java.jwt)
     implementation(libs.spring.boot.starter.webflux) {
@@ -68,7 +67,6 @@ dependencies {
     testImplementation(libs.spring.boot.webtestclient)
     testImplementation(libs.spring.security.test)
     testImplementation(libs.reactor.test)
-    testImplementation(libs.testcontainers.junit.jupiter)
     testImplementation(libs.testcontainers.postgresql)
     testImplementation(libs.testcontainers)
     testImplementation(libs.assertj.core)
@@ -86,7 +84,6 @@ dependencies {
         exclude(group = "com.squareup.okhttp3", module = "okhttp")
     }
     implementation(libs.okhttp.jvm)
-    implementation(libs.logging.interceptor)
     testImplementation(libs.mockwebserver3)
     implementation(libs.jakarta.annotation.api)
     implementation(libs.hibernate.validator)
