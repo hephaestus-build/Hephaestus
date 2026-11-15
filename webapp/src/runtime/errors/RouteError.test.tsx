@@ -8,10 +8,14 @@ import {
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { StrictMode } from "react";
-import { expect, it, vi } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
 
 import { ROUTER_SEARCH } from "@/lib/router-search";
 import { RouteError } from "./RouteError";
+
+afterEach(() => {
+	vi.unstubAllGlobals();
+});
 
 it("runs a failed route again on retry and shows the page once it renders", async () => {
 	const error = new Error("failed route with private detail");
@@ -126,4 +130,37 @@ it("names no reference for a failure without one, or with a value that is not a 
 
 	await screen.findByRole("alert");
 	expect(screen.queryByRole("button", { name: "Copy reference" })).toBeNull();
+});
+
+it("offers a reload when a route's code cannot load", async () => {
+	const missing = new TypeError(
+		"Failed to fetch dynamically imported module: https://hephaestus.example/assets/members-1a2b3c.js",
+	);
+	const reload = vi.fn();
+	// jsdom cannot reload, so the page's location is replaced by one that records the reload.
+	vi.stubGlobal("location", { reload });
+	const rootRoute = createRootRoute();
+	const route = createRoute({
+		getParentRoute: () => rootRoute,
+		path: "/",
+		// A loader that throws reaches the same error component as a route chunk that fails, without
+		// TanStack Router's own automatic reload.
+		loader: () => {
+			throw missing;
+		},
+	});
+	const router = createRouter({
+		...ROUTER_SEARCH,
+		routeTree: rootRoute.addChildren([route]),
+		history: createMemoryHistory({ initialEntries: ["/"] }),
+		defaultErrorComponent: RouteError,
+	});
+	render(<RouterProvider router={router} />, { onCaughtError: vi.fn() });
+
+	await screen.findByRole("heading", { name: "This page needs a reload" });
+	expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
+	expect(document.body.textContent).not.toContain("members-1a2b3c");
+
+	await userEvent.click(screen.getByRole("button", { name: "Reload" }));
+	expect(reload).toHaveBeenCalledOnce();
 });

@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { AlertCircleIcon, LockIcon, SearchXIcon } from "lucide-react";
+import { AlertCircleIcon, LockIcon, RefreshCwIcon, SearchXIcon } from "lucide-react";
 
 import { EmptyState } from "@/components/common/EmptyState";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -10,7 +10,9 @@ import { PROBLEM_COPY } from "@/lib/problem-detail";
 export type PageErrorProps =
 	| { cause: "not-found" }
 	| { cause: "no-access" }
-	| { cause: "failed"; onRetry?: () => void; reference?: string };
+	| { cause: "failed"; onRetry?: () => void; reference?: string }
+	/** The page's code did not load, most often because a newer build replaced it; a reload can load it. */
+	| { cause: "outdated"; onReload: () => void };
 
 const NOT_FOUND = PROBLEM_COPY["not-found"];
 const NO_ACCESS = PROBLEM_COPY["no-access"];
@@ -30,6 +32,14 @@ function copyOf(props: PageErrorProps) {
 				icon: <LockIcon />,
 				title: NO_ACCESS.retitle("this page"),
 				description: NO_ACCESS.next,
+			};
+		}
+		case "outdated": {
+			return {
+				icon: <RefreshCwIcon />,
+				title: "This page needs a reload",
+				description:
+					"Hephaestus may have been updated since you opened it. Reload to load the current version.",
 			};
 		}
 		case "failed": {
@@ -53,6 +63,7 @@ function copyOf(props: PageErrorProps) {
  */
 export function PageError(props: PageErrorProps) {
 	const onRetry = props.cause === "failed" ? props.onRetry : undefined;
+	const onReload = props.cause === "outdated" ? props.onReload : undefined;
 	const reference = props.cause === "failed" ? props.reference : undefined;
 	return (
 		<EmptyState
@@ -63,7 +74,11 @@ export function PageError(props: PageErrorProps) {
 				<div className="flex flex-col items-center gap-3">
 					<div className="flex flex-wrap justify-center gap-2">
 						{onRetry && <Button onClick={onRetry}>Retry</Button>}
-						<Link to="/" className={buttonVariants({ variant: onRetry ? "outline" : "default" })}>
+						{onReload && <Button onClick={onReload}>Reload</Button>}
+						<Link
+							to="/"
+							className={buttonVariants({ variant: onRetry || onReload ? "outline" : "default" })}
+						>
 							Go to the home page
 						</Link>
 					</div>
