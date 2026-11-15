@@ -26,8 +26,8 @@ on:
         description: "Whether this fast-tier PR changes only migration files and release notes"
         required: true
         type: string
-      queue_tier:
-        description: "Whether integration tests are selected by this run"
+      full_integration:
+        description: "Whether the numbered integration shards run: the queue tier and an armed pull request"
         required: true
         type: string
 
@@ -183,7 +183,7 @@ jobs:
 
   server-integration-1:
     name: Integration (1 of 8)
-    if: inputs.should_skip != 'true' && inputs.application_server_changed == 'true' && inputs.queue_tier == 'true'
+    if: inputs.should_skip != 'true' && inputs.application_server_changed == 'true' && inputs.full_integration == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -195,7 +195,7 @@ jobs:
 
   server-integration-2:
     name: Integration (2 of 8)
-    if: inputs.should_skip != 'true' && inputs.application_server_changed == 'true' && inputs.queue_tier == 'true'
+    if: inputs.should_skip != 'true' && inputs.application_server_changed == 'true' && inputs.full_integration == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -207,7 +207,7 @@ jobs:
 
   server-integration-3:
     name: Integration (3 of 8)
-    if: inputs.should_skip != 'true' && inputs.application_server_changed == 'true' && inputs.queue_tier == 'true'
+    if: inputs.should_skip != 'true' && inputs.application_server_changed == 'true' && inputs.full_integration == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -219,7 +219,7 @@ jobs:
 
   server-integration-4:
     name: Integration (4 of 8)
-    if: inputs.should_skip != 'true' && inputs.application_server_changed == 'true' && inputs.queue_tier == 'true'
+    if: inputs.should_skip != 'true' && inputs.application_server_changed == 'true' && inputs.full_integration == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -231,7 +231,7 @@ jobs:
 
   server-integration-5:
     name: Integration (5 of 8)
-    if: inputs.should_skip != 'true' && inputs.application_server_changed == 'true' && inputs.queue_tier == 'true'
+    if: inputs.should_skip != 'true' && inputs.application_server_changed == 'true' && inputs.full_integration == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -243,7 +243,7 @@ jobs:
 
   server-integration-6:
     name: Integration (6 of 8)
-    if: inputs.should_skip != 'true' && inputs.application_server_changed == 'true' && inputs.queue_tier == 'true'
+    if: inputs.should_skip != 'true' && inputs.application_server_changed == 'true' && inputs.full_integration == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -255,7 +255,7 @@ jobs:
 
   server-integration-7:
     name: Integration (7 of 8)
-    if: inputs.should_skip != 'true' && inputs.application_server_changed == 'true' && inputs.queue_tier == 'true'
+    if: inputs.should_skip != 'true' && inputs.application_server_changed == 'true' && inputs.full_integration == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -267,7 +267,7 @@ jobs:
 
   server-integration-8:
     name: Integration (8 of 8)
-    if: inputs.should_skip != 'true' && inputs.application_server_changed == 'true' && inputs.queue_tier == 'true'
+    if: inputs.should_skip != 'true' && inputs.application_server_changed == 'true' && inputs.full_integration == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:

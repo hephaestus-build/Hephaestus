@@ -403,6 +403,8 @@ interface TierRun {
 	readonly releaseCandidate?: string;
 	/** The opt-in step's light-tier decision for a layer of a stack. */
 	readonly light?: string;
+	/** Whether the opt-in step read auto-merge as enabled. */
+	readonly armed?: string;
 	readonly attempt?: number;
 }
 
@@ -415,6 +417,7 @@ function evaluateTierOutput(source: string, event: string, run: TierRun = {}): s
 		...(run.full === undefined ? {} : { full: run.full }),
 		...(run.preview === undefined ? {} : { preview: run.preview }),
 		...(run.light === undefined ? {} : { light: run.light }),
+		...(run.armed === undefined ? {} : { armed: run.armed }),
 	};
 	const context: unknown = JSON.parse(
 		JSON.stringify({
@@ -1094,10 +1097,11 @@ void describe("CI contract", () => {
 				`${event} with ci:full ${label}`,
 			);
 			// A duplicate is skipped only without the opt-in, so a re-run after the label runs the tier.
-			// A read that succeeds also reports the preview label, here absent.
+			// A read that succeeds also reports the preview label and auto-merge, here both absent.
 			const preview = full === undefined ? undefined : "false";
+			const armed = preview;
 			assert.equal(
-				evaluateTierOutput(skip, event, { full, preview }),
+				evaluateTierOutput(skip, event, { full, preview, armed }),
 				skipped,
 				`duplicate skip, ${event} ${label}`,
 			);
@@ -1126,14 +1130,68 @@ void describe("CI contract", () => {
 			}),
 			"true",
 		);
+		// An armed layer runs its server suites, as every armed pull request does.
+		assert.equal(
+			evaluateTierOutput(tests, "pull_request", {
+				light: "true",
+				armed: "true",
+				filter: { "application-server": "true" },
+			}),
+			"true",
+		);
+		const changed = String(
+			orchestrator.getIn(["jobs", "detect-changes", "outputs", "server-changed"]),
+		);
+		for (const [filter, expected] of [
+			[{ "application-server": "true" }, "true"],
+			[{ "test-config": "true" }, "true"],
+			[{ docs: "true" }, "false"],
+		] as const) {
+			assert.equal(
+				evaluateTierOutput(changed, "pull_request", { light: "true", filter }),
+				expected,
+				`server change, ${JSON.stringify(filter)}`,
+			);
+		}
+		// Enabling auto-merge adds the numbered shards, and no other queue-tier suite, so the pull
+		// request passes them before it enters the queue. The armed run repeats a tree whose earlier
+		// run skipped them, so it is never a duplicate. A failed read selects them.
+		const fullIntegration = String(
+			orchestrator.getIn(["jobs", "detect-changes", "outputs", "full-integration"]),
+		);
+		for (const [event, run, expected] of [
+			["pull_request", { full: "false", light: "false", armed: "false" }, "false"],
+			["pull_request", { full: "false", light: "false", armed: "true" }, "true"],
+			["pull_request", { full: "true", light: "false", armed: "false" }, "true"],
+			["pull_request", {}, "true"],
+			["pull_request", { full: "false", light: "true", armed: "true" }, "true"],
+			["pull_request", { full: "true", light: "true", armed: "false" }, "false"],
+			["merge_group", {}, "true"],
+			["push", {}, "true"],
+			["workflow_dispatch", {}, "true"],
+		] as const) {
+			assert.equal(
+				evaluateTierOutput(fullIntegration, event, run),
+				expected,
+				`full integration, ${event} ${JSON.stringify(run)}`,
+			);
+		}
+		const armedRun = { full: "false", preview: "false", light: "false", armed: "true" };
+		assert.equal(evaluateTierOutput(decision, "pull_request", armedRun), "false");
+		assert.equal(evaluateTierOutput(skip, "pull_request", armedRun), "false");
 		// A re-run, such as the one after a retarget, is never skipped as a duplicate.
 		assert.equal(
-			evaluateTierOutput(skip, "pull_request", { full: "false", preview: "false", attempt: 2 }),
+			evaluateTierOutput(skip, "pull_request", {
+				full: "false",
+				preview: "false",
+				armed: "false",
+				attempt: 2,
+			}),
 			"false",
 		);
 		// A labelled preview repeats a tree whose earlier run may have published no image.
 		assert.equal(
-			evaluateTierOutput(skip, "pull_request", { full: "false", preview: "true" }),
+			evaluateTierOutput(skip, "pull_request", { full: "false", preview: "true", armed: "false" }),
 			"false",
 		);
 		// Changing CI, browser specs or migrations does not promote every suite on a PR.
@@ -1165,7 +1223,10 @@ void describe("CI contract", () => {
 			const jobs = callee.get("jobs");
 			assert.ok(isMap(jobs));
 			for (const entry of jobs.items) {
-				if (isMap(entry.value) && String(entry.value.get("if")).includes("inputs.queue_tier")) {
+				if (
+					isMap(entry.value) &&
+					/inputs\.(?:queue_tier|full_integration) == 'true'/u.test(String(entry.value.get("if")))
+				) {
 					const name = `${caller} / ${String(entry.value.get("name"))}`;
 					guarded.push(String(entry.key));
 					assert.ok(
@@ -1297,10 +1358,17 @@ void describe("CI contract", () => {
 				`${name} skips drafts`,
 			);
 		}
-		// Marking a draft ready starts the run it skipped.
+		// Marking a draft ready starts the run it skipped, and enabling auto-merge starts the full
+		// integration tier.
 		const types = orchestrator.getIn(["on", "pull_request", "types"]);
 		assert.ok(isSeq(types));
-		assert.deepEqual(types.toJSON(), ["opened", "synchronize", "reopened", "ready_for_review"]);
+		assert.deepEqual(types.toJSON(), [
+			"opened",
+			"synchronize",
+			"reopened",
+			"ready_for_review",
+			"auto_merge_enabled",
+		]);
 		const optIn = namedStep(orchestrator, ["jobs", "detect-changes"], "Read the opt-in labels");
 		assert.equal(optIn.get("continue-on-error"), true);
 		assert.match(
@@ -1314,40 +1382,49 @@ void describe("CI contract", () => {
 			JSON.stringify(orchestrator.getIn(["on", "pull_request"]) ?? {}),
 			/labeled/u,
 		);
-		for (const caller of ["Build", "Browser-tests", "Test"]) {
+		// The numbered shards also run on an armed pull request, so the server suites take their own
+		// selector. ci-cd.mdx § Full integration at the arm point.
+		for (const [caller, input, output] of [
+			["Build", "queue_tier", "queue-tier"],
+			["Browser-tests", "queue_tier", "queue-tier"],
+			["Test", "full_integration", "full-integration"],
+		] as const) {
 			assert.equal(
-				orchestrator.getIn(["jobs", caller, "with", "queue_tier"]),
-				`\${{ needs.detect-changes.outputs.queue-tier }}`,
+				orchestrator.getIn(["jobs", caller, "with", input]),
+				`\${{ needs.detect-changes.outputs.${output} }}`,
 				`${caller} receives the tier decision`,
 			);
 		}
-		for (const [file, queue, fast] of [
-			[".github/workflows/ci-build.yml", ["server-database", "postgres-drill"], ["server-api"]],
-			[".github/workflows/ci-browser-tests.yml", ["webapp-e2e", "extension-e2e"], []],
+		for (const [file, input, queue, fast] of [
+			[
+				".github/workflows/ci-build.yml",
+				"queue_tier",
+				["server-database", "postgres-drill"],
+				["server-api"],
+			],
+			[".github/workflows/ci-browser-tests.yml", "queue_tier", ["webapp-e2e", "extension-e2e"], []],
 			[
 				".github/workflows/ci-tests.yml",
+				"full_integration",
 				Array.from({ length: committedShards() }, (_, index) => `server-integration-${index + 1}`),
 				["server-verification", "server-architecture", "server-integration"],
 			],
 		] as const) {
 			const workflow = parseDocument(await readFile(file, "utf8"));
-			assert.equal(
-				workflow.getIn(["on", "workflow_call", "inputs", "queue_tier", "required"]),
-				true,
-			);
+			assert.equal(workflow.getIn(["on", "workflow_call", "inputs", input, "required"]), true);
 			for (const name of queue) {
 				assert.match(
 					String(workflow.getIn(["jobs", name, "if"])),
 					name === "server-database" || name === "postgres-drill"
 						? /&& \(inputs\.queue_tier == 'true' \|\| inputs\.migrations_changed == 'true'\)$/u
-						: /&& inputs\.queue_tier == 'true'$/u,
+						: new RegExp(`&& inputs\\.${input} == 'true'$`, "u"),
 					`${name} belongs to the queue tier`,
 				);
 			}
 			for (const name of fast) {
 				assert.doesNotMatch(
 					String(workflow.getIn(["jobs", name, "if"])),
-					/queue_tier/u,
+					/queue_tier|full_integration/u,
 					`${name} belongs to the fast tier`,
 				);
 			}
@@ -2724,6 +2801,165 @@ void describe("CI contract", () => {
 			}
 		}
 		assertNeeds(source, "all-ci-passed", "Docker");
+	});
+
+	void test("only an armed run's passed server tests make `Full integration` succeed", async () => {
+		const workflow = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
+		const jobPath = ["jobs", "report-full-integration"];
+		// Rulesets match a required context against check runs too, and both come from the Actions app.
+		for (const file of await readdir(".github/workflows")) {
+			const jobs = parseDocument(await readFile(`.github/workflows/${file}`, "utf8")).get("jobs");
+			for (const entry of isMap(jobs) ? jobs.items : []) {
+				assert.ok(
+					!isMap(entry.value) || entry.value.get("name") !== "Full integration",
+					`${file} names a job like the required status`,
+				);
+			}
+		}
+		const condition = asString(workflow.getIn([...jobPath, "if"]), "reporter condition");
+		const parsed = new Parser(
+			new Lexer(condition).lex().tokens,
+			["github", "needs"],
+			[{ name: "always", minArgs: 0, maxArgs: 0 }],
+		).parse();
+		const always = new Map([
+			[
+				"always",
+				{ name: "always", minArgs: 0, maxArgs: 0, call: () => new data.BooleanData(true) },
+			],
+		]);
+		const reports = (
+			event: string,
+			pullRequest: Record<string, unknown> = {},
+			changes = "success",
+		) => {
+			const context: unknown = JSON.parse(
+				JSON.stringify({
+					github: {
+						event_name: event,
+						repository: "owner/repo",
+						event: { repository: { default_branch: "main" }, pull_request: pullRequest },
+					},
+					needs: { "detect-changes": { result: changes } },
+				}),
+				data.reviver,
+			);
+			assert.ok(context instanceof data.Dictionary);
+			return new Evaluator(parsed, context, always).evaluate().coerceString() === "true";
+		};
+		const ownPullRequest = { base: { ref: "main" }, head: { repo: { full_name: "owner/repo" } } };
+		assert.ok(reports("merge_group"));
+		assert.ok(reports("pull_request", ownPullRequest));
+		// A stacked layer enters the queue with its stack. A fork's token cannot write statuses.
+		assert.ok(reports("pull_request", { ...ownPullRequest, base: { ref: "layer" } }));
+		assert.ok(
+			!reports("pull_request", { ...ownPullRequest, head: { repo: { full_name: "fork/repo" } } }),
+		);
+		assert.ok(!reports("pull_request", ownPullRequest, "failure"));
+		assert.ok(!reports("push"));
+
+		// An armed layer's suites run the packaged server, so the layer packages one.
+		const layer = (serverTests: string) =>
+			jobRuns(workflow, "server-package", "pull_request", {
+				"detect-changes": {
+					result: "success",
+					outputs: { "light-tier": "true", "server-tests": serverTests, "any-code": "true" },
+				},
+				Security: { result: "success" },
+			});
+		assert.ok(layer("true"), "an armed layer packages the server");
+		assert.ok(!layer("false"), "an unarmed layer packages nothing");
+
+		const publisher = namedStep(workflow, jobPath, "Create commit status");
+		for (const [name, value] of [
+			["SERVER_CHANGED", "needs.detect-changes.outputs.server-changed"],
+			["FULL_INTEGRATION", "needs.detect-changes.outputs.full-integration"],
+			["TESTS", "needs.Test.result"],
+		] as const) {
+			assert.equal(publisher.getIn(["env", name]), `\${{ ${value} }}`);
+		}
+		const script = String(stepInputs(publisher).get("script"));
+		const head = "b".repeat(40);
+		const published = async (
+			eventName: string,
+			environment: Record<string, string>,
+			existing: { context: string; state: string; description: string }[] = [],
+		) => {
+			const calls: Record<string, unknown>[] = [];
+			const sandbox = {
+				context: {
+					eventName,
+					payload: eventName === "pull_request" ? { pull_request: { head: { sha: head } } } : {},
+					sha: "a".repeat(40),
+					repo: { owner: "owner", repo: "repo" },
+					serverUrl: "https://github.com",
+					runId: 1,
+				},
+				github: {
+					rest: {
+						repos: {
+							createCommitStatus: async (payload: unknown) => {
+								calls.push(asRecord(payload, "commit status"));
+							},
+							getCombinedStatusForRef: async () => ({
+								data: { statuses: existing },
+							}),
+						},
+					},
+				},
+				core: { info: () => undefined },
+				process: { env: environment },
+				done: Promise.resolve(),
+			};
+			runInNewContext(`done = (async () => {\n${script}\n})();`, sandbox);
+			await sandbox.done;
+			assert.ok(calls.length <= 1);
+			const [call] = calls;
+			if (call === undefined) {
+				return null;
+			}
+			assert.equal(call.context, "Full integration");
+			assert.equal(call.sha, eventName === "pull_request" ? head : "a".repeat(40));
+			return call.state;
+		};
+		const armed = { SERVER_CHANGED: "true", FULL_INTEGRATION: "true" };
+		const unarmed = { SERVER_CHANGED: "true", FULL_INTEGRATION: "false", TESTS: "success" };
+		assert.equal(await published("merge_group", {}), "success");
+		assert.equal(await published("pull_request", { SERVER_CHANGED: "false" }), "success");
+		assert.equal(await published("pull_request", { ...armed, TESTS: "success" }), "success");
+		assert.equal(await published("pull_request", { ...armed, TESTS: "failure" }), "failure");
+		for (const result of ["cancelled", "skipped", ""]) {
+			assert.equal(await published("pull_request", { ...armed, TESTS: result }), null, result);
+		}
+		// A fast-tier pass is no full integration, and never replaces an armed run's verdict.
+		assert.equal(await published("pull_request", unarmed), "pending");
+		const passed = "The server tests passed, every integration shard included";
+		assert.equal(await published("pull_request", { ...armed, TESTS: "success" }), "success");
+		assert.equal(
+			await published("pull_request", unarmed, [
+				{ context: "Full integration", state: "success", description: passed },
+			]),
+			null,
+		);
+		assert.equal(
+			await published("pull_request", unarmed, [
+				{ context: "Full integration", state: "failure", description: "failed" },
+			]),
+			null,
+		);
+		// "No server change" holds only against the base it was computed for.
+		assert.equal(
+			await published("pull_request", unarmed, [
+				{ context: "Full integration", state: "success", description: "No server change" },
+			]),
+			"pending",
+		);
+		assert.equal(
+			await published("pull_request", unarmed, [
+				{ context: "All CI Passed", state: "success", description: passed },
+			]),
+			"pending",
+		);
 	});
 
 	void test("reports a failed merge-group run on its pull request, and only a failure", async () => {
@@ -5331,7 +5567,7 @@ function serverShards(workflow: Document, queue: boolean, migrationOnly = false)
 		return jobRuns(suites, String(key), "pull_request", {}, false, {
 			should_skip: "false",
 			application_server_changed: "true",
-			queue_tier: String(queue),
+			full_integration: String(queue),
 			migration_only: String(migrationOnly),
 		})
 			? [asString(tier, "server tier or shard")]

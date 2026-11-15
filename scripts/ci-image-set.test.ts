@@ -355,7 +355,7 @@ function run(entry: Case) {
 	const steps = {
 		filter: { outputs: entry.filters },
 		alias_base: { outputs: { commit: entry.aliasBase } },
-		opt_in: { outputs: { preview: entry.preview, full: "false" } },
+		opt_in: { outputs: { preview: entry.preview, full: "false", armed: "false" } },
 		queue_run: {
 			outputs: {
 				complete: String(entry.queueImages === ALL_IMAGES),
