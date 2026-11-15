@@ -37,6 +37,7 @@ class GitLabRouteCredentialTest {
     @Test
     void shouldVerifyTheRouteItIssuedWhenConnectionKeyAndRouteMatch() {
         GitLabRouteCredential credential = credential(KEY, null);
+        assertThat(credential.isConfigured()).isTrue();
 
         GitLabRouteCredential.Issued issued = credential.issue(ROUTE);
 
@@ -154,17 +155,24 @@ class GitLabRouteCredentialTest {
         assertThatThrownBy(() -> credential.issue(
                         new GitLabRouteCredential.Route(7L, 3L, "https://gitlab.lrz.de", 42L, "g".repeat(513))))
                 .isInstanceOf(IllegalArgumentException.class);
+        // A zero id in any position is no route.
+        for (var zero : List.of(
+                new GitLabRouteCredential.Route(0L, 3L, "https://gitlab.lrz.de", 42L, "group"),
+                new GitLabRouteCredential.Route(7L, 0L, "https://gitlab.lrz.de", 42L, "group"),
+                new GitLabRouteCredential.Route(7L, 3L, "https://gitlab.lrz.de", 0L, "group"))) {
+            assertThatThrownBy(() -> credential.issue(zero)).isInstanceOf(IllegalArgumentException.class);
+        }
+        // A group path within its 512 characters can still make a token too long to verify: each character of a
+        // non-ASCII path takes several bytes once encoded.
         assertThatThrownBy(() -> credential.issue(
-                        new GitLabRouteCredential.Route(7L, 0L, "https://gitlab.lrz.de", 42L, "group")))
+                        new GitLabRouteCredential.Route(7L, 3L, "https://gitlab.lrz.de", 42L, "中".repeat(512))))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
-    void shouldIssueAndVerifyRoutesAtTheEdgeOfWhatItAccepts() {
+    void shouldIssueAndVerifyTheSmallestIdsAndTheLongestGroupPath() {
         GitLabRouteCredential credential = credential(KEY, null);
-        assertThat(credential.isConfigured()).isTrue();
 
-        // The smallest ids and the longest group path are still a route.
         var smallest = new GitLabRouteCredential.Route(1L, 1L, "https://gitlab.lrz.de", 1L, "g");
         GitLabRouteCredential.Issued issued = credential.issue(smallest);
         assertThat(credential.verify(issued.token(), 1L, issued.keyId(), issued.routeId()))
@@ -173,13 +181,6 @@ class GitLabRouteCredentialTest {
         GitLabRouteCredential.Issued longIssued = credential.issue(longest);
         assertThat(credential.verify(longIssued.token(), 7L, longIssued.keyId(), longIssued.routeId()))
                 .contains(longest);
-
-        // A zero id in any position is no route.
-        for (var zero : List.of(
-                new GitLabRouteCredential.Route(0L, 3L, "https://gitlab.lrz.de", 42L, "group"),
-                new GitLabRouteCredential.Route(7L, 0L, "https://gitlab.lrz.de", 42L, "group"),
-                new GitLabRouteCredential.Route(7L, 3L, "https://gitlab.lrz.de", 0L, "group")))
-            assertThatThrownBy(() -> credential.issue(zero)).isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
