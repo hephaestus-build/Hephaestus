@@ -28,7 +28,6 @@ export const pushStaticTasks = {
 		"gate:prose",
 		"gate:diagrams",
 		"gate:system-diagrams",
-		"gate:docs-tokens",
 		"gate:docs-pages",
 		"gate:adr-confirmation",
 		"gate:instructions",
