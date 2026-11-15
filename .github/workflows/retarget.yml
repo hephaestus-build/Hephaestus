@@ -4,14 +4,19 @@ name: CI / Retarget
 # layer below merges and this pull request is retargeted to the default branch, no push may follow,
 # so the CI/CD run of its head is run again. `Detect changes` reads the base from the pull request,
 # not from the event, so the new attempt runs the full tier: ci-cd.mdx § Light tier for stacked layers.
+# A push can also follow the retarget within seconds. Its own run then covers the new head, and a
+# re-run of the old head would join CI/CD's concurrency group and cancel it, so the job re-reads the
+# head before it acts.
 
 on:
   pull_request:
     types: [edited]
 
+# A later edit, such as a title change, waits instead of cancelling: a retarget cancelled after it
+# cancelled the old run would leave the pull request with no CI.
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: false
 
 permissions: {}
 
@@ -27,13 +32,29 @@ jobs:
     timeout-minutes: 15
     permissions:
       actions: write # re-run this pull request's CI/CD run
+      pull-requests: read # read the pull request's current head
     steps:
       - name: Run the head's CI/CD run again
         env:
           GH_TOKEN: ${{ github.token }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           set -euo pipefail
+          # Exits when the pull request's head is no longer the event's; a failed read fails the job.
+          exit_if_head_moved() {
+            local current
+            current=$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json headRefOid --jq .headRefOid)
+            if [ -z "$current" ]; then
+              echo "::error::Could not read the head of pull request $PR_NUMBER."
+              exit 1
+            fi
+            if [ "$current" != "$HEAD_SHA" ]; then
+              echo "The head moved from $HEAD_SHA to $current; the push's own CI/CD run covers it."
+              exit 0
+            fi
+          }
+          exit_if_head_moved
           run=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow cicd.yml --event pull_request --commit "$HEAD_SHA" \
             --limit 1 --json databaseId,status --jq '.[0] // empty | "\(.databaseId) \(.status)"')
           if [ -z "$run" ]; then
@@ -46,4 +67,6 @@ jobs:
             gh run cancel "$id" --repo "$GITHUB_REPOSITORY"
             gh run watch "$id" --repo "$GITHUB_REPOSITORY" --interval 10 > /dev/null || true
           fi
+          # The cancel can take minutes, so a push may arrive in between.
+          exit_if_head_moved
           gh run rerun "$id" --repo "$GITHUB_REPOSITORY"

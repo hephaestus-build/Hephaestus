@@ -5528,6 +5528,8 @@ const UNCANCELLED_PULL_REQUEST_RUNS: Record<string, string> = {
 		"It deletes the docs and Storybook previews; a teardown cancelled halfway leaves them published.",
 	".github/workflows/openapi-autocommit.yml":
 		"Any label starts it, so an unrelated label would cancel the run that commits the regeneration.",
+	".github/workflows/retarget.yml":
+		"Any edit starts it, so a title change would cancel a retarget after it cancelled the old run, and nothing re-runs CI.",
 };
 
 /** A workflow value as the runner expands it: each `${{ }}` evaluated against `context`. */
@@ -8099,3 +8101,71 @@ void test("a prompt change composes the safety subset, the eval:run label the wh
 		`feedback-eval-panel-\${{ github.event.pull_request.number || github.ref }}`,
 	);
 });
+
+void test(
+	"a retarget re-runs only the head it was told about, so a push right after it keeps its own CI/CD run",
+	runnerStepsOnly,
+	async () => {
+		const retarget = parseDocument(await readFile(".github/workflows/retarget.yml", "utf8"));
+		const shell = runScript(retarget, ["jobs", "rerun"], "Run the head's CI/CD run again");
+		// Without it, the token cannot read the head, and every retarget fails.
+		assert.equal(retarget.getIn(["jobs", "rerun", "permissions", "pull-requests"]), "read");
+		const directory = await mkdtemp(path.join(tmpdir(), "retarget-"));
+		const calls = path.join(directory, "calls");
+		// `gh pr view` answers the event's head until `gh run watch` has run, then the pushed head.
+		await writeFile(
+			path.join(directory, "gh"),
+			[
+				"#!/bin/sh",
+				`echo "gh $*" >> "${calls}"`,
+				'case "$1 $2" in',
+				'"pr view") [ -n "$STUB_PR_FAILS" ] && exit 1; [ -n "$STUB_PR_EMPTY" ] && exit 0',
+				`  if [ -e "${directory}/pushed" ] || [ -n "$STUB_PUSHED_FIRST" ]; then echo new; else echo old; fi ;;`,
+				'"run list") echo "$STUB_RUN" ;;',
+				`"run watch") [ -n "$STUB_PUSH_DURING_CANCEL" ] && touch "${directory}/pushed" ;;`,
+				"esac",
+				"exit 0",
+				"",
+			].join("\n"),
+		);
+		await chmod(path.join(directory, "gh"), 0o755);
+		const environment = {
+			GITHUB_REPOSITORY: "hephaestus-build/Hephaestus",
+			HEAD_SHA: "old",
+			PATH: `${directory}${path.delimiter}${process.env.PATH ?? ""}`,
+			PR_NUMBER: "7",
+		};
+		const attempt = async (stub: Record<string, string>) => {
+			await rm(calls, { force: true });
+			await rm(path.join(directory, "pushed"), { force: true });
+			const result = await runStep(shell, { ...environment, ...stub });
+			return { ...result, calls: existsSync(calls) ? await readFile(calls, "utf8") : "" };
+		};
+
+		const unchanged = await attempt({ STUB_RUN: "101 completed" });
+		assert.equal(unchanged.failed, false, unchanged.diagnosis);
+		assert.match(unchanged.calls, /^gh pr view 7 --repo hephaestus-build\/Hephaestus /mu);
+		assert.match(unchanged.calls, /^gh run rerun 101 /mu);
+
+		const pushedFirst = await attempt({ STUB_RUN: "101 completed", STUB_PUSHED_FIRST: "1" });
+		assert.equal(pushedFirst.failed, false, pushedFirst.diagnosis);
+		assert.doesNotMatch(pushedFirst.calls, /^gh run (?:list|cancel|rerun) /mu);
+
+		// The old head's run is still going, and the push lands while the job waits for its cancel.
+		const pushedDuringCancel = await attempt({
+			STUB_RUN: "101 in_progress",
+			STUB_PUSH_DURING_CANCEL: "1",
+		});
+		assert.equal(pushedDuringCancel.failed, false, pushedDuringCancel.diagnosis);
+		assert.match(pushedDuringCancel.calls, /^gh run cancel 101 /mu);
+		assert.doesNotMatch(pushedDuringCancel.calls, /^gh run rerun /mu);
+
+		// An unreadable head fails the job instead of passing as a moved one.
+		const unreadable = await attempt({ STUB_RUN: "101 completed", STUB_PR_FAILS: "1" });
+		assert.equal(unreadable.failed, true);
+		assert.doesNotMatch(unreadable.calls, /^gh run rerun /mu);
+		const empty = await attempt({ STUB_RUN: "101 completed", STUB_PR_EMPTY: "1" });
+		assert.equal(empty.failed, true);
+		assert.doesNotMatch(empty.calls, /^gh run rerun /mu);
+	},
+);
