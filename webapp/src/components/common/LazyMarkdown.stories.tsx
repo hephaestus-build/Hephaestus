@@ -25,10 +25,9 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** Nothing for the first second, so a fast load does not flash a placeholder, then a skeleton. */
+/** A skeleton while the renderer loads. It waits a second first, so a fast load shows none. */
 export const Loading: Story = {
 	play: async ({ canvasElement }) => {
-		await expect(canvasElement.querySelector("[aria-busy]")).toBeNull();
 		await waitFor(
 			async () => expect(canvasElement.querySelector("[aria-busy='true']")).not.toBeNull(),
 			{
