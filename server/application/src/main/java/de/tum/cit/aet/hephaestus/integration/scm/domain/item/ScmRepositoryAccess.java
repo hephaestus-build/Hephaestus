@@ -12,16 +12,15 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRef;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitCloneUrl;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.RepositoryKey;
 import de.tum.cit.aet.hephaestus.integration.scm.spi.ScmTokenSource;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
-import org.springframework.web.util.UriComponentsBuilder;
 
 @Component
 @RequiredArgsConstructor
@@ -83,15 +82,8 @@ public class ScmRepositoryAccess {
         String origin = source.serverUrl(workspaceId).orElseThrow(() -> unavailable("SCM origin is unavailable"));
         if (!ScmOrigin.of(origin).equals(ScmOrigin.of(repository.getProvider().getServerUrl())))
             throw unavailable("SCM credential origin changed");
-        String[] path = repository.getNameWithOwner().split("/", -1);
-        if (path.length < 2 || Arrays.stream(path).anyMatch(p -> p.isBlank() || p.equals(".") || p.equals("..")))
-            throw unavailable("Repository path is invalid");
-        path[path.length - 1] += ".git";
-        String clone = UriComponentsBuilder.fromUriString(origin)
-                .pathSegment(path)
-                .build()
-                .encode()
-                .toUriString();
+        String clone = GitCloneUrl.of(origin, repository.getNameWithOwner())
+                .orElseThrow(() -> unavailable("Repository path is invalid"));
         return new Remote(new RepositoryKey(workspaceId, repository.getId()), clone, source);
     }
 
