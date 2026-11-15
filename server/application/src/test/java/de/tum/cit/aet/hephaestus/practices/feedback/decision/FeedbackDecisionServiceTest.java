@@ -100,13 +100,16 @@ class FeedbackDecisionServiceTest {
                 .build();
         when(feedback.lockByIdAndWorkspaceId(id, 1)).thenReturn(Optional.of(row));
         when(decisions.save(any())).thenAnswer(a -> a.getArgument(0));
-        when(gate.evaluate(row, FeedbackCheckStage.APPROVED, false))
-                .thenReturn(new FeedbackCheck(
-                        FeedbackCheckStage.APPROVED,
-                        true,
-                        null,
-                        now,
-                        new FeedbackCheckFacts(0, 0, true, true, true, true, false, true, true, false)));
+        when(gate.evaluate(row, FeedbackCheckStage.APPROVED, false)).thenReturn(approvedCheck());
+    }
+
+    FeedbackCheck approvedCheck() {
+        return new FeedbackCheck(
+                FeedbackCheckStage.APPROVED,
+                true,
+                null,
+                now,
+                new FeedbackCheckFacts(0, 0, true, true, true, true, false, true, true, false));
     }
 
     @Test
@@ -141,7 +144,6 @@ class FeedbackDecisionServiceTest {
 
     @Test
     void shouldApproveRejectedFeedbackAfterAllAndQueueItsPost() {
-        var approved = gate.evaluate(row, FeedbackCheckStage.APPROVED, false);
         row = Feedback.builder()
                 .id(id)
                 .workspaceId(1)
@@ -152,7 +154,7 @@ class FeedbackDecisionServiceTest {
                 .body("Add a regression test.")
                 .build();
         when(feedback.lockByIdAndWorkspaceId(id, 1)).thenReturn(Optional.of(row));
-        when(gate.evaluate(row, FeedbackCheckStage.APPROVED, false)).thenReturn(approved);
+        when(gate.evaluate(row, FeedbackCheckStage.APPROVED, false)).thenReturn(approvedCheck());
         var outcome = service.decide(
                 1, id, 3, new FeedbackDecisionInput(FeedbackDecisionAction.APPROVE, null, null, digest()));
         assertThat(outcome.state()).isEqualTo(FeedbackState.READY);
