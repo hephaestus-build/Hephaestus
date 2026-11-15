@@ -1,5 +1,9 @@
 import { useId } from "react";
 
+import {
+	ConfirmAccessDialog,
+	type ConfirmAccessDialogProps,
+} from "@/components/auth/ConfirmAccessDialog";
 import { HephaestusLogo } from "@/components/brand/HephaestusLogo";
 import { PageLayout } from "@/components/layout/PageLayout";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -20,7 +24,10 @@ export interface McpConsentRequestView {
 
 export type McpConsentRefusal = "NOT_ADMIN" | "PASSKEY_REQUIRED";
 
-export type McpAuthorizationError = "INVALID_CLIENT" | "INVALID_CLIENT_METADATA" | "INVALID_REDIRECT_URI";
+export type McpAuthorizationError =
+	| "INVALID_CLIENT"
+	| "INVALID_CLIENT_METADATA"
+	| "INVALID_REDIRECT_URI";
 
 export type McpConsentState =
 	| { status: "loading" }
@@ -37,13 +44,14 @@ export type McpConsentState =
 
 export interface McpConsentPageProps {
 	state: McpConsentState;
+	/** Approving grants access, so the server can ask for a recent sign-in first. */
+	confirmAccess?: ConfirmAccessDialogProps;
 }
 
 const SCOPE_WORDS: Record<string, string> = {
 	"practices:read":
-		"Read this workspace's practices, review settings, members' provider logins and review status.",
-	"practices:write":
-		"Change practices, feedback modes and who is reviewed, and request reviews.",
+		"Read this workspace’s practices, review settings, members’ provider logins and review status.",
+	"practices:write": "Change practices, feedback modes and who is reviewed, and request reviews.",
 };
 
 const REFUSALS: Record<McpConsentRefusal, string> = {
@@ -54,34 +62,41 @@ const REFUSALS: Record<McpConsentRefusal, string> = {
 
 const INVALID: Record<McpAuthorizationError, string> = {
 	INVALID_CLIENT: "The client did not identify itself with a client metadata document.",
-	INVALID_CLIENT_METADATA: "The client's metadata document could not be read or is not valid.",
-	INVALID_REDIRECT_URI: "The client asked to send you to an address that its metadata document does not list.",
+	INVALID_CLIENT_METADATA: "The client’s metadata document could not be read or is not valid.",
+	INVALID_REDIRECT_URI:
+		"The client asked to send you to an address that its metadata document does not list.",
 };
 
 /**
  * The page where an account lets an MCP client act in one workspace. The host comes first because the
  * client cannot choose it; the client's own name is plain text below it.
  */
-export function McpConsentPage({ state }: McpConsentPageProps) {
+export function McpConsentPage({ state, confirmAccess }: McpConsentPageProps) {
 	const id = useId();
 	return (
 		<PageLayout className="max-w-xl py-10">
 			<HephaestusLogo className="h-8 w-auto" />
-			<section aria-labelledby={`${id}-heading`} aria-busy={state.status === "loading"} className="space-y-4">
+			<section
+				aria-labelledby={`${id}-heading`}
+				aria-busy={state.status === "loading"}
+				className="space-y-4"
+			>
 				<h1 id={`${id}-heading`} className="text-2xl font-semibold">
 					Connect an MCP client
 				</h1>
 				<Body state={state} />
 			</section>
+			{confirmAccess !== undefined && <ConfirmAccessDialog {...confirmAccess} />}
 		</PageLayout>
 	);
 }
 
-function Body({ state }: McpConsentPageProps) {
+function Body({ state }: Pick<McpConsentPageProps, "state">) {
 	switch (state.status) {
-		case "loading":
+		case "loading": {
 			return <Skeleton className="h-48 w-full" />;
-		case "error":
+		}
+		case "error": {
 			return (
 				<Alert variant="destructive">
 					<AlertTitle>We could not load this request</AlertTitle>
@@ -93,24 +108,29 @@ function Body({ state }: McpConsentPageProps) {
 					</AlertDescription>
 				</Alert>
 			);
-		case "gone":
+		}
+		case "gone": {
 			return (
 				<Alert>
 					<AlertTitle>This request has expired</AlertTitle>
 					<AlertDescription>
-						It was answered already, or it waited longer than 10 minutes. Start the client's sign-in again.
+						It was answered already, or it waited longer than 10 minutes. Start the client’s sign-in
+						again.
 					</AlertDescription>
 				</Alert>
 			);
-		case "invalid":
+		}
+		case "invalid": {
 			return (
 				<Alert variant="destructive">
 					<AlertTitle>This client cannot connect</AlertTitle>
 					<AlertDescription>{INVALID[state.reason]}</AlertDescription>
 				</Alert>
 			);
-		case "ready":
+		}
+		case "ready": {
 			return <Request {...state} />;
+		}
 	}
 }
 
@@ -120,7 +140,7 @@ function Request({
 	onApprove,
 	onRefuse,
 }: Extract<McpConsentState, { status: "ready" }>) {
-	const refusal = request.refusal;
+	const { refusal } = request;
 	return (
 		<div className="space-y-4">
 			<div>
@@ -130,8 +150,8 @@ function Request({
 				</p>
 			</div>
 			<p>
-				wants to act for you in the workspace <span className="font-medium">{request.workspaceName}</span>. It
-				may:
+				wants to act for you in the workspace{" "}
+				<span className="font-medium">{request.workspaceName}</span>. It may:
 			</p>
 			<ul className="list-disc space-y-1 pl-5">
 				{request.scopes.map((scope) => (
@@ -142,13 +162,15 @@ function Request({
 				It can never read source code, observations, feedback, conversations or secrets.
 			</p>
 			<p className="text-sm text-muted-foreground">
-				After you answer, your browser goes to <span className="font-medium">{request.redirectHost}</span>.
+				After you answer, your browser goes to{" "}
+				<span className="font-medium">{request.redirectHost}</span>.
 			</p>
 			{request.loopbackRedirect && (
 				<Alert>
 					<AlertTitle>The client runs on this computer</AlertTitle>
 					<AlertDescription>
-						The answer goes to a program on this computer. Allow it only if you started this sign-in yourself.
+						The answer goes to a program on this computer. Allow it only if you started this sign-in
+						yourself.
 					</AlertDescription>
 				</Alert>
 			)}
@@ -159,11 +181,20 @@ function Request({
 				</Alert>
 			)}
 			<div className="flex gap-2">
-				<Button onClick={onApprove} disabled={pending !== undefined || refusal !== undefined} aria-busy={pending === "approve"}>
+				<Button
+					onClick={onApprove}
+					disabled={pending !== undefined || refusal !== undefined}
+					aria-busy={pending === "approve"}
+				>
 					{pending === "approve" && <Spinner />}
 					Allow
 				</Button>
-				<Button variant="outline" onClick={onRefuse} disabled={pending !== undefined} aria-busy={pending === "refuse"}>
+				<Button
+					variant="outline"
+					onClick={onRefuse}
+					disabled={pending !== undefined}
+					aria-busy={pending === "refuse"}
+				>
 					{pending === "refuse" && <Spinner />}
 					Deny
 				</Button>

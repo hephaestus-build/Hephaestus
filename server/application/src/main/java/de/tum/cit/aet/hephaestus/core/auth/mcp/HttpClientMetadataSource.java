@@ -7,8 +7,10 @@ import java.time.Duration;
 import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
 import org.springframework.http.MediaType;
+import org.springframework.http.client.reactive.ClientHttpConnector;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 
@@ -29,12 +31,19 @@ class HttpClientMetadataSource implements ClientMetadataSource {
     private static final Duration TIMEOUT = Duration.ofSeconds(5);
 
     private final WebClient webClient;
+    private final Duration timeout;
 
+    @Autowired
     HttpClientMetadataSource(WebClient.Builder webClients) {
+        this(webClients, WebClientConnectors.ssrfGuarded(), TIMEOUT);
+    }
+
+    HttpClientMetadataSource(WebClient.Builder webClients, ClientHttpConnector connector, Duration timeout) {
         this.webClient = webClients
-                .clientConnector(WebClientConnectors.ssrfGuarded())
+                .clientConnector(connector)
                 .codecs(codecs -> codecs.defaultCodecs().maxInMemorySize(MAX_DOCUMENT_BYTES))
                 .build();
+        this.timeout = timeout;
     }
 
     @Override
@@ -46,9 +55,11 @@ class HttpClientMetadataSource implements ClientMetadataSource {
                     .accept(MediaType.APPLICATION_JSON)
                     .retrieve()
                     .bodyToMono(String.class)
-                    .block(TIMEOUT));
+                    .block(timeout));
         } catch (RuntimeException unreadable) {
-            log.info("mcp.client: client metadata document could not be read: {}", unreadable.getClass().getSimpleName());
+            log.info(
+                    "mcp.client: client metadata document could not be read: {}",
+                    unreadable.getClass().getSimpleName());
             return Optional.empty();
         }
     }

@@ -50,6 +50,22 @@ spec:
       backendRefs:
         - name: {{ include "hephaestus.name" (dict "root" . "component" "server") }}
           port: 8080
+    {{- if .Values.config.mcpEnabled }}
+    # MCP clients discover the authorization server (RFC 8414 § 3.1) and each workspace endpoint's
+    # protected resource metadata (RFC 9728 § 3.1) on the host root, so neither path carries /api.
+    - matches:
+        - path:
+            type: Exact
+            value: /.well-known/oauth-authorization-server
+        - path:
+            type: PathPrefix
+            value: /.well-known/oauth-protected-resource/
+      filters:
+        - {{ toJson $hsts }}
+      backendRefs:
+        - name: {{ include "hephaestus.name" (dict "root" . "component" "server") }}
+          port: 8080
+    {{- end }}
     # Everything else is the SPA. The webapp serves index.html for an unknown path.
     - matches:
         - path:

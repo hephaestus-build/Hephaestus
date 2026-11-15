@@ -32,7 +32,8 @@ class GetReviewTool implements McpTool {
              "properties": {"reviewId": {"type": "string", "format": "uuid"}}}
             """;
 
-    private static final String OUTPUT_SCHEMA = """
+    private static final String OUTPUT_SCHEMA =
+            """
             {"type": "object", "required": ["id", "kind", "origin", "status", "createdAt", "completedAt", "stopReason", "item", "practices", "jobCount", "activeJobCount"],
              "additionalProperties": false,
              "properties": {"id": {"type": "string"}, "kind": {"type": "string"}, "origin": {"type": "string"}, "status": {"type": "string"},
@@ -69,7 +70,8 @@ class GetReviewTool implements McpTool {
         } catch (IllegalArgumentException malformed) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "The argument reviewId is not a review id.");
         }
-        ReviewDetailDTO review = reviews.detail(WorkspaceContextHolder.getContext().id(), reviewId);
+        ReviewDetailDTO review =
+                reviews.detail(WorkspaceContextHolder.getContext().id(), reviewId);
         return McpTools.result(new Result(
                 review.id().toString(),
                 review.kind().name(),

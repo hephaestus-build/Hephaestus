@@ -33,7 +33,8 @@ export const Default: Story = {
 		const current = canvas.getByRole("listitem", { name: "Chrome on macOS" });
 		await expect(within(current).getByText("This device")).toBeVisible();
 		await expect(within(current).getByRole("button", { name: "Current session" })).toBeDisabled();
-		await expect(canvas.getByRole("button", { name: "Sign out 3 other sessions" })).toBeEnabled();
+		await expect(canvas.getByRole("listitem", { name: "MCP client" })).toBeVisible();
+		await expect(canvas.getByRole("button", { name: "Sign out 4 other sessions" })).toBeEnabled();
 	},
 };
 

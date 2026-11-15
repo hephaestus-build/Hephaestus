@@ -493,7 +493,8 @@ public class SecurityConfig {
         if (authorization != null && authorization.regionMatches(true, 0, "Bearer ", 0, 7) && !hasAuthCookie(request)) {
             return false;
         }
-        if ((CLIENT_SESSION_MATCHER.matches(request) || MCP_TOKEN_MATCHER.matches(request)) && !hasAuthCookie(request)) {
+        if ((CLIENT_SESSION_MATCHER.matches(request) || MCP_TOKEN_MATCHER.matches(request))
+                && !hasAuthCookie(request)) {
             return false;
         }
         if (devLoginEnabled && DEV_LOGIN_MATCHER.matches(request)) {

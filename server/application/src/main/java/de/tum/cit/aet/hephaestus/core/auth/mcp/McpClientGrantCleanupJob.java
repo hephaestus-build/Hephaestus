@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.core.auth.mcp;
 
+import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import java.time.Clock;
 import java.time.Duration;
@@ -16,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Component
 @ConditionalOnServerRole
+@WorkspaceAgnostic("Retention expires and removes MCP client grant rows across all workspaces")
 public class McpClientGrantCleanupJob {
 
     /** An approved grant waits for its exchange as long as its code lives. */

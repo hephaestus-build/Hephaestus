@@ -1,17 +1,11 @@
 package de.tum.cit.aet.hephaestus.core.auth.config;
 
-import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEventLogger;
-import de.tum.cit.aet.hephaestus.core.auth.jwt.AccessTokenAdmission;
-import de.tum.cit.aet.hephaestus.core.auth.jwt.JwtSigningKeyService;
+import de.tum.cit.aet.hephaestus.core.WebClientConnectors;
+import de.tum.cit.aet.hephaestus.core.auth.AuthProperties;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.RevocationAwareJwtDecoder;
 import de.tum.cit.aet.hephaestus.core.auth.mcp.McpChallenges;
 import de.tum.cit.aet.hephaestus.core.auth.mcp.McpResources;
 import de.tum.cit.aet.hephaestus.core.auth.mcp.McpTokenValidators;
-import de.tum.cit.aet.hephaestus.core.auth.metrics.AuthMetrics;
-import org.springframework.cache.CacheManager;
-import java.time.Clock;
-import de.tum.cit.aet.hephaestus.core.WebClientConnectors;
-import de.tum.cit.aet.hephaestus.core.auth.AuthProperties;
 import de.tum.cit.aet.hephaestus.core.auth.OAuthLoginPaths;
 import de.tum.cit.aet.hephaestus.core.auth.oauth.AuthIntentCookie;
 import de.tum.cit.aet.hephaestus.core.auth.oauth.CookieOAuth2AuthorizationRequestRepository;
@@ -302,6 +296,23 @@ public class AuthSecurityConfig {
     }
 
     /**
+     * MCP discovery (RFC 8414, RFC 9728) is public and ours. It needs a chain without a resource server:
+     * Spring Security 7 answers {@code /.well-known/oauth-protected-resource/**} itself on every resource-server
+     * chain, with a resource taken from the request's host instead of the issuer.
+     */
+    @Bean
+    @Order(Ordered.HIGHEST_PRECEDENCE + 6)
+    @ConditionalOnBooleanProperty("hephaestus.mcp.enabled")
+    public SecurityFilterChain mcpDiscoverySecurityFilterChain(HttpSecurity http) throws Exception {
+        http.securityMatcher("/.well-known/oauth-authorization-server", "/.well-known/oauth-protected-resource/**")
+                .sessionManagement(sessions -> sessions.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .csrf(csrf -> csrf.disable())
+                .authorizeHttpRequests(requests -> requests.anyRequest().permitAll());
+        SecurityHeaders.apply(http);
+        return http.build();
+    }
+
+    /**
      * The workspace MCP endpoint (ADR 0110) accepts bearer tokens only. The session cookie is ignored, so a
      * browser cannot carry a signed-in user's cookie into a tool call, and CSRF does not apply. Its decoder is
      * the revocation-aware decoder with the MCP audience rule instead of the web app's: a web-app token never
@@ -312,25 +323,12 @@ public class AuthSecurityConfig {
     @ConditionalOnBooleanProperty("hephaestus.mcp.enabled")
     public SecurityFilterChain mcpSecurityFilterChain(
             HttpSecurity http,
-            JwtSigningKeyService keyService,
-            AccessTokenAdmission admission,
-            AuthEventLogger authEventLogger,
-            CacheManager cacheManager,
-            Clock clock,
-            AuthMetrics metrics,
-            AuthProperties authProperties,
+            RevocationAwareJwtDecoder webAppDecoder,
             McpResources resources,
+            AuthRateLimitFilter authRateLimitFilter,
             Converter<Jwt, AbstractAuthenticationToken> authenticationConverter)
             throws Exception {
-        JwtDecoder decoder = new RevocationAwareJwtDecoder(
-                keyService,
-                admission,
-                authEventLogger,
-                authProperties,
-                cacheManager,
-                clock,
-                metrics,
-                McpTokenValidators.mcpAudience(resources));
+        JwtDecoder decoder = webAppDecoder.forAudience(McpTokenValidators.mcpAudience(resources));
         McpChallenges challenges = new McpChallenges(resources);
         http.securityMatcher("/workspaces/*/mcp")
                 .sessionManagement(sessions -> sessions.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
@@ -342,6 +340,8 @@ public class AuthSecurityConfig {
                         .jwt(jwt -> jwt.decoder(decoder).jwtAuthenticationConverter(authenticationConverter)))
                 .authorizeHttpRequests(requests -> requests.anyRequest().authenticated());
         SecurityHeaders.apply(http);
+        // The mcp-call limit keys by the token's account, so it runs after bearer authentication.
+        http.addFilterBefore(authRateLimitFilter, AuthorizationFilter.class);
         return http.build();
     }
 }

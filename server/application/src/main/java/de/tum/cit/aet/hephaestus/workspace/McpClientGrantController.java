@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.workspace;
 
 import de.tum.cit.aet.hephaestus.core.AuditLedger;
 import de.tum.cit.aet.hephaestus.core.Audited;
+import de.tum.cit.aet.hephaestus.core.RecentSignInExempt;
 import de.tum.cit.aet.hephaestus.core.auth.AccountReferenceService;
 import de.tum.cit.aet.hephaestus.core.auth.dto.AccountRefDTO;
 import de.tum.cit.aet.hephaestus.core.auth.spi.McpClientGrants;
@@ -43,7 +44,8 @@ public class McpClientGrantController {
     public List<McpClientGrantDTO> list(WorkspaceContext workspace) {
         List<McpClientGrants.Grant> active = grants.activeGrants(workspace.id());
         Map<Long, AccountRefDTO> approvers = accounts.references(
-                workspace.id(), active.stream().map(McpClientGrants.Grant::accountId).distinct().toList());
+                workspace.id(),
+                active.stream().map(McpClientGrants.Grant::accountId).distinct().toList());
         return active.stream()
                 .map(grant -> new McpClientGrantDTO(
                         grant.id(),
@@ -56,6 +58,7 @@ public class McpClientGrantController {
     }
 
     @DeleteMapping("/{grantId}")
+    @RecentSignInExempt(reason = "disconnects an MCP client, which an admin can connect again; grants no access")
     @Audited(ledger = AuditLedger.AUTH_EVENT, type = "MCP_CLIENT_REVOKED")
     @Operation(operationId = "revokeMcpClientGrant", summary = "Disconnect an MCP client from the workspace")
     public ResponseEntity<Void> revoke(WorkspaceContext workspace, @PathVariable UUID grantId) {

@@ -10,7 +10,12 @@ public interface McpClientGrants {
 
     /** One active grant. {@code clientName} is the client's self-declared name: plain text. */
     record Grant(
-            UUID id, String clientHost, String clientName, Long accountId, List<String> scopes, @Nullable Instant approvedAt) {
+            UUID id,
+            String clientHost,
+            String clientName,
+            Long accountId,
+            List<String> scopes,
+            @Nullable Instant approvedAt) {
         public Grant {
             scopes = List.copyOf(scopes);
         }

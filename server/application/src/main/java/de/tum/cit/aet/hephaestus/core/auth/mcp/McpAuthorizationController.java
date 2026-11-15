@@ -2,6 +2,8 @@ package de.tum.cit.aet.hephaestus.core.auth.mcp;
 
 import de.tum.cit.aet.hephaestus.core.AuditLedger;
 import de.tum.cit.aet.hephaestus.core.Audited;
+import de.tum.cit.aet.hephaestus.core.RecentSignInExempt;
+import de.tum.cit.aet.hephaestus.core.RequiresRecentSignIn;
 import de.tum.cit.aet.hephaestus.core.auth.mcp.dto.McpConsentRedirectDTO;
 import de.tum.cit.aet.hephaestus.core.auth.mcp.dto.McpConsentRequestDTO;
 import de.tum.cit.aet.hephaestus.core.auth.mcp.dto.McpTokenErrorDTO;
@@ -75,14 +77,24 @@ public class McpAuthorizationController {
             @RequestParam(name = "prompt", required = false) @Nullable String prompt,
             HttpServletRequest request) {
         var parameters = new McpAuthorizationService.AuthorizationRequest(
-                responseType, clientId, redirectUri, codeChallenge, codeChallengeMethod, state, resource, scope, prompt);
+                responseType,
+                clientId,
+                redirectUri,
+                codeChallenge,
+                codeChallengeMethod,
+                state,
+                resource,
+                scope,
+                prompt);
         // Only the browser session approves; an installed client's bearer token never signs in here.
         Long accountId = CurrentAccount.sessionIdOrNull() == null ? CurrentAccount.idOrNull() : null;
         String location = switch (authorization.authorize(parameters, accountId)) {
             case McpAuthorizationService.Outcome.ErrorPage page -> webappUrl + CONSENT_PAGE + "?error=" + page.reason();
-            case McpAuthorizationService.Outcome.SignIn ignored -> webappUrl + CONSENT_PAGE + "?" + request.getQueryString();
+            case McpAuthorizationService.Outcome.SignIn ignored ->
+                webappUrl + CONSENT_PAGE + "?" + request.getQueryString();
             case McpAuthorizationService.Outcome.ClientRedirect redirect -> redirect.location();
-            case McpAuthorizationService.Outcome.Consent consent -> webappUrl + CONSENT_PAGE + "?request=" + consent.requestId();
+            case McpAuthorizationService.Outcome.Consent consent ->
+                webappUrl + CONSENT_PAGE + "?request=" + consent.requestId();
         };
         return ResponseEntity.status(HttpStatus.FOUND)
                 .location(URI.create(location))
@@ -96,23 +108,27 @@ public class McpAuthorizationController {
     public ResponseEntity<McpConsentRequestDTO> consentRequest(@PathVariable UUID requestId) {
         return authorization
                 .consentRequest(requestId, browserAccount())
-                .map(found -> ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(new McpConsentRequestDTO(
-                        found.id(),
-                        found.clientHost(),
-                        found.clientName(),
-                        found.redirectHost(),
-                        found.loopbackRedirect(),
-                        found.workspaceSlug(),
-                        found.workspaceName(),
-                        found.scopes(),
-                        found.refusal() == null
-                                ? null
-                                : McpConsentRequestDTO.McpConsentRefusal.valueOf(found.refusal().name()))))
+                .map(found -> ResponseEntity.ok()
+                        .cacheControl(CacheControl.noStore())
+                        .body(new McpConsentRequestDTO(
+                                found.id(),
+                                found.clientHost(),
+                                found.clientName(),
+                                found.redirectHost(),
+                                found.loopbackRedirect(),
+                                found.workspaceSlug(),
+                                found.workspaceName(),
+                                found.scopes(),
+                                found.refusal() == null
+                                        ? null
+                                        : McpConsentRequestDTO.McpConsentRefusal.valueOf(
+                                                found.refusal().name()))))
                 .orElseThrow(McpAuthorizationController::gone);
     }
 
     @PutMapping("/requests/{requestId}/approval")
     @PreAuthorize("isAuthenticated()")
+    @RequiresRecentSignIn
     @Audited(ledger = AuditLedger.AUTH_EVENT, type = "MCP_CLIENT_APPROVED")
     @Operation(summary = "Approve an MCP client for a workspace", operationId = "approveMcpConsentRequest")
     public ResponseEntity<McpConsentRedirectDTO> approve(@PathVariable UUID requestId) {
@@ -127,22 +143,29 @@ public class McpAuthorizationController {
         return switch (authorization.approve(
                 requestId, accountId, CurrentAccount.requireJti(), sessionExpiresAt, authTime)) {
             case McpAuthorizationService.Approval.Approved approved ->
-                ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(new McpConsentRedirectDTO(approved.location()));
+                ResponseEntity.ok()
+                        .cacheControl(CacheControl.noStore())
+                        .body(new McpConsentRedirectDTO(approved.location()));
             case McpAuthorizationService.Approval.NotAllowed notAllowed ->
-                throw new ResponseStatusException(HttpStatus.CONFLICT, "This account cannot approve the client: "
-                        + notAllowed.refusal().name());
+                throw new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "This account cannot approve the client: "
+                                + notAllowed.refusal().name());
             case McpAuthorizationService.Approval.Gone ignored -> throw gone();
         };
     }
 
     @DeleteMapping("/requests/{requestId}")
     @PreAuthorize("isAuthenticated()")
+    @RecentSignInExempt(reason = "refuses a pending client request; nothing is removed and the client can ask again")
     @Audited(ledger = AuditLedger.AUTH_EVENT, type = "MCP_CLIENT_REFUSED")
     @Operation(summary = "Refuse an MCP client", operationId = "refuseMcpConsentRequest")
     public ResponseEntity<McpConsentRedirectDTO> refuse(@PathVariable UUID requestId) {
         return authorization
                 .refuse(requestId, browserAccount())
-                .map(location -> ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(new McpConsentRedirectDTO(location)))
+                .map(location -> ResponseEntity.ok()
+                        .cacheControl(CacheControl.noStore())
+                        .body(new McpConsentRedirectDTO(location)))
                 .orElseThrow(McpAuthorizationController::gone);
     }
 
@@ -162,19 +185,26 @@ public class McpAuthorizationController {
         var parameters = new McpAuthorizationService.TokenRequest(
                 grantType, code, redirectUri, clientId, codeVerifier, refreshToken, resource, scope);
         return switch (authorization.token(parameters, request)) {
-            case McpAuthorizationService.TokenOutcome.Issued issued -> ResponseEntity.ok()
-                    .cacheControl(CacheControl.noStore())
-                    .header("Pragma", "no-cache")
-                    .body(new McpTokenResponseDTO(
-                            issued.tokens().accessToken(),
-                            "Bearer",
-                            Math.max(0, Duration.between(clock.instant(), issued.tokens().accessTokenExpiresAt()).toSeconds()),
-                            issued.tokens().refreshToken(),
-                            issued.scope()));
-            case McpAuthorizationService.TokenOutcome.Refused refused -> ResponseEntity.badRequest()
-                    .cacheControl(CacheControl.noStore())
-                    .header("Pragma", "no-cache")
-                    .body(new McpTokenErrorDTO(refused.error()));
+            case McpAuthorizationService.TokenOutcome.Issued issued ->
+                ResponseEntity.ok()
+                        .cacheControl(CacheControl.noStore())
+                        .header("Pragma", "no-cache")
+                        .body(new McpTokenResponseDTO(
+                                issued.tokens().accessToken(),
+                                "Bearer",
+                                Math.max(
+                                        0,
+                                        Duration.between(
+                                                        clock.instant(),
+                                                        issued.tokens().accessTokenExpiresAt())
+                                                .toSeconds()),
+                                issued.tokens().refreshToken(),
+                                issued.scope()));
+            case McpAuthorizationService.TokenOutcome.Refused refused ->
+                ResponseEntity.badRequest()
+                        .cacheControl(CacheControl.noStore())
+                        .header("Pragma", "no-cache")
+                        .body(new McpTokenErrorDTO(refused.error()));
         };
     }
 
@@ -187,6 +217,7 @@ public class McpAuthorizationController {
     }
 
     private static ResponseStatusException gone() {
-        return new ResponseStatusException(HttpStatus.NOT_FOUND, "This request was answered, has expired, or is not yours.");
+        return new ResponseStatusException(
+                HttpStatus.NOT_FOUND, "This request was answered, has expired, or is not yours.");
     }
 }

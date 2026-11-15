@@ -22,7 +22,9 @@ final class McpProjections {
     record FeedbackMode(@Nullable String override, String effective, String source) {
         static FeedbackMode of(FeedbackModeAssignmentDTO mode) {
             return new FeedbackMode(
-                    mode.override() == null ? null : mode.override().name(), mode.effective().name(), mode.source().name());
+                    mode.override() == null ? null : mode.override().name(),
+                    mode.effective().name(),
+                    mode.source().name());
         }
     }
 
@@ -31,18 +33,28 @@ final class McpProjections {
      * is built from the repository and the number; an Outline document's label is its title, and a Slack
      * thread's container is a channel name, so neither goes out.
      */
-    record ItemReference(String id, String kind, @Nullable String provider, @Nullable String label) {
+    private static final Pattern NUMBER_LABEL = Pattern.compile("^(Review of )?[#!][1-9][0-9]*$");
+
+    record ItemReference(
+            String id,
+            String kind,
+            @Nullable String provider,
+            @Nullable String label) {
+        /**
+         * Only a number label such as {@code #12}, {@code !12} or {@code Review of #12} goes out. An item without
+         * a number is labelled by its title, and a file by its path, which its author wrote.
+         */
         static ItemReference of(ItemRefDTO item) {
-            boolean sourceControl = item.kind().startsWith("scm.");
             return new ItemReference(
                     item.id(),
                     item.kind(),
                     item.provider() == null ? null : item.provider().name(),
-                    sourceControl ? item.label() : null);
+                    NUMBER_LABEL.matcher(item.label()).matches() ? item.label() : null);
         }
     }
 
-    record PracticeStatus(String slug, String status, @Nullable String reasonCode) {
+    record PracticeStatus(
+            String slug, String status, @Nullable String reasonCode) {
         static PracticeStatus of(ReviewPracticeDTO practice) {
             return new PracticeStatus(practice.practiceSlug(), practice.status().name(), code(practice.reason()));
         }

@@ -87,7 +87,9 @@ public interface McpClientGrantRepository extends JpaRepository<McpClientGrant, 
         """)
     @WorkspaceAgnostic("Signing out everywhere else ends the account's other grants in every workspace")
     int revokeAllForAccountExceptSession(
-            @Param("accountId") Long accountId, @Param("exceptSessionId") UUID exceptSessionId, @Param("now") Instant now);
+            @Param("accountId") Long accountId,
+            @Param("exceptSessionId") UUID exceptSessionId,
+            @Param("now") Instant now);
 
     /** An ended client session revokes its grant in the same transaction. */
     @Modifying
@@ -108,12 +110,12 @@ public interface McpClientGrantRepository extends JpaRepository<McpClientGrant, 
          WHERE (g.status = 'PENDING' AND g.expiresAt < :now)
             OR (g.status = 'APPROVED' AND g.approvedAt < :codeCutoff)
         """)
-    @WorkspaceAgnostic("Expiry is a cleanup across all workspaces")
+    @WorkspaceAgnostic("Retention expires MCP client grant rows across all workspaces")
     int expireStale(@Param("now") Instant now, @Param("codeCutoff") Instant codeCutoff);
 
     /** Ended grants keep their row for the retention period, so the config history can still name the client. */
     @Modifying
     @Query("DELETE FROM McpClientGrant g WHERE g.endedAt < :cutoff")
-    @WorkspaceAgnostic("Retention deletes ended grants across all workspaces")
+    @WorkspaceAgnostic("Retention removes ended MCP client grant rows across all workspaces")
     int deleteEndedBefore(@Param("cutoff") Instant cutoff);
 }

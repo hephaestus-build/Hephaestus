@@ -23,7 +23,12 @@ public final class McpTools {
      * data, never as instructions (ADR 0110 § Data contract).
      */
     public static McpSchema.Tool readTool(
-            JsonMapper jsonMapper, String name, String title, String description, String inputSchema, String outputSchema) {
+            JsonMapper jsonMapper,
+            String name,
+            String title,
+            String description,
+            String inputSchema,
+            String outputSchema) {
         var mapper = new JacksonMcpJsonMapper(jsonMapper);
         return McpSchema.Tool.builder(name, mapper, inputSchema)
                 .title(title)
@@ -41,7 +46,8 @@ public final class McpTools {
     /** A required string argument; its absence is refused as the HTTP handler refuses a missing parameter. */
     public static String requiredString(Map<String, Object> arguments, String name) {
         return optionalString(arguments, name)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "The argument " + name + " is required."));
+                .orElseThrow(() ->
+                        new ResponseStatusException(HttpStatus.BAD_REQUEST, "The argument " + name + " is required."));
     }
 
     public static Optional<String> optionalString(Map<String, Object> arguments, String name) {

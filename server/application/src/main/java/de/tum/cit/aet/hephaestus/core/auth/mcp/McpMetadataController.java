@@ -52,9 +52,13 @@ public class McpMetadataController {
         return metadata;
     }
 
-    @GetMapping(value = "/.well-known/oauth-protected-resource/{*resourcePath}", produces = MediaType.APPLICATION_JSON_VALUE)
+    @GetMapping(
+            value = "/.well-known/oauth-protected-resource/{*resourcePath}",
+            produces = MediaType.APPLICATION_JSON_VALUE)
     @PreAuthorize("permitAll()")
-    @Operation(summary = "Protected resource metadata of a workspace MCP endpoint (RFC 9728)", operationId = "getMcpResourceMetadata")
+    @Operation(
+            summary = "Protected resource metadata of a workspace MCP endpoint (RFC 9728)",
+            operationId = "getMcpResourceMetadata")
     public ResponseEntity<Map<String, Object>> protectedResource(@PathVariable String resourcePath) {
         // RFC 9728 § 3.1 inserts the resource's path after the well-known prefix.
         String prefix = properties.apiBasePath() + "/workspaces/";

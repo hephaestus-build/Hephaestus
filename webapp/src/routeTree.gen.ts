@@ -39,6 +39,7 @@ import { Route as AuthenticatedAdminSettingsRouteImport } from './routes/_authen
 import { Route as AuthenticatedAdminUsageRouteImport } from './routes/_authenticated/admin.usage'
 import { Route as AuthenticatedAdminUsersRouteImport } from './routes/_authenticated/admin.users'
 import { Route as AuthenticatedAdminWorkspacesRouteImport } from './routes/_authenticated/admin.workspaces'
+import { Route as AuthenticatedMcpAuthorizeRouteImport } from './routes/_authenticated/mcp.authorize'
 import { Route as AuthenticatedWWorkspaceSlugRouteRouteImport } from './routes/_authenticated/w/$workspaceSlug/route'
 import { Route as WWorkspaceSlugIndexRouteImport } from './routes/w.$workspaceSlug.index'
 import { Route as WWorkspaceSlugLoginRouteImport } from './routes/w/$workspaceSlug/login'
@@ -246,6 +247,12 @@ const AuthenticatedAdminWorkspacesRoute =
     id: '/workspaces',
     path: '/workspaces',
     getParentRoute: () => AuthenticatedAdminRoute,
+  } as any)
+const AuthenticatedMcpAuthorizeRoute =
+  AuthenticatedMcpAuthorizeRouteImport.update({
+    id: '/mcp/authorize',
+    path: '/mcp/authorize',
+    getParentRoute: () => AuthenticatedRoute,
   } as any)
 const AuthenticatedWWorkspaceSlugRouteRoute =
   AuthenticatedWWorkspaceSlugRouteRouteImport.update({
@@ -546,6 +553,7 @@ export interface FileRoutesByFullPath {
   '/admin/usage': typeof AuthenticatedAdminUsageRoute
   '/admin/users': typeof AuthenticatedAdminUsersRoute
   '/admin/workspaces': typeof AuthenticatedAdminWorkspacesRoute
+  '/mcp/authorize': typeof AuthenticatedMcpAuthorizeRoute
   '/w/$workspaceSlug/login': typeof WWorkspaceSlugLoginRoute
   '/admin/': typeof AuthenticatedAdminIndexRoute
   '/w/$workspaceSlug/': typeof WWorkspaceSlugIndexRoute
@@ -620,6 +628,7 @@ export interface FileRoutesByTo {
   '/admin/usage': typeof AuthenticatedAdminUsageRoute
   '/admin/users': typeof AuthenticatedAdminUsersRoute
   '/admin/workspaces': typeof AuthenticatedAdminWorkspacesRoute
+  '/mcp/authorize': typeof AuthenticatedMcpAuthorizeRoute
   '/w/$workspaceSlug/login': typeof WWorkspaceSlugLoginRoute
   '/admin': typeof AuthenticatedAdminIndexRoute
   '/w/$workspaceSlug/activity': typeof AuthenticatedWWorkspaceSlugActivityRoute
@@ -692,6 +701,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/usage': typeof AuthenticatedAdminUsageRoute
   '/_authenticated/admin/users': typeof AuthenticatedAdminUsersRoute
   '/_authenticated/admin/workspaces': typeof AuthenticatedAdminWorkspacesRoute
+  '/_authenticated/mcp/authorize': typeof AuthenticatedMcpAuthorizeRoute
   '/w/$workspaceSlug/login': typeof WWorkspaceSlugLoginRoute
   '/_authenticated/admin/': typeof AuthenticatedAdminIndexRoute
   '/w/$workspaceSlug/': typeof WWorkspaceSlugIndexRoute
@@ -770,6 +780,7 @@ export interface FileRouteTypes {
     | '/admin/usage'
     | '/admin/users'
     | '/admin/workspaces'
+    | '/mcp/authorize'
     | '/w/$workspaceSlug/login'
     | '/admin/'
     | '/w/$workspaceSlug/'
@@ -844,6 +855,7 @@ export interface FileRouteTypes {
     | '/admin/usage'
     | '/admin/users'
     | '/admin/workspaces'
+    | '/mcp/authorize'
     | '/w/$workspaceSlug/login'
     | '/admin'
     | '/w/$workspaceSlug/activity'
@@ -915,6 +927,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/usage'
     | '/_authenticated/admin/users'
     | '/_authenticated/admin/workspaces'
+    | '/_authenticated/mcp/authorize'
     | '/w/$workspaceSlug/login'
     | '/_authenticated/admin/'
     | '/w/$workspaceSlug/'
@@ -1190,6 +1203,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/admin/workspaces'
       preLoaderRoute: typeof AuthenticatedAdminWorkspacesRouteImport
       parentRoute: typeof AuthenticatedAdminRoute
+    }
+    '/_authenticated/mcp/authorize': {
+      id: '/_authenticated/mcp/authorize'
+      path: '/mcp/authorize'
+      fullPath: '/mcp/authorize'
+      preLoaderRoute: typeof AuthenticatedMcpAuthorizeRouteImport
+      parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/w/$workspaceSlug': {
       id: '/_authenticated/w/$workspaceSlug'
@@ -1749,6 +1769,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
   AuthenticatedVerifyPasskeyRoute: typeof AuthenticatedVerifyPasskeyRoute
   AuthenticatedWWorkspaceSlugRouteRoute: typeof AuthenticatedWWorkspaceSlugRouteRouteWithChildren
+  AuthenticatedMcpAuthorizeRoute: typeof AuthenticatedMcpAuthorizeRoute
   AuthenticatedWWorkspaceSlugViewAsRoute: typeof AuthenticatedWWorkspaceSlugViewAsRoute
   AuthenticatedWorkspacesNewGithubRoute: typeof AuthenticatedWorkspacesNewGithubRoute
   AuthenticatedWorkspacesNewGitlabRoute: typeof AuthenticatedWorkspacesNewGitlabRoute
@@ -1763,6 +1784,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedVerifyPasskeyRoute: AuthenticatedVerifyPasskeyRoute,
   AuthenticatedWWorkspaceSlugRouteRoute:
     AuthenticatedWWorkspaceSlugRouteRouteWithChildren,
+  AuthenticatedMcpAuthorizeRoute: AuthenticatedMcpAuthorizeRoute,
   AuthenticatedWWorkspaceSlugViewAsRoute:
     AuthenticatedWWorkspaceSlugViewAsRoute,
   AuthenticatedWorkspacesNewGithubRoute: AuthenticatedWorkspacesNewGithubRoute,

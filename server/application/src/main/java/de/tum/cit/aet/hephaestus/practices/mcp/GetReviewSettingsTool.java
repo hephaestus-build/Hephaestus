@@ -77,7 +77,8 @@ class GetReviewSettingsTool implements McpTool {
                         scope.repositories().name(),
                         scope.people().name(),
                         scope.selectedRepositories().stream()
-                                .map(repository -> new Repository(repository.repositoryItemId(), repository.baseBranches()))
+                                .map(repository ->
+                                        new Repository(repository.repositoryItemId(), repository.baseBranches()))
                                 .toList(),
                         scope.accountIds()),
                 new Summary(

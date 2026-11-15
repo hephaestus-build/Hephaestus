@@ -16,18 +16,20 @@ import de.tum.cit.aet.hephaestus.core.auth.spi.McpWorkspaceDirectory;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import jakarta.servlet.http.HttpServletRequest;
 import java.net.URI;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
+import java.util.StringJoiner;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.util.UriComponentsBuilder;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
@@ -141,12 +143,13 @@ public class McpAuthorizationService implements McpClientGrants {
     /**
      * Checks an authorization request in the fixed order of decision 6: the form of {@code client_id}, then
      * sign-in, then the metadata document and the redirect, and only then the parameters whose errors may
-     * be redirected to the client.
+     * be redirected to the client. No transaction spans it: the metadata document fetch may take seconds, and
+     * the one write, the pending grant, is a single save.
      */
-    @Transactional
     public Outcome authorize(AuthorizationRequest request, @Nullable Long accountId) {
         String clientIdParameter = request.clientId();
-        Optional<URI> clientId = clientIdParameter == null ? Optional.empty() : ClientMetadataResolver.clientIdUrl(clientIdParameter);
+        Optional<URI> clientId =
+                clientIdParameter == null ? Optional.empty() : ClientMetadataResolver.clientIdUrl(clientIdParameter);
         if (clientId.isEmpty()) {
             return new Outcome.ErrorPage(ErrorPageReason.INVALID_CLIENT);
         }
@@ -205,16 +208,19 @@ public class McpAuthorizationService implements McpClientGrants {
     public Optional<ConsentRequest> consentRequest(UUID id, Long accountId) {
         return grants.findById(id)
                 .filter(grant -> isOpenFor(grant, accountId))
-                .flatMap(grant -> workspaceOf(grant).map(workspace -> new ConsentRequest(
-                        grant.getId(),
-                        URI.create(grant.getClientId()).getHost(),
-                        grant.getClientName(),
-                        hostOf(grant.getRedirectUri()),
-                        isLoopback(grant.getRedirectUri()),
-                        workspace.slug(),
-                        workspace.displayName(),
-                        McpScope.parse(grant.getScopes()).stream().map(McpScope::value).toList(),
-                        refusal(accountId, workspace))));
+                .flatMap(grant -> workspaceOf(grant)
+                        .map(workspace -> new ConsentRequest(
+                                grant.getId(),
+                                URI.create(grant.getClientId()).getHost(),
+                                grant.getClientName(),
+                                hostOf(grant.getRedirectUri()),
+                                isLoopback(grant.getRedirectUri()),
+                                workspace.slug(),
+                                workspace.displayName(),
+                                McpScope.parse(grant.getScopes()).stream()
+                                        .map(McpScope::value)
+                                        .toList(),
+                                refusal(accountId, workspace))));
     }
 
     /** The answer to an approval. */
@@ -236,7 +242,8 @@ public class McpAuthorizationService implements McpClientGrants {
     @Transactional
     public Approval approve(UUID id, Long accountId, UUID approvingJti, Instant sessionExpiresAt, Instant authTime) {
         Instant now = clock.instant();
-        if (!accounts.lockForIssuance(accountId) || issuedJwts.findActive(approvingJti, now).isEmpty()) {
+        if (!accounts.lockForIssuance(accountId)
+                || issuedJwts.findActive(approvingJti, now).isEmpty()) {
             return new Approval.Gone();
         }
         McpClientGrant grant = grants.lockById(id).orElse(null);
@@ -252,7 +259,10 @@ public class McpAuthorizationService implements McpClientGrants {
             return new Approval.NotAllowed(refusal);
         }
         InstalledClient client = new InstalledClient(
-                InstalledClientKind.MCP_CLIENT, grant.getClientId(), grant.getRedirectUri(), originOf(grant.getClientId()));
+                InstalledClientKind.MCP_CLIENT,
+                grant.getClientId(),
+                grant.getRedirectUri(),
+                originOf(grant.getClientId()));
         Optional<String> code = sessions.createHandoff(
                 accountId, client, grant.getCodeChallenge(), sessionExpiresAt, authTime, grant.getId());
         if (code.isEmpty()) {
@@ -333,7 +343,7 @@ public class McpAuthorizationService implements McpClientGrants {
             return new TokenOutcome.Refused("invalid_target");
         }
         String scope = target.get().scopes();
-        return sessions.exchange(clientId, redirectUri, code, verifier, http)
+        return sessions.exchangeMcpCode(clientId, redirectUri, code, verifier, http)
                 .<TokenOutcome>map(tokens -> new TokenOutcome.Issued(tokens, scope))
                 .orElseGet(() -> new TokenOutcome.Refused("invalid_grant"));
     }
@@ -351,7 +361,13 @@ public class McpAuthorizationService implements McpClientGrants {
         Optional<McpClientGrant> grant = issuedJwts
                 .findSessionIdByRefreshTokenHash(Pkce.hash(refreshToken))
                 .flatMap(grants::findActiveBySession);
-        if (grant.isEmpty()) {
+        // The grant holds its resource literally, so after a rename the slug no longer leads to its workspace.
+        boolean namesItsWorkspace = grant.flatMap(found -> resources
+                        .slugOf(found.getResource())
+                        .flatMap(workspaces::findActiveBySlug)
+                        .filter(workspace -> workspace.id() == found.getWorkspaceId()))
+                .isPresent();
+        if (!namesItsWorkspace) {
             return new TokenOutcome.Refused("invalid_grant");
         }
         // A refresh never widens what the grant holds (RFC 8707 § 2.2).
@@ -377,7 +393,9 @@ public class McpAuthorizationService implements McpClientGrants {
                         URI.create(grant.getClientId()).getHost(),
                         grant.getClientName(),
                         grant.getAccountId(),
-                        McpScope.parse(grant.getScopes()).stream().map(McpScope::value).toList(),
+                        McpScope.parse(grant.getScopes()).stream()
+                                .map(McpScope::value)
+                                .toList(),
                         grant.getApprovedAt()))
                 .toList();
     }
@@ -389,7 +407,8 @@ public class McpAuthorizationService implements McpClientGrants {
         if (owner == null || !sessions.revokeMcpGrant(owner, grantId)) {
             return false;
         }
-        grants.findById(grantId).ifPresent(grant -> audit(AuthEvent.EventType.MCP_CLIENT_REVOKED, grant, actingAccountId));
+        grants.findById(grantId)
+                .ifPresent(grant -> audit(AuthEvent.EventType.MCP_CLIENT_REVOKED, grant, actingAccountId));
         return true;
     }
 
@@ -400,7 +419,8 @@ public class McpAuthorizationService implements McpClientGrants {
     }
 
     private Optional<McpWorkspaceDirectory.McpWorkspace> workspaceOf(McpClientGrant grant) {
-        return resources.slugOf(grant.getResource())
+        return resources
+                .slugOf(grant.getResource())
                 .flatMap(workspaces::findActiveBySlug)
                 .filter(workspace -> workspace.id() == grant.getWorkspaceId());
     }
@@ -419,25 +439,34 @@ public class McpAuthorizationService implements McpClientGrants {
         return new Outcome.ClientRedirect(clientRedirect(redirectUri, null, error, state));
     }
 
-    /** A redirect to the client that always names this issuer (RFC 9207), errors included. */
-    private String clientRedirect(String redirectUri, @Nullable String code, @Nullable String error, @Nullable String state) {
-        UriComponentsBuilder location = UriComponentsBuilder.fromUriString(redirectUri);
+    /**
+     * A redirect to the client that always names this issuer (RFC 9207), errors included. The registered URI
+     * stays byte for byte as the metadata document lists it; only the added parameters are encoded.
+     */
+    private String clientRedirect(
+            String redirectUri, @Nullable String code, @Nullable String error, @Nullable String state) {
+        StringJoiner query = new StringJoiner("&");
         if (code != null) {
-            location.queryParam("code", code);
+            query.add("code=" + formEncode(code));
         }
         if (error != null) {
-            location.queryParam("error", error);
+            query.add("error=" + formEncode(error));
         }
         if (state != null) {
-            location.queryParam("state", state);
+            query.add("state=" + formEncode(state));
         }
-        location.queryParam("iss", resources.issuer());
-        return location.encode().build().toUriString();
+        query.add("iss=" + formEncode(resources.issuer()));
+        return redirectUri + (redirectUri.contains("?") ? "&" : "?") + query;
+    }
+
+    private static String formEncode(String value) {
+        return URLEncoder.encode(value, StandardCharsets.UTF_8);
     }
 
     /** Records who decided about which client, for which workspace, with which scopes, and whose grant it is. */
     private void audit(AuthEvent.EventType type, McpClientGrant grant, Long actingAccountId) {
-        var details = jsonMapper.createObjectNode()
+        var details = jsonMapper
+                .createObjectNode()
                 .put("grantId", grant.getId().toString())
                 .put("clientId", grant.getClientId())
                 .put("scopes", grant.getScopes())

@@ -127,5 +127,7 @@ public class IssuedJwt {
         ACCOUNT_DELETED,
         /** A rotated-away refresh secret of a live installed-client session was presented again. */
         REFRESH_REUSE,
+        /** A used MCP authorization code was presented again; the session it issued ends. */
+        CODE_REUSE,
     }
 }

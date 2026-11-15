@@ -1482,7 +1482,9 @@ describe("the connected MCP clients", () => {
 			ROUTE_RENDER_WAIT,
 		);
 		within(section).getByText("claude.ai");
-		within(section).getByText(/Calls itself Claude Code\. Allowed by Octo Cat on 15 November 2026\./u);
+		within(section).getByText(
+			/Calls itself Claude Code\. Allowed by Octo Cat on 15 November 2026\./u,
+		);
 		await userEvent.click(within(section).getByRole("button", { name: "Disconnect claude.ai" }));
 		await within(section).findByText("No client is connected.");
 		expect(revoked).toStrictEqual(["8a1f6c3e-2b47-4d55-9f0e-1c2d3e4f5a6b"]);

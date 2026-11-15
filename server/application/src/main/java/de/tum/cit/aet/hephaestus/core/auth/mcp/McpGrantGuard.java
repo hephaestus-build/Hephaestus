@@ -13,7 +13,6 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.servlet.function.HandlerFilterFunction;
 import org.springframework.web.servlet.function.HandlerFunction;
 import org.springframework.web.servlet.function.ServerRequest;
@@ -43,7 +42,6 @@ public class McpGrantGuard implements HandlerFilterFunction<ServerResponse, Serv
     }
 
     @Override
-    @Transactional(readOnly = true)
     public ServerResponse filter(ServerRequest request, HandlerFunction<ServerResponse> next) throws Exception {
         String slug = request.pathVariable("workspaceSlug");
         String resource = resources.resourceFor(slug);

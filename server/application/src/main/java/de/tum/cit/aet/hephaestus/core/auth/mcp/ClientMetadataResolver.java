@@ -9,6 +9,7 @@ import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.regex.Pattern;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
 import org.springframework.stereotype.Component;
 import tools.jackson.core.JacksonException;
@@ -27,6 +28,7 @@ public class ClientMetadataResolver {
     static final int CLIENT_NAME_LENGTH = 80;
 
     private static final Set<String> LOOPBACK_HOSTS = Set.of("127.0.0.1", "[::1]", "localhost");
+    private static final Pattern UNPRINTABLE = Pattern.compile("[\\p{Cc}\\p{Cf}]");
 
     /** What the authorization server keeps from a valid document. */
     public record ClientMetadata(String clientId, String clientName, List<String> redirectUris) {
@@ -89,7 +91,7 @@ public class ClientMetadataResolver {
         }
         List<String> redirects = new ArrayList<>();
         for (JsonNode redirect : document.path("redirect_uris")) {
-            if (!redirect.isString() || !isAbsoluteRedirect(redirect.asString())) {
+            if (!redirect.isString() || !isAllowedRedirect(redirect.asString())) {
                 return Optional.empty();
             }
             redirects.add(redirect.asString());
@@ -97,7 +99,11 @@ public class ClientMetadataResolver {
         if (redirects.isEmpty()) {
             return Optional.empty();
         }
-        String name = document.path("client_name").asString("").strip();
+        // Control and format characters, bidi overrides among them, could make the name read as another.
+        String name = UNPRINTABLE
+                .matcher(document.path("client_name").asString(""))
+                .replaceAll("")
+                .strip();
         String clientName = name.isEmpty() ? clientId.getHost() : name;
         if (clientName.length() > CLIENT_NAME_LENGTH) {
             clientName = clientName.substring(0, CLIENT_NAME_LENGTH);
@@ -135,7 +141,10 @@ public class ClientMetadataResolver {
 
     private static boolean sameButPort(URI registered, URI asked) {
         return registered.getScheme().equals(asked.getScheme())
-                && registered.getHost().toLowerCase(Locale.ROOT).equals(asked.getHost().toLowerCase(Locale.ROOT))
+                && registered
+                        .getHost()
+                        .toLowerCase(Locale.ROOT)
+                        .equals(asked.getHost().toLowerCase(Locale.ROOT))
                 && registered.getRawPath().equals(asked.getRawPath())
                 && Objects.equals(registered.getRawQuery(), asked.getRawQuery())
                 && asked.getRawFragment() == null;
@@ -148,10 +157,12 @@ public class ClientMetadataResolver {
                 && uri.getRawPath() != null;
     }
 
-    private static boolean isAbsoluteRedirect(String redirect) {
+    /** An HTTPS redirect, or a loopback HTTP one; OAuth 2.1 § 2.3.1 admits no other scheme here. */
+    private static boolean isAllowedRedirect(String redirect) {
         return redirect.length() <= McpClientGrant.URL_LENGTH
                 && parse(redirect)
-                        .filter(uri -> uri.getScheme() != null && uri.getHost() != null && uri.getRawFragment() == null)
+                        .filter(uri -> uri.getHost() != null && uri.getRawFragment() == null)
+                        .filter(uri -> "https".equals(uri.getScheme()) || isLoopback(uri))
                         .isPresent();
     }
 

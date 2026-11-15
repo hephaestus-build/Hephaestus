@@ -102,7 +102,9 @@ class DataIsolationArchitectureTest extends HephaestusArchitectureTest {
             "SlackMonitoredChannel", // direct workspace_id scalar
             // Grant allowlist: workspace_id lives inside the composite @EmbeddedId, so the direct-field
             // probe below cannot see it. Scoped, not global — the row names the tenant it grants.
-            "LlmModelWorkspaceGrant");
+            "LlmModelWorkspaceGrant",
+            // An MCP client's grant for one workspace endpoint carries a direct workspace_id scalar.
+            "McpClientGrant");
 
     @Test
     void shouldNameOnlyExistingClassesInWorkspaceScopedEntities() {

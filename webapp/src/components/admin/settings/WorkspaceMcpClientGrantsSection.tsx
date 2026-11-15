@@ -42,38 +42,10 @@ export function WorkspaceMcpClientGrantsSection({
 				Connected MCP clients
 			</h2>
 			<p className="text-sm text-muted-foreground">
-				Programs such as Claude Code that an admin allowed to read and configure this workspace's practices.
-				Disconnecting one ends its access at once.
+				Programs such as Claude Code that an admin allowed to read this workspace’s practice
+				configuration. Disconnecting one ends its access at once.
 			</p>
-			{loading ? (
-				<Skeleton className="h-16 w-full" />
-			) : grants === undefined ? null : grants.length === 0 ? (
-				<p>No client is connected.</p>
-			) : (
-				<ul className="divide-y rounded-md border">
-					{grants.map((grant) => (
-						<li key={grant.id} className="flex items-center justify-between gap-4 p-3">
-							<div className="min-w-0">
-								<p className="font-medium">{grant.clientHost}</p>
-								<p className="text-sm text-muted-foreground">
-									Calls itself {grant.clientName}. Allowed by {grant.approvedBy}
-									{grant.approvedAt === undefined ? "" : ` on ${formatDate(grant.approvedAt)}`}.
-								</p>
-							</div>
-							<Button
-								variant="outline"
-								onClick={() => onRevoke(grant.id)}
-								disabled={revokingId !== undefined}
-								aria-busy={revokingId === grant.id}
-								aria-label={`Disconnect ${grant.clientHost}`}
-							>
-								{revokingId === grant.id && <Spinner />}
-								Disconnect
-							</Button>
-						</li>
-					))}
-				</ul>
-			)}
+			<Grants grants={grants} loading={loading} revokingId={revokingId} onRevoke={onRevoke} />
 			<div role="alert" aria-atomic="true">
 				{error !== undefined && <p>{error}</p>}
 			</div>
@@ -83,5 +55,47 @@ export function WorkspaceMcpClientGrantsSection({
 				</Button>
 			)}
 		</section>
+	);
+}
+
+function Grants({
+	grants,
+	loading,
+	revokingId,
+	onRevoke,
+}: Pick<WorkspaceMcpClientGrantsSectionProps, "grants" | "loading" | "revokingId" | "onRevoke">) {
+	if (loading === true) {
+		return <Skeleton className="h-16 w-full" />;
+	}
+	if (grants === undefined) {
+		return null;
+	}
+	if (grants.length === 0) {
+		return <p>No client is connected.</p>;
+	}
+	return (
+		<ul className="divide-y rounded-md border">
+			{grants.map((grant) => (
+				<li key={grant.id} className="flex items-center justify-between gap-4 p-3">
+					<div className="min-w-0">
+						<p className="font-medium">{grant.clientHost}</p>
+						<p className="text-sm text-muted-foreground">
+							Calls itself {grant.clientName}. Allowed by {grant.approvedBy}
+							{grant.approvedAt === undefined ? "" : ` on ${formatDate(grant.approvedAt)}`}.
+						</p>
+					</div>
+					<Button
+						variant="outline"
+						onClick={() => onRevoke(grant.id)}
+						disabled={revokingId !== undefined}
+						aria-busy={revokingId === grant.id}
+						aria-label={`Disconnect ${grant.clientHost}`}
+					>
+						{revokingId === grant.id && <Spinner />}
+						Disconnect
+					</Button>
+				</li>
+			))}
+		</ul>
 	);
 }

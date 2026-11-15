@@ -38,7 +38,8 @@ class ListReviewsTool implements McpTool {
              "properties": {"page": {"type": "integer", "minimum": 0, "description": "Zero-based page of 25 reviews, newest first"}}}
             """;
 
-    static final String REVIEW_SCHEMA = """
+    static final String REVIEW_SCHEMA =
+            """
             {"type": "object", "required": ["id", "kind", "origin", "status", "createdAt", "completedAt", "stopReason", "item", "practices"],
              "additionalProperties": false,
              "properties": {"id": {"type": "string"}, "kind": {"type": "string"}, "origin": {"type": "string"}, "status": {"type": "string"},
@@ -80,7 +81,8 @@ class ListReviewsTool implements McpTool {
                 WorkspaceContextHolder.getContext().id(),
                 filter.validated(),
                 PageRequest.of(page, PAGE_SIZE, Sort.by(Sort.Direction.DESC, "createdAt", "id")));
-        return McpTools.result(new Result(found.getContent().stream().map(ListReviewsTool::row).toList(), page, found.hasNext()));
+        return McpTools.result(
+                new Result(found.getContent().stream().map(ListReviewsTool::row).toList(), page, found.hasNext()));
     }
 
     static Review row(ReviewSummaryDTO review) {

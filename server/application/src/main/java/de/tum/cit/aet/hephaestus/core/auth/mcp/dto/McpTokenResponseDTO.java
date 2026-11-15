@@ -8,6 +8,9 @@ import org.jspecify.annotations.NonNull;
 public record McpTokenResponseDTO(
         @NonNull @JsonProperty("access_token") String accessToken,
         @NonNull @JsonProperty("token_type") String tokenType,
-        @JsonProperty("expires_in") @Schema(requiredMode = Schema.RequiredMode.REQUIRED) long expiresIn,
+
+        @JsonProperty("expires_in") @Schema(requiredMode = Schema.RequiredMode.REQUIRED)
+        long expiresIn,
+
         @NonNull @JsonProperty("refresh_token") String refreshToken,
         @NonNull String scope) {}

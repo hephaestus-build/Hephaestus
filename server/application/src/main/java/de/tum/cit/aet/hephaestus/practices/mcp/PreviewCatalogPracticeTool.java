@@ -60,8 +60,8 @@ class PreviewCatalogPracticeTool implements McpTool {
     @Override
     @RequireAtLeastWorkspaceAdmin
     public McpSchema.CallToolResult call(Map<String, Object> arguments) {
-        CatalogPracticePreviewDTO preview = adoption
-                .preview(WorkspaceContextHolder.getContext(), McpTools.requiredString(arguments, "slug"))
+        CatalogPracticePreviewDTO preview = adoption.preview(
+                        WorkspaceContextHolder.getContext(), McpTools.requiredString(arguments, "slug"))
                 .preview();
         return McpTools.result(new Result(
                 preview.slug(),

@@ -52,6 +52,9 @@ public class RevocationAwareJwtDecoder implements JwtDecoder {
     private static final Logger log = LoggerFactory.getLogger(RevocationAwareJwtDecoder.class);
 
     private final NimbusJwtDecoder delegate;
+    private final JwtSigningKeyService keyService;
+    private final AuthProperties properties;
+    private final CacheManager cacheManager;
     private final AccessTokenAdmission admission;
     private final AuthEventLogger authEventLogger;
     private final Cache cache;
@@ -66,14 +69,18 @@ public class RevocationAwareJwtDecoder implements JwtDecoder {
             CacheManager cacheManager,
             Clock clock,
             AuthMetrics metrics) {
-        this(keyService, admission, authEventLogger, properties, cacheManager, clock, metrics, webAppAudience(properties));
+        this(
+                keyService,
+                admission,
+                authEventLogger,
+                properties,
+                cacheManager,
+                clock,
+                metrics,
+                webAppAudience(properties));
     }
 
-    /**
-     * A decoder whose tokens must carry a different audience, such as the workspace MCP endpoint's (ADR 0110).
-     * Signature, issuer, deadline and revocation checks are the same as for every other token.
-     */
-    public RevocationAwareJwtDecoder(
+    private RevocationAwareJwtDecoder(
             JwtSigningKeyService keyService,
             AccessTokenAdmission admission,
             AuthEventLogger authEventLogger,
@@ -83,11 +90,23 @@ public class RevocationAwareJwtDecoder implements JwtDecoder {
             AuthMetrics metrics,
             OAuth2TokenValidator<Jwt> audience) {
         this.delegate = localSignatureDecoder(keyService, properties, audience);
+        this.keyService = keyService;
+        this.properties = properties;
+        this.cacheManager = cacheManager;
         this.admission = admission;
         this.authEventLogger = authEventLogger;
         this.cache = Objects.requireNonNull(cacheManager.getCache(CACHE_NAME));
         this.clock = clock;
         this.metrics = metrics;
+    }
+
+    /**
+     * A decoder whose tokens must carry another audience, such as the workspace MCP endpoint's (ADR 0110).
+     * Signature, issuer, deadline and revocation checks stay those of this decoder.
+     */
+    public RevocationAwareJwtDecoder forAudience(OAuth2TokenValidator<Jwt> audience) {
+        return new RevocationAwareJwtDecoder(
+                keyService, admission, authEventLogger, properties, cacheManager, clock, metrics, audience);
     }
 
     /** Signature and claim validation without the database-backed revocation check. */
@@ -111,7 +130,8 @@ public class RevocationAwareJwtDecoder implements JwtDecoder {
                 JwtClaimNames.AUD, aud -> aud != null && aud.contains(properties.audience()));
     }
 
-    private static OAuth2TokenValidator<Jwt> buildValidator(AuthProperties properties, OAuth2TokenValidator<Jwt> audience) {
+    private static OAuth2TokenValidator<Jwt> buildValidator(
+            AuthProperties properties, OAuth2TokenValidator<Jwt> audience) {
         OAuth2TokenValidator<Jwt> defaults = JwtValidators.createDefault();
         OAuth2TokenValidator<Jwt> issuer = new JwtClaimValidator<String>(
                 JwtClaimNames.ISS,

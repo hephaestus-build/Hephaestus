@@ -70,5 +70,10 @@ class ListPracticeGroupsTool implements McpTool {
 
     record Result(List<Group> groups) {}
 
-    record Group(String slug, String name, int position, boolean shownToDevelopers, McpProjections.FeedbackMode feedbackMode) {}
+    record Group(
+            String slug,
+            String name,
+            int position,
+            boolean shownToDevelopers,
+            McpProjections.FeedbackMode feedbackMode) {}
 }

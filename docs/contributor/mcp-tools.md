@@ -19,8 +19,9 @@ The tool runs on the request thread, so the workspace context and the authentica
    A handler that needs `@RequiresRecentSignIn` or the instance-admin role cannot have a tool.
 2. **Put the tool in the module of the handler**, in its `mcp` package, such as `practices.mcp`.
    The module allows `core::mcp-spi` in its `package-info.java`.
-3. **Give the `call` method the handler's authorization.** Copy the method or class annotation of the handler, such as `@RequireAtLeastWorkspaceAdmin`.
-   `McpToolHandlerParityArchTest` compares the effective `@PreAuthorize` of both.
+3. **Put `@RequireAtLeastWorkspaceAdmin` on the `call` method.** Every tool needs the admin role, even if its handler lets any member read.
+   A handler that requires more than admin, such as the owner role, cannot have a tool.
+   `McpToolHandlerParityArchTest` checks both rules.
 4. **Write the input and output JSON Schemas by hand** as text blocks, and build the definition with `McpTools.readTool`.
    Every object in the output schema has `"additionalProperties": false` and requires every property.
    The SDK validates each result against the output schema, so a field outside the schema fails the call.

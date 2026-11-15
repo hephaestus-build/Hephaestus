@@ -23,8 +23,8 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Connected: Story = {
-	play: async ({ canvas, args }) => {
-		await canvas.getByRole("button", { name: "Disconnect claude.ai" }).click();
+	play: async ({ canvas, args, userEvent }) => {
+		await userEvent.click(canvas.getByRole("button", { name: "Disconnect claude.ai" }));
 		await expect(args.onRevoke).toHaveBeenCalledWith(grant.id);
 	},
 };

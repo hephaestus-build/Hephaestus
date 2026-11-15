@@ -10,6 +10,7 @@ import io.modelcontextprotocol.server.transport.DefaultServerTransportSecurityVa
 import io.modelcontextprotocol.spec.McpSchema;
 import java.util.List;
 import java.util.Map;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.mcp.server.webmvc.transport.WebMvcStatelessServerTransport;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
@@ -25,6 +26,7 @@ import tools.jackson.databind.json.JsonMapper;
  * The workspace MCP endpoint, {@code POST /workspaces/{workspaceSlug}/mcp}, in stateless mode: any
  * replica answers any request, and the server never calls the client.
  */
+@Slf4j
 @Configuration(proxyBeanMethods = false)
 @ConditionalOnServerRole
 @ConditionalOnBooleanProperty("hephaestus.mcp.enabled")
@@ -81,6 +83,10 @@ class McpServerConfiguration {
         } catch (ResponseStatusException refused) {
             String reason = refused.getReason();
             return error(reason == null ? "The request was refused." : reason);
+        } catch (RuntimeException failed) {
+            // Any other message may name internals, so the client gets none of it.
+            log.error("mcp: tool {} failed", tool.definition().name(), failed);
+            return error("The tool failed. Try again later.");
         }
     }
 

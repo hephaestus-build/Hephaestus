@@ -15,8 +15,8 @@ import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
-import java.util.regex.Pattern;
 import java.util.UUID;
+import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
 import org.springframework.http.CacheControl;
 import org.springframework.http.HttpHeaders;
@@ -100,7 +100,9 @@ public final class McpAuthorizationFlow {
 
     /** A JWT's payload, read without verifying it: the server verified it when it issued it. */
     public static JsonNode payload(String jwt) {
-        String payload = new String(Base64.getUrlDecoder().decode(jwt.substring(jwt.indexOf('.') + 1, jwt.lastIndexOf('.'))), StandardCharsets.UTF_8);
+        String payload = new String(
+                Base64.getUrlDecoder().decode(jwt.substring(jwt.indexOf('.') + 1, jwt.lastIndexOf('.'))),
+                StandardCharsets.UTF_8);
         return JSON.readTree(payload);
     }
 

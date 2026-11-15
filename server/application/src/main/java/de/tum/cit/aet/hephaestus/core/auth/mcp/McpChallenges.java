@@ -44,7 +44,10 @@ public final class McpChallenges implements AuthenticationEntryPoint {
             separator = ", ";
         }
         if (slug != null) {
-            value.append(separator).append("resource_metadata=\"").append(resources.resourceMetadataFor(slug)).append('"');
+            value.append(separator)
+                    .append("resource_metadata=\"")
+                    .append(resources.resourceMetadataFor(slug))
+                    .append('"');
         }
         return value.toString();
     }

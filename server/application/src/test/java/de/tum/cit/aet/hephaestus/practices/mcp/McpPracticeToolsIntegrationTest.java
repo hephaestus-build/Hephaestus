@@ -37,6 +37,10 @@ class McpPracticeToolsIntegrationTest extends RealAuthIntegrationTest {
             {"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "list_practices", "arguments": {}}}
             """;
 
+    private static final String LIST_MEMBERS = """
+            {"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "list_members", "arguments": {}}}
+            """;
+
     @Autowired
     private WebTestClient webTestClient;
 
@@ -84,7 +88,13 @@ class McpPracticeToolsIntegrationTest extends RealAuthIntegrationTest {
     @Test
     void shouldListTheWorkspacePracticesWithTheirVersions() {
         versions.create(new PracticeVersionService.NewPractice(
-                workspace.getId(), "mcp-listed", new ItemKind("scm.pull_request"), DefinitionTestFixtures.definition(), null, 0, null));
+                workspace.getId(),
+                "mcp-listed",
+                new ItemKind("scm.pull_request"),
+                DefinitionTestFixtures.definition(),
+                null,
+                0,
+                null));
 
         flow.callTool(accessToken, workspace.getWorkspaceSlug(), LIST_PRACTICES)
                 .expectStatus()
@@ -117,14 +127,17 @@ class McpPracticeToolsIntegrationTest extends RealAuthIntegrationTest {
         membership.setRole(Membership.WorkspaceRole.MEMBER);
         membershipRepository.save(membership);
 
-        flow.callTool(accessToken, workspace.getWorkspaceSlug(), LIST_PRACTICES)
-                .expectStatus()
-                .isOk()
-                .expectBody()
-                .jsonPath("$.result.isError")
-                .isEqualTo(true)
-                .jsonPath("$.result.content[0].text")
-                .isEqualTo("Your role in this workspace does not allow this tool.");
+        // list_members stands for a handler that any member may call, and still refuses a member.
+        for (String call : List.of(LIST_PRACTICES, LIST_MEMBERS)) {
+            flow.callTool(accessToken, workspace.getWorkspaceSlug(), call)
+                    .expectStatus()
+                    .isOk()
+                    .expectBody()
+                    .jsonPath("$.result.isError")
+                    .isEqualTo(true)
+                    .jsonPath("$.result.content[0].text")
+                    .isEqualTo("Your role in this workspace does not allow this tool.");
+        }
     }
 
     /** Every object in a tool's output schema closes its properties and requires them all, so the SDK's
@@ -143,7 +156,9 @@ class McpPracticeToolsIntegrationTest extends RealAuthIntegrationTest {
             return;
         }
         if (node.get("properties") instanceof Map<?, ?> properties) {
-            assertThat(node.get("additionalProperties")).as(path + " closes its properties").isEqualTo(false);
+            assertThat(node.get("additionalProperties"))
+                    .as(path + " closes its properties")
+                    .isEqualTo(false);
             Set<?> required = node.get("required") instanceof List<?> names ? new HashSet<>(names) : Set.of();
             assertThat(required).as(path + " requires every property").isEqualTo(new HashSet<>(properties.keySet()));
             properties.forEach((name, child) -> assertClosed(path + "." + name, child));
@@ -155,7 +170,8 @@ class McpPracticeToolsIntegrationTest extends RealAuthIntegrationTest {
 
     @Test
     void shouldRefuseABrowserRequestFromAnotherOrigin() {
-        webTestClient.post()
+        webTestClient
+                .post()
                 .uri("/workspaces/{slug}/mcp", workspace.getWorkspaceSlug())
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)
                 .header(HttpHeaders.ORIGIN, "https://attacker.example")

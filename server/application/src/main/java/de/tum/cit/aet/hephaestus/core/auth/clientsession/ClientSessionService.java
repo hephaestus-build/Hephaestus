@@ -1,7 +1,5 @@
 package de.tum.cit.aet.hephaestus.core.auth.clientsession;
 
-import de.tum.cit.aet.hephaestus.core.auth.mcp.McpClientGrant;
-import de.tum.cit.aet.hephaestus.core.auth.mcp.McpClientGrantRepository;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEvent;
 import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEventLogger;
@@ -10,6 +8,8 @@ import de.tum.cit.aet.hephaestus.core.auth.jwt.HephaestusJwtIssuer;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwt;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwtRepository;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.TokenConstraints;
+import de.tum.cit.aet.hephaestus.core.auth.mcp.McpClientGrant;
+import de.tum.cit.aet.hephaestus.core.auth.mcp.McpClientGrantRepository;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.Clock;
@@ -89,7 +89,7 @@ public class ClientSessionService {
     @Transactional
     public Optional<String> createHandoff(
             Long accountId, InstalledClient client, String codeChallenge, Instant sessionExpiresAt, Instant authTime) {
-        return createHandoff(accountId, client, codeChallenge, sessionExpiresAt, authTime, null);
+        return storeHandoff(accountId, client, codeChallenge, sessionExpiresAt, authTime, null);
     }
 
     /**
@@ -98,6 +98,16 @@ public class ClientSessionService {
      */
     @Transactional
     public Optional<String> createHandoff(
+            Long accountId,
+            InstalledClient client,
+            String codeChallenge,
+            Instant sessionExpiresAt,
+            Instant authTime,
+            @Nullable UUID mcpClientGrantId) {
+        return storeHandoff(accountId, client, codeChallenge, sessionExpiresAt, authTime, mcpClientGrantId);
+    }
+
+    private Optional<String> storeHandoff(
             Long accountId,
             InstalledClient client,
             String codeChallenge,
@@ -133,6 +143,30 @@ public class ClientSessionService {
             String code,
             String codeVerifier,
             @Nullable HttpServletRequest request) {
+        return exchange(clientId, redirectUri, code, codeVerifier, false, request);
+    }
+
+    /**
+     * Redeems an MCP client's code at the MCP token endpoint, the only door for it: there the caller has
+     * checked that the code's grant is for the requested resource.
+     */
+    @Transactional
+    public Optional<ClientTokens> exchangeMcpCode(
+            String clientId,
+            String redirectUri,
+            String code,
+            String codeVerifier,
+            @Nullable HttpServletRequest request) {
+        return exchange(clientId, redirectUri, code, codeVerifier, true, request);
+    }
+
+    private Optional<ClientTokens> exchange(
+            String clientId,
+            String redirectUri,
+            String code,
+            String codeVerifier,
+            boolean mcpDoor,
+            @Nullable HttpServletRequest request) {
         Optional<InstalledClient> client = registry.find(clientId, redirectUri);
         String codeHash = Pkce.hash(code);
         Long accountId = handoffRepository.findAccountId(codeHash).orElse(null);
@@ -141,7 +175,20 @@ public class ClientSessionService {
         }
         boolean active = accountRepository.lockForIssuance(accountId);
         Instant now = clock.instant();
+        // An MCP code's grant is locked before the code, in the order a console revoke takes: session, grant.
+        UUID mcpGrantId = handoffRepository.findMcpClientGrantId(codeHash).orElse(null);
+        UUID lockedSessionId = null;
+        if (mcpGrantId != null) {
+            lockedSessionId = grantRepository.findSessionId(mcpGrantId).orElse(null);
+            if (lockedSessionId != null) {
+                sessionRepository.lockById(lockedSessionId);
+            }
+            grantRepository.lockById(mcpGrantId);
+        }
         if (handoffRepository.consume(codeHash, now) != 1) {
+            if (mcpGrantId != null) {
+                endReplayedGrant(mcpGrantId, lockedSessionId, now);
+            }
             return Optional.empty();
         }
         ClientSignInHandoff handoff = handoffRepository.findById(codeHash).orElseThrow();
@@ -152,6 +199,10 @@ public class ClientSessionService {
         // A first-party client is checked against the registry; an MCP client's code names its grant, whose
         // client and redirect were checked against its metadata document when the code was approved.
         boolean mcp = handoff.getClientKind() == InstalledClientKind.MCP_CLIENT;
+        if (mcp != mcpDoor) {
+            log.warn("auth.client: handoff code redeemed at the token endpoint of the other client kind");
+            return Optional.empty();
+        }
         if ((!mcp && client.isEmpty())
                 || !handoff.getClientId().equals(clientId)
                 || !handoff.getRedirectUri().equals(redirectUri)) {
@@ -164,7 +215,7 @@ public class ClientSessionService {
         McpClientGrant grant = null;
         if (mcp) {
             UUID grantId = handoff.getMcpClientGrantId();
-            grant = grantId == null ? null : grantRepository.lockById(grantId).orElse(null);
+            grant = grantId == null ? null : grantRepository.findById(grantId).orElse(null);
             // A console revoke that won the grant lock leaves it REVOKED; the exchange never reactivates it.
             if (grant == null || grant.getStatus() != McpClientGrant.Status.APPROVED) {
                 return Optional.empty();
@@ -194,7 +245,7 @@ public class ClientSessionService {
      */
     @Transactional
     public Optional<ClientTokens> refresh(String refreshToken, @Nullable HttpServletRequest request) {
-        return refresh(refreshToken, null, request);
+        return rotate(refreshToken, null, request);
     }
 
     /**
@@ -204,6 +255,11 @@ public class ClientSessionService {
      */
     @Transactional
     public Optional<ClientTokens> refresh(
+            String refreshToken, @Nullable String mcpClientId, @Nullable HttpServletRequest request) {
+        return rotate(refreshToken, mcpClientId, request);
+    }
+
+    private Optional<ClientTokens> rotate(
             String refreshToken, @Nullable String mcpClientId, @Nullable HttpServletRequest request) {
         String presentedHash = Pkce.hash(refreshToken);
         ClientSession session = lockSessionOf(presentedHash).orElse(null);
@@ -350,9 +406,24 @@ public class ClientSessionService {
                         session.getSessionExpiresAt(),
                         session.getAuthTime(),
                         new TokenConstraints.McpAudience(grant.getResource(), grant.getScopes()));
-        HephaestusJwtIssuer.Token token = jwtIssuer.issueForClientSession(
-                session.getAccountId(), constraints, Pkce.hash(refreshToken), request);
+        HephaestusJwtIssuer.Token token =
+                jwtIssuer.issueForClientSession(session.getAccountId(), constraints, Pkce.hash(refreshToken), request);
         return new ClientTokens(token.value(), token.expiresAt(), refreshToken, session.getSessionExpiresAt());
+    }
+
+    /**
+     * A used MCP code came back, so two parties hold it: the grant and whatever session the code issued end
+     * (OAuth 2.1 § 4.1.2). The caller holds the grant lock. A session that an exchange linked after the
+     * caller read the link is ended too, even though its lock comes after the grant's here.
+     */
+    private void endReplayedGrant(UUID grantId, @Nullable UUID lockedSessionId, Instant now) {
+        UUID sessionId = grantRepository.findSessionId(grantId).orElse(lockedSessionId);
+        if (grantRepository.revokeIfOpen(grantId, now) == 1) {
+            log.warn("auth.client: a used MCP authorization code was presented again; its grant ended");
+        }
+        if (sessionId != null) {
+            end(sessionId, IssuedJwt.RevokedReason.CODE_REUSE, now);
+        }
     }
 
     /** Ends a session whose row lock the caller holds, and revokes every token of its family. */

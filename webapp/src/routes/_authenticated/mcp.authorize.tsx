@@ -1,6 +1,6 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 import {
 	approveMcpConsentRequestMutation,
@@ -12,9 +12,10 @@ import {
 	McpConsentPage,
 	type McpConsentState,
 } from "@/components/auth/McpConsentPage";
-import { environment } from "@/environment";
+import environment from "@/environment";
+import { useConfirmAccess } from "@/hooks/use-confirm-access";
 import { pageTitle } from "@/lib/page-title";
-import { problemDetailOf, problemStatusOf } from "@/lib/problem-detail";
+import { problemDetailOf, problemStatusOf, stepUpChallengeOf } from "@/lib/problem-detail";
 
 const AUTHORIZATION_ERRORS: readonly McpAuthorizationError[] = [
 	"INVALID_CLIENT",
@@ -43,7 +44,8 @@ export const Route = createFileRoute("/_authenticated/mcp/authorize")({
 		],
 	}),
 	validateSearch: (search): McpAuthorizeSearch => ({
-		request: typeof search.request === "string" && UUID.test(search.request) ? search.request : undefined,
+		request:
+			typeof search.request === "string" && UUID.test(search.request) ? search.request : undefined,
 		error: AUTHORIZATION_ERRORS.find((reason) => reason === search.error),
 	}),
 	component: McpAuthorizeRoute,
@@ -56,7 +58,9 @@ function McpAuthorizeRoute() {
 	useEffect(() => {
 		if (resumesAuthorization) {
 			// Signed in now, so the server's authorization endpoint can create the consent request.
-			window.location.replace(`${environment.serverUrl}/mcp/oauth/authorize${window.location.search}`);
+			window.location.replace(
+				`${environment.serverUrl}/mcp/oauth/authorize${window.location.search}`,
+			);
 		}
 	}, [resumesAuthorization]);
 
@@ -65,15 +69,27 @@ function McpAuthorizeRoute() {
 		enabled: request !== undefined,
 		retry: false,
 	});
-	const leave = (location: string) => window.location.assign(location);
+	const [unsafeLocation, setUnsafeLocation] = useState(false);
+	// The server checked the client's redirect; a scheme other than HTTP(S) still never runs here.
+	const leave = (location: string) => {
+		if (/^https?:\/\//iu.test(location)) {
+			window.location.assign(location);
+		} else {
+			setUnsafeLocation(true);
+		}
+	};
 	const approve = useMutation({
 		...approveMcpConsentRequestMutation(),
-		onSuccess: (answer) => leave(answer.location),
+		onSuccess: (answer) => leave(answer.redirectUri),
 	});
 	const refuse = useMutation({
 		...refuseMcpConsentRequestMutation(),
-		onSuccess: (answer) => leave(answer.location),
+		onSuccess: (answer) => leave(answer.redirectUri),
 	});
+	// Approving grants access, so the server may ask for a recent sign-in. Signing in again returns here,
+	// to the same request, which waits 10 minutes.
+	const challenge = approve.isError ? stepUpChallengeOf(approve.error) : undefined;
+	const confirmAccess = useConfirmAccess(challenge !== undefined);
 
 	let state: McpConsentState;
 	if (error !== undefined) {
@@ -87,9 +103,13 @@ function McpAuthorizeRoute() {
 				: {
 						status: "error",
 						message: problemDetailOf(consent.error, "The request could not be loaded."),
-						onRetry: () => void consent.refetch(),
+						onRetry: () => {
+							void consent.refetch();
+						},
 					};
-	} else if (approve.isError || refuse.isError) {
+	} else if (unsafeLocation) {
+		state = { status: "invalid", reason: "INVALID_REDIRECT_URI" };
+	} else if ((approve.isError && challenge === undefined) || refuse.isError) {
 		state = {
 			status: "error",
 			message: problemDetailOf(approve.error ?? refuse.error, "Your answer could not be sent."),
@@ -101,20 +121,39 @@ function McpAuthorizeRoute() {
 		};
 	} else {
 		const path = { requestId: request };
+		// A successful answer stays pending while the browser leaves for the client.
+		let pending: "approve" | "refuse" | undefined;
+		if (approve.isPending || approve.isSuccess) {
+			pending = "approve";
+		} else if (refuse.isPending || refuse.isSuccess) {
+			pending = "refuse";
+		}
 		state = {
 			status: "ready",
 			request: consent.data,
-			// A successful answer stays pending while the browser leaves for the client.
-			pending:
-				approve.isPending || approve.isSuccess
-					? "approve"
-					: refuse.isPending || refuse.isSuccess
-						? "refuse"
-						: undefined,
+			pending,
 			onApprove: () => approve.mutate({ path }),
 			onRefuse: () => refuse.mutate({ path }),
 		};
 	}
 
-	return <McpConsentPage state={state} />;
+	return (
+		<McpConsentPage
+			state={state}
+			confirmAccess={{
+				open: challenge !== undefined,
+				onOpenChange: (open) => {
+					if (!open) {
+						approve.reset();
+					}
+				},
+				maxAgeSeconds: challenge?.maxAgeSeconds,
+				providers: confirmAccess.providers,
+				loading: confirmAccess.loading,
+				error: confirmAccess.error,
+				onRetry: confirmAccess.retry,
+				onSignIn: confirmAccess.signIn,
+			}}
+		/>
+	);
 }

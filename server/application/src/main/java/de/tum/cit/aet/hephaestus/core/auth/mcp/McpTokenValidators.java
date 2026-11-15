@@ -19,7 +19,9 @@ public final class McpTokenValidators {
     public static OAuth2TokenValidator<Jwt> mcpAudience(McpResources resources) {
         return jwt -> {
             List<String> audience = jwt.getAudience();
-            if (audience == null || audience.size() != 1 || resources.slugOf(audience.getFirst()).isEmpty()) {
+            if (audience == null
+                    || audience.size() != 1
+                    || resources.slugOf(audience.getFirst()).isEmpty()) {
                 return invalid("the token is not for a workspace MCP endpoint");
             }
             if (jwt.hasClaim("roles")) {

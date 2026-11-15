@@ -9,6 +9,7 @@ import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.workspace.Membership;
 import de.tum.cit.aet.hephaestus.workspace.MembershipController;
 import de.tum.cit.aet.hephaestus.workspace.MembershipService;
+import de.tum.cit.aet.hephaestus.workspace.authorization.RequireAtLeastWorkspaceAdmin;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContextHolder;
 import io.modelcontextprotocol.spec.McpSchema;
 import java.util.List;
@@ -72,6 +73,7 @@ class ListMembersTool implements McpTool {
     }
 
     @Override
+    @RequireAtLeastWorkspaceAdmin
     public McpSchema.CallToolResult call(Map<String, Object> arguments) {
         long workspaceId = WorkspaceContextHolder.getContext().id();
         int page = Math.max(0, McpTools.optionalInt(arguments, "page", 0));
@@ -89,9 +91,11 @@ class ListMembersTool implements McpTool {
                             ? List.of()
                             : reference.identities().stream()
                                     .filter(identity -> identity.login() != null)
-                                    .map(identity -> new Login(identity.provider(), Objects.requireNonNull(identity.login())))
+                                    .map(identity ->
+                                            new Login(identity.provider(), Objects.requireNonNull(identity.login())))
                                     .toList();
-                    return new Member(String.valueOf(accountId), member.getRole().name(), member.isReviewSelected(), logins);
+                    return new Member(
+                            String.valueOf(accountId), member.getRole().name(), member.isReviewSelected(), logins);
                 })
                 .toList();
         return McpTools.result(new Result(rows, page, found.hasNext()));

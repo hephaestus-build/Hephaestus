@@ -79,5 +79,9 @@ class ListRepositoriesTool implements McpTool {
 
     record Result(List<Repository> repositories, int page, boolean hasMore) {}
 
-    record Repository(String repositoryItemId, @Nullable String provider, String name, @Nullable String removedAt) {}
+    record Repository(
+            String repositoryItemId,
+            @Nullable String provider,
+            String name,
+            @Nullable String removedAt) {}
 }

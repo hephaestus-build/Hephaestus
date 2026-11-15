@@ -45,7 +45,8 @@ public class McpResources {
 
     /** Where RFC 9728 places the protected resource metadata of a workspace endpoint. */
     public String resourceMetadataFor(String slug) {
-        String origin = properties.issuer().getScheme() + "://" + properties.issuer().getRawAuthority();
+        String origin =
+                properties.issuer().getScheme() + "://" + properties.issuer().getRawAuthority();
         return origin + "/.well-known/oauth-protected-resource" + properties.apiBasePath() + "/workspaces/" + slug
                 + "/mcp";
     }

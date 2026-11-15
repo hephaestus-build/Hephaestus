@@ -26,7 +26,9 @@ public enum McpScope {
     }
 
     static Optional<McpScope> of(String value) {
-        return Arrays.stream(values()).filter(scope -> scope.value.equals(value)).findFirst();
+        return Arrays.stream(values())
+                .filter(scope -> scope.value.equals(value))
+                .findFirst();
     }
 
     /** The known scopes in a space-separated list; an unknown one is not silently dropped by callers that check. */
