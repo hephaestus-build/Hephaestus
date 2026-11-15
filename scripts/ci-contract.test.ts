@@ -1139,18 +1139,20 @@ void describe("CI contract", () => {
 			}),
 			"true",
 		);
-		const changed = String(
-			orchestrator.getIn(["jobs", "detect-changes", "outputs", "server-changed"]),
-		);
-		for (const [filter, expected] of [
-			[{ "application-server": "true" }, "true"],
-			[{ "test-config": "true" }, "true"],
-			[{ docs: "true" }, "false"],
+		// Whether a diff changes the server suites' or the browser suites' inputs, whatever the tier runs.
+		for (const [output, filter, expected] of [
+			["server-changed", { "application-server": "true" }, "true"],
+			["server-changed", { "test-config": "true" }, "true"],
+			["server-changed", { docs: "true" }, "false"],
+			["browser-changed", { e2e: "true" }, "true"],
+			["browser-changed", { "extension-e2e": "true" }, "true"],
+			["browser-changed", { docs: "true" }, "false"],
 		] as const) {
+			const source = String(orchestrator.getIn(["jobs", "detect-changes", "outputs", output]));
 			assert.equal(
-				evaluateTierOutput(changed, "pull_request", { light: "true", filter }),
+				evaluateTierOutput(source, "pull_request", { light: "true", filter }),
 				expected,
-				`server change, ${JSON.stringify(filter)}`,
+				`${output}, ${JSON.stringify(filter)}`,
 			);
 		}
 		// Enabling auto-merge adds the numbered shards, and no other queue-tier suite, so the pull
@@ -1246,7 +1248,7 @@ void describe("CI contract", () => {
 		// A pull request packages for the browser suites only when it runs them.
 		assert.match(
 			String(orchestrator.getIn(["jobs", "server-package", "if"])),
-			/\(needs\.detect-changes\.outputs\.queue-tier == 'true' && \(needs\.detect-changes\.outputs\.e2e == 'true' \|\| needs\.detect-changes\.outputs\.extension-e2e == 'true'\)\)/u,
+			/\(needs\.detect-changes\.outputs\.full-integration == 'true' && \(needs\.detect-changes\.outputs\.e2e == 'true' \|\| needs\.detect-changes\.outputs\.extension-e2e == 'true'\)\)/u,
 		);
 
 		// A draft runs the fast tier only, unless it carries the label, and builds no image.
@@ -1386,7 +1388,7 @@ void describe("CI contract", () => {
 		// selector. ci-cd.mdx § Full integration at the arm point.
 		for (const [caller, input, output] of [
 			["Build", "queue_tier", "queue-tier"],
-			["Browser-tests", "queue_tier", "queue-tier"],
+			["Browser-tests", "full_integration", "full-integration"],
 			["Test", "full_integration", "full-integration"],
 		] as const) {
 			assert.equal(
@@ -1402,7 +1404,12 @@ void describe("CI contract", () => {
 				["server-database", "postgres-drill"],
 				["server-api"],
 			],
-			[".github/workflows/ci-browser-tests.yml", "queue_tier", ["webapp-e2e", "extension-e2e"], []],
+			[
+				".github/workflows/ci-browser-tests.yml",
+				"full_integration",
+				["webapp-e2e", "extension-e2e"],
+				[],
+			],
 			[
 				".github/workflows/ci-tests.yml",
 				"full_integration",
@@ -2803,7 +2810,7 @@ void describe("CI contract", () => {
 		assertNeeds(source, "all-ci-passed", "Docker");
 	});
 
-	void test("only an armed run's passed server tests make `Full integration` succeed", async () => {
+	void test("only an armed run whose selected suites passed makes `Full integration` succeed", async () => {
 		const workflow = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
 		const jobPath = ["jobs", "report-full-integration"];
 		// Rulesets match a required context against check runs too, and both come from the Actions app.
@@ -2834,6 +2841,7 @@ void describe("CI contract", () => {
 			changes = "success",
 			outputs?: Record<string, string>,
 			tests = "success",
+			browsers = "success",
 		) => {
 			const context: unknown = JSON.parse(
 				JSON.stringify({
@@ -2848,6 +2856,7 @@ void describe("CI contract", () => {
 							outputs: outputs ?? { "server-changed": "true", "full-integration": "false" },
 						},
 						Test: { result: tests },
+						"Browser-tests": { result: browsers },
 					},
 				}),
 				data.reviver,
@@ -2872,6 +2881,20 @@ void describe("CI contract", () => {
 		for (const tests of ["cancelled", "skipped"]) {
 			assert.ok(!reports("pull_request", fork, "success", armedRun, tests), tests);
 		}
+		// A browser change selects the browser suites: their result decides too.
+		const browserRun = { ...base, "browser-changed": "true", "full-integration": "true" };
+		assert.ok(reports("pull_request", fork, "success", browserRun, "skipped", "success"));
+		assert.ok(reports("pull_request", fork, "success", browserRun, "skipped", "failure"));
+		assert.ok(!reports("pull_request", fork, "success", browserRun, "skipped", "cancelled"));
+		assert.ok(
+			!reports("pull_request", fork, "success", { ...browserRun, "full-integration": "false" }),
+		);
+		const bothRun = { ...armedRun, "browser-changed": "true" };
+		assert.ok(reports("pull_request", fork, "success", bothRun, "success", "success"));
+		assert.ok(!reports("pull_request", fork, "success", bothRun, "success", "cancelled"));
+		// One failed group is a verdict, as for a same-repository pull request.
+		assert.ok(reports("pull_request", fork, "success", bothRun, "failure", "cancelled"));
+		assert.ok(reports("pull_request", fork, "success", bothRun, "cancelled", "failure"));
 		// One fork branch can head a pull request into each base: only the run into the default
 		// branch, as the run read it, has a verdict. An unreadable base has none.
 		for (const other of ["feature", ""]) {
@@ -2886,20 +2909,35 @@ void describe("CI contract", () => {
 		assert.ok(!reports("push"));
 
 		// An armed layer's suites run the packaged server, so the layer packages one.
-		const layer = (serverTests: string) =>
+		// An armed pull request's suites, the browser suites included, run the packaged server. A stacked
+		// layer packages it only once armed.
+		const packages = (outputs: Record<string, string>) =>
 			jobRuns(workflow, "server-package", "pull_request", {
-				"detect-changes": {
-					result: "success",
-					outputs: { "light-tier": "true", "server-tests": serverTests, "any-code": "true" },
-				},
+				"detect-changes": { result: "success", outputs: { "any-code": "true", ...outputs } },
 				Security: { result: "success" },
 			});
-		assert.ok(layer("true"), "an armed layer packages the server");
-		assert.ok(!layer("false"), "an unarmed layer packages nothing");
+		const armedLayer = { "light-tier": "true", "full-integration": "true" };
+		assert.ok(
+			packages({ ...armedLayer, "server-tests": "true" }),
+			"an armed layer's server suites",
+		);
+		assert.ok(packages({ ...armedLayer, e2e: "true" }), "an armed layer's browser suites");
+		assert.ok(packages({ "full-integration": "true", e2e: "true" }), "an armed webapp change");
+		assert.ok(
+			packages({ "full-integration": "true", "extension-e2e": "true" }),
+			"an armed extension change",
+		);
+		assert.ok(!packages({ "full-integration": "false", e2e: "true" }), "an unarmed webapp change");
+		assert.ok(!packages({ "light-tier": "true", "full-integration": "false", e2e: "true" }));
+		// An armed layer packages only for suites that run the server.
+		assert.ok(!packages({ ...armedLayer, kubernetes: "true" }), "an armed layer's chart change");
 
 		const publisher = namedStep(workflow, jobPath, "Create commit status");
 		for (const [name, value] of [
 			["SERVER_CHANGED", "needs.detect-changes.outputs.server-changed"],
+			["WEBAPP_CHANGED", "needs.detect-changes.outputs.e2e"],
+			["EXTENSION_CHANGED", "needs.detect-changes.outputs.extension-e2e"],
+			["BROWSERS", "needs.Browser-tests.result"],
 			["FULL_INTEGRATION", "needs.detect-changes.outputs.full-integration"],
 			["TESTS", "needs.Test.result"],
 		] as const) {
@@ -2982,7 +3020,29 @@ void describe("CI contract", () => {
 		}
 		// A fast-tier pass is no full integration, and never replaces an armed run's verdict.
 		assert.equal(await published("pull_request", unarmed), "pending");
-		const passed = "The server tests passed, every integration shard included";
+		const passed = "Passed in an armed run: server shards";
+		// The browser suites decide too when the change selects them.
+		const browser = { WEBAPP_CHANGED: "true", FULL_INTEGRATION: "true" };
+		assert.equal(await published("pull_request", { ...browser, BROWSERS: "success" }), "success");
+		assert.equal(await published("pull_request", { ...browser, BROWSERS: "failure" }), "failure");
+		assert.equal(await published("pull_request", { ...browser, BROWSERS: "skipped" }), null);
+		const both = { ...armed, ...browser };
+		assert.equal(
+			await published("pull_request", { ...both, TESTS: "success", BROWSERS: "success" }),
+			"success",
+		);
+		assert.equal(
+			await published("pull_request", { ...both, TESTS: "success", BROWSERS: "failure" }),
+			"failure",
+		);
+		assert.equal(
+			await published("pull_request", { ...both, TESTS: "success", BROWSERS: "cancelled" }),
+			null,
+		);
+		assert.equal(
+			await published("pull_request", { WEBAPP_CHANGED: "true", FULL_INTEGRATION: "false" }),
+			"pending",
+		);
 		assert.equal(await published("pull_request", { ...armed, TESTS: "success" }), "success");
 		assert.equal(
 			await published("pull_request", unarmed, [
@@ -2996,10 +3056,14 @@ void describe("CI contract", () => {
 			]),
 			null,
 		);
-		// "No server change" holds only against the base it was computed for.
+		// "No change that full integration tests" holds only against the base it was computed for.
 		assert.equal(
 			await published("pull_request", unarmed, [
-				{ context: "Full integration", state: "success", description: "No server change" },
+				{
+					context: "Full integration",
+					state: "success",
+					description: "No change that full integration tests",
+				},
 			]),
 			"pending",
 		);
@@ -3009,11 +3073,38 @@ void describe("CI contract", () => {
 			]),
 			"pending",
 		);
+		// A kept success must cover every group that the current diff selects: a retarget can add one.
+		const kept = async (environment: Record<string, string>, description: string) =>
+			published("pull_request", environment, [
+				{ context: "Full integration", state: "success", description },
+			]);
+		const unarmedBoth = { ...unarmed, WEBAPP_CHANGED: "true" };
+		const unarmedBrowser = { WEBAPP_CHANGED: "true", FULL_INTEGRATION: "false" };
+		assert.equal(await kept(unarmed, "Passed in an armed run: webapp suite"), "pending");
+		assert.equal(await kept(unarmedBoth, "Passed in an armed run: server shards"), "pending");
+		assert.equal(
+			await kept(unarmedBoth, "Passed in an armed run: server shards, webapp suite"),
+			null,
+		);
+		assert.equal(
+			await kept(unarmedBrowser, "Passed in an armed run: server shards, webapp suite"),
+			null,
+		);
+		// Each browser suite is selected on its own: an Extension-only verdict does not cover Webapp.
+		assert.equal(await kept(unarmedBrowser, "Passed in an armed run: extension suite"), "pending");
+		const unarmedExtension = { EXTENSION_CHANGED: "true", FULL_INTEGRATION: "false" };
+		assert.equal(await kept(unarmedExtension, "Passed in an armed run: extension suite"), null);
+		assert.equal(
+			await kept(unarmed, "The server tests passed, every integration shard included"),
+			"pending",
+			"a verdict from before the browser suites joined does not cover them",
+		);
 		// A fork's token cannot write statuses: its job ends in the verdict instead of publishing it.
 		for (const [environment, notices, failures] of [
 			[{ ...armed, TESTS: "success" }, 1, 0],
 			[{ SERVER_CHANGED: "false" }, 1, 0],
 			[{ ...armed, TESTS: "failure" }, 0, 1],
+			[{ ...armed, WEBAPP_CHANGED: "true", TESTS: "failure", BROWSERS: "cancelled" }, 0, 1],
 			[unarmed, 0, 1],
 		] as const) {
 			assert.equal(await published("pull_request", environment, [], "fork/repo"), null);

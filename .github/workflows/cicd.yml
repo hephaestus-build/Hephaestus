@@ -57,6 +57,8 @@ jobs:
       server-tests: ${{ (steps.opt_in.outputs.light != 'true' || steps.opt_in.outputs.armed == 'true') && (steps.filter.outputs.application-server == 'true' || steps.filter.outputs.test-config == 'true' || github.event_name == 'push' || github.event_name == 'workflow_dispatch') }}
       # Whether the diff changes the server suites' inputs, whatever the tier runs.
       server-changed: ${{ steps.filter.outputs.application-server == 'true' || steps.filter.outputs.test-config == 'true' }}
+      # Whether the diff changes a browser suite's inputs, whatever the tier runs.
+      browser-changed: ${{ steps.filter.outputs.e2e == 'true' || steps.filter.outputs.extension-e2e == 'true' }}
       migrations-changed: ${{ steps.filter.outputs.migrations }}
       # Only migrations and their release/schema notes changed. The queue and explicit full runs still
       # execute Unit and Architecture; generated-artifact drift stays on every selected server PR.
@@ -124,9 +126,9 @@ jobs:
       # the full tier. Release evidence selection is separate. Every merge group still runs the
       # queue tier: ci-cd.mdx § Two verification tiers.
       queue-tier: ${{ github.event_name != 'pull_request' || (steps.opt_in.outputs.light != 'true' && steps.opt_in.outputs.full != 'false') }}
-      # The numbered integration shards: the queue tier, and a pull request with auto-merge enabled,
-      # a stacked layer included, so that it passes them before it enters the queue. An unreadable
-      # read selects them. ci-cd.mdx § Full integration at the arm point.
+      # The numbered integration shards and the browser suites: the queue tier, and a pull request
+      # with auto-merge enabled, a stacked layer included, so that it passes them before it enters the
+      # queue. An unreadable read selects them. ci-cd.mdx § Full integration at the arm point.
       full-integration: ${{ github.event_name != 'pull_request' || steps.opt_in.outputs.armed != 'false' || (steps.opt_in.outputs.light != 'true' && steps.opt_in.outputs.full != 'false') }}
       # A draft runs the fast tier and builds no image: no cluster jobs, no image scan, unless it
       # carries `preview`. A release candidate always builds its evidence. Marking it
@@ -1047,7 +1049,8 @@ jobs:
     needs: [detect-changes, Security]
     if: |
       !cancelled() && needs.detect-changes.result == 'success' && (needs.Security.result == 'success' || needs.Security.result == 'skipped') &&
-      (needs.detect-changes.outputs.light-tier != 'true' || needs.detect-changes.outputs.server-tests == 'true') &&
+      (needs.detect-changes.outputs.light-tier != 'true' || needs.detect-changes.outputs.server-tests == 'true' ||
+      (needs.detect-changes.outputs.full-integration == 'true' && (needs.detect-changes.outputs.e2e == 'true' || needs.detect-changes.outputs.extension-e2e == 'true'))) &&
       needs.detect-changes.outputs.should_skip != 'true' && needs.detect-changes.outputs.queue-images-complete != 'true' && (
         needs.detect-changes.outputs.unfiltered == 'true' ||
         needs.detect-changes.outputs.head-images == 'true' ||
@@ -1057,7 +1060,7 @@ jobs:
         needs.detect-changes.outputs.build-config == 'true' ||
         needs.detect-changes.outputs.test-config == 'true'
       ) && (
-        needs.detect-changes.outputs.kubernetes == 'true' || needs.detect-changes.outputs.server-tests == 'true' || (needs.detect-changes.outputs.queue-tier == 'true' && (needs.detect-changes.outputs.e2e == 'true' || needs.detect-changes.outputs.extension-e2e == 'true')) || needs.detect-changes.outputs.api-clients == 'true' || needs.detect-changes.outputs.postgres-image == 'true' || needs.detect-changes.outputs.build-config == 'true' || (needs.detect-changes.outputs.images == 'true' && (needs.detect-changes.outputs.application-server-image == 'true' || needs.detect-changes.outputs.kubernetes == 'true' || needs.detect-changes.outputs.all-images == 'true'))
+        needs.detect-changes.outputs.kubernetes == 'true' || needs.detect-changes.outputs.server-tests == 'true' || (needs.detect-changes.outputs.full-integration == 'true' && (needs.detect-changes.outputs.e2e == 'true' || needs.detect-changes.outputs.extension-e2e == 'true')) || needs.detect-changes.outputs.api-clients == 'true' || needs.detect-changes.outputs.postgres-image == 'true' || needs.detect-changes.outputs.build-config == 'true' || (needs.detect-changes.outputs.images == 'true' && (needs.detect-changes.outputs.application-server-image == 'true' || needs.detect-changes.outputs.kubernetes == 'true' || needs.detect-changes.outputs.all-images == 'true'))
       )
     env:
       SERVER_BUILD_ARTIFACT: server-build-${{ github.run_id }}
@@ -1185,7 +1188,7 @@ jobs:
       e2e_changed: ${{ (github.event_name != 'push' || needs.detect-changes.outputs.version-bump == 'true') && (needs.detect-changes.outputs.e2e == 'true' || needs.detect-changes.outputs.unfiltered == 'true') && 'true' || 'false' }}
       extension_e2e_changed: ${{ (github.event_name != 'push' || needs.detect-changes.outputs.version-bump == 'true') && (needs.detect-changes.outputs.extension-e2e == 'true' || needs.detect-changes.outputs.unfiltered == 'true') && 'true' || 'false' }}
       postgres_image_changed: ${{ (needs.detect-changes.outputs.postgres-image == 'true' || needs.detect-changes.outputs.unfiltered == 'true') && 'true' || 'false' }}
-      queue_tier: ${{ needs.detect-changes.outputs.queue-tier }}
+      full_integration: ${{ needs.detect-changes.outputs.full-integration }}
 
   # Every image of the run: one build job per platform and one manifest job. The application-server
   # image is built from the package job's executable JAR, so the job waits for it.
@@ -1531,14 +1534,15 @@ jobs:
               context: 'All CI Passed'
             });
 
-  # The required `Full integration` status, which keeps a server pull request out of the queue until
-  # it passed the numbered integration shards. Only an armed run's passed server tests make it
-  # success. A missing status blocks a merge as a pending one does, so a run that cannot tell posts
-  # nothing. The job has another name: a check run named like the status would satisfy the rule.
+  # The required `Full integration` status, which keeps a pull request out of the queue until it
+  # passed the numbered integration shards and the browser suites that its change selects. Only an
+  # armed run whose selected suites all passed makes it success. A missing status blocks a merge as
+  # a pending one does, so a run that cannot tell posts nothing. The job has another name: a check
+  # run named like the status would satisfy the rule.
   # ci-cd.mdx § Full integration at the arm point.
   report-full-integration:
     name: "Report full integration"
-    needs: [detect-changes, Test]
+    needs: [detect-changes, Test, Browser-tests]
     # Every pull request gets it, a stacked layer included: a stack enters the queue whole, and each
     # layer must meet the rules of `main`. A fork's token cannot write statuses, so a fork's job runs
     # only when it has a verdict and ends in it; full-integration-fork.yml publishes that conclusion.
@@ -1549,9 +1553,13 @@ jobs:
       (github.event_name == 'pull_request' &&
       (github.event.pull_request.head.repo.full_name == github.repository ||
       (needs.detect-changes.outputs.pull-request-base == github.event.repository.default_branch &&
-      (needs.detect-changes.outputs.server-changed != 'true' ||
+      ((needs.detect-changes.outputs.server-changed != 'true' &&
+      needs.detect-changes.outputs.browser-changed != 'true') ||
       (needs.detect-changes.outputs.full-integration == 'true' &&
-      (needs.Test.result == 'success' || needs.Test.result == 'failure')))))))
+      ((needs.detect-changes.outputs.server-changed == 'true' && needs.Test.result == 'failure') ||
+      (needs.detect-changes.outputs.browser-changed == 'true' && needs.Browser-tests.result == 'failure') ||
+      ((needs.detect-changes.outputs.server-changed != 'true' || needs.Test.result == 'success') &&
+      (needs.detect-changes.outputs.browser-changed != 'true' || needs.Browser-tests.result == 'success')))))))))
     runs-on: ubuntu-slim
     timeout-minutes: 15
     permissions:
@@ -1561,15 +1569,29 @@ jobs:
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           SERVER_CHANGED: ${{ needs.detect-changes.outputs.server-changed }}
+          WEBAPP_CHANGED: ${{ needs.detect-changes.outputs.e2e }}
+          EXTENSION_CHANGED: ${{ needs.detect-changes.outputs.extension-e2e }}
           FULL_INTEGRATION: ${{ needs.detect-changes.outputs.full-integration }}
           TESTS: ${{ needs.Test.result }}
+          BROWSERS: ${{ needs.Browser-tests.result }}
         with:
           retries: 3
           script: |
             const sha = context.payload.pull_request?.head?.sha || context.sha;
-            const { SERVER_CHANGED, FULL_INTEGRATION, TESTS } = process.env;
+            const { SERVER_CHANGED, WEBAPP_CHANGED, EXTENSION_CHANGED, FULL_INTEGRATION, TESTS, BROWSERS } =
+              process.env;
+            // Each suite group that the change selects, with its result. The browser suites are selected
+            // one by one, so each is its own group; Browser tests passes only if every selected one did.
+            const groups = [
+              ...(SERVER_CHANGED === 'true' ? [['server shards', TESTS]] : []),
+              ...(WEBAPP_CHANGED === 'true' ? [['webapp suite', BROWSERS]] : []),
+              ...(EXTENSION_CHANGED === 'true' ? [['extension suite', BROWSERS]] : []),
+            ];
+            const selected = groups.map(([, result]) => result);
             const target_url = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
-            const passed = 'The server tests passed, every integration shard included';
+            // A success names the groups it covers: what a change selects depends on its base.
+            const prefix = 'Passed in an armed run: ';
+            const passed = prefix + groups.map(([name]) => name).join(', ');
             const fork = context.payload.pull_request !== undefined &&
               context.payload.pull_request.head.repo?.full_name !== `${context.repo.owner}/${context.repo.repo}`;
             const post = async (state, description) => {
@@ -1592,20 +1614,24 @@ jobs:
             };
             if (context.eventName === 'merge_group') {
               await post('success', 'The merge group runs every integration shard');
-            } else if (SERVER_CHANGED !== 'true') {
-              await post('success', 'No server change');
+            } else if (selected.length === 0) {
+              await post('success', 'No change that full integration tests');
             } else if (FULL_INTEGRATION === 'true') {
-              if (TESTS === 'success') await post('success', passed);
-              else if (TESTS === 'failure') await post('failure', 'The server tests failed');
-              else core.info(`The server tests ended ${TESTS}, so this run has no verdict`);
+              if (selected.includes('failure')) await post('failure', 'A selected suite failed');
+              else if (selected.every((result) => result === 'success')) await post('success', passed);
+              else core.info(`The selected suites ended ${selected.join(', ')}, so this run has no verdict`);
             } else {
-              // An armed run's verdict on this commit stays: it is the verdict on the same tree. A
-              // "No server change" holds only against the base it was computed for, so it does not.
+              // An armed run's verdict on this commit stays when it covers every group that this diff
+              // selects: a failure always, a success only if it names them all. "No change that full
+              // integration tests" names none, so it holds only against the base it was computed for.
               const { data } = await github.rest.repos.getCombinedStatusForRef({ ...context.repo, ref: sha });
               const verdict = data.statuses.some(
                 (status) =>
                   status.context === 'Full integration' &&
-                  (status.state === 'failure' || (status.state === 'success' && status.description === passed)),
+                  (status.state === 'failure' ||
+                    (status.state === 'success' &&
+                      status.description?.startsWith(prefix) &&
+                      groups.every(([name]) => status.description.slice(prefix.length).split(', ').includes(name)))),
               );
               if (!verdict) await post('pending', 'Runs when auto-merge is enabled');
             }
