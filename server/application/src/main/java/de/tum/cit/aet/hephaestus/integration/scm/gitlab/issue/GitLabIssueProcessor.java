@@ -122,7 +122,7 @@ public class GitLabIssueProcessor extends BaseGitLabProcessor {
         // Webhook and sync must resolve both version inputs identically.
         // Otherwise an unchanged issue appears edited.
         String stateReason = resolveStateReason(issueState, attrs.duplicatedToId() != null);
-        String issueTypeId = resolveIssueTypeId(attrs.type(), Objects.requireNonNull(context.repository()));
+        Long issueTypeId = resolveIssueTypeId(attrs.type(), Objects.requireNonNull(context.repository()));
         Issue issue = upsertIssue(
                 attrs.id(),
                 attrs.iid(),
@@ -359,7 +359,7 @@ public class GitLabIssueProcessor extends BaseGitLabProcessor {
 
         String duplicateOfGid = data.closedAsDuplicateOfGid();
         String stateReason = resolveStateReason(issueState, duplicateOfGid != null && !duplicateOfGid.isBlank());
-        String issueTypeId = resolveIssueTypeId(data.typeName(), repository);
+        Long issueTypeId = resolveIssueTypeId(data.typeName(), repository);
 
         Instant now = Instant.now();
         int written = issueRepository.upsertCore(
@@ -560,7 +560,7 @@ public class GitLabIssueProcessor extends BaseGitLabProcessor {
             @Nullable String description,
             Issue.State issueState,
             @Nullable String stateReason,
-            @Nullable String issueTypeId,
+            @Nullable Long issueTypeId,
             @Nullable String htmlUrl,
             @Nullable String createdAt,
             @Nullable String updatedAt,
@@ -693,7 +693,7 @@ public class GitLabIssueProcessor extends BaseGitLabProcessor {
      * preserves any previously set FK.
      */
     @Nullable
-    private String resolveIssueTypeId(@Nullable String typeName, Repository repository) {
+    private Long resolveIssueTypeId(@Nullable String typeName, Repository repository) {
         if (typeName == null || typeName.isBlank()) {
             return null;
         }
@@ -707,14 +707,10 @@ public class GitLabIssueProcessor extends BaseGitLabProcessor {
         if (orgScoped.isPresent()) {
             return orgScoped.get().getId();
         }
-        // Subgroups become their own Organization rows but share provider-global
-        // issue_type primary keys (GitLab GraphQL global IDs), so a provider-scoped
-        // name lookup yields the exact same row; a subgroup org has no issue_type seed
-        // rows of its own. The provider id is resolved by a JPQL subquery on organizationId
-        // because the lazy Organization proxy throws LazyInitializationException once the
-        // Repository has outlived its Hibernate session.
+        // A subgroup is its own Organization row without issue types of its own: it takes its nearest parent
+        // group's type, never a sibling group's or another instance's.
         return issueTypeRepository
-                .findFirstByOrganizationProviderAndNameIgnoreCase(organization.getId(), humanised)
+                .findInNearestParentGroupByName(organization.getId(), humanised)
                 .map(IssueType::getId)
                 .orElse(null);
     }

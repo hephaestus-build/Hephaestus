@@ -24,6 +24,7 @@ import java.util.Queue;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CopyOnWriteArrayList;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -130,7 +131,7 @@ class GitLabSyncOutsideTransactionsIntegrationTest extends BaseIntegrationTest {
         String listed = "gid://gitlab/WorkItems::Type/listed-" + group.getId();
         String gone = "gid://gitlab/WorkItems::Type/gone-" + group.getId();
         jdbc.update(
-                "INSERT INTO issue_type(id,name,color,is_enabled,organization_id,last_sync_at) VALUES (?,?,?,true,?,now())",
+                "INSERT INTO issue_type(native_id,name,color,is_enabled,organization_id,last_sync_at) VALUES (?,?,?,true,?,now())",
                 gone,
                 "Requirement",
                 "GRAY",
@@ -143,14 +144,12 @@ class GitLabSyncOutsideTransactionsIntegrationTest extends BaseIntegrationTest {
 
         assertThat(synced).isEqualTo(1);
         assertThat(requests).containsExactly(new Request(Thread.currentThread().getName(), false));
-        assertThat(jdbc.queryForObject("SELECT is_enabled FROM issue_type WHERE id = ?", Boolean.class, listed))
-                .isTrue();
-        assertThat(jdbc.queryForObject("SELECT is_enabled FROM issue_type WHERE id = ?", Boolean.class, gone))
-                .isFalse();
+        assertThat(enabled(listed, group.getId())).isTrue();
+        assertThat(enabled(gone, group.getId())).isFalse();
     }
 
     @Test
-    void shouldStoreTheIssueTypesOnTheWorkspaceInstanceWhenAnotherInstanceHasTheSameGroupPath() {
+    void shouldKeepEachInstancesOwnIssueTypeWhenBothHaveTheSameTypeId() {
         var otherInstance = providers
                 .findByTypeAndServerUrl(IdentityProviderType.GITLAB, OTHER_SERVER)
                 .orElseGet(
@@ -161,20 +160,39 @@ class GitLabSyncOutsideTransactionsIntegrationTest extends BaseIntegrationTest {
         twin.setHtmlUrl(OTHER_SERVER + "/" + group.getLogin());
         twin.setProvider(otherInstance);
         twin = organizations.saveAndFlush(twin);
-        // A custom type: its global id is unique, unlike the fixed ids of GitLab's system-defined types.
-        String listed = "gid://gitlab/WorkItems::Type/" + (9_000_000L + group.getId());
+        // GitLab's system-defined types have the same global id on every instance.
+        String system = "gid://gitlab/WorkItems::Type/1";
+        jdbc.update(
+                "INSERT INTO issue_type(native_id,name,color,is_enabled,organization_id,last_sync_at) VALUES (?,?,?,true,?,now())",
+                system,
+                "Issue",
+                "BLUE",
+                twin.getId());
         answers.add("""
                 {"data":{"group":{"workItemTypes":{"nodes":[{"id":"%s","name":"Task","iconName":"issue-type-task"}]}}}}
-                """.formatted(listed));
+                """.formatted(system));
 
         int synced = issueTypes().syncIssueTypesForGroup(scopeId, group.getLogin());
 
         assertThat(synced).isEqualTo(1);
-        assertThat(jdbc.queryForObject("SELECT organization_id FROM issue_type WHERE id = ?", Long.class, listed))
-                .isEqualTo(group.getId());
-        assertThat(jdbc.queryForObject(
-                        "SELECT count(*) FROM issue_type WHERE organization_id = ?", Long.class, twin.getId()))
-                .isZero();
+        assertThat(name(system, group.getId())).isEqualTo("Task");
+        assertThat(name(system, twin.getId())).isEqualTo("Issue");
+    }
+
+    private @Nullable Boolean enabled(String nativeId, long organizationId) {
+        return jdbc.queryForObject(
+                "SELECT is_enabled FROM issue_type WHERE native_id = ? AND organization_id = ?",
+                Boolean.class,
+                nativeId,
+                organizationId);
+    }
+
+    private @Nullable String name(String nativeId, long organizationId) {
+        return jdbc.queryForObject(
+                "SELECT name FROM issue_type WHERE native_id = ? AND organization_id = ?",
+                String.class,
+                nativeId,
+                organizationId);
     }
 
     private GitLabIssueTypeSyncService issueTypes() {

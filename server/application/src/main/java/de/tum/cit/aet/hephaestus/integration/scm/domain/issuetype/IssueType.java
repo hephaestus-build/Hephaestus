@@ -6,10 +6,13 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import java.time.Instant;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -19,29 +22,31 @@ import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
 /**
- * Represents a GitHub Issue Type - an organization-level categorization for
- * issues.
+ * An organization's issue type (GitHub) or work item type (GitLab), such as Bug or Task.
  * <p>
- * Issue types are defined at the organization level and can be assigned to
- * issues
- * to categorize them (e.g., Bug, Feature, Task).
- * <p>
- * This maps to GitHub's IssueType GraphQL type.
+ * The provider's id is unique only within one organization: GitLab's system-defined types have the same global id on
+ * every instance. So the row has its own id, and {@code (organization_id, native_id)} identifies the provider's type.
  */
 @Entity
-@Table(name = "issue_type")
+@Table(
+        name = "issue_type",
+        uniqueConstraints =
+                @UniqueConstraint(
+                        name = "uq_issue_type_organization_native_id",
+                        columnNames = {"organization_id", "native_id"}))
 @Getter
 @Setter
 @NoArgsConstructor
 @ToString
 public class IssueType {
 
-    /**
-     * GitHub's node_id (GraphQL ID) is used as the primary key.
-     */
     @Id
-    @Column(length = 128)
-    private String id;
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    /** The provider's id: GitHub's GraphQL node id, or GitLab's work item type global id. */
+    @Column(name = "native_id", nullable = false, length = 128)
+    private String nativeId;
 
     @NonNull
     @Column(nullable = false, length = 128)

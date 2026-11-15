@@ -1,7 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.scm.github.issue;
 
 import de.tum.cit.aet.hephaestus.integration.core.ProviderStateVersion;
-import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.ProcessingContext;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
@@ -11,7 +10,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.label.Label;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.label.LabelRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.milestone.Milestone;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.milestone.MilestoneRepository;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.Organization;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
@@ -57,7 +56,6 @@ public class GitHubIssueProcessor extends BaseGitHubProcessor {
 
     private final IssueRepository issueRepository;
     private final PullRequestRepository pullRequestRepository;
-    private final OrganizationRepository organizationRepository;
     private final GitHubIssueTypeSyncService issueTypeSyncService;
     private final ApplicationEventPublisher eventPublisher;
     private final GitHubMisfiledWork misfiledWork;
@@ -68,7 +66,6 @@ public class GitHubIssueProcessor extends BaseGitHubProcessor {
             LabelRepository labelRepository,
             MilestoneRepository milestoneRepository,
             UserRepository userRepository,
-            OrganizationRepository organizationRepository,
             GitHubIssueTypeSyncService issueTypeSyncService,
             GitHubUserProcessor gitHubUserProcessor,
             ApplicationEventPublisher eventPublisher,
@@ -76,7 +73,6 @@ public class GitHubIssueProcessor extends BaseGitHubProcessor {
         super(userRepository, labelRepository, milestoneRepository, gitHubUserProcessor);
         this.issueRepository = issueRepository;
         this.pullRequestRepository = pullRequestRepository;
-        this.organizationRepository = organizationRepository;
         this.issueTypeSyncService = issueTypeSyncService;
         this.eventPublisher = eventPublisher;
         this.misfiledWork = misfiledWork;
@@ -189,8 +185,7 @@ public class GitHubIssueProcessor extends BaseGitHubProcessor {
         Milestone milestone = dto.milestone() != null ? findOrCreateMilestone(dto.milestone(), repository) : null;
         IssueType issueType = null;
         if (dto.issueType() != null && repository.getOrganization() != null) {
-            issueType = findOrCreateIssueType(
-                    dto.issueType(), repository.getOrganization().getLogin());
+            issueType = findOrCreateIssueType(dto.issueType(), repository.getOrganization());
         }
 
         // Atomic upsert prevents races between concurrent inserts; ON CONFLICT
@@ -331,14 +326,16 @@ public class GitHubIssueProcessor extends BaseGitHubProcessor {
 
     @Transactional
     public @Nullable Issue processTyped(
-            GitHubIssueDTO issueDto, GitHubIssueTypeDTO typeDto, @Nullable String orgLogin, ProcessingContext context) {
+            GitHubIssueDTO issueDto, GitHubIssueTypeDTO typeDto, ProcessingContext context) {
         Processed processed = processInternal(issueDto, context, true, true);
         if (processed == null) return null;
         Issue issue = processed.issue();
         if (processed.superseded()) return issue;
 
-        if (typeDto != null && orgLogin != null) {
-            IssueType issueType = findOrCreateIssueType(typeDto, orgLogin);
+        var repository = issue.getRepository();
+        Organization organization = repository == null ? null : repository.getOrganization();
+        if (typeDto != null && organization != null) {
+            IssueType issueType = findOrCreateIssueType(typeDto, organization);
             if (issueType != null) {
                 issue.setIssueType(issueType);
                 issue = issueRepository.save(issue);
@@ -513,27 +510,18 @@ public class GitHubIssueProcessor extends BaseGitHubProcessor {
         };
     }
 
-    @Nullable
-    private IssueType findOrCreateIssueType(GitHubIssueTypeDTO dto, String orgLogin) {
-        if (dto == null || dto.nodeId() == null) {
+    /** The issue type of the issue's own organization: the same node id in another organization is another row. */
+    private @Nullable IssueType findOrCreateIssueType(GitHubIssueTypeDTO dto, Organization organization) {
+        if (dto.nodeId() == null || dto.name() == null) {
             return null;
         }
-
-        return issueTypeSyncService.findByNodeId(dto.nodeId()).orElseGet(() -> {
-            var orgOpt =
-                    organizationRepository.findByLoginIgnoreCaseAndProvider_Type(orgLogin, IdentityProviderType.GITHUB);
-            if (orgOpt.isEmpty()) {
-                log.warn("Skipped issue type creation: reason=orgNotFound, issueTypeNodeId={}", dto.nodeId());
-                return null;
-            }
-            return issueTypeSyncService.findOrCreateFromWebhook(
-                    Objects.requireNonNull(dto.nodeId()),
-                    Objects.requireNonNull(dto.name()),
-                    dto.description(),
-                    dto.color(),
-                    dto.isEnabled() != null ? dto.isEnabled() : true,
-                    orgOpt.get());
-        });
+        return issueTypeSyncService.findOrCreateFromWebhook(
+                dto.nodeId(),
+                dto.name(),
+                dto.description(),
+                dto.color(),
+                dto.isEnabled() != null ? dto.isEnabled() : true,
+                organization);
     }
 
     private static @Nullable String stateReasonName(@Nullable String stateReason) {

@@ -403,7 +403,9 @@ class GitHubSyncOutsideTransactionsIntegrationTest extends BaseIntegrationTest {
         assertThat(synced).isEqualTo(1);
         assertThat(requests).containsExactly(new Request(Thread.currentThread().getName(), false));
         assertThat(jdbc.queryForObject(
-                        "SELECT name FROM issue_type WHERE id = ?", String.class, "IT_bug-" + organization.getId()))
+                        "SELECT name FROM issue_type WHERE native_id = ?",
+                        String.class,
+                        "IT_bug-" + organization.getId()))
                 .isEqualTo("Bug");
     }
 
@@ -412,7 +414,7 @@ class GitHubSyncOutsideTransactionsIntegrationTest extends BaseIntegrationTest {
         Organization organization = organization();
         String unreached = "IT_task-" + organization.getId();
         jdbc.update(
-                "INSERT INTO issue_type(id,name,color,is_enabled,organization_id,last_sync_at) VALUES (?,?,?,true,?,now())",
+                "INSERT INTO issue_type(native_id,name,color,is_enabled,organization_id,last_sync_at) VALUES (?,?,?,true,?,now())",
                 unreached,
                 "Task",
                 "BLUE",
@@ -422,7 +424,7 @@ class GitHubSyncOutsideTransactionsIntegrationTest extends BaseIntegrationTest {
 
         issueTypes(organization).syncIssueTypesForScope(workspaceId);
 
-        assertThat(jdbc.queryForObject("SELECT count(*) FROM issue_type WHERE id = ?", Integer.class, unreached))
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM issue_type WHERE native_id = ?", Integer.class, unreached))
                 .isEqualTo(1);
     }
 

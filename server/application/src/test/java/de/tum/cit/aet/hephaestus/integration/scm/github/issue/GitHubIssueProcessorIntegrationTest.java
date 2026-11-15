@@ -1390,7 +1390,7 @@ class GitHubIssueProcessorIntegrationTest extends BaseIntegrationTest {
             GitHubIssueTypeDTO typeDto = new GitHubIssueTypeDTO(
                     27228861L, "IT_kwDODNYmp84Bn3q9", "Task", "A specific piece of work", "yellow", true);
 
-            Issue result = processor.processTyped(issueDto, typeDto, FIXTURE_ORG_LOGIN, createContext());
+            Issue result = processor.processTyped(issueDto, typeDto, createContext());
             assertNotNull(result);
 
             assertThat(result.getIssueType()).isNotNull();
@@ -1439,7 +1439,7 @@ class GitHubIssueProcessorIntegrationTest extends BaseIntegrationTest {
                     null // subIssuesSummary
                     );
 
-            Issue result = processor.processTyped(typed, typeDto, FIXTURE_ORG_LOGIN, createContext());
+            Issue result = processor.processTyped(typed, typeDto, createContext());
             assertNotNull(result);
 
             assertThat(eventListener.ofType(ScmDomainEvent.IssueUpdated.class))
@@ -1450,7 +1450,7 @@ class GitHubIssueProcessorIntegrationTest extends BaseIntegrationTest {
         @Test
         void processUntypedShouldPublishEvent() {
             IssueType issueType = new IssueType();
-            issueType.setId("IT_node_123");
+            issueType.setNativeId("IT_node_123");
             issueType.setName("Bug");
             issueType.setDescription("A bug");
             issueType.setColor(IssueType.Color.RED);

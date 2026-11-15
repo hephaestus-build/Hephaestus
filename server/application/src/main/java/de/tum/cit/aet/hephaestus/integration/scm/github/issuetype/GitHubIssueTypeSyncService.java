@@ -291,7 +291,7 @@ public class GitHubIssueTypeSyncService {
         }
         List<IssueType> existingTypes = issueTypeRepository.findAllByOrganizationId(organizationId);
         for (IssueType existingType : existingTypes) {
-            if (!syncedIds.contains(existingType.getId())) {
+            if (!syncedIds.contains(existingType.getNativeId())) {
                 issueTypeRepository.delete(existingType);
                 log.debug("Removed deleted issue type: issueTypeName={}", existingType.getName());
             }
@@ -301,11 +301,13 @@ public class GitHubIssueTypeSyncService {
     private void syncIssueType(GHIssueType graphQlType, Organization organization) {
         String id = graphQlType.getId();
 
-        IssueType issueType = issueTypeRepository.findById(id).orElseGet(() -> {
-            IssueType newType = new IssueType();
-            newType.setId(id);
-            return newType;
-        });
+        IssueType issueType = issueTypeRepository
+                .findByOrganizationIdAndNativeId(organization.getId(), id)
+                .orElseGet(() -> {
+                    IssueType newType = new IssueType();
+                    newType.setNativeId(id);
+                    return newType;
+                });
 
         issueType.setName(graphQlType.getName());
         issueType.setDescription(graphQlType.getDescription());
@@ -330,20 +332,18 @@ public class GitHubIssueTypeSyncService {
             @Nullable String color,
             boolean isEnabled,
             Organization organization) {
-        return issueTypeRepository.findById(nodeId).orElseGet(() -> {
-            IssueType newType = new IssueType();
-            newType.setId(nodeId);
-            newType.setName(name);
-            newType.setDescription(description);
-            newType.setColor(parseColor(color));
-            newType.setEnabled(isEnabled);
-            newType.setOrganization(organization);
-            return issueTypeRepository.save(newType);
-        });
-    }
-
-    public Optional<IssueType> findByNodeId(String nodeId) {
-        return issueTypeRepository.findById(nodeId);
+        return issueTypeRepository
+                .findByOrganizationIdAndNativeId(organization.getId(), nodeId)
+                .orElseGet(() -> {
+                    IssueType newType = new IssueType();
+                    newType.setNativeId(nodeId);
+                    newType.setName(name);
+                    newType.setDescription(description);
+                    newType.setColor(parseColor(color));
+                    newType.setEnabled(isEnabled);
+                    newType.setOrganization(organization);
+                    return issueTypeRepository.save(newType);
+                });
     }
 
     private IssueType.Color convertColor(GHIssueTypeColor graphQlColor) {
