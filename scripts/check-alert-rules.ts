@@ -62,9 +62,9 @@ export function incompleteAlerts(rules: string, tests: string, runbook: string):
 
 /** The pages whose tables give the reason for each alert's threshold: one row per alert, on one of them. */
 export const ALERT_REASON_PAGES = [
-	"docs/admin/alert-rules.md",
+	"docs/admin/alert-rules.mdx",
 	"docs/admin/observability.mdx",
-	"docs/admin/monitoring.md",
+	"docs/admin/monitoring.mdx",
 ];
 
 /** The alerts that no first table cell of the reason pages names. A row in the runbook says what to do, not why. */
