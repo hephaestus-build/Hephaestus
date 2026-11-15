@@ -4,7 +4,6 @@ import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { Button } from "@/components/ui/button";
 import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from "@/components/ui/item";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Spinner } from "@/components/ui/spinner";
 import { formatDate } from "@/lib/dates";
 
 /** One connected MCP client, as the workspace's admins see it. */
@@ -91,6 +90,7 @@ export function WorkspaceMcpClientGrantsSection({
 								</ItemContent>
 								<ItemActions>
 									<Button
+										pending={revokingId === grant.id}
 										variant="outline"
 										size="sm"
 										disabled={revokingId !== undefined}
@@ -98,7 +98,6 @@ export function WorkspaceMcpClientGrantsSection({
 										aria-label={`Disconnect ${grant.clientHost}`}
 										onClick={() => onRevoke(grant.id)}
 									>
-										{revokingId === grant.id && <Spinner />}
 										Disconnect
 									</Button>
 								</ItemActions>

@@ -9,7 +9,6 @@ import { PageLayout } from "@/components/layout/PageLayout";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Spinner } from "@/components/ui/spinner";
 
 /** What the consent page knows about the client's request, as the server answers it. */
 export interface McpConsentRequestView {
@@ -183,19 +182,17 @@ function Request({
 			<div className="flex gap-2">
 				<Button
 					onClick={onApprove}
+					pending={pending === "approve"}
 					disabled={pending !== undefined || refusal !== undefined}
-					aria-busy={pending === "approve"}
 				>
-					{pending === "approve" && <Spinner />}
 					Allow
 				</Button>
 				<Button
 					variant="outline"
 					onClick={onRefuse}
+					pending={pending === "refuse"}
 					disabled={pending !== undefined}
-					aria-busy={pending === "refuse"}
 				>
-					{pending === "refuse" && <Spinner />}
 					Deny
 				</Button>
 			</div>
