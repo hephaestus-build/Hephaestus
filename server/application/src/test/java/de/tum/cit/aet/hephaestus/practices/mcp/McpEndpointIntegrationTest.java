@@ -58,7 +58,7 @@ class McpEndpointIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 .isOk()
                 .expectBody()
                 .jsonPath("$.result.isError")
-                .doesNotExist()
+                .isEqualTo(false)
                 .jsonPath("$.result.structuredContent.practices[?(@.slug == 'mcp-listed')].versionNumber")
                 .isEqualTo(1);
     }
