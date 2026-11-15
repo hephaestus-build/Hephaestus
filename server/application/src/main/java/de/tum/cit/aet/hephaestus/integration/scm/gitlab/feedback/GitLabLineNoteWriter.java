@@ -492,6 +492,7 @@ public class GitLabLineNoteWriter implements LineNoteWriter {
         if (!ranged(item.anchor())) return postedBody(footer, item);
         return footer.appendLineNotePrompt(PostedText.of(item.body()))
                 + "\n"
+                + ScmFeedbackFormatter.provenanceLine(item.provenance())
                 + item.writeMarker()
                 + "\n"
                 + RANGE_PLACEMENT
@@ -537,7 +538,7 @@ public class GitLabLineNoteWriter implements LineNoteWriter {
 
     private String postedBody(Footer footer, LineNote item) {
         String body = footer.appendLineNotePrompt(PostedText.of(item.body()));
-        body = body + "\n" + item.writeMarker();
+        body = body + "\n" + ScmFeedbackFormatter.provenanceLine(item.provenance()) + item.writeMarker();
         String key = item.writeKey();
         return body + "\n" + ScmFeedbackFormatter.deliveryTag(key);
     }

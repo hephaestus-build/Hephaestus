@@ -36,6 +36,7 @@ erDiagram
         TIMESTAMPTZ created_at "NOT NULL"
         TIMESTAMPTZ delivered_at
         JSONB composition "NOT NULL"
+        TEXT provenance
     }
 
     FeedbackBasi {
@@ -73,6 +74,7 @@ erDiagram
         TIMESTAMPTZ posted_at
         UUID conversation_turn_id FK
         TEXT thread_ref
+        TEXT provenance
     }
 
     FeedbackDecision {

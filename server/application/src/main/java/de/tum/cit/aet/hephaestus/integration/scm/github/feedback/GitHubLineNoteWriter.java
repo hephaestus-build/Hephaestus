@@ -519,7 +519,10 @@ public class GitHubLineNoteWriter implements LineNoteWriter {
     }
 
     private String postedBody(Footer footer, LineNote item) {
-        String body = footer.appendLineNotePrompt(PostedText.of(item.body())) + "\n" + item.writeMarker();
+        String body = footer.appendLineNotePrompt(PostedText.of(item.body()))
+                + "\n"
+                + ScmFeedbackFormatter.provenanceLine(item.provenance())
+                + item.writeMarker();
         return body + "\n" + ScmFeedbackFormatter.deliveryTag(item.writeKey());
     }
 

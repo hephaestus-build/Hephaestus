@@ -127,6 +127,32 @@ Prefer **Responses API** for reviews and conversations, because they call tools 
 Choose **Chat Completions API** only if the endpoint does not serve the Responses API.
 The Anthropic preset serves reviews, feedback, and conversations. It does not support Bedrock or Google Cloud authentication.
 
+### Provenance records
+
+Hephaestus signs a provenance record for each piece of feedback that it posts on GitHub and GitLab.
+The comment carries the record in a hidden line.
+Feedback on practice pages and in conversations does not carry a record yet.
+The record contains these values:
+
+| Value | Content |
+| --- | --- |
+| `iss` | The web address of your instance |
+| `ver` | The Hephaestus release |
+| `model` | The upstream model ID of the model that wrote the text, as **AI models** lists it |
+| `at` | When Hephaestus prepared the text |
+| `sha256` | A hash of the text that Hephaestus stored |
+
+The record names no person and no workspace.
+Anyone who can read the comment can read the model ID.
+A comment shows the text with escaping that GitHub and GitLab need, so `sha256` does not match the text that the comment shows.
+The signature proves that your instance signed the record. It does not prove that the words next to it are unchanged.
+If you change `hephaestus.webapp.url`, records signed under the old address no longer verify.
+
+Hephaestus makes the first signing key at start and seals it with the system key ([Secret custody](./secret-custody#what-the-database-seals)).
+It keeps every signing key for the life of the instance, so that each record stays valid.
+`/.well-known/hephaestus-provenance-keys.json` publishes the public keys without sign-in.
+No setting turns the records off.
+
 ### Model limits
 
 Each model has a **Context window** and **Max output tokens**.

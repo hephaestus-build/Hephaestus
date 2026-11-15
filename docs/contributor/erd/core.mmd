@@ -247,6 +247,13 @@ erDiagram
         BIGINT version "NOT NULL"
     }
 
+    ProvenanceSigningKey {
+        VARCHAR(64) kid PK
+        TIMESTAMPTZ created_at "NOT NULL"
+        BYTEA public_key "NOT NULL"
+        BYTEA private_key "NOT NULL"
+    }
+
     ReleaseStart {
         BIGINT id PK
         VARCHAR(16) channel "NOT NULL"

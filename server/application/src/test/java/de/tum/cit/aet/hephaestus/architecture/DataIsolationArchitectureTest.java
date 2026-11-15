@@ -153,6 +153,7 @@ class DataIsolationArchitectureTest extends HephaestusArchitectureTest {
             "JwtSigningKey", // System-wide signing keys
             "StoredSystemSecret", // Secrets that the instance generates for itself, sealed by the system key
             "SlackRequestClaim", // Slack request signatures, held 15 minutes, past the signature window
+            "ProvenanceSigningKey", // Instance keys that sign the provenance records of generated text
             "AccountExport", // GDPR Art. 20 self-service export; account-scoped, spans workspaces
             "LoginProvider", // Instance-scoped OAuth login provider (sign-in option); not workspace-scoped
             "ConsentDecision", // Account-scoped consent evidence; spans workspaces

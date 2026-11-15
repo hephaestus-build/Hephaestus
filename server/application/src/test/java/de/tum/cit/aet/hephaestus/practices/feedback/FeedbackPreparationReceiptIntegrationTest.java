@@ -16,6 +16,8 @@ import de.tum.cit.aet.hephaestus.agent.handler.composition.FeedbackPackage;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobInput;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurnRunRows;
+import de.tum.cit.aet.hephaestus.core.provenance.ProvenanceRecord;
+import de.tum.cit.aet.hephaestus.core.provenance.ProvenanceVerifier;
 import de.tum.cit.aet.hephaestus.evidence.CitationSide;
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemRefDTO;
@@ -73,6 +75,9 @@ class FeedbackPreparationReceiptIntegrationTest extends AbstractFeedbackDelivery
 
     @Autowired
     PracticePageFeedbackService page;
+
+    @Autowired
+    ProvenanceVerifier provenance;
 
     @MockitoBean
     CurrentDeveloperLookup currentDeveloper;
@@ -227,6 +232,22 @@ class FeedbackPreparationReceiptIntegrationTest extends AbstractFeedbackDelivery
         assertThat(sends.findById(feedbackId))
                 .hasValueSatisfying(send ->
                         assertThat(send.getAction() + "|" + send.getState()).isEqualTo("POST|PENDING"));
+    }
+
+    /** The stored words carry a record that this instance signed, which marks exactly those words (Art. 50(2)). */
+    @Test
+    void shouldSignTheWordsItPreparesWithARecordThatVerifies() {
+        store.prepareAll(workspace.getId(), reviewId, List.of(draft(true)));
+
+        String record = jdbc.queryForObject(
+                "SELECT provenance FROM feedback WHERE workspace_id=? AND id=?",
+                String.class,
+                workspace.getId(),
+                feedbackId);
+        var verified = provenance.verify(Objects.requireNonNull(record)).orElseThrow();
+        assertThat(verified.kind()).isEqualTo(ProvenanceRecord.Kind.FEEDBACK);
+        assertThat(verified.marks("Add a focused regression test.")).isTrue();
+        assertThat(verified.marks("Add an unfocused test.")).isFalse();
     }
 
     @Test

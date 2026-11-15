@@ -13,10 +13,12 @@ import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import java.time.Instant;
 import java.util.UUID;
+import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 import org.hibernate.annotations.ColumnDefault;
 import org.jspecify.annotations.Nullable;
 
@@ -59,6 +61,14 @@ public class FeedbackCopy {
 
     @Column(name = "body", nullable = true, columnDefinition = "TEXT")
     private @Nullable String body;
+
+    /**
+     * The signed provenance record of a note's own {@link #body}, made when the feedback was prepared. A summary posts
+     * its feedback's body, so it carries {@link Feedback#getProvenance()} instead.
+     */
+    @Column(name = "provenance", nullable = true, columnDefinition = "TEXT")
+    @Setter(AccessLevel.PACKAGE)
+    private @Nullable String provenance;
 
     @Column(name = "path", nullable = true, columnDefinition = "TEXT")
     private @Nullable String path;

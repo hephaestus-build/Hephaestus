@@ -16,6 +16,7 @@ final class AnonymousEndpointAllowlist {
             "AuthBeginController.begin",
             "AuthBeginController.beginClient",
             "WellKnownController.jwks",
+            "ProvenanceKeysController.keys",
             "ClientSessionController.configuration",
             "ClientSessionController.token",
             "ClientSessionController.refresh",

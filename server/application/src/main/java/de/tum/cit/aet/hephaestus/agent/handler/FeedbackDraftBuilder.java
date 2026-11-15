@@ -175,9 +175,18 @@ public final class FeedbackDraftBuilder {
                             : new FeedbackDraft.Page(
                                     piece.page().title(),
                                     piece.page().body(),
-                                    piece.page().nextStep())));
+                                    piece.page().nextStep()),
+                    composerModel(job)));
         }
         return List.copyOf(drafts);
+    }
+
+    /** The model that the job froze at admission, which the composer runs on ({@code ConfigSnapshot#model()}). */
+    private static @Nullable String composerModel(ReviewJob job) {
+        var snapshot = job.getConfigSnapshot();
+        if (snapshot == null) return null;
+        var model = snapshot.path("model").path("upstreamModelId");
+        return model.isString() && !model.asString().isBlank() ? model.asString() : null;
     }
 
     private static FeedbackCopyInput copy(
