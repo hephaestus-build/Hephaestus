@@ -4,12 +4,10 @@ import { docsLlms } from "@/lib/llms";
 import { source } from "@/lib/source";
 
 export const getStaticPaths = (() =>
-	source
-		.getPages()
-		.map((page) => ({
-			params: { slug: page.slugs.join("/") },
-			props: { page },
-		}))) satisfies GetStaticPaths;
+	source.getPages().map((page) => ({
+		params: { slug: page.slugs.join("/") },
+		props: { page },
+	}))) satisfies GetStaticPaths;
 
 export const GET: APIRoute<InferGetStaticPropsType<typeof getStaticPaths>> = async ({
 	props: { page },

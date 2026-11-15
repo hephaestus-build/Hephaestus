@@ -260,7 +260,7 @@ public class GitLabIssueCommentProcessor extends BaseGitLabProcessor {
             return null;
         }
         boolean isNew = existingOpt.isEmpty();
-        // An older hook would restore older words (sync-lifecycle.md).
+        // An older hook would restore older words (sync-lifecycle.mdx).
         Instant eventUpdatedAt = attrs.updatedAt() == null ? null : parseGitLabTimestamp(attrs.updatedAt());
         if (!isNew
                 && eventUpdatedAt != null

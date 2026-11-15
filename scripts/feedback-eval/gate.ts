@@ -90,7 +90,7 @@ export interface Check {
 	problems: string[];
 }
 
-/** The catalog fields that state an occasion (criteria docs: practice-catalog.md). */
+/** The catalog fields that state an occasion (criteria docs: practice-catalog.mdx). */
 export interface CatalogPractice {
 	slug: string;
 	automated: boolean;

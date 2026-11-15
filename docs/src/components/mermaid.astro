@@ -34,10 +34,15 @@ const { chart } = Astro.props;
 		}
 		await mermaid.run({ nodes });
 	};
-	document.addEventListener("astro:page-load", () => {
-		void draw();
-	});
-	new MutationObserver(() => {
-		void draw();
-	}).observe(document.documentElement, { attributeFilter: ["class"] });
+	// One draw at a time: a theme change during a page load must not run two renders on the same diagrams.
+	let drawing = Promise.resolve();
+	const drawAfter = async (previous: Promise<void>): Promise<void> => {
+		await previous.catch(() => undefined);
+		await draw();
+	};
+	const queue = (): void => {
+		drawing = drawAfter(drawing);
+	};
+	document.addEventListener("astro:page-load", queue);
+	new MutationObserver(queue).observe(document.documentElement, { attributeFilter: ["class"] });
 </script>

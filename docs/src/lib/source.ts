@@ -2,6 +2,7 @@ import { toFumadocsSource } from "@fumadocs/astro/source";
 import { getCollection } from "astro:content";
 import { loader } from "fumadocs-core/source";
 
+import { linksWithBasePath } from "@/lib/page-tree";
 import { BASE } from "@/lib/site";
 
 /** A file or folder whose name starts with `_` is a partial that a page includes, not a page. */
@@ -9,9 +10,10 @@ const isPage = (entry: { id: string }): boolean =>
 	!entry.id.split("/").some((segment) => segment.startsWith("_"));
 
 // The three guides are the whole site (docs/README.md). Each guide is a collection, placed in its folder of the site.
-// Without a client router, every URL carries the base path (`/next/` for the unreleased docs).
+// Every URL carries the base path (`/next/` for the unreleased docs): Astro's client router adds none.
 export const source = loader({
 	baseUrl: BASE,
+	plugins: [linksWithBasePath(BASE)],
 	source: {
 		user: toFumadocsSource(await getCollection("user", isPage), await getCollection("user-meta"), {
 			baseDir: "user",

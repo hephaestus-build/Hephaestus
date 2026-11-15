@@ -116,7 +116,7 @@ public class GitLabMilestoneProcessor extends BaseGitLabProcessor {
             milestone.setNativeId(dto.nativeId());
         }
 
-        // A late hook would restore an older title, state or due date (sync-lifecycle.md).
+        // A late hook would restore an older title, state or due date (sync-lifecycle.mdx).
         Instant incomingUpdatedAt = ProviderStateVersion.atStoredPrecision(parseGitLabTimestamp(dto.updatedAt()));
         // A sync read that began after the last write may settle an equal version, because issue counts change
         // without moving updated_at. Identity is not versioned: a refused hook still records the real id above.

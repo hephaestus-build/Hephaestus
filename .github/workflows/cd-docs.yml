@@ -57,6 +57,13 @@ jobs:
       - uses: ./.github/actions/setup-toolchain
         with:
           install: "frozen"
+      # The deployed site also has a /next/ build. Its link check catches a link that leaves the base path, which a
+      # build at the root cannot see.
+      - name: Build at /next/
+        run: vp run --filter docs build
+        env:
+          DOCS_BASE_URL: "/next/"
+          DOCS_CHANNEL: next
       - run: vp run --filter docs build
         env:
           DOCS_BASE_URL: "/"

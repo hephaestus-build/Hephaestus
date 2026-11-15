@@ -11,6 +11,7 @@ import { loader, type VirtualFile } from "fumadocs-core/source";
 import { metaSchema } from "fumadocs-core/source/schema";
 import { parse } from "yaml";
 
+import { linksWithBasePath } from "./src/lib/page-tree.ts";
 import { callouts, rejectUnparsedAdmonitions, restoreUnusedDirectives } from "./src/lib/plugins.ts";
 import { GUIDES, SITE_URL } from "./src/lib/site.ts";
 
@@ -78,37 +79,34 @@ const pageTree = (): VitePlugin => ({
 			return null;
 		}
 		const files: VirtualFile[] = [];
+		const read = async (file: string): Promise<string> => {
+			this.addWatchFile(file);
+			return readFile(file, "utf8");
+		};
 		const meta = async (relative: string): Promise<void> => {
-			files.push({
-				type: "meta",
-				path: relative,
-				data: metaSchema.parse(JSON.parse(await readFile(path.join(root, relative), "utf8"))),
-			});
+			const data = metaSchema.parse(JSON.parse(await read(path.join(root, relative))));
+			files.push({ type: "meta", path: relative, data });
 		};
 		await meta("meta.json");
 		for (const guide of GUIDES) {
 			for (const file of await filesOf(path.join(root, guide.path))) {
 				const relative = path.relative(root, file).split(path.sep).join("/");
 				if (file.endsWith(".mdx")) {
-					const frontMatter: unknown = parse(
-						/^---\n(?<frontMatter>[\s\S]*?)\n---/u.exec(await readFile(file, "utf8"))?.groups
-							?.frontMatter ?? "",
-					);
+					const match = /^---\r?\n(?<frontMatter>[\s\S]*?)\r?\n---/u.exec(await read(file));
+					const frontMatter: unknown = parse(match?.groups?.frontMatter ?? "");
 					const page = isRecord(frontMatter) ? frontMatter : {};
-					files.push({
-						type: "page",
-						path: relative,
-						data: {
-							title: typeof page.title === "string" ? page.title : relative,
-							description: typeof page.description === "string" ? page.description : undefined,
-						},
-					});
+					if (typeof page.title !== "string") {
+						throw new Error(`${relative} has no title in its front matter.`);
+					}
+					const description = typeof page.description === "string" ? page.description : undefined;
+					files.push({ type: "page", path: relative, data: { title: page.title, description } });
 				} else if (path.basename(file) === "meta.json") {
 					await meta(relative);
 				}
 			}
 		}
-		const source = loader({ baseUrl: base.endsWith("/") ? base : `${base}/`, source: { files } });
+		const baseUrl = base.endsWith("/") ? base : `${base}/`;
+		const source = loader({ baseUrl, source: { files }, plugins: [linksWithBasePath(baseUrl)] });
 		return `export default ${JSON.stringify(await source.serializePageTree(source.getPageTree()))};`;
 	},
 });

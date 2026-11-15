@@ -91,8 +91,6 @@ const markdownScope = asStringArray(markdownlintConfig.globs, "docs/.markdownlin
 const docsLintInputs = [
 	"docs/**",
 	"!docs/build/**",
-	"!docs/dist/**",
-	"!docs/.source/**",
 	"!docs/.astro/**",
 	"!docs/node_modules/**",
 	...markdownScope,

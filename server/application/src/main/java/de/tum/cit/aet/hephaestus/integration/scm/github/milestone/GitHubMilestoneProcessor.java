@@ -116,7 +116,7 @@ public class GitHubMilestoneProcessor {
         // else: existing milestone, keep its current nativeId (whether real or generated)
 
         Instant incomingUpdatedAt = ProviderStateVersion.atStoredPrecision(dto.updatedAt());
-        // A late delivery would restore an older title, state or due date (sync-lifecycle.md).
+        // A late delivery would restore an older title, state or due date (sync-lifecycle.mdx).
         // A sync read that began after the last write may settle an equal version, because issue counts change
         // without moving updated_at. Identity is not versioned: a refused webhook still records the real id above,
         // which a later delete looks up.

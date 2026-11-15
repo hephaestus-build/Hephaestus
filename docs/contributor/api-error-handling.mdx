@@ -3,8 +3,6 @@ title: API error handling
 description: How the server reports errors and how the generated client surfaces them.
 ---
 
-# API Error Handling Guidelines
-
 Every REST error this server returns is an [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457) `application/problem+json` body produced by a
 `@RestControllerAdvice`. A controller throws a meaningful exception. An advice class translates it
 into HTTP semantics and decides exactly what detail leaves the server. No controller formats an error

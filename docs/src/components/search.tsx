@@ -82,9 +82,8 @@ async function loadPagefind(): Promise<Search> {
 	return pagefind;
 }
 
-/** `/next/admin/upgrade.html#install` → `/admin/upgrade#install`: the router adds the base path. */
-const route = (url: string): string =>
-	url.replace(new RegExp(`^${base.replace(/\/$/u, "")}`, "u"), "").replace(/\.html(?=#|$)/u, "");
+/** `/next/admin/upgrade.html#install` → `/next/admin/upgrade#install`. Pagefind's URL already carries the base path. */
+const route = (url: string): string => url.replace(/\.html(?=#|$)/u, "");
 const text = (html: string): string => html.replaceAll(/<[^>]+>/gu, "");
 
 async function searchPagefind(query: string) {

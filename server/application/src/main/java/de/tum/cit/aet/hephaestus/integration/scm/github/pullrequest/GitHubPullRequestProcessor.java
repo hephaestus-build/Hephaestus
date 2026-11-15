@@ -174,7 +174,7 @@ public class GitHubPullRequestProcessor extends BaseGitHubProcessor {
         // The facts only the GraphQL sync carries still land: a webhook stored GitHub's updated_at
         // first, and the sync row that follows carries the same moment with more in it. So do
         // review
-        // requests received within the same second (sync-lifecycle.md § Reviewer lists are dated
+        // requests received within the same second (sync-lifecycle.mdx § Reviewer lists are dated
         // snapshots).
         if (!isNew && !promotedFromIssue && !moved) {
             PullRequest existing = existingOpt.get();
@@ -331,7 +331,7 @@ public class GitHubPullRequestProcessor extends BaseGitHubProcessor {
     /**
      * Processes a payload and publishes its lifecycle event under the event's own identity. A first delivery that
      * arrives after a later change still records its occasion for the current work; a redelivery of the same event
-     * records none (sync-lifecycle.md § A redelivered or older payload changes nothing).
+     * records none (sync-lifecycle.mdx § A redelivered or older payload changes nothing).
      */
     @Nullable
     private PullRequest processLifecycle(

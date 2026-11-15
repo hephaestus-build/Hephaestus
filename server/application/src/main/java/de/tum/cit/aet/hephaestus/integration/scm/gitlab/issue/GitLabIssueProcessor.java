@@ -96,7 +96,7 @@ public class GitLabIssueProcessor extends BaseGitLabProcessor {
             log.debug("Skipped confidential issue: iid={}", attrs.iid());
             return null;
         }
-        // An older hook would restore older work (sync-lifecycle.md). The row lock makes the compare and the write
+        // An older hook would restore older work (sync-lifecycle.mdx). The row lock makes the compare and the write
         // after it one step.
         long repositoryId = Objects.requireNonNull(context.repository()).getId();
         issueRepository.lockByRepositoryIdAndNumber(repositoryId, attrs.iid());

@@ -567,7 +567,7 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
                         && eventUpdatedAt.equals(existing.getUpdatedAt());
                 if (!continuesHead && ProviderStateVersion.cannotReplace(eventUpdatedAt, existing.getUpdatedAt())) {
                     // The reviewer list still applies unless the payload is older, as
-                    // sync-lifecycle.md § Reviewer lists are dated snapshots explains.
+                    // sync-lifecycle.mdx § Reviewer lists are dated snapshots explains.
                     if (!ProviderStateVersion.isOlder(eventUpdatedAt, existing.getUpdatedAt())
                             && updateRequestedReviewers(event.currentReviewers(), existing, context)) {
                         existing = pullRequestRepository.save(existing);

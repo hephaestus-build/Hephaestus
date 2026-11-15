@@ -3,8 +3,6 @@ title: CI/CD Architecture
 description: Trunk-based CI/CD through the merge queue. Staging follows main, and production runs releases after approval.
 ---
 
-# CI/CD Architecture
-
 Hephaestus uses trunk-based delivery through GitHub's merge queue. Pull requests provide early
 feedback, merge groups validate projected `main`, and pushes to `main` produce release images.
 Staging follows successful builds of `main` under the [automatic promotion policy](../admin/pull-based-deployment). Production runs a release only after an approved promotion.

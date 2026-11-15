@@ -195,7 +195,7 @@ server:
   # docs/admin/sizing.mdx § Memory headroom gives the measurements behind both defaults.
   jvm:
     # The share of the limit kept for native memory that the calculator does not count. With none, the heap grows
-    # until the kernel kills the container.
+    # past the limit and the kernel kills the container.
     headRoomPercent: 15
     # The threads whose 1 MiB stacks the calculator reserves: the measured peak plus a margin.
     threadCount: 200

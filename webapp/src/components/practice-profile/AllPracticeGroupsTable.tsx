@@ -162,7 +162,7 @@ const NO_GROUPS: GroupRef[] = [];
 
 /**
  * What a practice group is, beside the column's heading: the page names groups everywhere and
- * explains them nowhere else. The words are the vocabulary's (`practice-feedback-language.md`). In
+ * explains them nowhere else. The words are the vocabulary's (`practice-feedback-language.mdx`). In
  * the stacked layout the heading is for a screen reader only, so the (i) leaves it rather than take
  * a keyboard's focus out of sight.
  */

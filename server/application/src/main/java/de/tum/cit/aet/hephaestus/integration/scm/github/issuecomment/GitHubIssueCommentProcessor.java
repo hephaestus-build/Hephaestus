@@ -210,7 +210,7 @@ public class GitHubIssueCommentProcessor extends BaseGitHubProcessor {
         Optional<IssueComment> existingOpt =
                 commentRepository.findForUpdateByNativeIdAndProviderId(commentId, providerId);
         boolean isNew = existingOpt.isEmpty();
-        // An older payload would restore older words (sync-lifecycle.md).
+        // An older payload would restore older words (sync-lifecycle.mdx).
         if (!isNew
                 && dto.updatedAt() != null
                 && existingOpt.get().getUpdatedAt() != null

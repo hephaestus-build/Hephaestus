@@ -36,7 +36,7 @@ const lastModified = page.data.lastModified instanceof Date ? page.data.lastModi
 		markdownUrl={twin}
 		pageUrl={`${SITE_URL}${page.url}`}
 		sourceUrl={`${REPO_URL}/blob/main/docs/${page.path}`}
-		editUrl={`${REPO_URL}/tree/main/docs/${page.path}`}
+		editUrl={`${REPO_URL}/edit/main/docs/${page.path}`}
 		lastModified={lastModified}
 	>
 		<Content components={{ ...mdxComponents(page), Mermaid }} />
