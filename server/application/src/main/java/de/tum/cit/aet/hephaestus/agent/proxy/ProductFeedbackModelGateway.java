@@ -52,7 +52,8 @@ public class ProductFeedbackModelGateway {
                 deadline,
                 outputLimit,
                 actionId);
-        var response = Objects.requireNonNull(proxy.serve(routing, model.protocol(), null, new HttpHeaders(), body));
+        var response =
+                Objects.requireNonNull(proxy.serve(routing, model.protocol(), null, new HttpHeaders(), body, null));
         Object result = response.getBody();
         byte[] bytes = result instanceof byte[] raw
                 ? raw

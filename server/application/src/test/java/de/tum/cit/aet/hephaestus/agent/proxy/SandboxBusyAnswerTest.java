@@ -22,6 +22,7 @@ import org.springframework.dao.CannotAcquireLockException;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * A write that waited past the pool's lock bound answers a sandbox {@code 503}, which the runner retries: never a
@@ -34,10 +35,10 @@ class SandboxBusyAnswerTest extends BaseUnitTest {
     @Test
     void shouldAnswerAModelCallBusyWhenItsAdmissionWaitedPastTheLockBound() throws Exception {
         var proxy = mock(LlmProxyService.class);
-        when(proxy.proxy(any(), any(), any(), any())).thenThrow(LOCK_TIMEOUT);
+        when(proxy.proxy(any(), any(), any(), any(), any())).thenThrow(LOCK_TIMEOUT);
 
-        var response = gateway(
-                        new LlmProxyController(proxy, mock(ComposerTranscript.class), mock(ProxyAccounting.class)))
+        var response = gateway(new LlmProxyController(
+                        proxy, mock(ComposerTranscript.class), mock(ProxyAccounting.class), new ObjectMapper()))
                 .perform(post("/internal/llm/responses")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{}"))

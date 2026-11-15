@@ -715,6 +715,15 @@ A session makes at most the model calls of one practice's turn for each practice
 Each attempt makes at most 12 model calls across its feedback destinations.
 Each call asks for no more than the attempt's output limit.
 
+Each call streams, so the proxy's silence bound measures silence, not the time that a long composition takes.
+The proxy assembles the stream's answer and records its reply and tool calls in the composition's transcript.
+Then it writes the answer as the stream's last event (`hephaestus.answer`).
+The loop reads only that event, so it keeps exactly the reply that the transcript holds.
+It runs a tool call only after the server recorded that call.
+
+A stream that ends without the event is a provider failure.
+The transcript refuses a composer request that does not stream.
+
 No call starts after the composition deadline.
 The deadline is the composition timeout after the sandbox ends, and at the latest one minute before the stale-job sweep would end the attempt.
 The proxy refuses a later call.

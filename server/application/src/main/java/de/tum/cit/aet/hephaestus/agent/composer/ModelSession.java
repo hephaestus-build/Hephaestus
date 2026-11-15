@@ -190,6 +190,8 @@ public final class ModelSession {
                         // Only a composition run's request can get it; a refusal here is a fault of this server.
                         case NOT_COMPOSER_REQUEST ->
                             throw new IllegalStateException("The gateway refused a request of no composition");
+                        // The in-process draft call is served directly, never refused for its stream flag.
+                        case NOT_STREAMED -> throw new IllegalStateException("The gateway refused an in-process call");
                     });
         int status = answer.status();
         if (status == 408 || status == 429 || status >= 500) return new Reply(null, List.of(), Failure.PROVIDER);

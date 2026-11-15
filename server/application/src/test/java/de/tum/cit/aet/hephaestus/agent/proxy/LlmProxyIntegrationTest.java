@@ -917,7 +917,8 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
     void shouldLowerTheLimitWhenAStreamSendsItsHeadAndACommentAndThenNothing() throws Exception {
         var upstream = silentAfterAComment();
         try {
-            var pool = streamUntilTheWorkEnds("http://127.0.0.1:" + upstream.port() + "/v1", 8, 50);
+            var pool =
+                    streamUntilTheWorkEnds("http://127.0.0.1:" + upstream.port() + "/v1", 8, 50, Duration.ofMinutes(2));
             assertThat(pool.getLearnedLimit()).isEqualTo(5);
             assertThat(pool.getThrottledAt()).isNotNull();
             assertThat(pool.getBaselineFirstTokenMs()).isEqualTo(50);
@@ -943,7 +944,8 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
                                 "data: [DONE]\n\n")))
                 .bindNow();
         try {
-            var pool = streamUntilTheWorkEnds("http://127.0.0.1:" + upstream.port() + "/v1", 8, null);
+            var pool = streamUntilTheProviderEnds(
+                    "http://127.0.0.1:" + upstream.port() + "/v1", 8, null, Duration.ofMinutes(2));
             assertThat(calls(pool, "refused")).isEqualTo(1);
             assertThat(calls(pool, "completed")).isZero();
             assertThat(
@@ -975,7 +977,8 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
                                 "data: [DONE]\n\n")))
                 .bindNow();
         try {
-            var pool = streamUntilTheWorkEnds("http://127.0.0.1:" + upstream.port() + "/v1", 8, null);
+            var pool = streamUntilTheProviderEnds(
+                    "http://127.0.0.1:" + upstream.port() + "/v1", 8, null, Duration.ofMinutes(2));
             assertThat(calls(pool, "refused")).isEqualTo(1);
             assertThat(calls(pool, "unanswered")).isZero();
         } finally {
@@ -988,7 +991,8 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
         var upstream = silentAfterAComment();
         try {
             // At two, one background call binds the limit, which a served call would raise.
-            var pool = streamUntilTheWorkEnds("http://127.0.0.1:" + upstream.port() + "/v1", 2, null);
+            var pool = streamUntilTheWorkEnds(
+                    "http://127.0.0.1:" + upstream.port() + "/v1", 2, null, Duration.ofMinutes(2));
             assertThat(pool.getLearnedLimit()).isEqualTo(2);
             assertThat(pool.getThrottledAt()).isNull();
             assertThat(unansweredDecreases(pool)).isZero();
@@ -1001,7 +1005,7 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
     void shouldLowerTheLimitWithoutABaselineWhenTheSilenceBoundCutsTheStream() throws Exception {
         var upstream = silentAfterAComment();
         try {
-            var pool = streamUntilTheWorkEnds(
+            var pool = streamUntilTheProviderEnds(
                     "http://127.0.0.1:" + upstream.port() + "/v1", 8, null, Duration.ofSeconds(1));
             assertThat(pool.getLearnedLimit()).isEqualTo(5);
             assertThat(unansweredDecreases(pool)).isEqualTo(1);
@@ -1038,7 +1042,7 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
                     .body("data: {\"error\":{\"message\":\"overloaded\"}}\n\n")
                     .build());
             upstream.start();
-            var pool = streamUntilTheWorkEnds(upstream.url("/v1").toString(), 8, 700);
+            var pool = streamUntilTheProviderEnds(upstream.url("/v1").toString(), 8, 700, Duration.ofMinutes(2));
             assertThat(pool.getLearnedLimit()).isEqualTo(5);
             assertThat(pool.getBaselineFirstTokenMs()).isEqualTo(700);
             assertThat(pool.getWindowSamples()).isZero();
@@ -1046,17 +1050,31 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
         }
     }
 
-    private LlmCallPool streamUntilTheWorkEnds(String baseUrl, int limit, @Nullable Integer baselineMillis)
-            throws Exception {
-        return streamUntilTheWorkEnds(baseUrl, limit, baselineMillis, Duration.ofMinutes(2));
+    /**
+     * The work window of a call that only the attempt's end may end. It must outlast the proxy's work before it calls
+     * the provider, so a slow machine cannot end the attempt before its call starts.
+     */
+    private static final Duration WORK_THAT_ENDS_THE_CALL = Duration.ofSeconds(10);
+
+    /** A streamed review call that the provider or the silence bound ends, long before the attempt's work could. */
+    private LlmCallPool streamUntilTheProviderEnds(
+            String baseUrl, int limit, @Nullable Integer baselineMillis, Duration silence) throws Exception {
+        return streamOnce(baseUrl, limit, baselineMillis, silence, Duration.ofMinutes(5));
+    }
+
+    /** A streamed review call that only the end of the attempt's work ends: the caller, not the provider, ends it. */
+    private LlmCallPool streamUntilTheWorkEnds(
+            String baseUrl, int limit, @Nullable Integer baselineMillis, Duration silence) throws Exception {
+        return streamOnce(baseUrl, limit, baselineMillis, silence, WORK_THAT_ENDS_THE_CALL);
     }
 
     /**
      * One streamed review call on the model's own pool, which ends when the provider, the proxy's silence bound or the
-     * attempt's work does.
+     * attempt's work does. The call must reach the provider: a refused call says nothing about the pool's limit.
      */
-    private LlmCallPool streamUntilTheWorkEnds(
-            String baseUrl, int limit, @Nullable Integer baselineMillis, Duration silence) throws Exception {
+    private LlmCallPool streamOnce(
+            String baseUrl, int limit, @Nullable Integer baselineMillis, Duration silence, Duration workLeft)
+            throws Exception {
         ReviewJob job = reviewJob(baseUrl);
         job = jobRepository.saveAndFlush(job);
         var model = Objects.requireNonNull(
@@ -1086,15 +1104,21 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 new ConversationCallProperties(Duration.ofMinutes(5), silence));
         var request = new MockHttpServletRequest("POST", "/internal/llm/chat/completions");
         request.setRemoteAddr("127.0.0.1");
-        request.addHeader("Authorization", "Bearer " + tokenFor(job, Duration.ofSeconds(3)));
+        request.addHeader("Authorization", "Bearer " + tokenFor(job, workLeft));
         var response = new MockHttpServletResponse();
         var body = objectMapper.createObjectNode().put("model", "caller-model").put("stream", true);
         body.putArray("messages").addObject().put("role", "user").put("content", "Review.");
+        AtomicReference<@Nullable ResponseEntity<?>> ownAnswer = new AtomicReference<>();
         filter.doFilter(
                 request,
                 response,
-                (ignoredRequest, ignoredResponse) ->
-                        service.proxy(request, response, new HttpHeaders(), objectMapper.writeValueAsBytes(body)));
+                (ignoredRequest, ignoredResponse) -> ownAnswer.set(
+                        service.proxy(request, response, new HttpHeaders(), objectMapper.writeValueAsBytes(body))));
+        // A streamed answer writes the response itself; an answer of the proxy's own is a call that never streamed.
+        assertThat(ownAnswer.get())
+                .as("the proxy answered instead of streaming the provider's call")
+                .isNull();
+        assertThat(response.getContentType()).startsWith("text/event-stream");
         return callPools.findById(poolId).orElseThrow();
     }
 
@@ -1142,14 +1166,14 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
             var forwarded =
                     objectMapper.readTree(Objects.requireNonNull(sent.getBody()).utf8());
             assertThat(forwarded.path("max_tokens").asLong()).isEqualTo(CHAT_OUTPUT_LIMIT);
-            // The answer reported no usage: the call ends unverifiable and holds its bound, the request's 64 bytes
+            // The answer reported no usage: the call ends unverifiable and holds its bound, the request's 78 bytes
             // and the output limit at the frozen $1 per 1M tokens.
             assertThat(calls(job)).containsExactly(new CallRow("ENDED", "UNVERIFIABLE", "UNPRICED", 0, 1));
             assertThat(jdbc.queryForObject(
                             "SELECT cost_bound_usd FROM llm_usage_event WHERE source_id = ?",
                             BigDecimal.class,
                             job.getId()))
-                    .isEqualByComparingTo("0.004160");
+                    .isEqualByComparingTo("0.004174");
         }
     }
 
@@ -1216,7 +1240,7 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
             upstream.start();
             upstream.enqueue(json("{\"choices\":[]}"));
             ReviewJob job = reviewJob(upstream.url("/v1").toString());
-            String request = "{\"max_tokens\":16384,\"messages\":[]}";
+            String request = "{\"max_tokens\":16384,\"stream\":true,\"messages\":[]}";
 
             assertThat(callChat(proxyService(), job, request)).isEqualTo(200);
 
@@ -1236,7 +1260,7 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     /**
      * The cap holds each call's upper bound: a call starts only while the month's spend plus its own bound fits under
-     * the cap. The call's bound is the request's 64 bytes and the output limit at $1 per 1M tokens: $0.004160.
+     * the cap. The call's bound is the request's 78 bytes and the output limit at $1 per 1M tokens: $0.004174.
      */
     @Test
     void shouldRefuseAChatCallWhoseUpperBoundDoesNotFitUnderTheCapAndServeOneThatFits() throws Exception {
@@ -1245,12 +1269,12 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
             upstream.enqueue(json("{\"choices\":[]}"));
             ReviewJob job = reviewJob(upstream.url("/v1").toString());
 
-            assertThat(callChat(proxyService(WebClient.create(), capOf("0.004159"), admittingPermits()), job))
+            assertThat(callChat(proxyService(WebClient.create(), capOf("0.004173"), admittingPermits()), job))
                     .isEqualTo(429);
             assertThat(upstream.getRequestCount()).isZero();
             assertThat(calls(job)).isEmpty();
 
-            assertThat(callChat(proxyService(WebClient.create(), capOf("0.004160"), admittingPermits()), job))
+            assertThat(callChat(proxyService(WebClient.create(), capOf("0.004174"), admittingPermits()), job))
                     .isEqualTo(200);
             assertThat(upstream.getRequestCount()).isEqualTo(1);
         }
@@ -1267,7 +1291,10 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
             + "\"content\":\"ok\"}}],\"usage\":{\"prompt_tokens\":1000000,\"completion_tokens\":0}}";
 
     private int callChat(LlmProxyService service, ReviewJob job) throws Exception {
-        return callChat(service, job, "{\"model\":\"any\",\"messages\":[{\"role\":\"user\",\"content\":\"Review.\"}]}");
+        return callChat(
+                service,
+                job,
+                "{\"model\":\"any\",\"stream\":true,\"messages\":[{\"role\":\"user\",\"content\":\"Review.\"}]}");
     }
 
     private int callChat(LlmProxyService service, ReviewJob job, String json) throws Exception {

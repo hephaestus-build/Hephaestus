@@ -76,6 +76,8 @@ final class ComposerRequests {
 
     Read read(LlmApiProtocol protocol, JsonNode body) {
         if (!body.isObject()) return new Refused("not an object");
+        // A composition can take longer than the proxy lets a call send nothing; only a stream shows it working.
+        if (!JSON.booleanNode(true).equals(body.get("stream"))) return new Refused("not streamed");
         return switch (protocol) {
             case ANTHROPIC_MESSAGES -> anthropic(body);
             case OPENAI_COMPLETIONS -> completions(body);
@@ -84,7 +86,7 @@ final class ComposerRequests {
     }
 
     private Read anthropic(JsonNode body) {
-        if (!only(body, Set.of("model", "system", "messages", "max_tokens", "tool_choice", "tools")))
+        if (!only(body, Set.of("model", "stream", "system", "messages", "max_tokens", "tool_choice", "tools")))
             return new Refused("unexpected field");
         if (!JSON.objectNode().put("type", "auto").equals(body.get("tool_choice"))) return new Refused("tool_choice");
         if (!body.path("system").isString()) return new Refused("system");
@@ -152,6 +154,7 @@ final class ComposerRequests {
                 body,
                 Set.of(
                         "model",
+                        "stream",
                         "messages",
                         "store",
                         "max_completion_tokens",
@@ -223,6 +226,7 @@ final class ComposerRequests {
                 body,
                 Set.of(
                         "model",
+                        "stream",
                         "instructions",
                         "input",
                         "store",

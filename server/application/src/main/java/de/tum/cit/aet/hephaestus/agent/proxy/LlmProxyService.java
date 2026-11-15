@@ -78,6 +78,11 @@ class LlmProxyService {
     /** The refusal of a model call after its review attempt's work deadline. */
     static final String WORK_TIME_OVER = "This review's work time has ended; it makes no more model calls.";
 
+    static final String NOT_STREAMED_MESSAGE =
+            "The model proxy serves only streamed chat calls: set \"stream\": true on the request.";
+
+    static final String READ_STALLED = "the model provider sent nothing within the proxy's read timeout";
+
     /** How long a conversation call can wait out a provider's refusal, as its person is watching. */
     static final Duration TURN_ABSORB_WINDOW = Duration.ofSeconds(30);
 
@@ -157,6 +162,23 @@ class LlmProxyService {
             HttpServletResponse response,
             HttpHeaders incomingHeaders,
             byte @Nullable [] body) {
+        return proxy(request, response, incomingHeaders, body, null);
+    }
+
+    /**
+     * Serves a sandbox's model call. Only a streamed call is served: a call that does not stream sends nothing until
+     * its whole answer exists, so the proxy's silence bound would cut a long but working generation. The two
+     * in-process callers, the product-feedback draft and the capability probe, are bounded far below it and call
+     * {@link #serve} directly.
+     *
+     * @param capture receives a copy of each chunk of a streamed answer, before the client does
+     */
+    public @Nullable ResponseEntity<?> proxy(
+            HttpServletRequest request,
+            HttpServletResponse response,
+            HttpHeaders incomingHeaders,
+            byte @Nullable [] body,
+            @Nullable Consumer<byte[]> capture) {
         ProxyRouting routing = authenticatedRouting();
         ResponseEntity<String> rejected = validateSafeSurface(request);
         if (rejected != null) return rejected;
@@ -169,13 +191,17 @@ class LlmProxyService {
         if (body == null || body.length == 0) return ResponseEntity.badRequest().body("Request body is required");
         rejected = validateJsonObject(body);
         if (rejected != null) return rejected;
-        return serve(routing, protocol, response, incomingHeaders, body);
+        if (!requestsStream(body))
+            return refusal(HttpStatus.BAD_REQUEST, ProxyRefusal.NOT_STREAMED, NOT_STREAMED_MESSAGE);
+        return serve(routing, protocol, response, incomingHeaders, body, capture);
     }
 
     /**
      * Serves one call on a routing: the AI-choice, budget, connection, deadline and usage rules.
      * A null response serves a server step in-process: the call must not stream, and a
      * provider that answers with a stream anyway is refused.
+     *
+     * @param capture receives a copy of each chunk of a streamed answer, before the client does
      */
     @SuppressWarnings("try") // The scope installs the current span and restores it on close.
     @Nullable
@@ -184,7 +210,8 @@ class LlmProxyService {
             LlmApiProtocol protocol,
             @Nullable HttpServletResponse response,
             HttpHeaders incomingHeaders,
-            byte[] body) {
+            byte[] body,
+            @Nullable Consumer<byte[]> capture) {
         accounting.recordGatewayRequest(body.length);
         // Begun first and closed last, so that nothing before the provider call can leave it open for the turn's end.
         try (ProxyCallsInFlight.Call inFlight = callsInFlight.begin(routing.attempt())) {
@@ -205,7 +232,7 @@ class LlmProxyService {
             long started = System.nanoTime();
             String ended = "error";
             try (var ignored = tracer.withSpan(span)) {
-                var result = forward(routing, protocol, response, incomingHeaders, body, span, inFlight);
+                var result = forward(routing, protocol, response, incomingHeaders, body, capture, span, inFlight);
                 int status = classifyFailure(result, response, inFlight);
                 ended = Integer.toString(status);
                 span.tag("http.response.status_code", status);
@@ -335,6 +362,7 @@ class LlmProxyService {
             @Nullable HttpServletResponse response,
             HttpHeaders incomingHeaders,
             byte[] body,
+            @Nullable Consumer<byte[]> capture,
             Span span,
             ProxyCallsInFlight.Call call) {
         if (workTimeOver(routing)) return refusal(HttpStatus.FORBIDDEN, ProxyRefusal.WORK_TIME, WORK_TIME_OVER);
@@ -377,7 +405,7 @@ class LlmProxyService {
             ResponseEntity<?> answer;
             do {
                 answer = forwardWithinScanBudget(
-                        routing, protocol, response, incomingHeaders, body, span, call, row, absorbUntil);
+                        routing, protocol, response, incomingHeaders, body, capture, span, call, row, absorbUntil);
             } while (answer instanceof AskAgain);
             classifyFailure(answer, response, call);
             return answer;
@@ -397,6 +425,7 @@ class LlmProxyService {
             @Nullable HttpServletResponse response,
             HttpHeaders incomingHeaders,
             byte[] body,
+            @Nullable Consumer<byte[]> capture,
             Span span,
             ProxyCallsInFlight.Call call,
             CallRow row,
@@ -552,7 +581,8 @@ class LlmProxyService {
                     return errors.providerError(
                             HttpStatus.SERVICE_UNAVAILABLE, UPSTREAM_PAUSED, "The model capacity lease ended.");
                 }
-                upstream = callUpstream(exchange, prepared.body(), span, response, tap, deadline, reviewStream);
+                upstream =
+                        callUpstream(exchange, prepared.body(), span, response, tap, capture, deadline, reviewStream);
                 if (rejectedOurUsageRequest(upstream, prepared)) {
                     // Asking for usage is OUR addition, so refusing it must cost the caller nothing.
                     row.answeredWithError();
@@ -583,6 +613,7 @@ class LlmProxyService {
                             span,
                             response,
                             tap,
+                            capture,
                             deadline,
                             reviewStream);
                 }
@@ -608,7 +639,13 @@ class LlmProxyService {
                 call.failed(new ConversationTurn.FailedCall(
                         failure.isEmpty() ? e.getClass().getName() : failure, null));
                 if (e instanceof WebClientRequestException) {
-                    if (!routing.conversationTurn())
+                    // A read timeout before the head reaches the provider and hears nothing back: it stalled.
+                    if (!routing.conversationTurn() && ProxyStreamingUtils.readTimedOut(e))
+                        log.warn(
+                                "LLM upstream stalled for principal {}: {}",
+                                routing.principalDescription(),
+                                READ_STALLED);
+                    else if (!routing.conversationTurn())
                         log.warn(
                                 "LLM upstream unreachable for principal {}: reason={}",
                                 routing.principalDescription(),
@@ -821,6 +858,7 @@ class LlmProxyService {
             Span span,
             @Nullable HttpServletResponse response,
             ProxyStreamUsageTap tap,
+            @Nullable Consumer<byte[]> capture,
             @Nullable Instant deadline,
             boolean reviewStream) {
         Duration limit = exchangeWait(deadline, reviewStream, now());
@@ -866,7 +904,8 @@ class LlmProxyService {
                 })));
         boolean completed = false;
         try {
-            UpstreamResult result = ProxyStreamingUtils.forward(parts, limit, response, tap);
+            UpstreamResult result =
+                    ProxyStreamingUtils.forward(parts, limit, response, capture == null ? tap : both(tap, capture));
             completed = !cancelled.get()
                     && (result.streamOutcome() == null || result.streamOutcome() == StreamOutcome.COMPLETED);
             return cancelled.get() && !result.streamed() ? null : result;
@@ -889,6 +928,17 @@ class LlmProxyService {
         Duration ceiling = BLOCK_TIMEOUT.plus(ProxyStreamingUtils.DEFAULT_SSE_TIMEOUT);
         Duration remaining = ProxyStreamingUtils.remainingUntil(deadline, now);
         return reviewStream || remaining.compareTo(ceiling) < 0 ? remaining : ceiling;
+    }
+
+    /** Feeds both: a usage tap that fails on a chunk does not keep that chunk from the capture. */
+    private static Consumer<byte[]> both(Consumer<byte[]> tap, Consumer<byte[]> capture) {
+        return chunk -> {
+            try {
+                tap.accept(chunk);
+            } finally {
+                capture.accept(chunk);
+            }
+        };
     }
 
     private boolean requestsStream(byte[] body) {

@@ -106,7 +106,14 @@ class ComposerTranscriptTest {
         assertThat(refusal(first, body -> function(body).put("strict", true))).isEqualTo("tool");
         assertThat(refusal(first, body -> body.putObject("response_format").put("type", "json_schema")))
                 .isEqualTo("unexpected field");
-        assertThat(refusal(first, body -> body.put("stream", true))).isEqualTo("unexpected field");
+    }
+
+    @Test
+    void shouldRefuseARequestThatDoesNotStream() throws Exception {
+        var first = start().get(0).get("request");
+
+        assertThat(refusal(first, body -> body.remove("stream"))).isEqualTo("not streamed");
+        assertThat(refusal(first, body -> body.put("stream", false))).isEqualTo("not streamed");
     }
 
     @Test

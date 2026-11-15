@@ -15,5 +15,7 @@ public enum ProxyRefusal {
     /** The attempt already had its most model calls in flight, or the gateway its most request bodies: ask again. */
     CALLS_IN_FLIGHT,
     /** A compose run's request holds a part that the server did not issue or serve to its claim. */
-    NOT_COMPOSER_REQUEST
+    NOT_COMPOSER_REQUEST,
+    /** A sandbox's chat call does not stream, so the proxy could not tell a long generation from a stalled one. */
+    NOT_STREAMED
 }

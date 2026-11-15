@@ -30,6 +30,7 @@ import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmAuthMode;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmConnectionHealth;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
+import de.tum.cit.aet.hephaestus.agent.composer.ComposerStreamAnswer;
 import de.tum.cit.aet.hephaestus.agent.config.ModelAssignmentLimits;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunBand;
@@ -65,6 +66,7 @@ import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
@@ -81,6 +83,7 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 import java.util.stream.IntStream;
 import mockwebserver3.MockResponse;
 import mockwebserver3.MockWebServer;
@@ -276,7 +279,12 @@ class LlmProxyServiceTest extends BaseUnitTest {
     class OutputLimits {
 
         @ParameterizedTest
-        @ValueSource(strings = {"{\"max_completion_tokens\":0}", "{\"max_tokens\":\"x\"}", "{\"max_tokens\":1.5}"})
+        @ValueSource(
+                strings = {
+                    "{\"stream\":true,\"max_completion_tokens\":0}",
+                    "{\"stream\":true,\"max_tokens\":\"x\"}",
+                    "{\"stream\":true,\"max_tokens\":1.5}"
+                })
         void shouldRefuseACallWhenItsOutputLimitIsNotAPositiveWholeNumberBeforeCredentialsOrNetwork(String body) {
             authenticate(routing("openai-completions"));
 
@@ -639,6 +647,11 @@ class LlmProxyServiceTest extends BaseUnitTest {
             }
 
             void start(ProxyRouting routing) {
+                start(routing, null);
+            }
+
+            /** As above, and {@code capture} reads what the proxy relayed, as the feedback composer does. */
+            void start(ProxyRouting routing, @Nullable Consumer<byte[]> capture) {
                 stubStreamCredential(routing);
                 caller.execute(() -> {
                     authenticate(routing);
@@ -647,7 +660,8 @@ class LlmProxyServiceTest extends BaseUnitTest {
                                 request("POST", "/internal/llm/chat/completions"),
                                 response,
                                 new HttpHeaders(),
-                                STREAM_REQUEST));
+                                STREAM_REQUEST,
+                                capture));
                     } catch (RuntimeException | Error failure) {
                         answer.completeExceptionally(failure);
                     } finally {
@@ -904,42 +918,68 @@ class LlmProxyServiceTest extends BaseUnitTest {
         }
 
         @Test
-        @DisplayName(
-                "a review call without a stream keeps the client's read bound when its provider pauses past the idle bound")
-        void aReviewCallWithoutAStreamIsNotCutAtTheIdleBound() throws Exception {
-            streamingController = controllerWith(IDLE_ONLY);
-            upstream.enqueue(new MockResponse.Builder()
-                    .code(200)
-                    .addHeader("Content-Type", "application/json")
-                    .bodyDelay(800, TimeUnit.MILLISECONDS)
-                    .body("{\"choices\":[{\"message\":{\"role\":\"assistant\",\"content\":\"slow review\"}}],"
-                            + "\"usage\":{\"prompt_tokens\":100,\"completion_tokens\":40}}")
-                    .build());
+        @DisplayName("a sandbox call that does not stream is refused before credentials or network access")
+        void aSandboxCallWithoutAStreamIsRefused() {
             ProxyRouting routing = streamingRouting();
             authenticate(routing);
-            stubCredential(
-                    routing,
-                    new LlmModelResolver.ProxyCredential(
-                            upstream.url("/v1").toString(),
-                            "openai-completions",
-                            LlmAuthMode.BEARER,
-                            "catalog-model",
-                            "secret",
-                            42L));
-            MockHttpServletResponse response = new MockHttpServletResponse();
 
             ResponseEntity<?> answer = streamingController.proxy(
                     request("POST", "/internal/llm/chat/completions"),
-                    response,
+                    new MockHttpServletResponse(),
                     new HttpHeaders(),
                     "{\"stream\":false,\"messages\":[]}".getBytes(StandardCharsets.UTF_8));
 
-            String body = answer == null
-                    ? response.getContentAsString()
-                    : answer.getBody() instanceof byte[] bytes
-                            ? new String(bytes, StandardCharsets.UTF_8)
-                            : String.valueOf(answer.getBody());
-            assertThat(body).contains("slow review").doesNotContain("upstream_stalled");
+            assertThat(answer).isNotNull();
+            assertThat(answer.getStatusCode().value()).isEqualTo(400);
+            assertThat(answer.getHeaders().getFirst(LlmProxyService.REFUSAL_HEADER))
+                    .isEqualTo(ProxyRefusal.NOT_STREAMED.name());
+            assertThat(upstream.getRequestCount()).isZero();
+        }
+
+        @Test
+        @DisplayName(
+                "a composer stream that keeps sending runs many times past the idle bound and keeps its whole answer")
+        void aLongComposerStreamCompletesWithItsAnswer() throws Exception {
+            // Each piece comes 100 ms inside the idle bound; together they span many idle bounds.
+            List<String> pieces = new ArrayList<>();
+            pieces.add("data: {\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\"}}]}\n\n");
+            for (int step = 0; step < 12; step++)
+                pieces.add("data: {\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\"step " + step
+                        + ". \"}}]}\n\n");
+            pieces.add("data: {\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,"
+                    + "\"id\":\"call-1\",\"type\":\"function\",\"function\":{\"name\":\"check_package\","
+                    + "\"arguments\":\"{}\"}}]}}]}\n\n");
+            pieces.add("data: {\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"tool_calls\"}]}\n\n");
+            Sinks.Many<DataBuffer> provider = Sinks.many().unicast().onBackpressureBuffer();
+            var answer = new ComposerStreamAnswer(LlmApiProtocol.OPENAI_COMPLETIONS, OBJECT_MAPPER);
+            MockHttpServletResponse response;
+            try (VirtualCall call = new VirtualCall(streaming(provider.asFlux()), IDLE_ONLY)) {
+                call.start(streamingRouting(), answer);
+                for (String piece : pieces) {
+                    provider.emitNext(sse(piece), Sinks.EmitFailureHandler.FAIL_FAST);
+                    call.relayed();
+                    call.time.advanceTimeBy(CONVERSATION_IDLE.minusMillis(100));
+                }
+                provider.emitNext(sse("data: [DONE]\n\n"), Sinks.EmitFailureHandler.FAIL_FAST);
+                provider.emitComplete(Sinks.EmitFailureHandler.FAIL_FAST);
+                call.finished();
+                response = call.response;
+            }
+
+            assertThat(response.getContentAsString()).doesNotContain(LlmProxyService.UPSTREAM_STALLED);
+            JsonNode message = Objects.requireNonNull(answer.answer())
+                    .path("choices")
+                    .path(0)
+                    .path("message");
+            assertThat(message.path("reasoning_content").asString())
+                    .startsWith("step 0. ")
+                    .endsWith("step 11. ");
+            assertThat(message.path("tool_calls")
+                            .path(0)
+                            .path("function")
+                            .path("name")
+                            .asString())
+                    .isEqualTo("check_package");
         }
 
         @Test
@@ -2417,7 +2457,7 @@ class LlmProxyServiceTest extends BaseUnitTest {
     }
 
     private static byte[] jsonBody() {
-        return "{\"model\":\"anything\"}".getBytes(StandardCharsets.UTF_8);
+        return "{\"model\":\"anything\",\"stream\":true}".getBytes(StandardCharsets.UTF_8);
     }
 
     private static MockHttpServletRequest request(String method, String path) {

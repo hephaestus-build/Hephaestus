@@ -42,7 +42,7 @@ class LlmModelProbeGatewayTest extends BaseUnitTest {
                 "admin-trace");
         try {
             MDC.setContextMap(caller);
-            when(proxy.serve(any(), any(), isNull(), any(), any())).thenAnswer(invocation -> {
+            when(proxy.serve(any(), any(), isNull(), any(), any(), isNull())).thenAnswer(invocation -> {
                 assertThat(MDC.getCopyOfContextMap())
                         .containsExactlyInAnyOrderEntriesOf(Map.of(StructuredLogKeys.TRACE_ID, "admin-trace"));
                 throw new IllegalStateException("synthetic failure");
