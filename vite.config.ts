@@ -401,7 +401,7 @@ export default defineConfig({
 			"gate:docs-format": cached(`vp fmt --check ${docsSources}`),
 			"gate:docs-lint": cachedOn(
 				// `astro check` type-checks the `.astro` files and writes the content types that the lint's type check reads.
-				"vp run --filter docs check && vp -C docs lint --type-aware --type-check . && vp -C docs exec markdownlint-cli2",
+				"node scripts/docs-astro.ts check && vp -C docs lint --type-aware --type-check . && vp -C docs exec markdownlint-cli2",
 				docsLintInputs,
 			),
 			"gate:diagrams": cached("node scripts/check-mermaid-diagrams.ts"),

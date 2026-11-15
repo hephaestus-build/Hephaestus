@@ -1,11 +1,11 @@
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import { readdir, readFile, writeFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { isSet } from "./lib/env.ts";
-import { asRecord, asString, isRecord, readJsonFile } from "./lib/json.ts";
-import { compareLinks, renderPreviewComments, type PreviewLink } from "./lib/preview-comment.ts";
+import { asRecord, asString, readJsonFile } from "./lib/json.ts";
+import { renderPreviewComments, type PreviewLink } from "./lib/preview-comment.ts";
 import { CAPTURE_LIMIT_BYTES } from "./lib/process.ts";
 
 function argument(index: number): string {
@@ -52,9 +52,9 @@ const ENTITIES: Record<string, string> = {
 async function renderDocs(): Promise<string[]> {
 	const links = new Map<string, PreviewLink>();
 	for (const source of changedFiles) {
-		const route = /^docs\/((?:user|admin|contributor)\/.+)\.mdx?$/u
-			.exec(source)?.[1]
-			?.replace(/\/index$/u, "");
+		const route = /^docs\/(?<route>(?:user|admin|contributor)\/.+)\.mdx?$/u
+			.exec(source)
+			?.groups?.route?.replace(/\/index$/u, "");
 		if (route === undefined || route.split("/").some((part) => part.startsWith("_"))) {
 			continue;
 		}
@@ -66,7 +66,10 @@ async function renderDocs(): Promise<string[]> {
 			/<title>(?<title>[^<]*)<\/title>/u.exec(await readFile(file, "utf8"))?.groups?.title ?? route;
 		const title = heading
 			.replace(SITE_TITLE_SUFFIX, "")
-			.replaceAll(/&(amp|lt|gt|quot|#39|#x27);/gu, (_, name: string) => ENTITIES[name] ?? "");
+			.replaceAll(
+				/&(?<name>amp|lt|gt|quot|#39|#x27);/gu,
+				(_, name: string) => ENTITIES[name] ?? "",
+			);
 		const url = new URL(route, baseUrl);
 		links.set(url.href, { group: path.posix.dirname(source), title, url: url.href });
 	}
