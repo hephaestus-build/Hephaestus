@@ -108,6 +108,7 @@ import {
 	newUsageLedger,
 	outputTokensOf,
 	inputTokensOf,
+	callPromptTokens,
 	type UsageReport,
 } from "./pi-runner-usage.ts";
 import {
@@ -2432,6 +2433,8 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 						}
 						if (scope.currentTurn && !event.aborted) {
 							scope.currentTurn.compactions += 1;
+							// A compaction calls the model outside the agent loop, so no assistant message charges its prompt.
+							scope.currentTurn.inputTokens += callPromptTokens(event.result?.usage);
 						}
 					}
 					// The SDK rides out a retryable provider failure on its own. A run that took longer, or that
