@@ -13,6 +13,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import org.jspecify.annotations.Nullable;
 import org.springframework.context.annotation.Profile;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -90,7 +91,7 @@ public class AgentRunController {
         boolean held = Boolean.TRUE.equals(transactions.execute(status -> {
             kind.beforeWrite(run.sandbox());
             if (unisolated) sandboxes.revoke(run.sandbox(), AgentSandboxes.Revocation.UNISOLATED);
-            return kind.end(run, outcome);
+            return kind.end(run, outcome, request.cause());
         }));
         if (!held) throw new StaleRunException(run.fence());
     }
@@ -104,6 +105,9 @@ public class AgentRunController {
     /** @param leasedUntil when the lease ends unless the sandbox renews it again */
     public record Lease(Instant leasedUntil) {}
 
-    /** @param outcome {@code completed}, {@code handed_on} or {@code unisolated} */
-    public record End(@NotBlank String outcome) {}
+    /**
+     * @param outcome {@code completed}, {@code handed_on} or {@code unisolated}
+     * @param cause the hand-on cause that the server answered the loop's close, or {@code null}
+     */
+    public record End(@NotBlank String outcome, @Nullable String cause) {}
 }

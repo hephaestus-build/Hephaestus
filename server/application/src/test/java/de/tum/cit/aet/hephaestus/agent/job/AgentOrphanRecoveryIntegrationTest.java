@@ -1069,6 +1069,7 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
                         context.getBean(JobEvidenceFiles.class)),
                 new ReviewJobTerminal(jobRepository, agentRuns, continuation),
                 reviewRuns,
+                context.getBean(ProviderOutages.class),
                 new PracticeScriptRunRecorder(scriptReports, scriptRuns, meterRegistry, objectMapper, assignments),
                 transactionTemplate,
                 objectMapper,

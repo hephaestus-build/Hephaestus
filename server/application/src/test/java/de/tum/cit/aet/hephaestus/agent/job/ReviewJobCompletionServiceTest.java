@@ -139,6 +139,49 @@ class ReviewJobCompletionServiceTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldCloseAReviewWhoseProviderStayedUnavailableWithThatReasonForItAndEachPractice() {
+        var job = RuntimeReviewTestData.job();
+        job.setStatus(ReviewJobStatus.FAILED);
+        job.setStartedAt(Instant.now());
+        job.setExecutionStartedAt(Instant.now());
+        job.setOutput(new JsonMapper().createObjectNode().put("outcome", "PROVIDER_UNAVAILABLE"));
+
+        service(job, ReviewKind.ITEM).tick();
+
+        verify(members)
+                .fail(
+                        1,
+                        RuntimeReviewTestData.assignment(null, null).id(),
+                        job.getId(),
+                        ReviewStopReason.PROVIDER_UNAVAILABLE,
+                        "The execution ended without an admitted result");
+        verify(reviews)
+                .complete(
+                        anyLong(),
+                        any(),
+                        argThat(completion -> completion.status() == ReviewStatus.PARTIAL
+                                && completion.reason() == ReviewStopReason.PROVIDER_UNAVAILABLE));
+    }
+
+    @Test
+    void shouldCloseAnAdmittedReviewWhoseCompositionTheProviderStoppedAsProviderUnavailable() {
+        var job = RuntimeReviewTestData.job();
+        job.setStatus(ReviewJobStatus.FAILED);
+        job.setAdmissionAttempt(0);
+        job.setAdmissionDigest("proof");
+        job.setOutput(new JsonMapper().createObjectNode().put("outcome", "PROVIDER_UNAVAILABLE"));
+
+        service(job, ReviewKind.ITEM).tick();
+
+        verify(reviews)
+                .complete(
+                        anyLong(),
+                        any(),
+                        argThat(completion -> completion.status() == ReviewStatus.PARTIAL
+                                && completion.reason() == ReviewStopReason.PROVIDER_UNAVAILABLE));
+    }
+
+    @Test
     void shouldCloseAnAdmittedPartialRunWithItsRuntimeNonResultReason() {
         var job = RuntimeReviewTestData.job();
         job.setStatus(ReviewJobStatus.COMPLETED);

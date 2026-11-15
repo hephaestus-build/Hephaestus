@@ -1037,6 +1037,8 @@ drain. docs/admin/kubernetes.mdx § Sandbox prerequisites.
   value: {{ include "hephaestus.serverReviews" . | quote }}
 - name: HEPHAESTUS_AGENT_DRAIN_TIMEOUT
   value: {{ printf "%ds" (int .Values.server.drainTimeoutSeconds) | quote }}
+- name: HEPHAESTUS_AGENT_CAPACITY_MODEL_OUTAGE_WINDOW
+  value: {{ printf "%ds" (int .Values.server.modelOutageWindowSeconds) | quote }}
 - name: HEPHAESTUS_SANDBOX_KUBERNETES_NAMESPACE
   value: {{ include "hephaestus.sandboxNamespace" (dict "root" .) | quote }}
 # A sandbox claim names its kind's warm pool (sandbox-templates.yaml) and the gateway Service, whose address the

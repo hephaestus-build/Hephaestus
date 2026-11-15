@@ -21,12 +21,12 @@ import de.tum.cit.aet.hephaestus.agent.gateway.SandboxRunArgumentResolver;
 import de.tum.cit.aet.hephaestus.agent.gateway.testing.AgentReviewDrainFixtures;
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.job.CompositionToolTrace;
+import de.tum.cit.aet.hephaestus.agent.job.ProviderOutages;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewCompositionClaim;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewCompositionContinuation;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobAssignments;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewMemberAiPolicy;
-import de.tum.cit.aet.hephaestus.agent.job.ReviewRunKind;
 import de.tum.cit.aet.hephaestus.agent.job.SandboxReviewClaims;
 import de.tum.cit.aet.hephaestus.agent.proxy.ProxyAccounting;
 import de.tum.cit.aet.hephaestus.agent.proxy.SandboxModelProxy;
@@ -150,7 +150,7 @@ public final class ComposeRunGateway implements AutoCloseable {
                 continuation,
                 sessions,
                 SandboxReviewClaims.terminal(context),
-                context.getBean(ReviewRunKind.class),
+                context.getBean(ProviderOutages.class),
                 runs,
                 new ReviewCompositionClaim(
                         jobs, transactions, context.getBean(JsonMapper.class), context.getBean(ClusterLock.class)),

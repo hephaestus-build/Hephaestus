@@ -284,6 +284,15 @@ void test("the run's deadline stops the kind, and the driver leaves the run to t
 	assert.deepEqual(ends(calls), []);
 });
 
+void test("a runner's hand-on cause reaches the server with its end", async () => {
+	const calls = await driveOnce(
+		{ REVIEW_COMPOSE: async () => ({ leaseLost: false, outcome: "handed_on", cause: "PROVIDER" }) },
+		gateway({ runs: [assignment("REVIEW_COMPOSE")] }),
+	);
+
+	assert.deepEqual(ends(calls), [JSON.stringify({ outcome: "handed_on", cause: "PROVIDER" })]);
+});
+
 void test("a run of a kind that this sandbox does not run, or whose kind fails, is handed on", async () => {
 	const calls = await driveOnce(
 		{

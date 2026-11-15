@@ -41,12 +41,16 @@ void test("a composition that decides every destination completes its run", asyn
 	]);
 });
 
-void test("a composition that a passing cause stopped hands its run on", async () => {
+void test("a composition that a passing cause stopped hands its run on with the server's cause", async () => {
 	const runner = KINDS.REVIEW_COMPOSE;
 	assert.ok(runner);
 	const { context } = run(Response.json({ handedOn: "PROVIDER" }));
 
-	assert.deepEqual(await runner(context), { leaseLost: false, outcome: "handed_on" });
+	assert.deepEqual(await runner(context), {
+		leaseLost: false,
+		outcome: "handed_on",
+		cause: "PROVIDER",
+	});
 });
 
 void test("a composition whose run lost its lease ends nothing", async () => {

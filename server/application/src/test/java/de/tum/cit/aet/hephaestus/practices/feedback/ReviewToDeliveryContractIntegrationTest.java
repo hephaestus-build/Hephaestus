@@ -2469,7 +2469,7 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
             Boolean handedOn = transactions.execute(status -> {
                 // The gateway's end first loads the composing run in this same persistence context.
                 admission.composing(fence);
-                return reviewRuns.retryComposition(jobId, fence);
+                return reviewRuns.retryComposition(jobId, fence, AgentRuns.Charge.SPEND, null);
             });
             assertThat(handedOn).isTrue();
 
@@ -2495,7 +2495,8 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
             assertThat(agentRuns.find(new AgentRunRef(composing, review.workspaceId())))
                     .isEmpty();
             assertThat(resultIds(review)).containsExactlyElementsOf(sealed);
-            Boolean stale = transactions.execute(status -> reviewRuns.retryComposition(jobId, fence));
+            Boolean stale = transactions.execute(
+                    status -> reviewRuns.retryComposition(jobId, fence, AgentRuns.Charge.SPEND, null));
             assertThat(stale).isFalse();
         }
     }

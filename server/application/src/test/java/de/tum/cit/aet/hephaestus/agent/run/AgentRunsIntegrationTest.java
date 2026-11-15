@@ -374,7 +374,8 @@ class AgentRunsIntegrationTest extends BaseIntegrationTest {
 
         Duration window = Duration.ofMinutes(11);
         AgentRunRef next = Objects.requireNonNull(transactions.execute(status -> {
-            AgentRunRef continued = runs.continueAfter(run, lease.epoch(), Duration.ZERO, window);
+            AgentRunRef continued =
+                    runs.continueAfter(run, lease.epoch(), AgentRuns.Charge.SPEND, Duration.ZERO, window);
             runs.retire(run);
             return continued;
         }));

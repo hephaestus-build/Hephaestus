@@ -90,11 +90,13 @@ public class AgentRuns {
 
     /**
      * Queues the run that continues work whose earlier run ended. Its epochs go on from {@code lastEpoch}, so the
-     * claims of a piece of work keep distinct numbers across its runs. The continuation spends one attempt more than
-     * the ended run had spent: it is a retry of the same work, so the work's retry limit bounds how often it continues.
+     * claims of a piece of work keep distinct numbers across its runs. A charged continuation spends one attempt more
+     * than the ended run had spent: it is a retry of the same work, so the work's retry limit bounds how often it
+     * continues. A free one continues work that a cause outside it stopped, such as a provider outage.
      */
     @Transactional(propagation = Propagation.MANDATORY)
-    public AgentRunRef continueAfter(AgentRunRef ended, int lastEpoch, Duration delay, Duration executionWindow) {
+    public AgentRunRef continueAfter(
+            AgentRunRef ended, int lastEpoch, Charge charge, Duration delay, Duration executionWindow) {
         AgentRun previous = ended(ended);
         return insert(
                 previous.getWorkspaceId(),
@@ -102,7 +104,7 @@ public class AgentRuns {
                 previous.getBand(),
                 previous.getConcurrencyKey(),
                 Math.max(lastEpoch, previous.getLeaseEpoch()),
-                previous.getAttempt() + 1,
+                previous.getAttempt() + (charge == Charge.SPEND ? 1 : 0),
                 startWithin(previous),
                 delay,
                 executionWindow);

@@ -40,7 +40,8 @@ export interface RunContext {
 /** How a run ended for its runner: the lease was lost, or the runner finished or handed the run on. */
 export type RunOutcome =
 	| { leaseLost: true }
-	| { leaseLost: false; outcome: "completed" | "handed_on" };
+	// `cause` echoes the hand-on cause that the server answered the runner; the server decides a retry's charge from it.
+	| { leaseLost: false; outcome: "completed" | "handed_on"; cause?: string };
 
 export type KindRunner = (run: RunContext) => Promise<RunOutcome>;
 
@@ -266,7 +267,10 @@ async function runOne(
 		const ended = await fetch(`${runUrl}/end`, {
 			method: "POST",
 			headers: { ...headers, "content-type": "application/json" },
-			body: JSON.stringify({ outcome: outcome.outcome }),
+			body: JSON.stringify({
+				outcome: outcome.outcome,
+				cause: "cause" in outcome ? outcome.cause : undefined,
+			}),
 			signal: AbortSignal.timeout(CALL_TIMEOUT_MS),
 		});
 		await ended.body?.cancel();

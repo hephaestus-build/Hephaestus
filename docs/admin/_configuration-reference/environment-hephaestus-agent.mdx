@@ -3,6 +3,7 @@
 | Variable | Setting | Application default | Containers | Description |
 | --- | --- | --- | --- | --- |
 | `AGENT_ENABLED` | `hephaestus.agent.enabled` | `default: false` | `server` | Turns on agent jobs, which run practice reviews, on this server. |
+| `HEPHAESTUS_AGENT_CAPACITY_MODEL_OUTAGE_WINDOW` | `hephaestus.agent.capacity.model-outage-window` |  | `server` | How long after its submission a review keeps waiting for a model provider that answers none of its calls or limits their rate. An attempt that meets such an outage spends no retry, so this bounds its measurement and its composition together; the review then ends as provider-unavailable. |
 | `HEPHAESTUS_AGENT_DRAIN_TIMEOUT` | `hephaestus.agent.drain-timeout` |  | `server` | How long shutdown waits for leased review runs, with the gateway still available. |
 | `HEPHAESTUS_AGENT_IMAGE_REFERENCE` | `hephaestus.agent.image.reference` |  | `server` | Image reference used by Pi practice sandboxes and the Hephaestus container. Production must be digest-pinned (registry/path@sha256:\<64 lowercase hex\>). |
 | `HEPHAESTUS_AGENT_IMAGE_REQUIRE_DIGEST` | `hephaestus.agent.image.require-digest` |  | `server` | Refuses startup unless the agent image reference is pinned by digest. |

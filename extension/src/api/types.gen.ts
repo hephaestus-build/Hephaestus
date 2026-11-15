@@ -6082,7 +6082,8 @@ export type ReviewStopReason =
 	| "LEGACY_SCOPE_UNKNOWN"
 	| "CONTRACT_CHANGED"
 	| "NO_SANDBOX_ROOM"
-	| "COMPOSITION_UNCONFIRMED";
+	| "COMPOSITION_UNCONFIRMED"
+	| "PROVIDER_UNAVAILABLE";
 
 export type ReviewSummary = {
 	activeJobCount: number;

@@ -3,10 +3,14 @@ package de.tum.cit.aet.hephaestus.agent.job;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
@@ -45,22 +49,28 @@ import de.tum.cit.aet.hephaestus.agent.practice.PracticePiAdapter;
 import de.tum.cit.aet.hephaestus.agent.proxy.LlmCallPermits;
 import de.tum.cit.aet.hephaestus.agent.proxy.LlmCallPermitsTestFixtures;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunBand;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunFence;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunHold;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunRef;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
+import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxWorkspaceManager;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxKind;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxes;
+import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxResult;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetBlockReason;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetDecision;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetService;
+import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRecorder;
+import de.tum.cit.aet.hephaestus.conversation.ConversationTurn;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AiChoice;
 import de.tum.cit.aet.hephaestus.core.lock.ClusterLock;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonProcessingSuppression;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStart;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewStopReason;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.LlmCatalogTestFixtures;
 import de.tum.cit.aet.hephaestus.testconfig.TestEntities;
@@ -70,8 +80,10 @@ import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import de.tum.cit.aet.hephaestus.workspace.spi.MemberAiPreferences;
+import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import io.micrometer.tracing.Tracer;
+import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -84,6 +96,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import org.awaitility.Awaitility;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -322,6 +335,308 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void shouldRequeueAnAttemptThatNoModelCallAnsweredWithoutSpendingARetry() {
+        var job = queued(binding(DataHandlingTier.IN_HOUSE));
+        var fence = claimLeased(job).orElseThrow().fence();
+        var metrics = new SimpleMeterRegistry();
+        var unanswered = results(metrics, new ConversationTurn.FailedCall("upstream_stalled", null));
+
+        assertThat(measure(unanswered, job, fence, SandboxLayout.EXIT_PROVIDER_UNREACHABLE))
+                .isNull();
+
+        var waiting = jobs.findById(job.getId()).orElseThrow();
+        assertThat(waiting.getStatus()).isEqualTo(ReviewJobStatus.QUEUED);
+        assertThat(waiting.spentAttempts()).as("an outage spends no retry").isZero();
+        assertThat(jdbc.queryForObject(
+                        "SELECT available_at > clock_timestamp() + interval '10 seconds' FROM agent_run WHERE id=?",
+                        Boolean.class,
+                        job.getRunId()))
+                .as("the next attempt waits the backoff of its number")
+                .isTrue();
+        assertThat(metrics.counter(AgentMetrics.AGENT_JOB_INFRA_RETRY_REQUEUED, "cause", "provider_unreachable")
+                        .count())
+                .isEqualTo(1);
+    }
+
+    @Test
+    void shouldCountARateLimitedAttemptApartAndSpendNoRetry() {
+        var job = queued(binding(DataHandlingTier.IN_HOUSE));
+        var fence = claimLeased(job).orElseThrow().fence();
+        var metrics = new SimpleMeterRegistry();
+        var limited = results(metrics, new ConversationTurn.FailedCall("upstream_status", 429));
+
+        measure(limited, job, fence, SandboxLayout.EXIT_PROVIDER_UNREACHABLE);
+
+        var waiting = jobs.findById(job.getId()).orElseThrow();
+        assertThat(waiting.getStatus()).isEqualTo(ReviewJobStatus.QUEUED);
+        assertThat(waiting.spentAttempts()).isZero();
+        assertThat(metrics.counter(AgentMetrics.AGENT_JOB_INFRA_RETRY_REQUEUED, "cause", "rate_limited")
+                        .count())
+                .isEqualTo(1);
+        assertThat(metrics.counter(AgentMetrics.AGENT_JOB_INFRA_RETRY_REQUEUED, "cause", "provider_unreachable")
+                        .count())
+                .isZero();
+    }
+
+    @Test
+    void shouldEndAReviewThatNoModelCallAnsweredPastItsOutageWindowAsProviderUnavailable() {
+        var job = queued(binding(DataHandlingTier.IN_HOUSE));
+        var fence = claimLeased(job).orElseThrow().fence();
+        jdbc.update(
+                "UPDATE review_job SET submitted_at = clock_timestamp() - make_interval(secs => ?) WHERE id=?",
+                runs().modelOutageWindow().plusMinutes(1).toSeconds(),
+                job.getId());
+        var metrics = new SimpleMeterRegistry();
+        var unanswered = results(metrics, new ConversationTurn.FailedCall("upstream_stalled", null));
+
+        measure(unanswered, job, fence, SandboxLayout.EXIT_PROVIDER_UNREACHABLE);
+
+        var ended = jobs.findById(job.getId()).orElseThrow();
+        assertThat(ended.getStatus()).isEqualTo(ReviewJobStatus.FAILED);
+        assertThat(Objects.requireNonNull(ended.getOutput()).path("outcome").asString())
+                .isEqualTo(RefusalOutcome.PROVIDER_UNAVAILABLE.name());
+        assertThat(ended.getAdmissionDigest())
+                .as("it admitted nothing about the work")
+                .isNull();
+        assertThat(RuntimeJobTestData.runState(jdbc, ended)).isEqualTo("ENDED");
+        assertThat(metrics.counter(AgentMetrics.AGENT_JOB_INFRA_RETRY_REQUEUED, "cause", "provider_unreachable")
+                        .count())
+                .isZero();
+    }
+
+    @Test
+    void shouldKeepStagedPracticesThroughAnOutageAndWithholdTheRestPastItsWindow() {
+        var job = queued(binding(DataHandlingTier.IN_HOUSE));
+        var fence = claimLeased(job).orElseThrow().fence();
+        var handler = mock(DefaultReviewExecutionHandler.class);
+        when(handler.hasStaged(any())).thenReturn(true);
+        when(handler.completeStaged(any())).thenReturn(false);
+        var stalled = new ConversationTurn.FailedCall("upstream_stalled", null);
+
+        measure(
+                results(new SimpleMeterRegistry(), stalled, handler),
+                job,
+                fence,
+                SandboxLayout.EXIT_PROVIDER_UNREACHABLE);
+
+        var waiting = jobs.findById(job.getId()).orElseThrow();
+        assertThat(waiting.getStatus())
+                .as("inside the window it waits, keeping what it staged")
+                .isEqualTo(ReviewJobStatus.QUEUED);
+        assertThat(waiting.spentAttempts()).isZero();
+        verify(handler, never()).finishInterrupted(any(), any());
+
+        jdbc.update("UPDATE agent_run SET available_at=clock_timestamp() WHERE id=?", waiting.getRunId());
+        var again = claimLeased(waiting).orElseThrow().fence();
+        jdbc.update(
+                "UPDATE review_job SET submitted_at = clock_timestamp() - make_interval(secs => ?) WHERE id=?",
+                runs().modelOutageWindow().plusMinutes(1).toSeconds(),
+                job.getId());
+        measure(
+                results(new SimpleMeterRegistry(), stalled, handler),
+                waiting,
+                again,
+                SandboxLayout.EXIT_PROVIDER_UNREACHABLE);
+
+        verify(handler).finishInterrupted(any(), eq(ReviewStopReason.PROVIDER_UNAVAILABLE));
+    }
+
+    @Test
+    void shouldSpendARetryWhenTheProviderAnsweredEveryCallWithAnError() {
+        var job = queued(binding(DataHandlingTier.IN_HOUSE));
+        var fence = claimLeased(job).orElseThrow().fence();
+        var metrics = new SimpleMeterRegistry();
+        // A revoked key: the sandbox reports no reply, but the provider answered.
+        var refused = results(metrics, new ConversationTurn.FailedCall("upstream_status", 401));
+
+        measure(refused, job, fence, SandboxLayout.EXIT_PROVIDER_UNREACHABLE);
+
+        var waiting = jobs.findById(job.getId()).orElseThrow();
+        assertThat(waiting.getStatus()).isEqualTo(ReviewJobStatus.QUEUED);
+        assertThat(waiting.spentAttempts())
+                .as("an answered error spends a retry")
+                .isEqualTo(1);
+        assertThat(metrics.counter(AgentMetrics.AGENT_JOB_INFRA_RETRY_REQUEUED, "cause", "provider_unreachable")
+                        .count())
+                .isEqualTo(1);
+    }
+
+    @Test
+    void shouldSpendARetryWhenTheSandboxCouldNotReachTheServer() {
+        var job = queued(binding(DataHandlingTier.IN_HOUSE));
+        var fence = claimLeased(job).orElseThrow().fence();
+        var metrics = new SimpleMeterRegistry();
+        var unreached = results(metrics, new ConversationTurn.FailedCall("upstream_stalled", null));
+
+        measure(unreached, job, fence, SandboxLayout.EXIT_SERVER_UNREACHABLE);
+
+        var waiting = jobs.findById(job.getId()).orElseThrow();
+        assertThat(waiting.getStatus()).isEqualTo(ReviewJobStatus.QUEUED);
+        assertThat(waiting.spentAttempts()).isEqualTo(1);
+        assertThat(metrics.counter(AgentMetrics.AGENT_JOB_INFRA_RETRY_REQUEUED, "cause", "server_unreachable")
+                        .count())
+                .isEqualTo(1);
+    }
+
+    @Test
+    void shouldContinueACompositionThatTheProviderLeftUnansweredOnAFreshRunWithoutSpendingARetry() {
+        var claim = composing();
+        var deadline = runDeadline(claim.fence().runId());
+        var metrics = new SimpleMeterRegistry();
+
+        assertThat(handOn(claim, new ConversationTurn.FailedCall("WebClientRequestException", null), metrics))
+                .isTrue();
+
+        var waiting = jobs.findById(claim.job().getId()).orElseThrow();
+        assertThat(waiting.getStatus()).isEqualTo(ReviewJobStatus.QUEUED);
+        assertThat(waiting.getRunId())
+                .as("a fresh run continues it")
+                .isNotEqualTo(claim.fence().runId());
+        assertThat(waiting.spentAttempts()).isEqualTo(claim.job().spentAttempts());
+        assertThat(runDeadline(waiting.getRunId()))
+                .as("the fresh run has its own work deadline")
+                .isAfter(deadline);
+        assertThat(metrics.counter(AgentMetrics.AGENT_JOB_INFRA_RETRY_REQUEUED, "cause", "provider_unreachable")
+                        .count())
+                .isEqualTo(1);
+    }
+
+    @Test
+    void shouldContinueARateLimitedCompositionWithoutSpendingARetryAndCountItApart() {
+        var claim = composing();
+        var metrics = new SimpleMeterRegistry();
+
+        assertThat(handOn(claim, new ConversationTurn.FailedCall("upstream_status", 429), metrics))
+                .isTrue();
+
+        var waiting = jobs.findById(claim.job().getId()).orElseThrow();
+        assertThat(waiting.getRunId()).isNotEqualTo(claim.fence().runId());
+        assertThat(waiting.spentAttempts()).isEqualTo(claim.job().spentAttempts());
+        assertThat(metrics.counter(AgentMetrics.AGENT_JOB_INFRA_RETRY_REQUEUED, "cause", "rate_limited")
+                        .count())
+                .isEqualTo(1);
+    }
+
+    @Test
+    void shouldSpendARetryWhenTheProviderAnsweredTheCompositionsFailedCall() {
+        var claim = composing();
+        var metrics = new SimpleMeterRegistry();
+
+        assertThat(handOn(claim, new ConversationTurn.FailedCall("upstream_status", 400), metrics))
+                .isTrue();
+
+        var retry = jobs.findById(claim.job().getId()).orElseThrow();
+        assertThat(retry.getStatus()).isEqualTo(ReviewJobStatus.QUEUED);
+        assertThat(retry.getRunId()).isNotEqualTo(claim.fence().runId());
+        assertThat(retry.spentAttempts()).isEqualTo(claim.job().spentAttempts() + 1);
+        assertThat(metrics.find(AgentMetrics.AGENT_JOB_INFRA_RETRY_REQUEUED).counters().stream()
+                        .mapToDouble(Counter::count)
+                        .sum())
+                .isZero();
+    }
+
+    @Test
+    void shouldSpendARetryWhenACompositionHandsOnForAnotherCauseAfterATransientOutage() {
+        var claim = composing();
+        var metrics = new SimpleMeterRegistry();
+        // A 503 that the loop retried, then a hand-on for its deadline: the outage did not stop the composition.
+        assertThat(handOn(claim, new ConversationTurn.FailedCall("upstream_status", 503), metrics, false))
+                .isTrue();
+
+        var waiting = jobs.findById(claim.job().getId()).orElseThrow();
+        assertThat(waiting.getStatus()).isEqualTo(ReviewJobStatus.QUEUED);
+        assertThat(waiting.getRunId())
+                .as("a spent retry continues on a fresh run")
+                .isNotEqualTo(claim.fence().runId());
+        assertThat(waiting.spentAttempts()).isEqualTo(claim.job().spentAttempts() + 1);
+        assertThat(metrics.counter(AgentMetrics.AGENT_JOB_INFRA_RETRY_REQUEUED, "cause", "provider_unreachable")
+                        .count())
+                .isZero();
+    }
+
+    @Test
+    void shouldEndACompositionThatTheProviderLeftUnansweredPastItsOutageWindowAsProviderUnavailable() {
+        var claim = composing();
+        jdbc.update(
+                "UPDATE review_job SET submitted_at = clock_timestamp() - make_interval(secs => ?) WHERE id=?",
+                runs().modelOutageWindow().plusMinutes(1).toSeconds(),
+                claim.job().getId());
+        var metrics = new SimpleMeterRegistry();
+
+        assertThat(handOn(claim, new ConversationTurn.FailedCall("upstream_stalled", null), metrics))
+                .isTrue();
+
+        var ended = jobs.findById(claim.job().getId()).orElseThrow();
+        assertThat(ended.getStatus()).isEqualTo(ReviewJobStatus.FAILED);
+        assertThat(Objects.requireNonNull(ended.getOutput()).path("outcome").asString())
+                .isEqualTo(RefusalOutcome.PROVIDER_UNAVAILABLE.name());
+        assertThat(ended.getAdmissionDigest()).as("its admitted results stay").isNotNull();
+        assertThat(RuntimeJobTestData.runState(jdbc, ended)).isEqualTo("ENDED");
+        assertThat(metrics.counter(AgentMetrics.AGENT_JOB_INFRA_RETRY_REQUEUED, "cause", "provider_unreachable")
+                        .count())
+                .isZero();
+    }
+
+    /** The claim of the run that composes an admitted review. */
+    private ReviewJobClaimService.ClaimResult composing() {
+        var job = queued(binding(DataHandlingTier.IN_HOUSE));
+        var started = claimLeased(job).orElseThrow();
+        jdbc.update(
+                "UPDATE review_job SET admission_attempt=0, admission_digest=? WHERE id=?",
+                "a".repeat(64),
+                job.getId());
+        Optional<AgentRunRef> composition = Objects.requireNonNull(
+                transactions.execute(status -> reviewRuns.continueToCompose(job.getId(), started.fence())));
+        assertThat(composition)
+                .as("the measured review hands on to its composition")
+                .isPresent();
+        return claimLeased(jobs.findById(job.getId()).orElseThrow()).orElseThrow();
+    }
+
+    /** Ends the composing claim handed on for a provider failure, after its newest failed call was {@code latestFailure}. */
+    private boolean handOn(
+            ReviewJobClaimService.ClaimResult claim,
+            ConversationTurn.FailedCall latestFailure,
+            SimpleMeterRegistry metrics) {
+        return handOn(claim, latestFailure, metrics, true);
+    }
+
+    /** @param providerFailure whether the server closed the attempt for a provider failure, not another passing cause */
+    private boolean handOn(
+            ReviewJobClaimService.ClaimResult claim,
+            ConversationTurn.FailedCall latestFailure,
+            SimpleMeterRegistry metrics,
+            boolean providerFailure) {
+        var outages = outages(metrics, latestFailure);
+        var job = jobs.findById(claim.job().getId()).orElseThrow();
+        return Boolean.TRUE.equals(
+                transactions.execute(status -> outages.handOnComposition(job, claim.fence(), providerFailure)));
+    }
+
+    private Instant runDeadline(UUID runId) {
+        return Objects.requireNonNull(
+                        jdbc.queryForObject("SELECT deadline FROM agent_run WHERE id=?", Timestamp.class, runId))
+                .toInstant();
+    }
+
+    private ProviderOutages outages(SimpleMeterRegistry metrics, ConversationTurn.@Nullable FailedCall latestFailure) {
+        var usage = mock(LlmUsageRecorder.class);
+        when(usage.latestFailure(anyLong(), any(), anyInt())).thenReturn(latestFailure);
+        return new ProviderOutages(reviewRuns, usage, runs(), metrics);
+    }
+
+    /** Hands the attempt's result to {@code results} as its sandbox reported it: an exit code and nothing else. */
+    private @Nullable ReviewJobStatus measure(
+            ReviewAttemptResults results, ReviewJob job, AgentRunFence fence, int exitCode) {
+        return results.measured(
+                job.getId(),
+                jobs.findById(job.getId()).orElseThrow(),
+                fence,
+                0,
+                new SandboxResult(exitCode, Map.of(), "", false, Duration.ZERO));
+    }
+
+    @Test
     void shouldRefuseAnAttemptWhoseEvidenceIsTooLittleAndEndItsRun() {
         var job = queued(binding(DataHandlingTier.IN_HOUSE));
         var fence = claimLeased(job).orElseThrow().fence();
@@ -490,13 +805,30 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
 
     /** The steps after a sandbox's attempt, with the real job and run writes and nothing of its measurement. */
     private ReviewAttemptResults results(SimpleMeterRegistry metrics) {
+        return results(metrics, null);
+    }
+
+    /** @param latestFailure the newest failed model call of the attempt's claim, as the proxy recorded it */
+    private ReviewAttemptResults results(
+            SimpleMeterRegistry metrics, ConversationTurn.@Nullable FailedCall latestFailure) {
+        return results(metrics, latestFailure, mock(DefaultReviewExecutionHandler.class));
+    }
+
+    private ReviewAttemptResults results(
+            SimpleMeterRegistry metrics,
+            ConversationTurn.@Nullable FailedCall latestFailure,
+            DefaultReviewExecutionHandler handler) {
+        var preparation = mock(ReviewAttemptPreparation.class);
+        when(preparation.owned(any(), any()))
+                .thenAnswer(call -> jobs.findById(call.getArgument(0)).orElseThrow());
         return new ReviewAttemptResults(
                 jobs,
-                mock(DefaultReviewExecutionHandler.class),
+                handler,
                 mock(PracticePiAdapter.class),
-                mock(ReviewAttemptPreparation.class),
+                preparation,
                 new ReviewJobTerminal(jobs, agentRuns, context.getBeanProvider(ReviewCompositionContinuation.class)),
                 reviewRuns,
+                outages(metrics, latestFailure),
                 mock(PracticeScriptRunRecorder.class),
                 transactions,
                 mapper,

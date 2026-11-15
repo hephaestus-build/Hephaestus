@@ -144,6 +144,7 @@ export const REVIEW_STOP_REASON_SENTENCES: Record<ReviewStopReason, string> = {
 	EXECUTION_INCOMPLETE: "The review did not record an observation for every selected practice.",
 	COMPOSITION_UNCONFIRMED:
 		"The observations are kept, but we could not confirm where the feedback went.",
+	PROVIDER_UNAVAILABLE: "The AI provider was unavailable or rate-limited for too long.",
 	RESULT_WITHHELD: "Its candidate observations were withheld.",
 	READINESS_REFUSED: "Something the review needs was not ready.",
 	SUSPECT_LISTING: "The file listing changed too much to trust, so files were not removed.",

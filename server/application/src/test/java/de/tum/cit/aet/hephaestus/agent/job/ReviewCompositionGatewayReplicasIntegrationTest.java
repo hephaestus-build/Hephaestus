@@ -350,7 +350,7 @@ class ReviewCompositionGatewayReplicasIntegrationTest extends BaseIntegrationTes
                 continuation,
                 closing,
                 SandboxReviewClaims.terminal(beans),
-                beans.getBean(ReviewRunKind.class),
+                beans.getBean(ProviderOutages.class),
                 runs,
                 new ReviewCompositionClaim(jobs, transactions, mapper, beans.getBean(ClusterLock.class)),
                 new SimpleMeterRegistry(),

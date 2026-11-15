@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import org.jspecify.annotations.Nullable;
 import tools.jackson.databind.JsonNode;
 
 /**
@@ -53,6 +54,14 @@ public interface SandboxRunKind {
      * answers the sandbox that its lease is gone.
      */
     boolean end(SandboxRun run, Outcome outcome);
+
+    /**
+     * {@link #end(SandboxRun, Outcome)} with the cause that the server answered the loop when it closed the attempt, or
+     * {@code null}. Only a kind whose server decides a hand-on cause reads it.
+     */
+    default boolean end(SandboxRun run, Outcome outcome, @Nullable String cause) {
+        return end(run, outcome);
+    }
 
     /** The registered kinds by the run kind that each drives; two beans of one run kind are a defect. */
     static Map<AgentRunKind, SandboxRunKind> byKind(List<SandboxRunKind> kinds) {

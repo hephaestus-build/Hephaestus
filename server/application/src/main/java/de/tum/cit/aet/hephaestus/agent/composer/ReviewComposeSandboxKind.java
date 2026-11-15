@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.agent.context.ReviewAttemptCustody;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxRun;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxRunKind;
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
+import de.tum.cit.aet.hephaestus.agent.job.ProviderOutages;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewCompositionClaim;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewCompositionContinuation;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobClaimService;
@@ -29,6 +30,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.MDC;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
 import org.springframework.stereotype.Component;
@@ -53,7 +55,7 @@ public class ReviewComposeSandboxKind implements SandboxRunKind {
     private final ReviewCompositionContinuation continuation;
     private final CompositionSessions sessions;
     private final ReviewJobTerminal terminal;
-    private final ReviewRunKind reviewRuns;
+    private final ProviderOutages outages;
     private final AgentRuns runs;
     private final ReviewStageTelemetry stages;
     private final ReviewCompositionClaim gateway;
@@ -65,7 +67,7 @@ public class ReviewComposeSandboxKind implements SandboxRunKind {
             ReviewCompositionContinuation continuation,
             CompositionSessions sessions,
             ReviewJobTerminal terminal,
-            ReviewRunKind reviewRuns,
+            ProviderOutages outages,
             AgentRuns runs,
             ReviewCompositionClaim gateway,
             MeterRegistry meters,
@@ -76,7 +78,7 @@ public class ReviewComposeSandboxKind implements SandboxRunKind {
         this.continuation = continuation;
         this.sessions = sessions;
         this.terminal = terminal;
-        this.reviewRuns = reviewRuns;
+        this.outages = outages;
         this.runs = runs;
         this.gateway = gateway;
         this.stages = new ReviewStageTelemetry(meters, tracer);
@@ -167,6 +169,12 @@ public class ReviewComposeSandboxKind implements SandboxRunKind {
 
     @Override
     public boolean end(SandboxRun run, Outcome outcome) {
+        return end(run, outcome, null);
+    }
+
+    /** @param cause the passing cause that {@code close} answered the loop; only {@code PROVIDER} can be an outage */
+    @Override
+    public boolean end(SandboxRun run, Outcome outcome, @Nullable String cause) {
         var fence = run.fence();
         ResultAdmissionService.Composing composing;
         try {
@@ -181,7 +189,11 @@ public class ReviewComposeSandboxKind implements SandboxRunKind {
             var decision = gateway.find(run, composing.job());
             boolean held = switch (outcome) {
                 case COMPLETED -> terminal.completeComposed(jobId, fence);
-                case HANDED_ON -> reviewRuns.retryComposition(jobId, fence);
+                case HANDED_ON ->
+                    outages.handOnComposition(
+                            composing.job(),
+                            fence,
+                            CompositionStop.PROVIDER.name().equals(cause));
             };
             custody.release(composing.identity());
             if (held && decision.isPresent())

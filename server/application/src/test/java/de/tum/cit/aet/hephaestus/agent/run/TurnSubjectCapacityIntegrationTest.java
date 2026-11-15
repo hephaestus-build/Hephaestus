@@ -79,7 +79,8 @@ class TurnSubjectCapacityIntegrationTest extends BaseIntegrationTest {
                         capacity.permitAging(),
                         capacity.sandboxStart(),
                         capacity.sandboxIdle(),
-                        capacity.conversationSandboxIdle()),
+                        capacity.conversationSandboxIdle(),
+                        capacity.modelOutageWindow()),
                 new SimpleMeterRegistry());
     }
 

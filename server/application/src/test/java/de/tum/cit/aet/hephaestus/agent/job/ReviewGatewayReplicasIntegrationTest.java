@@ -519,6 +519,7 @@ class ReviewGatewayReplicasIntegrationTest extends BaseIntegrationTest {
                 preparation,
                 terminal,
                 beans.getBean(ReviewRunKind.class),
+                beans.getBean(ProviderOutages.class),
                 mock(PracticeScriptRunRecorder.class),
                 transactions,
                 mapper,

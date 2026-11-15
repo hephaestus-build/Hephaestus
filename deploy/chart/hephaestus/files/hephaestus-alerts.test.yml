@@ -801,7 +801,26 @@ tests:
               severity: warning
               cause: provider_unreachable
             exp_annotations:
-              summary: Review sandboxes failed to reach the server or the model provider at least three times in one hour
+              summary: Review sandboxes failed to reach the server or the model provider, or the provider limited their rate, at least three times in one hour
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+
+  - name: a provider that keeps limiting the rate of reviews fires with its own cause
+    interval: 1m
+    input_series:
+      - series: 'agent_job_infra_retry_requeued_total{job="hephaestus",instance="server-b:9090",cause="rate_limited"}'
+        values: "0 1 2 3x30"
+    alert_rule_test:
+      - eval_time: 1m
+        alertname: HephaestusReviewUnreachable
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: HephaestusReviewUnreachable
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              cause: rate_limited
+            exp_annotations:
+              summary: Review sandboxes failed to reach the server or the model provider, or the provider limited their rate, at least three times in one hour
               runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
   - name: one server error on a review's results fires
