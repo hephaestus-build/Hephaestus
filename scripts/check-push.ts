@@ -121,15 +121,7 @@ export function pushScopeReason(paths: string[] | undefined): string {
 }
 
 export function pushTasks(paths: string[] | undefined): string[] {
-	const scopes = pushScopes(paths);
-	const tasks = new Set(scopes.flatMap((scope) => pushStaticTasks[scope]));
-	if (
-		scopes.length === allScopes.length ||
-		paths?.some((file) => instructionPath.test(file)) === true
-	) {
-		tasks.add("gate:instructions");
-	}
-	return [...tasks];
+	return [...new Set(pushScopes(paths).flatMap((scope) => pushStaticTasks[scope]))];
 }
 
 const nativeTest =

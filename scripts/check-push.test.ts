@@ -21,16 +21,20 @@ import {
 	toolingScopes,
 } from "./check-push.ts";
 import { environmentForGitFixture } from "./lib/git-environment.ts";
+import { asStringArray } from "./lib/json.ts";
+import { pushStaticTasks } from "./lib/push-gates.ts";
 import { commandsOf, loadTasks } from "./lib/task-graph.ts";
 
-void test("workflow and docs edits retain eight static checks without complete suites or builds", async () => {
+void test("workflow and docs edits run their static checks without complete suites or builds", async () => {
 	const selected = pushTasks([".github/workflows/cicd.yml", "docs/contributor/ci-cd.mdx"]);
-	assert.equal(selected.length, 8);
+	assert.equal(selected.length, 15);
 	for (const owner of [
 		"gate:agents-lint",
 		"gate:scripts-typecheck",
 		"gate:docs-lint",
 		"gate:prose",
+		"gate:docs-pages",
+		"gate:adr-confirmation",
 	]) {
 		assert.ok(selected.includes(owner));
 	}
@@ -75,6 +79,97 @@ void test("a server change compiles the tests and runs Spotless, PMD and the arc
 		":application:architectureTest",
 	]) {
 		assert.ok(commands[0]?.includes(task) === true, task);
+	}
+});
+
+/**
+ * The gates that `check:affected` runs for a scope and the hook does not, each with its reason. Every
+ * other gate of `affected:<scope>` is in the hook's list for that scope.
+ */
+const notInHook: Readonly<Record<string, Readonly<Record<string, string>>>> = {
+	agents: {
+		"test:tooling":
+			"A complete Node suite. The hook runs the changed and companion test files; PR CI runs the suite.",
+		"test:agents":
+			"A complete agent-runtime suite. The hook runs the changed spec files; PR CI runs the suite.",
+	},
+	server: {
+		"gate:server":
+			"check:push:server runs each of its Gradle tasks in the hook's one Gradle invocation.",
+	},
+};
+
+/** A task's leaf tasks: a group (no command of its own) stands for the tasks it depends on. */
+function leafTasks(tasks: Record<string, unknown>, name: string): string[] {
+	const task = tasks[name];
+	if (
+		typeof task === "object" &&
+		task !== null &&
+		"dependsOn" in task &&
+		Array.isArray(task.dependsOn) &&
+		commandsOf(task).length === 0
+	) {
+		return task.dependsOn.flatMap((dependency: unknown) => leafTasks(tasks, String(dependency)));
+	}
+	return [name];
+}
+
+/** Where the hook and `check:affected` disagree, as one line each. */
+function hookGaps(
+	tasks: Record<string, unknown>,
+	hook: Readonly<Record<string, readonly string[]>>,
+	exclusions: typeof notInHook,
+): string[] {
+	return Object.keys(hook).flatMap((scope) => {
+		const affected = new Set(leafTasks(tasks, `affected:${scope}`));
+		const pushed = new Set((hook[scope] ?? []).flatMap((name) => leafTasks(tasks, name)));
+		const excluded = exclusions[scope] ?? {};
+		return [
+			...[...affected]
+				.filter((gate) => !pushed.has(gate) && !Object.hasOwn(excluded, gate))
+				.map((gate) => `${scope}: check:affected runs ${gate}, the hook does not`),
+			...Object.keys(excluded)
+				.filter((gate) => !affected.has(gate) || pushed.has(gate))
+				.map((gate) => `${scope}: the exclusion of ${gate} is stale`),
+		];
+	});
+}
+
+void test("the hook runs every gate that check:affected selects for a scope, or names why not", async () => {
+	const tasks = await loadTasks();
+	assert.deepEqual(hookGaps(tasks, pushStaticTasks, notInHook), []);
+
+	// A gate added to one list only, or an exclusion that no longer excludes anything, fails here.
+	const affectedDocs = tasks["affected:docs"];
+	assert.ok(
+		typeof affectedDocs === "object" && affectedDocs !== null && "dependsOn" in affectedDocs,
+	);
+	const widened = {
+		...tasks,
+		"affected:docs": {
+			...affectedDocs,
+			dependsOn: [...asStringArray(affectedDocs.dependsOn, "affected:docs"), "gate:new"],
+		},
+	};
+	assert.deepEqual(hookGaps(widened, pushStaticTasks, notInHook), [
+		"docs: check:affected runs gate:new, the hook does not",
+	]);
+	assert.deepEqual(
+		hookGaps(
+			tasks,
+			{ ...pushStaticTasks, agents: [...pushStaticTasks.agents, "test:agents"] },
+			notInHook,
+		),
+		["agents: the exclusion of test:agents is stale"],
+	);
+
+	// The server exclusion holds only while the hook's Gradle call runs every task of gate:server.
+	const gradleTasks = (name: string) =>
+		new Set(commandsOf(tasks[name]).flatMap((line) => line.match(/(?<=\s):[\w:-]+/gu) ?? []));
+	const hookGradle = gradleTasks("check:push:server");
+	assert.ok(hookGradle.size > 0);
+	for (const gradleTask of gradleTasks("gate:server")) {
+		assert.ok(hookGradle.has(gradleTask), `check:push:server does not run ${gradleTask}`);
 	}
 });
 
@@ -356,7 +451,8 @@ void test("instruction changes keep their owning static gate", () => {
 	]) {
 		assert.ok(pushTasks([file]).includes("gate:instructions"), file);
 	}
-	assert.ok(!pushTasks([".github/workflows/cicd.yml"]).includes("gate:instructions"));
+	// The docs scope runs it too, as check:affected does; a server-only change does not.
+	assert.ok(!pushTasks(["server/application/build.gradle.kts"]).includes("gate:instructions"));
 });
 
 void test("a webapp change runs the build that enforces the bundle budget", () => {
