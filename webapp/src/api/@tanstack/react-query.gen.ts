@@ -205,8 +205,13 @@ export { adoptGroupMutation } from "./react-query/adoptGroup.gen.js";
 export { adoptPracticeMutation } from "./react-query/adoptPractice.gen.js";
 export { allowMyProductFeedbackPublicMutation } from "./react-query/allowMyProductFeedbackPublic.gen.js";
 export { answerPublicActivityOnboardingMutation } from "./react-query/answerPublicActivityOnboarding.gen.js";
+export { approveMcpConsentRequestMutation } from "./react-query/approveMcpConsentRequest.gen.js";
 export { assignMemberRoleMutation } from "./react-query/assignMemberRole.gen.js";
 export { assignModelMutation } from "./react-query/assignModel.gen.js";
+export {
+	authorizeMcpClientOptions,
+	authorizeMcpClientQueryKey,
+} from "./react-query/authorizeMcpClient.gen.js";
 export { bindPracticeGroupMutation } from "./react-query/bindPracticeGroup.gen.js";
 export { callbackGetOptions, callbackGetQueryKey } from "./react-query/callbackGet.gen.js";
 export { callbackPostMutation } from "./react-query/callbackPost.gen.js";
@@ -359,6 +364,18 @@ export {
 	getLlmUsageReportOptions,
 	getLlmUsageReportQueryKey,
 } from "./react-query/getLlmUsageReport.gen.js";
+export {
+	getMcpAuthorizationServerMetadataOptions,
+	getMcpAuthorizationServerMetadataQueryKey,
+} from "./react-query/getMcpAuthorizationServerMetadata.gen.js";
+export {
+	getMcpConsentRequestOptions,
+	getMcpConsentRequestQueryKey,
+} from "./react-query/getMcpConsentRequest.gen.js";
+export {
+	getMcpResourceMetadataOptions,
+	getMcpResourceMetadataQueryKey,
+} from "./react-query/getMcpResourceMetadata.gen.js";
 export {
 	getMemberOnboardingOptions,
 	getMemberOnboardingQueryKey,
@@ -645,6 +662,10 @@ export {
 	listLinkedIdentitiesQueryKey,
 } from "./react-query/listLinkedIdentities.gen.js";
 export {
+	listMcpClientGrantsOptions,
+	listMcpClientGrantsQueryKey,
+} from "./react-query/listMcpClientGrants.gen.js";
+export {
 	listMembershipsInfiniteOptions,
 	listMembershipsInfiniteQueryKey,
 	listMembershipsOptions,
@@ -807,6 +828,7 @@ export { logoutMutation } from "./react-query/logout.gen.js";
 export { logoutClientSessionMutation } from "./react-query/logoutClientSession.gen.js";
 export { makeMyProductFeedbackPrivateMutation } from "./react-query/makeMyProductFeedbackPrivate.gen.js";
 export { markConversationReadMutation } from "./react-query/markConversationRead.gen.js";
+export { mcpTokenMutation } from "./react-query/mcpToken.gen.js";
 export { moveCatalogPracticeMutation } from "./react-query/moveCatalogPractice.gen.js";
 export { movePracticeMutation } from "./react-query/movePractice.gen.js";
 export {
@@ -825,6 +847,7 @@ export { recordResearchRemovalsMutation } from "./react-query/recordResearchRemo
 export { recoverPasskeysMutation } from "./react-query/recoverPasskeys.gen.js";
 export { refreshMutation } from "./react-query/refresh.gen.js";
 export { refreshClientSessionMutation } from "./react-query/refreshClientSession.gen.js";
+export { refuseMcpConsentRequestMutation } from "./react-query/refuseMcpConsentRequest.gen.js";
 export { registerOutlineCollectionMutation } from "./react-query/registerOutlineCollection.gen.js";
 export { registerPasskeyMutation } from "./react-query/registerPasskey.gen.js";
 export { registerSlackChannelMutation } from "./react-query/registerSlackChannel.gen.js";
@@ -859,6 +882,7 @@ export {
 } from "./react-query/resolveReviewContext.gen.js";
 export { retryFeedbackMutation } from "./react-query/retryFeedback.gen.js";
 export { retryProductFeedbackFilingMutation } from "./react-query/retryProductFeedbackFiling.gen.js";
+export { revokeMcpClientGrantMutation } from "./react-query/revokeMcpClientGrant.gen.js";
 export { revokeOtherSessionsMutation } from "./react-query/revokeOtherSessions.gen.js";
 export { revokeSessionMutation } from "./react-query/revokeSession.gen.js";
 export { setCatalogGroupStatusMutation } from "./react-query/setCatalogGroupStatus.gen.js";
