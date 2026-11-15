@@ -37,6 +37,8 @@ export interface Measured {
 	sizes: BundleSizes;
 	/** The packages in the entry closure. */
 	entryPackages: string[];
+	/** The packages each lazy load adds past the entry, by its key. */
+	lazyPackages: Record<string, string[]>;
 }
 
 /** Growth that one change may add to a size: a small feature or fix fits in it. */
@@ -77,6 +79,7 @@ export function measure(chunks: readonly BuiltChunk[]): Measured {
 	}
 	const entryClosure = staticClosure(entries[0]?.fileName ?? "", byName);
 	const lazy: Record<string, number> = {};
+	const lazyPackages: Record<string, string[]> = {};
 	for (const chunk of chunks) {
 		if (!chunk.isDynamicEntry || chunk.facadeModule === null) {
 			continue;
@@ -89,6 +92,9 @@ export function measure(chunks: readonly BuiltChunk[]): Measured {
 			(name) => !entryClosure.has(name),
 		);
 		lazy[key] = gzipOf(added, byName);
+		lazyPackages[key] = [
+			...new Set(added.flatMap((name) => byName.get(name)?.packages ?? [])),
+		].sort();
 	}
 	const entryPackages = new Set(
 		[...entryClosure].flatMap((name) => byName.get(name)?.packages ?? []),
@@ -99,6 +105,7 @@ export function measure(chunks: readonly BuiltChunk[]): Measured {
 			lazy: Object.fromEntries(Object.entries(lazy).sort(([a], [b]) => a.localeCompare(b))),
 		},
 		entryPackages: [...entryPackages].sort(),
+		lazyPackages,
 	};
 }
 
@@ -110,6 +117,31 @@ export function entryViolations(
 	return routeOnlyPackages
 		.filter((name) => measured.entryPackages.includes(name))
 		.map((name) => `${name} is in the entry closure; only the routes that use it may load it.`);
+}
+
+/**
+ * Why a package that one lazy component owns loads anywhere else: with the entry, or in another load,
+ * such as a route's or another component's, which would fetch it before the reader opens the owner.
+ * The lazy modules of the packages that one owner holds (Monaco's language modes) are the owner's.
+ */
+export function componentViolations(
+	measured: Measured,
+	owners: Readonly<Record<string, string>>,
+): string[] {
+	// A lazy module of any package that the same owner holds loads only after the owner, so it may hold
+	// the owner's other packages: Monaco's language modes share the editor's chunk.
+	const ownedBy = (load: string, owner: string) =>
+		Object.entries(owners).some(([name, by]) => by === owner && load.startsWith(`${name}/`));
+	return Object.entries(owners).flatMap(([name, owner]) => [
+		...(measured.entryPackages.includes(name)
+			? [`${name} is in the entry closure; only ${owner} may load it.`]
+			: []),
+		...Object.entries(measured.lazyPackages)
+			.filter(
+				([load, packages]) => load !== owner && !ownedBy(load, owner) && packages.includes(name),
+			)
+			.map(([load]) => `${name} loads with ${load}; only ${owner} may load it.`),
+	]);
 }
 
 /** One load that a change grew past the tolerance on purpose, and the change that accepted it. */

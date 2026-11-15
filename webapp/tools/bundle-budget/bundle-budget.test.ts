@@ -5,6 +5,7 @@ import {
 	acceptGrowth,
 	type BuiltChunk,
 	type BundleSizes,
+	componentViolations,
 	entryViolations,
 	growthViolations,
 	lazyKey,
@@ -56,6 +57,7 @@ describe("measure", () => {
 		expect(measure(build)).toStrictEqual({
 			sizes: { entry: 400, lazy: { [PROFILE]: 450 } },
 			entryPackages: ["react"],
+			lazyPackages: { [PROFILE]: ["recharts"] },
 		});
 	});
 
@@ -70,6 +72,61 @@ describe("entryViolations", () => {
 			"react is in the entry closure; only the routes that use it may load it.",
 		]);
 		expect(entryViolations(measure(build), ["recharts"])).toStrictEqual([]);
+	});
+});
+
+describe("componentViolations", () => {
+	const PANEL = "src/components/ChartPanel.tsx";
+	// The profile renders a chart panel that loads the chart library when it opens.
+	const lazyCharts = [
+		chunk({ fileName: "index.js", isEntry: true, imports: ["shell.js"] }),
+		chunk({ fileName: "shell.js", imports: ["index.js"], packages: ["react"] }),
+		chunk({
+			fileName: "profile.js",
+			isDynamicEntry: true,
+			facadeModule: PROFILE,
+			imports: ["shell.js"],
+		}),
+		chunk({
+			fileName: "chart-panel.js",
+			isDynamicEntry: true,
+			facadeModule: PANEL,
+			imports: ["charts.js"],
+		}),
+		chunk({ fileName: "charts.js", packages: ["recharts"] }),
+		chunk({
+			fileName: "charts-mode.js",
+			isDynamicEntry: true,
+			facadeModule: "/repo/node_modules/recharts/es6/mode.js",
+			imports: ["charts.js"],
+		}),
+	];
+
+	it("passes a package that only its owner, and its own lazy modules, load", () => {
+		expect(componentViolations(measure(lazyCharts), { recharts: PANEL })).toStrictEqual([]);
+	});
+
+	it("passes the owner's other package in a lazy module of a package that the owner holds", () => {
+		// The chart mode shares the panel's chunk, which also holds the panel's wrapper package.
+		const withWrapper = [
+			...lazyCharts.filter((built) => built.fileName !== "charts.js"),
+			chunk({ fileName: "charts.js", packages: ["recharts", "react-charts"] }),
+		];
+		expect(
+			componentViolations(measure(withWrapper), { recharts: PANEL, "react-charts": PANEL }),
+		).toStrictEqual([]);
+	});
+
+	it("breaks on a component-only package that another load holds", () => {
+		expect(componentViolations(measure(build), { recharts: PANEL })).toStrictEqual([
+			`recharts loads with ${PROFILE}; only ${PANEL} may load it.`,
+		]);
+	});
+
+	it("breaks on a component-only package in the entry closure", () => {
+		expect(componentViolations(measure(build), { react: PANEL })).toStrictEqual([
+			`react is in the entry closure; only ${PANEL} may load it.`,
+		]);
 	});
 });
 
