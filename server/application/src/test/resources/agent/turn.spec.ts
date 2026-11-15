@@ -2306,7 +2306,7 @@ async function until(condition: () => boolean): Promise<void> {
 
 void test("a turn's call waits while its worker restarts, and its run's end stops the wait", async () => {
 	const served = readFileSync(
-		new URL("heph-turn-contract/context.response.json", import.meta.url),
+		new URL("conversation-turn-contract/context.response.json", import.meta.url),
 		"utf8",
 	);
 	// A port that nothing listens on until the worker comes back: every connection is refused.

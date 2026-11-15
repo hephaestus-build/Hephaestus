@@ -46,7 +46,7 @@ export function waitForGateway(
 		};
 		const fetchGateway: typeof fetch = async (input, init) => {
 			failure = undefined;
-			// The deadline can cut a retry that hangs instead of refusing; the earlier refusal still makes it the gateway's loss.
+			// The deadline can cut a retry that hangs instead of refusing; the earlier refusal makes it the gateway's loss.
 			let refused = false;
 			let response: Response;
 			try {
