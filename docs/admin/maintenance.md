@@ -26,7 +26,7 @@ Keep PostgreSQL running until the servers have drained:
 
 1. Suspend [pull-based reconciliation](./pull-based-deployment#operating-it) and wait for an active reconciliation to finish.
    Suspend any other automation that restores the release.
-   Record the replica counts and take the [database backup](./backup-restore#back-up-the-database).
+   Take the [database backup](./backup-restore#back-up-the-database).
 2. Stop the servers: run `helm upgrade` with the verified chart, your saved values and `server.stopped=true`.
    Wait for their Pods to disappear: `kubectl --namespace hephaestus wait --for=delete pod -l app.kubernetes.io/instance=hephaestus,app.kubernetes.io/component=server --timeout=35m`.
    Their termination grace is the configured drain plus 120 seconds.
