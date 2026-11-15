@@ -39,6 +39,7 @@ The alert or the objective tells the operator when the answer needs work.
 | Is a container near its memory limit? | cAdvisor | `HephaestusContainerMemoryHigh` |
 | Did the kernel kill a container for its memory? | kube-state-metrics | `HephaestusContainerOomKilled` |
 | Does a server container restart repeatedly? | `kube_pod_container_status_restarts_total` from kube-state-metrics | `HephaestusServerRestarting` |
+| Does a node run out of disk? | `node_filesystem_avail_bytes`, `node_filesystem_size_bytes` from node-exporter | `HephaestusNodeDiskFilling` |
 | Does a node run low on RAM? | `node_memory_MemAvailable_bytes`, `node_memory_MemTotal_bytes` from node-exporter | `HephaestusNodeMemoryLow` |
 | How long does a model call take, how many tokens does it use, and how does it end? | `gen_ai_client_operation_duration_seconds`, `gen_ai_client_tokens_total`, `gen_ai_client_calls_total` by `outcome` | None |
 | Which calls does the proxy refuse before a provider sees them? | `llm_proxy_refused_total`, by `refusal` | None |

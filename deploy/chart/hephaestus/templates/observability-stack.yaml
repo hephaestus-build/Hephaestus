@@ -1,7 +1,8 @@
 {{- /*
 The monitoring stack of the release, in its namespace: VictoriaMetrics scrapes the roles, vmalert evaluates
 files/hephaestus-alerts.yml, and Alertmanager notifies. Node, kubelet and kube-state-metrics exporters need
-host paths or cluster-wide access, which the restricted posture of the chart excludes.
+host paths or cluster-wide access, which the restricted posture of the chart excludes. The stack scrapes
+node-exporters that run outside the release at the addresses of observability.stack.nodeExporters.
 docs/admin/monitoring.md § Run the monitoring stack.
 */}}
 {{- $stack := .Values.observability.stack }}
@@ -13,12 +14,16 @@ docs/admin/monitoring.md § Run the monitoring stack.
 {{- $vmalert := include "hephaestus.name" (dict "root" . "component" "vmalert") }}
 {{- $alertmanager := include "hephaestus.name" (dict "root" . "component" "alertmanager") }}
 {{- /*
-The release's rules without the groups that read host and cluster exporters, which the stack does not run. Their
-series never exist here, and an absent() rule among them, such as HephaestusDeployMetricsMissing, would fire for ever.
+The release's rules without the groups that read exporters the stack does not scrape. Their series never exist
+here, and an absent() rule among them, such as HephaestusDeployMetricsMissing, would fire for ever.
 */}}
+{{- $unscraped := list "hephaestus-kubernetes" "hephaestus-pull-deploy" }}
+{{- if not $stack.nodeExporters }}
+{{- $unscraped = append $unscraped "hephaestus-node" }}
+{{- end }}
 {{- $groups := list }}
 {{- range (fromYaml (.Files.Get "files/hephaestus-alerts.yml")).groups }}
-{{- if not (has .name (list "hephaestus-kubernetes" "hephaestus-pull-deploy")) }}
+{{- if not (has .name $unscraped) }}
 {{- /* PostgreSQL counters survive exporter restarts. MetricsQL must skip their first sample, as Prometheus does. */}}
 {{- if eq .name "hephaestus-postgresql" }}
 {{- range .rules }}
@@ -112,6 +117,12 @@ data:
             action: keep
           - source_labels: [__meta_kubernetes_namespace]
             target_label: namespace
+      {{- end }}
+      {{- with $stack.nodeExporters }}
+      # node-exporter on the hosts, outside the release. The address is the instance label of the node rules.
+      - job_name: node
+        static_configs:
+          - targets: {{ toJson . }}
       {{- end }}
 ---
 apiVersion: v1
@@ -397,6 +408,15 @@ spec:
       ports:
         - port: {{ $api.port }}
           protocol: TCP
+    {{- range $stack.nodeExporters }}
+    {{- $address := splitList ":" . }}
+    - to:
+        - ipBlock:
+            cidr: {{ printf "%s/32" (first $address) }}
+      ports:
+        - port: {{ last $address | int }}
+          protocol: TCP
+    {{- end }}
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
