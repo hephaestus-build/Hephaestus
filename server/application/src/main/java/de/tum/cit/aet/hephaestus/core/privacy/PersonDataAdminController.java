@@ -4,7 +4,6 @@ import de.tum.cit.aet.hephaestus.core.AuditLedger;
 import de.tum.cit.aet.hephaestus.core.Audited;
 import de.tum.cit.aet.hephaestus.core.RequireInstanceAdmin;
 import de.tum.cit.aet.hephaestus.core.RequiresRecentSignIn;
-import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEvent;
 import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEventLogger;
 import de.tum.cit.aet.hephaestus.core.auth.web.CurrentAccount;
@@ -49,7 +48,6 @@ import tools.jackson.databind.ObjectMapper;
 @ConditionalOnServerRole
 @RequestMapping("/admin/person-data")
 @RequireInstanceAdmin
-@WorkspaceAgnostic("Verified instance-admin access and erasure requests cover all stores and workspaces")
 @Tag(name = "Person Data", description = "Instance-administrator access and erasure requests")
 @RequiredArgsConstructor
 public class PersonDataAdminController {

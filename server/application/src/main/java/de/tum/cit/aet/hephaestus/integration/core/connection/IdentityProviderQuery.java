@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.integration.core.connection;
 
-import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.security.ScmOrigin;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IdentityProviderLookup;
 import java.util.Optional;
@@ -11,7 +10,6 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
-@WorkspaceAgnostic("Identity providers describe shared instances; connections bind each workspace")
 public class IdentityProviderQuery implements IdentityProviderLookup {
     private final IdentityProviderRepository providers;
 

@@ -1,7 +1,6 @@
 package de.tum.cit.aet.hephaestus.notification.preferences;
 
 import de.tum.cit.aet.hephaestus.agent.conversation.weeklydigest.WeeklyDigestSubscriptions;
-import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
@@ -13,7 +12,6 @@ import org.springframework.transaction.annotation.Transactional;
 /** The weekly digest choice is one account-level subscription, {@link NotificationSubscriptionKind#WEEKLY_DIGEST}. */
 @Component
 @RequiredArgsConstructor
-@WorkspaceAgnostic("Subscriptions belong to native accounts, not workspaces")
 class WeeklyDigestSubscriptionAdapter implements WeeklyDigestSubscriptions {
 
     private final NotificationSubscriptionRepository subscriptions;

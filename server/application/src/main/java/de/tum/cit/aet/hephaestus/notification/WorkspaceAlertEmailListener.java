@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.notification;
 
-import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountContactQuery;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountMembershipQuery;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountMembershipQuery.Role;
@@ -26,7 +25,6 @@ import org.springframework.transaction.annotation.Propagation;
 @Component
 @ConditionalOnServerRole
 @RequiredArgsConstructor
-@WorkspaceAgnostic("Delivery rechecks native account identity and current administration of the incident's workspace")
 public class WorkspaceAlertEmailListener implements EmailNotice<WorkspaceAlertEmailRequested> {
     static final Duration EXPIRES_AFTER = Duration.ofHours(24);
 

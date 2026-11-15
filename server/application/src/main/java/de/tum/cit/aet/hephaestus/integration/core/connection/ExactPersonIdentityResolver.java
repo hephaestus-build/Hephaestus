@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.integration.core.connection;
 
-import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentityResolver;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
@@ -27,7 +26,6 @@ import org.springframework.web.server.ResponseStatusException;
 /** Exact provider-key closure, including disabled links. Cached actor ids are never ownership proof. */
 @Component
 @ConditionalOnServerRole
-@WorkspaceAgnostic("Verified person requests intentionally span all workspaces")
 public class ExactPersonIdentityResolver implements PersonIdentityResolver {
 
     private final JdbcTemplate jdbc;

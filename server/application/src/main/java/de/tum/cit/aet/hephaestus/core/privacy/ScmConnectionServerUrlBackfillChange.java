@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.core.privacy;
 
-import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonSourceNamespace;
 import java.util.Objects;
 import liquibase.change.custom.CustomTaskChange;
@@ -18,7 +17,6 @@ import org.springframework.jdbc.datasource.SingleConnectionDataSource;
  * source namespaces meant gitlab.com, so the connection could not say which instance holds its work. API calls reached
  * the configured instance, so that is the instance a stored URL names.
  */
-@WorkspaceAgnostic("Upgrade-time backfill of the connection table across all workspaces")
 public class ScmConnectionServerUrlBackfillChange implements CustomTaskChange {
     private final String configuredGitLab;
 

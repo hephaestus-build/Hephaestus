@@ -1,7 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.usage.fx;
 
 import de.tum.cit.aet.hephaestus.agent.LlmProperties;
-import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.YearMonth;
@@ -22,7 +21,6 @@ import org.springframework.transaction.annotation.Transactional;
  * and the UI falls back to USD-only: a conversion quietly drifting from reality is worse than none.
  */
 @Service
-@WorkspaceAgnostic("Reference rates and the instance display currency are instance-wide, not tenant-scoped")
 public class FxRateLookup {
 
     /**

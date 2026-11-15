@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.core.privacy;
 
-import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonCopyIdentity;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyRecorder;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
@@ -15,10 +14,10 @@ import org.springframework.stereotype.Component;
 /**
  * A capture's provenance travels with its bytes, not with a later lookup of mutable source
  * authorship.
+ *
+ * <p>It reads only immutable user and provider keys. Each producer owns its workspace-scoped content read.
  */
 @Component
-@WorkspaceAgnostic(
-        "Only immutable user/provider keys are read; each producer owns its workspace-scoped" + " content read")
 public class ExactPersonDataCopyRecorder implements PersonDataCopyRecorder {
     private static final ThreadLocal<CaptureFrame> ACTIVE = new ThreadLocal<>();
 

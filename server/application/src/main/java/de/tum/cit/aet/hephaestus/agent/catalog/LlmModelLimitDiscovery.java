@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.agent.catalog;
 
-import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.core.security.SystemSecrets;
 import java.util.List;
@@ -21,7 +20,6 @@ import org.springframework.transaction.support.TransactionTemplate;
  * changed while the probe ran.
  */
 @Service
-@WorkspaceAgnostic("Each workspace method scopes every read and write by the workspace it receives")
 public class LlmModelLimitDiscovery {
 
     private static final Logger log = LoggerFactory.getLogger(LlmModelLimitDiscovery.class);

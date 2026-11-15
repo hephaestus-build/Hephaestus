@@ -2,7 +2,6 @@ package de.tum.cit.aet.hephaestus.agent.sandbox.claim;
 
 import de.tum.cit.aet.hephaestus.agent.AgentCapacityProperties;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
-import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.observability.StructuredLogKeys;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.util.HashSet;
@@ -19,7 +18,6 @@ import org.springframework.transaction.support.TransactionTemplate;
  * names goes, as after a workspace was deleted, and so do the claims of the taken-back sandboxes. No leader: each
  * statement changes a row once, and each claim call is idempotent.
  */
-@WorkspaceAgnostic("Takes back sandboxes of every workspace; each row carries its workspace")
 public class AgentSandboxReaper {
 
     private static final Logger log = LoggerFactory.getLogger(AgentSandboxReaper.class);

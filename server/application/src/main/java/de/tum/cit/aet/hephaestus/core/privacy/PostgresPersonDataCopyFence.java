@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.core.privacy;
 
-import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyFence;
 import java.sql.Connection;
 import java.sql.SQLException;
@@ -19,9 +18,10 @@ import org.springframework.transaction.annotation.Transactional;
  * Session locks cover file IO without keeping a content transaction open. Every pooled connection is
  * unlocked before it is returned. The two-integer key space is separate from the native identity locks.
  * https://www.postgresql.org/docs/current/explicit-locking.html#ADVISORY-LOCKS
+ *
+ * <p>It admits captures across runtimes only. Each content reader keeps its own workspace predicates.
  */
 @Component
-@WorkspaceAgnostic("Cross-runtime capture admission only; each content reader retains its own workspace predicates")
 public class PostgresPersonDataCopyFence implements PersonDataCopyFence {
     private final DataSource dataSource;
     private final JdbcTemplate jdbc;

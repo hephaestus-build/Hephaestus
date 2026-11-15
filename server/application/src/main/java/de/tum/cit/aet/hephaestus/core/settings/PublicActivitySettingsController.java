@@ -4,7 +4,6 @@ import de.tum.cit.aet.hephaestus.core.AuditLedger;
 import de.tum.cit.aet.hephaestus.core.Audited;
 import de.tum.cit.aet.hephaestus.core.RequireInstanceAdmin;
 import de.tum.cit.aet.hephaestus.core.RequiresRecentSignIn;
-import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import io.swagger.v3.oas.annotations.Operation;
 import jakarta.validation.Valid;
@@ -20,7 +19,6 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @ConditionalOnServerRole
 @RequestMapping("/admin/settings/public-activity")
-@WorkspaceAgnostic("Only instance administrators can change instance publication policy")
 @RequireInstanceAdmin
 @RequiredArgsConstructor
 public class PublicActivitySettingsController {

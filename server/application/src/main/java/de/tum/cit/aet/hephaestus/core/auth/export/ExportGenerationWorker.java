@@ -3,7 +3,6 @@ package de.tum.cit.aet.hephaestus.core.auth.export;
 import de.tum.cit.aet.hephaestus.core.PrivacyJobMetrics;
 import de.tum.cit.aet.hephaestus.core.PrivacyJobMetrics.Job;
 import de.tum.cit.aet.hephaestus.core.PrivacyJobMetrics.Outcome;
-import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import java.time.Clock;
 import java.time.Duration;
@@ -27,7 +26,6 @@ import tools.jackson.databind.ObjectMapper;
  */
 @ConditionalOnServerRole
 @Component
-@WorkspaceAgnostic("GDPR export generation operates on a single account's data; not workspace-scoped")
 public class ExportGenerationWorker {
 
     private static final Logger log = LoggerFactory.getLogger(ExportGenerationWorker.class);

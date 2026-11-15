@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.core.database;
 
-import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import liquibase.change.custom.CustomTaskChange;
 import liquibase.database.Database;
 import liquibase.database.jvm.JdbcConnection;
@@ -17,7 +16,6 @@ import org.springframework.jdbc.datasource.SingleConnectionDataSource;
  * for an email, so one commit stands for all of them. Liquibase checksums only this class's name, so this statement must
  * never change.
  */
-@WorkspaceAgnostic("Upgrade-time seed of a queue over shared mirror rows across all workspaces")
 public class GitLabCommitIdentityResolutionSeedChange implements CustomTaskChange {
 
     private static final Logger log = LoggerFactory.getLogger(GitLabCommitIdentityResolutionSeedChange.class);

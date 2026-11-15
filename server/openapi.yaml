@@ -123,7 +123,10 @@ tags:
   name: git-hub-installation-claim
 - description: GitLab-specific REST endpoints used during the workspace creation wizard.
   name: git-lab-preflight
-- name: installation-dead-letter
+- description: |-
+    Lists only installation events that no workspace owns yet. The records of a workspace have their own
+     workspace-scoped API.
+  name: installation-dead-letter
 - name: instance-feedback
 - name: instance-provider-resource-repair
 - name: item
@@ -151,7 +154,9 @@ tags:
     \ that failed to file."
   name: product-feedback-destinations
 - name: provider-resource-repair
-- name: public-activity
+- description: Serves only active workspaces that opted in to public activity. The
+    SQL of every activity read names its workspace.
+  name: public-activity
 - name: public-activity-onboarding
 - name: public-activity-settings
 - name: review-batch

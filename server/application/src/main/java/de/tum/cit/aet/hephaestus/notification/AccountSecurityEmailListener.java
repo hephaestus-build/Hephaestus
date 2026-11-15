@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.notification;
 
-import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountContactQuery;
 import de.tum.cit.aet.hephaestus.core.event.AccountSecurityChangedEvent;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
@@ -21,7 +20,6 @@ import org.springframework.transaction.annotation.Propagation;
 @Component
 @ConditionalOnServerRole
 @RequiredArgsConstructor
-@WorkspaceAgnostic("Security notices are addressed only to the affected native account")
 public class AccountSecurityEmailListener implements EmailNotice<AccountSecurityChangedEvent> {
     static final Duration EXPIRES_AFTER = Duration.ofHours(24);
 

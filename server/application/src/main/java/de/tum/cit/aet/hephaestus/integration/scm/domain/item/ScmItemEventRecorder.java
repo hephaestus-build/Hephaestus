@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.integration.scm.domain.item;
 
-import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemEventService;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemIndexService;
@@ -37,7 +36,6 @@ import org.springframework.transaction.event.TransactionalEventListener;
 
 @Component
 @ConditionalOnServerRole
-@WorkspaceAgnostic("Fans out one exact provider mirror event to explicitly monitored workspace items")
 @RequiredArgsConstructor
 @Slf4j
 public class ScmItemEventRecorder {

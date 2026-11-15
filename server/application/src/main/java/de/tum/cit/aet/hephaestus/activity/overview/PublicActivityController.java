@@ -3,7 +3,6 @@ package de.tum.cit.aet.hephaestus.activity.overview;
 import de.tum.cit.aet.hephaestus.activity.overview.dto.PublicActivityDTO;
 import de.tum.cit.aet.hephaestus.activity.overview.dto.PublicActivityPersonDetailDTO;
 import de.tum.cit.aet.hephaestus.activity.overview.dto.PublicActivityWorkDTO;
-import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.web.CursorPageDTO;
 import io.swagger.v3.oas.annotations.Operation;
@@ -23,11 +22,13 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+/**
+ * Serves only active workspaces that opted in to public activity. The SQL of every activity read names its workspace.
+ */
 @RestController
 @Validated
 @ConditionalOnServerRole
 @RequiredArgsConstructor
-@WorkspaceAgnostic("Public activity resolves only active, opted-in workspaces; SQL scopes every activity read")
 @PreAuthorize("permitAll()")
 public class PublicActivityController {
     private final PublicActivityService activity;

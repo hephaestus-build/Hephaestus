@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.integration.core.oauth.state;
 
-import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
@@ -30,7 +29,6 @@ import org.jspecify.annotations.Nullable;
  */
 @Entity
 @Table(name = "oauth_state_nonce")
-@WorkspaceAgnostic("Consumed at OAuth callback before workspace context is established")
 public class OAuthStateNonce {
 
     /** The raw nonce produced by {@link HmacOAuthStateService#issue} — base64url, 12 random bytes. */

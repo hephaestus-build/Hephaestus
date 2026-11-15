@@ -4,7 +4,6 @@ import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
 import de.tum.cit.aet.hephaestus.agent.config.ModelPurpose;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceModelAssignment;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceModelAssignmentRepository;
-import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.practices.spi.ConversationReadinessQuery;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceQueries;
 import org.slf4j.Logger;
@@ -12,7 +11,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 @Component
-@WorkspaceAgnostic("Slack entry points resolve a workspace from team_id before checking conversation readiness")
 class DefaultConversationReadinessQuery implements ConversationReadinessQuery {
 
     private static final Logger log = LoggerFactory.getLogger(DefaultConversationReadinessQuery.class);

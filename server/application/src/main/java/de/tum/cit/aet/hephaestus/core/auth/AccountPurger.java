@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.core.auth;
 
-import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountErasureContributor;
@@ -19,7 +18,6 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @ConditionalOnServerRole
 @Component
-@WorkspaceAgnostic("Account hard-delete is account-scoped; the sweep is global, not tenant data")
 public class AccountPurger {
 
     private static final Logger log = LoggerFactory.getLogger(AccountPurger.class);

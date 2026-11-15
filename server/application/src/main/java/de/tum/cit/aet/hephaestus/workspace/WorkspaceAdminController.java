@@ -1,7 +1,6 @@
 package de.tum.cit.aet.hephaestus.workspace;
 
 import de.tum.cit.aet.hephaestus.core.RequireInstanceAdmin;
-import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.workspace.dto.AdminWorkspaceViewDTO;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -20,7 +19,6 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/admin/workspaces")
 @Tag(name = "Admin")
 @RequireInstanceAdmin
-@WorkspaceAgnostic("Instance-admin cross-tenant overview; authorized by app_admin, not workspace context")
 public class WorkspaceAdminController {
 
     private final WorkspaceAdminService workspaceAdminService;

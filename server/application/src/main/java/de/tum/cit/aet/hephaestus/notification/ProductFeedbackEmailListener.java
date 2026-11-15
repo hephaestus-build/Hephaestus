@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.notification;
 
-import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountContactQuery;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.notification.email.EmailDeliveryResult.Outcome;
@@ -24,7 +23,6 @@ import org.springframework.transaction.annotation.Propagation;
 
 @Component
 @ConditionalOnServerRole
-@WorkspaceAgnostic("Product-feedback notifications address instance administrators")
 @RequiredArgsConstructor
 public class ProductFeedbackEmailListener implements EmailNotice<ProductFeedbackEmailRequested> {
     private final AccountContactQuery contacts;

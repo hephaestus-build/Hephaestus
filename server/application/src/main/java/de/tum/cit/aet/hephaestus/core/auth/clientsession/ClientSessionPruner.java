@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.core.auth.clientsession;
 
-import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwtRepository;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import java.time.Clock;
@@ -20,7 +19,6 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @ConditionalOnServerRole
 @Service
-@WorkspaceAgnostic("Installed-client sessions are account-scoped, not workspace-scoped")
 public class ClientSessionPruner {
 
     private static final Logger log = LoggerFactory.getLogger(ClientSessionPruner.class);

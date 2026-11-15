@@ -4,7 +4,6 @@ import de.tum.cit.aet.hephaestus.core.AuditLedger;
 import de.tum.cit.aet.hephaestus.core.Audited;
 import de.tum.cit.aet.hephaestus.core.RequireInstanceAdmin;
 import de.tum.cit.aet.hephaestus.core.RequiresRecentSignIn;
-import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.security.SecurityUtils;
 import io.swagger.v3.oas.annotations.Operation;
@@ -19,7 +18,6 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @ConditionalOnServerRole
 @RequireInstanceAdmin
-@WorkspaceAgnostic("Instance-level GitHub App installations; an adoption is what creates their workspace")
 @RequestMapping("/admin/github-installations")
 public class GitHubInstallationAdminController {
     private final GitHubInstallationAdoptionService adoptions;

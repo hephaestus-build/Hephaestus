@@ -4,7 +4,6 @@ import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
 import de.tum.cit.aet.hephaestus.agent.composer.ModelSession;
 import de.tum.cit.aet.hephaestus.agent.proxy.ProductFeedbackModelGateway;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRecorder;
-import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.action.ActionAdapter;
 import de.tum.cit.aet.hephaestus.core.action.ActionAttempt;
 import de.tum.cit.aet.hephaestus.core.action.ActionEnded;
@@ -32,7 +31,6 @@ import tools.jackson.databind.ObjectMapper;
  */
 @Component
 @ConditionalOnServerRole
-@WorkspaceAgnostic("Product feedback drafting uses the instance's model; it belongs to no workspace")
 class DraftReportAdapter implements ActionAdapter {
     /**
      * The call ends before the action's lease does, with time left to record its result, so a reclaim after a lost

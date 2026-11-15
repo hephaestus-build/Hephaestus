@@ -9,7 +9,6 @@ import de.tum.cit.aet.hephaestus.agent.run.AgentRunStopReason;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurn;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurnProgress;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurnService;
-import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Duration;
@@ -35,7 +34,6 @@ import org.springframework.stereotype.Component;
 @Component
 @ConditionalOnServerRole
 @RequiredArgsConstructor
-@WorkspaceAgnostic("Each call names a run, which carries its workspace")
 public class TurnRunKind implements AgentRunHandler {
 
     private static final Logger log = LoggerFactory.getLogger(TurnRunKind.class);

@@ -10,7 +10,6 @@ import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallPoolProperties;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallPoolRepository;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunBand;
-import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.annotation.PreDestroy;
@@ -57,7 +56,6 @@ import reactor.core.publisher.Sinks;
  */
 @Component
 @ConditionalOnAgentRuntime
-@WorkspaceAgnostic("Instance-owned endpoint capacity, shared across all servers and workspaces.")
 public class LlmCallPermits {
     static final int MAINTENANCE_THREADS = 2;
     private static final Logger log = LoggerFactory.getLogger(LlmCallPermits.class);

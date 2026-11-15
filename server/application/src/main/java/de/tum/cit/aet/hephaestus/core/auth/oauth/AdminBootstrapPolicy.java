@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.core.auth.oauth;
 
-import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.auth.AuthProperties;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import java.util.LinkedHashSet;
@@ -15,7 +14,6 @@ import org.springframework.stereotype.Component;
 /** Operator-selected provider subjects are stable; handle allowlist entries can be reclaimed when a provider recycles usernames. */
 @ConditionalOnServerRole
 @Component
-@WorkspaceAgnostic("Instance-admin bootstrap is keyed by (provider, identity); not workspace-scoped")
 public class AdminBootstrapPolicy {
 
     private static final Logger log = LoggerFactory.getLogger(AdminBootstrapPolicy.class);

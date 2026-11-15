@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.integration.outline;
 
-import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonSourceIdentityContributor;
@@ -20,7 +19,6 @@ import org.springframework.stereotype.Component;
 @Component
 @ConditionalOnServerRole
 @RequiredArgsConstructor
-@WorkspaceAgnostic("Instance person scope and explicitly workspace-bound Outline attribution")
 public class OutlinePersonSourceIdentityContributor implements PersonSourceIdentityContributor {
     private final OutlineDocumentRepository repository;
     // Suppression collects source contributors; initialize permission only for exact attribution reads.

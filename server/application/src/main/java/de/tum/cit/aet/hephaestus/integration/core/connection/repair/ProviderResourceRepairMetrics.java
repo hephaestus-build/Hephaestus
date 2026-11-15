@@ -2,7 +2,6 @@ package de.tum.cit.aet.hephaestus.integration.core.connection.repair;
 
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
-import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.metrics.IntegrationCoreMetrics;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
@@ -17,7 +16,6 @@ import org.springframework.stereotype.Component;
 /** One aggregate read per scrape window; no per-resource identifiers enter a metric label. */
 @Component
 @ConditionalOnServerRole
-@WorkspaceAgnostic("Counts unresolved security identities by provider and state, without owner or resource labels")
 public final class ProviderResourceRepairMetrics {
     private final ProviderResourceRepairRepository repairs;
     private final Cache<String, Map<String, Long>> samples = Caffeine.newBuilder()

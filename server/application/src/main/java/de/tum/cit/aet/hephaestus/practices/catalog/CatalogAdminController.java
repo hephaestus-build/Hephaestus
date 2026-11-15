@@ -6,7 +6,6 @@ import de.tum.cit.aet.hephaestus.core.Audited;
 import de.tum.cit.aet.hephaestus.core.EntityTagPrecondition;
 import de.tum.cit.aet.hephaestus.core.RecentSignInExempt;
 import de.tum.cit.aet.hephaestus.core.RequireInstanceAdmin;
-import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.web.PublicApiUrls;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinitionOptionsService;
@@ -43,7 +42,6 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/admin/practice-catalog")
 @RequireInstanceAdmin
-@WorkspaceAgnostic("The instance catalog has no workspace owner")
 @RecentSignInExempt(
         reason = "Catalog edits change practice content and organization without changing access or credentials")
 @RequiredArgsConstructor

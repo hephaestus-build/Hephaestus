@@ -1,7 +1,6 @@
 package de.tum.cit.aet.hephaestus.core.action;
 
 import de.tum.cit.aet.hephaestus.core.TimeOrderedIds;
-import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collection;
@@ -18,10 +17,13 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
 
-/** The outbox's short transactions: each one statement of {@link AgentActionRepository}, mapped to records. */
+/**
+ * The outbox's short transactions: each one statement of {@link AgentActionRepository}, mapped to records.
+ *
+ * <p>The outbox runs the actions of every workspace and of the instance. Each adapter scopes its own work.
+ */
 @Component
 @RequiredArgsConstructor
-@WorkspaceAgnostic("The outbox runs the actions of every workspace and of the instance; each adapter scopes its work")
 class ActionStore {
 
     /** What {@link #claim} hands to the executor. */

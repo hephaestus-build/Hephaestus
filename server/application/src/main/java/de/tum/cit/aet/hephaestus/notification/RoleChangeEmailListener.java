@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.notification;
 
-import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountContactQuery;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountDirectory;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountMembershipQuery;
@@ -32,7 +31,6 @@ import org.springframework.stereotype.Component;
 @Component
 @ConditionalOnServerRole
 @RequiredArgsConstructor
-@WorkspaceAgnostic("Delivery rechecks the recipient against the change's own workspace or the instance admin role")
 public class RoleChangeEmailListener implements EmailNotice<RoleChangeEmailRequested> {
     static final Duration EXPIRES_AFTER = Duration.ofDays(7);
     private static final DateTimeFormatter WHEN =

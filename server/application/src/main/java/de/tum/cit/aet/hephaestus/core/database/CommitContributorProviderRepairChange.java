@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.core.database;
 
-import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import liquibase.change.custom.CustomTaskChange;
 import liquibase.database.Database;
 import liquibase.database.jvm.JdbcConnection;
@@ -20,7 +19,6 @@ import org.springframework.jdbc.datasource.SingleConnectionDataSource;
  * that differ only in the spelling of the URL. Every other unusual link stays, because the database cannot tell whether
  * it is right. Liquibase checksums only this class's name, so this statement must never change.
  */
-@WorkspaceAgnostic("Upgrade-time correction of shared mirror rows across all workspaces")
 public class CommitContributorProviderRepairChange implements CustomTaskChange {
 
     private static final Logger log = LoggerFactory.getLogger(CommitContributorProviderRepairChange.class);

@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.core.auth.jwt;
 
-import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import java.time.Instant;
@@ -16,7 +15,6 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @ConditionalOnServerRole
 @Component
-@WorkspaceAgnostic("Access tokens are account-scoped, not workspace-scoped")
 public class AccessTokenAdmission {
 
     private final IssuedJwtRepository repository;

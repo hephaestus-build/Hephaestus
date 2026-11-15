@@ -6,7 +6,6 @@ import de.tum.cit.aet.hephaestus.core.Audited;
 import de.tum.cit.aet.hephaestus.core.RecentSignInExempt;
 import de.tum.cit.aet.hephaestus.core.RequireInstanceAdmin;
 import de.tum.cit.aet.hephaestus.core.RequiresRecentSignIn;
-import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.auth.web.CurrentAccount;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
@@ -33,7 +32,6 @@ import org.springframework.web.server.ResponseStatusException;
 @RestController
 @ConditionalOnServerRole
 @RequestMapping("/admin/product-feedback")
-@WorkspaceAgnostic("Product feedback destinations are instance-wide")
 @RequireInstanceAdmin
 @RequiredArgsConstructor
 public class ProductFeedbackDestinationsController {

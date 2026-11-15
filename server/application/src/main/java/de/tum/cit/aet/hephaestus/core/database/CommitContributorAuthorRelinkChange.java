@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.core.database;
 
-import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import liquibase.change.custom.CustomTaskChange;
 import liquibase.database.Database;
 import liquibase.database.jvm.JdbcConnection;
@@ -23,7 +22,6 @@ import org.springframework.jdbc.datasource.SingleConnectionDataSource;
  * is out: a stored email there could itself come from a guess, and the linker fills those rows from pairs GitLab
  * resolved. Liquibase checksums only this class's name, so this statement must never change.
  */
-@WorkspaceAgnostic("Upgrade-time correction of shared mirror rows across all workspaces")
 public class CommitContributorAuthorRelinkChange implements CustomTaskChange {
 
     private static final Logger log = LoggerFactory.getLogger(CommitContributorAuthorRelinkChange.class);

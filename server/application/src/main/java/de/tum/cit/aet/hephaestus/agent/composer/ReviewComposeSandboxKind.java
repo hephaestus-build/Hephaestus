@@ -20,7 +20,6 @@ import de.tum.cit.aet.hephaestus.agent.run.AgentRunState;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.run.StaleRunException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxKind;
-import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
 import de.tum.cit.aet.hephaestus.observability.StructuredLogKeys;
@@ -47,7 +46,6 @@ import tools.jackson.databind.node.JsonNodeFactory;
 @Component
 @ConditionalOnAgentRuntime
 @ConditionalOnBooleanProperty(RuntimeRole.AGENT_ENABLED_PROPERTY)
-@WorkspaceAgnostic("Each call names a run, which carries its workspace, and the gateway checked it")
 public class ReviewComposeSandboxKind implements SandboxRunKind {
     private final ReviewJobClaimService claims;
     private final ResultAdmissionService admission;

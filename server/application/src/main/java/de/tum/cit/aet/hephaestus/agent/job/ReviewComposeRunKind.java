@@ -7,7 +7,6 @@ import de.tum.cit.aet.hephaestus.agent.run.AgentRunHandler;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunRef;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunStopReason;
-import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
@@ -21,7 +20,6 @@ import org.springframework.stereotype.Component;
  */
 @Component
 @ConditionalOnServerRole
-@WorkspaceAgnostic("Each call names a run, which carries its workspace")
 public class ReviewComposeRunKind implements AgentRunHandler {
     private final ReviewRunKind review;
     private final ReviewJobRepository jobs;

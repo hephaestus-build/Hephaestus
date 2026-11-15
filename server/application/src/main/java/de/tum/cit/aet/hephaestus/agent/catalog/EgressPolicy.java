@@ -2,7 +2,6 @@ package de.tum.cit.aet.hephaestus.agent.catalog;
 
 import de.tum.cit.aet.hephaestus.agent.LlmProperties;
 import de.tum.cit.aet.hephaestus.core.SsrfGuardedResolverGroup;
-import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.security.PrivateAddressGuard;
 import de.tum.cit.aet.hephaestus.core.security.PrivateHostAllowlist;
 import io.netty.resolver.AddressResolverGroup;
@@ -34,7 +33,6 @@ import org.springframework.stereotype.Component;
  * configure providers out of the private network.
  */
 @Component
-@WorkspaceAgnostic("Instance egress policy reads the global instance_llm_settings singleton, not tenant data")
 public class EgressPolicy {
 
     /**

@@ -5,7 +5,6 @@ import de.tum.cit.aet.hephaestus.core.Audited;
 import de.tum.cit.aet.hephaestus.core.EntityTagPrecondition;
 import de.tum.cit.aet.hephaestus.core.RecentSignInExempt;
 import de.tum.cit.aet.hephaestus.core.RequireInstanceAdmin;
-import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.auth.web.CurrentAccount;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import io.swagger.v3.oas.annotations.Operation;
@@ -33,7 +32,6 @@ import org.springframework.web.bind.annotation.RestController;
 
 @ConditionalOnServerRole
 @RestController
-@WorkspaceAgnostic("Instance-wide operator settings — deliberately cross-tenant, app_admin only")
 @RequestMapping("/admin/settings")
 @Tag(name = "Instance Settings", description = "Instance-wide operator settings")
 @RecentSignInExempt(

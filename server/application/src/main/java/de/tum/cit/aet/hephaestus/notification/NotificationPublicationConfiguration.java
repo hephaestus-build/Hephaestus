@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.notification;
 
-import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -31,7 +30,6 @@ import org.springframework.util.function.SingletonSupplier;
 /** Modulith owns delivery; only failed-batch ordering differs to prevent retry starvation. */
 @Configuration(proxyBeanMethods = false)
 @ConditionalOnServerRole
-@WorkspaceAgnostic("The notification registry is instance-wide; each delivery listener rechecks recipient eligibility")
 public class NotificationPublicationConfiguration {
 
     @Bean

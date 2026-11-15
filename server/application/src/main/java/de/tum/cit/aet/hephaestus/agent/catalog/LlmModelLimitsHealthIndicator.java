@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.agent.catalog;
 
-import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import java.util.List;
 import org.springframework.boot.health.contributor.Health;
 import org.springframework.boot.health.contributor.HealthIndicator;
@@ -12,7 +11,6 @@ import org.springframework.stereotype.Component;
  * server serves its API either way, and a model that cannot run must not take the server out of rotation.
  */
 @Component
-@WorkspaceAgnostic("Counts every workspace's unbounded models without naming them")
 public class LlmModelLimitsHealthIndicator implements HealthIndicator {
 
     static final String FIX = "Set Max output tokens or Context window in AI providers, or test the model's connection";

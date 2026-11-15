@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.notification;
 
-import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountContactQuery;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.notification.preferences.NotificationSubscriptionKind;
@@ -21,7 +20,6 @@ import org.springframework.transaction.event.TransactionalEventListener;
 
 @Component
 @ConditionalOnServerRole
-@WorkspaceAgnostic("Product-feedback notifications address instance administrators")
 @RequiredArgsConstructor
 public class ProductFeedbackEmailPreparation {
     private static final Duration MAX_AGE = Duration.ofDays(7);

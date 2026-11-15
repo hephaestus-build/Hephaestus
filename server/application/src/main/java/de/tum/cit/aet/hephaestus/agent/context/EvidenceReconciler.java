@@ -2,7 +2,6 @@ package de.tum.cit.aet.hephaestus.agent.context;
 
 import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceFolderPersonDataCatalog;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
-import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Gauge;
@@ -23,7 +22,6 @@ import org.springframework.stereotype.Component;
  */
 @Component
 @ConditionalOnServerRole
-@WorkspaceAgnostic("Server-local cleanup rechecks each workspace-scoped job and attempt owner before removal")
 public class EvidenceReconciler {
     private static final Logger log = LoggerFactory.getLogger(EvidenceReconciler.class);
 

@@ -1,7 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.conversation.weeklydigest;
 
 import de.tum.cit.aet.hephaestus.agent.conversation.turn.ConversationAdmission;
-import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountMembershipQuery;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountMembershipQuery.MembershipView;
 import de.tum.cit.aet.hephaestus.practices.spi.ConversationReadinessQuery;
@@ -16,7 +15,6 @@ import org.springframework.stereotype.Component;
  */
 @Component
 @RequiredArgsConstructor
-@WorkspaceAgnostic("Availability is read per account, across the workspaces it is a member of")
 public class WeeklyDigestAvailability {
 
     private final AccountMembershipQuery memberships;

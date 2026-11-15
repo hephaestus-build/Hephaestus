@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.integration.scm;
 
-import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonSourceIdentityContributor;
@@ -20,7 +19,6 @@ import org.springframework.stereotype.Component;
 /** One source-role relation for exact scope selection and post-sync processing admission. */
 @Component
 @RequiredArgsConstructor
-@WorkspaceAgnostic("Instance person scope and explicitly workspace-bound source attribution")
 public class ScmPersonSourceIdentityContributor implements PersonSourceIdentityContributor {
     private final JdbcTemplate jdbc;
     private static final String ROLES = """
