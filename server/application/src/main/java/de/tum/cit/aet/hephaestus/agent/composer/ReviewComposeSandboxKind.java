@@ -7,7 +7,6 @@ import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewCompositionClaim;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewCompositionContinuation;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobClaimService;
-import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobTerminal;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewRunKind;
 import de.tum.cit.aet.hephaestus.agent.metrics.ReviewStageTelemetry;
@@ -49,7 +48,6 @@ import tools.jackson.databind.node.JsonNodeFactory;
 @WorkspaceAgnostic("Each call names a run, which carries its workspace, and the gateway checked it")
 public class ReviewComposeSandboxKind implements SandboxRunKind {
     private final ReviewJobClaimService claims;
-    private final ReviewJobRepository jobs;
     private final ResultAdmissionService admission;
     private final ReviewAttemptCustody custody;
     private final ReviewCompositionContinuation continuation;
@@ -62,7 +60,6 @@ public class ReviewComposeSandboxKind implements SandboxRunKind {
 
     public ReviewComposeSandboxKind(
             ReviewJobClaimService claims,
-            ReviewJobRepository jobs,
             ResultAdmissionService admission,
             ReviewAttemptCustody custody,
             ReviewCompositionContinuation continuation,
@@ -74,7 +71,6 @@ public class ReviewComposeSandboxKind implements SandboxRunKind {
             MeterRegistry meters,
             Tracer tracer) {
         this.claims = claims;
-        this.jobs = jobs;
         this.admission = admission;
         this.custody = custody;
         this.continuation = continuation;
@@ -114,19 +110,19 @@ public class ReviewComposeSandboxKind implements SandboxRunKind {
     public Optional<ProxyAttempt> attempt(SandboxRun run) {
         var fence = run.fence();
         var ref = new AgentRunRef(fence.runId(), fence.workspaceId());
-        return jobs.findByRunIdAndWorkspaceId(fence.runId(), fence.workspaceId())
-                .flatMap(job -> gateway.find(run, job)
-                        .filter(decision -> decision.withholdOnly() == null)
-                        .map(decision -> new ProxyAttempt(
-                                ProxyAttempt.Caller.REVIEW,
-                                job.getId(),
-                                fence.workspaceId(),
-                                fence.epoch(),
-                                fence.runId(),
-                                runs.find(ref)
-                                        .map(AgentRun::getDeadline)
-                                        .map(ReviewRunKind::compositionWorkDeadline)
-                                        .orElse(null))));
+        // Every request of the sandbox authenticates here, so it reads the claim, never the job's whole capture.
+        return gateway.find(run)
+                .filter(claimed -> claimed.decision().withholdOnly() == null)
+                .map(claimed -> new ProxyAttempt(
+                        ProxyAttempt.Caller.REVIEW,
+                        claimed.jobId(),
+                        fence.workspaceId(),
+                        fence.epoch(),
+                        fence.runId(),
+                        runs.find(ref)
+                                .map(AgentRun::getDeadline)
+                                .map(ReviewRunKind::compositionWorkDeadline)
+                                .orElse(null)));
     }
 
     @Override

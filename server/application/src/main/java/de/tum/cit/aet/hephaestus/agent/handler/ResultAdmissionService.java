@@ -533,9 +533,8 @@ public class ResultAdmissionService {
             @Nullable Instant deadline) {}
 
     public ReviewJob ownedJob(AdmissionIdentity identity) {
-        var retained = jobs.findByIdAndWorkspaceId(identity.jobId(), identity.workspaceId())
-                .orElseThrow(StaleAttemptException::new);
-        writeGuard.lock(identity.workspaceId(), retained.getReviewId());
+        var retained = jobs.findCall(identity.jobId(), identity.workspaceId()).orElseThrow(StaleAttemptException::new);
+        writeGuard.lock(identity.workspaceId(), retained.reviewId());
         var job = jobs.findByIdAndWorkspaceIdForUpdate(identity.jobId(), identity.workspaceId())
                 .orElseThrow(StaleAttemptException::new);
         if (job.getStatus() != ReviewJobStatus.RUNNING

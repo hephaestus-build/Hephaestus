@@ -27,6 +27,7 @@ import de.tum.cit.aet.hephaestus.agent.job.ReviewCompositionBasisRepository;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobAssignments;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
+import de.tum.cit.aet.hephaestus.agent.job.RuntimeJobTestData;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.AdmissionResponseDTO;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.PracticeStartRequestDTO;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.SealResultsRequestDTO;
@@ -162,6 +163,7 @@ class ResultAdmissionServiceTest extends BaseUnitTest {
         job.setRunId(LEASE);
         job.setCapture(mapper.createObjectNode());
         when(jobs.findByIdAndWorkspaceId(job.getId(), 1L)).thenReturn(Optional.of(job));
+        when(jobs.findCall(job.getId(), 1L)).thenAnswer(read -> Optional.of(RuntimeJobTestData.call(job)));
         when(jobs.findByIdAndWorkspaceIdForUpdate(job.getId(), 1)).thenReturn(Optional.of(job));
         when(jobs.databaseClock()).thenReturn(Instant.now());
     }

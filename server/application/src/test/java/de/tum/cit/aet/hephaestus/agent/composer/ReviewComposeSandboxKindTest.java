@@ -82,7 +82,6 @@ class ReviewComposeSandboxKindTest {
     private ReviewComposeSandboxKind replica(ReviewAttemptCustody localCustody) {
         return new ReviewComposeSandboxKind(
                 claims,
-                jobs,
                 admission,
                 localCustody,
                 continuation,
@@ -123,6 +122,14 @@ class ReviewComposeSandboxKindTest {
                     composing.job().setCapture(capture);
                     return 1;
                 });
+        // The claim as the database reads it back: only the stored decision, never the whole capture.
+        when(jobs.findCompositionClaimByRun(fence.runId(), fence.workspaceId())).thenAnswer(call -> {
+            var capture = composing.job().getCapture();
+            if (capture == null || !capture.has("compositionClaim")) return Optional.empty();
+            String claim = capture.get("compositionClaim").toString();
+            return Optional.of(
+                    new ReviewJobRepository.CompositionClaim(composing.job().getId(), claim));
+        });
     }
 
     @Test

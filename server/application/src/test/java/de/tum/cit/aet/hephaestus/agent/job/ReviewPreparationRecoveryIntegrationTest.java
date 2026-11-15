@@ -33,6 +33,7 @@ import de.tum.cit.aet.hephaestus.core.lock.ClusterLock;
 import de.tum.cit.aet.hephaestus.integration.core.fabric.FabricLayout;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
+import de.tum.cit.aet.hephaestus.testconfig.SqlStatementCounter;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -68,6 +69,9 @@ import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.json.JsonMapper;
 
 class ReviewPreparationRecoveryIntegrationTest extends BaseIntegrationTest {
+    @Autowired
+    private SqlStatementCounter statements;
+
     @Autowired
     private ApplicationContext context;
 
@@ -192,8 +196,13 @@ class ReviewPreparationRecoveryIntegrationTest extends BaseIntegrationTest {
                 ReviewRunKind.subject(job.getReviewId()),
                 AgentSandboxKind.REVIEW);
         var run = new SandboxRun(sandbox, fence, AgentRunKind.REVIEW, 0);
-        assertThat(replacement.attempt(run).orElseThrow().workDeadline())
-                .isEqualTo(ReviewAttemptPreparation.workDeadline(job, snapshot()));
+        // Every request of a review sandbox authenticates through this read; none of its statements selects the
+        // capture.
+        var attempt = statements.measure(() -> replacement.attempt(run));
+        assertThat(attempt.sql()).isNotEmpty().noneMatch(sql -> sql.matches("(?s).*\\bcapture\\b.*"));
+        assertThat(attempt.value().orElseThrow().workDeadline())
+                .isEqualTo(ReviewAttemptPreparation.workDeadline(
+                        Objects.requireNonNull(job.getExecutionStartedAt()), snapshot()));
 
         replacement.measured(run, new SandboxResult(1, Map.of(), "", false, Duration.ZERO));
 

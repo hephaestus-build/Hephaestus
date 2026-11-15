@@ -3,8 +3,6 @@ package de.tum.cit.aet.hephaestus.agent.proxy;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.config.FrozenModel;
 import de.tum.cit.aet.hephaestus.agent.conversation.turn.ConversationTurnAdmission;
-import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
-import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewRunKind;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRun;
@@ -65,9 +63,13 @@ class ProxyRoutingService {
                     .map(AgentRun::getBand)
                     .orElseThrow(ProxyRoutingService::attemptEnded);
         }
-        var job = agentJobRepository.findById(routing.sourceId()).orElseThrow(ProxyRoutingService::attemptEnded);
-        if (ResultAdmissionService.isAdmitted(job)) return AgentRunBand.BATCH;
-        return reviews.find(job.getWorkspaceId(), job.getReviewId())
+        Long workspace = routing.workspaceId();
+        if (workspace == null) throw attemptEnded();
+        var job = agentJobRepository
+                .findCall(routing.sourceId(), workspace)
+                .orElseThrow(ProxyRoutingService::attemptEnded);
+        if (job.admitted()) return AgentRunBand.BATCH;
+        return reviews.find(job.workspaceId(), job.reviewId())
                 .map(review -> ReviewRunKind.band(review.origin()))
                 .orElseThrow(ProxyRoutingService::attemptEnded);
     }
@@ -91,14 +93,12 @@ class ProxyRoutingService {
         var caller = identity.job();
         if (caller == null) throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Model credential required");
         var job = agentJobRepository
-                .findById(caller.id())
+                .findCall(caller.id(), caller.workspaceId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Review attempt unavailable"));
-        if (job.getWorkspaceId() != caller.workspaceId())
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Review attempt unavailable");
-        if (!job.getRunId().equals(caller.runId())
+        if (!job.runId().equals(caller.runId())
                 || !runs.isCurrent(new AgentRunRef(caller.runId(), caller.workspaceId()), caller.epoch()))
             throw attemptEnded();
-        var snapshot = ConfigSnapshot.fromJson(job.getConfigSnapshot(), objectMapper);
+        var snapshot = ConfigSnapshot.fromJson(job.configSnapshot(), objectMapper);
         // The live checks above decide whether this attempt may call at all; its work deadline decides until when.
         Instant workDeadline = Objects.requireNonNull(caller.workDeadline(), "a review attempt has a work deadline");
         return reviewRouting(job, caller.runId(), snapshot, workDeadline);
@@ -138,18 +138,18 @@ class ProxyRoutingService {
     }
 
     private static ProxyRouting reviewRouting(
-            ReviewJob job, UUID runId, ConfigSnapshot snapshot, Instant workDeadline) {
+            ReviewJobRepository.ReviewJobCall job, UUID runId, ConfigSnapshot snapshot, Instant workDeadline) {
         FrozenModel model = snapshot.model();
         return new ProxyRouting(
-                "job:" + job.getId(),
+                "job:" + job.id(),
                 model.apiProtocol().wire(),
                 model.baseUrl(),
                 model.connectionScope(),
                 model.connectionId(),
                 model.modelId(),
-                job.getWorkspaceId(),
+                job.workspaceId(),
                 new ProxyRouting.BilledAttempt(
-                        UsageSourceType.REVIEW_JOB, job.getId(), job.getAttempt(), runId, job.getWorkspaceId()),
+                        UsageSourceType.REVIEW_JOB, job.id(), job.attempt(), runId, job.workspaceId()),
                 workDeadline,
                 ProxyRouting.outputLimitOf(snapshot.contextWindow(), snapshot.maxOutputTokens()));
     }

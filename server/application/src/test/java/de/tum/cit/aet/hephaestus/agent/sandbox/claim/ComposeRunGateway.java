@@ -145,7 +145,6 @@ public final class ComposeRunGateway implements AutoCloseable {
                 new SimpleMeterRegistry());
         var kind = new ReviewComposeSandboxKind(
                 SandboxReviewClaims.claimService(context, policy),
-                jobs,
                 admission,
                 custody,
                 continuation,

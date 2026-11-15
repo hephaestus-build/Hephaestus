@@ -15,6 +15,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.NativeQuery;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -77,6 +78,51 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
 
     /** The job that a run drives, in the run's workspace. */
     Optional<ReviewJob> findByRunIdAndWorkspaceId(UUID runId, long workspaceId);
+
+    /**
+     * The fields of a review job that a sandbox request reads, without the capture. With a repository tree, the capture
+     * lists the citable text of every captured file, megabytes that each request would otherwise parse and copy.
+     */
+    record ReviewJobCall(
+            UUID id,
+            long workspaceId,
+            UUID reviewId,
+            UUID runId,
+            int attempt,
+            @Nullable Instant executionStartedAt,
+            JsonNode configSnapshot,
+            ReviewJobInput input,
+            @Nullable Integer admissionAttempt,
+            @Nullable String admissionDigest) {
+        /** Whether the job admitted results, as {@code ResultAdmissionService.isAdmitted} decides for the entity. */
+        public boolean admitted() {
+            return admissionAttempt != null && admissionDigest != null;
+        }
+    }
+
+    String CALL = """
+        SELECT new de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository$ReviewJobCall(
+            j.id, j.workspaceId, j.reviewId, j.runId, j.attempt, j.executionStartedAt, j.configSnapshot, j.input,
+            j.admissionAttempt, j.admissionDigest)
+        FROM ReviewJob j
+        """;
+
+    @Query(CALL + "WHERE j.id = :id AND j.workspaceId = :workspaceId")
+    Optional<ReviewJobCall> findCall(@Param("id") UUID id, @Param("workspaceId") long workspaceId);
+
+    @Query(CALL + "WHERE j.runId = :runId AND j.workspaceId = :workspaceId")
+    Optional<ReviewJobCall> findCallByRun(@Param("runId") UUID runId, @Param("workspaceId") long workspaceId);
+
+    /** The composition claim that the run's job stored in its capture, read without the rest of the capture. */
+    @NativeQuery("""
+        SELECT j.id, (j.capture -> 'compositionClaim')::text
+        FROM review_job j
+        WHERE j.run_id = :runId AND j.workspace_id = :workspaceId
+        """)
+    Optional<CompositionClaim> findCompositionClaimByRun(
+            @Param("runId") UUID runId, @Param("workspaceId") long workspaceId);
+
+    record CompositionClaim(UUID id, @Nullable String claim) {}
 
     /** A job blocks a purge until it ends and settlement marks it DONE or FAILED. */
     @Query("SELECT CASE WHEN COUNT(j) > 0 THEN true ELSE false END FROM ReviewJob j "

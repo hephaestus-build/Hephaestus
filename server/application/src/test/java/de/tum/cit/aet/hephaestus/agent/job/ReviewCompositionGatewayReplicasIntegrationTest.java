@@ -43,6 +43,7 @@ import de.tum.cit.aet.hephaestus.core.lock.ClusterLock;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
+import de.tum.cit.aet.hephaestus.testconfig.SqlStatementCounter;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -100,6 +101,9 @@ class ReviewCompositionGatewayReplicasIntegrationTest extends BaseIntegrationTes
     private static final AttemptSigningKey KEY = AttemptSigningKey.generate();
     private final AttemptTokenIssuer issuer = new AttemptTokenIssuer(AttemptKeyFixtures.keyring(KEY));
     private final HttpClient http = HttpClient.newHttpClient();
+
+    @Autowired
+    private SqlStatementCounter statements;
 
     @Autowired
     private ApplicationContext beans;
@@ -185,7 +189,10 @@ class ReviewCompositionGatewayReplicasIntegrationTest extends BaseIntegrationTes
                 assertThat(firstClosed).hasValue(1);
             }
 
-            assertThat(secondKind.attempt(run)).isEmpty();
+            // Each composer request authenticates through this read: only the claim, never the whole capture.
+            var attempt = statements.measure(() -> secondKind.attempt(run));
+            assertThat(attempt.sql()).isNotEmpty().noneMatch(sql -> sql.matches("(?s).*\\bcapture\\b(?!\\s*->).*"));
+            assertThat(attempt.value()).isEmpty();
             assertThat(call(second, "/context", null, fence.epoch()).statusCode())
                     .isEqualTo(200);
             var unchanged = jobs.findById(job.getId()).orElseThrow();
@@ -338,7 +345,6 @@ class ReviewCompositionGatewayReplicasIntegrationTest extends BaseIntegrationTes
                         Map.of()));
         return new ReviewComposeSandboxKind(
                 claims,
-                jobs,
                 admission,
                 custody,
                 continuation,

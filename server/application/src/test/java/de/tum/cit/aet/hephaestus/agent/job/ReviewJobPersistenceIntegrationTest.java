@@ -148,6 +148,42 @@ class ReviewJobPersistenceIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    @DisplayName(
+            "the call fields and the composition claim of a run's job read without its capture, in its workspace only")
+    void shouldReadTheCallFieldsAndTheCompositionClaimOfARunsJobInItsWorkspaceOnly() {
+        UUID id = staleRunningJob(readableSnapshot());
+        var job = jobRepository.findById(id).orElseThrow();
+        // A repository tree capture lists the citable text of every captured file: megabytes in one column.
+        var capture = objectMapper.createObjectNode();
+        var texts = capture.putObject("manifest").putArray("citableTexts");
+        for (int file = 0; file < 20_000; file++)
+            texts.addObject()
+                    .put("source", "scm.repository.tree")
+                    .put("path", "src/main/java/some/deeply/nested/package/File" + file + ".java")
+                    .put("stagedPath", "repos/reviewed/src/main/java/some/deeply/nested/package/File" + file + ".java")
+                    .put("sha256", "a".repeat(64));
+        capture.set("compositionClaim", objectMapper.createObjectNode().put("epoch", 3));
+        transactionTemplate.executeWithoutResult(status -> assertThat(
+                        jobRepository.updateCapture(id, workspace.getId(), job.getRunId(), job.getAttempt(), capture))
+                .isEqualTo(1));
+        var other = workspaceRepository.save(TestEntities.activeWorkspace("other-attempt-ws"));
+        var attempt = jobRepository.findCallByRun(job.getRunId(), workspace.getId());
+        var claim = jobRepository.findCompositionClaimByRun(job.getRunId(), workspace.getId());
+
+        assertThat(attempt).hasValueSatisfying(read -> {
+            assertThat(read.id()).isEqualTo(id);
+            assertThat(read.attempt()).isEqualTo(job.getAttempt());
+            assertThat(read.configSnapshot()).isEqualTo(job.getConfigSnapshot());
+        });
+        assertThat(claim)
+                .hasValueSatisfying(read -> assertThat(objectMapper.readTree(Objects.requireNonNull(read.claim())))
+                        .isEqualTo(objectMapper.createObjectNode().put("epoch", 3)));
+        assertThat(jobRepository.findCallByRun(job.getRunId(), other.getId())).isEmpty();
+        assertThat(jobRepository.findCompositionClaimByRun(job.getRunId(), other.getId()))
+                .isEmpty();
+    }
+
+    @Test
     @DisplayName("the reaper's take-back settles the calls that the lost claim left open, and no other claim's")
     void shouldSettleTheOpenCallsOfTheLostClaimOnlyWhenTheReaperTakesItBack() {
         UUID jobId = staleRunningJob(readableSnapshot());

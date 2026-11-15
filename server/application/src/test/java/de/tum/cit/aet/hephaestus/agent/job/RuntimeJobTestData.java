@@ -34,6 +34,21 @@ public final class RuntimeJobTestData {
             job.setInput(new ReviewJobInput(1, List.of(new ReviewAssignmentId(job.getReviewId(), 1, 1))));
     }
 
+    /** The call fields that a sandbox request reads of the job ({@link ReviewJobRepository#findCall}). */
+    public static ReviewJobRepository.ReviewJobCall call(ReviewJob job) {
+        return new ReviewJobRepository.ReviewJobCall(
+                job.getId(),
+                job.getWorkspaceId(),
+                job.getReviewId(),
+                Objects.requireNonNull(job.getRunId()),
+                job.getAttempt(),
+                job.getExecutionStartedAt(),
+                job.getConfigSnapshot(),
+                job.getInput(),
+                job.getAdmissionAttempt(),
+                job.getAdmissionDigest());
+    }
+
     /** Sets the attempt number that a load of the job reads from its run; for tests without a database. */
     public static ReviewJob attempt(ReviewJob job, int attempt) {
         ReflectionTestUtils.setField(job, "attempt", attempt);
@@ -216,14 +231,15 @@ public final class RuntimeJobTestData {
     }
 
     /**
-     * Saves a stored job whose status a test changed, and moves its run to agree, in one transaction of the
-     * application's transaction manager.
+     * Saves a job whose status a test set, and moves its run to agree, in one transaction of the application's
+     * transaction manager. A new job's run is inserted first, since the job's {@code run_id} references it.
      *
      * @return the saved job
      */
     public static ReviewJob save(
             TransactionTemplate transactions, JdbcTemplate jdbc, ReviewJobRepository jobs, ReviewJob job) {
         return Objects.requireNonNull(transactions.execute(status -> {
+            if (job.getRunId() == null || runState(jdbc, job) == null) persistRun(jdbc, job);
             ReviewJob saved = jobs.saveAndFlush(job);
             persistRun(jdbc, saved);
             return saved;

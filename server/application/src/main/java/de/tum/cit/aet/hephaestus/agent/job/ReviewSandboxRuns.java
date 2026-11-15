@@ -157,15 +157,19 @@ public class ReviewSandboxRuns implements SandboxRunKind {
     /** No model call before the attempt's execution started: its work deadline counts from there. */
     @Override
     public Optional<ProxyAttempt> attempt(SandboxRun run) {
-        return job(run).filter(job -> job.getExecutionStartedAt() != null)
-                .map(job -> new ProxyAttempt(
-                        ProxyAttempt.Caller.REVIEW,
-                        job.getId(),
-                        job.getWorkspaceId(),
-                        run.fence().epoch(),
-                        job.getRunId(),
-                        ReviewAttemptPreparation.workDeadline(
-                                job, ConfigSnapshot.fromJson(job.getConfigSnapshot(), objectMapper))));
+        // Every request of the sandbox authenticates here, so it reads the job's attempt, never its capture.
+        return jobs.findCallByRun(run.fence().runId(), run.fence().workspaceId())
+                .filter(job ->
+                        job.attempt() == ReviewRunKind.attempt(run.fence().epoch()))
+                .flatMap(job -> Optional.ofNullable(job.executionStartedAt())
+                        .map(started -> new ProxyAttempt(
+                                ProxyAttempt.Caller.REVIEW,
+                                job.id(),
+                                job.workspaceId(),
+                                run.fence().epoch(),
+                                job.runId(),
+                                ReviewAttemptPreparation.workDeadline(
+                                        started, ConfigSnapshot.fromJson(job.configSnapshot(), objectMapper)))));
     }
 
     @Override

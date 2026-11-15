@@ -19,7 +19,9 @@ import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.handler.RuntimeReviewTestData;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobAssignments;
+import de.tum.cit.aet.hephaestus.agent.job.ReviewJobInput;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
+import de.tum.cit.aet.hephaestus.agent.job.RuntimeJobTestData;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.core.exception.ProblemType;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyRecorder;
@@ -124,6 +126,9 @@ class FeedbackPublicationContextIntegrationTest extends AbstractFeedbackDelivery
 
     @Autowired
     ResultMarkService marks;
+
+    @Autowired
+    ReviewJobRepository jobRows;
 
     @Test
     void shouldWithholdAPieceComposedBeforeAnotherReviewPostedOnTheSameWork() {
@@ -647,7 +652,7 @@ class FeedbackPublicationContextIntegrationTest extends AbstractFeedbackDelivery
             }
         };
         var job = ownedAdmittedJob();
-        var service = admissionService(job, pausing);
+        var service = admissionService(pausing);
         var read = CompletableFuture.supplyAsync(() -> service.publicFeedbackHistory(
                 new ResultAdmissionService.AdmissionIdentity(job.getId(), workspace.getId(), 0, job.getRunId())));
         try {
@@ -692,7 +697,7 @@ class FeedbackPublicationContextIntegrationTest extends AbstractFeedbackDelivery
         var job = ownedAdmittedJob();
         var transactions = new PhysicalTransactions(transactionManager);
 
-        admissionService(job, history, transactions)
+        admissionService(history, transactions)
                 .publicFeedbackHistory(new ResultAdmissionService.AdmissionIdentity(
                         job.getId(), workspace.getId(), 0, job.getRunId()));
 
@@ -1063,30 +1068,33 @@ class FeedbackPublicationContextIntegrationTest extends AbstractFeedbackDelivery
                 workspace);
     }
 
-    /** A running attempt of the fixture review that admission accepted, under its live lease. */
+    /** A running attempt of the fixture review that admission accepted, stored with its run under a live lease. */
     private ReviewJob ownedAdmittedJob() {
         var job = RuntimeReviewTestData.job();
         job.setWorkspaceId(workspace.getId());
         job.setReviewId(reviewId);
+        job.setInput(new ReviewJobInput(
+                itemId,
+                List.of(new ReviewAssignmentId(
+                        reviewId,
+                        RuntimeReviewTestData.assignment(developerId, null).id().practiceId(),
+                        itemId))));
         job.setStatus(ReviewJobStatus.RUNNING);
+        job.setStartedAt(AT);
         job.setAdmissionAttempt(0);
-        job.setAdmissionDigest("admitted");
-        return job;
+        job.setAdmissionDigest("a".repeat(64));
+        return RuntimeJobTestData.save(new TransactionTemplate(transactionManager), jdbc, jobRows, job);
     }
 
-    /** The production service and its own history snapshot; only ownership and late-copy custody are stand-ins. */
-    private ResultAdmissionService admissionService(ReviewJob job, FeedbackHistoryQuery query) {
-        return admissionService(job, query, transactionManager);
+    /**
+     * The production service on the stored job, with its own history snapshot; only the review's assignments, the run's
+     * lease and late-copy custody are stand-ins.
+     */
+    private ResultAdmissionService admissionService(FeedbackHistoryQuery query) {
+        return admissionService(query, transactionManager);
     }
 
-    private ResultAdmissionService admissionService(
-            ReviewJob job, FeedbackHistoryQuery query, PlatformTransactionManager manager) {
-        var jobs = mock(ReviewJobRepository.class);
-        when(jobs.databaseNow()).thenAnswer(call -> Instant.now());
-        when(jobs.findByIdAndWorkspaceId(job.getId(), workspace.getId())).thenReturn(Optional.of(job));
-        when(jobs.findByIdAndWorkspaceIdForUpdate(job.getId(), workspace.getId()))
-                .thenReturn(Optional.of(job));
-        when(jobs.databaseClock()).thenReturn(Instant.now());
+    private ResultAdmissionService admissionService(FeedbackHistoryQuery query, PlatformTransactionManager manager) {
         var base = RuntimeReviewTestData.assignment(developerId, null);
         var item = new ItemRef(workspace.getId(), itemId, new ItemKind("scm.pull_request"), 42L, null, null);
         var assignment = new ReviewAssignmentSnapshot(
@@ -1097,7 +1105,8 @@ class FeedbackPublicationContextIntegrationTest extends AbstractFeedbackDelivery
                 base.practiceSlug(),
                 base.practice());
         var assignments = mock(ReviewJobAssignments.class);
-        when(assignments.review(job))
+        // The service reads the stored job itself, so these answer for any copy of it.
+        when(assignments.review(any()))
                 .thenReturn(new ReviewSnapshot(
                         reviewId,
                         workspace.getId(),
@@ -1107,7 +1116,7 @@ class FeedbackPublicationContextIntegrationTest extends AbstractFeedbackDelivery
                         ReviewOrigin.REQUEST,
                         1,
                         List.of(base.practice())));
-        when(assignments.load(job)).thenReturn(List.of(assignment));
+        when(assignments.load(any(ReviewJob.class))).thenReturn(List.of(assignment));
         var files = mock(JobEvidenceFiles.class);
         when(files.indexLateRead(any(), any(), any())).thenAnswer(call -> ((Supplier<?>) call.getArgument(1)).get());
         var source = new ReviewHistoryContentSource(
@@ -1117,7 +1126,7 @@ class FeedbackPublicationContextIntegrationTest extends AbstractFeedbackDelivery
                 mock(RegisteredItemLabels.class),
                 mapper);
         return new ResultAdmissionService(
-                jobs,
+                jobRows,
                 mock(AdmittedResultQuery.class),
                 assignments,
                 mock(AdmittedResultProjectionService.class),

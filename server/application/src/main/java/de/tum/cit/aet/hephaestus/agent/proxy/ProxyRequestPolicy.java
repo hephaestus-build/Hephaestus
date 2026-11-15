@@ -56,7 +56,7 @@ class ProxyRequestPolicy {
                 request.connectionScope(), request.connectionId(), request.modelId(), workspaceId);
         return switch (attempt.sourceType()) {
             case REVIEW_JOB ->
-                jobs.findByIdAndWorkspaceId(attempt.sourceId(), workspaceId)
+                jobs.findCall(attempt.sourceId(), workspaceId)
                         .filter(job -> reviews.allows(job, model))
                         .isPresent();
             case PRODUCT_FEEDBACK_DRAFT, PROBE -> false;

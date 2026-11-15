@@ -2,8 +2,10 @@ package de.tum.cit.aet.hephaestus.agent.job;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
 import de.tum.cit.aet.hephaestus.agent.config.MemberAiRoutingAdapter;
 import de.tum.cit.aet.hephaestus.agent.handler.RuntimeReviewTestData;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AiChoice;
@@ -45,5 +47,26 @@ class ReviewMemberAiPolicyTest extends BaseUnitTest {
                 suppression,
                 assignments);
         assertThat(policy.permitsReview(job)).isFalse();
+    }
+
+    @Test
+    void shouldSuppressAJobUnderErasureBeforeItReadsItsAssignments() {
+        var assignments = mock(ReviewJobAssignments.class);
+        var suppression = mock(PersonProcessingSuppression.class);
+        var job = RuntimeReviewTestData.job();
+        when(suppression.isReviewJobSuppressed(job.getId())).thenReturn(true);
+        var policy = new ReviewMemberAiPolicy(
+                mock(MemberAiRoutingAdapter.class),
+                new JsonMapper(),
+                mock(MemberAiPreferences.class),
+                suppression,
+                assignments);
+
+        assertThat(policy.isProcessingSuppressed(job)).isTrue();
+        assertThat(policy.permitsReview(job)).isFalse();
+        assertThat(policy.allows(RuntimeJobTestData.call(job), LlmModelResolver.ConnectionRef.NONE))
+                .isFalse();
+        // Erasure can remove the job's review before the job itself, and then its assignments cannot be read.
+        verifyNoInteractions(assignments);
     }
 }
