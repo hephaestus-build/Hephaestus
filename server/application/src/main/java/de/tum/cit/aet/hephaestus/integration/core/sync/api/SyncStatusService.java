@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.api.ConnectionAdminService;
 import de.tum.cit.aet.hephaestus.integration.core.framework.IntegrationManifestRegistry;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionStrategy;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionSyncDetails;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionSyncStateProvider;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationFamily;
@@ -32,7 +33,9 @@ import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.core.task.AsyncTaskExecutor;
@@ -54,6 +57,7 @@ public class SyncStatusService {
     private final AsyncTaskExecutor taskExecutor;
     private final List<ConnectionSyncStateProvider> providers;
     private final List<IntegrationSyncRunner> runners;
+    private final Set<IntegrationKind> connectableKinds;
 
     public SyncStatusService(
             ConnectionAdminService connectionAdminService,
@@ -63,7 +67,8 @@ public class SyncStatusService {
             @Qualifier("syncJobExecutor") AsyncTaskExecutor taskExecutor,
             List<ConnectionSyncStateProvider> providers,
             List<IntegrationSyncRunner> runners,
-            RepositoryAvailabilityProvider repositoryAvailabilityProvider) {
+            RepositoryAvailabilityProvider repositoryAvailabilityProvider,
+            List<ConnectionStrategy> connectionStrategies) {
         this.repositoryAvailabilityProvider = repositoryAvailabilityProvider;
         this.connectionAdminService = connectionAdminService;
         this.syncJobService = syncJobService;
@@ -72,6 +77,11 @@ public class SyncStatusService {
         this.taskExecutor = taskExecutor;
         this.providers = List.copyOf(providers);
         this.runners = List.copyOf(runners);
+        // A kind connects only through its strategy, and an operator setting such as
+        // `hephaestus.integration.outline.enabled` decides whether that bean exists.
+        this.connectableKinds = connectionStrategies.stream()
+                .map(ConnectionStrategy::kind)
+                .collect(Collectors.toUnmodifiableSet());
     }
 
     private @Nullable ConnectionSyncStateProvider providerFor(IntegrationKind kind) {
@@ -342,6 +352,7 @@ public class SyncStatusService {
                             kind,
                             displayName,
                             connected,
+                            connectableKinds.contains(kind),
                             c == null ? null : c.getId(),
                             c == null ? null : c.getState(),
                             c == null ? null : c.credentialsUnreadableSince(),

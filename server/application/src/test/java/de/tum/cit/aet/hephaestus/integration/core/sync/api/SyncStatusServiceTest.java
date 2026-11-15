@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.integration.core.sync.api;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
@@ -20,6 +21,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionFixtures;
 import de.tum.cit.aet.hephaestus.integration.core.connection.api.ConnectionAdminService;
 import de.tum.cit.aet.hephaestus.integration.core.framework.IntegrationManifestRegistry;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionStrategy;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionSyncDetails;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionSyncStateProvider;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
@@ -137,7 +139,8 @@ class SyncStatusServiceTest extends BaseUnitTest {
                 taskExecutor,
                 List.of(githubProvider),
                 List.of(githubRunner),
-                syncTargetProvider);
+                syncTargetProvider,
+                List.of(strategyFor(IntegrationKind.GITHUB)));
     }
 
     @Test
@@ -341,7 +344,8 @@ class SyncStatusServiceTest extends BaseUnitTest {
                 taskExecutor,
                 List.of(),
                 List.of(),
-                mock(SyncTargetProvider.class));
+                mock(SyncTargetProvider.class),
+                List.of());
 
         var status = noProviders.getStatus(WORKSPACE_ID, CONNECTION_ID);
 
@@ -638,6 +642,24 @@ class SyncStatusServiceTest extends BaseUnitTest {
         assertThat(service.catalog(WORKSPACE_ID))
                 .extracting(IntegrationCatalogEntryDTO::kind)
                 .containsExactly(IntegrationKind.GITHUB, IntegrationKind.SLACK);
+    }
+
+    @Test
+    void catalog_marksAKindWithoutItsConnectionStrategyAsNotConnectable() {
+        when(connectionAdminService.manifests()).thenReturn(manifests);
+        when(manifests.registeredKinds()).thenReturn(Set.of(IntegrationKind.GITHUB, IntegrationKind.SLACK));
+        when(manifests.manifestFor(any())).thenReturn(Optional.empty());
+        when(connectionAdminService.listForWorkspace(WORKSPACE_ID)).thenReturn(List.of());
+
+        assertThat(service.catalog(WORKSPACE_ID))
+                .extracting(IntegrationCatalogEntryDTO::kind, IntegrationCatalogEntryDTO::connectable)
+                .containsExactly(tuple(IntegrationKind.GITHUB, true), tuple(IntegrationKind.SLACK, false));
+    }
+
+    private static ConnectionStrategy strategyFor(IntegrationKind kind) {
+        ConnectionStrategy strategy = mock(ConnectionStrategy.class);
+        when(strategy.kind()).thenReturn(kind);
+        return strategy;
     }
 
     private SyncJob terminalJob(SyncJobStatus status) {

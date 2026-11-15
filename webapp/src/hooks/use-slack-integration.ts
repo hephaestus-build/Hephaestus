@@ -276,11 +276,13 @@ export function useSlackIntegration(workspaceSlug: string) {
 								},
 					isDisconnecting: disconnect.isPending,
 				}
-			: {
-					state: "disconnected",
-					onConnect: startSlackOAuth,
-					isConnecting: connect.isPending,
-				}) satisfies WorkspaceSlackConnectionSettingsProps,
+			: entry?.connectable === false
+				? { state: "not-enabled" }
+				: {
+						state: "disconnected",
+						onConnect: startSlackOAuth,
+						isConnecting: connect.isPending,
+					}) satisfies WorkspaceSlackConnectionSettingsProps,
 		channelsSettingsProps: {
 			hasSlackConnection: isConnectionActive,
 			channels: isConnectionActive && !channelsFailed ? (slackChannelsQuery.data ?? []) : [],

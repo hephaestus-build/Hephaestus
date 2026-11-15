@@ -199,6 +199,8 @@ function OverviewBody({
 					<p className="text-sm text-muted-foreground">
 						Source control is selected when the workspace is created.
 					</p>
+				) : !entry.connectable ? (
+					<p className="text-sm text-muted-foreground">Not enabled on this instance.</p>
 				) : (
 					<Link to={detailTo} params={{ workspaceSlug }} className={buttonVariants({ size: "sm" })}>
 						Connect<span className="sr-only"> {entry.displayName}</span>

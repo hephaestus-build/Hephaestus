@@ -8,6 +8,7 @@ import {
 	type ConnectionState,
 } from "@/components/admin/integrations/sync-format";
 import { WorkspaceIntegrationCardHeading } from "@/components/admin/integrations/WorkspaceIntegrationCardHeading";
+import { WorkspaceIntegrationNotEnabled } from "@/components/admin/integrations/WorkspaceIntegrationNotEnabled";
 import { DocLink } from "@/components/common/DocLink";
 import { RelativeTime } from "@/components/common/RelativeTime";
 import { useNow } from "@/components/common/use-now";
@@ -48,8 +49,8 @@ export interface OutlineConnectCardProps {
 	isConnecting?: boolean;
 	isDisconnecting?: boolean;
 	errorMessage?: string;
-	/** This instance has no Outline integration, so the connect form is a dead end and the card says so. */
-	connectUnavailable?: boolean;
+	/** This instance has not enabled Outline, so the card offers no connect form and says so instead. */
+	notEnabled?: boolean;
 	onConnect: (input: OutlineConnectInput) => void;
 	onDisconnect: () => void;
 	isReplacingToken?: boolean;
@@ -85,7 +86,7 @@ export function OutlineConnectCard({
 	isConnecting = false,
 	isDisconnecting = false,
 	errorMessage,
-	connectUnavailable = false,
+	notEnabled = false,
 	onConnect,
 	onDisconnect,
 	isReplacingToken = false,
@@ -150,6 +151,8 @@ export function OutlineConnectCard({
 								</p>
 							)}
 						</>
+					) : notEnabled ? (
+						<WorkspaceIntegrationNotEnabled displayName="Outline" doc="outlineIntegration" />
 					) : (
 						<FieldGroup>
 							<Field data-invalid={serverUrlInvalid}>
@@ -189,19 +192,6 @@ export function OutlineConnectCard({
 							</Field>
 
 							{hasText(errorMessage) && <FieldError>{errorMessage}</FieldError>}
-
-							{connectUnavailable && (
-								<Alert variant="warning">
-									<TriangleAlertIcon />
-									<AlertTitle>Outline may not be enabled on this instance</AlertTitle>
-									<AlertDescription>
-										The server has no Outline integration configured, so connecting cannot succeed
-										here. If your URL and token are correct, ask your instance operator to{" "}
-										<DocLink doc="outlineIntegration">enable the Outline integration</DocLink> for
-										this deployment.
-									</AlertDescription>
-								</Alert>
-							)}
 
 							<Button
 								pending={isConnecting}

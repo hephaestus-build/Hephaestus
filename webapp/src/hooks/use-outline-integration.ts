@@ -4,6 +4,7 @@ import { toast } from "@/lib/toast";
 
 import {
 	deleteOutlineCollectionMutation,
+	getIntegrationCatalogOptions,
 	getOutlineTokenStatusOptions,
 	initiateMutation,
 	listOptions,
@@ -49,6 +50,13 @@ export function useOutlineIntegration(workspaceSlug: string) {
 		enabled: Boolean(workspaceSlug),
 	});
 	const connections = connectionsQuery.data;
+	// The catalog says whether this instance can connect Outline at all; the sidebar reads the same key.
+	const catalogQuery = useQuery({
+		...getIntegrationCatalogOptions({ path: { workspaceSlug } }),
+		enabled: Boolean(workspaceSlug),
+	});
+	const notEnabled =
+		catalogQuery.data?.find((entry) => entry.kind === "OUTLINE")?.connectable === false;
 
 	const outlineConnections = (connections ?? []).filter(
 		(connection) => connection.kind === "OUTLINE",
@@ -193,10 +201,7 @@ export function useOutlineIntegration(workspaceSlug: string) {
 		},
 	});
 
-	// The catalog does not expose deployment availability, so translate the server's missing-strategy error.
 	const connectErrorMessage = connect.error == null ? undefined : problemDetailOf(connect.error);
-	const connectUnavailable =
-		connectErrorMessage != null && /no connectionstrategy registered/iu.test(connectErrorMessage);
 
 	const handleConnect = (input: OutlineConnectInput) => {
 		connect.mutate({
@@ -281,7 +286,7 @@ export function useOutlineIntegration(workspaceSlug: string) {
 			isConnecting: connect.isPending,
 			isDisconnecting: disconnect.isPending,
 			errorMessage: connectErrorMessage,
-			connectUnavailable,
+			notEnabled,
 			onConnect: handleConnect,
 			onDisconnect: handleDisconnect,
 			isReplacingToken: replaceToken.isPending,
