@@ -51,6 +51,12 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - uses: ./.github/actions/postgres-image
+        with:
+          phase: start
+          base-sha: ${{ inputs.postgres_base_sha }}
+          image-changed: ${{ inputs.postgres_image_changed }}
+          tag: hephaestus-postgres:ci
       - uses: ./.github/actions/setup-toolchain
         with:
           install: "frozen"
@@ -61,9 +67,7 @@ jobs:
           artifact: ${{ env.SERVER_BUILD_ARTIFACT }}
       - uses: ./.github/actions/postgres-image
         with:
-          base-sha: ${{ inputs.postgres_base_sha }}
-          image-changed: ${{ inputs.postgres_image_changed }}
-          tag: hephaestus-postgres:ci
+          phase: wait
       - name: OpenAPI specification and client
         id: openapi
         continue-on-error: true
@@ -169,6 +173,12 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - uses: ./.github/actions/postgres-image
+        with:
+          phase: start
+          base-sha: ${{ inputs.postgres_base_sha }}
+          image-changed: ${{ inputs.postgres_image_changed }}
+          tag: hephaestus-postgres:ci
       - uses: ./.github/actions/setup-toolchain
         with:
           install: "frozen"
@@ -178,9 +188,7 @@ jobs:
           artifact: ${{ env.SERVER_BUILD_ARTIFACT }}
       - uses: ./.github/actions/postgres-image
         with:
-          base-sha: ${{ inputs.postgres_base_sha }}
-          image-changed: ${{ inputs.postgres_image_changed }}
-          tag: hephaestus-postgres:ci
+          phase: wait
       - name: Run database contract tests
         run: |
           POSTGRES_PASSWORD="$(openssl rand -hex 24)"
@@ -236,6 +244,12 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - uses: ./.github/actions/postgres-image
+        with:
+          phase: start
+          base-sha: ${{ inputs.postgres_base_sha }}
+          image-changed: ${{ inputs.postgres_image_changed }}
+          tag: hephaestus-postgres:ci
       - uses: ./.github/actions/setup-toolchain
         with:
           install: "frozen"
@@ -246,9 +260,7 @@ jobs:
           artifact: ${{ env.SERVER_BUILD_ARTIFACT }}
       - uses: ./.github/actions/postgres-image
         with:
-          base-sha: ${{ inputs.postgres_base_sha }}
-          image-changed: ${{ inputs.postgres_image_changed }}
-          tag: hephaestus-postgres:ci
+          phase: wait
       - name: Run the PostgreSQL backup-restore drill
         id: backup_restore
         env:
