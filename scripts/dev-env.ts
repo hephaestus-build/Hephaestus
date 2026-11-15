@@ -70,7 +70,8 @@ export async function ensureEnvFile({
 
 /**
  * Generates each value of `GENERATED` that neither the file nor the environment sets, and returns their names.
- * Existing data refuses a missing database password: a new one would lock the developer out of the data.
+ * Existing data refuses a missing database password or key: a new password would lock the developer out of the
+ * data, and the server refuses to start without both keys, while a new key cannot open what the old one sealed.
  */
 export async function ensureGeneratedValues({
 	envFile,
@@ -87,6 +88,12 @@ export async function ensureGeneratedValues({
 	if (existingData && missing.some(({ name }) => name === "POSTGRES_PASSWORD")) {
 		throw new Error(
 			"The local database has data but no POSTGRES_PASSWORD. Set its password in server/.env, or run `vp run dev:reset` to start again with a new database.",
+		);
+	}
+	const missingKeys = missing.filter(({ name }) => name.startsWith("HEPHAESTUS_SECURITY_"));
+	if (existingData && missingKeys.length > 0) {
+		throw new Error(
+			`The local database has data but no ${missingKeys.map(({ name }) => name).join(" or ")}. Set the key that sealed its values in server/.env, or run \`vp run dev:reset\` to start again with a new database.`,
 		);
 	}
 	const written = missing.filter(({ newDatabaseOnly }) => !(existingData && newDatabaseOnly));

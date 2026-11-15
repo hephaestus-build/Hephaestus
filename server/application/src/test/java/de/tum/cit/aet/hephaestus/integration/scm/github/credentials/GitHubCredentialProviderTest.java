@@ -40,7 +40,7 @@ class GitHubCredentialProviderTest extends BaseUnitTest {
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
-        converter = new CredentialBundleConverter("0123456789abcdef0123456789abcdef", false);
+        converter = new CredentialBundleConverter("0123456789abcdef0123456789abcdef");
         lenient().when(appTokenService.getConfiguredAppId()).thenReturn(42L);
         provider =
                 new GitHubCredentialProvider(connectionService, CredentialReaders.forTests(converter), appTokenService);

@@ -17,7 +17,6 @@ import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
 
 /**
@@ -55,22 +54,12 @@ public final class SystemSecrets {
     private final Map<Integer, SecretKey> keys;
     private final int activeId;
 
-    public SystemSecrets(SecurityProperties properties, Environment environment) {
+    public SystemSecrets(SecurityProperties properties) {
         String active = properties.encryptionKey();
+        // One rule in every profile: a missing key stops the start here, not later inside a migration or a request.
         if (active == null) {
-            if (environment.matchesProfiles("prod")) {
-                throw new IllegalStateException(
-                        "An encryption key is required in production. Set hephaestus.security.encryption-key.");
-            }
-            if (environment.matchesProfiles("specs", "cds-training")) {
-                log.debug("System encryption is unavailable during artifact generation: reason=missing_key");
-            } else {
-                log.warn("Skipped encryption configuration: reason=missing_key, "
-                        + "action=set_hephaestus_security_encryption_key_in_production");
-            }
-            this.keys = Map.of();
-            this.activeId = 0;
-            return;
+            throw new IllegalStateException("No system encryption key. Set hephaestus.security.encryption-key"
+                    + " (HEPHAESTUS_SECURITY_ENCRYPTION_KEY), as docs/admin/secret-custody.mdx describes.");
         }
         Map<Integer, SecretKey> configured = new HashMap<>();
         SecretKey activeKey = parseKey(active, "encryption-key");
@@ -86,11 +75,6 @@ public final class SystemSecrets {
         this.keys = Map.copyOf(configured);
         log.info(
                 "Enabled system encryption: activeKeyId={}, priorKeyConfigured={}", keyIdText(activeId), prior != null);
-    }
-
-    /** Whether a system key is configured. Without one, nothing can be sealed or opened. */
-    public boolean isEnabled() {
-        return !keys.isEmpty();
     }
 
     /**
@@ -109,14 +93,12 @@ public final class SystemSecrets {
             return "the value names the configured key " + keyIdText(stored)
                     + " but does not open with it: it is damaged, or it belongs to another row";
         }
-        String held = keys.isEmpty()
-                ? "no system key"
-                : "the active key " + keyIdText(activeId)
-                        + keys.keySet().stream()
-                                .filter(id -> id != activeId)
-                                .findFirst()
-                                .map(id -> " and the prior key " + keyIdText(id))
-                                .orElse(" and no prior key");
+        String held = "the active key " + keyIdText(activeId)
+                + keys.keySet().stream()
+                        .filter(id -> id != activeId)
+                        .findFirst()
+                        .map(id -> " and the prior key " + keyIdText(id))
+                        .orElse(" and no prior key");
         return "the value was sealed by the system key with id " + keyIdText(stored) + ", and this server holds "
                 + held;
     }

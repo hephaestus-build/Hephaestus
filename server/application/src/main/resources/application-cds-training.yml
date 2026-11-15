@@ -28,6 +28,11 @@ spring:
 
 # Artifact generation loads the runtime contract, not deployment bootstrap or integrations.
 hephaestus:
+    # Fixture keys: an artifact run seals nothing that a deployment keeps, and a deployment never activates this
+    # profile, so the image always reads the operator's keys at runtime.
+    security:
+        encryption-key: cdsTrainingFixtureSystemKey00001
+        credential-encryption-key: cdsTrainingFixtureCredentialKey1
     # Artifact generation has no database to work on (ConditionalOnBackgroundWork).
     background-work:
         enabled: false

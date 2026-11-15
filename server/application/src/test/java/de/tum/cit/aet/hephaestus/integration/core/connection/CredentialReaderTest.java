@@ -72,10 +72,10 @@ class CredentialReaderTest extends BaseUnitTest {
 
     @Test
     void shouldHandTheRecordToItsExecutorRatherThanRunItInline() {
-        connection.setCredentials(TOKEN, new CredentialBundleConverter(KEY_A, false));
+        connection.setCredentials(TOKEN, new CredentialBundleConverter(KEY_A));
         List<Runnable> handedOver = new ArrayList<>();
 
-        assertThatThrownBy(() -> readerWith(new CredentialBundleConverter(KEY_B, false), handedOver::add)
+        assertThatThrownBy(() -> readerWith(new CredentialBundleConverter(KEY_B), handedOver::add)
                         .credentialsOf(connection))
                 .isInstanceOf(CredentialUnreadableException.class);
 
@@ -97,7 +97,7 @@ class CredentialReaderTest extends BaseUnitTest {
     @Test
     @Timeout(10)
     void shouldStillAnswerAtOnceWhenTheRecorderIsStalledAndItsQueueIsFull() throws InterruptedException {
-        connection.setCredentials(TOKEN, new CredentialBundleConverter(KEY_A, false));
+        connection.setCredentials(TOKEN, new CredentialBundleConverter(KEY_A));
         CountDownLatch recording = new CountDownLatch(1);
         CountDownLatch release = new CountDownLatch(1);
         doAnswer(invocation -> {
@@ -109,7 +109,7 @@ class CredentialReaderTest extends BaseUnitTest {
                 .markCredentialsUnreadable(any(), any(), any(), any());
         ThreadPoolTaskExecutor recorder = productionRecorder();
         try {
-            CredentialReader reader = readerWith(new CredentialBundleConverter(KEY_B, false), recorder);
+            CredentialReader reader = readerWith(new CredentialBundleConverter(KEY_B), recorder);
             int queueCapacity = recorder.getQueueCapacity();
 
             // The first record occupies the only worker until released; the next fill the queue.
@@ -134,11 +134,11 @@ class CredentialReaderTest extends BaseUnitTest {
 
     @Test
     void shouldStillAnswerWithTheUnreadableCredentialWhenTheRecorderHasShutDown() {
-        connection.setCredentials(TOKEN, new CredentialBundleConverter(KEY_A, false));
+        connection.setCredentials(TOKEN, new CredentialBundleConverter(KEY_A));
         ThreadPoolTaskExecutor recorder = productionRecorder();
         recorder.shutdown();
 
-        assertThatThrownBy(() -> readerWith(new CredentialBundleConverter(KEY_B, false), recorder)
+        assertThatThrownBy(() -> readerWith(new CredentialBundleConverter(KEY_B), recorder)
                         .credentialsOf(connection))
                 .isExactlyInstanceOf(CredentialUnreadableException.class);
         // A record submitted after shutdown is discarded, not run and not thrown.
@@ -147,7 +147,7 @@ class CredentialReaderTest extends BaseUnitTest {
 
     @Test
     void shouldReturnTheCredentialWhenTheKeyReadsIt() {
-        CredentialBundleConverter converter = new CredentialBundleConverter(KEY_A, false);
+        CredentialBundleConverter converter = new CredentialBundleConverter(KEY_A);
         connection.setCredentials(TOKEN, converter);
 
         assertThat(readerWith(converter).credentialsOf(connection)).contains(TOKEN);
@@ -156,10 +156,10 @@ class CredentialReaderTest extends BaseUnitTest {
 
     @Test
     void shouldMarkTheConnectionAndNameItWhenTheKeyCannotReadTheCredential() {
-        connection.setCredentials(TOKEN, new CredentialBundleConverter(KEY_A, false));
+        connection.setCredentials(TOKEN, new CredentialBundleConverter(KEY_A));
 
         assertThatThrownBy(() ->
-                        readerWith(new CredentialBundleConverter(KEY_B, false)).credentialsOf(connection))
+                        readerWith(new CredentialBundleConverter(KEY_B)).credentialsOf(connection))
                 .isInstanceOf(CredentialUnreadableException.class)
                 .satisfies(e -> {
                     CredentialUnreadableException unreadable = (CredentialUnreadableException) e;
@@ -175,7 +175,7 @@ class CredentialReaderTest extends BaseUnitTest {
 
     @Test
     void shouldClearTheRecordWhenAMarkedCredentialReadsAgain() {
-        CredentialBundleConverter converter = new CredentialBundleConverter(KEY_A, false);
+        CredentialBundleConverter converter = new CredentialBundleConverter(KEY_A);
         connection.setCredentials(TOKEN, converter);
         connection.markCredentialRotationFailed(NOW.minusSeconds(60));
 
@@ -187,10 +187,10 @@ class CredentialReaderTest extends BaseUnitTest {
     void shouldLetAMissingKeyVersionThroughWithoutMarking() {
         // Written under key version 2; a server that only holds version 1 has an instance fault,
         // not a credential to give up on.
-        connection.setCredentials(TOKEN, new CredentialBundleConverter(KEY_A, 2, null, null, false));
+        connection.setCredentials(TOKEN, new CredentialBundleConverter(KEY_A, 2, null, null));
 
         assertThatThrownBy(() ->
-                        readerWith(new CredentialBundleConverter(KEY_A, false)).credentialsOf(connection))
+                        readerWith(new CredentialBundleConverter(KEY_A)).credentialsOf(connection))
                 .isInstanceOf(MissingCredentialKeyException.class);
         verify(connectionRepository, never()).markCredentialsUnreadable(any(), any(), any(), any());
     }

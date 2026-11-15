@@ -20,9 +20,9 @@ class StoredSystemSecretsTest extends BaseUnitTest {
 
     @Test
     void shouldNameTheSecretAndBothKeyIdsWhenTheSystemKeyDoesNotOpenIt() {
-        SystemSecrets sealedWith = systemSecrets(KEY, "test");
+        SystemSecrets sealedWith = systemSecrets(KEY);
         when(repository.findAll()).thenReturn(List.of(stored("namespace-reservation", sealedWith)));
-        SystemSecrets restored = systemSecrets(OTHER_KEY, "test");
+        SystemSecrets restored = systemSecrets(OTHER_KEY);
 
         assertThatThrownBy(() -> new StoredSystemSecrets(repository, restored).verifyAllOpen())
                 .isInstanceOf(IllegalStateException.class)
@@ -35,7 +35,7 @@ class StoredSystemSecretsTest extends BaseUnitTest {
 
     @Test
     void shouldOpenEveryStoredSecretWithTheKeyThatSealedIt() {
-        SystemSecrets secrets = systemSecrets(KEY, "test");
+        SystemSecrets secrets = systemSecrets(KEY);
         when(repository.findAll()).thenReturn(List.of(stored("namespace-reservation", secrets)));
 
         assertThatCode(() -> new StoredSystemSecrets(repository, secrets).verifyAllOpen())

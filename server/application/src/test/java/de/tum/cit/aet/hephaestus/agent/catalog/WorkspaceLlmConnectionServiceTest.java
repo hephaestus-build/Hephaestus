@@ -41,7 +41,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 class WorkspaceLlmConnectionServiceTest extends BaseUnitTest {
 
     private static final SystemSecrets SECRETS =
-            TestSystemSecrets.systemSecrets("0123456789abcdef0123456789abcdef", "test");
+            TestSystemSecrets.systemSecrets("0123456789abcdef0123456789abcdef");
 
     @Mock
     private WorkspaceLlmConnectionRepository connectionRepository;

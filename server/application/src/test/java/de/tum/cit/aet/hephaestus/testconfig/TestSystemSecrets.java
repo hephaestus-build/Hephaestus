@@ -3,21 +3,17 @@ package de.tum.cit.aet.hephaestus.testconfig;
 import de.tum.cit.aet.hephaestus.core.security.SecurityProperties;
 import de.tum.cit.aet.hephaestus.core.security.SystemSecrets;
 import org.jspecify.annotations.Nullable;
-import org.springframework.mock.env.MockEnvironment;
 
 public final class TestSystemSecrets {
 
     private TestSystemSecrets() {}
 
-    public static SystemSecrets systemSecrets(@Nullable String key, String... profiles) {
-        return systemSecretsWithPrior(key, null, profiles);
+    public static SystemSecrets systemSecrets(String key) {
+        return systemSecretsWithPrior(key, null);
     }
 
-    public static SystemSecrets systemSecretsWithPrior(
-            @Nullable String key, @Nullable String priorKey, String... profiles) {
-        var environment = new MockEnvironment();
-        environment.setActiveProfiles(profiles);
-        return new SystemSecrets(properties(key, priorKey), environment);
+    public static SystemSecrets systemSecretsWithPrior(String key, @Nullable String priorKey) {
+        return new SystemSecrets(properties(key, priorKey));
     }
 
     public static SecurityProperties properties(@Nullable String key, @Nullable String priorKey) {

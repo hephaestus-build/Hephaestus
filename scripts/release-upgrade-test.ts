@@ -18,6 +18,7 @@ import { researchConsentFields } from "./lib/research-consent.ts";
 const [previousImage = "", candidateImage = "", postgresImage = ""] = process.argv.slice(2);
 /** The system key of every run, the previous release's and the candidate's: one installation keeps one key. */
 const SYSTEM_KEY = "upgradeTestEncryptionKey01234567";
+const CREDENTIAL_KEY = "upgradeTestCredentialKey01234567";
 
 if (previousImage === "" || candidateImage === "" || postgresImage === "") {
 	throw new Error(
@@ -106,6 +107,8 @@ function migrate(image: string, database = "hephaestus") {
 			// The migration opens the values that the previous release sealed, as the chart's migration Job does.
 			"--env",
 			`HEPHAESTUS_SECURITY_ENCRYPTION_KEY=${SYSTEM_KEY}`,
+			"--env",
+			`HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY=${CREDENTIAL_KEY}`,
 			image,
 		],
 		{ encoding: "utf8", maxBuffer: CAPTURE_LIMIT_BYTES, timeout: 600_000 },
@@ -190,6 +193,8 @@ function startApplication(
 		"HEPHAESTUS_SYNC_RUN_ON_STARTUP=false",
 		"--env",
 		`HEPHAESTUS_SECURITY_ENCRYPTION_KEY=${SYSTEM_KEY}`,
+		"--env",
+		`HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY=${CREDENTIAL_KEY}`,
 		image,
 	);
 	return publishedPort(name);

@@ -35,7 +35,7 @@ class GitLabCredentialProviderTest extends BaseUnitTest {
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
-        converter = new CredentialBundleConverter("0123456789abcdef0123456789abcdef", false);
+        converter = new CredentialBundleConverter("0123456789abcdef0123456789abcdef");
         provider = new GitLabCredentialProvider(connectionService, CredentialReaders.forTests(converter));
     }
 

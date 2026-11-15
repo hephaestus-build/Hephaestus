@@ -102,11 +102,6 @@ public class JwtSigningKeyService implements JWKSource<SecurityContext>, SystemS
         if (hasCurrentKey(notBefore)) {
             return;
         }
-        if (!secrets.isEnabled()) {
-            throw new IllegalStateException(
-                    "No JWT signing key exists and sealing is disabled. The server does not create an unsealed "
-                            + "signing key. Set hephaestus.security.encryption-key (ADR 0017).");
-        }
         JwtSigningKey row = generateNewKeyRow();
         repository.save(row);
         cache.set(null);

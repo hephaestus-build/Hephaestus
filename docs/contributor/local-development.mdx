@@ -103,6 +103,7 @@ Spring. `vp run dev:server:e2e` uses that interface.
 #### Build-only profiles
 
 `specs` and `cds-training` generate artifacts. They are not deployment modes.
+Each carries fixture encryption keys in its profile file, so it starts without your keys.
 They load the application contract without runtime bootstrap, container-image validation or image pulls.
 They supply no shared placeholder secrets.
 If an authentication component needs a key to initialize, the build uses the non-production ephemeral-key behavior, without a runtime warning.
@@ -126,9 +127,13 @@ Changing the dev release's requests requires separate measurements of dev peaks.
 Create `application-local.yml` in `server/application/src/main/resources` to override defaults. This file is gitignored.
 
 The server encrypts stored secrets with `HEPHAESTUS_SECURITY_ENCRYPTION_KEY` and `HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY`.
+It refuses to start without either key, in every profile.
 For a new database, the first `vp run dev` writes both keys to `server/.env` ([Local settings](#local-settings)).
+
 Keep these values across restarts.
 For an existing database, keep its current keys and versions.
+If the database has data but `server/.env` has no key, local setup stops and names the missing key.
+Set the key that sealed the data, or run `vp run dev:reset`.
 The server does not store plaintext credentials or JWT private keys.
 
 :::caution[Keep it local]
@@ -180,7 +185,7 @@ It is safe to run again: it never replaces a value that is set.
    |---|---|---|
    | `COMPOSE_PROJECT_NAME` | For a new database | The checkout's folder name and a hash of its path. A command in one checkout never acts on the containers of another. |
    | `POSTGRES_PASSWORD` | For a new database | Compose creates the database with it. Spring Boot and the database scripts read it. |
-   | `HEPHAESTUS_SECURITY_ENCRYPTION_KEY`, `HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY` | For a new database | The server encrypts stored secrets with them. |
+   | `HEPHAESTUS_SECURITY_ENCRYPTION_KEY`, `HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY` | For a new database | The server encrypts stored secrets with them and does not start without them. |
    | `WEBHOOK_SECRET` | Always | GitHub signs its webhooks with it ([Webhook receiver](#webhook-receiver)). |
 
 Edit `server/.env` to add your own settings. Do not copy `server/.env.example` over it.

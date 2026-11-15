@@ -39,8 +39,8 @@ class CredentialRotationServiceIntegrationTest extends AbstractWorkspaceIntegrat
         User owner = persistUser("rotation-owner-" + System.nanoTime());
         Workspace workspace = createWorkspace(
                 "rotation-ws-" + System.nanoTime(), "Rotation Test", "rotation-org", AccountType.ORG, owner);
-        CredentialBundleConverter oldConverter = new CredentialBundleConverter(OLD_KEY, false);
-        CredentialBundleConverter rotatingConverter = new CredentialBundleConverter(NEW_KEY, 2, OLD_KEY, 1, false);
+        CredentialBundleConverter oldConverter = new CredentialBundleConverter(OLD_KEY);
+        CredentialBundleConverter rotatingConverter = new CredentialBundleConverter(NEW_KEY, 2, OLD_KEY, 1);
 
         Connection corrupt = connectionRepository.save(connection(workspace, "corrupt"));
         corrupt.setCredentials(TOKEN, oldConverter);

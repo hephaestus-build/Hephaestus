@@ -54,9 +54,10 @@ The chart schema refuses an empty value, and the server does not start with a bl
 
 **Check:** The server Pod becomes ready.
 
-## Startup fails: `An encryption key is required in production`
+## Startup fails: `No system encryption key` or `No credential encryption key`
 
-**Cause:** The release Secret has no `HEPHAESTUS_SECURITY_ENCRYPTION_KEY`.
+**Cause:** The release Secret has no `HEPHAESTUS_SECURITY_ENCRYPTION_KEY` or no `HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY`.
+The server refuses to start without either key, in every profile.
 
 **Fix:**
 

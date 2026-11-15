@@ -98,7 +98,9 @@ jobs:
           mapfile -t SERVER_JARS < <(find server/application/build/libs -maxdepth 1 -name 'hephaestus-application-*.jar')
           (( ${#SERVER_JARS[@]} == 1 ))
           SERVER_JAR=${SERVER_JARS[0]}
+          # Fixture keys for this throwaway database; the e2e profile carries none.
           SERVER_PORT=8080 MANAGEMENT_PORT=9090 POSTGRES_PORT=5432 \
+            HEPHAESTUS_SECURITY_ENCRYPTION_KEY=e2eFixtureSystemKeyNotForUse0001 HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY=e2eFixtureCredentialKeyNotUse001 \
             SPRING_DOCKER_COMPOSE_ENABLED=false APPLICATION_HOST_URL=http://localhost:4200 \
             setsid java -jar "$SERVER_JAR" --spring.profiles.active=e2e,playwright > e2e-server.log 2>&1 &
           SERVER_PID=$!
@@ -204,7 +206,9 @@ jobs:
           mapfile -t SERVER_JARS < <(find server/application/build/libs -maxdepth 1 -name 'hephaestus-application-*.jar')
           (( ${#SERVER_JARS[@]} == 1 ))
           SERVER_JAR=${SERVER_JARS[0]}
+          # Fixture keys for this throwaway database; the e2e profile carries none.
           SERVER_PORT=8080 MANAGEMENT_PORT=9090 POSTGRES_PORT=5432 \
+            HEPHAESTUS_SECURITY_ENCRYPTION_KEY=e2eFixtureSystemKeyNotForUse0001 HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY=e2eFixtureCredentialKeyNotUse001 \
             SPRING_DOCKER_COMPOSE_ENABLED=false APPLICATION_HOST_URL=http://localhost:4200 \
             setsid java -jar "$SERVER_JAR" --spring.profiles.active=e2e,playwright \
             --hephaestus.integration.gitlab.enabled=true > e2e-server.log 2>&1 &
