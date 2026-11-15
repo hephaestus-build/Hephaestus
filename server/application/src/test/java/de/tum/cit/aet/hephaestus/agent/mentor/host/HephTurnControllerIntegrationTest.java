@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.mentor.host;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.matchesPattern;
 import static org.mockito.ArgumentMatchers.any;
@@ -379,6 +380,19 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                         "model.apiProtocol",
                         "model.modelId",
                         "systemPrompt");
+    }
+
+    /** The build's guard against a caller's transaction ({@link HephTurnContexts#context}). */
+    @Test
+    void shouldRefuseToBuildATurnContextOrDocumentInsideATransaction() {
+        var contexts = HephTurnFixtures.contexts(beans);
+        var transactions = beans.getBean(TransactionTemplate.class);
+        assertThatThrownBy(() -> transactions.execute(tx -> contexts.context(attempt)))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("outside any transaction");
+        assertThatThrownBy(() -> transactions.execute(tx -> contexts.document(attempt, "inputs/context/user.json")))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("outside any transaction");
     }
 
     /**

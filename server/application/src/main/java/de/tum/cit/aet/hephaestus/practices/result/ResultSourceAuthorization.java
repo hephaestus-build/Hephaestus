@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.practices.result;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AiChoice;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountDirectory;
+import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentityResolver;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonProcessingSuppression;
@@ -243,6 +244,7 @@ public class ResultSourceAuthorization implements ResultProofAccess {
      */
     private final class Lookups {
         private final Map<Long, Optional<ItemRef>> items = new HashMap<>();
+        private final Map<RepositoryKey, List<Long>> repositoryItems = new HashMap<>();
         private final Map<SourceKey, Boolean> sources = new HashMap<>();
         // Suppression does not depend on the purpose or the audience, so every source check of an item shares it.
         private final Map<Long, Boolean> suppressedSources = new HashMap<>();
@@ -319,6 +321,13 @@ public class ResultSourceAuthorization implements ResultProofAccess {
             return children.getOrDefault(result.getId(), List.of());
         }
 
+        /** The live repository items of the workspace for a provider repository: one, unless it was removed or doubled. */
+        List<Long> repositoryItems(long workspaceId, long repositoryId) {
+            return repositoryItems.computeIfAbsent(
+                    new RepositoryKey(workspaceId, repositoryId),
+                    key -> itemRows.activeRepositoryIds(key.workspaceId(), key.repositoryId()));
+        }
+
         Optional<ItemRef> item(long workspaceId, long itemId) {
             return items.computeIfAbsent(itemId, id -> ResultSourceAuthorization.this.items.find(workspaceId, id));
         }
@@ -384,6 +393,8 @@ public class ResultSourceAuthorization implements ResultProofAccess {
     // The audience is part of the answer, so a human read never reuses a processing answer or the reverse.
     private record SourceKey(long itemId, SourceUsePurpose purpose, SourceReadAudience audience) {}
 
+    private record RepositoryKey(long workspaceId, long repositoryId) {}
+
     private record PersonKey(
             long providerId, String subject, @Nullable String teamId) {}
 
@@ -418,13 +429,12 @@ public class ResultSourceAuthorization implements ResultProofAccess {
             }
         }
         for (var repositoryId : facts.repositoryIds()) {
-            var repositories = itemRows.activeRepositoryIds(result.getWorkspaceId(), repositoryId);
-            if (repositories.size() != 1
-                    || !source(
-                            items.require(result.getWorkspaceId(), repositories.getFirst()),
-                            purpose,
-                            audience,
-                            lookups)) return false;
+            var repositories = lookups.repositoryItems(result.getWorkspaceId(), repositoryId);
+            if (repositories.size() != 1) return false;
+            long repositoryItem = repositories.getFirst();
+            var repository = lookups.item(result.getWorkspaceId(), repositoryItem)
+                    .orElseThrow(() -> new EntityNotFoundException("Item", Long.toString(repositoryItem)));
+            if (!source(repository, purpose, audience, lookups)) return false;
         }
         return true;
     }
