@@ -140,8 +140,10 @@ An SSH host alias that hides `github.com`, such as `git@github-work:org/repo`, a
 Pull request CI still runs every check.
 
 The pre-push hook runs `vp run check:push` with one task worker.
-It compares the same paths as `check:affected` and runs selected format, lint, TypeScript and prose checks.
-It does not write source files.
+It compares the same paths as `check:affected` and runs the static checks that `check:affected` selects for those scopes.
+`scripts/check-push.test.ts` names each exception with its reason, and fails when `check:affected` runs a check that the hook does not.
+
+The hook does not write source files.
 `git push --no-verify` skips the hook.
 A change under `db/changelog/next/` first checks that the branch's migrations sort after `origin/main` as last fetched and after the merge queue's.
 If the hook cannot read the queue, it says so and checks against `origin/main` only.
@@ -154,7 +156,7 @@ The complete Node suites remain in `check` and CI.
 
 A server change runs one Gradle invocation: Spotless, PMD, the test compilation and the architecture tier.
 The Java unit and integration tiers remain in CI.
-Instruction changes also run the instruction gate.
+A docs or instruction change also runs the instruction gate.
 The workflow parser and CI linters remain outside the hook.
 
 For the webapp and the extension, the hook runs the changed test files and the colocated test of each changed source, such as `Dialog.test.tsx` beside `Dialog.tsx`.
