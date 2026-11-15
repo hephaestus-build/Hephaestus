@@ -1,8 +1,10 @@
 package de.tum.cit.aet.hephaestus.workspace;
 
 import de.tum.cit.aet.hephaestus.integration.core.framework.SyncSchedulerProperties;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceRepositoryExclusion;
 import jakarta.annotation.PostConstruct;
 import java.util.Collections;
+import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -34,8 +36,11 @@ public class WorkspaceScopeFilter {
 
     private final Set<String> allowedOrganizations;
     private final Set<String> allowedRepositories;
+    // Absent in a runtime role that holds no exclusion, and such a role adds no monitor.
+    private final List<WorkspaceRepositoryExclusion> exclusions;
 
-    public WorkspaceScopeFilter(SyncSchedulerProperties properties) {
+    public WorkspaceScopeFilter(SyncSchedulerProperties properties, List<WorkspaceRepositoryExclusion> exclusions) {
+        this.exclusions = List.copyOf(exclusions);
         SyncSchedulerProperties.FilterProperties filters = properties.filters();
         log.debug(
                 "Received SyncSchedulerProperties.filters: allowedOrganizations={}, allowedRepositories={}",
@@ -84,6 +89,25 @@ public class WorkspaceScopeFilter {
         // This is a fallback for when workspace entity is not available
         // In practice, the scheduler (which has workspace access) does org-level filtering
         return workspaceId != null;
+    }
+
+    /**
+     * Whether no workspace may hold this GitHub repository at all, which the allow-lists cannot override. The rule
+     * lives here because monitor enumeration, added repositories, subscriptions, sync and webhook handling all ask
+     * this filter, so one check covers them. It names a GitHub repository, so a GitLab project on the same path is a
+     * different repository, and GitLab paths ask {@link #isRepositoryAllowed(String)}.
+     */
+    public boolean isExcluded(String nameWithOwner) {
+        return exclusions.stream().anyMatch(exclusion -> exclusion.excludes(nameWithOwner));
+    }
+
+    /** The allow-lists, and then whether no workspace may hold this GitHub repository. */
+    public boolean isGitHubRepositoryAllowed(@Nullable String nameWithOwner) {
+        return isRepositoryAllowed(nameWithOwner) && nameWithOwner != null && !isExcluded(nameWithOwner);
+    }
+
+    public boolean isGitHubRepositoryAllowed(@Nullable RepositoryToMonitor repository) {
+        return isGitHubRepositoryAllowed(repository != null ? repository.getNameWithOwner() : null);
     }
 
     public boolean isRepositoryAllowed(@Nullable RepositoryToMonitor repository) {

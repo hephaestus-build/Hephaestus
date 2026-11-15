@@ -5,6 +5,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.core.framework.SyncSchedulerProperties;
+import java.util.List;
 import java.util.Set;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -16,7 +17,25 @@ class WorkspaceScopeFilterTest {
         SyncSchedulerProperties properties = mock(SyncSchedulerProperties.class);
         when(properties.filters())
                 .thenReturn(new SyncSchedulerProperties.FilterProperties(organizations, repositories));
-        return new WorkspaceScopeFilter(properties);
+        return new WorkspaceScopeFilter(properties, List.of());
+    }
+
+    private static WorkspaceScopeFilter excluding(String repository) {
+        SyncSchedulerProperties properties = mock(SyncSchedulerProperties.class);
+        when(properties.filters()).thenReturn(new SyncSchedulerProperties.FilterProperties(Set.of(), Set.of()));
+        return new WorkspaceScopeFilter(properties, List.of(repository::equalsIgnoreCase));
+    }
+
+    @Test
+    void shouldRefuseAnExcludedRepositoryInAnyCaseWhileEveryOtherRepositoryStaysAllowed() {
+        WorkspaceScopeFilter filter = excluding("acme/reports");
+
+        assertThat(filter.isActive()).isFalse();
+        assertThat(filter.isGitHubRepositoryAllowed("Acme/Reports")).isFalse();
+        assertThat(filter.isExcluded("acme/reports")).isTrue();
+        assertThat(filter.isGitHubRepositoryAllowed("acme/product")).isTrue();
+        // A GitLab project on the same path is another repository, so the allow-lists alone decide.
+        assertThat(filter.isRepositoryAllowed("acme/reports")).isTrue();
     }
 
     private static Workspace workspace(String accountLogin) {

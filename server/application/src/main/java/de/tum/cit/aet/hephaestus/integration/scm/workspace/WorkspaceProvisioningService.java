@@ -31,6 +31,7 @@ import de.tum.cit.aet.hephaestus.workspace.spi.RepositoryMonitorCommands;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceLookup;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceMemberships;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceProvisioning;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceRepositoryExclusion;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceRoots;
 import java.time.Duration;
 import java.util.EnumMap;
@@ -74,6 +75,7 @@ public class WorkspaceProvisioningService implements WorkspaceProvisioning {
     private final List<BootstrapRepositoryLookup> identityLookups;
     private final ScmServerEndpointPolicy endpoints;
     private final TransactionTemplate writes;
+    private final List<WorkspaceRepositoryExclusion> exclusions;
 
     private final Map<IntegrationKind, WorkspaceProviderAvailability> providerAvailability;
 
@@ -95,8 +97,10 @@ public class WorkspaceProvisioningService implements WorkspaceProvisioning {
             WebClient.Builder webClients,
             List<SelectedRepositoryVerifier> repositoryVerifiers,
             List<BootstrapRepositoryLookup> identityLookups,
-            PlatformTransactionManager transactions) {
+            PlatformTransactionManager transactions,
+            List<WorkspaceRepositoryExclusion> exclusions) {
         this.writes = new TransactionTemplate(transactions);
+        this.exclusions = List.copyOf(exclusions);
         this.repositoryVerifiers = repositoryVerifiers;
         this.identityLookups = identityLookups;
         this.endpoints = endpoints;
@@ -158,6 +162,7 @@ public class WorkspaceProvisioningService implements WorkspaceProvisioning {
         List<RepositoryIdentity> repositories = config.repositoriesToMonitor().stream()
                 .map(repo -> repo == null ? null : repo.trim())
                 .filter(name -> !isBlank(name))
+                .filter(name -> exclusions.stream().noneMatch(exclusion -> exclusion.excludes(name)))
                 .map(
                         name -> identityLookups.stream()
                                 .filter(lookup -> lookup.kind() == IntegrationKind.GITHUB)

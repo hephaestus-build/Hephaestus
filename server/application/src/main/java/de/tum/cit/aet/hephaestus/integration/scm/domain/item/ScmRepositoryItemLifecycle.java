@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.scm.domain.item;
 
 import de.tum.cit.aet.hephaestus.core.event.RepositoryMonitoringChangedEvent;
+import de.tum.cit.aet.hephaestus.core.event.RepositoryWithdrawnFromWorkspaceEvent;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemIndexService;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureCode;
@@ -22,6 +23,26 @@ public class ScmRepositoryItemLifecycle {
     private final ScmRepositoryAccess access;
     private final ScmWorkItemIndex work;
     private final Clock clock;
+
+    /** Removing the repository item alone would leave the work under it, with the words it retained. */
+    @EventListener
+    @Transactional
+    public void onWithdrawn(RepositoryWithdrawnFromWorkspaceEvent event) {
+        for (long repositoryId : event.repositoryIds()) {
+            writer.findSource(event.workspaceId(), ScmItemEvents.REPOSITORY.value(), repositoryId)
+                    .ifPresent(item -> {
+                        removeBelow(event.workspaceId(), item.itemId());
+                        writer.remove(event.workspaceId(), item.itemId(), clock.instant());
+                    });
+        }
+    }
+
+    private void removeBelow(long workspaceId, long parentId) {
+        for (long child : writer.childIds(workspaceId, parentId)) {
+            removeBelow(workspaceId, child);
+            writer.remove(workspaceId, child, clock.instant());
+        }
+    }
 
     @EventListener
     @Transactional

@@ -17,4 +17,7 @@ public interface RepositoryMonitorSources {
 
     /** The mirrored repositories that a monitor reads. */
     List<Long> sourceRepositoryIds(long monitorId);
+
+    /** The mirrored repositories with the monitor's provider-stable id, also under a name that a rename left. */
+    List<Long> withdrawalRepositoryIds(long monitorId);
 }

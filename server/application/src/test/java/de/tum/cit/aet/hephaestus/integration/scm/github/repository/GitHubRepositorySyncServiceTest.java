@@ -11,6 +11,8 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
+import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryScopeFilter;
+import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.exception.RepositoryNotFoundOnGitProviderException;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
@@ -24,6 +26,7 @@ import de.tum.cit.aet.hephaestus.testconfig.TestEntities;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.io.IOException;
 import java.time.Duration;
+import java.util.List;
 import mockwebserver3.MockResponse;
 import mockwebserver3.MockWebServer;
 import org.junit.jupiter.api.AfterEach;
@@ -85,7 +88,9 @@ class GitHubRepositorySyncServiceTest extends BaseUnitTest {
                 new GitHubExceptionClassifier(new SimpleMeterRegistry()),
                 mock(GitHubGraphQlSyncCoordinator.class),
                 webClient,
-                new TransactionTemplate(mock(PlatformTransactionManager.class)));
+                new TransactionTemplate(mock(PlatformTransactionManager.class)),
+                List.of(),
+                List.of());
     }
 
     @ParameterizedTest
@@ -239,6 +244,37 @@ class GitHubRepositorySyncServiceTest extends BaseUnitTest {
 
     private GitHubRepositorySyncService graphQlService(
             HttpStatus status, String body, RepositoryRepository repositories, OrganizationRepository organizations) {
+        return graphQlService(status, body, repositories, organizations, List.of(), List.of());
+    }
+
+    @Test
+    void shouldWithdrawRenamedExcludedRepositoryBeforeStoringItsMetadata() {
+        var repositories = mock(RepositoryRepository.class);
+        var organizations = mock(OrganizationRepository.class);
+        var targets = mock(SyncTargetProvider.class);
+        var filter = mock(RepositoryScopeFilter.class);
+        when(filter.isRepositoryAllowed("course/reports")).thenReturn(false);
+        var service =
+                graphQlService(HttpStatus.OK, """
+                {"data":{"repository":{"databaseId":123,"name":"reports","nameWithOwner":"course/reports",
+                "owner":{"__typename":"Organization","databaseId":33,"login":"course"}}}}
+                """, repositories, organizations, List.of(filter), List.of(targets));
+
+        assertThat(service.syncRepository(
+                        7L, "course/old-reports", TestEntities.gitProvider(100L, IdentityProviderType.GITHUB), 123L))
+                .isEmpty();
+
+        verifyNoInteractions(repositories, organizations);
+        verify(targets).reconcileSyncTargetsForRepository(100L, 123L, "course/reports");
+    }
+
+    private GitHubRepositorySyncService graphQlService(
+            HttpStatus status,
+            String body,
+            RepositoryRepository repositories,
+            OrganizationRepository organizations,
+            List<RepositoryScopeFilter> filters,
+            List<SyncTargetProvider> targets) {
         upstream.enqueue(new MockResponse.Builder()
                 .code(status.value())
                 .addHeader("Content-Type", "application/json")
@@ -271,7 +307,9 @@ class GitHubRepositorySyncServiceTest extends BaseUnitTest {
                 classifier,
                 coordinator,
                 webClient,
-                new TransactionTemplate(mock(PlatformTransactionManager.class)));
+                new TransactionTemplate(mock(PlatformTransactionManager.class)),
+                filters,
+                targets);
     }
 
     @ParameterizedTest
