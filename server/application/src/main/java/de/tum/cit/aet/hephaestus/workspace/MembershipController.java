@@ -104,7 +104,7 @@ public class MembershipController {
                 .toList();
         var references = accounts.references(context.id(), accountIds);
         var eligible = selections.eligibleAccountIds(context.id(), accountIds);
-        var inScope = selections.inScopeAccountIds(context.id(), accountIds);
+        var inScope = selections.peopleScopeAdmits(context.id(), eligible);
         var answered = workspaceMembershipService.publicActivityAnswered(context.id(), page.getContent());
         return ResponseEntity.ok(OffsetPageDTO.from(page.map(member -> toDTO(
                 member,
@@ -195,12 +195,13 @@ public class MembershipController {
 
     private WorkspaceMembershipDTO toDTO(long workspaceId, Membership member, WorkspaceRole role) {
         long accountId = Objects.requireNonNull(member.getAccountId());
+        var eligible = selections.eligibleAccountIds(workspaceId, Set.of(accountId));
         return toDTO(
                 member,
                 role,
                 accounts.reference(workspaceId, accountId),
-                selections.eligibleAccountIds(workspaceId, Set.of(accountId)).contains(accountId),
-                selections.inScopeAccountIds(workspaceId, Set.of(accountId)).contains(accountId),
+                eligible.contains(accountId),
+                selections.peopleScopeAdmits(workspaceId, eligible).contains(accountId),
                 workspaceMembershipService
                         .publicActivityAnswered(workspaceId, List.of(member))
                         .get(accountId));

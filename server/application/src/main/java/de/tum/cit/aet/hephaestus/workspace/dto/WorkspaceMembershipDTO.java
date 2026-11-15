@@ -27,8 +27,9 @@ public record WorkspaceMembershipDTO(
 
         @Schema(
                 requiredMode = Schema.RequiredMode.REQUIRED,
-                description = "Whether the workspace review scope admits this member's work: the member is eligible,"
-                        + " and the people scope is all eligible members or selects them.")
+                description = "Whether the people part of the workspace review scope includes this member: the member"
+                        + " is eligible, and the people scope is all eligible members or selects them. The repository"
+                        + " part of the scope still decides which of their repository work is reviewed.")
         boolean inReviewScope,
 
         @Schema(

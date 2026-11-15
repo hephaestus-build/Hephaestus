@@ -48,15 +48,15 @@ public class MembershipReviewSelectionService implements MembershipReviewSelecti
 
     @Override
     @Transactional(readOnly = true)
-    public Set<Long> inScopeAccountIds(long workspaceId, Collection<Long> accountIds) {
-        if (accountIds.isEmpty()) return Set.of();
+    public Set<Long> peopleScopeAdmits(long workspaceId, Set<Long> eligibleAccountIds) {
+        if (eligibleAccountIds.isEmpty()) return Set.of();
         var people = workspaces
                 .findReviewScopePeople(workspaceId)
                 .orElseThrow(() -> new EntityNotFoundException("Workspace", workspaceId));
         var selected = people == ReviewScopeMode.ALL
                 ? Set.<Long>of()
                 : Set.copyOf(memberships.findSelectedAccountIds(workspaceId));
-        return eligible(workspaceId, accountIds, false).stream()
+        return eligibleAccountIds.stream()
                 .filter(id -> WorkspaceReviewScope.admitsPerson(people, selected.contains(id)))
                 .collect(Collectors.toUnmodifiableSet());
     }

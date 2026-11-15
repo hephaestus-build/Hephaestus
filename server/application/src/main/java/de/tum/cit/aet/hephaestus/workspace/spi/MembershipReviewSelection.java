@@ -9,8 +9,11 @@ public interface MembershipReviewSelection {
 
     Set<Long> eligibleAccountIds(long workspaceId, Collection<Long> accountIds);
 
-    /** The listed accounts that are eligible and that the workspace's people scope admits. */
-    Set<Long> inScopeAccountIds(long workspaceId, Collection<Long> accountIds);
+    /**
+     * The accounts of {@code eligibleAccountIds}, a result of {@link #eligibleAccountIds}, that the workspace's people
+     * scope admits.
+     */
+    Set<Long> peopleScopeAdmits(long workspaceId, Set<Long> eligibleAccountIds);
 
     List<Long> selectedAccountIds(long workspaceId);
 
