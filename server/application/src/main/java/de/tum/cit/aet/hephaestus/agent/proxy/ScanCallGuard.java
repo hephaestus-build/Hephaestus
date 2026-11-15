@@ -127,9 +127,9 @@ public class ScanCallGuard {
 
     /**
      * An ordinary review's own calls take at most {@link #WORK_MARGIN} times the work that its loop may spend: the model
-     * calls, output tokens and input tokens of each assigned practice. The loop holds itself to its budget; this bound holds a caller
-     * that does not, so an attempt's cost never rests on its runner alone. Each call already in flight may pass it
-     * once.
+     * calls, output tokens and input tokens of each assigned practice. The loop holds itself to its budget; this bound
+     * holds a caller that does not, so an attempt's cost never rests on its runner alone. Each call already in flight
+     * may pass it once.
      */
     private void requireWithinAttemptWork(ReviewJob job, ProxyRouting route) {
         // A row that moved to another attempt counts that attempt's calls; the lease refuses this one's.

@@ -38,10 +38,11 @@ Each one explains a review that starts late, is refused, or stops early.
 | Reviews that one person can request by hand | 5 for each workspace in one hour |
 | Model calls for each practice | 36 |
 | Output tokens for each practice | 48,000 |
-| Input tokens for each practice | 342,000. They count every prompt that the practice's model calls send, cached or not. |
+| Input tokens for each practice | 342,000 |
 | Model use of one review attempt | Twice the sum of its practices' budgets. Past it, the model proxy refuses the next call with `403`. |
 | Attempts of a review after a retryable failure | 5 |
 
+Input tokens count every prompt that the practice's model calls send, cached or not.
 A practice that spends one of its budgets ends as `NOT_REACHED` with reason `BUDGET`, and the other practices go on.
 
 The timeout of the workspace's **Practice reviews** model assignment limits the whole review run.
