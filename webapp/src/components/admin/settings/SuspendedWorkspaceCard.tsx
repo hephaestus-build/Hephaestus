@@ -3,7 +3,6 @@ import { CirclePause } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Spinner } from "@/components/ui/spinner";
 
 export interface SuspendedWorkspaceCardProps {
 	workspaceName: string;
@@ -55,8 +54,7 @@ export function SuspendedWorkspaceCard({
 				)}
 			</CardContent>
 			<CardFooter>
-				<Button onClick={onResume} disabled={resuming}>
-					{resuming && <Spinner aria-hidden />}
+				<Button onClick={onResume} pending={resuming}>
 					{resuming ? "Resuming…" : "Resume workspace"}
 				</Button>
 			</CardFooter>

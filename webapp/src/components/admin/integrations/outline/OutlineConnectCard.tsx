@@ -397,8 +397,12 @@ function ReplaceOutlineKeyForm({ isReplacing, error, onReplace }: ReplaceOutline
 				</FieldDescription>
 				{hasText(error) && <FieldError>{error}</FieldError>}
 			</Field>
-			<Button type="submit" variant="outline" disabled={!hasText(token.trim()) || isReplacing}>
-				{isReplacing && <Spinner />}
+			<Button
+				type="submit"
+				variant="outline"
+				pending={isReplacing}
+				disabled={!hasText(token.trim())}
+			>
 				{isReplacing ? "Replacing key…" : "Replace key"}
 			</Button>
 		</form>

@@ -277,8 +277,8 @@ export function ApproveRejectedFeedback({ isDeciding, onApprove }: ApproveReject
 					<Button variant="ghost" size="sm" onClick={() => setOpen(false)}>
 						Cancel
 					</Button>
-					<Button size="sm" disabled={isDeciding} onClick={onApprove}>
-						{isDeciding ? <Spinner /> : <CheckIcon />} Approve for delivery
+					<Button size="sm" pending={isDeciding} onClick={onApprove}>
+						<CheckIcon /> Approve for delivery
 					</Button>
 				</div>
 			</PopoverContent>
