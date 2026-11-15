@@ -954,8 +954,10 @@ class JobEvidenceFilesTest extends BaseUnitTest {
                             .containsExactly("record.json");
                 }
                 String text = Files.readString(trace.resolve("record.json"));
+                // The job id is random hex, so it can itself contain a forged number such as 1e30.
+                String outsideJobId = text.replace(job.getId().toString(), "");
                 for (String forged : List.of("Jane", "jane", "/workspace", "people/", "1e30", "note", "arguments")) {
-                    assertThat(text).doesNotContain(forged);
+                    assertThat(outsideJobId).doesNotContain(forged);
                 }
                 var record = new JsonMapper().readTree(text);
                 assertThat(record.path("retention").asString()).isEqualTo("METADATA_ONLY");
