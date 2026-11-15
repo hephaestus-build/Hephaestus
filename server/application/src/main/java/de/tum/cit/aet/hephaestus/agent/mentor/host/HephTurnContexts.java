@@ -34,6 +34,7 @@ import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
@@ -122,7 +123,15 @@ public class HephTurnContexts {
             String systemPrompt,
             String documents) {}
 
+    /**
+     * The turn's context: its path, situation, model and documents. Each part reads in a short transaction of its own.
+     * Inside one read-write transaction, Hibernate checks every entity the build has loaded before each query, which
+     * made a build of minutes, and its locks blocked the run's lease (docs/contributor/agent-runs.mdx § Locks and slow
+     * work). So a caller in a transaction is refused.
+     */
     public Context context(TurnAttempt turn) {
+        if (TransactionSynchronizationManager.isActualTransactionActive())
+            throw new IllegalStateException("A turn's context is built outside any transaction");
         ZoneId zone = zone(turn);
         MentorContextPathBuilder.TurnContext path = paths.forTurn(turn.workspaceId(), turn.turnId(), zone);
         MentorTurnAdmission admitted = MentorTurnAdmission.read(

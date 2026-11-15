@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.mentor.host;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.matchesPattern;
 import static org.mockito.ArgumentMatchers.any;
@@ -379,6 +380,19 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                         "model.apiProtocol",
                         "model.modelId",
                         "systemPrompt");
+    }
+
+    /**
+     * Inside one read-write transaction, Hibernate checks every entity the build has loaded before each query, and the
+     * build held the run's locks: a context build of minutes. Each part of the build reads in its own transaction.
+     */
+    @Test
+    void shouldRefuseToBuildATurnContextInsideATransaction() {
+        var contexts = HephTurnFixtures.contexts(beans);
+        assertThatThrownBy(() -> beans.getBean(TransactionTemplate.class).execute(tx -> contexts.context(attempt)))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("outside any transaction");
+        assertThat(contexts.context(attempt).systemPrompt()).isEqualTo(HephTurnContexts.SYSTEM_PROMPT);
     }
 
     /**
