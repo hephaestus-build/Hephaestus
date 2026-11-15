@@ -148,7 +148,7 @@ const PROVIDER_NAMES: Record<NonNullable<ItemRef["provider"]>, string> = {
 };
 
 function ItemFacts({ item }: { item: ItemRef }) {
-	if (!hasText(item.url) && item.removedAt === null) {
+	if (!hasText(item.url) && item.removedAt === undefined) {
 		return null;
 	}
 	return (
@@ -161,12 +161,12 @@ function ItemFacts({ item }: { item: ItemRef }) {
 						rel="noopener noreferrer"
 						className="inline-flex items-center gap-1 text-primary underline-offset-2 hover:underline"
 					>
-						{`Open on ${item.provider === null ? "its site" : PROVIDER_NAMES[item.provider]}`}
+						{`Open on ${item.provider === undefined ? "its site" : PROVIDER_NAMES[item.provider]}`}
 						<ExternalLinkIcon aria-hidden className="size-3" />
 					</a>
 				</Fact>
 			)}
-			{item.removedAt !== null && (
+			{item.removedAt !== undefined && (
 				<Fact label="Removed">
 					<DayTime at={item.removedAt} />
 				</Fact>
@@ -219,7 +219,7 @@ function ReviewFacts({
 					<DayTime at={pickedUp} from={review.createdAt} />
 				</Fact>
 			)}
-			{review.completedAt !== null && (
+			{review.completedAt !== undefined && (
 				<Fact label="Finished">
 					<DayTime at={review.completedAt} from={pickedUp ?? review.createdAt} />
 				</Fact>

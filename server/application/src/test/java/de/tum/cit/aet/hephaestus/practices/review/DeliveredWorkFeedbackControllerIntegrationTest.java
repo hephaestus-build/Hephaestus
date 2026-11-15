@@ -63,7 +63,7 @@ class DeliveredWorkFeedbackControllerIntegrationTest extends BaseIntegrationTest
     }
 
     @Test
-    void unmatchedPageReturnsAnExplicitNullItemAndEmptyFeedback() {
+    void unmatchedPageLeavesOutTheItemAndReturnsEmptyFeedback() {
         http.get()
                 .uri(b -> b.path(root() + "/practices/feedback/on-work")
                         .queryParam("url", "https://github.com/unknown/project/pull/1")
@@ -74,7 +74,7 @@ class DeliveredWorkFeedbackControllerIntegrationTest extends BaseIntegrationTest
                 .isOk()
                 .expectBody()
                 .jsonPath("$.item")
-                .isEmpty()
+                .doesNotExist()
                 .jsonPath("$.feedback.length()")
                 .isEqualTo(0);
     }

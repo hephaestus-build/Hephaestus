@@ -38,12 +38,11 @@ const reviewItemEvents = itemEventsOf(reviewDetailCompleted);
 const requestedReview: ReviewRef = {
 	id: reviewDetailCompleted.id,
 	item: reviewItem,
-	itemVersion: reviewDetailCompleted.itemVersion,
+	itemVersion: reviewDetailCompleted.itemVersion ?? undefined,
 	kind: "ITEM",
 	origin: "REQUEST",
 	status: "RUNNING",
 	createdAt: reviewDetailCompleted.createdAt,
-	completedAt: null,
 };
 
 const withheldEvents = reviewItemEvents.slice(0, 1).map((event) => ({
@@ -349,7 +348,11 @@ export const RequestedReviewRunning: Story = {
 export const WithRequestedReview: Story = {
 	args: {
 		reviews: [
-			{ ...requestedReview, status: "COMPLETE", completedAt: reviewDetailCompleted.completedAt },
+			{
+				...requestedReview,
+				status: "COMPLETE",
+				completedAt: reviewDetailCompleted.completedAt ?? undefined,
+			},
 		],
 		requestOutcome: (
 			<ReviewRequestedNotice
@@ -373,7 +376,11 @@ export const RequestedReviewComplete: Story = {
 	args: {
 		events: { status: "ready", events: withheldEvents },
 		reviews: [
-			{ ...requestedReview, status: "COMPLETE", completedAt: reviewDetailCompleted.completedAt },
+			{
+				...requestedReview,
+				status: "COMPLETE",
+				completedAt: reviewDetailCompleted.completedAt ?? undefined,
+			},
 		],
 	},
 	play: async () => {

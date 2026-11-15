@@ -85,7 +85,12 @@ export const RequestedByAnUnnamedAccount: Story = {
 	args: {
 		review: {
 			...requested,
-			requestedBy: { ...reviewAccounts.grace, displayName: null, avatarUrl: null, identities: [] },
+			requestedBy: {
+				...reviewAccounts.grace,
+				avatarUrl: undefined,
+				displayName: undefined,
+				identities: [],
+			},
 		},
 	},
 	play: async ({ canvas }) => {

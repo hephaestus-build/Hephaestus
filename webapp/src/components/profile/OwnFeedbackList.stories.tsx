@@ -19,7 +19,7 @@ function Answerable({
 
 const ratedHelpful = {
 	...detailFeedback,
-	response: { usefulness: "HELPFUL", resolution: null, comment: null, createdAt: daysBefore(1) },
+	response: { usefulness: "HELPFUL", createdAt: daysBefore(1) },
 } satisfies ComponentProps<typeof OwnFeedbackList>["feedback"][number];
 
 const meta = {
@@ -66,7 +66,7 @@ export const OnlyDeliveredFeedback: Story = {
 			...(["WITHHELD", "AWAITING_APPROVAL", "REJECTED", "FAILED"] as const).map((state, index) =>
 				ownFeedback(`00000000-0000-4000-8000-0000000006a${index}`, {
 					state,
-					deliveredAt: null,
+					deliveredAt: undefined,
 					copies: detailFeedback.copies,
 				}),
 			),
@@ -83,7 +83,10 @@ export const OnlyDeliveredFeedback: Story = {
 export const NothingDelivered: Story = {
 	args: {
 		feedback: [
-			ownFeedback("00000000-0000-4000-8000-0000000006b0", { state: "WITHHELD", deliveredAt: null }),
+			ownFeedback("00000000-0000-4000-8000-0000000006b0", {
+				state: "WITHHELD",
+				deliveredAt: undefined,
+			}),
 		],
 	},
 	play: async ({ canvas }) => {

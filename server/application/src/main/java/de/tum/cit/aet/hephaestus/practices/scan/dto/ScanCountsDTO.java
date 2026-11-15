@@ -1,16 +1,12 @@
 package de.tum.cit.aet.hephaestus.practices.scan.dto;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
 import io.swagger.v3.oas.annotations.media.Schema;
 import org.jspecify.annotations.Nullable;
 
-@JsonInclude(JsonInclude.Include.ALWAYS)
 public record ScanCountsDTO(
-        @Schema(requiredMode = Schema.RequiredMode.REQUIRED) @Nullable
-        Integer files,
+        @Nullable Integer files,
 
-        @Schema(requiredMode = Schema.RequiredMode.REQUIRED) @Nullable
-        Integer practiceItemPairs,
+        @Nullable Integer practiceItemPairs,
 
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) int reviewed,
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) int reused,

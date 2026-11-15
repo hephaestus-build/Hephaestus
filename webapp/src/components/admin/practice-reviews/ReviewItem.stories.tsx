@@ -67,12 +67,12 @@ export const ExternalLink: Story = {
 };
 
 export const WithoutAProvider: Story = {
-	args: { item: { ...reviewItem, provider: null } },
+	args: { item: { ...reviewItem, provider: undefined } },
 };
 
 export const WithoutAUrl: Story = {
 	render: (args) => <ReviewItemLink {...args} />,
-	args: { item: { ...reviewItem, url: null } },
+	args: { item: { ...reviewItem, url: undefined } },
 	play: async ({ canvas }) => {
 		await expect(canvas.queryByRole("link")).not.toBeInTheDocument();
 	},

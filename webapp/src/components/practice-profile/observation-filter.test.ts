@@ -2,7 +2,11 @@ import { assert, describe, expect, it } from "vitest";
 
 import type { ResultList } from "@/api/types.gen";
 import type { ReviewEntry } from "@/components/profile/reviews";
-import { detailResult, detailReviews } from "@/stories/practice-detail-story-mock-data";
+import {
+	detailResult as detailRecord,
+	detailReviews,
+	listedResult,
+} from "@/stories/practice-detail-story-mock-data";
 
 import {
 	changedObservationFilter,
@@ -20,6 +24,7 @@ const ids = (reviews: readonly ReviewEntry[]) =>
 
 const newest = detailReviews[0]?.results[0];
 const older = detailReviews[1]?.results[0];
+const detailResult = listedResult(detailRecord);
 if (newest === undefined || older === undefined) {
 	throw new Error("The fixture feed needs two reviews with results.");
 }
@@ -36,7 +41,7 @@ describe("filterObservations", () => {
 	});
 
 	it("matches the observation's words without case", () => {
-		assert(older.summary !== null);
+		assert(older.summary !== undefined);
 		const words = older.summary.slice(2, 20).toUpperCase();
 		expect(ids(filterObservations(detailReviews, { query: words }))).toContain(older.id);
 	});

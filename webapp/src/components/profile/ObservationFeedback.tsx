@@ -76,7 +76,7 @@ export function ObservationFeedback({ feedback: given, links }: ObservationFeedb
 						</span>
 						<StatusBadge def={definitionFor(FEEDBACK_DESTINATION_DEFS, piece.destination)} />
 						{/* Full delivery needs no state label; partial delivery is described below. */}
-						{piece.deliveredAt !== null && (
+						{piece.deliveredAt !== undefined && (
 							<time dateTime={piece.deliveredAt.toISOString()} className="text-muted-foreground">
 								{isPartialDelivery(piece) ? "First appeared" : "Delivered"}{" "}
 								{formatDayTime(piece.deliveredAt, today)}
@@ -107,7 +107,7 @@ function FeedbackWhere({
 	feedback: OwnFeedbackRef;
 	links: ObservationFeedbackLinks | undefined;
 }) {
-	if (feedback.deliveredAt === null) {
+	if (feedback.deliveredAt === undefined) {
 		return null;
 	}
 	if (feedback.destination === "ON_WORK") {
@@ -149,18 +149,20 @@ function FeedbackWhere({
 function ResponseLine({ feedback }: { feedback: OwnFeedbackRef }) {
 	const { response } = feedback;
 	if (
-		response === null ||
-		(response.resolution === null && response.usefulness === null && !hasText(response.comment))
+		response === undefined ||
+		(response.resolution === undefined &&
+			response.usefulness === undefined &&
+			!hasText(response.comment))
 	) {
 		return null;
 	}
 	return (
 		<p className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
 			<span>Your response:</span>
-			{response.resolution !== null && (
+			{response.resolution !== undefined && (
 				<StatusBadge def={definitionFor(FEEDBACK_RESOLUTION_DEFS, response.resolution)} />
 			)}
-			{response.usefulness !== null && (
+			{response.usefulness !== undefined && (
 				<StatusBadge
 					def={definitionFor(FEEDBACK_USEFULNESS_DEFS, response.usefulness, UNKNOWN_USEFULNESS_DEF)}
 				/>

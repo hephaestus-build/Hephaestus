@@ -79,7 +79,7 @@ if (!ownResult) {
 }
 
 const ownSummary = ownResult.summary;
-if (ownSummary === null) {
+if (ownSummary === undefined) {
 	throw new Error("The detail review's result has a summary");
 }
 
@@ -111,9 +111,8 @@ const membership: WorkspaceMembership = {
 	account: {
 		id: "1",
 		displayName: "Ada",
-		avatarUrl: null,
 		status: "ACTIVE",
-		identities: [{ provider: "GITHUB", login: "ada", displayName: "Ada", avatarUrl: null }],
+		identities: [{ provider: "GITHUB", login: "ada", displayName: "Ada" }],
 	},
 	role: "MEMBER",
 	eligibleForPracticeReview: true,
@@ -603,7 +602,6 @@ describe("practice profile route", () => {
 				return HttpResponse.json({
 					status: "REFUSED",
 					reason: "REQUEST_COOLDOWN_ACTIVE",
-					reviewId: null,
 				});
 			}),
 		);
@@ -858,7 +856,7 @@ describe("a met result", () => {
 				practiceSlug: MET.practiceSlug,
 				practiceName: MET.practiceName,
 				outcome: "MET",
-				severity: null,
+				severity: undefined,
 				summary: MET.summary,
 				problems: [],
 			},
@@ -1421,7 +1419,6 @@ describe("the feedback an observation gave", () => {
 							destination,
 							state: "DELIVERED",
 							deliveredAt: "2026-09-09T14:20:00Z",
-							response: null,
 							copies: [],
 						},
 					],
@@ -1625,7 +1622,7 @@ describe("the way to a review an accepted ask created", () => {
 			item,
 			origin: "REQUEST",
 			status: "QUEUED",
-			completedAt: null,
+			completedAt: undefined,
 		};
 		return {
 			...openProfileReviewDetail,
@@ -1644,7 +1641,7 @@ describe("the way to a review an accepted ask created", () => {
 		server.use(
 			http.post("*/workspaces/:workspaceSlug/practices/review-requests", async ({ request }) => {
 				asked.push(await request.json());
-				return HttpResponse.json({ status: "SUBMITTED", reviewId: NEW_ID, reason: null });
+				return HttpResponse.json({ status: "SUBMITTED", reviewId: NEW_ID });
 			}),
 			http.get(`*/workspaces/:workspaceSlug/practice-profile/reviews/${NEW_ID}`, () => {
 				reads += 1;
@@ -1763,14 +1760,9 @@ const pullRequestEvidence = (number: number) => ({
 	item: {
 		kind: "scm.pull_request",
 		id: String(9000 + number),
-		parentId: null,
 		label: `#${number}`,
 		title: `Pull request ${number}`,
 		provider: "GITHUB" as const,
-		url: null,
-		container: null,
-		path: null,
-		removedAt: null,
 	},
 });
 

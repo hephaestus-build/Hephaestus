@@ -188,11 +188,11 @@ function pagedWork(record: (request: Request) => void) {
 function adaMembership(
 	role: WorkspaceMembership["role"],
 	identities: WorkspaceMembership["account"]["identities"] = [
-		{ provider: "GITHUB", login: "ada-lrz", displayName: "Ada", avatarUrl: null },
+		{ provider: "GITHUB", login: "ada-lrz", displayName: "Ada" },
 	],
 ): Wire<WorkspaceMembership> {
 	return {
-		account: { id: "70", status: "ACTIVE", displayName: "Ada", avatarUrl: null, identities },
+		account: { id: "70", status: "ACTIVE", displayName: "Ada", identities },
 		role,
 		joinedAt: "2026-01-01T00:00:00Z",
 		leftAt: null,
@@ -402,11 +402,7 @@ describe("Activity", () => {
 	it("tells a member with no connected account in the workspace how to connect one", async () => {
 		server.use(
 			http.get("*/workspaces/:workspaceSlug/members/me", () =>
-				HttpResponse.json(
-					adaMembership("MEMBER", [
-						{ provider: "SLACK", login: null, displayName: "Ada", avatarUrl: null },
-					]),
-				),
+				HttpResponse.json(adaMembership("MEMBER", [{ provider: "SLACK", displayName: "Ada" }])),
 			),
 		);
 		renderRouteAtWithRouter("/w/acme/activity");
@@ -509,14 +505,10 @@ describe("Activity", () => {
 					kind: "PULL_REQUEST",
 					label: "#27",
 					container: "acme/app",
-					parentId: null,
-					path: null,
 					provider: "GITHUB",
-					removedAt: null,
-					title: null,
 					url,
 				},
-				reasonDescription: requestAllowed ? null : "Reviews of this work are paused.",
+				reasonDescription: requestAllowed ? undefined : "Reviews of this work are paused.",
 				requestAllowed,
 				workspaceId: "1",
 				workspaceSlug: "acme",
@@ -531,7 +523,7 @@ describe("Activity", () => {
 			context = (url: string) => HttpResponse.json(reviewContext(url)),
 			heldContext = Promise.resolve(),
 			heldAsk = Promise.resolve(),
-			answers = [{ status: "SUBMITTED", reason: null, reviewId: "review-77" }],
+			answers = [{ status: "SUBMITTED", reviewId: "review-77" }],
 		}: {
 			context?: (url: string) => Response;
 			heldContext?: Promise<void>;
@@ -686,14 +678,9 @@ describe("Activity", () => {
 					kind: "ISSUE",
 					label: "#52",
 					container: "beta/web",
-					parentId: null,
-					path: null,
 					provider: "GITHUB",
-					removedAt: null,
-					title: null,
 					url: betaIssue.htmlUrl,
 				},
-				reasonDescription: null,
 				requestAllowed: true,
 				workspaceId: "2",
 				workspaceSlug: "beta",
@@ -729,7 +716,6 @@ describe("Activity", () => {
 					await betaAnswer.promise;
 					return HttpResponse.json({
 						status: "SUBMITTED",
-						reason: null,
 						reviewId: "review-88",
 					} satisfies ReviewRequestOutcome);
 				}),
@@ -828,8 +814,8 @@ describe("Activity", () => {
 		it("says why a review was declined, and asks again on the next press", async () => {
 			const { asks } = serveReviewRequests({
 				answers: [
-					{ status: "REFUSED", reason: "COOLDOWN_ACTIVE", reviewId: null },
-					{ status: "SUBMITTED", reason: null, reviewId: "review-78" },
+					{ status: "REFUSED", reason: "COOLDOWN_ACTIVE" },
+					{ status: "SUBMITTED", reviewId: "review-78" },
 				],
 			});
 			const user = userEvent.setup();
@@ -852,7 +838,7 @@ describe("Activity", () => {
 
 		it("says a review request failed, and asks again on the next press", async () => {
 			const { asks } = serveReviewRequests({
-				answers: [{ problem: 503 }, { status: "SUBMITTED", reason: null, reviewId: "review-79" }],
+				answers: [{ problem: 503 }, { status: "SUBMITTED", reviewId: "review-79" }],
 			});
 			const user = userEvent.setup();
 			renderRouteAtWithRouter("/w/acme/activity");
@@ -892,7 +878,7 @@ describe("Activity", () => {
 			},
 			{
 				answer: "names no practice item",
-				context: (url: string) => HttpResponse.json({ ...reviewContext(url), item: null }),
+				context: (url: string) => HttpResponse.json({ ...reviewContext(url), item: undefined }),
 				shown: "You cannot request a review of this work.",
 			},
 		])(
@@ -2361,10 +2347,7 @@ describe("Workspace activity", () => {
 								id: "7",
 								status: "ACTIVE",
 								displayName: "Ada",
-								avatarUrl: null,
-								identities: [
-									{ provider: "GITLAB", login: "ada-lrz", displayName: "Ada", avatarUrl: null },
-								],
+								identities: [{ provider: "GITLAB", login: "ada-lrz", displayName: "Ada" }],
 							},
 						}),
 					),
@@ -2383,10 +2366,7 @@ describe("Workspace activity", () => {
 								id: "7",
 								status: "ACTIVE",
 								displayName: "Ada",
-								avatarUrl: null,
-								identities: [
-									{ provider: "GITLAB", login: "ada-lrz", displayName: "Ada", avatarUrl: null },
-								],
+								identities: [{ provider: "GITLAB", login: "ada-lrz", displayName: "Ada" }],
 							},
 						}),
 					),

@@ -246,7 +246,7 @@ async function resolveLocated(
 	);
 	await located.stillThere();
 	const matches = answers.flatMap(({ site, dto }) =>
-		dto === undefined || dto.item === null ? [] : [{ site, dto, item: dto.item }],
+		dto === undefined || dto.item == null ? [] : [{ site, dto, item: dto.item }],
 	);
 	const workLabel = workLabelFor(page);
 	if (matches.length === 0) {
@@ -348,7 +348,7 @@ function requireOnlyThisItem(
 function unverifiable(
 	row: Partial<Pick<ResultList, "unverifiableReason" | "capturedAt">>,
 ): Pick<ResultRow, "unverifiableReason" | "capturedAt"> {
-	return { unverifiableReason: row.unverifiableReason ?? null, capturedAt: row.capturedAt ?? null };
+	return { unverifiableReason: row.unverifiableReason, capturedAt: row.capturedAt };
 }
 
 /**
@@ -395,8 +395,11 @@ export async function resultPage(
  * work's origin — GitLab's `issues` and `work_items` addresses of one issue both count. Anything else
  * loses its link.
  */
-function verifiedPermalink(permalink: string | null, context: ReadyContext): string | undefined {
-	if (permalink === null) {
+function verifiedPermalink(
+	permalink: string | undefined,
+	context: ReadyContext,
+): string | undefined {
+	if (permalink == null) {
 		return undefined;
 	}
 	let url: URL;
@@ -444,7 +447,7 @@ export async function workFeedback(
 		for (const copy of feedback.copies) {
 			const { kind, externalRef } = copy;
 			// Only a comment on the work itself is one the reader can go to; no handle identifies none.
-			if (kind === "CHAT_TURN" || externalRef === null || externalRef.trim() === "") {
+			if (kind === "CHAT_TURN" || externalRef == null || externalRef.trim() === "") {
 				continue;
 			}
 			const comment = comments.get(externalRef) ?? {

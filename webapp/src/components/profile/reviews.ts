@@ -57,11 +57,14 @@ export interface FeedbackResponseControls {
 	 */
 	write: (
 		feedbackId: string,
-		recorded: FeedbackResponse | null,
+		recorded: FeedbackResponse | undefined,
 		change: FeedbackResponseRequest,
 	) => void;
 	clear: (feedbackId: string) => void;
-	responseOf: (feedbackId: string, recorded: FeedbackResponse | null) => FeedbackResponseRequest;
+	responseOf: (
+		feedbackId: string,
+		recorded: FeedbackResponse | undefined,
+	) => FeedbackResponseRequest;
 	/**
 	 * The response being written to each piece of feedback, from whichever surface; a clear is the
 	 * empty response. A surface shows it over the recorded one, and its buttons wait until the write
@@ -78,9 +81,7 @@ export function isEmptyFeedbackResponse(response: FeedbackResponseRequest): bool
 	);
 }
 
-export function responseRequestOf(
-	response: FeedbackResponse | null | undefined,
-): FeedbackResponseRequest {
+export function responseRequestOf(response: FeedbackResponse | undefined): FeedbackResponseRequest {
 	return {
 		usefulness: response?.usefulness ?? undefined,
 		resolution: response?.resolution ?? undefined,
@@ -91,7 +92,10 @@ export function responseRequestOf(
 export function resultSummary({
 	summary,
 	practiceName,
-}: Pick<ResultList, "summary" | "practiceName">) {
+}: {
+	summary?: string | null;
+	practiceName: string;
+}) {
 	const trimmed = summary?.trim();
 	return hasText(trimmed) ? trimmed : practiceName;
 }

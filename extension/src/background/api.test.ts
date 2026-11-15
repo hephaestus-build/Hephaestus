@@ -81,14 +81,11 @@ function itemRef(id: string): ItemRef {
 	return {
 		id,
 		kind: "scm.pull_request",
-		parentId: null,
 		provider: "GITHUB",
 		label: `#${id}`,
 		title: "Add login",
 		url: `https://github.com/octo/app/pull/${id}`,
 		container: "octo/app",
-		path: null,
-		removedAt: null,
 	};
 }
 
@@ -370,7 +367,6 @@ describe("the report's calls", () => {
 	it("posts one review request, and returns a refusal as the server's answer", async () => {
 		const refusal: ReviewRequestOutcome = {
 			status: "REFUSED",
-			reviewId: null,
 			reason: "COOLDOWN_ACTIVE",
 		};
 		const { built, requests } = await reportApi(async () => json(refusal));
@@ -407,10 +403,6 @@ describe("the report's calls", () => {
 							kind: "SUMMARY",
 							externalRef: "IC_kwDOA",
 							externalUrl: "https://github.com/octo/app/pull/16#issuecomment-1",
-							path: null,
-							startLine: null,
-							endLine: null,
-							side: null,
 							postedAt: "2026-09-26T11:00:00Z",
 						},
 					],

@@ -1,0 +1,3 @@
+# ADR 0103 rule 2: the public contract leaves out a missing value instead of sending null.
+# .migration/public-api-leaves-out-missing-values.md gives the client step.
+in API GET /workspaces/{workspaceSlug}/practices/feedback/practice-page the response property `items/response/anyOf[#/components/schemas/FeedbackResponse]/usefulness` became optional for the status `200`
