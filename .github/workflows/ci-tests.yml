@@ -145,6 +145,8 @@ jobs:
         env:
           HEPHAESTUS_INTEGRATION_SHARD: ${{ env.INTEGRATION_SHARD }}
           HEPHAESTUS_TEST_POSTGRES_IMAGE: hephaestus-postgres:ci
+          # Measurement only, never merged: Gradle's build-operation trace, kept by the upload below.
+          GRADLE_OPTS: -Dorg.gradle.internal.operations.trace=build/reports/dependency-verification/operations
         run: vp run test:server:integration
       - name: List the shard's classes
         if: ${{ !cancelled() }}
