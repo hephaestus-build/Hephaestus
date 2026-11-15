@@ -24,7 +24,7 @@ import {
 import { priceFieldsOf, priceLabel } from "@/lib/llm-pricing";
 import { hasText } from "@/lib/text";
 
-import { LlmConnectionApi } from "./LlmConnectionApi";
+import { LlmConnectionApi } from "@/components/admin/llm/LlmConnectionApi";
 import type { WorkspaceOption } from "./workspace-options";
 
 export interface AdminLlmModelsSectionProps {

@@ -3,11 +3,11 @@ import { CheckIcon, CircleAlertIcon, KeyRoundIcon, TriangleAlertIcon } from "luc
 import { useState } from "react";
 
 import type { OutlineTokenStatus } from "@/api/types.gen";
-import { IntegrationCardHeading } from "@/components/admin/integrations/IntegrationCardHeading";
 import {
 	CONNECTION_STATE_LABEL,
 	type ConnectionState,
 } from "@/components/admin/integrations/sync-format";
+import { WorkspaceIntegrationCardHeading } from "@/components/admin/integrations/WorkspaceIntegrationCardHeading";
 import { DocLink } from "@/components/common/DocLink";
 import { RelativeTime } from "@/components/common/RelativeTime";
 import { useNow } from "@/components/common/use-now";
@@ -74,7 +74,7 @@ const EXPIRY_WARNING_DAYS = 14;
  * When disconnected it is the connect form (server URL + API token). When connected it names the
  * linked instance and shows the stored token's health plus a guarded disconnect; the connection plane
  * itself — health, freshness, webhook diagnostics, running-job progress and the Sync/Cancel controls —
- * lives in the shared `SyncStatusHeader` above this card, and which collections are mirrored is
+ * lives in the shared `WorkspaceSyncStatusHeader` above this card, and which collections are mirrored is
  * managed in `OutlineCollectionsSection` below it. Pure presentation.
  */
 export function OutlineConnectCard({
@@ -106,9 +106,9 @@ export function OutlineConnectCard({
 		<div className="space-y-6">
 			<Card>
 				<CardHeader>
-					<IntegrationCardHeading>
+					<WorkspaceIntegrationCardHeading>
 						{connected ? "Outline connection" : "Connect Outline"}
-					</IntegrationCardHeading>
+					</WorkspaceIntegrationCardHeading>
 					{!connected && (
 						<CardDescription>
 							Mirror Outline collections so their design docs and decision records reach practice

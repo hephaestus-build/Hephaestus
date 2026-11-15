@@ -20,7 +20,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
 import type { RefreshFailure } from "@/runtime/tanstack-query/infinite-list";
 
-import { IntegrationCardHeading } from "./IntegrationCardHeading";
+import { WorkspaceIntegrationCardHeading } from "./WorkspaceIntegrationCardHeading";
 
 type ProjectSelection = GitLabRepositorySelection["repositorySelection"];
 
@@ -159,7 +159,7 @@ export function WorkspaceGitLabProjectSelection({
 	return (
 		<Card className="max-w-full">
 			<CardHeader>
-				<IntegrationCardHeading>Projects to follow</IntegrationCardHeading>
+				<WorkspaceIntegrationCardHeading>Projects to follow</WorkspaceIntegrationCardHeading>
 				<CardDescription>
 					Choose whether new projects in the GitLab group are added to this workspace. With only the
 					listed projects, members come from those projects and the subgroups that contain them,

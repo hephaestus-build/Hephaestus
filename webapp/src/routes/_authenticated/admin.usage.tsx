@@ -14,8 +14,8 @@ import {
 } from "@/api/@tanstack/react-query.gen";
 import type { AdminWorkspaceLlmUsage } from "@/api/types.gen";
 import { AdminInstanceLlmUsageTable } from "@/components/admin/usage/AdminInstanceLlmUsageTable";
+import { AdminSetBudgetDialog } from "@/components/admin/usage/AdminSetBudgetDialog";
 import { MonthNavigator } from "@/components/admin/usage/MonthNavigator";
-import { SetBudgetDialog } from "@/components/admin/usage/SetBudgetDialog";
 import {
 	type AdminInstanceUsageView,
 	INSTANCE_USAGE_SEARCH_MAX_LENGTH,
@@ -188,7 +188,7 @@ function AdminInstanceUsagePage() {
 				onEditSharedModelBudget={editBudgetFor}
 			/>
 
-			<SetBudgetDialog
+			<AdminSetBudgetDialog
 				workspace={editing}
 				fx={fx}
 				isCurrentMonth={isCurrentMonth}

@@ -10,8 +10,8 @@ import {
 	getIntegrationCatalogOptions,
 	triggerSyncJobMutation,
 } from "@/api/@tanstack/react-query.gen";
-import { IntegrationOverviewCard } from "@/components/admin/integrations/IntegrationOverviewCard";
 import { returnedJobMessage, syncPollInterval } from "@/components/admin/integrations/sync-format";
+import { WorkspaceIntegrationOverviewCard } from "@/components/admin/integrations/WorkspaceIntegrationOverviewCard";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { PageLayout } from "@/components/layout/PageLayout";
@@ -79,7 +79,7 @@ function IntegrationOverviewCardContainer({
 	entry,
 }: {
 	workspaceSlug: string;
-	entry: Parameters<typeof IntegrationOverviewCard>[0]["entry"];
+	entry: Parameters<typeof WorkspaceIntegrationOverviewCard>[0]["entry"];
 }) {
 	const queryClient = useQueryClient();
 	const { connectionId } = entry;
@@ -113,7 +113,7 @@ function IntegrationOverviewCardContainer({
 	});
 
 	return (
-		<IntegrationOverviewCard
+		<WorkspaceIntegrationOverviewCard
 			workspaceSlug={workspaceSlug}
 			entry={entry}
 			status={statusQuery.data}

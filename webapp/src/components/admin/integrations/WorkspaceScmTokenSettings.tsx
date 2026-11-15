@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { problemDetailOf } from "@/lib/problem-detail";
 
-import { IntegrationCardHeading } from "./IntegrationCardHeading";
+import { WorkspaceIntegrationCardHeading } from "./WorkspaceIntegrationCardHeading";
 
 interface WorkspaceScmTokenSettingsProps {
 	providerLabel: string;
@@ -73,7 +73,7 @@ export function WorkspaceScmTokenSettings({
 	return (
 		<Card>
 			<CardHeader>
-				<IntegrationCardHeading>Personal access token</IntegrationCardHeading>
+				<WorkspaceIntegrationCardHeading>Personal access token</WorkspaceIntegrationCardHeading>
 				<CardDescription>
 					{reconnect
 						? `Reconnect this workspace to the same ${providerLabel} group with a new token. Hephaestus syncs the work again. If you used selected projects, select them again after reconnecting.`

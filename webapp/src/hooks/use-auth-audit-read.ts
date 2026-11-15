@@ -7,10 +7,10 @@ import {
 } from "@/api/@tanstack/react-query.gen";
 import { adminExportAuthEvents } from "@/api/sdk.gen";
 import type { AdminExportAuthEventsData } from "@/api/types.gen";
+import type { AdminAuthAuditPanelProps } from "@/components/admin/audit/AdminAuthAuditPanel";
 import { auditRows } from "@/components/admin/audit/audit-list";
 import type { AuditSearch } from "@/components/admin/audit/audit-search";
 import { authAuditFilters } from "@/components/admin/audit/auth-audit-filters";
-import type { AuthAuditPanelProps } from "@/components/admin/audit/AuthAuditPanel";
 import { saveTextFile } from "@/lib/download";
 import { formatNumber } from "@/lib/numbers";
 import { infiniteListState } from "@/runtime/tanstack-query/infinite-list";
@@ -41,7 +41,7 @@ async function downloadAuditLog(query: AdminExportAuthEventsData["query"]): Prom
 /** The instance's sign-in and permission events under the filters of `search`, and their CSV export. */
 export function useAuthAuditRead(
 	search: AuditSearch,
-): Pick<AuthAuditPanelProps, "list" | "total" | "read" | "exporting" | "onExport"> {
+): Pick<AdminAuthAuditPanelProps, "list" | "total" | "read" | "exporting" | "onExport"> {
 	const filters = authAuditFilters(search);
 	const listOptions = adminListAuthEventsInfiniteOptions({
 		query: { size: PAGE_SIZE, ...filters },

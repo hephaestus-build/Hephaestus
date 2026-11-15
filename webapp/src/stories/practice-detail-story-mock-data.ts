@@ -262,9 +262,9 @@ export const detailResult: ResultDetail = recorded({
 					endLine: 46,
 					quote:
 						'@Cacheable(cacheNames = "practice-catalog", key = "#workspaceId")\n' +
-						"public PracticeCatalog load(long workspaceId) {\n" +
+						"public WorkspacePracticeCatalog load(long workspaceId) {\n" +
 						"    var practices = repository.findAllByWorkspaceId(workspaceId);\n" +
-						"    return PracticeCatalog.of(practices);\n" +
+						"    return WorkspacePracticeCatalog.of(practices);\n" +
 						"}\n" +
 						"// moved from de.tum.cit.aet.hephaestus.practices.PracticeLoader",
 				}),

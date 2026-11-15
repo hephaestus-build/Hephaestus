@@ -3,7 +3,7 @@ import { expect, fn, userEvent, waitFor } from "storybook/test";
 
 import { STORY_NOW, daysAfter, hoursBefore } from "@/stories/story-clock";
 
-import { ConnectionStateNotice } from "./ConnectionStateNotice";
+import { WorkspaceConnectionStateNotice } from "./WorkspaceConnectionStateNotice";
 import { WorkspaceScmTokenSettings } from "./WorkspaceScmTokenSettings";
 
 const meta = {
@@ -68,7 +68,7 @@ export const UnreadableGitLabToken: Story = {
 	parameters: { viewport: { defaultViewport: "reflow" } },
 	render: (args) => (
 		<div className="space-y-4">
-			<ConnectionStateNotice
+			<WorkspaceConnectionStateNotice
 				connectionState="ACTIVE"
 				displayName={args.providerLabel}
 				credentialsUnreadableSince={new Date(STORY_NOW)}
@@ -117,7 +117,7 @@ export const UnreadableGitHubToken: Story = {
 	parameters: { viewport: { defaultViewport: "reflow" } },
 	render: (args) => (
 		<div className="space-y-4">
-			<ConnectionStateNotice
+			<WorkspaceConnectionStateNotice
 				connectionState="ACTIVE"
 				displayName={args.providerLabel}
 				credentialsUnreadableSince={hoursBefore(1)}

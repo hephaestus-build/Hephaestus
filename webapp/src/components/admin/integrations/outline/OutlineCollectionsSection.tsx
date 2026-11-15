@@ -2,8 +2,8 @@ import { LibraryIcon, PlusIcon } from "lucide-react";
 import { type ReactNode, useState } from "react";
 
 import type { OutlineCollection } from "@/api/types.gen";
-import { IntegrationCardHeading } from "@/components/admin/integrations/IntegrationCardHeading";
 import { swallow } from "@/components/admin/integrations/swallow";
+import { WorkspaceIntegrationCardHeading } from "@/components/admin/integrations/WorkspaceIntegrationCardHeading";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { TableRowsSkeleton } from "@/components/common/TableRowsSkeleton";
 import { Button } from "@/components/ui/button";
@@ -117,7 +117,7 @@ function MirroredCollection({
  * only while an Outline connection is active. Pure: all data + mutations live in the container.
  *
  * <p>Management only. Per-collection document counts and freshness belong to the shared
- * `SyncResourcesTable` the Outline page mounts above this card — see {@link OutlineCollectionRow}
+ * `WorkspaceSyncResourcesTable` the Outline page mounts above this card — see {@link OutlineCollectionRow}
  * for why they are not duplicated here.
  */
 export function OutlineCollectionsSection({
@@ -204,7 +204,7 @@ export function OutlineCollectionsSection({
 		<div className="space-y-6">
 			<Card>
 				<CardHeader>
-					<IntegrationCardHeading>Mirrored collections</IntegrationCardHeading>
+					<WorkspaceIntegrationCardHeading>Mirrored collections</WorkspaceIntegrationCardHeading>
 					<CardDescription>
 						Documents in mirrored collections are kept in sync and reach practice reviews as
 						context. Hephaestus posts no feedback in Outline: feedback about a document goes to its

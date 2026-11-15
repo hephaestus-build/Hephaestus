@@ -199,7 +199,7 @@ reaches both edges of the panel. Only `DrawerBody` scrolls.
   Negative margins to cancel that padding create the same defect later.
 - **The panel is the measure.** A `max-w-*` on the controls is a page-era convention. Inside a panel sized
   for the form it only strands the footer's buttons to the right of the fields. Cap *prose* instead,
-  which is what `PracticeDefinitionPreview` does.
+  which is what `WorkspacePracticeDefinitionPreview` does.
 - **The header content row has at most two columns.** The second is the title block.
   At 320px, a drawer fills the viewport.
   Dismiss, padding, and a leading chip already use 40% of it.

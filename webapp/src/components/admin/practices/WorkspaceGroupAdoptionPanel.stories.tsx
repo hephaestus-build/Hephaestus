@@ -1,0 +1,201 @@
+import type { Meta, StoryObj } from "@storybook/react-vite";
+import { expect, fn, screen, userEvent } from "storybook/test";
+
+import { definitionOf } from "@/components/admin/practice-editor/fixtures";
+import type {
+	GroupAdoptionPreview,
+	PracticeAdoptionPreview,
+} from "@/components/admin/practices/catalog-adoption";
+import { withPageBehind } from "@/stories/decorators";
+import { InLevelStack } from "@/stories/level-stack";
+import { expectSettledVisible, settledDrawerPanel } from "@/stories/overlay";
+import { expectNoPanelOverflow } from "@/stories/reflow";
+import { expectGenuinelyDisabled } from "@/test/controls";
+
+import { WorkspaceGroupAdoptionPanel } from "./WorkspaceGroupAdoptionPanel";
+
+const practice: PracticeAdoptionPreview = {
+	slug: "describe-what-and-why",
+	kind: "scm.pull_request",
+	availability: "AVAILABLE",
+	etag: '"practice-preview"',
+	initialFeedbackMode: "APPROVE_FIRST",
+	offeredDigest: "sha256:describe-what-and-why",
+	group: { slug: "review-ready-work", disposition: "CREATE_CATALOG_GROUP" },
+	definition: definitionOf({
+		name: "Describe what changed and why",
+		criteria: "Confirm the pull request explains both the change and its motivation.",
+	}),
+};
+
+const preview: GroupAdoptionPreview = {
+	slug: "review-ready-work",
+	definition: {
+		name: "Review-ready work",
+		description: "Practices that make proposed changes easier to understand and review.",
+		icon: null,
+		color: null,
+	},
+	disposition: "CREATE_CATALOG_GROUP",
+	etag: '"group-preview"',
+	actions: [
+		{ slug: "describe-what-and-why", action: "ADD" },
+		{ slug: "focused-changes", action: "KEEP" },
+		{ slug: "clear-context", action: "BLOCKED" },
+	],
+	practices: [
+		practice,
+		{
+			...practice,
+			slug: "focused-changes",
+			availability: "ADOPTED",
+			definition: definitionOf({ name: "Keep changes focused" }),
+		},
+		{
+			...practice,
+			slug: "clear-context",
+			availability: "SLUG_CONFLICT",
+			definition: definitionOf({ name: "Provide clear context" }),
+		},
+	],
+};
+
+const ready = (
+	over: Partial<GroupAdoptionPreview> = {},
+	action: "idle" | "adding" | "stale" = "idle",
+) => ({ status: "ready", preview: { ...preview, ...over }, action }) as const;
+
+const meta = {
+	component: WorkspaceGroupAdoptionPanel,
+	parameters: { layout: "fullscreen" },
+	decorators: [withPageBehind],
+	args: {
+		state: ready(),
+		onConfirm: fn(),
+		onOpenPractice: fn(),
+		path: { behind: [{ label: "Practice setup", depth: 0 }], onClose: fn() },
+	},
+	argTypes: {
+		// A discriminated union renders as a free-text box, which cannot produce a valid value.
+		state: { control: false },
+		path: { control: false },
+	},
+	render: (args) => (
+		<InLevelStack entry={{ kind: "catalog-group", id: preview.slug }} path={args.path}>
+			{(level) => <WorkspaceGroupAdoptionPanel {...args} {...level} />}
+		</InLevelStack>
+	),
+	tags: ["autodocs"],
+} satisfies Meta<typeof WorkspaceGroupAdoptionPanel>;
+
+export default meta;
+type Story = StoryObj<typeof meta>;
+
+export const MixedOutcomes: Story = {
+	play: async ({ args }) => {
+		const confirm = await screen.findByRole("button", { name: "Add 1 practice" });
+		await expectSettledVisible(confirm);
+		await expect(screen.getByText("Adds")).toBeVisible();
+		await expect(screen.getByText("Already here")).toBeVisible();
+		await expect(screen.getByText("Blocked")).toBeVisible();
+		await userEvent.click(screen.getByRole("button", { name: /Describe what changed and why/u }));
+		await expect(args.onOpenPractice).toHaveBeenCalledWith("describe-what-and-why");
+	},
+};
+
+export const RestoreDeletedGroup: Story = {
+	args: {
+		state: ready({
+			disposition: "REUSE_EXISTING_GROUP",
+			actions: [
+				{ slug: "describe-what-and-why", action: "MOVE_TO_GROUP" },
+				{ slug: "focused-changes", action: "MOVE_TO_GROUP" },
+				{ slug: "clear-context", action: "KEEP" },
+			],
+		}),
+	},
+	play: async ({ args }) => {
+		const confirm = await screen.findByRole("button", { name: "Restore group" });
+		await expectSettledVisible(confirm);
+		await expect(screen.getAllByText("Moves back")).toHaveLength(2);
+		await userEvent.click(confirm);
+		await expect(args.onConfirm).toHaveBeenCalledOnce();
+	},
+};
+
+export const NothingToChange: Story = {
+	args: {
+		state: ready({
+			actions: preview.actions.map(({ slug }) => ({ slug, action: "KEEP" as const })),
+		}),
+	},
+	play: async () => {
+		await expectGenuinelyDisabled(await screen.findByRole("button", { name: "Add 0 practices" }));
+	},
+};
+
+export const Loading: Story = {
+	args: { state: { status: "loading" } },
+	play: async () => {
+		const panel = await settledDrawerPanel();
+		await expect(panel.querySelectorAll('[data-slot="skeleton"]').length).toBeGreaterThan(0);
+		// The drawer is named by what is loading while its title's shape stands in.
+		await expect(screen.getByRole("heading", { level: 2 })).toHaveTextContent(
+			"Loading catalog group",
+		);
+	},
+};
+
+export const FailedToLoad: Story = {
+	args: { state: { status: "error", error: new Error("offline"), onRetry: fn() } },
+	play: async ({ args }) => {
+		const retry = await screen.findByRole("button", { name: "Retry" });
+		await expectSettledVisible(retry);
+		await userEvent.click(retry);
+		const { state } = args;
+		await expect(state.status === "error" && state.onRetry).toHaveBeenCalledOnce();
+	},
+};
+
+/** The panel stays open with the refreshed plan rather than closing. */
+export const PlanWentStale: Story = {
+	args: { state: ready({}, "stale") },
+	play: async () => {
+		const alert = await screen.findByRole("alert");
+		await expectSettledVisible(alert);
+		await expect(alert.textContent).toContain("The catalog changed while you were reading");
+		await expect(screen.getByRole("button", { name: "Add 1 practice" })).toBeEnabled();
+	},
+};
+
+export const Adding: Story = {
+	args: { state: ready({}, "adding") },
+	play: async () => {
+		await expectGenuinelyDisabled(await screen.findByRole("button", { name: "Adding…" }));
+	},
+};
+
+export const LongContent: Story = {
+	args: {
+		state: ready({
+			definition: {
+				name: "Decisions, documentation, and long-lived operational knowledge",
+				description:
+					"Practices cover how a team records the reasoning behind a change. They keep operational runbooks current. They make the resulting knowledge findable long after the original authors have moved on.",
+				icon: null,
+				color: null,
+			},
+		}),
+	},
+};
+
+export const NarrowViewport: Story = {
+	parameters: { viewport: { defaultViewport: "reflow" }, chromatic: { viewports: [320] } },
+	play: async () => {
+		await expectNoPanelOverflow(await settledDrawerPanel());
+	},
+};
+
+export const DarkMode: Story = {
+	globals: { theme: "dark" },
+};

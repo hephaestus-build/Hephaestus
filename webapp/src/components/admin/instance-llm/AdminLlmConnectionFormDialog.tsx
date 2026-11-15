@@ -29,7 +29,7 @@ import {
 	LlmConnectionFields,
 	type LlmConnectionFieldsValue,
 	validateConnectionFields,
-} from "./LlmConnectionFields";
+} from "@/components/admin/llm/LlmConnectionFields";
 
 export interface AdminLlmConnectionFormDialogProps {
 	open: boolean;

@@ -17,12 +17,12 @@ import {
 	type SyncTriggerType,
 	syncPollInterval,
 } from "@/components/admin/integrations/sync-format";
-import type { SyncJobsTableProps } from "@/components/admin/integrations/SyncJobsTable";
-import type { SyncResourcesTableProps } from "@/components/admin/integrations/SyncResourcesTable";
+import type { WorkspaceSyncJobsTableProps } from "@/components/admin/integrations/WorkspaceSyncJobsTable";
+import type { WorkspaceSyncResourcesTableProps } from "@/components/admin/integrations/WorkspaceSyncResourcesTable";
 import type {
 	SyncStatusHeaderError,
-	SyncStatusHeaderProps,
-} from "@/components/admin/integrations/SyncStatusHeader";
+	WorkspaceSyncStatusHeaderProps,
+} from "@/components/admin/integrations/WorkspaceSyncStatusHeader";
 import { queryErrorIsRetryable } from "@/components/common/QueryErrorAlert";
 import { useLivePushUnavailable } from "@/hooks/use-sync-liveness";
 import { problemDetailOf } from "@/lib/problem-detail";
@@ -54,11 +54,11 @@ function syncRead<TData>(query: UseQueryResult<TData>) {
 }
 
 export interface ConnectionSyncOptions extends Pick<
-	SyncResourcesTableProps,
+	WorkspaceSyncResourcesTableProps,
 	"resourceNoun" | "resourceNounPlural" | "expectedClassKeys"
 > {
 	workspaceSlug: string;
-	/** Undefined until the provider's lookup has found a connection; every sync query waits on it. */
+	/** Undefined while the provider's lookup has found no connection; every sync query waits on it. */
 	connectionId: number | undefined;
 	isConnectionActive: boolean;
 	credentialsUnreadableSince?: Date | null;
@@ -198,7 +198,7 @@ export function useConnectionSync({
 
 	// `onBackfill` is always offered; the header shows it only where the server reports
 	// `backfillSupported`, which is the one home for which providers can backfill.
-	const syncStatusHeaderProps: Omit<SyncStatusHeaderProps, "label" | "actions"> = {
+	const syncStatusHeaderProps: Omit<WorkspaceSyncStatusHeaderProps, "label" | "actions"> = {
 		status,
 		isLoading: isConnectionLoading || statusQuery.isLoading,
 		error: headerError,
@@ -246,7 +246,7 @@ export function useConnectionSync({
 			resourceNounPlural,
 			syncIntervalSeconds: status?.syncIntervalSeconds,
 			expectedClassKeys,
-		} satisfies SyncResourcesTableProps,
+		} satisfies WorkspaceSyncResourcesTableProps,
 		jobHistoryProps: {
 			jobs: jobs.data?.content ?? [],
 			isLoading: jobsQuery.isLoading,
@@ -259,6 +259,6 @@ export function useConnectionSync({
 			page: jobsPage,
 			totalPages: jobs.data?.totalPages ?? 1,
 			onPageChange: (page: number) => setPagination({ connectionId, page }),
-		} satisfies SyncJobsTableProps,
+		} satisfies WorkspaceSyncJobsTableProps,
 	};
 }

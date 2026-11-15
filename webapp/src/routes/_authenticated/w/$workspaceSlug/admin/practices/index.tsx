@@ -42,11 +42,6 @@ import {
 	parsePracticeAdoptionPreview,
 	type PracticeAdoptionPreview,
 } from "@/components/admin/practices/catalog-adoption";
-import { CatalogUpdatesLink } from "@/components/admin/practices/CatalogUpdatesLink";
-import {
-	GroupAdoptionPanel,
-	type GroupAdoptionState,
-} from "@/components/admin/practices/GroupAdoptionPanel";
 import {
 	DETAIL_LEVEL_KINDS,
 	GUARDED_LEVEL_KINDS,
@@ -55,25 +50,30 @@ import {
 	practiceSetupSearchSchema,
 } from "@/components/admin/practices/practice-search";
 import {
-	PracticeAdoptionPanel,
-	type PracticeAdoptionState,
-} from "@/components/admin/practices/PracticeAdoptionPanel";
-import {
-	type FocusFilter,
-	type LibraryState,
-	PracticeCatalog,
-} from "@/components/admin/practices/PracticeCatalog";
-import { PracticeForm } from "@/components/admin/practices/PracticeForm";
-import { PracticeFormLevel } from "@/components/admin/practices/PracticeFormLevel";
-import {
 	PracticeDefinitionSkeleton,
 	PracticeTreeSkeleton,
 } from "@/components/admin/practices/PracticeSkeletons";
-import { ResetToCatalogDialog } from "@/components/admin/practices/ResetToCatalogDialog";
+import { WorkspaceCatalogUpdatesLink } from "@/components/admin/practices/WorkspaceCatalogUpdatesLink";
+import {
+	WorkspaceGroupAdoptionPanel,
+	type GroupAdoptionState,
+} from "@/components/admin/practices/WorkspaceGroupAdoptionPanel";
+import {
+	WorkspacePracticeAdoptionPanel,
+	type PracticeAdoptionState,
+} from "@/components/admin/practices/WorkspacePracticeAdoptionPanel";
+import {
+	type FocusFilter,
+	type LibraryState,
+	WorkspacePracticeCatalog,
+} from "@/components/admin/practices/WorkspacePracticeCatalog";
+import { WorkspacePracticeForm } from "@/components/admin/practices/WorkspacePracticeForm";
+import { WorkspacePracticeFormLevel } from "@/components/admin/practices/WorkspacePracticeFormLevel";
 import {
 	WorkspacePracticePanel,
 	type WorkspacePracticeState,
 } from "@/components/admin/practices/WorkspacePracticePanel";
+import { WorkspaceResetToCatalogDialog } from "@/components/admin/practices/WorkspaceResetToCatalogDialog";
 import { QueryErrorAlert, queryErrorIsRetryable } from "@/components/common/QueryErrorAlert";
 import {
 	type DetailStackEntry,
@@ -445,7 +445,7 @@ function PracticeCatalogRoute() {
 						onRetry={treeFailure.retry}
 					/>
 				)}
-				<PracticeCatalog
+				<WorkspacePracticeCatalog
 					workspaceSlug={workspaceSlug}
 					groups={groups}
 					practices={practices}
@@ -586,7 +586,7 @@ function PracticeCatalogRoute() {
 				};
 			}
 			return (
-				<GroupAdoptionPanel
+				<WorkspaceGroupAdoptionPanel
 					nested={level.nested}
 					path={pathAt(level.depth)}
 					state={state}
@@ -690,7 +690,7 @@ function PracticeCatalogRoute() {
 					// Split on the loaded practice rather than on `creating`: the guard above has already
 					// sent every other way of having none elsewhere, so no practice here means this level is
 					// writing a new one.
-					<PracticeForm
+					<WorkspacePracticeForm
 						key={`${entry.id}:${editorGeneration}`}
 						{...(editing === undefined
 							? {
@@ -740,9 +740,13 @@ function PracticeCatalogRoute() {
 				);
 			}
 			return (
-				<PracticeFormLevel nested={level.nested} path={pathAt(level.depth)} creating={creating}>
+				<WorkspacePracticeFormLevel
+					nested={level.nested}
+					path={pathAt(level.depth)}
+					creating={creating}
+				>
 					{body}
-				</PracticeFormLevel>
+				</WorkspacePracticeFormLevel>
 			);
 		}
 		const catalogPreview = practiceAdoptionAt(query);
@@ -764,7 +768,7 @@ function PracticeCatalogRoute() {
 			};
 		}
 		return (
-			<PracticeAdoptionPanel
+			<WorkspacePracticeAdoptionPanel
 				nested={level.nested}
 				path={pathAt(level.depth)}
 				state={state}
@@ -781,7 +785,10 @@ function PracticeCatalogRoute() {
 				icon={<ListChecks />}
 				title="Practice setup"
 				actions={
-					<CatalogUpdatesLink workspaceSlug={workspaceSlug} count={releasesQuery.data?.length} />
+					<WorkspaceCatalogUpdatesLink
+						workspaceSlug={workspaceSlug}
+						count={releasesQuery.data?.length}
+					/>
 				}
 				description={
 					<>
@@ -893,7 +900,7 @@ function PracticeCatalogRoute() {
 				</AlertDialogContent>
 			</AlertDialog>
 
-			<ResetToCatalogDialog
+			<WorkspaceResetToCatalogDialog
 				open={catalogReset.target !== null}
 				onOpenChange={(open) => {
 					if (!open) {

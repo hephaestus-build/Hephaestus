@@ -73,22 +73,24 @@ Colocation does not change the rule.
 
 ## Which admin console a component belongs to
 
-`src/components/admin/**` holds two different consoles, and most directories serve both — `usage`,
-`audit`, `practices`, `practice-editor` are imported by instance and workspace routes alike. Only
-the two LLM consoles have a directory each, `admin/instance-llm/` and `admin/workspace-llm/`. So
-the **component name** is what carries the scope:
+`src/components/admin/**` holds two consoles. Six directories hold components that both render: `audit`, `integrations`, `llm`, `practices`, `practice-editor`, `usage`.
+Directly in those, the **component name** carries the scope:
 
 - `Admin*` or `Instance*` — instance-wide. Configures the deployment for every workspace.
 - `Workspace*` — scoped to one workspace.
 - **Unprefixed — shared by both, so it must not assume a scope.**
   An `Admin*` dialog *and* a `Workspace*` dialog each render `LlmConnectionFields` and `LlmModelFields`.
-  Adding a scope-specific field, permission check, or copy string to either component silently breaks the other console.
+  A scope-specific field, permission check or copy string in either one silently breaks the other console.
   Nothing in the file says it has two callers.
 
-Name a new component for its scope.
-Before you edit an unprefixed component, check its caller list.
+In every other directory, components serve one console, so they stay unprefixed.
+A helper module there may serve both.
+A shared component never lives there.
 
-A split into `admin/instance/` and `admin/workspace/` was rejected: the shared components would still need a `shared/` directory.
+Name a new component for its scope.
+Before you edit an unprefixed component, check its callers.
+
+A split into `admin/instance/` and `admin/workspace/` was rejected: shared components would still need a third directory.
 The prefix identifies the scope in imports and in the Storybook sidebar.
 
 ## Container/presentation split

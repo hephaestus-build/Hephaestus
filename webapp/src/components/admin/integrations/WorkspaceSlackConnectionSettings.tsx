@@ -26,7 +26,7 @@ import {
 } from "@/components/ui/item";
 import { Spinner } from "@/components/ui/spinner";
 
-import { IntegrationCardHeading } from "./IntegrationCardHeading";
+import { WorkspaceIntegrationCardHeading } from "./WorkspaceIntegrationCardHeading";
 
 /** What Slack said about the scopes the token holds; only a reconnect grants a missing one. */
 export type SlackScopeCheck =
@@ -63,10 +63,10 @@ export function WorkspaceSlackConnectionSettings(props: WorkspaceSlackConnection
 	return (
 		<Card>
 			<CardHeader>
-				<IntegrationCardHeading className="flex items-center gap-2">
+				<WorkspaceIntegrationCardHeading className="flex items-center gap-2">
 					<SlackIcon className="size-4" />
 					Slack integration
-				</IntegrationCardHeading>
+				</WorkspaceIntegrationCardHeading>
 				<CardDescription>
 					Install Hephaestus in Slack to talk with Hephaestus in direct messages, manage privacy
 					controls in App Home, and monitor channels you choose. Hephaestus stores no channel

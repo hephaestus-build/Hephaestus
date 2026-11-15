@@ -30,6 +30,7 @@ import {
 } from "@/components/ui/table";
 import { hasText } from "@/lib/text";
 
+import { AdminAuditEventDetailSheet } from "./AdminAuditEventDetailSheet";
 import {
 	eventLabel,
 	eventSeverity,
@@ -38,7 +39,6 @@ import {
 	severityScreenReaderPrefix,
 } from "./audit-format";
 import type { AuditListState } from "./audit-list";
-import { AuditEventDetailSheet } from "./AuditEventDetailSheet";
 import { AuditListEnd } from "./AuditListEnd";
 
 export interface AdminAuditTableProps {
@@ -231,7 +231,7 @@ function AuthEventRows({
 
 			<AuditListEnd list={list} noun="events" />
 
-			<AuditEventDetailSheet
+			<AdminAuditEventDetailSheet
 				event={detail}
 				open={detailOpen}
 				onOpenChange={setDetailOpen}

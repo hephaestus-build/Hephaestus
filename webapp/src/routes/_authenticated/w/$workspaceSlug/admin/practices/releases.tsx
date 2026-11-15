@@ -11,7 +11,7 @@ import {
 	listPracticesQueryKey,
 	listPracticeVersionsQueryKey,
 } from "@/api/@tanstack/react-query.gen";
-import { CatalogUpdatesPage } from "@/components/admin/practices/CatalogUpdatesPage";
+import { WorkspaceCatalogUpdatesPage } from "@/components/admin/practices/WorkspaceCatalogUpdatesPage";
 import { panelState } from "@/components/common/panel-state";
 import { refreshPracticeGuidance } from "@/hooks/practice-guidance-cache";
 import { workspaceAdminHead } from "@/lib/page-title";
@@ -72,7 +72,7 @@ function CatalogUpdatesRoute() {
 	});
 	const pending = (accept.isPending ? "accept" : null) ?? (decline.isPending ? "decline" : null);
 	return (
-		<CatalogUpdatesPage
+		<WorkspaceCatalogUpdatesPage
 			workspaceSlug={workspaceSlug}
 			state={panelState(query, (proposals) => ({ status: "ready" as const, proposals }))}
 			pending={pending}

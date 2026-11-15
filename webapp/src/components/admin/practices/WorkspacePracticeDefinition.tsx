@@ -2,8 +2,8 @@ import type { ReactNode } from "react";
 import { currentDefinition } from "@/components/admin/practices/practice-definition-fields";
 
 import type { Practice, PracticeDefinitionOptions } from "@/api/types.gen";
-import { CatalogOriginNote } from "@/components/admin/practices/CatalogOriginBadge";
-import { PracticeDefinitionPreview } from "@/components/admin/practices/PracticeDefinitionPreview";
+import { CatalogOriginNote } from "@/components/admin/practices/WorkspaceCatalogOriginBadge";
+import { WorkspacePracticeDefinitionPreview } from "@/components/admin/practices/WorkspacePracticeDefinitionPreview";
 import { FeedbackModeBadge } from "@/components/practice-vocabulary/FeedbackModeBadge";
 import { FeedbackModeSourceNote } from "@/components/practice-vocabulary/FeedbackModeSourceNote";
 import { Item, ItemContent, ItemDescription, ItemGroup, ItemTitle } from "@/components/ui/item";
@@ -22,7 +22,7 @@ export interface WorkspacePracticeDefinitionProps {
 	showStanding?: boolean;
 	/** What the reader can do about where it came from, such as reset it to the catalog. */
 	originActions?: ReactNode;
-	/** `4` under a record sheet's `h3` section; see `PracticeDefinitionPreview`. */
+	/** `4` under a record sheet's `h3` section; see `WorkspacePracticeDefinitionPreview`. */
 	headingLevel?: 4;
 }
 
@@ -63,7 +63,7 @@ export function WorkspacePracticeDefinition({
 					<Separator />
 				</>
 			)}
-			<PracticeDefinitionPreview
+			<WorkspacePracticeDefinitionPreview
 				slug={practice.slug}
 				kind={practice.kind}
 				definition={currentDefinition(practice)}

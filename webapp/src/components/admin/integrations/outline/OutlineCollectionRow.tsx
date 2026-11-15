@@ -47,7 +47,7 @@ export interface OutlineCollectionRowProps {
  * pass's outcome, and a state-gated row action menu. Pure — every transition is delegated upward.
  *
  * <p>This is the management plane only. Document count and freshness live in the shared
- * `SyncResourcesTable` the Outline page mounts above this card — the same table SCM and Slack mount,
+ * `WorkspaceSyncResourcesTable` the Outline page mounts above this card — the same table SCM and Slack mount,
  * so all four integrations report freshness in one language, tinted against the connection's cadence.
  * Printing them here too, from a separately-polled `collections.list`, would let the same fact disagree
  * with itself on screen and could not tint a reading stale against that cadence.

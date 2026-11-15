@@ -56,7 +56,7 @@ export type ConnectionState = NonNullable<IntegrationCatalogEntry["connectionSta
 /**
  * The connection lifecycle as a word rather than a wire token — the {@link HEALTH_LABEL} treatment for
  * `connectionState`: a short label for inline use. Copy that must also explain the *consequence* and
- * the *next action* lives in `ConnectionStateNotice`, which is the only thing that should be explaining
+ * the *next action* lives in `WorkspaceConnectionStateNotice`, which is the only thing that should be explaining
  * a blocked state at length.
  */
 export const CONNECTION_STATE_LABEL: Record<ConnectionState, string> = {

@@ -2,13 +2,13 @@ import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
 import { WorkspaceProviderRepairs } from "@/routes/_authenticated/-provider-repairs";
 
-import { ConnectionStateNotice } from "@/components/admin/integrations/ConnectionStateNotice";
-import { IntegrationCardHeading } from "@/components/admin/integrations/IntegrationCardHeading";
-import { JobHistoryCard } from "@/components/admin/integrations/JobHistoryCard";
 import { OutlineCollectionsSection } from "@/components/admin/integrations/outline/OutlineCollectionsSection";
 import { OutlineConnectCard } from "@/components/admin/integrations/outline/OutlineConnectCard";
-import { SyncResourcesTable } from "@/components/admin/integrations/SyncResourcesTable";
-import { SyncStatusHeader } from "@/components/admin/integrations/SyncStatusHeader";
+import { WorkspaceConnectionStateNotice } from "@/components/admin/integrations/WorkspaceConnectionStateNotice";
+import { WorkspaceIntegrationCardHeading } from "@/components/admin/integrations/WorkspaceIntegrationCardHeading";
+import { WorkspaceJobHistoryCard } from "@/components/admin/integrations/WorkspaceJobHistoryCard";
+import { WorkspaceSyncResourcesTable } from "@/components/admin/integrations/WorkspaceSyncResourcesTable";
+import { WorkspaceSyncStatusHeader } from "@/components/admin/integrations/WorkspaceSyncStatusHeader";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { OutlineIcon } from "@/components/icons/brand";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -64,7 +64,7 @@ function OutlineIntegrationPage() {
 					)}
 
 					{hasConnection && (
-						<ConnectionStateNotice
+						<WorkspaceConnectionStateNotice
 							connectionState={outline.connectionState}
 							credentialsUnreadableSince={outline.credentialsUnreadableSince}
 							providerCleanupUnconfirmed={outline.providerCleanupUnconfirmed}
@@ -77,15 +77,19 @@ function OutlineIntegrationPage() {
 						/>
 					)}
 
-					{hasConnection && <SyncStatusHeader label="Outline" {...outline.syncStatusHeaderProps} />}
+					{hasConnection && (
+						<WorkspaceSyncStatusHeader label="Outline" {...outline.syncStatusHeaderProps} />
+					)}
 
 					{hasConnection && (
 						<Card>
 							<CardHeader>
-								<IntegrationCardHeading>Collection sync state</IntegrationCardHeading>
+								<WorkspaceIntegrationCardHeading>
+									Collection sync state
+								</WorkspaceIntegrationCardHeading>
 							</CardHeader>
 							<CardContent>
-								<SyncResourcesTable {...outline.syncResourcesProps} />
+								<WorkspaceSyncResourcesTable {...outline.syncResourcesProps} />
 							</CardContent>
 						</Card>
 					)}
@@ -96,7 +100,7 @@ function OutlineIntegrationPage() {
 				</>
 			)}
 
-			{hasConnection && <JobHistoryCard {...outline.jobHistoryProps} />}
+			{hasConnection && <WorkspaceJobHistoryCard {...outline.jobHistoryProps} />}
 			{typeof repairId === "number" && (
 				<WorkspaceProviderRepairs
 					key={`${slug}/${repairId}`}

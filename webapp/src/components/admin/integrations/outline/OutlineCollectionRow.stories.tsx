@@ -13,7 +13,7 @@ import { OutlineCollectionRow } from "./OutlineCollectionRow";
  * row in a minimal `Table`. Pure — pause / resume / remove are delegated upward.
  *
  * This row is the management plane only: document counts and freshness live in the shared
- * `SyncResourcesTable` the Outline page mounts above the collections card, so the same fact is never
+ * `WorkspaceSyncResourcesTable` the Outline page mounts above the collections card, so the same fact is never
  * printed twice from two independently-polled queries in two different visual languages.
  */
 const meta = {

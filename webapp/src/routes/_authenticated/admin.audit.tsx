@@ -3,8 +3,11 @@ import { createFileRoute } from "@tanstack/react-router";
 import { ScrollTextIcon } from "lucide-react";
 
 import { adminListWorkspacesOptions } from "@/api/@tanstack/react-query.gen";
+import {
+	AdminAuthAuditPanel,
+	type AdminAuthAuditPanelProps,
+} from "@/components/admin/audit/AdminAuthAuditPanel";
 import { type AuditSearch, auditSearchSchema } from "@/components/admin/audit/audit-search";
-import { AuthAuditPanel, type AuthAuditPanelProps } from "@/components/admin/audit/AuthAuditPanel";
 import { ConfigAuditPanel } from "@/components/admin/audit/ConfigAuditPanel";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { PageLayout } from "@/components/layout/PageLayout";
@@ -81,11 +84,14 @@ function AdminAuditPage() {
 	);
 }
 
-type TabProps = Pick<AuthAuditPanelProps, "search" | "onSearchChange" | "resolveWorkspaceName">;
+type TabProps = Pick<
+	AdminAuthAuditPanelProps,
+	"search" | "onSearchChange" | "resolveWorkspaceName"
+>;
 
 /** A tab reads its own list: only the open tab's panel is mounted, so only it reads. */
 function AccessTab(props: TabProps) {
-	return <AuthAuditPanel {...props} {...useAuthAuditRead(props.search)} />;
+	return <AdminAuthAuditPanel {...props} {...useAuthAuditRead(props.search)} />;
 }
 
 function SettingsTab(props: TabProps) {

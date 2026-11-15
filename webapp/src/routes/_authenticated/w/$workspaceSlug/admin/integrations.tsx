@@ -1,6 +1,6 @@
 import { createFileRoute, Outlet } from "@tanstack/react-router";
 
-import { SyncFreshnessBanner } from "@/components/admin/integrations/SyncFreshnessBanner";
+import { WorkspaceSyncFreshnessBanner } from "@/components/admin/integrations/WorkspaceSyncFreshnessBanner";
 import { useSyncEvents } from "@/hooks/use-sync-events";
 import { SyncLivenessProvider } from "@/hooks/use-sync-liveness";
 import { workspaceAdminHead } from "@/lib/page-title";
@@ -17,7 +17,7 @@ function IntegrationsLayout() {
 	return (
 		<SyncLivenessProvider livePushUnavailable={livePushUnavailable}>
 			<div className="space-y-6">
-				<SyncFreshnessBanner />
+				<WorkspaceSyncFreshnessBanner />
 				<Outlet />
 			</div>
 		</SyncLivenessProvider>
