@@ -1,8 +1,10 @@
 package de.tum.cit.aet.hephaestus.practices.mcp;
 
 import de.tum.cit.aet.hephaestus.core.mcp.McpTool;
+import de.tum.cit.aet.hephaestus.core.mcp.McpToolFor;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.practices.CatalogOriginPresenter;
+import de.tum.cit.aet.hephaestus.practices.PracticeCatalogController;
 import de.tum.cit.aet.hephaestus.practices.PracticeService;
 import de.tum.cit.aet.hephaestus.practices.dto.PracticeDTO;
 import de.tum.cit.aet.hephaestus.workspace.authorization.RequireAtLeastWorkspaceAdmin;
@@ -19,6 +21,7 @@ import tools.jackson.databind.json.JsonMapper;
 
 /** {@code list_practices}: the workspace's practices, as {@code PracticeCatalogController.list} reads them. */
 @Component
+@McpToolFor(controller = PracticeCatalogController.class, method = "list")
 @ConditionalOnServerRole
 @ConditionalOnBooleanProperty("hephaestus.mcp.enabled")
 class ListPracticesTool implements McpTool {

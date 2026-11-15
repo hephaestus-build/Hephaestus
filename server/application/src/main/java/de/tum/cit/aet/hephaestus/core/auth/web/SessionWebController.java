@@ -47,6 +47,7 @@ public class SessionWebController {
     public enum SessionClient {
         WEB,
         BROWSER_EXTENSION,
+        MCP_CLIENT,
     }
 
     /**
@@ -87,6 +88,7 @@ public class SessionWebController {
         }
         return switch (kind) {
             case BROWSER_EXTENSION -> SessionClient.BROWSER_EXTENSION;
+            case MCP_CLIENT -> SessionClient.MCP_CLIENT;
         };
     }
 

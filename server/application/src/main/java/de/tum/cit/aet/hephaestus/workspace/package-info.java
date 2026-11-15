@@ -27,6 +27,7 @@
             "core::exception",
             "core::installed-clients",
             "core::logging",
+            "core::mcp-spi",
             "core::person-data",
             "core::runtime",
             "core::security",

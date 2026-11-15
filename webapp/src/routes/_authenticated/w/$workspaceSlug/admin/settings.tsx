@@ -2,11 +2,13 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { Settings2 } from "lucide-react";
 import type { ReactNode } from "react";
+import { useWorkspaceMcpClientGrants } from "@/hooks/use-workspace-mcp-client-grants";
 import { useWorkspacePasskeySettings } from "@/hooks/use-workspace-passkey-settings";
 
 import { updateStatusMutation } from "@/api/@tanstack/react-query.gen";
 import { SuspendedWorkspaceCard } from "@/components/admin/settings/SuspendedWorkspaceCard";
 import { WorkspaceDangerZoneSettings } from "@/components/admin/settings/WorkspaceDangerZoneSettings";
+import { WorkspaceMcpClientGrantsSection } from "@/components/admin/settings/WorkspaceMcpClientGrantsSection";
 import { WorkspacePasskeyPolicySection } from "@/components/admin/settings/WorkspacePasskeyPolicySection";
 import { WorkspaceSettingsPage } from "@/components/admin/settings/WorkspaceSettingsPage";
 import { WorkspaceSetupSummary } from "@/components/admin/settings/WorkspaceSetupSummary";
@@ -102,7 +104,9 @@ function SuspendedSettings({
 }
 
 function ActiveSettings() {
-	const passkeys = useWorkspacePasskeySettings({ workspaceSlug: Route.useParams().workspaceSlug });
+	const routeSlug = Route.useParams().workspaceSlug;
+	const passkeys = useWorkspacePasskeySettings({ workspaceSlug: routeSlug });
+	const mcpClients = useWorkspaceMcpClientGrants({ workspaceSlug: routeSlug });
 	const {
 		adminWorkspaceSlug: workspaceSlug,
 		isLoading: isWorkspaceLoading,
@@ -147,6 +151,9 @@ function ActiveSettings() {
 			<WorkspaceSettingsPage
 				setupSummary={<WorkspaceSetupSummary workspaceSlug={workspaceSlug} state={setup} />}
 				security={<WorkspacePasskeyPolicySection {...passkeys} />}
+				mcpClients={
+					mcpClients === undefined ? undefined : <WorkspaceMcpClientGrantsSection {...mcpClients} />
+				}
 				workspaceSlug={workspaceSlug}
 				practicesEnabled={workspace.practicesEnabled}
 				publicActivity={{

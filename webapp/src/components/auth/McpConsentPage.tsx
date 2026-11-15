@@ -1,0 +1,173 @@
+import { useId } from "react";
+
+import { HephaestusLogo } from "@/components/brand/HephaestusLogo";
+import { PageLayout } from "@/components/layout/PageLayout";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Spinner } from "@/components/ui/spinner";
+
+/** What the consent page knows about the client's request, as the server answers it. */
+export interface McpConsentRequestView {
+	clientHost: string;
+	clientName: string;
+	redirectHost: string;
+	loopbackRedirect: boolean;
+	workspaceName: string;
+	scopes: string[];
+	refusal?: McpConsentRefusal;
+}
+
+export type McpConsentRefusal = "NOT_ADMIN" | "PASSKEY_REQUIRED";
+
+export type McpAuthorizationError = "INVALID_CLIENT" | "INVALID_CLIENT_METADATA" | "INVALID_REDIRECT_URI";
+
+export type McpConsentState =
+	| { status: "loading" }
+	| { status: "error"; message: string; onRetry: () => void }
+	| { status: "gone" }
+	| { status: "invalid"; reason: McpAuthorizationError }
+	| {
+			status: "ready";
+			request: McpConsentRequestView;
+			pending?: "approve" | "refuse";
+			onApprove: () => void;
+			onRefuse: () => void;
+	  };
+
+export interface McpConsentPageProps {
+	state: McpConsentState;
+}
+
+const SCOPE_WORDS: Record<string, string> = {
+	"practices:read":
+		"Read this workspace's practices, review settings, members' provider logins and review status.",
+	"practices:write":
+		"Change practices, feedback modes and who is reviewed, and request reviews.",
+};
+
+const REFUSALS: Record<McpConsentRefusal, string> = {
+	NOT_ADMIN: "You are not an admin of this workspace. Only an admin or owner can connect a client.",
+	PASSKEY_REQUIRED:
+		"This workspace requires a passkey for admin changes. An MCP client cannot hold a passkey proof, so use the web app for this workspace.",
+};
+
+const INVALID: Record<McpAuthorizationError, string> = {
+	INVALID_CLIENT: "The client did not identify itself with a client metadata document.",
+	INVALID_CLIENT_METADATA: "The client's metadata document could not be read or is not valid.",
+	INVALID_REDIRECT_URI: "The client asked to send you to an address that its metadata document does not list.",
+};
+
+/**
+ * The page where an account lets an MCP client act in one workspace. The host comes first because the
+ * client cannot choose it; the client's own name is plain text below it.
+ */
+export function McpConsentPage({ state }: McpConsentPageProps) {
+	const id = useId();
+	return (
+		<PageLayout className="max-w-xl py-10">
+			<HephaestusLogo className="h-8 w-auto" />
+			<section aria-labelledby={`${id}-heading`} aria-busy={state.status === "loading"} className="space-y-4">
+				<h1 id={`${id}-heading`} className="text-2xl font-semibold">
+					Connect an MCP client
+				</h1>
+				<Body state={state} />
+			</section>
+		</PageLayout>
+	);
+}
+
+function Body({ state }: McpConsentPageProps) {
+	switch (state.status) {
+		case "loading":
+			return <Skeleton className="h-48 w-full" />;
+		case "error":
+			return (
+				<Alert variant="destructive">
+					<AlertTitle>We could not load this request</AlertTitle>
+					<AlertDescription>
+						<p>{state.message}</p>
+						<Button variant="outline" className="mt-2" onClick={state.onRetry}>
+							Retry
+						</Button>
+					</AlertDescription>
+				</Alert>
+			);
+		case "gone":
+			return (
+				<Alert>
+					<AlertTitle>This request has expired</AlertTitle>
+					<AlertDescription>
+						It was answered already, or it waited longer than 10 minutes. Start the client's sign-in again.
+					</AlertDescription>
+				</Alert>
+			);
+		case "invalid":
+			return (
+				<Alert variant="destructive">
+					<AlertTitle>This client cannot connect</AlertTitle>
+					<AlertDescription>{INVALID[state.reason]}</AlertDescription>
+				</Alert>
+			);
+		case "ready":
+			return <Request {...state} />;
+	}
+}
+
+function Request({
+	request,
+	pending,
+	onApprove,
+	onRefuse,
+}: Extract<McpConsentState, { status: "ready" }>) {
+	const refusal = request.refusal;
+	return (
+		<div className="space-y-4">
+			<div>
+				<p className="text-lg font-medium">{request.clientHost}</p>
+				<p className="text-sm text-muted-foreground">
+					Calls itself <span className="font-medium text-foreground">{request.clientName}</span>
+				</p>
+			</div>
+			<p>
+				wants to act for you in the workspace <span className="font-medium">{request.workspaceName}</span>. It
+				may:
+			</p>
+			<ul className="list-disc space-y-1 pl-5">
+				{request.scopes.map((scope) => (
+					<li key={scope}>{SCOPE_WORDS[scope] ?? scope}</li>
+				))}
+			</ul>
+			<p className="text-sm text-muted-foreground">
+				It can never read source code, observations, feedback, conversations or secrets.
+			</p>
+			<p className="text-sm text-muted-foreground">
+				After you answer, your browser goes to <span className="font-medium">{request.redirectHost}</span>.
+			</p>
+			{request.loopbackRedirect && (
+				<Alert>
+					<AlertTitle>The client runs on this computer</AlertTitle>
+					<AlertDescription>
+						The answer goes to a program on this computer. Allow it only if you started this sign-in yourself.
+					</AlertDescription>
+				</Alert>
+			)}
+			{refusal !== undefined && (
+				<Alert variant="destructive">
+					<AlertTitle>You cannot allow this client</AlertTitle>
+					<AlertDescription>{REFUSALS[refusal]}</AlertDescription>
+				</Alert>
+			)}
+			<div className="flex gap-2">
+				<Button onClick={onApprove} disabled={pending !== undefined || refusal !== undefined} aria-busy={pending === "approve"}>
+					{pending === "approve" && <Spinner />}
+					Allow
+				</Button>
+				<Button variant="outline" onClick={onRefuse} disabled={pending !== undefined} aria-busy={pending === "refuse"}>
+					{pending === "refuse" && <Spinner />}
+					Deny
+				</Button>
+			</div>
+		</div>
+	);
+}

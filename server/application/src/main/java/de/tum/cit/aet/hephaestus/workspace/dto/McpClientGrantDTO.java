@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.workspace.dto;
 
+import de.tum.cit.aet.hephaestus.core.auth.dto.AccountRefDTO;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
 import java.util.List;
@@ -12,7 +13,7 @@ public record McpClientGrantDTO(
         @NonNull UUID id,
         @NonNull @Schema(description = "The host of the client's metadata document URL") String clientHost,
         @NonNull @Schema(description = "The client's self-declared name, plain text") String clientName,
-        @NonNull @Schema(pattern = "^[1-9][0-9]*$", description = "The account that approved the client") String accountId,
+        @NonNull @Schema(description = "The account that approved the client") AccountRefDTO approvedBy,
         @NonNull List<String> scopes,
         @Nullable Instant approvedAt) {
     public McpClientGrantDTO {

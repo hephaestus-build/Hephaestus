@@ -1105,6 +1105,7 @@
 				"publicActivity",
 				"pageExperienceMetrics",
 				"browserFaultReports",
+				"mcpEnabled",
 				"sync",
 				"credentialKey",
 				"systemKey",
@@ -1195,6 +1196,9 @@
 					"type": "boolean"
 				},
 				"browserFaultReports": {
+					"type": "boolean"
+				},
+				"mcpEnabled": {
 					"type": "boolean"
 				},
 				"sync": {

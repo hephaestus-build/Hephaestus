@@ -3972,6 +3972,12 @@ await test("one value turns browser fault reports on for the server and for the 
 	}
 });
 
+await test("one value turns the workspace MCP endpoint on for the server, off by default", () => {
+	assert.equal(envValue(workload(rendered(layersFor("small")), "server"), "HEPHAESTUS_MCP_ENABLED"), "false");
+	const resources = rendered([...layersFor("small"), { config: { mcpEnabled: true } }]);
+	assert.equal(envValue(workload(resources, "server"), "HEPHAESTUS_MCP_ENABLED"), "true");
+});
+
 await test("workspace hosts reach only the SPA and share the apex origin settings", () => {
 	const layers = [profile("small"), prepared, operator, reviews];
 	const off = rendered(layers);

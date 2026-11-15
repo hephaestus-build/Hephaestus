@@ -17,6 +17,8 @@ export interface WorkspaceSettingsPageProps {
 	/** Whether members get value from the workspace yet, first because it is what an admin acts on. */
 	setupSummary?: ReactNode;
 	security?: ReactNode;
+	/** The connected MCP clients; absent while the instance has MCP clients turned off. */
+	mcpClients?: ReactNode;
 	workspaceSlug: string;
 	practicesEnabled: boolean;
 	publicActivity: WorkspacePublicActivitySettingsProps;
@@ -27,6 +29,7 @@ export interface WorkspaceSettingsPageProps {
 export function WorkspaceSettingsPage({
 	setupSummary,
 	security,
+	mcpClients,
 	workspaceSlug,
 	practicesEnabled,
 	publicActivity,
@@ -43,6 +46,7 @@ export function WorkspaceSettingsPage({
 			<WorkspacePublicActivitySettings {...publicActivity} />
 			<WorkspaceHiddenPeopleSettings workspaceSlug={workspaceSlug} {...hiddenPeople} />
 			{security}
+			{mcpClients}
 			<WorkspaceDangerZoneSettings workspaceSlug={workspaceSlug} {...dangerZone} />
 		</div>
 	);

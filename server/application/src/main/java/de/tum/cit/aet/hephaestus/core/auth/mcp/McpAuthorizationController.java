@@ -15,6 +15,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import java.net.URI;
 import java.time.Clock;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Value;
@@ -115,12 +116,16 @@ public class McpAuthorizationController {
     @Audited(ledger = AuditLedger.AUTH_EVENT, type = "MCP_CLIENT_APPROVED")
     @Operation(summary = "Approve an MCP client for a workspace", operationId = "approveMcpConsentRequest")
     public ResponseEntity<McpConsentRedirectDTO> approve(@PathVariable UUID requestId) {
+        Long accountId = browserAccount();
+        Instant sessionExpiresAt = CurrentAccount.sessionExpiresAt();
+        Instant authTime = CurrentAccount.authTime();
+        if (sessionExpiresAt == null || authTime == null) {
+            // The client's session inherits this sign-in's deadline and auth_time; without them it would
+            // outlive the browser session that approved it.
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Sign in again to approve the client.");
+        }
         return switch (authorization.approve(
-                requestId,
-                browserAccount(),
-                CurrentAccount.requireJti(),
-                CurrentAccount.sessionExpiresAt(),
-                CurrentAccount.authTime())) {
+                requestId, accountId, CurrentAccount.requireJti(), sessionExpiresAt, authTime)) {
             case McpAuthorizationService.Approval.Approved approved ->
                 ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(new McpConsentRedirectDTO(approved.location()));
             case McpAuthorizationService.Approval.NotAllowed notAllowed ->

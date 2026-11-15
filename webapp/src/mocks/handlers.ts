@@ -75,6 +75,10 @@ export const handlers = [
 			instanceRequired: false,
 		} satisfies Wire<WorkspacePasskeyPolicy>),
 	),
+	// MCP clients are off by default, so the endpoint does not exist.
+	http.get("*/workspaces/:workspaceSlug/mcp-grants", () =>
+		HttpResponse.json({ status: 404, title: "Not Found" }, { status: 404 }),
+	),
 	http.get("*/workspaces/:workspaceSlug/onboarding/me", () =>
 		HttpResponse.json(workspaceOnboarding()),
 	),
