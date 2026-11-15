@@ -54,7 +54,7 @@ class SlackMessageServiceLiveTest {
         workspace.setId(workspaceId);
 
         // Real per-row AES-GCM encryption (same converter the app wires), AAD-bound to this row.
-        CredentialBundleConverter converter = new CredentialBundleConverter("a".repeat(32), false);
+        CredentialBundleConverter converter = new CredentialBundleConverter("a".repeat(32));
         Connection connection = new Connection(
                 workspace,
                 IntegrationKind.SLACK,

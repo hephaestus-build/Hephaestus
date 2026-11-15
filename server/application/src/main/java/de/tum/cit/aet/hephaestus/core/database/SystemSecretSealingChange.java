@@ -90,7 +90,7 @@ public class SystemSecretSealingChange implements CustomTaskChange {
                         + " Rotate the key after the upgrade.");
             }
             SecretKey earlier = new SecretKeySpec(systemKey.getBytes(StandardCharsets.UTF_8), "AES");
-            SystemSecrets secrets = new SystemSecrets(properties, env);
+            SystemSecrets secrets = new SystemSecrets(properties);
             sealText(jdbc, secrets, earlier, "login_provider", "client_secret", "registration_id");
             sealText(jdbc, secrets, earlier, "llm_connection", "api_key", "slug");
             sealText(jdbc, secrets, earlier, "workspace_llm_connection", "api_key", "workspace_id", "slug");

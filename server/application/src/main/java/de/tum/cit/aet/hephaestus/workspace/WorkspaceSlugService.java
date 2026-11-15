@@ -81,10 +81,7 @@ public class WorkspaceSlugService {
         return WorkspaceSlugValidator.isAssignable(slug)
                 && !workspaceRepository.existsByWorkspaceSlug(slug)
                 && !reservations.existsById(slug)
-                && erasedNamespaces
-                        .slugToken(slug)
-                        .map(token -> !reservations.existsById(token))
-                        .orElse(true)
+                && !reservations.existsById(erasedNamespaces.slugToken(slug))
                 && !workspaceSlugHistoryRepository.existsByOldSlug(slug);
     }
 

@@ -102,11 +102,6 @@ public class JwtSigningKeyService implements JWKSource<SecurityContext>, SystemS
         if (hasCurrentKey(notBefore)) {
             return;
         }
-        if (!secrets.isEnabled()) {
-            throw new IllegalStateException(
-                    "No JWT signing key exists and sealing is disabled. The server does not create an unsealed "
-                            + "signing key. Set hephaestus.security.encryption-key (ADR 0017).");
-        }
         JwtSigningKey row = generateNewKeyRow();
         repository.save(row);
         cache.set(null);
@@ -119,8 +114,6 @@ public class JwtSigningKeyService implements JWKSource<SecurityContext>, SystemS
      */
     @Transactional(readOnly = true)
     public void verifyActiveKeysOpen() {
-        // No guard for a missing system key, unlike StoredSystemSecrets#verifyAllOpen: a server that cannot open its
-        // signing keys cannot sign or verify a session, so it stops even in development.
         for (JwtSigningKey row : repository.findActive()) {
             try {
                 row.privateKey(secrets);

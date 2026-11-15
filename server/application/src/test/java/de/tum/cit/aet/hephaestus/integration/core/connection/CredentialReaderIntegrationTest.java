@@ -115,7 +115,7 @@ class CredentialReaderIntegrationTest extends AbstractWorkspaceIntegrationTest {
         Workspace healthy =
                 createWorkspace("reader-ws-" + System.nanoTime(), "Reader Test", "reader-org", AccountType.ORG, owner);
         BearerToken healthyToken = new BearerToken("glpat-synthetic-healthy", null);
-        activeGitLabConnection(unreadable, TOKEN, new CredentialBundleConverter(OTHER_KEY, false));
+        activeGitLabConnection(unreadable, TOKEN, new CredentialBundleConverter(OTHER_KEY));
         activeGitLabConnection(healthy, healthyToken, credentialBundleConverter);
         TransactionTemplate readOnly =
                 new TransactionTemplate(Objects.requireNonNull(transactionTemplate.getTransactionManager()));
@@ -142,8 +142,8 @@ class CredentialReaderIntegrationTest extends AbstractWorkspaceIntegrationTest {
         Workspace healthy = createWorkspace(
                 "snapshot-good-" + System.nanoTime(), "Snapshot", "snapshot-org", AccountType.ORG, owner);
         var writer = missingKey
-                ? new CredentialBundleConverter(OTHER_KEY, Integer.MAX_VALUE, null, null, false)
-                : new CredentialBundleConverter(OTHER_KEY, false);
+                ? new CredentialBundleConverter(OTHER_KEY, Integer.MAX_VALUE, null, null)
+                : new CredentialBundleConverter(OTHER_KEY);
         activeGitLabConnection(unreadable, TOKEN, writer);
         var healthyToken = new BearerToken("synthetic-snapshot-healthy", null);
         activeGitLabConnection(healthy, healthyToken, credentialBundleConverter);
@@ -198,7 +198,7 @@ class CredentialReaderIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 IntegrationKind.GITHUB,
                 instanceKey,
                 new ConnectionConfig.GitHubAppConfig(100L, null, null, Set.of())));
-        connection.setCredentials(TOKEN, new CredentialBundleConverter(OTHER_KEY, false));
+        connection.setCredentials(TOKEN, new CredentialBundleConverter(OTHER_KEY));
         return connectionRepository.saveAndFlush(connection);
     }
 

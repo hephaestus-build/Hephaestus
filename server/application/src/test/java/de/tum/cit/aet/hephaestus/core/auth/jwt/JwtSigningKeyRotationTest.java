@@ -34,7 +34,7 @@ class JwtSigningKeyRotationTest extends BaseUnitTest {
 
     private static final String KEY = "0123456789abcdef0123456789abcdef";
 
-    private final SystemSecrets secrets = systemSecrets(KEY, "test");
+    private final SystemSecrets secrets = systemSecrets(KEY);
     private final MovableClock clock = new MovableClock(Instant.parse("2026-11-14T10:00:00Z"));
     private final JwtSigningKeyRepository repository = mock(JwtSigningKeyRepository.class);
     private final List<JwtSigningKey> saved = new ArrayList<>();

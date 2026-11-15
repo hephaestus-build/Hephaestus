@@ -42,8 +42,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 
 class LlmModelServiceTest extends BaseUnitTest {
 
-    private static final SystemSecrets SECRETS =
-            TestSystemSecrets.systemSecrets("0123456789abcdef0123456789abcdef", "test");
+    private static final SystemSecrets SECRETS = TestSystemSecrets.systemSecrets("0123456789abcdef0123456789abcdef");
 
     @Mock
     private LlmModelRepository modelRepository;

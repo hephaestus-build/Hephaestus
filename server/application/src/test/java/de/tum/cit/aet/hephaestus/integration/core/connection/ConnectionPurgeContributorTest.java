@@ -66,7 +66,7 @@ class ConnectionPurgeContributorTest extends BaseUnitTest {
 
     @BeforeEach
     void setUp() {
-        credentialConverter = new CredentialBundleConverter("a".repeat(32), false);
+        credentialConverter = new CredentialBundleConverter("a".repeat(32));
         connectionService = new ConnectionService(
                 connectionRepository,
                 auditRepository,

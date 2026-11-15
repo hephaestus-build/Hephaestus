@@ -61,7 +61,7 @@ class SystemSecretSealingChangeDatabaseTest {
 
         migrate(database, KEY);
 
-        SystemSecrets secrets = systemSecrets(KEY, "test");
+        SystemSecrets secrets = systemSecrets(KEY);
         assertThat(secrets.openText(
                         required(sql.queryForObject(
                                 "SELECT client_secret FROM login_provider WHERE registration_id='gitlab'",

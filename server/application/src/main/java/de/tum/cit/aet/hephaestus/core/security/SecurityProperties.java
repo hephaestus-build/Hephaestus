@@ -9,9 +9,9 @@ import org.springframework.validation.annotation.Validated;
  * Encryption key configuration.
  *
  * @param encryptionKey Key that encrypts sensitive values at rest, such as login provider secrets, LLM connection keys
- *     and JWT signing keys. Exactly 32 bytes, so 32 ASCII characters. Required in production.
+ *     and JWT signing keys. Exactly 32 bytes, so 32 ASCII characters. Required in every profile.
  * @param credentialEncryptionKey Active key that encrypts the stored credentials of integration connections. Exactly
- *     32 bytes, so 32 ASCII characters. Required in production.
+ *     32 bytes, so 32 ASCII characters. Required in every profile.
  * @param credentialEncryptionKeyVersion Positive version number stored with each credential that the active credential
  *     key encrypts. Must differ from prior-credential-encryption-key-version.
  * @param priorCredentialEncryptionKey Previous credential key, still used to decrypt credentials stored under its

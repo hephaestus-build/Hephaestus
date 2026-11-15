@@ -168,23 +168,35 @@ await describe("the generated values of a checkout", async () => {
 		});
 	});
 
-	await test("existing data gets no new keys, because its stored secrets need the old ones", async () => {
+	await test("existing data without its keys refuses without changing the file", async () => {
+		await checkout(async (paths) => {
+			await mkdir(paths.dataDirectory);
+			await writeFile(path.join(paths.dataDirectory, "PG_VERSION"), "18");
+			const before = "POSTGRES_PORT=15432\nPOSTGRES_PASSWORD=chosen\n";
+			await writeFile(paths.envFile, before);
+			await assert.rejects(
+				ensureGeneratedValues({ ...paths, environment: {} }),
+				/no HEPHAESTUS_SECURITY_ENCRYPTION_KEY or HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY\. Set the key that sealed its values in server\/\.env, or run `vp run dev:reset`/u,
+			);
+			assert.equal(await readFile(paths.envFile, "utf8"), before);
+		});
+	});
+
+	await test("existing data with its keys gets only the missing webhook secret", async () => {
 		await checkout(async (paths) => {
 			await mkdir(paths.dataDirectory);
 			await writeFile(path.join(paths.dataDirectory, "PG_VERSION"), "18");
 			await writeFile(
 				paths.envFile,
-				"POSTGRES_PORT=15432\nPOSTGRES_PASSWORD=chosen\nSERVER_PORT=18080\n",
+				`POSTGRES_PORT=15432\nPOSTGRES_PASSWORD=chosen\n${keyNames.map((key) => `${key}=${"k".repeat(32)}`).join("\n")}\n`,
 			);
 			assert.deepEqual(await ensureGeneratedValues({ ...paths, environment: {} }), [
 				"WEBHOOK_SECRET",
 			]);
 			const values = await readEnvFile(paths.envFile);
 			assert.equal(values.POSTGRES_PASSWORD, "chosen");
-			assert.equal(values.POSTGRES_PORT, "15432");
-			assert.equal(values.SERVER_PORT, "18080");
 			for (const key of keyNames) {
-				assert.equal(values[key], undefined);
+				assert.equal(values[key], "k".repeat(32));
 			}
 		});
 	});

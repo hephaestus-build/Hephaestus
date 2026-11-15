@@ -38,7 +38,7 @@ class LlmConnectionServiceTest extends BaseUnitTest {
     private LlmConnectionAudit llmConnectionAudit;
 
     @Spy
-    private SystemSecrets secrets = TestSystemSecrets.systemSecrets("0123456789abcdef0123456789abcdef", "test");
+    private SystemSecrets secrets = TestSystemSecrets.systemSecrets("0123456789abcdef0123456789abcdef");
 
     @InjectMocks
     private LlmConnectionService connectionService;

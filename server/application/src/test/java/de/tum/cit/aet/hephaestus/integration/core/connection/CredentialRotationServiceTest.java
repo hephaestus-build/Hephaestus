@@ -53,8 +53,8 @@ class CredentialRotationServiceTest extends BaseUnitTest {
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
-        oldConverter = new CredentialBundleConverter(OLD_KEY, false);
-        rotatingConverter = new CredentialBundleConverter(NEW_KEY, 2, OLD_KEY, 1, false);
+        oldConverter = new CredentialBundleConverter(OLD_KEY);
+        rotatingConverter = new CredentialBundleConverter(NEW_KEY, 2, OLD_KEY, 1);
         SecurityProperties properties = new SecurityProperties(null, NEW_KEY, 2, OLD_KEY, 1, true, 25, null, false);
         meterRegistry = new SimpleMeterRegistry();
         service = new CredentialRotationService(
@@ -77,7 +77,7 @@ class CredentialRotationServiceTest extends BaseUnitTest {
         assertThat(stale.getCredentialsEncrypted()).isNotEqualTo(staleBlob);
         assertThat(stale.credentials(rotatingConverter)).contains(TOKEN);
         // The rewritten blob must not need the prior key any more.
-        CredentialBundleConverter activeOnly = new CredentialBundleConverter(NEW_KEY, 2, null, null, false);
+        CredentialBundleConverter activeOnly = new CredentialBundleConverter(NEW_KEY, 2, null, null);
         assertThat(stale.credentials(activeOnly)).contains(TOKEN);
     }
 

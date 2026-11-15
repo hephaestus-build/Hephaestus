@@ -375,10 +375,10 @@ class ProviderOAuthExchangeRepairIntegrationTest extends AbstractWorkspaceIntegr
         String fingerprint = ProviderResourceAdapter.slackTokenFingerprint(token);
         UUID attempt = exchanges.begin(ref());
         exchanges.observed(attempt, team, "U-BOT", fingerprint);
-        var firstProcess = new CredentialBundleConverter("a".repeat(32), false);
+        var firstProcess = new CredentialBundleConverter("a".repeat(32));
         owner.setCredentials(new BearerToken(token, null), firstProcess);
         owner = connections.saveAndFlush(owner);
-        var restarted = new CredentialBundleConverter("b".repeat(32), 2, "a".repeat(32), 1, false);
+        var restarted = new CredentialBundleConverter("b".repeat(32), 2, "a".repeat(32), 1);
         Connection persisted = connections.findById(owner.getId()).orElseThrow();
         var context = new EncryptionContext(
                 workspace.getId(), IntegrationKind.SLACK, null, "connection.credentials_encrypted");
@@ -393,7 +393,7 @@ class ProviderOAuthExchangeRepairIntegrationTest extends AbstractWorkspaceIntegr
                                 .isEqualTo(fingerprint));
         persisted.setCredentials(decrypted, restarted);
         connections.saveAndFlush(persisted);
-        var secondRestart = new CredentialBundleConverter("b".repeat(32), 2, null, null, false);
+        var secondRestart = new CredentialBundleConverter("b".repeat(32), 2, null, null);
         Connection rotated = connections.findById(owner.getId()).orElseThrow();
         var afterRotation = secondRestart.decrypt(Objects.requireNonNull(rotated.getCredentialsEncrypted()), context);
         assertThat(afterRotation)

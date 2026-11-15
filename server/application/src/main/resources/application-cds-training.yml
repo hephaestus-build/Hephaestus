@@ -28,6 +28,11 @@ spring:
 
 # Artifact generation loads the runtime contract, not deployment bootstrap or integrations.
 hephaestus:
+    # The server refuses to start without both keys. The training run seals nothing, and CdsTrainingRunGuard refuses
+    # this profile outside that run, so these fixture keys never reach a server that serves.
+    security:
+        encryption-key: cdsTrainingFixtureSystemKey00001
+        credential-encryption-key: cdsTrainingFixtureCredentialKey1
     # Artifact generation has no database to work on (ConditionalOnBackgroundWork).
     background-work:
         enabled: false

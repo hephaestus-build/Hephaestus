@@ -116,7 +116,7 @@ class ConnectionServiceTest extends BaseUnitTest {
         TransactionSynchronizationManager.initSynchronization();
         // Real converter so the credential-purge case operates on a genuine AES-GCM blob,
         // not a mock stand-in.
-        credentialConverter = new CredentialBundleConverter("a".repeat(32), false);
+        credentialConverter = new CredentialBundleConverter("a".repeat(32));
         // Provider teardown runs through a TransactionTemplate over this manager; a stub status is
         // enough to let the template execute, and it lets us assert the propagation it asked for.
         lenient().when(transactionManager.getTransaction(any())).thenReturn(new SimpleTransactionStatus());

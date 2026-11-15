@@ -39,8 +39,7 @@ class JwtSigningKeyServiceSealingTest extends BaseUnitTest {
 
     @Test
     void generatedSealedKey_roundTripsThroughDbLoad() {
-        SystemSecrets sealer = systemSecrets(KEY, "dev");
-        assertThat(sealer.isEnabled()).isTrue();
+        SystemSecrets sealer = systemSecrets(KEY);
 
         JwtSigningKeyRepository repo = mock(JwtSigningKeyRepository.class);
         when(repo.countByActiveTrue()).thenReturn(0L);
@@ -72,7 +71,7 @@ class JwtSigningKeyServiceSealingTest extends BaseUnitTest {
 
     @Test
     void shouldRefuseToSignWithAKeySealedForAnotherRow() {
-        SystemSecrets secrets = systemSecrets(KEY, "dev");
+        SystemSecrets secrets = systemSecrets(KEY);
         JwtSigningKeyRepository repo = mock(JwtSigningKeyRepository.class);
         ArgumentCaptor<JwtSigningKey> saved = ArgumentCaptor.forClass(JwtSigningKey.class);
         when(repo.save(saved.capture())).thenAnswer(inv -> inv.getArgument(0));
@@ -87,23 +86,13 @@ class JwtSigningKeyServiceSealingTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldRefuseToCreateAnUnsealedKeyWithoutAnEncryptionKey() {
-        var sealer = systemSecrets(null, "dev");
-        var repo = mock(JwtSigningKeyRepository.class);
-        assertThatThrownBy(() -> serviceWith(repo, sealer).ensureActiveKey())
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("sealing is disabled");
-        verify(repo, never()).save(any());
-    }
-
-    @Test
     void coldBoot_acquiresAdvisoryLockBeforeInsertingAndRechecksUnderIt() {
         // The double-mint guard is ordering: read (fast path) → take the cluster-wide advisory lock →
         // RE-read under the lock → only then insert. Pin that order so a refactor cannot move the
         // insert outside the lock or drop the re-check (the load-bearing step countByActiveTrue's
         // Javadoc calls out). Postgres owns the cross-pod semantics of pg_advisory_xact_lock; this pins
         // OUR sequence around it.
-        SystemSecrets sealer = systemSecrets(KEY, "dev");
+        SystemSecrets sealer = systemSecrets(KEY);
         JwtSigningKeyRepository repo = mock(JwtSigningKeyRepository.class);
         when(repo.countByActiveTrue()).thenReturn(0L); // empty before AND after the lock
         when(repo.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -122,7 +111,7 @@ class JwtSigningKeyServiceSealingTest extends BaseUnitTest {
         // Two pods race past the unlocked fast path (both see 0). The loser blocks on the advisory lock;
         // by the time it acquires it, the winner has committed a key. The post-lock re-check must see
         // that key and SKIP the insert — otherwise the cluster mints two active signing identities.
-        SystemSecrets sealer = systemSecrets(KEY, "dev");
+        SystemSecrets sealer = systemSecrets(KEY);
         JwtSigningKeyRepository repo = mock(JwtSigningKeyRepository.class);
         // 0 at the fast path, then 1 after acquiring the lock (the winner inserted while we waited).
         when(repo.countByActiveTrue()).thenReturn(0L).thenReturn(1L);
@@ -137,7 +126,7 @@ class JwtSigningKeyServiceSealingTest extends BaseUnitTest {
     void warmBoot_skipsTheAdvisoryLockEntirely() {
         // The overwhelmingly common path: a key already exists, so the cheap unlocked read short-circuits
         // and the bootstrap lock is never taken (it would needlessly serialize every warm boot).
-        SystemSecrets sealer = systemSecrets(KEY, "dev");
+        SystemSecrets sealer = systemSecrets(KEY);
         JwtSigningKeyRepository repo = mock(JwtSigningKeyRepository.class);
         when(repo.countByActiveTrue()).thenReturn(1L);
 
@@ -149,7 +138,7 @@ class JwtSigningKeyServiceSealingTest extends BaseUnitTest {
 
     @Test
     void prod_emptyTable_bootstrapsSealedKey() {
-        SystemSecrets sealer = systemSecrets(KEY, "prod");
+        SystemSecrets sealer = systemSecrets(KEY);
         JwtSigningKeyRepository repo = mock(JwtSigningKeyRepository.class);
         when(repo.countByActiveTrue()).thenReturn(0L);
         ArgumentCaptor<JwtSigningKey> saved = ArgumentCaptor.forClass(JwtSigningKey.class);
@@ -172,11 +161,11 @@ class JwtSigningKeyServiceSealingTest extends BaseUnitTest {
         JwtSigningKeyRepository repo = mock(JwtSigningKeyRepository.class);
         ArgumentCaptor<JwtSigningKey> saved = ArgumentCaptor.forClass(JwtSigningKey.class);
         when(repo.save(saved.capture())).thenAnswer(inv -> inv.getArgument(0));
-        SystemSecrets sealedWith = systemSecrets(KEY, "dev");
+        SystemSecrets sealedWith = systemSecrets(KEY);
         serviceWith(repo, sealedWith).ensureActiveKey();
         when(repo.findActive()).thenReturn(List.of(saved.getValue()));
         String otherKey = "fedcba9876543210fedcba9876543210";
-        SystemSecrets restored = systemSecrets(otherKey, "dev");
+        SystemSecrets restored = systemSecrets(otherKey);
 
         assertThatThrownBy(() -> serviceWith(repo, restored).verifyActiveKeysOpen())
                 .isInstanceOf(IllegalStateException.class)
@@ -192,11 +181,11 @@ class JwtSigningKeyServiceSealingTest extends BaseUnitTest {
         JwtSigningKeyRepository repo = mock(JwtSigningKeyRepository.class);
         ArgumentCaptor<JwtSigningKey> saved = ArgumentCaptor.forClass(JwtSigningKey.class);
         when(repo.save(saved.capture())).thenAnswer(inv -> inv.getArgument(0));
-        serviceWith(repo, systemSecrets(KEY, "dev")).ensureActiveKey();
+        serviceWith(repo, systemSecrets(KEY)).ensureActiveKey();
         when(repo.findActive()).thenReturn(List.of(saved.getValue()));
 
-        var rotating = serviceWith(
-                repo, TestSystemSecrets.systemSecretsWithPrior("fedcba9876543210fedcba9876543210", KEY, "dev"));
+        var rotating =
+                serviceWith(repo, TestSystemSecrets.systemSecretsWithPrior("fedcba9876543210fedcba9876543210", KEY));
 
         assertThatCode(rotating::verifyActiveKeysOpen).doesNotThrowAnyException();
     }

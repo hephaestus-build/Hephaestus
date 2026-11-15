@@ -37,4 +37,26 @@ class BuildProfileSecretsTest extends BaseUnitTest {
                     }
                 });
     }
+
+    /**
+     * A shipped profile that carried an encryption key would let a server start with a key anyone can read. Only the
+     * image build's training run gets fixture keys, and {@link CdsTrainingRunGuard} keeps that profile in that run.
+     */
+    @ParameterizedTest
+    @ValueSource(strings = {"default", "prod", "e2e", "playwright", "migrate", "erasure-recovery", "specs"})
+    void shouldShipNoEncryptionKeyInAnyRunnableProfile(String profile) {
+        new ApplicationContextRunner()
+                .withInitializer(context -> context.getEnvironment()
+                        .getPropertySources()
+                        .remove(StandardEnvironment.SYSTEM_ENVIRONMENT_PROPERTY_SOURCE_NAME))
+                .withInitializer(new ConfigDataApplicationContextInitializer())
+                .withPropertyValues("spring.config.import=", "spring.profiles.active=" + profile)
+                .run(context -> {
+                    var environment = context.getEnvironment();
+                    assertThat(environment.getProperty("hephaestus.security.encryption-key"))
+                            .isNullOrEmpty();
+                    assertThat(environment.getProperty("hephaestus.security.credential-encryption-key"))
+                            .isNullOrEmpty();
+                });
+    }
 }

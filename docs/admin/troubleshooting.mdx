@@ -54,15 +54,18 @@ The chart schema refuses an empty value, and the server does not start with a bl
 
 **Check:** The server Pod becomes ready.
 
-## Startup fails: `An encryption key is required in production`
+## Startup fails: `No system encryption key` or `No credential encryption key`
 
-**Cause:** The release Secret has no `HEPHAESTUS_SECURITY_ENCRYPTION_KEY`.
+**Cause:** The release Secret has no `HEPHAESTUS_SECURITY_ENCRYPTION_KEY` or no `HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY`.
+The server refuses to start without either key, in every profile.
 
 **Fix:**
 
-1. Restore the exact value of the key from your off-host copy, as [System key](./secret-custody#system-key) describes.
+1. Restore the exact value of the missing key from your off-host copy.
+   [Keep the required keys outside the cluster](./secret-custody#keep-the-required-keys-outside-the-cluster) describes that copy.
    Do not make a new key for an existing database.
-   The server cannot read the values that the old key sealed.
+   A new system key cannot open the values that the old key sealed.
+   A new credential key cannot open the stored credentials, so each one must be replaced, as [Credential key](./secret-custody#credential-key) describes.
 2. Restart the server, as [Restart a role](./secret-custody#restart-a-role) describes.
 
 **Check:** The server Pod becomes ready, and you can sign in.

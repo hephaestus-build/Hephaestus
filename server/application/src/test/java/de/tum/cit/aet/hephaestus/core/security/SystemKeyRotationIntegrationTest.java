@@ -27,8 +27,8 @@ class SystemKeyRotationIntegrationTest extends BaseIntegrationTest {
     private static final String ACTIVE_KEY = "test-encryption-key-32-bytes-aes";
     private static final String PRIOR_KEY = "fedcba9876543210fedcba9876543210";
 
-    private final SystemSecrets priorKeyOnly = systemSecrets(PRIOR_KEY, "test");
-    private final SystemSecrets rotating = systemSecretsWithPrior(ACTIVE_KEY, PRIOR_KEY, "test");
+    private final SystemSecrets priorKeyOnly = systemSecrets(PRIOR_KEY);
+    private final SystemSecrets rotating = systemSecretsWithPrior(ACTIVE_KEY, PRIOR_KEY);
 
     @Autowired
     private List<SystemSecretOwner> owners;

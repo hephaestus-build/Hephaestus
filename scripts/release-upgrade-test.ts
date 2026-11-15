@@ -18,6 +18,7 @@ import { researchConsentFields } from "./lib/research-consent.ts";
 const [previousImage = "", candidateImage = "", postgresImage = ""] = process.argv.slice(2);
 /** The system key of every run, the previous release's and the candidate's: one installation keeps one key. */
 const SYSTEM_KEY = "upgradeTestEncryptionKey01234567";
+const CREDENTIAL_KEY = "upgradeTestCredentialKey01234567";
 
 if (previousImage === "" || candidateImage === "" || postgresImage === "") {
 	throw new Error(
@@ -64,7 +65,11 @@ let application = `${runId}-previous`;
 function docker(...args: string[]): string {
 	const result = spawnSync("docker", args, { encoding: "utf8", maxBuffer: CAPTURE_LIMIT_BYTES });
 	if (result.status !== 0) {
-		throw new Error(`docker ${args.join(" ")} failed:\n${result.stdout}${result.stderr}`);
+		// The arguments carry the run's keys; a failure message names the variables, not the values.
+		const shown = args.map((arg) =>
+			arg.replace(/^(?<name>HEPHAESTUS_SECURITY_[A-Z_]+)=.*/u, "$<name>=<redacted>"),
+		);
+		throw new Error(`docker ${shown.join(" ")} failed:\n${result.stdout}${result.stderr}`);
 	}
 	return (args[0] === "logs" ? result.stdout + result.stderr : result.stdout).trim();
 }
@@ -106,6 +111,8 @@ function migrate(image: string, database = "hephaestus") {
 			// The migration opens the values that the previous release sealed, as the chart's migration Job does.
 			"--env",
 			`HEPHAESTUS_SECURITY_ENCRYPTION_KEY=${SYSTEM_KEY}`,
+			"--env",
+			`HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY=${CREDENTIAL_KEY}`,
 			image,
 		],
 		{ encoding: "utf8", maxBuffer: CAPTURE_LIMIT_BYTES, timeout: 600_000 },
@@ -190,6 +197,8 @@ function startApplication(
 		"HEPHAESTUS_SYNC_RUN_ON_STARTUP=false",
 		"--env",
 		`HEPHAESTUS_SECURITY_ENCRYPTION_KEY=${SYSTEM_KEY}`,
+		"--env",
+		`HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY=${CREDENTIAL_KEY}`,
 		image,
 	);
 	return publishedPort(name);

@@ -46,8 +46,7 @@ import tools.jackson.databind.ObjectMapper;
  */
 class LoginProviderServiceTest extends BaseUnitTest {
 
-    private static final SystemSecrets SECRETS =
-            TestSystemSecrets.systemSecrets("0123456789abcdef0123456789abcdef", "test");
+    private static final SystemSecrets SECRETS = TestSystemSecrets.systemSecrets("0123456789abcdef0123456789abcdef");
 
     @BeforeAll
     static void declarePublicHosts() {

@@ -16,7 +16,6 @@ import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
@@ -38,38 +37,28 @@ public class CredentialBundleConverter {
 
     private final Map<Integer, SecretKey> keys;
     private final int activeKeyVersion;
-    private final boolean enabled;
     private final ObjectMapper objectMapper;
 
     @Autowired
-    public CredentialBundleConverter(
-            SecurityProperties properties, Environment environment, ObjectMapper objectMapper) {
+    public CredentialBundleConverter(SecurityProperties properties, ObjectMapper objectMapper) {
         this(
                 properties.credentialEncryptionKey(),
                 properties.credentialEncryptionKeyVersion(),
                 properties.priorCredentialEncryptionKey(),
                 properties.priorCredentialEncryptionKeyVersion(),
-                environment.matchesProfiles("prod"),
                 objectMapper);
     }
 
-    public CredentialBundleConverter(@Nullable String encryptionKey, boolean production) {
-        this(encryptionKey, 1, null, null, production, testObjectMapper());
+    public CredentialBundleConverter(@Nullable String encryptionKey) {
+        this(encryptionKey, 1, null, null, testObjectMapper());
     }
 
     public CredentialBundleConverter(
             @Nullable String encryptionKey,
             int activeKeyVersion,
             @Nullable String priorCredentialEncryptionKey,
-            @Nullable Integer priorKeyVersion,
-            boolean production) {
-        this(
-                encryptionKey,
-                activeKeyVersion,
-                priorCredentialEncryptionKey,
-                priorKeyVersion,
-                production,
-                testObjectMapper());
+            @Nullable Integer priorKeyVersion) {
+        this(encryptionKey, activeKeyVersion, priorCredentialEncryptionKey, priorKeyVersion, testObjectMapper());
     }
 
     private CredentialBundleConverter(
@@ -77,7 +66,6 @@ public class CredentialBundleConverter {
             int activeKeyVersion,
             @Nullable String priorCredentialEncryptionKey,
             @Nullable Integer priorKeyVersion,
-            boolean production,
             ObjectMapper objectMapper) {
         if (activeKeyVersion < 1) throw new IllegalArgumentException("Active key version must be positive");
         if ((priorCredentialEncryptionKey == null) != (priorKeyVersion == null)) {
@@ -88,14 +76,12 @@ public class CredentialBundleConverter {
         }
         this.activeKeyVersion = activeKeyVersion;
         this.objectMapper = objectMapper;
+        // As for the system key: a missing key stops the start in every profile.
         if (encryptionKey == null || encryptionKey.isBlank()) {
-            if (production) {
-                throw new IllegalStateException(
-                        "A credential encryption key is required in production. Set hephaestus.security.credential-encryption-key.");
-            }
-            this.keys = Map.of();
-            this.enabled = false;
-            return;
+            throw new IllegalStateException("No credential encryption key. Set"
+                    + " hephaestus.security.credential-encryption-key (HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY),"
+                    + " as https://docs.hephaestus.build/admin/secret-custody#keep-the-required-keys-outside-the-cluster"
+                    + " describes.");
         }
         SecretKey active = parseKey(encryptionKey, "credential-encryption-key");
         this.keys = priorCredentialEncryptionKey == null
@@ -105,15 +91,10 @@ public class CredentialBundleConverter {
                         active,
                         Objects.requireNonNull(priorKeyVersion),
                         parseKey(priorCredentialEncryptionKey, "prior-credential-encryption-key"));
-        this.enabled = true;
         log.info(
                 "Enabled credential encryption: activeKeyVersion={}, priorKeyConfigured={}",
                 activeKeyVersion,
                 priorCredentialEncryptionKey != null);
-    }
-
-    public boolean isEnabled() {
-        return enabled;
     }
 
     public int activeKeyVersion() {
@@ -121,7 +102,6 @@ public class CredentialBundleConverter {
     }
 
     public byte[] encrypt(CredentialBundle bundle, EncryptionContext ctx) {
-        requireEnabled("persist");
         return encryptInternal(serialize(bundle), ctx.toAad(), activeKeyVersion);
     }
 
@@ -137,7 +117,6 @@ public class CredentialBundleConverter {
     }
 
     private CredentialBundle decrypt(byte[] dbData, EncryptionContext ctx, int keyVersion) {
-        requireEnabled("decrypt");
         byte version = versionByte(dbData);
         if (version != FORMAT_VERSION_V2) throw unsupportedVersion(version);
         return deserialize(decryptInternal(dbData, ctx.toAad(), requireKey(keyVersion)));
@@ -206,13 +185,6 @@ public class CredentialBundleConverter {
 
     private static EncryptionException unsupportedVersion(byte version) {
         return new EncryptionException("Unsupported credential blob version: 0x" + Integer.toHexString(version & 0xFF));
-    }
-
-    private void requireEnabled(String operation) {
-        if (!enabled) {
-            throw new MissingCredentialKeyException(
-                    "Credential encryption is disabled. Hephaestus cannot " + operation + " without a configured key.");
-        }
     }
 
     private byte[] serialize(CredentialBundle bundle) {
