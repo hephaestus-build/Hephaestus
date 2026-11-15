@@ -675,6 +675,7 @@ The required checks are job names, so a display name does not change them.
 | `platform-pins.yml` | PR touching platform pins or their validator | Verifies the installer checksum and the images that both upstream charts render |
 | `rescan-images.yml`                   | Daily, manual                                                                | Rescans main's published images against the release vulnerability policy and keeps one tracking issue in step with the findings. A second job rescans the latest published release's images and reports drift on the vulnerability response issue|
 | `ci-diagnostics.yml`                  | Completed CI/CD runs                                                          | Reports exact-attempt job and step timings without changing the required CI verdict                                                                                                                                              |
+| `full-integration-fork.yml` | Completed CI/CD runs of fork pull requests | From the default branch: publishes the fork run's `Report full integration` conclusion as the `Full integration` status on its head commit. Never checks out or runs fork code |
 | `scheduled-failures.yml` | Completed scheduled workflows | Notifies maintainers once per failed attempt and covers unavailable specific reporters |
 | `ci-profile.yml`                      | Weekly, manual                                                                | Reports advisory performance budgets and profiles server test tiers                                                                                                                                                              |
 | `delivery-metrics.yml`                | Weekly, manual                                                                | Reports lead time, deployment frequency, and change fail, recovery and rework proxies. See [Delivery Metrics](./delivery-metrics.mdx)                                                                                                 |
@@ -763,6 +764,7 @@ server jobs: packaging, the test classes, Spotless, PMD and a test inventory tha
 The cache keeps raw POM and module metadata with the resolved binaries.
 Consumers need those files for dependency verification, even when a warm build uses binary metadata.
 The action does not prune files after each job.
+`setup-gradle` saves and restores the configuration cache only with a Develocity server, so CI does not reuse it between jobs.
 
 A main push does not build the server, because it reuses the merge group's packaged server (§ Build once).
 Thus, without this producer, nothing would refresh the dependencies that consumers restore.
@@ -938,9 +940,15 @@ A push to an unarmed pull request keeps the fast tier.
 
 A pending or missing required status keeps a pull request out of the queue.
 Thus auto-merge enqueues a server pull request only after its armed run passed. People and the board arm a pull request as before, with no label.
-A fork's token cannot write statuses, so the job skips a fork's pull request.
-Before step 2 below, the maintainers decide how a fork's pull request meets the rule, for example through a same-repository branch.
 The job has another name than the status, because a ruleset also matches a required context against check runs.
+
+A fork's token cannot write statuses. So in a fork's run, the job runs only when it has a verdict, and it ends in that verdict.
+A fork's run has a verdict only when the run reads the default branch as the pull request's base.
+`full-integration-fork.yml` then runs from the default branch and publishes that job's conclusion on the run's head commit.
+It reads only that conclusion, for the run's latest attempt, and never checks out or runs fork code. No workflow uses `pull_request_target`.
+
+It publishes only while an open pull request from that fork branch into the default branch has that commit as its head. Another pull request can share the commit, and the verdict does not describe that other pull request's diff.
+A fork author who changes the base while the run reads the changed paths can choose the diff that decides the verdict. The merge group still runs every check, as it does for `CI Status Gate`.
 
 The rollout has two steps:
 

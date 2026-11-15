@@ -1,0 +1,96 @@
+name: CI / Full integration for forks
+
+# A fork's token cannot write statuses, so a fork pull request's own CI/CD run cannot publish the
+# required `Full integration` status. This workflow runs from the default branch when that run
+# completes, reads the conclusion of its `Report full integration` job for the exact attempt, and
+# publishes that verdict on the run's head commit while an open pull request from that fork branch
+# into the default branch has it as its head. It never checks out or runs pull-request code.
+# docs/contributor/ci-cd.mdx § Full integration at the arm point.
+
+on:
+  workflow_run: # zizmor: ignore[dangerous-triggers] Runs only the default branch's reporter; it reads one job's conclusion as data and publishes it on the run's head commit.
+    workflows: ["CI/CD"]
+    types: [completed]
+
+permissions: {}
+
+jobs:
+  report:
+    name: "Publish a fork's full integration"
+    if: >-
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.path == '.github/workflows/cicd.yml' &&
+      github.event.workflow_run.head_repository.full_name != github.repository
+    runs-on: ubuntu-slim
+    timeout-minutes: 15
+    permissions:
+      actions: read
+      pull-requests: read
+      statuses: write
+    steps:
+      - name: Create commit status
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          HEAD_REPOSITORY: ${{ github.event.workflow_run.head_repository.full_name }}
+          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          RUN_URL: ${{ github.event.workflow_run.html_url }}
+        with:
+          retries: 3
+          script: |
+            const { RUN_ID, RUN_ATTEMPT, HEAD_SHA, HEAD_REPOSITORY, HEAD_BRANCH, DEFAULT_BRANCH, RUN_URL } =
+              process.env;
+            // A verdict belongs to a fork pull request into the default branch whose head is this commit:
+            // the same commit can head another pull request, whose diff the verdict does not describe.
+            const owner = HEAD_REPOSITORY.split('/')[0];
+            const { data: pulls } = await github.rest.pulls.list({
+              ...context.repo,
+              state: 'open',
+              head: `${owner}:${HEAD_BRANCH}`,
+              per_page: 100,
+            });
+            const bound = pulls.some(
+              (pull) =>
+                pull.head.sha === HEAD_SHA &&
+                pull.head.repo?.full_name === HEAD_REPOSITORY &&
+                pull.base.ref === DEFAULT_BRANCH,
+            );
+            if (!bound) {
+              core.info(`No open pull request from ${HEAD_REPOSITORY}:${HEAD_BRANCH} into ${DEFAULT_BRANCH} has head ${HEAD_SHA}`);
+              return;
+            }
+            // A later attempt of the same run decides instead.
+            const { data: run } = await github.rest.actions.getWorkflowRun({ ...context.repo, run_id: Number(RUN_ID) });
+            if (run.run_attempt !== Number(RUN_ATTEMPT)) {
+              core.info(`Attempt ${RUN_ATTEMPT} is not the run's latest (${String(run.run_attempt)})`);
+              return;
+            }
+            const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRunAttempt, {
+              ...context.repo,
+              run_id: Number(RUN_ID),
+              attempt_number: Number(RUN_ATTEMPT),
+              per_page: 100,
+            });
+            // The fork's run decides the verdict: that job runs only when it has one, and ends in it.
+            const reporter = jobs.find((job) => job.name === 'Report full integration');
+            const verdicts = {
+              success: ['success', 'The pull request passed full integration'],
+              failure: ['failure', 'The pull request failed full integration'],
+            };
+            const verdict = verdicts[reporter?.conclusion];
+            if (verdict === undefined) {
+              core.info(`Report full integration ended ${reporter?.conclusion ?? 'absent'}: no verdict to publish`);
+              return;
+            }
+            const [state, description] = verdict;
+            await github.rest.repos.createCommitStatus({
+              ...context.repo,
+              sha: HEAD_SHA,
+              state,
+              description,
+              target_url: RUN_URL,
+              context: 'Full integration',
+            });
