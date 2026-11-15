@@ -9,6 +9,7 @@
 | `server.inboxClaimers` | integer | `8` | yes | `minimum: 0` |
 | `server.jvm.headRoomPercent` | integer | `15` | yes | The percent of the server's memory limit that the buildpack's memory calculator keeps out of the JVM's budget, for native memory that it does not count (BPL_JVM_HEAD_ROOM).<br />`minimum: 0. maximum: 50` |
 | `server.jvm.threadCount` | integer | `200` | yes | The threads whose stacks the buildpack's memory calculator reserves before it sizes the heap (BPL_JVM_THREAD_COUNT).<br />`minimum: 1` |
+| `server.modelOutageWindowSeconds` | integer | `7200` |  | Whole seconds from a review's submission that it waits through a model provider outage or rate limit without spending a retry.<br />`minimum: 0. maximum: 604800` |
 | `server.replicas` | integer | `2` | yes | Number of servers. It also sizes PostgreSQL's connections, so stop the servers with server.stopped, not with 0.<br />`minimum: 0` |
 | `server.resources.limits.cpu` | string | `"4"` | yes | Positive CPU as a Kubernetes Quantity. 1000m is one CPU.<br />`pattern: "^(?:[1-9][0-9]*(?:\\.[0-9]+)?\|0\\.[0-9]*[1-9][0-9]*)(?:m\|k\|M\|G\|T\|P\|E\|Ki\|Mi\|Gi\|Ti\|Pi\|Ei)?$"` |
 | `server.resources.limits.ephemeral-storage` | string | `"72Gi"` | yes | Positive memory or storage as a Kubernetes Quantity, such as Mi or Gi.<br />`pattern: "^(?:[1-9][0-9]*(?:\\.[0-9]+)?\|0\\.[0-9]*[1-9][0-9]*)(?:m\|k\|M\|G\|T\|P\|E\|Ki\|Mi\|Gi\|Ti\|Pi\|Ei)?$"` |
