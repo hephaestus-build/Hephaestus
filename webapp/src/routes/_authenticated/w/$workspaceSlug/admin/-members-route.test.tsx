@@ -1,3 +1,4 @@
+import { QueryClient } from "@tanstack/react-query";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
@@ -13,6 +14,7 @@ import { problemType } from "@/lib/problem-detail";
 import { currentUser } from "@/mocks/fixtures/auth";
 import { ownMembership, workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
+import { QUERY_STALE_TIME_MS } from "@/runtime/tanstack-query/query-defaults";
 import { deferred } from "@/test/async";
 import {
 	ROUTE_RENDER_WAIT,
@@ -740,7 +742,13 @@ it("renders the verified nonmember target's members without adding that target t
 			return HttpResponse.json(membershipPage([SAM]));
 		}),
 	);
-	const { router } = renderRouteAtWithRouter("/w/tutors/admin/members");
+	// The app's freshness: the page reuses the rows its loader read instead of reading them again.
+	const { router } = renderRouteAtWithRouter(
+		"/w/tutors/admin/members",
+		new QueryClient({
+			defaultOptions: { queries: { retry: false, staleTime: QUERY_STALE_TIME_MS } },
+		}),
+	);
 	await screen.findByText("Sam Unclaimed", { selector: "div" }, ROUTE_RENDER_WAIT);
 	expect(router.state.location.pathname).toBe("/w/tutors/admin/members");
 	screen.getByText("Tutors administration");

@@ -323,7 +323,10 @@ describe("Practices across the workspace", () => {
 		});
 
 		await act(async () => {
-			await router.navigate({ to: PAGE });
+			await router.navigate({
+				to: "/w/$workspaceSlug/practices-across-the-workspace",
+				params: { workspaceSlug: "acme" },
+			});
 		});
 		screen.getByRole("button", { name: "Open group Packaging work for review" });
 		expect(overviewReads()).toHaveLength(1);
