@@ -1,4 +1,4 @@
-# ADR 0109: The docs site is a static Fumadocs build on Astro
+# ADR 0111: The docs site is a static Fumadocs build on Astro
 
 **Status:** Proposed
 **Date:** 2026-11-15

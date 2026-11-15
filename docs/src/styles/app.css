@@ -1,7 +1,7 @@
 @import "tailwindcss";
 @import "fumadocs-ui/css/shadcn.css";
 @import "fumadocs-ui/css/preset.css";
-/* The web app's palette, radius and dark mode: one file for the product and its docs (ADR 0109). */
+/* The web app's palette, radius and dark mode: one file for the product and its docs (ADR 0111). */
 @import "../../../webapp/src/styles/theme-tokens.css";
 
 /* The docs accent is the app's highlight blue, as the app uses it for links and the active item. */

@@ -149,7 +149,7 @@
 			"groupName": "Hey API"
 		},
 		{
-			"description": "The docs site runs on 0.x packages whose Markdown compiler can change between minor releases (ADR 0109), so each one moves in its own pull request",
+			"description": "The docs site runs on 0.x packages whose Markdown compiler can change between minor releases (ADR 0111), so each one moves in its own pull request",
 			"matchManagers": ["npm"],
 			"matchFileNames": ["docs/package.json"],
 			"matchPackageNames": ["@fumadocs/astro", "@fumadocs/satteri", "satteri", "@astrojs/markdown-satteri"],

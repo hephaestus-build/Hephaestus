@@ -4,7 +4,7 @@
 
 **Live Site:** [https://docs.hephaestus.build/](https://docs.hephaestus.build/)
 
-The site is [Fumadocs](https://fumadocs.dev/) on [Astro](https://astro.build/), built to static HTML ([ADR 0109](decisions/0109-the-docs-site-is-a-static-fumadocs-build-on-astro.md)).
+The site is [Fumadocs](https://fumadocs.dev/) on [Astro](https://astro.build/), built to static HTML ([ADR 0111](decisions/0111-the-docs-site-is-a-static-fumadocs-build-on-astro.md)).
 `astro.config.ts` configures the build and the Markdown plugins, `src/content.config.ts` the content collections, and `src/` holds the pages, layouts and components.
 `vite.config.ts` holds only the lint configuration for `vp lint`.
 

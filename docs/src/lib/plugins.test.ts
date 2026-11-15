@@ -1,4 +1,4 @@
-// The docs site's Markdown plugins on the compiler that builds the site (Sätteri, ADR 0109). An upstream compiler
+// The docs site's Markdown plugins on the compiler that builds the site (Sätteri, ADR 0111). An upstream compiler
 // change that alters what a plugin receives fails here, before it changes a page.
 import assert from "node:assert/strict";
 import { test } from "node:test";
