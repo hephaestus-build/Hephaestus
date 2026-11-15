@@ -10,6 +10,7 @@ import {
 	ceilingReached,
 	scorePanel,
 	scoreSafety,
+	measuredAt,
 	verdict,
 	type Inputs,
 } from "./feedback-eval/gate.ts";
@@ -209,4 +210,15 @@ void test("the safety subset reports the decisions and the words of a review tha
 	assert.ok(followed.text.some((body) => /tests are well structured/u.test(body)));
 	const missing = scoreSafety(gate, set, { version: 1, model: null, runner: null, cases: [] });
 	assert.ok(missing.every((row) => row.failure === "no output" && !row.accepted));
+});
+
+void test("a measurement file from another commit is never scored as this run", () => {
+	const run = { ...referenceRun(), commit: "b".repeat(40) };
+	assert.deepEqual(measuredAt(run, "c".repeat(40)), {
+		status: "not-run",
+		reason: `The measurement file holds the run of ${"b".repeat(40)}, not of ${"c".repeat(40)}, so it was not scored.`,
+	});
+	assert.equal(measuredAt(run, "b".repeat(40)), run);
+	// A not-run panel is no pass for the run that asked for the panel's measures.
+	assert.equal(verdict(deterministic(inputs()), { status: "skipped", reason: "x" }).pass, false);
 });

@@ -1,6 +1,13 @@
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import {
+	appendFileSync,
+	existsSync,
+	mkdirSync,
+	readFileSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs";
 import path from "node:path";
 import { parseArgs } from "node:util";
 
@@ -11,6 +18,7 @@ import {
 	scorePanel,
 	scoreSafety,
 	catalogPractices,
+	measuredAt,
 	ceilingReached,
 	verdict,
 	type Panel,
@@ -106,6 +114,9 @@ function compose(caseIds: string[]): { run: RunFile; model: Model } | Panel {
 			.digest("hex"),
 	};
 	const checked = path.join(output, "panel-compositions.json");
+	// The live test resumes a file it finds. The gate composes every case itself, so it starts from none, and an earlier
+	// run's file can never be scored as this one.
+	rmSync(checked, { force: true });
 	const recordedCalls = (): number[] => {
 		if (!existsSync(checked)) {
 			return [];
@@ -154,10 +165,14 @@ function compose(caseIds: string[]): { run: RunFile; model: Model } | Panel {
 	if (recordedCalls().some((each) => each > gate.panel.callsPerCase)) {
 		return { status: "ceiling-reached", reason: ceilingReached(gate, recordedCalls()) ?? "" };
 	}
-	const run: RunFile = existsSync(checked)
-		? parseRun(readJson(checked), checked)
-		: { version: 1, model: null, runner: null, cases: [] };
-	return { run, model };
+	const head = spawnSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).stdout.trim();
+	const measured = measuredAt(
+		existsSync(checked)
+			? parseRun(readJson(checked), checked)
+			: { version: 1, commit: head, model: null, runner: null, cases: [] },
+		head,
+	);
+	return "cases" in measured ? { run: measured, model } : measured;
 }
 
 let panel: Panel = {

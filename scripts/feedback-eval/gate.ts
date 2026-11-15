@@ -449,6 +449,19 @@ export function scoreSafety(
 	});
 }
 
+/**
+ * The run file holds this commit's measurement, or why it cannot be scored. A file left by an earlier run, of another
+ * commit, would otherwise be scored as this one.
+ */
+export function measuredAt(run: RunFile, commit: string): RunFile | Panel {
+	return run.commit === commit
+		? run
+		: {
+				status: "not-run",
+				reason: `The measurement file holds the run of ${run.commit ?? "an unknown commit"}, not of ${commit}, so it was not scored.`,
+			};
+}
+
 /** The job's verdict. A skipped panel is not a pass: the run that asked for it fails with the reason. */
 export function verdict(checks: Check[], panel: Panel) {
 	if (checks.some((check) => check.problems.length > 0)) {

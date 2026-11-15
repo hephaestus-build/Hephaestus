@@ -127,15 +127,20 @@ async function artifactOf(github: GitHub, repo: Repo, night: Night): Promise<str
 	if (night.artifactUrl !== "") {
 		return night.artifactUrl;
 	}
-	const artifacts = await github.paginate(github.rest.actions.listWorkflowRunArtifacts, {
-		...repo,
-		run_id: night.runId,
-		per_page: 100,
-	});
-	const kept = artifacts.map(record).find((artifact) => artifact.name === "feedback-eval-panel");
-	return typeof kept?.id === "number"
-		? `${night.runUrl}/artifacts/${kept.id}`
-		: "no artifact was kept";
+	try {
+		const artifacts = await github.paginate(github.rest.actions.listWorkflowRunArtifacts, {
+			...repo,
+			run_id: night.runId,
+			per_page: 100,
+		});
+		const kept = artifacts.map(record).find((artifact) => artifact.name === "feedback-eval-panel");
+		return typeof kept?.id === "number"
+			? `${night.runUrl}/artifacts/${kept.id}`
+			: "no artifact was kept";
+	} catch {
+		// The report must still post. The error text can carry request details, so it stays out.
+		return "the artifact lookup failed; see the run";
+	}
 }
 
 async function range(github: GitHub, repo: Repo, night: Night): Promise<string> {
@@ -229,19 +234,23 @@ export async function reportNight(
 ): Promise<"closed" | "commented" | "created" | "unchanged"> {
 	const [open] = await panelIssues(github, repo, { state: "open" });
 	const number = typeof open?.number === "number" ? open.number : null;
+	// A rerun of an older green night says nothing about a failure that a later night reported.
+	const openedLater =
+		typeof open?.created_at === "string" && Date.parse(open.created_at) > Date.parse(night.date);
+	const passed = night.result === "success" && night.status === "passed";
 	const marker = `<!-- run:${night.runId}:${night.attempt} -->`;
 	const told = await alreadyTold(github, repo, night, marker);
 	if (told === true) {
 		// A replay after a failed close finds its own comment and only closes.
-		if (night.result === "success" && night.status === "passed" && number !== null) {
+		if (passed && number !== null && !openedLater) {
 			await github.rest.issues.update({ ...repo, issue_number: number, state: "closed" });
 			return "closed";
 		}
 		return "unchanged";
 	}
 	const note = told === false ? [] : ["", unchecked(told.failure)];
-	if (night.result === "success" && night.status === "passed") {
-		if (number === null) {
+	if (passed) {
+		if (number === null || openedLater) {
 			return "unchanged";
 		}
 		await github.rest.issues.createComment({

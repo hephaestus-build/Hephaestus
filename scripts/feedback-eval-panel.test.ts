@@ -21,10 +21,18 @@ const repo = { owner: "owner", repo: "repo" };
 interface Fixture {
 	caches?: { key: string; created_at: string; ref: string }[];
 	cacheError?: number | Error;
-	issues?: { number: number; title: string; state: string; updated_at?: string; body?: string }[];
+	issues?: {
+		number: number;
+		title: string;
+		state: string;
+		updated_at?: string;
+		created_at?: string;
+		body?: string;
+	}[];
 	comments?: Record<number, { user: { login: string }; body: string }[]>;
 	commentErrors?: number[];
 	artifacts?: object[];
+	artifactError?: boolean;
 }
 
 /** A client over a fixed repository state, which filters caches by ref as the REST API does, and records writes. */
@@ -35,6 +43,7 @@ function client({
 	comments = {},
 	commentErrors = [],
 	artifacts = [],
+	artifactError = false,
 }: Fixture) {
 	const writes: { kind: string; input: Record<string, unknown> }[] = [];
 	const cacheQueries: Record<string, unknown>[] = [];
@@ -67,6 +76,9 @@ function client({
 				return comments[Number(input.issue_number)] ?? [];
 			}
 			assert.equal(endpoint, listWorkflowRunArtifacts);
+			if (artifactError) {
+				throw new Error("request to https://api.github.com/secret-path failed");
+			}
 			return artifacts;
 		},
 		rest: {
@@ -397,4 +409,29 @@ void test("a secret reaches a step only through its environment", async () => {
 	for (const reference of references) {
 		assert.match(reference, /^\$\{\{ secrets\.CI_LLM_\w+(?: != '')? \}\}$/u, reference);
 	}
+});
+
+void test("a failed artifact lookup still posts the night's report, without the error text", async () => {
+	const { github, written } = client({ artifactError: true });
+	assert.equal(await reportNight(github, repo, night("success", "failed", "")), "created");
+	const [created] = written();
+	assert.match(bodyOf(created), /Result: the artifact lookup failed; see the run/u);
+	assert.doesNotMatch(bodyOf(created), /secret-path/u);
+});
+
+void test("a green rerun of an older night leaves open an issue that a later night opened", async () => {
+	// The issue was opened after this night started, by a later night that failed.
+	const issues = [
+		{ number: 7, title: ISSUE_TITLE, state: "open", created_at: "2026-11-21T03:50:00Z" },
+	];
+	const fresh = client({ issues });
+	assert.equal(await reportNight(fresh.github, repo, night("success", "passed")), "unchanged");
+	assert.deepEqual(fresh.written(), []);
+	// Nor does a replay that finds its own marker close it.
+	const replay = client({
+		issues,
+		comments: { 7: [{ user: { login: "github-actions[bot]" }, body: "<!-- run:99:1 -->" }] },
+	});
+	assert.equal(await reportNight(replay.github, repo, night("success", "passed")), "unchanged");
+	assert.deepEqual(replay.written(), []);
 });
