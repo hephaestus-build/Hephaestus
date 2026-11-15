@@ -5,9 +5,10 @@
  *
  *   QUAL_STAGING_EXEC="ssh <host>" node scripts/qual-staging-hold.ts -- node scripts/qual-bench.ts --target staging …
  */
-import { execFileSync, spawn } from "node:child_process";
+import { spawn } from "node:child_process";
 import { setTimeout as sleep } from "node:timers/promises";
 
+import { output } from "./lib/process.ts";
 import { json, onStaging, path2, str } from "./lib/qual-cluster.ts";
 import { hold } from "./lib/qual-hold.ts";
 
@@ -21,8 +22,7 @@ if (program === undefined) {
 	throw new Error("usage: node scripts/qual-staging-hold.ts -- <command> [args…]");
 }
 
-const gh = (ghArgs: string[]): string =>
-	execFileSync("gh", [...ghArgs, "-R", REPOSITORY], { encoding: "utf8" });
+const gh = async (ghArgs: string[]): Promise<string> => output("gh", [...ghArgs, "-R", REPOSITORY]);
 
 async function applied(): Promise<string> {
 	const result = await onStaging("sudo cat /var/lib/hephaestus/applied.json", {
@@ -49,7 +49,7 @@ function findRun(runs: unknown, commit: string, idOrSince: string | number): unk
 
 async function promote(commit: string, freeze: boolean): Promise<string> {
 	const since = Date.now() - 5000;
-	gh([
+	await gh([
 		"workflow",
 		"run",
 		"promote.yml",
@@ -67,7 +67,7 @@ async function promote(commit: string, freeze: boolean): Promise<string> {
 	while (Date.now() < deadline) {
 		await sleep(POLL_MS);
 		const runs = json(
-			gh([
+			await gh([
 				"run",
 				"list",
 				"--workflow",
