@@ -71,12 +71,12 @@ Without it, workspaces mirror collections, but Hephaestus cannot match a documen
    An origin has no path, query, fragment or user name.
    An origin on a private or site-local address is refused.
    The server does not start with an entry that is not valid.
+   While `config.outline.enabled` is `false`, the Outline page of each workspace says that Outline is not enabled on this instance.
 
 4. Apply `site.yaml`.
    On a cluster, run the `helm upgrade` command of [Install](./kubernetes#install) again.
    On one host, run the installer again ([Run the installer](./k3s#2-run-the-installer)).
 
-While `config.outline.enabled` is `false`, the Outline page of each workspace says that Outline is not enabled on this instance.
 At its next start, the server creates the Outline login provider if it does not exist.
 If `oauthBaseUrl` is empty or not valid, the server logs the reason at `ERROR` and creates no provider.
 After that, the server ignores the client ID and secret of the chart.

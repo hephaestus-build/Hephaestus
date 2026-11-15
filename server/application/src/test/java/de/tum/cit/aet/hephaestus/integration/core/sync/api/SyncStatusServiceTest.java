@@ -403,7 +403,8 @@ class SyncStatusServiceTest extends BaseUnitTest {
                 taskExecutor,
                 List.of(githubProvider),
                 List.of(),
-                mock(SyncTargetProvider.class));
+                mock(SyncTargetProvider.class),
+                List.of());
 
         assertThat(noRunners.getStatus(WORKSPACE_ID, CONNECTION_ID).backfillSupported())
                 .isFalse();
@@ -428,7 +429,8 @@ class SyncStatusServiceTest extends BaseUnitTest {
                 taskExecutor,
                 List.of(githubProvider),
                 List.of(),
-                mock(SyncTargetProvider.class));
+                mock(SyncTargetProvider.class),
+                List.of());
 
         assertThatThrownBy(() -> noRunners.triggerSync(WORKSPACE_ID, CONNECTION_ID, SyncJobType.RECONCILIATION, null))
                 .isInstanceOf(SyncNotSupportedException.class);
