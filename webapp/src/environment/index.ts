@@ -22,7 +22,6 @@ interface RuntimeEnvVars {
 	HEPHAESTUS_WORKSPACE_SUBDOMAINS_BASE_DOMAIN?: string;
 	XSRF_COOKIE_NAME?: string;
 	DEPLOYMENT_ENVIRONMENT?: string;
-	TANSTACK_DEVTOOLS_ENABLED?: string;
 	GIT_BRANCH?: string;
 	GIT_COMMIT?: string;
 	DEPLOYED_AT?: string;
@@ -47,7 +46,6 @@ const defaults: RuntimeEnvVars = {
 		: `${window.location.origin}/api`,
 	XSRF_COOKIE_NAME: SECURE_XSRF_COOKIE_NAME,
 	DEPLOYMENT_ENVIRONMENT: import.meta.env.DEV ? "local" : "unknown",
-	TANSTACK_DEVTOOLS_ENABLED: import.meta.env.DEV ? "true" : "false",
 	GIT_BRANCH: "",
 	GIT_COMMIT: "",
 	DEPLOYED_AT: "",
@@ -113,10 +111,6 @@ const environment = {
 		branch: env("GIT_BRANCH"),
 		commit: env("GIT_COMMIT"),
 		deployedAt: env("DEPLOYED_AT"),
-	},
-
-	devtools: {
-		tanstack: env("TANSTACK_DEVTOOLS_ENABLED") === "true",
 	},
 
 	/** The operator's switch for browser fault reports. Anonymous pages read it here, not from the reader's flags. */

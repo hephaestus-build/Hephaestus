@@ -88,7 +88,6 @@ describe("runtime configuration defaults", () => {
 		expect(environment.serverUrl).toBe(`${window.location.origin}/api`);
 		expect(environment.deployment.environment).toBe("unknown");
 		expect(environment.deployment.name).toBe("Unknown");
-		expect(environment.devtools.tanstack).toBe(false);
 	});
 
 	it("uses the explicit runtime URLs when the script is available", async () => {
@@ -108,6 +107,5 @@ describe("runtime configuration defaults", () => {
 		const environment = await environmentFor(undefined);
 		expect(environment.clientUrl).toBe("http://localhost:4200");
 		expect(environment.serverUrl).toBe("http://localhost:8080");
-		expect(environment.devtools.tanstack).toBe(true);
 	});
 });

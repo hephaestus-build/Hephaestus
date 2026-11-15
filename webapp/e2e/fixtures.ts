@@ -10,7 +10,6 @@ async function serveEnvConfig(context: BrowserContext): Promise<void> {
 				APPLICATION_SERVER_URL: E2E_SERVER_URL,
 				APPLICATION_CLIENT_URL: E2E_BASE_URL,
 				XSRF_COOKIE_NAME: "XSRF-TOKEN",
-				TANSTACK_DEVTOOLS_ENABLED: "false",
 			})};`,
 		}),
 	);
