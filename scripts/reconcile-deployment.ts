@@ -1071,9 +1071,9 @@ function matchesChartValues(
  * `server.stopped` states it there, and `server.replicas` stays the capacity. `helm get values --all`
  * includes the chart's defaults, so the key is present whenever the installed chart has it.
  *
- * A chart without the key (1.0.0-rc.8 and earlier) stopped the servers with `server.replicas: 0`. That
- * fallback serves the one transition from such a chart. Remove it in the first release after the one
- * that ships `server.stopped`: no supported source chart then lacks the key.
+ * A chart without the key (1.0.0-rc.8 and earlier) stops the servers with `server.replicas: 0`. This
+ * tooling meets such a chart only when an operator installed it by hand on that host
+ * (docs/admin/pull-based-deployment.mdx § Install newer reconciler tooling).
  */
 export function writersStopped(server: Readonly<Record<string, unknown>>): boolean {
 	if ("stopped" in server) {

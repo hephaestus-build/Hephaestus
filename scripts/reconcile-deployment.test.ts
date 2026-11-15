@@ -733,6 +733,7 @@ await test("a stopped upgrade reads server.stopped, and replicas only from a cha
 	assert.equal(writersStopped({ replicas: 0, stopped: false }), false);
 	assert.equal(writersStopped({ replicas: 0 }), true);
 	assert.equal(writersStopped({ replicas: 1 }), false);
+	assert.equal(writersStopped({ replicas: 0, stopped: null }), false);
 });
 
 await test("a host on a release candidate stops for its major's stable release", () => {
