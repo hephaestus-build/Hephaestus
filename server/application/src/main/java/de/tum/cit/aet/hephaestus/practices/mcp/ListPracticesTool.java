@@ -73,11 +73,9 @@ class ListPracticesTool implements McpTool {
         this.practices = practices;
         this.presenter = presenter;
         var mapper = new JacksonMcpJsonMapper(jsonMapper);
-        this.definition = McpSchema.Tool.builder()
-                .name("list_practices")
+        this.definition = McpSchema.Tool.builder("list_practices", mapper, INPUT_SCHEMA)
                 .title("List workspace practices")
                 .description("Lists the practices of this workspace with their version, group, reviewer and feedback mode.")
-                .inputSchema(mapper, INPUT_SCHEMA)
                 .outputSchema(mapper, OUTPUT_SCHEMA)
                 .annotations(new McpSchema.ToolAnnotations(null, true, false, true, false, null))
                 .build();
