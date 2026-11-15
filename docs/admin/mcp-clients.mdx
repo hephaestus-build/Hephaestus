@@ -77,6 +77,7 @@ A demotion or removal from the workspace takes effect on the client's next call.
 Calls to a workspace MCP endpoint share one budget for each account: 120 calls a minute.
 The sign-in endpoints share the budgets of web sign-in and of installed clients.
 Each replica keeps its own budget, so the real limit is the replica count times this number.
+These budgets are fixed and have no chart value. They stop a runaway client. An agent that configures practices stays far below them.
 
 ## Check that it worked
 
