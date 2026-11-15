@@ -23,6 +23,7 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceScopeFilter;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceService;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceSummaryQuery;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
@@ -79,6 +80,9 @@ class GitHubPurgedWorkspaceIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private WorkspaceRepository workspaceRepository;
+
+    @Autowired
+    private WorkspaceSummaryQuery workspaceStates;
 
     @Autowired
     private GitHubLifecycleListener lifecycleListener;
@@ -258,7 +262,7 @@ class GitHubPurgedWorkspaceIntegrationTest extends BaseIntegrationTest {
         return new GitHubInstallationReconciler(
                 tokens,
                 lifecycleListener,
-                workspaceRepository,
+                workspaceStates,
                 workspaceService,
                 scopeFilter,
                 installationRequests,

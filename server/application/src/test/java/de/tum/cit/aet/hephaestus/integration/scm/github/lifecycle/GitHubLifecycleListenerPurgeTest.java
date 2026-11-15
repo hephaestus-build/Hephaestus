@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -27,6 +28,7 @@ import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceLifecycleService;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceStatusFixture;
+import de.tum.cit.aet.hephaestus.workspace.adapter.WorkspaceRootsAdapter;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -67,13 +69,15 @@ class GitHubLifecycleListenerPurgeTest extends BaseUnitTest {
 
     @BeforeEach
     void setUp() {
+        var roots = new WorkspaceRootsAdapter(workspaceRepository, mock());
         listener = new GitHubLifecycleListener(
-                workspaceRepository,
+                roots,
+                roots,
+                mock(),
                 mock(),
                 repositoryRepository,
                 mock(),
                 identityProviders,
-                mock(),
                 mock(),
                 mock(),
                 gitHubAppTokenService,
@@ -93,7 +97,7 @@ class GitHubLifecycleListenerPurgeTest extends BaseUnitTest {
         Workspace workspace = workspace(11L, "acme");
         boolean resume = status == Workspace.WorkspaceStatus.ACTIVE;
         if (resume) workspace.suspend();
-        when(workspaceRepository.findByInstallationIdForUpdate(INSTALLATION_ID)).thenReturn(Optional.of(workspace));
+        locked(workspace);
         when(workspaceRepository.save(workspace)).thenReturn(workspace);
 
         assertThat(
@@ -110,7 +114,7 @@ class GitHubLifecycleListenerPurgeTest extends BaseUnitTest {
     void purgeWorkspaceForInstallation_delegatesToWorkspaceLifecycleService() {
         Workspace workspace = workspace(11L, "acme");
         IntegrationRef ref = new IntegrationRef(IntegrationKind.GITHUB, 11L, Long.toString(INSTALLATION_ID));
-        when(workspaceRepository.findByInstallationIdForUpdate(INSTALLATION_ID)).thenReturn(Optional.of(workspace));
+        locked(workspace);
         when(connectionService.findReferenced(ref)).thenReturn(Optional.of(connection));
         when(workspaceLifecycleService.purgeWorkspace("acme")).thenReturn(workspace);
 
@@ -124,7 +128,7 @@ class GitHubLifecycleListenerPurgeTest extends BaseUnitTest {
     @DisplayName("the SPI uninstall hook purges rather than flipping a status")
     void onInstanceUninstalled_purgesTheWorkspace() {
         Workspace workspace = workspace(11L, "acme");
-        when(workspaceRepository.findByInstallationIdForUpdate(INSTALLATION_ID)).thenReturn(Optional.of(workspace));
+        locked(workspace);
         when(workspaceLifecycleService.purgeWorkspace("acme")).thenReturn(workspace);
 
         listener.onInstanceUninstalled(new IntegrationRef(IntegrationKind.GITHUB, 11L, Long.toString(INSTALLATION_ID)));
@@ -146,7 +150,7 @@ class GitHubLifecycleListenerPurgeTest extends BaseUnitTest {
     void installationEventsCannotReactivateAPurgedWorkspace() {
         Workspace workspace = workspace(11L, "acme");
         WorkspaceStatusFixture.markPurged(workspace);
-        when(workspaceRepository.findByInstallationIdForUpdate(INSTALLATION_ID)).thenReturn(Optional.of(workspace));
+        locked(workspace);
 
         Workspace result = listener.createOrUpdateFromInstallation(
                 INSTALLATION_ID, 99L, "acme", AccountKind.ORGANIZATION, null, RepositorySelection.ALL);
@@ -178,7 +182,7 @@ class GitHubLifecycleListenerPurgeTest extends BaseUnitTest {
     void statusEventsCannotReactivateAPurgedWorkspace() {
         Workspace workspace = workspace(11L, "acme");
         WorkspaceStatusFixture.markPurged(workspace);
-        when(workspaceRepository.findByInstallationIdForUpdate(INSTALLATION_ID)).thenReturn(Optional.of(workspace));
+        locked(workspace);
 
         assertThat(listener.resumeForInstallation(INSTALLATION_ID)).contains(workspace);
         assertThat(listener.suspendForInstallation(INSTALLATION_ID)).contains(workspace);
@@ -192,7 +196,7 @@ class GitHubLifecycleListenerPurgeTest extends BaseUnitTest {
         Workspace workspace = workspace(11L, "acme");
         WorkspaceStatusFixture.markPurged(workspace);
         workspace.setRepositorySelection(RepositorySelection.SELECTED);
-        when(workspaceRepository.findByInstallationIdForUpdate(INSTALLATION_ID)).thenReturn(Optional.of(workspace));
+        locked(workspace);
 
         assertThat(listener.updateRepositorySelection(INSTALLATION_ID, RepositorySelection.ALL))
                 .isEmpty();
@@ -206,7 +210,7 @@ class GitHubLifecycleListenerPurgeTest extends BaseUnitTest {
         Workspace workspace = workspace(11L, "acme");
         WorkspaceStatusFixture.markPurged(workspace);
         workspace.setAccountLogin("acme");
-        when(workspaceRepository.findByInstallationIdForUpdate(INSTALLATION_ID)).thenReturn(Optional.of(workspace));
+        locked(workspace);
 
         listener.handleAccountRename(INSTALLATION_ID, "acme", "renamed");
 
@@ -219,7 +223,7 @@ class GitHubLifecycleListenerPurgeTest extends BaseUnitTest {
         Workspace workspace = workspace(11L, "acme");
         workspace.resume();
         workspace.setAccountLogin("acme");
-        when(workspaceRepository.findByInstallationIdForUpdate(INSTALLATION_ID)).thenReturn(Optional.of(workspace));
+        locked(workspace);
         when(identityProviders.findId(IdentityProviderType.GITHUB, PersonSourceNamespace.GITHUB_DEFAULT_URL))
                 .thenReturn(Optional.empty());
 
@@ -234,13 +238,19 @@ class GitHubLifecycleListenerPurgeTest extends BaseUnitTest {
     void activationStillResumesALockedSuspendedWorkspace() {
         Workspace workspace = workspace(11L, "acme");
         workspace.suspend();
-        when(workspaceRepository.findByInstallationIdForUpdate(INSTALLATION_ID)).thenReturn(Optional.of(workspace));
+        locked(workspace);
         when(workspaceRepository.save(workspace)).thenReturn(workspace);
 
         assertThat(listener.resumeForInstallation(INSTALLATION_ID)).contains(workspace);
 
         assertThat(workspace.getStatus()).isEqualTo(Workspace.WorkspaceStatus.ACTIVE);
         verify(workspaceRepository).findByInstallationIdForUpdate(INSTALLATION_ID);
+    }
+
+    /** The installation's workspace, as the adapter's locking reads return it. */
+    private void locked(Workspace workspace) {
+        when(workspaceRepository.findByInstallationIdForUpdate(INSTALLATION_ID)).thenReturn(Optional.of(workspace));
+        lenient().when(workspaceRepository.findByIdForUpdate(workspace.getId())).thenReturn(Optional.of(workspace));
     }
 
     private static Workspace workspace(long id, String slug) {
