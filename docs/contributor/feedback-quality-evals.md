@@ -287,12 +287,9 @@ The IDs stay stable: G1 and G4 pinned case and prompt digests and were removed.
 | --- | --- |
 | G2 | The composition set or the claim corpus does not parse. Or the panel or the safety subset names a case that the composition set does not hold. |
 | G3 | A quote check does not match, or an absence check finds its text and the claim label is not `false`. |
-| G5 | An automated practice has no Applicability section in its criteria and no Applies when gate. |
+| G5 | An automated practice has no Applicability section in its criteria. An Applies when gate or a scan section does not replace it. |
 | G6 | A bundled practice script gives other leads than its snapshot in `docker/agents/practice-scripts/corpus/snapshots/`. |
 | G7 | The panel's cases times the calls for each case permit more model calls than the panel's ceiling. |
-
-G5 keeps a list of known gaps: automated practices without an Applicability section or an Applies when gate.
-The check also fails when a listed practice gets one. Then remove it from the list.
 
 G6 runs `docker/agents/practice-scripts/corpus.test.ts`. Each bundled script runs over the authored corpus, without a model.
 A practice script is deterministic, and its leads are the product's output, so its snapshot is a legitimate golden.
