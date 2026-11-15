@@ -89,7 +89,7 @@ The rows below are what 1.0.0 adds. "Main" is a note in `.migration/` on `main`.
 | The server serves the web app (ADR 0100) | Remove `webapp.*`. The web app image, the Gateway `/api` rewrite and `hephaestus.auth.api-base-path` go. | Decided, not shipped. No pull request delivers it yet. |
 | No deletion cooldown | Remove `hephaestus.auth.delete-cooldown`. After a recent sign-in, an account is purged at once. | Decided, not shipped. No pull request delivers it yet. |
 | No `preview` chart profile | Remove `profiles/preview.yaml` from Helm commands. | Decided, not shipped. No pull request delivers it yet. |
-| `/mentor` redirects and `mentor` identifiers | Rename every `mentor` name once, at 1.0, and drop the `/mentor` redirects ([ADR 0070 update](0070-1-0-is-a-cutover-release.md#update--2026-10-28-one-product-name-and-conversation-turns)). | Decided, not shipped. No pull request delivers it yet. |
+| `/mentor` redirects and `mentor` identifiers | Rename every `mentor` name once, at 1.0, and drop the `/mentor` redirects ([ADR 0070 update](0070-1-0-is-a-cutover-release.md#update--2026-10-28-one-product-name-and-conversation-turns)). | The redirects are removed. The identifier rename is decided, not shipped. |
 
 ## What changed and why
 
