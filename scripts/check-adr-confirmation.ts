@@ -71,6 +71,40 @@ function resolvesCheck(
 	return found;
 }
 
+function plainText(node: unknown): string {
+	if (!isRecord(node)) {
+		return "";
+	}
+	if ((node.type === "text" || node.type === "inlineCode") && typeof node.value === "string") {
+		return node.value;
+	}
+	return Array.isArray(node.children) ? node.children.map(plainText).join("") : "";
+}
+
+/**
+ * The template's escape for a decision that nothing checks yet: a paragraph that starts with `Not enforced.` and goes
+ * on to say what review catches it, or which later change adds the check.
+ */
+function statesNotEnforced(section: readonly unknown[]): boolean {
+	const paragraphs: string[] = [];
+	const visit = (node: unknown) => {
+		if (!isRecord(node)) {
+			return;
+		}
+		if (node.type === "paragraph") {
+			paragraphs.push(plainText(node).trim());
+		} else if (node.type !== "code" && Array.isArray(node.children)) {
+			for (const child of node.children) {
+				visit(child);
+			}
+		}
+	};
+	for (const node of section) {
+		visit(node);
+	}
+	return paragraphs.some((text) => /^Not enforced\.\s+\S*\p{L}/u.test(text));
+}
+
 export function confirmationFindings(
 	file: string,
 	source: string,
@@ -121,7 +155,7 @@ export function confirmationFindings(
 			findings.push(`${file}: missing check ${reference}`);
 		}
 	}
-	if (checks === 0) {
+	if (checks === 0 && !statesNotEnforced(section)) {
 		findings.push(`${file}: Confirmation names no existing executable check`);
 	}
 	return [...new Set(findings)].toSorted();

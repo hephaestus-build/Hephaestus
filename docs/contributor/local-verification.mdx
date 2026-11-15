@@ -342,6 +342,11 @@ Every named executable reference must resolve.
 A test method suffix such as `BoundaryTest#checksBoundary` resolves its class.
 The gate checks existence, not test coverage or method behavior.
 
+If nothing checks a decision yet, the [ADR template](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0000-template.md) says to write `Not enforced.` and the reason.
+The gate accepts a paragraph that starts with `Not enforced.` and then states the reason.
+The reason names the review that catches a break, or the change that adds the check.
+A named reference beside it must still resolve.
+
 Existing gaps live in `scripts/baselines/adr-confirmation.json`.
 Each entry names its owner, reason and removal condition.
 New debt fails even when the total count stays the same.
