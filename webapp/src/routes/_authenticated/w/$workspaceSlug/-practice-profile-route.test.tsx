@@ -385,8 +385,8 @@ describe("practice profile route", () => {
 		);
 		await renderProfile();
 		await screen.findByRole("button", { name: "Take the tour" }, ROUTE_RENDER_WAIT);
-		// The offer is latched while the page renders, before its lazy dialog loads, and this browser
-		// remembers it at once: an unset record is what proves that no offer opened.
+		// The browser remembers the offer once the tour is on screen: an unset record is what proves
+		// that no offer opened.
 		expect(localStorage.getItem(TOUR_OFFERED)).toBeNull();
 		expect(screen.queryByRole("dialog", { name: "Guided tour" })).toBeNull();
 	});

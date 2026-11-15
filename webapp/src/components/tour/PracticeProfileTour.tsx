@@ -47,7 +47,7 @@ import {
 	useSpot,
 	type Viewport,
 } from "./tour-spotlight";
-import { TOUR_START_SELECTOR } from "./tour-start";
+import { rememberTourOffered, TOUR_START_SELECTOR } from "./tour-start";
 import { EXAMPLE_CAPTION, TourExampleLayer } from "./TourExampleLayer";
 import styles from "./tour.module.css";
 
@@ -164,6 +164,12 @@ export function PracticeProfileTour({
 	const [example] = useState(() => exampleProfile(new Date(), facts.provider));
 	const chapters = tourChapters(facts, example);
 	const tour = useTourProgress(accountId);
+	// The first visit's offer counts once the tour is on screen: a tour that failed to load offered nothing.
+	useEffect(() => {
+		if (firstVisit) {
+			rememberTourOffered(accountId);
+		}
+	}, [firstVisit, accountId]);
 	const still = useStill();
 	const [view, setView] = useState<View>(() => {
 		const chapter = chapters.find((each) => each.id === startChapter);
@@ -560,8 +566,8 @@ function StepFooter({
 				All chapters
 			</Button>
 			<StepCount index={index} total={total} />
-			{/* One group, so a narrow guide wraps it onto its own line whole, at the end. */}
-			<span className="ml-auto flex items-center gap-2">
+			{/* One group at the end; on a narrow guide it wraps onto its own line, and Back above Next. */}
+			<span className="ml-auto flex flex-wrap items-center justify-end gap-2">
 				{index > 0 && (
 					<Button variant="outline" size="sm" onClick={onBack}>
 						<ArrowLeftIcon aria-hidden />

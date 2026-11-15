@@ -784,7 +784,8 @@ function goingDeeper(example: ExampleProfile): TourChapter {
 				title: "Back to the page",
 				body: (
 					<p>
-						A press on the page beside the panels closes them all. Escape closes one at a time. Next
+						A press on the page beside the panels closes them all. On a phone, where the panels fill
+						the screen, the close button at the top closes one. Escape closes one at a time. Next
 						does it here.
 					</p>
 				),

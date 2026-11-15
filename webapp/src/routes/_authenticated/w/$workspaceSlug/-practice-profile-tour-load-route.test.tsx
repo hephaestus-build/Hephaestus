@@ -2,7 +2,9 @@ import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { http, HttpResponse } from "msw";
 import { beforeAll, expect, it, vi } from "vitest";
 
+import { tourRecordKey } from "@/components/tour/tour-start";
 import { toast } from "@/lib/toast";
+import { currentUser } from "@/mocks/fixtures/auth";
 import { ownMembership, workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
 import { OVERVIEW_FIXTURE } from "@/stories/practice-profile-story-mock-data";
@@ -15,8 +17,7 @@ vi.mock("@/components/tour/PracticeProfileTour", () => {
 	throw new Error("The chunk did not load");
 });
 
-it("says that the tour could not load, and leaves the page usable", async () => {
-	const failure = vi.spyOn(toast, "error");
+function servePracticeProfile() {
 	server.use(
 		http.get("*/workspaces", () =>
 			HttpResponse.json([workspaceListItem("acme", { practicesEnabled: true })]),
@@ -32,6 +33,11 @@ it("says that the tour could not load, and leaves the page usable", async () => 
 			HttpResponse.json([]),
 		),
 	);
+}
+
+it("says that the tour could not load, and leaves the page usable", async () => {
+	const failure = vi.spyOn(toast, "error");
+	servePracticeProfile();
 	renderRouteAtWithRouter("/w/acme/practice-profile");
 
 	fireEvent.click(await screen.findByRole("button", { name: "Take the tour" }, ROUTE_RENDER_WAIT));
@@ -42,4 +48,21 @@ it("says that the tour could not load, and leaves the page usable", async () => 
 	expect(screen.queryByRole("dialog", { name: "Guided tour" })).toBeNull();
 	// The page stays: this throws if the boundary took it down with the tour.
 	screen.getByRole("heading", { level: 1, name: "Practice profile" });
+});
+
+it("keeps a first visit's offer owed when the tour could not load, so the reader is offered it again", async () => {
+	localStorage.clear();
+	const failure = vi.spyOn(toast, "error");
+	servePracticeProfile();
+	renderRouteAtWithRouter("/w/acme/practice-profile");
+
+	await waitFor(
+		() =>
+			expect(failure).toHaveBeenCalledWith(
+				"The tour could not load. Reload the page to try again.",
+			),
+		ROUTE_RENDER_WAIT,
+	);
+	// The offer counts once the tour is on screen, and this one never was.
+	expect(localStorage.getItem(tourRecordKey("offered", String(currentUser.id)))).toBeNull();
 });

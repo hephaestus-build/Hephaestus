@@ -8,7 +8,7 @@ import {
 	stripSearchParams,
 } from "@tanstack/react-router";
 import { CompassIcon } from "lucide-react";
-import { lazy, type ReactNode, Suspense, useEffect, useState, useTransition } from "react";
+import { lazy, type ReactNode, Suspense, useState, useTransition } from "react";
 
 import {
 	getOwnResultOptions,
@@ -61,7 +61,7 @@ import {
 	ReviewResultDetails,
 } from "@/components/profile/ReviewResultRow";
 import type { TourChapterId } from "@/components/tour/tour-chapters";
-import { rememberTourOffered, TOUR_START_PROPS, tourOffered } from "@/components/tour/tour-start";
+import { TOUR_START_PROPS, tourOffered } from "@/components/tour/tour-start";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";
 import { REVIEW_PAGE_SIZE, usePracticeGroupDetail } from "@/hooks/use-practice-group-detail";
@@ -263,12 +263,6 @@ function PracticeProfile() {
 		offerMade();
 		setTour({ firstVisit: true });
 	}
-	const firstVisitOpen = tour?.firstVisit === true;
-	useEffect(() => {
-		if (firstVisitOpen) {
-			rememberTourOffered(accountId);
-		}
-	}, [firstVisitOpen, accountId]);
 	// Only a definite "off" redirects: the surface exists only where practices review the work, and
 	// sending someone away before the answer arrives would bounce them out of a workspace that does.
 	if (featureState.practicesEnabled === false) {

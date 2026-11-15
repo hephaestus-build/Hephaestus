@@ -105,14 +105,21 @@ function topLevel(): Element | null {
 	return top;
 }
 
-/** The strip left of the lowest open level, over the dimmed page: a press there closes every level. */
+/**
+ * The strip left of the lowest open level, over the dimmed page: a press there closes every level.
+ * Where the levels fill the screen, as on a phone, no strip shows, and the top level's close control
+ * stands in for it.
+ */
 function besideLevels(): TourTarget | null {
 	const levels = [...document.querySelectorAll("[data-detail-depth][inert]")];
 	if (levels.length === 0) {
 		return null;
 	}
 	const right = Math.min(...levels.map((level) => level.getBoundingClientRect().left));
-	const area = new DOMRect(8, 72, Math.max(0, right - 24), window.innerHeight - 144);
+	if (right - 24 <= 0) {
+		return topLevel()?.querySelector('[data-slot="drawer-close"]') ?? null;
+	}
+	const area = new DOMRect(8, 72, right - 24, window.innerHeight - 144);
 	// The strip is no element of its own, so there is nothing to scroll into view.
 	return { getBoundingClientRect: () => area, scrollIntoView: () => undefined };
 }
@@ -157,6 +164,9 @@ export function useSpot({
 		box: null,
 	});
 	const hasTarget = spot !== undefined;
+	// One arrival for each step and target: a step can keep its key while its target changes, as when
+	// the reader's own card arrives in place of the example's, and then the arrival starts again.
+	const arrivalKey = `${stepKey}|${spot === undefined ? "" : JSON.stringify(spot)}`;
 	const findTarget = useEffectEvent(() =>
 		spot === undefined ? null : findSpot(spot, examplePage),
 	);
@@ -200,29 +210,29 @@ export function useSpot({
 			if (box !== null && (found || quiet >= STILL_FRAMES)) {
 				found = true;
 				setSeen((previous) =>
-					previous.key === stepKey && sameBox(previous.box, box)
+					previous.key === arrivalKey && sameBox(previous.box, box)
 						? previous
-						: { key: stepKey, status: "found", box },
+						: { key: arrivalKey, status: "found", box },
 				);
 			} else if (found && box === null) {
 				// Out of sight, the light goes with it and the guide waits in the middle.
 				setSeen((previous) =>
-					previous.box === null ? previous : { key: stepKey, status: "found", box: null },
+					previous.box === null ? previous : { key: arrivalKey, status: "found", box: null },
 				);
 			} else if (!found && !gaveUp && now - start > SETTLE_MS) {
 				gaveUp = true;
-				setSeen({ key: stepKey, status: "missing", box: null });
+				setSeen({ key: arrivalKey, status: "missing", box: null });
 			}
 			frame = window.requestAnimationFrame(tick);
 		};
 		frame = window.requestAnimationFrame(tick);
 		return () => window.cancelAnimationFrame(frame);
-	}, [stepKey, hasTarget, padding, still]);
+	}, [arrivalKey, hasTarget, padding, still]);
 
 	if (!hasTarget) {
 		return { status: "none", box: null };
 	}
-	return seen.key === stepKey ? seen : { status: "settling", box: null };
+	return seen.key === arrivalKey ? seen : { status: "settling", box: null };
 }
 
 function overlaps(a: Box, b: Box): boolean {
