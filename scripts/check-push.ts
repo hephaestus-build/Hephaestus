@@ -258,14 +258,58 @@ const pushEnvironment = (): NodeJS.ProcessEnv => ({
 	[PUSH_CHECK_ENV]: "true",
 });
 
-function run(program: string, args: string[]): void {
+function run(program: string, args: string[]): number {
 	const result = spawnSync(program, args, { stdio: "inherit", env: pushEnvironment() });
 	if (result.error !== undefined) {
 		throw result.error;
 	}
-	if (result.status !== 0) {
-		process.exit(result.status ?? 1);
+	return result.status ?? 1;
+}
+
+/** The base revision, and whether a failed check lets the next one run. */
+export function parsePushArguments(args: readonly string[]): { base: string; keepGoing: boolean } {
+	const keepGoing = args.includes("--keep-going");
+	try {
+		return { base: parseBase(args.filter((arg) => arg !== "--keep-going")), keepGoing };
+	} catch {
+		throw new Error("Usage: vp run check:push [--base <revision>] [--keep-going]");
 	}
+}
+
+/**
+ * Where each failed check goes. The hook stops at the first one. With `--keep-going`, every
+ * selected check runs, and the end lists each failure and exits with the first one's status.
+ */
+export function pushFailures(
+	keepGoing: boolean,
+	exit: (status: number) => never = (status) => process.exit(status),
+) {
+	const failures: { check: string; status: number }[] = [];
+	return {
+		record(check: string, status: number): void {
+			if (status === 0) {
+				return;
+			}
+			if (!keepGoing) {
+				exit(status);
+			}
+			console.error(`${check} failed (exit ${status}); --keep-going lists it at the end.`);
+			failures.push({ check, status });
+		},
+		finish(): void {
+			const [first] = failures;
+			if (first === undefined) {
+				return;
+			}
+			console.error(
+				[
+					`${failures.length} push ${failures.length === 1 ? "check" : "checks"} failed:`,
+					...failures.map(({ check, status }) => `- ${check} (exit ${status})`),
+				].join("\n"),
+			);
+			exit(first.status);
+		},
+	};
 }
 
 /**
@@ -376,7 +420,8 @@ export async function runUnlessStalled(
 }
 
 async function main(): Promise<void> {
-	const base = parseBase(process.argv.slice(2));
+	const { base, keepGoing } = parsePushArguments(process.argv.slice(2));
+	const failures = pushFailures(keepGoing);
 	let paths: string[] | undefined;
 	let since = "";
 	try {
@@ -404,7 +449,7 @@ async function main(): Promise<void> {
 		const problem = orderProblem(base, process.cwd(), queued);
 		if (problem !== undefined) {
 			console.error(problem);
-			process.exit(1);
+			failures.record("migration order", 1);
 		}
 	}
 	// Also milliseconds, and otherwise CI's: a change to shipped code needs a changeset even when the
@@ -417,30 +462,32 @@ async function main(): Promise<void> {
 				`These compare against the merge base with ${base}; if it is stale, run \`git fetch origin main\` and push again.`,
 			].join("\n"),
 		);
-		process.exit(1);
+		failures.record("release-note rules", 1);
 	}
 	const tasks = pushTasks(paths);
 	if (tasks.length === 0) {
+		failures.finish();
 		console.log("No changes detected; no push checks ran.");
 		return;
 	}
 	const cli = repositoryCli();
 	console.log(`Push checks, one task worker: ${tasks.join(", ")}`);
 	for (const task of tasks) {
-		run(process.execPath, [cli, "run", task]);
+		failures.record(task, run(process.execPath, [cli, "run", task]));
 	}
 	const tests = focusedTests(paths ?? []);
 	if (tests.length > 0) {
 		console.log(`Focused Node tests, one file worker: ${tests.join(", ")}`);
-		run(process.execPath, ["--test", "--test-concurrency=1", ...tests]);
+		failures.record(
+			"focused Node tests",
+			run(process.execPath, ["--test", "--test-concurrency=1", ...tests]),
+		);
 	}
 	for (const command of frontendCommands(paths)) {
 		console.log(`Frontend unit selection: ${command.join(" ")}`);
-		const status = await runUnlessStalled(process.execPath, [cli, ...command]);
-		if (status !== 0) {
-			process.exit(status);
-		}
+		failures.record(command.join(" "), await runUnlessStalled(process.execPath, [cli, ...command]));
 	}
+	failures.finish();
 	if (skipsImportedTests(paths)) {
 		console.log(
 			"Tests that reach the changed frontend files through imports, setup files or shared inputs did not run here; PR CI runs the complete unit projects.",

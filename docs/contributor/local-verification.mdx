@@ -146,6 +146,11 @@ It does not write source files.
 A change under `db/changelog/next/` first checks that the branch's migrations sort after `origin/main` as last fetched and after the merge queue's.
 If the hook cannot read the queue, it says so and checks against `origin/main` only.
 
+The hook stops at the first failed check.
+To see every failure in one run, run `vp run check:push --keep-going` before you push.
+It runs each selected check to the end, then lists the failed checks.
+It exits with the status of the first failed check, as the hook does.
+
 For Node, it runs changed test files, existing source companion tests and the CI contract suites for workflow changes.
 A change under `.vite-hooks/` runs each test that runs a hook as a process.
 Such a test names the hook directory, `core.hooksPath` or the hook installer.
