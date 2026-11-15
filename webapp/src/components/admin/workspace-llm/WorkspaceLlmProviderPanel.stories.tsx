@@ -121,7 +121,8 @@ export const ProviderOff: Story = {
 		state: {
 			status: "ready",
 			connections: [{ ...openAi, enabled: false }, onPrem],
-			models: [gpt],
+			// The server answers CONNECTION_OFF for every model on a connection that is off.
+			models: [{ ...gpt, readiness: "CONNECTION_OFF" }],
 		},
 	},
 	play: async ({ canvas }) => {
