@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.workspace;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.security.UserViewContextHolder;
@@ -226,6 +227,15 @@ class WorkspaceConnectionReadCostIntegrationTest extends AbstractWorkspaceIntegr
         assertThat(read.value().status()).isEqualTo(Workspace.WorkspaceStatus.SUSPENDED);
         assertThat(read.value().installationId()).isEqualTo(workspace.getId() + 10000);
         assertThat(read.value().providerType()).isEqualTo(IdentityProviderType.GITHUB);
+        // Its owner still finds it, so they can resume it; a member does not.
+        assertThat(reads.measure(queries::findAccessibleWorkspaceListItems).value())
+                .extracting(WorkspaceListItemDTO::id, WorkspaceListItemDTO::status)
+                .containsExactly(tuple(workspace.getId(), Workspace.WorkspaceStatus.SUSPENDED));
+        var member = persistAccount("Suspended workspace member");
+        workspaceMembershipService.createMembership(
+                workspace, Objects.requireNonNull(member.getId()), Membership.WorkspaceRole.MEMBER);
+        SecurityContextHolder.setContext(MockSecurityContextUtils.createSecurityContext(
+                Objects.requireNonNull(member.getId()).toString(), new String[0], "read-cost-token"));
         assertThat(reads.measure(queries::findAccessibleWorkspaceListItems).value())
                 .isEmpty();
     }

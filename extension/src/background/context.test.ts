@@ -186,6 +186,19 @@ describe("resolveContext", () => {
 		expect(context).toMatchObject({ status: "ready", workspace: { slug: "team" } });
 	});
 
+	it("never asks a suspended workspace, which its admins still find in the list", async () => {
+		const { env, resolve } = environment({
+			url: MR,
+			workspaces: [
+				{ ...listItem("paused", "GITLAB"), status: "SUSPENDED" },
+				listItem("team", "GITLAB"),
+			],
+			resolved: { paused: dto("4009"), team: dto("4009") },
+		});
+		await resolveContext(env, 1);
+		expect(resolve.mock.calls).toStrictEqual([["team", MR]]);
+	});
+
 	it("reports no workspace when none is connected to the site", async () => {
 		const { env } = environment({ url: "https://gitlab.other.test/a/b/-/issues/1" });
 		await expect(resolveContext(env, 1)).resolves.toMatchObject({

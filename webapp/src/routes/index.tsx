@@ -3,6 +3,7 @@ import { createFileRoute, redirect } from "@tanstack/react-router";
 import { listWorkspacesOptions } from "@/api/@tanstack/react-query.gen";
 import { StandardPageSurface } from "@/components/layout/StandardPageSurface";
 import { LandingPage } from "@/components/site/landing/LandingPage";
+import { defaultWorkspace } from "@/hooks/use-active-workspace";
 import { useLoginNavigation } from "@/hooks/use-login-navigation";
 import { pageHead } from "@/lib/page-title";
 import { hasText } from "@/lib/text";
@@ -30,7 +31,7 @@ export const Route = createFileRoute("/")({
 			...listWorkspacesOptions(),
 			retry: false,
 		});
-		const workspaceSlug = workspaces[0]?.workspaceSlug;
+		const workspaceSlug = defaultWorkspace(workspaces)?.workspaceSlug;
 		if (hasText(workspaceSlug)) {
 			throw redirect({ to: "/w/$workspaceSlug", params: { workspaceSlug }, replace: true });
 		}

@@ -12,6 +12,8 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionFixtures;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
+import de.tum.cit.aet.hephaestus.integration.core.connection.IntegrationAttentionService;
+import de.tum.cit.aet.hephaestus.integration.core.events.IntegrationAttentionChangedEvent;
 import de.tum.cit.aet.hephaestus.integration.core.item.ItemRepository;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
@@ -104,6 +106,9 @@ class WorkspaceControllerIntegrationTest extends AbstractWorkspaceIntegrationTes
 
     @Autowired
     private TransactionTemplate transactions;
+
+    @Autowired
+    private IntegrationAttentionService attention;
 
     @Test
     @WithAdminUser
@@ -1309,6 +1314,113 @@ class WorkspaceControllerIntegrationTest extends AbstractWorkspaceIntegrationTes
         Workspace resumedEntity =
                 workspaceRepository.findById(workspace.getId()).orElseThrow();
         assertThat(resumedEntity.getStatus()).isEqualTo(Workspace.WorkspaceStatus.ACTIVE);
+    }
+
+    @Test
+    @WithMentorUser
+    void shouldListASuspendedWorkspaceOnlyForTheAdminsAndOwnersWhoCanResumeIt() {
+        User mentor = persistUser("mentor");
+        User owner = persistUser("listing-owner");
+        Workspace joined = createWorkspace("listing-member", "Listing member", "listing-m", AccountType.ORG, owner);
+        ensureMembership(joined, mentor, Membership.WorkspaceRole.MEMBER);
+        Workspace administered = createWorkspace("listing-admin", "Listing admin", "listing-a", AccountType.ORG, owner);
+        ensureMembership(administered, mentor, Membership.WorkspaceRole.ADMIN);
+        Workspace owned = createWorkspace("listing-owned", "Listing owned", "listing-o", AccountType.ORG, owner);
+        ensureMembership(owned, mentor, Membership.WorkspaceRole.OWNER);
+        Workspace active = createWorkspace("listing-active", "Listing active", "listing-x", AccountType.ORG, owner);
+        ensureMembership(active, mentor, Membership.WorkspaceRole.MEMBER);
+        for (Workspace workspace : List.of(joined, administered, owned)) {
+            workspaceLifecycleService.suspendWorkspace(workspace.getWorkspaceSlug());
+        }
+
+        List<WorkspaceListItemDTO> listed = webTestClient
+                .get()
+                .uri("/workspaces")
+                .headers(TestAuthUtils.withCurrentUser())
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBodyList(WorkspaceListItemDTO.class)
+                .returnResult()
+                .getResponseBody();
+
+        assertThat(listed)
+                .extracting(WorkspaceListItemDTO::workspaceSlug, WorkspaceListItemDTO::status)
+                .contains(
+                        tuple("listing-admin", Workspace.WorkspaceStatus.SUSPENDED),
+                        tuple("listing-owned", Workspace.WorkspaceStatus.SUSPENDED),
+                        tuple("listing-active", Workspace.WorkspaceStatus.ACTIVE));
+        assertThat(listed).extracting(WorkspaceListItemDTO::workspaceSlug).doesNotContain("listing-member");
+
+        // The admin can open the administration: their own role answers, the workspace's data does not.
+        webTestClient
+                .get()
+                .uri("/workspaces/{workspaceSlug}/members/me", administered.getWorkspaceSlug())
+                .headers(TestAuthUtils.withCurrentUser())
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.role")
+                .isEqualTo("ADMIN");
+        webTestClient
+                .get()
+                .uri("/workspaces/{workspaceSlug}/members", administered.getWorkspaceSlug())
+                .headers(TestAuthUtils.withCurrentUser())
+                .exchange()
+                .expectStatus()
+                .isNotFound()
+                .expectBody(Void.class);
+
+        // A suspended workspace the caller has no part in still answers as if it did not exist.
+        Workspace foreign = createWorkspace("listing-foreign", "Listing foreign", "listing-f", AccountType.ORG, owner);
+        workspaceLifecycleService.suspendWorkspace(foreign.getWorkspaceSlug());
+        webTestClient
+                .get()
+                .uri("/workspaces/{workspaceSlug}/members/me", foreign.getWorkspaceSlug())
+                .headers(TestAuthUtils.withCurrentUser())
+                .exchange()
+                .expectStatus()
+                .isNotFound()
+                .expectBody(Void.class);
+    }
+
+    @Test
+    @WithAdminUser
+    void shouldRefuseToResumeAWorkspaceThatGitHubKeepsSuspended() {
+        User owner = persistUser("github-suspended-owner");
+        Workspace workspace =
+                createWorkspace("github-suspended", "GitHub suspended", "github-suspended", AccountType.ORG, owner);
+        ensureAdminMembership(workspace);
+        Connection connection = new Connection(
+                workspace,
+                IntegrationKind.GITHUB,
+                "7001",
+                new ConnectionConfig.GitHubAppConfig(7001L, "github-suspended", null, Set.of()));
+        ConnectionFixtures.reachState(connection, IntegrationState.ACTIVE);
+        connection = connectionRepository.save(connection);
+        attention.report(
+                connection.getId(),
+                workspace.getId(),
+                IntegrationAttentionChangedEvent.Problem.PROVIDER_SUSPENDED,
+                false);
+        workspaceLifecycleService.suspendWorkspace(workspace.getWorkspaceSlug());
+
+        webTestClient
+                .patch()
+                .uri("/workspaces/{workspaceSlug}/status", workspace.getWorkspaceSlug())
+                .headers(TestAuthUtils.withCurrentUser())
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(new UpdateWorkspaceStatusRequestDTO(Workspace.WorkspaceStatus.ACTIVE))
+                .exchange()
+                .expectStatus()
+                .isEqualTo(HttpStatus.CONFLICT)
+                .expectBody()
+                .jsonPath("$.detail")
+                .value(detail -> assertThat(detail).asString().startsWith("GitHub has suspended the Hephaestus app"));
+
+        assertThat(workspaceRepository.findById(workspace.getId()).orElseThrow().getStatus())
+                .isEqualTo(Workspace.WorkspaceStatus.SUSPENDED);
     }
 
     @Test

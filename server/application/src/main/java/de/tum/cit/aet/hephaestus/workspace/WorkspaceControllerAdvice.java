@@ -10,6 +10,7 @@ import de.tum.cit.aet.hephaestus.workspace.exception.OwnerRoleFollowsNoProviderE
 import de.tum.cit.aet.hephaestus.workspace.exception.WorkspaceLifecycleViolationException;
 import de.tum.cit.aet.hephaestus.workspace.exception.WorkspaceSlugConflictException;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspacePurgeBlockedException;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceResumeBlockedException;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
 import jakarta.validation.Path;
@@ -92,7 +93,11 @@ public class WorkspaceControllerAdvice {
                 userFacingDetail(Objects.requireNonNullElse(exception.getMessage(), "The workspace needs an owner.")));
     }
 
-    @ExceptionHandler({WorkspaceLifecycleViolationException.class, WorkspacePurgeBlockedException.class})
+    @ExceptionHandler({
+        WorkspaceLifecycleViolationException.class,
+        WorkspacePurgeBlockedException.class,
+        WorkspaceResumeBlockedException.class
+    })
     ProblemDetail handleLifecycleViolation(RuntimeException exception) {
         return problem(
                 HttpStatus.CONFLICT,
