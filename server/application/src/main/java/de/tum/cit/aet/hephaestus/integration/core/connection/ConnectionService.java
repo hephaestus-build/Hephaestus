@@ -54,6 +54,7 @@ public class ConnectionService {
 
     private final ConnectionLifecycleEffects lifecycleEffects;
     private final CredentialReader credentialReader;
+    private final ActiveScmConnections activeScm;
     private final SourceProviderNamespaces sourceNamespaces;
     private final Clock clock;
     private final ProviderResourceRepairs resourceRepairs;
@@ -67,8 +68,10 @@ public class ConnectionService {
             CredentialReader credentialReader,
             SourceProviderNamespaces sourceNamespaces,
             Clock clock,
-            ProviderResourceRepairs resourceRepairs) {
+            ProviderResourceRepairs resourceRepairs,
+            ActiveScmConnections activeScm) {
         this.connectionRepository = connectionRepository;
+        this.activeScm = activeScm;
         this.clock = clock;
         this.resourceRepairs = resourceRepairs;
         this.sourceNamespaces = sourceNamespaces;
@@ -141,19 +144,7 @@ public class ConnectionService {
      */
     @Transactional(readOnly = true)
     public Optional<IntegrationKind> findActiveProviderKind(long workspaceId) {
-        boolean github = connectionRepository
-                .findActive(workspaceId, IntegrationKind.GITHUB)
-                .isPresent();
-        boolean gitlab = connectionRepository
-                .findActive(workspaceId, IntegrationKind.GITLAB)
-                .isPresent();
-        if (github && gitlab) {
-            throw new IllegalStateException(
-                    "This workspace has active GitHub and GitLab connections, which Hephaestus does not support. Ask your instance operator to fix it.");
-        }
-        if (github) return Optional.of(IntegrationKind.GITHUB);
-        if (gitlab) return Optional.of(IntegrationKind.GITLAB);
-        return Optional.empty();
+        return activeScm.kind(workspaceId);
     }
 
     @Transactional(readOnly = true)

@@ -88,6 +88,10 @@ public interface ConnectionRepository extends JpaRepository<Connection, Long> {
     Optional<Connection> findFirstByWorkspaceIdAndKindAndStateOrderByCreatedAtDesc(
             long workspaceId, IntegrationKind kind, IntegrationState state);
 
+    /** The workspace's connections of these kinds in this state; {@code uq_connection_one_active_scm_per_workspace}. */
+    List<Connection> findByWorkspaceIdAndStateAndKindIn(
+            long workspaceId, IntegrationState state, Collection<IntegrationKind> kinds);
+
     default Optional<Connection> findActive(long workspaceId, IntegrationKind kind) {
         return findFirstByWorkspaceIdAndKindAndStateOrderByCreatedAtDesc(workspaceId, kind, IntegrationState.ACTIVE);
     }
