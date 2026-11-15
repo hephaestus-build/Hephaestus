@@ -79,9 +79,8 @@ public class SyncStatusService {
         this.runners = List.copyOf(runners);
         // A kind connects only through its strategy, and an operator setting such as
         // `hephaestus.integration.outline.enabled` decides whether that bean exists.
-        this.connectableKinds = connectionStrategies.stream()
-                .map(ConnectionStrategy::kind)
-                .collect(Collectors.toUnmodifiableSet());
+        this.connectableKinds =
+                connectionStrategies.stream().map(ConnectionStrategy::kind).collect(Collectors.toUnmodifiableSet());
     }
 
     private @Nullable ConnectionSyncStateProvider providerFor(IntegrationKind kind) {
