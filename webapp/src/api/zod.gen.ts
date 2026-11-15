@@ -3986,6 +3986,7 @@ export const zReviewStopReason = z.enum([
 	"CONTRACT_CHANGED",
 	"NO_SANDBOX_ROOM",
 	"COMPOSITION_UNCONFIRMED",
+	"PROVIDER_UNAVAILABLE",
 ]);
 
 export const zReviewTimeShares = z.object({

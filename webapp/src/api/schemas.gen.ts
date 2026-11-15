@@ -14200,6 +14200,7 @@ export const ReviewStopReasonSchema = {
 		"CONTRACT_CHANGED",
 		"NO_SANDBOX_ROOM",
 		"COMPOSITION_UNCONFIRMED",
+		"PROVIDER_UNAVAILABLE",
 	],
 } as const;
 

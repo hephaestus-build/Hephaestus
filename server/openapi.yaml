@@ -23181,6 +23181,7 @@ components:
       - CONTRACT_CHANGED
       - NO_SANDBOX_ROOM
       - COMPOSITION_UNCONFIRMED
+      - PROVIDER_UNAVAILABLE
     ReviewSummary:
       type: object
       properties:
