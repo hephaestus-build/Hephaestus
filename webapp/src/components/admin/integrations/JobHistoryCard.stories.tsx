@@ -37,7 +37,7 @@ type Story = StoryObj<typeof meta>;
 export const Default: Story = {
 	play: async ({ canvas }) => {
 		canvas.getByText("Sync history");
-		canvas.getByRole("button", { name: "Show details for sync 2" });
+		canvas.getByText("Succeeded");
 	},
 };
 
