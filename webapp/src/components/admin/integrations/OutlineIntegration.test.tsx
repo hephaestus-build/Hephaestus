@@ -163,6 +163,14 @@ function useConnectedHandlers(collectionsRef: { current: unknown[] }) {
 
 beforeEach(() => {
 	vi.clearAllMocks();
+	// This instance has enabled Outline, so the card offers its connect form.
+	server.use(
+		http.get("*/workspaces/demo/connections/catalog", () =>
+			HttpResponse.json([
+				{ kind: "OUTLINE", displayName: "Outline", connected: false, connectable: true },
+			]),
+		),
+	);
 });
 
 describe("Outline integration — connect happy path", () => {
@@ -527,41 +535,6 @@ describe("Outline integration — with live push down, polling keeps a running s
 		});
 		expect(screen.queryByText(/reconciliation running/iu)).toBeNull();
 		expect(statusReads).toBeGreaterThanOrEqual(2);
-	});
-});
-
-describe("Outline integration — Outline not enabled on this instance", () => {
-	it("turns the initiate 400 (no strategy for the kind) into a clear 'not available here' hint", async () => {
-		// A deployment with HEPHAESTUS_INTEGRATION_OUTLINE_ENABLED off has no OutlineConnectionStrategy
-		// bean, so ConnectionController.initiate rejects the kind with exactly this 400. The card must
-		// explain that instead of only echoing the developer-facing message, so an admin does not keep
-		// retrying a connect that can never succeed.
-		server.use(
-			http.get("*/workspaces/demo/connections", () => HttpResponse.json([])),
-			http.post("*/workspaces/demo/connections", () =>
-				HttpResponse.json(
-					{
-						type: "about:blank",
-						title: "Invalid request",
-						status: 400,
-						detail: "No ConnectionStrategy registered for kind=OUTLINE",
-					},
-					{ status: 400 },
-				),
-			),
-		);
-
-		renderContainer();
-
-		fireEvent.change(await screen.findByLabelText(/server url/iu), {
-			target: { value: "https://wiki.acme.dev" },
-		});
-		fireEvent.change(screen.getByLabelText(/api token/iu), { target: { value: "ol_api_secret" } });
-		fireEvent.click(screen.getByRole("button", { name: /connect outline/iu }));
-
-		// The raw ProblemDetail is still shown; the hint is derived from it and added below.
-		await screen.findByText(/outline may not be enabled on this instance/iu);
-		screen.getByText(/no connectionstrategy registered for kind=outline/iu);
 	});
 });
 

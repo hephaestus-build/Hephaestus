@@ -76,6 +76,7 @@ Without it, workspaces mirror collections, but Hephaestus cannot match a documen
    On a cluster, run the `helm upgrade` command of [Install](./kubernetes#install) again.
    On one host, run the installer again ([Run the installer](./k3s#2-run-the-installer)).
 
+While `config.outline.enabled` is `false`, the Outline page of each workspace says that Outline is not enabled on this instance.
 At its next start, the server creates the Outline login provider if it does not exist.
 If `oauthBaseUrl` is empty or not valid, the server logs the reason at `ERROR` and creates no provider.
 After that, the server ignores the client ID and secret of the chart.

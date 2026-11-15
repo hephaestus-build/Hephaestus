@@ -72,6 +72,17 @@ export const NotConnected: Story = {
 	args: { state: "disconnected", onConnect: fn(), isConnecting: false },
 };
 
+/** This instance has not enabled Slack: the card offers no install, and says why. */
+export const NotEnabled: Story = {
+	args: { state: "not-enabled" },
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText("Slack is not enabled on this instance")).toBeVisible();
+		await expect(
+			canvas.queryByRole("button", { name: /connect slack workspace/iu }),
+		).not.toBeInTheDocument();
+	},
+};
+
 export const Connecting: Story = {
 	args: { state: "disconnected", onConnect: fn(), isConnecting: true },
 	play: async ({ canvas }) => {

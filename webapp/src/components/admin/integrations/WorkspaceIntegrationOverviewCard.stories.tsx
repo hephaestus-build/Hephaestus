@@ -270,6 +270,18 @@ export const DisconnectedWithCleanupUnconfirmed: Story = {
 	},
 };
 
+/** This instance has not enabled Outline, so the card links to no connect page. */
+export const NotEnabled: Story = {
+	args: {
+		entry: { kind: "OUTLINE", displayName: "Outline", connected: false, connectable: false },
+		status: undefined,
+	},
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText("Not enabled on this instance.")).toBeVisible();
+		await expect(canvas.queryByRole("link", { name: /connect/iu })).not.toBeInTheDocument();
+	},
+};
+
 export const Loading: Story = { args: { status: undefined, isStatusLoading: true } };
 
 export const StoppingReconciliation: Story = {
