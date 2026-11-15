@@ -61,6 +61,15 @@ export const UninstalledWithCleanupUnconfirmed: Story = {
 	},
 };
 
+/** GitLab refused every webhook, so the connection is live but changes wait for a sync. */
+export const WebhookUnavailable: Story = {
+	args: { connectionState: "ACTIVE", webhookUnavailable: true, displayName: "GitLab" },
+	play: async ({ canvas }) => {
+		canvas.getByText(/new work shows only after a sync/iu);
+		canvas.getByText(/maintainer role on its projects/iu);
+	},
+};
+
 /** The same states, worded for a different integration — one component, one vocabulary. */
 export const SuspendedOutline: Story = {
 	args: { connectionState: "SUSPENDED", displayName: "Outline" },

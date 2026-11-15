@@ -49,6 +49,7 @@ import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceLookup;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceProviderAccounts;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceRepositoryMonitors;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceRoots;
+import java.time.Instant;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
@@ -424,6 +425,34 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
 
             assertThat(initService.initializeIfWebhookMissing(1L)).isTrue();
             verify(gitLabWebhookService, never()).registerWebhook(any());
+        }
+
+        @Test
+        void shouldNotRunTheSetupAgainOnEachSyncAfterGitLabRefusedEveryHook() {
+            when(gitLabWebhookService.isRegistrationEnabled()).thenReturn(true);
+            when(connectionService.findActiveGitLabConfig(1L))
+                    .thenReturn(Optional.of(
+                            new ConnectionConfig.GitLabConfig("https://gitlab.com", 42L, null, Set.of(), null)
+                                    .withWebhooksRefusedAt(Instant.parse("2026-11-15T12:00:00Z"))));
+
+            assertThat(initService.initializeIfWebhookMissing(1L)).isFalse();
+            verifyNoInteractions(gitLabSyncServiceHolderProvider);
+            verify(gitLabWebhookService, never()).registerWebhook(any());
+        }
+
+        @Test
+        void shouldReconcileProjectHooksWithoutRunningTheSetupAgain() {
+            when(gitLabWebhookService.isRegistrationEnabled()).thenReturn(true);
+            when(connectionService.findActiveGitLabConfig(1L))
+                    .thenReturn(Optional.of(
+                            new ConnectionConfig.GitLabConfig("https://gitlab.com", 42L, null, Set.of(), null)
+                                    .withProjectHook(7L, 40L, "hash", "marker")));
+            when(workspaceLookup.find(1L)).thenReturn(Optional.of(workspace));
+            when(gitLabWebhookService.registerWebhook(workspace)).thenReturn(WebhookSetupResult.projectHooks(42L));
+
+            assertThat(initService.initializeIfWebhookMissing(1L)).isFalse();
+            verify(gitLabWebhookService).registerWebhook(workspace);
+            verifyNoInteractions(gitLabSyncServiceHolderProvider);
         }
 
         @Test

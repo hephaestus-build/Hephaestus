@@ -2640,7 +2640,8 @@ export type IntegrationAttentionChangedEventProblem =
 	| "CREDENTIAL_EXPIRING"
 	| "CREDENTIAL_REVOKED"
 	| "PROVIDER_SUSPENDED"
-	| "PROVIDER_CLEANUP_UNCONFIRMED";
+	| "PROVIDER_CLEANUP_UNCONFIRMED"
+	| "WEBHOOK_UNAVAILABLE";
 
 /**
  * Integration kind availability + connection status for this workspace
@@ -4888,6 +4889,7 @@ export type ProviderIdentityRef = {
 export type ProviderResourceAdapterResourceType =
 	| "INSTALLATION"
 	| "GROUP_HOOK"
+	| "PROJECT_HOOK"
 	| "BOT_TOKEN"
 	| "BOT_USER"
 	| "SUBSCRIPTION"

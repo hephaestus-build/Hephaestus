@@ -72,7 +72,9 @@ public class GitLabConnectionSyncStateProvider implements ConnectionSyncStatePro
     public ConnectionSyncDetails describe(IntegrationRef ref, long connectionId) {
         long workspaceId = ref.workspaceId();
         Optional<ConnectionConfig.GitLabConfig> config = connectionService.findActiveGitLabConfig(workspaceId);
-        Boolean webhookRegistered = config.map(c -> c.gitlabWebhookId() != null).orElse(null);
+        Boolean webhookRegistered = config.map(
+                        c -> c.gitlabWebhookId() != null || !c.projectHooks().isEmpty())
+                .orElse(null);
 
         GitLabRateLimitTracker tracker = rateLimitTrackerProvider.getIfAvailable();
         RateLimitSnapshot rateLimit = tracker == null ? null : tracker.snapshot(workspaceId);

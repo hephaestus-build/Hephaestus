@@ -21,6 +21,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
@@ -394,7 +395,15 @@ public class ProviderResourceRepairs {
             checkAdoption(ref(owner), next, credential);
             owner.setConfig(update.apply(owner.getConfig()));
         } else {
-            for (Resource target : targets) requestCapturedRemoval(owner, target);
+            // A concurrent registration of the active connection may have recorded the same hook: that one stays.
+            var held = owner.getState() != IntegrationState.ACTIVE
+                    ? Set.<String>of()
+                    : resources(ref(owner), owner.getConfig(), credential).stream()
+                            .map(Resource::identity)
+                            .collect(Collectors.toSet());
+            for (Resource target : targets) {
+                if (!held.contains(target.identity())) requestCapturedRemoval(owner, target);
+            }
         }
         references.delete(reference);
         repairs.delete(reference.getRepair());
@@ -429,6 +438,32 @@ public class ProviderResourceRepairs {
         captureRemoval(connection, true);
     }
 
+    /**
+     * Captures the removal of {@code released}, hooks that an active connection no longer needs, and stores
+     * {@code update}, which forgets them, in the same transaction. Each hook is matched by its identity; one the
+     * connection no longer holds is skipped.
+     */
+    @Transactional
+    public void releaseHooks(
+            long workspaceId, long connectionId, List<Resource> released, UnaryOperator<ConnectionConfig> update) {
+        Connection owner =
+                connections.findByIdAndWorkspaceId(connectionId, workspaceId).orElseThrow();
+        var locks = new ArrayList<>(resources(ref(owner), owner.getConfig(), retainedCredential(owner)));
+        locks.addAll(released);
+        lockIdentities(locks);
+        connections.acquireLifecycleLock(connectionId, workspaceId);
+        Objects.requireNonNull(entityManager).refresh(owner);
+        if (owner.getState() != IntegrationState.ACTIVE) return;
+        // The held resource carries the ownership proof the adapter derives, such as a legacy hook's.
+        var held = resources(ref(owner), owner.getConfig(), retainedCredential(owner)).stream()
+                .collect(Collectors.toMap(Resource::identity, resource -> resource, (first, second) -> first));
+        for (Resource resource : released) {
+            Resource current = held.get(resource.identity());
+            if (current != null) requestCapturedRemoval(owner, current);
+        }
+        owner.setConfig(update.apply(owner.getConfig()));
+    }
+
     @Transactional(propagation = Propagation.MANDATORY)
     public void clearCompletedHook(UUID repairId, Resource resource) {
         for (var reference : references.findByRepair_Id(repairId).stream()
@@ -439,6 +474,7 @@ public class ProviderResourceRepairs {
             Objects.requireNonNull(entityManager).refresh(owner);
             if (owner.getState() != IntegrationState.ACTIVE
                     && (resource.type() == ProviderResourceAdapter.ResourceType.GROUP_HOOK
+                            || resource.type() == ProviderResourceAdapter.ResourceType.PROJECT_HOOK
                             || resource.type() == ProviderResourceAdapter.ResourceType.SUBSCRIPTION)
                     && resources(ref(owner), owner.getConfig(), retainedCredential(owner)).stream()
                             .anyMatch(current -> current.identity().equals(resource.identity()))) {
@@ -514,7 +550,11 @@ public class ProviderResourceRepairs {
                             .anyMatch(resource -> resource.ownershipHash() != null
                                     && !resource.ownershipHash().equals(old.ownershipHash()));
         }
-        return current.stream().anyMatch(resource -> resource.type() == old.type())
+        // A project hook is replaced only by a hook on the same project.
+        return current.stream()
+                        .anyMatch(resource -> resource.type() == old.type()
+                                && (old.type() != ProviderResourceAdapter.ResourceType.PROJECT_HOOK
+                                        || resource.parentId().equals(old.parentId())))
                 && current.stream().noneMatch(resource -> overlaps(resource, old));
     }
 

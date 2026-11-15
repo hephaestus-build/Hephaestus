@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.integration.core.connection.repair;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doThrow;
@@ -41,6 +42,8 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.support.StaticListableBeanFactory;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+import org.springframework.http.HttpHeaders;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
 
 @Tag("unit")
 class ProviderResourceAdaptersTest {
@@ -120,6 +123,72 @@ class ProviderResourceAdaptersTest {
         when(client.deregisterGroupWebhookWithCredentials(target.origin(), TOKEN.token(), 99L, 42L))
                 .thenReturn(true);
         assertThat(adapter.remove(target, TOKEN, () -> true)).isEqualTo(Removal.TERMINAL_SUCCESS);
+    }
+
+    @Test
+    void gitlabListsEachProjectHookAndRemovesItFromItsProject() {
+        GitLabWebhookClient client = mock(GitLabWebhookClient.class);
+        var beans = new StaticListableBeanFactory();
+        beans.addBean("client", client);
+        var adapter = new GitLabResourceAdapter(beans.getBeanProvider(GitLabWebhookClient.class), URLS);
+        String url = "https://receiver.example.test/webhooks/gitlab/connections/5/k/r?hephaestus_resource=m";
+        String hash = ProviderResourceAdapter.fingerprint(url);
+        var config = new ConnectionConfig.GitLabConfig("https://gitlab.example.test", 99L, null, Set.of(), null)
+                .withProjectHook(7L, 40L, hash, "m")
+                .withProjectHook(8L, 41L, hash, "m");
+
+        List<Resource> resources =
+                adapter.resources(new IntegrationRef(IntegrationKind.GITLAB, 1, "99", 5L), config, null);
+
+        assertThat(resources)
+                .extracting(Resource::type, Resource::parentId, Resource::resourceId, Resource::ownershipHash)
+                .containsExactly(
+                        tuple(ResourceType.PROJECT_HOOK, "99/7", "40", hash),
+                        tuple(ResourceType.PROJECT_HOOK, "99/8", "41", hash));
+        Resource target = resources.getFirst();
+        when(client.listProjectWebhooksWithCredentials(target.origin(), TOKEN.token(), 7L))
+                .thenReturn(List.of(new WebhookInfo(40L, url)));
+        when(client.deregisterProjectWebhookWithCredentials(target.origin(), TOKEN.token(), 7L, 40L))
+                .thenReturn(true);
+        assertThat(adapter.remove(target, TOKEN, () -> true)).isEqualTo(Removal.TERMINAL_SUCCESS);
+        verify(client, never()).listGroupWebhooksWithCredentials(anyString(), anyString(), anyLong());
+        verify(client, never()).deregisterGroupWebhookWithCredentials(anyString(), anyString(), anyLong(), anyLong());
+
+        Resource registration =
+                new Resource(IntegrationKind.GITLAB, target.origin(), ResourceType.REGISTRATION, "99/7", "m", hash);
+        assertThat(adapter.discoverRegistration(registration, TOKEN))
+                .singleElement()
+                .isEqualTo(target);
+    }
+
+    @Test
+    void gitlabTreatsTheHookOfADeletedProjectAsAbsentOnlyWhileTheGroupIsReadable() {
+        GitLabWebhookClient client = mock(GitLabWebhookClient.class);
+        var beans = new StaticListableBeanFactory();
+        beans.addBean("client", client);
+        var adapter = new GitLabResourceAdapter(beans.getBeanProvider(GitLabWebhookClient.class), URLS);
+        Resource target = new Resource(
+                IntegrationKind.GITLAB,
+                "https://gitlab.example.test",
+                ResourceType.PROJECT_HOOK,
+                "99/7",
+                "40",
+                ProviderResourceAdapter.fingerprint("https://receiver.example.test/hook?hephaestus_resource=m"));
+        var notFound = WebClientResponseException.create(404, "Not Found", HttpHeaders.EMPTY, new byte[0], null);
+        when(client.listProjectWebhooksWithCredentials(target.origin(), TOKEN.token(), 7L))
+                .thenThrow(notFound);
+        when(client.projectReadableWithCredentials(target.origin(), TOKEN.token(), 7L))
+                .thenReturn(false);
+
+        when(client.groupReadableWithCredentials(target.origin(), TOKEN.token(), 99L))
+                .thenReturn(false);
+        assertThatThrownBy(() -> adapter.remove(target, TOKEN, () -> true))
+                .isInstanceOf(WebClientResponseException.NotFound.class);
+
+        when(client.groupReadableWithCredentials(target.origin(), TOKEN.token(), 99L))
+                .thenReturn(true);
+        assertThat(adapter.remove(target, TOKEN, () -> true)).isEqualTo(Removal.VERIFIED_ABSENT);
+        verify(client, never()).deregisterProjectWebhookWithCredentials(anyString(), anyString(), anyLong(), anyLong());
     }
 
     @Test

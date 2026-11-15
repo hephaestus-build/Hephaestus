@@ -343,7 +343,7 @@ public class Connection {
     }
 
     public void detachProviderWebhook() {
-        if (config instanceof ConnectionConfig.GitLabConfig gitlab) setConfig(gitlab.withGitlabWebhookId(null));
+        if (config instanceof ConnectionConfig.GitLabConfig gitlab) setConfig(gitlab.withoutWebhooks());
         else if (config instanceof ConnectionConfig.OutlineConfig outline)
             setConfig(outline.withWebhookSubscription(null, null));
     }

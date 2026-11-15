@@ -6,8 +6,11 @@ import de.tum.cit.aet.hephaestus.core.exception.InvalidInputException;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonSourceNamespace;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -73,7 +76,12 @@ public sealed interface ConnectionConfig
         }
     }
 
-    /** GitLab. */
+    /**
+     * GitLab. The connection's hooks are either one group hook ({@link #gitlabWebhookId}) or, where the GitLab tier has
+     * no group hooks, one hook on each monitored project ({@link #projectHooks}). All hooks of one registration share
+     * the ownership marker and its hash. {@link #webhooksRefusedAt} records that GitLab refused every hook, until one
+     * registers.
+     */
     record GitLabConfig(
             String serverUrl,
             Long gitlabGroupId,
@@ -82,7 +90,9 @@ public sealed interface ConnectionConfig
             @Nullable GitLabTokenMetadata tokenMetadata,
             GitLabProjectExclusions projectExclusions,
             @Nullable String webhookOwnershipHash,
-            @Nullable String webhookOwnershipMarker)
+            @Nullable String webhookOwnershipMarker,
+            List<GitLabProjectHook> projectHooks,
+            @Nullable Instant webhooksRefusedAt)
             implements ConnectionConfig {
         public GitLabConfig {
             if (gitlabGroupId == null || gitlabGroupId <= 0) {
@@ -92,6 +102,10 @@ public sealed interface ConnectionConfig
             Objects.requireNonNull(serverUrl, "A GitLab connection names its server");
             if (serverUrl.isBlank()) throw new IllegalArgumentException("A GitLab connection names its server");
             projectExclusions = Objects.requireNonNullElseGet(projectExclusions, GitLabProjectExclusions::empty);
+            projectHooks = List.copyOf(Objects.requireNonNullElse(projectHooks, List.of()));
+            if (gitlabWebhookId != null && !projectHooks.isEmpty()) {
+                throw new IllegalArgumentException("A GitLab connection has a group hook or project hooks, not both");
+            }
         }
 
         public GitLabConfig(
@@ -109,12 +123,9 @@ public sealed interface ConnectionConfig
                     tokenMetadata,
                     projectExclusions,
                     null,
+                    null,
+                    List.of(),
                     null);
-        }
-
-        public GitLabConfig withWebhookOwnership(@Nullable Long id, @Nullable String hash, @Nullable String marker) {
-            return new GitLabConfig(
-                    serverUrl, gitlabGroupId, id, enabledStreams, tokenMetadata, projectExclusions, hash, marker);
         }
 
         public GitLabConfig(
@@ -132,6 +143,97 @@ public sealed interface ConnectionConfig
                     GitLabProjectExclusions.empty());
         }
 
+        /** The group hook and its ownership. Adopt it through {@code ProviderResourceRepairs.completeRegistration}. */
+        public GitLabConfig withWebhookOwnership(@Nullable Long id, @Nullable String hash, @Nullable String marker) {
+            return new GitLabConfig(
+                    serverUrl,
+                    gitlabGroupId,
+                    id,
+                    enabledStreams,
+                    tokenMetadata,
+                    projectExclusions,
+                    hash,
+                    marker,
+                    List.of(),
+                    null);
+        }
+
+        /**
+         * Records the hook of project {@code projectId}, registered under {@code marker}. A marker other than the stored
+         * one starts a new registration: the hooks of the earlier one are dropped, and the caller has captured their
+         * removal.
+         */
+        public GitLabConfig withProjectHook(long projectId, long hookId, String hash, String marker) {
+            var hooks = new ArrayList<GitLabProjectHook>();
+            if (marker.equals(webhookOwnershipMarker)) {
+                projectHooks.stream()
+                        .filter(hook -> hook.projectId() != projectId)
+                        .forEach(hooks::add);
+            }
+            hooks.add(new GitLabProjectHook(projectId, hookId));
+            hooks.sort(Comparator.comparingLong(GitLabProjectHook::projectId));
+            return new GitLabConfig(
+                    serverUrl,
+                    gitlabGroupId,
+                    null,
+                    enabledStreams,
+                    tokenMetadata,
+                    projectExclusions,
+                    hash,
+                    marker,
+                    hooks,
+                    null);
+        }
+
+        /** Drops the hooks of {@code projectIds}; the caller has captured their removal. */
+        public GitLabConfig withoutProjectHooks(Set<Long> projectIds) {
+            var hooks = projectHooks.stream()
+                    .filter(hook -> !projectIds.contains(hook.projectId()))
+                    .toList();
+            boolean none = hooks.isEmpty() && gitlabWebhookId == null;
+            return new GitLabConfig(
+                    serverUrl,
+                    gitlabGroupId,
+                    gitlabWebhookId,
+                    enabledStreams,
+                    tokenMetadata,
+                    projectExclusions,
+                    none ? null : webhookOwnershipHash,
+                    none ? null : webhookOwnershipMarker,
+                    hooks,
+                    webhooksRefusedAt);
+        }
+
+        /** Forgets every hook, after their removal was captured or completed. */
+        public GitLabConfig withoutWebhooks() {
+            return new GitLabConfig(
+                    serverUrl,
+                    gitlabGroupId,
+                    null,
+                    enabledStreams,
+                    tokenMetadata,
+                    projectExclusions,
+                    null,
+                    null,
+                    List.of(),
+                    webhooksRefusedAt);
+        }
+
+        /** Records when GitLab refused every hook, or clears it with {@code null}. */
+        public GitLabConfig withWebhooksRefusedAt(@Nullable Instant refusedAt) {
+            return new GitLabConfig(
+                    serverUrl,
+                    gitlabGroupId,
+                    gitlabWebhookId,
+                    enabledStreams,
+                    tokenMetadata,
+                    projectExclusions,
+                    webhookOwnershipHash,
+                    webhookOwnershipMarker,
+                    projectHooks,
+                    refusedAt);
+        }
+
         public GitLabConfig withTokenMetadata(@Nullable GitLabTokenMetadata metadata) {
             return new GitLabConfig(
                     serverUrl,
@@ -141,7 +243,9 @@ public sealed interface ConnectionConfig
                     metadata,
                     projectExclusions,
                     webhookOwnershipHash,
-                    webhookOwnershipMarker);
+                    webhookOwnershipMarker,
+                    projectHooks,
+                    webhooksRefusedAt);
         }
 
         public GitLabConfig withProjectExclusions(GitLabProjectExclusions exclusions) {
@@ -153,7 +257,9 @@ public sealed interface ConnectionConfig
                     tokenMetadata,
                     exclusions,
                     webhookOwnershipHash,
-                    webhookOwnershipMarker);
+                    webhookOwnershipMarker,
+                    projectHooks,
+                    webhooksRefusedAt);
         }
 
         /**
@@ -169,7 +275,9 @@ public sealed interface ConnectionConfig
                     tokenMetadata,
                     projectExclusions,
                     Objects.equals(webhookId, gitlabWebhookId) ? webhookOwnershipHash : null,
-                    Objects.equals(webhookId, gitlabWebhookId) ? webhookOwnershipMarker : null);
+                    Objects.equals(webhookId, gitlabWebhookId) ? webhookOwnershipMarker : null,
+                    webhookId == null ? projectHooks : List.of(),
+                    webhookId == null ? webhooksRefusedAt : null);
         }
 
         /** Returns a copy with the provider-verified group ID. */
@@ -182,7 +290,16 @@ public sealed interface ConnectionConfig
                     tokenMetadata,
                     projectExclusions,
                     webhookOwnershipHash,
-                    webhookOwnershipMarker);
+                    webhookOwnershipMarker,
+                    projectHooks,
+                    webhooksRefusedAt);
+        }
+    }
+
+    /** The hook that Hephaestus registered on one GitLab project, by GitLab's project and hook ids. */
+    record GitLabProjectHook(long projectId, long hookId) {
+        public GitLabProjectHook {
+            if (projectId <= 0 || hookId <= 0) throw new IllegalArgumentException("A project hook has GitLab ids");
         }
     }
 

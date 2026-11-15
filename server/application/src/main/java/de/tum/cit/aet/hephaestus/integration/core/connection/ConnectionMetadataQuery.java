@@ -63,7 +63,8 @@ public class ConnectionMetadataQuery {
         } else if (kind == IntegrationKind.GITLAB && config instanceof ConnectionConfig.GitLabConfig group) {
             serverUrl = group.serverUrl();
             hasPat = credentialPresent;
-            webhookRegistered = group.gitlabWebhookId() != null;
+            webhookRegistered =
+                    group.gitlabWebhookId() != null || !group.projectHooks().isEmpty();
         }
         return new WorkspaceMetadata(
                 kind,

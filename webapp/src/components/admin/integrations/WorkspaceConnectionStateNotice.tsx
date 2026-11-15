@@ -4,6 +4,7 @@ import {
 	KeyRoundIcon,
 	PlugZapIcon,
 	ShieldAlertIcon,
+	WebhookOffIcon,
 } from "lucide-react";
 import type * as React from "react";
 
@@ -71,6 +72,11 @@ export interface WorkspaceConnectionStateNoticeProps {
 	 * Hephaestus set up there, so the admin must check at the provider.
 	 */
 	providerCleanupUnconfirmed?: boolean;
+	/**
+	 * The provider refused every webhook that Hephaestus tried to register, so new work arrives only with
+	 * a sync. Only GitLab reports it.
+	 */
+	webhookUnavailable?: boolean;
 	/** The integration as the admin knows it — "Slack", "GitHub", "Outline". */
 	displayName: string;
 	className?: string;
@@ -93,11 +99,12 @@ export function WorkspaceConnectionStateNotice({
 	credentialsUnreadableSince,
 	credentialRecovery = "The connection’s page says how to replace it",
 	providerCleanupUnconfirmed = false,
+	webhookUnavailable = false,
 	displayName,
 	className,
 }: WorkspaceConnectionStateNoticeProps) {
 	const copy = connectionState ? STATE_COPY[connectionState] : undefined;
-	if (!copy && !credentialsUnreadableSince && !providerCleanupUnconfirmed) {
+	if (!copy && !credentialsUnreadableSince && !providerCleanupUnconfirmed && !webhookUnavailable) {
 		return null;
 	}
 	return (
@@ -128,6 +135,20 @@ export function WorkspaceConnectionStateNotice({
 					<AlertTitle>{`Check ${displayName} for what Hephaestus left`}</AlertTitle>
 					<AlertDescription>
 						{`We could not confirm that ${displayName} removed the app, token, or webhook that Hephaestus set up there. It may still work. Remove it in your ${displayName} settings.`}
+					</AlertDescription>
+				</Alert>
+			)}
+			{webhookUnavailable && (
+				<Alert
+					variant="warning"
+					className={
+						copy || credentialsUnreadableSince || providerCleanupUnconfirmed ? "mt-3" : undefined
+					}
+				>
+					<WebhookOffIcon />
+					<AlertTitle>New work shows only after a sync</AlertTitle>
+					<AlertDescription>
+						{`${displayName} refused the webhooks that Hephaestus registers, so changes show after the scheduled sync or Sync now. Give the token the Owner role on the group, or the Maintainer role on its projects. Hephaestus tries again every 6 hours.`}
 					</AlertDescription>
 				</Alert>
 			)}

@@ -38,6 +38,22 @@ public class IntegrationAttentionService {
     }
 
     /**
+     * Raises {@code problem} unless the connection already shows another one, which stays the one the admin acts on
+     * first; recovery clears only {@code problem}.
+     */
+    @Transactional
+    public void reportUnlessOther(
+            long connectionId, long workspaceId, IntegrationAttentionChangedEvent.Problem problem, boolean recovered) {
+        connections.acquireLifecycleLock(connectionId, workspaceId);
+        var current = connections
+                .findByIdAndWorkspaceId(connectionId, workspaceId)
+                .map(Connection::getAttentionProblem)
+                .orElse(null);
+        if (!recovered && current != null && current != problem) return;
+        recordChange(connectionId, workspaceId, problem, recovered);
+    }
+
+    /**
      * Records whether the provider accepted the stored token that made a call. The observation is scoped to that
      * token, not just its workspace: an old in-flight request must not degrade (or recover) a replacement token.
      */

@@ -90,6 +90,7 @@ The connection audit records an uncertain attempt as `GITLAB_TOKEN_ROTATION_UNCE
 
 After a workspace admin creates a GitLab workspace, open the group in GitLab, then **Settings → Webhooks**.
 The list shows the webhook that Hephaestus registered.
+On a GitLab without group webhooks, look in a monitored project instead ([GitLab without group webhooks](#gitlab-without-group-webhooks)).
 A change to a merge request then shows in the workspace without a wait for the scheduled sync.
 
 ## Undo
@@ -119,18 +120,39 @@ Thus, they must sign in with GitLab, or link their GitLab account, before they c
 
 Hephaestus registers a webhook on the GitLab group of each workspace, with a token that `WEBHOOK_ROUTING_SECRET` signs.
 `hephaestus-keys.sh` generates that key, and you set nothing for it.
-The webhook needs the Owner role on the group, and a GitLab tier with group webhooks.
+A group webhook needs the Owner role on the group, and a GitLab tier with group webhooks.
 GitLab Community Edition and the Free tier have no group webhooks.
 
-Without the webhook, the sync of the workspace reports as incomplete, and Hephaestus sees changes only when a sync runs:
+If GitLab refuses the group webhook, Hephaestus registers one webhook on each monitored project instead.
+A project webhook needs the Maintainer role on the project, in every GitLab tier.
+Hephaestus manages project webhooks as it manages the group webhook:
+
+- A project that Hephaestus starts to monitor gets its webhook at the next sync.
+- A project that Hephaestus no longer monitors loses its webhook at the next sync.
+- A deleted project loses its webhook with it.
+- A new routing key replaces every project webhook.
+- Every 6 hours, Hephaestus replaces a project webhook that GitLab deleted or disabled.
+- A disconnect removes every project webhook.
+
+Project webhooks do not send member, subgroup, and project events.
+Membership changes, new subgroups, and new projects show after the next sync.
+A new project gets its webhook at that sync too.
+
+To check the webhooks, open a monitored project in GitLab, then **Settings → Webhooks**.
+The list shows the webhook that Hephaestus registered.
+
+If GitLab refuses the group webhook and every project webhook, the GitLab page of the workspace shows **New work shows only after a sync**.
+Workspace admins also get an email.
+Hephaestus tries again every 6 hours, and clears the notice when a webhook works.
+Until then, Hephaestus sees changes only when a sync runs:
 
 - The scheduled sync reads new and changed work. `config.sync.syncCron` sets it, hourly by default ([Values](./helm-chart#values)).
 - **Sync now** on the connection runs a sync at once.
 - A person can request a review only of work that a sync has read.
 - Feedback delivery does not need the webhook. Hephaestus posts its comments through the GitLab API.
 
-Do not add a project webhook instead: Hephaestus accepts only the webhooks that it registers.
-If new work must show sooner, schedule the sync more often.
+To fix it, give the token the Owner role on the group, or the Maintainer role on each project.
+Do not add a webhook yourself: Hephaestus accepts only the webhooks that it registers.
 
 GitLab 18.6 or later sends the review state of each reviewer in merge request events.
 On an earlier GitLab, approvals and change requests arrive only with the scheduled sync.
