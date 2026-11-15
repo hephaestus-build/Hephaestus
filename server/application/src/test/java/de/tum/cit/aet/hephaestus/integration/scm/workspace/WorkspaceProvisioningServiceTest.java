@@ -42,6 +42,7 @@ import de.tum.cit.aet.hephaestus.workspace.WorkspaceSlugService;
 import de.tum.cit.aet.hephaestus.workspace.adapter.WorkspaceMembershipsAdapter;
 import de.tum.cit.aet.hephaestus.workspace.adapter.WorkspaceRepositoryMonitorsAdapter;
 import de.tum.cit.aet.hephaestus.workspace.adapter.WorkspaceRootsAdapter;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceRepositoryExclusion;
 import java.time.Clock;
 import java.util.List;
 import java.util.Objects;
@@ -136,7 +137,8 @@ class WorkspaceProvisioningServiceTest {
                 WebClient.builder(),
                 List.of(),
                 List.of(),
-                new Transactions());
+                new Transactions(),
+                List.of());
     }
 
     @Test
@@ -191,6 +193,56 @@ class WorkspaceProvisioningServiceTest {
                         eq("pat-token"),
                         anyString());
         assertThat(workspace.getId()).isEqualTo(1L);
+    }
+
+    @Test
+    void bootstrapLeavesOutARepositoryThatNoWorkspaceMayHold() {
+        workspaceProperties = new WorkspaceProperties(
+                true,
+                new WorkspaceProperties.DefaultProperties("aet-org", "pat-token", List.of("aet-org/reports")),
+                false,
+                null,
+                WorkspaceProperties.CreationPolicy.SELF_SERVICE);
+        WorkspaceRepositoryExclusion reports = "aet-org/reports"::equalsIgnoreCase;
+        provisioningService = new WorkspaceProvisioningService(
+                workspaceProperties,
+                roots(),
+                roots(),
+                monitors(),
+                workspaceService,
+                workspaceSlugs,
+                userRepository,
+                identityProviders,
+                sourceNamespaces,
+                memberships(),
+                workspaceMembershipService,
+                connectionService,
+                List.of(),
+                new ScmServerEndpointPolicy(
+                        new MockEnvironment(), WebClient.builder(), new ScmEgressProperties(List.of())),
+                WebClient.builder(),
+                List.of(),
+                List.of(),
+                new Transactions(),
+                List.of(reports));
+        Workspace workspace = new Workspace();
+        workspace.setWorkspaceSlug("aet-org");
+        workspace.setId(1L);
+        when(identityProviders.findId(IdentityProviderType.GITHUB, "https://github.com"))
+                .thenReturn(Optional.of(100L));
+        User owner = new User();
+        owner.setId(11L);
+        when(userRepository.findByLoginAndProviderId("aet-org", 100L)).thenReturn(Optional.of(owner));
+        when(workspaceRepository.count()).thenReturn(0L);
+        when(workspaceService.createWorkspace(anyString(), anyString(), anyString(), any(AccountType.class), anyLong()))
+                .thenReturn(workspace);
+        when(workspaceRepository.save(any(Workspace.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(workspaceRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(workspace));
+
+        provisioningService.bootstrapDefaultPatWorkspace();
+
+        verify(repositoryToMonitorRepository, never()).saveAndFlush(any());
+        assertThat(workspace.getRepositoriesToMonitor()).isEmpty();
     }
 
     @Test
@@ -289,7 +341,8 @@ class WorkspaceProvisioningServiceTest {
                 WebClient.builder(),
                 List.of(),
                 List.of(),
-                new Transactions());
+                new Transactions(),
+                List.of());
         when(workspaceRepository.findAllByAccountLoginIgnoreCase("hephaestustest"))
                 .thenReturn(List.of(gitlabWorkspace, githubDuplicate));
         when(connectionService.findActive(10L, IntegrationKind.GITLAB)).thenReturn(Optional.of(mock(Connection.class)));
@@ -434,7 +487,8 @@ class WorkspaceProvisioningServiceTest {
                 WebClient.builder(),
                 List.of(verifier),
                 List.of(),
-                new Transactions());
+                new Transactions(),
+                List.of());
     }
 
     private static class Transactions extends AbstractPlatformTransactionManager {

@@ -109,6 +109,11 @@ public interface RepositoryToMonitorRepository extends JpaRepository<RepositoryT
     @Query("SELECT m.workspace.id FROM RepositoryToMonitor m WHERE m.nameWithOwner = :nameWithOwner"
             + " ORDER BY m.workspace.id")
     List<Long> findWorkspaceIdsByNameWithOwner(@Param("nameWithOwner") String nameWithOwner);
+    /** Every workspace that holds this path in any case, because a provider's paths ignore case. */
+    @WorkspaceAgnostic("An excluded repository leaves every workspace that monitors it")
+    @Query("SELECT m FROM RepositoryToMonitor m JOIN FETCH m.workspace WHERE LOWER(m.nameWithOwner) ="
+            + " LOWER(:nameWithOwner) ORDER BY m.workspace.id")
+    List<RepositoryToMonitor> findAllWithWorkspaceByNameIgnoringCase(@Param("nameWithOwner") String nameWithOwner);
 
     /** Resolve monitors by provider-stable id across workspaces; a renamed path cannot serve as the lookup key. */
     @WorkspaceAgnostic(
@@ -177,6 +182,15 @@ public interface RepositoryToMonitorRepository extends JpaRepository<RepositoryT
                     + MonitoredRepositoryScope.NATIVE_RTM_R,
             nativeQuery = true)
     List<Long> findSourceRepositoryIdsOfMonitor(@Param("monitorId") Long monitorId);
+
+    /** Withdrawal must also clear retained work when the monitor and mirror disagree after a rename. */
+    @WorkspaceAgnostic("Keyed by the monitor being withdrawn, restricted to its provider and native repository id")
+    @Query(
+            value = "SELECT r.id FROM repository_to_monitor rtm JOIN repository r ON"
+                    + " r.native_id = rtm.native_id WHERE rtm.id = :monitorId AND "
+                    + MonitoredRepositoryScope.NATIVE_RTM_R,
+            nativeQuery = true)
+    List<Long> findSourceRepositoryIdsForWithdrawal(@Param("monitorId") Long monitorId);
 
     /**
      * Remaining monitors of this exact source repository; a foreign same-named repository does not

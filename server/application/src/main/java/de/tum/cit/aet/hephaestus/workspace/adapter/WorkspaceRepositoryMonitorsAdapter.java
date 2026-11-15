@@ -83,6 +83,11 @@ public class WorkspaceRepositoryMonitorsAdapter
     }
 
     @Override
+    public List<Long> withdrawalRepositoryIds(long monitorId) {
+        return monitors.findSourceRepositoryIdsForWithdrawal(monitorId);
+    }
+
+    @Override
     @Transactional(propagation = Propagation.MANDATORY)
     public RepositoryToMonitor add(long workspaceId, String nameWithOwner, long nativeId) {
         var monitor = new RepositoryToMonitor();

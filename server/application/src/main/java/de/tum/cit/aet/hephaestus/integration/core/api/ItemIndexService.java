@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.core.api;
 
+import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.integration.core.item.Item;
 import de.tum.cit.aet.hephaestus.integration.core.item.ItemRepository;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemEventInput;
@@ -51,6 +52,22 @@ public class ItemIndexService {
     }
 
     public record IndexedItem(ItemRef ref, boolean removed) {}
+
+    /** The ids of the workspace's items directly below {@code parentId}, removed or not. */
+    @Transactional(readOnly = true)
+    public List<Long> childIds(long workspaceId, long parentId) {
+        return repository.findByWorkspaceIdAndParentId(workspaceId, parentId).stream()
+                .map(Item::getId)
+                .toList();
+    }
+
+    /** Workspaces whose item of one of these sources, or any item below it, is live. */
+    @WorkspaceAgnostic(
+            "Instance-wide repository exclusion finds the workspaces that hold its work; each withdraws under its own lock")
+    @Transactional(readOnly = true)
+    public List<Long> workspacesHoldingSources(String kind, Collection<Long> sourceIds) {
+        return sourceIds.isEmpty() ? List.of() : repository.findWorkspaceIdsHoldingSources(kind, sourceIds);
+    }
 
     public ItemRef upsert(ItemRegistration registration) {
         Long parentId = registration.parentId();

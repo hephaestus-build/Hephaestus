@@ -8,6 +8,8 @@ import static de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubSync
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
+import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryScopeFilter;
+import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.common.ScmTransportErrors;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.exception.InstallationNotFoundException;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.exception.RepositoryNotFoundOnGitProviderException;
@@ -70,6 +72,9 @@ public class GitHubRepositorySyncService {
     private static final int MAX_RETRY_ATTEMPTS = 3;
     private final WebClient restClient;
     private final TransactionTemplate transactionTemplate;
+    // Absent in a role without the workspace filter, and such a role syncs no workspace's repository.
+    private final List<RepositoryScopeFilter> scopeFilters;
+    private final List<SyncTargetProvider> syncTargets;
 
     public GitHubRepositorySyncService(
             GitHubGraphQlClientProvider graphQlClientProvider,
@@ -79,7 +84,11 @@ public class GitHubRepositorySyncService {
             GitHubExceptionClassifier exceptionClassifier,
             GitHubGraphQlSyncCoordinator graphQlSyncHelper,
             @Qualifier("gitHubGraphQlWebClient") WebClient webClient,
-            TransactionTemplate transactionTemplate) {
+            TransactionTemplate transactionTemplate,
+            List<RepositoryScopeFilter> scopeFilters,
+            List<SyncTargetProvider> syncTargets) {
+        this.scopeFilters = List.copyOf(scopeFilters);
+        this.syncTargets = List.copyOf(syncTargets);
         this.restClient = webClient.mutate().baseUrl("https://api.github.com").build();
         this.graphQlClientProvider = graphQlClientProvider;
         this.repositoryRepository = repositoryRepository;
@@ -255,6 +264,20 @@ public class GitHubRepositorySyncService {
 
             if (expectedNativeId != null && !expectedNativeId.equals(githubDatabaseId)) {
                 throw new RepositoryIdentityMismatchException(nameWithOwner, expectedNativeId, githubDatabaseId);
+            }
+
+            // GitHub answers with the current name, which a rename may have turned into a repository no workspace may
+            // hold. It is checked here, before anything of it is stored.
+            String answeredName = repoData.getNameWithOwner();
+            if (answeredName != null
+                    && scopeFilters.stream().anyMatch(filter -> !filter.isRepositoryAllowed(answeredName))) {
+                syncTargets.forEach(targets -> targets.reconcileSyncTargetsForRepository(
+                        Objects.requireNonNull(provider.getId()), githubDatabaseId, answeredName));
+                log.info(
+                        "Skipped repository sync: reason=repositoryNotAllowed, scopeId={}, repoId={}",
+                        scopeId,
+                        githubDatabaseId);
+                return Optional.empty();
             }
 
             // GitHub has answered: the write is its own short transaction, so no connection waits on GitHub.

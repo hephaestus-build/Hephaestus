@@ -69,6 +69,14 @@ public interface RepositoryRepository extends JpaRepository<Repository, Long> {
             "Reads a shared mirror row by name on any provider; only tests call it, to check what sync stored")
     Optional<Repository> findByNameWithOwner(String nameWithOwner);
 
+    /** GitHub mirrors of a repository name; a GitLab project on the same path is another repository. */
+    @WorkspaceAgnostic("Reads shared mirror rows by name, so an instance-wide exclusion finds every workspace's copy")
+    @Query(value = """
+            SELECT r.id FROM repository r JOIN identity_provider p ON p.id = r.provider_id
+            WHERE LOWER(r.name_with_owner) = LOWER(:nameWithOwner) AND p.type = 'GITHUB'
+            """, nativeQuery = true)
+    List<Long> findGitHubIdsByNameIgnoringCase(@Param("nameWithOwner") String nameWithOwner);
+
     @EntityGraph(attributePaths = {"organization", "provider"})
     Optional<Repository> findByNativeIdAndProviderId(Long nativeId, Long providerId);
 

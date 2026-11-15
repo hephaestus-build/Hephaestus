@@ -143,6 +143,17 @@ It asserts the invariants: no private report is public, no report has two issues
 
 The model test fails if the search leaves any move of the table untaken.
 When you add a state or an event, change both tests on purpose.
+
+### The private repository stays out of workspaces
+
+The private repository stays out of every workspace.
+`PrivateRepositoryExclusion` implements the `WorkspaceRepositoryExclusion` SPI.
+`WorkspaceScopeFilter.isGitHubRepositoryAllowed` asks it on every GitHub path.
+
+Saving the destination, and a repair run every 15 minutes, publish `RepositoryExcludedFromWorkspacesEvent`.
+Each workspace then gives up the repository in its own transaction, with its issue items and Activity.
+A failure raises `HephaestusPrivateRepositoryNotWithdrawn`.
+
 A refused move keeps the row as it was. The sweepers count it, log the report ID, and raise `HephaestusProductFeedbackMoveRefused`.
 
 An expired lease returns work to its previous waiting state with backoff.

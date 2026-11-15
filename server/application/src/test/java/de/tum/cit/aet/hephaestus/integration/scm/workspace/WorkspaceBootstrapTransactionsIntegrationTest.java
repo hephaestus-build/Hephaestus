@@ -166,6 +166,7 @@ class WorkspaceBootstrapTransactionsIntegrationTest extends BaseIntegrationTest 
                 context.getBean(WebClient.Builder.class),
                 List.of(verifier),
                 List.of(),
-                transactions);
+                transactions,
+                List.of());
     }
 }

@@ -1,7 +1,9 @@
 package de.tum.cit.aet.hephaestus.integration.core.item;
 
+import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import jakarta.persistence.LockModeType;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.jspecify.annotations.Nullable;
@@ -28,6 +30,21 @@ public interface ItemRepository extends JpaRepository<Item, Long> {
 
     Optional<Item> findByWorkspaceIdAndParentIdAndPath(long workspaceId, long parentId, String path);
 
+    @WorkspaceAgnostic(
+            "Instance-wide repository exclusion finds the workspaces that hold its work; each withdraws under its own lock")
+    @Query(value = """
+            WITH RECURSIVE tree(workspace_id, id, removed_at) AS (
+              SELECT s.workspace_id, s.id, s.removed_at FROM item s
+              WHERE s.kind = :kind AND s.source_id IN (:sourceIds)
+              UNION ALL
+              SELECT c.workspace_id, c.id, c.removed_at FROM item c
+              JOIN tree t ON c.workspace_id = t.workspace_id AND c.parent_id = t.id
+            )
+            SELECT DISTINCT workspace_id FROM tree WHERE removed_at IS NULL
+            """, nativeQuery = true)
+    List<Long> findWorkspaceIdsHoldingSources(
+            @Param("kind") String kind, @Param("sourceIds") Collection<Long> sourceIds);
+
     @Modifying
     @Query(
             value =
@@ -40,6 +57,9 @@ public interface ItemRepository extends JpaRepository<Item, Long> {
             @Param("parentId") @Nullable Long parentId,
             @Param("path") @Nullable String path,
             @Param("at") Instant at);
+
+    /** Every child of one item, removed or not: a removed item can still have live items below it. */
+    List<Item> findByWorkspaceIdAndParentId(long workspaceId, long parentId);
 
     @Modifying
     @Query(
