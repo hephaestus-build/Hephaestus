@@ -661,6 +661,7 @@ jobs:
               - '.github/actions/**'
               - 'scripts/check-workflows.ts'
               - 'scripts/lib/actions-language.ts'
+              - 'scripts/lib/shellcheck.ts'
             quality-config:
               - '.github/workflows/cicd.yml'
               - '.github/workflows/ci-quality-gates.yml'

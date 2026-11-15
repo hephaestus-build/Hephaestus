@@ -9,7 +9,7 @@ import type { TemplateToken } from "@actions/workflow-parser/templates/tokens/te
 
 import { checkRepository, runScript } from "./check-workflows.ts";
 import { openActionsLanguage } from "./lib/actions-language.ts";
-import { prepareShellCheck } from "./lib/shellcheck.ts";
+import { errexitDisabled, prepareShellCheck } from "./lib/shellcheck.ts";
 
 const mask = (expression: string) => "_".repeat(expression.length);
 const language = await openActionsLanguage();
@@ -293,3 +293,52 @@ void test(
 		assert.deepEqual(masked.problems, []);
 	},
 );
+
+void test("a run script that turns errexit off fails the check, in a workflow and in a composite action", async () => {
+	assert.deepEqual(
+		errexitDisabled(
+			[
+				"set -euo pipefail",
+				"set +e",
+				"( set +eu; true )",
+				"true && set +o errexit",
+				"set +o pipefail",
+				"set +x",
+				"# set +e stays a comment",
+				"echo 'set +e'",
+				"if true; then set +e; fi",
+				"{ set +e; }",
+				"set -eu -o pipefail +e",
+				"set +x +e",
+				"echo 'x; set +e'",
+				"# example: set +e; set +e",
+				'echo "a; set +e" # not; set +e either',
+			].join("\n"),
+		),
+		[2, 3, 4, 5, 9, 10, 11, 12],
+	);
+
+	const workflow = await check(job("      - run: |\n          set +e\n          false\n"));
+	assert.ok(
+		workflow.problems.some((problem) => /test\.yml: .*line 1: turns errexit off/u.test(problem)),
+		workflow.problems.join("\n"),
+	);
+	const action = await check(job("      - uses: ./.github/actions/composite\n"), {
+		".github/actions/composite/action.yml": [
+			"name: Composite",
+			"description: Composite",
+			"runs:",
+			"  using: composite",
+			"  steps:",
+			"    - shell: bash",
+			"      run: |",
+			"        set +e",
+			"        false",
+			"",
+		].join("\n"),
+	});
+	assert.ok(
+		action.problems.some((problem) => /composite\/action\.yml: .*turns errexit off/u.test(problem)),
+		action.problems.join("\n"),
+	);
+});
