@@ -38,6 +38,7 @@ import java.util.Set;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.dao.DataAccessException;
 import org.springframework.graphql.client.ClientGraphQlResponse;
@@ -48,6 +49,8 @@ import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Scheduler;
+import reactor.core.scheduler.Schedulers;
 import reactor.util.retry.Retry;
 
 /**
@@ -75,7 +78,10 @@ public class GitHubRepositorySyncService {
     // Absent in a role without the workspace filter, and such a role syncs no workspace's repository.
     private final List<RepositoryScopeFilter> scopeFilters;
     private final List<SyncTargetProvider> syncTargets;
+    /** Counts the GitHub timeouts; a test passes a virtual clock, so no wall time decides its outcome. */
+    private final Scheduler timeouts;
 
+    @Autowired
     public GitHubRepositorySyncService(
             GitHubGraphQlClientProvider graphQlClientProvider,
             RepositoryRepository repositoryRepository,
@@ -87,6 +93,33 @@ public class GitHubRepositorySyncService {
             TransactionTemplate transactionTemplate,
             List<RepositoryScopeFilter> scopeFilters,
             List<SyncTargetProvider> syncTargets) {
+        this(
+                graphQlClientProvider,
+                repositoryRepository,
+                organizationRepository,
+                syncProperties,
+                exceptionClassifier,
+                graphQlSyncHelper,
+                webClient,
+                transactionTemplate,
+                scopeFilters,
+                syncTargets,
+                Schedulers.parallel());
+    }
+
+    GitHubRepositorySyncService(
+            GitHubGraphQlClientProvider graphQlClientProvider,
+            RepositoryRepository repositoryRepository,
+            OrganizationRepository organizationRepository,
+            GitHubSyncProperties syncProperties,
+            GitHubExceptionClassifier exceptionClassifier,
+            GitHubGraphQlSyncCoordinator graphQlSyncHelper,
+            WebClient webClient,
+            TransactionTemplate transactionTemplate,
+            List<RepositoryScopeFilter> scopeFilters,
+            List<SyncTargetProvider> syncTargets,
+            Scheduler timeouts) {
+        this.timeouts = timeouts;
         this.scopeFilters = List.copyOf(scopeFilters);
         this.syncTargets = List.copyOf(syncTargets);
         this.restClient = webClient.mutate().baseUrl("https://api.github.com").build();
@@ -123,7 +156,8 @@ public class GitHubRepositorySyncService {
                     .headers(headers -> headers.setBearerAuth(graphQlClientProvider.getToken(scopeId)))
                     .retrieve()
                     .bodyToMono(RepositoryIdentity.class)
-                    .block(syncProperties.graphqlTimeout());
+                    .timeout(syncProperties.graphqlTimeout(), timeouts)
+                    .block();
             if (identity == null
                     || identity.id() != nativeId
                     || identity.fullName() == null
@@ -196,7 +230,8 @@ public class GitHubRepositorySyncService {
                                     safeNameWithOwner,
                                     signal.totalRetries() + 1,
                                     signal.failure().getClass().getSimpleName())))
-                    .block(syncProperties.graphqlTimeout());
+                    .timeout(syncProperties.graphqlTimeout(), timeouts)
+                    .block();
 
             if (response == null || !response.isValid() || !response.getErrors().isEmpty()) {
                 ClassificationResult classification = graphQlSyncHelper.classifyGraphQlErrors(response);
@@ -303,14 +338,16 @@ public class GitHubRepositorySyncService {
                     || classification.category() == GitHubExceptionClassifier.Category.AUTH_ERROR) {
                 throw new RepositoryNotFoundOnGitProviderException(nameWithOwner, e);
             }
-            graphQlSyncHelper.handleGraphQlClassification(new GraphQlClassificationContext(
+            if (graphQlSyncHelper.handleGraphQlClassification(new GraphQlClassificationContext(
                     classification,
                     retryAttempt,
                     MAX_RETRY_ATTEMPTS,
                     "repository sync",
                     "repoName",
                     safeNameWithOwner,
-                    log));
+                    log))) {
+                return syncRepositoryWithRetry(scopeId, nameWithOwner, provider, expectedNativeId, retryAttempt + 1);
+            }
             return Optional.empty();
         }
     }
