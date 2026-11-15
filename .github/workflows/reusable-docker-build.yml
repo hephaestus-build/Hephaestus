@@ -327,19 +327,14 @@ jobs:
           fi
           pack build "$PER_ARCH_TAG" --path "${jars[0]}" --descriptor "$PROJECT_DESCRIPTOR" \
             --run-image "$RUN_IMAGE" --platform "$MATRIX_PLATFORM" "${dependencies[@]}" --publish --trust-builder 2>&1 | node scripts/summarize-buildpack-log.ts "$RUNNER_TEMP/buildpacks.log"
-          # Buildpacks may wrap one platform in an index; capture its manifest, not the wrapper.
-          RAW=$(docker buildx imagetools inspect "$PER_ARCH_TAG" --format '{{json .Manifest}}')
-          if echo "$RAW" | jq -e '.manifests' >/dev/null 2>&1; then
-            ARCH=$(echo "$MATRIX_PLATFORM" | awk -F/ '{print $2}')
-            DIGEST=$(echo "$RAW" | jq -r --arg arch "$ARCH" \
-              '.manifests[] | select(.platform.architecture == $arch and .platform.os == "linux") | .digest')
-          else
-            DIGEST=$(echo "$RAW" | jq -r '.digest')
-          fi
-          if [[ ! "$DIGEST" =~ ^sha256:[a-f0-9]{64}$ ]]; then
-            echo "::error::Refusing to publish: per-arch digest is not a sha256:<64 hex> (got: ${DIGEST:-<empty>})"
+          # The lifecycle names the per-arch manifest that it pushed. Reading the tag back from GHCR
+          # right after the push can fail with "not found" while the registry settles.
+          mapfile -t reported < <(grep -oE '\*\*\* Images \(sha256:[a-f0-9]{64}\)' "$RUNNER_TEMP/buildpacks.log" | grep -oE 'sha256:[a-f0-9]{64}')
+          if (( ${#reported[@]} != 1 )); then
+            echo "::error title=Buildpacks build::The lifecycle reported ${#reported[@]} image digests, not one; read buildpacks.log"
             exit 1
           fi
+          DIGEST=${reported[0]}
           echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
           echo "Per-arch digest: $DIGEST"
 
@@ -365,25 +360,33 @@ jobs:
           AGENT_PI_DIGEST: ${{ steps.bake.outputs.metadata && fromJSON(steps.bake.outputs.metadata)['agent-pi']['containerimage.digest'] || '' }}
           POSTGRES_DIGEST: ${{ steps.bake.outputs.metadata && fromJSON(steps.bake.outputs.metadata).postgres['containerimage.digest'] || '' }}
           BUILDPACKS_DIGEST: ${{ steps.build-buildpacks.outputs.digest }}
+          BUILDPACKS_OUTCOME: ${{ steps.build-buildpacks.outcome }}
+          BAKE_OUTCOME: ${{ steps.bake.outcome }}
           PLATFORM_PAIR: ${{ steps.prep.outputs.platform_pair }}
         run: |
           set -euo pipefail
           missing=()
           for name in $(jq -r '.[]' <<< "$IMAGES"); do
             case "$name" in
-              application-server) digest=$BUILDPACKS_DIGEST ;;
-              webapp) digest=$WEBAPP_DIGEST ;;
-              agent-pi) digest=$AGENT_PI_DIGEST ;;
-              postgres) digest=$POSTGRES_DIGEST ;;
-              *) digest= ;;
+              application-server) digest=$BUILDPACKS_DIGEST outcome=$BUILDPACKS_OUTCOME ;;
+              webapp) digest=$WEBAPP_DIGEST outcome=$BAKE_OUTCOME ;;
+              agent-pi) digest=$AGENT_PI_DIGEST outcome=$BAKE_OUTCOME ;;
+              postgres) digest=$POSTGRES_DIGEST outcome=$BAKE_OUTCOME ;;
+              *) digest= outcome= ;;
             esac
-            if [[ ! "$digest" =~ ^sha256:[a-f0-9]{64}$ ]]; then
-              echo "::error::No digest produced for $name (got: ${digest:-<empty>})"
-              missing+=("$name")
+            # A failed bake can still have pushed its other images, so a digest decides first.
+            if [[ "$digest" =~ ^sha256:[a-f0-9]{64}$ ]]; then
+              mkdir -p "$RUNNER_TEMP/digests/$name/$PLATFORM_PAIR"
+              touch "$RUNNER_TEMP/digests/$name/$PLATFORM_PAIR/${digest#sha256:}"
               continue
             fi
-            mkdir -p "$RUNNER_TEMP/digests/$name/$PLATFORM_PAIR"
-            touch "$RUNNER_TEMP/digests/$name/$PLATFORM_PAIR/${digest#sha256:}"
+            missing+=("$name")
+            if [[ "$outcome" == failure ]]; then
+              # The failed step reports the cause; a missing digest would only repeat its effect.
+              echo "::notice::$name has no digest: its build step failed (see the first failed step)"
+            else
+              echo "::error::No digest produced for $name (got: ${digest:-<empty>})"
+            fi
           done
           (( ${#missing[@]} == 0 ))
 
