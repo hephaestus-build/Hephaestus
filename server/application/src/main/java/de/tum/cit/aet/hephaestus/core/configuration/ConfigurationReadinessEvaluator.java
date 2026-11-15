@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.core.configuration;
 
 import de.tum.cit.aet.hephaestus.core.release.ImageReference;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
+import de.tum.cit.aet.hephaestus.core.web.DocsSite;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Base64;
@@ -22,12 +23,16 @@ public final class ConfigurationReadinessEvaluator {
 
     private static final Logger log = LoggerFactory.getLogger(ConfigurationReadinessEvaluator.class);
 
-    static final String DOC = "https://docs.hephaestus.build/admin/configuration-readiness";
+    static final String GUIDE = "admin/configuration-readiness";
 
     private final Environment environment;
 
+    /** The readiness guide in the docs for this build. */
+    private final String guide;
+
     public ConfigurationReadinessEvaluator(Environment environment) {
         this.environment = environment;
+        this.guide = DocsSite.page(environment.getProperty("spring.application.version", ""), GUIDE);
     }
 
     public List<ConfigurationFactDTO> evaluateDeployment() {
@@ -235,7 +240,7 @@ public final class ConfigurationReadinessEvaluator {
         add(facts, id, subject, roles, requirement, applicable, configured, satisfied, explanation, anchor);
     }
 
-    private static void add(
+    private void add(
             List<ConfigurationFactDTO> facts,
             String id,
             String subject,
@@ -248,7 +253,7 @@ public final class ConfigurationReadinessEvaluator {
         add(facts, id, subject, roles, requirement, applicable, true, satisfied, explanation, anchor);
     }
 
-    private static void add(
+    private void add(
             List<ConfigurationFactDTO> facts,
             String id,
             String subject,
@@ -264,7 +269,7 @@ public final class ConfigurationReadinessEvaluator {
                 : !configured
                         ? ConfigurationStatus.NOT_CONFIGURED
                         : satisfied ? ConfigurationStatus.SATISFIED : ConfigurationStatus.ACTION_REQUIRED;
-        facts.add(new ConfigurationFactDTO(id, subject, roles, requirement, status, explanation, DOC + "#" + anchor));
+        facts.add(new ConfigurationFactDTO(id, subject, roles, requirement, status, explanation, guide + "#" + anchor));
     }
 
     /**

@@ -19,6 +19,7 @@ A problem has the RFC 9457 members `type`, `title`, `status` and `detail`.
 - `ProblemType` (`core/exception`) is the registry of every `type` that a client can branch on.
   Each constant has a slug.
   The `type` is `https://docs.hephaestus.build/contributor/api-error-handling#<slug>`, which points to the slug in [Problem types](#problem-types).
+  It is an identifier, so it is the same in every build. Other docs links of the server follow the docs of the running build (`DocsSite`).
 - A problem without a distinct kind keeps `type: about:blank`. Its status is then its kind.
 - Other members carry named data, such as `maxAgeSeconds`, `errors` or `withholdingReason`.
   Do not add a second code member such as `code`, `reason`, `kind`, `reasonCode` or `error`.

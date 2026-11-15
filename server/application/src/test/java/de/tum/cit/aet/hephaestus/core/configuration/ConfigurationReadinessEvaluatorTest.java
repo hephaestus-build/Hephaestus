@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import de.tum.cit.aet.hephaestus.core.web.DocsSite;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -67,10 +68,12 @@ class ConfigurationReadinessEvaluatorTest extends BaseUnitTest {
         List<ConfigurationFactDTO> facts = evaluateReadiness(validProperties(), true);
 
         assertThat(facts).isNotEmpty().allSatisfy(fact -> {
-            assertThat(fact.documentationUrl()).startsWith(ConfigurationReadinessEvaluator.DOC + "#");
+            // MockEnvironment names no release version, so the links follow the docs of main.
+            String guide = DocsSite.page("", ConfigurationReadinessEvaluator.GUIDE);
+            assertThat(fact.documentationUrl()).startsWith(guide + "#");
             assertThat(sections)
                     .as("section of the guide linked by %s", fact.id())
-                    .contains(fact.documentationUrl().substring(ConfigurationReadinessEvaluator.DOC.length() + 1));
+                    .contains(fact.documentationUrl().substring(guide.length() + 1));
         });
     }
 

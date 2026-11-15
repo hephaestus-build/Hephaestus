@@ -40,6 +40,9 @@ public class DatabaseMigration {
 
     public static final String PROFILE = "migrate";
 
+    /** The admin guide's section on the migrate run mode, under the build's docs site. */
+    static final String GUIDE = "admin/runtime-roles#database-migrations";
+
     private static final Logger log = LoggerFactory.getLogger(DatabaseMigration.class);
 
     /** Whether the active profiles, from the environment or the command line, name the run mode. */
