@@ -3982,7 +3982,7 @@ await test("one value turns the workspace MCP endpoint on for the server, off by
 });
 
 await test("with MCP on, OAuth discovery on the host root reaches the server without a rewrite", () => {
-	const discovery = (resources: unknown[]) =>
+	const discovery = (resources: Resource[]) =>
 		list(
 			get(
 				resources.find((resource) => kindOf(resource) === "HTTPRoute"),
