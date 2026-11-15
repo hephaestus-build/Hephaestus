@@ -70,7 +70,6 @@
 		"@gitlab/svgs": "3.170.0",
 		"@oxlint/plugins": "catalog:",
 		"@playwright/test": "1.64.1",
-		"@primer/primitives": "11.10.0",
 		"@shadcn/lint": "0.1.0",
 		"@storybook/addon-a11y": "10.6.5",
 		"@storybook/addon-docs": "10.6.5",

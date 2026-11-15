@@ -32,11 +32,16 @@ function ThemeButtons() {
 	);
 }
 
+/** The theme class on the root, which `theme-tokens.css` and `styles.css` read. */
+function paintedTheme(): string | undefined {
+	const { classList } = document.documentElement;
+	return ["dark", "light"].find((theme) => classList.contains(theme));
+}
+
 describe("ThemeProvider", () => {
 	afterEach(() => {
 		clearThemeCookie();
 		document.documentElement.className = "";
-		delete document.documentElement.dataset.colorMode;
 	});
 
 	it("takes the theme from the shared cookie", () => {
@@ -44,7 +49,7 @@ describe("ThemeProvider", () => {
 
 		render(<ThemeProvider defaultTheme="light" />);
 
-		expect(document.documentElement.dataset.colorMode).toBe("dark");
+		expect(paintedTheme()).toBe("dark");
 	});
 
 	it("writes a new choice to the cookie that the other hosts read", () => {
@@ -57,7 +62,7 @@ describe("ThemeProvider", () => {
 		fireEvent.click(screen.getByRole("button", { name: "Dark" }));
 
 		expect(readThemeCookie(document.cookie)).toBe("dark");
-		expect(document.documentElement.dataset.colorMode).toBe("dark");
+		expect(paintedTheme()).toBe("dark");
 	});
 
 	it("neither reads nor writes the cookie when it is not persistent", () => {
@@ -69,7 +74,7 @@ describe("ThemeProvider", () => {
 			</ThemeProvider>,
 		);
 
-		expect(document.documentElement.dataset.colorMode).toBe("light");
+		expect(paintedTheme()).toBe("light");
 		fireEvent.click(screen.getByRole("button", { name: "System" }));
 		expect(readThemeCookie(document.cookie)).toBe("dark");
 	});
@@ -84,7 +89,6 @@ describe("theme-init.js", () => {
 	afterEach(() => {
 		clearThemeCookie();
 		document.documentElement.className = "";
-		delete document.documentElement.dataset.colorMode;
 	});
 
 	it("applies the cookie's theme before the app mounts", () => {
@@ -92,8 +96,7 @@ describe("theme-init.js", () => {
 
 		runInThisContext(script);
 
-		expect(document.documentElement.classList.contains("dark")).toBe(true);
-		expect(document.documentElement.dataset.colorMode).toBe("dark");
+		expect(paintedTheme()).toBe("dark");
 	});
 
 	it("follows the system when the cookie holds no known theme", () => {
@@ -106,7 +109,7 @@ describe("theme-init.js", () => {
 		runInThisContext(script);
 		matchMedia.mockRestore();
 
-		expect(document.documentElement.dataset.colorMode).toBe("dark");
+		expect(paintedTheme()).toBe("dark");
 		expect(document.documentElement.classList.contains("solarized")).toBe(false);
 	});
 
@@ -125,6 +128,6 @@ describe("theme-init.js", () => {
 		cookieGetter.mockRestore();
 
 		expect(readThemeCookie(cookies)).toBe(choice);
-		expect(document.documentElement.dataset.colorMode).toBe(painted);
+		expect(paintedTheme()).toBe(painted);
 	});
 });

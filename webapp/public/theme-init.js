@@ -15,5 +15,4 @@
 	}
 	document.documentElement.classList.remove("light", "dark");
 	document.documentElement.classList.add(applied);
-	document.documentElement.dataset.colorMode = applied;
 }
