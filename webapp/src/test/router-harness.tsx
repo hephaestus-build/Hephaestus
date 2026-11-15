@@ -94,8 +94,11 @@ export function testQueryClient(): QueryClient {
  * rendering behavior once the matched code is available.
  */
 export async function loadRouteCode(...paths: string[]): Promise<void> {
-	// The root layout mounts this React.lazy module outside the router's split route chunks.
+	// These React.lazy modules load outside the router's split route chunks: the root layout mounts
+	// the conversation panel, and any page that shows Markdown mounts the renderers.
 	await import("@/routes/-GlobalConversationPanel");
+	await import("@/components/common/UntrustedMarkdownRenderer");
+	await import("@/components/admin/practice-reviews/FeedbackMarkdown");
 	const router = createRouter({
 		...ROUTER_SEARCH,
 		routeTree,
