@@ -33,8 +33,8 @@ export function anchorsOf(html: string): Set<string> {
 }
 
 /**
- * The page's HTML in the build output, or `undefined` if the site has no such page. With
- * The build writes the page `admin/upgrade` to `admin/upgrade.html` (`docs/vite.config.ts`).
+ * The page's HTML in the build output, or `undefined` if the site has no such page.
+ * `build.format: "file"` in `docs/astro.config.ts` writes the page `admin/upgrade` to `admin/upgrade.html`.
  */
 export function readBuiltPage(buildDirectory: string, page: string): string | undefined {
 	const file = path.join(buildDirectory, `${page}.html`);

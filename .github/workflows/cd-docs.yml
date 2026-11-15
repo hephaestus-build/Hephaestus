@@ -5,11 +5,22 @@ on:
     branches: [main]
     paths:
       - "docs/**"
+      # The docs build runs these scripts and checks the web app's docs targets.
+      - "scripts/docs-astro.ts"
+      - "scripts/check-docs-links.ts"
+      - "scripts/check-doc-targets.ts"
+      - "webapp/src/lib/doc-targets.ts"
       - ".github/workflows/cd-docs.yml"
   pull_request:
     types: [opened, synchronize, reopened]
     paths:
       - "docs/**"
+      - "scripts/docs-astro.ts"
+      - "scripts/check-docs-links.ts"
+      - "scripts/check-doc-targets.ts"
+      - "webapp/src/lib/doc-targets.ts"
+      # Lockfile maintenance alone moves the transitive packages of the site.
+      - "pnpm-lock.yaml"
       - "scripts/docs-preview.ts"
       - "scripts/render-preview-comment.ts"
       - "scripts/publish-preview-comments.ts"
@@ -135,6 +146,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ needs.release-ref.outputs.tag }}
+          # Each page's last-updated date and sitemap entry come from its own last commit.
+          fetch-depth: 0
           persist-credentials: false
       - uses: ./.github/actions/setup-toolchain
         with:
@@ -166,6 +179,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: main
+          # Each page's last-updated date and sitemap entry come from its own last commit.
+          fetch-depth: 0
           persist-credentials: false
       - uses: ./.github/actions/setup-toolchain
         with:

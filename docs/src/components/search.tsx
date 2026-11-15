@@ -13,8 +13,6 @@ import {
 
 import { BASE } from "@/lib/site";
 
-const base = BASE;
-
 interface PagefindPage {
 	url: string;
 	title: string;
@@ -52,7 +50,7 @@ async function importPagefind(): Promise<Search> {
 	const module: unknown = await import(
 		// The index is a file of the build, not a module of the bundle.
 		/* @vite-ignore */
-		`${base}pagefind/pagefind.js`
+		`${BASE}pagefind/pagefind.js`
 	);
 	if (!isRecord(module) || !isSearch(module.search)) {
 		throw new Error("The Pagefind module has no search function.");

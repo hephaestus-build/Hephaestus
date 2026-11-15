@@ -3,7 +3,6 @@ import { SearchHome } from "@/components/home";
 import Layout from "@/layouts/layout.astro";
 import { BASE, GUIDES } from "@/lib/site";
 
-const base = BASE;
 ---
 
 <Layout title="Search">
@@ -15,7 +14,7 @@ const base = BASE;
 				{
 					GUIDES.map((guide) => (
 						<li>
-							<a class="text-fd-primary font-medium underline" href={`${base}${guide.path}/overview`}>
+							<a class="text-fd-primary font-medium underline" href={`${BASE}${guide.path}/overview`}>
 								{guide.label}
 							</a>
 							<span class="text-fd-muted-foreground"> — {guide.description}</span>
