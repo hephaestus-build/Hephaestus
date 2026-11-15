@@ -48,7 +48,7 @@ export const NARROW = 640;
 /** How long a target may take to arrive: a level slides in, and a smooth scroll ends. */
 const SETTLE_MS = 2500;
 /** How long a part may stay out of sight after a scroll before the tour scrolls to it again. */
-const RESCROLL_MS = 500;
+const RESCROLL_MS = 800;
 /** Frames in a row that the target must hold still before the light goes on. */
 const STILL_FRAMES = 3;
 
@@ -180,11 +180,13 @@ export function useSpot({
 			const now = performance.now();
 			const target = findTarget();
 			const box = target === null ? null : measure(target, padding);
-			// Something can scroll the part out of sight again, such as a level that closes during a
-			// smooth scroll. A part out of sight for a moment is scrolled to again.
+			// Something can scroll the part out of sight again while it arrives, such as a level that
+			// closes during a smooth scroll; the part is then scrolled to again. After that the reader
+			// owns the scroll, and a part they scroll away only takes its light with it.
+			const arriving = now - start < SETTLE_MS;
 			if (
 				target !== null &&
-				(scrolledAt === 0 || (box === null && now - scrolledAt > RESCROLL_MS))
+				(scrolledAt === 0 || (arriving && box === null && now - scrolledAt > RESCROLL_MS))
 			) {
 				target.scrollIntoView({
 					block: "center",

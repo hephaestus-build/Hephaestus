@@ -46,6 +46,8 @@ import { storeUserView } from "@/test/user-view";
 // Mounting the real route pulls in the whole app shell and its lazy modules.
 
 const PAGE = "/w/acme/practice-profile";
+/** Where this browser remembers that the Practice profile offered its tour. */
+const TOUR_OFFERED = "hephaestus:guided-tour:practice-profile:offered";
 
 beforeAll(
 	async () =>
@@ -380,7 +382,27 @@ describe("practice profile route", () => {
 		);
 		await renderProfile();
 		await screen.findByRole("button", { name: "Take the tour" }, ROUTE_RENDER_WAIT);
+		// The offer is latched while the page renders, before its lazy dialog loads, and this browser
+		// remembers it at once: an unset record is what proves that no offer opened.
+		expect(localStorage.getItem(TOUR_OFFERED)).toBeNull();
 		expect(screen.queryByRole("dialog", { name: "Guided tour" })).toBeNull();
+	});
+
+	it("offers the tour once the question about public activity is answered", async () => {
+		localStorage.clear();
+		server.use(
+			http.get("*/workspaces", () =>
+				HttpResponse.json([
+					workspaceListItem("acme", { practicesEnabled: true, publishesPublicActivity: true }),
+				]),
+			),
+			http.get("*/user/public-activity/workspaces/:slug/onboarding", () =>
+				HttpResponse.json({ seen: true, visible: false }),
+			),
+		);
+		await renderProfile();
+		await screen.findByRole("dialog", { name: "Guided tour" }, ROUTE_RENDER_WAIT);
+		expect(localStorage.getItem(TOUR_OFFERED)).toBe("1");
 	});
 
 	it("does not offer the tour to a first visit that a link opened on a level", async () => {
@@ -390,6 +412,7 @@ describe("practice profile route", () => {
 			`${PAGE}?detail=${encodeURIComponent(JSON.stringify(["practice-groups:all"]))}`,
 		);
 		await screen.findByRole("table", { name: "All practice groups" }, ROUTE_RENDER_WAIT);
+		expect(localStorage.getItem(TOUR_OFFERED)).toBeNull();
 		expect(screen.queryByRole("dialog", { name: "Guided tour" })).toBeNull();
 	});
 
@@ -399,6 +422,7 @@ describe("practice profile route", () => {
 			http.get("*/workspaces/:workspaceSlug/practice-profile/overview", async () => pending()),
 		);
 		await renderProfile();
+		expect(localStorage.getItem(TOUR_OFFERED)).toBeNull();
 		expect(screen.queryByRole("dialog", { name: "Guided tour" })).toBeNull();
 	});
 

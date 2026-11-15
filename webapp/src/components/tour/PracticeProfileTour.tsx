@@ -462,7 +462,7 @@ function Guide({
 				)}
 				style={{
 					"--tour-w": `${width}px`,
-					"--tour-max-h": `${Math.max(0, viewport.height - MARGIN * 2)}px`,
+					"--tour-max-h": `${Math.max(0, viewport.height - (reserveTop ? CAPTION_ROOM : MARGIN) - MARGIN)}px`,
 				}}
 			>
 				{children}

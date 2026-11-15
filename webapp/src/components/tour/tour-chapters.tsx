@@ -863,7 +863,7 @@ function acrossTheWorkspace(facts: TourFacts): TourChapter {
 		steps: [
 			{
 				id: "figures",
-				title: "Your figures beside the workspace",
+				title: "Figures beside the workspace",
 				body: (
 					<p>
 						Practices across the workspace is a page of its own, in the sidebar. On it, your own
