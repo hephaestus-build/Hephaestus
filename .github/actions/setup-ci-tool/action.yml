@@ -8,7 +8,7 @@ inputs:
     description: Restore and save GitHub Actions cache archives; disable in signing jobs
     default: "true"
   variant:
-    description: Optional key, keyless, kms or checksums asset
+    description: Optional key, keyless or kms asset
     default: ""
 outputs:
   version:

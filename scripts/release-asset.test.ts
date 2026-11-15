@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import { downloadReleaseAsset } from "./lib/release-asset.ts";
-import { checksumFor, verifyChecksum } from "./setup-release-security-tools.ts";
 
 const direct = "https://github.com/example/tool/releases/download/v1.2.3/tool.tar.gz";
 const tag = "https://api.github.com/repos/example/tool/releases/tags/v1.2.3";
@@ -90,17 +89,6 @@ void test("API failure falls back to the authenticated GitHub direct URL", async
 	);
 	assert.equal(new TextDecoder().decode(await downloadReleaseAsset(direct)), "archive");
 	assert.deepEqual(calls, [tag, tag, direct]);
-});
-
-void test("checksum lookup rejects missing, duplicate and changed security-tool subjects", () => {
-	const hash = "a".repeat(64);
-	assert.equal(checksumFor(`${hash}  tool.tar.gz\n`, "tool.tar.gz"), hash);
-	assert.throws(() => checksumFor(`${hash}  other.tar.gz\n`, "tool.tar.gz"));
-	assert.throws(() => checksumFor(`${hash}  tool.tar.gz\n${hash}  tool.tar.gz\n`, "tool.tar.gz"));
-	assert.throws(
-		() => verifyChecksum(new TextEncoder().encode("changed"), hash),
-		/checksum differs/u,
-	);
 });
 
 void test("an unavailable API asset is retried before the direct fallback", async (t) => {

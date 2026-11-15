@@ -10,11 +10,6 @@
 			"version": "v0.76.1",
 			"sha256": "e174dff2a6dba5e3ae41f8d0537a6324405bd08132497340304c6b20e0f16a1f",
 			"name": "trivy_{version}_Linux-ARM64.tar.gz"
-		},
-		"checksums": {
-			"version": "v0.76.1",
-			"sha256": "885debc41b570179e81af560e5f393a66be29b9ff8c52915674f3eb2304c535d",
-			"name": "trivy_{version}_checksums.txt"
 		}
 	}
 }
