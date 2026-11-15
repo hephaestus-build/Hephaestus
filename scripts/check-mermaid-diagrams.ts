@@ -53,7 +53,9 @@ interface Diagram {
 const diagrams: Diagram[] = [];
 for (const root of ROOTS) {
 	for (const entry of await readdir(root, { recursive: true })) {
-		if (entry.split(path.sep).includes("node_modules")) {
+		// The site build writes a Markdown copy of each page, with its included diagrams inlined.
+		const [first] = entry.split(path.sep);
+		if (entry.split(path.sep).includes("node_modules") || first === "build" || first === ".astro") {
 			continue;
 		}
 		const file = path.join(root, entry);
