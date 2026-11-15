@@ -68,7 +68,8 @@ class GetReviewTool implements McpTool {
         try {
             reviewId = UUID.fromString(McpTools.requiredString(arguments, "reviewId"));
         } catch (IllegalArgumentException malformed) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "The argument reviewId is not a review id.");
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST, "The argument reviewId is not a review id.", malformed);
         }
         ReviewDetailDTO review =
                 reviews.detail(WorkspaceContextHolder.getContext().id(), reviewId);
