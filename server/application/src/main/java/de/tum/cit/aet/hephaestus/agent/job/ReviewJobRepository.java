@@ -569,6 +569,8 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
             @Param("runId") UUID runId,
             @Param("diagnosis") String diagnosis);
 
+    /** Its own transaction: a caller may run outside one. */
+    @Transactional
     @Modifying(flushAutomatically = true)
     @Query(
             value = "UPDATE review_job SET capture = capture #- '{manifest,files}' #- '{manifest,citableTexts}' WHERE"

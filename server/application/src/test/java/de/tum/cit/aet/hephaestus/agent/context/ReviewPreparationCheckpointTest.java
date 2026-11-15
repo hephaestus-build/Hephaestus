@@ -29,6 +29,7 @@ import java.time.Clock;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Supplier;
@@ -41,20 +42,22 @@ class ReviewPreparationCheckpointTest extends BaseUnitTest {
     private final JsonMapper mapper = new JsonMapper();
     private final AttemptInputs inputs = mock(AttemptInputs.class);
     private final EvidenceFolderPersonDataCatalog copies = mock(EvidenceFolderPersonDataCatalog.class);
+    private final ReviewJobRepository jobs = mock(ReviewJobRepository.class);
 
     @TempDir
     Path root;
 
+    /** A claimed job: the claim records it as running this run and attempt before its preparation starts. */
     private ReviewJob job() {
         var job = RuntimeReviewTestData.job();
         job.setRunId(UUID.randomUUID());
         job.setStatus(ReviewJobStatus.RUNNING);
+        when(jobs.findByIdAndWorkspaceId(job.getId(), job.getWorkspaceId())).thenReturn(Optional.of(job));
         return job;
     }
 
     private JobEvidenceFiles files() {
-        return new JobEvidenceFiles(
-                new FabricLayout(root.toString()), mock(ReviewJobRepository.class), Clock.systemUTC(), copies, inputs);
+        return new JobEvidenceFiles(new FabricLayout(root.toString()), jobs, Clock.systemUTC(), copies, inputs);
     }
 
     private void publish(ReviewJob job) {
@@ -150,5 +153,63 @@ class ReviewPreparationCheckpointTest extends BaseUnitTest {
         assertThatThrownBy(() -> files().resume(job))
                 .isInstanceOf(CheckoutUnverifiedException.class)
                 .hasMessageContaining("differs from its recorded digest");
+    }
+
+    @Test
+    void shouldKeepTheFolderOfAResumedAttemptThroughEverySweepWhileItRuns() throws Exception {
+        var job = job();
+        restorable(job);
+        var files = files();
+        Path index;
+        try (var restored = files.resume(job)) {
+            index = Objects.requireNonNull(restored.filesOnDisk().get("INDEX.json"));
+
+            assertThat(files.cleanEndedAttempts()).isZero();
+            assertThat(index).exists();
+        }
+        // The attempt still runs after its preparation hands the folder on.
+        assertThat(files.cleanEndedAttempts()).isZero();
+        assertThat(index).exists();
+    }
+
+    @Test
+    void shouldRemoveTheStagingRemainderOfASupersededRunWhileTheRunningAttemptHoldsTheLease() throws Exception {
+        var job = job();
+        restorable(job);
+        var files = files();
+        // A preparation of an earlier run died while it staged: only its staging copy is left, beside no folder.
+        Path staging = new FabricLayout(root.toString())
+                .jobsRoot()
+                .resolve(Long.toString(job.getWorkspaceId()))
+                .resolve(job.getId().toString())
+                .resolve("." + job.getAttempt() + "-"
+                        + ProvenanceDigest.sha256Hex(
+                                UUID.randomUUID().toString().getBytes(StandardCharsets.UTF_8))
+                        + ".preparing-1");
+        try (var restored = files.resume(job)) {
+            Path index = Objects.requireNonNull(restored.filesOnDisk().get("INDEX.json"));
+            Files.createDirectories(staging);
+            Files.write(staging.resolve("checkout.pack"), new byte[1024 * 1024]);
+
+            assertThat(files.cleanEndedAttempts()).isZero();
+
+            assertThat(staging).doesNotExist();
+            assertThat(index).exists();
+        }
+    }
+
+    @Test
+    void shouldRemoveTheFolderOfAResumedAttemptOnceItsJobStopsRunningIt() throws Exception {
+        var job = job();
+        restorable(job);
+        var files = files();
+        try (var restored = files.resume(job)) {
+            Path index = Objects.requireNonNull(restored.filesOnDisk().get("INDEX.json"));
+            job.setStatus(ReviewJobStatus.FAILED);
+
+            assertThat(files.cleanEndedAttempts()).isZero();
+
+            assertThat(index).doesNotExist();
+        }
     }
 }

@@ -95,8 +95,6 @@ public class JobEvidenceFiles implements SandboxResultListener {
     /** Invalid UTF-8 cannot match a quote: this lone surrogate is rejected by quoteDigest. */
     private static final String UNDECODABLE = "\uDC00";
 
-    static final Duration RETENTION_GRACE = Duration.ofHours(1);
-
     /** The most bytes of a checkout that a search proof reads: {@code PROOF_BYTES} in {@code pi-verified-search.ts}. */
     static final long SEARCH_PROOF_BYTES = 512L * 1024 * 1024;
 
@@ -248,7 +246,7 @@ public class JobEvidenceFiles implements SandboxResultListener {
                             CheckoutUnverifiedException.Reason.UNAVAILABLE, "The frozen inputs expired");
                 lease.shareWithRemovals();
                 return new PreparedJobInputs(
-                        paths, directories, List.of(() -> retire(job, root), lease), manifest, readiness, expiry);
+                        paths, directories, List.of(() -> retire(root), lease), manifest, readiness, expiry);
             } catch (IOException failure) {
                 lease.close();
                 throw new UncheckedIOException(failure);
@@ -346,7 +344,7 @@ public class JobEvidenceFiles implements SandboxResultListener {
             var closed = new AtomicBoolean();
             cleanups.add(() -> {
                 if (closed.compareAndSet(false, true)) {
-                    retire(job, root);
+                    retire(root);
                 }
             });
             cleanups.add(personCopies.finishCapture(job));
@@ -831,16 +829,27 @@ public class JobEvidenceFiles implements SandboxResultListener {
                 .replaceWith(UNDECODABLE);
     }
 
-    /** Under the runtime's own lease, one removal at a time with admission; an exclusive owner otherwise retires it. */
-    private void retire(ReviewJob owner, Path root) throws IOException {
-        EvidenceFolderLease.removeAsOwner(layout.root(), owner.getWorkspaceId(), owner.getId(), () -> {
-            if (!Files.exists(root)) return;
+    /**
+     * Removes the folder, with its staging remainder and marker, if no attempt reads it: under the runtime's shared
+     * lease, one removal at a time with admission, or under an exclusive lease of its own. Each claim names a new folder
+     * (its attempt counts the run's leases), so a folder that no attempt reads never becomes read; the decision is
+     * still made from the job as it is recorded under the lease. The folder of a job with an erased copy is erasure's
+     * to remove and count.
+     *
+     * @return false when another holder keeps the lease to itself, and the folder stays for a later pass
+     */
+    private boolean retire(Path root) throws IOException {
+        Path jobDirectory = Objects.requireNonNull(root.getParent());
+        Path workspaceDirectory = Objects.requireNonNull(jobDirectory.getParent());
+        long workspaceId = Long.parseLong(
+                Objects.requireNonNull(workspaceDirectory.getFileName()).toString());
+        UUID jobId = UUID.fromString(
+                Objects.requireNonNull(jobDirectory.getFileName()).toString());
+        return EvidenceFolderLease.removeAsOwner(layout.root(), workspaceId, jobId, () -> {
+            if (!present(root)) return;
+            if (!personCopies.erasedJobs(Map.of(jobId, workspaceId)).isEmpty()) return;
             var job = recordedJob(root);
-            if (job.isPresent() && admitted(job.get()) && matches(root, job.get())) {
-                deleteAttempt(root);
-            } else {
-                markEnded(root);
-            }
+            if (job.isEmpty() || !readsFolder(root, job.get())) deleteAttempt(root);
         });
     }
 
@@ -1121,8 +1130,8 @@ public class JobEvidenceFiles implements SandboxResultListener {
                     }
                     Path recordFile = staging.resolve(TRACE_RECORD);
                     Files.writeString(recordFile, record.toString(), StandardOpenOption.CREATE_NEW);
-                    // The sweep counts the retention from this timestamp, as it counts the grace from an ended marker,
-                    // and ends it sooner when the record states an earlier expiry.
+                    // The sweep counts the retention from this timestamp, and ends it sooner when the record states an
+                    // earlier expiry.
                     Files.setLastModifiedTime(recordFile, FileTime.from(now));
                     Files.move(staging, trace, StandardCopyOption.ATOMIC_MOVE);
                 } finally {
@@ -1163,20 +1172,19 @@ public class JobEvidenceFiles implements SandboxResultListener {
     }
 
     public void cleanAfterRestart() {
-        cleanAttempts(true);
+        cleanEndedAttempts();
     }
 
     /**
-     * Removes the folders of ended attempts and of deleted jobs.
+     * Removes every attempt folder that no attempt reads: the folders of ended, admitted and superseded attempts, and
+     * of deleted jobs. Only the running attempt of its job reads its folder; a retry or a composition takes a new one.
+     * The folders of a job with an erased copy are erasure's: the same reconcile pass removes and counts them.
      *
-     * @return the folders of deleted jobs that stay because they could not be removed now, and the folders whose
-     *     removal failed, including expired transcripts: the reconcile counts them, and a later pass retries them
+     * @return the folders that remain although no attempt reads them, because their lease is held or their removal
+     *     failed, and the expired transcripts that could not be removed: the reconcile counts them, and a later pass
+     *     retries them
      */
     public int cleanEndedAttempts() {
-        return cleanAttempts(false);
-    }
-
-    private int cleanAttempts(boolean restarting) {
         int remaining = layout.spool().reconcile();
         if (!Files.isDirectory(layout.jobsRoot())) return remaining;
         try (var paths = Files.walk(layout.jobsRoot(), 3)) {
@@ -1190,66 +1198,142 @@ public class JobEvidenceFiles implements SandboxResultListener {
                         } else if (name.startsWith(".") && name.contains(".preparing-")) {
                             roots.add(path.resolveSibling(name.substring(1, name.indexOf(".preparing-"))));
                         } else if (name.endsWith(".ended")) {
+                            // A marker that an earlier release left beside its folder.
                             roots.add(path.resolveSibling(name.substring(0, name.lastIndexOf('.'))));
                         } else if (Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS)) {
                             roots.add(path);
                         }
                     });
+            // Erasure removes and counts the folders of a job with an erased copy; this sweep leaves them to it.
+            var erased = erasedJobs(roots, traces);
             for (Path root : roots) {
                 if (!root.getFileName().toString().matches("[0-9]+-[0-9a-f]{64}")) continue;
+                if (ofErasedJob(erased, root)) continue;
                 // A capture holds this lease until its inputs are released, after retiring its own folder; erasure
                 // and the other sweep take it too. Whoever holds it owns the job's folders, and a later pass retries.
                 Optional<EvidenceFolderLease> acquired;
                 try {
                     acquired = leaseJob(root);
-                    // A running attempt holds its folder; a deleted job's folder that someone still holds remains.
-                    if (acquired.isEmpty() && recordedJob(root).isEmpty()) remaining++;
-                } catch (RuntimeException exception) {
+                    // The lease is the job's, not the folder's: a later run of the job can hold it while a folder that
+                    // no attempt reads waits. This server removes such a folder under its runtime's shared lease; a
+                    // folder that it cannot remove stays and counts.
+                    if (acquired.isEmpty()) {
+                        var holder = recordedJob(root);
+                        if ((holder.isEmpty() || !readsFolder(root, holder.get())) && !retire(root)) remaining++;
+                        continue;
+                    }
+                } catch (RuntimeException | IOException exception) {
                     log.warn("Could not clean attempt folder {}", root, exception);
                     remaining++;
                     continue;
                 }
-                if (acquired.isEmpty()) continue;
                 var lease = acquired.get();
                 try (lease) {
                     // The holder before this one may have removed it; only a removal of our own is reported.
                     if (!present(root)) continue;
                     var job = recordedJob(root);
-                    // Retention or a purge removed the job: nothing can need the folder, and a purge's bound holds.
-                    if (job.isEmpty()) {
-                        deleteAttempt(root);
-                        continue;
-                    }
-                    if (matches(root, job.get())) {
-                        if (admitted(job.get())) {
-                            deleteAttempt(root);
-                            continue;
-                        }
-                        if (job.get().getStatus() == ReviewJobStatus.RUNNING) continue;
-                    }
-                    if (restarting) {
-                        deleteAttempt(root);
-                        discardRetiredInventory(root, job);
-                        continue;
-                    }
-                    Path ended = markEnded(root);
-                    if (!Files.getLastModifiedTime(ended)
-                            .toInstant()
-                            .plus(RETENTION_GRACE)
-                            .isAfter(clock.instant())) {
-                        deleteAttempt(root);
-                        discardRetiredInventory(root, job);
+                    if (job.isPresent() && readsFolder(root, job.get())) continue;
+                    deleteAttempt(root);
+                    // An ended job's file and text inventory goes with its folder; a running one still reads it.
+                    if (job.isPresent() && job.get().getStatus() != ReviewJobStatus.RUNNING) {
+                        ReviewJob ended = job.get();
+                        jobs.expireCaptureInventory(
+                                ended.getId(), ended.getWorkspaceId(), ended.getAttempt(), ended.getRunId());
                     }
                 } catch (RuntimeException | IOException exception) {
                     log.warn("Could not clean attempt folder {}", root, exception);
                     remaining++;
                 }
             }
-            for (Path trace : traces) if (!cleanTrace(trace)) remaining++;
+            for (Path trace : traces) if (!ofErasedJob(erased, trace) && !cleanTrace(trace)) remaining++;
+            removeEmptyJobFolders(erased);
         } catch (IOException exception) {
             throw new UncheckedIOException(exception);
         }
         return remaining;
+    }
+
+    /** The jobs of these attempt folders and transcripts that have an erased copy. */
+    private Set<UUID> erasedJobs(Set<Path> roots, Set<Path> traces) {
+        var jobs = new HashMap<UUID, Long>();
+        for (Path entry : roots) addJob(jobs, entry);
+        for (Path entry : traces) addJob(jobs, entry);
+        return personCopies.erasedJobs(jobs);
+    }
+
+    private static void addJob(Map<UUID, Long> jobs, Path entry) {
+        Path jobDirectory = Objects.requireNonNull(entry.getParent());
+        Path workspaceDirectory = Objects.requireNonNull(jobDirectory.getParent());
+        try {
+            jobs.put(
+                    UUID.fromString(
+                            Objects.requireNonNull(jobDirectory.getFileName()).toString()),
+                    Long.parseLong(Objects.requireNonNull(workspaceDirectory.getFileName())
+                            .toString()));
+        } catch (IllegalArgumentException notAJobFolder) {
+            // Not a job's folder: the sweep skips its entries by their names.
+        }
+    }
+
+    private static boolean ofErasedJob(Set<UUID> erased, Path entry) {
+        try {
+            return erased.contains(UUID.fromString(Objects.requireNonNull(
+                            Objects.requireNonNull(entry.getParent()).getFileName())
+                    .toString()));
+        } catch (IllegalArgumentException notAJobFolder) {
+            return false;
+        }
+    }
+
+    /**
+     * Removes each job folder that holds nothing more: no attempt, staging copy or transcript. A capture holds the job's
+     * lease while it creates the folder, so the folder is removed only under that lease.
+     */
+    private void removeEmptyJobFolders(Set<UUID> erased) throws IOException {
+        try (var workspaces = Files.list(layout.jobsRoot())) {
+            for (Path workspace : workspaces.toList()) {
+                if (!workspace.getFileName().toString().matches("[0-9]+")
+                        || !Files.isDirectory(workspace, LinkOption.NOFOLLOW_LINKS)) continue;
+                try (var jobFolders = Files.list(workspace)) {
+                    for (Path jobFolder : jobFolders.toList()) {
+                        if (!isEmptyDirectory(jobFolder)) continue;
+                        UUID jobId;
+                        try {
+                            jobId = UUID.fromString(jobFolder.getFileName().toString());
+                        } catch (IllegalArgumentException notAJobFolder) {
+                            continue;
+                        }
+                        if (erased.contains(jobId)) continue;
+                        var acquired = EvidenceFolderLease.tryAcquire(
+                                layout.root(),
+                                Long.parseLong(workspace.getFileName().toString()),
+                                jobId);
+                        if (acquired.isEmpty()) continue;
+                        var lease = acquired.get();
+                        try (lease) {
+                            if (isEmptyDirectory(jobFolder)) Files.deleteIfExists(jobFolder);
+                        } catch (DirectoryNotEmptyException written) {
+                            // A capture wrote into it after the check; the next pass sees what it holds.
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private static boolean isEmptyDirectory(Path folder) throws IOException {
+        if (!Files.isDirectory(folder, LinkOption.NOFOLLOW_LINKS)) return false;
+        try (var entries = Files.list(folder)) {
+            return entries.findAny().isEmpty();
+        }
+    }
+
+    /**
+     * Whether the folder is the one that the job's running attempt reads. A composition reads the folder of its own
+     * run; the folder of the run that measured the review is then another run's, and the next sweep removes it.
+     */
+    private boolean readsFolder(Path root, ReviewJob job) {
+        return matches(root, job) && job.getStatus() == ReviewJobStatus.RUNNING;
     }
 
     /**
@@ -1322,12 +1406,6 @@ public class JobEvidenceFiles implements SandboxResultListener {
         }
     }
 
-    private void discardRetiredInventory(Path root, Optional<ReviewJob> recorded) {
-        if (recorded.isEmpty() || !matches(root, recorded.get())) return;
-        ReviewJob job = recorded.get();
-        jobs.expireCaptureInventory(job.getId(), job.getWorkspaceId(), job.getAttempt(), job.getRunId());
-    }
-
     private Optional<ReviewJob> recordedJob(Path root) {
         Path jobDirectory = Objects.requireNonNull(root.getParent());
         Path workspaceDirectory = Objects.requireNonNull(jobDirectory.getParent());
@@ -1340,21 +1418,6 @@ public class JobEvidenceFiles implements SandboxResultListener {
 
     private boolean matches(Path root, ReviewJob job) {
         return directory(job).equals(root);
-    }
-
-    private static boolean admitted(ReviewJob job) {
-        return ResultAdmissionService.isAdmitted(job);
-    }
-
-    private Path markEnded(Path root) throws IOException {
-        Path ended = root.resolveSibling(root.getFileName() + ".ended");
-        try {
-            Files.createFile(ended);
-            Files.setLastModifiedTime(ended, FileTime.from(clock.instant()));
-        } catch (FileAlreadyExistsException alreadyEnded) {
-            // The marker's timestamp is when the attempt first ended; the retention grace counts from it.
-        }
-        return ended;
     }
 
     private static void deleteAttempt(Path root) throws IOException {
