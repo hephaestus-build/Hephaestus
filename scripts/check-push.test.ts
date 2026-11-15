@@ -149,6 +149,18 @@ void test("a hook change runs every test that runs a hook as a process", () => {
 	);
 });
 
+void test("a schema change pushes with the server and docs checks only", () => {
+	const schema = [
+		"server/application/src/main/java/de/tum/cit/aet/hephaestus/practices/model/Practice.java",
+		"server/application/src/main/resources/db/changelog/next/20261115000000-practice.xml",
+		"docs/contributor/erd/practices.mmd",
+		"docs/contributor/erd/_modules.mdx",
+	];
+	assert.deepEqual(pushScopes(schema), ["docs", "server"]);
+	assert.deepEqual(pushScopes(["docs/contributor/erd/practices.mmd"]), ["docs"]);
+	assert.deepEqual(frontendCommands(schema), []);
+});
+
 void test("focused Node tests include changed tests and existing source companions", () => {
 	assert.deepEqual(
 		focusedTests([

@@ -35,14 +35,9 @@ const fullGateInputs = [
 	/^pnpm-lock\.yaml$/u,
 	/^pnpm-workspace\.yaml$/u,
 	/^patches\//u,
+	/^webapp\/tools\/oxlint\//u,
 	/^tsconfig(?:\.node)?\.json$/u,
 	/^\.ox(?:fmt|lint)rc\.json$/u,
-	/^server\/openapi\.yaml$/u,
-	/^webapp\/src\/api\//u,
-	/^extension\/src\/api\//u,
-	/^webapp\/src\/routeTree\.gen\.ts$/u,
-	/^webapp\/tools\/oxlint\//u,
-	/^docs\/contributor\/erd\//u,
 	/(?:^|\/)AGENTS\.md$/u,
 	/(?:^|\/)CLAUDE\.md$/u,
 ];
@@ -53,7 +48,7 @@ const SHARED_THEME_TOKENS = "webapp/src/styles/theme-tokens.css";
 // Webapp files the extension imports by path (`@/…`), the files those import, and the stylesheet
 // the formatter sorts the extension's Tailwind classes by; `check-affected.test.ts` derives them from
 // the extension's imports and holds this list and the `extension` filters in `cicd.yml` to them. The
-// webapp lint plugin, which both trees load, is a full-gate input above.
+// webapp lint plugin, which every lint loads, is a full-gate input above.
 const webappInputsOfTheExtension = [
 	/^webapp\/brand\/hephaestus-mark\.svg$/u,
 	/^webapp\/src\/components\/brand\/HephaestusLogo\.tsx$/u,
@@ -119,6 +114,11 @@ export function scopesFor(paths: string[]): Scope[] {
 		} else if (file === SHARED_THEME_TOKENS) {
 			scopes.add("docs");
 			scopes.add("extension");
+			scopes.add("webapp");
+		} else if (file === "server/openapi.yaml") {
+			// The spec and the two clients generated from it; CI's generated-artifact check proves they agree.
+			scopes.add("extension");
+			scopes.add("server");
 			scopes.add("webapp");
 		} else if (webappInputsOfTheExtension.some((pattern) => pattern.test(file))) {
 			scopes.add("extension");

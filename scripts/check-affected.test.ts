@@ -141,9 +141,26 @@ await test("selects the Chrome extension, and the webapp inputs it imports", () 
 		"extension",
 		"webapp",
 	]);
-	// The lint plugin both trees load, and the spec the extension's client comes from, run everything.
+	// Every lint loads the plugin, so it runs everything. The spec runs the server and both of its clients.
 	assert.deepEqual(scopesFor(["webapp/tools/oxlint/rules/a.ts"]), ["full"]);
-	assert.deepEqual(scopesFor(["server/openapi.yaml"]), ["full"]);
+	assert.deepEqual(scopesFor(["server/openapi.yaml"]), ["extension", "server", "webapp"]);
+});
+
+await test("generated files select the trees that read them, not every scope", () => {
+	// CI's generated-artifact check proves each one against its source; locally, its readers run.
+	assert.deepEqual(scopesFor(["docs/contributor/erd/integration.mmd"]), ["docs"]);
+	assert.deepEqual(scopesFor(["webapp/src/api/core/a.ts"]), ["webapp"]);
+	assert.deepEqual(scopesFor(["webapp/src/routeTree.gen.ts"]), ["webapp"]);
+	assert.deepEqual(scopesFor(["extension/src/api/sdk.gen.ts"]), ["extension"]);
+	// A schema change: an entity, its migration and the regenerated diagram.
+	assert.deepEqual(
+		scopesFor([
+			"server/application/src/main/java/de/tum/cit/aet/hephaestus/practices/model/Practice.java",
+			"server/application/src/main/resources/db/changelog/next/20261115000000-practice.xml",
+			"docs/contributor/erd/practices.mmd",
+		]),
+		["docs", "server"],
+	);
 });
 
 /** A path-filter glob as a pattern; the filter uses only `**` and literal dots. */
@@ -327,20 +344,15 @@ await test("release notes select their validation without expanding an unrelated
 	}
 });
 
-await test("fails closed for shared, generated, contract, tooling, and unknown inputs", () => {
+await test("fails closed for shared, tooling, and unknown inputs", () => {
 	for (const file of [
 		"package.json",
 		"pnpm-lock.yaml",
 		"pnpm-workspace.yaml",
 		"patches/zod@4.4.3.patch",
 		".oxlintrc.json",
-		"scripts/check-affected.ts",
-		"server/openapi.yaml",
-		"webapp/src/api/core/a.ts",
-		"extension/src/api/sdk.gen.ts",
-		"webapp/src/routeTree.gen.ts",
 		"webapp/tools/oxlint/index.ts",
-		"docs/contributor/erd/integration.mmd",
+		"scripts/check-affected.ts",
 		".vite-hooks/pre-push",
 		"docker/docker-bake.hcl",
 		"webapp/CLAUDE.md",
@@ -352,7 +364,7 @@ await test("fails closed for shared, generated, contract, tooling, and unknown i
 
 await test("a full-gate input overrides scoped inputs", () => {
 	assert.deepEqual(scopesFor(["webapp/src/a.tsx", "package.json"]), ["full"]);
-	assert.deepEqual(scopesFor(["extension/src/a.tsx", "server/openapi.yaml"]), ["full"]);
+	assert.deepEqual(scopesFor(["extension/src/a.tsx", "pnpm-lock.yaml"]), ["full"]);
 	assert.deepEqual(commandsFor(["full"]), [["run", "quality"]]);
 });
 
