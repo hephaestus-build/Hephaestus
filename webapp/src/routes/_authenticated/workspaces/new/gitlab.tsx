@@ -25,6 +25,7 @@ import {
 import type { WorkspaceListItem } from "@/api/types.gen";
 import { ConfigureWorkspaceStep } from "@/components/create-workspace/ConfigureWorkspaceStep";
 import { ConnectGitLabStep } from "@/components/create-workspace/ConnectGitLabStep";
+import { GitLabWizardSkeleton } from "@/components/create-workspace/CreateWorkspaceSkeletons";
 import {
 	type ProjectChoices,
 	ProjectScopeField,
@@ -200,8 +201,9 @@ function GitLabWizardPage() {
 
 	if (providersLoading || identityProvidersLoading) {
 		return (
-			<div className="flex justify-center py-16">
-				<Spinner />
+			<div className="mx-auto w-full max-w-2xl">
+				<BackToProviders />
+				<GitLabWizardSkeleton />
 			</div>
 		);
 	}

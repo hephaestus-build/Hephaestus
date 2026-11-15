@@ -5,10 +5,11 @@ import type { ReactNode } from "react";
 
 import { getProvidersOptions } from "@/api/@tanstack/react-query.gen";
 import { DocLink } from "@/components/common/DocLink";
+import { InstallActionSkeleton } from "@/components/create-workspace/CreateWorkspaceSkeletons";
 import { GitHubIcon } from "@/components/icons/brand";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { buttonVariants } from "@/components/ui/button";
-import { Spinner } from "@/components/ui/spinner";
+import { Skeleton } from "@/components/ui/skeleton";
 import { pageHead } from "@/lib/page-title";
 import { hasText } from "@/lib/text";
 
@@ -29,11 +30,7 @@ function GitHubSetupPage() {
 
 	let installAction: ReactNode;
 	if (isLoading) {
-		installAction = (
-			<div className="flex justify-center py-4">
-				<Spinner />
-			</div>
-		);
+		installAction = <InstallActionSkeleton />;
 	} else if (hasText(appUrl)) {
 		installAction = (
 			<a
@@ -88,14 +85,21 @@ function GitHubSetupPage() {
 							organization
 						</li>
 						<li>Select which repositories you want to monitor</li>
-						{adoptionNeeded ? (
+						{isLoading && (
+							// The last step depends on the creation policy, so it says nothing until that is known.
+							<li aria-hidden>
+								<Skeleton className="inline-block h-4 w-3/4 align-middle" />
+							</li>
+						)}
+						{!isLoading && adoptionNeeded && (
 							<li>
 								Back in Hephaestus, adopt the installation under{" "}
 								<strong className="text-foreground">
 									Instance administration → GitHub installations
 								</strong>
 							</li>
-						) : (
+						)}
+						{!isLoading && !adoptionNeeded && (
 							<li>A workspace is created automatically and appears in your sidebar</li>
 						)}
 					</ol>
