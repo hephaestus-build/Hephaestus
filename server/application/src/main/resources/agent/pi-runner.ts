@@ -2716,7 +2716,7 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 		const measuringEnded = new AbortController();
 		function gatewayUnavailable(): void {
 			gatewayFailure ??= new GatewayUnavailableError(
-				"The gateway repeatedly disconnected a model response",
+				"The gateway stayed unreachable until the work ended, or repeatedly disconnected a model response",
 			);
 			measuringEnded.abort(gatewayFailure);
 		}

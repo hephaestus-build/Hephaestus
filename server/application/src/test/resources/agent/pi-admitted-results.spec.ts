@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { once } from "node:events";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import {
@@ -261,5 +262,26 @@ void test("a refused connection after its work ended fails as unreachable, so th
 		),
 		(error) => error instanceof AdmissionUnreachableError,
 	);
-	assert.equal(calls, 4);
+	assert.equal(calls, 1, "after the work's end, the attempt ends at once");
+});
+
+void test("an admission that the gateway took but did not answer before the work ended fails as unreachable at once", async () => {
+	let calls = 0;
+	const ended = AbortSignal.timeout(300);
+	const started = Date.now();
+	await assert.rejects(
+		admit(
+			{},
+			async (_body, signal) => {
+				calls += 1;
+				// The gateway took the request and is still working on it, as fetch waits for its answer.
+				await once(signal, "abort");
+				throw new Error("the call was aborted", { cause: signal.reason });
+			},
+			ended,
+		),
+		(error) => error instanceof AdmissionUnreachableError,
+	);
+	assert.ok(Date.now() - started < 2000, "the call ended with the work, not at its own timeout");
+	assert.equal(calls, 1);
 });

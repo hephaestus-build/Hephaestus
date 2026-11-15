@@ -33,6 +33,9 @@ export function waitForGateway(
 		const transport = options?.fetch ?? globalThis.fetch;
 		let failure: "connection" | "response" | undefined;
 		const failureKind = () => failure;
+		// The work ended while the gateway still refused: that is the gateway's loss, not a cancelled call.
+		let lostAtWorkEnd = false;
+		const lostWithWork = () => lostAtWorkEnd;
 		let waits = 0;
 		const waited = () => {
 			waits += 1;
@@ -49,6 +52,10 @@ export function waitForGateway(
 				response = await untilGatewayTakes(async () => transport(input, init), signal, waited);
 			} catch (error) {
 				failure = isAborted() ? undefined : gatewayConnectionFailure(error);
+				lostAtWorkEnd =
+					deadline.aborted &&
+					options?.signal?.aborted !== true &&
+					gatewayConnectionFailure(error) === "connection";
 				throw error;
 			}
 			if (response.body === null) {
@@ -117,6 +124,9 @@ export function waitForGateway(
 				for (;;) {
 					let again = false;
 					for await (const event of current) {
+						if (event.type === "error" && lostWithWork()) {
+							observer.unavailable?.();
+						}
 						if (event.type === "error" && failureKind() !== undefined && !isAborted()) {
 							lastFailure = event.error;
 							countResponseLoss();

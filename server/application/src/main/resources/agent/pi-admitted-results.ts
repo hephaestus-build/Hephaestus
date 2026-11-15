@@ -68,9 +68,11 @@ async function postAdmission(
 ): Promise<unknown> {
 	let response: Response;
 	try {
-		// A refused connection reached no server; each new connection gets its own attempt timeout.
+		// A refused connection reached no server; each new connection gets its own attempt timeout. The end of the
+		// work also ends a call in flight, so the sandbox's deadline never stops the runner mid-call.
 		response = await untilGatewayTakes(
-			async () => send(body, AbortSignal.timeout(ADMISSION_ATTEMPT_TIMEOUT_MS)),
+			async () =>
+				send(body, AbortSignal.any([AbortSignal.timeout(ADMISSION_ATTEMPT_TIMEOUT_MS), patience])),
 			patience,
 			(waits) => {
 				if (Number.isInteger(Math.log2(waits))) {
@@ -79,6 +81,13 @@ async function postAdmission(
 			},
 		);
 	} catch (error) {
+		if (patience.aborted) {
+			// The work ended before the gateway took or answered the call. The attempt ends retryable, and the next one
+			// sends the same recorded request again.
+			throw new AdmissionUnreachableError(
+				`result admission did not reach the gateway before the work ended: ${errorText(error)}`,
+			);
+		}
 		if (isTimeoutAbort(error)) {
 			// The server is still verifying; a second attempt would only queue the same work behind it.
 			throw new Error(`result admission did not answer within ${ADMISSION_ATTEMPT_TIMEOUT_MS}ms`, {
@@ -129,7 +138,8 @@ async function sendRecorded(
 	const body = JSON.stringify(request);
 	const response: unknown = await retrying(
 		async () => postAdmission(body, send, patience),
-		(error) => error instanceof AdmissionUnreachableError,
+		// After the work's end, every attempt would end the same way at once.
+		(error) => error instanceof AdmissionUnreachableError && !patience.aborted,
 		{ attempts: ADMISSION_ATTEMPTS },
 		(attempt, error, delayMs) => {
 			diagnose("admission.retrying", {

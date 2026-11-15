@@ -210,6 +210,22 @@ await test("the work deadline bounds a gateway wait", async () => {
 	assert.equal(modelFailure(result).source, "ADAPTER");
 });
 
+await test("a gateway that still refuses when the work ends is the gateway's loss, not a cancelled call", async () => {
+	let interrupted = 0;
+	const output = await waitForGateway(stream, Date.now() + 1200, {
+		unavailable: () => {
+			interrupted += 1;
+		},
+	})(model, context, {
+		...options,
+		fetch: async () => {
+			throw new TypeError("fetch failed", { cause: { code: "ECONNREFUSED" } });
+		},
+	});
+	await eventsFrom(output);
+	assert.equal(interrupted, 1);
+});
+
 await test("repeated lost responses stop as an infrastructure interruption without a model retry", async () => {
 	let calls = 0;
 	let interrupted = false;
