@@ -66,6 +66,21 @@ export const Delivered: Story = {
 };
 
 /**
+ * A newer server can deliver to a place that this version does not know. The piece shows that it was
+ * delivered, with no link to a place that it may not be.
+ */
+export const UnknownDestination: Story = {
+	args: {
+		feedback: [ownFeedback("00000000-0000-4000-8000-0000000005a4", { destination: "EMAIL" })],
+	},
+	play: async ({ canvas }) => {
+		const piece = within(canvas.getByRole("listitem"));
+		await expect(piece.getByText(/^Delivered /u)).toBeVisible();
+		await expect(piece.queryByRole("link")).toBeNull();
+	},
+};
+
+/**
  * Feedback that did not reach the reader is not shown: an observation with only such feedback draws
  * no block, as one that gave none.
  */

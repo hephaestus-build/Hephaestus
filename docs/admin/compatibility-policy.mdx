@@ -139,11 +139,25 @@ A client must accept a value that it does not know, and must not fail on it.
 Thus, a new value in a response is a minor change.
 A new recorded reason is an example.
 
+The OpenAPI specification writes an open enum as a string with its known values in `examples`.
+Its description starts with "Extensible enum".
+A generated client then reads the value as a string, in every language.
+Removing a known value is a breaking change.
+
 A request enum stays closed: removing a value that a client can send is a breaking change.
+When a request uses an open enum, the server answers 400 for a value that it does not know.
 
 The observation outcomes and the problem severities are not open.
+The specification writes them as `enum`.
 A new outcome or severity is a major change, because it changes what an observation means.
 The [product vocabulary](/contributor/practice-feedback-language#observation-outcomes) defines them.
+
+## Missing values
+
+A response of the REST API leaves out a property that has no value.
+It does not send the property with `null`.
+A client treats an absent property and `null` the same, because an older server can still send `null`.
+A request can leave out an optional property, and `null` means the same as absent.
 
 ## Database migrations
 

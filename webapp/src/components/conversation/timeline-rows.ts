@@ -1,6 +1,7 @@
 import { differenceInCalendarDays, isSameDay } from "date-fns";
 
 import type { MentorEntry, MentorTurn } from "@/api/types.gen";
+import { definitionFor } from "@/components/common/status-def";
 import type { PendingMessage } from "@/lib/conversation-entry";
 import { formatWeekdayDay } from "@/lib/dates";
 import { hasText } from "@/lib/text";
@@ -74,25 +75,28 @@ function outcomesOf(entries: MentorEntry[]): Map<string, TurnOutcome> {
 }
 
 interface Speaker {
-	author: "developer" | "hephaestus" | "digest";
+	author: "developer" | "hephaestus" | "digest" | "unknown";
 	surface: MentorEntry["surface"];
 	createdAt: Date;
 }
 
-const AUTHORS = {
+export const AUTHORS = {
 	USER: "developer",
 	HEPH: "hephaestus",
 	DIGEST: "digest",
-} as const satisfies Record<MentorEntry["kind"], Speaker["author"]>;
+} as const satisfies Record<string, Speaker["author"]>;
 
 function speakerOf(entry: MentorEntry): Speaker {
-	return { author: AUTHORS[entry.kind], surface: entry.surface, createdAt: entry.createdAt };
+	// A kind that this build does not know names no author, so it is not shown as anyone's.
+	const author = definitionFor(AUTHORS, entry.kind, "unknown");
+	return { author, surface: entry.surface, createdAt: entry.createdAt };
 }
 
 function continues(previous: Speaker | undefined, next: Speaker): boolean {
 	return (
 		previous !== undefined &&
 		next.author !== "digest" &&
+		next.author !== "unknown" &&
 		previous.author === next.author &&
 		previous.surface === next.surface &&
 		next.createdAt.getTime() - previous.createdAt.getTime() < GROUP_WINDOW_MS

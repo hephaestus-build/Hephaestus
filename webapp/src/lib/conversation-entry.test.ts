@@ -109,11 +109,14 @@ describe("parseLiveEvent", () => {
 		});
 	});
 
-	it("drops what it cannot read rather than guessing", () => {
-		expect(parseLiveEvent("entry", "not json")).toBeUndefined();
+	it("keeps an entry of a kind that this build does not know: the kind is an open enum", () => {
 		expect(
 			parseLiveEvent("entry", JSON.stringify({ ...ENTRY, kind: "TOOL_RESULT" })),
-		).toBeUndefined();
+		).toMatchObject({ type: "entry", entry: { kind: "TOOL_RESULT" } });
+	});
+
+	it("drops what it cannot read rather than guessing", () => {
+		expect(parseLiveEvent("entry", "not json")).toBeUndefined();
 		expect(
 			parseLiveEvent("entry", JSON.stringify({ ...ENTRY, createdAt: "yesterday" })),
 		).toBeUndefined();

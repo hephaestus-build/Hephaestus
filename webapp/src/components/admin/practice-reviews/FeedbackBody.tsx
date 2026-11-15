@@ -1,6 +1,6 @@
 import type { ReviewFeedback } from "@/api/types.gen";
 import { UNTRUSTED_MARKDOWN_PROSE, UntrustedMarkdown } from "@/components/common/UntrustedMarkdown";
-import { ADMIN_WITHHELD_TEXT } from "@/components/practice-vocabulary/feedback-destination-defs";
+import { adminWithheldText } from "@/components/practice-vocabulary/feedback-destination-defs";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { hasText } from "@/lib/text";
@@ -18,7 +18,7 @@ export interface FeedbackBodyProps {
 
 export function FeedbackBody({ feedback, className }: FeedbackBodyProps) {
 	const { body } = feedback;
-	const withheld = ADMIN_WITHHELD_TEXT[feedback.destination];
+	const withheld = adminWithheldText(feedback.destination);
 
 	// Private-destination text must stay hidden even if the caller supplies it.
 	if (withheld) {

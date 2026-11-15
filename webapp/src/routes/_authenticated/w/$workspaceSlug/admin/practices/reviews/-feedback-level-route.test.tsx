@@ -9,7 +9,7 @@ import {
 	listReviewResultsQueryKey,
 	listReviewsQueryKey,
 } from "@/api/@tanstack/react-query.gen";
-import type { FeedbackDecision, ReviewFeedback } from "@/api/types.gen";
+import type { FeedbackDecision } from "@/api/types.gen";
 import {
 	awaitingApprovalFeedback,
 	awaitingApprovalFeedbackDetail,
@@ -52,7 +52,7 @@ const DECISIONS = "*/workspaces/:workspaceSlug/practices/reviews/feedback/:feedb
 /** The level opened by its URL over the list it belongs to, as a shared link opens it. */
 const FEEDBACK_LEVEL = `/w/acme/admin/practices/reviews/feedback?detail=feedback:${FEEDBACK_ID}`;
 
-type ProposalState = Extract<ReviewFeedback["state"], "AWAITING_APPROVAL" | "READY">;
+type ProposalState = "AWAITING_APPROVAL" | "READY";
 
 function proposalWire(state: ProposalState, id = FEEDBACK_ID) {
 	return {

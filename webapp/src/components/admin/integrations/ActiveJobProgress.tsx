@@ -5,7 +5,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { hasText } from "@/lib/text";
 
 import { formatNumber } from "@/lib/numbers";
-import { JOB_TYPE_LABEL, jobProgress, phaseLabel } from "./sync-format";
+import { jobProgress, jobTypeLabel, phaseLabel } from "./sync-format";
 
 export interface ActiveJobProgressProps {
 	job?: SyncJob | null;
@@ -52,7 +52,7 @@ export function ActiveJobProgress({ job }: ActiveJobProgressProps) {
 				) : (
 					<>
 						<Spinner className="size-4 shrink-0" />
-						{!hasText(currentStep) && <span>{JOB_TYPE_LABEL[job.type]} running…</span>}
+						{!hasText(currentStep) && <span>{jobTypeLabel(job.type)} running…</span>}
 					</>
 				)}
 				{hasText(phase) && (

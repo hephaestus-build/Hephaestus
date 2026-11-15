@@ -20,18 +20,20 @@ import type {
 	ReviewSummary,
 } from "@/api/types.gen";
 
-import type { StatusDef, StatusDefs } from "@/components/common/status-def";
+import { definitionFor, type StatusDef, type StatusDefs } from "@/components/common/status-def";
 
 import { BOT_REVIEW_REFUSAL_SENTENCE } from "./bot-review-refusal";
 
 export type ReviewStatus = ReviewRef["status"];
+/** A review status that this build names, and the ones that a filter can ask for. */
+export type KnownReviewStatus = keyof typeof REVIEW_STATUS_DEFS;
 export type ReviewStopReason = NonNullable<ReviewSummary["stopReason"]>;
 export type ReviewPracticeStatus = ReviewPractice["status"];
 export type ReviewJobStatus = ReviewJob["status"];
 export type ReviewJobProcessingStatus = ReviewJob["processingStatus"];
 
 // Review status describes execution; result outcomes and feedback delivery are separate facts.
-export const REVIEW_STATUS_DEFS: StatusDefs<ReviewStatus> = {
+export const REVIEW_STATUS_DEFS = {
 	QUEUED: {
 		label: "Queued",
 		icon: ClockIcon,
@@ -69,14 +71,14 @@ export const REVIEW_STATUS_DEFS: StatusDefs<ReviewStatus> = {
 		badgeVariant: "outline",
 		description: "It was stopped before it finished.",
 	},
-};
+} satisfies StatusDefs<string>;
 
 /**
  * How a review ended, as the developer's own surfaces read it. Those surfaces carry no stop reason,
  * so each sentence must hold for every reason. A partial review may have run to the end with a
  * practice failed or withheld, or may predate a record of what it covered, so it names only scope.
  */
-export const OWN_REVIEW_STATUS_DEFS: StatusDefs<ReviewStatus> = {
+export const OWN_REVIEW_STATUS_DEFS = {
 	QUEUED: {
 		label: "Waiting",
 		icon: ClockIcon,
@@ -114,24 +116,29 @@ export const OWN_REVIEW_STATUS_DEFS: StatusDefs<ReviewStatus> = {
 		badgeVariant: "outline",
 		description: "The review was stopped before it finished.",
 	},
-};
+} satisfies StatusDefs<string>;
 
 /**
  * What a partial review's results cover, beside the recorded stop reason that says why. A partial
  * review may have stopped early or run to the end with a practice failed or withheld, so this names
  * only the scope and never the cause.
  */
-export const PARTIAL_REVIEW_SCOPE: Record<ReviewRef["kind"], string> = {
+export const PARTIAL_REVIEW_SCOPE = {
 	ITEM: "Its observations and feedback cover only the practices it reviewed.",
 	SCAN: "Its observations cover only the work it reached.",
-};
+} satisfies Record<string, string>;
+
+/** What a partial review covers; a review kind that this build does not know names no scope. */
+export function partialReviewScope(kind: ReviewRef["kind"]): string | undefined {
+	return definitionFor(PARTIAL_REVIEW_SCOPE, kind, undefined);
+}
 
 export function isActiveReview(status: ReviewStatus): boolean {
 	return status === "QUEUED" || status === "RUNNING";
 }
 
 /** Why a review stopped, as the server recorded it. */
-export const REVIEW_STOP_REASON_SENTENCES: Record<ReviewStopReason, string> = {
+export const REVIEW_STOP_REASON_SENTENCES = {
 	TIMED_OUT: "It ran past the time it is allowed and was stopped.",
 	EXECUTION_FAILED: "Running the review failed.",
 	PREPARATION_FAILED: "Preparing the review failed.",
@@ -160,7 +167,16 @@ export const REVIEW_STOP_REASON_SENTENCES: Record<ReviewStopReason, string> = {
 	LEGACY_SCOPE_UNKNOWN: "It ran before Hephaestus recorded what it covered.",
 	CONTRACT_CHANGED: "Hephaestus was upgraded while it waited, so it stopped.",
 	NO_SANDBOX_ROOM: "Hephaestus had no room to run this review in time.",
-};
+} satisfies Record<string, string>;
+
+/** Why a review stopped, or that the reason is one this build does not know. */
+export function reviewStopReasonSentence(reason: ReviewStopReason): string {
+	return definitionFor(
+		REVIEW_STOP_REASON_SENTENCES,
+		reason,
+		"It stopped for a reason that this version of Hephaestus does not recognize.",
+	);
+}
 
 /** The wire values of the server's `CandidateRefusal`; each withholds an observation that failed that check. */
 const CANDIDATE_REFUSALS = [
@@ -352,7 +368,7 @@ export function shownReviewStatusDef(
 	status: ReviewStatus,
 	progress: ReviewProgress | null | undefined,
 ): StatusDef {
-	return progress?.continuing === true ? REVIEW_CONTINUING_DEF : defs[status];
+	return progress?.continuing === true ? REVIEW_CONTINUING_DEF : definitionFor(defs, status);
 }
 
 /**

@@ -7,7 +7,7 @@ import {
 } from "@/components/practice-vocabulary/delivery-family-defs";
 import {
 	DELIVERY_STATE_DEFS,
-	type DeliveryState,
+	type KnownDeliveryState,
 } from "@/components/practice-vocabulary/delivery-state-defs";
 import { OUTCOME_DEFS, outcomeCountNoun } from "@/components/practice-vocabulary/outcome-defs";
 import { RESULT_MARK_DEFS } from "@/components/practice-vocabulary/result-mark-defs";
@@ -65,14 +65,14 @@ export const OUTCOME_LEGEND_LABELS = {
 
 const lower = (def: StatusDef) => def.label.toLowerCase();
 
-const REVIEW_COUNT: Record<ReviewStatus, keyof ReviewStatusCounts> = {
+export const REVIEW_COUNT = {
 	QUEUED: "queued",
 	RUNNING: "running",
 	COMPLETE: "complete",
 	PARTIAL: "partial",
 	FAILED: "failed",
 	CANCELLED: "cancelled",
-};
+} satisfies Record<string, keyof ReviewStatusCounts>;
 
 /** A slot built with a scope, which always names the list it opens. */
 type ScopedOutcomeSlot = OutcomeSlot & { target: ReviewListTarget };
@@ -153,7 +153,7 @@ export function markedIncorrectSlot(count: number, scope?: OutcomeScope): Outcom
 	};
 }
 
-const FEEDBACK_COUNT: Record<DeliveryState, keyof ReviewFeedbackCounts> = {
+const FEEDBACK_COUNT: Record<KnownDeliveryState, keyof ReviewFeedbackCounts> = {
 	AWAITING_APPROVAL: "awaitingApproval",
 	READY: "ready",
 	DELIVERED: "delivered",
@@ -167,7 +167,7 @@ const FEEDBACK_COUNT: Record<DeliveryState, keyof ReviewFeedbackCounts> = {
 /** How many pieces of feedback are in one delivery family. */
 export function familyCount(counts: ReviewFeedbackCounts, family: DeliveryFamily): number {
 	return DELIVERY_FAMILY_STATES[family].reduce(
-		(sum: number, state: DeliveryState) => sum + counts[FEEDBACK_COUNT[state]],
+		(sum: number, state: KnownDeliveryState) => sum + counts[FEEDBACK_COUNT[state]],
 		0,
 	);
 }
@@ -197,7 +197,7 @@ export function overviewFeedbackSlots(
 	counts: ReviewFeedbackCounts,
 	scope?: OutcomeScope,
 ): OutcomeSlot[] {
-	const search = (state: DeliveryState[]): ReviewListTarget | undefined =>
+	const search = (state: KnownDeliveryState[]): ReviewListTarget | undefined =>
 		scope && {
 			list: "feedback",
 			search: { ...scopeSearch(scope, "feedback"), state },

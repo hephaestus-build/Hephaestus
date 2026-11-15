@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { ITEM_EVENT_REASON_SENTENCES } from "@/components/practice-vocabulary/item-event-defs";
+import { itemEventReasonSentence } from "@/components/practice-vocabulary/item-event-defs";
 import type { ReviewRequestOutcome } from "~/api/types.gen";
 import {
 	type ContextApi,
@@ -366,14 +366,18 @@ async function send(
 	context: ReadyContext,
 ): Promise<ActionOutcome> {
 	const outcome = await env.api.requestReview(context.workspace.slug, context.item.id);
-	return outcome.status === "SUBMITTED"
-		? { kind: "request-review", status: "SUBMITTED" }
-		: {
-				kind: "request-review",
-				status: "REFUSED",
-				reasonDescription:
-					outcome.reason == null ? undefined : ITEM_EVENT_REASON_SENTENCES[outcome.reason],
-			};
+	if (outcome.status === "SUBMITTED") {
+		return { kind: "request-review", status: "SUBMITTED" };
+	}
+	if (outcome.status === "REFUSED") {
+		return {
+			kind: "request-review",
+			status: "REFUSED",
+			reasonDescription:
+				outcome.reason == null ? undefined : itemEventReasonSentence(outcome.reason),
+		};
+	}
+	return { kind: "request-review", status: "UNRECOGNIZED" };
 }
 
 /** The window's own "Cancel": removes its intent, and only while it is still this window's. */

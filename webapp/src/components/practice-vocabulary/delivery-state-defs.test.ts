@@ -159,3 +159,20 @@ describe("isDeliveryInProgress", () => {
 		).toBe(false);
 	});
 });
+
+describe("deliveryOutcome for a destination that this build does not know", () => {
+	it("says ready without naming a place, and does not count it as being sent", () => {
+		const facts = {
+			destination: "EMAIL",
+			state: "READY",
+			stopReason: null,
+			withdrawn: false,
+			deliveredAt: null,
+		} as const;
+		expect(deliveryOutcome(facts)).toMatchObject({
+			label: "Ready",
+			description: "It is ready for a place that this version of Hephaestus does not recognize.",
+		});
+		expect(isDeliveryInProgress(facts)).toBe(false);
+	});
+});

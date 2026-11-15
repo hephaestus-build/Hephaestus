@@ -34,7 +34,10 @@ export type AccountRef = {
 	status: AccountStatus;
 };
 
-export type AccountStatus = "UNCLAIMED" | "ACTIVE" | "BLOCKED" | "DELETING" | "DELETED";
+/**
+ * Extensible enum: a client accepts a value that the examples do not name.
+ */
+export type AccountStatus = string;
 
 export type AccountType = "ORG" | "USER";
 
@@ -769,7 +772,10 @@ export type CitationProof = {
 
 export type CitationRequirement = "REQUIRED" | "OPTIONAL" | "FORBIDDEN";
 
-export type CitationSide = "OLD" | "NEW";
+/**
+ * Extensible enum: a client accepts a value that the examples do not name.
+ */
+export type CitationSide = string;
 
 export type ClaimBasis = {
 	type: string;
@@ -901,13 +907,15 @@ export type ConfigurationFact = {
 	subject: string;
 };
 
-export type ConfigurationRequirement = "REQUIRED" | "RECOMMENDED" | "OPTIONAL";
+/**
+ * Extensible enum: a client accepts a value that the examples do not name.
+ */
+export type ConfigurationRequirement = string;
 
-export type ConfigurationStatus =
-	| "SATISFIED"
-	| "ACTION_REQUIRED"
-	| "NOT_CONFIGURED"
-	| "NOT_APPLICABLE";
+/**
+ * Extensible enum: a client accepts a value that the examples do not name.
+ */
+export type ConfigurationStatus = string;
 
 /**
  * Detailed view of a single Connection — extends {@link ConnectionSummaryDTO ConnectionSummaryDTO} with the
@@ -1418,7 +1426,10 @@ export type CurrentUserView = {
 	username?: string;
 };
 
-export type Currentness = "CURRENT" | "STALE" | "UNVERIFIABLE";
+/**
+ * Extensible enum: a client accepts a value that the examples do not name.
+ */
+export type Currentness = string;
 
 /**
  * One page of a list that a client reads forward with a cursor
@@ -1743,7 +1754,10 @@ export type FeedbackCopyCounts = {
 	writeStarted: number;
 };
 
-export type FeedbackCopyKind = "SUMMARY" | "LINE_NOTE" | "FILE_NOTE" | "CHAT_TURN";
+/**
+ * Extensible enum: a client accepts a value that the examples do not name.
+ */
+export type FeedbackCopyKind = string;
 
 export type FeedbackCopyReadback = "ABSENT" | "TRANSIENT" | "UNKNOWN";
 
@@ -1776,7 +1790,10 @@ export type FeedbackDecisionReason =
 	| "INAPPROPRIATE_LOCATION"
 	| "OTHER";
 
-export type FeedbackDestination = "ON_WORK" | "PRACTICE_PAGE" | "CONVERSATION";
+/**
+ * Extensible enum: a client accepts a value that the examples do not name.
+ */
+export type FeedbackDestination = string;
 
 export type FeedbackDisagreement = {
 	comment: string;
@@ -1859,7 +1876,10 @@ export type FeedbackRequest = {
 	userAgent?: string;
 };
 
-export type FeedbackResolution = "ADDRESSED" | "DISAGREE" | "NOT_APPLICABLE";
+/**
+ * Extensible enum: a client accepts a value that the examples do not name.
+ */
+export type FeedbackResolution = string;
 
 export type FeedbackResponse = {
 	comment?: string;
@@ -1906,15 +1926,10 @@ export type FeedbackSourceCount = {
 	itemKind: string;
 };
 
-export type FeedbackState =
-	| "AWAITING_APPROVAL"
-	| "READY"
-	| "DELIVERED"
-	| "UNCONFIRMED"
-	| "WITHHELD"
-	| "REJECTED"
-	| "REPLACED"
-	| "FAILED";
+/**
+ * Extensible enum: a client accepts a value that the examples do not name.
+ */
+export type FeedbackState = string;
 
 export type FeedbackStopReason =
 	| "VOLUME_CAPPED"
@@ -1961,7 +1976,10 @@ export type FeedbackTriage = {
 	resolved: boolean;
 };
 
-export type FeedbackUsefulness = "HELPFUL" | "UNHELPFUL";
+/**
+ * Extensible enum: a client accepts a value that the examples do not name.
+ */
+export type FeedbackUsefulness = string;
 
 /**
  * The workspace a record was submitted from; absent for instance-level submissions.
@@ -2280,7 +2298,10 @@ export type Identity = {
 	teamId?: string;
 };
 
-export type IdentityProviderType = "GITHUB" | "GITLAB" | "SLACK" | "OUTLINE";
+/**
+ * Extensible enum: a client accepts a value that the examples do not name.
+ */
+export type IdentityProviderType = string;
 
 /**
  * One row per sign-in option. <code>providerType</code> drives the SPA's icon choice; <code>baseUrl</code> is
@@ -2354,7 +2375,10 @@ export type InitiateConnectionResponse = {
 	vendorUrl?: string;
 };
 
-export type InitiateConnectionResponseType = "REDIRECT" | "LINKED";
+/**
+ * Extensible enum: a client accepts a value that the examples do not name.
+ */
+export type InitiateConnectionResponseType = string;
 
 /**
  * Instance-wide LLM governance settings
@@ -2420,7 +2444,10 @@ export type IntegrationCatalogEntry = {
 
 export type IntegrationFamily = "SCM" | "MESSAGING" | "DOCUMENTATION";
 
-export type IntegrationKind = "GITHUB" | "GITLAB" | "SLACK" | "OUTLINE";
+/**
+ * Extensible enum: a client accepts a value that the examples do not name.
+ */
+export type IntegrationKind = string;
 
 export type IntegrationState = "PENDING" | "ACTIVE" | "SUSPENDED" | "UNINSTALLED";
 
@@ -3167,13 +3194,25 @@ export type MentorEntry = {
 	vote?: MentorEntryVote;
 };
 
-export type MentorEntryKind = "USER" | "HEPH" | "DIGEST";
+/**
+ * Extensible enum: a client accepts a value that the examples do not name.
+ */
+export type MentorEntryKind = string;
 
-export type MentorEntrySlackDelivery = "PENDING" | "DELIVERED" | "UNCERTAIN" | "FAILED";
+/**
+ * Extensible enum: a client accepts a value that the examples do not name.
+ */
+export type MentorEntrySlackDelivery = string;
 
-export type MentorEntrySurface = "APP" | "SLACK" | "SYSTEM";
+/**
+ * Extensible enum: a client accepts a value that the examples do not name.
+ */
+export type MentorEntrySurface = string;
 
-export type MentorEntryVote = "HELPFUL" | "NOT_HELPFUL";
+/**
+ * Extensible enum: a client accepts a value that the examples do not name.
+ */
+export type MentorEntryVote = string;
 
 /**
  * A practice result, problem or prepared feedback Hephaestus showed in a message
@@ -3198,7 +3237,10 @@ export type MentorLink = {
 	text: string;
 };
 
-export type MentorLinkKind = "RESULT" | "PROBLEM" | "FEEDBACK";
+/**
+ * Extensible enum: a client accepts a value that the examples do not name.
+ */
+export type MentorLinkKind = string;
 
 /**
  * How far the developer read their Hephaestus conversation
@@ -3318,7 +3360,10 @@ export type MentorTurnPartial = {
 	tool?: string;
 };
 
-export type MentorTurnPartialActivity = "THINKING" | "WRITING" | "TOOL";
+/**
+ * Extensible enum: a client accepts a value that the examples do not name.
+ */
+export type MentorTurnPartialActivity = string;
 
 /**
  * A question to Hephaestus from the app
@@ -3342,7 +3387,10 @@ export type MentorTurnRequest = {
 	text: string;
 };
 
-export type MentorTurnStatus = "QUEUED" | "RUNNING" | "DONE" | "FAILED" | "STOPPED";
+/**
+ * Extensible enum: a client accepts a value that the examples do not name.
+ */
+export type MentorTurnStatus = string;
 
 /**
  * A status change the developer asks for on a turn
@@ -3354,9 +3402,15 @@ export type MentorTurnStatusRequest = {
 	status: MentorTurnStatus;
 };
 
-export type MentorTurnSurface = "APP" | "SLACK" | "SYSTEM";
+/**
+ * Extensible enum: a client accepts a value that the examples do not name.
+ */
+export type MentorTurnSurface = string;
 
-export type MentorTurnWaitingFor = "FREE_HEPH";
+/**
+ * Extensible enum: a client accepts a value that the examples do not name.
+ */
+export type MentorTurnWaitingFor = string;
 
 /**
  * The developer's vote on one of Hephaestus's messages
@@ -4770,18 +4824,20 @@ export type ProfileChange = {
 	type: ProfileChangeType;
 };
 
-export type ProfileChangeDirection = "UP" | "DOWN";
+/**
+ * Extensible enum: a client accepts a value that the examples do not name.
+ */
+export type ProfileChangeDirection = string;
 
-export type ProfileChangeResolvedBy = "WORK" | "DEVELOPER";
+/**
+ * Extensible enum: a client accepts a value that the examples do not name.
+ */
+export type ProfileChangeResolvedBy = string;
 
-export type ProfileChangeType =
-	| "FEEDBACK_NEW"
-	| "FEEDBACK_RESOLVED"
-	| "FEEDBACK_RESET"
-	| "STANDING_MOVED"
-	| "TREND_TURNED"
-	| "GROUP_MOVED"
-	| "FIRST_RECORDED";
+/**
+ * Extensible enum: a client accepts a value that the examples do not name.
+ */
+export type ProfileChangeType = string;
 
 export type ProfileReview = {
 	feedback: Array<OwnFeedbackRef>;
@@ -4817,7 +4873,10 @@ export type ProviderIdentityRef = {
 	avatarUrl?: string;
 	displayName?: string;
 	login?: string;
-	provider: "GITHUB" | "GITLAB" | "SLACK" | "OUTLINE";
+	/**
+	 * Extensible enum: a client accepts a value that the examples do not name.
+	 */
+	provider: string;
 };
 
 export type ProviderResourceAdapterResourceType =
@@ -5104,17 +5163,20 @@ export type RegisterSlackChannelRequest = {
 	slackChannelId: string;
 };
 
-export type ReleaseChannel = "RELEASE" | "COMMIT" | "DEVELOPMENT";
+/**
+ * Extensible enum: a client accepts a value that the examples do not name.
+ */
+export type ReleaseChannel = string;
 
-export type ReleaseCheckFailure = "RATE_LIMITED" | "UNAVAILABLE" | "MALFORMED";
+/**
+ * Extensible enum: a client accepts a value that the examples do not name.
+ */
+export type ReleaseCheckFailure = string;
 
-export type ReleaseCheckStatus =
-	| "DISABLED"
-	| "NOT_APPLICABLE"
-	| "NEVER_CHECKED"
-	| "CURRENT"
-	| "UPDATE_AVAILABLE"
-	| "FAILED";
+/**
+ * Extensible enum: a client accepts a value that the examples do not name.
+ */
+export type ReleaseCheckStatus = string;
 
 export type ReleaseProviderResourceRepairRequest = {
 	confirmedGone: boolean;
@@ -5253,11 +5315,10 @@ export type ResearchConsent = {
 
 export type ResearchDisclosureClosure = "DESTROYED" | "ANONYMIZED";
 
-export type ResearchDisclosureSubjectRemovalReason =
-	| "CONSENT_WITHDRAWN"
-	| "CONSENT_SUPERSEDED"
-	| "QUESTION_CHANGED"
-	| "ACCOUNT_ERASED";
+/**
+ * Extensible enum: a client accepts a value that the examples do not name.
+ */
+export type ResearchDisclosureSubjectRemovalReason = string;
 
 export type ResearchRemovalDisclosure = {
 	createdAt: string;
@@ -5657,7 +5718,10 @@ export type ReviewJobStatus =
 	| "TIMED_OUT"
 	| "CANCELLED";
 
-export type ReviewKind = "ITEM" | "SCAN";
+/**
+ * Extensible enum: a client accepts a value that the examples do not name.
+ */
+export type ReviewKind = string;
 
 export type ReviewLimit = {
 	code: string;
@@ -5708,7 +5772,10 @@ export type ReviewOn = {
 	};
 };
 
-export type ReviewOrigin = "EVENT" | "REQUEST" | "SCHEDULE" | "BACKFILL";
+/**
+ * Extensible enum: a client accepts a value that the examples do not name.
+ */
+export type ReviewOrigin = string;
 
 export type ReviewOverview = {
 	bucket: TimeBucketSize;
@@ -5883,39 +5950,15 @@ export type ReviewRequestOutcome = {
 	status: ReviewRequestStatus;
 };
 
-export type ReviewRequestReason =
-	| "GATE_WITHHELD"
-	| "COOLDOWN_ACTIVE"
-	| "REQUEST_COOLDOWN_ACTIVE"
-	| "REQUESTER_QUOTA_EXHAUSTED"
-	| "CONCURRENT_DUPLICATE"
-	| "COALESCED"
-	| "OUT_OF_REVIEW_SCOPE"
-	| "BOT_AUTHOR"
-	| "BOT_REVIEWER"
-	| "STALE_ROLLOUT_REVISION"
-	| "WORKSPACE_INACTIVE"
-	| "PRACTICES_DISABLED"
-	| "NO_ACTIVE_PRACTICE"
-	| "REVIEW_MODEL_UNBOUND"
-	| "MEMBER_AI_DECLINED"
-	| "PERSON_DATA_ERASED"
-	| "FEEDBACK_MODE_OFF"
-	| "SUBJECT_UNLINKED"
-	| "MERGE_ACTOR_UNAVAILABLE"
-	| "MODEL_UNAVAILABLE"
-	| "BUDGET_EXHAUSTED"
-	| "ITEM_NOT_VISIBLE"
-	| "VERSION_SUPERSEDED"
-	| "PENDING_DEADLINE_EXCEEDED"
-	| "ITEM_GONE"
-	| "LEGACY_REVIEW_UNBOUND"
-	| "OCCASION_EVIDENCE_UNAVAILABLE"
-	| "QUIET_WINDOW"
-	| "REVIEW_IN_PROGRESS"
-	| "ALREADY_CURRENT";
+/**
+ * Extensible enum: a client accepts a value that the examples do not name.
+ */
+export type ReviewRequestReason = string;
 
-export type ReviewRequestStatus = "SUBMITTED" | "REFUSED";
+/**
+ * Extensible enum: a client accepts a value that the examples do not name.
+ */
+export type ReviewRequestStatus = string;
 
 export type ReviewResult = {
 	acceptedAt: string | null;
@@ -6027,9 +6070,9 @@ export type ReviewScopeRepository = {
 };
 
 /**
- * Where the review stands.
+ * Extensible enum: a client accepts a value that the examples do not name. Where the review stands.
  */
-export type ReviewStatus = "QUEUED" | "RUNNING" | "COMPLETE" | "PARTIAL" | "FAILED" | "CANCELLED";
+export type ReviewStatus = string;
 
 export type ReviewStatusCounts = {
 	cancelled: number;
@@ -6040,34 +6083,10 @@ export type ReviewStatusCounts = {
 	running: number;
 };
 
-export type ReviewStopReason =
-	| "TIMED_OUT"
-	| "EXECUTION_FAILED"
-	| "PREPARATION_FAILED"
-	| "PROCESSING_FAILED"
-	| "PERSON_DATA_ERASED"
-	| "STALE_ROLLOUT_REVISION"
-	| "CANCELLED_BY_ADMIN"
-	| "REPLACED"
-	| "LEGACY_FAILURE"
-	| "EXECUTION_INCOMPLETE"
-	| "RESULT_WITHHELD"
-	| "READINESS_REFUSED"
-	| "SUSPECT_LISTING"
-	| "BUDGET"
-	| "USAGE_UNVERIFIABLE"
-	| "DEADLINE"
-	| "CANCELLED"
-	| "ENUMERATION_FAILED"
-	| "ENUMERATION_LIMIT"
-	| "NO_SCAN_PRACTICES"
-	| "MODEL_CHANGED"
-	| "MODEL_UNAVAILABLE"
-	| "ERROR"
-	| "LEGACY_SCOPE_UNKNOWN"
-	| "CONTRACT_CHANGED"
-	| "NO_SANDBOX_ROOM"
-	| "COMPOSITION_UNCONFIRMED";
+/**
+ * Extensible enum: a client accepts a value that the examples do not name.
+ */
+export type ReviewStopReason = string;
 
 export type ReviewSummary = {
 	activeJobCount: number;
@@ -6230,7 +6249,10 @@ export type RunningRelease = {
 	version: string;
 };
 
-export type RuntimeRole = "SERVER";
+/**
+ * Extensible enum: a client accepts a value that the examples do not name.
+ */
+export type RuntimeRole = string;
 
 /**
  * Create or change a pool of provider capacity
@@ -6687,17 +6709,20 @@ export type SyncJob = {
 	type: SyncJobType;
 };
 
-export type SyncJobStatus =
-	| "PENDING"
-	| "RUNNING"
-	| "SUCCEEDED"
-	| "SUCCEEDED_WITH_WARNINGS"
-	| "FAILED"
-	| "CANCELLED";
+/**
+ * Extensible enum: a client accepts a value that the examples do not name.
+ */
+export type SyncJobStatus = string;
 
-export type SyncJobTrigger = "SCHEDULED" | "MANUAL" | "LIFECYCLE" | "SYSTEM";
+/**
+ * Extensible enum: a client accepts a value that the examples do not name.
+ */
+export type SyncJobTrigger = string;
 
-export type SyncJobType = "INITIAL" | "RECONCILIATION" | "BACKFILL";
+/**
+ * Extensible enum: a client accepts a value that the examples do not name.
+ */
+export type SyncJobType = string;
 
 /**
  * One entity class mirrored within a resource (issues, pull requests, comments, messages, …)
@@ -6940,7 +6965,10 @@ export type TriggerSyncJobRequest = {
 	type: SyncJobType;
 };
 
-export type UnverifiableReason = "RECORD_MISSING" | "WORK_UNREADABLE";
+/**
+ * Extensible enum: a client accepts a value that the examples do not name.
+ */
+export type UnverifiableReason = string;
 
 export type UpdateAccountRequest = {
 	appRole?: string;
@@ -7448,7 +7476,10 @@ export type UpdateWorkspaceTokenRequest = {
 	personalAccessToken: string;
 };
 
-export type UsageFundingSource = "INSTANCE" | "WORKSPACE";
+/**
+ * Extensible enum: a client accepts a value that the examples do not name.
+ */
+export type UsageFundingSource = string;
 
 export type UsagePricingState = "PRICED" | "NO_CHARGE" | "UNPRICED";
 
@@ -8354,7 +8385,10 @@ export type WorkspaceSplitPart = {
 
 export type WorkspaceSplitsVerdict = "DEVELOPING" | "MIXED" | "STRENGTH";
 
-export type WorkspaceStatus = "ACTIVE" | "SUSPENDED" | "PURGED";
+/**
+ * Extensible enum: a client accepts a value that the examples do not name.
+ */
+export type WorkspaceStatus = string;
 
 /**
  * What a workspace member may know about syncing

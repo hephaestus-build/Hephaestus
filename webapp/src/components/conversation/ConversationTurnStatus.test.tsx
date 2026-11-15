@@ -7,6 +7,10 @@ import { ConversationTurnStatus, useTurnStatusLabel } from "./ConversationTurnSt
 
 type ShownTurn = Pick<MentorTurn, "status" | "surface" | "partial" | "waitingFor">;
 
+// Annotated, so each rerender may add the properties that a later turn carries.
+const QUEUED: ShownTurn = { status: "QUEUED", surface: "APP" };
+const WAITS_FOR_HEPH: ShownTurn = { ...QUEUED, waitingFor: "FREE_HEPH" };
+
 beforeEach(() => {
 	vi.useFakeTimers();
 });
@@ -17,7 +21,7 @@ afterEach(() => {
 
 it("says a queued turn waits only once it has waited a second", () => {
 	const { result, rerender } = renderHook((turn: ShownTurn) => useTurnStatusLabel(turn), {
-		initialProps: { status: "QUEUED", surface: "APP" },
+		initialProps: QUEUED,
 	});
 	expect(result.current).toBe("Thinking…");
 
@@ -43,7 +47,7 @@ it("says a queued turn waits only once it has waited a second", () => {
 
 it("says why a queued turn waits only when the server says it waits for a free Hephaestus", () => {
 	const { result, rerender } = renderHook((turn: ShownTurn) => useTurnStatusLabel(turn), {
-		initialProps: { status: "QUEUED", surface: "APP", waitingFor: "FREE_HEPH" },
+		initialProps: WAITS_FOR_HEPH,
 	});
 	act(() => {
 		vi.advanceTimersByTime(1000);
@@ -52,13 +56,13 @@ it("says why a queued turn waits only when the server says it waits for a free H
 		"Hephaestus is answering other questions. Yours starts when one finishes.",
 	);
 
-	rerender({ status: "QUEUED", surface: "APP" });
+	rerender(QUEUED);
 	expect(result.current).toBe("Waiting to start…");
 });
 
 it("never shows the wait for a turn that starts within the second", () => {
 	const { result, rerender } = renderHook((turn: ShownTurn) => useTurnStatusLabel(turn), {
-		initialProps: { status: "QUEUED", surface: "APP" },
+		initialProps: QUEUED,
 	});
 	act(() => {
 		vi.advanceTimersByTime(200);

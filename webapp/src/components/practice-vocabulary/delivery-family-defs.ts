@@ -1,6 +1,6 @@
 import { definitionFor, type StatusDef, type StatusDefs } from "@/components/common/status-def";
 
-import { DELIVERY_STATE_DEFS, type DeliveryState } from "./delivery-state-defs";
+import { DELIVERY_STATE_DEFS, type KnownDeliveryState } from "./delivery-state-defs";
 
 /**
  * The delivery families a count of feedback uses in place of the stored delivery states. What each
@@ -24,7 +24,7 @@ export const DELIVERY_FAMILY_STATES = {
 	UNCONFIRMED: ["UNCONFIRMED"],
 	WITHHELD: ["WITHHELD", "REJECTED", "REPLACED"],
 	FAILED: ["FAILED"],
-} as const satisfies Record<DeliveryFamily, readonly DeliveryState[]>;
+} as const satisfies Record<DeliveryFamily, readonly KnownDeliveryState[]>;
 
 /**
  * Each family wears the words, icon and tone of its first state, so a count and the badge on the

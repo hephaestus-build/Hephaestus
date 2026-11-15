@@ -288,3 +288,20 @@ export const StoppingBackfill: Story = {
 		await expect(canvas.getByRole("link", { name: /view details/iu })).toBeVisible();
 	},
 };
+
+/** An integration kind that this build does not know: a neutral mark, and no page to open here. */
+export const UnrecognizedKind: Story = {
+	args: {
+		entry: {
+			kind: "JIRA",
+			displayName: "Jira",
+			connected: true,
+			connectionId: 9,
+			connectionState: "ACTIVE",
+		},
+	},
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText("Jira")).toBeVisible();
+		await expect(canvas.queryByRole("link", { name: /View details/u })).toBeNull();
+	},
+};

@@ -27,7 +27,11 @@ import { formatDay, formatDayTime, formatShortDay } from "@/lib/dates";
 import { hasText } from "@/lib/text";
 
 import { UNVERIFIED_HISTORY_NOTE } from "./claim-currentness";
-import { FEEDBACK_RESOLUTION_DEFS, type FeedbackResolution } from "./feedback-resolution-defs";
+import {
+	FEEDBACK_RESOLUTION_DEFS,
+	type FeedbackResolution,
+	type KnownFeedbackResolution,
+} from "./feedback-resolution-defs";
 import { FEEDBACK_STATE_DEFS, type FeedbackState, isOpenFeedback } from "./feedback-state-defs";
 import { count, type FeedbackTextSegment, linkWork } from "./feedback-text";
 import {
@@ -51,7 +55,7 @@ export type ResponseControl = "rating" | "answer" | "send" | "disagree";
  * An answer that resolves the feedback, the card's own way to close it beside the work coming back
  * clean. A disagreement leaves the feedback open, so it has its own Disagree button.
  */
-export type ResolvingAnswer = Exclude<FeedbackResolution, "DISAGREE">;
+export type ResolvingAnswer = Exclude<KnownFeedbackResolution, "DISAGREE">;
 
 /**
  * One piece of reviewed work on the card's timeline — the evidence behind the feedback — with

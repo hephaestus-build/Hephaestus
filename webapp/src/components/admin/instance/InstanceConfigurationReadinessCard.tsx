@@ -4,7 +4,14 @@ import { cn } from "cn";
 import type { ConfigurationFact } from "@/api/types.gen";
 import { InlineLink } from "@/components/common/InlineLink";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
-import { definitionFor, statusToneClass, statusValues } from "@/components/common/status-def";
+import {
+	definitionFor,
+	isKnownValue,
+	type StatusDef,
+	statusToneClass,
+	statusValues,
+	UNKNOWN_STATUS_DEF,
+} from "@/components/common/status-def";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import {
 	Accordion,
@@ -44,29 +51,51 @@ export interface InstanceConfigurationReadinessCardProps {
 	state: InstanceConfigurationReadinessCardState;
 }
 
-/** The groups that ask something of the operator start open; the rest start folded. */
-const OPEN_BY_DEFAULT: ConfigurationStatus[] = ["ACTION_REQUIRED", "NOT_CONFIGURED"];
+/** One group holds every fact whose status this build does not know. */
+const UNRECOGNIZED = "UNRECOGNIZED";
+
+/** The groups that ask something of the operator, or that this build cannot judge, start open. */
+const OPEN_BY_DEFAULT: string[] = ["ACTION_REQUIRED", "NOT_CONFIGURED", UNRECOGNIZED];
 
 const REQUIREMENT_ORDER = statusValues(CONFIGURATION_REQUIREMENT_DEFS);
+
+/** A requirement's place in `REQUIREMENT_ORDER`; one that this build does not know sorts last. */
+function requirementRank(requirement: ConfigurationFact["requirement"]): number {
+	return isKnownValue(CONFIGURATION_REQUIREMENT_DEFS, requirement)
+		? REQUIREMENT_ORDER.indexOf(requirement)
+		: REQUIREMENT_ORDER.length;
+}
 
 function settings(count: number): string {
 	return `${count} ${count === 1 ? "setting" : "settings"}`;
 }
 
+function verbOf(count: number, one: string, many: string): string {
+	return count === 1 ? one : many;
+}
+
 function summaryOf(
 	actionRequired: number,
 	notConfigured: number,
-): { status: ConfigurationStatus; text: string } {
+	unrecognized: number,
+): { def: StatusDef; text: string } {
 	const absent = notConfigured > 0 ? ` ${settings(notConfigured)} not configured.` : "";
+	const unknown =
+		unrecognized > 0
+			? `${settings(unrecognized)} ${verbOf(unrecognized, "has", "have")} a status that this version of Hephaestus does not recognize.`
+			: "";
 	if (actionRequired > 0) {
-		const verb = actionRequired === 1 ? "needs" : "need";
 		return {
-			status: "ACTION_REQUIRED",
-			text: `${settings(actionRequired)} ${verb} action.${absent}`,
+			def: CONFIGURATION_STATUS_DEFS.ACTION_REQUIRED,
+			text: `${settings(actionRequired)} ${verbOf(actionRequired, "needs", "need")} action.${absent}${unknown === "" ? "" : ` ${unknown}`}`,
 		};
 	}
+	// A status that this build cannot judge is not a pass.
+	if (unrecognized > 0) {
+		return { def: UNKNOWN_STATUS_DEF, text: `${unknown}${absent}` };
+	}
 	return {
-		status: "SATISFIED",
+		def: CONFIGURATION_STATUS_DEFS.SATISFIED,
 		text: `Every check that applies to this instance passes.${absent}`,
 	};
 }
@@ -159,23 +188,24 @@ function ReadyBody({
 	facts: ConfigurationFact[];
 	refreshFailure: RefreshFailure | undefined;
 }) {
-	const groups = statusValues(CONFIGURATION_STATUS_DEFS).map((status) => ({
+	// Every status that this build does not know shares one group, so no fact goes missing.
+	const groupOf = (fact: ConfigurationFact) =>
+		isKnownValue(CONFIGURATION_STATUS_DEFS, fact.status) ? fact.status : UNRECOGNIZED;
+	const groups = [...statusValues(CONFIGURATION_STATUS_DEFS), UNRECOGNIZED].map((status) => ({
 		status,
 		// `filter` hands back a copy, so sorting it in place leaves `facts` alone.
 		facts: facts
-			.filter((fact) => fact.status === status)
-			.sort(
-				(a, b) =>
-					REQUIREMENT_ORDER.indexOf(a.requirement) - REQUIREMENT_ORDER.indexOf(b.requirement),
-			),
+			.filter((fact) => groupOf(fact) === status)
+			.sort((a, b) => requirementRank(a.requirement) - requirementRank(b.requirement)),
 	}));
 	const countOf = (status: ConfigurationStatus) =>
 		groups.find((group) => group.status === status)?.facts.length ?? 0;
-	const summary = summaryOf(countOf("ACTION_REQUIRED"), countOf("NOT_CONFIGURED"));
-	const { icon: SummaryIcon, badgeVariant } = definitionFor(
-		CONFIGURATION_STATUS_DEFS,
-		summary.status,
+	const summary = summaryOf(
+		countOf("ACTION_REQUIRED"),
+		countOf("NOT_CONFIGURED"),
+		countOf(UNRECOGNIZED),
 	);
+	const { icon: SummaryIcon, badgeVariant } = summary.def;
 
 	return (
 		<>
@@ -195,8 +225,9 @@ function ReadyBody({
 	);
 }
 
-function FactGroup({ status, facts }: { status: ConfigurationStatus; facts: ConfigurationFact[] }) {
-	const def = definitionFor(CONFIGURATION_STATUS_DEFS, status);
+function FactGroup({ status, facts }: { status: string; facts: ConfigurationFact[] }) {
+	const def =
+		status === UNRECOGNIZED ? UNKNOWN_STATUS_DEF : definitionFor(CONFIGURATION_STATUS_DEFS, status);
 	return (
 		<AccordionItem value={status}>
 			<AccordionTrigger headingLevel={2} className="items-center no-underline hover:no-underline">

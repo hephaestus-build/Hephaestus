@@ -1,0 +1,3 @@
+# ADR 0103 rule 3: an enum that a public operation returns is open, written as a string with examples.
+# The wire values are unchanged; a client already accepts a value that it does not know.
+in API PATCH /workspaces/{workspaceSlug}/connections/{connectionId}/sync/jobs/{jobId} removed the enum constraint from the `type` response property for the response status `202`

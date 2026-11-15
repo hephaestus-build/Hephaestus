@@ -14,9 +14,9 @@ import type { ReviewBoundFeedback, ReviewDetail, ReviewLineage, ReviewRef } from
 import type { BadgeVariant } from "@/components/common/status-def";
 import { deliveryOutcome } from "@/components/practice-vocabulary/delivery-state-defs";
 import {
-	PARTIAL_REVIEW_SCOPE,
+	partialReviewScope,
 	REVIEW_JOB_PROCESSING_DEFS,
-	REVIEW_STOP_REASON_SENTENCES,
+	reviewStopReasonSentence,
 } from "@/components/practice-vocabulary/review-status-defs";
 import { durationBetween } from "@/lib/dates";
 import { hasText } from "@/lib/text";
@@ -268,6 +268,10 @@ export function feedbackLoss(feedback: ReviewBoundFeedback): FeedbackLoss | unde
 		case "UNCONFIRMED": {
 			return undefined;
 		}
+		// A state that this build does not know claims no loss: its badge says the state is unknown.
+		default: {
+			return undefined;
+		}
 	}
 }
 
@@ -312,7 +316,7 @@ function reviewBottleneck(
 	now: Date,
 ): TraceBottleneck | undefined {
 	const stopReason = detail?.stopReason ?? null;
-	const because = stopReason === null ? undefined : REVIEW_STOP_REASON_SENTENCES[stopReason];
+	const because = stopReason === null ? undefined : reviewStopReasonSentence(stopReason);
 	const { error, latest } = runtimeFailure(detail);
 	const tries = latest === undefined ? "" : ` It stopped on attempt ${latest}.`;
 	switch (review.status) {
@@ -334,7 +338,7 @@ function reviewBottleneck(
 				kind: "lost",
 				stage: "review",
 				title: "Partial review",
-				text: [because, PARTIAL_REVIEW_SCOPE[review.kind]].filter(hasText).join(" "),
+				text: [because, partialReviewScope(review.kind)].filter(hasText).join(" "),
 				tone: "warning",
 				icon: CircleDashedIcon,
 			};
@@ -405,6 +409,10 @@ function reviewBottleneck(
 			};
 		}
 		case "COMPLETE": {
+			return undefined;
+		}
+		// A status that this build does not know names no bottleneck; its badge says it is unknown.
+		default: {
 			return undefined;
 		}
 	}

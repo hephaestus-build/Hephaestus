@@ -20,7 +20,7 @@ import {
 } from "@/api/@tanstack/react-query.gen";
 import type { AdminAccountView } from "@/api/types.gen";
 import {
-	ACCOUNT_STATUS_LABELS,
+	accountStatusLabel,
 	APP_ROLE_LABELS,
 	type AppRole,
 } from "@/components/admin/users/account-labels";
@@ -138,7 +138,7 @@ function AdminUsersPage() {
 					u.displayName,
 					u.primaryEmail,
 					APP_ROLE_LABELS[u.appRole],
-					ACCOUNT_STATUS_LABELS[u.status],
+					accountStatusLabel(u.status),
 					String(u.id ?? ""),
 				]
 					.filter(Boolean)

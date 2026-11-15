@@ -103,6 +103,12 @@ describe("traceVerdict on a review", () => {
 		);
 	});
 
+	it("invents nothing for a review status that this build does not know", () => {
+		const { lineage } = lineageStateCase("complete");
+		const { sentence } = traceVerdict(withReviewStatus(lineage, "PAUSED"), REVIEW);
+		expect(sentence).not.toMatch(/object Object|undefined/u);
+	});
+
 	it("says it cannot tell when the record of the review is gone", () => {
 		expect(verdictOf("record-gone").end.label).toBe("Not known");
 	});
@@ -245,6 +251,22 @@ describe("traceVerdict on a piece of feedback", () => {
 		},
 	);
 
+	it("says when a piece's state or destination is one that this build does not know", () => {
+		const unknownState = withFeedback(lineageStateCase("state-ready").lineage, {
+			state: "ARCHIVED",
+		});
+		expect(traceVerdict(unknownState, piece)).toMatchObject({
+			sentence: "This version of Hephaestus does not recognize the state of this feedback.",
+			end: { kind: "open" },
+		});
+		const unknownPlace = withFeedback(lineageStateCase("state-ready").lineage, {
+			destination: "EMAIL",
+		});
+		expect(traceVerdict(unknownPlace, piece).sentence).toBe(
+			"This feedback has not reached the developer yet: it is ready for a destination that this version of Hephaestus does not recognize.",
+		);
+	});
+
 	it("falls back to the review for a record the graph does not hold", () => {
 		const { lineage } = lineageStateCase("complete");
 		expect(traceVerdict(lineage, feedbackNode("missing"))).toStrictEqual(
@@ -252,6 +274,15 @@ describe("traceVerdict on a piece of feedback", () => {
 		);
 	});
 });
+
+function withReviewStatus(lineage: ReviewLineage, status: string): ReviewLineage {
+	return {
+		...lineage,
+		nodes: lineage.nodes.map((node) =>
+			node.review === null ? node : { ...node, review: { ...node.review, status } },
+		),
+	};
+}
 
 function withFeedback(
 	lineage: ReviewLineage,

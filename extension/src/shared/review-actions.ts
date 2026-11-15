@@ -19,10 +19,13 @@ export interface ActionPreview {
 	item: ItemRef;
 }
 
-/** What became of a confirmed action, based on the server's answer. */
+/**
+ * What became of a confirmed action, based on the server's answer. A newer server can answer with a
+ * status that this version does not know: `UNRECOGNIZED` claims neither a started nor a refused review.
+ */
 export interface ActionOutcome {
 	kind: "request-review";
-	status: "SUBMITTED" | "REFUSED";
+	status: "SUBMITTED" | "REFUSED" | "UNRECOGNIZED";
 	/** The shared explanation for the server's refusal code. */
 	reasonDescription?: string;
 }

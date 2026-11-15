@@ -24,7 +24,7 @@ import { TableRowsSkeleton } from "@/components/common/TableRowsSkeleton";
 import { Spinner } from "@/components/ui/spinner";
 
 import type { TeamInfo } from "@/api/types.gen";
-import { ACCOUNT_STATUS_LABELS } from "@/components/admin/users/account-labels";
+import { ACCOUNT_STATUS_LABELS, accountStatusLabel } from "@/components/admin/users/account-labels";
 import { type DataTableFeatures, dataTableFeatures } from "@/components/common/data-table";
 import { DataTableHeader } from "@/components/common/DataTableHeader";
 import { StatusBadge } from "@/components/common/StatusBadge";
@@ -298,7 +298,7 @@ function AccountStatus({ row }: { row: WorkspaceMemberRow }) {
 	}
 	return (
 		<Badge variant={account.status === "UNCLAIMED" ? "outline" : "destructive"}>
-			{ACCOUNT_STATUS_LABELS[account.status]}
+			{accountStatusLabel(account.status)}
 		</Badge>
 	);
 }

@@ -81,6 +81,10 @@ function linkTo(row: WeeklyDigestFeedback, workspaceSlug: string): ReactElement 
 				/>
 			);
 		}
+		// A destination that this build does not know has no page to open here.
+		default: {
+			return undefined;
+		}
 	}
 }
 

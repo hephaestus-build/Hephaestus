@@ -52,18 +52,38 @@ function explanation(preview: ActionPreview): string {
 	return `Hephaestus reviews this ${itemKindNoun(preview.item.kind, 1, preview.item.provider)} against the practices ${preview.workspace.displayName} follows. The workspace’s feedback mode decides whether feedback from the review reaches the developer.`;
 }
 
-function outcomeText(outcome: ActionOutcome): { title: string; body: string; done: boolean } {
-	return outcome.status === "SUBMITTED"
-		? {
+function outcomeText(outcome: ActionOutcome): {
+	title: string;
+	body: string;
+	icon: typeof CircleCheckIcon;
+	tone: string;
+} {
+	switch (outcome.status) {
+		case "SUBMITTED": {
+			return {
 				title: "Review requested",
 				body: "The review runs in the background. Its observations appear in the practice review on the page once they are recorded.",
-				done: true,
-			}
-		: {
+				icon: CircleCheckIcon,
+				tone: "text-success",
+			};
+		}
+		case "REFUSED": {
+			return {
 				title: "No review started",
 				body: outcome.reasonDescription ?? "Hephaestus did not start a review.",
-				done: false,
+				icon: CircleSlashIcon,
+				tone: "text-muted-foreground",
 			};
+		}
+		case "UNRECOGNIZED": {
+			return {
+				title: "Answer not recognized",
+				body: "This version of Hephaestus does not recognize the answer. Reload the page to see whether a review started.",
+				icon: CircleAlertIcon,
+				tone: "text-warning",
+			};
+		}
+	}
 }
 
 function Frame({ title, children }: { title: string; children: ReactNode }) {
@@ -144,11 +164,7 @@ export function ActionConfirmation({ state, onConfirm, onClose }: ActionConfirma
 	if (state.status === "done") {
 		const text = outcomeText(state.outcome);
 		result = (
-			<Result
-				icon={text.done ? CircleCheckIcon : CircleSlashIcon}
-				tone={text.done ? "text-success" : "text-muted-foreground"}
-				title={text.title}
-			>
+			<Result icon={text.icon} tone={text.tone} title={text.title}>
 				{text.body}
 			</Result>
 		);

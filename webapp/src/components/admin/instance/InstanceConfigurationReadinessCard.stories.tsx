@@ -215,3 +215,34 @@ export const OnAPhone: Story = {
 		await expect(canvasElement.scrollWidth).toBeLessThanOrEqual(canvasElement.clientWidth);
 	},
 };
+
+/**
+ * A newer server can report statuses or a requirement that this build does not know. Those facts share
+ * one open group, named Unknown, so no setting goes missing, and the summary claims no pass.
+ */
+export const UnrecognizedStatus: Story = {
+	args: {
+		state: {
+			status: "ready",
+			facts: [
+				...satisfied,
+				fact("sandbox.runtime", "hephaestus.sandbox.runtime", "sandbox", {
+					status: "DEPRECATED_SETTING",
+					requirement: "TRANSITIONAL",
+				}),
+				fact("mail.relay", "hephaestus.mail.relay", "mail", { status: "MIGRATING" }),
+			],
+		},
+	},
+	play: async ({ canvas }) => {
+		await expect(
+			canvas.getByText(
+				"2 settings have a status that this version of Hephaestus does not recognize.",
+			),
+		).toBeVisible();
+		await expect(canvas.queryByText(/Every check that applies/u)).toBeNull();
+		await expect(canvas.getAllByRole("button", { name: /Unknown/u })).toHaveLength(1);
+		await expect(canvas.getByText("hephaestus.sandbox.runtime")).toBeVisible();
+		await expect(canvas.getByText("hephaestus.mail.relay")).toBeVisible();
+	},
+};

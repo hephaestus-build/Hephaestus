@@ -247,6 +247,12 @@ The gate changes the level of some oasdiff rules. `scripts/check-api-compatibili
   The Chrome extension shows such a value as unknown.
   From 1.0.0, the web app also shows an unknown value without a route error.
   It offers a reload after an upgrade and keeps the current page until the reader chooses it.
+  A public operation's open enums carry no `enum` in the spec, so a new value changes only their `examples`.
+- From a base of `v1.0.0`, the gate fails on a public response enum that changes against the rules of
+  [ADR 0103](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0103-the-public-api-grows-only-by-addition-and-every-client-tolerates-what-it-does-not-know.md).
+  The gate fails when a closed enum gains a value or becomes open.
+  It also fails when an open enum becomes closed or drops a known value.
+- For any base, the gate fails on a `null` type in a schema that a public operation's responses reach.
 - From a base of `v1.0.0`, a removed optional response property is an `ERR` change.
   A changed response media type is an `ERR` change too.
 - From a base of `v1.0.0`, the gate fails on a removed operation or parameter.

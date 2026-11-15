@@ -19,7 +19,7 @@ export type ConfigurationRequirement = ConfigurationFact["requirement"];
  * `NOT_CONFIGURED` is neutral on purpose, because the server reports it only for a setting that is
  * allowed to stay absent.
  */
-export const CONFIGURATION_STATUS_DEFS: StatusDefs<ConfigurationStatus> = {
+export const CONFIGURATION_STATUS_DEFS = {
 	ACTION_REQUIRED: {
 		label: "Action required",
 		icon: TriangleAlertIcon,
@@ -44,10 +44,10 @@ export const CONFIGURATION_STATUS_DEFS: StatusDefs<ConfigurationStatus> = {
 		badgeVariant: "secondary",
 		description: "The check does not apply to the runtime roles of this server.",
 	},
-};
+} satisfies StatusDefs<string>;
 
 /** Ordered from the strictest down, which is the order rows sort in inside a group. */
-export const CONFIGURATION_REQUIREMENT_DEFS: StatusDefs<ConfigurationRequirement> = {
+export const CONFIGURATION_REQUIREMENT_DEFS = {
 	REQUIRED: {
 		label: "Required",
 		icon: AsteriskIcon,
@@ -66,4 +66,4 @@ export const CONFIGURATION_REQUIREMENT_DEFS: StatusDefs<ConfigurationRequirement
 		badgeVariant: "outline",
 		description: "A capability you can leave off.",
 	},
-};
+} satisfies StatusDefs<string>;

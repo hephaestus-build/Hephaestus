@@ -6,7 +6,10 @@ export const zAboutRole = z.enum(["AUTHOR", "REVIEWER", "ASSIGNEE", "MERGER"]);
 
 export const zAccountAppRole = z.enum(["USER", "APP_ADMIN"]);
 
-export const zAccountStatus = z.enum(["UNCLAIMED", "ACTIVE", "BLOCKED", "DELETING", "DELETED"]);
+/**
+ * Extensible enum: a client accepts a value that the examples do not name.
+ */
+export const zAccountStatus = z.string();
 
 export const zAccountType = z.enum(["ORG", "USER"]);
 
@@ -418,7 +421,10 @@ export const zCitationCapabilities = z.object({
 	side: zCitationRequirement.optional(),
 });
 
-export const zCitationSide = z.enum(["OLD", "NEW"]);
+/**
+ * Extensible enum: a client accepts a value that the examples do not name.
+ */
+export const zCitationSide = z.string();
 
 export const zClaimBasis = z.object({
 	type: z.string(),
@@ -524,14 +530,15 @@ export const zConfigAuditEntryView = z.object({
 	workspaceId: z.int().optional(),
 });
 
-export const zConfigurationRequirement = z.enum(["REQUIRED", "RECOMMENDED", "OPTIONAL"]);
+/**
+ * Extensible enum: a client accepts a value that the examples do not name.
+ */
+export const zConfigurationRequirement = z.string();
 
-export const zConfigurationStatus = z.enum([
-	"SATISFIED",
-	"ACTION_REQUIRED",
-	"NOT_CONFIGURED",
-	"NOT_APPLICABLE",
-]);
+/**
+ * Extensible enum: a client accepts a value that the examples do not name.
+ */
+export const zConfigurationStatus = z.string();
 
 export const zConnectionHealth = z.enum(["PENDING", "HEALTHY", "DEGRADED", "FAILED", "SUSPENDED"]);
 
@@ -605,7 +612,10 @@ export const zCsrfToken = z.object({
 	token: z.string(),
 });
 
-export const zCurrentness = z.enum(["CURRENT", "STALE", "UNVERIFIABLE"]);
+/**
+ * Extensible enum: a client accepts a value that the examples do not name.
+ */
+export const zCurrentness = z.string();
 
 /**
  * One page of a list that a client reads forward with a cursor
@@ -811,7 +821,10 @@ export const zFeedbackCopyCounts = z.object({
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
 });
 
-export const zFeedbackCopyKind = z.enum(["SUMMARY", "LINE_NOTE", "FILE_NOTE", "CHAT_TURN"]);
+/**
+ * Extensible enum: a client accepts a value that the examples do not name.
+ */
+export const zFeedbackCopyKind = z.string();
 
 export const zDeliveredWorkFeedbackCopy = z.object({
 	endLine: z
@@ -872,7 +885,10 @@ export const zCreateFeedbackDecisionRequest = z.object({
 	reasonCode: zFeedbackDecisionReason.optional(),
 });
 
-export const zFeedbackDestination = z.enum(["ON_WORK", "PRACTICE_PAGE", "CONVERSATION"]);
+/**
+ * Extensible enum: a client accepts a value that the examples do not name.
+ */
+export const zFeedbackDestination = z.string();
 
 export const zFeedbackDisagreement = z.object({
 	comment: z.string(),
@@ -919,7 +935,10 @@ export const zFeedbackModeAssignment = z.object({
 	source: zFeedbackModeSource,
 });
 
-export const zFeedbackResolution = z.enum(["ADDRESSED", "DISAGREE", "NOT_APPLICABLE"]);
+/**
+ * Extensible enum: a client accepts a value that the examples do not name.
+ */
+export const zFeedbackResolution = z.string();
 
 /**
  * A developer's answer to feedback: the resolution, and the explanation only for a disagreement
@@ -953,16 +972,10 @@ export const zFeedbackSourceCount = z.object({
 	itemKind: z.string(),
 });
 
-export const zFeedbackState = z.enum([
-	"AWAITING_APPROVAL",
-	"READY",
-	"DELIVERED",
-	"UNCONFIRMED",
-	"WITHHELD",
-	"REJECTED",
-	"REPLACED",
-	"FAILED",
-]);
+/**
+ * Extensible enum: a client accepts a value that the examples do not name.
+ */
+export const zFeedbackState = z.string();
 
 export const zFeedbackStopReason = z.enum([
 	"VOLUME_CAPPED",
@@ -1049,7 +1062,10 @@ export const zFeedbackTriage = z.object({
 	resolved: z.boolean(),
 });
 
-export const zFeedbackUsefulness = z.enum(["HELPFUL", "UNHELPFUL"]);
+/**
+ * Extensible enum: a client accepts a value that the examples do not name.
+ */
+export const zFeedbackUsefulness = z.string();
 
 export const zFeedbackResponse = z.object({
 	comment: z.string().optional(),
@@ -1311,7 +1327,10 @@ export const zIdentity = z.object({
 	teamId: z.string().min(1).max(255).optional(),
 });
 
-export const zIdentityProviderType = z.enum(["GITHUB", "GITLAB", "SLACK", "OUTLINE"]);
+/**
+ * Extensible enum: a client accepts a value that the examples do not name.
+ */
+export const zIdentityProviderType = z.string();
 
 /**
  * One row per sign-in option. <code>providerType</code> drives the SPA's icon choice; <code>baseUrl</code> is
@@ -1348,7 +1367,10 @@ export const zInapplicabilityWarrant = z.object({
 	ruledOutBy: z.string().optional(),
 });
 
-export const zInitiateConnectionResponseType = z.enum(["REDIRECT", "LINKED"]);
+/**
+ * Extensible enum: a client accepts a value that the examples do not name.
+ */
+export const zInitiateConnectionResponseType = z.string();
 
 /**
  * Flat response for <code>POST /workspaces/{workspaceSlug</code>/connections}.
@@ -1398,7 +1420,10 @@ export const zIntegrationAttentionChangedEventProblem = z.enum([
 
 export const zIntegrationFamily = z.enum(["SCM", "MESSAGING", "DOCUMENTATION"]);
 
-export const zIntegrationKind = z.enum(["GITHUB", "GITLAB", "SLACK", "OUTLINE"]);
+/**
+ * Extensible enum: a client accepts a value that the examples do not name.
+ */
+export const zIntegrationKind = z.string();
 
 /**
  * Inbound payload for <code>POST /workspaces/{workspaceSlug</code>/connections}.
@@ -1865,15 +1890,30 @@ export const zAssignRoleRequest = z.object({
 	role: zMembershipWorkspaceRole,
 });
 
-export const zMentorEntryKind = z.enum(["USER", "HEPH", "DIGEST"]);
+/**
+ * Extensible enum: a client accepts a value that the examples do not name.
+ */
+export const zMentorEntryKind = z.string();
 
-export const zMentorEntrySlackDelivery = z.enum(["PENDING", "DELIVERED", "UNCERTAIN", "FAILED"]);
+/**
+ * Extensible enum: a client accepts a value that the examples do not name.
+ */
+export const zMentorEntrySlackDelivery = z.string();
 
-export const zMentorEntrySurface = z.enum(["APP", "SLACK", "SYSTEM"]);
+/**
+ * Extensible enum: a client accepts a value that the examples do not name.
+ */
+export const zMentorEntrySurface = z.string();
 
-export const zMentorEntryVote = z.enum(["HELPFUL", "NOT_HELPFUL"]);
+/**
+ * Extensible enum: a client accepts a value that the examples do not name.
+ */
+export const zMentorEntryVote = z.string();
 
-export const zMentorLinkKind = z.enum(["RESULT", "PROBLEM", "FEEDBACK"]);
+/**
+ * Extensible enum: a client accepts a value that the examples do not name.
+ */
+export const zMentorLinkKind = z.string();
 
 /**
  * A practice result, problem or prepared feedback Hephaestus showed in a message
@@ -1911,7 +1951,10 @@ export const zMentorThreadSummary = z.object({
 	replyCount: z.int(),
 });
 
-export const zMentorTurnPartialActivity = z.enum(["THINKING", "WRITING", "TOOL"]);
+/**
+ * Extensible enum: a client accepts a value that the examples do not name.
+ */
+export const zMentorTurnPartialActivity = z.string();
 
 /**
  * What Hephaestus is doing in a running turn
@@ -1933,7 +1976,10 @@ export const zMentorTurnRequest = z.object({
 	text: z.string().min(1),
 });
 
-export const zMentorTurnStatus = z.enum(["QUEUED", "RUNNING", "DONE", "FAILED", "STOPPED"]);
+/**
+ * Extensible enum: a client accepts a value that the examples do not name.
+ */
+export const zMentorTurnStatus = z.string();
 
 /**
  * A status change the developer asks for on a turn
@@ -1942,9 +1988,15 @@ export const zMentorTurnStatusRequest = z.object({
 	status: zMentorTurnStatus,
 });
 
-export const zMentorTurnSurface = z.enum(["APP", "SLACK", "SYSTEM"]);
+/**
+ * Extensible enum: a client accepts a value that the examples do not name.
+ */
+export const zMentorTurnSurface = z.string();
 
-export const zMentorTurnWaitingFor = z.enum(["FREE_HEPH"]);
+/**
+ * Extensible enum: a client accepts a value that the examples do not name.
+ */
+export const zMentorTurnWaitingFor = z.string();
 
 /**
  * One conversation turn: a requested answer or an opted-in proactive digest
@@ -2685,19 +2737,20 @@ export const zProductFeedbackSharing = z.object({
 	publicRepository: z.string().optional(),
 });
 
-export const zProfileChangeDirection = z.enum(["UP", "DOWN"]);
+/**
+ * Extensible enum: a client accepts a value that the examples do not name.
+ */
+export const zProfileChangeDirection = z.string();
 
-export const zProfileChangeResolvedBy = z.enum(["WORK", "DEVELOPER"]);
+/**
+ * Extensible enum: a client accepts a value that the examples do not name.
+ */
+export const zProfileChangeResolvedBy = z.string();
 
-export const zProfileChangeType = z.enum([
-	"FEEDBACK_NEW",
-	"FEEDBACK_RESOLVED",
-	"FEEDBACK_RESET",
-	"STANDING_MOVED",
-	"TREND_TURNED",
-	"GROUP_MOVED",
-	"FIRST_RECORDED",
-]);
+/**
+ * Extensible enum: a client accepts a value that the examples do not name.
+ */
+export const zProfileChangeType = z.string();
 
 export const zProfileChange = z.object({
 	at: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
@@ -2723,7 +2776,7 @@ export const zProviderIdentityRef = z.object({
 	avatarUrl: z.string().optional(),
 	displayName: z.string().optional(),
 	login: z.string().optional(),
-	provider: z.enum(["GITHUB", "GITLAB", "SLACK", "OUTLINE"]),
+	provider: z.string(),
 });
 
 export const zAccountRef = z.object({
@@ -3151,18 +3204,20 @@ export const zRegisterSlackChannelRequest = z.object({
 		.regex(/^[CG][A-Z0-9]{8,}$/),
 });
 
-export const zReleaseChannel = z.enum(["RELEASE", "COMMIT", "DEVELOPMENT"]);
+/**
+ * Extensible enum: a client accepts a value that the examples do not name.
+ */
+export const zReleaseChannel = z.string();
 
-export const zReleaseCheckFailure = z.enum(["RATE_LIMITED", "UNAVAILABLE", "MALFORMED"]);
+/**
+ * Extensible enum: a client accepts a value that the examples do not name.
+ */
+export const zReleaseCheckFailure = z.string();
 
-export const zReleaseCheckStatus = z.enum([
-	"DISABLED",
-	"NOT_APPLICABLE",
-	"NEVER_CHECKED",
-	"CURRENT",
-	"UPDATE_AVAILABLE",
-	"FAILED",
-]);
+/**
+ * Extensible enum: a client accepts a value that the examples do not name.
+ */
+export const zReleaseCheckStatus = z.string();
 
 export const zReleaseProviderResourceRepairRequest = z.object({
 	confirmedGone: z.boolean(),
@@ -3267,12 +3322,10 @@ export const zCloseResearchDisclosure = z.object({
 	closure: zResearchDisclosureClosure,
 });
 
-export const zResearchDisclosureSubjectRemovalReason = z.enum([
-	"CONSENT_WITHDRAWN",
-	"CONSENT_SUPERSEDED",
-	"QUESTION_CHANGED",
-	"ACCOUNT_ERASED",
-]);
+/**
+ * Extensible enum: a client accepts a value that the examples do not name.
+ */
+export const zResearchDisclosureSubjectRemovalReason = z.string();
 
 export const zResearchRemovalObligation = z.object({
 	participantKey: z.string(),
@@ -3624,7 +3677,10 @@ export const zReviewJob = z.object({
 	traceId: z.string(),
 });
 
-export const zReviewKind = z.enum(["ITEM", "SCAN"]);
+/**
+ * Extensible enum: a client accepts a value that the examples do not name.
+ */
+export const zReviewKind = z.string();
 
 export const zReviewLimit = z.object({
 	code: z.string(),
@@ -3660,7 +3716,10 @@ export const zReviewOn = z.object({
 	state: z.record(z.string(), z.array(z.string())),
 });
 
-export const zReviewOrigin = z.enum(["EVENT", "REQUEST", "SCHEDULE", "BACKFILL"]);
+/**
+ * Extensible enum: a client accepts a value that the examples do not name.
+ */
+export const zReviewOrigin = z.string();
 
 export const zReviewPracticeStatus = z.enum([
 	"QUEUED",
@@ -3733,38 +3792,10 @@ export const zMemberReviewReadiness = z.object({
 	events: z.array(z.string()),
 });
 
-export const zReviewRequestReason = z.enum([
-	"GATE_WITHHELD",
-	"COOLDOWN_ACTIVE",
-	"REQUEST_COOLDOWN_ACTIVE",
-	"REQUESTER_QUOTA_EXHAUSTED",
-	"CONCURRENT_DUPLICATE",
-	"COALESCED",
-	"OUT_OF_REVIEW_SCOPE",
-	"BOT_AUTHOR",
-	"BOT_REVIEWER",
-	"STALE_ROLLOUT_REVISION",
-	"WORKSPACE_INACTIVE",
-	"PRACTICES_DISABLED",
-	"NO_ACTIVE_PRACTICE",
-	"REVIEW_MODEL_UNBOUND",
-	"MEMBER_AI_DECLINED",
-	"PERSON_DATA_ERASED",
-	"FEEDBACK_MODE_OFF",
-	"SUBJECT_UNLINKED",
-	"MERGE_ACTOR_UNAVAILABLE",
-	"MODEL_UNAVAILABLE",
-	"BUDGET_EXHAUSTED",
-	"ITEM_NOT_VISIBLE",
-	"VERSION_SUPERSEDED",
-	"PENDING_DEADLINE_EXCEEDED",
-	"ITEM_GONE",
-	"LEGACY_REVIEW_UNBOUND",
-	"OCCASION_EVIDENCE_UNAVAILABLE",
-	"QUIET_WINDOW",
-	"REVIEW_IN_PROGRESS",
-	"ALREADY_CURRENT",
-]);
+/**
+ * Extensible enum: a client accepts a value that the examples do not name.
+ */
+export const zReviewRequestReason = z.string();
 
 export const zItemEvent = z.object({
 	decidedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
@@ -3779,7 +3810,10 @@ export const zItemEvent = z.object({
 	state: zItemEventState,
 });
 
-export const zReviewRequestStatus = z.enum(["SUBMITTED", "REFUSED"]);
+/**
+ * Extensible enum: a client accepts a value that the examples do not name.
+ */
+export const zReviewRequestStatus = z.string();
 
 export const zReviewRequestOutcome = z.object({
 	reason: zReviewRequestReason.optional(),
@@ -3861,16 +3895,9 @@ export const zReviewScopeRepository = z.object({
 });
 
 /**
- * Where the review stands.
+ * Extensible enum: a client accepts a value that the examples do not name. Where the review stands.
  */
-export const zReviewStatus = z.enum([
-	"QUEUED",
-	"RUNNING",
-	"COMPLETE",
-	"PARTIAL",
-	"FAILED",
-	"CANCELLED",
-]);
+export const zReviewStatus = z.string();
 
 export const zProfileReviewRef = z.object({
 	at: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
@@ -3944,35 +3971,10 @@ export const zReviewStatusCounts = z.object({
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
 });
 
-export const zReviewStopReason = z.enum([
-	"TIMED_OUT",
-	"EXECUTION_FAILED",
-	"PREPARATION_FAILED",
-	"PROCESSING_FAILED",
-	"PERSON_DATA_ERASED",
-	"STALE_ROLLOUT_REVISION",
-	"CANCELLED_BY_ADMIN",
-	"REPLACED",
-	"LEGACY_FAILURE",
-	"EXECUTION_INCOMPLETE",
-	"RESULT_WITHHELD",
-	"READINESS_REFUSED",
-	"SUSPECT_LISTING",
-	"BUDGET",
-	"USAGE_UNVERIFIABLE",
-	"DEADLINE",
-	"CANCELLED",
-	"ENUMERATION_FAILED",
-	"ENUMERATION_LIMIT",
-	"NO_SCAN_PRACTICES",
-	"MODEL_CHANGED",
-	"MODEL_UNAVAILABLE",
-	"ERROR",
-	"LEGACY_SCOPE_UNKNOWN",
-	"CONTRACT_CHANGED",
-	"NO_SANDBOX_ROOM",
-	"COMPOSITION_UNCONFIRMED",
-]);
+/**
+ * Extensible enum: a client accepts a value that the examples do not name.
+ */
+export const zReviewStopReason = z.string();
 
 export const zReviewTimeShares = z.object({
 	asked: z.number(),
@@ -4050,7 +4052,10 @@ export const zRevokeSessionsResult = z.object({
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
 });
 
-export const zRuntimeRole = z.enum(["SERVER"]);
+/**
+ * Extensible enum: a client accepts a value that the examples do not name.
+ */
+export const zRuntimeRole = z.string();
 
 export const zConfigurationFact = z.object({
 	documentationUrl: z.string(),
@@ -4834,18 +4839,20 @@ export const zStateBasis = zClaimBasis.and(
 	}),
 );
 
-export const zSyncJobStatus = z.enum([
-	"PENDING",
-	"RUNNING",
-	"SUCCEEDED",
-	"SUCCEEDED_WITH_WARNINGS",
-	"FAILED",
-	"CANCELLED",
-]);
+/**
+ * Extensible enum: a client accepts a value that the examples do not name.
+ */
+export const zSyncJobStatus = z.string();
 
-export const zSyncJobTrigger = z.enum(["SCHEDULED", "MANUAL", "LIFECYCLE", "SYSTEM"]);
+/**
+ * Extensible enum: a client accepts a value that the examples do not name.
+ */
+export const zSyncJobTrigger = z.string();
 
-export const zSyncJobType = z.enum(["INITIAL", "RECONCILIATION", "BACKFILL"]);
+/**
+ * Extensible enum: a client accepts a value that the examples do not name.
+ */
+export const zSyncJobType = z.string();
 
 /**
  * One sync_job row — a single INITIAL/RECONCILIATION/BACKFILL pass for a connection
@@ -5109,7 +5116,10 @@ export const zTriggerSyncJobRequest = z.object({
 	type: zSyncJobType,
 });
 
-export const zUnverifiableReason = z.enum(["RECORD_MISSING", "WORK_UNREADABLE"]);
+/**
+ * Extensible enum: a client accepts a value that the examples do not name.
+ */
+export const zUnverifiableReason = z.string();
 
 export const zResultList = z.object({
 	acceptedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
@@ -5663,7 +5673,10 @@ export const zUpdateWorkspaceTokenRequest = z.object({
 	personalAccessToken: z.string().min(1),
 });
 
-export const zUsageFundingSource = z.enum(["INSTANCE", "WORKSPACE"]);
+/**
+ * Extensible enum: a client accepts a value that the examples do not name.
+ */
+export const zUsageFundingSource = z.string();
 
 /**
  * A model and the pool its calls share
@@ -6404,7 +6417,10 @@ export const zWorkspaceGroupSplit = z.object({
 	yourStanding: zStanding.nullable(),
 });
 
-export const zWorkspaceStatus = z.enum(["ACTIVE", "SUSPENDED", "PURGED"]);
+/**
+ * Extensible enum: a client accepts a value that the examples do not name.
+ */
+export const zWorkspaceStatus = z.string();
 
 /**
  * Metadata-only workspace summary for the instance-admin overview

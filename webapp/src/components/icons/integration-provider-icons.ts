@@ -16,7 +16,7 @@ export const PROVIDER_ICONS = {
 	OUTLINE: OutlineIcon,
 } satisfies Record<ItemProvider, BrandIcon>;
 
-function hasProviderIcon(providerType: string): providerType is ItemProvider {
+function hasProviderIcon(providerType: string): providerType is keyof typeof PROVIDER_ICONS {
 	return Object.hasOwn(PROVIDER_ICONS, providerType);
 }
 

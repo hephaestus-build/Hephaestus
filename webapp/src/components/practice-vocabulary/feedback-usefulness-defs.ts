@@ -15,7 +15,7 @@ export const UNKNOWN_USEFULNESS_DEF: FeedbackUsefulnessDef = {
 	note: { name: "Feedback note", label: "Your feedback", placeholder: "Optional note" },
 };
 
-export const FEEDBACK_USEFULNESS_DEFS: Record<FeedbackUsefulness, FeedbackUsefulnessDef> = {
+export const FEEDBACK_USEFULNESS_DEFS = {
 	HELPFUL: {
 		label: "Helpful",
 		icon: ThumbsUpIcon,
@@ -38,4 +38,4 @@ export const FEEDBACK_USEFULNESS_DEFS: Record<FeedbackUsefulness, FeedbackUseful
 			placeholder: "Optional: what was missing or off",
 		},
 	},
-};
+} satisfies Record<string, FeedbackUsefulnessDef>;

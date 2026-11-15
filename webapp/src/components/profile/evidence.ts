@@ -85,7 +85,8 @@ function toLocation({ citation, change }: DiffBlock): EvidenceLocation {
 		startLine: citation.startLine ?? undefined,
 		endLine: citation.endLine ?? undefined,
 		sourceKind: citation.sourceKind,
-		side: citation.side ?? undefined,
+		// A side that this build does not know is left out rather than drawn as old or new.
+		side: citation.side === "OLD" || citation.side === "NEW" ? citation.side : undefined,
 		commit: citation.commit ?? undefined,
 		snippet: citation.quote ?? undefined,
 	};

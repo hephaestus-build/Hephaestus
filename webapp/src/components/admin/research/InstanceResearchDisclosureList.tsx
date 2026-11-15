@@ -21,7 +21,7 @@ import { formatCalendarDate } from "@/lib/dates";
 import { lastPermittedMoment } from "@/lib/research-release";
 
 import { InstanceResearchAttestationDialog } from "./InstanceResearchAttestationDialog";
-import { REMOVAL_REASON_LABELS } from "./research-labels";
+import { removalReasonLabel } from "./research-labels";
 
 type Closure = CloseResearchDisclosure["closure"];
 
@@ -202,7 +202,7 @@ export function InstanceResearchDisclosureList({
 													<TableCell>
 														<code>{removal.participantKey}</code>
 													</TableCell>
-													<TableCell>{REMOVAL_REASON_LABELS[removal.reason]}</TableCell>
+													<TableCell>{removalReasonLabel(removal.reason)}</TableCell>
 													<TableCell>{formatCalendarDate(removal.requiredAt)}</TableCell>
 												</TableRow>
 											))}

@@ -1,6 +1,6 @@
 import { ArrowRightIcon, ExternalLinkIcon } from "lucide-react";
 import type { ReactElement, ReactNode } from "react";
-import { definitionFor } from "@/components/common/status-def";
+import { definitionFor, UNKNOWN_STATUS_DEF } from "@/components/common/status-def";
 
 import type { ItemRef, ReviewDetail, ReviewLineage } from "@/api/types.gen";
 import { useNow } from "@/components/common/use-now";
@@ -140,12 +140,12 @@ function DayTime({ at, from }: { at: Date; from?: Date | null }) {
 	);
 }
 
-const PROVIDER_NAMES: Record<NonNullable<ItemRef["provider"]>, string> = {
+export const PROVIDER_NAMES = {
 	GITHUB: "GitHub",
 	GITLAB: "GitLab",
 	SLACK: "Slack",
 	OUTLINE: "Outline",
-};
+} satisfies Record<string, string>;
 
 function ItemFacts({ item }: { item: ItemRef }) {
 	if (!hasText(item.url) && item.removedAt === undefined) {
@@ -161,7 +161,7 @@ function ItemFacts({ item }: { item: ItemRef }) {
 						rel="noopener noreferrer"
 						className="inline-flex items-center gap-1 text-primary underline-offset-2 hover:underline"
 					>
-						{`Open on ${item.provider === undefined ? "its site" : PROVIDER_NAMES[item.provider]}`}
+						{`Open on ${item.provider === undefined ? "its site" : definitionFor(PROVIDER_NAMES, item.provider, "its site")}`}
 						<ExternalLinkIcon aria-hidden className="size-3" />
 					</a>
 				</Fact>
@@ -265,7 +265,11 @@ function FeedbackFacts({
 	const sources = numbered.filter(({ result }) => feedback.basis.includes(result.id));
 	return (
 		<FactList>
-			<Fact label="Destination">{feedbackLocationSentence(location, item ?? null)}</Fact>
+			<Fact label="Destination">
+				{location === undefined
+					? UNKNOWN_STATUS_DEF.label
+					: feedbackLocationSentence(location, item ?? null)}
+			</Fact>
 			{!told && <Fact label="Outcome">{outcomeText(feedback, lineage)}</Fact>}
 			{feedback.deliveredAt !== null && (
 				<Fact label="Delivered">

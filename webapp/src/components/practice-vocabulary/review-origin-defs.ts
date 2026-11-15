@@ -6,7 +6,7 @@ import type { StatusDefs } from "@/components/common/status-def";
 
 export type ReviewOrigin = ReviewRef["origin"];
 
-export const REVIEW_ORIGIN_DEFS: StatusDefs<ReviewOrigin> = {
+export const REVIEW_ORIGIN_DEFS = {
 	EVENT: {
 		label: "Event",
 		icon: ZapIcon,
@@ -31,4 +31,4 @@ export const REVIEW_ORIGIN_DEFS: StatusDefs<ReviewOrigin> = {
 		badgeVariant: "outline",
 		description: "Reviewed while catching up on work that predates the connection.",
 	},
-};
+} satisfies StatusDefs<string>;

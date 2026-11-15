@@ -60,10 +60,7 @@ function pullRequest(number: number, title: string): Wire<ItemRef> {
 		id: `pr-${number}`,
 		kind: "scm.pull_request",
 		label: `#${number}`,
-		parentId: null,
-		path: null,
 		provider: "GITHUB",
-		removedAt: null,
 		title,
 		url: `https://github.com/${REPOSITORY}/pull/${number}`,
 	};
@@ -238,17 +235,12 @@ const overview: Wire<PracticeProfileOverview> = {
 	changes: [
 		{
 			at: daysAgo(1),
-			cleanNeeded: null,
-			direction: null,
 			evidence: [metrics],
 			feedbackId: "feedback-verify",
-			from: null,
 			groupName: "Packaging work for review",
 			groupSlug: "review-ready-work",
 			practiceName: "State how to verify the change",
 			practiceSlug: "states-how-to-verify-the-change",
-			resolvedBy: null,
-			to: null,
 			type: "FEEDBACK_NEW",
 		},
 	],
@@ -410,10 +402,7 @@ const membership = (role: WorkspaceMembership["role"]) =>
 			id: "7",
 			status: "ACTIVE",
 			displayName: "Alex Rivera",
-			avatarUrl: null,
-			identities: [
-				{ provider: "GITHUB", login: "alex-rivera", displayName: "Alex Rivera", avatarUrl: null },
-			],
+			identities: [{ provider: "GITHUB", login: "alex-rivera", displayName: "Alex Rivera" }],
 		},
 		joinedAt: daysAgo(120),
 	});

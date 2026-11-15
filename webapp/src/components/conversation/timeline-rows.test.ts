@@ -92,6 +92,32 @@ describe("timelineRows", () => {
 		]);
 	});
 
+	it("shows a message of a kind that this build does not know, and counts it as not the developer's", () => {
+		const rows = timelineRows({
+			entries: [
+				entry("e1", { kind: "USER", createdAt: new Date(`${DAY}T09:00:00`) }),
+				entry("e2", { kind: "SYSTEM_NOTE", createdAt: new Date(`${DAY}T09:01:00`) }),
+				entry("e3", { kind: "USER", createdAt: new Date(`${DAY}T09:02:00`) }),
+			],
+			pending: [],
+			turns: [],
+		});
+		expect(shape(rows)).toStrictEqual(["day Thu Oct 08 2026", "e1", "e2", "e3"]);
+	});
+
+	it("never groups a message of a kind that this build does not know under Hephaestus", () => {
+		const rows = timelineRows({
+			entries: [
+				entry("e1", { kind: "HEPH", createdAt: new Date(`${DAY}T09:00:00`) }),
+				entry("e2", { kind: "SYSTEM_NOTE", createdAt: new Date(`${DAY}T09:01:00`) }),
+				entry("e3", { kind: "SYSTEM_NOTE", createdAt: new Date(`${DAY}T09:02:00`) }),
+			],
+			pending: [],
+			turns: [],
+		});
+		expect(shape(rows)).toStrictEqual(["day Thu Oct 08 2026", "e1", "e2", "e3"]);
+	});
+
 	it("never groups a weekly digest with the message before it", () => {
 		const rows = timelineRows({
 			entries: [entry("e1", { kind: "HEPH" }), entry("e2", { kind: "DIGEST", surface: "SYSTEM" })],

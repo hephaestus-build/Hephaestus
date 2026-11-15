@@ -1,4 +1,4 @@
-import type { ItemRef, OwnItemTrace, ResultList, ReviewRef } from "~/api/types.gen";
+import type { ItemRef, OwnItemTrace, ResultList } from "~/api/types.gen";
 import type { WorkPageView } from "~/shared/work-url";
 
 /**
@@ -122,7 +122,7 @@ export const SETTLING_REFRESH_MS = 10_000;
 export const VISIBLE_REFRESH_MS = 60_000;
 
 /** The named own review's status while it is still moving, never another developer's review. */
-export type ReviewActivity = Extract<ReviewRef["status"], "QUEUED" | "RUNNING">;
+export type ReviewActivity = "QUEUED" | "RUNNING";
 
 export function reviewActivity(context: ReviewContext): ReviewActivity | undefined {
 	if (context.status !== "ready") {

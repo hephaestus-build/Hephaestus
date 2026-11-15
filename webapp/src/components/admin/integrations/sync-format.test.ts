@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { freshnessTone } from "./sync-format";
+import {
+	freshnessTone,
+	jobStatusLabel,
+	jobTriggerLabel,
+	jobTypeLabel,
+	returnedJobMessage,
+} from "./sync-format";
 
 describe("freshnessTone", () => {
 	const now = new Date("2026-08-07T12:00:00.000Z");
@@ -43,5 +49,24 @@ describe("freshnessTone", () => {
 
 	it("reads an ISO string, which is what the SDK actually hands over", () => {
 		expect(freshnessTone(ago(10 * hourly).toISOString(), hourly, now.getTime())).toBe("veryStale");
+	});
+});
+
+describe("a sync job value that this build does not know", () => {
+	it("is named by its own token in sentence case", () => {
+		expect(jobStatusLabel("PAUSED_BY_PROVIDER")).toBe("Paused by provider");
+		expect(jobTypeLabel("REPLAY")).toBe("Replay");
+		expect(jobTriggerLabel("WEBHOOK")).toBe("Webhook");
+		expect(jobStatusLabel("SUCCEEDED")).toBe("Succeeded");
+	});
+
+	it("still says what a returned job did", () => {
+		expect(
+			returnedJobMessage({
+				type: "RECONCILIATION",
+				status: "PAUSED_BY_PROVIDER",
+				cancelRequested: false,
+			}),
+		).toBe("Sync paused by provider");
 	});
 });

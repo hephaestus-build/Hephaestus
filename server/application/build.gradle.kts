@@ -157,6 +157,8 @@ tasks.processResources {
     exclude("agent/work/**")
     exclude("agent/*.ts")
     from(rootProject.file("../docs/contributor/practice-feedback-language.md")) { into("agent") }
+    // The spec writes the enums that these operations return as open (ADR 0103 rule 3).
+    from(rootProject.file("public-api-operations.json")) { into("openapi") }
 }
 
 tasks.withType<JavaCompile>().configureEach {
