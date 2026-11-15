@@ -154,9 +154,7 @@ tags:
     \ that failed to file."
   name: product-feedback-destinations
 - name: provider-resource-repair
-- description: Serves only active workspaces that opted in to public activity. The
-    SQL of every activity read names its workspace.
-  name: public-activity
+- name: public-activity
 - name: public-activity-onboarding
 - name: public-activity-settings
 - name: review-batch

@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.notification.email;
 
 import de.tum.cit.aet.hephaestus.core.AuditExempt;
 import de.tum.cit.aet.hephaestus.core.RecentSignInExempt;
+import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.notification.preferences.NotificationSubscriptionService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -20,12 +21,9 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
-/**
- * An opaque token authorizes one action only: it turns off one subscription of one account. It reads no workspace
- * data.
- */
 @RestController
 @ConditionalOnServerRole
+@WorkspaceAgnostic("An opaque token turns off one subscription of one account; it reads no workspace data")
 @PreAuthorize("permitAll()")
 @RecentSignInExempt(reason = "RFC 8058 unsubscribe must work without an authenticated session")
 @Tag(name = "Notification preferences")

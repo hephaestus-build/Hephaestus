@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.contributors;
 
+import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirements;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -20,6 +21,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 @Tag(name = "Contributors", description = "Global contributor information")
 @PreAuthorize("permitAll()")
+@WorkspaceAgnostic("Lists the contributors of the Hephaestus project from GitHub; it reads no workspace data")
 public class ContributorController {
 
     private final ContributorService contributorService;

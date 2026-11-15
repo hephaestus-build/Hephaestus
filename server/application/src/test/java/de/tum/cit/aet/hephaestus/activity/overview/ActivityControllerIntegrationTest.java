@@ -1418,6 +1418,65 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
         }
 
         @Test
+        void shouldReturnNotFoundOnBothPersonReadsForAnUnknownWorkspace() {
+            for (String suffix : List.of("", "/work")) {
+                webTestClient
+                        .get()
+                        .uri("/public/workspaces/{slug}/activity/people/{login}" + suffix, "unknown", ada.getLogin())
+                        .exchange()
+                        .expectStatus()
+                        .isNotFound()
+                        .expectBody(Void.class);
+            }
+        }
+
+        @Test
+        void shouldKeepBothPersonReadsOfEachPublicWorkspaceToItsOwnRows() {
+            var firstIssue = issue(monitored, Issue.State.OPEN, ada);
+            record(ada, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, firstIssue.getId(), DAY);
+            Workspace first = workspace;
+
+            // A second public workspace monitors the same public repository, where the same person works too. Only
+            // the workspace of each activity row tells the two apart.
+            workspace = createWorkspace(
+                    "public-second", "Second", "public-second-org", AccountType.ORG, persistUser("second-owner"));
+            ensureMembership(workspace, ada, WorkspaceRole.MEMBER);
+            var connection = connections.saveAndFlush(new Connection(
+                    workspace,
+                    IntegrationKind.GITHUB,
+                    "public-second",
+                    new ConnectionConfig.GitHubAppConfig(9303L, workspace.getAccountLogin(), null, Set.of())));
+            connectionService.transition(
+                    connection,
+                    new ConnectionService.TransitionRequest(
+                            IntegrationState.ACTIVE,
+                            "TEST_CONNECTED",
+                            "SYSTEM",
+                            "public-second",
+                            UUID.randomUUID().toString(),
+                            "Source connected"));
+            var sharedMonitor = new RepositoryToMonitor();
+            sharedMonitor.setWorkspace(workspace);
+            sharedMonitor.setNameWithOwner(monitored.getNameWithOwner());
+            sharedMonitor.setNativeId(monitored.getNativeId());
+            repositoryToMonitorRepository.save(sharedMonitor);
+            publish();
+            var secondIssue = issue(monitored, Issue.State.OPEN, ada);
+            record(ada, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, secondIssue.getId(), DAY);
+
+            assertOnlyOwnRow(secondIssue);
+            workspace = first;
+            assertOnlyOwnRow(firstIssue);
+        }
+
+        private void assertOnlyOwnRow(Issue own) {
+            assertThat(person(ada).counts().contributions()).isEqualTo(1);
+            assertThat(personWork(ada, uri -> uri).content())
+                    .extracting(entry -> entry.work().htmlUrl())
+                    .containsExactly(own.getHtmlUrl());
+        }
+
+        @Test
         void shouldKeepAVisibleReviewWhenItsAuthorObjectsButRefuseTheHiddenReviewer() {
             TestUserFactory.ensureAccountForUser(accountRepository, publicIdentities, ada);
             var pull = pullRequest(ada, monitored, work -> work);
