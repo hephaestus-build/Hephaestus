@@ -830,9 +830,10 @@ public class JobEvidenceFiles implements SandboxResultListener {
     }
 
     /**
-     * Removes the folder if no attempt reads it: under the runtime's shared lease, one removal at a time with admission,
-     * or under an exclusive lease of its own. The job is read again under that lease, because an attempt that shares
-     * the lease may have started to read the folder since the caller looked.
+     * Removes the folder, with its staging remainder and marker, if no attempt reads it: under the runtime's shared
+     * lease, one removal at a time with admission, or under an exclusive lease of its own. Each claim names a new folder
+     * (its attempt counts the run's leases), so a folder that no attempt reads never becomes read; the decision is
+     * still made from the job as it is recorded under the lease.
      *
      * @return false when another holder keeps the lease to itself, and the folder stays for a later pass
      */
@@ -846,7 +847,7 @@ public class JobEvidenceFiles implements SandboxResultListener {
                 UUID.fromString(
                         Objects.requireNonNull(jobDirectory.getFileName()).toString()),
                 () -> {
-                    if (!Files.exists(root, LinkOption.NOFOLLOW_LINKS)) return;
+                    if (!present(root)) return;
                     var job = recordedJob(root);
                     if (job.isEmpty() || !readsFolder(root, job.get())) deleteAttempt(root);
                 });
@@ -1217,7 +1218,7 @@ public class JobEvidenceFiles implements SandboxResultListener {
                         if ((holder.isEmpty() || !readsFolder(root, holder.get())) && !retire(root)) remaining++;
                         continue;
                     }
-                } catch (RuntimeException exception) {
+                } catch (RuntimeException | IOException exception) {
                     log.warn("Could not clean attempt folder {}", root, exception);
                     remaining++;
                     continue;
@@ -1292,7 +1293,7 @@ public class JobEvidenceFiles implements SandboxResultListener {
 
     /**
      * Whether the folder is the one that the job's running attempt reads. A composition reads the folder of its own
-     * run; the folder of the run that measured the review is then another run's, and admission has removed it.
+     * run; the folder of the run that measured the review is then another run's, and the next sweep removes it.
      */
     private boolean readsFolder(Path root, ReviewJob job) {
         return matches(root, job) && job.getStatus() == ReviewJobStatus.RUNNING;

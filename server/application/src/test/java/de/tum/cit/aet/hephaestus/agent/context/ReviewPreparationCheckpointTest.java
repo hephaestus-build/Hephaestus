@@ -173,22 +173,27 @@ class ReviewPreparationCheckpointTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldKeepAFolderThatItsAttemptStartedToReadBeforeTheSweepTookTheSharedLease() throws Exception {
+    void shouldRemoveTheStagingRemainderOfASupersededRunWhileTheRunningAttemptHoldsTheLease() throws Exception {
         var job = job();
         restorable(job);
         var files = files();
-        // The sweep first reads the job as not yet running this run; the claim commits before the removal starts.
-        var claimable = RuntimeReviewTestData.job();
-        claimable.setId(job.getId());
-        claimable.setRunId(job.getRunId());
-        claimable.setStatus(ReviewJobStatus.QUEUED);
-        when(jobs.findByIdAndWorkspaceId(job.getId(), job.getWorkspaceId()))
-                .thenReturn(Optional.of(claimable), Optional.of(job));
+        // A preparation of an earlier run died while it staged: only its staging copy is left, beside no folder.
+        Path staging = new FabricLayout(root.toString())
+                .jobsRoot()
+                .resolve(Long.toString(job.getWorkspaceId()))
+                .resolve(job.getId().toString())
+                .resolve("." + job.getAttempt() + "-"
+                        + ProvenanceDigest.sha256Hex(
+                                UUID.randomUUID().toString().getBytes(StandardCharsets.UTF_8))
+                        + ".preparing-1");
         try (var restored = files.resume(job)) {
             Path index = Objects.requireNonNull(restored.filesOnDisk().get("INDEX.json"));
+            Files.createDirectories(staging);
+            Files.write(staging.resolve("checkout.pack"), new byte[1024 * 1024]);
 
             assertThat(files.cleanEndedAttempts()).isZero();
 
+            assertThat(staging).doesNotExist();
             assertThat(index).exists();
         }
     }
