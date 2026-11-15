@@ -100,13 +100,16 @@ class FeedbackDecisionServiceTest {
                 .build();
         when(feedback.lockByIdAndWorkspaceId(id, 1)).thenReturn(Optional.of(row));
         when(decisions.save(any())).thenAnswer(a -> a.getArgument(0));
-        when(gate.evaluate(row, FeedbackCheckStage.APPROVED, false))
-                .thenReturn(new FeedbackCheck(
-                        FeedbackCheckStage.APPROVED,
-                        true,
-                        null,
-                        now,
-                        new FeedbackCheckFacts(0, 0, true, true, true, true, false, true, true, false)));
+        when(gate.evaluate(row, FeedbackCheckStage.APPROVED, false)).thenReturn(approvedCheck());
+    }
+
+    FeedbackCheck approvedCheck() {
+        return new FeedbackCheck(
+                FeedbackCheckStage.APPROVED,
+                true,
+                null,
+                now,
+                new FeedbackCheckFacts(0, 0, true, true, true, true, false, true, true, false));
     }
 
     @Test
@@ -134,6 +137,29 @@ class FeedbackDecisionServiceTest {
         assertThat(outcome.state()).isEqualTo(FeedbackState.READY);
         assertThat(decision.getAction()).isEqualTo(FeedbackDecisionAction.APPROVE);
         assertThat(decision.getFeedbackId()).isEqualTo(id);
+        var capture = ArgumentCaptor.forClass(ActionRequest.class);
+        verify(actions).enqueue(capture.capture());
+        assertThat(capture.getValue().idempotencyKey()).isEqualTo("feedback:" + id + ":1:POST");
+    }
+
+    @Test
+    void shouldApproveRejectedFeedbackAfterAllAndQueueItsPost() {
+        row = Feedback.builder()
+                .id(id)
+                .workspaceId(1)
+                .reviewId(row.getReviewId())
+                .developerId(2)
+                .destination(FeedbackDestination.ON_WORK)
+                .state(FeedbackState.REJECTED)
+                .body("Add a regression test.")
+                .build();
+        when(feedback.lockByIdAndWorkspaceId(id, 1)).thenReturn(Optional.of(row));
+        when(gate.evaluate(row, FeedbackCheckStage.APPROVED, false)).thenReturn(approvedCheck());
+        var outcome = service.decide(
+                1, id, 3, new FeedbackDecisionInput(FeedbackDecisionAction.APPROVE, null, null, digest()));
+        assertThat(outcome.state()).isEqualTo(FeedbackState.READY);
+        assertThat(saved().getAction()).isEqualTo(FeedbackDecisionAction.APPROVE);
+        verify(feedback).updateDelivery(1, id, FeedbackState.READY, null, null);
         var capture = ArgumentCaptor.forClass(ActionRequest.class);
         verify(actions).enqueue(capture.capture());
         assertThat(capture.getValue().idempotencyKey()).isEqualTo("feedback:" + id + ":1:POST");

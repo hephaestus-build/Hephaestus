@@ -74,7 +74,12 @@ import { FeedbackBody } from "./FeedbackBody";
 import { FeedbackLocationLabel } from "./FeedbackLocationLabel";
 import { levelFoldKey } from "./level-folds";
 import { LevelBodySkeleton } from "./LevelBodySkeleton";
-import { type ApprovalQueue, ProposalDecision, ProposalPackage } from "./ProposalDecision";
+import {
+	type ApprovalQueue,
+	ApproveRejectedFeedback,
+	ProposalDecision,
+	ProposalPackage,
+} from "./ProposalDecision";
 import {
 	ERASED_ACCOUNT,
 	type SheetEvent,
@@ -232,6 +237,12 @@ export function FeedbackLevel({
 					<SheetSection part="state" foldKey={levelFoldKey("feedback", "state")}>
 						<SheetHistory events={feedbackHistory(record)} now={feedbackNow(record)} />
 					</SheetSection>
+					{/* Rejected feedback is never awaiting approval, so at most one of these footers shows. */}
+					{canApproveAfterAll(record) && (
+						<DrawerFooter>
+							<ApproveRejectedFeedback isDeciding={isDeciding} onApprove={onApprove} />
+						</DrawerFooter>
+					)}
 					{awaitingApproval ? (
 						<ProposalPackage feedback={record} />
 					) : (
@@ -298,6 +309,7 @@ export function FeedbackLevel({
 					</div>
 				</DrawerFooter>
 			) : (
+				!canApproveAfterAll(record) &&
 				canChangeWithdrawal(record) && (
 					<DrawerFooter>
 						{deliveryCheck(record) === "available" && (
@@ -868,6 +880,20 @@ function feedbackTechnical(feedback: FeedbackRecord): TechnicalFact[] {
 		}
 	}
 	return facts;
+}
+
+/**
+ * Rejected feedback that an approval would post. Not one with no digest to approve, which the server
+ * refuses, nor one whose copies were all withheld since, which would post nothing.
+ */
+function canApproveAfterAll(feedback: FeedbackRecord): boolean {
+	return (
+		feedback.state === "REJECTED" &&
+		!feedback.withdrawn &&
+		feedback.destination === "ON_WORK" &&
+		hasText(feedback.contentDigest) &&
+		feedback.copies.some((copy) => copy.state === "PLANNED")
+	);
 }
 
 function canChangeWithdrawal(feedback: FeedbackRecord): boolean {

@@ -1,4 +1,5 @@
 import {
+	CheckCheckIcon,
 	CheckIcon,
 	ChevronLeftIcon,
 	ChevronRightIcon,
@@ -241,6 +242,44 @@ function RejectFeedbackPopover({
 						}}
 					>
 						Reject feedback
+					</Button>
+				</div>
+			</PopoverContent>
+		</Popover>
+	);
+}
+
+export interface ApproveRejectedFeedbackProps {
+	isDeciding: boolean;
+	onApprove: () => void;
+}
+
+/**
+ * Approves rejected feedback after all, once the admin has read what that sends. Only feedback on the
+ * work waits for approval, so only it can have been rejected.
+ */
+export function ApproveRejectedFeedback({ isDeciding, onApprove }: ApproveRejectedFeedbackProps) {
+	const [open, setOpen] = useState(false);
+	return (
+		<Popover open={open} onOpenChange={setOpen}>
+			<PopoverTrigger render={<Button variant="outline" disabled={isDeciding} />}>
+				<CheckCheckIcon />
+				Approve after all
+			</PopoverTrigger>
+			<PopoverContent align="end" side="top" className="w-[min(24rem,calc(100vw-2rem))] gap-4 p-4">
+				<PopoverHeader>
+					<PopoverTitle>Approve this feedback after all</PopoverTitle>
+					<PopoverDescription>
+						Hephaestus posts the planned copies above on the work if the feedback checks pass.
+						Otherwise nothing is posted, and you see why. The rejection stays in the history.
+					</PopoverDescription>
+				</PopoverHeader>
+				<div className="flex justify-end gap-2 border-t pt-3">
+					<Button variant="ghost" size="sm" onClick={() => setOpen(false)}>
+						Cancel
+					</Button>
+					<Button size="sm" disabled={isDeciding} onClick={onApprove}>
+						{isDeciding ? <Spinner /> : <CheckIcon />} Approve for delivery
 					</Button>
 				</div>
 			</PopoverContent>

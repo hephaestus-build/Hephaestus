@@ -554,6 +554,57 @@ export const Rejected: Story = {
 		events.getByText("by Grace Hopper");
 		await expect(events.getByText(/Not useful to the developer/u)).toBeVisible();
 		events.getByText(/The long comment already covers the test names/u);
+		await expect(
+			within(panelElement).getByRole("button", { name: "Approve after all" }),
+		).toBeEnabled();
+	},
+};
+
+/** Approving rejected feedback says what it sends and where before anything is decided. */
+export const ApproveRejectedAfterAll: Story = {
+	args: { feedback: ready(rejectedFeedbackDetail) },
+	parameters: { chromatic: { disableSnapshot: true } },
+	play: async ({ args, userEvent }) => {
+		const panel = within(await settledDrawerPanel());
+		await userEvent.click(panel.getByRole("button", { name: "Approve after all" }));
+		const dialog = await screen.findByRole("dialog", { name: "Approve this feedback after all" });
+		await expectSettledVisible(dialog);
+		within(dialog).getByText(
+			"Hephaestus posts the planned copies above on the work if the feedback checks pass. Otherwise nothing is posted, and you see why. The rejection stays in the history.",
+		);
+		await expect(args.onApprove).not.toHaveBeenCalled();
+		await userEvent.click(within(dialog).getByRole("button", { name: "Approve for delivery" }));
+		await expect(args.onApprove).toHaveBeenCalledOnce();
+	},
+};
+
+/** While the approval is saved, it cannot be sent twice. */
+export const ApprovingRejected: Story = {
+	args: { feedback: ready(rejectedFeedbackDetail), isDeciding: true },
+	play: async () => {
+		const panel = within(await settledDrawerPanel());
+		await expectGenuinelyDisabled(panel.getByRole("button", { name: "Approve after all" }));
+	},
+};
+
+/**
+ * Rejected feedback whose copies were all withheld since, as when its result was marked incorrect,
+ * would post nothing, so no approval is offered.
+ */
+export const RejectedNothingLeftToPost: Story = {
+	args: {
+		feedback: ready({
+			...rejectedFeedbackDetail,
+			copies: rejectedFeedbackDetail.copies.map((copy) => ({
+				...copy,
+				state: "WITHHELD" as const,
+				stopReason: "RESULT_MARKED_INCORRECT" as const,
+			})),
+		}),
+	},
+	play: async () => {
+		const panel = within(await settledDrawerPanel());
+		await expect(panel.queryByRole("button", { name: "Approve after all" })).toBeNull();
 	},
 };
 

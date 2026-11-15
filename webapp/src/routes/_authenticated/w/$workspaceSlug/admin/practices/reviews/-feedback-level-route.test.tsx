@@ -692,6 +692,85 @@ describe("feedback approval level", () => {
 	});
 });
 
+function rejectedWire(state: "REJECTED" | "READY") {
+	return {
+		...proposalWire("READY"),
+		state,
+		stopReason: null,
+		decisions: [
+			{ ...decisionWire(FEEDBACK_ID, "REJECT"), reasonCode: "UNHELPFUL" as const },
+			...(state === "READY" ? [decisionWire(FEEDBACK_ID, "APPROVE")] : []),
+		],
+	};
+}
+
+describe("approving rejected feedback after all", () => {
+	it("confirms what approval sends, then approves with the package it read", async () => {
+		let state: "REJECTED" | "READY" = "REJECTED";
+		let requestBody: unknown;
+		server.use(
+			...feedbackCountHandlers(),
+			http.get("*/workspaces/:workspaceSlug/practices/reviews/feedback/:feedbackId", () =>
+				HttpResponse.json(rejectedWire(state)),
+			),
+			http.post(DECISIONS, async ({ request }) => {
+				requestBody = await request.json();
+				state = "READY";
+				return HttpResponse.json(decisionWire(FEEDBACK_ID, "APPROVE"), { status: 201 });
+			}),
+			...reviewHandlers(),
+		);
+		renderRouteAtWithRouter(FEEDBACK_LEVEL);
+
+		await userEvent.click(
+			await screen.findByRole("button", { name: "Approve after all" }, ROUTE_RENDER_WAIT),
+		);
+		const dialog = await screen.findByRole("dialog", { name: "Approve this feedback after all" });
+		within(dialog).getByText(
+			/posts the planned copies above on the work if the feedback checks pass/u,
+		);
+		expect(requestBody).toBeUndefined();
+		await userEvent.click(within(dialog).getByRole("button", { name: "Approve for delivery" }));
+
+		await screen.findByText("Feedback approved. Delivery is being checked.");
+		expect(requestBody).toStrictEqual({ action: "APPROVE", contentDigest: CONTENT_DIGEST });
+		await waitFor(() =>
+			expect(screen.queryByRole("button", { name: "Approve after all" })).toBeNull(),
+		);
+	});
+
+	it("says why the server refused, and keeps the approval on offer", async () => {
+		server.use(
+			...feedbackCountHandlers(),
+			http.get("*/workspaces/:workspaceSlug/practices/reviews/feedback/:feedbackId", () =>
+				HttpResponse.json(rejectedWire("REJECTED")),
+			),
+			http.post(DECISIONS, () =>
+				HttpResponse.json(
+					{ status: 409, detail: "The feedback changed. Refresh it before deciding." },
+					{ status: 409 },
+				),
+			),
+			...reviewHandlers(),
+		);
+		renderRouteAtWithRouter(FEEDBACK_LEVEL);
+
+		await userEvent.click(
+			await screen.findByRole("button", { name: "Approve after all" }, ROUTE_RENDER_WAIT),
+		);
+		const dialog = await screen.findByRole("dialog", { name: "Approve this feedback after all" });
+		await userEvent.click(within(dialog).getByRole("button", { name: "Approve for delivery" }));
+
+		await screen.findByText("We could not save your decision on this feedback");
+		await screen.findByText("The feedback changed. Refresh it before deciding.");
+		await waitFor(() =>
+			expect(
+				screen.getByRole("button", { name: "Approve after all" }).hasAttribute("disabled"),
+			).toBe(false),
+		);
+	});
+});
+
 describe("what feedback is based on", () => {
 	it("names each result it was written from, and whether one problem of it or the whole", async () => {
 		const detail = feedbackDetail("99999999-6666-6666-6666-666666666666");
