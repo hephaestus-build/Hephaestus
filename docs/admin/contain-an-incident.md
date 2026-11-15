@@ -126,8 +126,8 @@ The lock waits for sign-ins in progress, so the updates include their sessions.
 The server checks each request against `issued_jwt`, so every session ends at once.
 
 A leaked JWT signing key lets its holder sign new sessions.
-Hephaestus has no procedure that replaces the signing key.
-If it leaked, report it as the [security policy](https://github.com/hephaestus-build/Hephaestus/blob/main/SECURITY.md) describes.
+If it leaked, make a new signing key, as [Signing key](./secret-custody#signing-key) describes.
+If the system key leaked together with the database or a backup, rotate the system key, as [System key](./secret-custody#system-key) describes.
 
 Record the action in your incident record.
 

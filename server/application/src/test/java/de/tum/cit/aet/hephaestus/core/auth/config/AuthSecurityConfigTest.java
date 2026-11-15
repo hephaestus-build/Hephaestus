@@ -26,7 +26,7 @@ import org.springframework.security.oauth2.core.endpoint.OAuth2AuthorizationRequ
  * Pins the fail-closed contract of {@link AuthSecurityConfig#resolveStateCookieKey}: in production a
  * blank state-cookie key is fatal (an ephemeral per-pod key would silently abandon in-flight logins
  * on every restart and differ per replica), while dev/CI tolerate it with a generated key. Mirrors
- * {@code JwtSigningKeySealer}'s prod fail-fast. Fails if either guard is removed.
+ * {@code SystemSecrets}' prod fail-fast. Fails if either guard is removed.
  */
 class AuthSecurityConfigTest extends BaseUnitTest {
 

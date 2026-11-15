@@ -1,11 +1,14 @@
 package de.tum.cit.aet.hephaestus.core.auth.provider;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
+import jakarta.persistence.LockModeType;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 /**
@@ -34,4 +37,17 @@ public interface LoginProviderRepository extends JpaRepository<LoginProvider, Lo
     List<LoginProvider> findByEnabledTrueOrderByDisplayNameAsc();
 
     boolean existsByEnabledTrueAndTypeIn(Collection<LoginProvider.ProviderType> types);
+
+    /** Every row, locked, for the system key rotation ({@code SystemKeyRotation}). */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT x FROM LoginProvider x ORDER BY x.id")
+    List<LoginProvider> lockAllForKeyRotation();
+
+    /**
+     * An update writes every column back, so it locks the row: a system key rotation that resealed the secret meanwhile
+     * would otherwise get the value under the earlier key back.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT p FROM LoginProvider p WHERE p.registrationId = :registrationId")
+    Optional<LoginProvider> findByRegistrationIdForUpdate(@Param("registrationId") String registrationId);
 }

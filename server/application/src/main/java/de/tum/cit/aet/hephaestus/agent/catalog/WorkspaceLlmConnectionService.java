@@ -1,10 +1,13 @@
 package de.tum.cit.aet.hephaestus.agent.catalog;
 
+import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditEntityType;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditEntry;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditPort;
 import de.tum.cit.aet.hephaestus.core.exception.AccessForbiddenException;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
+import de.tum.cit.aet.hephaestus.core.security.SystemSecretOwner;
+import de.tum.cit.aet.hephaestus.core.security.SystemSecrets;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceSummaryQuery;
@@ -25,7 +28,7 @@ import org.springframework.util.StringUtils;
  */
 @Service
 @RequiredArgsConstructor
-public class WorkspaceLlmConnectionService {
+public class WorkspaceLlmConnectionService implements SystemSecretOwner {
 
     private final WorkspaceLlmConnectionRepository connectionRepository;
     private final WorkspaceLlmModelRepository modelRepository;
@@ -34,6 +37,7 @@ public class WorkspaceLlmConnectionService {
     private final InstanceLlmSettingsService instanceLlmSettingsService;
     private final LlmModelLimitDiscovery limitDiscovery;
     private final ConfigAuditPort configAudit;
+    private final SystemSecrets secrets;
 
     @PersistenceContext
     private @Nullable EntityManager entityManager;
@@ -75,7 +79,7 @@ public class WorkspaceLlmConnectionService {
         connection.setApiProtocol(request.apiProtocol());
         connection.setAuthMode(request.authMode() != null ? request.authMode() : LlmAuthMode.BEARER);
         if (StringUtils.hasText(request.apiKey())) {
-            connection.setApiKey(request.apiKey());
+            connection.replaceApiKey(request.apiKey(), secrets);
         }
         if (request.enabled() != null) {
             connection.setEnabled(request.enabled());
@@ -121,9 +125,9 @@ public class WorkspaceLlmConnectionService {
             connection.setConnectionPlatform(request.connectionPlatform());
         }
         if (Boolean.TRUE.equals(request.clearApiKey())) {
-            connection.setApiKey(null);
+            connection.replaceApiKey(null, secrets);
         } else if (request.apiKey() != null) {
-            connection.setApiKey(request.apiKey());
+            connection.replaceApiKey(request.apiKey(), secrets);
         }
         if (request.enabled() != null) {
             connection.setEnabled(request.enabled());
@@ -160,5 +164,16 @@ public class WorkspaceLlmConnectionService {
         if (!instanceLlmSettingsService.get().isAllowWorkspaceConnections()) {
             throw new AccessForbiddenException("This server does not allow you to connect your own AI provider.");
         }
+    }
+
+    @Override
+    @Transactional
+    @WorkspaceAgnostic("Seals the AI provider keys of every workspace again during a system key rotation")
+    public int resealWithActiveKey(SystemSecrets secrets) {
+        int resealed = 0;
+        for (var row : connectionRepository.lockAllForKeyRotation()) {
+            if (row.resealWithActiveKey(secrets)) resealed++;
+        }
+        return resealed;
     }
 }

@@ -1,7 +1,9 @@
 package de.tum.cit.aet.hephaestus.core.auth.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -10,6 +12,7 @@ import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEventLogger;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.AccessTokenAdmission;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.JwtSigningKeyService;
 import de.tum.cit.aet.hephaestus.core.auth.metrics.AuthMetrics;
+import de.tum.cit.aet.hephaestus.core.security.StoredSystemSecrets;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Clock;
 import org.junit.jupiter.api.Test;
@@ -24,10 +27,12 @@ import org.springframework.cache.concurrent.ConcurrentMapCacheManager;
 class AuthJwtConfigTest extends BaseUnitTest {
 
     private final JwtSigningKeyService keyService = mock(JwtSigningKeyService.class);
+    private final StoredSystemSecrets storedSecrets = mock(StoredSystemSecrets.class);
 
     private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
             .withUserConfiguration(AuthJwtConfig.class)
             .withBean(JwtSigningKeyService.class, () -> keyService)
+            .withBean(StoredSystemSecrets.class, () -> storedSecrets)
             .withBean(AccessTokenAdmission.class, () -> mock(AccessTokenAdmission.class))
             .withBean(AuthEventLogger.class, () -> mock(AuthEventLogger.class))
             .withBean(AuthMetrics.class, () -> mock(AuthMetrics.class))
@@ -43,12 +48,16 @@ class AuthJwtConfigTest extends BaseUnitTest {
         });
     }
 
+    /** The check comes first, so a server with another system key never seals a new signing key. */
     @Test
-    void shouldSeedSigningKeysDuringProductionStartup() {
+    void shouldCheckTheStoredKeysBeforeItSeedsASigningKey() {
         contextRunner.withPropertyValues("spring.profiles.active=prod").run(context -> {
             assertThat(context).hasNotFailed();
             context.getBean(ApplicationRunner.class).run(new DefaultApplicationArguments());
-            verify(keyService).ensureActiveKey();
+            var order = inOrder(keyService, storedSecrets);
+            order.verify(keyService).verifyActiveKeysOpen();
+            order.verify(storedSecrets).verifyAllOpen();
+            order.verify(keyService).ensureActiveKey();
         });
     }
 
@@ -60,6 +69,22 @@ class AuthJwtConfigTest extends BaseUnitTest {
         contextRunner.run(context -> {
             context.getBean(ApplicationRunner.class).run(new DefaultApplicationArguments());
             verify(keyService).ensureActiveKey();
+        });
+    }
+
+    /** A system key that does not open the stored keys must stop the server instead of letting it refuse every session. */
+    @Test
+    void shouldStopStartupWhenTheSystemKeyDoesNotOpenTheStoredKeys() {
+        doThrow(new IllegalStateException(
+                        "hephaestus.security.encryption-key does not open the stored JWT signing key"))
+                .when(keyService)
+                .verifyActiveKeysOpen();
+        contextRunner.run(context -> {
+            var runner = context.getBean(ApplicationRunner.class);
+            assertThatThrownBy(() -> runner.run(new DefaultApplicationArguments()))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("does not open the stored JWT signing key");
+            verify(keyService, never()).ensureActiveKey();
         });
     }
 }

@@ -8,7 +8,9 @@ import static org.mockito.Mockito.when;
 import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBinding;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
+import de.tum.cit.aet.hephaestus.core.security.SystemSecrets;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import de.tum.cit.aet.hephaestus.testconfig.TestSystemSecrets;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import java.util.Optional;
@@ -17,6 +19,9 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
 
 class LlmModelResolverTest extends BaseUnitTest {
+
+    private static final SystemSecrets SECRETS =
+            TestSystemSecrets.systemSecrets("0123456789abcdef0123456789abcdef", "test");
 
     @Mock
     private LlmConnectionRepository instanceConnections;
@@ -41,14 +46,15 @@ class LlmModelResolverTest extends BaseUnitTest {
     @BeforeEach
     void setUp() {
         resolver = new LlmModelResolver(
-                instanceConnections, workspaceConnections, instanceModels, workspaceModels, grants);
+                instanceConnections, workspaceConnections, instanceModels, workspaceModels, grants, SECRETS);
         connection = new LlmConnection();
         connection.setId(10L);
+        connection.setSlug("primary");
         connection.setEnabled(true);
         connection.setApiProtocol(LlmApiProtocol.OPENAI_RESPONSES);
         connection.setBaseUrl("https://api.example.test/v1");
         connection.setAuthMode(LlmAuthMode.BEARER);
-        connection.setApiKey("secret");
+        connection.replaceApiKey("secret", SECRETS);
         model = new LlmModel();
         model.setId(20L);
         model.setUpstreamModelId("gpt-test");
@@ -94,7 +100,7 @@ class LlmModelResolverTest extends BaseUnitTest {
      */
     @Test
     void shouldReportABlankApiKeyAsNoCredentialAtAll() {
-        connection.setApiKey("   ");
+        connection.replaceApiKey("   ", SECRETS);
         var ref = new LlmModelResolver.ConnectionRef(UsageFundingSource.INSTANCE, 10L, 20L, 30L);
 
         LlmModelResolver.ProxyCredential credential = resolver.resolveProxyCredential(ref);

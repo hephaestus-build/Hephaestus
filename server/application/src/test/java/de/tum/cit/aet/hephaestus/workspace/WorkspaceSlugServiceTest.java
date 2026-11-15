@@ -5,10 +5,10 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import de.tum.cit.aet.hephaestus.core.security.SystemEncryptionKey;
+import de.tum.cit.aet.hephaestus.core.security.StoredSystemSecrets;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.validation.WorkspaceSlugValidator;
-import javax.crypto.spec.SecretKeySpec;
+import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -53,9 +53,9 @@ class WorkspaceSlugServiceTest extends BaseUnitTest {
 
     @Test
     void shouldRejectAvailabilityWhenAnErasedNamespaceReservesTheSlug() {
-        var systemKey = mock(SystemEncryptionKey.class);
-        when(systemKey.key()).thenReturn(new SecretKeySpec(new byte[32], "AES"));
-        var erased = new WorkspaceNamespaceReservation(systemKey);
+        var storedSecrets = mock(StoredSystemSecrets.class);
+        when(storedSecrets.find(WorkspaceNamespaceReservation.KEY_NAME)).thenReturn(Optional.of(new byte[32]));
+        var erased = new WorkspaceNamespaceReservation(storedSecrets);
         String token = erased.slugToken("ada").orElseThrow();
         var reservations = mock(WorkspaceSlugReservationRepository.class);
         when(reservations.existsById(anyString())).thenAnswer(call -> token.equals(call.getArgument(0)));

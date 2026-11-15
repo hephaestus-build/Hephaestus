@@ -11,7 +11,9 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.core.auth.spi.LlmConnectionAudit;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
+import de.tum.cit.aet.hephaestus.core.security.SystemSecrets;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import de.tum.cit.aet.hephaestus.testconfig.TestSystemSecrets;
 import de.tum.cit.aet.hephaestus.workspace.spi.LlmConnectionPlatform;
 import java.util.Optional;
 import org.junit.jupiter.api.Nested;
@@ -19,6 +21,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 
 class LlmConnectionServiceTest extends BaseUnitTest {
 
@@ -33,6 +36,9 @@ class LlmConnectionServiceTest extends BaseUnitTest {
 
     @Mock
     private LlmConnectionAudit llmConnectionAudit;
+
+    @Spy
+    private SystemSecrets secrets = TestSystemSecrets.systemSecrets("0123456789abcdef0123456789abcdef", "test");
 
     @InjectMocks
     private LlmConnectionService connectionService;
@@ -167,9 +173,9 @@ class LlmConnectionServiceTest extends BaseUnitTest {
             connection.setSlug("openai-prod");
             connection.setDisplayName("Old name");
             connection.setApiProtocol(LlmApiProtocol.OPENAI_RESPONSES);
-            connection.setApiKey("sk-stored");
+            connection.replaceApiKey("sk-stored", secrets);
             connection.setEnabled(true);
-            when(connectionRepository.findById(5L)).thenReturn(Optional.of(connection));
+            when(connectionRepository.findByIdForUpdate(5L)).thenReturn(Optional.of(connection));
             when(connectionRepository.save(any(LlmConnection.class))).thenAnswer(inv -> inv.getArgument(0));
             return connection;
         }
@@ -194,7 +200,7 @@ class LlmConnectionServiceTest extends BaseUnitTest {
             connectionService.update(5L, new UpdateLlmConnectionRequestDTO(null, null, null, null, null, null));
 
             assertThat(connection.getDisplayName()).isEqualTo("Old name");
-            assertThat(connection.getApiKey()).isEqualTo("sk-stored");
+            assertThat(connection.apiKey(secrets)).isEqualTo("sk-stored");
             assertThat(connection.isEnabled()).isTrue();
         }
 
@@ -204,7 +210,7 @@ class LlmConnectionServiceTest extends BaseUnitTest {
 
             connectionService.update(5L, new UpdateLlmConnectionRequestDTO(null, "sk-new", true, null, null, null));
 
-            assertThat(connection.getApiKey()).isNull();
+            assertThat(connection.apiKey(secrets)).isNull();
         }
 
         @Test
@@ -213,7 +219,7 @@ class LlmConnectionServiceTest extends BaseUnitTest {
 
             connectionService.update(5L, new UpdateLlmConnectionRequestDTO(null, "sk-new", false, null, null, null));
 
-            assertThat(connection.getApiKey()).isEqualTo("sk-new");
+            assertThat(connection.apiKey(secrets)).isEqualTo("sk-new");
         }
 
         @Test
@@ -223,7 +229,8 @@ class LlmConnectionServiceTest extends BaseUnitTest {
             connectionService.update(
                     5L, new UpdateLlmConnectionRequestDTO(null, null, null, null, LlmConnectionPlatform.AZURE, null));
             assertThat(connection.getConnectionPlatform()).isEqualTo(LlmConnectionPlatform.AZURE);
-            assertThat(LlmConnectionDTO.from(connection).connectionPlatform()).isEqualTo(LlmConnectionPlatform.AZURE);
+            assertThat(LlmConnectionDTO.from(connection, secrets).connectionPlatform())
+                    .isEqualTo(LlmConnectionPlatform.AZURE);
 
             connectionService.update(
                     5L, new UpdateLlmConnectionRequestDTO(null, null, null, null, LlmConnectionPlatform.OPENAI, true));
@@ -232,7 +239,7 @@ class LlmConnectionServiceTest extends BaseUnitTest {
 
         @Test
         void unknownConnectionRaisesNotFoundWithoutAuditing() {
-            when(connectionRepository.findById(404L)).thenReturn(Optional.empty());
+            when(connectionRepository.findByIdForUpdate(404L)).thenReturn(Optional.empty());
 
             assertThatThrownBy(() -> connectionService.update(
                             404L, new UpdateLlmConnectionRequestDTO("New name", null, null, null, null, null)))

@@ -151,6 +151,7 @@ class DataIsolationArchitectureTest extends HephaestusArchitectureTest {
             "ClientSession", // Installed-client session (refresh family); account-scoped like IssuedJwt
             "ClientSignInHandoff", // Single-use installed-client sign-in code; precedes any workspace choice
             "JwtSigningKey", // System-wide signing keys
+            "StoredSystemSecret", // Secrets that the instance generates for itself, sealed by the system key
             "AccountExport", // GDPR Art. 20 self-service export; account-scoped, spans workspaces
             "LoginProvider", // Instance-scoped OAuth login provider (sign-in option); not workspace-scoped
             "ConsentDecision", // Account-scoped consent evidence; spans workspaces
