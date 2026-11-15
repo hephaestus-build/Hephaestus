@@ -245,7 +245,7 @@ await describe("migrationNoteProblems", async () => {
 const anchors = (docsPage: string) =>
 	docsPage === "admin/upgrade"
 		? headingAnchors(
-				"## Stopped schema upgrades\n\n```md\n## Not a heading\n```\n## Drain {/*#drain-queues*/}\n",
+				"## Stopped schema upgrades\n\n```md\n## Not a heading\n```\n## Drain [#drain-queues]\n",
 			)
 		: undefined;
 const linking = (link: string) => [

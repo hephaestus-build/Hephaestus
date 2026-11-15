@@ -340,7 +340,7 @@ function docsLinkProblems(
 	);
 }
 
-// The anchors of a page: an explicit MDX id comment, else the slug of the heading text.
+// The anchors of a page: an explicit id (`## Drain [#drain-queues]`), else the slug of the heading text.
 export function headingAnchors(source: string): Set<string> {
 	return new Set(
 		readPage(source).body.flatMap(({ text }) => {
@@ -348,7 +348,7 @@ export function headingAnchors(source: string): Set<string> {
 			if (heading === undefined) {
 				return [];
 			}
-			const explicit = /\{\/\*#(?<id>[^*]+)\*\/\}/u.exec(heading)?.groups?.id;
+			const explicit = /\[#(?<id>[^\]]+)\]\s*$/u.exec(heading)?.groups?.id;
 			return [
 				explicit ??
 					heading
