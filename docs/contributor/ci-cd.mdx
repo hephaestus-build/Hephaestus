@@ -940,7 +940,7 @@ No rule requires it, so it changes no merge.
 | Merge group | Success, because the merge group runs every shard under `CI Status Gate` |
 | Pull request without a server change | Success |
 | Server pull request with `ci:full` | Success after the server tests pass, failure after they fail. A cancelled or skipped run publishes nothing |
-| Other server pull request | Nothing |
+| Server pull request in the fast tier or the light tier | Nothing |
 
 The job has another name than the status, because a ruleset also matches a required context against check runs.
 
@@ -953,10 +953,11 @@ It publishes only while an open pull request from that fork branch into the defa
 A fork author who changes the base while the run reads the changed paths can choose the diff that decides the verdict. The merge group still runs every check, as it does for `CI Status Gate`.
 
 Enabling auto-merge does not start a run.
-An earlier design ran the shards when auto-merge was enabled, and the `main` ruleset required this status.
-The armed run waited for the pull request's run on the same commit and then repeated it, and the merge group ran the shards again.
-That delayed each server pull request by about 45 minutes before it entered the queue.
-A merge group failure costs the other entries of the group one rebuild, which is less, so the merge group alone runs the shards.
+For a pull request without `ci:full`, only the merge group runs the numbered shards.
+A failure there removes the group from the queue.
+Do not run the shards when auto-merge is enabled.
+That run waits for the pull request's run on the same commit and then repeats it, and the merge group runs the shards again.
+Thus it delays every server pull request to save a rebuild of the group only when a shard fails.
 
 ### Migration checks on PRs
 
@@ -1263,11 +1264,13 @@ Right after a merge, that run is still building, so the pull request builds ever
 - A Kubernetes cluster leg is named for its distribution, minor and architecture, such as
   `k3s 1.37 amd64`. Its check history thus survives an image update. The job summary names the
   pinned node image. Renovate updates the image within its minor. A new minor is a workflow change.
-  Before cluster creation, each leg removes unused SDKs from its GitHub-hosted runner.
-  `scripts/prepare-kubernetes-runner.ts` checks free space on Docker's filesystem before each cluster starts.
-- Before its vulnerability scans, each image build job removes the same unused SDKs and logs the free space.
-  Trivy copies each image layer to a temporary file after the builds have filled the root volume.
+  Before cluster creation, `scripts/prepare-kubernetes-runner.ts` checks free space on Docker's filesystem.
+  It removes unused SDKs from the GitHub-hosted runner only if less than 40 GiB is free.
+  The deletion takes minutes on an x64 runner.
+- Before its vulnerability scans, each image build job logs the free space.
+  Trivy copies each image layer to a temporary file after the builds have used part of the root volume.
   Thus, `scripts/prepare-image-scan-runner.ts` gives the scans' temporary files the volume with the most free space.
+  It removes the same unused SDKs only if that volume has less than 40 GiB free.
 - A pull request that matches the `kubernetes` filter runs the latest k3s on amd64. Its server first lints the chart and validates its schemas.
   The merge queue also runs the lowest supported minor on amd64 and `kind 1.35 Calico`.
   Only the nightly run adds the lowest supported minor on arm64.

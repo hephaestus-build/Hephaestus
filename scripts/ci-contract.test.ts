@@ -5735,8 +5735,7 @@ function validationConcurrencyScopes(
 // such run holds runners the next pull request queues for. Cancelling it must not reach another
 // pull request's run, or a run on main or in the merge queue: those are the only runs their commits get.
 // GitHub marks every job of a cancelled run cancelled, whatever its condition says, and the head shows
-// those checks until the next run's jobs reach the same names. Enabling auto-merge starts a run on the
-// commit that the running one already tests, so it waits for that run instead of cancelling it.
+// those checks until the next run's jobs reach the same names.
 void test("a pull-request workflow cancels its superseded runs and nothing else", async () => {
 	const repository = "hephaestus-build/Hephaestus";
 	// Every pull request pushes the same branch name: two forks can each push `patch-1`.

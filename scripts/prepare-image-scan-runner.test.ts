@@ -5,7 +5,8 @@ import { tmpdir, userInfo } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 
-import { roomiest } from "./prepare-image-scan-runner.ts";
+import { availableBytes, KEEP_SDKS_FREE_BYTES } from "./lib/runner-disk.ts";
+import { roomiest, scanVolume, type Volume } from "./prepare-image-scan-runner.ts";
 
 void test("the scans' temporary files go to the volume with the most free space", () => {
 	const runnerTemp = { mount: "/home/runner/work/_temp", available: 9 * 1024 ** 3 };
@@ -18,6 +19,37 @@ void test("the scans' temporary files go to the volume with the most free space"
 		runnerTemp,
 	);
 	assert.throws(() => roomiest([]), /No volume/u);
+});
+
+/** The volume scanVolume picks, and the order of its measurements and deletion. */
+const choose = async (before: Volume[], after: Volume[]) => {
+	const events: string[] = [];
+	let removed = false;
+	const chosen = await scanVolume(
+		async () => {
+			events.push("measure");
+			return removed ? after : before;
+		},
+		async () => {
+			events.push("remove");
+			removed = true;
+		},
+	);
+	return { chosen, events };
+};
+
+void test("the scans remove the SDKs only when the roomiest volume is short, then measure again", async () => {
+	const gib = 1024 ** 3;
+	const root = { mount: "/home/runner/work/_temp", available: 10 * gib };
+	const second = { mount: "/mnt", available: 30 * gib };
+	const roomy = { ...root, available: KEEP_SDKS_FREE_BYTES };
+	assert.deepEqual(await choose([roomy, second], []), { chosen: roomy, events: ["measure"] });
+	// The deletion frees the root volume, which then wins over the second disk.
+	const freed = { ...root, available: 60 * gib };
+	assert.deepEqual(await choose([root, second], [freed, second]), {
+		chosen: freed,
+		events: ["measure", "remove", "measure"],
+	});
 });
 
 void test("disk preparation for the scans refuses a contributor's machine", () => {
@@ -34,7 +66,7 @@ void test("disk preparation for the scans refuses a contributor's machine", () =
 });
 
 void test(
-	"preparation logs the disk, removes the SDKs and hands the scans a directory it owns",
+	"preparation logs the disk, removes the SDKs only when short and hands the scans a directory it owns",
 	{ skip: process.platform !== "linux" },
 	async () => {
 		const directory = await mkdtemp(path.join(tmpdir(), "image-scan-disk-"));
@@ -70,9 +102,14 @@ void test(
 			const { uid, gid } = userInfo();
 			const recorded = await readFile(calls, "utf8");
 			const log = recorded.trim().split("\n");
+			const short = (await availableBytes(chosen)) < KEEP_SDKS_FREE_BYTES;
 			assert.deepEqual(log, [
 				"df -h",
-				"sudo rm -rf -- /usr/local/lib/android /usr/share/dotnet /usr/local/.ghcup /opt/ghc /opt/hostedtoolcache/CodeQL",
+				...(short
+					? [
+							"sudo rm -rf -- /usr/local/lib/android /usr/share/dotnet /usr/local/.ghcup /opt/ghc /opt/hostedtoolcache/CodeQL",
+						]
+					: []),
 				`sudo install -d -o ${uid} -g ${gid} ${chosen}/image-scan-tmp`,
 				"df -h",
 			]);
