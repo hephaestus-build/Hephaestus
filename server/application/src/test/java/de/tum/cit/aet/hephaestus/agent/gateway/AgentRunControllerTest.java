@@ -147,13 +147,13 @@ class AgentRunControllerTest extends BaseUnitTest {
 
     @Test
     void shouldEndTheRunThroughItsKindAndAnswerAStaleEndAsLeaseLost() throws Exception {
-        when(review.end(run(), SandboxRunKind.Outcome.HANDED_ON)).thenReturn(true);
+        when(review.end(run(), SandboxRunKind.Outcome.HANDED_ON, null)).thenReturn(true);
         mvc.perform(claimed(post("/internal/agent/runs/{runId}/end", RUN))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"outcome\":\"handed_on\"}"))
                 .andExpect(status().isNoContent());
 
-        when(review.end(run(), SandboxRunKind.Outcome.COMPLETED)).thenReturn(false);
+        when(review.end(run(), SandboxRunKind.Outcome.COMPLETED, null)).thenReturn(false);
         mvc.perform(claimed(post("/internal/agent/runs/{runId}/end", RUN))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"outcome\":\"completed\"}"))
@@ -167,7 +167,7 @@ class AgentRunControllerTest extends BaseUnitTest {
 
     @Test
     void shouldHandOnTheRunOfAnUnisolatedSandboxAndRevokeTheSandboxEvenWhenTheRunMovedOn() throws Exception {
-        when(review.end(run(), SandboxRunKind.Outcome.HANDED_ON)).thenReturn(true, false);
+        when(review.end(run(), SandboxRunKind.Outcome.HANDED_ON, null)).thenReturn(true, false);
 
         mvc.perform(claimed(post("/internal/agent/runs/{runId}/end", RUN))
                         .contentType(MediaType.APPLICATION_JSON)
@@ -179,6 +179,16 @@ class AgentRunControllerTest extends BaseUnitTest {
                 .andExpect(status().isConflict());
 
         verify(sandboxes, times(2)).revoke(SANDBOX, AgentSandboxes.Revocation.UNISOLATED);
+    }
+
+    @Test
+    void shouldPassTheHandOnCauseThatTheLoopEchoesToTheKind() throws Exception {
+        when(review.end(run(), SandboxRunKind.Outcome.HANDED_ON, "PROVIDER")).thenReturn(true);
+
+        mvc.perform(claimed(post("/internal/agent/runs/{runId}/end", RUN))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"outcome\":\"handed_on\",\"cause\":\"PROVIDER\"}"))
+                .andExpect(status().isNoContent());
     }
 
     @Test
