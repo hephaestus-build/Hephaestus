@@ -83,7 +83,8 @@ Directly in those, the **component name** carries the scope:
   A scope-specific field, permission check or copy string in either one silently breaks the other console.
   Nothing in the file says it has two callers.
 
-In every other directory, components serve one console, so they stay unprefixed; a helper module may serve both.
+In every other directory, components serve one console, so they stay unprefixed.
+A helper module there may serve both.
 A shared component never lives there.
 
 Name a new component for its scope.
