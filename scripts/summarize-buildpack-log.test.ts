@@ -5,6 +5,10 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 
+const javaLine = readFileSync(".java-version", "utf8").trim();
+const jre = (major: string) =>
+	`[builder]   BellSoft Liberica JRE ${major}.0.5: Contributing to layer\n`;
+
 void test("CDS reporting collapses only known archive exclusions and retains raw evidence", (t) => {
 	const directory = mkdtempSync(path.join(tmpdir(), "buildpack-log-"));
 	t.after(() => rmSync(directory, { recursive: true, force: true }));
@@ -20,7 +24,7 @@ void test("CDS reporting collapses only known archive exclusions and retains raw
 		`${prefix}Preload Warning: Verification failed for optional.Class`,
 		`${prefix}Skipping future/Class: Unknown exclusion`,
 		"ERROR: archive creation failed",
-	].join("\n")}\n`;
+	].join("\n")}\n${jre(javaLine)}`;
 	const result = spawnSync(process.execPath, ["scripts/summarize-buildpack-log.ts", log], {
 		input,
 		encoding: "utf8",
@@ -65,12 +69,14 @@ void test("a buildpack download that does not come from the dependency binding f
 			},
 		);
 	const bound = summarize(
-		"[builder]     \u001B[33mDownloading\u001B[0m from file:///home/runner/work/_temp/buildpack-dependencies/files/jre.tar.gz\n",
+		`${jre(javaLine)}[builder]     \u001B[33mDownloading\u001B[0m from file:///home/runner/work/_temp/buildpack-dependencies/files/jre.tar.gz\n`,
 	);
 	assert.equal(bound.status, 0, bound.stdout);
 	const upstream = "https://github.com/bell-sw/Liberica/releases/download/21.0.13.0.3+5/jre.tar.gz";
 	// The terminal colours that the lifecycle can add must not hide a download.
-	const fetched = summarize(`[builder]     \u001B[33mDownloading\u001B[0m from ${upstream}\n`);
+	const fetched = summarize(
+		`${jre(javaLine)}[builder]     \u001B[33mDownloading\u001B[0m from ${upstream}\n`,
+	);
 	assert.equal(fetched.status, 1);
 	assert.ok(
 		fetched.stdout.includes(`::error::A buildpack downloaded ${upstream}.`),
@@ -106,7 +112,7 @@ void test("the lifecycle's failure lines become one annotation, so the step name
 	const warning = spawnSync(
 		process.execPath,
 		["scripts/summarize-buildpack-log.ts", path.join(directory, "raw.log")],
-		{ input: "[builder] unable to read an optional file\n", encoding: "utf8" },
+		{ input: `${jre(javaLine)}[builder] unable to read an optional file\n`, encoding: "utf8" },
 	);
 	assert.doesNotMatch(warning.stdout, /::error/u);
 });
@@ -137,4 +143,28 @@ void test("the image build takes the per-arch digest that the lifecycle reports,
 	const missing = run("Successfully built image\n");
 	assert.notEqual(missing.status, 0);
 	assert.match(missing.stdout, /reported 0 image digests/u);
+});
+
+void test("an image whose JRE is not of the .java-version line fails the build", (t) => {
+	const directory = mkdtempSync(path.join(tmpdir(), "buildpack-log-"));
+	t.after(() => rmSync(directory, { recursive: true, force: true }));
+	const summarize = (input: string) =>
+		spawnSync(
+			process.execPath,
+			["scripts/summarize-buildpack-log.ts", path.join(directory, "raw.log")],
+			{ input, encoding: "utf8" },
+		);
+	assert.equal(summarize(`\u001B[1m${jre(javaLine)}`).status, 0);
+	const other = String(Number(javaLine) - 4);
+	const fallback = summarize(jre(other));
+	assert.equal(fallback.status, 1);
+	assert.ok(
+		fallback.stdout.includes(
+			`::error::The image runs Java ${other}, but .java-version is ${javaLine}.`,
+		),
+		fallback.stdout,
+	);
+	const unknown = summarize("[builder] Paketo Buildpack for BellSoft Liberica 11.10.5\n");
+	assert.equal(unknown.status, 1);
+	assert.ok(unknown.stdout.includes("names no Liberica JRE"), unknown.stdout);
 });

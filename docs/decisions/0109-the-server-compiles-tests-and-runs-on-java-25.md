@@ -71,6 +71,7 @@ Hosts roll back with the [upgrade rollback procedure](https://docs.hephaestus.bu
 ## Confirmation
 
 - `gate:toolchain` fails when Gradle, Renovate, a workflow, `BP_JVM_VERSION` or the JRE pin leaves the `.java-version` line.
+- The image build fails unless the buildpack contributes a Liberica JRE of the `.java-version` line, so a fallback to another line cannot pass unseen.
 - `-Werror` fails compilation on any lint finding.
 - The integration tier fails on a pinned park of 20 ms or more.
 - `ProxyStandInLifecycleTest` fails when the stand-in stops streaming a frame while the upstream stalls.

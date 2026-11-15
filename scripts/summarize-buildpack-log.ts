@@ -1,4 +1,4 @@
-import { appendFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
 import { createInterface } from "node:readline";
 import { stripVTControlCharacters } from "node:util";
 
@@ -16,6 +16,10 @@ const download = /Downloading from (?<uri>\S+)/u;
 // The lifecycle's own failure lines. Without an annotation, the step shows only its exit status,
 // and the next step reports the missing digest instead of the cause.
 const failure = /^(?:\[\w+\]\s+)?(?:ERROR: |unable to )/u;
+// The JVM buildpack takes the image's Java line from the JAR manifest. Nothing else would notice if it took another
+// line, so the image must name the JRE of the tested one.
+const contributedJre = /BellSoft Liberica JRE (?<major>\d+)\.\S*: Contributing to layer/u;
+const javaLine = readFileSync(new URL("../.java-version", import.meta.url), "utf8").trim();
 
 const output = process.argv[2];
 if (!isSet(output)) {
@@ -25,11 +29,16 @@ writeFileSync(output, "");
 const counts = new Map<string, number>();
 const downloads: string[] = [];
 const failures: string[] = [];
+const jreLines: string[] = [];
 for await (const line of createInterface({ input: process.stdin, crlfDelay: Infinity })) {
 	appendFileSync(output, `${line}\n`);
 	const plain = stripVTControlCharacters(line).trim();
 	if (failure.test(plain)) {
 		failures.push(plain);
+	}
+	const major = contributedJre.exec(plain)?.groups?.major;
+	if (major !== undefined) {
+		jreLines.push(major);
 	}
 	const uri = download.exec(plain)?.groups?.uri;
 	if (uri !== undefined && !uri.startsWith("file:")) {
@@ -64,7 +73,8 @@ if (downloads.length > 0) {
 	process.exitCode = 1;
 }
 // A line "unable to" alone can be a warning; the lifecycle prints "ERROR:" when the build fails.
-if (failures.some((line) => line.includes("ERROR: "))) {
+const buildFailed = failures.some((line) => line.includes("ERROR: "));
+if (buildFailed) {
 	// A workflow command ends at a line break, so the message escapes them (docs.github.com, workflow commands).
 	const message = failures
 		.join("\n")
@@ -72,4 +82,17 @@ if (failures.some((line) => line.includes("ERROR: "))) {
 		.replaceAll("\r", "%0D")
 		.replaceAll("\n", "%0A");
 	console.log(`::error title=Buildpacks build failed::${message}`);
+}
+// A failed build contributes no JRE, and its own failure lines already name the cause.
+if (!buildFailed) {
+	if (jreLines.length === 0) {
+		console.log("::error::The buildpack log names no Liberica JRE, so the image's Java line is unknown.");
+		process.exitCode = 1;
+	}
+	for (const major of new Set(jreLines)) {
+		if (major !== javaLine) {
+			console.log(`::error::The image runs Java ${major}, but .java-version is ${javaLine}.`);
+			process.exitCode = 1;
+		}
+	}
 }
