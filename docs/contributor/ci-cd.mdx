@@ -929,6 +929,10 @@ An armed run is never skipped as a duplicate, because the earlier run of its tre
 A failure then stops only this pull request, before it can remove a merge group that holds other pull requests.
 A push to an unarmed pull request keeps the fast tier.
 
+The armed run waits for the pull request's run in progress, which tests the same commit, instead of cancelling it.
+A later event on the pull request replaces the waiting run. That run reads the auto-merge state again, so it still runs the shards while the pull request is armed.
+GitHub marks every job of a cancelled run cancelled, and the head would show those checks until the armed run's jobs replace them.
+
 `Report full integration` publishes the `Full integration` commit status for the head of a same-repository pull request, and for a merge group:
 
 | Run | Status |
