@@ -11,6 +11,6 @@
 		"HEPHAESTUS_IMAGE_POSTGRES": "ghcr.io/hephaestus-build/postgres@sha256:a45aaaa91b56d45ef6d7df76487f845a49831ac2d024af52cd1efc5cdad1d7c2"
 	},
 	"allowRollback": false,
-	"freeze": true,
+	"freeze": false,
 	"refreshDatabaseImage": false
 }
