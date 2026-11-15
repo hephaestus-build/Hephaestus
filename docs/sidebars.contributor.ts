@@ -24,6 +24,8 @@ const sidebars: SidebarsConfig = {
 						"security-mutation-testing",
 						"sandbox-footprint",
 						"capacity-benchmark",
+						"qualify-a-release",
+						"qualification-checks",
 						{
 							type: "category",
 							label: "Accessibility audit",
