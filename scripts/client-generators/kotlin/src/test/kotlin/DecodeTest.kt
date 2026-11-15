@@ -3,7 +3,6 @@ package build.hephaestus.api
 
 import build.hephaestus.api.infrastructure.Serializer
 import build.hephaestus.api.models.WorkspaceListItem
-import build.hephaestus.api.models.WorkspaceStatus
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -18,6 +17,12 @@ class DecodeTest {
     fun ignoresAnUnknownResponseProperty() {
         val workspace = decodeFixture<WorkspaceListItem>("workspace-list-item")
         assertEquals("octo-org", workspace.workspaceSlug)
-        assertEquals(WorkspaceStatus.ACTIVE, workspace.status)
+        assertEquals("ACTIVE", workspace.status)
+    }
+
+    @Test
+    fun keepsAValueOfAnOpenEnumThatItDoesNotKnow() {
+        val workspace = decodeFixture<WorkspaceListItem>("workspace-list-item-unknown-status")
+        assertEquals("PAUSED_IN_A_LATER_RELEASE", workspace.status)
     }
 }

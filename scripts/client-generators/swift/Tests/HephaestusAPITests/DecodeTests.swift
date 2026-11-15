@@ -19,5 +19,10 @@ func decodeFixture<T: Decodable>(_ name: String, as type: T.Type) throws -> T {
 @Test func ignoresAnUnknownResponseProperty() throws {
   let workspace = try decodeFixture("workspace-list-item", as: Components.Schemas.WorkspaceListItem.self)
   #expect(workspace.workspaceSlug == "octo-org")
-  #expect(workspace.status == .ACTIVE)
+  #expect(workspace.status == "ACTIVE")
+}
+
+@Test func keepsAValueOfAnOpenEnumThatItDoesNotKnow() throws {
+  let workspace = try decodeFixture("workspace-list-item-unknown-status", as: Components.Schemas.WorkspaceListItem.self)
+  #expect(workspace.status == "PAUSED_IN_A_LATER_RELEASE")
 }
