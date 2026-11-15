@@ -128,8 +128,8 @@ The job's own limit cancels the run and can lose its log, so the list is the evi
 | Feedback eval gate | The deterministic checks of the [feedback eval gate](./feedback-quality-evals.md#feedback-eval-gate): valid fixtures and case lists, literal checks, practice occasions, practice-script snapshots and the call ceiling. Keeps the `feedback-eval-gate` artifact. The model panel and the prompt-safety subset run in `feedback-eval-panel.yml` | `node scripts/feedback-eval-gate.ts` |
 | PR → Validate PR                                                        | Conventional Commit title. Every commit’s primary author resolves to the PR author’s GitHub account (including bot accounts) or a listed review-policy maintainer. The title, body, and every commit message contain no `Claude-Session:` trailer, "Generated with" line, or session link (a `Co-authored-by:` trailer is allowed) | —                                                                        |
 
-`Build → Database migrations`, the PostgreSQL drills, both E2E rows and the integration shards other than `review` are
-the queue tier. See [Two verification tiers](#two-verification-tiers) for migration PR exceptions.
+`Build → Database migrations`, the PostgreSQL drills and both E2E rows are the queue tier.
+The integration shards other than `review` run in the queue tier and on an [armed pull request](#full-integration-at-the-arm-point). See [Two verification tiers](#two-verification-tiers) for migration PR exceptions.
 
 The browser jobs retain `webapp-e2e-results` and `extension-e2e-results`, each including
 `e2e-server.log`, for seven days on success as well as failure. Inspect server startup and shutdown output even when browser assertions
@@ -817,7 +817,8 @@ action does not persist configuration-cache entries across jobs.
 A pull request outside the [light tier](#light-tier-for-stacked-layers) uses the **fast tier**.
 A merge group, a push and a dispatch also enable the **queue tier**.
 `detect-changes` publishes the decision once as `queue-tier`, and each queue-tier job adds it to its path condition.
-The numbered integration shards require the queue tier. The `review` shard does not.
+The numbered integration shards require the queue tier or an armed pull request ([Full integration at the arm point](#full-integration-at-the-arm-point)).
+The `review` shard does not.
 
 The table lists eligible jobs. Path filters and event guards still select which jobs run.
 
@@ -907,6 +908,38 @@ Changes to workflows, build scripts, shard durations or browser tests do not sel
 The merge group checks the complete selected queue tier before the change reaches `main`.
 Release evidence selection stays separate. A Version PR does not select the full queue tier unless it carries `ci:full`.
 
+### Full integration at the arm point
+
+A server pull request runs the numbered integration shards once, before it enters the queue.
+Enabling auto-merge is the arm point. The `auto_merge_enabled` event starts a run, and `Changes` reads the auto-merge state from the pull request when it runs.
+`detect-changes` publishes `full-integration`, which selects the shards for the queue tier and for an armed pull request. A push to an armed pull request selects them too.
+An armed [stacked layer](#light-tier-for-stacked-layers) also runs its server suites and the shards, because each layer of a stack must meet the rules of `main`.
+
+An armed run is never skipped as a duplicate, because the earlier run of its tree skipped the shards.
+A failure then stops only this pull request, before it can remove a merge group that holds other pull requests.
+A push to an unarmed pull request keeps the fast tier.
+
+`Report full integration` publishes the `Full integration` commit status for the head of a same-repository pull request, and for a merge group:
+
+| Run | Status |
+| --- | --- |
+| Merge group | Success, because the merge group runs every shard under `CI Status Gate` |
+| Pull request without a server change | Success |
+| Armed server pull request | Success after the server tests pass, failure after they fail. A cancelled or skipped run publishes nothing |
+| Unarmed server pull request | Pending, "Runs when auto-merge is enabled", unless the commit already has an armed run's verdict. A "No server change" holds only against the base it was computed for, so pending replaces it |
+
+A pending or missing required status keeps a pull request out of the queue.
+Thus auto-merge enqueues a server pull request only after its armed run passed. People and the board arm a pull request as before, with no label.
+A fork's token cannot write statuses, so the job skips a fork's pull request.
+Before step 2 below, the maintainers decide how a fork's pull request meets the rule, for example through a same-repository branch.
+The job has another name than the status, because a ruleset also matches a required context against check runs.
+
+The rollout has two steps:
+
+1. The workflow publishes the status. No rule requires it, so it changes no merge.
+2. The maintainers add `Full integration`, from the GitHub Actions app, to the required status checks of the `main` ruleset.
+   From then on, the queue admits a server pull request only after its armed run.
+
 ### Migration checks on PRs
 
 A PR outside the [light tier](#light-tier-for-stacked-layers) that changes `db/**` runs database tests and PostgreSQL drills, including on a draft.
@@ -916,13 +949,14 @@ it runs `review` without Unit or Architecture. The notes can be changesets, `.mi
 Generated-artifact drift, quality and security checks stay selected.
 A migration with a Java, build or configuration change keeps Unit and Architecture too.
 
-The migration-specific integration classes remain in the numbered shards. They first run in the merge group, where a failure removes the group from the queue.
+The migration-specific integration classes remain in the numbered shards. They first run at the [arm point](#full-integration-at-the-arm-point) or in the merge group.
 The Database tier and `review` do not replace those classes. An explicit full run checks them on the PR too.
 
 ### Reproduce a queue-tier failure
 
 Use `ci:full` to reproduce a queue-tier failure on the pull request.
-It enables the queue tier but keeps path selection.
+It enables the whole queue tier but keeps path selection: the numbered shards, the browser suites, database migrations, the drills and the Kubernetes queue legs.
+Enabling auto-merge runs only the numbered shards ([Full integration at the arm point](#full-integration-at-the-arm-point)).
 It is not the default for a workflow or migration change. Remove the label after the reproduction.
 Then push, or use **Re-run all jobs** on the latest CI/CD run.
 
@@ -956,6 +990,7 @@ The merge group runs the checks selected for the combined diff.
 Thus, such a layer runs the **light tier**: `Changes`, the quality legs except Windows and Webapp stories, Security, Release notes and Workflow lint.
 These are format, lint, types, prose and the quality legs' own tests.
 It packages no server, so it runs no server suite, no artifact gate, no image build and no cluster leg.
+Enabling auto-merge adds its server suites and the numbered shards ([Full integration at the arm point](#full-integration-at-the-arm-point)).
 `CI Status Gate` evaluates the selected checks.
 
 `Changes` reads the base from the pull request when it runs, not from the event, and publishes `light-tier`.
