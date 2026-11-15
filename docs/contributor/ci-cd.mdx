@@ -1011,6 +1011,11 @@ The new attempt reads the new base and runs the ordinary pull-request tier.
 A re-run is never skipped as a duplicate, because the earlier run of the same tree may have run only the light tier.
 A push to the retargeted pull request runs the ordinary pull-request tier as well.
 
+A push can follow the retarget within seconds, for example when a stack tool rebases the layer.
+A re-run of the old head then joins the CI/CD concurrency group and cancels the run of the new head.
+So `CI / Retarget` reads the current head of the pull request before it acts and again before the re-run.
+If the head is not the head in the event, it stops.
+
 ## Path filters
 
 The `kubernetes` filter includes `docker/**`, `application*.yml`, `*Properties.java` and `Application.java`.
