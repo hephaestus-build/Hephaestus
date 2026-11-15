@@ -5594,6 +5594,50 @@ function validationConcurrencyScopes(
 // A push to a pull request leaves its earlier run validating a commit nobody will merge, and every
 // such run holds runners the next pull request queues for. Cancelling it must not reach another
 // pull request's run, or a run on main or in the merge queue: those are the only runs their commits get.
+// GitHub marks every job of a cancelled run cancelled, whatever its condition says, and the head shows
+// those checks until the next run's jobs reach the same names. Enabling auto-merge starts a run on the
+// commit that the running one already tests, so it waits for that run instead of cancelling it.
+void test("enabling auto-merge waits for the run on the same commit instead of cancelling it", async () => {
+	const workflow = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
+	const lane = (event: string, action: string) => {
+		const sha = "a".repeat(40);
+		const context = {
+			github: {
+				workflow: workflow.get("name"),
+				repository: "hephaestus-build/Hephaestus",
+				event_name: event,
+				ref: event === "pull_request" ? "refs/pull/7/merge" : "refs/heads/main",
+				ref_name: event === "pull_request" ? "7/merge" : "main",
+				head_ref: event === "pull_request" ? "topic" : "",
+				sha,
+				event: {
+					action,
+					pull_request: { head: { sha, repo: { full_name: "hephaestus-build/Hephaestus" } } },
+					repository: { default_branch: "main" },
+				},
+			},
+		};
+		return {
+			group: expandExpressions(workflow.getIn(["concurrency", "group"]), context),
+			cancels:
+				expandExpressions(workflow.getIn(["concurrency", "cancel-in-progress"]), context) ===
+				"true",
+		};
+	};
+	const push = lane("pull_request", "synchronize");
+	const arm = lane("pull_request", "auto_merge_enabled");
+	assert.equal(arm.group, push.group, "the armed run queues behind the pull request's run");
+	assert.equal(arm.cancels, false, "the armed run does not cancel the run on its commit");
+	assert.equal(push.cancels, true, "a push still cancels the run it supersedes");
+	for (const action of ["opened", "reopened", "ready_for_review"]) {
+		assert.equal(lane("pull_request", action).cancels, true, action);
+	}
+	assert.equal(lane("workflow_dispatch", "").cancels, true);
+	for (const event of ["push", "merge_group"]) {
+		assert.equal(lane(event, "").cancels, false, event);
+	}
+});
+
 void test("a pull-request workflow cancels its superseded runs and nothing else", async () => {
 	const repository = "hephaestus-build/Hephaestus";
 	// Every pull request pushes the same branch name: two forks can each push `patch-1`.
