@@ -53,6 +53,8 @@ public class WorkspaceScopedTables {
             "issued_jwt",
             "jwt_signing_key",
             "system_secret",
+            // Signatures of the instance's Slack app, held until a signed request can no longer arrive again.
+            "slack_request_claim",
             // Installed-client sessions and their single-use sign-in handoffs;
             // account-scoped like issued_jwt
             "client_session",

@@ -1207,7 +1207,7 @@ export const AwaitingApproval: Story = {
 		await expect(panel.getByText(/Approval authorizes every copy above/u)).toBeVisible();
 		await expect(panel.getByText(/^A summary, a line note,? and a file note$/u)).toBeVisible();
 		await expect(
-			panel.getByText(/This name says the delay doubles, which is the rule a reader needs/u),
+			await panel.findByText(/This name says the delay doubles, which is the rule a reader needs/u),
 		).toBeVisible();
 		panel.getByText("It waits for a workspace admin to approve or reject it.");
 

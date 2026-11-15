@@ -665,6 +665,10 @@ node scripts/check-gradle-verification-metadata.ts --write
 ```
 
 It resolves every server dependency in an empty Gradle home with strict verification.
+A local endpoint serves the empty home each file from your own Gradle cache whose checksum the metadata already lists.
+It downloads the other files from Maven Central and the Plugin Portal.
+The cache adds only files that verification accepts, so it does not change which components the resolution reads.
+
 Then it deletes each component that the resolution did not download.
 The deletion adds no checksum to trust.
 If a CI task reads a reported component, add that task to the script instead of deleting the entry.

@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.job;
 
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobPreparationException;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.practices.spi.Currentness;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentSnapshot;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentStore;
@@ -70,12 +71,22 @@ public class ReviewJobAssignments {
                 .toList();
     }
 
-    public boolean start(ReviewJob job, String practiceSlug) {
-        var assignment = load(job).stream()
+    /** {@link ReviewFreshness#startCurrentness} for the practice that {@link #start} starts; it holds no lock. */
+    public Currentness startCurrentness(ReviewJob job, String practiceSlug) {
+        return freshness.startCurrentness(
+                job.getWorkspaceId(), assigned(job, practiceSlug).id());
+    }
+
+    public boolean start(ReviewJob job, String practiceSlug, Currentness checked) {
+        return freshness.start(
+                job.getWorkspaceId(), assigned(job, practiceSlug).id(), job.getId(), job.getAttempt(), checked);
+    }
+
+    private ReviewAssignmentSnapshot assigned(ReviewJob job, String practiceSlug) {
+        return load(job).stream()
                 .filter(row -> row.practiceSlug().equals(practiceSlug))
                 .findFirst()
                 .orElseThrow(() -> invalid("The practice is not assigned to this invocation"));
-        return freshness.start(job.getWorkspaceId(), assignment.id(), job.getId(), job.getAttempt());
     }
 
     /** {@link ReviewFreshness#syncSources} for the practice that {@link #start} starts; it runs with no transaction. */

@@ -120,16 +120,14 @@ export const New: Story = {
 			(heading) => getComputedStyle(heading.parentElement ?? heading).rowGap,
 		);
 		await expect(new Set(steps).size).toBe(1);
-		await expect(
-			why.compareDocumentPosition(
-				canvas.getByText(/Reviewers had to follow two intentions in one diff\.$/u),
-			),
-		).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+		// The explanation is Markdown, which renders once its lazy renderer resolves.
+		const explanation = await canvas.findByText(
+			/Reviewers had to follow two intentions in one diff\.$/u,
+		);
+		await expect(why.compareDocumentPosition(explanation)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
 		// The explanation shows whole, with no clamp and no "Show more".
 		await expect(canvas.queryByRole("button", { name: /Show (?:more|less)/u })).toBeNull();
-		await expect(
-			canvas.getByText(/Reviewers had to follow two intentions in one diff\.$/u),
-		).toBeVisible();
+		await expect(explanation).toBeVisible();
 		// The timeline is the centre: every piece in time order, each read as its number, its day
 		// and what the review saw.
 		const timeline = canvas.getByRole("list", { name: "Where it happened" });

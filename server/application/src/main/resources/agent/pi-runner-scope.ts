@@ -16,7 +16,7 @@ import { ProblemDrafts } from "./pi-problem-drafts.ts";
 import { validateChangeBasis } from "./pi-result-normalize.ts";
 import { RESULT_TOOL_NAMES } from "./pi-result-tools.ts";
 import type { buildBrief } from "./pi-review-brief.ts";
-import { type Work, spent } from "./pi-review-turns.ts";
+import { type Work, spent, workOf } from "./pi-review-turns.ts";
 import { addAssistantUsage, type UsageLedger } from "./pi-runner-usage.ts";
 import type {
 	ActiveReview,
@@ -353,6 +353,7 @@ export async function runScope(
 		practices: slugs.length,
 		call_budget: budget.modelCalls,
 		output_token_budget: budget.outputTokens,
+		input_token_budget: budget.inputTokens,
 		tokens_per_result: sessionState().tokensPerProblem,
 	});
 	const trace = openTurnTrace(label, budget, {
@@ -397,10 +398,7 @@ export async function runScope(
 		interrupted: Promise<undefined>,
 	) {
 		const state = sessionState();
-		if (
-			!endedUnrecorded(slug) ||
-			spent({ modelCalls: trace.calls, outputTokens: trace.outputTokens }, trace.budget)
-		) {
+		if (!endedUnrecorded(slug) || spent(workOf(trace), trace.budget)) {
 			return;
 		}
 		diagnose("practice.unsubmitted", {

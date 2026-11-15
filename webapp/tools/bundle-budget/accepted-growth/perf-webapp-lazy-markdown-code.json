@@ -1,0 +1,16 @@
+{
+	"accepted": [
+		{
+			"load": "src/components/admin/practice-reviews/FeedbackMarkdown.tsx",
+			"gzipBytes": 161764,
+			"acceptedBy": "branch perf/webapp-lazy-markdown-code",
+			"reason": "The Markdown renderer loads on first use instead of with each page that shows feedback, so it is one lazy chunk shared by those pages."
+		},
+		{
+			"load": "src/components/common/UntrustedMarkdownRenderer.tsx",
+			"gzipBytes": 160895,
+			"acceptedBy": "branch perf/webapp-lazy-markdown-code",
+			"reason": "The Markdown renderer loads on first use instead of with each page that shows feedback, so it is one lazy chunk shared by those pages."
+		}
+	]
+}

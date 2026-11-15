@@ -747,12 +747,22 @@ class ResultAdmissionIntegrationTest extends AbstractResultAdmissionIntegrationT
         doReturn(Map.of(kind, "a".repeat(64))).when(productItems).fingerprints(eq(ref), anySet(), any());
         var id = new ReviewAssignmentId(
                 pending.review().getId(), scenario.practice().getId(), ref.itemId());
-        assertThat(reviewFreshness.start(ref.workspaceId(), id, pending.jobId(), 0))
+        assertThat(reviewFreshness.start(
+                        ref.workspaceId(),
+                        id,
+                        pending.jobId(),
+                        0,
+                        reviewFreshness.startCurrentness(ref.workspaceId(), id)))
                 .isTrue();
         doReturn(Map.of(kind, "b".repeat(64))).when(productItems).fingerprints(eq(ref), anySet(), any());
         var other = admissions.pending(data.scenario(), Instant.now(), null);
 
-        assertThat(reviewFreshness.start(ref.workspaceId(), id, pending.jobId(), 0))
+        assertThat(reviewFreshness.start(
+                        ref.workspaceId(),
+                        id,
+                        pending.jobId(),
+                        0,
+                        reviewFreshness.startCurrentness(ref.workspaceId(), id)))
                 .isFalse();
         var stopped = memberRows
                 .findByWorkspaceIdAndReviewIdAndPracticeIdAndItemId(
@@ -792,7 +802,12 @@ class ResultAdmissionIntegrationTest extends AbstractResultAdmissionIntegrationT
         var id = new ReviewAssignmentId(
                 pending.review().getId(), scenario.practice().getId(), ref.itemId());
 
-        assertThat(reviewFreshness.start(ref.workspaceId(), id, pending.jobId(), 0))
+        assertThat(reviewFreshness.start(
+                        ref.workspaceId(),
+                        id,
+                        pending.jobId(),
+                        0,
+                        reviewFreshness.startCurrentness(ref.workspaceId(), id)))
                 .isFalse();
         var stopped = memberRows
                 .findByWorkspaceIdAndReviewIdAndPracticeIdAndItemId(

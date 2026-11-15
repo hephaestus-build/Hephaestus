@@ -1,4 +1,4 @@
-#### 🔴 Drain legacy reviews
+#### 🔴 Stop every role to drain legacy reviews
 
 Before this first upgrade, stop the old servers and let their review drain finish. Keep PostgreSQL running.
 Do not start target servers until no `REVIEW_COMPOSE` run has a live lease.

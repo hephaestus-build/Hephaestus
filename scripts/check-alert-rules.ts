@@ -60,6 +60,34 @@ export function incompleteAlerts(rules: string, tests: string, runbook: string):
 	]);
 }
 
+/** The pages whose tables give the reason for each alert's threshold: one row per alert, on one of them. */
+export const ALERT_REASON_PAGES = [
+	"docs/admin/alert-rules.md",
+	"docs/admin/observability.mdx",
+	"docs/admin/monitoring.md",
+];
+
+/** The alerts that no first table cell of the reason pages names. A row in the runbook says what to do, not why. */
+export function unexplainedAlerts(rules: string, pages: readonly string[]): string[] {
+	const named = new Set(
+		pages.flatMap((page) =>
+			page
+				.split("\n")
+				.filter((line) => line.startsWith("|"))
+				// The first cell names the alerts that the row explains; a later cell can mention any alert.
+				.flatMap((row) => row.split("|")[1]?.match(/`Hephaestus\w+`/gu) ?? [])
+				.map((name) => name.slice(1, -1)),
+		),
+	);
+	return asArray(asRecord(parse(rules), rulesFile).groups, "groups")
+		.flatMap((group) => asArray(asRecord(group, "group").rules, "rules"))
+		.map((rule) => asRecord(rule, "rule").alert)
+		.filter((alert): alert is string => typeof alert === "string" && !named.has(alert))
+		.map(
+			(alert) => `${alert}: no table row in ${ALERT_REASON_PAGES.join(", ")} gives its threshold`,
+		);
+}
+
 /**
  * The counters of samplers that keep their gauges' last values when a pass fails. While a sampler fails, an alert on
  * those gauges reads an old value and stays silent, so each such counter needs an alert of its own.
@@ -126,6 +154,7 @@ if (import.meta.main) {
 			await read(runbookFile),
 		),
 		...unwatchedSamplers(rulesText, javaSources),
+		...unexplainedAlerts(rulesText, await Promise.all(ALERT_REASON_PAGES.map(read))),
 	];
 	if (gaps.length > 0) {
 		console.error(gaps.join("\n"));
