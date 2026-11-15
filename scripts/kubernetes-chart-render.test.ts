@@ -715,6 +715,25 @@ const stackComponents = ["victoria-metrics", "vmalert", "alertmanager"] as const
 const inStack = (resource: Resource) =>
 	stackComponents.some((component) => component === componentOf(resource));
 
+/**
+ * The rule groups that the bundled stack never loads, with the metric prefixes of their exporters. kube-state-metrics,
+ * the kubelet and cert-manager need cluster-wide access. The reconciler's metrics can come through a scraped
+ * node-exporter, but HephaestusDeployMetricsMissing would fire wherever no host runs the reconciler.
+ */
+const unscrapedGroups: Record<string, readonly string[]> = {
+	"hephaestus-kubernetes": ["kube_", "kubelet_", "container_", "certmanager_"],
+	"hephaestus-pull-deploy": ["hephaestus_deploy_"],
+};
+/** The metric names that a PromQL expression selects: no comments, strings, label sets, ranges, grouping labels or functions. */
+const selectedMetrics = (expr: string) =>
+	expr
+		.replaceAll(/#.*$/gmu, "")
+		.replaceAll(/"(?:[^"\\]|\\.)*"/gu, "")
+		.replaceAll(/\{[^}]*\}|\[[^\]]*\]/gu, "")
+		.replaceAll(/\b(?:by|without|on|ignoring|group_left|group_right)\s*\([^)]*\)/gu, "")
+		.match(/\b[a-zA-Z_:][\w:]*\b(?!\s*\()/gu)
+		?.filter((name) => !["and", "or", "unless", "bool", "offset"].includes(name)) ?? [];
+
 await test("the monitoring stack scrapes this release, evaluates its rules and notifies, all in its namespace", () => {
 	const resources = rendered([...layersFor("small"), stackOn]);
 	const stack = resources.filter((resource) => inStack(resource));
@@ -783,8 +802,8 @@ await test("the monitoring stack scrapes this release, evaluates its rules and n
 	assert.ok(
 		Array.isArray(metricsArgs) && metricsArgs.includes("-vmui.customDashboardsPath=/dashboards"),
 	);
-	// vmalert evaluates the release's rules, except the groups whose exporters the stack does not run: their series
-	// never exist here, and HephaestusDeployMetricsMissing, an absent() rule, would fire for ever.
+	// vmalert evaluates the release's rules, except the groups whose exporters the stack does not scrape: their
+	// series never exist here, and HephaestusDeployMetricsMissing, an absent() rule, would fire for ever.
 	assert.deepEqual(ruleResources(resources), []);
 	const vmalert = workload(resources, "vmalert");
 	const ruleMap = stack.find(
@@ -817,7 +836,7 @@ await test("the monitoring stack scrapes this release, evaluates its rules and n
 		loaded,
 		tested.filter(
 			(group) =>
-				!["hephaestus-kubernetes", "hephaestus-pull-deploy"].includes(String(get(group, "name"))),
+				![...Object.keys(unscrapedGroups), "hephaestus-node"].includes(String(get(group, "name"))),
 		),
 	);
 	assert.ok(!JSON.stringify(loaded).includes("HephaestusDeployMetricsMissing"));
@@ -872,6 +891,92 @@ await test("the monitoring stack is off by default and needs its Alertmanager co
 	assert.match(
 		render([...layersFor("small"), { observability: { stack: { enabled: true } } }]).stderr,
 		/observability\.stack\.alertmanager\.configSecret is required/u,
+	);
+});
+
+await test("the monitoring stack loads every shipped alert group whose exporter it scrapes", () => {
+	const nodeExporters = ["192.168.5.21:9100", "192.168.5.22:9101"];
+	const stackFor = (values: Layer) => {
+		const resources = rendered([...layersFor("small"), stackOn, values]);
+		const config = (component: string, key: string) =>
+			String(
+				get(
+					resources.find(
+						(resource) =>
+							kindOf(resource) === "ConfigMap" &&
+							componentOf(resource) === component &&
+							get(resource, "data", key) !== undefined,
+					),
+					"data",
+					key,
+				),
+			);
+		const groups = list(
+			get(parseAllDocuments(config("vmalert", "hephaestus-alerts.yml"))[0]?.toJS(), "groups"),
+		).map((group) => String(get(group, "name")));
+		const jobs = list(
+			get(parseAllDocuments(config("victoria-metrics", "scrape.yml"))[0]?.toJS(), "scrape_configs"),
+		);
+		const policy = resources.find(
+			(resource) =>
+				kindOf(resource) === "NetworkPolicy" &&
+				get(resource, "spec", "podSelector", "matchLabels", "app.kubernetes.io/component") ===
+					"victoria-metrics",
+		);
+		return { groups, jobs, egress: list(get(policy, "spec", "egress")) };
+	};
+	const shipped = list(get(parseAllDocuments(alertRules)[0]?.toJS(), "groups"));
+	const scraped = stackFor({ observability: { stack: { nodeExporters } } });
+	for (const group of shipped) {
+		const name = String(get(group, "name"));
+		assert.equal(
+			scraped.groups.includes(name),
+			!(name in unscrapedGroups),
+			`${name}: load the group where the stack scrapes its exporter, or name its exporter in unscrapedGroups`,
+		);
+		// Each rule of an unloaded group reads only its exporters, or the stack could have evaluated it.
+		for (const rule of name in unscrapedGroups ? list(get(group, "rules")) : []) {
+			const metrics = selectedMetrics(String(get(rule, "expr")));
+			assert.ok(metrics.length > 0, String(get(rule, "alert")));
+			for (const metric of metrics) {
+				assert.ok(
+					unscrapedGroups[name]?.some((prefix) => metric.startsWith(prefix)) === true,
+					`${String(get(rule, "alert"))} reads ${metric}, which is not an exporter of ${name}`,
+				);
+			}
+		}
+	}
+	assert.deepEqual(
+		scraped.jobs.find((job) => get(job, "job_name") === "node"),
+		{ job_name: "node", static_configs: [{ targets: nodeExporters }] },
+	);
+	for (const [address, port] of [
+		["192.168.5.21", 9100],
+		["192.168.5.22", 9101],
+	] as const) {
+		assert.ok(
+			scraped.egress.some((rule) =>
+				isDeepStrictEqual(rule, {
+					to: [{ ipBlock: { cidr: `${address}/32` } }],
+					ports: [{ port, protocol: "TCP" }],
+				}),
+			),
+			address,
+		);
+	}
+	// Without node-exporters, the node rules stay out: they would have no series.
+	const unscraped = stackFor({});
+	assert.ok(!unscraped.groups.includes("hephaestus-node"));
+	assert.ok(!unscraped.jobs.some((job) => get(job, "job_name") === "node"));
+	assert.equal(unscraped.egress.length, scraped.egress.length - nodeExporters.length);
+	// The address becomes a policy's ipBlock, so a host name is refused.
+	assert.match(
+		render([
+			...layersFor("small"),
+			stackOn,
+			{ observability: { stack: { nodeExporters: ["node-a:9100"] } } },
+		]).stderr,
+		/nodeExporters\/0/u,
 	);
 });
 

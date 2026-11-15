@@ -634,7 +634,7 @@ groups:
           summary: An hourly privacy sweep ended no run in four hours
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
-  # Kubernetes and cluster metrics: kube-state-metrics, the kubelet, node-exporter and cert-manager.
+  # Kubernetes and cluster metrics: kube-state-metrics, the kubelet and cert-manager.
   # The PVC and CronJob names are those that the chart gives a release. The server rules select the
   # Deployment by the chart's labels, which kube-state-metrics exports only when they are allowed. Add a namespace matcher to
   # limit a rule to the release namespace.
@@ -1077,6 +1077,27 @@ groups:
         annotations:
           summary: The PostgreSQL volume has less than 5 % free space
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+      - alert: HephaestusCertificateExpiring
+        expr: certmanager_certificate_expiration_timestamp_seconds - time() < 7 * 24 * 3600
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: A certificate that cert-manager manages expires in less than seven days, or has no issued certificate
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+  # Host metrics from node-exporter on each node, scraped as job="node". The bundled stack loads this group when
+  # it scrapes node-exporter (observability.stack.nodeExporters).
+  - name: hephaestus-node
+    rules:
+      # Without this rule, an exporter that the scraper cannot reach silences the two host rules below.
+      - alert: HephaestusNodeMetricsUnavailable
+        expr: up{job="node"} == 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: A node-exporter target cannot be scraped, so the node disk and memory alerts cannot fire for it
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusNodeDiskFilling
         expr: >-
           node_filesystem_avail_bytes{fstype!~"tmpfs|ramfs|squashfs|overlay",mountpoint!~"/var/lib/kubelet/pods/.+"}
@@ -1098,14 +1119,6 @@ groups:
           severity: warning
         annotations:
           summary: A node has less than 10 % of its memory available
-          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
-      - alert: HephaestusCertificateExpiring
-        expr: certmanager_certificate_expiration_timestamp_seconds - time() < 7 * 24 * 3600
-        for: 1h
-        labels:
-          severity: warning
-        annotations:
-          summary: A certificate that cert-manager manages expires in less than seven days, or has no issued certificate
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
   # The pull reconciler's metrics, from node-exporter's textfile collector on each host that runs
   # hephaestus-reconcile.timer (docs/admin/pull-based-deployment.mdx § Watching it). Load this

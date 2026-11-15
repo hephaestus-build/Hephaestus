@@ -248,6 +248,9 @@ observability:
   # docs/admin/monitoring.md § Run the monitoring stack.
   stack:
     enabled: false
+    # The node-exporter of each node as <IPv4 address>:<port>, such as 10.0.0.5:9100. The stack then
+    # scrapes them and loads the node disk and memory alerts. node-exporter runs outside the release.
+    nodeExporters: []
     retention: 30d
     persistence:
       size: 5Gi

@@ -136,8 +136,10 @@ Alertmanager reaches its receivers on ports 443, 465 and 587 of `networkPolicy.e
 Silences live only until Alertmanager restarts.
 
 The stack needs no host path and no cluster-wide access, so it does not run the node and cluster exporters.
-Thus, the stack does not load the groups `hephaestus-kubernetes` and `hephaestus-pull-deploy`: they read kube-state-metrics, the kubelet's volume statistics and cAdvisor metrics, node-exporter, and cert-manager.
-Without these series, `HephaestusDeployMetricsMissing` would fire at all times.
+It can scrape a node-exporter that runs outside the release: see [Scrape node-exporter](#scrape-node-exporter).
+The stack does not load the group `hephaestus-kubernetes`: it reads kube-state-metrics, the kubelet's volume statistics and cAdvisor metrics, and cert-manager.
+The stack also does not load the group `hephaestus-pull-deploy`, even when it scrapes node-exporter.
+`HephaestusDeployMetricsMissing` would then fire on each installation whose hosts do not run the reconciler.
 
 To use those groups, run the exporters in a namespace that allows host paths. Scrape them, and evaluate the [rule file](./alert-rules), with your own Prometheus or vmalert.
 The stack collects no logs: see [Collecting logs](#collect-logs).
@@ -145,6 +147,35 @@ The stack collects no logs: see [Collecting logs](#collect-logs).
 On the project's test instance, VictoriaMetrics used at most 470 MiB while it scraped the roles and the kubelets, and vmalert used 22 MiB.
 Both used less than 0.05 of a CPU.
 The stack's requests and limits follow these numbers.
+
+### Scrape node-exporter
+
+The node disk and memory alerts, `HephaestusNodeDiskFilling` and `HephaestusNodeMemoryLow`, read [node-exporter](https://github.com/prometheus/node_exporter) on each node.
+The stack loads them only when it scrapes node-exporter.
+Without them, no alert tells you that a node runs out of disk or memory.
+
+1. Run node-exporter on each node, for example as a systemd service.
+   Make it listen on an address that the Pods reach, such as the node's IPv4 address on port 9100.
+   An exporter that listens only on `127.0.0.1` cannot be scraped.
+2. In the host firewall, allow the port from the Pod network and from the nodes of the cluster.
+   A scrape of another node comes from the node that runs VictoriaMetrics, not from the Pod network.
+   Refuse all other sources.
+3. Set `observability.stack.nodeExporters` to the address of each node-exporter:
+
+   ```yaml
+   observability:
+     stack:
+       nodeExporters:
+         - 10.0.0.5:9100
+   ```
+
+4. Upgrade the release.
+5. Query `up{job="node"}` in the VictoriaMetrics web view. Each address has the value 1.
+
+VictoriaMetrics scrapes each address as `job="node"`, and its network policy allows each address and port.
+Use an IPv4 address: the network policy cannot allow a host name.
+Some network plugins do not apply IP blocks to node addresses. On Cilium, set `policyCIDRMatchMode` to `nodes`.
+vmalert then also evaluates `HephaestusNodeMetricsUnavailable`, which fires when an address cannot be scraped.
 
 ## Open the dashboards
 

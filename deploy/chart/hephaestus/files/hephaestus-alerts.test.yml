@@ -1717,6 +1717,28 @@ tests:
               summary: A node file system has less than 15 % free space
               runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
+  - name: an unreachable node-exporter fires after five minutes, and a reachable one stays quiet
+    interval: 1m
+    input_series:
+      - series: 'up{job="node",instance="192.168.5.21:9100"}'
+        values: "0x10"
+      - series: 'up{job="node",instance="192.168.5.22:9100"}'
+        values: "1x10"
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: HephaestusNodeMetricsUnavailable
+        exp_alerts: []
+      - eval_time: 6m
+        alertname: HephaestusNodeMetricsUnavailable
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: node
+              instance: 192.168.5.21:9100
+            exp_annotations:
+              summary: A node-exporter target cannot be scraped, so the node disk and memory alerts cannot fire for it
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+
   # 6 days and 30 days after the start.
   - name: a certificate that expires within seven days fires after one hour, a later one does not
     interval: 1m
@@ -3552,17 +3574,17 @@ tests:
   - name: a node with less than 10 % of its memory available fires after 15 minutes, a node above it and a short dip do not
     interval: 1m
     input_series:
-      - series: 'node_memory_MemTotal_bytes{instance="node-a",job="node-exporter"}'
+      - series: 'node_memory_MemTotal_bytes{instance="node-a",job="node"}'
         values: "16000x40"
-      - series: 'node_memory_MemAvailable_bytes{instance="node-a",job="node-exporter"}'
+      - series: 'node_memory_MemAvailable_bytes{instance="node-a",job="node"}'
         values: "1000x40"
-      - series: 'node_memory_MemTotal_bytes{instance="node-b",job="node-exporter"}'
+      - series: 'node_memory_MemTotal_bytes{instance="node-b",job="node"}'
         values: "16000x40"
-      - series: 'node_memory_MemAvailable_bytes{instance="node-b",job="node-exporter"}'
+      - series: 'node_memory_MemAvailable_bytes{instance="node-b",job="node"}'
         values: "2000x40"
-      - series: 'node_memory_MemTotal_bytes{instance="node-c",job="node-exporter"}'
+      - series: 'node_memory_MemTotal_bytes{instance="node-c",job="node"}'
         values: "16000x40"
-      - series: 'node_memory_MemAvailable_bytes{instance="node-c",job="node-exporter"}'
+      - series: 'node_memory_MemAvailable_bytes{instance="node-c",job="node"}'
         values: "8000x5 1000x8 8000x27"
     alert_rule_test:
       - eval_time: 10m
@@ -3574,7 +3596,7 @@ tests:
           - exp_labels:
               severity: warning
               instance: node-a
-              job: node-exporter
+              job: node
             exp_annotations:
               summary: A node has less than 10 % of its memory available
               runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
