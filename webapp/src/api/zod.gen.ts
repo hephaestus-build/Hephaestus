@@ -263,6 +263,9 @@ export const zAuthEventEventType = z.enum([
 	"PRODUCT_FEEDBACK_FILED_BY_ADMIN",
 	"RESEARCH_DATASET_RELEASED",
 	"RESEARCH_REMOVAL_RECORDED",
+	"MCP_CLIENT_APPROVED",
+	"MCP_CLIENT_REFUSED",
+	"MCP_CLIENT_REVOKED",
 ]);
 
 export const zAuthEventResult = z.enum(["SUCCESS", "FAILURE"]);
@@ -1935,6 +1938,30 @@ export const zLoginProviderView = z.object({
 	updatedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
 });
 
+/**
+ * Where the browser goes next: the client's redirect, with the code or the refusal.
+ */
+export const zMcpConsentRedirect = z.object({
+	redirectUri: z.string(),
+});
+
+export const zMcpConsentRequestMcpConsentRefusal = z.enum(["NOT_ADMIN", "PASSKEY_REQUIRED"]);
+
+/**
+ * A pending MCP client consent request, as the consent page shows it.
+ */
+export const zMcpConsentRequest = z.object({
+	clientHost: z.string(),
+	clientName: z.string(),
+	id: z.uuid(),
+	loopbackRedirect: z.boolean(),
+	redirectHost: z.string(),
+	refusal: zMcpConsentRequestMcpConsentRefusal.optional(),
+	scopes: z.array(z.string()),
+	workspaceName: z.string(),
+	workspaceSlug: z.string(),
+});
+
 export const zMembershipRoleSource = z.enum(["PROVIDER", "PERSON"]);
 
 export const zMembershipWorkspaceRole = z.enum(["OWNER", "ADMIN", "MEMBER"]);
@@ -2750,6 +2777,18 @@ export const zFeedbackDecision = z.object({
 	id: z.uuid(),
 	note: z.string().nullable(),
 	reasonCode: zFeedbackDecisionReason.nullable(),
+});
+
+/**
+ * One active MCP client grant of a workspace, as its admins see it (ADR 0110).
+ */
+export const zMcpClientGrant = z.object({
+	approvedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
+	approvedBy: zAccountRef,
+	clientHost: z.string(),
+	clientName: z.string(),
+	id: z.uuid(),
+	scopes: z.array(z.string()),
 });
 
 export const zProviderResourceAdapterResourceType = z.enum([
@@ -4666,7 +4705,7 @@ export const zResultEvidence = z.object({
 	search: zSearchWarrant.nullable(),
 });
 
-export const zSessionClient = z.enum(["WEB", "BROWSER_EXTENSION"]);
+export const zSessionClient = z.enum(["WEB", "BROWSER_EXTENSION", "MCP_CLIENT"]);
 
 export const zSessionView = z.object({
 	client: zSessionClient,

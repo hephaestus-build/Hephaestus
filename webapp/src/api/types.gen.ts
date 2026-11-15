@@ -402,7 +402,10 @@ export type AuthEventEventType =
 	| "PRODUCT_FEEDBACK_CLEANUP_CONFIRMED"
 	| "PRODUCT_FEEDBACK_FILED_BY_ADMIN"
 	| "RESEARCH_DATASET_RELEASED"
-	| "RESEARCH_REMOVAL_RECORDED";
+	| "RESEARCH_REMOVAL_RECORDED"
+	| "MCP_CLIENT_APPROVED"
+	| "MCP_CLIENT_REFUSED"
+	| "MCP_CLIENT_REVOKED";
 
 export type AuthEventResult = "SUCCESS" | "FAILURE";
 
@@ -3303,6 +3306,63 @@ export type LoginProviderView = {
 	type: string;
 	updatedAt: Date;
 };
+
+/**
+ * One active MCP client grant of a workspace, as its admins see it (ADR 0110).
+ */
+export type McpClientGrant = {
+	approvedAt?: Date;
+	/**
+	 * The account that approved the client
+	 */
+	approvedBy: AccountRef;
+	/**
+	 * The host of the client's metadata document URL
+	 */
+	clientHost: string;
+	/**
+	 * The client's self-declared name, plain text
+	 */
+	clientName: string;
+	id: string;
+	scopes: Array<string>;
+};
+
+/**
+ * Where the browser goes next: the client's redirect, with the code or the refusal.
+ */
+export type McpConsentRedirect = {
+	redirectUri: string;
+};
+
+/**
+ * A pending MCP client consent request, as the consent page shows it.
+ */
+export type McpConsentRequest = {
+	/**
+	 * The host of the client's metadata document URL; the client cannot choose it
+	 */
+	clientHost: string;
+	/**
+	 * The client's self-declared name, plain text
+	 */
+	clientName: string;
+	id: string;
+	/**
+	 * The code goes to this machine only
+	 */
+	loopbackRedirect: boolean;
+	redirectHost: string;
+	/**
+	 * Why this account cannot approve the request; absent when it can
+	 */
+	refusal?: McpConsentRequestMcpConsentRefusal;
+	scopes: Array<string>;
+	workspaceName: string;
+	workspaceSlug: string;
+};
+
+export type McpConsentRequestMcpConsentRefusal = "NOT_ADMIN" | "PASSKEY_REQUIRED";
 
 /**
  * Whether and how the workspace reviews one member's work, from the rules that start and admit a review.
@@ -6453,7 +6513,7 @@ export type SearchWarrant = {
 	lookedFor?: string;
 };
 
-export type SessionClient = "WEB" | "BROWSER_EXTENSION";
+export type SessionClient = "WEB" | "BROWSER_EXTENSION" | "MCP_CLIENT";
 
 export type SessionView = {
 	/**
@@ -8442,6 +8502,46 @@ export type GetJwksResponses = {
 };
 
 export type GetJwksResponse = GetJwksResponses[keyof GetJwksResponses];
+
+export type GetMcpAuthorizationServerMetadataData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/.well-known/oauth-authorization-server";
+};
+
+export type GetMcpAuthorizationServerMetadataResponses = {
+	/**
+	 * OK
+	 */
+	200: {
+		[key: string]: unknown;
+	};
+};
+
+export type GetMcpAuthorizationServerMetadataResponse =
+	GetMcpAuthorizationServerMetadataResponses[keyof GetMcpAuthorizationServerMetadataResponses];
+
+export type GetMcpResourceMetadataData = {
+	body?: never;
+	path: {
+		resourcePath: string;
+	};
+	query?: never;
+	url: "/.well-known/oauth-protected-resource/{resourcePath}";
+};
+
+export type GetMcpResourceMetadataResponses = {
+	/**
+	 * OK
+	 */
+	200: {
+		[key: string]: unknown;
+	};
+};
+
+export type GetMcpResourceMetadataResponse =
+	GetMcpResourceMetadataResponses[keyof GetMcpResourceMetadataResponses];
 
 export type AdminListAuthEventsData = {
 	body?: never;
@@ -10587,6 +10687,114 @@ export type ListIdentityProvidersResponses = {
 
 export type ListIdentityProvidersResponse =
 	ListIdentityProvidersResponses[keyof ListIdentityProvidersResponses];
+
+export type AuthorizeMcpClientData = {
+	body?: never;
+	path?: never;
+	query?: {
+		response_type?: string;
+		client_id?: string;
+		redirect_uri?: string;
+		code_challenge?: string;
+		code_challenge_method?: string;
+		state?: string;
+		resource?: string;
+		scope?: string;
+		prompt?: string;
+	};
+	url: "/mcp/oauth/authorize";
+};
+
+export type AuthorizeMcpClientResponses = {
+	/**
+	 * OK
+	 */
+	200: unknown;
+};
+
+export type RefuseMcpConsentRequestData = {
+	body?: never;
+	path: {
+		requestId: string;
+	};
+	query?: never;
+	url: "/mcp/oauth/requests/{requestId}";
+};
+
+export type RefuseMcpConsentRequestResponses = {
+	/**
+	 * OK
+	 */
+	200: McpConsentRedirect;
+};
+
+export type RefuseMcpConsentRequestResponse =
+	RefuseMcpConsentRequestResponses[keyof RefuseMcpConsentRequestResponses];
+
+export type GetMcpConsentRequestData = {
+	body?: never;
+	path: {
+		requestId: string;
+	};
+	query?: never;
+	url: "/mcp/oauth/requests/{requestId}";
+};
+
+export type GetMcpConsentRequestResponses = {
+	/**
+	 * OK
+	 */
+	200: McpConsentRequest;
+};
+
+export type GetMcpConsentRequestResponse =
+	GetMcpConsentRequestResponses[keyof GetMcpConsentRequestResponses];
+
+export type ApproveMcpConsentRequestData = {
+	body?: never;
+	path: {
+		requestId: string;
+	};
+	query?: never;
+	url: "/mcp/oauth/requests/{requestId}/approval";
+};
+
+export type ApproveMcpConsentRequestResponses = {
+	/**
+	 * OK
+	 */
+	200: McpConsentRedirect;
+};
+
+export type ApproveMcpConsentRequestResponse =
+	ApproveMcpConsentRequestResponses[keyof ApproveMcpConsentRequestResponses];
+
+export type McpTokenData = {
+	body?: {
+		client_id?: string;
+		code?: string;
+		code_verifier?: string;
+		grant_type?: string;
+		redirect_uri?: string;
+		refresh_token?: string;
+		resource?: string;
+		scope?: string;
+	};
+	path?: never;
+	query?: never;
+	url: "/mcp/oauth/token";
+};
+
+export type McpTokenResponses = {
+	/**
+	 * OK
+	 */
+	200: {
+		[key: string]: unknown;
+	};
+};
+
+export type McpTokenResponse = McpTokenResponses[keyof McpTokenResponses];
 
 export type UnsubscribeEmailData = {
 	body?: {
@@ -13403,6 +13611,48 @@ export type GetLlmUsageReportResponses = {
 
 export type GetLlmUsageReportResponse =
 	GetLlmUsageReportResponses[keyof GetLlmUsageReportResponses];
+
+export type ListMcpClientGrantsData = {
+	body?: never;
+	path: {
+		/**
+		 * Workspace slug
+		 */
+		workspaceSlug: string;
+	};
+	query?: never;
+	url: "/workspaces/{workspaceSlug}/mcp-grants";
+};
+
+export type ListMcpClientGrantsResponses = {
+	/**
+	 * OK
+	 */
+	200: Array<McpClientGrant>;
+};
+
+export type ListMcpClientGrantsResponse =
+	ListMcpClientGrantsResponses[keyof ListMcpClientGrantsResponses];
+
+export type RevokeMcpClientGrantData = {
+	body?: never;
+	path: {
+		/**
+		 * Workspace slug
+		 */
+		workspaceSlug: string;
+		grantId: string;
+	};
+	query?: never;
+	url: "/workspaces/{workspaceSlug}/mcp-grants/{grantId}";
+};
+
+export type RevokeMcpClientGrantResponses = {
+	/**
+	 * OK
+	 */
+	200: unknown;
+};
 
 export type ListMembershipsData = {
 	body?: never;

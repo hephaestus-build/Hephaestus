@@ -882,6 +882,9 @@ export const AuthEventEventTypeSchema = {
 		"PRODUCT_FEEDBACK_FILED_BY_ADMIN",
 		"RESEARCH_DATASET_RELEASED",
 		"RESEARCH_REMOVAL_RECORDED",
+		"MCP_CLIENT_APPROVED",
+		"MCP_CLIENT_REFUSED",
+		"MCP_CLIENT_REVOKED",
 	],
 } as const;
 
@@ -6443,6 +6446,108 @@ export const LoginProviderViewSchema = {
 		"type",
 		"updatedAt",
 	],
+} as const;
+
+export const McpClientGrantSchema = {
+	type: "object",
+	description: "One active MCP client grant of a workspace, as its admins see it (ADR 0110).",
+	properties: {
+		approvedAt: {
+			type: "string",
+			format: "date-time",
+		},
+		approvedBy: {
+			$ref: "#/components/schemas/AccountRef",
+			description: "The account that approved the client",
+		},
+		clientHost: {
+			type: "string",
+			description: "The host of the client's metadata document URL",
+		},
+		clientName: {
+			type: "string",
+			description: "The client's self-declared name, plain text",
+		},
+		id: {
+			type: "string",
+			format: "uuid",
+		},
+		scopes: {
+			type: "array",
+			items: {
+				type: "string",
+			},
+		},
+	},
+	required: ["approvedBy", "clientHost", "clientName", "id", "scopes"],
+} as const;
+
+export const McpConsentRedirectSchema = {
+	type: "object",
+	description: "Where the browser goes next: the client's redirect, with the code or the refusal.",
+	properties: {
+		redirectUri: {
+			type: "string",
+		},
+	},
+	required: ["redirectUri"],
+} as const;
+
+export const McpConsentRequestSchema = {
+	type: "object",
+	description: "A pending MCP client consent request, as the consent page shows it.",
+	properties: {
+		clientHost: {
+			type: "string",
+			description: "The host of the client's metadata document URL; the client cannot choose it",
+		},
+		clientName: {
+			type: "string",
+			description: "The client's self-declared name, plain text",
+		},
+		id: {
+			type: "string",
+			format: "uuid",
+		},
+		loopbackRedirect: {
+			type: "boolean",
+			description: "The code goes to this machine only",
+		},
+		redirectHost: {
+			type: "string",
+		},
+		refusal: {
+			$ref: "#/components/schemas/McpConsentRequestMcpConsentRefusal",
+			description: "Why this account cannot approve the request; absent when it can",
+		},
+		scopes: {
+			type: "array",
+			items: {
+				type: "string",
+			},
+		},
+		workspaceName: {
+			type: "string",
+		},
+		workspaceSlug: {
+			type: "string",
+		},
+	},
+	required: [
+		"clientHost",
+		"clientName",
+		"id",
+		"loopbackRedirect",
+		"redirectHost",
+		"scopes",
+		"workspaceName",
+		"workspaceSlug",
+	],
+} as const;
+
+export const McpConsentRequestMcpConsentRefusalSchema = {
+	type: "string",
+	enum: ["NOT_ADMIN", "PASSKEY_REQUIRED"],
 } as const;
 
 export const MemberReviewReadinessSchema = {
@@ -15293,7 +15398,7 @@ export const SearchWarrantSchema = {
 
 export const SessionClientSchema = {
 	type: "string",
-	enum: ["WEB", "BROWSER_EXTENSION"],
+	enum: ["WEB", "BROWSER_EXTENSION", "MCP_CLIENT"],
 } as const;
 
 export const SessionViewSchema = {
