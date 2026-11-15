@@ -9,7 +9,7 @@ import type {
 import {
 	connectionCreateBodyOf,
 	connectionUpdateBodyOf,
-} from "@/components/admin/instance-llm/llm-connection-request";
+} from "@/components/admin/llm/llm-connection-request";
 import {
 	connectionFieldsValueOf,
 	LlmConnectionFields,

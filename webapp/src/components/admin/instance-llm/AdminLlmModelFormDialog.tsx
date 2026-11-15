@@ -28,7 +28,11 @@ import { Spinner } from "@/components/ui/spinner";
 import type { AdminLlmModelSaveBody } from "@/lib/admin-llm-model-save";
 import type { FieldErrors, LlmModelFormField } from "@/lib/llm-form-validation";
 
-import { modelCreateBodyOf, modelPriceBodyOf, modelUpdateBodyOf } from "./llm-model-request";
+import {
+	modelCreateBodyOf,
+	modelPriceBodyOf,
+	modelUpdateBodyOf,
+} from "@/components/admin/llm/llm-model-request";
 import {
 	LlmModelFields,
 	type LlmModelFieldsValue,

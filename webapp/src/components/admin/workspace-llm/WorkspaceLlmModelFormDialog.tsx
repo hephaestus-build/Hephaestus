@@ -13,7 +13,7 @@ import type {
 import {
 	workspaceModelCreateBodyOf,
 	workspaceModelUpdateBodyOf,
-} from "@/components/admin/instance-llm/llm-model-request";
+} from "@/components/admin/llm/llm-model-request";
 import {
 	LlmModelFields,
 	type LlmModelFieldsValue,

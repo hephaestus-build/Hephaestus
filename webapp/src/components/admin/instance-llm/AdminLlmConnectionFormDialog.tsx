@@ -24,7 +24,10 @@ import type { FieldErrors, LlmConnectionFormField } from "@/lib/llm-form-validat
 import type { LlmApiProtocol, LlmAuthMode } from "@/lib/llm-provider-type";
 import { hasText } from "@/lib/text";
 
-import { connectionCreateBodyOf, connectionUpdateBodyOf } from "./llm-connection-request";
+import {
+	connectionCreateBodyOf,
+	connectionUpdateBodyOf,
+} from "@/components/admin/llm/llm-connection-request";
 import {
 	connectionFieldsValueOf,
 	LlmConnectionFields,
