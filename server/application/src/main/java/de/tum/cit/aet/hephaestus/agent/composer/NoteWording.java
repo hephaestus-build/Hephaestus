@@ -32,8 +32,8 @@ final class NoteWording {
             Pattern.compile("(?i)(?<![\\p{L}\\p{N}])(?:L\\d+|lines?\\s+\\d+(?:\\s*[-–]\\s*\\d+)?)(?![\\p{L}\\p{N}])"
                     + "|[\\p{L}\\p{N}_./-]+\\.\\p{L}{1,8}:\\d+");
 
-    private static final Pattern FIELD_LABEL = Pattern.compile(
-            "(?i)^\\s*(?:situation|capability|evidence|next step|in conversation|earlier feedback)\\s*:");
+    // A heading or a field label of one to three words at the start of a field, such as "Evidence:" or "Problem:".
+    private static final Pattern FIELD_LABEL = Pattern.compile("^\\s*\\p{Lu}\\p{L}*(?:[ -]\\p{L}+){0,2}:\\s");
 
     /** What the note says that it must not, one sentence for each rule it breaks; empty when it may stay. */
     static List<String> problems(String note, Collection<String> practiceSlugs) {
@@ -49,7 +49,8 @@ final class NoteWording {
         if (COORDINATE.matcher(prose).find())
             problems.add("names a line coordinate; refer to the evidence naturally, such as \"the description's"
                     + " closing line\", and keep coordinates in basedOn");
-        if (FIELD_LABEL.matcher(prose).find()) problems.add("starts with a field label; write only the field's fact");
+        if (FIELD_LABEL.matcher(prose).find())
+            problems.add("starts with a heading or field label; write only the field's fact");
         return problems;
     }
 
