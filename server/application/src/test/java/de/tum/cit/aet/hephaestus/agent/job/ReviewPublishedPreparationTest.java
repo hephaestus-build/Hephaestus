@@ -145,14 +145,14 @@ class ReviewPublishedPreparationTest extends BaseUnitTest {
             job.setCapture(invocation.getArgument(4));
             return 1;
         });
-        when(adapter.buildSandboxSpec(any())).thenAnswer(unused -> program.get());
+        when(adapter.buildSandboxSpec(any())).thenAnswer(_ -> program.get());
         when(issuer.issueForReview(any(), anyLong(), anyInt(), any(), any(), any()))
                 .thenAnswer(invocation -> {
                     tokenDeadlines.add(invocation.getArgument(4));
                     return "attempt-token";
                 });
-        when(handler.endedPractices(job)).thenAnswer(unused -> ended.get());
-        when(handler.prepareInputs(job)).thenAnswer(unused -> capture());
+        when(handler.endedPractices(job)).thenAnswer(_ -> ended.get());
+        when(handler.prepareInputs(job)).thenAnswer(_ -> capture());
         doAnswer(invocation -> {
                     Map<String, Path> paths = invocation.getArgument(3);
                     for (var entry : paths.entrySet()) frozen.put(entry.getKey(), Files.readAllBytes(entry.getValue()));
@@ -161,7 +161,7 @@ class ReviewPublishedPreparationTest extends BaseUnitTest {
                 .when(inputs)
                 .record(any(), anyLong(), anyInt(), anyMap());
         when(inputs.list(any()))
-                .thenAnswer(unused -> frozen.entrySet().stream()
+                .thenAnswer(_ -> frozen.entrySet().stream()
                         .map(entry -> new AttemptInputs.RecordedFile(
                                 entry.getKey(), ProvenanceDigest.sha256Hex(entry.getValue()), "r--------"))
                         .toList());

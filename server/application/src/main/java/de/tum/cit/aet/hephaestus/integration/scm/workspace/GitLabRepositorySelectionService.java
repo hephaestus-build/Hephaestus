@@ -80,7 +80,7 @@ public class GitLabRepositorySelectionService {
         String slug = requireSlug(workspaceContext);
         Long workspaceId = requireWorkspace(slug).getId();
         RepositorySelection selection = transactionTemplate.execute(status -> {
-            var unused = workspaceLocks
+            var _ = workspaceLocks
                     .lock(workspaceId)
                     .orElseThrow(() -> new EntityNotFoundException("Workspace", workspaceId));
             Connection current = connectionCommands
