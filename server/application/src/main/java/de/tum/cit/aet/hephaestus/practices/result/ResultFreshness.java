@@ -153,7 +153,7 @@ public class ResultFreshness {
 
     /**
      * Brings this server's copy of what a freshness read of these results reads up to date with the provider, so that a
-     * locked read after it does not answer from a mirror that another server filled or that this one evicted. It may
+     * read after it does not answer from a mirror that another server filled or that this one evicted. It may
      * call the provider, so it runs with no transaction. A scan reads its frozen scope and needs nothing.
      */
     public void sync(long workspaceId, Collection<Result> rows) {

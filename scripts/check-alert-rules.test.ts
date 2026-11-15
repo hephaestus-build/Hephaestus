@@ -3,10 +3,12 @@ import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 
 import {
+	ALERT_REASON_PAGES,
 	incompleteAlerts,
 	readJavaSources,
 	RUNBOOK_URL,
 	runPatterns,
+	unexplainedAlerts,
 	unwatchedSamplers,
 } from "./check-alert-rules.ts";
 
@@ -142,6 +144,36 @@ void test("a sampler failure counter without an alert is refused", () => {
 				"increase(queue_sampler_failures_total[15m]) + increase(runs_sampler_failure_total[15m]) > 10",
 			),
 			sources,
+		),
+		[],
+	);
+});
+
+void test("an alert needs a table row that gives the reason for its threshold", () => {
+	assert.deepEqual(
+		unexplainedAlerts(rules, ["| `HephaestusAnswered` | `up` | Several failures |"]),
+		[`HephaestusUntested: no table row in ${ALERT_REASON_PAGES.join(", ")} gives its threshold`],
+	);
+	assert.deepEqual(
+		unexplainedAlerts(rules, [
+			"`HephaestusUntested` in prose",
+			"| `HephaestusAnswered`, `HephaestusUntested` | up |",
+		]),
+		[],
+	);
+	assert.deepEqual(
+		unexplainedAlerts(rules, [
+			"| `HephaestusAnswered` | up | Unlike `HephaestusUntested`, it fires |",
+		]),
+		[`HephaestusUntested: no table row in ${ALERT_REASON_PAGES.join(", ")} gives its threshold`],
+	);
+});
+
+void test("every shipped alert has a table row that gives its threshold", async () => {
+	assert.deepEqual(
+		unexplainedAlerts(
+			await read("deploy/chart/hephaestus/files/hephaestus-alerts.yml"),
+			await Promise.all(ALERT_REASON_PAGES.map(read)),
 		),
 		[],
 	);

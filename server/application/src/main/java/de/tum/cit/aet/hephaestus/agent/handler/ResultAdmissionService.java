@@ -111,8 +111,10 @@ public class ResultAdmissionService {
     }
 
     /**
-     * Starts one practice if the sources its capture read still hold. The locked check reads only this server's mirror,
-     * so the mirror is synced first, with no transaction: another server may have captured the work. If the provider
+     * Starts one practice if the sources its capture read still hold. The check reads only this server's mirror, so the
+     * mirror is synced first, with no transaction: another server may have captured the work. The check reads the
+     * item's record and holds no lock; the locked start only checks the claim and records its verdict
+     * (docs/contributor/agent-runs.mdx § Locks and slow work). If the provider
      * cannot be reached, the check finds the sources unverifiable and withholds the practice as
      * {@code READINESS_REFUSED}, which is true. That reason is carried, so the item's next readiness edge measures the
      * practice again, also an edge whose occasions do not select it.
@@ -121,9 +123,11 @@ public class ResultAdmissionService {
         Assert.state(
                 !TransactionSynchronizationManager.isActualTransactionActive(),
                 "A practice start syncs its sources with no transaction");
+        // A start of an attempt that no longer runs, or that already admitted its results, is refused before the slow
+        // work, as the locked check would refuse it.
+        ReviewJob claimed = claimedJob(identity);
         try {
-            jobs.findByIdAndWorkspaceId(identity.jobId(), identity.workspaceId())
-                    .ifPresent(job -> assignments.syncSources(job, request.practiceSlug()));
+            assignments.syncSources(claimed, request.practiceSlug());
         } catch (RuntimeException unreachable) {
             log.warn(
                     "Practice start could not sync its sources: jobId={}, practiceSlug={}, errorType={}",
@@ -131,10 +135,12 @@ public class ResultAdmissionService {
                     request.practiceSlug(),
                     unreachable.getClass().getName());
         }
+        Currentness checked = assignments.startCurrentness(claimed, request.practiceSlug());
         return Objects.requireNonNull(transactions.execute(status -> {
             var job = ownedJob(identity);
             if (isAdmitted(job)) throw new AdmissionConflictException();
-            return new PracticeStartResponseDTO(request.practiceSlug(), assignments.start(job, request.practiceSlug()));
+            return new PracticeStartResponseDTO(
+                    request.practiceSlug(), assignments.start(job, request.practiceSlug(), checked));
         }));
     }
 
@@ -531,6 +537,17 @@ public class ResultAdmissionService {
             ReviewJob job,
             AdmissionIdentity identity,
             @Nullable Instant deadline) {}
+
+    /** The identity's attempt as it reads with no lock: a cheap refusal before slow work, which {@link #ownedJob} repeats. */
+    private ReviewJob claimedJob(AdmissionIdentity identity) {
+        var job = jobs.findByIdAndWorkspaceId(identity.jobId(), identity.workspaceId())
+                .orElseThrow(StaleAttemptException::new);
+        if (job.getStatus() != ReviewJobStatus.RUNNING
+                || job.getAttempt() != identity.attempt()
+                || !identity.runId().equals(job.getRunId())) throw new StaleAttemptException();
+        if (isAdmitted(job)) throw new AdmissionConflictException();
+        return job;
+    }
 
     public ReviewJob ownedJob(AdmissionIdentity identity) {
         var retained = jobs.findCall(identity.jobId(), identity.workspaceId()).orElseThrow(StaleAttemptException::new);

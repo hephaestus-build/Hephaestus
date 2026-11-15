@@ -403,8 +403,6 @@ interface TierRun {
 	readonly releaseCandidate?: string;
 	/** The opt-in step's light-tier decision for a layer of a stack. */
 	readonly light?: string;
-	/** Whether the opt-in step read auto-merge as enabled. */
-	readonly armed?: string;
 	readonly attempt?: number;
 }
 
@@ -417,7 +415,6 @@ function evaluateTierOutput(source: string, event: string, run: TierRun = {}): s
 		...(run.full === undefined ? {} : { full: run.full }),
 		...(run.preview === undefined ? {} : { preview: run.preview }),
 		...(run.light === undefined ? {} : { light: run.light }),
-		...(run.armed === undefined ? {} : { armed: run.armed }),
 	};
 	const context: unknown = JSON.parse(
 		JSON.stringify({
@@ -1097,11 +1094,10 @@ void describe("CI contract", () => {
 				`${event} with ci:full ${label}`,
 			);
 			// A duplicate is skipped only without the opt-in, so a re-run after the label runs the tier.
-			// A read that succeeds also reports the preview label and auto-merge, here both absent.
+			// A read that succeeds also reports the preview label, here absent.
 			const preview = full === undefined ? undefined : "false";
-			const armed = preview;
 			assert.equal(
-				evaluateTierOutput(skip, event, { full, preview, armed }),
+				evaluateTierOutput(skip, event, { full, preview }),
 				skipped,
 				`duplicate skip, ${event} ${label}`,
 			);
@@ -1130,15 +1126,6 @@ void describe("CI contract", () => {
 			}),
 			"true",
 		);
-		// An armed layer runs its server suites, as every armed pull request does.
-		assert.equal(
-			evaluateTierOutput(tests, "pull_request", {
-				light: "true",
-				armed: "true",
-				filter: { "application-server": "true" },
-			}),
-			"true",
-		);
 		const changed = String(
 			orchestrator.getIn(["jobs", "detect-changes", "outputs", "server-changed"]),
 		);
@@ -1153,19 +1140,16 @@ void describe("CI contract", () => {
 				`server change, ${JSON.stringify(filter)}`,
 			);
 		}
-		// Enabling auto-merge adds the numbered shards, and no other queue-tier suite, so the pull
-		// request passes them before it enters the queue. The armed run repeats a tree whose earlier
-		// run skipped them, so it is never a duplicate. A failed read selects them.
+		// The numbered shards run where the queue tier runs, and nowhere else: a fast-tier pull
+		// request reaches the queue without them. A failed read selects them.
 		const fullIntegration = String(
 			orchestrator.getIn(["jobs", "detect-changes", "outputs", "full-integration"]),
 		);
 		for (const [event, run, expected] of [
-			["pull_request", { full: "false", light: "false", armed: "false" }, "false"],
-			["pull_request", { full: "false", light: "false", armed: "true" }, "true"],
-			["pull_request", { full: "true", light: "false", armed: "false" }, "true"],
+			["pull_request", { full: "false", light: "false" }, "false"],
+			["pull_request", { full: "true", light: "false" }, "true"],
 			["pull_request", {}, "true"],
-			["pull_request", { full: "false", light: "true", armed: "true" }, "true"],
-			["pull_request", { full: "true", light: "true", armed: "false" }, "false"],
+			["pull_request", { full: "true", light: "true" }, "false"],
 			["merge_group", {}, "true"],
 			["push", {}, "true"],
 			["workflow_dispatch", {}, "true"],
@@ -1175,23 +1159,20 @@ void describe("CI contract", () => {
 				expected,
 				`full integration, ${event} ${JSON.stringify(run)}`,
 			);
+			assert.equal(evaluateTierOutput(decision, event, run), expected, `queue tier, ${event}`);
 		}
-		const armedRun = { full: "false", preview: "false", light: "false", armed: "true" };
-		assert.equal(evaluateTierOutput(decision, "pull_request", armedRun), "false");
-		assert.equal(evaluateTierOutput(skip, "pull_request", armedRun), "false");
 		// A re-run, such as the one after a retarget, is never skipped as a duplicate.
 		assert.equal(
 			evaluateTierOutput(skip, "pull_request", {
 				full: "false",
 				preview: "false",
-				armed: "false",
 				attempt: 2,
 			}),
 			"false",
 		);
 		// A labelled preview repeats a tree whose earlier run may have published no image.
 		assert.equal(
-			evaluateTierOutput(skip, "pull_request", { full: "false", preview: "true", armed: "false" }),
+			evaluateTierOutput(skip, "pull_request", { full: "false", preview: "true" }),
 			"false",
 		);
 		// Changing CI, browser specs or migrations does not promote every suite on a PR.
@@ -1358,17 +1339,11 @@ void describe("CI contract", () => {
 				`${name} skips drafts`,
 			);
 		}
-		// Marking a draft ready starts the run it skipped, and enabling auto-merge starts the full
-		// integration tier.
+		// Marking a draft ready starts the run it skipped. Enabling auto-merge starts no run:
+		// ci-cd.mdx § Full integration status.
 		const types = orchestrator.getIn(["on", "pull_request", "types"]);
 		assert.ok(isSeq(types));
-		assert.deepEqual(types.toJSON(), [
-			"opened",
-			"synchronize",
-			"reopened",
-			"ready_for_review",
-			"auto_merge_enabled",
-		]);
+		assert.deepEqual(types.toJSON(), ["opened", "synchronize", "reopened", "ready_for_review"]);
 		const optIn = namedStep(orchestrator, ["jobs", "detect-changes"], "Read the opt-in labels");
 		assert.equal(optIn.get("continue-on-error"), true);
 		assert.match(
@@ -1382,8 +1357,8 @@ void describe("CI contract", () => {
 			JSON.stringify(orchestrator.getIn(["on", "pull_request"]) ?? {}),
 			/labeled/u,
 		);
-		// The numbered shards also run on an armed pull request, so the server suites take their own
-		// selector. ci-cd.mdx § Full integration at the arm point.
+		// The `Full integration` status reports on the numbered shards, so they take their own
+		// selector. ci-cd.mdx § Full integration status.
 		for (const [caller, input, output] of [
 			["Build", "queue_tier", "queue-tier"],
 			["Browser-tests", "queue_tier", "queue-tier"],
@@ -2803,7 +2778,7 @@ void describe("CI contract", () => {
 		assertNeeds(source, "all-ci-passed", "Docker");
 	});
 
-	void test("only an armed run's passed server tests make `Full integration` succeed", async () => {
+	void test("only a run of the numbered shards passes or fails `Full integration`", async () => {
 		const workflow = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
 		const jobPath = ["jobs", "report-full-integration"];
 		// Rulesets match a required context against check runs too, and both come from the Actions app.
@@ -2863,14 +2838,14 @@ void describe("CI contract", () => {
 		// A fork's job runs only when it has a verdict, because its conclusion is that verdict.
 		const fork = { ...ownPullRequest, head: { repo: { full_name: "fork/repo" } } };
 		const base = { "pull-request-base": "main" };
-		const armedRun = { ...base, "server-changed": "true", "full-integration": "true" };
+		const shardRun = { ...base, "server-changed": "true", "full-integration": "true" };
 		const noServerChange = { ...base, "server-changed": "false" };
 		assert.ok(!reports("pull_request", fork, "success", { ...base, "server-changed": "true" }));
 		assert.ok(reports("pull_request", fork, "success", noServerChange));
-		assert.ok(reports("pull_request", fork, "success", armedRun, "success"));
-		assert.ok(reports("pull_request", fork, "success", armedRun, "failure"));
+		assert.ok(reports("pull_request", fork, "success", shardRun, "success"));
+		assert.ok(reports("pull_request", fork, "success", shardRun, "failure"));
 		for (const tests of ["cancelled", "skipped"]) {
-			assert.ok(!reports("pull_request", fork, "success", armedRun, tests), tests);
+			assert.ok(!reports("pull_request", fork, "success", shardRun, tests), tests);
 		}
 		// One fork branch can head a pull request into each base: only the run into the default
 		// branch, as the run read it, has a verdict. An unreadable base has none.
@@ -2878,24 +2853,12 @@ void describe("CI contract", () => {
 			const into = { "pull-request-base": other };
 			assert.ok(!reports("pull_request", fork, "success", { ...noServerChange, ...into }), other);
 			assert.ok(
-				!reports("pull_request", fork, "success", { ...armedRun, ...into }, "success"),
+				!reports("pull_request", fork, "success", { ...shardRun, ...into }, "success"),
 				other,
 			);
 		}
 		assert.ok(!reports("pull_request", ownPullRequest, "failure"));
 		assert.ok(!reports("push"));
-
-		// An armed layer's suites run the packaged server, so the layer packages one.
-		const layer = (serverTests: string) =>
-			jobRuns(workflow, "server-package", "pull_request", {
-				"detect-changes": {
-					result: "success",
-					outputs: { "light-tier": "true", "server-tests": serverTests, "any-code": "true" },
-				},
-				Security: { result: "success" },
-			});
-		assert.ok(layer("true"), "an armed layer packages the server");
-		assert.ok(!layer("false"), "an unarmed layer packages nothing");
 
 		const publisher = namedStep(workflow, jobPath, "Create commit status");
 		for (const [name, value] of [
@@ -2911,7 +2874,6 @@ void describe("CI contract", () => {
 		const published = async (
 			eventName: string,
 			environment: Record<string, string>,
-			existing: { context: string; state: string; description: string }[] = [],
 			repository: string | null = "owner/repo",
 		) => {
 			const calls: Record<string, unknown>[] = [];
@@ -2942,9 +2904,6 @@ void describe("CI contract", () => {
 							createCommitStatus: async (payload: unknown) => {
 								calls.push(asRecord(payload, "commit status"));
 							},
-							getCombinedStatusForRef: async () => ({
-								data: { statuses: existing },
-							}),
 						},
 					},
 				},
@@ -2971,56 +2930,29 @@ void describe("CI contract", () => {
 			assert.equal(call.sha, eventName === "pull_request" ? head : "a".repeat(40));
 			return call.state;
 		};
-		const armed = { SERVER_CHANGED: "true", FULL_INTEGRATION: "true" };
-		const unarmed = { SERVER_CHANGED: "true", FULL_INTEGRATION: "false", TESTS: "success" };
+		const shards = { SERVER_CHANGED: "true", FULL_INTEGRATION: "true" };
+		const fastTier = { SERVER_CHANGED: "true", FULL_INTEGRATION: "false", TESTS: "success" };
 		assert.equal(await published("merge_group", {}), "success");
 		assert.equal(await published("pull_request", { SERVER_CHANGED: "false" }), "success");
-		assert.equal(await published("pull_request", { ...armed, TESTS: "success" }), "success");
-		assert.equal(await published("pull_request", { ...armed, TESTS: "failure" }), "failure");
+		assert.equal(await published("pull_request", { ...shards, TESTS: "success" }), "success");
+		assert.equal(await published("pull_request", { ...shards, TESTS: "failure" }), "failure");
 		for (const result of ["cancelled", "skipped", ""]) {
-			assert.equal(await published("pull_request", { ...armed, TESTS: result }), null, result);
+			assert.equal(await published("pull_request", { ...shards, TESTS: result }), null, result);
 		}
-		// A fast-tier pass is no full integration, and never replaces an armed run's verdict.
-		assert.equal(await published("pull_request", unarmed), "pending");
-		const passed = "The server tests passed, every integration shard included";
-		assert.equal(await published("pull_request", { ...armed, TESTS: "success" }), "success");
-		assert.equal(
-			await published("pull_request", unarmed, [
-				{ context: "Full integration", state: "success", description: passed },
-			]),
-			null,
-		);
-		assert.equal(
-			await published("pull_request", unarmed, [
-				{ context: "Full integration", state: "failure", description: "failed" },
-			]),
-			null,
-		);
-		// "No server change" holds only against the base it was computed for.
-		assert.equal(
-			await published("pull_request", unarmed, [
-				{ context: "Full integration", state: "success", description: "No server change" },
-			]),
-			"pending",
-		);
-		assert.equal(
-			await published("pull_request", unarmed, [
-				{ context: "All CI Passed", state: "success", description: passed },
-			]),
-			"pending",
-		);
+		// A fast-tier run ran no shard, so it has no verdict, and it posts nothing.
+		assert.equal(await published("pull_request", fastTier), null);
 		// A fork's token cannot write statuses: its job ends in the verdict instead of publishing it.
 		for (const [environment, notices, failures] of [
-			[{ ...armed, TESTS: "success" }, 1, 0],
+			[{ ...shards, TESTS: "success" }, 1, 0],
 			[{ SERVER_CHANGED: "false" }, 1, 0],
-			[{ ...armed, TESTS: "failure" }, 0, 1],
-			[unarmed, 0, 1],
+			[{ ...shards, TESTS: "failure" }, 0, 1],
+			[fastTier, 0, 0],
 		] as const) {
-			assert.equal(await published("pull_request", environment, [], "fork/repo"), null);
+			assert.equal(await published("pull_request", environment, "fork/repo"), null);
 			assert.deepEqual(outcome, { notice: notices, failed: failures }, JSON.stringify(environment));
 		}
 		// A deleted fork leaves no head repository; the run is still a fork's and publishes nothing.
-		assert.equal(await published("pull_request", { SERVER_CHANGED: "false" }, [], null), null);
+		assert.equal(await published("pull_request", { SERVER_CHANGED: "false" }, null), null);
 		assert.deepEqual(outcome, { notice: 1, failed: 0 });
 	});
 
@@ -5803,47 +5735,6 @@ function validationConcurrencyScopes(
 // GitHub marks every job of a cancelled run cancelled, whatever its condition says, and the head shows
 // those checks until the next run's jobs reach the same names. Enabling auto-merge starts a run on the
 // commit that the running one already tests, so it waits for that run instead of cancelling it.
-void test("enabling auto-merge waits for the run on the same commit instead of cancelling it", async () => {
-	const workflow = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
-	const lane = (event: string, action: string) => {
-		const sha = "a".repeat(40);
-		const context = {
-			github: {
-				workflow: workflow.get("name"),
-				repository: "hephaestus-build/Hephaestus",
-				event_name: event,
-				ref: event === "pull_request" ? "refs/pull/7/merge" : "refs/heads/main",
-				ref_name: event === "pull_request" ? "7/merge" : "main",
-				head_ref: event === "pull_request" ? "topic" : "",
-				sha,
-				event: {
-					action,
-					pull_request: { head: { sha, repo: { full_name: "hephaestus-build/Hephaestus" } } },
-					repository: { default_branch: "main" },
-				},
-			},
-		};
-		return {
-			group: expandExpressions(workflow.getIn(["concurrency", "group"]), context),
-			cancels:
-				expandExpressions(workflow.getIn(["concurrency", "cancel-in-progress"]), context) ===
-				"true",
-		};
-	};
-	const push = lane("pull_request", "synchronize");
-	const arm = lane("pull_request", "auto_merge_enabled");
-	assert.equal(arm.group, push.group, "the armed run queues behind the pull request's run");
-	assert.equal(arm.cancels, false, "the armed run does not cancel the run on its commit");
-	assert.equal(push.cancels, true, "a push still cancels the run it supersedes");
-	for (const action of ["opened", "reopened", "ready_for_review"]) {
-		assert.equal(lane("pull_request", action).cancels, true, action);
-	}
-	assert.equal(lane("workflow_dispatch", "").cancels, true);
-	for (const event of ["push", "merge_group"]) {
-		assert.equal(lane(event, "").cancels, false, event);
-	}
-});
-
 void test("a pull-request workflow cancels its superseded runs and nothing else", async () => {
 	const repository = "hephaestus-build/Hephaestus";
 	// Every pull request pushes the same branch name: two forks can each push `patch-1`.
@@ -7182,8 +7073,9 @@ void test("the staging channel is signed by the release's keyless signer, over n
 });
 
 // docs/contributor/ci-cd.mdx § Fail fast in the merge queue owns the reasons for the tests below.
+const CANCEL_WORKFLOW = ".github/workflows/merge-group-cancel.yml";
 const isCancelWorker = (worker: Record<string, unknown>) =>
-	worker.name === "Stop the merge group early";
+	worker.name === "Stop the merge group early" && worker.uses === `./${CANCEL_WORKFLOW}`;
 
 // The legs that take most of a merge group's runner time. In a merge group they start only after
 // Security passed, so a base-wide advisory ends the group before they take runners.
@@ -7328,31 +7220,50 @@ void test("a failed leg cancels its own merge-group run, and only a merge-group 
 	);
 });
 
-void test("each cancel worker has the same readable name and runs only graceful cancellation with its token", async () => {
+void test("each cancel worker calls the one cancel workflow, which runs only graceful cancellation with its token", async () => {
 	let count = 0;
 	for (const [file, source] of await workflowSources()) {
 		const workflow = asRecord(parseDocument(source).toJSON(), file);
 		for (const [key, definition] of Object.entries(asRecord(workflow.jobs, "jobs"))) {
 			const worker = asRecord(definition, key);
-			if (!key.startsWith("fail-fast-")) {
+			if (!key.startsWith("fail-fast-") && worker.uses !== `./${CANCEL_WORKFLOW}`) {
 				continue;
 			}
 			count += 1;
-			assert.equal(worker.name, "Stop the merge group early");
-			assert.equal(worker["runs-on"], "ubuntu-slim");
-			assert.deepEqual(worker.permissions, { actions: "write" });
-			const steps = asArray(worker.steps, "cancel steps");
-			assert.equal(steps.length, 1);
-			const cancelStep = asRecord(steps[0], "cancel step");
-			assert.equal(cancelStep.run, 'gh run cancel "$RUN_ID" --repo "$GITHUB_REPOSITORY"');
-			assert.equal(cancelStep.uses, undefined);
-			assert.deepEqual(cancelStep.env, {
-				GH_TOKEN: `\${{ github.token }}`,
-				RUN_ID: `\${{ github.run_id }}`,
-			});
+			assert.ok(isCancelWorker(worker), `${file}#${key}`);
+			// Each caller needs only its own leg, so the cancel starts when that leg fails.
+			assert.deepEqual(worker.needs, [key.replace(/^fail-fast-/u, "")], `${file}#${key}`);
+			assert.deepEqual(worker.permissions, { actions: "write" }, `${file}#${key}`);
+			assert.equal("with" in worker || "secrets" in worker, false, `${file}#${key}`);
 		}
 	}
 	assert.ok(count > 0);
+	const cancel = asRecord(
+		parseDocument(await readFile(CANCEL_WORKFLOW, "utf8")).toJSON(),
+		CANCEL_WORKFLOW,
+	);
+	assert.deepEqual(cancel.on, { workflow_call: null });
+	assert.deepEqual(cancel.permissions, {});
+	const jobs = Object.values(asRecord(cancel.jobs, "cancel jobs"));
+	assert.equal(jobs.length, 1);
+	const cancelJob = asRecord(jobs[0], "cancel job");
+	assert.equal(cancelJob["runs-on"], "ubuntu-slim");
+	assert.equal(
+		cancelJob.if,
+		`\${{ always() }}`,
+		"the caller decided; an implicit success() must not skip",
+	);
+	assert.equal(cancelJob.needs, undefined);
+	assert.deepEqual(cancelJob.permissions, { actions: "write" });
+	const steps = asArray(cancelJob.steps, "cancel steps");
+	assert.equal(steps.length, 1);
+	const cancelStep = asRecord(steps[0], "cancel step");
+	assert.equal(cancelStep.run, 'gh run cancel "$RUN_ID" --repo "$GITHUB_REPOSITORY"');
+	assert.equal(cancelStep.uses, undefined);
+	assert.deepEqual(cancelStep.env, {
+		GH_TOKEN: `\${{ github.token }}`,
+		RUN_ID: `\${{ github.run_id }}`,
+	});
 });
 
 void test("no workflow, action or script force-cancels a run", async () => {
@@ -7603,6 +7514,9 @@ void test("only the fail-fast jobs, and the listed exceptions, can write to Acti
 	const grants: string[] = [];
 	const sources = await workflowSources();
 	const callsCancel = (file: string): boolean => {
+		if (file === CANCEL_WORKFLOW) {
+			return true;
+		}
 		const workflow = asRecord(parseDocument(sources.get(file) ?? "").toJSON(), file);
 		return Object.values(asRecord(workflow.jobs, "jobs")).some((value) => {
 			const workerDefinition = asRecord(value, "job");
@@ -7620,6 +7534,9 @@ void test("only the fail-fast jobs, and the listed exceptions, can write to Acti
 	for (const [file, source] of sources) {
 		const workflow = asRecord(parseDocument(source).toJSON(), file);
 		assert.equal(writesActions(workflow.permissions), false, `${file} grants it to every job`);
+		if (file === CANCEL_WORKFLOW) {
+			continue;
+		}
 		for (const [name, definition] of Object.entries(asRecord(workflow.jobs, `${file} jobs`))) {
 			const worker = asRecord(definition, name);
 			if (typeof worker.uses === "string") {
@@ -7727,9 +7644,9 @@ void test("the CI outline has static names and one reusable level, including ski
 		);
 		for (const [workerKey, value] of Object.entries(asRecord(callee.jobs, key))) {
 			const worker = asRecord(value, workerKey);
-			assert.equal(
-				worker.uses,
-				undefined,
+			// A skipped call shows as one entry; the cancel level appears only in a group that failed.
+			assert.ok(
+				worker.uses === undefined || isCancelWorker(worker),
 				`${key}/${workerKey}: a nested workflow adds a sidebar level`,
 			);
 			const label = asString(worker.name ?? workerKey, "worker name");

@@ -75,11 +75,12 @@ class ScanCallGuardTest extends BaseUnitTest {
     private final LlmUsageEventRepository usage = mock(LlmUsageEventRepository.class);
     private long calls;
     private long outputTokens;
+    private long inputTokens;
     private final JsonMapper mapper = new JsonMapper();
     private final ReviewJob job = RuntimeReviewTestData.job();
     private ReviewSnapshot scan;
     private static final PracticeReviewProperties PRACTICE_REVIEW =
-            new PracticeReviewProperties(false, 15, 5, null, 36, 48_000, Duration.ofMinutes(10));
+            new PracticeReviewProperties(false, 15, 5, null, 36, 48_000, 342_000, Duration.ofMinutes(10));
     private final ScanCallGuard guard = new ScanCallGuard(
             jobs,
             runs,
@@ -366,6 +367,10 @@ class ScanCallGuardTest extends BaseUnitTest {
         return (long) job.getInput().assignments().size() * PRACTICE_REVIEW.practiceOutputTokens();
     }
 
+    private long loopInputTokens() {
+        return (long) job.getInput().assignments().size() * PRACTICE_REVIEW.practiceInputTokens();
+    }
+
     private void refusedForWork(ProxyRouting route) {
         assertThatThrownBy(() -> guard.acquire(route, "{}".getBytes(StandardCharsets.UTF_8)))
                 .isInstanceOfSatisfying(ResponseStatusException.class, failure -> {
@@ -379,6 +384,7 @@ class ScanCallGuardTest extends BaseUnitTest {
         ordinaryReview();
         calls = ScanCallGuard.WORK_MARGIN * loopCalls() - 1;
         outputTokens = ScanCallGuard.WORK_MARGIN * loopOutputTokens() - 1;
+        inputTokens = ScanCallGuard.WORK_MARGIN * loopInputTokens() - 1;
 
         assertThat(guard.acquire(route(), "{}".getBytes(StandardCharsets.UTF_8)))
                 .isEmpty();
@@ -393,11 +399,16 @@ class ScanCallGuardTest extends BaseUnitTest {
         calls = 0;
         outputTokens = ScanCallGuard.WORK_MARGIN * loopOutputTokens();
         refusedForWork(route());
+
+        outputTokens = 0;
+        inputTokens = ScanCallGuard.WORK_MARGIN * loopInputTokens();
+        refusedForWork(route());
     }
 
     private LlmUsageEventRepository.ReviewCalls reviewCalls() {
         long counted = calls;
         long output = outputTokens;
+        long input = inputTokens;
         return new LlmUsageEventRepository.ReviewCalls() {
             @Override
             public long getCalls() {
@@ -407,6 +418,11 @@ class ScanCallGuardTest extends BaseUnitTest {
             @Override
             public long getOutputTokens() {
                 return output;
+            }
+
+            @Override
+            public long getInputTokens() {
+                return input;
             }
         };
     }

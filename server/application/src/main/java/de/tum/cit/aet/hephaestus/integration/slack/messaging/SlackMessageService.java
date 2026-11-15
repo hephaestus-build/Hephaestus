@@ -76,6 +76,7 @@ public class SlackMessageService {
     private final SlackCredentialProvider credentialProvider;
     private final SlackRateLimitTracker rateLimitTracker;
     private final OutboundEgressGuard egressGuard;
+    private final SlackTime time;
     private final ConcurrentMap<Long, BotIdentity> botCache = new ConcurrentHashMap<>();
 
     @Autowired
@@ -84,21 +85,29 @@ public class SlackMessageService {
             SlackRateLimitTracker rateLimitTracker,
             OutboundEgressGuard egressGuard,
             SlackProperties properties) {
-        this(Slack.getInstance(nativeConfig(properties)), credentialProvider, rateLimitTracker, egressGuard);
+        this(
+                Slack.getInstance(nativeConfig(properties)),
+                credentialProvider,
+                rateLimitTracker,
+                egressGuard,
+                SlackTime.SYSTEM);
     }
 
     /**
      * @param slack the Slack client of this gateway; a test points one at a local server
+     * @param time the time of the throttle budgets; a test passes virtual time, so no throttle wait takes real time
      */
     SlackMessageService(
             Slack slack,
             SlackCredentialProvider credentialProvider,
             SlackRateLimitTracker rateLimitTracker,
-            OutboundEgressGuard egressGuard) {
+            OutboundEgressGuard egressGuard,
+            SlackTime time) {
         this.slack = slack;
         this.credentialProvider = credentialProvider;
         this.rateLimitTracker = rateLimitTracker;
         this.egressGuard = egressGuard;
+        this.time = time;
     }
 
     /**
@@ -211,7 +220,7 @@ public class SlackMessageService {
         }
         try {
             AuthTestResponse r = callHonoringRateLimit(
-                    SlackBackoff.interactive(rateLimitTracker, workspaceId),
+                    SlackBackoff.interactive(time, rateLimitTracker, workspaceId),
                     () -> slack.methods(token.get()).authTest(req -> req));
             if (r.isOk() && r.getUserId() != null && !r.getUserId().isBlank()) {
                 BotIdentity bot = new BotIdentity(r.getUserId(), r.getBotId());
@@ -246,7 +255,7 @@ public class SlackMessageService {
         String token = resolveToken(workspaceId)
                 .orElseThrow(() -> new SlackSendException(workspaceId, channel, "no_active_slack_connection"));
         try {
-            T response = callHonoringRateLimit(SlackBackoff.interactive(rateLimitTracker, workspaceId), () -> {
+            T response = callHonoringRateLimit(SlackBackoff.interactive(time, rateLimitTracker, workspaceId), () -> {
                 try {
                     egressGuard.requireDeliveryAllowed("slack.write");
                     return call.call(slack.methods(token));
@@ -305,7 +314,7 @@ public class SlackMessageService {
             boolean more;
             if (threadTs == null) {
                 var r = callHonoringRateLimit(
-                        SlackBackoff.history(rateLimitTracker, workspaceId),
+                        SlackBackoff.history(time, rateLimitTracker, workspaceId),
                         () -> slack.methods(token)
                                 .conversationsHistory(req -> req.channel(channel)
                                         .oldest(oldest)
@@ -317,7 +326,7 @@ public class SlackMessageService {
                 more = Matches.holdsMore(r.isHasMore(), r.getResponseMetadata());
             } else {
                 var r = callHonoringRateLimit(
-                        SlackBackoff.history(rateLimitTracker, workspaceId),
+                        SlackBackoff.history(time, rateLimitTracker, workspaceId),
                         () -> slack.methods(token)
                                 .conversationsReplies(req -> req.channel(channel)
                                         .ts(threadTs)
@@ -373,7 +382,7 @@ public class SlackMessageService {
         if (token.isEmpty()) throw new SlackSendException(workspaceId, subject, "no_active_slack_connection");
         try {
             var response = callHonoringRateLimit(
-                    SlackBackoff.interactive(rateLimitTracker, workspaceId),
+                    SlackBackoff.interactive(time, rateLimitTracker, workspaceId),
                     () -> slack.methods(token.get()).usersInfo(request -> request.user(subject)));
             if (!response.isOk())
                 throw new SlackSendException(
@@ -411,7 +420,7 @@ public class SlackMessageService {
             do {
                 String pageCursor = cursor;
                 ConversationsListResponse response = callHonoringRateLimit(
-                        SlackBackoff.interactive(rateLimitTracker, workspaceId),
+                        SlackBackoff.interactive(time, rateLimitTracker, workspaceId),
                         () -> methods.conversationsList(req -> req.types(
                                         List.of(ConversationType.PUBLIC_CHANNEL, ConversationType.PRIVATE_CHANNEL))
                                 .excludeArchived(false)
@@ -457,7 +466,7 @@ public class SlackMessageService {
                 .orElseThrow(() -> new SlackSendException(workspaceId, channelId, "no_active_slack_connection"));
         try {
             ConversationsInfoResponse response = callHonoringRateLimit(
-                    SlackBackoff.interactive(rateLimitTracker, workspaceId),
+                    SlackBackoff.interactive(time, rateLimitTracker, workspaceId),
                     () -> slack.methods(token)
                             .conversationsInfo(req -> req.channel(channelId).includeNumMembers(true)));
             if (!response.isOk()) {
@@ -491,7 +500,7 @@ public class SlackMessageService {
         }
         try {
             ConversationsInfoResponse response = callHonoringRateLimit(
-                    SlackBackoff.interactive(rateLimitTracker, workspaceId),
+                    SlackBackoff.interactive(time, rateLimitTracker, workspaceId),
                     () -> slack.methods(token.get()).conversationsInfo(req -> req.channel(channelId)));
             if (!response.isOk()) {
                 String error = response.getError() == null ? "unknown" : response.getError();
@@ -537,7 +546,7 @@ public class SlackMessageService {
                 .orElseThrow(() -> new SlackSendException(workspaceId, channelId, "no_active_slack_connection"));
         try {
             var response = callHonoringRateLimit(
-                    SlackBackoff.history(rateLimitTracker, workspaceId),
+                    SlackBackoff.history(time, rateLimitTracker, workspaceId),
                     () -> slack.methods(token)
                             .conversationsHistory(req -> req.channel(channelId)
                                     .oldest(oldest)
@@ -571,7 +580,7 @@ public class SlackMessageService {
                 .orElseThrow(() -> new SlackSendException(workspaceId, channelId, "no_active_slack_connection"));
         try {
             var response = callHonoringRateLimit(
-                    SlackBackoff.history(rateLimitTracker, workspaceId),
+                    SlackBackoff.history(time, rateLimitTracker, workspaceId),
                     () -> slack.methods(token)
                             .conversationsReplies(req -> req.channel(channelId)
                                     .ts(threadTs)

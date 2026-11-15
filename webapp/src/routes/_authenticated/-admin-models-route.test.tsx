@@ -140,6 +140,34 @@ describe("instance AI models route", () => {
 		}
 	});
 
+	it("shows the server's readiness for a model again after its connection turns off", async () => {
+		// The server's state: turning the connection off changes the model's readiness with it.
+		let provider = connection(1, "Main provider");
+		let mainModel: LlmModel = { ...model(11, 1, "Main model"), readiness: "READY" };
+		mockPage();
+		server.use(
+			http.get("*/admin/llm/connections", () => HttpResponse.json([provider])),
+			http.get("*/admin/llm/models", () => HttpResponse.json([mainModel])),
+			http.patch("*/admin/llm/connections/1", () => {
+				provider = { ...provider, enabled: false };
+				mainModel = { ...mainModel, readiness: "CONNECTION_OFF" };
+				return HttpResponse.json(provider);
+			}),
+		);
+
+		await renderModelsRoute();
+		const row = await screen.findByRole("row", { name: /Main model/u }, ROUTE_RENDER_WAIT);
+		expect(within(row).getByText("Ready").textContent).toBe("Ready");
+
+		await confirmTurnOff("Main provider");
+
+		await waitFor(() =>
+			expect(
+				within(screen.getByRole("row", { name: /Main model/u })).queryByText("Connection off"),
+			).not.toBeNull(),
+		);
+	});
+
 	it("keeps each connection's toggle pending independently when two run at once", async () => {
 		const slowToggle = deferred();
 		let slowToggleCalls = 0;

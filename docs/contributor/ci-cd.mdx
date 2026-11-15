@@ -81,12 +81,15 @@ A path-filtered stage can be skipped.
 A selected stage shows its servers directly, including static names for skipped servers.
 The tooling gates and the two halves of the tooling tests remain three jobs.
 Each server keeps its isolated cancel callback, named `Stop the merge group early`.
+Each callback calls `merge-group-cancel.yml`, the one workflow that cancels a run.
 
 The removed placeholder entries allocated no runner. Combining workflow linters saves one runner job when lint is selected. Folding chart lint into the latest k3s server saves one runner job when Kubernetes is selected. The checks remain the same.
 
 GitHub displays every job of a [reused workflow](https://docs.github.com/en/actions/concepts/workflows-and-actions/reusing-workflow-configurations).
 A skipped job remains a [skipped check](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-jobs-with-conditions).
 We use one stage workflow per group and [YAML step aliases](https://docs.github.com/en/actions/reference/workflows-and-actions/reusing-workflow-configurations#yaml-anchors-and-aliases) to share server steps without a second workflow level.
+The cancel callbacks are the one exception.
+A skipped call shows as one entry, so the second level appears only in a group that already failed.
 The image signing steps stay in `reusable-docker-build.yml`, which is part of the signature identity.
 
 `CI Status Gate` keeps its required context name.
@@ -128,8 +131,8 @@ The job's own limit cancels the run and can lose its log, so the list is the evi
 | Feedback eval gate | The deterministic checks of the [feedback eval gate](./feedback-quality-evals.md#feedback-eval-gate): valid fixtures and case lists, literal checks, practice occasions, practice-script snapshots and the call ceiling. Keeps the `feedback-eval-gate` artifact. The model panel and the prompt-safety subset run in `feedback-eval-panel.yml` | `node scripts/feedback-eval-gate.ts` |
 | PR → Validate PR                                                        | Conventional Commit title. Every commit’s primary author resolves to the PR author’s GitHub account (including bot accounts) or a listed review-policy maintainer. The title, body, and every commit message contain no `Claude-Session:` trailer, "Generated with" line, or session link (a `Co-authored-by:` trailer is allowed) | —                                                                        |
 
-`Build → Database migrations`, the PostgreSQL drills and both E2E rows are the queue tier.
-The integration shards other than `review` run in the queue tier and on an [armed pull request](#full-integration-at-the-arm-point). See [Two verification tiers](#two-verification-tiers) for migration PR exceptions.
+`Build → Database migrations`, the PostgreSQL drills, both E2E rows and the integration shards other than `review` are
+the queue tier. See [Two verification tiers](#two-verification-tiers) for migration PR exceptions.
 
 The browser jobs retain `webapp-e2e-results` and `extension-e2e-results`, each including
 `e2e-server.log`, for seven days on success as well as failure. Inspect server startup and shutdown output even when browser assertions
@@ -489,7 +492,9 @@ Each build, test and quality server has a dependent cancel job that runs if the 
 That job needs only its server, so it starts without waiting for other servers in the workflow.
 Each server has a static name in its stage workflow.
 Shared step sequences use YAML aliases, so each skipped server still has a readable name.
+
 Every cancel job is named `Stop the merge group early`.
+When it runs, its check is `<stage> / Stop the merge group early / Cancel this run`.
 
 - The gate waits for every stage, and none of its prerequisite lists include cancel jobs.
 - `Changesets` runs only in pull requests, so it has no cancel job.
@@ -517,16 +522,17 @@ The image advisory snapshot and pinned upstream image scan remain independent of
 **Never force-cancel a merge-group run.**
 A force-cancel skips the `always()` jobs, so `CI Status Gate` never reports.
 The queue then keeps the entry with no verdict until its check timeout.
-Use only the graceful `gh run cancel` command in the isolated cancel servers.
+Use only the graceful `gh run cancel` command in `merge-group-cancel.yml`.
 
 **Only the cancel jobs can write to Actions.**
 The `actions: write` permission also lets a job dispatch workflows, rerun runs and delete caches.
 Reusable-workflow callers forward this permission as a ceiling to their stage workflows.
 A call job sets a permission ceiling.
 Each build and test server sets its own narrower permissions.
-Only each isolated cancel server receives a token that can cancel runs.
 
+The token goes to the one job of `merge-group-cancel.yml`.
 That job runs on `ubuntu-slim`, with no checkout and no action, so no other code holds the token.
+Each callback only grants the permission and calls the workflow, so its token never reaches a step.
 Each workflow keeps `permissions: {}` at the top level.
 `ACTIONS_WRITE_GRANTS` in `scripts/ci-contract.test.ts` lists each other job with this permission, and the reason.
 
@@ -542,6 +548,7 @@ Record it here from the first merge group that fails after this rule reached `ma
 `scripts/ci-contract.test.ts` holds each rule:
 
 - Each leg that runs in a merge group has its cancel job, for merge groups only.
+  Each cancel job calls `merge-group-cancel.yml`.
   The job's condition has `always()` and the leg's `failure` result.
 - No workflow, action or script force-cancels a run.
 - Only the cancel jobs, and the listed exceptions, have `actions: write`.
@@ -657,6 +664,7 @@ The required checks are job names, so a display name does not change them.
 | `ci-build.yml`                        | Called by cicd.yml                                                            | Runs the OpenAPI, schema, database and PostgreSQL drill gates against the server artifact packaged by cicd.yml                                                                                                                        |
 | `ci-tests.yml`                        | Called by cicd.yml                                                            | The server unit, architecture and integration suites, on the package job's compiled classes                                                                                                                                     |
 | `reusable-docker-build.yml`           | Called by cicd.yml                                                 | Builds every requested image in one job per platform, natively, and blocks on the release vulnerability policy there. One job merges each index, attests, signs and tags it                                                       |
+| `merge-group-cancel.yml` | Called by each `Stop the merge group early` job | Cancels its merge-group run gracefully. Its one job is the only job with a token that can cancel runs |
 | `ci-security-scan.yml`                | Called by cicd.yml                                                            | Trivy dependency scan, secret detection and repository policy checks                                                                                                                                                             |
 | `dependency-review.yml`               | PR changing a dependency input                                                | Reports introduced dependency advisories independently of the required CI verdict                                                                                                                                                |
 | `dependency-graph.yml`                | PR changing a dependency input, push to main                                  | Resolves and uploads the verified Gradle dependency graph with read-only permissions                                                                                                                                             |
@@ -821,8 +829,7 @@ action does not persist configuration-cache entries across jobs.
 A pull request outside the [light tier](#light-tier-for-stacked-layers) uses the **fast tier**.
 A merge group, a push and a dispatch also enable the **queue tier**.
 `detect-changes` publishes the decision once as `queue-tier`, and each queue-tier job adds it to its path condition.
-The numbered integration shards require the queue tier or an armed pull request ([Full integration at the arm point](#full-integration-at-the-arm-point)).
-The `review` shard does not.
+The numbered integration shards require the queue tier. The `review` shard does not.
 
 The table lists eligible jobs. Path filters and event guards still select which jobs run.
 
@@ -918,32 +925,19 @@ Changes to workflows, build scripts, shard durations or browser tests do not sel
 The merge group checks the complete selected queue tier before the change reaches `main`.
 Release evidence selection stays separate. A Version PR does not select the full queue tier unless it carries `ci:full`.
 
-### Full integration at the arm point
+### Full integration status
 
-A server pull request runs the numbered integration shards once, before it enters the queue.
-Enabling auto-merge is the arm point. The `auto_merge_enabled` event starts a run, and `Changes` reads the auto-merge state from the pull request when it runs.
-`detect-changes` publishes `full-integration`, which selects the shards for the queue tier and for an armed pull request. A push to an armed pull request selects them too.
-An armed [stacked layer](#light-tier-for-stacked-layers) also runs its server suites and the shards, because each layer of a stack must meet the rules of `main`.
-
-An armed run is never skipped as a duplicate, because the earlier run of its tree skipped the shards.
-A failure then stops only this pull request, before it can remove a merge group that holds other pull requests.
-A push to an unarmed pull request keeps the fast tier.
-
-The armed run waits for the pull request's run in progress, which tests the same commit, instead of cancelling it.
-A later event on the pull request replaces the waiting run. That run reads the auto-merge state again, so it still runs the shards while the pull request is armed.
-GitHub marks every job of a cancelled run cancelled, and the head would show those checks until the armed run's jobs replace them.
-
-`Report full integration` publishes the `Full integration` commit status for the head of a same-repository pull request, and for a merge group:
+`Report full integration` publishes the `Full integration` commit status for the head of a same-repository pull request, and for a merge group.
+No rule requires it, so it changes no merge.
+`detect-changes` publishes `full-integration`, which selects the numbered integration shards. It equals the queue tier.
 
 | Run | Status |
 | --- | --- |
 | Merge group | Success, because the merge group runs every shard under `CI Status Gate` |
 | Pull request without a server change | Success |
-| Armed server pull request | Success after the server tests pass, failure after they fail. A cancelled or skipped run publishes nothing |
-| Unarmed server pull request | Pending, "Runs when auto-merge is enabled", unless the commit already has an armed run's verdict. A "No server change" holds only against the base it was computed for, so pending replaces it |
+| Server pull request with `ci:full` | Success after the server tests pass, failure after they fail. A cancelled or skipped run publishes nothing |
+| Other server pull request | Nothing |
 
-A pending or missing required status keeps a pull request out of the queue.
-Thus auto-merge enqueues a server pull request only after its armed run passed. People and the board arm a pull request as before, with no label.
 The job has another name than the status, because a ruleset also matches a required context against check runs.
 
 A fork's token cannot write statuses. So in a fork's run, the job runs only when it has a verdict, and it ends in that verdict.
@@ -954,11 +948,11 @@ It reads only that conclusion, for the run's latest attempt, and never checks ou
 It publishes only while an open pull request from that fork branch into the default branch has that commit as its head. Another pull request can share the commit, and the verdict does not describe that other pull request's diff.
 A fork author who changes the base while the run reads the changed paths can choose the diff that decides the verdict. The merge group still runs every check, as it does for `CI Status Gate`.
 
-The rollout has two steps:
-
-1. The workflow publishes the status. No rule requires it, so it changes no merge.
-2. The maintainers add `Full integration`, from the GitHub Actions app, to the required status checks of the `main` ruleset.
-   From then on, the queue admits a server pull request only after its armed run.
+Enabling auto-merge does not start a run.
+An earlier design ran the shards when auto-merge was enabled, and the `main` ruleset required this status.
+The armed run waited for the pull request's run on the same commit and then repeated it, and the merge group ran the shards again.
+That delayed each server pull request by about 45 minutes before it entered the queue.
+A merge group failure costs the other entries of the group one rebuild, which is less, so the merge group alone runs the shards.
 
 ### Migration checks on PRs
 
@@ -969,14 +963,13 @@ it runs `review` without Unit or Architecture. The notes can be changesets, `.mi
 Generated-artifact drift, quality and security checks stay selected.
 A migration with a Java, build or configuration change keeps Unit and Architecture too.
 
-The migration-specific integration classes remain in the numbered shards. They first run at the [arm point](#full-integration-at-the-arm-point) or in the merge group.
+The migration-specific integration classes remain in the numbered shards. They first run in the merge group, where a failure removes the group from the queue.
 The Database tier and `review` do not replace those classes. An explicit full run checks them on the PR too.
 
 ### Reproduce a queue-tier failure
 
 Use `ci:full` to reproduce a queue-tier failure on the pull request.
 It enables the whole queue tier but keeps path selection: the numbered shards, the browser suites, database migrations, the drills and the Kubernetes queue legs.
-Enabling auto-merge runs only the numbered shards ([Full integration at the arm point](#full-integration-at-the-arm-point)).
 It is not the default for a workflow or migration change. Remove the label after the reproduction.
 Then push, or use **Re-run all jobs** on the latest CI/CD run.
 
@@ -1010,7 +1003,6 @@ The merge group runs the checks selected for the combined diff.
 Thus, such a layer runs the **light tier**: `Changes`, the quality legs except Windows and Webapp stories, Security, Release notes and Workflow lint.
 These are format, lint, types, prose and the quality legs' own tests.
 It packages no server, so it runs no server suite, no artifact gate, no image build and no cluster leg.
-Enabling auto-merge adds its server suites and the numbered shards ([Full integration at the arm point](#full-integration-at-the-arm-point)).
 `CI Status Gate` evaluates the selected checks.
 
 `Changes` reads the base from the pull request when it runs, not from the event, and publishes `light-tier`.

@@ -124,7 +124,7 @@ A reason that is not a constant name counts as `other`.
 Other items have the reason `none`.
 The `review.stop_reason` and `review_item.reason` columns keep the same reasons for each review.
 
-The server and the worker register each status and stop reason of `practice_review_ended_total` at zero when it starts.
+The server registers each status and stop reason of `practice_review_ended_total` at zero when it starts.
 Thus, `increase()` also counts the first end after a start.
 An item series starts with its first count, so `increase()` does not count the first items of a new state and reason after a start.
 
@@ -476,6 +476,23 @@ The gauge makes no claim that the server did not check:
   `HephaestusWalArchiveFailing` also fires on failed reads that continue, so a read outage does not resolve it.
 
 The bundled PostgreSQL archives its WAL only when `postgresql.backup.enabled` is `true`.
+
+## Database size metrics
+
+The server role reads `pg_database_size` every five minutes.
+A scrape does not query the database.
+
+| Prometheus name                          | Type    | Meaning                                                                              |
+| ---------------------------------------- | ------- | ------------------------------------------------------------------------------------ |
+| `database_size_bytes`                    | Gauge   | The bytes of the database                                                            |
+| `database_volume_capacity_bytes`         | Gauge   | The bytes of the bundled PostgreSQL volume, from `postgresql.persistence.size`       |
+| `database_size_sampler_failures_total`   | Counter | Reads of the database size that failed                                               |
+
+The size is an approximation of how full the volume is.
+It does not include the WAL, temporary files or the space of the filesystem.
+
+- Before the first read, and after a read that failed, `database_size_bytes` is `NaN`.
+- With an external database, the chart sets no volume size, and `database_volume_capacity_bytes` is `NaN`.
 
 ## HTTP route metrics
 

@@ -173,16 +173,29 @@ class ResultAdmissionServiceTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldSyncThePracticeSourcesWithNoTransactionBeforeTheLockedStart() {
-        when(assignments.start(job, "review-ready-work")).thenReturn(true);
+    void shouldSyncAndCheckThePracticeSourcesWithNoLockBeforeTheLockedStart() {
+        when(assignments.startCurrentness(job, "review-ready-work")).thenReturn(Currentness.CURRENT);
+        when(assignments.start(job, "review-ready-work", Currentness.CURRENT)).thenReturn(true);
 
         var started = service.start(identity(), new PracticeStartRequestDTO("review-ready-work"));
 
         assertThat(started.current()).isTrue();
         var order = inOrder(assignments, manager);
         order.verify(assignments).syncSources(job, "review-ready-work");
+        order.verify(assignments).startCurrentness(job, "review-ready-work");
         order.verify(manager).getTransaction(any());
-        order.verify(assignments).start(job, "review-ready-work");
+        order.verify(assignments).start(job, "review-ready-work", Currentness.CURRENT);
+    }
+
+    @Test
+    void shouldRefuseAStaleAttemptBeforeSyncingOrCheckingItsSources() {
+        job.setRunId(UUID.randomUUID());
+
+        assertThatThrownBy(() -> service.start(identity(), new PracticeStartRequestDTO("review-ready-work")))
+                .isInstanceOf(ResultAdmissionService.StaleAttemptException.class);
+
+        verify(assignments, never()).syncSources(any(), any());
+        verify(assignments, never()).startCurrentness(any(), any());
     }
 
     @Test
@@ -190,12 +203,14 @@ class ResultAdmissionServiceTest extends BaseUnitTest {
         doThrow(new IllegalStateException("The provider cannot be reached"))
                 .when(assignments)
                 .syncSources(job, "review-ready-work");
-        when(assignments.start(job, "review-ready-work")).thenReturn(false);
+        when(assignments.startCurrentness(job, "review-ready-work")).thenReturn(Currentness.UNVERIFIABLE);
+        when(assignments.start(job, "review-ready-work", Currentness.UNVERIFIABLE))
+                .thenReturn(false);
 
         var started = service.start(identity(), new PracticeStartRequestDTO("review-ready-work"));
 
         assertThat(started.current()).isFalse();
-        verify(assignments).start(job, "review-ready-work");
+        verify(assignments).start(job, "review-ready-work", Currentness.UNVERIFIABLE);
     }
 
     @Test
