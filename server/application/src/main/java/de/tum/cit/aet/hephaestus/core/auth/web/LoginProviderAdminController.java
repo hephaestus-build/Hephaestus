@@ -43,7 +43,7 @@ import org.springframework.web.bind.annotation.RestController;
 @ConditionalOnServerRole
 @RestController
 @RequestMapping("/admin/login-providers")
-@Tag(name = "Admin", description = "Instance-admin login provider management")
+@Tag(name = "Admin")
 @RequireInstanceAdmin
 public class LoginProviderAdminController {
 

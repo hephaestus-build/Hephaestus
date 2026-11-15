@@ -18,7 +18,7 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @RestController
 @RequestMapping("/admin/workspaces")
-@Tag(name = "Admin", description = "Instance-admin account management")
+@Tag(name = "Admin")
 @RequireInstanceAdmin
 @WorkspaceAgnostic("Instance-admin cross-tenant overview; authorized by app_admin, not workspace context")
 public class WorkspaceAdminController {

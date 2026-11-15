@@ -28,7 +28,7 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @ConditionalOnServerRole
 @RestController
-@Tag(name = "Auth discovery", description = "Identity provider discovery (public)")
+@Tag(name = "Auth discovery")
 public class IdentityProviderDiscoveryController {
 
     /** Synthetic registration id + provider type for the optional passwordless dev sign-in row. */
