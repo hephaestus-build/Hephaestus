@@ -119,7 +119,7 @@ export function OutlineConnectCard({
 				</CardHeader>
 
 				<CardContent className="space-y-4">
-					{connected ? (
+					{connected && (
 						<>
 							{/* Which Outline instance is linked — the one fact the connection plane above doesn't
 							    carry. The green check is a claim that syncing works, so it is spent only on ACTIVE;
@@ -151,58 +151,60 @@ export function OutlineConnectCard({
 								</p>
 							)}
 						</>
-					) : notEnabled ? (
-						<WorkspaceIntegrationNotEnabled displayName="Outline" doc="outlineIntegration" />
-					) : (
-						<FieldGroup>
-							<Field data-invalid={serverUrlInvalid}>
-								<FieldLabel htmlFor="outline-server-url">Server URL</FieldLabel>
-								<Input
-									id="outline-server-url"
-									value={serverUrl}
-									disabled={isConnecting}
-									onChange={(e) => setServerUrl(e.target.value)}
-									// Placeholder, never a default value: a prefilled cloud URL would ship a
-									// self-hoster's token to Outline Cloud if they only pasted the token.
-									placeholder={CLOUD_SERVER_URL}
-									autoComplete="off"
-									aria-invalid={serverUrlInvalid}
-								/>
-								<FieldDescription>
-									Your Outline host. Use <code>{CLOUD_SERVER_URL}</code> for Outline Cloud, or your
-									self-hosted URL.
-								</FieldDescription>
-								{serverUrlInvalid && <FieldError>Enter an https:// URL.</FieldError>}
-							</Field>
-
-							<Field>
-								<FieldLabel htmlFor="outline-token">API token</FieldLabel>
-								<Input
-									id="outline-token"
-									type="password"
-									value={token}
-									disabled={isConnecting}
-									onChange={(e) => setToken(e.target.value)}
-									placeholder="ol_api_…"
-									autoComplete="off"
-								/>
-								<FieldDescription>
-									Create it in Outline under <em>Settings → API Keys</em>.
-								</FieldDescription>
-							</Field>
-
-							{hasText(errorMessage) && <FieldError>{errorMessage}</FieldError>}
-
-							<Button
-								pending={isConnecting}
-								onClick={() => onConnect({ serverUrl: serverUrl.trim(), token: token.trim() })}
-								disabled={!canConnect}
-								className="w-full"
-							>
-								{isConnecting ? "Connecting…" : "Connect Outline"}
-							</Button>
-						</FieldGroup>
 					)}
+					{!connected &&
+						(notEnabled ? (
+							<WorkspaceIntegrationNotEnabled displayName="Outline" doc="outlineIntegration" />
+						) : (
+							<FieldGroup>
+								<Field data-invalid={serverUrlInvalid}>
+									<FieldLabel htmlFor="outline-server-url">Server URL</FieldLabel>
+									<Input
+										id="outline-server-url"
+										value={serverUrl}
+										disabled={isConnecting}
+										onChange={(e) => setServerUrl(e.target.value)}
+										// Placeholder, never a default value: a prefilled cloud URL would ship a
+										// self-hoster's token to Outline Cloud if they only pasted the token.
+										placeholder={CLOUD_SERVER_URL}
+										autoComplete="off"
+										aria-invalid={serverUrlInvalid}
+									/>
+									<FieldDescription>
+										Your Outline host. Use <code>{CLOUD_SERVER_URL}</code> for Outline Cloud, or
+										your self-hosted URL.
+									</FieldDescription>
+									{serverUrlInvalid && <FieldError>Enter an https:// URL.</FieldError>}
+								</Field>
+
+								<Field>
+									<FieldLabel htmlFor="outline-token">API token</FieldLabel>
+									<Input
+										id="outline-token"
+										type="password"
+										value={token}
+										disabled={isConnecting}
+										onChange={(e) => setToken(e.target.value)}
+										placeholder="ol_api_…"
+										autoComplete="off"
+									/>
+									<FieldDescription>
+										Create it in Outline under <em>Settings → API Keys</em>.
+									</FieldDescription>
+								</Field>
+
+								{hasText(errorMessage) && <FieldError>{errorMessage}</FieldError>}
+
+								<Button
+									pending={isConnecting}
+									onClick={() => onConnect({ serverUrl: serverUrl.trim(), token: token.trim() })}
+									disabled={!canConnect}
+									className="w-full"
+								>
+									{isConnecting ? "Connecting…" : "Connect Outline"}
+								</Button>
+							</FieldGroup>
+						))}
 				</CardContent>
 
 				{connected && (
