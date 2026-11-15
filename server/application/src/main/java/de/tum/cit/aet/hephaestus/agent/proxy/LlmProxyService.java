@@ -27,6 +27,7 @@ import java.time.Instant;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
@@ -49,6 +50,7 @@ import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientRequestException;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 import reactor.netty.Connection;
 import reactor.netty.http.client.HttpClientRequest;
 import tools.jackson.core.JacksonException;
@@ -322,8 +324,9 @@ class LlmProxyService {
     private static boolean absorbs(UpstreamResult upstream, Duration asked, Instant absorbUntil) {
         byte[] body = upstream.body();
         if (upstream.streamOutcome() != null || body == null) return false;
-        if (upstream.status() == 503 && RetryAfter.parse(upstream.headers(), Instant.now()) == null) return false;
-        return !Instant.now().plus(asked).isAfter(absorbUntil);
+        Instant now = now();
+        if (upstream.status() == 503 && RetryAfter.parse(upstream.headers(), now) == null) return false;
+        return !now.plus(asked).isAfter(absorbUntil);
     }
 
     private @Nullable ResponseEntity<?> forward(
@@ -370,8 +373,7 @@ class LlmProxyService {
             // A provider's limit should slow a call, not fail it. It must still be heard: past this, or when the
             // provider
             // asks for longer, its answer reaches the caller as the failure it is.
-            Instant absorbUntil =
-                    Instant.now().plus(routing.conversationTurn() ? TURN_ABSORB_WINDOW : REVIEW_ABSORB_WINDOW);
+            Instant absorbUntil = now().plus(routing.conversationTurn() ? TURN_ABSORB_WINDOW : REVIEW_ABSORB_WINDOW);
             ResponseEntity<?> answer;
             do {
                 answer = forwardWithinScanBudget(
@@ -821,7 +823,7 @@ class LlmProxyService {
             ProxyStreamUsageTap tap,
             @Nullable Instant deadline,
             boolean reviewStream) {
-        Duration limit = exchangeWait(deadline, reviewStream);
+        Duration limit = exchangeWait(deadline, reviewStream, now());
         tap.sending();
         span.event("upstream.request");
         Bounds bounds = exchange.bounds();
@@ -882,10 +884,10 @@ class LlmProxyService {
      * stream gets the attempt's remaining work time, however long; every other call of the attempt the shorter of
      * that and the proxy's own ceiling.
      */
-    static Duration exchangeWait(@Nullable Instant deadline, boolean reviewStream) {
+    static Duration exchangeWait(@Nullable Instant deadline, boolean reviewStream, Instant now) {
         if (deadline == null) return CONVERSATION_CALL_CEILING;
         Duration ceiling = BLOCK_TIMEOUT.plus(ProxyStreamingUtils.DEFAULT_SSE_TIMEOUT);
-        Duration remaining = ProxyStreamingUtils.remainingUntil(deadline);
+        Duration remaining = ProxyStreamingUtils.remainingUntil(deadline, now);
         return reviewStream || remaining.compareTo(ceiling) < 0 ? remaining : ceiling;
     }
 
@@ -900,7 +902,15 @@ class LlmProxyService {
     /** Whether the job attempt's work time is over. A conversation turn has no work deadline. */
     private static boolean workTimeOver(ProxyRouting routing) {
         Instant deadline = routing.workDeadline();
-        return deadline != null && !Instant.now().isBefore(deadline);
+        return deadline != null && !now().isBefore(deadline);
+    }
+
+    /**
+     * The time on the clock of the parallel scheduler, which also runs the timer that ends an exchange at its work
+     * deadline. A check of the deadline and the timer that enforces it thus read one clock.
+     */
+    private static Instant now() {
+        return Instant.ofEpochMilli(Schedulers.parallel().now(TimeUnit.MILLISECONDS));
     }
 
     // Not 429 or 5xx, so neither the runner nor a model client asks again; the words avoid what retry classifiers read.

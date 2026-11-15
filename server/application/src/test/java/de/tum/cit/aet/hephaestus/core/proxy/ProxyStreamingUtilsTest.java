@@ -796,9 +796,10 @@ class ProxyStreamingUtilsTest extends BaseUnitTest {
         @Test
         @DisplayName("a far deadline keeps all of its time; a passed one leaves none")
         void shouldGiveAFarDeadlineAllOfItsTimeAndAPassedOneNone() {
-            assertThat(ProxyStreamingUtils.remainingUntil(Instant.now().plus(Duration.ofHours(3))))
-                    .isGreaterThan(ProxyStreamingUtils.DEFAULT_SSE_TIMEOUT);
-            assertThat(ProxyStreamingUtils.remainingUntil(Instant.now().minusSeconds(5)))
+            Instant now = Instant.parse("2026-01-01T00:00:00Z");
+            assertThat(ProxyStreamingUtils.remainingUntil(now.plus(Duration.ofHours(3)), now))
+                    .isEqualTo(Duration.ofHours(3));
+            assertThat(ProxyStreamingUtils.remainingUntil(now.minusSeconds(5), now))
                     .isZero();
         }
     }

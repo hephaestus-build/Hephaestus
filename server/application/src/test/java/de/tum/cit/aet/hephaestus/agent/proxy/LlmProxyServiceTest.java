@@ -75,7 +75,6 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -618,27 +617,39 @@ class LlmProxyServiceTest extends BaseUnitTest {
         }
 
         /**
-         * One call of {@code routing} whose provider body is {@code provider}, with the idle bound on virtual time.
-         * Virtual time moves only when the test advances it, after {@link #relayed()}, so no chunk is ever late and no
-         * bound fires early, however slowly the test runs.
+         * One call to {@code client} on virtual time: the proxy's idle bound, its deadline timer and its deadline checks
+         * all read the parallel scheduler's clock, which the virtual one replaces.
+         * Virtual time moves only when the test advances it, after the proxy reached the point the test waits for, so
+         * no chunk is ever late and no bound or deadline passes early, however slowly the test runs.
          */
         private final class VirtualCall implements AutoCloseable {
             final VirtualTimeScheduler time = VirtualTimeScheduler.getOrSet();
             private final ExecutorService caller = Executors.newSingleThreadExecutor();
             private final Semaphore flushed = new Semaphore(0);
-            private final MockHttpServletResponse response = flushCounting(flushed);
-            private final Future<?> call;
+            final MockHttpServletResponse response = flushCounting(flushed);
+            private final CompletableFuture<@Nullable ResponseEntity<?>> answer = new CompletableFuture<>();
 
-            VirtualCall(ProxyRouting routing, Flux<DataBuffer> provider) {
-                AtomicBoolean consumed = new AtomicBoolean();
-                // An HTTP body is consumed once; the client's cleanup after a failure must not subscribe to it again.
-                Flux<DataBuffer> body = Flux.defer(() -> consumed.compareAndSet(false, true) ? provider : Flux.empty());
-                streamingController = controllerWith(answering(new AtomicInteger(), body), Tracer.NOOP, IDLE_ONLY);
+            VirtualCall(WebClient client, ConversationCallProperties silence) {
+                streamingController = controllerWith(client, Tracer.NOOP, silence);
+            }
+
+            /** The virtual time now, as the proxy reads it. */
+            Instant now() {
+                return Instant.ofEpochMilli(time.now(TimeUnit.MILLISECONDS));
+            }
+
+            void start(ProxyRouting routing) {
                 stubStreamCredential(routing);
-                call = caller.submit(() -> {
+                caller.execute(() -> {
                     authenticate(routing);
                     try {
-                        controllerProxy(response);
+                        answer.complete(streamingController.proxy(
+                                request("POST", "/internal/llm/chat/completions"),
+                                response,
+                                new HttpHeaders(),
+                                STREAM_REQUEST));
+                    } catch (RuntimeException | Error failure) {
+                        answer.completeExceptionally(failure);
                     } finally {
                         SecurityContextHolder.clearContext();
                     }
@@ -653,9 +664,9 @@ class LlmProxyServiceTest extends BaseUnitTest {
                 assertThat(flushed.tryAcquire(10, TimeUnit.SECONDS)).isTrue();
             }
 
-            MockHttpServletResponse finished() throws Exception {
-                call.get(10, TimeUnit.SECONDS);
-                return response;
+            @Nullable
+            ResponseEntity<?> finished() throws Exception {
+                return answer.get(10, TimeUnit.SECONDS);
             }
 
             @Override
@@ -672,13 +683,39 @@ class LlmProxyServiceTest extends BaseUnitTest {
             }
         }
 
+        /** A provider whose one answer streams {@code body}. */
+        private WebClient streaming(Flux<DataBuffer> body) {
+            AtomicBoolean consumed = new AtomicBoolean();
+            // An HTTP body is consumed once; the client's cleanup after a failure must not subscribe to it again.
+            return answering(
+                    new AtomicInteger(), Flux.defer(() -> consumed.compareAndSet(false, true) ? body : Flux.empty()));
+        }
+
+        /**
+         * A provider that answers its requests with {@code answers} in turn and releases {@code requested} as each one
+         * arrives. The proxy has started its deadline's timer by then, so virtual time may move.
+         */
+        @SafeVarargs
+        private static WebClient answeringInTurn(Semaphore requested, Mono<ClientResponse>... answers) {
+            AtomicInteger next = new AtomicInteger();
+            return WebClient.builder()
+                    .exchangeFunction(request -> {
+                        Mono<ClientResponse> answer = answers[next.getAndIncrement()];
+                        requested.release();
+                        return answer;
+                    })
+                    .build();
+        }
+
         /** What a call of {@code routing} relayed when its provider sent {@code sent}, then nothing for the idle bound. */
         private MockHttpServletResponse stalledAfter(ProxyRouting routing, String sent) throws Exception {
             try (VirtualCall call =
-                    new VirtualCall(routing, Flux.just(sse(sent)).concatWith(Flux.never()))) {
+                    new VirtualCall(streaming(Flux.just(sse(sent)).concatWith(Flux.never())), IDLE_ONLY)) {
+                call.start(routing);
                 call.relayed();
                 call.time.advanceTimeBy(CONVERSATION_IDLE);
-                return call.finished();
+                call.finished();
+                return call.response;
             }
         }
 
@@ -774,8 +811,8 @@ class LlmProxyServiceTest extends BaseUnitTest {
         void keepAliveCommentsKeepASlowConversationCallAlive() throws Exception {
             // Each comment comes 100 ms inside the idle bound; together they span nearly 4 idle bounds.
             Sinks.Many<DataBuffer> provider = Sinks.many().unicast().onBackpressureBuffer();
-            try (VirtualCall call =
-                    new VirtualCall(conversationTurnRouting(upstream.url("/v1").toString()), provider.asFlux())) {
+            try (VirtualCall call = new VirtualCall(streaming(provider.asFlux()), IDLE_ONLY)) {
+                call.start(conversationTurnRouting(upstream.url("/v1").toString()));
                 for (int comment = 0; comment < 5; comment++) {
                     provider.emitNext(sse(": scheduled\n\n"), Sinks.EmitFailureHandler.FAIL_FAST);
                     call.relayed();
@@ -786,7 +823,8 @@ class LlmProxyServiceTest extends BaseUnitTest {
                         Sinks.EmitFailureHandler.FAIL_FAST);
                 provider.emitComplete(Sinks.EmitFailureHandler.FAIL_FAST);
 
-                assertThat(call.finished().getContentAsString())
+                call.finished();
+                assertThat(call.response.getContentAsString())
                         .contains("late answer")
                         .contains("[DONE]")
                         .doesNotContain("upstream_stalled");
@@ -1894,60 +1932,56 @@ class LlmProxyServiceTest extends BaseUnitTest {
 
         @Test
         @DisplayName("a deadline that passes before the headers writes nothing, bills nothing, and is refused")
-        void aDeadlineBeforeTheHeadersWritesNothing() {
-            upstream.enqueue(new MockResponse.Builder()
-                    .code(200)
-                    .addHeader("Content-Type", "text/event-stream")
-                    .headersDelay(4, TimeUnit.SECONDS)
-                    .body(USAGE_FRAME)
-                    .build());
-            ProxyRouting routing = streamingRouting(Instant.now().plusSeconds(1));
-            stubStreamCredential(routing);
-            MockHttpServletResponse response = new MockHttpServletResponse();
+        void aDeadlineBeforeTheHeadersWritesNothing() throws Exception {
+            Semaphore requested = new Semaphore(0);
+            try (VirtualCall call = new VirtualCall(answeringInTurn(requested, Mono.never()), SILENCE_NEVER_REACHED)) {
+                call.start(streamingRouting(call.now().plusSeconds(1)));
+                assertThat(requested.tryAcquire(10, TimeUnit.SECONDS)).isTrue();
+                call.time.advanceTimeBy(Duration.ofSeconds(1));
 
-            var result = proxyReview(routing, response);
+                var result = call.finished();
 
-            assertThat(result).isNotNull();
-            assertThat(result.getStatusCode().value()).isEqualTo(403);
-            assertThat(result.getBody()).isEqualTo(LlmProxyService.WORK_TIME_OVER);
-            // The stream that answers later cannot take the response over: no status, header or byte of it.
-            assertThat(response.isCommitted()).isFalse();
-            assertThat(response.getContentAsByteArray()).isEmpty();
-            assertThat(response.getHeader("X-Accel-Buffering")).isNull();
-            verify(callLedger).complete(any(), eq(CALL), isNull(), any());
-            assertThat(missingUsage()).isZero();
-            assertThat(upstream.getRequestCount()).isEqualTo(1);
+                assertThat(result).isNotNull();
+                assertThat(result.getStatusCode().value()).isEqualTo(403);
+                assertThat(result.getBody()).isEqualTo(LlmProxyService.WORK_TIME_OVER);
+                // Nothing reached the client: no status, header or byte.
+                assertThat(call.response.isCommitted()).isFalse();
+                assertThat(call.response.getContentAsByteArray()).isEmpty();
+                assertThat(call.response.getHeader("X-Accel-Buffering")).isNull();
+                verify(callLedger).complete(any(), eq(CALL), isNull(), any());
+                assertThat(missingUsage()).isZero();
+                assertThat(requested.availablePermits()).isZero();
+            }
         }
 
         @Test
         @DisplayName("the retry without stream_options gets what is left of the deadline, not a new window")
-        void theUsageRetryGetsWhatIsLeftOfTheDeadline() {
-            upstream.enqueue(new MockResponse.Builder()
-                    .code(400)
-                    .addHeader("Content-Type", "application/json")
-                    .headersDelay(1, TimeUnit.SECONDS)
-                    .body("{\"error\":{\"message\":\"Unrecognized request argument: stream_options\"}}")
-                    .build());
-            upstream.enqueue(new MockResponse.Builder()
-                    .code(200)
-                    .addHeader("Content-Type", "text/event-stream")
-                    .headersDelay(3, TimeUnit.SECONDS)
-                    .body(USAGE_FRAME)
-                    .build());
-            Instant deadline = Instant.now().plusSeconds(2);
-            ProxyRouting routing = streamingRouting(deadline);
-            stubStreamCredential(routing);
-            MockHttpServletResponse response = new MockHttpServletResponse();
+        void theUsageRetryGetsWhatIsLeftOfTheDeadline() throws Exception {
+            Semaphore requested = new Semaphore(0);
+            Sinks.One<ClientResponse> refusal = Sinks.one();
+            try (VirtualCall call = new VirtualCall(
+                    answeringInTurn(requested, refusal.asMono(), Mono.never()), SILENCE_NEVER_REACHED)) {
+                call.start(streamingRouting(call.now().plusSeconds(2)));
+                assertThat(requested.tryAcquire(10, TimeUnit.SECONDS)).isTrue();
+                call.time.advanceTimeBy(Duration.ofSeconds(1));
+                refusal.emitValue(
+                        ClientResponse.create(HttpStatusCode.valueOf(400))
+                                .header(HttpHeaders.CONTENT_TYPE, "application/json")
+                                .body("{\"error\":{\"message\":\"Unrecognized request argument: stream_options\"}}")
+                                .build(),
+                        Sinks.EmitFailureHandler.FAIL_FAST);
+                assertThat(requested.tryAcquire(10, TimeUnit.SECONDS)).isTrue();
+                // The deadline is now 1 s away; a new window would keep the retry open for 2 s.
+                call.time.advanceTimeBy(Duration.ofSeconds(1));
 
-            var result = proxyReview(routing, response);
+                var result = call.finished();
 
-            // A fresh window would have waited out the 3 s headers and served the stream.
-            assertThat(result).isNotNull();
-            assertThat(result.getStatusCode().value()).isEqualTo(403);
-            assertThat(Instant.now()).isBefore(deadline.plusSeconds(2));
-            assertThat(upstream.getRequestCount()).isEqualTo(2);
-            assertThat(response.isCommitted()).isFalse();
-            verify(callLedger).complete(any(), eq(CALL), isNull(), any());
+                assertThat(result).isNotNull();
+                assertThat(result.getStatusCode().value()).isEqualTo(403);
+                assertThat(requested.availablePermits()).isZero();
+                assertThat(call.response.isCommitted()).isFalse();
+                verify(callLedger).complete(any(), eq(CALL), isNull(), any());
+            }
         }
 
         /** One SSE answer to every request, counting them; its body is the given one. */
@@ -2300,14 +2334,14 @@ class LlmProxyServiceTest extends BaseUnitTest {
     @DisplayName("a review stream may wait all of its remaining work time; other job calls keep the proxy ceiling")
     void shouldGiveAReviewStreamItsRemainingWorkTimeWithoutTheOldStreamCap() {
         Duration ceiling = Duration.ofSeconds(910);
-        Instant longJob = Instant.now().plus(Duration.ofHours(3));
+        Instant now = Instant.parse("2026-01-01T00:00:00Z");
+        Instant longJob = now.plus(Duration.ofHours(3));
 
-        assertThat(LlmProxyService.exchangeWait(longJob, true)).isGreaterThan(Duration.ofHours(2));
-        assertThat(LlmProxyService.exchangeWait(longJob, false)).isEqualTo(ceiling);
-        assertThat(LlmProxyService.exchangeWait(Instant.now().plusSeconds(10), false))
-                .isLessThanOrEqualTo(Duration.ofSeconds(10));
-        assertThat(LlmProxyService.exchangeWait(Instant.now().minusSeconds(1), true))
-                .isZero();
+        assertThat(LlmProxyService.exchangeWait(longJob, true, now)).isEqualTo(Duration.ofHours(3));
+        assertThat(LlmProxyService.exchangeWait(longJob, false, now)).isEqualTo(ceiling);
+        assertThat(LlmProxyService.exchangeWait(now.plusSeconds(10), false, now))
+                .isEqualTo(Duration.ofSeconds(10));
+        assertThat(LlmProxyService.exchangeWait(now.minusSeconds(1), true, now)).isZero();
     }
 
     @Test
@@ -2317,8 +2351,8 @@ class LlmProxyServiceTest extends BaseUnitTest {
         // The dispatcher's tick (5 s) and the host's stop grace (30 s) end the turn before the call's own bound.
         Duration stopped = turnCeiling.plusSeconds(5).plusSeconds(30);
 
-        assertThat(LlmProxyService.exchangeWait(null, true)).isGreaterThan(stopped);
-        assertThat(LlmProxyService.exchangeWait(null, false)).isGreaterThan(stopped);
+        assertThat(LlmProxyService.exchangeWait(null, true, Instant.EPOCH)).isGreaterThan(stopped);
+        assertThat(LlmProxyService.exchangeWait(null, false, Instant.EPOCH)).isGreaterThan(stopped);
     }
 
     @Nested

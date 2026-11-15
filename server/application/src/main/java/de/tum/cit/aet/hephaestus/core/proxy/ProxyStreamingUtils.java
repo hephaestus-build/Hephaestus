@@ -386,9 +386,9 @@ public final class ProxyStreamingUtils {
         }
     }
 
-    /** The time from now until {@code deadline}; zero once it has passed, never a fresh allowance. */
-    public static Duration remainingUntil(Instant deadline) {
-        Duration remaining = Duration.between(Instant.now(), deadline);
+    /** The time from {@code now} until {@code deadline}; zero once it has passed, never a fresh allowance. */
+    public static Duration remainingUntil(Instant deadline, Instant now) {
+        Duration remaining = Duration.between(now, deadline);
         return remaining.isNegative() ? Duration.ZERO : remaining;
     }
 
