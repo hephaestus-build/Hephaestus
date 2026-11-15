@@ -33,10 +33,10 @@ function WorkCard({ preview }: { preview: ActionPreview }) {
 			<dt className="text-muted-foreground">Work</dt>
 			<dd className="min-w-0 break-words">
 				<span className="font-medium">
-					{item.container === null ? "" : `${item.container} `}
+					{item.container == null ? "" : `${item.container} `}
 					{item.label}
 				</span>
-				{item.title === null ? null : (
+				{item.title == null ? null : (
 					<span className="block text-muted-foreground">{item.title}</span>
 				)}
 			</dd>

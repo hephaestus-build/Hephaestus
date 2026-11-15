@@ -89,7 +89,7 @@ export const UnclaimedAccount: Story = {
 const erinWhoLeft = membership(
 	memberAccount("21", {
 		displayName: "Erin Former",
-		identities: [{ provider: "GITHUB", login: "erin", displayName: null, avatarUrl: null }],
+		identities: [{ provider: "GITHUB", login: "erin" }],
 	}),
 	{ leftAt: new Date("2026-06-30T12:00:00Z") },
 );
@@ -151,7 +151,7 @@ function grace(publicActivityAnswered: boolean) {
 		membership(
 			memberAccount("31", {
 				displayName: "Grace Hopper",
-				identities: [{ provider: "GITHUB", login: "grace", displayName: null, avatarUrl: null }],
+				identities: [{ provider: "GITHUB", login: "grace" }],
 			}),
 			{ publicActivityAnswered },
 		),
@@ -411,9 +411,7 @@ export const ManyMembers: Story = {
 				membership(
 					memberAccount(String(i + 100), {
 						displayName: `User ${String(i + 1).padStart(2, "0")}`,
-						identities: [
-							{ provider: "GITHUB", login: `user${i + 1}`, displayName: null, avatarUrl: null },
-						],
+						identities: [{ provider: "GITHUB", login: `user${i + 1}` }],
 					}),
 				),
 			),

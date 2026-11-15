@@ -346,7 +346,9 @@ function ResultRow({
 				{/* An admin's mark belongs with the outcome it qualifies. */}
 				<span className="flex flex-col items-start gap-1">
 					<ResultOutcome outcome={result.outcome} plain={plainState} />
-					{result.markedIncorrectAt !== null && <StatusBadge def={RESULT_MARK_DEFS.INCORRECT} />}
+					{result.markedIncorrectAt !== undefined && (
+						<StatusBadge def={RESULT_MARK_DEFS.INCORRECT} />
+					)}
 				</span>
 			</TableCell>
 			<TableCell className="text-right align-middle whitespace-normal">

@@ -45,7 +45,7 @@ export function reviewedAt(context: Pick<ReadyContext, "trace">): string | undef
 	const review = context.trace?.review;
 	return review !== undefined &&
 		(review.status === "COMPLETE" || review.status === "PARTIAL") &&
-		review.completedAt !== null
+		review.completedAt != null
 		? review.completedAt
 		: undefined;
 }

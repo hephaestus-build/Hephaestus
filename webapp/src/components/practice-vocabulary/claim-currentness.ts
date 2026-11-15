@@ -7,7 +7,12 @@ export type Currentness = ResultList["currentness"];
  * Whether an observation still describes the work. An unverifiable one also says why it cannot be
  * checked, and when its capture read the work.
  */
-export type Freshness = Pick<ResultList, "currentness" | "unverifiableReason" | "capturedAt">;
+export interface Freshness {
+	currentness: ResultList["currentness"];
+	/** A listed result leaves a missing value out; a detail read still sends null. */
+	unverifiableReason?: ResultList["unverifiableReason"] | null;
+	capturedAt?: ResultList["capturedAt"] | null;
+}
 
 export interface CurrentnessCopy {
 	badge: string;

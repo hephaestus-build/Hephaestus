@@ -27,8 +27,8 @@ export type AccountAiChoiceRequest = {
 export type AccountAppRole = "USER" | "APP_ADMIN";
 
 export type AccountRef = {
-	avatarUrl: string | null;
-	displayName: string | null;
+	avatarUrl?: string;
+	displayName?: string;
 	id: string;
 	identities: Array<ProviderIdentityRef>;
 	status: AccountStatus;
@@ -1783,19 +1783,19 @@ export type DeliveredFeedbackPractice = {
 
 export type DeliveredWorkFeedback = {
 	feedback: Array<DeliveredWorkFeedbackItem>;
-	item: ItemRef | null;
+	item?: ItemRef;
 };
 
 export type DeliveredWorkFeedbackCopy = {
-	endLine: null | number;
-	externalRef: string | null;
-	externalUrl: string | null;
+	endLine?: number;
+	externalRef?: string;
+	externalUrl?: string;
 	id: string;
 	kind: FeedbackCopyKind;
-	path: string | null;
+	path?: string;
 	postedAt: string;
-	side: CitationSide | null;
-	startLine: null | number;
+	side?: CitationSide;
+	startLine?: number;
 };
 
 export type DeliveredWorkFeedbackItem = {
@@ -2117,10 +2117,10 @@ export type FeedbackRequest = {
 export type FeedbackResolution = "ADDRESSED" | "DISAGREE" | "NOT_APPLICABLE";
 
 export type FeedbackResponse = {
-	comment: string | null;
-	createdAt: string | null;
-	resolution: FeedbackResolution | null;
-	usefulness: FeedbackUsefulness | null;
+	comment?: string;
+	createdAt?: string;
+	resolution?: FeedbackResolution;
+	usefulness?: FeedbackUsefulness;
 };
 
 /**
@@ -2728,16 +2728,16 @@ export type ItemFacts = {
 };
 
 export type ItemRef = {
-	container: string | null;
+	container?: string;
 	id: string;
 	kind: string;
 	label: string;
-	parentId: string | null;
-	path: string | null;
-	provider: IntegrationKind | null;
-	removedAt: string | null;
-	title: string | null;
-	url: string | null;
+	parentId?: string;
+	path?: string;
+	provider?: IntegrationKind;
+	removedAt?: string;
+	title?: string;
+	url?: string;
 };
 
 export type ItemTrace = {
@@ -3985,7 +3985,7 @@ export type OverviewWindow = {
 };
 
 export type OwnFeedbackCopyRef = {
-	externalUrl: string | null;
+	externalUrl?: string;
 	id: string;
 	kind: FeedbackCopyKind;
 	postedAt: string;
@@ -3993,10 +3993,10 @@ export type OwnFeedbackCopyRef = {
 
 export type OwnFeedbackRef = {
 	copies: Array<OwnFeedbackCopyRef>;
-	deliveredAt: string | null;
+	deliveredAt?: string;
 	destination: FeedbackDestination;
 	id: string;
-	response: FeedbackResponse | null;
+	response?: FeedbackResponse;
 	state: FeedbackState;
 };
 
@@ -4761,17 +4761,17 @@ export type ProductFeedbackSharing = {
 
 export type ProfileChange = {
 	at: string;
-	cleanNeeded: null | number;
-	direction: ProfileChangeDirection | null;
+	cleanNeeded?: number;
+	direction?: ProfileChangeDirection;
 	evidence: Array<ItemRef>;
-	feedbackId: string | null;
-	from: string | null;
-	groupName: string | null;
-	groupSlug: string | null;
-	practiceName: string | null;
-	practiceSlug: string | null;
-	resolvedBy: ProfileChangeResolvedBy | null;
-	to: string | null;
+	feedbackId?: string;
+	from?: string;
+	groupName?: string;
+	groupSlug?: string;
+	practiceName?: string;
+	practiceSlug?: string;
+	resolvedBy?: ProfileChangeResolvedBy;
+	to?: string;
 	type: ProfileChangeType;
 };
 
@@ -4819,9 +4819,9 @@ export type ProfileReviewRef = {
 };
 
 export type ProviderIdentityRef = {
-	avatarUrl: string | null;
-	displayName: string | null;
-	login: string | null;
+	avatarUrl?: string;
+	displayName?: string;
+	login?: string;
 	provider: "GITHUB" | "GITLAB" | "SLACK" | "OUTLINE";
 };
 
@@ -5369,15 +5369,15 @@ export type ResultExample = {
 };
 
 export type ResultList = {
-	acceptedAt: string | null;
+	acceptedAt?: string;
 	/**
-	 * When the observation's capture read the work: the work as of that time. A later check that found the work unchanged is not recorded. Null when the capture record is missing.
+	 * When the observation's capture read the work: the work as of that time. A later check that found the work unchanged is not recorded. Absent when the capture record is missing.
 	 */
-	capturedAt: string | null;
+	capturedAt?: string;
 	currentness: Currentness;
 	id: string;
 	item: ItemRef;
-	markedIncorrectAt: string | null;
+	markedIncorrectAt?: string;
 	origin: ReviewOrigin;
 	outcome: ResultOutcome;
 	practiceName: string;
@@ -5385,12 +5385,12 @@ export type ResultList = {
 	problems: Array<ProblemSummary>;
 	recordedAt: string;
 	reviewId: string;
-	severity: Severity | null;
-	summary: string | null;
+	severity?: Severity;
+	summary?: string;
 	/**
-	 * Why an unverifiable observation cannot be checked against the work; null unless currentness is UNVERIFIABLE.
+	 * Why an unverifiable observation cannot be checked against the work; absent unless currentness is UNVERIFIABLE.
 	 */
-	unverifiableReason: UnverifiableReason | null;
+	unverifiableReason?: UnverifiableReason;
 };
 
 export type ResultMark = {
@@ -5533,8 +5533,8 @@ export type ReviewCadence = "DAILY" | "WEEKLY";
 
 export type ReviewContext = {
 	canInspectReviewDetails: boolean;
-	item: ItemRef | null;
-	reasonDescription: string | null;
+	item?: ItemRef;
+	reasonDescription?: string;
 	requestAllowed: boolean;
 	workspaceId: string;
 	workspaceSlug: string;
@@ -5882,19 +5882,19 @@ export type ReviewReadinessBlocker =
 	| "ON_REQUEST_ONLY";
 
 export type ReviewRef = {
-	completedAt: string | null;
+	completedAt?: string;
 	createdAt: string;
 	id: string;
 	item: ItemRef;
-	itemVersion: string | null;
+	itemVersion?: string;
 	kind: ReviewKind;
 	origin: ReviewOrigin;
 	status: ReviewStatus;
 };
 
 export type ReviewRequestOutcome = {
-	reason: ReviewRequestReason | null;
-	reviewId: string | null;
+	reason?: ReviewRequestReason;
+	reviewId?: string;
 	status: ReviewRequestStatus;
 };
 
@@ -6289,12 +6289,12 @@ export type ScanAvailability = {
 export type ScanCounts = {
 	couldNotDetermine: number;
 	doesNotApply: number;
-	files: null | number;
+	files?: number;
 	met: number;
 	notMet: number;
 	notReviewed: number;
 	openProblems: number;
-	practiceItemPairs: null | number;
+	practiceItemPairs?: number;
 	problems: number;
 	reused: number;
 	reviewed: number;
@@ -6310,10 +6310,10 @@ export type ScanDefinition = {
 };
 
 export type ScanDetail = {
-	baselineScanId: string | null;
+	baselineScanId?: string;
 	budgetUsd: string;
 	chargedCostUsd: string | null;
-	completedAt: string | null;
+	completedAt?: string;
 	counts: ScanCounts;
 	createdAt: string;
 	id: string;
@@ -6324,10 +6324,10 @@ export type ScanDetail = {
 	progress: ScanProgress;
 	ref: string;
 	repository: ItemRef;
-	requestedBy: AccountRef | null;
-	startedAt: string | null;
+	requestedBy?: AccountRef;
+	startedAt?: string;
 	status: ReviewStatus;
-	stopReason: ReviewStopReason | null;
+	stopReason?: ReviewStopReason;
 };
 
 export type ScanExcludedFile = {
@@ -6407,8 +6407,8 @@ export type ScanReportProblem = {
 };
 
 export type ScanSummary = {
-	baselineScanId: string | null;
-	completedAt: string | null;
+	baselineScanId?: string;
+	completedAt?: string;
 	counts: ScanCounts;
 	createdAt: string;
 	id: string;
@@ -6417,10 +6417,10 @@ export type ScanSummary = {
 	practiceCount: number;
 	ref: string;
 	repository: ItemRef;
-	requestedBy: AccountRef | null;
-	startedAt: string | null;
+	requestedBy?: AccountRef;
+	startedAt?: string;
 	status: ReviewStatus;
-	stopReason: ReviewStopReason | null;
+	stopReason?: ReviewStopReason;
 };
 
 export type ScriptKind = "BUILTIN" | "CUSTOM";

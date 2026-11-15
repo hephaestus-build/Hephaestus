@@ -332,7 +332,7 @@ function Note({ title, children }: { title: string; children: ReactNode }) {
 function StoppedNote({ scan, nothingCounted }: { scan: ScanDetail; nothingCounted: boolean }) {
 	const failed = scan.status === "FAILED";
 	const reason =
-		scan.stopReason === null ? "" : ` ${REVIEW_STOP_REASON_SENTENCES[scan.stopReason]}`;
+		scan.stopReason === undefined ? "" : ` ${REVIEW_STOP_REASON_SENTENCES[scan.stopReason]}`;
 	return (
 		<Alert variant={failed ? "destructive" : "warning"}>
 			<AlertCircleIcon />

@@ -25,14 +25,15 @@ export type DeliveryFacts = Pick<
 	"destination" | "state" | "stopReason" | "withdrawn" | "deliveredAt"
 >;
 
-type PartialFacts = Pick<ReviewFeedback, "destination" | "state" | "deliveredAt">;
+// The developer's own feedback leaves out a missing delivery time; the admin's review feedback sends null.
+type PartialFacts = Pick<ReviewFeedback, "destination" | "state"> & { deliveredAt?: Date | null };
 
 /** Part of the feedback is on the work, while another copy failed or is not confirmed yet. */
 export function isPartialDelivery(feedback: PartialFacts): boolean {
 	return (
 		feedback.destination === "ON_WORK" &&
 		(feedback.state === "UNCONFIRMED" || feedback.state === "FAILED") &&
-		feedback.deliveredAt !== null
+		feedback.deliveredAt != null
 	);
 }
 

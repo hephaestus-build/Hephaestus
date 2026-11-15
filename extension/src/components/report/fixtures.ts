@@ -12,9 +12,7 @@ const GITLAB_ITEM = {
 	provider: "GITLAB",
 	title: "Add the login screen",
 	container: "hephaestustest/introcourse/demo",
-	path: null,
 	url: "https://gitlab.example.test/hephaestustest/introcourse/demo/-/merge_requests/1",
-	removedAt: null,
 } satisfies ItemRef;
 
 export const OWN_TRACE: OwnItemTrace = {
@@ -89,7 +87,6 @@ export const NOT_MET_ROW: ResultRow = {
 	outcome: "NOT_MET",
 	severity: "MAJOR",
 	currentness: "CURRENT",
-	unverifiableReason: null,
 	capturedAt: minutesBefore(45),
 	recordedAt: minutesBefore(42),
 	problems: [
@@ -112,9 +109,7 @@ export const MET_ROW: ResultRow = {
 	practiceSlug: "small-focused-changes",
 	summary: "The change touches one feature and stays under two hundred lines.",
 	outcome: "MET",
-	severity: null,
 	currentness: "CURRENT",
-	unverifiableReason: null,
 	capturedAt: minutesBefore(45),
 	recordedAt: minutesBefore(42),
 	problems: [],
@@ -127,9 +122,7 @@ export const COULD_NOT_DETERMINE_ROW: ResultRow = {
 	summary:
 		"The diff adds a form but it is unclear whether the existing end-to-end suite reaches it.",
 	outcome: "COULD_NOT_DETERMINE",
-	severity: null,
 	currentness: "CURRENT",
-	unverifiableReason: null,
 	capturedAt: minutesBefore(45),
 	recordedAt: minutesBefore(42),
 	problems: [],
@@ -152,7 +145,6 @@ export const HISTORICAL_ROW: ResultRow = {
 	summary: "Two commits are titled only “fix”.",
 	currentness: "UNVERIFIABLE",
 	unverifiableReason: "RECORD_MISSING",
-	capturedAt: null,
 	problems: [],
 };
 

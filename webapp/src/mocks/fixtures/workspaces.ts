@@ -35,10 +35,7 @@ export function ownMembership(
 			id: "42",
 			status: "ACTIVE",
 			displayName: "The Octocat",
-			avatarUrl: null,
-			identities: [
-				{ provider: "GITHUB", login: "octocat", displayName: "The Octocat", avatarUrl: null },
-			],
+			identities: [{ provider: "GITHUB", login: "octocat", displayName: "The Octocat" }],
 		},
 		role,
 		joinedAt: "2026-01-01T00:00:00Z",

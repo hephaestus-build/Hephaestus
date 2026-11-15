@@ -26,6 +26,7 @@ import { compareVersions, parseVersion } from "./plan-release.ts";
 const ROOT = path.resolve(import.meta.dirname, "..");
 export const SPEC = "server/openapi.yaml";
 export const ACCEPTED_BREAKS = "server/openapi-accepted-breaks";
+export const PUBLIC_OPERATIONS = "server/public-api-operations.json";
 
 /**
  * oasdiff rule levels that differ from its defaults. Response enums are open, so a new value is no
@@ -238,6 +239,77 @@ export function removedFromContract(base: string, revision: string): string[] {
 	return [...contractLines(parse(base))].filter((line) => !kept.has(line));
 }
 
+/** Each `METHOD /path` of `server/public-api-operations.json`. */
+export async function readPublicOperations(file: string): Promise<ReadonlySet<string>> {
+	return new Set(
+		asArray(parseJson(await readFile(file, "utf8")), file).map((entry) => asString(entry, file)),
+	);
+}
+
+/**
+ * Calls `visit` on every schema node that a public operation's responses reach, inline or through `$ref`, with a
+ * label such as `GET /items 200` or `ItemRef.properties.title`. ADR 0103 rules 2 and 3 hold for these nodes.
+ */
+export function walkPublicResponses(
+	spec: unknown,
+	operations: ReadonlySet<string>,
+	visit: (node: Readonly<Record<string, unknown>>, where: string) => void,
+): void {
+	const root = asRecord(spec, "spec");
+	const schemas = asRecord(asRecord(root.components ?? {}, "components").schemas ?? {}, "schemas");
+	const reached = new Set<string>();
+	const walk = (node: unknown, where: string): void => {
+		if (Array.isArray(node)) {
+			for (const [index, child] of node.entries()) {
+				walk(child, `${where}[${index}]`);
+			}
+			return;
+		}
+		if (node === null || typeof node !== "object") {
+			return;
+		}
+		const record = asRecord(node, where);
+		visit(record, where);
+		const ref = record.$ref;
+		if (typeof ref === "string" && ref.startsWith("#/components/schemas/")) {
+			const name = ref.slice("#/components/schemas/".length);
+			if (!reached.has(name)) {
+				reached.add(name);
+				walk(schemas[name], name);
+			}
+		}
+		for (const [key, child] of Object.entries(record)) {
+			walk(child, `${where}.${key}`);
+		}
+	};
+	for (const [template, item] of Object.entries(asRecord(root.paths, "spec paths"))) {
+		for (const [method, raw] of Object.entries(asRecord(item, template))) {
+			const operation = `${method.toUpperCase()} ${template}`;
+			if (HTTP_METHODS.has(method) && operations.has(operation)) {
+				const responses = asRecord(
+					asRecord(raw, operation).responses ?? {},
+					`${operation} responses`,
+				);
+				for (const [status, response] of Object.entries(responses)) {
+					walk(response, `${operation} ${status}`);
+				}
+			}
+		}
+	}
+}
+
+/** Each schema node that a public response reaches and that admits `null`. */
+export function nullTypes(spec: unknown, operations: ReadonlySet<string>): string[] {
+	const found: string[] = [];
+	walkPublicResponses(spec, operations, (node, where) => {
+		const { type } = node;
+		if (type === "null" || (Array.isArray(type) && type.includes("null"))) {
+			found.push(where);
+		}
+	});
+	return found;
+}
+
 function oasdiffBreaking(oasdiff: string, args: readonly string[], cwd: string) {
 	const result = spawnSync(oasdiff, ["breaking", ...args], {
 		cwd,
@@ -261,10 +333,22 @@ export async function compareSpecs(options: {
 	revision: string;
 	/** The directory of independent accepted-break files. */
 	acceptedBreaks: string;
+	/** The public operations, `METHOD /path`, that ADR 0103 holds to its rules. */
+	publicOperations: ReadonlySet<string>;
 	format: "githubactions" | "text";
 	cwd: string;
 }): Promise<Compatibility> {
-	const { oasdiff, base, baseTag, majorRelease, revision, acceptedBreaks, format, cwd } = options;
+	const {
+		oasdiff,
+		base,
+		baseTag,
+		majorRelease,
+		revision,
+		acceptedBreaks,
+		publicOperations,
+		format,
+		cwd,
+	} = options;
 	const stable = majorOf(baseTag) >= 1;
 	const directory = await mkdtemp(path.join(tmpdir(), "api-compatibility-levels-"));
 	try {
@@ -302,6 +386,8 @@ export async function compareSpecs(options: {
 				`oasdiff exited with ${exitStatus(gate.status, gate.signal)}:\n${gate.stderr}`,
 			);
 		}
+		const revisionSpec: unknown = parse(await readFile(path.resolve(cwd, revision), "utf8"));
+		const nulls = nullTypes(revisionSpec, publicOperations);
 		const removed =
 			stable && !majorRelease
 				? removedFromContract(
@@ -318,6 +404,10 @@ export async function compareSpecs(options: {
 				...removed.map(
 					(line) =>
 						`From 1.0 a removal needs a major release, also after a deprecation. Keep it: ${line}`,
+				),
+				...nulls.map(
+					(where) =>
+						`A public response leaves out a missing value instead of sending null (ADR 0103 rule 2): ${where}`,
 				),
 			],
 		};
@@ -374,6 +464,7 @@ async function main(): Promise<void> {
 			// Relative, so that each annotation names the file in the checkout.
 			revision: SPEC,
 			acceptedBreaks: ACCEPTED_BREAKS,
+			publicOperations: await readPublicOperations(path.join(ROOT, PUBLIC_OPERATIONS)),
 			format: process.env.GITHUB_ACTIONS === "true" ? "githubactions" : "text",
 			cwd: ROOT,
 		});

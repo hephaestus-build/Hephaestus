@@ -107,7 +107,7 @@ export function ProblemRow({ problem }: ProblemRowProps) {
 	const summary = problem.evidenceHidden ? HIDDEN_SUMMARY : problem.summary;
 	const place = placeOf(problem);
 	const { container, label } = problem.item;
-	const work = container === null ? label : `${container} ${label}`;
+	const work = container === undefined ? label : `${container} ${label}`;
 	const name = `${summary}, ${problem.practiceName}, ${work}, ${formatDayTime(problem.recordedAt, today)}`;
 	return (
 		<PracticeTableRow

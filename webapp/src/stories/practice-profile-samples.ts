@@ -15,14 +15,9 @@ const HOUR = 3_600_000;
 const pullRequest = (number: number, title: string): ItemRef => ({
 	kind: "scm.pull_request",
 	id: String(9000 + number),
-	parentId: null,
 	label: `#${number}`,
 	title,
 	provider: "GITHUB",
-	url: null,
-	container: null,
-	path: null,
-	removedAt: null,
 });
 
 const DESCRIBE = { slug: "describe-what-and-why", name: "Describe what changed and why" };

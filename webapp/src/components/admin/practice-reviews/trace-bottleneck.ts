@@ -118,7 +118,12 @@ export function traceReview(
 	detail: ReviewDetail | undefined,
 ): ReviewRef | undefined {
 	if (detail !== undefined) {
-		return detail;
+		// The detail read still sends null for a missing value; the reference leaves it out.
+		return {
+			...detail,
+			completedAt: detail.completedAt ?? undefined,
+			itemVersion: detail.itemVersion ?? undefined,
+		};
 	}
 	const rootReviewId = records.root?.review?.id ?? records.root?.result?.reviewId;
 	return records.reviews.find((review) => review.id === rootReviewId) ?? records.reviews[0];

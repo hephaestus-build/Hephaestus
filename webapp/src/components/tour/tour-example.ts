@@ -26,10 +26,6 @@ function exampleWork(number: number, provider: ItemProvider | undefined): ItemRe
 		label: exampleWorkLabel(number, provider),
 		url: "",
 		container: "example/web-shop",
-		parentId: null,
-		path: null,
-		removedAt: null,
-		title: null,
 	};
 }
 

@@ -161,7 +161,7 @@ function ScanItemResults({
 								>
 									<TableCell className="max-w-xs">
 										<span className="block truncate font-mono text-xs">{path}</span>
-										{entry.item.removedAt !== null && (
+										{entry.item.removedAt !== undefined && (
 											<StatusBadge def={REMOVED_FILE_DEF} className="mt-1" />
 										)}
 									</TableCell>

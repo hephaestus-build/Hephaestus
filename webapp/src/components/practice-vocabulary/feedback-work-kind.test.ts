@@ -7,8 +7,8 @@ import { workSeenIn } from "./feedback-work-kind";
 const ref = (
 	id: number,
 	kind: string = ITEM_KIND.pullRequest,
-	provider: "GITHUB" | "GITLAB" | null = "GITHUB",
-) => ({ id: String(id), kind, provider });
+	provider: "GITHUB" | "GITLAB" | "none" = "GITHUB",
+) => ({ id: String(id), kind, provider: provider === "none" ? undefined : provider });
 
 describe("workSeenIn", () => {
 	it("names the provider's kind of work and counts each piece once", () => {
@@ -27,7 +27,7 @@ describe("workSeenIn", () => {
 		expect(workSeenIn([ref(1, ITEM_KIND.issue), ref(2, ITEM_KIND.issue)])?.label).toBe(
 			"Recurring in two issues",
 		);
-		expect(workSeenIn([ref(1, ITEM_KIND.thread, null)])?.label).toBe(
+		expect(workSeenIn([ref(1, ITEM_KIND.thread, "none")])?.label).toBe(
 			"Recurring in one conversation",
 		);
 	});

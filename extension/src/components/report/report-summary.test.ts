@@ -9,14 +9,9 @@ const NOW = "2026-09-26T12:00:00Z";
 const ITEM = {
 	id: "1",
 	kind: "scm.issue",
-	parentId: null,
 	provider: "GITHUB",
 	label: "#1",
 	title: "Issue",
-	url: null,
-	container: null,
-	path: null,
-	removedAt: null,
 } as const;
 
 function trace(review: Partial<OwnItemTrace["review"]>): OwnItemTrace {
@@ -92,14 +87,15 @@ describe("report summary", () => {
 			"No recorded comments for you · review status unavailable",
 		);
 		expect(
-			summarize(feedback(0), { trace: trace({ status: "CANCELLED", completedAt: null }) }).text,
+			summarize(feedback(0), { trace: trace({ status: "CANCELLED", completedAt: undefined }) })
+				.text,
 		).toBe("No recorded comments for you");
 	});
 
 	it("says the own review is moving and still offers a request", () => {
 		expect(
 			summarizeReport({
-				state: { ...ready, trace: trace({ status: "RUNNING", completedAt: null }) },
+				state: { ...ready, trace: trace({ status: "RUNNING", completedAt: undefined }) },
 				activity: "RUNNING",
 				feedback: { status: "ready", data: feedback(0) },
 			}),
@@ -145,7 +141,7 @@ describe("report summary", () => {
 			"1 comment for you · reviewed 1 hr. ago · review partial",
 		);
 		expect(
-			summarize(feedback(1), { trace: trace({ status: "FAILED", completedAt: null }) }).text,
+			summarize(feedback(1), { trace: trace({ status: "FAILED", completedAt: undefined }) }).text,
 		).toBe("1 comment for you · review failed");
 	});
 

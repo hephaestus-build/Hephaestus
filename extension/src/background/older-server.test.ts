@@ -266,7 +266,7 @@ describe("the extension on an older server", () => {
 		expect(page).not.toContain("We could not load");
 		// That release sends no reason and no capture time, so a row claims neither.
 		expect(results.rows.map((row) => [row.unverifiableReason, row.capturedAt])).toStrictEqual(
-			results.rows.map(() => [null, null]),
+			results.rows.map(() => [undefined, undefined]),
 		);
 		vi.unstubAllGlobals();
 	});
