@@ -29,6 +29,7 @@ import java.time.Clock;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Supplier;
@@ -41,20 +42,22 @@ class ReviewPreparationCheckpointTest extends BaseUnitTest {
     private final JsonMapper mapper = new JsonMapper();
     private final AttemptInputs inputs = mock(AttemptInputs.class);
     private final EvidenceFolderPersonDataCatalog copies = mock(EvidenceFolderPersonDataCatalog.class);
+    private final ReviewJobRepository jobs = mock(ReviewJobRepository.class);
 
     @TempDir
     Path root;
 
+    /** A claimed job: the claim records it as running this run and attempt before its preparation starts. */
     private ReviewJob job() {
         var job = RuntimeReviewTestData.job();
         job.setRunId(UUID.randomUUID());
         job.setStatus(ReviewJobStatus.RUNNING);
+        when(jobs.findByIdAndWorkspaceId(job.getId(), job.getWorkspaceId())).thenReturn(Optional.of(job));
         return job;
     }
 
     private JobEvidenceFiles files() {
-        return new JobEvidenceFiles(
-                new FabricLayout(root.toString()), mock(ReviewJobRepository.class), Clock.systemUTC(), copies, inputs);
+        return new JobEvidenceFiles(new FabricLayout(root.toString()), jobs, Clock.systemUTC(), copies, inputs);
     }
 
     private void publish(ReviewJob job) {
@@ -150,5 +153,58 @@ class ReviewPreparationCheckpointTest extends BaseUnitTest {
         assertThatThrownBy(() -> files().resume(job))
                 .isInstanceOf(CheckoutUnverifiedException.class)
                 .hasMessageContaining("differs from its recorded digest");
+    }
+
+    @Test
+    void shouldKeepTheFolderOfAResumedAttemptThroughEverySweepWhileItRuns() throws Exception {
+        var job = job();
+        restorable(job);
+        var files = files();
+        Path index;
+        try (var restored = files.resume(job)) {
+            index = Objects.requireNonNull(restored.filesOnDisk().get("INDEX.json"));
+
+            assertThat(files.cleanEndedAttempts()).isZero();
+            assertThat(index).exists();
+        }
+        // The attempt still runs after its preparation hands the folder on.
+        assertThat(files.cleanEndedAttempts()).isZero();
+        assertThat(index).exists();
+    }
+
+    @Test
+    void shouldKeepAFolderThatItsAttemptStartedToReadBeforeTheSweepTookTheSharedLease() throws Exception {
+        var job = job();
+        restorable(job);
+        var files = files();
+        // The sweep first reads the job as not yet running this run; the claim commits before the removal starts.
+        var claimable = RuntimeReviewTestData.job();
+        claimable.setId(job.getId());
+        claimable.setRunId(job.getRunId());
+        claimable.setStatus(ReviewJobStatus.QUEUED);
+        when(jobs.findByIdAndWorkspaceId(job.getId(), job.getWorkspaceId()))
+                .thenReturn(Optional.of(claimable), Optional.of(job));
+        try (var restored = files.resume(job)) {
+            Path index = Objects.requireNonNull(restored.filesOnDisk().get("INDEX.json"));
+
+            assertThat(files.cleanEndedAttempts()).isZero();
+
+            assertThat(index).exists();
+        }
+    }
+
+    @Test
+    void shouldRemoveTheFolderOfAResumedAttemptOnceItsJobStopsRunningIt() throws Exception {
+        var job = job();
+        restorable(job);
+        var files = files();
+        try (var restored = files.resume(job)) {
+            Path index = Objects.requireNonNull(restored.filesOnDisk().get("INDEX.json"));
+            job.setStatus(ReviewJobStatus.FAILED);
+
+            assertThat(files.cleanEndedAttempts()).isZero();
+
+            assertThat(index).doesNotExist();
+        }
     }
 }

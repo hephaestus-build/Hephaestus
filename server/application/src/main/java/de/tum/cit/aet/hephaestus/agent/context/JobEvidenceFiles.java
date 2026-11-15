@@ -246,7 +246,7 @@ public class JobEvidenceFiles implements SandboxResultListener {
                             CheckoutUnverifiedException.Reason.UNAVAILABLE, "The frozen inputs expired");
                 lease.shareWithRemovals();
                 return new PreparedJobInputs(
-                        paths, directories, List.of(() -> retire(job, root), lease), manifest, readiness, expiry);
+                        paths, directories, List.of(() -> retire(root), lease), manifest, readiness, expiry);
             } catch (IOException failure) {
                 lease.close();
                 throw new UncheckedIOException(failure);
@@ -344,7 +344,7 @@ public class JobEvidenceFiles implements SandboxResultListener {
             var closed = new AtomicBoolean();
             cleanups.add(() -> {
                 if (closed.compareAndSet(false, true)) {
-                    retire(job, root);
+                    retire(root);
                 }
             });
             cleanups.add(personCopies.finishCapture(job));
@@ -829,13 +829,27 @@ public class JobEvidenceFiles implements SandboxResultListener {
                 .replaceWith(UNDECODABLE);
     }
 
-    /** Under the runtime's own lease, one removal at a time with admission; an exclusive owner otherwise retires it. */
-    private void retire(ReviewJob owner, Path root) throws IOException {
-        EvidenceFolderLease.removeAsOwner(layout.root(), owner.getWorkspaceId(), owner.getId(), () -> {
-            if (!Files.exists(root)) return;
-            var job = recordedJob(root);
-            if (job.isEmpty() || !readsFolder(root, job.get())) deleteAttempt(root);
-        });
+    /**
+     * Removes the folder if no attempt reads it: under the runtime's shared lease, one removal at a time with admission,
+     * or under an exclusive lease of its own. The job is read again under that lease, because an attempt that shares
+     * the lease may have started to read the folder since the caller looked.
+     *
+     * @return false when another holder keeps the lease to itself, and the folder stays for a later pass
+     */
+    private boolean retire(Path root) throws IOException {
+        Path jobDirectory = Objects.requireNonNull(root.getParent());
+        Path workspaceDirectory = Objects.requireNonNull(jobDirectory.getParent());
+        return EvidenceFolderLease.removeAsOwner(
+                layout.root(),
+                Long.parseLong(
+                        Objects.requireNonNull(workspaceDirectory.getFileName()).toString()),
+                UUID.fromString(
+                        Objects.requireNonNull(jobDirectory.getFileName()).toString()),
+                () -> {
+                    if (!Files.exists(root, LinkOption.NOFOLLOW_LINKS)) return;
+                    var job = recordedJob(root);
+                    if (job.isEmpty() || !readsFolder(root, job.get())) deleteAttempt(root);
+                });
     }
 
     /** Admission has committed; recheck ownership before removing the verified bytes. */
@@ -1200,8 +1214,7 @@ public class JobEvidenceFiles implements SandboxResultListener {
                     // folder that it cannot remove stays and counts.
                     if (acquired.isEmpty()) {
                         var holder = recordedJob(root);
-                        if ((holder.isEmpty() || !readsFolder(root, holder.get())) && !removeUnderRuntime(root))
-                            remaining++;
+                        if ((holder.isEmpty() || !readsFolder(root, holder.get())) && !retire(root)) remaining++;
                         continue;
                     }
                 } catch (RuntimeException exception) {
@@ -1275,18 +1288,6 @@ public class JobEvidenceFiles implements SandboxResultListener {
         try (var entries = Files.list(folder)) {
             return entries.findAny().isEmpty();
         }
-    }
-
-    private boolean removeUnderRuntime(Path root) throws IOException {
-        Path jobDirectory = Objects.requireNonNull(root.getParent());
-        Path workspaceDirectory = Objects.requireNonNull(jobDirectory.getParent());
-        return EvidenceFolderLease.removeAsOwner(
-                layout.root(),
-                Long.parseLong(
-                        Objects.requireNonNull(workspaceDirectory.getFileName()).toString()),
-                UUID.fromString(
-                        Objects.requireNonNull(jobDirectory.getFileName()).toString()),
-                () -> deleteAttempt(root));
     }
 
     /**
