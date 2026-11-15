@@ -426,7 +426,7 @@ These belong outside the locks:
 
 Check the fence and the lease in a short transaction.
 Do the work with no lock held, then check them again before you write or answer.
-`ConversationTurns.read` and `TurnContextController.load` follow this order.
+`ConversationTurns.read`, `TurnContextController.load` and a practice's start (`ResultAdmissionService.start`) follow this order.
 
 `RunLockProbe` proves it in an integration test.
 The test holds the route in its slow part.

@@ -60,8 +60,28 @@ public class ReviewFreshnessService implements ReviewFreshness {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public Currentness startCurrentness(long workspaceId, ReviewAssignmentId id) {
+        var review = reviews.findByIdAndWorkspaceId(id.reviewId(), workspaceId).orElseThrow();
+        if (review.getKind() == ReviewKind.SCAN) return Currentness.CURRENT;
+        var assignment = practices.findByWorkspaceIdAndReviewIdOrderByPracticeIdAsc(workspaceId, id.reviewId()).stream()
+                .filter(row -> row.getPracticeId() == id.practiceId())
+                .findFirst()
+                .orElseThrow();
+        var check = freshness.check(workspaceId, id.itemId(), occasion(review), assignment.getCaptureDecision());
+        log.info(
+                "Practice start: reviewId={}, practiceId={}, currentness={}, changedSources={}, unreadSources={}",
+                id.reviewId(),
+                id.practiceId(),
+                check.currentness(),
+                check.changed(),
+                check.unread());
+        return check.currentness();
+    }
+
+    @Override
     @Transactional
-    public boolean start(long workspaceId, ReviewAssignmentId id, UUID jobId, int attempt) {
+    public boolean start(long workspaceId, ReviewAssignmentId id, UUID jobId, int attempt, Currentness checked) {
         var review = fence.lock(workspaceId, id.reviewId(), jobId, attempt);
         var assignment = practices.lockAssignments(workspaceId, id.reviewId()).stream()
                 .filter(row -> row.getPracticeId() == id.practiceId())
@@ -73,15 +93,7 @@ public class ReviewFreshnessService implements ReviewFreshness {
             throw new IllegalArgumentException("The invocation does not own this practice");
         if (member.getState() != ReviewItemState.LISTED) return false;
         if (review.getKind() == ReviewKind.SCAN) return true;
-        var check = freshness.check(workspaceId, id.itemId(), occasion(review), assignment.getCaptureDecision());
-        var state = check.currentness();
-        log.info(
-                "Practice start: reviewId={}, practiceId={}, currentness={}, changedSources={}, unreadSources={}",
-                id.reviewId(),
-                id.practiceId(),
-                state,
-                check.changed(),
-                check.unread());
+        var state = checked;
         if (state == Currentness.CURRENT) {
             assignment.setStatus(ReviewPracticeStatus.RUNNING);
             return true;
