@@ -271,8 +271,7 @@ export function ApproveRejectedFeedback({ isDeciding, onApprove }: ApproveReject
 					<PopoverTitle>Approve this feedback after all</PopoverTitle>
 					<PopoverDescription>
 						Hephaestus posts the planned copies above on the work if the feedback checks pass.
-						Otherwise nothing is posted, and this sheet says why. The rejection stays in the
-						history.
+						Otherwise nothing is posted, and you see why. The rejection stays in the history.
 					</PopoverDescription>
 				</PopoverHeader>
 				<div className="flex justify-end gap-2 border-t pt-3">

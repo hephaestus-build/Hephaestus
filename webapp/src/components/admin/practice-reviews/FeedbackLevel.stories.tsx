@@ -570,7 +570,7 @@ export const ApproveRejectedAfterAll: Story = {
 		const dialog = await screen.findByRole("dialog", { name: "Approve this feedback after all" });
 		await expectSettledVisible(dialog);
 		within(dialog).getByText(
-			"Hephaestus posts the planned copies above on the work if the feedback checks pass. Otherwise nothing is posted, and this sheet says why. The rejection stays in the history.",
+			"Hephaestus posts the planned copies above on the work if the feedback checks pass. Otherwise nothing is posted, and you see why. The rejection stays in the history.",
 		);
 		await expect(args.onApprove).not.toHaveBeenCalled();
 		await userEvent.click(within(dialog).getByRole("button", { name: "Approve for delivery" }));
