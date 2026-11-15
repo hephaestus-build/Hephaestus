@@ -51,6 +51,7 @@ export function WorkspaceLlmUsagePage({
 								to="/w/$workspaceSlug/admin/usage"
 								params={{ workspaceSlug }}
 								search={(previous) => ({ ...previous, month: nextMonth })}
+								resetScroll={false}
 							/>
 						)}
 					/>

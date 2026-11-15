@@ -47,7 +47,7 @@ export const samePageSearchKeepsScroll = defineRule({
 		type: "problem",
 		docs: {
 			description:
-				"A search change on the page the reader is on keeps their scroll position. TanStack Router resets scroll on every commit, a search-only one included, so a filter, a tab or a search box halfway down a page throws the reader back to the top. `useSearchState` (`lib/search-params.ts`) passes `resetScroll: false`.",
+				'A search change on the page the reader is on keeps their scroll position. TanStack Router resets scroll on every commit, a search-only one included, so a filter, a tab or a search box halfway down a page throws the reader back to the top. `useSearchState` (`lib/search-params.ts`) passes `resetScroll: false`. The rule sees a navigation that names no other page: no `to`, or `to: "."`, and no `params`, `href` or `mask`. A link that names its own route by its absolute path is out of its sight, so state `resetScroll` on one.',
 		},
 		messages: {
 			reset:
@@ -97,7 +97,7 @@ export const samePageSearchKeepsScroll = defineRule({
 							: value,
 					);
 				}
-				// Only a link names `to` and `search`; without `to` an element is no navigation.
+				// Many components take a `search` prop of their own. Only one that also names `to` is a link.
 				if (names.has("to") && staysOnPage(names, spread)) {
 					context.report({ node, messageId: "reset" });
 				}

@@ -78,6 +78,14 @@ A change that adds a read, a round trip or a moved landmark fails and prints the
 Update the budget in the same change, so the review sees the cost.
 A saving fails in the same way, so the budget comes down with it.
 
+## Smooth navigation
+
+`smooth-navigation.spec.ts` checks that moving around the app keeps the reader where they are.
+Like the journeys, it needs no server and answers the API from the synthetic workspace.
+It counts document loads while links inside the app open pages, and while the browser goes back and forward: only the first load may load the document.
+It also checks that a tab on Review settings keeps the scroll position.
+The lint rule `hephaestus/same-page-search-keeps-scroll` guards the same rule in the source.
+
 ## Reading the result
 
 `public-activity.spec.ts` uses the isolated `e2e-public` workspace in `seed.sql`.
