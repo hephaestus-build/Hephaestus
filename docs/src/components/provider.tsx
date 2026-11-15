@@ -19,9 +19,12 @@ export interface ProviderProps {
 	children?: ReactNode;
 }
 
+// The banner text wraps on a phone, so its height follows the text, and the side padding keeps it clear of the close button.
+const BANNER = "min-h-12 px-10 py-2";
+
 function Announcement() {
 	return channel === "next" ? (
-		<Banner changeLayout={false}>
+		<Banner changeLayout={false} height="auto" className={BANNER}>
 			<span>
 				<strong>Unreleased:</strong> these docs describe the next release.{" "}
 				<a className="underline" href={`${SITE_URL}/`}>
@@ -31,7 +34,7 @@ function Announcement() {
 			</span>
 		</Banner>
 	) : (
-		<Banner id="pre-1-0" changeLayout={false}>
+		<Banner id="pre-1-0" changeLayout={false} height="auto" className={BANNER}>
 			<span>
 				Hephaestus is <strong>pre-1.0</strong>: only the latest release is supported, and a minor
 				release can require action.{" "}

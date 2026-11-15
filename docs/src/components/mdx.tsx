@@ -1,6 +1,6 @@
 import defaultMdxComponents from "fumadocs-ui/mdx";
 import type { MDXComponents } from "mdx/types";
-import type { AnchorHTMLAttributes } from "react";
+import type { AnchorHTMLAttributes, ComponentPropsWithoutRef } from "react";
 
 import { CalloutContainer, CalloutDescription, CalloutTitle } from "@/components/callout";
 import { Screenshot } from "@/components/screenshot";
@@ -17,6 +17,36 @@ const base = BASE;
  * (`./upgrade`) resolves against the page URL, as the browser would; a root-relative link (`/admin/upgrade`) gets the
  * base path.
  */
+type HeadingTag = "h1" | "h2" | "h3" | "h4" | "h5" | "h6";
+
+/*
+ * A heading links to its own anchor. Fumadocs' heading adds a copy button instead, but the content does not hydrate, so
+ * that button does nothing, and its screen-reader text "Copy Anchor Link" enters each search result's heading.
+ */
+function anchoredHeading(Tag: HeadingTag) {
+	return function DocsHeading({
+		id,
+		children,
+		className,
+		...props
+	}: ComponentPropsWithoutRef<HeadingTag>) {
+		if (id === undefined) {
+			return (
+				<Tag className={className} {...props}>
+					{children}
+				</Tag>
+			);
+		}
+		return (
+			<Tag id={id} className={`scroll-m-28 ${className ?? ""}`.trim()} {...props}>
+				<a data-card="" href={`#${id}`}>
+					{children}
+				</a>
+			</Tag>
+		);
+	};
+}
+
 export function mdxComponents(page: DocsPage) {
 	function DocsAnchor({ href = "", children, ...props }: AnchorHTMLAttributes<HTMLAnchorElement>) {
 		if (/^(?:[a-z]+:|#|\/\/)/u.test(href)) {
@@ -42,6 +72,12 @@ export function mdxComponents(page: DocsPage) {
 	return {
 		...defaultMdxComponents,
 		a: DocsAnchor,
+		h1: anchoredHeading("h1"),
+		h2: anchoredHeading("h2"),
+		h3: anchoredHeading("h3"),
+		h4: anchoredHeading("h4"),
+		h5: anchoredHeading("h5"),
+		h6: anchoredHeading("h6"),
 		CalloutContainer,
 		CalloutTitle,
 		CalloutDescription,
