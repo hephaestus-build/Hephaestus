@@ -422,10 +422,11 @@ await test(
 			"--input-type=module",
 			"-e",
 			program("probe"),
-			JSON.stringify({ targets: probed, dns: "", firstApi: "/nonexistent" }),
+			JSON.stringify({ targets: probed, dns: "", firstApi: "/nonexistent", pidBound: null }),
 		]);
 		const report = parseInside(parseJson(stdout));
 		assert.deepEqual(report.reached, { open: true, closed: false });
 		assert.equal(report.firstApi, null);
+		assert.equal(report.pids, null);
 	},
 );
