@@ -193,7 +193,7 @@ erDiagram
         INTEGER sub_issues_total
         INTEGER sub_issues_completed
         INTEGER sub_issues_percent_completed
-        VARCHAR(128) issue_type_id FK
+        BIGINT issue_type_id FK
         VARCHAR(255) merge_state_status
         BOOLEAN mergeable
         VARCHAR(255) review_decision
@@ -243,13 +243,14 @@ erDiagram
     }
 
     IssueType {
-        VARCHAR(128) id PK
+        BIGINT id PK
         VARCHAR(128) name "NOT NULL"
         TEXT description
         VARCHAR(20) color "NOT NULL"
         BOOLEAN is_enabled "NOT NULL"
-        BIGINT organization_id FK "NOT NULL"
+        BIGINT organization_id FK,UK "NOT NULL"
         TIMESTAMPTZ last_sync_at
+        VARCHAR(128) native_id UK "NOT NULL"
     }
 
     Item {

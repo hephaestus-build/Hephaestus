@@ -144,7 +144,7 @@ public final class ScmEventPayload {
             @NonNull String name,
             @Nullable String description) {
         public static IssueTypeData from(IssueType issueType) {
-            return new IssueTypeData(issueType.getId(), issueType.getName(), issueType.getDescription());
+            return new IssueTypeData(issueType.getNativeId(), issueType.getName(), issueType.getDescription());
         }
     }
 

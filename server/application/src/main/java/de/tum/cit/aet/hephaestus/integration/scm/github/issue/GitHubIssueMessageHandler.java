@@ -122,11 +122,7 @@ public class GitHubIssueMessageHandler extends AbstractIntegrationMessageHandler
                     issueProcessor.process(issueDto, context);
                 }
             }
-            case GitHubEventAction.Issue.TYPED -> {
-                String orgLogin =
-                        event.organization() != null ? event.organization().login() : null;
-                issueProcessor.processTyped(issueDto, event.issueType(), orgLogin, context);
-            }
+            case GitHubEventAction.Issue.TYPED -> issueProcessor.processTyped(issueDto, event.issueType(), context);
             case GitHubEventAction.Issue.UNTYPED -> issueProcessor.processUntyped(issueDto, context);
             // Unknown/unmapped actions SKIP rather than upsert. Falling through to process() would
             // silently re-create the issue if a future action means "removed". The explicit cases

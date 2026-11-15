@@ -145,7 +145,7 @@ public class GitLabIssueTypeSyncService {
         for (Map<String, Object> node : nodes) {
             IssueType issueType = processWorkItemType(node, org);
             if (issueType != null) {
-                syncedIds.add(issueType.getId());
+                syncedIds.add(issueType.getNativeId());
                 synced++;
             }
         }
@@ -161,11 +161,13 @@ public class GitLabIssueTypeSyncService {
 
         if (globalId == null || name == null) return null;
 
-        IssueType issueType = issueTypeRepository.findById(globalId).orElse(null);
+        IssueType issueType = issueTypeRepository
+                .findByOrganizationIdAndNativeId(org.getId(), globalId)
+                .orElse(null);
 
         if (issueType == null) {
             issueType = new IssueType();
-            issueType.setId(globalId);
+            issueType.setNativeId(globalId);
             issueType.setOrganization(org);
         }
 
@@ -181,7 +183,7 @@ public class GitLabIssueTypeSyncService {
         List<IssueType> existing = issueTypeRepository.findAllByOrganizationId(organizationId);
         int disabled = 0;
         for (IssueType it : existing) {
-            if (!syncedIds.contains(it.getId()) && it.isEnabled()) {
+            if (!syncedIds.contains(it.getNativeId()) && it.isEnabled()) {
                 it.setEnabled(false);
                 issueTypeRepository.save(it);
                 disabled++;

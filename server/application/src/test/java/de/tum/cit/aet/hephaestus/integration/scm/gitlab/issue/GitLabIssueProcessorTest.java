@@ -1090,7 +1090,8 @@ class GitLabIssueProcessorTest extends BaseUnitTest {
             testRepo.setOrganization(organization);
 
             IssueType taskType = new IssueType();
-            taskType.setId("gid://gitlab/IssueType/1");
+            taskType.setId(1L);
+            taskType.setNativeId("gid://gitlab/IssueType/1");
 
             when(issueTypeRepository.findByOrganizationIdAndNameIgnoreCase(42L, "Task"))
                     .thenReturn(Optional.of(taskType));
@@ -1140,7 +1141,7 @@ class GitLabIssueProcessorTest extends BaseUnitTest {
                             any(),
                             eq(REPO_ID),
                             any(),
-                            eq("gid://gitlab/IssueType/1"),
+                            eq(1L),
                             any(),
                             any(),
                             any(),
@@ -1155,7 +1156,8 @@ class GitLabIssueProcessorTest extends BaseUnitTest {
             testRepo.setOrganization(organization);
 
             IssueType testCaseType = new IssueType();
-            testCaseType.setId("gid://gitlab/IssueType/7");
+            testCaseType.setId(7L);
+            testCaseType.setNativeId("gid://gitlab/IssueType/7");
             when(issueTypeRepository.findByOrganizationIdAndNameIgnoreCase(42L, "Test Case"))
                     .thenReturn(Optional.of(testCaseType));
 
@@ -1181,7 +1183,7 @@ class GitLabIssueProcessorTest extends BaseUnitTest {
                             any(),
                             eq(REPO_ID),
                             any(),
-                            eq("gid://gitlab/IssueType/7"),
+                            eq(7L),
                             any(),
                             any(),
                             any(),
@@ -1190,22 +1192,23 @@ class GitLabIssueProcessorTest extends BaseUnitTest {
 
         @Test
         void shouldFallBackToProviderScopedLookupForSubgroupOrg() {
-            // Subgroup orgs have no own issue_type seed rows: the org-scoped lookup misses and the
-            // provider-scoped fallback resolves the shared provider-global row.
+            // A subgroup org has no issue types of its own: the org-scoped lookup misses, and the
+            // nearest parent group's type answers.
             var organization = new Organization();
             organization.setId(99L);
             testRepo.setOrganization(organization);
 
             when(issueTypeRepository.findByOrganizationIdAndNameIgnoreCase(99L, "Task"))
                     .thenReturn(Optional.empty());
-            IssueType providerScoped = new IssueType();
-            providerScoped.setId("gid://gitlab/IssueType/global-1");
-            when(issueTypeRepository.findFirstByOrganizationProviderAndNameIgnoreCase(99L, "Task"))
-                    .thenReturn(Optional.of(providerScoped));
+            IssueType parentGroups = new IssueType();
+            parentGroups.setId(101L);
+            parentGroups.setNativeId("gid://gitlab/IssueType/global-1");
+            when(issueTypeRepository.findInNearestParentGroupByName(99L, "Task"))
+                    .thenReturn(Optional.of(parentGroups));
 
             processor.processFromSync(syncDataWithType("TASK"), ProcessingContext.forSync(1L, testRepo));
 
-            verify(issueTypeRepository).findFirstByOrganizationProviderAndNameIgnoreCase(99L, "Task");
+            verify(issueTypeRepository).findInNearestParentGroupByName(99L, "Task");
             verify(issueRepository)
                     .upsertCore(
                             eq(RAW_ISSUE_ID),
@@ -1225,7 +1228,7 @@ class GitLabIssueProcessorTest extends BaseUnitTest {
                             any(),
                             eq(REPO_ID),
                             any(),
-                            eq("gid://gitlab/IssueType/global-1"),
+                            eq(101L),
                             any(),
                             any(),
                             any(),
@@ -1257,7 +1260,7 @@ class GitLabIssueProcessorTest extends BaseUnitTest {
                             any(),
                             eq(REPO_ID),
                             any(),
-                            eq((String) null),
+                            eq((Long) null),
                             any(),
                             any(),
                             any(),

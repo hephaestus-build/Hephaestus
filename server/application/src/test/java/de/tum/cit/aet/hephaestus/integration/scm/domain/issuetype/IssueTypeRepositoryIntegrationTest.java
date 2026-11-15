@@ -17,15 +17,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Integration tests for the provider-scoped {@code IssueType} name lookup used as
- * a fallback when a GitLab issue lives in a subgroup whose {@code Organization}
- * row has not had its own seed {@code issue_type} entries materialised yet.
- *
- * <p>Gap #3 reconciliation: {@code GitLabIssueTypeSyncService} only seeds types
- * under the workspace's root {@code accountLogin} organization, but each GitLab
- * subgroup gets its own {@code Organization} row. Because {@code issue_type}
- * primary keys are GitLab-global GraphQL IDs, resolving by provider-scoped name
- * yields the same row regardless of which organization owns it.
+ * A GitLab subgroup is its own organization without issue types of its own, so an issue in it takes the type of its
+ * nearest parent group on the same instance: never a sibling group's, and never another instance's.
  */
 @Transactional
 class IssueTypeRepositoryIntegrationTest extends BaseIntegrationTest {
@@ -73,7 +66,7 @@ class IssueTypeRepositoryIntegrationTest extends BaseIntegrationTest {
 
     private IssueType persistIssueType(String id, String name, Organization org) {
         IssueType type = new IssueType();
-        type.setId(id);
+        type.setNativeId(id);
         type.setName(name);
         type.setColor(IssueType.Color.BLUE);
         type.setEnabled(true);
@@ -82,66 +75,69 @@ class IssueTypeRepositoryIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    void resolvesTypeFromRootWhenSubgroupHasNoSeedRows() {
+    void shouldResolveTheRootGroupsTypeForASubgroupWithoutTypes() {
         persistIssueType("gid://gitlab/WorkItems::Type/1", "Issue", rootOrg);
 
-        Optional<IssueType> resolved =
-                issueTypeRepository.findFirstByProviderIdAndNameIgnoreCase(persistedId(gitlabProvider), "Issue");
+        Optional<IssueType> resolved = issueTypeRepository.findInNearestParentGroupByName(id(subgroupOrg), "Issue");
 
         assertThat(resolved).isPresent();
-        assertThat(resolved.get().getId()).isEqualTo("gid://gitlab/WorkItems::Type/1");
+        assertThat(resolved.get().getNativeId()).isEqualTo("gid://gitlab/WorkItems::Type/1");
         assertThat(resolved.get().getOrganization().getId()).isEqualTo(rootOrg.getId());
     }
 
     @Test
-    void matchIsCaseInsensitive() {
+    void shouldMatchTheNameCaseInsensitively() {
         persistIssueType("gid://gitlab/WorkItems::Type/2", "Task", rootOrg);
 
-        assertThat(issueTypeRepository.findFirstByProviderIdAndNameIgnoreCase(persistedId(gitlabProvider), "task"))
+        assertThat(issueTypeRepository.findInNearestParentGroupByName(id(subgroupOrg), "task"))
                 .isPresent();
-        assertThat(issueTypeRepository.findFirstByProviderIdAndNameIgnoreCase(persistedId(gitlabProvider), "TASK"))
-                .isPresent();
-        assertThat(issueTypeRepository.findFirstByProviderIdAndNameIgnoreCase(persistedId(gitlabProvider), "tAsK"))
+        assertThat(issueTypeRepository.findInNearestParentGroupByName(id(subgroupOrg), "TASK"))
                 .isPresent();
     }
 
     @Test
-    void doesNotCrossProviderBoundaries() {
-        Organization otherOrg = persistOrg(otherProvider, 2000L, "other-group");
-        persistIssueType("gid://other/WorkItems::Type/99", "Bug", otherOrg);
+    void shouldNotTakeTheTypeOfAGroupWithTheSamePathOnAnotherInstance() {
+        Organization twin = persistOrg(otherProvider, 2000L, "root-group");
+        persistIssueType("gid://gitlab/WorkItems::Type/1", "Bug", twin);
 
-        Optional<IssueType> resolved =
-                issueTypeRepository.findFirstByProviderIdAndNameIgnoreCase(persistedId(gitlabProvider), "Bug");
-
-        assertThat(resolved).isEmpty();
+        assertThat(issueTypeRepository.findInNearestParentGroupByName(id(subgroupOrg), "Bug"))
+                .isEmpty();
     }
 
     @Test
-    void skipsDisabledTypes() {
+    void shouldNotTakeTheTypeOfASiblingOrPrefixGroup() {
+        // Created before root-group's own type, so a lowest-id rule would pick these.
+        persistIssueType("gid://gitlab/WorkItems::Type/4", "Epic", persistOrg(gitlabProvider, 1002L, "another-group"));
+        persistIssueType("gid://gitlab/WorkItems::Type/4", "Epic", persistOrg(gitlabProvider, 1003L, "root-groupx"));
+
+        assertThat(issueTypeRepository.findInNearestParentGroupByName(id(subgroupOrg), "Epic"))
+                .isEmpty();
+    }
+
+    @Test
+    void shouldSkipDisabledTypes() {
         IssueType disabled = persistIssueType("gid://gitlab/WorkItems::Type/3", "Incident", rootOrg);
         disabled.setEnabled(false);
         issueTypeRepository.save(disabled);
 
-        Optional<IssueType> resolved =
-                issueTypeRepository.findFirstByProviderIdAndNameIgnoreCase(persistedId(gitlabProvider), "Incident");
-
-        assertThat(resolved).isEmpty();
+        assertThat(issueTypeRepository.findInNearestParentGroupByName(id(subgroupOrg), "Incident"))
+                .isEmpty();
     }
 
     @Test
-    void prefersRootOrganizationWhenDuplicateNames() {
-        IssueType rootType = persistIssueType("gid://gitlab/WorkItems::Type/10", "Epic", rootOrg);
-        persistIssueType("gid://gitlab/WorkItems::Type/11", "Epic", subgroupOrg);
+    void shouldPreferTheNearestParentGroup() {
+        Organization deeper = persistOrg(gitlabProvider, 1004L, "root-group/subgroup/deeper");
+        persistIssueType("gid://gitlab/WorkItems::Type/10", "Epic", rootOrg);
+        IssueType nearer = persistIssueType("gid://gitlab/WorkItems::Type/10", "Epic", subgroupOrg);
 
-        Optional<IssueType> resolved =
-                issueTypeRepository.findFirstByProviderIdAndNameIgnoreCase(persistedId(gitlabProvider), "Epic");
+        Optional<IssueType> resolved = issueTypeRepository.findInNearestParentGroupByName(id(deeper), "Epic");
 
         assertThat(resolved).isPresent();
-        assertThat(resolved.get().getId()).isEqualTo(rootType.getId());
+        assertThat(resolved.get().getId()).isEqualTo(nearer.getId());
     }
 
-    private static long persistedId(IdentityProvider provider) {
-        Long id = provider.getId();
+    private static long id(Organization organization) {
+        Long id = organization.getId();
         assertNotNull(id);
         return id;
     }

@@ -9,7 +9,10 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 @Repository
-public interface IssueTypeRepository extends JpaRepository<IssueType, String> {
+public interface IssueTypeRepository extends JpaRepository<IssueType, Long> {
+    /** The organization's row for one provider type id; the same id on another instance is another row. */
+    Optional<IssueType> findByOrganizationIdAndNativeId(Long organizationId, String nativeId);
+
     /**
      * Find all issue types for an organization (including disabled).
      * Used for cleanup of deleted issue types during sync.
@@ -39,61 +42,28 @@ public interface IssueTypeRepository extends JpaRepository<IssueType, String> {
             @Param("organizationId") Long organizationId, @Param("name") String name);
 
     /**
-     * Provider-scoped case-insensitive name lookup used as a fallback when a GitLab
-     * issue lives in a subgroup whose {@code organization} has not had its own
-     * {@code issue_type} seed rows materialised yet.
+     * The enabled type of this name in the nearest parent group of the organization, on the same provider instance.
+     * GitLab makes each subgroup its own organization without issue types of its own: the sync records them for the
+     * workspace's group. A sibling group, or a group of the same path on another instance, never answers.
      * <p>
-     * The current {@link de.tum.cit.aet.hephaestus.integration.scm.gitlab.issuetype.GitLabIssueTypeSyncService}
-     * only seeds types under the workspace's root accountLogin, but in GitLab each
-     * subgroup becomes its own {@code Organization} row. Without this fallback an
-     * issue synced from a subgroup would always resolve {@code issue_type_id} to
-     * {@code NULL}. Issue type primary keys are GitLab-global GraphQL IDs
-     * ({@code gid://gitlab/WorkItems::Type/1}), so a name match across the same
-     * provider yields the exact same {@code IssueType} row regardless of which
-     * organization owns it.
-     * <p>
-     * {@link Pageable} with size 1 gives us "first" semantics without provoking
-     * Spring Data runtime warnings about unordered single-row queries.
+     * The organization is read in the query, so a caller never dereferences a detached lazy organization proxy.
+     * {@link Pageable} with size 1 gives "first" semantics.
      */
     @Query("""
         SELECT it
-        FROM IssueType it
-        WHERE lower(it.name) = lower(:name)
+        FROM IssueType it, Organization o
+        WHERE o.id = :organizationId
+        AND lower(it.name) = lower(:name)
         AND it.isEnabled = true
-        AND it.organization.provider.id = :providerId
-        ORDER BY it.organization.id ASC
+        AND it.organization.provider.id = o.provider.id
+        AND SUBSTRING(o.login, 1, LENGTH(it.organization.login) + 1) = CONCAT(it.organization.login, '/')
+        ORDER BY LENGTH(it.organization.login) DESC
         """)
-    List<IssueType> findByProviderIdAndNameIgnoreCase(
-            @Param("providerId") Long providerId, @Param("name") String name, Pageable pageable);
-
-    default Optional<IssueType> findFirstByProviderIdAndNameIgnoreCase(Long providerId, String name) {
-        List<IssueType> results = findByProviderIdAndNameIgnoreCase(providerId, name, Pageable.ofSize(1));
-        return results.isEmpty() ? Optional.empty() : Optional.of(results.get(0));
-    }
-
-    /**
-     * Resolves an issue type by name for the same provider as the given organization.
-     * <p>
-     * Uses a JPQL subquery to find the organization's provider id so callers never
-     * have to dereference {@code organization.getProvider()} on a detached lazy proxy —
-     * which was raising {@code LazyInitializationException} during GitLab issue sync
-     * when the {@code Repository}'s Organization proxy outlived its Hibernate session.
-     */
-    @Query("""
-        SELECT it
-        FROM IssueType it
-        WHERE lower(it.name) = lower(:name)
-        AND it.isEnabled = true
-        AND it.organization.provider.id = (
-            SELECT o.provider.id FROM Organization o WHERE o.id = :organizationId
-        )
-        ORDER BY it.organization.id ASC
-        """)
-    List<IssueType> findByOrganizationProviderAndNameIgnoreCase(
+    List<IssueType> findInParentGroupsByName(
             @Param("organizationId") Long organizationId, @Param("name") String name, Pageable pageable);
 
-    default Optional<IssueType> findFirstByOrganizationProviderAndNameIgnoreCase(Long organizationId, String name) {
-        List<IssueType> results = findByOrganizationProviderAndNameIgnoreCase(organizationId, name, Pageable.ofSize(1));
-        return results.isEmpty() ? Optional.empty() : Optional.of(results.get(0));
+    default Optional<IssueType> findInNearestParentGroupByName(Long organizationId, String name) {
+        return findInParentGroupsByName(organizationId, name, Pageable.ofSize(1)).stream()
+                .findFirst();
     }
 }

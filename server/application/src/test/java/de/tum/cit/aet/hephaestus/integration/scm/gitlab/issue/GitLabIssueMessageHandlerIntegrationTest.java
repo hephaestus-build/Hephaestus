@@ -579,7 +579,7 @@ class GitLabIssueMessageHandlerIntegrationTest extends BaseIntegrationTest {
 
         private void seedIssueType(String name) {
             IssueType type = new IssueType();
-            type.setId("gid://gitlab/WorkItems::Type/1");
+            type.setNativeId("gid://gitlab/WorkItems::Type/1");
             type.setName(name);
             type.setColor(IssueType.Color.GRAY);
             type.setOrganization(savedOrg);

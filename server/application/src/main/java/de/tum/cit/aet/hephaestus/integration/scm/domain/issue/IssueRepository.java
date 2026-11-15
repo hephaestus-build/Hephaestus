@@ -411,7 +411,7 @@ public interface IssueRepository extends JpaRepository<Issue, Long> {
             @Param("authorId") @Nullable Long authorId,
             @Param("repositoryId") Long repositoryId,
             @Param("milestoneId") @Nullable Long milestoneId,
-            @Param("issueTypeId") @Nullable String issueTypeId,
+            @Param("issueTypeId") @Nullable Long issueTypeId,
             @Param("parentIssueId") @Nullable Long parentIssueId,
             @Param("subIssuesTotal") @Nullable Integer subIssuesTotal,
             @Param("subIssuesCompleted") @Nullable Integer subIssuesCompleted,
