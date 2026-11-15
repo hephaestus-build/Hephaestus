@@ -14,6 +14,7 @@ import { expect, type Page } from "@playwright/test";
 import { getResponse } from "msw";
 import type { WorkspaceMembership } from "@/api/types.gen";
 
+import { asReturningTourReader } from "./screenshots/tour-offer.ts";
 import { handlers, NOW, WORKSPACE } from "./screenshots/workspace.ts";
 import { E2E_BASE_URL } from "./urls.ts";
 
@@ -83,9 +84,9 @@ export async function openJourney(page: Page, role: WorkspaceMembership["role"])
 			timings.push({ start: startTime, end: startTime + responseEnd });
 		}
 	});
+	// A returning reader, to whom the practice profile has already offered its tour.
+	await asReturningTourReader(context);
 	await context.addInitScript(() => {
-		// A returning reader, to whom the practice profile has already offered its tour.
-		localStorage.setItem("hephaestus:guided-tour:practice-profile:offered", "1");
 		window.journeyShifts = [];
 		// oxlint-disable-next-line unicorn/consistent-function-scoping -- `addInitScript` sends this function's source to the page, so its helpers must be inside it.
 		const landmark = (node: Node | null) => {

@@ -17,8 +17,10 @@ import { expectNoPageOverflow } from "@/stories/reflow";
 import { exampleProfile } from "./example-profile";
 import { PracticeProfileTour, type PracticeProfileTourProps } from "./PracticeProfileTour";
 import { type TourChapterId, tourChapters } from "./tour-chapters";
+import { tourRecordKey } from "./tour-start";
 
-const STORAGE_KEY = "hephaestus:guided-tour:practice-profile";
+const ACCOUNT = "1";
+const STORAGE_KEY = tourRecordKey("progress", ACCOUNT);
 
 /** Long enough for a level to slide in and the page to scroll to the part. */
 const SETTLE = { timeout: 5000 } as const;
@@ -63,6 +65,7 @@ const meta = {
 		</>
 	),
 	args: {
+		accountId: ACCOUNT,
 		workspaceSlug: "acme",
 		workspaceName: "Acme",
 		provider: "GITHUB",
@@ -179,6 +182,29 @@ export const StartOverClearsProgress: Story = {
 	beforeEach: MenuContinues.beforeEach,
 	play: async () => {
 		await userEvent.click(await screen.findByRole("button", { name: "Start over" }));
+		await expect(screen.queryByText(/Continue at step/u)).toBeNull();
+		await expect(within(guide()).queryByText("Done")).toBeNull();
+	},
+};
+
+/** A shared browser: another account's finished chapters, and a record from before accounts, mark nothing. */
+export const AnotherAccountsProgressMarksNothing: Story = {
+	beforeEach: () => {
+		const record = JSON.stringify({
+			place: { chapter: "your-profile", step: "why" },
+			done: ["how-it-works"],
+		});
+		window.localStorage.setItem(tourRecordKey("progress", "2"), record);
+		window.localStorage.setItem("hephaestus:guided-tour:practice-profile", record);
+		return () => {
+			window.localStorage.removeItem(tourRecordKey("progress", "2"));
+			window.localStorage.removeItem("hephaestus:guided-tour:practice-profile");
+		};
+	},
+	play: async () => {
+		await expect(
+			await screen.findByRole("button", { name: /How it works.*Start here/u }),
+		).toBeVisible();
 		await expect(screen.queryByText(/Continue at step/u)).toBeNull();
 		await expect(within(guide()).queryByText("Done")).toBeNull();
 	},

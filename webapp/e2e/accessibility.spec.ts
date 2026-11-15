@@ -4,6 +4,11 @@ import { AxeBuilder } from "@axe-core/playwright";
 import type { Locator, Page } from "@playwright/test";
 
 import { expect, test as base } from "./fixtures";
+import {
+	asFirstTourVisit,
+	asReturningTourReader,
+	tourOfferRecords,
+} from "./screenshots/tour-offer.ts";
 
 /**
  * The integrated half of the accessibility evaluation in
@@ -96,7 +101,6 @@ const publicTest = base.extend({
 	colorScheme: "light",
 	storageState: { cookies: [], origins: [] },
 });
-const TOUR_OFFERED = "hephaestus:guided-tour:practice-profile:offered";
 
 const signedInTest = base.extend({
 	colorScheme: "light",
@@ -104,7 +108,7 @@ const signedInTest = base.extend({
 	// A returning reader: the practice profile has offered its tour already, so a scan or a Tab walk
 	// meets the page itself.
 	context: async ({ context }, use) => {
-		await context.addInitScript((key) => localStorage.setItem(key, "1"), TOUR_OFFERED);
+		await asReturningTourReader(context);
 		await use(context);
 	},
 });
@@ -113,7 +117,7 @@ const firstVisitTest = base.extend({
 	colorScheme: "light",
 	storageState: async ({ adminSession }, use) => use(adminSession),
 	context: async ({ context }, use) => {
-		await context.addInitScript((key) => localStorage.removeItem(key), TOUR_OFFERED);
+		await asFirstTourVisit(context);
 		await use(context);
 	},
 });
@@ -368,8 +372,8 @@ base.describe("keyboard", () => {
 			await page.keyboard.press("Escape");
 			await expect(tour).toBeHidden();
 			await expect(page.getByRole("button", { name: "Take the tour" })).toBeFocused();
-			// The browser remembers the offer, so it does not open by itself again.
-			expect(await page.evaluate((key) => localStorage.getItem(key), TOUR_OFFERED)).toBe("1");
+			// The browser remembers the offer for this account, so it does not open by itself again.
+			expect(await tourOfferRecords(page)).toHaveLength(1);
 		},
 	);
 

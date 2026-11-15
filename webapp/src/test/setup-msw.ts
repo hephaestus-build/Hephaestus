@@ -20,6 +20,7 @@ import { client } from "@/api/client.gen";
 import { rememberTourOffered } from "@/components/tour/tour-start";
 import environment from "@/environment";
 import { clearDrafts } from "@/lib/composer-drafts";
+import { currentUser } from "@/mocks/fixtures/auth";
 import { server, unansweredRequests } from "@/mocks/server";
 import { FakeEventSource } from "@/test/fake-event-source";
 import { ObserverStub } from "@/test/observers";
@@ -134,7 +135,7 @@ beforeEach(() => {
 	unansweredRequests.length = 0;
 	// A first visit to the Practice profile offers its tour over the page. Every test is a returning
 	// reader unless it clears this itself, as the first-visit cases do.
-	rememberTourOffered();
+	rememberTourOffered(String(currentUser.id));
 });
 afterEach(({ task }) => {
 	server.resetHandlers();

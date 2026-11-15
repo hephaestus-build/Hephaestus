@@ -52,6 +52,8 @@ import { EXAMPLE_CAPTION, TourExampleLayer } from "./TourExampleLayer";
 import styles from "./tour.module.css";
 
 export interface PracticeProfileTourProps extends TourFacts {
+	/** The reader's account, whose finished chapters and place this browser keeps; absent, it keeps none. */
+	accountId: string | undefined;
 	/** The chapter an offer on the page asked for; without it the tour opens on its menu. */
 	startChapter?: TourChapterId;
 	/** The page opened the tour on a first visit: the menu says what the tour is, and Close reads "Not now". */
@@ -153,6 +155,7 @@ function primaryLabel(onLastStep: boolean, nextChapter: TourChapter | undefined)
  * tour scrolls the page to the part it explains (`webapp/DESIGN.md` § Design principles, 3).
  */
 export function PracticeProfileTour({
+	accountId,
 	startChapter,
 	firstVisit = false,
 	onClose,
@@ -160,7 +163,7 @@ export function PracticeProfileTour({
 }: PracticeProfileTourProps) {
 	const [example] = useState(() => exampleProfile(new Date(), facts.provider));
 	const chapters = tourChapters(facts, example);
-	const tour = useTourProgress();
+	const tour = useTourProgress(accountId);
 	const still = useStill();
 	const [view, setView] = useState<View>(() => {
 		const chapter = chapters.find((each) => each.id === startChapter);

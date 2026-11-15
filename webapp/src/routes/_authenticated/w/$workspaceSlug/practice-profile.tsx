@@ -131,14 +131,28 @@ function TourOffer({
 	);
 }
 
+/**
+ * Whether this browser still owes the reader the first visit's offer of the tour, read once the
+ * account is known, since the page can render before it arrives; and the call that settles it.
+ */
+function useFirstVisitOffer(accountId: string | undefined) {
+	const [due, setDue] = useState<boolean>();
+	if (due === undefined && accountId !== undefined) {
+		setDue(!tourOffered(accountId));
+	}
+	return [due === true, () => setDue(false)] as const;
+}
+
 function PracticeProfile() {
 	// A user view reads the developer's page and answers nothing on their behalf.
-	const readOnly = useAuth().userView !== undefined;
+	const auth = useAuth();
+	const readOnly = auth.userView !== undefined;
+	// The tour's records in this browser belong to this account, never to whoever used it before.
+	const accountId = auth.getUserId();
 	const [tour, setTour] = useState<{ startChapter?: TourChapterId; firstVisit?: true } | null>(
 		null,
 	);
-	// Read once: whether this browser still owes the reader the first visit's offer of the tour.
-	const [offerDue, setOfferDue] = useState(() => !tourOffered());
+	const [offerDue, offerMade] = useFirstVisitOffer(accountId);
 	const [tourLoading, startTourTransition] = useTransition();
 	const workProvider = useWorkProvider();
 	// From the reader's own membership: an admin read here would ask an admin for a passkey step-up.
@@ -246,15 +260,15 @@ function PracticeProfile() {
 		search.feedbackCard === undefined &&
 		(!publicActivityAsked || publicActivity.data?.seen === true)
 	) {
-		setOfferDue(false);
+		offerMade();
 		setTour({ firstVisit: true });
 	}
 	const firstVisitOpen = tour?.firstVisit === true;
 	useEffect(() => {
 		if (firstVisitOpen) {
-			rememberTourOffered();
+			rememberTourOffered(accountId);
 		}
-	}, [firstVisitOpen]);
+	}, [firstVisitOpen, accountId]);
 	// Only a definite "off" redirects: the surface exists only where practices review the work, and
 	// sending someone away before the answer arrives would bounce them out of a workspace that does.
 	if (featureState.practicesEnabled === false) {
@@ -363,7 +377,7 @@ function PracticeProfile() {
 	} satisfies PracticeProfilePageProps;
 
 	const startTour = (chapter?: TourChapterId) => {
-		setOfferDue(false);
+		offerMade();
 		startTourTransition(() => setTour({ startChapter: chapter }));
 	};
 	const closeTour = () => setTour(null);
@@ -420,6 +434,7 @@ function PracticeProfile() {
 				<Suspense fallback={null}>
 					{tour !== null && (
 						<PracticeProfileTour
+							accountId={accountId}
 							workspaceSlug={workspaceSlug}
 							workspaceName={workspaceName}
 							provider={workProvider}

@@ -16,7 +16,9 @@ import type {
 } from "@/api/types.gen";
 import { stackInSearch } from "@/components/layout/detail-drawer/detail-stack";
 import { reviewRangeStart } from "@/components/practice-profile/practice-profile-search";
+import { tourRecordKey } from "@/components/tour/tour-start";
 import { formatDayTime } from "@/lib/dates";
+import { currentUser } from "@/mocks/fixtures/auth";
 import { workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
 import { clearUserView } from "@/runtime/user-view/session";
@@ -47,7 +49,8 @@ import { storeUserView } from "@/test/user-view";
 
 const PAGE = "/w/acme/practice-profile";
 /** Where this browser remembers that the Practice profile offered its tour. */
-const TOUR_OFFERED = "hephaestus:guided-tour:practice-profile:offered";
+const TOUR_OFFERED = tourRecordKey("offered", String(currentUser.id));
+const TOUR_PROGRESS = tourRecordKey("progress", String(currentUser.id));
 
 beforeAll(
 	async () =>
@@ -426,9 +429,29 @@ describe("practice profile route", () => {
 		expect(screen.queryByRole("dialog", { name: "Guided tour" })).toBeNull();
 	});
 
+	it("keeps another account's tour records on a shared browser out of the reader's tour", async () => {
+		localStorage.clear();
+		const finished = JSON.stringify({
+			place: { chapter: "your-profile", step: "why" },
+			done: ["how-it-works"],
+		});
+		// Another account on this browser, and a record from before records named their account.
+		localStorage.setItem(tourRecordKey("offered", "7"), "1");
+		localStorage.setItem(tourRecordKey("progress", "7"), finished);
+		localStorage.setItem("hephaestus:guided-tour:practice-profile:offered", "1");
+		localStorage.setItem("hephaestus:guided-tour:practice-profile", finished);
+		await renderProfile();
+		// The reader's own first visit is still owed: neither record counts as theirs.
+		const dialog = await screen.findByRole("dialog", { name: "Guided tour" }, ROUTE_RENDER_WAIT);
+		within(dialog).getByRole("button", { name: /How it works.*Start here/u });
+		expect(within(dialog).queryByText(/Continue at step/u)).toBeNull();
+		expect(within(dialog).queryByText("Done")).toBeNull();
+		expect(localStorage.getItem(TOUR_OFFERED)).toBe("1");
+	});
+
 	it("opens the guided tour when asked, and a link in it hands over to the real level", async () => {
 		localStorage.setItem(
-			"hephaestus:guided-tour:practice-profile",
+			TOUR_PROGRESS,
 			JSON.stringify({ place: { chapter: "going-deeper", step: "try" }, done: [] }),
 		);
 		const router = await renderProfile();

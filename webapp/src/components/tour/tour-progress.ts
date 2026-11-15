@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { z } from "zod";
 
-const STORAGE_KEY = "hephaestus:guided-tour:practice-profile";
+import { tourRecordKey } from "./tour-start";
 
 const progressSchema = z.object({
 	/** The step to continue from: step ids, so a later change to a chapter cannot point at a wrong step. */
@@ -26,25 +26,32 @@ export function readTourProgress(raw: string | null): TourProgress {
 	}
 }
 
-function loadTourProgress(): TourProgress {
+function loadTourProgress(accountId: string | undefined): TourProgress {
+	if (accountId === undefined) {
+		return FRESH;
+	}
 	try {
-		return readTourProgress(window.localStorage.getItem(STORAGE_KEY));
+		return readTourProgress(window.localStorage.getItem(tourRecordKey("progress", accountId)));
 	} catch {
 		return FRESH;
 	}
 }
 
 /**
- * Where the reader left the tour and which chapters they finished, in this browser. Nothing starts or
+ * Where the reader left the tour and which chapters they finished, in this browser and for this
+ * account only; without an account, until the page closes. Nothing starts or
  * returns because of it, so a new device costs a checkmark and a place to continue from. Keeping it on
  * the server would add a column, an export entry and an erasure entry for that.
  */
-export function useTourProgress() {
-	const [progress, setProgress] = useState(loadTourProgress);
+export function useTourProgress(accountId: string | undefined) {
+	const [progress, setProgress] = useState(() => loadTourProgress(accountId));
 	const update = (next: TourProgress) => {
 		setProgress(next);
+		if (accountId === undefined) {
+			return;
+		}
 		try {
-			window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+			window.localStorage.setItem(tourRecordKey("progress", accountId), JSON.stringify(next));
 		} catch {
 			// The progress lasts until the page closes.
 		}
