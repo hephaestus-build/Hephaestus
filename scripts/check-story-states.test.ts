@@ -32,7 +32,8 @@ export function Panel({ state }: { state: PanelState }) { return null; }
 const missingOf = async (files: Record<string, string>) => {
 	const root = await tree({ "webapp/src/lib/panel-state.ts": PANEL_STATE, ...files });
 	try {
-		return Object.fromEntries((await measure(root)).missing);
+		const { missing } = await measure(root);
+		return Object.fromEntries(missing);
 	} finally {
 		await rm(root, { recursive: true, force: true });
 	}

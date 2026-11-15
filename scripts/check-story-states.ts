@@ -54,7 +54,11 @@ const ERROR_MEMBER = /^[a-z]+Error$/u;
 const STATE_MEMBERS = new Set(["state", "status"]);
 
 type Node = Record<string, unknown>;
-type Module = { src: Node; types: Map<string, Node>; imports: Map<string, string> };
+interface Module {
+	src: Node;
+	types: Map<string, Node>;
+	imports: Map<string, string>;
+}
 
 const node = (value: unknown): Node | undefined => (isRecord(value) ? value : undefined);
 const list = (value: unknown): readonly Node[] =>
@@ -64,6 +68,11 @@ const nameOf = (value: unknown): string | undefined => {
 	return identifier?.type === "Identifier" && typeof identifier.name === "string"
 		? identifier.name
 		: undefined;
+};
+/** The name of a JSX identifier, or undefined for a member or namespaced name. */
+const jsxNameOf = (value: unknown): string | undefined => {
+	const name = node(value)?.name;
+	return typeof name === "string" ? name : undefined;
 };
 
 /** The repository-relative file a module specifier names, or undefined for a package or wire type. */
@@ -147,7 +156,9 @@ class Program {
 		const module: Module = { src: program, types, imports };
 		this.#modules.set(file, module);
 		for (const { local, specifier } of pending) {
-			const target = await resolveImport(file, specifier, (candidate) => this.exists(candidate));
+			const target = await resolveImport(file, specifier, async (candidate) =>
+				this.exists(candidate),
+			);
 			if (target !== undefined) {
 				imports.set(local, target);
 			}
@@ -164,51 +175,53 @@ class Program {
 		inState = false,
 	): Promise<void> {
 		const current = node(type);
+		if (current === undefined) {
+			return;
+		}
 		// A type is read once outside a state member and once inside one: only inside does a literal count.
-		const visit = current === undefined ? undefined : inState ? stateVisit(current) : current;
-		if (current === undefined || seen.has(visit)) {
+		const visit = inState ? stateVisit(current) : current;
+		if (seen.has(visit)) {
 			return;
 		}
 		seen.add(visit);
 		switch (current.type) {
 			case "TSTypeAnnotation":
+			case "TSTypeAliasDeclaration": {
 				await this.signals(current.typeAnnotation, module, found, seen, inState);
 				break;
+			}
+			case "TSIndexedAccessType": {
+				await this.signals(current.objectType, module, found, seen, inState);
+				break;
+			}
 			case "TSUnionType":
-			case "TSIntersectionType":
+			case "TSIntersectionType": {
 				for (const member of list(current.types)) {
 					await this.signals(member, module, found, seen, inState);
 				}
 				break;
+			}
 			case "TSLiteralType": {
-				const value = node(current.literal)?.value;
-				if (inState && typeof value === "string") {
-					for (const state of STATES) {
-						if (LITERALS[state].includes(value)) {
-							found.add(state);
-						}
-					}
+				if (inState) {
+					literalStates(node(current.literal)?.value, found);
 				}
 				break;
 			}
-			case "TSTypeLiteral":
+			case "TSTypeLiteral": {
 				await this.members(list(current.members), module, found, seen);
 				break;
-			case "TSInterfaceDeclaration":
+			}
+			case "TSInterfaceDeclaration": {
 				await this.members(list(node(current.body)?.body), module, found, seen);
 				for (const parent of list(current.extends)) {
 					await this.reference(parent.expression, parent.typeArguments, module, found, seen);
 				}
 				break;
-			case "TSTypeAliasDeclaration":
-				await this.signals(current.typeAnnotation, module, found, seen, inState);
-				break;
-			case "TSTypeReference":
+			}
+			case "TSTypeReference": {
 				await this.reference(current.typeName, current.typeArguments, module, found, seen, inState);
 				break;
-			case "TSIndexedAccessType":
-				await this.signals(current.objectType, module, found, seen, inState);
-				break;
+			}
 			default:
 		}
 	}
@@ -303,15 +316,27 @@ class Program {
 	}
 }
 
+/** The states that a string literal inside a `state` or `status` member names. */
+function literalStates(value: unknown, found: Set<State>): void {
+	if (typeof value !== "string") {
+		return;
+	}
+	for (const state of STATES) {
+		if (LITERALS[state].includes(value)) {
+			found.add(state);
+		}
+	}
+}
+
 /** Function declarations and `const X = (props) => …` (also through `memo` and `forwardRef`). */
 function exportedComponents(declaration: Node | undefined): readonly Node[] {
 	if (declaration === undefined) {
 		return [];
 	}
-	const isFunction = (value: Node | undefined): value is Node =>
-		value?.type === "FunctionDeclaration" ||
-		value?.type === "FunctionExpression" ||
-		value?.type === "ArrowFunctionExpression";
+	const isFunction = (value: Node): boolean =>
+		value.type === "FunctionDeclaration" ||
+		value.type === "FunctionExpression" ||
+		value.type === "ArrowFunctionExpression";
 	if (declaration.type === "FunctionDeclaration") {
 		return /^[A-Z]/u.test(nameOf(declaration.id) ?? "") ? [declaration] : [];
 	}
@@ -323,7 +348,10 @@ function exportedComponents(declaration: Node | undefined): readonly Node[] {
 			return [];
 		}
 		const init = node(declarator.init);
-		return isFunction(init) ? [init] : list(init?.arguments).filter(isFunction);
+		if (init === undefined) {
+			return [];
+		}
+		return isFunction(init) ? [init] : list(init.arguments).filter(isFunction);
 	});
 }
 
@@ -413,6 +441,36 @@ function propStates(value: Node | undefined, found: Set<State>, references: Set<
 	}
 }
 
+/** The states that the JSX attributes of one component element set. */
+function attributeStates(
+	attributes: readonly Node[],
+	found: Set<State>,
+	references: Set<string>,
+): void {
+	for (const attribute of attributes) {
+		if (attribute.type === "JSXSpreadAttribute") {
+			const reference = referenceOf(node(attribute.argument));
+			if (reference !== undefined) {
+				references.add(reference);
+			}
+			continue;
+		}
+		const name = jsxNameOf(attribute.name);
+		if (name === undefined) {
+			continue;
+		}
+		const raw = node(attribute.value);
+		const expression = raw?.type === "JSXExpressionContainer" ? unwrap(node(raw.expression)) : raw;
+		const state = stateOf(name, expression, true);
+		if (state !== undefined) {
+			found.add(state);
+		}
+		if (STATE_MEMBERS.has(name)) {
+			propStates(expression, found, references);
+		}
+	}
+}
+
 /** The states that `render` passes to the components of the file under test, as JSX attributes. */
 function renderStates(
 	value: unknown,
@@ -421,39 +479,17 @@ function renderStates(
 	references: Set<string>,
 ): void {
 	if (Array.isArray(value)) {
-		value.forEach((child) => {
+		for (const child of value) {
 			renderStates(child, components, found, references);
-		});
+		}
 		return;
 	}
 	const current = node(value);
 	if (current === undefined) {
 		return;
 	}
-	if (
-		current.type === "JSXOpeningElement" &&
-		components.has(asString(asRecord(current.name)?.name) ?? "")
-	) {
-		for (const attribute of list(current.attributes)) {
-			if (attribute.type === "JSXSpreadAttribute") {
-				const reference = referenceOf(node(attribute.argument));
-				if (reference !== undefined) {
-					references.add(reference);
-				}
-				continue;
-			}
-			const name = asString(asRecord(attribute.name)?.name);
-			const raw = node(attribute.value);
-			const expression =
-				raw?.type === "JSXExpressionContainer" ? unwrap(node(raw.expression)) : raw;
-			const state = name === undefined ? undefined : stateOf(name, expression, true);
-			if (state !== undefined) {
-				found.add(state);
-			}
-			if (name !== undefined && STATE_MEMBERS.has(name)) {
-				propStates(expression, found, references);
-			}
-		}
+	if (current.type === "JSXOpeningElement" && components.has(jsxNameOf(current.name) ?? "")) {
+		attributeStates(list(current.attributes), found, references);
 	}
 	for (const [key, child] of Object.entries(current)) {
 		if (key !== "type" && key !== "start" && key !== "end") {
@@ -539,12 +575,16 @@ async function storyStates(storyFile: string, program: Program): Promise<Readonl
 		seen.add(name);
 		const states = new Set(constant.states);
 		for (const reference of constant.references) {
-			resolve(reference, seen).forEach((state) => states.add(state));
+			for (const state of resolve(reference, seen)) {
+				states.add(state);
+			}
 		}
 		return states;
 	};
 	for (const name of exported) {
-		resolve(name, new Set()).forEach((state) => covered.add(state));
+		for (const state of resolve(name, new Set())) {
+			covered.add(state);
+		}
 	}
 	return covered;
 }
@@ -563,12 +603,12 @@ async function componentFiles(root: string): Promise<string[]> {
 		.toSorted();
 }
 
-export type Measurement = {
+export interface Measurement {
 	/** Data-region components: the states their props carry. */
 	regions: ReadonlyMap<string, ReadonlySet<State>>;
 	/** The carried states that no sibling story sets. A component with none left is absent. */
 	missing: ReadonlyMap<string, readonly State[]>;
-};
+}
 
 export async function measure(root: string): Promise<Measurement> {
 	const files = await componentFiles(root);
