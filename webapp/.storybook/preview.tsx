@@ -185,7 +185,16 @@ const preview: Preview = {
 			},
 		},
 	},
-	loaders: [mswLoader],
+	loaders: [
+		mswLoader,
+		// The app fetches the Markdown renderer on first use. Loading it before a story keeps that fetch,
+		// and the dev server's first transform of it, out of whichever story renders Markdown first, so
+		// a story waits only for React to resolve the lazy component.
+		async () => {
+			await import("@/components/common/UntrustedMarkdownRenderer");
+			return {};
+		},
+	],
 	decorators: [
 		withQueryClient,
 		withRouter,

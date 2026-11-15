@@ -177,7 +177,8 @@ describe("feedback approval level", () => {
 
 		// The title identifies the recipient and destination; the proposal remains in its package.
 		await screen.findByRole("heading", { name: /^For /u }, ROUTE_RENDER_WAIT);
-		expect(screen.getAllByText(/Please keep the cache scoped/u).length).toBeGreaterThan(0);
+		// The Markdown renderer is a lazy chunk, so its text lands after the heading.
+		await screen.findAllByText(/Please keep the cache scoped/u, {}, ROUTE_RENDER_WAIT);
 		expect(screen.getByRole("heading", { level: 2 }).textContent).not.toContain(
 			"Please keep the cache scoped",
 		);

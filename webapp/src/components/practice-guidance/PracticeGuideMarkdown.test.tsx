@@ -1,5 +1,5 @@
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 
 import { PracticeGuideMarkdown } from "./PracticeGuideMarkdown";
 
@@ -16,13 +16,19 @@ Split by goal.
 ![A figure the guide does not carry](figures/missing.svg)
 `;
 
+// Loaded up front, as on a page that showed Markdown before: a test waits only for React to resolve
+// the lazy renderer, not for its first import.
+beforeAll(async () => {
+	await import("@/components/common/UntrustedMarkdownRenderer");
+});
+
 describe("PracticeGuideMarkdown", () => {
-	it("draws the guide's own figure, named by its alt text, and no other image", () => {
+	it("draws the guide's own figure, named by its alt text, and no other image", async () => {
 		render(
 			<PracticeGuideMarkdown guide={{ markdown: MARKDOWN, figures: { "split-order": FIGURE } }} />,
 		);
 
-		const figure = screen.getByRole("figure");
+		const figure = await screen.findByRole("figure");
 		expect(screen.getByRole("img", { name: "Three changes in order" }).closest("figure")).toBe(
 			figure,
 		);
