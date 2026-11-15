@@ -3,7 +3,7 @@ import { expect, fn, userEvent } from "storybook/test";
 
 import type { SyncJob } from "@/api/types.gen";
 
-import { JobHistoryCard } from "./JobHistoryCard";
+import { WorkspaceJobHistoryCard } from "./WorkspaceJobHistoryCard";
 
 const succeeded: SyncJob = {
 	id: 2,
@@ -20,16 +20,16 @@ const succeeded: SyncJob = {
 
 /**
  * The card around a connection's sync history, the same on the GitHub, GitLab, Slack and Outline
- * pages. The table's own states live in `SyncJobsTable`; these stories show that the card keeps its
+ * pages. The table's own states live in `WorkspaceSyncJobsTable`; these stories show that the card keeps its
  * heading around each of them.
  */
 const meta = {
-	component: JobHistoryCard,
+	component: WorkspaceJobHistoryCard,
 	parameters: { layout: "padded" },
 	tags: ["autodocs"],
 	args: { jobs: [succeeded] },
 	argTypes: { jobs: { control: false } },
-} satisfies Meta<typeof JobHistoryCard>;
+} satisfies Meta<typeof WorkspaceJobHistoryCard>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
