@@ -726,7 +726,9 @@ describe("approving rejected feedback after all", () => {
 			await screen.findByRole("button", { name: "Approve after all" }, ROUTE_RENDER_WAIT),
 		);
 		const dialog = await screen.findByRole("dialog", { name: "Approve this feedback after all" });
-		within(dialog).getByText(/posts every copy above on the work once the feedback checks pass/u);
+		within(dialog).getByText(
+			/posts the planned copies above on the work if the feedback checks pass/u,
+		);
 		expect(requestBody).toBeUndefined();
 		await userEvent.click(within(dialog).getByRole("button", { name: "Approve for delivery" }));
 
@@ -745,7 +747,7 @@ describe("approving rejected feedback after all", () => {
 			),
 			http.post(DECISIONS, () =>
 				HttpResponse.json(
-					{ status: 409, detail: "The results of this feedback are marked incorrect." },
+					{ status: 409, detail: "The feedback changed. Refresh it before deciding." },
 					{ status: 409 },
 				),
 			),
@@ -760,7 +762,7 @@ describe("approving rejected feedback after all", () => {
 		await userEvent.click(within(dialog).getByRole("button", { name: "Approve for delivery" }));
 
 		await screen.findByText("We could not save your decision on this feedback");
-		await screen.findByText("The results of this feedback are marked incorrect.");
+		await screen.findByText("The feedback changed. Refresh it before deciding.");
 		await waitFor(() =>
 			expect(
 				screen.getByRole("button", { name: "Approve after all" }).hasAttribute("disabled"),

@@ -16,10 +16,7 @@ import {
 	FEEDBACK_DECISION_REASONS,
 	type FeedbackDecisionReason,
 } from "@/components/practice-vocabulary/feedback-decision-defs";
-import {
-	ADMIN_WITHHELD_TEXT,
-	type FeedbackDestination,
-} from "@/components/practice-vocabulary/feedback-destination-defs";
+import { ADMIN_WITHHELD_TEXT } from "@/components/practice-vocabulary/feedback-destination-defs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
@@ -252,27 +249,16 @@ function RejectFeedbackPopover({
 	);
 }
 
-const APPROVE_REJECTED_DESCRIPTIONS: Record<FeedbackDestination, string> = {
-	ON_WORK:
-		"Hephaestus posts every copy above on the work once the feedback checks pass. The rejection stays in the history.",
-	PRACTICE_PAGE:
-		"It appears on the developer’s practice pages once the feedback checks pass. The rejection stays in the history.",
-	CONVERSATION:
-		"Hephaestus can raise it in the developer’s next conversation once the feedback checks pass. The rejection stays in the history.",
-};
-
 export interface ApproveRejectedFeedbackProps {
-	destination: FeedbackDestination;
 	isDeciding: boolean;
 	onApprove: () => void;
 }
 
-/** Approves rejected feedback after all, once the admin has read what that sends and where. */
-export function ApproveRejectedFeedback({
-	destination,
-	isDeciding,
-	onApprove,
-}: ApproveRejectedFeedbackProps) {
+/**
+ * Approves rejected feedback after all, once the admin has read what that sends. Only feedback on the
+ * work waits for approval, so only it can have been rejected.
+ */
+export function ApproveRejectedFeedback({ isDeciding, onApprove }: ApproveRejectedFeedbackProps) {
 	const [open, setOpen] = useState(false);
 	return (
 		<Popover open={open} onOpenChange={setOpen}>
@@ -283,7 +269,11 @@ export function ApproveRejectedFeedback({
 			<PopoverContent align="end" side="top" className="w-[min(24rem,calc(100vw-2rem))] gap-4 p-4">
 				<PopoverHeader>
 					<PopoverTitle>Approve this feedback after all</PopoverTitle>
-					<PopoverDescription>{APPROVE_REJECTED_DESCRIPTIONS[destination]}</PopoverDescription>
+					<PopoverDescription>
+						Hephaestus posts the planned copies above on the work if the feedback checks pass.
+						Otherwise nothing is posted, and this sheet says why. The rejection stays in the
+						history.
+					</PopoverDescription>
 				</PopoverHeader>
 				<div className="flex justify-end gap-2 border-t pt-3">
 					<Button variant="ghost" size="sm" onClick={() => setOpen(false)}>

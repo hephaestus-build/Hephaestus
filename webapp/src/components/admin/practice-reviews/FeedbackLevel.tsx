@@ -304,11 +304,7 @@ export function FeedbackLevel({
 				</DrawerFooter>
 			) : canApproveAfterAll(record) ? (
 				<DrawerFooter>
-					<ApproveRejectedFeedback
-						destination={record.destination}
-						isDeciding={isDeciding}
-						onApprove={onApprove}
-					/>
+					<ApproveRejectedFeedback isDeciding={isDeciding} onApprove={onApprove} />
 				</DrawerFooter>
 			) : (
 				canChangeWithdrawal(record) && (
@@ -883,9 +879,18 @@ function feedbackTechnical(feedback: FeedbackRecord): TechnicalFact[] {
 	return facts;
 }
 
-/** The server approves rejected feedback that still has a package to send, so the sheet offers it. */
+/**
+ * Rejected feedback that an approval would post. Not one with no digest to approve, which the server
+ * refuses, nor one whose copies were all withheld since, which would post nothing.
+ */
 function canApproveAfterAll(feedback: FeedbackRecord): boolean {
-	return feedback.state === "REJECTED" && !feedback.withdrawn && feedback.copies.length > 0;
+	return (
+		feedback.state === "REJECTED" &&
+		!feedback.withdrawn &&
+		feedback.destination === "ON_WORK" &&
+		hasText(feedback.contentDigest) &&
+		feedback.copies.some((copy) => copy.state === "PLANNED")
+	);
 }
 
 function canChangeWithdrawal(feedback: FeedbackRecord): boolean {
