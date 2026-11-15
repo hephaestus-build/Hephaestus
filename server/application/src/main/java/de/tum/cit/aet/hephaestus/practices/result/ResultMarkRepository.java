@@ -15,6 +15,9 @@ public interface ResultMarkRepository extends JpaRepository<ResultMark, UUID> {
 
     List<ResultMark> findByWorkspaceIdAndResultIdOrderByCreatedAtDescIdDesc(long workspaceId, UUID resultId);
 
+    List<ResultMark> findByWorkspaceIdAndResultIdInOrderByCreatedAtDescIdDesc(
+            long workspaceId, Collection<UUID> resultIds);
+
     List<ResultMark> findByWorkspaceIdAndResultIdIn(long workspaceId, Collection<UUID> resultIds);
 
     List<ResultMark> findByWorkspaceIdAndResultIdInAndRemovedAtIsNull(long workspaceId, Collection<UUID> resultIds);

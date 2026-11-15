@@ -17,13 +17,17 @@ import de.tum.cit.aet.hephaestus.practices.spi.FeedbackState;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackStopReason;
 import de.tum.cit.aet.hephaestus.practices.spi.HistoryCustody;
 import de.tum.cit.aet.hephaestus.practices.spi.PrivateFeedbackHistory;
+import de.tum.cit.aet.hephaestus.practices.spi.ResultHistoryEntry;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultHistoryQuery;
 import jakarta.persistence.criteria.Predicate;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -88,7 +92,7 @@ public class FeedbackHistoryQueryService implements FeedbackHistoryQuery {
                         cb.and(
                                 cb.equal(row.get("destination"), FeedbackDestination.ON_WORK),
                                 cb.isNotNull(row.get("deliveredAt")))));
-        return read(selected, viewerAccountId, limit, SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY);
+        return read(workspaceId, selected, viewerAccountId, limit, SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY);
     }
 
     @Override
@@ -136,8 +140,10 @@ public class FeedbackHistoryQueryService implements FeedbackHistoryQuery {
                 .getContent();
         var entries = new ArrayList<PrivateFeedbackHistory.Entry>();
         int withoutCopyAuthority = 0;
-        for (var row : rows.stream().limit(limit).toList()) {
-            var facts = facts(row, developerAccountId, SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY);
+        var listed = rows.stream().limit(limit).toList();
+        var page = new Page(workspaceId, listed, developerAccountId, SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY);
+        for (var row : listed) {
+            var facts = page.facts(row);
             // A row whose support may not be copied for this purpose is left out whole, and counted.
             if (!facts.entry().copyAuthorityComplete()) {
                 withoutCopyAuthority++;
@@ -190,14 +196,16 @@ public class FeedbackHistoryQueryService implements FeedbackHistoryQuery {
     }
 
     private List<FeedbackHistoryEntry> read(
-            Specification<Feedback> selected, long viewerAccountId, int limit, SourceUsePurpose purpose) {
+            long workspaceId,
+            Specification<Feedback> selected,
+            long viewerAccountId,
+            int limit,
+            SourceUsePurpose purpose) {
         if (limit < 1) throw new InvalidInputException("A history read needs a positive limit.");
-        return feedback
-                .findAll(selected, PageRequest.of(0, limit, Sort.by(Sort.Direction.DESC, "createdAt", "id")))
-                .getContent()
-                .stream()
-                .map(row -> facts(row, viewerAccountId, purpose).entry())
-                .toList();
+        var rows = feedback.findAll(selected, PageRequest.of(0, limit, Sort.by(Sort.Direction.DESC, "createdAt", "id")))
+                .getContent();
+        var page = new Page(workspaceId, rows, viewerAccountId, purpose);
+        return rows.stream().map(row -> page.facts(row).entry()).toList();
     }
 
     /**
@@ -210,18 +218,16 @@ public class FeedbackHistoryQueryService implements FeedbackHistoryQuery {
         Specification<Feedback> visible =
                 selected.and((row, query, cb) -> row.get("state").in(FeedbackState.VISIBLE_TO_DEVELOPER));
         // Withdrawal is a decision on the piece, not a column: page on until the limit holds pieces that are kept, so
-        // a caller that asks for one more row than it lists still learns whether more exist. One query per page skips
-        // the withdrawn rows before their full read.
+        // a caller that asks for one more row than it lists still learns whether more exist.
         List<FeedbackHistoryEntry> kept = new ArrayList<>();
         for (int page = 0; kept.size() < limit; page++) {
             var rows = feedback.findAll(
                             visible, PageRequest.of(page, limit, Sort.by(Sort.Direction.DESC, "createdAt", "id")))
                     .getContent();
-            var withdrawn = visibility.withdrawnAt(
-                    workspaceId, rows.stream().map(Feedback::getId).toList());
+            var read = new Page(workspaceId, rows, developerAccountId, SourceUsePurpose.CONVERSATIONAL_MENTORING);
             for (var row : rows) {
-                if (withdrawn.containsKey(row.getId()) || kept.size() >= limit) continue;
-                var facts = facts(row, developerAccountId, SourceUsePurpose.CONVERSATIONAL_MENTORING);
+                if (kept.size() >= limit) break;
+                var facts = read.facts(row);
                 if (!facts.withdrawn()) kept.add(facts.entry());
             }
             if (rows.size() < limit) break;
@@ -236,123 +242,217 @@ public class FeedbackHistoryQueryService implements FeedbackHistoryQuery {
             List<FeedbackPublicHistory.AuthorizedSupport> authorized,
             boolean withdrawn) {}
 
-    private Facts facts(Feedback row, long viewerAccountId, SourceUsePurpose purpose) {
-        long workspaceId = row.getWorkspaceId();
-        var edges = basis.findByWorkspaceIdAndFeedbackIdOrderByOrdinalAscIdAsc(workspaceId, row.getId());
-        var ids = edges.stream().map(FeedbackBasis::getResultId).distinct().toList();
-        var support = results.findByWorkspaceIdAndIdIn(workspaceId, ids);
-        var authorized = row.getDestination() == FeedbackDestination.ON_WORK
-                ? support.stream()
-                        .flatMap(result -> publicHistoryReader.authorize(result, purpose).stream())
-                        .toList()
-                : ids.stream()
-                        .flatMap(id -> history.find(workspaceId, id, viewerAccountId, purpose).stream())
-                        .map(entry -> new FeedbackPublicHistory.AuthorizedSupport(
-                                entry.resultId(),
-                                entry.practiceSlug(),
-                                new HistoryCustody(
-                                        entry.copyAuthorityComplete(),
-                                        false,
-                                        entry.copiedIdentities(),
-                                        entry.repositoryIds(),
-                                        entry.sourceJobIds())))
-                        .toList();
-        boolean complete = !ids.isEmpty()
-                && support.size() == ids.size()
-                && authorized.size() == ids.size()
-                && authorized.stream()
-                        .map(FeedbackPublicHistory.AuthorizedSupport::resultId)
-                        .collect(Collectors.toSet())
-                        .containsAll(ids)
-                && authorized.stream().allMatch(entry -> entry.custody().complete());
-        var confirmed = copies.findByWorkspaceIdAndFeedbackIdOrderByPositionAsc(workspaceId, row.getId()).stream()
-                .filter(copy -> copy.getPostedAt() != null
-                        && (copy.getState() == FeedbackCopyState.POSTED
-                                || copy.getState() == FeedbackCopyState.RETRACTED))
-                .toList();
-        boolean withdrawn = visibility.withdrawn(workspaceId, row.getId());
-        boolean textAllowed = complete && !withdrawn && !basis.isIncorrect(workspaceId, row.getId());
-        var incorrect = copies.incorrectCopyIds(workspaceId, row.getId());
-        @Nullable String body = null;
-        if (textAllowed) {
-            if (row.getDestination() == FeedbackDestination.ON_WORK) {
-                body = confirmed.stream()
-                        .filter(copy -> !incorrect.contains(copy.getId()))
-                        .map(copy -> copy.getKind() == FeedbackCopyKind.SUMMARY ? row.getBody() : copy.getBody())
-                        .filter(Objects::nonNull)
-                        .collect(Collectors.joining("\n\n"));
-                if (body.isEmpty()) body = null;
-            } else if (row.getDestination() == FeedbackDestination.CONVERSATION && row.getDeliveredAt() != null) {
-                body = confirmed.stream()
-                        .filter(copy -> copy.getKind() == FeedbackCopyKind.CHAT_TURN)
-                        .map(FeedbackCopy::getBody)
-                        .filter(Objects::nonNull)
-                        .findFirst()
-                        .orElse(null);
-            } else if (row.getState() == FeedbackState.READY
-                    || (row.getDestination() == FeedbackDestination.PRACTICE_PAGE && row.getDeliveredAt() != null)) {
-                body = row.getBody();
-            }
+    /**
+     * What the facts of a page of rows read, read once for the page: their basis, support, the support's decisions,
+     * copies, withdrawals, incorrectness, responses and threads. Each row's facts are then decided from it, as one
+     * row's facts were decided alone.
+     */
+    private final class Page {
+        private final long viewerAccountId;
+        private final Map<UUID, List<FeedbackBasisRepository.ReadRow>> edges = new HashMap<>();
+        private final Map<UUID, Result> supportById = new HashMap<>();
+        private final Map<UUID, FeedbackPublicHistory.AuthorizedSupport> publicSupport = new HashMap<>();
+        private final Map<UUID, ResultHistoryEntry> privateSupport = new HashMap<>();
+        private final Map<UUID, List<FeedbackCopy>> copiesOf = new HashMap<>();
+        private final Set<UUID> withdrawn = new HashSet<>();
+        private final Set<UUID> incorrect = new HashSet<>();
+        private final Set<UUID> incorrectCopies = new HashSet<>();
+        private final Map<UUID, FeedbackResponse> responsesOf = new HashMap<>();
+        private final Map<UUID, UUID> threads = new HashMap<>();
+
+        Page(long workspaceId, List<Feedback> rows, long viewerAccountId, SourceUsePurpose purpose) {
+            this.viewerAccountId = viewerAccountId;
+            for (var chunk : chunks(rows)) read(workspaceId, chunk, purpose);
         }
-        @Nullable
-        FeedbackResponse response = row.getDeveloperId() == viewerAccountId
-                ? responses.findCurrent(workspaceId, row.getId()).orElse(null)
-                : null;
-        @Nullable
-        JsonNode publicHistory = row.getDestination() == FeedbackDestination.ON_WORK
-                        && complete
-                        && row.getDeliveredAt() != null
-                        && !confirmed.isEmpty()
-                ? publicHistoryReader.render(row, support, authorized, confirmed, withdrawn, textAllowed)
-                : null;
-        var visible = new FeedbackHistoryEntry(
-                row.getId(),
-                row.getReviewId(),
-                row.getItemId(),
-                row.getDeveloperId(),
-                row.getDestination(),
-                row.getState(),
-                body,
-                row.getCreatedAt(),
-                row.getDeliveredAt(),
-                ids,
-                edges.stream()
-                        .map(FeedbackBasis::getProblemId)
-                        .filter(Objects::nonNull)
-                        .distinct()
-                        .toList(),
-                complete
-                        ? authorized.stream()
-                                .map(FeedbackPublicHistory.AuthorizedSupport::practiceSlug)
-                                .distinct()
-                                .sorted()
-                                .toList()
-                        : List.of(),
-                response == null ? null : response.getResolution(),
-                response == null ? null : response.getUsefulness(),
-                complete
-                        ? authorized.stream()
-                                .flatMap(entry -> entry.custody().sourceJobIds().stream())
-                                .distinct()
-                                .sorted(Comparator.comparing(UUID::toString))
-                                .toList()
-                        : List.of(),
-                complete
-                        ? authorized.stream()
-                                .flatMap(entry -> entry.custody().copiedIdentities().stream())
-                                .distinct()
-                                .toList()
-                        : List.of(),
-                complete
-                        ? authorized.stream()
-                                .flatMap(entry -> entry.custody().repositoryIds().stream())
-                                .distinct()
-                                .sorted()
-                                .toList()
-                        : List.of(),
-                queries.threadId(workspaceId, row.getId()),
-                complete,
-                publicHistory);
-        return new Facts(visible, support, authorized, withdrawn);
+
+        private void read(long workspaceId, List<Feedback> rows, SourceUsePurpose purpose) {
+            var ids = rows.stream().map(Feedback::getId).toList();
+            basis.findReadRows(workspaceId, ids)
+                    .forEach(edge -> edges.computeIfAbsent(edge.feedbackId(), ignored -> new ArrayList<>())
+                            .add(edge));
+            var supportIds = rows.stream()
+                    .flatMap(row -> resultIds(row.getId()).stream())
+                    .distinct()
+                    .toList();
+            for (var chunk : chunks(supportIds))
+                results.findByWorkspaceIdAndIdIn(workspaceId, chunk)
+                        .forEach(result -> supportById.put(result.getId(), result));
+            // A piece on the work is read by its public support; any other by its developer's own history.
+            publicSupport.putAll(publicHistoryReader.authorizeAll(
+                    workspaceId,
+                    rows.stream()
+                            .filter(row -> row.getDestination() == FeedbackDestination.ON_WORK)
+                            .flatMap(row -> support(row.getId()).stream())
+                            .distinct()
+                            .toList(),
+                    purpose));
+            var privateIds = rows.stream()
+                    .filter(row -> row.getDestination() != FeedbackDestination.ON_WORK)
+                    .flatMap(row -> resultIds(row.getId()).stream())
+                    .distinct()
+                    .toList();
+            if (!privateIds.isEmpty())
+                privateSupport.putAll(history.findAll(workspaceId, privateIds, viewerAccountId, purpose));
+            copies.findByWorkspaceIdAndFeedbackIdInOrderByPositionAsc(workspaceId, ids)
+                    .forEach(copy -> copiesOf.computeIfAbsent(copy.getFeedbackId(), ignored -> new ArrayList<>())
+                            .add(copy));
+            withdrawn.addAll(visibility.withdrawnAt(workspaceId, ids).keySet());
+            incorrect.addAll(basis.incorrectFeedbackIds(workspaceId, ids));
+            incorrectCopies.addAll(copies.incorrectCopyIdsOf(workspaceId, ids));
+            var own = rows.stream()
+                    .filter(row -> row.getDeveloperId() == viewerAccountId)
+                    .map(Feedback::getId)
+                    .toList();
+            if (!own.isEmpty())
+                responses
+                        .findCurrentForFeedbackIds(workspaceId, own)
+                        .forEach(response -> responsesOf.put(response.getFeedbackId(), response));
+            queries.threadIds(workspaceId, ids)
+                    .forEach(thread -> threads.put(thread.getFeedbackId(), thread.getConversationId()));
+        }
+
+        private List<UUID> resultIds(UUID feedbackId) {
+            return edges.getOrDefault(feedbackId, List.of()).stream()
+                    .map(FeedbackBasisRepository.ReadRow::resultId)
+                    .distinct()
+                    .toList();
+        }
+
+        private List<Result> support(UUID feedbackId) {
+            return resultIds(feedbackId).stream()
+                    .map(supportById::get)
+                    .filter(Objects::nonNull)
+                    .toList();
+        }
+
+        /** One history row as the page's purpose may see it, with the support it was judged on. */
+        Facts facts(Feedback row) {
+            var edges = this.edges.getOrDefault(row.getId(), List.of());
+            var ids = resultIds(row.getId());
+            var support = support(row.getId());
+            var authorized = row.getDestination() == FeedbackDestination.ON_WORK
+                    ? support.stream()
+                            .map(result -> publicSupport.get(result.getId()))
+                            .filter(Objects::nonNull)
+                            .toList()
+                    : ids.stream()
+                            .map(privateSupport::get)
+                            .filter(Objects::nonNull)
+                            .map(entry -> new FeedbackPublicHistory.AuthorizedSupport(
+                                    entry.resultId(),
+                                    entry.practiceSlug(),
+                                    new HistoryCustody(
+                                            entry.copyAuthorityComplete(),
+                                            false,
+                                            entry.copiedIdentities(),
+                                            entry.repositoryIds(),
+                                            entry.sourceJobIds())))
+                            .toList();
+            boolean complete = !ids.isEmpty()
+                    && support.size() == ids.size()
+                    && authorized.size() == ids.size()
+                    && authorized.stream()
+                            .map(FeedbackPublicHistory.AuthorizedSupport::resultId)
+                            .collect(Collectors.toSet())
+                            .containsAll(ids)
+                    && authorized.stream().allMatch(entry -> entry.custody().complete());
+            var confirmed = copiesOf.getOrDefault(row.getId(), List.of()).stream()
+                    .filter(copy -> copy.getPostedAt() != null
+                            && (copy.getState() == FeedbackCopyState.POSTED
+                                    || copy.getState() == FeedbackCopyState.RETRACTED))
+                    .toList();
+            boolean withdrawn = this.withdrawn.contains(row.getId());
+            boolean textAllowed = complete && !withdrawn && !incorrect.contains(row.getId());
+            @Nullable String body = null;
+            if (textAllowed) {
+                if (row.getDestination() == FeedbackDestination.ON_WORK) {
+                    body = confirmed.stream()
+                            .filter(copy -> !incorrectCopies.contains(copy.getId()))
+                            .map(copy -> copy.getKind() == FeedbackCopyKind.SUMMARY ? row.getBody() : copy.getBody())
+                            .filter(Objects::nonNull)
+                            .collect(Collectors.joining("\n\n"));
+                    if (body.isEmpty()) body = null;
+                } else if (row.getDestination() == FeedbackDestination.CONVERSATION && row.getDeliveredAt() != null) {
+                    body = confirmed.stream()
+                            .filter(copy -> copy.getKind() == FeedbackCopyKind.CHAT_TURN)
+                            .map(FeedbackCopy::getBody)
+                            .filter(Objects::nonNull)
+                            .findFirst()
+                            .orElse(null);
+                } else if (row.getState() == FeedbackState.READY
+                        || (row.getDestination() == FeedbackDestination.PRACTICE_PAGE
+                                && row.getDeliveredAt() != null)) {
+                    body = row.getBody();
+                }
+            }
+            @Nullable
+            FeedbackResponse response = row.getDeveloperId() == viewerAccountId ? responsesOf.get(row.getId()) : null;
+            @Nullable
+            JsonNode publicHistory = row.getDestination() == FeedbackDestination.ON_WORK
+                            && complete
+                            && row.getDeliveredAt() != null
+                            && !confirmed.isEmpty()
+                    ? publicHistoryReader.render(row, support, authorized, confirmed, withdrawn, textAllowed)
+                    : null;
+            var visible = new FeedbackHistoryEntry(
+                    row.getId(),
+                    row.getReviewId(),
+                    row.getItemId(),
+                    row.getDeveloperId(),
+                    row.getDestination(),
+                    row.getState(),
+                    body,
+                    row.getCreatedAt(),
+                    row.getDeliveredAt(),
+                    ids,
+                    edges.stream()
+                            .map(FeedbackBasisRepository.ReadRow::problemId)
+                            .filter(Objects::nonNull)
+                            .distinct()
+                            .toList(),
+                    complete
+                            ? authorized.stream()
+                                    .map(FeedbackPublicHistory.AuthorizedSupport::practiceSlug)
+                                    .distinct()
+                                    .sorted()
+                                    .toList()
+                            : List.of(),
+                    response == null ? null : response.getResolution(),
+                    response == null ? null : response.getUsefulness(),
+                    complete
+                            ? authorized.stream()
+                                    .flatMap(entry -> entry.custody().sourceJobIds().stream())
+                                    .distinct()
+                                    .sorted(Comparator.comparing(UUID::toString))
+                                    .toList()
+                            : List.of(),
+                    complete
+                            ? authorized.stream()
+                                    .flatMap(entry -> entry.custody().copiedIdentities().stream())
+                                    .distinct()
+                                    .toList()
+                            : List.of(),
+                    complete
+                            ? authorized.stream()
+                                    .flatMap(entry -> entry.custody().repositoryIds().stream())
+                                    .distinct()
+                                    .sorted()
+                                    .toList()
+                            : List.of(),
+                    threads.get(row.getId()),
+                    complete,
+                    publicHistory);
+            return new Facts(visible, support, authorized, withdrawn);
+        }
+    }
+
+    /** A bounded number of ids per collection read, well below the driver's bind-parameter limit. */
+    private static final int READ_CHUNK = 1000;
+
+    private static <T> List<List<T>> chunks(List<T> values) {
+        List<List<T>> chunks = new ArrayList<>();
+        for (int from = 0; from < values.size(); from += READ_CHUNK)
+            chunks.add(values.subList(from, Math.min(values.size(), from + READ_CHUNK)));
+        return chunks;
     }
 }

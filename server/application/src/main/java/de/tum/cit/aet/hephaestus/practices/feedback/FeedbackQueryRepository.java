@@ -96,18 +96,29 @@ public interface FeedbackQueryRepository extends Repository<Feedback, UUID> {
         )
         """;
 
+    /**
+     * The conversation that each piece's first posted chat copy was shown in, to the piece's own developer. A
+     * piece without one is absent.
+     */
     @Query(value = """
-        SELECT e.conversation_id FROM feedback_copy c
+        SELECT DISTINCT ON (c.feedback_id) c.feedback_id AS "feedbackId",e.conversation_id AS "conversationId"
+        FROM feedback_copy c
         JOIN conversation_entry e ON e.id=c.conversation_entry_id AND e.workspace_id=c.workspace_id
         JOIN conversation mc ON mc.id=e.conversation_id AND mc.workspace_id=e.workspace_id
         JOIN feedback f ON f.id=c.feedback_id AND f.workspace_id=c.workspace_id
-        WHERE c.workspace_id=:workspaceId AND c.feedback_id=:feedbackId
+        WHERE c.workspace_id=:workspaceId AND c.feedback_id IN (:feedbackIds)
           AND c.kind='CHAT_TURN' AND c.posted_at IS NOT NULL
           AND mc.account_id=f.developer_id AND f.destination='CONVERSATION'
-        ORDER BY c.position LIMIT 1
+        ORDER BY c.feedback_id,c.position
         """, nativeQuery = true)
-    @Nullable
-    UUID threadId(@Param("workspaceId") long workspaceId, @Param("feedbackId") UUID feedbackId);
+    List<FeedbackThread> threadIds(
+            @Param("workspaceId") long workspaceId, @Param("feedbackIds") Collection<UUID> feedbackIds);
+
+    interface FeedbackThread {
+        UUID getFeedbackId();
+
+        UUID getConversationId();
+    }
 
     @Query(
             value = "SELECT feedback_content_digest(id) FROM feedback WHERE"

@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.practices.feedback;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -38,14 +39,19 @@ import de.tum.cit.aet.hephaestus.practices.spi.ResultHistoryEntry;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultHistoryQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
 import java.sql.Timestamp;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Stream;
+import org.jspecify.annotations.Nullable;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -82,6 +88,50 @@ class FeedbackHistoryQueryIntegrationTest extends AbstractFeedbackIntegrationTes
 
     @Autowired
     ResultPresentation presentation;
+
+    /**
+     * The history reads a page of pieces at once. Each batched read answers, for each row, what this test stubs for that
+     * row alone, so the answers stay those of the single reads.
+     */
+    @BeforeEach
+    void answerBatchedReadsByRow() {
+        when(permission.findAll(anyLong(), any(), anyLong(), any())).thenAnswer(call -> {
+            long workspaceId = call.getArgument(0);
+            Collection<UUID> ids = call.getArgument(1);
+            long viewerId = call.getArgument(2);
+            SourceUsePurpose purpose = call.getArgument(3);
+            Map<UUID, ResultHistoryEntry> found = new HashMap<>();
+            if (ids != null)
+                ids.forEach(id ->
+                        permission.find(workspaceId, id, viewerId, purpose).ifPresent(entry -> found.put(id, entry)));
+            return found;
+        });
+        when(publicPermission.checkAll(anyLong(), any(), any())).thenAnswer(call -> {
+            Collection<Result> rows = call.getArgument(1);
+            SourceUsePurpose purpose = call.getArgument(2);
+            Map<UUID, ResultSourceAuthorization.Check> checks = new HashMap<>();
+            if (rows != null)
+                for (var row : rows) {
+                    @Nullable HistoryCustody custody = publicPermission.custody(row);
+                    checks.put(
+                            row.getId(),
+                            custody == null
+                                    ? new ResultSourceAuthorization.Check(
+                                            new HistoryCustody(false, false, List.of(), List.of(), List.of()), false)
+                                    : new ResultSourceAuthorization.Check(
+                                            custody, publicPermission.authorized(row, custody, purpose)));
+                }
+            return checks;
+        });
+        when(visibility.withdrawnAt(anyLong(), any())).thenAnswer(call -> {
+            long workspaceId = call.getArgument(0);
+            Collection<UUID> ids = call.getArgument(1);
+            Map<UUID, Instant> withdrawn = new HashMap<>();
+            if (ids != null)
+                ids.stream().filter(id -> visibility.withdrawn(workspaceId, id)).forEach(id -> withdrawn.put(id, AT));
+            return withdrawn;
+        });
+    }
 
     @Test
     void shouldReadOneDevelopersDeliveredWitnessAndQueuedTargetOnTheReadPracticesOnly() {

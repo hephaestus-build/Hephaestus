@@ -18,9 +18,11 @@ import de.tum.cit.aet.hephaestus.practices.spi.FeedbackState;
 import de.tum.cit.aet.hephaestus.practices.spi.HistoryCustody;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
 import java.time.Instant;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -44,12 +46,39 @@ public class FeedbackPublicHistory {
 
     public record AuthorizedSupport(UUID resultId, String practiceSlug, HistoryCustody custody) {}
 
-    public Optional<AuthorizedSupport> authorize(Result result, SourceUsePurpose purpose) {
-        var facts = sourceAuthorization.custody(result);
-        if (!sourceAuthorization.authorized(result, facts, purpose)) return Optional.empty();
-        return practices
-                .findByIdAndWorkspaceId(result.getPracticeId(), result.getWorkspaceId())
-                .map(practice -> new AuthorizedSupport(result.getId(), practice.getSlug(), facts));
+    /**
+     * The results of the workspace whose custody and source {@code purpose} may use, each with its practice's slug and
+     * keyed by its id. They are decided in one read; a refused result, or one whose practice is gone, is absent.
+     */
+    public Map<UUID, AuthorizedSupport> authorizeAll(
+            long workspaceId, Collection<Result> results, SourceUsePurpose purpose) {
+        var checks = sourceAuthorization.checkAll(workspaceId, results, purpose);
+        var permitted = results.stream()
+                .filter(result -> {
+                    var check = checks.get(result.getId());
+                    return check != null && check.permitted();
+                })
+                .toList();
+        if (permitted.isEmpty()) return Map.of();
+        Map<Long, String> slugs = new HashMap<>();
+        practices
+                .findByWorkspaceIdAndIdIn(
+                        workspaceId,
+                        permitted.stream().map(Result::getPracticeId).distinct().toList())
+                .forEach(practice -> slugs.put(practice.getId(), practice.getSlug()));
+        Map<UUID, AuthorizedSupport> authorized = new HashMap<>();
+        for (var result : permitted) {
+            var slug = slugs.get(result.getPracticeId());
+            if (slug != null)
+                authorized.put(
+                        result.getId(),
+                        new AuthorizedSupport(
+                                result.getId(),
+                                slug,
+                                Objects.requireNonNull(checks.get(result.getId()))
+                                        .custody()));
+        }
+        return authorized;
     }
 
     public JsonNode render(

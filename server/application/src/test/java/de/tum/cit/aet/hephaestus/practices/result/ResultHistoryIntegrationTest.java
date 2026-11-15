@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -60,13 +61,15 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.function.Predicate;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -163,9 +166,23 @@ class ResultHistoryIntegrationTest extends BaseIntegrationTest {
         databaseTestUtils.cleanDatabase();
         scenario = data.scenario();
         scenarioAccountId = Objects.requireNonNull(scenario.account().getId());
-        when(authorization.custody(any()))
-                .thenReturn(new HistoryCustody(true, false, List.of(), List.of(), List.of(UUID.randomUUID())));
-        when(authorization.authorized(any(), any(), any())).thenReturn(true);
+        decide(purpose -> true);
+    }
+
+    /** The authorization answer of every row a history read checks: complete custody, permitted for some purposes. */
+    void decide(Predicate<SourceUsePurpose> permitted) {
+        var facts = new HistoryCustody(true, false, List.of(), List.of(), List.of(UUID.randomUUID()));
+        // doAnswer, so that a second stubbing does not run the first answer.
+        doAnswer(call -> {
+                    Collection<Result> rows = call.getArgument(1);
+                    SourceUsePurpose purpose = call.getArgument(2);
+                    Map<UUID, ResultSourceAuthorization.Check> checks = new HashMap<>();
+                    rows.forEach(row -> checks.put(
+                            row.getId(), new ResultSourceAuthorization.Check(facts, permitted.test(purpose))));
+                    return checks;
+                })
+                .when(authorization)
+                .checkAll(anyLong(), any(), any());
     }
 
     @ParameterizedTest
@@ -359,7 +376,7 @@ class ResultHistoryIntegrationTest extends BaseIntegrationTest {
     @Test
     void deniedSourceLeavesExplicitlyUnavailableMetadataForContext() {
         var result = data.result(scenario, ResultOutcome.NOT_MET, Instant.now());
-        when(authorization.authorized(any(), any(), any())).thenReturn(false);
+        decide(purpose -> false);
         var row = history.forDeveloper(result.getWorkspaceId(), scenarioAccountId, Instant.EPOCH, 10)
                 .getFirst();
         assertThat(row.resultId()).isEqualTo(result.getId());
@@ -394,8 +411,7 @@ class ResultHistoryIntegrationTest extends BaseIntegrationTest {
     @Test
     void shouldRefuseOperatorOnlyProofInAConversationRead() {
         var result = data.result(scenario, ResultOutcome.NOT_MET, Instant.now());
-        when(authorization.authorized(any(), any(), eq(SourceUsePurpose.CONVERSATIONAL_MENTORING)))
-                .thenReturn(false);
+        decide(purpose -> purpose != SourceUsePurpose.CONVERSATIONAL_MENTORING);
         assertThat(history.find(
                         result.getWorkspaceId(),
                         result.getId(),
@@ -561,7 +577,7 @@ class ResultHistoryIntegrationTest extends BaseIntegrationTest {
     void shouldNeitherCompareNorDateAResultWhoseWordsAreDenied() {
         var work = monitoredPullRequest();
         var recorded = data.result(work, ResultOutcome.NOT_MET, Instant.now(), Instant.now(), storedVersion(work));
-        when(authorization.authorized(any(), any(), any())).thenReturn(false);
+        decide(purpose -> false);
 
         var row = history.forDeveloper(recorded.getWorkspaceId(), scenarioAccountId, Instant.EPOCH, 20)
                 .getFirst();
@@ -570,7 +586,7 @@ class ResultHistoryIntegrationTest extends BaseIntegrationTest {
         assertThat(row.capturedAt()).isNull();
         verify(productItems, never()).currentWorkVersion(anyLong(), anyLong());
         verify(authorization, never()).producingJobs(anyLong(), any());
-        verify(custody, never()).capturedAt(anyLong(), any(), any());
+        verify(custody, never()).capturedAt(anyLong(), any());
         assertStillAsRecorded(recorded);
     }
 
@@ -615,7 +631,9 @@ class ResultHistoryIntegrationTest extends BaseIntegrationTest {
         when(authorization.producingJobs(eq(workspace), any()))
                 .thenReturn(Map.of(own.getId(), job, other.getId(), job));
         // The job belongs to the first result's review, so the second review's receipt names no time.
-        when(custody.capturedAt(workspace, own.getReviewId(), job)).thenReturn(Optional.of(capturedAt));
+        var dated = new HistoryCustodyQuery.Receipt(own.getReviewId(), job);
+        var undated = new HistoryCustodyQuery.Receipt(other.getReviewId(), job);
+        when(custody.capturedAt(eq(workspace), any())).thenReturn(Map.of(dated, capturedAt));
 
         var rows = history.forDeveloper(workspace, scenarioAccountId, Instant.EPOCH, 20);
         assertThat(rows).extracting(ResultHistoryEntry::resultId).containsExactly(own.getId(), other.getId());
@@ -626,11 +644,10 @@ class ResultHistoryIntegrationTest extends BaseIntegrationTest {
         assertThat(rows)
                 .extracting(ResultHistoryEntry::storedWorkVersion)
                 .containsOnly(ResultHistoryEntry.StoredWorkVersion.SAME);
-        // One read compares the shared work once and finds the producers of all its rows at once.
+        // One read compares the shared work once, and finds the producers and capture times of all its rows at once.
         verify(productItems).currentWorkVersion(workspace, work.item().getId());
         verify(authorization).producingJobs(eq(workspace), any());
-        verify(custody).capturedAt(workspace, own.getReviewId(), job);
-        verify(custody).capturedAt(workspace, other.getReviewId(), job);
+        verify(custody).capturedAt(workspace, Set.of(dated, undated));
         var detail = history.find(workspace, own.getId(), scenarioAccountId, SourceUsePurpose.CONVERSATIONAL_MENTORING)
                 .orElseThrow();
         assertThat(detail.capturedAt()).isEqualTo(capturedAt);

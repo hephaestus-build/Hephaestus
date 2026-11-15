@@ -16,6 +16,9 @@ public interface PersonProcessingSuppression {
     /** Frozen review jobs are unavailable from erasure admission through every resumable step. */
     boolean isReviewJobSuppressed(UUID jobId);
 
+    /** {@link #isReviewJobSuppressed} of many jobs in one read: the jobs among them that are suppressed. */
+    Set<UUID> suppressedReviewJobs(Collection<UUID> jobIds);
+
     /**
      * Current source attribution, including resynced provider records, scoped to the requesting
      * workspace.

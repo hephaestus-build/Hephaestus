@@ -23,6 +23,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcOperations;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
+import org.springframework.jdbc.support.SqlArrayValue;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -160,13 +161,29 @@ public class IdentityRestrictionService implements PersonProcessingSuppression {
     @Override
     @Transactional(propagation = Propagation.REQUIRES_NEW, readOnly = true)
     public boolean isReviewJobSuppressed(UUID jobId) {
-        String key = "[{\"columns\":{\"id\":\"" + jobId + "\"}}]";
-        return Boolean.TRUE.equals(jdbc.queryForObject("""
-            SELECT EXISTS(SELECT 1 FROM person_data_request
+        return reviewJobsSuppressed(List.of(jobId)).contains(jobId);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.REQUIRES_NEW, readOnly = true)
+    public Set<UUID> suppressedReviewJobs(Collection<UUID> jobIds) {
+        return reviewJobsSuppressed(jobIds);
+    }
+
+    private Set<UUID> reviewJobsSuppressed(Collection<UUID> jobIds) {
+        if (jobIds.isEmpty()) return Set.of();
+        return Set.copyOf(jdbc.query(
+                """
+            SELECT job.id FROM unnest(CAST(? AS uuid[])) AS job(id)
+            WHERE EXISTS(SELECT 1 FROM person_data_request
               WHERE state IN ('ERASING','FAILED') AND selections_json IS NOT NULL
-                AND ((selections_json::jsonb)->'review_job'->'rows' @> CAST(? AS jsonb)
-                  OR (selections_json::jsonb)->'person_evidence_copy'->'rows' @> CAST(? AS jsonb)))
-            """, Boolean.class, key, key));
+                AND ((selections_json::jsonb)->'review_job'->'rows' @> jsonb_build_array(
+                        jsonb_build_object('columns', jsonb_build_object('id', job.id::text)))
+                  OR (selections_json::jsonb)->'person_evidence_copy'->'rows' @> jsonb_build_array(
+                        jsonb_build_object('columns', jsonb_build_object('id', job.id::text)))))
+            """,
+                (rs, row) -> rs.getObject(1, UUID.class),
+                new SqlArrayValue("uuid", jobIds.stream().distinct().toArray())));
     }
 
     @Override

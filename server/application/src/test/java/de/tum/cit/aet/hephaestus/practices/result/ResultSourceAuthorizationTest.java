@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.practices.result;
 import static de.tum.cit.aet.hephaestus.practices.result.ResultTestFixtures.resultBuilder;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -34,11 +35,15 @@ import de.tum.cit.aet.hephaestus.practices.spi.HistoryCustody;
 import de.tum.cit.aet.hephaestus.practices.spi.HistoryCustodyQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewItemState;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -82,6 +87,11 @@ class ResultSourceAuthorizationTest extends BaseUnitTest {
     @BeforeEach
     void availableSource() {
         Mockito.lenient().when(items.find(1, 2)).thenReturn(Optional.of(item));
+        // A read of many rows reads their items at once; it finds what the single lookup finds.
+        Mockito.lenient().when(items.findAll(eq(1L), any())).thenAnswer(call -> {
+            Collection<Long> ids = call.getArgument(1);
+            return ids.contains(2L) ? Map.of(2L, item) : Map.of();
+        });
         Mockito.lenient().when(source.kinds()).thenReturn(Set.of(item.kind()));
         Mockito.lenient().when(source.permits(item, purpose)).thenReturn(true);
     }
@@ -480,6 +490,186 @@ class ResultSourceAuthorizationTest extends BaseUnitTest {
                 .resultId(recordedResult)
                 .jobId(producingJob)
                 .build();
+    }
+
+    /**
+     * A read of many rows shares its lookups, never its answers. Each row of a batch is admitted exactly when its single
+     * check admits it, whatever fence refuses the rows beside it.
+     */
+    @Test
+    void shouldAdmitEachRowOfABatchExactlyWhenItsSingleCheckAdmitsIt() {
+        var batch = new Batch();
+        var rows = batch.rows();
+
+        var admitted = authorization.permitsAll(1, rows, purpose);
+        var checks = authorization.checkAll(1, rows, purpose);
+        // The reads of many rows read the items and the capture jobs at once, not one by one.
+        verify(items, never()).find(eq(1L), anyLong());
+        verify(suppression, never()).isReviewJobSuppressed(any());
+
+        assertThat(admitted)
+                .isEqualTo(rows.stream()
+                        .filter(row -> authorization.permits(1, row.getId(), purpose))
+                        .map(Result::getId)
+                        .collect(Collectors.toSet()))
+                .containsExactlyInAnyOrder(batch.permitted.getId(), batch.alsoPermitted.getId());
+        assertThat(checks).doesNotContainKey(batch.foreign.getId());
+        assertThat(checks.entrySet().stream()
+                        .filter(check -> check.getValue().permitted())
+                        .map(Map.Entry::getKey))
+                .containsExactlyInAnyOrderElementsOf(admitted);
+        rows.stream()
+                .filter(row -> row.getWorkspaceId() == 1)
+                .forEach(row -> assertThat(
+                                Objects.requireNonNull(checks.get(row.getId())).custody())
+                        .isEqualTo(authorization.custody(row)));
+    }
+
+    /** A read of another workspace inside a read of this one shares none of its lookups. */
+    @Test
+    void shouldNeverShareTheLookupsOfOneWorkspaceWithARowOfAnother() {
+        var batch = new Batch();
+
+        var foreign = authorization.asOneRead(1, () -> {
+            assertThat(authorization.permitsAll(1, batch.rows(), purpose)).contains(batch.permitted.getId());
+            return authorization.permitsAll(2, List.of(batch.foreign), purpose);
+        });
+
+        // Its work item is the same id, which is permitted in workspace 1, and workspace 2 does not hold it.
+        assertThat(foreign).isEmpty();
+        verify(items).findAll(eq(2L), any());
+    }
+
+    /**
+     * Rows with complete custody, each refused by one fence or admitted, beside each other in one read. A single check
+     * and a read of many find the same custody, items, people, accounts, jobs and repositories.
+     */
+    private final class Batch {
+        // Declared first: each row below records its custody here as it is built.
+        private final Map<UUID, ReviewItem> retained = new HashMap<>();
+        final UUID suppressedJob = UUID.randomUUID();
+        final Result permitted = row(2, custody(List.of(copy("native-7")), List.of(9L)));
+        final Result alsoPermitted = row(2, custody(List.of(copy("native-7")), List.of(9L)));
+        final Result jobSuppressed =
+                row(2, new HistoryCustody(true, false, List.of(copy("native-7")), List.of(9L), List.of(suppressedJob)));
+        final Result personSuppressed = row(2, custody(List.of(copy("native-8")), List.of()));
+        final Result accountSuppressed = row(2, custody(List.of(copy("native-9")), List.of()));
+        final Result noAi = row(2, custody(List.of(copy("native-10")), List.of()));
+        final Result blocked = row(2, custody(List.of(copy("native-11")), List.of()));
+        final Result repositoryRemoved = row(2, custody(List.of(), List.of(10L)));
+        final Result repositoryDoubled = row(2, custody(List.of(), List.of(11L)));
+        final Result sourceRefused = row(20, custody(List.of(), List.of()));
+        final Result itemRemoved = row(21, custody(List.of(), List.of()));
+        final Result incomplete = row(2, new HistoryCustody(false, false, List.of(), List.of(), List.of()));
+        final Result foreign = resultBuilder(row(2, custody(List.of(), List.of())))
+                .workspaceId(2)
+                .build();
+
+        Batch() {
+            var refusedItem = new ItemRef(1, 20, item.kind(), 4L, null, null);
+            Map<Long, ItemRef> workItems = Map.of(2L, item, 20L, refusedItem);
+            Mockito.lenient()
+                    .when(items.find(eq(1L), anyLong()))
+                    .thenAnswer(call -> Optional.ofNullable(workItems.get(call.<Long>getArgument(1))));
+            Mockito.lenient().when(items.findAll(eq(1L), any())).thenAnswer(call -> {
+                Collection<Long> ids = call.getArgument(1);
+                Map<Long, ItemRef> found = new HashMap<>();
+                ids.stream().filter(workItems::containsKey).forEach(id -> found.put(id, workItems.get(id)));
+                return found;
+            });
+            when(source.permits(refusedItem, purpose)).thenReturn(false);
+            Mockito.lenient().when(itemRows.activeRepositoryIds(1, 9)).thenReturn(List.of(2L));
+            Mockito.lenient().when(itemRows.activeRepositoryIds(1, 10)).thenReturn(List.of());
+            Mockito.lenient().when(itemRows.activeRepositoryIds(1, 11)).thenReturn(List.of(2L, 20L));
+            when(people.providers())
+                    .thenReturn(List.of(new PersonIdentityResolver.Provider(8, "GITHUB", "https://github.com")));
+            owner("native-7", 7, Account.Status.ACTIVE, AiChoice.CLOUD);
+            owner("native-8", 8, Account.Status.ACTIVE, AiChoice.CLOUD);
+            owner("native-9", 9, Account.Status.ACTIVE, AiChoice.CLOUD);
+            owner("native-10", 10, Account.Status.ACTIVE, AiChoice.NO_AI);
+            owner("native-11", 11, Account.Status.BLOCKED, AiChoice.CLOUD);
+            Mockito.lenient()
+                    .when(suppression.isSuppressed(8, "native-8", null))
+                    .thenReturn(true);
+            Mockito.lenient().when(suppression.isAccountSuppressed(9)).thenReturn(true);
+            Mockito.lenient()
+                    .when(suppression.isReviewJobSuppressed(suppressedJob))
+                    .thenReturn(true);
+            Mockito.lenient().when(suppression.suppressedReviewJobs(any())).thenAnswer(call -> {
+                Collection<UUID> jobs = call.getArgument(0);
+                return jobs.contains(suppressedJob) ? Set.of(suppressedJob) : Set.of();
+            });
+            // Custody is retained on each row's assignment, in whichever workspace the row is read.
+            Mockito.lenient()
+                    .when(assignments.findByWorkspaceIdAndResultIdOrderByReviewIdAscPracticeIdAscItemIdAsc(
+                            anyLong(), any(UUID.class)))
+                    .thenAnswer(call -> Optional.ofNullable(retained.get(call.<UUID>getArgument(1))).stream()
+                            .toList());
+            Mockito.lenient()
+                    .when(assignments.findByWorkspaceIdAndResultIdInOrderByReviewIdAscPracticeIdAscItemIdAsc(
+                            anyLong(), any()))
+                    .thenAnswer(call -> call.<Collection<UUID>>getArgument(1).stream()
+                            .map(retained::get)
+                            .filter(Objects::nonNull)
+                            .toList());
+            rows().forEach(row -> Mockito.lenient()
+                    .when(results.findByIdAndWorkspaceId(row.getId(), row.getWorkspaceId()))
+                    .thenReturn(Optional.of(row)));
+        }
+
+        List<Result> rows() {
+            return List.of(
+                    permitted,
+                    alsoPermitted,
+                    jobSuppressed,
+                    personSuppressed,
+                    accountSuppressed,
+                    noAi,
+                    blocked,
+                    repositoryRemoved,
+                    repositoryDoubled,
+                    sourceRefused,
+                    itemRemoved,
+                    incomplete,
+                    foreign);
+        }
+
+        private Result row(long itemId, HistoryCustody custody) {
+            var row = resultBuilder(result)
+                    .id(UUID.randomUUID())
+                    .reviewId(UUID.randomUUID())
+                    .itemId(itemId)
+                    .build();
+            retained.put(
+                    row.getId(),
+                    ReviewItem.builder()
+                            .workspaceId(1)
+                            .reviewId(row.getReviewId())
+                            .practiceId(row.getPracticeId())
+                            .itemId(itemId)
+                            .resultId(row.getId())
+                            .detail(json.createObjectNode().set("custody", json.valueToTree(custody)))
+                            .build());
+            return row;
+        }
+
+        private HistoryCustody custody(List<PersonCopyIdentity> copies, List<Long> repositories) {
+            return new HistoryCustody(true, false, copies, repositories, List.of(UUID.randomUUID()));
+        }
+
+        private PersonCopyIdentity copy(String subject) {
+            return new PersonCopyIdentity("GITHUB", "https://github.com", subject, null);
+        }
+
+        private void owner(String subject, long accountId, Account.Status status, AiChoice choice) {
+            Mockito.lenient()
+                    .when(people.accountFor(new PersonIdentity(8, subject, null)))
+                    .thenReturn(Optional.of(accountId));
+            Mockito.lenient()
+                    .when(accounts.find(accountId))
+                    .thenReturn(Optional.of(
+                            new AccountDirectory.AccountView(accountId, status, "Person", choice, null, true)));
+        }
     }
 
     @Test
