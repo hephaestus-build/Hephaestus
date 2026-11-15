@@ -53,7 +53,16 @@ public record WorkspaceReviewScope(
     }
 
     public boolean admitsPerson(@Nullable Long accountId) {
-        return accountId != null && (personMode == ReviewScopeMode.ALL || accountIds.contains(accountId));
+        return accountId != null && admitsPerson(personMode, accountIds.contains(accountId));
+    }
+
+    /**
+     * Whether the people scope admits an eligible member: all of them under ALL, only the selected ones under
+     * SELECTED. The member selection flag means nothing under ALL. Review settings counts with this rule, and
+     * Members shows it.
+     */
+    public static boolean admitsPerson(ReviewScopeMode personMode, boolean selected) {
+        return personMode == ReviewScopeMode.ALL || selected;
     }
 
     public boolean admits(@Nullable Long repositoryItemId, @Nullable String baseBranch, @Nullable Long accountId) {

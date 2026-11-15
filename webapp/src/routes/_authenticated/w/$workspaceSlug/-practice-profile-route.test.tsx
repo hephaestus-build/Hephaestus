@@ -120,7 +120,7 @@ const membership: WorkspaceMembership = {
 	roleSource: "PROVIDER",
 	publicActivityAnswered: null,
 	hidden: false,
-	reviewSelected: true,
+	inReviewScope: true,
 	joinedAt: new Date("2026-01-01T00:00:00Z"),
 	leftAt: null,
 };

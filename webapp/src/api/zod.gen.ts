@@ -6396,10 +6396,10 @@ export const zWorkspaceMembership = z.object({
 	account: zAccountRef,
 	eligibleForPracticeReview: z.boolean(),
 	hidden: z.boolean(),
+	inReviewScope: z.boolean(),
 	joinedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
 	leftAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
 	publicActivityAnswered: z.boolean().nullable(),
-	reviewSelected: z.boolean(),
 	role: z.enum(["OWNER", "ADMIN", "MEMBER"]),
 	roleSource: z.enum(["PROVIDER", "PERSON"]),
 });

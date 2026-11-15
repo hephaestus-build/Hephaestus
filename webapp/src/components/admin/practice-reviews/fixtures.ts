@@ -141,7 +141,7 @@ export const workspaceMembers: WorkspaceMembership[] = Object.entries(reviewAcco
 		joinedAt: new Date("2026-01-01T00:00:00Z"),
 		leftAt: null,
 		hidden: false,
-		reviewSelected: true,
+		inReviewScope: true,
 		eligibleForPracticeReview: true,
 		roleSource: "PROVIDER",
 		publicActivityAnswered: null,

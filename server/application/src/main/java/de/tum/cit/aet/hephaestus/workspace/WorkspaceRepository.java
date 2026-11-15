@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.workspace;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountMembershipQuery;
+import de.tum.cit.aet.hephaestus.workspace.settings.ReviewScopeMode;
 import jakarta.persistence.LockModeType;
 import jakarta.persistence.QueryHint;
 import java.util.Collection;
@@ -46,6 +47,9 @@ public interface WorkspaceRepository extends JpaRepository<Workspace, Long> {
         WHERE w.id IN :ids
         """)
     List<WorkspaceListData> findListDataByIds(@Param("ids") Collection<Long> ids);
+
+    @Query("SELECT w.reviewSettings.reviewScopePeople FROM Workspace w WHERE w.id = :id")
+    Optional<ReviewScopeMode> findReviewScopePeople(@Param("id") long id);
 
     @Query("""
         SELECT new de.tum.cit.aet.hephaestus.workspace.WorkspaceIdData(w.id)

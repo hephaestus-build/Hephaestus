@@ -130,17 +130,16 @@ public class PracticeReviewCoverageService {
     }
 
     private PracticeReviewScopeSummaryDTO summary(ReviewWorkspace workspace, WorkspaceReviewScope scope, int volume) {
-        int monitored = workspaceQueries.repositorySettings(workspace.id()).size(),
-                eligible = eligibleAccountIds(workspace.id()).size();
+        int monitored = workspaceQueries.repositorySettings(workspace.id()).size();
+        var eligible = eligibleAccountIds(workspace.id());
         return new PracticeReviewScopeSummaryDTO(
                 scope.repositoryMode() == ReviewScopeMode.ALL
                         ? monitored
                         : scope.repositories().size(),
                 monitored,
-                scope.personMode() == ReviewScopeMode.ALL
-                        ? eligible
-                        : scope.accountIds().size(),
-                eligible,
+                // The people Members marks as in scope: a selected person who is no longer eligible is not counted.
+                (int) eligible.stream().filter(scope::admitsPerson).count(),
+                eligible.size(),
                 volume,
                 ESTIMATE_WINDOW_DAYS);
     }

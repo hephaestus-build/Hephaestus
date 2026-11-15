@@ -146,6 +146,46 @@ class AccountMembershipQueryIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void shouldMarkAndCountTheSamePeopleInScopeWhicheverPeopleScopeIsSaved() {
+        var first = accounts.saveAndFlush(new Account("Scope first"));
+        var member = membership(first, "people-scope-fact");
+        var workspace = member.getWorkspace();
+        var second = accounts.saveAndFlush(new Account("Scope second"));
+        addMember(workspace, second, Membership.WorkspaceRole.MEMBER, null);
+        long firstId = Objects.requireNonNull(first.getId());
+        long secondId = Objects.requireNonNull(second.getId());
+        var ids = List.of(firstId, secondId);
+
+        // Saving all eligible members clears every selection flag, and every eligible member stays in scope.
+        var all = coverage.replace(
+                WorkspacePortFixtures.reviewWorkspace(workspace),
+                new WorkspaceReviewScope(ReviewScopeMode.ALL, ReviewScopeMode.ALL, List.of(), List.of()));
+        assertThat(memberships.findSelectedAccountIds(workspace.getId())).isEmpty();
+        assertThat(inScope(workspace, ids)).containsExactlyInAnyOrder(firstId, secondId);
+        assertThat(coverage.summary(all, 0).selectedPeople()).isEqualTo(2);
+
+        var selected = coverage.replace(
+                all,
+                new WorkspaceReviewScope(ReviewScopeMode.ALL, ReviewScopeMode.SELECTED, List.of(), List.of(secondId)));
+        assertThat(inScope(workspace, ids)).containsExactly(secondId);
+        assertThat(coverage.summary(selected, 0).selectedPeople()).isEqualTo(1);
+
+        // A selected member who is no longer eligible is out of scope on both pages, though still selected.
+        var hidden = memberships
+                .findByWorkspace_IdAndId_AccountId(workspace.getId(), secondId)
+                .orElseThrow();
+        hidden.setHidden(true);
+        memberships.flush();
+        assertThat(memberships.findSelectedAccountIds(workspace.getId())).containsExactly(secondId);
+        assertThat(inScope(workspace, ids)).isEmpty();
+        assertThat(coverage.summary(selected, 0).selectedPeople()).isZero();
+    }
+
+    private Set<Long> inScope(Workspace workspace, List<Long> ids) {
+        return selections.peopleScopeAdmits(workspace.getId(), selections.eligibleAccountIds(workspace.getId(), ids));
+    }
+
+    @Test
     void shouldKeepLoadedSelectionCurrentWhenReviewScopeIsReplaced() {
         var account = accounts.saveAndFlush(new Account("Selection cache"));
         var member = membership(account, "selection-cache");

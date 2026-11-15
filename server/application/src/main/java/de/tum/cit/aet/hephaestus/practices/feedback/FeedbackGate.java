@@ -37,7 +37,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewSnapshot;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStatus;
 import de.tum.cit.aet.hephaestus.workspace.Workspace.WorkspaceStatus;
 import de.tum.cit.aet.hephaestus.workspace.settings.PracticeDeliveryStatus;
-import de.tum.cit.aet.hephaestus.workspace.settings.ReviewScopeMode;
+import de.tum.cit.aet.hephaestus.workspace.settings.WorkspaceReviewScope;
 import java.time.Clock;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -211,8 +211,8 @@ public class FeedbackGate {
         var policy = reads.policy(feedback.getDeveloperId());
         boolean inScope = policy.isPresent()
                 && policy.get().getLeftAt() == null
-                && (policy.get().getPeopleScope() != ReviewScopeMode.SELECTED
-                        || policy.get().getSelected());
+                && WorkspaceReviewScope.admitsPerson(
+                        policy.get().getPeopleScope(), policy.get().getSelected());
         boolean authorized = !support.isEmpty()
                 && support.stream()
                         .allMatch(result -> Objects.equals(result.getDeveloperId(), feedback.getDeveloperId()))

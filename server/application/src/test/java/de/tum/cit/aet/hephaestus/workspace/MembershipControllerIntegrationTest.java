@@ -117,6 +117,40 @@ class MembershipControllerIntegrationTest extends AbstractWorkspaceIntegrationTe
         assertThat(asMember.get(Long.toString(accountId(unanswered)))).isNull();
     }
 
+    @Test
+    @WithAdminUser
+    void shouldShowEveryEligibleMemberInReviewScopeWhileThePeopleScopeIsAllEligibleMembers() {
+        User owner = persistUser("scope-owner");
+        Workspace workspace = createWorkspace("scope-all", "Scope all", "scope-all", AccountType.ORG, owner);
+        ensureAdminMembership(workspace);
+        User unselected = persistUser("scope-unselected");
+        User hidden = persistUser("scope-hidden");
+        ensureMembership(workspace, unselected, WorkspaceRole.MEMBER);
+        var hiddenMember = ensureMembership(workspace, hidden, WorkspaceRole.MEMBER);
+        hiddenMember.setHidden(true);
+        workspaceMembershipRepository.saveAndFlush(hiddenMember);
+
+        var page = Objects.requireNonNull(webTestClient
+                .get()
+                .uri("/workspaces/{slug}/members?size=50", workspace.getWorkspaceSlug())
+                .headers(TestAuthUtils.withCurrentUser())
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody(new ParameterizedTypeReference<OffsetPageDTO<WorkspaceMembershipDTO>>() {})
+                .returnResult()
+                .getResponseBody());
+        Map<String, Boolean> inScope = new HashMap<>();
+        for (var member : page.content()) inScope.put(member.account().id(), member.inReviewScope());
+
+        // No member carries a selection flag, and the default people scope admits every eligible member.
+        assertThat(workspaceMembershipRepository.findSelectedAccountIds(workspace.getId()))
+                .isEmpty();
+        assertThat(inScope.get(Long.toString(accountId(unselected)))).isTrue();
+        // A hidden member is not eligible, so no people scope admits them.
+        assertThat(inScope.get(Long.toString(accountId(hidden)))).isFalse();
+    }
+
     /** Whether each listed member answered, by account id; a missing fact maps to null. */
     private Map<String, @Nullable Boolean> publicActivityAnswered(Workspace workspace, Consumer<HttpHeaders> caller) {
         var page = Objects.requireNonNull(webTestClient
