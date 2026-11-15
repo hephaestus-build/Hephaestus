@@ -39,7 +39,19 @@ export const Empty: Story = {
 export const Loading: Story = { args: { grants: undefined, loading: true } };
 
 export const Error: Story = {
-	args: { grants: undefined, error: "We could not load the connected clients." },
+	args: { grants: undefined, loadError: { status: 503 } },
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText("We could not load the connected clients")).toBeVisible();
+	},
+};
+
+/** A failed disconnection keeps the list and says so. */
+export const DisconnectFailed: Story = {
+	args: { revokeError: { status: 503 } },
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText("We could not disconnect the client")).toBeVisible();
+		await expect(canvas.getByText("claude.ai")).toBeVisible();
+	},
 };
 
 export const Disconnecting: Story = { args: { revokingId: grant.id } };

@@ -6,7 +6,7 @@ import {
 	revokeMcpClientGrantMutation,
 } from "@/api/@tanstack/react-query.gen";
 import { accountName } from "@/components/admin/users/account-labels";
-import { problemDetailOf, problemStatusOf } from "@/lib/problem-detail";
+import { problemStatusOf } from "@/lib/problem-detail";
 
 import type { WorkspaceMcpClientGrantsSectionProps } from "@/components/admin/settings/WorkspaceMcpClientGrantsSection";
 
@@ -31,12 +31,6 @@ export function useWorkspaceMcpClientGrants({
 	if (grants.isError && problemStatusOf(grants.error) === 404) {
 		return undefined;
 	}
-	let error: string | undefined;
-	if (revoke.isError) {
-		error = problemDetailOf(revoke.error, "We could not disconnect the client. Try again.");
-	} else if (grants.isError) {
-		error = problemDetailOf(grants.error, "We could not load the connected clients.");
-	}
 	return {
 		grants: grants.data?.map((grant) => ({
 			id: grant.id,
@@ -47,7 +41,8 @@ export function useWorkspaceMcpClientGrants({
 			approvedAt: grant.approvedAt,
 		})),
 		loading: grants.isPending,
-		error,
+		loadError: grants.isError ? grants.error : undefined,
+		revokeError: revoke.isError ? revoke.error : undefined,
 		revokingId: revoke.isPending ? revoke.variables.path.grantId : undefined,
 		onRetry: () => {
 			revoke.reset();
