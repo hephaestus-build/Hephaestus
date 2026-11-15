@@ -82,8 +82,22 @@ In the actions menu of a collection, **Pause** and **Resume** stop and start its
 Your instance operator approves each Outline address.
 If Hephaestus does not accept your address, ask your instance operator to approve it.
 
-The **Outline** page shows when the key expires, but it has no field for a new key.
-To replace the key and keep the mirror, follow [Replace the API key of a workspace](/admin/connect-outline#replace-the-api-key-of-a-workspace).
+### Replace the Outline API key
+
+Outline API keys do not renew.
+The **Outline** page shows when the key expires, and says so when Outline no longer accepts it.
+Replace the key on the connection you have. Do not use **Disconnect Outline**, which erases the mirror.
+
+1. In Outline, create an API key for the same Outline team under **Settings → API Keys**.
+2. In Hephaestus, under **Administration → Integrations**, open **Outline**.
+3. Enter the key in **Replace API key**, then select **Replace key**.
+4. Check that the page shows **Outline accepts this key**.
+5. Select **Sync now** and check that the collections refresh.
+6. Revoke the old key in Outline.
+
+The connection, its collections and its mirrored documents stay.
+Hephaestus refuses a key of another Outline team.
+**Replace API key** shows only while the connection is active. Resume a suspended connection first.
 
 ## Disconnect an integration
 

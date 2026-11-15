@@ -10,6 +10,7 @@ import {
 	listOutlineCollectionCandidatesOptions,
 	listOutlineCollectionsOptions,
 	registerOutlineCollectionMutation,
+	replaceOutlineTokenMutation,
 	updateConnectionStatusMutation,
 	updateOutlineCollectionStateMutation,
 } from "@/api/@tanstack/react-query.gen";
@@ -149,6 +150,16 @@ export function useOutlineIntegration(workspaceSlug: string) {
 		},
 	});
 
+	const replaceToken = useMutation({
+		...replaceOutlineTokenMutation(),
+		onSuccess: (status) => {
+			toast.success("Outline API key replaced");
+			queryClient.setQueryData(tokenStatusQueryOptions.queryKey, status);
+			void invalidateConnections();
+			sync.invalidateSyncActivity();
+		},
+	});
+
 	const registerCollection = useMutation({
 		...registerOutlineCollectionMutation(),
 		onSuccess: (collection) => {
@@ -273,6 +284,17 @@ export function useOutlineIntegration(workspaceSlug: string) {
 			connectUnavailable,
 			onConnect: handleConnect,
 			onDisconnect: handleDisconnect,
+			isReplacingToken: replaceToken.isPending,
+			replaceTokenError:
+				replaceToken.error == null ? undefined : problemDetailOf(replaceToken.error),
+			onReplaceToken: async (token: string) => {
+				try {
+					await replaceToken.mutateAsync({ path: { workspaceSlug }, body: { token } });
+					return true;
+				} catch {
+					return false;
+				}
+			},
 		},
 		collectionsProps: isConnectionActive
 			? {
