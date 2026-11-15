@@ -72,7 +72,7 @@ class GitLabWebhookCleanupClientTest extends BaseUnitTest {
         beans.addBean("client", client());
         return new GitLabResourceAdapter(
                 beans.getBeanProvider(GitLabWebhookClient.class),
-                new PublicApiUrls(AuthPropertiesFixture.withApiBase(URI.create("https://app.example"), "/api")));
+                new PublicApiUrls(AuthPropertiesFixture.withIssuer(URI.create("https://app.example"))));
     }
 
     private static ProviderResourceAdapter.Resource target() {

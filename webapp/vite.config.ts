@@ -23,8 +23,8 @@ const webappPort = Number.parseInt(ports.WEBAPP_PORT ?? "", 10) || 4200;
 const serverPort = Number.parseInt(ports.SERVER_PORT ?? "", 10) || 8080;
 
 /**
- * Serves the dev server's runtime environment, as the container entrypoint writes it in production, so the app
- * calls this worktree's server and not the default port.
+ * Serves the dev server's runtime environment, as the container entrypoint writes it in production. The app calls the
+ * API under `/api` of the dev server, which proxies it to this worktree's server.
  */
 const devRuntimeEnvironment = (): Plugin => ({
 	name: "hephaestus:dev-runtime-environment",
@@ -35,7 +35,7 @@ const devRuntimeEnvironment = (): Plugin => ({
 			response.end(
 				`window.__ENV__ = ${JSON.stringify({
 					APPLICATION_CLIENT_URL: `http://localhost:${webappPort}`,
-					APPLICATION_SERVER_URL: `http://localhost:${serverPort}`,
+					APPLICATION_SERVER_URL: `http://localhost:${webappPort}/api`,
 				})};`,
 			);
 		});
@@ -135,6 +135,8 @@ const viteConfig = defineConfig({
 	server: {
 		port: webappPort,
 		strictPort: true,
+		// The app and its API share one origin, as they do in production.
+		proxy: { "/api": `http://localhost:${serverPort}` },
 		// Storybook writes a separate site inside this root; rebuilding it must not reload the app.
 		watch: { ignored: ["**/storybook-static/**"] },
 		fs: {

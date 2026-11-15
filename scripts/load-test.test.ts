@@ -95,7 +95,6 @@ await test("runner records the inputs a scenario ran under and never records sec
 await test("the Hephaestus scenario takes one token or one per developer and records neither", () => {
 	const conversationEnv = {
 		BASE_URL: "http://127.0.0.1:8080",
-		API_PREFIX: "",
 		WORKSPACE_SLUG: "e2e",
 		AUTH_TOKENS: "first-secret,second-secret",
 		STAGES: "1:1m,2:1m",
@@ -103,7 +102,6 @@ await test("the Hephaestus scenario takes one token or one per developer and rec
 	const recorded = configuration("conversation", conversationEnv);
 	assert.ok(!JSON.stringify(recorded).includes("secret"));
 	assert.deepEqual(Object.keys(recorded.inputs).toSorted(), [
-		"API_PREFIX",
 		"BASE_URL",
 		"STAGES",
 		"WORKSPACE_SLUG",

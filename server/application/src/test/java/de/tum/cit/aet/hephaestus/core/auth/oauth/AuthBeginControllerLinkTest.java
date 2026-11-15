@@ -58,16 +58,15 @@ class AuthBeginControllerLinkTest extends BaseUnitTest {
         byte[] key = new byte[32];
         new SecureRandom().nextBytes(key);
         authIntentCookie = new AuthIntentCookie(key);
-        controller = buildController("");
+        controller = buildController();
     }
 
-    private AuthBeginController buildController(String apiBasePath) {
+    private AuthBeginController buildController() {
         return new AuthBeginController(
                 loginProviderService,
                 authIntentCookie,
                 identityLinkAuthentication,
-                new InstalledClientRegistry(AuthPropertiesFixture.withBrowserExtensionIds(List.of(EXTENSION_ID))),
-                AuthPropertiesFixture.withApiBasePath(apiBasePath));
+                new InstalledClientRegistry(AuthPropertiesFixture.withBrowserExtensionIds(List.of(EXTENSION_ID))));
     }
 
     private static LoginProvider providerRow(String registrationId, LoginProvider.ProviderType type) {
@@ -96,7 +95,7 @@ class AuthBeginControllerLinkTest extends BaseUnitTest {
 
         RedirectView view = controller.begin("github", null, "/settings", "link", new MockHttpServletRequest(), res);
 
-        assertThat(view.getUrl()).isEqualTo("/oauth2/authorization/github");
+        assertThat(view.getUrl()).isEqualTo("/api/oauth2/authorization/github");
         AuthIntentCookie.Intent intent = readIntent(res);
         assertThat(intent).isNotNull();
         assertThat(intent.mode()).isEqualTo(AuthIntentCookie.Intent.Mode.LINK);
@@ -187,7 +186,7 @@ class AuthBeginControllerLinkTest extends BaseUnitTest {
 
         RedirectView view = controller.begin("outline", null, "/settings", "link", new MockHttpServletRequest(), res);
 
-        assertThat(view.getUrl()).isEqualTo("/oauth2/authorization/outline");
+        assertThat(view.getUrl()).isEqualTo("/api/oauth2/authorization/outline");
         AuthIntentCookie.Intent intent = readIntent(res);
         assertThat(intent).isNotNull();
         assertThat(intent.mode()).isEqualTo(AuthIntentCookie.Intent.Mode.LINK);
@@ -200,19 +199,11 @@ class AuthBeginControllerLinkTest extends BaseUnitTest {
 
         RedirectView view = controller.begin("github", "ws", "/", "login", new MockHttpServletRequest(), res);
 
-        assertThat(view.getUrl()).isEqualTo("/oauth2/authorization/github");
+        assertThat(view.getUrl()).isEqualTo("/api/oauth2/authorization/github");
         AuthIntentCookie.Intent intent = readIntent(res);
         assertThat(intent).isNotNull();
         assertThat(intent.mode()).isEqualTo(AuthIntentCookie.Intent.Mode.LOGIN);
         verifyNoInteractions(identityLinkAuthentication);
-    }
-
-    @Test
-    void initRedirect_carriesApiBasePath_soItLandsOnTheProxiedEndpointNotTheSpa() {
-        RedirectView view = buildController("/api")
-                .begin("github", "ws", "/", "login", new MockHttpServletRequest(), new MockHttpServletResponse());
-
-        assertThat(view.getUrl()).isEqualTo("/api/oauth2/authorization/github");
     }
 
     private static final String CALLBACK = "https://" + EXTENSION_ID + ".chromiumapp.org/callback";
@@ -236,7 +227,7 @@ class AuthBeginControllerLinkTest extends BaseUnitTest {
 
         RedirectView view = beginClient("github", EXTENSION_ID, CALLBACK, CHALLENGE, "S256", "st.ate-1_~", res);
 
-        assertThat(view.getUrl()).isEqualTo("/oauth2/authorization/github");
+        assertThat(view.getUrl()).isEqualTo("/api/oauth2/authorization/github");
         AuthIntentCookie.Intent intent = readIntent(res);
         assertThat(intent).isNotNull();
         assertThat(intent.mode()).isEqualTo(AuthIntentCookie.Intent.Mode.CLIENT);

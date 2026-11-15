@@ -80,7 +80,6 @@ const sourceHashes = Object.fromEntries(
 const env = {
 	...process.env,
 	BASE_URL: "http://127.0.0.1:8080",
-	API_PREFIX: "",
 	WORKSPACE_SLUG: "capacity-bench-course",
 	AUTH_TOKEN: sessions[0],
 	AUTH_TOKENS: sessions.join(","),

@@ -8,7 +8,7 @@ import { server } from "@/mocks/server";
 import { deferred } from "@/test/async";
 import { csrfFetch, refetchCsrfToken } from "./csrf";
 
-const api = "http://localhost:8080";
+const api = "http://localhost:3000/api";
 const originalEnabled = workspaceAddressConfig.enabled;
 let issued = 0;
 

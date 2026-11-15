@@ -15,6 +15,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationManifest;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.outline.webhook.OutlineRouteCredential;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.webhook.GitLabRouteCredential;
+import de.tum.cit.aet.hephaestus.testconfig.ApiWebTestClient;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.HeldTransaction;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
@@ -43,6 +44,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationContext;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.TestPropertySource;
@@ -85,6 +87,9 @@ class OutlineFrameworkRegistrationIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private WebTestClient http;
+
+    @Autowired
+    private ApplicationContext context;
 
     @Autowired
     private WebhookProperties webhookProperties;
@@ -370,7 +375,7 @@ class OutlineFrameworkRegistrationIntegrationTest extends BaseIntegrationTest {
 
     private WebTestClient.ResponseSpec post(String path, Map<String, String> headers, String body) {
         return http.post()
-                .uri(path)
+                .uri(ApiWebTestClient.root(context, path))
                 .headers(values -> headers.forEach(values::set))
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(body.getBytes(StandardCharsets.UTF_8))

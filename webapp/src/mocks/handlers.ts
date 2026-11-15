@@ -1,6 +1,6 @@
 // URL patterns use the `*/path` wildcard so they match regardless of the API
 // client's configured base URL: in the app the client points at
-// `environment.serverUrl` (e.g. http://localhost:8080), while in Storybook the
+// `environment.serverUrl` (e.g. http://localhost:4200/api), while in Storybook the
 // client is unconfigured and issues same-origin relative requests (`/user`).
 // The leading `*` matches the optional `<scheme>://<host>` prefix.
 

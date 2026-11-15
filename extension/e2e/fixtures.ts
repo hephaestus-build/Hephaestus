@@ -43,7 +43,7 @@ declare const chrome: {
 export const EXTENSION_ID = "ijkajblcbajjpjbknfgdiiiljipafiko";
 const BUNDLE = path.resolve(import.meta.dirname, "../.output/chrome-mv3-e2e");
 
-/** The real Hephaestus server under the `e2e` profile; its API has no `/api` prefix locally. */
+/** The real Hephaestus server under the `e2e` profile; it serves its API under `/api`. */
 export const SERVER_URL = process.env.E2E_SERVER_URL ?? "http://127.0.0.1:8080";
 /** Only used for links out; the suite never loads it. */
 export const WEB_APP_URL = process.env.E2E_WEB_APP_URL ?? "http://localhost:4200";
@@ -400,7 +400,7 @@ export async function stopWorker(context: BrowserContext, page: Page): Promise<v
 
 export async function serverAvailable(): Promise<boolean> {
 	try {
-		const response = await fetch(`${SERVER_URL}/identity-providers`);
+		const response = await fetch(`${SERVER_URL}/api/identity-providers`);
 		return response.ok;
 	} catch {
 		return false;
@@ -418,7 +418,7 @@ const consentStatus = z.object({
  * value is an ordinary bearer token, which keeps these calls out of the cookie CSRF check.
  */
 export async function acceptNotice(username: string, { admin }: { admin: boolean }): Promise<void> {
-	const login = await fetch(`${SERVER_URL}/auth/dev-login`, {
+	const login = await fetch(`${SERVER_URL}/api/auth/dev-login`, {
 		method: "POST",
 		headers: { "content-type": "application/json" },
 		body: JSON.stringify({ username, admin }),
@@ -429,9 +429,9 @@ export async function acceptNotice(username: string, { admin }: { admin: boolean
 		throw new Error(`Dev login for ${username} failed with ${login.status}`);
 	}
 	const authorization = { authorization: `Bearer ${token}` };
-	const consent = await fetch(`${SERVER_URL}/user/consent`, { headers: authorization });
+	const consent = await fetch(`${SERVER_URL}/api/user/consent`, { headers: authorization });
 	const { noticeVersion, researchOrganization } = consentStatus.parse(await consent.json());
-	const accepted = await fetch(`${SERVER_URL}/user/consent`, {
+	const accepted = await fetch(`${SERVER_URL}/api/user/consent`, {
 		method: "PUT",
 		headers: { ...authorization, "content-type": "application/json" },
 		body: JSON.stringify({

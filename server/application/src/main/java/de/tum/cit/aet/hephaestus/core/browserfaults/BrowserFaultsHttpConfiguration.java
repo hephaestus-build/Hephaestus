@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.core.browserfaults;
 
 import de.tum.cit.aet.hephaestus.core.metrics.CoreMetrics;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.core.web.ApiPath;
 import de.tum.cit.aet.hephaestus.core.web.PayloadSizeFilter;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -35,7 +36,7 @@ public class BrowserFaultsHttpConfiguration {
             }
         };
         FilterRegistrationBean<PayloadSizeFilter> registration = new FilterRegistrationBean<>(filter);
-        registration.addUrlPatterns("/browser-faults");
+        registration.addUrlPatterns(ApiPath.of("/browser-faults"));
         registration.setOrder(Ordered.HIGHEST_PRECEDENCE);
         return registration;
     }

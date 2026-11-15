@@ -18,21 +18,20 @@ import org.springframework.mock.env.MockEnvironment;
 import org.springframework.mock.web.MockHttpServletRequest;
 
 /**
- * Pins that the dev-trigger carve-out is a SINGLE shared matcher object. Both the authorize
- * {@code permitAll} rule and the {@code requiresCsrf} skip reference {@link SecurityConfig#DEV_TRIGGER_MATCHER},
- * so they cannot drift apart.
+ * Pins the shared matchers that both the authorize rules and the {@code requiresCsrf} predicate reference, so they
+ * cannot drift apart, and the cookie guard of the constructor.
  */
 class SecurityConfigSharedMatcherTest extends BaseUnitTest {
 
     @Test
     void shouldExemptOnlyOneClickPostFromSessionRequirements() {
-        MockHttpServletRequest post = new MockHttpServletRequest("POST", "/notifications/unsubscribe/token");
-        post.setServletPath("/notifications/unsubscribe/token");
+        MockHttpServletRequest post = new MockHttpServletRequest("POST", "/api/notifications/unsubscribe/token");
+        post.setServletPath("/api/notifications/unsubscribe/token");
         assertThat(SecurityConfig.EMAIL_UNSUBSCRIBE_MATCHER.matches(post)).isTrue();
         for (String path : List.of(
-                "/notifications/unsubscribe",
-                "/notifications/unsubscribe/token/extra",
-                "/user/notification-preferences")) {
+                "/api/notifications/unsubscribe",
+                "/api/notifications/unsubscribe/token/extra",
+                "/api/user/notification-preferences")) {
             MockHttpServletRequest other = new MockHttpServletRequest("POST", path);
             other.setServletPath(path);
             assertThat(SecurityConfig.EMAIL_UNSUBSCRIBE_MATCHER.matches(other)).isFalse();
@@ -44,9 +43,9 @@ class SecurityConfigSharedMatcherTest extends BaseUnitTest {
     @Test
     void shouldPermitOnlyPublishedActivityReads() {
         for (String path : List.of(
-                "/public/workspaces/team/activity",
-                "/public/workspaces/team/activity/people/developer",
-                "/public/workspaces/team/activity/people/developer/work")) {
+                "/api/public/workspaces/team/activity",
+                "/api/public/workspaces/team/activity/people/developer",
+                "/api/public/workspaces/team/activity/people/developer/work")) {
             for (String method : List.of("GET", "HEAD", "POST")) {
                 var request = new MockHttpServletRequest(method, path);
                 request.setServletPath(path);
@@ -56,9 +55,9 @@ class SecurityConfigSharedMatcherTest extends BaseUnitTest {
             }
         }
         for (String path : List.of(
-                "/public/workspaces/team/activity/private",
-                "/public/workspaces/team/activity/people",
-                "/public/workspaces/team/activity/people/developer/work/extra")) {
+                "/api/public/workspaces/team/activity/private",
+                "/api/public/workspaces/team/activity/people",
+                "/api/public/workspaces/team/activity/people/developer/work/extra")) {
             var request = new MockHttpServletRequest("GET", path);
             request.setServletPath(path);
             assertThat(PublicActivityReadRequestMatcher.MATCHER.matches(request))
@@ -73,7 +72,7 @@ class SecurityConfigSharedMatcherTest extends BaseUnitTest {
 
     @Test
     void shouldMatchOnlyTheThreeInstalledClientPostsWhenDecidingPublicAccessAndCsrf() {
-        for (String path : List.of("/auth/client/token", "/auth/client/refresh", "/auth/client/logout")) {
+        for (String path : List.of("/api/auth/client/token", "/api/auth/client/refresh", "/api/auth/client/logout")) {
             MockHttpServletRequest post = new MockHttpServletRequest("POST", path);
             post.setServletPath(path);
             assertThat(SecurityConfig.CLIENT_SESSION_MATCHER.matches(post))
@@ -85,26 +84,18 @@ class SecurityConfigSharedMatcherTest extends BaseUnitTest {
                     .as("GET " + path)
                     .isFalse();
         }
-        for (String path : List.of("/auth/client/configuration", "/auth/client/other", "/auth/client/token/x")) {
+        for (String path :
+                List.of("/api/auth/client/configuration", "/api/auth/client/other", "/api/auth/client/token/x")) {
             MockHttpServletRequest post = new MockHttpServletRequest("POST", path);
             post.setServletPath(path);
             assertThat(SecurityConfig.CLIENT_SESSION_MATCHER.matches(post))
                     .as(path)
                     .isFalse();
         }
-        MockHttpServletRequest configuration = new MockHttpServletRequest("GET", "/auth/client/configuration");
-        configuration.setServletPath("/auth/client/configuration");
+        MockHttpServletRequest configuration = new MockHttpServletRequest("GET", "/api/auth/client/configuration");
+        configuration.setServletPath("/api/auth/client/configuration");
         assertThat(SecurityConfig.CLIENT_CONFIGURATION_MATCHER.matches(configuration))
                 .isTrue();
-    }
-
-    @Test
-    void devTriggerMatcherMatchesDevPathsOnly() {
-        MockHttpServletRequest dev = new MockHttpServletRequest("POST", "/api/dev/trigger-review");
-        MockHttpServletRequest notDev = new MockHttpServletRequest("POST", "/user/something");
-
-        assertThat(SecurityConfig.DEV_TRIGGER_MATCHER.matches(dev)).isTrue();
-        assertThat(SecurityConfig.DEV_TRIGGER_MATCHER.matches(notDev)).isFalse();
     }
 
     @ParameterizedTest
@@ -119,7 +110,6 @@ class SecurityConfigSharedMatcherTest extends BaseUnitTest {
                         noClients(),
                         new StaticListableBeanFactory().getBeanProvider(WorkspaceOriginPolicy.class),
                         environment,
-                        false,
                         false,
                         false,
                         "HEPHAESTUS_AT"))
@@ -138,7 +128,6 @@ class SecurityConfigSharedMatcherTest extends BaseUnitTest {
                         environment,
                         false,
                         false,
-                        false,
                         "HEPHAESTUS_AT"))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("cookie-secure");
@@ -153,7 +142,6 @@ class SecurityConfigSharedMatcherTest extends BaseUnitTest {
                         noClients(),
                         new StaticListableBeanFactory().getBeanProvider(WorkspaceOriginPolicy.class),
                         dev,
-                        false,
                         false,
                         false,
                         "HEPHAESTUS_AT"))

@@ -86,7 +86,7 @@ import org.springframework.web.server.ResponseStatusException;
 /** Real adapter boundaries and PostgreSQL coordination, with deterministic provider transport fakes. */
 class ProviderResourceAdoptionIntegrationTest extends BaseIntegrationTest {
     private static final PublicApiUrls URLS =
-            new PublicApiUrls(AuthPropertiesFixture.withApiBase(URI.create("https://receiver.example.test"), "/api"));
+            new PublicApiUrls(AuthPropertiesFixture.withIssuer(URI.create("https://receiver.example.test")));
 
     @Autowired
     private ConnectionAdminService connectionAdmin;

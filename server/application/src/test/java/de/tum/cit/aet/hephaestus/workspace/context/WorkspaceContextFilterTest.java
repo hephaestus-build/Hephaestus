@@ -7,9 +7,9 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
-import de.tum.cit.aet.hephaestus.core.auth.AuthPropertiesFixture;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AdminPasskeyAccess;
 import de.tum.cit.aet.hephaestus.core.auth.spi.WorkspaceElevationAudit;
+import de.tum.cit.aet.hephaestus.core.web.ApiPath;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.CurrentAccountUsers;
 import de.tum.cit.aet.hephaestus.workspace.MembershipRepository;
@@ -40,8 +40,7 @@ class WorkspaceContextFilterTest extends BaseUnitTest {
             JsonMapper.builder().build(),
             mock(WorkspaceElevationAudit.class),
             mock(WorkspaceActorSelector.class),
-            mock(AdminPasskeyAccess.class),
-            AuthPropertiesFixture.defaults());
+            mock(AdminPasskeyAccess.class));
 
     static Stream<String> slugsThatStartWithARegistrySegment() {
         return WorkspaceContextFilter.REGISTRY_SEGMENTS.stream()
@@ -77,9 +76,10 @@ class WorkspaceContextFilterTest extends BaseUnitTest {
         assertThat(WorkspaceContextFilter.REGISTRY_SEGMENTS).noneMatch(WorkspaceSlugValidator::isAssignable);
     }
 
+    /** A request to {@code path}, given relative to the API. */
     private static MockHttpServletRequest get(String path) {
-        var request = new MockHttpServletRequest("GET", path);
-        request.setRequestURI(path);
+        var request = new MockHttpServletRequest("GET", ApiPath.of(path));
+        request.setRequestURI(ApiPath.of(path));
         return request;
     }
 }

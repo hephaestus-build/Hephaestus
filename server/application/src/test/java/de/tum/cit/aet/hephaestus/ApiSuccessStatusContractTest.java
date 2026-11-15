@@ -35,8 +35,7 @@ class ApiSuccessStatusContractTest {
         var export = new AccountExport(42L);
         export.setId(17L);
         when(exports.requestExport(42L)).thenReturn(export);
-        var urls =
-                new PublicApiUrls(AuthPropertiesFixture.withApiBase(URI.create("https://heph.example.test"), "/api"));
+        var urls = new PublicApiUrls(AuthPropertiesFixture.withIssuer(URI.create("https://heph.example.test")));
         var mvc = MockMvcBuilders.standaloneSetup(new AccountExportController(exports, urls))
                 .build();
         var jwt =

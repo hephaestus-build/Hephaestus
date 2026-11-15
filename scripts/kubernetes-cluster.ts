@@ -2108,7 +2108,8 @@ async function sendSlackMessage(base: string, signingSecret: string): Promise<st
 		ts: `${sent}.000100`,
 		eventId: `Ev${randomUUID().replaceAll("-", "").slice(0, 16)}`,
 	});
-	const delivery = await fetch(`${base}/webhooks/slack`, {
+	// Provider webhooks stay at the server root, outside `/api`.
+	const delivery = await fetch(new URL("/webhooks/slack", base), {
 		method: "POST",
 		headers: {
 			"content-type": "application/json",
@@ -2358,7 +2359,7 @@ export async function turnRoll(
 			throw error;
 		}
 		forward = await portForward(signIn, 8080);
-		const base = `http://127.0.0.1:${forward.port}`;
+		const base = `http://127.0.0.1:${forward.port}/api`;
 		const token = await syntheticSession(base, ROLL_ADMIN, true);
 		await psql(
 			await readFile(path.join(ROOT, "scripts", "capacity-bench", "seed-identities.sql"), "utf8"),
@@ -2673,7 +2674,7 @@ async function gatewayAnswer(
 
 /**
  * The routes of docs/admin/helm-chart.md § Gateway routes, through Traefik: the redirect to HTTPS,
- * the webapp, the server behind the `/api` rewrite, and the webhook path, over TLS that the
+ * the webapp, the server's `/api` routes, and the webhook path, over TLS that the
  * certificate of the Gateway's listener carries.
  */
 async function gatewayRequests(

@@ -2,7 +2,7 @@
 # `docker compose down -v` won't clear it — use `vp run dev:reset` to reset the DB.
 #
 # Authentication is Hephaestus-native (no Keycloak — ADR 0017). For local login, register a
-# GitHub OAuth app (callback http://localhost:8080/login/oauth2/code/github) and set
+# GitHub OAuth app (callback http://localhost:8080/api/login/oauth2/code/github) and set
 # GITHUB_OAUTH_CLIENT_ID / GITHUB_OAUTH_CLIENT_SECRET in server/.env. See
 # docs/contributor/local-development.mdx.
 
