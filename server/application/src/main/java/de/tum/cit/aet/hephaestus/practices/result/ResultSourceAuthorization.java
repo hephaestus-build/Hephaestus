@@ -28,6 +28,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -296,6 +297,11 @@ public class ResultSourceAuthorization implements ResultProofAccess {
         private final Set<UUID> prefetchedResults = new HashSet<>();
         private final Map<UUID, List<ReviewItem>> retained = new HashMap<>();
         private final Map<UUID, List<Problem>> children = new HashMap<>();
+        // Registered by prefetchChecks and read in one batch at the first check that asks for one of them, so a read
+        // whose checks never reach an item or a job reads none.
+        private final Set<Long> pendingItems = new LinkedHashSet<>();
+        private final Set<UUID> pendingJobs = new LinkedHashSet<>();
+        private long pendingWorkspace;
 
         /**
          * Loads the assignments and problems of the rows in {@code owned} this read has not seen, in chunked collection
@@ -336,45 +342,51 @@ public class ResultSourceAuthorization implements ResultProofAccess {
         }
 
         /**
-         * Reads, in chunked collection queries, what the checks of {@code owned} and their {@code custody} ask and this
-         * read has not seen: the rows' work items and those items' parents, and whether each capture job is
-         * suppressed. An item that a read does not return is kept as absent, as its single lookup finds it.
+         * Registers what the checks of {@code owned} and their {@code custody} may ask and this read has not seen: the
+         * rows' work items, those items' parents, and whether each capture job is suppressed. The first check that asks
+         * for one reads all of its kind in chunked collection queries. An item that a read does not return is kept as
+         * absent, as its single lookup finds it.
          */
         void prefetchChecks(long workspaceId, List<Result> owned, Collection<HistoryCustody> custody) {
-            prefetchItems(workspaceId, owned.stream().map(Result::getItemId).toList());
-            prefetchItems(
-                    workspaceId,
-                    owned.stream()
-                            .map(result -> items.getOrDefault(result.getItemId(), Optional.empty()))
-                            .flatMap(Optional::stream)
-                            .map(ItemRef::parentId)
-                            .filter(Objects::nonNull)
-                            .toList());
-            var jobs = new ArrayList<UUID>();
-            custody.forEach(facts -> jobs.addAll(facts.sourceJobIds()));
+            pendingWorkspace = workspaceId;
+            owned.stream()
+                    .map(Result::getItemId)
+                    .filter(id -> !items.containsKey(id))
+                    .forEach(pendingItems::add);
+            custody.forEach(facts -> facts.sourceJobIds().stream()
+                    .filter(job -> !suppressedJobs.containsKey(job))
+                    .forEach(pendingJobs::add));
             // A row recorded before the current result model is checked by its review as a job.
             owned.stream()
                     .filter(Result::isMigratedHistory)
                     .map(Result::getReviewId)
-                    .forEach(jobs::add);
-            var unread = jobs.stream()
-                    .distinct()
                     .filter(job -> !suppressedJobs.containsKey(job))
-                    .toList();
+                    .forEach(pendingJobs::add);
+        }
+
+        private void readPendingItems(long workspaceId) {
+            if (workspaceId != pendingWorkspace || pendingItems.isEmpty()) return;
+            var unread = List.copyOf(pendingItems);
+            pendingItems.clear();
+            var parents = new ArrayList<Long>();
+            for (var chunk : chunks(unread)) {
+                var found = ResultSourceAuthorization.this.items.findAll(workspaceId, chunk);
+                for (var id : chunk) {
+                    var item = Optional.ofNullable(found.get(id));
+                    items.put(id, item);
+                    item.map(ItemRef::parentId).ifPresent(parents::add);
+                }
+            }
+            parents.stream().filter(id -> !items.containsKey(id)).forEach(pendingItems::add);
+        }
+
+        private void readPendingJobs() {
+            if (pendingJobs.isEmpty()) return;
+            var unread = List.copyOf(pendingJobs);
+            pendingJobs.clear();
             for (var chunk : chunks(unread)) {
                 var suppressed = suppression.suppressedReviewJobs(chunk);
                 chunk.forEach(job -> suppressedJobs.put(job, suppressed.contains(job)));
-            }
-        }
-
-        private void prefetchItems(long workspaceId, List<Long> itemIds) {
-            var unread = itemIds.stream()
-                    .distinct()
-                    .filter(id -> !items.containsKey(id))
-                    .toList();
-            for (var chunk : chunks(unread)) {
-                var found = ResultSourceAuthorization.this.items.findAll(workspaceId, chunk);
-                chunk.forEach(id -> items.put(id, Optional.ofNullable(found.get(id))));
             }
         }
 
@@ -407,6 +419,7 @@ public class ResultSourceAuthorization implements ResultProofAccess {
         }
 
         Optional<ItemRef> item(long workspaceId, long itemId) {
+            if (!items.containsKey(itemId) && pendingItems.contains(itemId)) readPendingItems(workspaceId);
             return items.computeIfAbsent(itemId, id -> ResultSourceAuthorization.this.items.find(workspaceId, id));
         }
 
@@ -428,6 +441,7 @@ public class ResultSourceAuthorization implements ResultProofAccess {
         }
 
         boolean jobSuppressed(UUID job) {
+            if (!suppressedJobs.containsKey(job) && pendingJobs.contains(job)) readPendingJobs();
             return suppressedJobs.computeIfAbsent(job, suppression::isReviewJobSuppressed);
         }
 
