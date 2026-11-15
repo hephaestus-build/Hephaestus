@@ -1,7 +1,7 @@
 # Architecture Decision Records
 
 An architecture decision record (ADR) records one decision that shapes Hephaestus, the options that we rejected, and the reasons.
-This index lists every ADR.
+Each ADR is one file in this directory. Its file name starts with its number.
 The rules below say how to write one and how it changes over time.
 
 ## These are repo-only, not on the docs site
@@ -33,7 +33,7 @@ Copy [the template](0000-template.md) and use the next free number.
 
 ### Status
 
-The status line holds one value, and the index shows the same value:
+The status line holds one value:
 
 | Status | Meaning |
 | --- | --- |
@@ -65,126 +65,15 @@ Rejected options are never deleted. A superseded ADR keeps them, and the new ADR
 
 `scripts/decisions-index.test.ts` runs in `vp run check`. It checks that:
 
-- each ADR has a unique number and a heading with that number;
-- each status is in the table above, and the index shows the same status;
-- each ADR link in a header points to an existing ADR;
-- the index lists each ADR exactly once;
+- each ADR has a unique number and a heading with that number.
+- each status is in the table above.
+- each ADR link in a header points to an existing ADR.
 - each Accepted ADR from 0081 has a `## Confirmation` section.
 
 ## Index
 
-| # | Title | Status |
-|---|---|---|
-| [0001](0001-flat-top-level-layout.md) | Flat top-level layout | Accepted |
-| [0002](0002-java-package-rename-to-aet-cit-tum.md) | Rename Java base package to `de.tum.cit.aet.hephaestus` | Accepted |
-| [0003](0003-spring-modulith-adoption.md) | Spring Modulith 2.0 adoption with two empirical shared kernels | Superseded by [0099](0099-aggregates-own-their-lifecycle-and-module-boundaries.md) |
-| [0004](0004-sql-layer-tenancy-via-statement-inspector.md) | SQL-layer tenancy enforcement via WorkspaceStatementInspector | Superseded by [0084](0084-every-statement-on-workspace-data-binds-its-workspace.md) |
-| [0005](0005-two-role-runtime-via-conditional-on-property.md) | Two-role runtime topology via `@ConditionalOnProperty` | Superseded by [0081](0081-one-server-role-and-sandboxes-that-reach-only-the-server.md) |
-| [0006](0006-llm-proxy-on-coordinator-trust-model.md) | LLM proxy stays on the coordinator (BYO trust model) | Superseded by [0081](0081-one-server-role-and-sandboxes-that-reach-only-the-server.md) |
-| [0007](0007-sandbox-spi-shape.md) | Sandbox SPI shape — sealed VolumeMount + typed NetworkPolicy | Superseded by [0079](0079-one-agent-system.md) |
-| [0008](0008-webhook-runtime-role.md) | Webhook as a third runtime role (`webhook-server` container) | Superseded by [0080](0080-provider-events-go-to-a-postgresql-inbox.md) |
-| [0009](0009-worker-runtime-substrate-wss-control-channel.md) | Worker runtime substrate + WSS-over-443 control channel | Superseded by [0081](0081-one-server-role-and-sandboxes-that-reach-only-the-server.md) |
-| [0010](0010-outbound-oauth-state-handrolled.md) | Hand-roll OAuth state for outbound per-workspace integrations | Accepted |
-| [0011](0011-integration-identity-not-wired-from-sync.md) | `integration_identity` is OAuth-fed, not sync-fed (tombstone) | Superseded by [0016](0016-unified-identity-keycloak-as-truth.md) |
-| [0012](0012-cross-instance-identity-safety-on-sync-paths.md) | Cross-instance identity safety on sync paths | Superseded by [0094](0094-a-provider-mirror-changes-only-on-a-definitive-answer-and-a-tombstone-is-not-an-erasure.md) |
-| [0013](0013-no-jetstream-dlq-stream.md) | No dedicated JetStream DLQ stream — poison handler ACKs after N redeliveries | Superseded by [0080](0080-provider-events-go-to-a-postgresql-inbox.md) |
-| [0014](0014-per-row-aes-gcm-aad-binding.md) | Per-row AES-GCM AAD binds ciphertext to record identity | Accepted |
-| [0015](0015-unified-integration-framework.md) | Unified integration framework — package layout and SPI surface | Superseded by [0095](0095-one-adapter-for-each-provider-behind-a-vendor-neutral-spi.md) |
-| [0016](0016-unified-identity-keycloak-as-truth.md) | Unified identity — SCM `User` is the authoritative person row, Keycloak `sub` is the persisted join key | Superseded by [0017](0017-replace-keycloak-with-spring-native-auth.md) |
-| [0017](0017-replace-keycloak-with-spring-native-auth.md) | Replace Keycloak with Spring-native auth (BFF cookie-JWT + `Connection`-backed workspace IdPs) | Superseded by [0088](0088-a-person-signs-in-through-an-instance-login-provider-and-is-one-account.md) |
-| [0018](0018-pg-partman-for-auth-event-partitioning.md) | pg_partman for `auth_event` partitioning (supersedes ADR 0017's self-managed partitions) | Accepted |
-| [0019](0019-workspace-membership-keyed-on-account.md) | Workspace membership is keyed on `Account`, not the SCM `User` | Superseded by [0088](0088-a-person-signs-in-through-an-instance-login-provider-and-is-one-account.md) |
-| [0020](0020-context-fabric-everything-is-an-integration.md) | Context Fabric — everything is an integration, only practice review and mentor are native | Superseded by [0090](0090-a-review-cites-only-captured-bytes-and-admission-verifies-each-citation-once.md) |
-| [0021](0021-observations-feedback-synthesis-seam.md) | Separate observations from feedback | Superseded by [0056](0056-one-practice-model-for-items-and-scans.md) |
-| [0022](0022-observation-presence-assessment-and-schema-cleanup.md) | Observation = presence × assessment (drop `Practice.kind`); reaction anchors on feedback; ruthless column cleanup | Superseded by [0056](0056-one-practice-model-for-items-and-scans.md) |
-| [0023](0023-outline-documentation-integration.md) | Outline documentation integration — a content source, not a detection surface | Superseded by [0095](0095-one-adapter-for-each-provider-behind-a-vendor-neutral-spi.md) |
-| [0024](0024-integration-sync-lifecycle-and-two-deletion-semantics.md) | Integration sync lifecycle — drift tombstones and mirror erasure are two different operations | Superseded by [0094](0094-a-provider-mirror-changes-only-on-a-definitive-answer-and-a-tombstone-is-not-an-erasure.md) |
-| [0025](0025-agent-job-queue-on-postgresql.md) | Agent job queue moves off NATS onto PostgreSQL | Superseded by [0081](0081-one-server-role-and-sandboxes-that-reach-only-the-server.md) |
-| [0026](0026-per-purpose-agent-bindings-and-llm-governance.md) | Per-purpose agent bindings and governed OpenAI-compatible LLM catalog | Superseded by [0083](0083-each-purpose-uses-one-governed-model-and-every-call-is-counted.md) |
-| [0027](0027-dialog-lifetime-and-where-a-write-outcome-lands.md) | Dialog lifetime, and where a write's outcome lands when the dialog is gone | Accepted |
-| [0028](0028-source-synced-practice-catalog.md) | Source-synced practice catalog with sparse instance overrides | Accepted |
-| [0029](0029-measurement-intervention-seam-and-channel-levels.md) | Separate measurement from intervention and derive level from channel | Superseded by [0056](0056-one-practice-model-for-items-and-scans.md) |
-| [0030](0030-agent-runtime-is-typescript-on-bun.md) | The agent runtime is TypeScript on Bun, with no Node in the sandbox | Superseded by [0036](0036-agent-runtime-runs-on-node-24.md) |
-| [0031](0031-agent-image-follows-the-deployments-own-tag.md) | The agent image reference follows the deployment's own image tag | Superseded by [0034](0034-signed-release-image-lock.md) |
-| [0032](0032-generated-clients-build-boundary.md) | Generated clients have an independent build boundary | Superseded by [0043](0043-gradle-java-build.md) |
-| [0033](0033-bun-is-the-javascript-runtime-and-package-manager.md) | Bun is the JavaScript runtime and package manager | Superseded by [0037](0037-node-24-and-pnpm-12-are-the-javascript-toolchain.md) |
-| [0034](0034-signed-release-image-lock.md) | Production consumes one signed release image lock | Superseded by [0092](0092-ci-builds-each-image-once-a-release-signs-one-lock-and-hosts-pull-it.md) |
-| [0035](0035-pull-request-previews-are-label-gated.md) | Pull request previews are label-gated and driven from the default branch | Deprecated |
-| [0036](0036-agent-runtime-runs-on-node-24.md) | Agent runtime runs on Node.js 24 with bounded resources | Superseded by [0081](0081-one-server-role-and-sandboxes-that-reach-only-the-server.md) |
-| [0037](0037-node-24-and-pnpm-12-are-the-javascript-toolchain.md) | Node.js 24 and pnpm 12 are the JavaScript toolchain | Superseded by [0089](0089-pinned-node-and-pnpm-install-the-repository-and-vite-plus-runs-every-command.md) |
-| [0038](0038-postgresql-18-release-baseline.md) | PostgreSQL 18 is the only supported major version | Accepted |
-| [0039](0039-git-and-postgresql-own-evidence.md) | Git owns repository evidence; PostgreSQL owns captured payloads and references | Superseded by [0090](0090-a-review-cites-only-captured-bytes-and-admission-verifies-each-citation-once.md) |
-| [0040](0040-vite-plus-is-the-command-surface.md) | Vite+ is the command surface; pnpm stays the package manager | Superseded by [0089](0089-pinned-node-and-pnpm-install-the-repository-and-vite-plus-runs-every-command.md) |
-| [0041](0041-compose-1x-kubernetes-2.md) | Compose for 1.x; Kubernetes only for 2.0 | Superseded by [0091](0091-the-signed-helm-chart-is-the-only-supported-deployment-and-one-host-runs-it-on-k3s.md) |
-| [0042](0042-hosts-pull-their-own-releases.md) | Hosts pull their own releases | Superseded by [0092](0092-ci-builds-each-image-once-a-release-signs-one-lock-and-hosts-pull-it.md) |
-| [0043](0043-gradle-java-build.md) | Gradle owns the Java build | Accepted |
-| [0044](0044-email-is-a-notification-transport.md) | Email is a notification transport, delivered through the event publication registry | Superseded by [0098](0098-each-email-is-one-outbox-action-and-is-sent-at-most-once.md) |
-| [0045](0045-activity-counts-work-and-never-ranks-people.md) | Activity counts and lists work; it never scores or ranks people | Superseded by [0093](0093-members-see-activity-a-workspace-can-publish-its-public-work-and-private-practice-feedback-has-one-reader.md) |
-| [0046](0046-heph-follows-its-model-not-a-workspace-switch.md) | Heph follows its model, not a workspace switch | Accepted |
-| [0047](0047-the-practice-profile-has-one-reader.md) | The Practice profile has one reader | Superseded by [0093](0093-members-see-activity-a-workspace-can-publish-its-public-work-and-private-practice-feedback-has-one-reader.md) |
-| [0048](0048-installed-clients-sign-in-with-a-pkce-handoff.md) | Installed clients sign in with a PKCE handoff to their own revocable session | Accepted |
-| [0049](0049-browser-extension-report-in-the-page.md) | The browser extension shows its report in the page and confirms changes in its own window | Accepted |
-| [0050](0050-one-practice-standard-one-outcome.md) | One practice standard, one outcome | Superseded by [0085](0085-an-observation-has-one-of-four-outcomes-and-standing-reads-the-newest-decision.md) |
-| [0051](0051-practices-across-the-workspace-counts-developers.md) | Practices across the workspace counts developers and never names one | Superseded by [0093](0093-members-see-activity-a-workspace-can-publish-its-public-work-and-private-practice-feedback-has-one-reader.md) |
-| [0052](0052-activity-sorts-by-contributions-and-can-be-public.md) | Workspace activity sorts people by plain counts, and a workspace can publish it | Superseded by [0093](0093-members-see-activity-a-workspace-can-publish-its-public-work-and-private-practice-feedback-has-one-reader.md) |
-| [0053](0053-workspace-addresses-are-a-presentation-origin.md) | A workspace address is a presentation origin, and sign-in stays on the apex | Accepted |
-| [0054](0054-practice-visuals-and-guides.md) | Practice visuals and guides are themeable inline SVG and Markdown | Accepted |
-| [0055](0055-practice-scripts-use-one-result-contract.md) | Practice scripts use one result contract | Accepted |
-| [0056](0056-one-practice-model-for-items-and-scans.md) | One practice model for items and scans | Superseded by [0085](0085-an-observation-has-one-of-four-outcomes-and-standing-reads-the-newest-decision.md) |
-| [0057](0057-one-heph-conversation-per-developer.md) | One Heph conversation per developer, on a stateless shared Heph host | Superseded by [0082](0082-a-developer-has-one-heph-conversation-and-its-ledger-is-hephs-memory.md) |
-| [0058](0058-the-helm-chart-is-the-only-supported-deployment-from-1-0.md) | The Helm chart is the only supported deployment from 1.0 | Superseded by [0091](0091-the-signed-helm-chart-is-the-only-supported-deployment-and-one-host-runs-it-on-k3s.md) |
-| [0059](0059-previews-run-on-the-staging-cluster.md) | Previews run on the staging cluster | Deprecated |
-| [0060](0060-the-kubernetes-floor-follows-upstream-support.md) | The Kubernetes floor follows upstream support | Superseded by [0091](0091-the-signed-helm-chart-is-the-only-supported-deployment-and-one-host-runs-it-on-k3s.md) |
-| [0061](0061-review-seals-then-feedback-composes.md) | A practice review seals its results, then feedback is composed | Superseded by [0086](0086-a-practice-review-stages-seals-then-composes-and-each-stage-records-why-it-stops.md) |
-| [0062](0062-the-item-is-the-review-scope.md) | The item is the review scope | Superseded by [0086](0086-a-practice-review-stages-seals-then-composes-and-each-stage-records-why-it-stops.md) |
-| [0063](0063-each-practice-is-staged-when-it-ends.md) | Each practice is staged when it ends, and the review seals once | Superseded by [0086](0086-a-practice-review-stages-seals-then-composes-and-each-stage-records-why-it-stops.md) |
-| [0064](0064-one-evidence-contract-for-every-producer.md) | One evidence contract for every result producer | Accepted |
-| [0065](0065-standing-counts-the-newest-observation-of-each-item.md) | Standing counts the newest observation of each item | Superseded by [0085](0085-an-observation-has-one-of-four-outcomes-and-standing-reads-the-newest-decision.md) |
-| [0066](0066-the-webhook-receiver-has-no-database.md) | The webhook receiver has no database | Superseded by [0080](0080-provider-events-go-to-a-postgresql-inbox.md) |
-| [0067](0067-the-server-image-builds-with-buildpacks-and-cds.md) | The server image builds with Paketo Buildpacks and Application CDS | Accepted |
-| [0068](0068-reviews-and-heph-run-on-one-agent-runtime.md) | Reviews and Heph run on one agent runtime | Superseded by [0081](0081-one-server-role-and-sandboxes-that-reach-only-the-server.md) |
-| [0069](0069-practices-run-when-ready-and-stay-current-by-their-sources.md) | Practices run when they are ready and stay current by their sources | Superseded by [0086](0086-a-practice-review-stages-seals-then-composes-and-each-stage-records-why-it-stops.md) |
-| [0070](0070-1-0-is-a-cutover-release.md) | 1.0 is a cutover release | Superseded by [0096](0096-1-0-is-one-stopped-cutover-from-1-0-0-rc-1-and-keeps-nothing-for-0-x.md) |
-| [0071](0071-every-user-visible-failure-is-observable.md) | Every user-visible failure is observable, through one first-party pipeline | Accepted |
-| [0072](0072-few-dependencies-owned-slivers-kept-foundations.md) | Few dependencies — own a sliver, keep a foundation | Accepted |
-| [0073](0073-product-feedback-is-worked-on-in-github.md) | Product feedback is worked on in GitHub | Superseded by [0097](0097-product-feedback-becomes-a-github-issue-and-only-the-reporters-tick-and-a-code-gate-make-it-public.md) |
-| [0074](0074-a-reviews-width-and-count-follow-the-provider.md) | A review's width and count follow the provider | Superseded by [0081](0081-one-server-role-and-sandboxes-that-reach-only-the-server.md) |
-| [0075](0075-a-transaction-is-one-use-case-and-talks-to-nothing.md) | A transaction is one use case and talks to nothing | Accepted |
-| [0076](0076-reads-are-shaped-like-the-screen.md) | Reads are shaped like the screen, entities are for writes | Accepted |
-| [0077](0077-provider-mirrors-are-shared-and-the-monitored-scope-isolates-them.md) | Provider mirrors are shared, and the monitored scope isolates them | Superseded by [0084](0084-every-statement-on-workspace-data-binds-its-workspace.md) |
-| [0078](0078-lifecycles-are-explicit-and-rigor-follows-the-damage.md) | Lifecycles are explicit, and rigor follows the damage | Accepted |
-| [0079](0079-one-agent-system.md) | One agent system: one sandbox per subject on agent-sandbox, PostgreSQL as the only brain | Accepted |
-| [0080](0080-provider-events-go-to-a-postgresql-inbox.md) | Provider events go to a PostgreSQL inbox, and the server receives them | Accepted |
-| [0081](0081-one-server-role-and-sandboxes-that-reach-only-the-server.md) | One server role runs Hephaestus, and agent work runs in sandboxes that reach only the server | Accepted |
-| [0082](0082-a-developer-has-one-heph-conversation-and-its-ledger-is-hephs-memory.md) | A developer has one Heph conversation, and its ledger is Heph's memory | Accepted |
-| [0083](0083-each-purpose-uses-one-governed-model-and-every-call-is-counted.md) | Each purpose uses one governed model within the member's AI choice, and every model call is counted | Accepted |
-| [0084](0084-every-statement-on-workspace-data-binds-its-workspace.md) | Every statement on workspace data binds its workspace, and a shared mirror binds it through the monitored scope | Accepted |
-| [0085](0085-an-observation-has-one-of-four-outcomes-and-standing-reads-the-newest-decision.md) | An observation has one of four outcomes, holds one current claim while its sources stay unchanged, and standing reads the newest decision | Accepted |
-| [0086](0086-a-practice-review-stages-seals-then-composes-and-each-stage-records-why-it-stops.md) | A practice review stages, seals, then composes, and each stage records why it stops | Accepted |
-| [0088](0088-a-person-signs-in-through-an-instance-login-provider-and-is-one-account.md) | A person signs in through an instance login provider and is one account in every workspace | Accepted |
-| [0089](0089-pinned-node-and-pnpm-install-the-repository-and-vite-plus-runs-every-command.md) | Pinned Node.js and pnpm install the repository, and Vite+ runs every command | Accepted |
-| [0090](0090-a-review-cites-only-captured-bytes-and-admission-verifies-each-citation-once.md) | A practice review cites only bytes that the server captured, admission verifies each citation once, and Hephaestus keeps the verdict, not the bytes | Accepted |
-| [0091](0091-the-signed-helm-chart-is-the-only-supported-deployment-and-one-host-runs-it-on-k3s.md) | The signed Helm chart is the only supported deployment, and one host runs it on k3s | Accepted |
-| [0092](0092-ci-builds-each-image-once-a-release-signs-one-lock-and-hosts-pull-it.md) | CI builds each image once, a release signs one lock that names it, and hosts pull that lock | Accepted |
-| [0093](0093-members-see-activity-a-workspace-can-publish-its-public-work-and-private-practice-feedback-has-one-reader.md) | Members see activity, a workspace can publish its public work, and private practice feedback has one reader | Accepted |
-| [0094](0094-a-provider-mirror-changes-only-on-a-definitive-answer-and-a-tombstone-is-not-an-erasure.md) | A provider mirror changes only on a definitive provider answer, and a tombstone is never an erasure | Accepted |
-| [0095](0095-one-adapter-for-each-provider-behind-a-vendor-neutral-spi.md) | Each provider has one adapter behind a vendor-neutral SPI, and Outline is a documentation source with a link-only identity | Accepted |
-| [0096](0096-1-0-is-one-stopped-cutover-from-1-0-0-rc-1-and-keeps-nothing-for-0-x.md) | 1.0 is one stopped cutover from 1.0.0-rc.1, and it keeps nothing for 0.x | Accepted |
-| [0097](0097-product-feedback-becomes-a-github-issue-and-only-the-reporters-tick-and-a-code-gate-make-it-public.md) | Product feedback becomes a GitHub issue, and only the reporter's tick and a code gate make it public | Accepted |
-| [0098](0098-each-email-is-one-outbox-action-and-is-sent-at-most-once.md) | Each email is one outbox action that the deciding transaction enqueues, and Hephaestus sends it at most once | Accepted |
-| [0099](0099-aggregates-own-their-lifecycle-and-module-boundaries.md) | Each module owns its aggregates, declares its dependencies, and changes a lifecycle only through the aggregate | Accepted |
-| [0100](0100-the-server-serves-the-web-app.md) | The server serves the web app | Accepted |
-| [0101](0101-a-connection-cannot-adopt-an-upstream-resource-whose-removal-is-unresolved.md) | A connection cannot adopt an upstream resource whose removal is unresolved | Accepted |
-| [0103](0103-the-public-api-grows-only-by-addition-and-every-client-tolerates-what-it-does-not-know.md) | The public API grows only by addition, and every client tolerates what it does not know | Proposed |
-| [0104](0104-the-system-key-and-the-signing-key-rotate-without-a-stop.md) | The system key and the signing key rotate without a stop | Accepted |
-| [0105](0105-generated-text-carries-a-signed-provenance-record.md) | Generated text carries a signed provenance record | Accepted |
-| [0111](0111-the-docs-site-is-a-static-fumadocs-build-on-astro.md) | The docs site is a static Fumadocs build on Astro | Proposed |
-| [0113](0113-the-mobile-apps-are-native-clients-of-the-server-api.md) | The mobile apps are native SwiftUI and Jetpack Compose clients of the server API | Accepted |
-| [0114](0114-one-store-app-signs-in-to-any-instance-by-its-address.md) | One store app for each platform signs in to any instance by its address, through a claimed HTTPS redirect and a checked issuer | Accepted |
-| [0115](0115-the-mobile-apps-release-with-the-stores-own-tools.md) | The mobile apps build and code-sign in GitHub Actions with the stores' own tools, and release on a version line of their own | Accepted |
-| [0116](0116-a-push-is-one-web-push-message-from-the-instance.md) | A push is one encrypted Web Push message from the instance, sent at most once from the outbox, and it says only that something is ready | Accepted |
-| [0117](0117-the-store-apps-receive-push-through-one-stateless-relay.md) | The store apps receive push through one stateless Web Push relay of the publishing organization | Accepted |
-
-| [0102](0102-sync-status-hints-use-postgresql-notifications.md) | Sync-status hints use PostgreSQL notifications | Accepted |
+The files of this directory are the index. Each file name starts with the ADR's number, and its header states its status.
+A new ADR adds only its own file, so two pull requests that each add an ADR do not conflict.
+To read the numbers, titles and statuses as one table, run `vp run report:decisions`.
 
 Template: [0000-template.md](0000-template.md).
