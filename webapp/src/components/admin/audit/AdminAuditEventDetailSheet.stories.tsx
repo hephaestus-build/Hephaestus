@@ -5,7 +5,7 @@ import type { AuthEventView } from "@/api/types.gen";
 import { expectSettledVisible } from "@/stories/overlay";
 import { expectNoPageOverflow } from "@/stories/reflow";
 
-import { AuditEventDetailSheet } from "./AuditEventDetailSheet";
+import { AdminAuditEventDetailSheet } from "./AdminAuditEventDetailSheet";
 
 const failedSignIn: AuthEventView = {
 	id: 418,
@@ -27,11 +27,11 @@ const failedSignIn: AuthEventView = {
 };
 
 const meta = {
-	component: AuditEventDetailSheet,
+	component: AdminAuditEventDetailSheet,
 	parameters: { layout: "fullscreen" },
 	tags: ["autodocs"],
 	args: { event: failedSignIn, open: true, onOpenChange: fn() },
-} satisfies Meta<typeof AuditEventDetailSheet>;
+} satisfies Meta<typeof AdminAuditEventDetailSheet>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
