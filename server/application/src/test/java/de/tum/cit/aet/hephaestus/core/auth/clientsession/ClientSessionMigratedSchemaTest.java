@@ -303,7 +303,8 @@ class ClientSessionMigratedSchemaTest {
                 ClientSignInFlow.challengeOf(Pkce.newSecret()),
                 now.plus(Duration.ofDays(7)),
                 now,
-                now.plusSeconds(60)));
+                now.plusSeconds(60),
+                null));
     }
 
     @TestConfiguration

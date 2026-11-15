@@ -27,6 +27,7 @@ import tools.jackson.databind.ObjectMapper;
     "issued_jwt",
     "client_session",
     "client_sign_in_handoff",
+    "mcp_client_grant",
     "account_export",
     "consent_decision",
     "auth_event",
@@ -146,6 +147,17 @@ public class CorePrivacyPersonDataCatalog implements PersonDataCatalog {
                         "t.account_id = :account",
                         "account_id,client_kind,client_id,redirect_uri,session_expires_at,auth_time,expires_at,consumed_at,created_at",
                         "code_hash",
+                        "",
+                        910),
+                new JdbcPersonDataStore(
+                        jdbc,
+                        mapper,
+                        "mcp_client_grant",
+                        "mcp_client_grant",
+                        "t.account_id = :account",
+                        "id,workspace_id,account_id,client_id,client_name,redirect_uri,resource,scopes,status,created_at,"
+                                + "approved_at,ended_at",
+                        "id",
                         "",
                         910),
                 new JdbcPersonDataStore(

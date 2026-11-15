@@ -41,6 +41,7 @@ class AuthRateLimitPropertiesTest extends BaseUnitTest {
                         "conversationTurns",
                         "reviewRequest",
                         "syncTrigger",
+                        "mcpCall",
                         "publicActivity",
                         "browserReports")));
     }

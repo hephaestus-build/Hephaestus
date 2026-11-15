@@ -161,6 +161,12 @@ public class AuthEvent {
         // Recorded before the bytes are sent, so it proves the release, not that a client received it.
         RESEARCH_DATASET_RELEASED,
         RESEARCH_REMOVAL_RECORDED,
+        // An account approved or refused an MCP client for a workspace; details carry the client, the workspace and
+        // the scopes (ADR 0110).
+        MCP_CLIENT_APPROVED,
+        MCP_CLIENT_REFUSED,
+        // A workspace admin revoked an MCP client's grant from the workspace console.
+        MCP_CLIENT_REVOKED,
     }
 
     public enum Result {

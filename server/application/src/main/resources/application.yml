@@ -402,6 +402,10 @@ hephaestus:
             sync-trigger:
                 capacity: ${HEPHAESTUS_RATE_LIMIT_SYNC_TRIGGER_CAPACITY:10}
                 period: ${HEPHAESTUS_RATE_LIMIT_SYNC_TRIGGER_PERIOD:1h}
+            # POST /workspaces/{slug}/mcp — workspace MCP endpoint calls, keyed by account (ADR 0110)
+            mcp-call:
+                capacity: ${HEPHAESTUS_RATE_LIMIT_MCP_CALL_CAPACITY:120}
+                period: ${HEPHAESTUS_RATE_LIMIT_MCP_CALL_PERIOD:1m}
             # POST /web-vitals and POST /browser-faults — keyed by account, IP fallback
             browser-reports:
                 capacity: ${HEPHAESTUS_RATE_LIMIT_BROWSER_REPORTS_CAPACITY:30}
@@ -484,6 +488,10 @@ hephaestus:
 
     webapp:
         url: ${HEPHAESTUS_WEBAPP_URL:${hephaestus.host-url}}
+
+    # The workspace MCP endpoint (core.mcp.McpProperties, ADR 0110). Off until an operator turns it on.
+    mcp:
+        enabled: ${HEPHAESTUS_MCP_ENABLED:false}
 
     # ═══════════════════════════════════════════════════════════════════════════
     # EMAIL — sender identity for the notification module (notification.email.EmailProperties).

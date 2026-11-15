@@ -50,6 +50,7 @@ class AuthRateLimitStoreIntegrationTest extends BaseIntegrationTest {
                 configured.conversationTurns(),
                 configured.reviewRequest(),
                 configured.syncTrigger(),
+                configured.mcpCall(),
                 configured.publicActivity(),
                 configured.browserReports());
         var first = new AuthRateLimitFilter(properties, buckets, objectMapper, metrics);

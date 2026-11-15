@@ -9,12 +9,27 @@ import org.jspecify.annotations.Nullable;
  *
  * @param sessionId the installed-client session the token belongs to ({@code sid}); absent for browser
  *                  sessions, which only the cookie refresh may rotate
+ * @param mcp       the workspace MCP endpoint and scopes of an MCP client session; such a token names only
+ *                  that endpoint in {@code aud} and carries no roles (ADR 0110 decision 11)
  */
 public record TokenConstraints(
         @Nullable Instant sessionExpiresAt,
         @Nullable Instant authTime,
         @Nullable UUID sessionId,
-        @Nullable Instant passkeyTime) {
+        @Nullable Instant passkeyTime,
+        @Nullable McpAudience mcp) {
+
+    /** The one resource an MCP token is for, and the scopes its grant holds. */
+    public record McpAudience(String resource, String scope) {}
+
+    public TokenConstraints(
+            @Nullable Instant sessionExpiresAt,
+            @Nullable Instant authTime,
+            @Nullable UUID sessionId,
+            @Nullable Instant passkeyTime) {
+        this(sessionExpiresAt, authTime, sessionId, passkeyTime, null);
+    }
+
     public static TokenConstraints session(@Nullable Instant sessionExpiresAt, @Nullable Instant authTime) {
         return new TokenConstraints(sessionExpiresAt, authTime, null, null);
     }
@@ -22,5 +37,11 @@ public record TokenConstraints(
     /** An installed-client session: the browser-session deadlines plus the {@code sid} its refresh secret rotates. */
     public static TokenConstraints clientSession(UUID sessionId, Instant sessionExpiresAt, Instant authTime) {
         return new TokenConstraints(sessionExpiresAt, authTime, sessionId, null);
+    }
+
+    /** An MCP client session: an installed-client session whose token is shaped by its grant. */
+    public static TokenConstraints mcpClientSession(
+            UUID sessionId, Instant sessionExpiresAt, Instant authTime, McpAudience mcp) {
+        return new TokenConstraints(sessionExpiresAt, authTime, sessionId, null, mcp);
     }
 }

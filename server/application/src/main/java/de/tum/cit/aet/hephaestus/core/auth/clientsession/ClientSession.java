@@ -44,7 +44,7 @@ public class ClientSession {
     @Column(name = "client_kind", nullable = false, length = 32)
     private InstalledClientKind clientKind;
 
-    @Column(name = "client_id", nullable = false, length = 64)
+    @Column(name = "client_id", nullable = false, length = 2048)
     private String clientId;
 
     @Column(name = "session_expires_at", nullable = false)

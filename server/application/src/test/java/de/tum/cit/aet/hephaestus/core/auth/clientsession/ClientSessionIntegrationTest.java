@@ -269,7 +269,8 @@ class ClientSessionIntegrationTest extends RealAuthIntegrationTest {
                 ClientSignInFlow.challengeOf(verifier),
                 now.plus(Duration.ofDays(7)),
                 now,
-                now.minusSeconds(1)));
+                now.minusSeconds(1),
+                null));
 
         flow.exchange(CLIENT_ID, CALLBACK, code, verifier)
                 .expectStatus()

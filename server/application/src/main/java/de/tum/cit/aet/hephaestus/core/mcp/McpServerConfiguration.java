@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.core.mcp;
 
+import de.tum.cit.aet.hephaestus.core.auth.mcp.McpGrantGuard;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import io.modelcontextprotocol.json.jackson3.JacksonMcpJsonMapper;
 import io.modelcontextprotocol.server.McpServer;
@@ -44,9 +45,10 @@ class McpServerConfiguration {
                 .build();
     }
 
+    /** Every request passes its grant check before the MCP server sees it. */
     @Bean
-    RouterFunction<ServerResponse> mcpRoutes(WebMvcStatelessServerTransport mcpTransport) {
-        return mcpTransport.getRouterFunction();
+    RouterFunction<ServerResponse> mcpRoutes(WebMvcStatelessServerTransport mcpTransport, McpGrantGuard grantGuard) {
+        return mcpTransport.getRouterFunction().filter(grantGuard);
     }
 
     @Bean(destroyMethod = "close")

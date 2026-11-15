@@ -78,6 +78,8 @@ public class AuthRateLimitFilter extends OncePerRequestFilter {
         CONVERSATION_TURNS("conversation-turns", true, false),
         REVIEW_REQUEST("review-request", true, false),
         SYNC_TRIGGER("sync-trigger", true, false),
+        // Workspace MCP endpoint calls, keyed by the account that approved the client (ADR 0110).
+        MCP_CALL("mcp-call", true, false),
         PUBLIC_ACTIVITY("public-activity", false, false),
         // What a browser measured or met: losing a report costs less than refusing it with a 503. Anyone
         // can send one, so a refusal is counted, never logged: a log line per refusal is the flood itself.
@@ -172,7 +174,10 @@ public class AuthRateLimitFilter extends OncePerRequestFilter {
                     && !(authentication instanceof AnonymousAuthenticationToken)) return null;
             return Endpoint.PUBLIC_ACTIVITY;
         }
-        if ("GET".equals(method) && path.startsWith("/oauth2/authorization/")) {
+        // The MCP authorization endpoint and its consent decisions start a sign-in for a client, and they
+        // fetch the client's metadata document, so they share the sign-in budget.
+        if (("GET".equals(method) && (path.startsWith("/oauth2/authorization/") || path.equals("/mcp/oauth/authorize")))
+                || (("PUT".equals(method) || "DELETE".equals(method)) && path.startsWith("/mcp/oauth/requests/"))) {
             return Endpoint.OAUTH_AUTHORIZATION;
         }
         if ("POST".equals(method) && path.equals("/auth/refresh")) {
@@ -180,6 +185,7 @@ public class AuthRateLimitFilter extends OncePerRequestFilter {
         }
         if ("POST".equals(method)
                 && (path.equals("/auth/client/token")
+                        || path.equals("/mcp/oauth/token")
                         || path.equals("/auth/client/refresh")
                         || path.equals("/auth/client/logout"))) {
             return Endpoint.CLIENT_SESSION;
@@ -204,6 +210,9 @@ public class AuthRateLimitFilter extends OncePerRequestFilter {
         if ("POST".equals(method) && path.matches("/workspaces/[^/]+/practices/review-requests")) {
             return Endpoint.REVIEW_REQUEST;
         }
+        if ("POST".equals(method) && path.matches("/workspaces/[^/]+/mcp")) {
+            return Endpoint.MCP_CALL;
+        }
         if ("POST".equals(method) && path.matches("/workspaces/[^/]+/connections/[^/]+/sync/jobs")) {
             return Endpoint.SYNC_TRIGGER;
         }
@@ -225,6 +234,7 @@ public class AuthRateLimitFilter extends OncePerRequestFilter {
             case CONVERSATION_TURNS -> properties.conversationTurns();
             case REVIEW_REQUEST -> properties.reviewRequest();
             case SYNC_TRIGGER -> properties.syncTrigger();
+            case MCP_CALL -> properties.mcpCall();
             case PUBLIC_ACTIVITY -> properties.publicActivity();
             case BROWSER_REPORTS -> properties.browserReports();
         };

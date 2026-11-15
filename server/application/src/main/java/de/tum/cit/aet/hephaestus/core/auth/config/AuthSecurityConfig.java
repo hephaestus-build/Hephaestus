@@ -1,5 +1,15 @@
 package de.tum.cit.aet.hephaestus.core.auth.config;
 
+import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEventLogger;
+import de.tum.cit.aet.hephaestus.core.auth.jwt.AccessTokenAdmission;
+import de.tum.cit.aet.hephaestus.core.auth.jwt.JwtSigningKeyService;
+import de.tum.cit.aet.hephaestus.core.auth.jwt.RevocationAwareJwtDecoder;
+import de.tum.cit.aet.hephaestus.core.auth.mcp.McpChallenges;
+import de.tum.cit.aet.hephaestus.core.auth.mcp.McpResources;
+import de.tum.cit.aet.hephaestus.core.auth.mcp.McpTokenValidators;
+import de.tum.cit.aet.hephaestus.core.auth.metrics.AuthMetrics;
+import org.springframework.cache.CacheManager;
+import java.time.Clock;
 import de.tum.cit.aet.hephaestus.core.WebClientConnectors;
 import de.tum.cit.aet.hephaestus.core.auth.AuthProperties;
 import de.tum.cit.aet.hephaestus.core.auth.OAuthLoginPaths;
@@ -292,23 +302,44 @@ public class AuthSecurityConfig {
     }
 
     /**
-     * The workspace MCP endpoint (ADR 0110) accepts bearer tokens only. The session cookie is ignored,
-     * so a browser cannot carry a signed-in user's cookie into a tool call, and CSRF does not apply.
+     * The workspace MCP endpoint (ADR 0110) accepts bearer tokens only. The session cookie is ignored, so a
+     * browser cannot carry a signed-in user's cookie into a tool call, and CSRF does not apply. Its decoder is
+     * the revocation-aware decoder with the MCP audience rule instead of the web app's: a web-app token never
+     * reaches this endpoint, and an MCP token never reaches another.
      */
     @Bean
     @Order(Ordered.HIGHEST_PRECEDENCE + 5)
     @ConditionalOnBooleanProperty("hephaestus.mcp.enabled")
     public SecurityFilterChain mcpSecurityFilterChain(
             HttpSecurity http,
-            JwtDecoder jwtDecoder,
+            JwtSigningKeyService keyService,
+            AccessTokenAdmission admission,
+            AuthEventLogger authEventLogger,
+            CacheManager cacheManager,
+            Clock clock,
+            AuthMetrics metrics,
+            AuthProperties authProperties,
+            McpResources resources,
             Converter<Jwt, AbstractAuthenticationToken> authenticationConverter)
             throws Exception {
+        JwtDecoder decoder = new RevocationAwareJwtDecoder(
+                keyService,
+                admission,
+                authEventLogger,
+                authProperties,
+                cacheManager,
+                clock,
+                metrics,
+                McpTokenValidators.mcpAudience(resources));
+        McpChallenges challenges = new McpChallenges(resources);
         http.securityMatcher("/workspaces/*/mcp")
                 .sessionManagement(sessions -> sessions.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .csrf(csrf -> csrf.disable())
+                .exceptionHandling(exceptions -> exceptions.authenticationEntryPoint(challenges))
                 .oauth2ResourceServer(resourceServer -> resourceServer
                         .bearerTokenResolver(new DefaultBearerTokenResolver())
-                        .jwt(jwt -> jwt.decoder(jwtDecoder).jwtAuthenticationConverter(authenticationConverter)))
+                        .authenticationEntryPoint(challenges)
+                        .jwt(jwt -> jwt.decoder(decoder).jwtAuthenticationConverter(authenticationConverter)))
                 .authorizeHttpRequests(requests -> requests.anyRequest().authenticated());
         SecurityHeaders.apply(http);
         return http.build();
