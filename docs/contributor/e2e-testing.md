@@ -92,7 +92,7 @@ The setup output identifies the workspace and, when one has synced, the selected
 IDs with the dev trigger:
 
 ```bash
-SERVER_PORT="$(sed -n 's/^SERVER_PORT=//p' server/.env)"
+SERVER_PORT="${SERVER_PORT:-$(sed -n 's/^SERVER_PORT=//p' server/.env)}"
 JWT="$(curl -fsS -i -X POST "http://localhost:${SERVER_PORT}/auth/dev-login" \
   -H 'content-type: application/json' \
   -d '{"username":"e2e","admin":true}' \

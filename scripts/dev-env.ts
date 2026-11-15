@@ -1,10 +1,20 @@
 import { createHash, randomBytes } from "node:crypto";
 import { constants } from "node:fs";
-import { access, chmod, copyFile, readdir, readFile, realpath, writeFile } from "node:fs/promises";
+import {
+	access,
+	chmod,
+	copyFile,
+	readdir,
+	readFile,
+	realpath,
+	rename,
+	rm,
+	writeFile,
+} from "node:fs/promises";
 import path from "node:path";
 
 import { isSet, readEnvFile } from "./lib/env.ts";
-import { output } from "./lib/process.ts";
+import { output, run } from "./lib/process.ts";
 
 const server = path.join(import.meta.dirname, "../server");
 
@@ -98,8 +108,11 @@ async function setEnvLine(envFile: string, name: string, value: string): Promise
 		last === undefined
 			? `${current}${current === "" || current.endsWith("\n") ? "" : "\n"}${line}\n`
 			: `${current.slice(0, last.index)}${line}${current.slice(last.index + last[0].length)}`;
-	await writeFile(envFile, next);
-	await chmod(envFile, 0o600);
+	// A new file renamed over the old one, so an interrupted write never leaves a truncated settings file.
+	const draft = `${envFile}.${process.pid}.tmp`;
+	await writeFile(draft, next, { mode: 0o600 });
+	await chmod(draft, 0o600);
+	await rename(draft, envFile);
 }
 
 /**
@@ -249,9 +262,15 @@ export async function ensurePorts({
 	// A file that sets no ports belongs to a worktree that runs on the defaults. An older file of that kind
 	// keeps them unless another file set them; every other file avoids the defaults of such worktrees too.
 	const ownsTheDefaults = !created && unset.length === PORTS.length;
-	const taken = new Set(
-		others.flatMap((other) => (ownsTheDefaults ? portsSetIn(other) : [...portsOf(other)])),
-	);
+	// The ports this checkout already set are taken too: a generated port must not repeat one of them.
+	const own = PORTS.flatMap(({ name }) => {
+		const configured = values[name];
+		return isSet(configured) ? [Number(configured)] : [];
+	});
+	const taken = new Set([
+		...own,
+		...others.flatMap((other) => (ownsTheDefaults ? portsSetIn(other) : [...portsOf(other)])),
+	]);
 	const developerServer = isSet(values.SERVER_PORT) ? Number(values.SERVER_PORT) : undefined;
 	for (let set = 0; set < PORT_SETS; set += 1) {
 		const written = Object.fromEntries(
@@ -322,6 +341,41 @@ export async function ensureLocalEnvironment(): Promise<void> {
 	}
 }
 
+/**
+ * Removes this checkout's local database, also one whose password or project name is missing, which
+ * `ensureLocalEnvironment` refuses. Without a configured name, the containers run under Compose's default
+ * project, the folder name `server`. Compose resolves the password even to stop them, and stopping reads none.
+ */
+export async function resetLocalDatabase({
+	envFile,
+	dataDirectory,
+	environment = process.env,
+	compose,
+}: {
+	envFile: string;
+	dataDirectory: string;
+	environment?: NodeJS.ProcessEnv;
+	compose: (args: string[], env: Record<string, string>) => Promise<void>;
+}): Promise<void> {
+	const values = { ...(await readEnvFile(envFile)), ...environment };
+	await compose(["down", "-v"], {
+		COMPOSE_PROJECT_NAME: isSet(values.COMPOSE_PROJECT_NAME)
+			? values.COMPOSE_PROJECT_NAME
+			: "server",
+		POSTGRES_PASSWORD: isSet(values.POSTGRES_PASSWORD)
+			? values.POSTGRES_PASSWORD
+			: "unused-when-stopping",
+	});
+	await rm(dataDirectory, { recursive: true, force: true });
+}
+
 if (import.meta.main) {
+	if (process.argv[2] === "reset") {
+		await resetLocalDatabase({
+			envFile: path.join(server, ".env"),
+			dataDirectory: path.join(server, "postgres-data"),
+			compose: async (args, env) => run("docker", ["compose", ...args], { cwd: server, env }),
+		});
+	}
 	await ensureLocalEnvironment();
 }

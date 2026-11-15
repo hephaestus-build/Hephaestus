@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, test } from "node:test";
@@ -10,6 +10,7 @@ import {
 	ensureGeneratedValues,
 	ensurePorts,
 	portsOf,
+	resetLocalDatabase,
 } from "./dev-env.ts";
 import { readEnvFile } from "./lib/env.ts";
 
@@ -119,6 +120,16 @@ await describe("the generated values of a checkout", async () => {
 				const { mode } = await stat(paths.envFile);
 				assert.equal(mode.toString(8).slice(-2), "00");
 			}
+		});
+	});
+
+	await test("a write replaces the file whole and leaves no draft behind", async () => {
+		await checkout(async (paths) => {
+			await writeFile(paths.envFile, "POSTGRES_PORT=15432\n");
+			await ensureGeneratedValues({ ...paths, environment: {} });
+			assert.deepEqual(await readdir(path.dirname(paths.envFile)), [path.basename(paths.envFile)]);
+			const values = await readEnvFile(paths.envFile);
+			assert.equal(values.POSTGRES_PORT, "15432");
 		});
 	});
 
@@ -384,6 +395,15 @@ await describe("the host ports of a worktree", async () => {
 		});
 	});
 
+	await test("a generated port never repeats a port this checkout already set", async () => {
+		await checkout(async ({ envFile }) => {
+			await writeFile(envFile, "SERVER_PORT=4200\n");
+			const written = await ensurePorts({ envFile, others: [], created: false, environment: {} });
+			assert.equal(written.WEBAPP_PORT, 4210);
+			assert.ok(!Object.values(written).includes(4200));
+		});
+	});
+
 	await test("the management port follows a server port the developer set", async () => {
 		await checkout(async ({ envFile }) => {
 			await writeFile(envFile, "SERVER_PORT=18080\n");
@@ -421,6 +441,46 @@ await describe("the host ports of a worktree", async () => {
 				{},
 			);
 			await assert.rejects(readFile(envFile, "utf8"));
+		});
+	});
+});
+
+await describe("resetting the local database", async () => {
+	await test("a database without a password or project name stops under Compose's default project and is removed", async () => {
+		await checkout(async (paths) => {
+			await mkdir(paths.dataDirectory);
+			await writeFile(path.join(paths.dataDirectory, "PG_VERSION"), "18");
+			await writeFile(paths.envFile, "SERVER_PORT=8090\n");
+			const calls: { args: string[]; env: Record<string, string> }[] = [];
+			await resetLocalDatabase({
+				...paths,
+				environment: {},
+				compose: async (args, env) => {
+					calls.push({ args, env });
+				},
+			});
+			assert.deepEqual(
+				calls.map(({ args }) => args),
+				[["down", "-v"]],
+			);
+			assert.equal(calls[0]?.env.COMPOSE_PROJECT_NAME, "server");
+			await assert.rejects(stat(paths.dataDirectory));
+			assert.equal(await readFile(paths.envFile, "utf8"), "SERVER_PORT=8090\n");
+		});
+	});
+
+	await test("a configured project and password are the ones that stop the containers", async () => {
+		await checkout(async (paths) => {
+			await writeFile(paths.envFile, "COMPOSE_PROJECT_NAME=mine\nPOSTGRES_PASSWORD=chosen\n");
+			const envs: Record<string, string>[] = [];
+			await resetLocalDatabase({
+				...paths,
+				environment: {},
+				compose: async (_args, env) => {
+					envs.push(env);
+				},
+			});
+			assert.deepEqual(envs, [{ COMPOSE_PROJECT_NAME: "mine", POSTGRES_PASSWORD: "chosen" }]);
 		});
 	});
 });

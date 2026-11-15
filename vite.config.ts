@@ -540,10 +540,9 @@ export default defineConfig({
 			"dev:compose:down": run("node ../scripts/dev-env.ts && docker compose down", {
 				cwd: "server",
 			}),
-			"dev:reset": run(
-				"node ../scripts/dev-env.ts && docker compose down -v && node ../scripts/rm.ts postgres-data && node ../scripts/dev-env.ts && docker compose up -d --wait",
-				{ cwd: "server" },
-			),
+			"dev:reset": run("node ../scripts/dev-env.ts reset && docker compose up -d --wait", {
+				cwd: "server",
+			}),
 			"dev:server": run("node scripts/dev-kubernetes.ts run", {
 				dependsOn: ["dev:compose"],
 			}),
