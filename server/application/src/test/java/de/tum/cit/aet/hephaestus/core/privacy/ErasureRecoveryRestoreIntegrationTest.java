@@ -2,8 +2,14 @@ package de.tum.cit.aet.hephaestus.core.privacy;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import de.tum.cit.aet.hephaestus.conversation.ConversationEntryService;
+import de.tum.cit.aet.hephaestus.conversation.ConversationService;
+import de.tum.cit.aet.hephaestus.conversation.ConversationTurn;
+import de.tum.cit.aet.hephaestus.conversation.ConversationTurnService;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentityResolver;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.RestoredCollectionErasures;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.RestoredDisconnects;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.RestoredMessageDeletions;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.RestoredWorkspacePurges;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnBackgroundWork;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
@@ -13,6 +19,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionFixtures;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.CredentialBundleConverter;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.InstallationCredential;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionStrategy;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
@@ -21,6 +28,10 @@ import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJob;
 import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobRepository;
 import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobTrigger;
 import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobType;
+import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineCollection;
+import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineCollectionRepository;
+import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineDocument;
+import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineDocumentRepository;
 import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
@@ -49,6 +60,8 @@ import org.springframework.context.support.GenericApplicationContext;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.SingleConnectionDataSource;
 import org.springframework.mock.env.MockEnvironment;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.ObjectMapper;
 
 /**
@@ -96,8 +109,27 @@ class ErasureRecoveryRestoreIntegrationTest extends AbstractWorkspaceIntegration
     @Autowired
     private SyncJobRepository syncJobs;
 
+    @Autowired
+    private ConversationService conversations;
+
+    @Autowired
+    private ConversationTurnService turns;
+
+    @Autowired
+    private ConversationEntryService entries;
+
+    @Autowired
+    private OutlineCollectionRepository outlineCollections;
+
+    @Autowired
+    private PlatformTransactionManager transactions;
+
+    @Autowired
+    private OutlineDocumentRepository outlineDocuments;
+
     private Workspace workspace;
     private Connection connection;
+    private long ownerAccount;
 
     @BeforeEach
     void setUp() {
@@ -106,6 +138,7 @@ class ErasureRecoveryRestoreIntegrationTest extends AbstractWorkspaceIntegration
         workspace = createWorkspace(
                 "restore-erase-" + suffix, "Restore Erase", "restore-org-" + suffix, AccountType.ORG, owner);
         ensureAdminMembership(workspace);
+        ownerAccount = accountId(owner);
         long installationId = System.nanoTime();
         var github = new Connection(
                 workspace,
@@ -143,7 +176,7 @@ class ErasureRecoveryRestoreIntegrationTest extends AbstractWorkspaceIntegration
         assertThat(monitors.findByWorkspaceId(workspace.getId())).hasSize(1);
 
         String manifest = """
-                {"version":2,"restorePoint":"2026-01-01T00:00:00Z","noLaterErasures":false,"people":[],
+                {"version":3,"collectionErasures":[],"messageDeletions":[],"restorePoint":"2026-01-01T00:00:00Z","noLaterErasures":false,"people":[],
                  "workspacePurges":[],"disconnects":[{"workspaceId":%d,"connectionId":%d}]}
                 """.formatted(workspace.getId(), connection.getId());
         recover(manifest);
@@ -187,7 +220,7 @@ class ErasureRecoveryRestoreIntegrationTest extends AbstractWorkspaceIntegration
                 null));
 
         String manifest = """
-                {"version":2,"restorePoint":"2026-01-01T00:00:00Z","noLaterErasures":false,"people":[],
+                {"version":3,"collectionErasures":[],"messageDeletions":[],"restorePoint":"2026-01-01T00:00:00Z","noLaterErasures":false,"people":[],
                  "workspacePurges":[{"workspaceId":%d}],"disconnects":[]}
                 """.formatted(workspace.getId());
         recover(manifest);
@@ -198,6 +231,131 @@ class ErasureRecoveryRestoreIntegrationTest extends AbstractWorkspaceIntegration
         assertThat(state()).isEqualTo(IntegrationState.UNINSTALLED);
         recover(manifest);
         assertThat(status()).isEqualTo("PURGED");
+    }
+
+    @Test
+    void shouldDeleteAgainAMessageThatARestoreBroughtBack() throws Exception {
+        var main = conversations.findOrCreateMain(workspace.getId(), ownerAccount);
+        UUID message = turns.submit(
+                        workspace.getId(),
+                        main.getId(),
+                        new ConversationTurnService.Question(
+                                ConversationTurn.Surface.APP,
+                                "Words to take back",
+                                UUID.randomUUID().toString(),
+                                null,
+                                null))
+                .question()
+                .getId();
+        var backup = Backup.of(jdbc, workspace.getId());
+        entries.deleteMessage(workspace.getId(), message);
+        assertThat(words(message)).doesNotContain("Words to take back");
+
+        backup.restore();
+        assertThat(words(message)).as("the restore brought the words back").contains("Words to take back");
+
+        String manifest = """
+                {"version":3,"restorePoint":"2026-01-01T00:00:00Z","noLaterErasures":false,"people":[],
+                 "workspacePurges":[],"disconnects":[],"collectionErasures":[],
+                 "messageDeletions":[{"workspaceId":%d,"entryId":"%s"}]}
+                """.formatted(workspace.getId(), message);
+        recover(manifest);
+
+        assertThat(words(message)).doesNotContain("Words to take back");
+        assertThat(entries.find(workspace.getId(), message).orElseThrow().isRedacted())
+                .isTrue();
+        // The same manifest is safe after a restart.
+        recover(manifest);
+        assertThat(entries.find(workspace.getId(), message).orElseThrow().isRedacted())
+                .isTrue();
+    }
+
+    @Test
+    void shouldEraseAgainAnOutlineCollectionThatARestoreBroughtBack() throws Exception {
+        var outline = new Connection(
+                workspace,
+                IntegrationKind.OUTLINE,
+                "team-" + workspace.getId(),
+                new ConnectionConfig.OutlineConfig("https://outline.example.test", null, null, Set.of()));
+        outline.setCredentials(new BearerToken("outline-token", null), credentials);
+        ConnectionFixtures.reachState(outline, IntegrationState.ACTIVE);
+        long outlineId = Objects.requireNonNull(connections.save(outline).getId());
+        String collectionId = UUID.randomUUID().toString();
+        // A sibling collection of the same connection, which the erase leaves alone.
+        String siblingId = UUID.randomUUID().toString();
+        mirror(outlineId, collectionId, "decision-record");
+        mirror(outlineId, siblingId, "runbook");
+        var backup = Backup.of(jdbc, workspace.getId());
+        // The admin's erase: the registration and every mirrored document go.
+        new TransactionTemplate(transactions).executeWithoutResult(status -> {
+            outlineDocuments.deleteByWorkspaceIdAndConnectionIdAndCollectionId(
+                    workspace.getId(), outlineId, collectionId);
+            outlineCollections
+                    .findByWorkspaceIdAndConnectionIdAndCollectionId(workspace.getId(), outlineId, collectionId)
+                    .ifPresent(outlineCollections::delete);
+        });
+
+        backup.restore();
+        assertThat(mirrored(collectionId))
+                .as("the restore brought the documents back")
+                .isOne();
+
+        String manifest = """
+                {"version":3,"restorePoint":"2026-01-01T00:00:00Z","noLaterErasures":false,"people":[],
+                 "workspacePurges":[],"disconnects":[],"messageDeletions":[],
+                 "collectionErasures":[{"workspaceId":%d,"connectionId":%d,"collectionId":"%s"}]}
+                """.formatted(workspace.getId(), outlineId, collectionId);
+        recover(manifest);
+
+        assertThat(mirrored(collectionId)).isZero();
+        assertThat(mirrored(siblingId))
+                .as("the sibling collection keeps its documents")
+                .isOne();
+        assertThat(outlineCollections.findByWorkspaceIdAndConnectionIdAndCollectionId(
+                        workspace.getId(), outlineId, siblingId))
+                .isPresent();
+        assertThat(outlineCollections.findByWorkspaceIdAndConnectionIdAndCollectionId(
+                        workspace.getId(), outlineId, collectionId))
+                .as("the collection is no longer registered, so no sync mirrors it again")
+                .isEmpty();
+        // The same manifest is safe after a restart.
+        recover(manifest);
+        assertThat(mirrored(collectionId)).isZero();
+    }
+
+    /** A registered collection of the Outline connection with one mirrored document. */
+    private void mirror(long outlineId, String collectionId, String documentId) {
+        var collection = new OutlineCollection();
+        collection.setWorkspaceId(workspace.getId());
+        collection.setConnectionId(outlineId);
+        collection.setCollectionId(collectionId);
+        collection.setName(documentId);
+        collection.setState(OutlineCollection.MirrorState.ENABLED);
+        collection.setSyncStatus(OutlineCollection.SyncStatus.COMPLETE);
+        outlineCollections.save(collection);
+        var document = new OutlineDocument();
+        document.setWorkspaceId(workspace.getId());
+        document.setConnectionId(outlineId);
+        document.setCollectionId(collectionId);
+        document.setDocumentId(documentId);
+        document.setTitle(documentId);
+        document.setBodyMarkdown("# Words of " + documentId);
+        outlineDocuments.save(document);
+    }
+
+    private int mirrored(String collectionId) {
+        Integer count = jdbc.queryForObject(
+                "SELECT count(*) FROM outline_document WHERE workspace_id = ? AND collection_id = ?",
+                Integer.class,
+                workspace.getId(),
+                collectionId);
+        return count == null ? 0 : count;
+    }
+
+    /** The message's stored words: its text and the text that search and the personal-data export read. */
+    private String words(UUID entryId) {
+        return Objects.requireNonNull(jdbc.queryForObject(
+                "SELECT text || ' ' || search_text FROM conversation_entry WHERE id = ?", String.class, entryId));
     }
 
     private void recover(String content) throws Exception {
@@ -216,6 +374,8 @@ class ErasureRecoveryRestoreIntegrationTest extends AbstractWorkspaceIntegration
                             beans.getBean(PersonDataRequestRepository.class),
                             beans.getBean(RestoredWorkspacePurges.class),
                             beans.getBean(RestoredDisconnects.class),
+                            beans.getBean(RestoredMessageDeletions.class),
+                            beans.getBean(RestoredCollectionErasures.class),
                             new PersonDataRecoveryProperties(manifest.toString())));
             context.refresh();
             assertThat(context.getBean(PersonDataRecovery.class).isRunning()).isTrue();

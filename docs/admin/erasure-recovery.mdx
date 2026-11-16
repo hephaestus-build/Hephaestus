@@ -1,17 +1,18 @@
 ---
 title: Reapply erasures after a restore
-description: Erase again each disconnect, workspace purge and person that a database restore brought back, before the restored server processes data.
+description: Erase again each disconnect, purge, erased collection, deleted message and person that a database restore brought back, before the server processes data.
 page_type: how-to
 ---
 
-A database restore brings back the data that Hephaestus erased after the recovery point: disconnected connections, purged workspaces and erased people.
+A database restore brings back the data that Hephaestus erased after the recovery point.
+That is disconnected connections, purged workspaces, erased Outline collections, deleted conversation messages and erased people.
 Reapply these erasures before the restored server processes data or opens access.
 
 The server's `erasure-recovery` startup profile turns background work off: no scheduled task, claimer or inbox consumer runs.
 Startup stops if a setting turns background work on beside the profile.
-The profile then reapplies each erasure in a manifest, in this order: disconnects, workspace purges, then people.
+The profile then reapplies each erasure in a manifest, in this order: disconnects, workspace purges, erased collections, deleted messages, then people.
 Each step is idempotent, so a restart with the same manifest is safe.
-A missing or invalid manifest, a manifest of version 1, an unknown provider instance, or an incomplete erasure stops startup.
+A missing or invalid manifest, a manifest of version 1 or 2, an unknown provider instance, or an incomplete erasure stops startup.
 
 ## Before you start
 
@@ -27,24 +28,29 @@ A missing or invalid manifest, a manifest of version 1, an unknown provider inst
    Include each disconnect that a provider caused, such as a Slack app uninstall.
 3. List each purged workspace under `workspacePurges`, with its workspace ID.
    The server log events `connection.erased` and `workspace.purged` carry these IDs, so they cross-check the record.
-4. List each erased person under `people`, including an account that its owner deleted.
+4. List each Outline collection that an admin erased under `collectionErasures`.
+   Give its workspace ID, connection ID and collection ID.
+   The log event `outline.collection_erased` carries these IDs as `workspace.id`, `connection.id` and `outline.collection.id`.
+5. List each conversation message that a developer deleted under `messageDeletions`, with its workspace ID and entry ID.
+   The log event `conversation.message_deleted` carries both IDs as `workspace.id` and `conversation.entry.id`. It never carries the words.
+6. List each erased person under `people`, including an account that its owner deleted.
    The log event `account.deleted` names each account that its owner deleted, by its `account.id`. That account ID alone identifies the person.
    Include the account ID of each person, when you know it, and all known exact native identities.
-5. For GitHub and GitLab, use the numeric user ID.
+7. For GitHub and GitLab, use the numeric user ID.
    For Slack, use the user ID and the team ID.
    For Outline, use the user UUID.
    Never use a login, a display name or an email address in place of these IDs.
-6. Give the exact provider type and server URL from the restored provider inventory.
-7. Set `administratorAccountId` to an administrator who is active and has instance-admin rights in the restored database.
+8. Give the exact provider type and server URL from the restored provider inventory.
+9. Set `administratorAccountId` to an administrator who is active and has instance-admin rights in the restored database.
    Only `people` needs the administrator. Another administrator must authorize the erasure of that administrator.
-8. Set `externalCopiesRemoved` to `true` only after you confirm that the provider copies are gone, as [Remove feedback from a provider](./remove-feedback-from-a-provider) requires.
+10. Set `externalCopiesRemoved` to `true` only after you confirm that the provider copies are gone, as [Remove feedback from a provider](./remove-feedback-from-a-provider) requires.
    The recovery does not delete provider-hosted copies.
 
 The manifest has this structure:
 
 ```json
 {
-  "version": 2,
+  "version": 3,
   "restorePoint": "2026-11-01T00:00:00Z",
   "administratorAccountId": 10,
   "noLaterErasures": false,
@@ -53,6 +59,12 @@ The manifest has this structure:
   ],
   "workspacePurges": [
     {"workspaceId": 5}
+  ],
+  "collectionErasures": [
+    {"workspaceId": 3, "connectionId": 21, "collectionId": "6a1f3b52-8e0d-4b7c-9f26-3d4e5a6b7c8d"}
+  ],
+  "messageDeletions": [
+    {"workspaceId": 3, "entryId": "0f2d6c1e-5b7a-4c3e-9a41-2b8d7e6f1a90"}
   ],
   "people": [
     {
@@ -76,22 +88,36 @@ What each entry does:
   The server tries that removal at once. It fails while provider egress is closed, and the server tries it again after egress opens.
   The erasure does not wait for it.
 - A purge deletes the data of the workspace, as the original purge did.
-- A connection or workspace that the restored database does not have, or that is erased already, needs nothing more.
+- A collection erasure deletes the collection's mirrored documents and its registration, as the admin's erase did. No sync mirrors it again.
+- A message deletion erases the message's words and every summary that read them, as the developer's delete did.
+- An entry needs nothing more if the restored database does not have it, or if it is erased already.
 
 If no erasure occurred after the recovery point, declare it:
 
 ```json
 {
-  "version": 2,
+  "version": 3,
   "restorePoint": "2026-11-01T00:00:00Z",
   "noLaterErasures": true,
   "disconnects": [],
   "workspacePurges": [],
+  "collectionErasures": [],
+  "messageDeletions": [],
   "people": []
 }
 ```
 
 Empty lists without `noLaterErasures: true` stop startup.
+
+## Redo the repository removals
+
+The manifest does not list repository removals.
+A restore brings back each repository that an admin removed after the recovery point, and its synced work.
+Redo these removals after the recovery and before egress opens:
+
+1. From the incident record, list each repository that an admin removed from a workspace after the recovery point.
+2. For a GitLab project, stop it again, then remove its kept work in the workspace's repository settings.
+3. For another repository, remove it from the workspace's monitor list again.
 
 Keep the manifest outside the database, and give access only to the recovery operators.
 Do not put it in Helm values, a ConfigMap, a command-line argument or shared logs.
@@ -189,9 +215,10 @@ It does not quote the manifest or the identities.
 
 1. Keep the other Deployments stopped and external egress denied.
 2. Correct the cause that the reason names:
-   - For `MANIFEST_VERSION`, write the manifest as version 2.
+   - For `MANIFEST_VERSION`, write the manifest as version 3.
    - For `BACKGROUND_WORK`, remove the setting that turns background work on beside the profile, such as `HEPHAESTUS_BACKGROUND_WORK_ENABLED`.
    - For `ERASURE_INCOMPLETE` on a disconnect, turn on the integration of that connection for the recovery run. Without it, nothing can erase its data.
+   - For `ERASURE_INCOMPLETE` on a message deletion, check that the entry ID names a message that a developer wrote. A manifest that names another entry stops the recovery.
    - For another reason, correct the manifest, or complete the unfinished erasure.
 3. Replace the Secret with the corrected manifest.
 4. Delete the recovery Pod, so that the Deployment starts it again with the corrected manifest.

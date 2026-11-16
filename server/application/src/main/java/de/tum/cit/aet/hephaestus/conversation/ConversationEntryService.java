@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.conversation;
 
 import de.tum.cit.aet.hephaestus.conversation.spi.TurnRuns;
+import de.tum.cit.aet.hephaestus.core.TransactionCallbacks;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
 import java.time.Clock;
@@ -12,6 +13,8 @@ import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -26,6 +29,7 @@ import tools.jackson.databind.node.ObjectNode;
 @Service
 @RequiredArgsConstructor
 public class ConversationEntryService {
+    private static final Logger log = LoggerFactory.getLogger(ConversationEntryService.class);
 
     /** The most hits {@code search_conversation} returns. */
     public static final int MAX_SEARCH_HITS = 20;
@@ -200,6 +204,15 @@ public class ConversationEntryService {
             turns.lockById(turnId).ifPresent(this::stop);
         }
         redaction.redact(List.of(entryId));
+        // An erasure recovery manifest lists this delete after its recovery point, so a rolled-back delete logs
+        // nothing.
+        // The conversation module does not depend on observability, so the keys are literals; they hold ids, never
+        // words.
+        TransactionCallbacks.afterCommit(() -> log.atInfo()
+                .addKeyValue("event.name", "conversation.message_deleted")
+                .addKeyValue("workspace.id", workspaceId)
+                .addKeyValue("conversation.entry.id", entryId)
+                .log("A developer's conversation message was deleted"));
     }
 
     /**
