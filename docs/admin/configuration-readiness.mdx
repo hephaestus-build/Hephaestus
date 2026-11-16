@@ -31,6 +31,7 @@ The requirement is `REQUIRED`, `RECOMMENDED`, or `OPTIONAL`.
 | `auth.state-cookie-key`, `auth.login-provider` | Required | [Login](#login) |
 | `llm.proxy-egress` | Required with `sandbox.enabled` | [LLM proxy](#llm-proxy) |
 | `agent.image-contract` | Required with `sandbox.enabled` | [Agent image](#agent-image) |
+| `api.description` | Required | [OpenAPI description](#openapi-description) |
 | `notification.email` | Optional | [Email](#email) |
 
 ## Server role [#runtime-roles]
@@ -121,6 +122,13 @@ Provider credentials and models are runtime settings in the database, not deploy
 
 `agent.image-contract` checks, on a server with `sandbox.enabled`, that `HEPHAESTUS_AGENT_IMAGE_REQUIRE_DIGEST` is on and that `HEPHAESTUS_AGENT_IMAGE_REFERENCE` is pinned by its SHA-256 digest.
 The chart sets both from the release ([Release image lock](./release-image-lock)).
+
+## OpenAPI description
+
+`api.description` checks that `SPRINGDOC_API_DOCS_ENABLED` is `false`, as it is by default.
+A production server does not publish its OpenAPI description or Swagger UI.
+Swagger UI needs the description, so it is off too.
+The [OpenAPI specification](https://github.com/hephaestus-build/Hephaestus/blob/main/server/openapi.yaml) in the repository describes the API.
 
 ## Email
 

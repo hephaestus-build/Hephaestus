@@ -124,6 +124,27 @@ class ConfigurationReadinessEvaluatorTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldAcceptTheOpenApiDescriptionOffByDefault() {
+        assertStatus(evaluateReadiness(role(false), true), "api.description", ConfigurationStatus.SATISFIED);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"true", "off", ""})
+    void shouldRefuseToStartInProductionUnlessTheOpenApiDescriptionIsOff(String value) {
+        // springdoc registers the description for any value except false.
+        var properties = role(false);
+        properties.put("springdoc.api-docs.enabled", value);
+
+        assertStatus(evaluateReadiness(properties, true), "api.description", ConfigurationStatus.ACTION_REQUIRED);
+        var environment = environment(properties);
+        environment.setActiveProfiles("prod");
+        assertThatThrownBy(() -> new ProductionConfigurationEnvironmentPostProcessor()
+                        .postProcessEnvironment(environment, new SpringApplication(Object.class)))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("api.description");
+    }
+
+    @Test
     void shouldApplyServerChecksAndExcludeAgentChecksWithoutAgentJobs() {
         Map<String, Object> properties = role(false);
         List<ConfigurationFactDTO> facts = evaluateReadiness(properties, true);
