@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.practices.review.model;
 
+import de.tum.cit.aet.hephaestus.practices.spi.FeedbackMode;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewMethod;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewPracticeStatus;
 import jakarta.persistence.Column;
@@ -75,6 +76,15 @@ public class ReviewPractice {
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "method", columnDefinition = "jsonb")
     private @Nullable ReviewMethod method;
+
+    /**
+     * The practice's effective feedback mode when its first observation of this review was admitted. Standing reads it,
+     * so an observation sealed in {@link FeedbackMode#OFF} never counts, even after the practice goes live (ADR 0118).
+     * Null until an observation is admitted.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "sealed_feedback_mode", length = 16)
+    private @Nullable FeedbackMode sealedFeedbackMode;
 
     public record Id(UUID reviewId, long practiceId) implements Serializable {}
 }

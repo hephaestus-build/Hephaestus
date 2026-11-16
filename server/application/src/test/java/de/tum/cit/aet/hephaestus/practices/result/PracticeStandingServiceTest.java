@@ -144,10 +144,22 @@ class PracticeStandingServiceTest {
     }
 
     @Test
-    void feedbackModeOffStillContributesResults() {
+    void shouldKeepCountingAnObservationRecordedBeforeThePracticeWasSetToFeedbackModeOff() {
         add(1, ResultOutcome.MET);
         data.getFirst().practice().setFeedbackMode(FeedbackMode.OFF);
         assertThat(card().standing()).isEqualTo(PracticeStanding.STRENGTH);
+    }
+
+    @Test
+    void shouldGiveNoStandingAndQuoteNothingWhenEveryObservationWasSealedInFeedbackModeOff() {
+        add(1, ResultOutcome.NOT_MET);
+        data.set(0, sealedIn(data.getFirst(), FeedbackMode.OFF));
+
+        var standing = only(service.getStandingSnapshots(1L, 7L, List.of(now)).getFirst());
+        assertThat(standing.dto().standing()).isEqualTo(PracticeStanding.NOT_OBSERVED);
+        assertThat(standing.dto().toWorkOn()).isEmpty();
+        assertThat(standing.dto().strengths()).isEmpty();
+        assertThat(standing.evidence()).isEmpty();
     }
 
     @Test
@@ -168,7 +180,8 @@ class PracticeStandingServiceTest {
                         latest.version(),
                         latest.review(),
                         prior.item(),
-                        Freshness.current(null)));
+                        Freshness.current(null),
+                        latest.sealedFeedbackMode()));
         assertThat(card().toWorkOn()).isEmpty();
         assertThat(card().strengths()).hasSize(1);
     }
@@ -215,6 +228,33 @@ class PracticeStandingServiceTest {
                 .extracting(PracticeStandingResultDTO::resultId)
                 .containsExactly(requested.result().getId());
         assertThat(live.result().getEndReason()).isEqualTo(ResultEndReason.REPLACED);
+    }
+
+    @Test
+    void shouldNeitherCountNorHideTheLiveStandingWithAnObservationSealedInFeedbackModeOff() {
+        add(1, ResultOutcome.NOT_MET);
+        var live = data.getFirst();
+        var before = card().standing();
+        replace(live, 5, ResultOutcome.MET, ReviewOrigin.EVENT, ResultEndReason.REPLACED);
+        data.set(1, sealedIn(data.get(1), FeedbackMode.OFF));
+
+        var standing = only(service.getStandingSnapshots(1L, 7L, List.of(now)).getFirst());
+        assertThat(standing.dto().standing()).isEqualTo(before);
+        assertThat(standing.liveRuns()).extracting(ResultView::result).containsExactly(live.result());
+        assertThat(standing.dto().strengths()).isEmpty();
+    }
+
+    @Test
+    void shouldCountAnObservationSealedLiveAfterThePracticeLeftFeedbackModeOff() {
+        add(1, ResultOutcome.NOT_MET);
+        data.set(0, sealedIn(data.getFirst(), FeedbackMode.OFF));
+        replace(data.getFirst(), 5, ResultOutcome.MET, ReviewOrigin.EVENT, ResultEndReason.REPLACED);
+        data.set(1, sealedIn(data.get(1), FeedbackMode.AUTOMATIC));
+
+        var standing = only(service.getStandingSnapshots(1L, 7L, List.of(now)).getFirst());
+        assertThat(standing.liveRuns())
+                .extracting(ResultView::result)
+                .containsExactly(data.get(1).result());
     }
 
     @Test
@@ -363,7 +403,8 @@ class PracticeStandingServiceTest {
                         null,
                         view.review(),
                         view.item(),
-                        Freshness.current(null)));
+                        Freshness.current(null),
+                        view.sealedFeedbackMode()));
 
         assertThat(card().basis()).isEqualTo(StandingBasis.EARLIER_REVIEWS_CRITERIA_UNKNOWN);
         assertThat(card().toWorkOn()).isEmpty();
@@ -487,6 +528,17 @@ class PracticeStandingServiceTest {
         return next;
     }
 
+    private static ResultView sealedIn(ResultView view, FeedbackMode mode) {
+        return new ResultView(
+                view.result(),
+                view.practice(),
+                view.version(),
+                view.review(),
+                view.item(),
+                view.sourceFreshness(),
+                mode);
+    }
+
     // A result the cutover carried over from the earlier model: kept as recorded, without current proof.
     private void earlier(int index) {
         var view = data.get(index);
@@ -498,7 +550,8 @@ class PracticeStandingServiceTest {
                         view.version(),
                         view.review(),
                         view.item(),
-                        Freshness.current(null)));
+                        Freshness.current(null),
+                        view.sealedFeedbackMode()));
     }
 
     private PracticeStandingDTO card() {

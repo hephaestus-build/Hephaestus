@@ -17,6 +17,7 @@ import de.tum.cit.aet.hephaestus.practices.result.trend.WorkResolution;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewOrder;
 import de.tum.cit.aet.hephaestus.practices.spi.CurrentDeveloperLookup;
 import de.tum.cit.aet.hephaestus.practices.spi.Currentness;
+import de.tum.cit.aet.hephaestus.practices.spi.FeedbackMode;
 import de.tum.cit.aet.hephaestus.practices.spi.PracticeStanding;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultEndReason;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
@@ -421,8 +422,10 @@ public class PracticeStandingService {
                 view.review().getId());
     }
 
+    // An observation sealed in feedback mode Off never counts, so the chain reads past it (ADR 0118 decision 6).
     private static boolean isLive(ResultView view) {
-        return view.review().getOrigin() == ReviewOrigin.EVENT || view.review().getOrigin() == ReviewOrigin.SCHEDULE;
+        return (view.review().getOrigin() == ReviewOrigin.EVENT || view.review().getOrigin() == ReviewOrigin.SCHEDULE)
+                && view.sealedFeedbackMode() != FeedbackMode.OFF;
     }
 
     private static Map<String, List<ResultView>> byPractice(Stream<ResultView> rows, Set<UUID> readable) {
@@ -469,8 +472,12 @@ public class PracticeStandingService {
             Eligibility eligibility,
             Map<UUID, String> deliveredGuidance,
             Instant since) {
+        // An observation sealed in feedback mode Off neither decides nor is quoted (ADR 0118 decision 6).
         Map<String, List<ResultView>> current = byPractice(
-                rows.current().stream().filter(view -> !view.result().isMigratedHistory()), readable.standing());
+                rows.current().stream()
+                        .filter(view -> !view.result().isMigratedHistory())
+                        .filter(view -> view.sealedFeedbackMode() != FeedbackMode.OFF),
+                readable.standing());
         Map<String, List<ResultView>> earlier = byPractice(
                 Stream.concat(rows.current().stream(), rows.live().stream())
                         .filter(view -> view.result().isMigratedHistory())

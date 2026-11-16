@@ -64,6 +64,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -252,11 +253,37 @@ class PracticesAcrossWorkspaceServiceTest {
                         .count());
     }
 
+    @Test
+    void shouldNotCountADeveloperWhoseOnlyObservationsWereSealedInFeedbackModeOff() {
+        result(reviewed, READER, 1, 5, ResultOutcome.MET);
+        result(reviewed, PROLIFIC, 10, 5, ResultOutcome.MET, FeedbackMode.OFF);
+
+        var tiles = service.readTiles(context, PracticesAcrossWorkspaceWindow.DAYS_30);
+
+        assertThat(tiles.developersWithAStandingInWindow()).isEqualTo(1);
+        var prolific =
+                standings.getStandingSnapshots(1L, PROLIFIC, List.of(now)).getFirst();
+        assertThat(Objects.requireNonNull(prolific.practices().get(reviewed.getSlug()))
+                        .dto()
+                        .standing())
+                .isEqualTo(PracticeStanding.NOT_OBSERVED);
+    }
+
     private static Set<UUID> ids(Collection<Result> rows) {
         return rows.stream().map(Result::getId).collect(Collectors.toSet());
     }
 
     private void result(Practice practice, long developer, long item, int daysAgo, ResultOutcome outcome) {
+        result(practice, developer, item, daysAgo, outcome, null);
+    }
+
+    private void result(
+            Practice practice,
+            long developer,
+            long item,
+            int daysAgo,
+            ResultOutcome outcome,
+            @Nullable FeedbackMode sealedFeedbackMode) {
         var base = ReviewTestData.view(
                 item,
                 UUID.randomUUID(),
@@ -269,7 +296,13 @@ class PracticesAcrossWorkspaceServiceTest {
                 .developerId(developer)
                 .build();
         data.add(new ResultView(
-                row, practice, practice.getCurrentVersion(), base.review(), base.item(), Freshness.current(null)));
+                row,
+                practice,
+                practice.getCurrentVersion(),
+                base.review(),
+                base.item(),
+                Freshness.current(null),
+                sealedFeedbackMode));
     }
 
     private static PracticeGroup group(String slug, int position) {

@@ -5,8 +5,11 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.CandidateRefusal;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewInvocationFence;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewItemRepository;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewPracticeRepository;
+import de.tum.cit.aet.hephaestus.practices.review.model.ReviewPractice;
 import de.tum.cit.aet.hephaestus.practices.spi.AdmissionReceipt;
 import de.tum.cit.aet.hephaestus.practices.spi.CitationVerificationStatus;
+import de.tum.cit.aet.hephaestus.practices.spi.FeedbackMode;
+import de.tum.cit.aet.hephaestus.practices.spi.FeedbackModeQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultCandidate;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentId;
@@ -18,8 +21,11 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.springframework.http.HttpStatus;
@@ -38,6 +44,7 @@ public class ResultAdmissionWriter {
     private final ReviewAssignmentQuery assignments;
     private final ResultAdmissionPolicy policy;
     private final ResultClaimWriter claims;
+    private final FeedbackModeQuery feedbackModes;
     private final ResultRepository results;
     private final ResultProofMapper proof;
     private final JsonMapper json;
@@ -46,7 +53,11 @@ public class ResultAdmissionWriter {
     public AdmissionReceipt admitLocked(
             long ws, UUID reviewId, UUID jobId, int attempt, List<ResultCandidate> candidates) {
         var review = fence.lock(ws, reviewId, jobId, attempt);
-        practices.lockAssignments(ws, reviewId);
+        var practiceById = practices.lockAssignments(ws, reviewId).stream()
+                .collect(Collectors.toMap(ReviewPractice::getPracticeId, Function.identity()));
+        Map<Long, FeedbackMode> modes = feedbackModes.effectiveModes(
+                ws,
+                candidates.stream().map(ResultCandidate::practiceId).distinct().toList());
         var assessment = policy.assess(ws, review, jobId);
         var copyAuthority = assessment.copyAuthority();
         var admitted = new ArrayList<UUID>();
@@ -105,6 +116,10 @@ public class ResultAdmissionWriter {
             var at = clock.instant();
             if (review.getAdmittedAt() == null) review.setAdmittedAt(at);
             var result = claims.write(ws, review, c, at);
+            // A scan admits its files one by one: the first admission fixes the mode for the review's practice.
+            var reviewPractice = Objects.requireNonNull(practiceById.get(c.practiceId()));
+            if (reviewPractice.getSealedFeedbackMode() == null)
+                reviewPractice.setSealedFeedbackMode(modes.getOrDefault(c.practiceId(), FeedbackMode.OFF));
             member.judge(result.getId());
             member.setAttemptedAt(at);
             ObjectNode detail = member.getDetail() == null
