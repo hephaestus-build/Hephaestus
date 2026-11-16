@@ -84,7 +84,7 @@ overrides:
   "undici@>=8.0.0 <8.12.2": 8.12.2
   "uuid@<11.1.1": 11.1.1
   # CVE-2026-118773 (GHSA-3g3m-2fjr-6pw4). No consumer releases a range that reaches 14.0.2.
-  "glob@>=9.0.0 <14.0.2": 14.0.4
+  "glob@>=9.0.0 <14.0.2": 14.0.6
   # CVE-2026-118764 (GHSA-g3hv-75wg-m249). ESLint and ts-morph still require ^10.
   "minimatch@>=10.0.0 <11.0.1": 11.0.5
   # CVE-2026-104844 (GHSA-rj75-hqrm-r3gf). @tailwindcss/typography pins 6.0.10 exactly.
