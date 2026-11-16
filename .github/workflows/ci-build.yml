@@ -97,6 +97,12 @@ jobs:
         continue-on-error: true
         if: always()
         run: vp run gate:api-compatibility
+      # Lints the spec generated above with server/redocly.yaml.
+      - name: OpenAPI lint
+        id: openapi-lint
+        continue-on-error: true
+        if: always()
+        run: vp run gate:openapi-lint
       - name: Configuration reference
         id: configuration-reference
         continue-on-error: true
@@ -153,11 +159,12 @@ jobs:
         env:
           OPENAPI: ${{ steps.openapi.outcome }}
           API_COMPATIBILITY: ${{ steps.api-compatibility.outcome }}
+          OPENAPI_LINT: ${{ steps.openapi-lint.outcome }}
           CONFIGURATION_REFERENCE: ${{ steps.configuration-reference.outcome }}
           SCHEMA: ${{ steps.schema.outcome }}
         run: |
-          if [ "$OPENAPI" != "success" ] || [ "$API_COMPATIBILITY" != "success" ] || [ "$CONFIGURATION_REFERENCE" != "success" ] || [ "$SCHEMA" != "success" ]; then
-            echo "::error::OpenAPI, API compatibility, configuration reference or schema validation failed; review the independently reported steps."
+          if [ "$OPENAPI" != "success" ] || [ "$API_COMPATIBILITY" != "success" ] || [ "$OPENAPI_LINT" != "success" ] || [ "$CONFIGURATION_REFERENCE" != "success" ] || [ "$SCHEMA" != "success" ]; then
+            echo "::error::OpenAPI, API compatibility, OpenAPI lint, configuration reference or schema validation failed; review the independently reported steps."
             exit 1
           fi
 

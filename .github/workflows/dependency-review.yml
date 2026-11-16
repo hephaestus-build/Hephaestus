@@ -16,6 +16,8 @@ on:
       - "server/*-gradle.lockfile"
       - "server/gradle/**"
       - "server/gradle.properties"
+      - "scripts/client-generators/kotlin/*.gradle.kts"
+      - "scripts/client-generators/kotlin/gradle/**"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
