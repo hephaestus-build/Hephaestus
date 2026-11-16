@@ -216,8 +216,14 @@ class ComposerTranscriptTest {
         var first = (ObjectNode) conversation(protocol).get(0).get("request");
         transcript.issued(FENCE, session(protocol, "Compose the review."));
         var forward = (ComposerTranscript.Forward) transcript.check(WORKSPACE, RUN, EPOCH, protocol, bytes(first));
-        transcript.served(WORKSPACE, RUN, EPOCH, protocol, forward, bytes(json("{\"output\": []}")));
+        byte[] empty = bytes(json("{\"output\": []}"));
+        transcript.served(WORKSPACE, RUN, EPOCH, protocol, forward, empty);
 
+        // An answer that the composer keeps nothing of is replayed like any other when it was lost on its way.
+        assertThat(transcript.check(WORKSPACE, RUN, EPOCH, protocol, bytes(first)))
+                .isInstanceOfSatisfying(
+                        ComposerTranscript.Replay.class,
+                        replay -> assertThat(replay.answer()).isEqualTo(empty));
         ((ArrayNode) first.get("input")).add(user("Finish now."));
         assertThat(transcript.check(WORKSPACE, RUN, EPOCH, protocol, bytes(first)))
                 .isInstanceOf(ComposerTranscript.Forward.class);

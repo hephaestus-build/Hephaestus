@@ -117,7 +117,7 @@ class ComposerAnswerReplayIntegrationTest extends BaseIntegrationTest {
 
         assertThat(replayed.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat((byte[]) replayed.getBody()).isEqualTo(served);
-        assertThat(count("llm_usage_event")).as("no usage row").isZero();
+        assertThat(usageRows()).as("no usage row for this run").isZero();
         verify(permits, never()).acquire(anyLong(), any(), any(), any(), any());
 
         ObjectNode differing = (ObjectNode) first.get("request").deepCopy();
@@ -127,7 +127,7 @@ class ComposerAnswerReplayIntegrationTest extends BaseIntegrationTest {
         assertThat(refused.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
         assertThat(refused.getHeaders().getFirst(LlmProxyService.REFUSAL_HEADER))
                 .isEqualTo(ProxyRefusal.NOT_COMPOSER_REQUEST.name());
-        assertThat(count("llm_usage_event")).isZero();
+        assertThat(usageRows()).isZero();
         verify(permits, never()).acquire(anyLong(), any(), any(), any(), any());
     }
 
@@ -138,8 +138,12 @@ class ComposerAnswerReplayIntegrationTest extends BaseIntegrationTest {
         return Objects.requireNonNull(gateway.proxy(request, new MockHttpServletResponse(), new HttpHeaders(), body));
     }
 
-    private long count(String table) {
-        return Objects.requireNonNull(jdbc.queryForObject("SELECT count(*) FROM " + table, Long.class));
+    private long usageRows() {
+        return Objects.requireNonNull(jdbc.queryForObject(
+                "SELECT count(*) FROM llm_usage_event WHERE workspace_id = ? AND run_id = ?",
+                Long.class,
+                workspace,
+                lease.runId()));
     }
 
     private static byte[] bytes(JsonNode node) {

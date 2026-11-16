@@ -240,11 +240,10 @@ public class ComposerTranscript {
         }
         var fence = new AgentRunFence(runId, workspaceId, epoch);
         runs.requireCurrent(fence);
+        // Every served answer is kept for a copy sent again, also one that the composer keeps nothing of.
+        parts.addServed(workspaceId, runId, epoch, forward.conversation(), body);
         Reply reply = requests.reply(protocol, answer);
-        if (reply != null) {
-            add(fence, Kind.REPLY, ComposerRequests.link(forward.conversation(), reply.digest()));
-            parts.addServed(workspaceId, runId, epoch, forward.conversation(), body);
-        }
+        if (reply != null) add(fence, Kind.REPLY, ComposerRequests.link(forward.conversation(), reply.digest()));
         for (var call : requests.calls(protocol, answer)) {
             if (call.id().isBlank() || call.id().length() > MAX_CALL_ID) continue;
             if (call.tool().isBlank() || call.tool().length() > MAX_TOOL) continue;
