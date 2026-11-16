@@ -78,10 +78,27 @@ export const VALUE_PUNCTUATION = "#.,%+()/-";
  */
 const PLAIN_VALUE = new RegExp(String.raw`^[\w \t\n\v\f\r${VALUE_PUNCTUATION}]*$`, "u");
 
+/** One class name that `PracticeGuidanceRules.THEME_CLASS` matches: the theme classes, and no class of the app. */
+export const THEME_CLASS = "pv-[a-z0-9-]+";
+
+const THEME_CLASS_NAME = new RegExp(`^${THEME_CLASS}$`, "u");
+
+/** Whether every name in a class list is a theme class, checked name by name as the server does. */
+function onlyThemeClasses(classes: string): boolean {
+	return classes
+		.trim()
+		.split(/\s+/u)
+		.every((name) => name === "" || THEME_CLASS_NAME.test(name));
+}
+
 // An instance of its own: a hook on the shared default would change every other caller in the bundle.
 const purify = DOMPurify();
 purify.addHook("uponSanitizeAttribute", (_node, data) => {
-	if (!PLAIN_VALUE.test(data.attrValue) || data.attrValue.toLowerCase().includes("url(")) {
+	if (
+		!PLAIN_VALUE.test(data.attrValue) ||
+		data.attrValue.toLowerCase().includes("url(") ||
+		(data.attrName === "class" && !onlyThemeClasses(data.attrValue))
+	) {
 		data.keepAttr = false;
 	}
 });

@@ -3,12 +3,14 @@ package de.tum.cit.aet.hephaestus.practices;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 
 import de.tum.cit.aet.hephaestus.core.exception.InvalidInputException;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.Map;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -99,6 +101,41 @@ class PracticeGuidanceRulesTest extends BaseUnitTest {
             String body = "<rect fill=\"url(https://example.com/a.svg#p)\" width=\"1\" height=\"1\"/>";
             assertThatThrownBy(() -> PracticeGuidanceRules.validate(new PracticeVisual(svg(body), "x")))
                     .hasMessageContaining("refers to something outside itself in “fill”");
+        }
+
+        @Test
+        void shouldAcceptTheVisualWhenAShapeHasSeveralThemeClasses() {
+            String body = "<text class=\" pv-fill-muted \t\n pv-mono \" x=\"1\" y=\"9\">Hi</text>";
+            assertThatCode(() -> PracticeGuidanceRules.validate(new PracticeVisual(svg(body), "x")))
+                    .doesNotThrowAnyException();
+        }
+
+        @ParameterizedTest
+        @ValueSource(strings = {"fixed inset-0", "pv-fill-ink hidden", "pvfill-ink", "Pv-fill-ink", "pv-"})
+        void shouldRefuseTheVisualWhenAClassIsNotAThemeClass(String classes) {
+            String body = "<rect class=\"" + classes + "\" width=\"1\" height=\"1\"/>";
+            assertThatThrownBy(() -> PracticeGuidanceRules.validate(new PracticeVisual(svg(body), "x")))
+                    .isInstanceOf(InvalidInputException.class)
+                    .hasMessageContaining("Use only the pv-* classes");
+        }
+
+        @Test
+        void shouldNameTheClassToRemove() {
+            String body = "<rect class=\"pv-fill-ink hidden\" width=\"1\" height=\"1\"/>";
+            assertThatThrownBy(() -> PracticeGuidanceRules.validate(new PracticeVisual(svg(body), "x")))
+                    .hasMessageContaining("uses the class “hidden”");
+        }
+
+        @Test
+        void shouldCheckALongClassListAtOnce() {
+            String many = "<rect class=\"" + "pv-a ".repeat(6_000) + "\" width=\"1\" height=\"1\"/>";
+            String spaces = "<rect class=\"" + " ".repeat(60_000) + "x\" width=\"1\" height=\"1\"/>";
+            assertTimeoutPreemptively(Duration.ofSeconds(5), () -> {
+                assertThatCode(() -> PracticeGuidanceRules.validate(new PracticeVisual(svg(many), "x")))
+                        .doesNotThrowAnyException();
+                assertThatThrownBy(() -> PracticeGuidanceRules.validate(new PracticeVisual(svg(spaces), "x")))
+                        .hasMessageContaining("uses the class “x”");
+            });
         }
 
         @Test
