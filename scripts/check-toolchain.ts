@@ -252,9 +252,17 @@ const javaVersion = readFileSync(".java-version", "utf8").trim();
 const gradleBuild = readFileSync("server/build.gradle.kts", "utf8");
 if (
 	!/^\d+$/u.test(javaVersion) ||
-	!gradleBuild.includes('file("../.java-version").readText().trim().toInt()')
+	!gradleBuild.includes('file("../.java-version").readText().trim().toInt()') ||
+	!gradleBuild.includes("JavaLanguageVersion.of(javaVersion)")
 ) {
 	throw new Error("Gradle must compile with the JDK line from .java-version");
+}
+for (const file of execFileSync("git", ["ls-files", "*.gradle.kts"], { encoding: "utf8" }).split(
+	"\n",
+)) {
+	if (file !== "" && /JavaLanguageVersion\.of\(\s*\d/u.test(readFileSync(file, "utf8"))) {
+		throw new Error(`${file} pins a JDK line; read it from .java-version`);
+	}
 }
 const renovate = asRecord(readJsonFileSync(".github/renovate.json"), ".github/renovate.json");
 if (asRecord(renovate.constraints, "Renovate constraints").java !== javaVersion) {
