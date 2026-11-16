@@ -49,8 +49,11 @@ The API compatibility gate then lets the break land.
 If the operator must act, state the action (`**Operators:** …`).
 Add `.migration/<changeset-slug>.md` exactly as a `major` would.
 The fragment contains the complete `#### 🔴 …` migration-guide entry, with the fields that `.migration/README.md` names.
-Never edit `MIGRATION.md`.
 The version process assembles and consumes fragments in filename order.
+
+Never edit `MIGRATION.md` or a released changeset in `.changeset/pre/`.
+The one exception is a docs URL: point it at the page and heading that own its content today.
+Change nothing else on the line.
 
 A PR that removes or renames a chart value must name the old value in backticks, such as `` `config.gitlab.workspaceCreation` ``, in its changeset or fragment.
 CI compares the chart's schema with the base, because the chart refuses a value that its schema lacks.

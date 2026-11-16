@@ -326,7 +326,8 @@ Do not put two callouts in a row.
 - When you move, rename, or delete a page, update every link to it in the same pull request.
   Look in `docs/`, the code, the chart, and the repository instructions.
   The docs build fails on a broken link inside the docs.
-  This includes the links in `CHANGELOG.md` and `MIGRATION.md`.
+  This includes the links in `CHANGELOG.md`, `MIGRATION.md`, and the released changesets in `.changeset/pre/`.
+  In those files, change only the URL (`.changeset/README.md`).
 - A released address is a contract with readers.
   Did a published release list the page that you move or remove?
   Then add its old path to `docs/src/lib/released-redirects.ts`.

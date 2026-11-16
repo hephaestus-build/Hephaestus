@@ -41,11 +41,12 @@ const maskedLines = (text: string) =>
 	text.split("\n").map((line) => line.replaceAll(DOCS_URL, "<docs-url>"));
 
 /**
- * Whether a change to MIGRATION.md only rewrites docs.hephaestus.build URLs: the same number of lines, and each line
- * identical once its docs URLs are masked. Released upgrade steps never change, but their links must keep resolving,
- * because the docs site's upgrade page renders these entries for readers.
+ * Whether a change to released text only rewrites docs.hephaestus.build URLs: the same number of lines, and each line
+ * identical once its docs URLs are masked. Released text is MIGRATION.md and the consumed changesets under
+ * `.changeset/pre/`. It never changes, but its links must keep resolving: the docs site's upgrade page renders
+ * MIGRATION.md, and the stable release's notes repeat the consumed changesets.
  */
-export function migrationChangeIsLinkOnly(before: string, after: string): boolean {
+export function changeIsLinkOnly(before: string, after: string): boolean {
 	const old = maskedLines(before);
 	const next = maskedLines(after);
 	return old.length === next.length && old.every((line, index) => line === next[index]);
@@ -53,7 +54,7 @@ export function migrationChangeIsLinkOnly(before: string, after: string): boolea
 
 /**
  * Why a pull request's release notes break the rules that hold for every pull request, compared from
- * its merge base with `base`: no edit to MIGRATION.md, no deleted pending fragment or changeset, and
+ * its merge base with `base`: no edit to released text but its docs URLs, no deleted pending fragment or changeset, and
  * a changeset for each change to shipped code. CI and the pre-push hook run the same rules; CI exempts
  * drafts, bots and verified reverts.
  */
@@ -71,9 +72,9 @@ export function releaseNoteProblems(base: string, cwd = process.cwd()): string[]
 			.split("\n")
 			.filter((file) => file !== "" && !file.endsWith("README.md"));
 	const problems: string[] = [];
-	const show = (ref: string) => {
+	const show = (ref: string, file: string) => {
 		try {
-			return execFileSync("git", ["show", `${ref}:MIGRATION.md`], {
+			return execFileSync("git", ["show", `${ref}:${file}`], {
 				cwd,
 				encoding: "utf8",
 				maxBuffer: 16 * 1024 * 1024,
@@ -87,9 +88,11 @@ export function releaseNoteProblems(base: string, cwd = process.cwd()): string[]
 		cwd,
 		encoding: "utf8",
 	}).trim();
-	const [before, after] = [show(mergeBase), show("HEAD")];
-	const linkOnly = before !== "" && after !== "" && migrationChangeIsLinkOnly(before, after);
-	if (changed("ACDMRT", "MIGRATION.md").length > 0 && !linkOnly) {
+	const linkOnly = (file: string) => {
+		const [before, after] = [show(mergeBase, file), show("HEAD", file)];
+		return before !== "" && after !== "" && changeIsLinkOnly(before, after);
+	};
+	if (changed("ACDMRT", "MIGRATION.md").length > 0 && !linkOnly("MIGRATION.md")) {
 		problems.push(
 			`Do not edit MIGRATION.md in a feature PR. Restore it with \`git checkout ${base} -- MIGRATION.md\`, and put the upgrade step in .migration/<changeset-slug>.md (.changeset/README.md has the format).`,
 		);
@@ -100,6 +103,12 @@ export function releaseNoteProblems(base: string, cwd = process.cwd()): string[]
 			`Pending migration fragments may be edited, but not deleted or renamed: ${fragmentsRemoved.join(", ")}. Restore them with \`git checkout ${base} -- ${fragmentsRemoved.join(" ")}\`.`,
 		);
 	}
+	const releasedChanged = changed("AM", ".changeset/pre/*.md").filter((file) => !linkOnly(file));
+	if (releasedChanged.length > 0) {
+		problems.push(
+			`Released changesets may change only their docs URLs: ${releasedChanged.join(", ")}. Restore them with \`git checkout ${base} -- ${releasedChanged.join(" ")}\`, and put the new release note in a new changeset.`,
+		);
+	}
 	const changesetsRemoved = changed("DR", ".changeset/*.md");
 	if (changesetsRemoved.length > 0) {
 		problems.push(
@@ -107,7 +116,7 @@ export function releaseNoteProblems(base: string, cwd = process.cwd()): string[]
 		);
 	}
 	const shipped = changed("ACDMRT", ...SHIPPED_PATHS);
-	if (shipped.length > 0 && changed("A", ".changeset/*.md").length === 0) {
+	if (shipped.length > 0 && changed("A", ".changeset/*.md", ":!.changeset/pre/**").length === 0) {
 		problems.push(
 			[
 				`This PR changes shipped code but carries no changeset: ${shipped.slice(0, 5).join(", ")}${shipped.length > 5 ? ", …" : ""}`,

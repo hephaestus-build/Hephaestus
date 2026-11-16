@@ -57,10 +57,20 @@ export function addressProblem(
 	if (html === undefined) {
 		return "no page and no redirect";
 	}
-	if (anchor !== undefined && anchor !== "" && !html.includes(`id="${anchor}"`)) {
-		return `no element with id "${anchor}"`;
+	if (anchor === undefined || anchor === "") {
+		return undefined;
 	}
-	return undefined;
+	const ids = new Set(
+		Array.from(html.matchAll(/<[a-z][^>]*?\sid="(?<id>[^"]*)"/giu), (match) => match.groups?.id),
+	);
+	// A browser tries the fragment as written, then percent-decoded.
+	let decoded = anchor;
+	try {
+		decoded = decodeURIComponent(anchor);
+	} catch {
+		// A malformed escape stays as written.
+	}
+	return ids.has(anchor) || ids.has(decoded) ? undefined : `no element with id "${anchor}"`;
 }
 
 /** The released addresses of `released-paths.txt`, without comments and blank lines. */
@@ -84,11 +94,12 @@ export function linkedAddresses(
 			return [];
 		}
 		const where = `${match.file}:${match.line}`;
-		return [...match.text.matchAll(/https:\/\/docs\.hephaestus\.build\/(?<rest>[\w./%#-]*)/gu)].map(
-			(link) => ({
-				where,
-				address: (link.groups?.rest ?? "").replace(/[.,;:]+$/u, ""),
-			}),
+		return [...match.text.matchAll(/https:\/\/docs\.hephaestus\.build\/[\w./%#?=&-]*/gu)].map(
+			(link) => {
+				// The query does not choose the page or the heading.
+				const url = new URL(link[0].replace(/[.,;:]+$/u, ""));
+				return { where, address: `${url.pathname.slice(1)}${url.hash}` };
+			},
 		);
 	});
 }

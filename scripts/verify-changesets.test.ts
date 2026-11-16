@@ -379,6 +379,9 @@ void test("the release-note rules hold a branch to what CI requires, against ori
 	await write("MIGRATION.md", "# Migration\n");
 	await write(".changeset/pending.md", "---\n---\n\nCI only. No shipped application changes.\n");
 	await write(".migration/pending.md", "#### Pending\n");
+	const released =
+		'---\n"hephaestus": minor\n---\n\nSee [Faults](https://docs.hephaestus.build/admin/observability#faults).\n';
+	await write(".changeset/pre/released.md", released);
 	await write("webapp/src/a.ts", "export const a = 1;\n");
 	git("add", ".");
 	git("commit", "--quiet", "-m", "base");
@@ -408,6 +411,26 @@ void test("the release-note rules hold a branch to what CI requires, against ori
 	await attempt(() => {
 		git("rm", "--quiet", ".migration/pending.md");
 	}, /Pending migration fragments may be edited, but not deleted or renamed/u);
+	// A consumed changeset is released text, and the stable release's notes repeat it.
+	await attempt(
+		async () => write(".changeset/pre/released.md", released.replace("See", "Read")),
+		/Released changesets may change only their docs URLs: \.changeset\/pre\/released\.md/u,
+	);
+	// A consumed changeset is not this pull request's release note.
+	await attempt(async () => {
+		await write("webapp/src/a.ts", "export const a = 2;\n");
+		await write(".changeset/pre/added.md", '---\n"hephaestus": patch\n---\n\nThe value is two.\n');
+	}, /changes shipped code but carries no changeset/u);
+
+	// Its links follow the page that owns the content today.
+	await write(
+		".changeset/pre/released.md",
+		released.replace("admin/observability#faults", "admin/metrics#faults"),
+	);
+	git("add", "--all");
+	git("commit", "--quiet", "-m", "link only");
+	assert.equal(problems(), "");
+	git("reset", "--quiet", "--hard", "origin/main");
 
 	// Test support code is in no image, like the tests that import it.
 	await write("webapp/src/test/harness.tsx", "export const harness = 1;\n");

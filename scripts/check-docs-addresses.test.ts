@@ -9,7 +9,7 @@ const site: Record<string, string> = {
 	"admin/practice-review.html":
 		'<meta http-equiv="refresh" content="0;url=/user/practice-reviews">',
 	"user/practice-reviews.html": '<h2 id="feedback-mode">Feedback mode</h2>',
-	"admin/dsms/index.html": "<h1>DSMS</h1>",
+	"admin/dsms/index.html": '<h1>DSMS</h1><h2 data-id="gone">Not an id</h2>',
 	"admin/upgrade.md": "# Upgrade",
 };
 const read = (file: string) => site[file];
@@ -33,6 +33,11 @@ void test("an anchor must exist on the page that the address finally reaches, th
 	assert.equal(addressProblem("admin/kubernetes#install", read), "no page and no redirect");
 });
 
+void test("an anchor matches an element id, as written or percent-decoded", () => {
+	assert.equal(addressProblem("admin/upgrade#stopped%2Dschema%2Dupgrades", read), undefined);
+	assert.equal(addressProblem("admin/dsms#gone", read), 'no element with id "gone"');
+});
+
 void test("released addresses skip comments and blank lines; linked addresses keep their source line", () => {
 	assert.deepEqual(
 		releasedAddresses("# v1\n\n/admin/upgrade\n/admin/upgrade#stopped-schema-upgrades\n"),
@@ -43,6 +48,12 @@ void test("released addresses skip comments and blank lines; linked addresses ke
 			"MIGRATION.md:12:See https://docs.hephaestus.build/admin/upgrade#stopped-schema-upgrades.",
 		]),
 		[{ where: "MIGRATION.md:12", address: "admin/upgrade#stopped-schema-upgrades" }],
+	);
+	assert.deepEqual(
+		linkedAddresses([
+			"README.md:4:https://docs.hephaestus.build/admin/upgrade?source=release#gone",
+		]),
+		[{ where: "README.md:4", address: "admin/upgrade#gone" }],
 	);
 	assert.deepEqual(
 		linkedAddresses(["scripts/a.test.ts:3:https://docs.hephaestus.build/admin/gone"]),
