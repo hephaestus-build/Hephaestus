@@ -189,7 +189,7 @@ server:
   # rebuilds it.
   gitCache:
     sizeLimit: 70Gi
-    # One snapshot's bound: docs/admin/helm-chart.md § Storage and retention.
+    # One snapshot's bound: docs/admin/helm-chart.mdx § Storage and retention.
     snapshotLimit: 2Gi
   # The inputs of the buildpack's memory calculator, which sizes the heap from the memory limit at each start.
   # docs/admin/sizing.mdx § Memory headroom gives the measurements behind both defaults.
