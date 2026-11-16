@@ -1,5 +1,8 @@
 #### 🔴 Write erasure recovery manifests as version 2
 
+- **When:** before the window
+- **Action:** Add the disconnects and the workspace purges to each erasure recovery manifest, as [Erasure recovery](https://docs.hephaestus.build/admin/erasure-recovery) describes.
+
 Erasure recovery now reapplies workspace purges and disconnects, not only person erasures.
 A recovery manifest uses version 2 and lists `disconnects` and `workspacePurges` beside `people`. A version 1 manifest stops startup.
 

@@ -3,6 +3,7 @@ import type { MDXComponents } from "mdx/types";
 import type { AnchorHTMLAttributes, ComponentPropsWithoutRef } from "react";
 
 import { CalloutContainer, CalloutDescription, CalloutTitle } from "@/components/callout";
+import { MigrationEntries } from "@/components/migration-entries";
 import { Screenshot } from "@/components/screenshot";
 import { SystemDiagram } from "@/components/system-diagram";
 import { BASE } from "@/lib/site";
@@ -81,6 +82,7 @@ export function mdxComponents(page: DocsPage) {
 		CalloutContainer,
 		CalloutTitle,
 		CalloutDescription,
+		MigrationEntries,
 		Screenshot,
 		SystemDiagram,
 	} satisfies MDXComponents;

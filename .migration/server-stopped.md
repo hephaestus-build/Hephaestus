@@ -1,5 +1,8 @@
 #### 🔴 Use server.stopped instead of server.replicas=0
 
+- **When:** before the window, in the window, after the upgrade
+- **Action:** In every procedure that set `server.replicas=0`, set `server.stopped=true` instead, and `server.stopped=false` where it restored the count. From 1.0.0-rc.8 or earlier, follow [Stopped schema upgrades](https://docs.hephaestus.build/admin/upgrade#stopped-schema-upgrades), and pin `postgresql.parameters.max_connections` in every phase.
+
 In a stopped upgrade, in database maintenance, in a restore, when you contain an incident and when you decommission an instance, set `server.stopped=true` where the procedure set `server.replicas=0`, and `server.stopped=false` where it restored the count.
 `server.stopped` keeps `server.replicas`, which sizes PostgreSQL's connections, so PostgreSQL keeps running.
 

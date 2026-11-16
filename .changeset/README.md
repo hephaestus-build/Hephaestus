@@ -48,7 +48,7 @@ The API compatibility gate then lets the break land.
 
 If the operator must act, state the action (`**Operators:** …`).
 Add `.migration/<changeset-slug>.md` exactly as a `major` would.
-The fragment contains the complete `#### 🔴 …` migration-guide entry.
+The fragment contains the complete `#### 🔴 …` migration-guide entry, with the fields that `.migration/README.md` names.
 Never edit `MIGRATION.md`.
 The version process assembles and consumes fragments in filename order.
 

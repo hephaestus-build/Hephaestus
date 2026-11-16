@@ -11,3 +11,10 @@ declare module "virtual:docs-page-tree" {
 	const tree: SerializedPageTree;
 	export default tree;
 }
+
+declare module "virtual:migration-entries" {
+	import type { MigrationGuide } from "@/lib/migration-entries";
+
+	const guide: MigrationGuide;
+	export default guide;
+}

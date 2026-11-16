@@ -1,5 +1,8 @@
 #### 🔴 Stop every role before Ask Hephaestus takes its names
 
+- **When:** before the window, in the window
+- **Action:** Before the window, move your own queries, image environment and API clients to the new names. Stop every role for the migration: an old server cannot read the renamed tables.
+
 The conversation tables `mentor_conversation`, `mentor_entry` and `mentor_turn` become `conversation`, `conversation_entry` and `conversation_turn`. The table `workspace_agent_binding` becomes `workspace_model_assignment`. Their indexes, constraints, sequences and trigger functions follow. The workspace columns `practice_review_auto_trigger_enabled` and `practice_review_manual_trigger_enabled` become `practice_review_event_enabled` and `practice_review_request_enabled`. Stored values change with the code: `HEPH` answers become `ANSWER`, `MENTOR` model assignments become `CONVERSATION`, `MENTOR_TURN` usage becomes `CONVERSATION_TURN`, and `MENTOR_DIGEST` subscriptions and queued digest emails become `WEEKLY_DIGEST`. Person-data requests in progress and provider events still pending at the stop use the new store and step names. Unsubscribe links, Slack answers and their feedback buttons keep working.
 
 **Operators:** Apply this change in the stopped window before the 1.0.0 cut. Use [Stopped schema upgrades](https://docs.hephaestus.build/admin/upgrade#stopped-schema-upgrades). Stop every runtime role before the migration and start only the upgraded roles afterward. An old server cannot read the renamed tables.

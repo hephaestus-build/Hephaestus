@@ -1,5 +1,8 @@
 #### 🔴 Set a PID limit for each sandbox Pod
 
+- **When:** before the window
+- **Action:** Set the kubelet's `podPidsLimit` to 4096 or lower on each sandbox node, as [Sandbox prerequisites](https://docs.hephaestus.build/admin/sandboxes#sandbox-prerequisites) describes. The one-host platform already sets it.
+
 The sandbox isolation gate now fails when a sandbox can hold more than 4096 tasks (processes and threads).
 A Pod without a PID limit can use every free process ID of its node.
 

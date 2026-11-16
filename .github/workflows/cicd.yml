@@ -447,6 +447,10 @@ jobs:
               - 'pnpm-lock.yaml'
               - 'pnpm-workspace.yaml'
               - '.changeset/**'
+              # The docs build lists the migration guide and each migration note on its upgrade page, and
+              # refuses a malformed one.
+              - 'MIGRATION.md'
+              - '.migration/**'
               - 'commitlint.config.ts'
               - '.github/scripts/**'
               - '**/AGENTS.md'
