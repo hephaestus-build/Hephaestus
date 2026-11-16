@@ -410,6 +410,36 @@ public class ProviderResourceRepairs {
         return adopt;
     }
 
+    /**
+     * Records the ownership of a hook that the active connection already holds, as read back from the provider. It
+     * changes no resource identity, so it starts no repair. It refuses a connection that changed since {@code version}.
+     *
+     * @return whether the ownership was recorded
+     */
+    @Transactional
+    public boolean recordOwnership(
+            long workspaceId, long connectionId, @Nullable Long version, UnaryOperator<ConnectionConfig> update) {
+        Connection owner =
+                connections.findByIdAndWorkspaceId(connectionId, workspaceId).orElseThrow();
+        lockIdentities(owner);
+        connections.acquireLifecycleLock(connectionId, workspaceId);
+        Objects.requireNonNull(entityManager).refresh(owner);
+        if (owner.getState() != IntegrationState.ACTIVE || !Objects.equals(owner.getVersion(), version)) return false;
+        ConnectionConfig next = update.apply(owner.getConfig());
+        var credential = retainedCredential(owner);
+        if (!identities(resources(ref(owner), next, credential))
+                .equals(identities(resources(ref(owner), owner.getConfig(), credential)))) {
+            throw new IllegalArgumentException(
+                    "Recording ownership must not change which resources a connection holds");
+        }
+        owner.setConfig(next);
+        return true;
+    }
+
+    private static Set<String> identities(List<Resource> resources) {
+        return resources.stream().map(Resource::identity).collect(Collectors.toSet());
+    }
+
     @Transactional
     public void recordDiscovered(UUID registrationId, List<Resource> discovered) {
         ProviderResourceRepair registration = repairs.findById(registrationId).orElse(null);

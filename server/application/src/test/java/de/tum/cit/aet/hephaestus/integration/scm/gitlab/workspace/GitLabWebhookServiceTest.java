@@ -29,6 +29,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.repair.ProviderReso
 import de.tum.cit.aet.hephaestus.integration.core.events.IntegrationAttentionChangedEvent.Problem;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ProviderResourceAdapter;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ProviderResourceAdapter.Resource;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ProviderResourceAdapter.ResourceType;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabWebhookClient;
@@ -206,6 +207,13 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
                     bindGitLabConfig(1L, (ConnectionConfig.GitLabConfig) mutate.apply(currentConfig(1L)));
                     return true;
                 });
+        lenient()
+                .when(repairs.recordOwnership(anyLong(), anyLong(), any(), any()))
+                .thenAnswer(call -> {
+                    UnaryOperator<ConnectionConfig> mutate = call.getArgument(3);
+                    bindGitLabConfig(1L, (ConnectionConfig.GitLabConfig) mutate.apply(currentConfig(1L)));
+                    return true;
+                });
         lenient().when(lockProvider.getIfAvailable()).thenReturn(locks);
         lenient().when(locks.lock(any())).thenReturn(Optional.of(mock(SimpleLock.class)));
         routeCredential = credential(KEY, null);
@@ -337,13 +345,67 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
         }
 
         @Test
-        void shouldLeaveTheStoredHookAloneWhenItIsThisRoute() {
-            storeHook(99L, connectionUrl(routeCredential));
+        void shouldRecordTheOwnershipOfAReleaseCandidateHookAndKeepIt() {
+            String url = connectionUrl(routeCredential);
+            storeHook(99L, url);
 
             WebhookSetupResult result = webhookService.registerWebhook(workspace);
 
             assertThat(result.webhookId()).isEqualTo(99L);
             assertThat(registered).isEmpty();
+            assertThat(currentConfig(1L).gitlabWebhookId()).isEqualTo(99L);
+            assertThat(currentConfig(1L).webhookOwnershipHash()).isEqualTo(ProviderResourceAdapter.fingerprint(url));
+        }
+
+        @Test
+        void shouldLeaveTheStoredHookAloneWhenItsOwnershipIsRecorded() {
+            String url = connectionUrl(routeCredential);
+            hooks.add(new WebhookInfo(99L, url));
+            bindGitLabConfig(
+                    1L,
+                    new ConnectionConfig.GitLabConfig("https://gitlab.com", 42L, 99L, Set.of(), null)
+                            .withWebhookOwnership(99L, ProviderResourceAdapter.fingerprint(url), null));
+
+            WebhookSetupResult result = webhookService.registerWebhook(workspace);
+
+            assertThat(result.webhookId()).isEqualTo(99L);
+            assertThat(registered).isEmpty();
+            verify(repairs, never()).recordOwnership(anyLong(), anyLong(), any(), any());
+        }
+
+        @Test
+        void shouldNotRecordTheOwnershipOfAMarkedHookOrOneOnAnotherOrigin() {
+            String url = connectionUrl(routeCredential);
+            for (String foreign : List.of(
+                    url + "?hephaestus_resource=unrecorded",
+                    "https://elsewhere.example" + URI.create(url).getRawPath())) {
+                hooks.clear();
+                storeHook(99L, foreign);
+
+                webhookService.registerWebhook(workspace);
+
+                verify(repairs, never()).recordOwnership(anyLong(), anyLong(), any(), any());
+            }
+        }
+
+        @Test
+        void shouldNotRecordTheOwnershipOfAHookUnderAKeyThisServerDoesNotAccept() {
+            storeHook(99L, connectionUrl(credential(NEXT_KEY, null)));
+
+            webhookService.registerWebhook(workspace);
+
+            verify(repairs, never()).recordOwnership(anyLong(), anyLong(), any(), any());
+        }
+
+        @Test
+        void shouldNotRecordTheOwnershipOfAHookOnAnotherRoute() {
+            storeHook(99L, API_ORIGIN + "/webhooks/gitlab/connections/" + (CONNECTION_ID + 1) + "/key/route");
+
+            WebhookSetupResult result = webhookService.registerWebhook(workspace);
+
+            verify(repairs, never()).recordOwnership(anyLong(), anyLong(), any(), any());
+            assertThat(result.webhookId()).isEqualTo(100L);
+            assertThat(registered).hasSize(1);
         }
 
         @Test
@@ -613,13 +675,15 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
         }
 
         @Test
-        void leavesExecutableWebhookUntouched() {
-            storeHook(new WebhookInfo(99L, connectionUrl(routeCredential), "executable"));
+        void leavesExecutableWebhookUntouchedAndRecordsTheOwnershipItLacks() {
+            String url = connectionUrl(routeCredential);
+            storeHook(new WebhookInfo(99L, url, "executable"));
 
             webhookService.checkWebhookHealth();
 
             verify(webhookClient, never()).registerGroupWebhook(anyLong(), anyLong(), any());
             assertThat(currentConfig(1L).gitlabWebhookId()).isEqualTo(99L);
+            assertThat(currentConfig(1L).webhookOwnershipHash()).isEqualTo(ProviderResourceAdapter.fingerprint(url));
         }
 
         @Test
