@@ -1,6 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { existsSync } from "node:fs";
-import { readFile, writeFile } from "node:fs/promises";
+import { writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { isSet } from "./lib/env.ts";
@@ -12,17 +11,16 @@ function argument(index: number): string {
 	const value = process.argv[index];
 	if (!isSet(value)) {
 		throw new Error(
-			"Usage: render-preview-comment <docs|storybook> <artifact-directory> <preview-url> <base-sha> <output>",
+			"Usage: render-preview-comment <storybook-static-directory> <preview-url> <base-sha> <output>",
 		);
 	}
 	return value;
 }
 
-const kind = argument(2);
-const artifactDirectory = argument(3);
-const previewUrl = argument(4);
-const baseSha = argument(5);
-const output = argument(6);
+const artifactDirectory = argument(2);
+const previewUrl = argument(3);
+const baseSha = argument(4);
+const output = argument(5);
 
 const changedFiles = new Set(
 	execFileSync("git", ["diff", "--name-only", "--diff-filter=ACMRT", "-z", `${baseSha}...HEAD`], {
@@ -34,53 +32,6 @@ const changedFiles = new Set(
 );
 
 const baseUrl = new URL(previewUrl);
-
-const SITE_TITLE_SUFFIX = " | Hephaestus documentation";
-const ENTITIES: Record<string, string> = {
-	amp: "&",
-	lt: "<",
-	gt: ">",
-	quot: '"',
-	"#39": "'",
-	"#x27": "'",
-};
-
-/**
- * A page's URL is its path under its guide (`docs/admin/upgrade.mdx` → `/admin/upgrade`, an `index` file → its folder).
- * A changed page is published when the build has its HTML file, and the link names the page by its `<title>`.
- */
-async function renderDocs(): Promise<string[]> {
-	const links = new Map<string, PreviewLink>();
-	for (const source of changedFiles) {
-		const route = /^docs\/(?<route>(?:user|admin|contributor)\/.+)\.mdx?$/u
-			.exec(source)
-			?.groups?.route?.replace(/\/index$/u, "");
-		if (route === undefined || route.split("/").some((part) => part.startsWith("_"))) {
-			continue;
-		}
-		const file = path.resolve(artifactDirectory, `${route}.html`);
-		if (!existsSync(file)) {
-			continue;
-		}
-		const heading =
-			/<title>(?<title>[^<]*)<\/title>/u.exec(await readFile(file, "utf8"))?.groups?.title ?? route;
-		const title = heading
-			.replace(SITE_TITLE_SUFFIX, "")
-			.replaceAll(
-				/&(?<name>amp|lt|gt|quot|#39|#x27);/gu,
-				(_, name: string) => ENTITIES[name] ?? "",
-			);
-		const url = new URL(route, baseUrl);
-		links.set(url.href, { group: path.posix.dirname(source), title, url: url.href });
-	}
-	return comment(
-		"📚 Documentation preview",
-		"Open full documentation preview",
-		[...links.values()],
-		"Changed pages",
-		"No published pages found in changed files.",
-	);
-}
 
 async function renderStorybook(): Promise<string[]> {
 	const index = asRecord(
@@ -139,8 +90,5 @@ function comment(
 	return renderPreviewComments(introduction, links, emptyMessage, footer);
 }
 
-if (kind !== "docs" && kind !== "storybook") {
-	throw new Error(`Unknown preview kind: ${kind}`);
-}
-const rendered = kind === "docs" ? await renderDocs() : await renderStorybook();
+const rendered = await renderStorybook();
 await writeFile(output, `${JSON.stringify(rendered)}\n`);
