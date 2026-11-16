@@ -78,7 +78,9 @@ const USAGE = {
 };
 
 const WORKSPACE_LIST_ITEM = { ...WORKSPACE, workspaceSlug: "acme", accountLogin: "acme" };
-const AGENTS_QUERY_KEY = listModelAssignmentsQueryKey({ path: { workspaceSlug: "acme" } });
+const MODEL_ASSIGNMENTS_QUERY_KEY = listModelAssignmentsQueryKey({
+	path: { workspaceSlug: "acme" },
+});
 
 /** The undeclared row takes any model, so most cases bind there and read the row by its title. */
 function binding(
@@ -430,10 +432,10 @@ describe("workspace AI models route", () => {
 
 	it("keeps an unsaved assignment through a failed refresh and its retry, and saves it", async () => {
 		const user = userEvent.setup();
-		let agentReads = 0;
+		let assignmentReads = 0;
 		const saved: ModelAssignmentRequest[] = [];
 		const queryClient = await renderModelsRoute(() => {
-			agentReads += 1;
+			assignmentReads += 1;
 			return [binding("PRACTICE_REVIEW", 20)];
 		});
 		server.use(
@@ -466,15 +468,15 @@ describe("workspace AI models route", () => {
 		await screen.findByText("We could not refresh AI models");
 		expect(timeoutInput(row("Practice reviews")).value).toBe("900");
 		expect(pickerOf(row("Practice reviews")).textContent).toContain("GPT Other");
-		const agentReadsBeforeRetry = agentReads;
+		const assignmentReadsBeforeRetry = assignmentReads;
 		await user.click(screen.getByRole("button", { name: "Retry" }));
 		await waitFor(() => expect(screen.queryByRole("button", { name: /^Retry/u })).toBeNull());
-		const agentReadsAfterRetry = agentReads;
+		const assignmentReadsAfterRetry = assignmentReads;
 
 		await user.click(saveButton("Practice reviews"));
 		await waitFor(() => expect(saved).toHaveLength(1));
 		expect(saved[0]).toMatchObject({ instanceModelId: 21, timeoutSeconds: 900 });
-		expect(agentReadsAfterRetry).toBe(agentReadsBeforeRetry);
+		expect(assignmentReadsAfterRetry).toBe(assignmentReadsBeforeRetry);
 	});
 
 	it("hides refused assignments through a later failure, then seeds the next authorized read", async () => {
@@ -506,7 +508,7 @@ describe("workspace AI models route", () => {
 		);
 		const refreshAssignments = async () => {
 			await act(async () => {
-				await queryClient.invalidateQueries({ queryKey: AGENTS_QUERY_KEY, exact: true });
+				await queryClient.invalidateQueries({ queryKey: MODEL_ASSIGNMENTS_QUERY_KEY, exact: true });
 			});
 		};
 		const refusal = /Ask a workspace admin or instance admin for access/u;
@@ -547,7 +549,7 @@ describe("workspace AI models route", () => {
 		);
 		await act(async () => {
 			await Promise.all([
-				queryClient.invalidateQueries({ queryKey: AGENTS_QUERY_KEY, exact: true }),
+				queryClient.invalidateQueries({ queryKey: MODEL_ASSIGNMENTS_QUERY_KEY, exact: true }),
 				queryClient.invalidateQueries({
 					queryKey: getMemberOnboardingSettingsQueryKey({ path: { workspaceSlug: "acme" } }),
 					exact: true,
@@ -636,7 +638,7 @@ it("saves and clears only the selected tier and lists only that tier's models", 
 	await user.click(clearButton(row("Practice reviews", "Cloud")));
 	await waitFor(() => expect(deletedTier).toBe("CLOUD"));
 	await waitFor(() =>
-		expect(queryClient.getQueryData<ModelAssignment[]>(AGENTS_QUERY_KEY)).toStrictEqual([
+		expect(queryClient.getQueryData<ModelAssignment[]>(MODEL_ASSIGNMENTS_QUERY_KEY)).toStrictEqual([
 			binding("PRACTICE_REVIEW", 20, "IN_HOUSE"),
 		]),
 	);
@@ -836,7 +838,7 @@ it("resets model drafts on workspace navigation while a previous workspace save 
 		release();
 	});
 	await waitFor(() =>
-		expect(queryClient.getQueryState(AGENTS_QUERY_KEY)?.isInvalidated).toBe(true),
+		expect(queryClient.getQueryState(MODEL_ASSIGNMENTS_QUERY_KEY)?.isInvalidated).toBe(true),
 	);
 	expect(
 		queryClient.getQueryData<ModelAssignment[]>(

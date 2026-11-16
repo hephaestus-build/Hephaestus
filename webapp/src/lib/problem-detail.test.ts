@@ -63,9 +63,9 @@ describe("problemDetailOf", () => {
 	});
 
 	it("still prefers `detail` over a `message` sitting beside it", () => {
-		expect(problemDetailOf({ detail: "Model still bound to an agent", message: "boom" })).toBe(
-			"Model still bound to an agent",
-		);
+		expect(
+			problemDetailOf({ detail: "Model still assigned to a model purpose", message: "boom" }),
+		).toBe("Model still assigned to a model purpose");
 	});
 
 	it("ignores blank/whitespace-only string fields and continues the precedence chain", () => {

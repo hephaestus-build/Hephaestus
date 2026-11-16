@@ -6,11 +6,11 @@ import jakarta.validation.constraints.Min;
 import org.jspecify.annotations.Nullable;
 
 /**
- * Set a workspace's model + execution limits for one agent purpose. Exactly one of
+ * Set a workspace's model + execution limits for one model purpose. Exactly one of
  * {@code instanceModelId} / {@code workspaceModelId} must be provided. Execution limits and the
  * enabled flag keep their current value when omitted.
  */
-@Schema(description = "Bind a model and execution limits to an agent purpose")
+@Schema(description = "Assign a model and execution limits to a model purpose")
 public record ModelAssignmentRequestDTO(
         @Nullable @Schema(description = "Shared (instance-catalog) model id to run this purpose on")
         Long instanceModelId,

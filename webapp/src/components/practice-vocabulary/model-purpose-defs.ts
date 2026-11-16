@@ -36,7 +36,7 @@ export const UNKNOWN_MODEL_PURPOSE_DEF: ModelPurposeDef = {
 	tone: "text-muted-foreground",
 };
 
-// Agent purposes are model kinds, so their registry has no status tone.
+// Model purposes are kinds, not states, so their registry has no status tone.
 export const MODEL_PURPOSE_DEFS = {
 	PRACTICE_REVIEW: {
 		title: "Practice reviews",

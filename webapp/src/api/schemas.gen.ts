@@ -1008,7 +1008,7 @@ export const AvailableLlmModelSchema = {
 		purposes: {
 			type: "array",
 			description:
-				"The purposes a binding may assign this model to, from its connection's protocol",
+				"The model purposes this model can be assigned to, from its connection's protocol",
 			items: {
 				$ref: "#/components/schemas/ModelPurpose",
 			},
@@ -6655,12 +6655,12 @@ export const ModelAssignmentSchema = {
 		},
 		ready: {
 			type: "boolean",
-			description: "True when the bound model is available to run right now",
+			description: "True when the assigned model is available to run right now",
 		},
 		servedTiers: {
 			type: "array",
 			description:
-				"The members this binding serves now, named by the tier of their choice: IN_HOUSE and CLOUD for the members who chose them, UNDECLARED for the members who have not chosen. Empty when the binding serves no member.",
+				"The members this model assignment serves now, named by the tier of their choice: IN_HOUSE and CLOUD for the members who chose them, UNDECLARED for the members who have not chosen. Empty when the model assignment serves no member.",
 			items: {
 				$ref: "#/components/schemas/DataHandlingTier",
 			},
@@ -6679,7 +6679,7 @@ export const ModelAssignmentSchema = {
 
 export const ModelAssignmentRequestSchema = {
 	type: "object",
-	description: "Bind a model and execution limits to an agent purpose",
+	description: "Assign a model and execution limits to a model purpose",
 	properties: {
 		enabled: {
 			type: "boolean",
