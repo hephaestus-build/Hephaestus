@@ -529,6 +529,7 @@ export default defineConfig({
 			"report:flakes": run("node scripts/report-flakes.ts"),
 			"report:test-results": run("node scripts/summarize-test-results.ts"),
 			"report:test-churn": run("node scripts/report-test-churn.ts"),
+			"report:duplication": run("node scripts/report-duplication.ts"),
 			"pr:wait": run("node scripts/pr-wait.ts"),
 			// A long command that must outlive the caller: docs/contributor/ai-agent-workflow.mdx § Long commands.
 			"job:start": run("node scripts/job.ts start"),

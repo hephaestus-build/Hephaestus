@@ -8,6 +8,7 @@ on:
       - "Security / Rescan images"
       - "CI / Extension provider slots"
       - "CI / Feedback eval panel"
+      - "CI / Duplicated code report"
       - "CI / Flaky test report"
       - "CI / Profile"
       - "CI / Server clean-build reference"
