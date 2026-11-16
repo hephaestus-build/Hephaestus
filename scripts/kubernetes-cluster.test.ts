@@ -107,9 +107,9 @@ await test("the generated Secret holds every key that the chart reads", () => {
 		"HEPHAESTUS_SECURITY_ENCRYPTION_KEY",
 		"HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY",
 		"HEPHAESTUS_AUTH_STATE_COOKIE_KEY",
-		"HEPHAESTUS_CONVERSATION_LOOP_SECRET",
 		"WEBHOOK_SECRET",
 		"WEBHOOK_ROUTING_SECRET",
+		"HEPHAESTUS_INTEGRATION_OAUTH_STATE_SECRET",
 	]) {
 		assert.ok((first[key] ?? "").length > 0, key);
 	}

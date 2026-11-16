@@ -176,7 +176,7 @@ A host on 1.0.0-rc.6 made these changes when it installed that release.
 | Site file | `config.gitCheckoutEnabled` | No key. Git checkout is always on. | *Remove the Git checkout switch* |
 | Site file | `config.slack.redirectUri` | No key. The server derives the callback. | *Use the canonical Slack workspace callback* |
 | Profile | `small-16gib` in `HEPHAESTUS_CHART_PROFILE` and `profiles/small-16gib.yaml` | `small` and `profiles/small.yaml` | *Use the small profile on every single-node install* |
-| Server settings | `hephaestus.agent.max-retries` | `hephaestus.agent.capacity.review-retries`. `AGENT_MAX_RETRIES` still works. | *Stop every role before moving review leases to agent runs* |
+| Server settings | `hephaestus.agent.max-retries`, `AGENT_MAX_RETRIES` | `hephaestus.agent.capacity.review-retries` | *Stop every role before moving review leases to agent runs* |
 | Secret | `DATABASE_USERNAME`, `DATABASE_PASSWORD` | `DATABASE_ADMIN_USERNAME` and `DATABASE_ADMIN_PASSWORD` for the bundled PostgreSQL, and `DATABASE_OWNER_PASSWORD` and `DATABASE_APP_PASSWORD` | *Give each database purpose its own login* |
 | Secret | `HEPHAESTUS_CONVERSATION_LOOP_SECRET`, and the broker keys of `--external-nats` | No key. Each sandbox receives its own credential. | *Stop every role before moving conversation turns to sandboxes* and *Remove the retired sync broker values before upgrading* |
 | Image outside the chart | `HEPHAESTUS_WORKER_CAPACITY_MENTOR_MAX` | `HEPHAESTUS_CONVERSATION_TURN_CAPACITY` on the server | *Stop every role before moving conversation turns to sandboxes* |

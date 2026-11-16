@@ -635,7 +635,7 @@ hephaestus:
           lease-ttl: 5m
           lease-renewal: 25s
           # Lost leases a review survives; requeues for sandbox room, drains and progress spend none.
-          review-retries: ${AGENT_MAX_RETRIES:5}
+          review-retries: 5
           # A queued run that waited this long orders one band higher, never into the interactive band.
           band-aging: 10m
           # A model call that waited this long for its call pool orders one band higher, never into the interactive band.
@@ -731,6 +731,9 @@ hephaestus:
     # pure helper/subject classes may still load because they do no external work.
     # Flip `enabled` to `true` once credentials and redirect URLs are configured.
     integration:
+        # Signs the state of each integration connection in progress; independent of every webhook secret.
+        oauth-state:
+            secret: ${HEPHAESTUS_INTEGRATION_OAUTH_STATE_SECRET:}
         # The provider event inbox (ProviderEventConsumerProperties). A handled event stays for the replay
         # window, so a provider that sends it again finds it; a dead letter stays for its retention.
         consumer:

@@ -89,6 +89,21 @@ class ConfigurationReadinessEvaluatorTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldRequireAnOAuthStateSecretOfItsOwn() {
+        Map<String, Object> missing = validProperties();
+        missing.remove("hephaestus.integration.oauth-state.secret");
+        Map<String, Object> reused = validProperties();
+        reused.put("hephaestus.integration.oauth-state.secret", reused.get("hephaestus.webhook.secret"));
+
+        assertStatus(
+                evaluateReadiness(missing, true),
+                "integration.oauth-state-secret",
+                ConfigurationStatus.ACTION_REQUIRED);
+        assertStatus(
+                evaluateReadiness(reused, true), "integration.oauth-state-secret", ConfigurationStatus.ACTION_REQUIRED);
+    }
+
+    @Test
     void shouldSatisfyAllChecksForTheServer() {
         assertThat(evaluateReadiness(validProperties(), true))
                 .allMatch(fact -> Set.of(ConfigurationStatus.SATISFIED, ConfigurationStatus.NOT_CONFIGURED)
@@ -339,6 +354,7 @@ class ConfigurationReadinessEvaluatorTest extends BaseUnitTest {
         properties.put("hephaestus.auth.issuer", "https://hephaestus.example.com");
         properties.put("hephaestus.webhook.secret", "0123456789abcdef0123456789abcdef");
         properties.put("hephaestus.webhook.routing.secret", "fedcba9876543210fedcba9876543210");
+        properties.put("hephaestus.integration.oauth-state.secret", "abcdef0123456789abcdef0123456789");
         properties.put("hephaestus.auth.state-cookie-key", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=");
         properties.put("hephaestus.llm.egress.allow-loopback", false);
         properties.put("hephaestus.agent.image.require-digest", true);
