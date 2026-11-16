@@ -11,9 +11,10 @@ import { loader, type VirtualFile } from "fumadocs-core/source";
 import { metaSchema } from "fumadocs-core/source/schema";
 import { parse } from "yaml";
 
+import { migrationEntries } from "./src/lib/migration-entries.ts";
 import { linksWithBasePath } from "./src/lib/page-tree.ts";
 import { callouts, rejectUnparsedAdmonitions, restoreUnusedDirectives } from "./src/lib/plugins.ts";
-import { GUIDES, SITE_URL } from "./src/lib/site.ts";
+import { GUIDES, REPO_URL, SITE_URL } from "./src/lib/site.ts";
 
 /*
  * The Pages workflow builds the latest release tag at the site root with DOCS_CHANNEL=latest, and `main` at `/next/`
@@ -29,6 +30,7 @@ const release = process.env.DOCS_RELEASE?.trim() ?? "";
 const root = import.meta.dirname;
 const PAGE_SOURCES = new Set([".md", ".mdx", ".mmd", ".json"]);
 const PAGE_TREE = "virtual:docs-page-tree";
+const MIGRATION_ENTRIES = "virtual:migration-entries";
 
 async function filesOf(directory: string): Promise<string[]> {
 	const entries = await readdir(directory, { withFileTypes: true });
@@ -111,6 +113,40 @@ const pageTree = (): VitePlugin => ({
 	},
 });
 
+/**
+ * The entries of the migration guide and the pending `.migration` notes, for the `MigrationEntries` component of an
+ * upgrade page. A change writes its operator action once, in its note, and the page lists it. A note that breaks the
+ * rules of `.migration/README.md` fails the build.
+ */
+const migrationGuide = (): VitePlugin => ({
+	name: "hephaestus-migration-entries",
+	resolveId: (id: string) => (id === MIGRATION_ENTRIES ? `\0${MIGRATION_ENTRIES}` : undefined),
+	async load(id: string) {
+		if (id !== `\0${MIGRATION_ENTRIES}`) {
+			return null;
+		}
+		const repository = path.resolve(root, "..");
+		const notes = path.join(repository, ".migration");
+		const read = async (file: string): Promise<string> => {
+			this.addWatchFile(file);
+			return readFile(file, "utf8");
+		};
+		const entries = await readdir(notes);
+		const names = entries.filter((name) => name.endsWith(".md") && name !== "README.md").toSorted();
+		const guide = migrationEntries(
+			await read(path.join(repository, "MIGRATION.md")),
+			await Promise.all(
+				names.map(async (name) => ({
+					file: `.migration/${name}`,
+					source: await read(path.join(notes, name)),
+				})),
+			),
+			`${REPO_URL}/blob/main`,
+		);
+		return `export default ${JSON.stringify(guide)};`;
+	},
+});
+
 export default defineConfig({
 	site: SITE_URL,
 	base,
@@ -161,7 +197,7 @@ export default defineConfig({
 		linkedFiles(),
 	],
 	vite: {
-		plugins: [tailwindcss(), pageTree()],
+		plugins: [tailwindcss(), pageTree(), migrationGuide()],
 		define: {
 			"import.meta.env.DOCS_CHANNEL": JSON.stringify(channel),
 			"import.meta.env.DOCS_RELEASE": JSON.stringify(release),

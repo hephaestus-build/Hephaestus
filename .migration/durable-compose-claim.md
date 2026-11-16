@@ -1,5 +1,8 @@
 #### 🔴 Stop every role to drain legacy reviews
 
+- **When:** before the window
+- **Action:** Follow [Drain legacy reviews before removing gateway affinity](https://docs.hephaestus.build/admin/upgrade-to-1-0#drain-legacy-reviews-before-removing-gateway-affinity).
+
 Before this first upgrade, stop the old servers and let their review drain finish. Keep PostgreSQL running.
 Do not start target servers until no `REVIEW_COMPOSE` run has a live lease.
 Follow [Drain legacy reviews before removing gateway affinity](https://docs.hephaestus.build/admin/upgrade-to-1-0#drain-legacy-reviews-before-removing-gateway-affinity).

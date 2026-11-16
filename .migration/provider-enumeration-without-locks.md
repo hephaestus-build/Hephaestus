@@ -1,5 +1,8 @@
 #### 🔴 Stop every role before the repository enumeration upgrade
 
+- **When:** in the window
+- **Action:** Stop every runtime role before the upgrade. Every replica must record repository access events in the same connection revision.
+
 Stop every server before upgrading, then start all servers with the new release.
 The new code records repository access events in the connection revision, including events that do not change a monitor.
 Every replica must record that revision before repository discovery can trust it.

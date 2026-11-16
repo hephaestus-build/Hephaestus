@@ -275,22 +275,16 @@ export function screenshotProblems(
 }
 
 /**
- * Each migration note must be named on an upgrade page in the admin guide, so that the operator who
- * follows that page meets every required action. The note's heading is its name in the migration guide.
+ * A migration note that stops servers says so in its heading, and its docs links resolve. The docs
+ * build owns the note's shape: docs/src/lib/migration-entries.ts.
  */
 export function migrationNoteProblems(
 	notes: readonly { file: string; source: string }[],
-	upgradePages: string,
 	anchorsOf: (page: string) => ReadonlySet<string> | undefined,
 ): string[] {
 	const problems: string[] = [];
 	for (const { file, source } of notes) {
 		const title = /^#### (?:🔴 )?(?<title>.+)$/mu.exec(source)?.groups?.title?.trim();
-		if (title === undefined) {
-			problems.push(`${file}:1: Start the migration note with a "#### " heading.`);
-		} else if (!upgradePages.includes(title)) {
-			problems.push(`${file}:1: Name "${title}" on an upgrade page in docs/admin/.`);
-		}
 		// The upgrade test and the compatibility guard choose a stopped upgrade only from the heading.
 		if (title !== undefined && !title.startsWith("Stop every role") && stopsRoles(source)) {
 			problems.push(
@@ -399,8 +393,6 @@ if (import.meta.main) {
 			);
 		}
 	}
-	const adminPages = await pagesOf("docs/admin");
-	const upgradePages = adminPages.filter((file) => /^docs\/admin\/upgrade[^/]*\.mdx?$/u.test(file));
 	const migrationEntries = await readdir(path.resolve(repositoryRoot, ".migration"));
 	const notes = await Promise.all(
 		migrationEntries
@@ -409,9 +401,6 @@ if (import.meta.main) {
 				const file = `.migration/${name}`;
 				return { file, source: await readFile(path.resolve(repositoryRoot, file), "utf8") };
 			}),
-	);
-	const upgradeSources = await Promise.all(
-		upgradePages.map(async (file) => readFile(path.resolve(repositoryRoot, file), "utf8")),
 	);
 	// A page is served under its path, or under the `id` in its front matter.
 	const served = new Map<string, string>();
@@ -427,7 +416,7 @@ if (import.meta.main) {
 		const source = served.get(page);
 		return source === undefined ? undefined : headingAnchors(source);
 	};
-	problems.push(...migrationNoteProblems(notes, upgradeSources.join("\n"), anchorsOf));
+	problems.push(...migrationNoteProblems(notes, anchorsOf));
 	if (problems.length > 0) {
 		process.stderr.write(
 			`${problems.join("\n")}\nThe rules: docs/contributor/documentation-guide.mdx.\n`,

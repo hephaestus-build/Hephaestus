@@ -163,7 +163,6 @@ A host on 1.0.0-rc.6 made these changes when it installed that release.
 
 | Where | Before | After | Migration entry |
 | --- | --- | --- | --- |
-| Site file | Fixed `server.databasePool.maximumPoolSize` or `postgresql.parameters.max_connections` | Automatic values or fixed values that hold the target chart’s full connection budget | *Check database connection limits for review recovery* |
 | Site file | `config.monitoring` | `config.sync`, with the same four child settings | *Rename scheduled sync settings* |
 | Site file | `config.auth.bootstrapAdmins`, `config.auth.browserExtensionIds`, `config.auth.passkeys.allowedOrigins`, `config.outline.allowedOrigins` as strings | The same keys as YAML arrays | *Convert chart list values to arrays* |
 | Site file | `config.conversationRetention` | `config.feedbackRetention` | *Choose the feedback retention before you upgrade* |
@@ -185,10 +184,11 @@ A host on 1.0.0-rc.6 made these changes when it installed that release.
 | Image outside the chart | `NATS_*`, `hephaestus.sync.nats.*`, `HEPHAESTUS_WEBHOOK_STREAM_*`, `HEPHAESTUS_INTEGRATION_CONSUMER_INACTIVE_THRESHOLD` | No setting | *Remove the retired sync broker values before upgrading* and *Drain the webhook streams before the upgrade* |
 | Image outside the chart | `HEPHAESTUS_MENTOR_TURN_*`, `HEPHAESTUS_RATE_LIMIT_MENTOR_TURNS_*` | `HEPHAESTUS_CONVERSATION_TURN_*`, `HEPHAESTUS_RATE_LIMIT_CONVERSATION_TURNS_*` | *Stop every role before Ask Hephaestus takes its names* |
 | Server settings | `hephaestus.mentor.*` | `hephaestus.conversation.*` | *Stop every role before Ask Hephaestus takes its names* |
-| Server settings | `hephaestus.auth.api-base-path`, `HEPHAESTUS_AUTH_API_BASE_PATH` | No setting. The server serves the API under `/api`. Outside the chart, your proxy must not remove `/api`. | *Send the API path to the server unchanged* |
 | Monitoring | `mentor_turn_*`, `mentor_live_streams`, `surface="mentor"`, log events `mentor.turn.ended` and `heph.turn.*` | `conversation_turn_*`, `conversation_live_streams`, `surface="conversation"`, `conversation.turn.*` | *Stop every role before Ask Hephaestus takes its names* |
 | API clients | `/api/workspaces/{slug}/mentor/…`, `/api/workspaces/{slug}/agents` | `/api/workspaces/{slug}/conversation/…`, `/api/workspaces/{slug}/model-assignments` | *Stop every role before Ask Hephaestus takes its names* |
 | Custom agent image | An image from an earlier release | An image that you rebuilt from this release | *Rebuild custom agent images* and *Rebuild a custom agent image* |
+
+<MigrationEntries after="1.0.0-rc.7" group="values" />
 
 After the upgraded server delivers sync status hints through PostgreSQL, stop an external NATS broker that only this release used.
 Helm removes the bundled NATS workload but keeps its PersistentVolumeClaim.
@@ -196,30 +196,14 @@ Delete only the confirmed claim of this release, and only when you no longer nee
 
 ### The other migration entries
 
-Each entry of § v1.0.0-rc.6 and of the target release that the table above does not name is in this table.
+Each entry of § v1.0.0-rc.6 and of the target release that the values table does not name is in these tables.
+The second table lists every entry after § v1.0.0-rc.7.
 **When** says where the action goes: before the window, in a step of [the cutover](#cut-over-to-100), or after the upgrade.
 Entries of § v1.0.0-rc.6 apply only to a host on 1.0.0-rc.5 or earlier.
 
 | Migration entry | Section | When | Action |
 | --- | --- | --- | --- |
-| *Use server.stopped instead of server.replicas=0* | Target | Every stopped phase | Stop the servers with `server.stopped=true` where the procedure set `server.replicas=0`. From 1.0.0-rc.8 or earlier, follow [Stopped schema upgrades](./upgrade#stopped-schema-upgrades). |
-| *Stop every role before the provider resource repair upgrade* | Target | Before the window, and after the upgrade | Finish connection authorizations before the window, or start them again after. After the upgrade, open **Instance administration → Provider removals**, and confirm at the provider each removal before you release its block. Replace `integration_provider_teardown_total` with `integration_provider_repair_attempts_total` and `integration_provider_repair_open`. Route `HephaestusProviderRemovalNeedsConfirmation` to an instance admin. |
-| *Stop every role before clearing personal logins from GitHub App installation records* | Target | The window | Stop every server before the migration. The previous server cannot read an installation record without a login. |
-| *Stop every role before the repository enumeration upgrade* | Target | The window | Stop every server before the upgrade. Every replica must record repository access events in the same connection revision. |
-| *Stop every role before changing role-notice delivery* | Target | The window | Use the procedure in that entry. |
-| *Set both encryption keys on a server outside the chart* | Target | Before the window | Outside the chart, set both encryption keys and `SPRING_PROFILES_ACTIVE` on every role. The chart already sets them. |
-| *Stop every role to drain legacy reviews*, *Stop every role to drain legacy reviews before removing gateway affinity* | Target | Before the window | Follow [Drain legacy reviews before removing gateway affinity](#drain-legacy-reviews-before-removing-gateway-affinity). |
-| *Check database connection limits for review recovery* | Target | Before the window | Render the target chart with your values. Set `server.databasePool.maximumPoolSize` to `auto`, or raise a fixed value to the minimum that the chart reports. Check `postgresql.parameters.max_connections` against [Database connections](./sizing#database-connections). |
-| *Stop every role before recording failed and handed-off run outcomes* | Target | The window | Stop every server before the migration. The previous server cannot read the new run outcomes. |
-| *Stop every role before issue types become unique per organization* | Target | The window | Stop every server before the migration. The previous server cannot read the new issue type keys. |
-| *Stop every role before sealing the system secrets with their key identifier* | Target | The window | Stop every server before the migration, and keep the system key unchanged. The migration Job needs that key. The previous server cannot read the new sealed values. |
-| *Stop every role before recording provider-unavailable reviews* | Target | The window | Stop every server before the migration. The previous server cannot read a review with the new stop reason. |
-| *Write erasure recovery manifests as version 2* | Target | Before the window | Add the disconnects and the workspace purges to each erasure recovery manifest, as [Erasure recovery](./erasure-recovery) describes. |
-| *Set a PID limit for each sandbox Pod* | Target | Before the window | Set the kubelet's `podPidsLimit` to 4096 or lower on each sandbox node, as [Sandbox prerequisites](./sandboxes#sandbox-prerequisites) describes. The one-host platform already sets it. |
-| *The Git cache volume keeps room for review checkouts* | Target | Before the window | Render the target chart with your values. If it refuses `server.gitCache.sizeLimit`, raise it to the size that the message names, and the server's `ephemeral-storage` limit with it. Or lower `server.gitCache.snapshotLimit`. The earlier limit for one repository was 8Gi. Now a repository whose checkout and history take more than 2Gi is refused, although the chart renders. For such a repository, raise `server.gitCache.snapshotLimit` and `sizeLimit` with it. |
-| *Update the Slack app's descriptions* | Target | After the upgrade | Copy the two descriptions from the current manifest template into your Slack app settings. No new scope and no reinstall. |
-| *Change the queries that read the agent queue and claim meters* | Target | After the upgrade | Your own queries, alerts and dashboards read the `agent_run_*` meters. |
-| *Treat an absent field as missing in public API responses* | Target | Before the window | Make custom API clients treat a field that a public response leaves out as missing. |
+| *Stop every role before the provider resource repair upgrade* | rc.7 | Before the window, and after the upgrade | Finish connection authorizations before the window, or start them again after. After the upgrade, open **Instance administration → Provider removals**, and confirm at the provider each removal before you release its block. Replace `integration_provider_teardown_total` with `integration_provider_repair_attempts_total` and `integration_provider_repair_open`. Route `HephaestusProviderRemovalNeedsConfirmation` to an instance admin. |
 | *Drain the webhook streams before the upgrade* | rc.6 | Before the window, and step 4 | Before the window, replay the dead letters that you keep with the current release ([Replay a failed webhook event](./webhook-replay)). Plan PostgreSQL space for 3 days of webhook traffic. In your alert routing, remove `HephaestusStreamPollStale`, `HephaestusStreamPollMissing`, `HephaestusStreamBacklog`, `HephaestusStreamConsumerStopped`, `HephaestusWebhookStreamPastAgeBound` and `HephaestusWebhookRetentionBelowAgeBound`, and add `HephaestusProviderEventsWaiting` and `HephaestusProviderEventBacklogUnsampled`. Replace `integration_consumer_nak_total` with `integration_consumer_retry_total`. Step 4 drains the streams. |
 | *Route provider webhooks to the server* | rc.6 | Before the window | In your alert routing, replace `HephaestusWebhookReceiverDown` and `HephaestusWebhookReceiverUnready` with `HephaestusServerDown` and `HephaestusServerUnready`. Remove filters on `runtime.role` from your log queries. Outside the chart, route `/webhooks` to the server. |
 | *Use the canonical webhook receiver base* | rc.6 | Before the window | Remove `WEBHOOK_EXTERNAL_URL` and `hephaestus.webhook.external-url`. |
@@ -252,6 +236,8 @@ Entries of § v1.0.0-rc.6 apply only to a host on 1.0.0-rc.5 or earlier.
 | *Stop every role before correcting unknown issue comment counts* | rc.6 | After the upgrade | Ask the administrators of each affected workspace to run its backfill. Until it finishes, those issues show an unknown comment count. |
 | *Public activity pages count contributors without an account instead of naming them* | rc.6 | After the upgrade | To keep their names, turn on **Show contributors without an account**. |
 | *Remove the retired sync broker values before upgrading* | rc.6 | After the upgrade | Remove the claim of the bundled NATS only after you confirm that nothing uses its data. |
+
+<MigrationEntries after="1.0.0-rc.7" group="entries" />
 
 ## Cut over to 1.0.0
 

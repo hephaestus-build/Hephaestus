@@ -571,7 +571,7 @@ A changeset summary becomes the `CHANGELOG.md` entry **verbatim** — write it i
 No TTY (agents, CI)? `vp exec changeset` is interactive — write the file by hand instead: create
 `.changeset/<slug>.md` with frontmatter `"hephaestus": <bump>` and the summary as the body (see
 `.changeset/README.md`). When action is required, add `.migration/<slug>.md` with the complete
-`#### 🔴 …` guide entry. CI requires the matching slug and `**Operators:**` marker. Never hand-edit
+`#### 🔴 …` guide entry and the fields that `.migration/README.md` names. CI requires the matching slug and `**Operators:**` marker. Never hand-edit
 `CHANGELOG.md` or `MIGRATION.md`. Versioning generates both.
 
 A fragment whose heading starts with `#### 🔴 Stop every role` waives the rule that the previous release runs on the new schema.

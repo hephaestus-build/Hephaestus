@@ -1,5 +1,8 @@
 #### 🔴 Set both encryption keys on a server outside the chart
 
+- **When:** before the window
+- **Action:** Outside the chart, set both encryption keys and `SPRING_PROFILES_ACTIVE` on every role. The chart already sets them.
+
 The server now refuses to start without its system encryption key and its credential encryption key, in every profile. A container of the server image that sets no `SPRING_PROFILES_ACTIVE` also refuses to start.
 
 **Operators:** A deployment through the chart already sets both keys and its profile, and needs no change. Before you upgrade a server outside the chart, set these variables on every role:

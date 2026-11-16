@@ -1,5 +1,8 @@
 #### 🔴 Stop every role before clearing personal logins from GitHub App installation records
 
+- **When:** in the window
+- **Action:** Stop every runtime role before the migration. The previous server cannot read an installation record without a login.
+
 1. Stop every server before the migration, then deploy the matching release.
    After the upgrade, a deleted workspace or an erasure clears a personal account's login from its adopted installation record.
    The previous server reads that login as always present, and it does not know the setup answer for a declined installation.
