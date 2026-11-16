@@ -47,7 +47,7 @@ runs:
     - id: pnpm-setup-1
       if: inputs.install == 'frozen' && steps.pnpm-cache.outputs.cache-hit != 'true'
       continue-on-error: true
-      uses: pnpm/setup@fa36a5ef7dcdefc3a7cb25655c122e00cf6e636e # v3.1.2
+      uses: pnpm/setup@731dfb6463bbd11c11fd0ee11fe00ed0e36d48a1 # v3.2.0
       with:
         cache: false
         cache-dependency-path: pnpm-lock.yaml
@@ -59,7 +59,7 @@ runs:
     - id: pnpm-setup-2
       if: steps.pnpm-setup-1.outcome == 'failure'
       continue-on-error: true
-      uses: pnpm/setup@fa36a5ef7dcdefc3a7cb25655c122e00cf6e636e # v3.1.2
+      uses: pnpm/setup@731dfb6463bbd11c11fd0ee11fe00ed0e36d48a1 # v3.2.0
       with:
         cache: false
         cache-dependency-path: pnpm-lock.yaml
@@ -69,7 +69,7 @@ runs:
       shell: bash
       run: sleep 10
     - if: steps.pnpm-setup-2.outcome == 'failure'
-      uses: pnpm/setup@fa36a5ef7dcdefc3a7cb25655c122e00cf6e636e # v3.1.2
+      uses: pnpm/setup@731dfb6463bbd11c11fd0ee11fe00ed0e36d48a1 # v3.2.0
       with:
         cache: false
         cache-dependency-path: pnpm-lock.yaml
