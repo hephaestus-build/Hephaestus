@@ -35,6 +35,12 @@ public interface ConversationTurnAccess {
     /** The queued turns of every workspace that a person asked, not the system. */
     long countQueuedQuestions();
 
+    /**
+     * The LLM proxy admitted a model call of the turn's current attempt, so readers see a running turn's phase move to
+     * {@link ConversationTurn.Phase#WORKING}. A turn that no longer runs changes nothing.
+     */
+    void modelCallAdmitted(long workspaceId, UUID turnId);
+
     /** @param admission a copy of what the current attempt was admitted with; {@code null} before its admission */
     record TurnState(
             UUID id,

@@ -12,8 +12,10 @@ import de.tum.cit.aet.hephaestus.conversation.Conversation;
 import de.tum.cit.aet.hephaestus.conversation.ConversationLedgerEvents;
 import de.tum.cit.aet.hephaestus.conversation.ConversationLedgerFixtures;
 import de.tum.cit.aet.hephaestus.conversation.ConversationService;
+import de.tum.cit.aet.hephaestus.conversation.ConversationTimeline;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurn;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurnClaims;
+import de.tum.cit.aet.hephaestus.conversation.ConversationTurnDTO;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurnRepository;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurnService;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
@@ -76,6 +78,9 @@ class ConversationTurnCompletionIntegrationTest extends AbstractWorkspaceIntegra
 
     @Autowired
     private ConversationTurnCompletion completion;
+
+    @Autowired
+    private ConversationTimeline timeline;
 
     @Autowired
     private LlmUsageRecorder recorder;
@@ -348,6 +353,37 @@ class ConversationTurnCompletionIntegrationTest extends AbstractWorkspaceIntegra
         assertThat(settled(called))
                 .as("the retry's end settles none of the lost attempt's claims")
                 .isEqualTo("UNCONFIRMED/WRITE_STARTED/true/-");
+    }
+
+    @Test
+    void shouldShowEachAttemptStartingUntilTheProxyAdmitsItsFirstModelCallAndNameTheExhaustedAttempts() {
+        ConversationTurn first = admittedTurn(Duration.ofMinutes(5));
+        assertThat(read(first).phase()).isEqualTo(ConversationTurn.Phase.STARTING);
+        assertThat(read(first).maxAttempts()).isEqualTo(ConversationTurn.MAX_ATTEMPTS);
+
+        proxyCall(first, 100);
+        assertThat(read(first).phase()).isEqualTo(ConversationTurn.Phase.WORKING);
+
+        expire(first);
+        reaper.reap();
+        ConversationTurn second = claims.claimNext().orElseThrow();
+        assertThat(second.getAttempt()).isEqualTo(2);
+        assertThat(read(second).phase())
+                .as("the lost attempt's call does not count for its retry")
+                .isEqualTo(ConversationTurn.Phase.STARTING);
+        proxyCall(second, 100);
+        assertThat(read(second).phase()).isEqualTo(ConversationTurn.Phase.WORKING);
+
+        expire(second);
+        reaper.reap();
+        ConversationTurnDTO failed = read(second);
+        assertThat(failed.status()).isEqualTo(ConversationTurn.Status.FAILED);
+        assertThat(failed.phase()).isNull();
+        assertThat(failed.failureReason()).isEqualTo(ConversationTurn.FailureReason.ATTEMPTS_EXHAUSTED);
+    }
+
+    private ConversationTurnDTO read(ConversationTurn turn) {
+        return timeline.turn(workspace.getId(), account, turn.getId());
     }
 
     /** A claimed attempt admitted at {@link #ADMITTED}'s rates. */

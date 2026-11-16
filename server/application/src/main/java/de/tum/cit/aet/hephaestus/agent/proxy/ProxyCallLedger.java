@@ -168,7 +168,21 @@ class ProxyCallLedger {
             throw new ClaimLost(lost);
         }
         budgetGate.spent(workspaceId);
+        if (attempt.sourceType() == UsageSourceType.CONVERSATION_TURN)
+            turnCallAdmitted(workspaceId, attempt.sourceId());
         return call;
+    }
+
+    /** After the call's row committed, so a failure here cannot refuse the call: readers only see the change late. */
+    private void turnCallAdmitted(long workspaceId, UUID turnId) {
+        try {
+            turns.modelCallAdmitted(workspaceId, turnId);
+        } catch (RuntimeException failed) {
+            log.warn(
+                    "A conversation turn's admitted model call was not published: turnId={}, error={}",
+                    turnId,
+                    failed.getClass().getSimpleName());
+        }
     }
 
     private UUID probeCall(ProxyRouting routing, Bound bound, String upstreamModel) {

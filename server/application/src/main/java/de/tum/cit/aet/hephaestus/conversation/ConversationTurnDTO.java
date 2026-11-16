@@ -38,11 +38,26 @@ public record ConversationTurnDTO(
 
         ConversationTurn.@NonNull Surface surface,
 
+        @Schema(
+                description =
+                        "Where the running attempt stands. STARTING: it prepares, and the server admitted none of its"
+                                + " model calls yet. WORKING: the server admitted a model call of the attempt. Only while the"
+                                + " turn runs.")
+        ConversationTurn.@Nullable Phase phase,
+
+        @Schema(
+                description = "The attempts the turn may take: its first and its retries after a lost holder",
+                requiredMode = RequiredMode.REQUIRED)
+        int maxAttempts,
+
         @Schema(description = "Hephaestus's answer in progress; only while the turn runs") @Nullable
         ConversationTurnPartialDTO partial,
 
         @Schema(description = "Why the turn failed, worded for the developer; only on a failed turn") @Nullable
         String error,
+
+        @Schema(description = "Why the turn failed, for a client to act on; only on a failed turn")
+        ConversationTurn.@Nullable FailureReason failureReason,
 
         @NonNull Instant createdAt,
         @Nullable Instant finishedAt) {}

@@ -34,6 +34,7 @@ function turn(
 		requestId,
 		status,
 		attempt: status === "QUEUED" ? 0 : 1,
+		maxAttempts: 2,
 		surface: "APP",
 		createdAt: new Date(`${DAY}T09:00:00`),
 	};

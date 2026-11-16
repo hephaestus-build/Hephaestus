@@ -93,6 +93,7 @@ describe("parseLiveEvent", () => {
 				requestId: R1,
 				status: "RUNNING",
 				attempt: 1,
+				maxAttempts: 2,
 				surface: "APP",
 				createdAt: "2026-10-08T09:12:00Z",
 				partial: {

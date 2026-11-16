@@ -1256,8 +1256,16 @@ export type ConversationTurn = {
 	 * Why the turn failed, worded for the developer; only on a failed turn
 	 */
 	error?: string;
+	/**
+	 * Why the turn failed, for a client to act on; only on a failed turn
+	 */
+	failureReason?: ConversationTurnFailureReason;
 	finishedAt?: Date;
 	id: string;
+	/**
+	 * The attempts the turn may take: its first and its retries after a lost holder
+	 */
+	maxAttempts: number;
 	/**
 	 * Set when the turn runs in a thread: the top-level message the thread replies to
 	 */
@@ -1266,6 +1274,10 @@ export type ConversationTurn = {
 	 * Hephaestus's answer in progress; only while the turn runs
 	 */
 	partial?: ConversationTurnPartial;
+	/**
+	 * Where the running attempt stands. STARTING: it prepares, and the server admitted none of its model calls yet. WORKING: the server admitted a model call of the attempt. Only while the turn runs.
+	 */
+	phase?: ConversationTurnPhase;
 	/**
 	 * The submission or schedule key; the stimulus entry carries the same value
 	 */
@@ -1277,6 +1289,13 @@ export type ConversationTurn = {
 	 */
 	waitingFor?: ConversationTurnWaitingFor;
 };
+
+export type ConversationTurnFailureReason =
+	| "START_WAIT_EXPIRED"
+	| "ATTEMPTS_EXHAUSTED"
+	| "MODEL_UNAVAILABLE"
+	| "CONTEXT_ERASED"
+	| "UNKNOWN";
 
 /**
  * What Hephaestus is doing in a running turn
@@ -1298,6 +1317,8 @@ export type ConversationTurnPartial = {
 };
 
 export type ConversationTurnPartialActivity = "THINKING" | "WRITING" | "TOOL";
+
+export type ConversationTurnPhase = "STARTING" | "WORKING";
 
 /**
  * A question to Hephaestus from the app

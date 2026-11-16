@@ -2532,6 +2532,10 @@ export const ConversationTurnSchema = {
 			type: "string",
 			description: "Why the turn failed, worded for the developer; only on a failed turn",
 		},
+		failureReason: {
+			$ref: "#/components/schemas/ConversationTurnFailureReason",
+			description: "Why the turn failed, for a client to act on; only on a failed turn",
+		},
 		finishedAt: {
 			type: "string",
 			format: "date-time",
@@ -2539,6 +2543,11 @@ export const ConversationTurnSchema = {
 		id: {
 			type: "string",
 			format: "uuid",
+		},
+		maxAttempts: {
+			type: "integer",
+			format: "int32",
+			description: "The attempts the turn may take: its first and its retries after a lost holder",
 		},
 		parentEntryId: {
 			type: "string",
@@ -2549,6 +2558,11 @@ export const ConversationTurnSchema = {
 		partial: {
 			$ref: "#/components/schemas/ConversationTurnPartial",
 			description: "Hephaestus's answer in progress; only while the turn runs",
+		},
+		phase: {
+			$ref: "#/components/schemas/ConversationTurnPhase",
+			description:
+				"Where the running attempt stands. STARTING: it prepares, and the server admitted none of its model calls yet. WORKING: the server admitted a model call of the attempt. Only while the turn runs.",
 		},
 		requestId: {
 			type: "string",
@@ -2566,7 +2580,27 @@ export const ConversationTurnSchema = {
 				"Why a queued turn has not started. CAPACITY: a server may start it, and every conversation slot of the deployment is taken, so it starts when one is free. Absent when the turn does not wait, waits for an earlier question of its conversation, or waits for a reason that the server does not know, such as a server without a configured conversation turn capacity.",
 		},
 	},
-	required: ["attempt", "conversationId", "createdAt", "id", "requestId", "status", "surface"],
+	required: [
+		"attempt",
+		"conversationId",
+		"createdAt",
+		"id",
+		"maxAttempts",
+		"requestId",
+		"status",
+		"surface",
+	],
+} as const;
+
+export const ConversationTurnFailureReasonSchema = {
+	type: "string",
+	enum: [
+		"START_WAIT_EXPIRED",
+		"ATTEMPTS_EXHAUSTED",
+		"MODEL_UNAVAILABLE",
+		"CONTEXT_ERASED",
+		"UNKNOWN",
+	],
 } as const;
 
 export const ConversationTurnPartialSchema = {
@@ -2596,6 +2630,11 @@ export const ConversationTurnPartialSchema = {
 export const ConversationTurnPartialActivitySchema = {
 	type: "string",
 	enum: ["THINKING", "WRITING", "TOOL"],
+} as const;
+
+export const ConversationTurnPhaseSchema = {
+	type: "string",
+	enum: ["STARTING", "WORKING"],
 } as const;
 
 export const ConversationTurnRequestSchema = {

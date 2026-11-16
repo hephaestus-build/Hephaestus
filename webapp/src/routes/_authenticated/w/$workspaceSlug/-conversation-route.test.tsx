@@ -1032,6 +1032,7 @@ it("shows what the live stream reports: Hephaestus's answer as it arrives and a 
 		surface: "APP",
 		createdAt: "2026-10-09T09:10:00Z",
 		attempt: 1,
+		maxAttempts: 2,
 	};
 	act(() => {
 		stream.open();

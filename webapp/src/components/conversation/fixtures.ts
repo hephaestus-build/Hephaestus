@@ -290,6 +290,7 @@ export function turn(
 		surface: "APP",
 		createdAt: minutesBefore(1),
 		attempt: overrides.status === "QUEUED" ? 0 : 1,
+		maxAttempts: 2,
 		...overrides,
 	};
 }

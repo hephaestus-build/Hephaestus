@@ -13904,12 +13904,21 @@ components:
           type: string
           description: "Why the turn failed, worded for the developer; only on a failed\
             \ turn"
+        failureReason:
+          $ref: "#/components/schemas/ConversationTurnFailureReason"
+          description: "Why the turn failed, for a client to act on; only on a failed\
+            \ turn"
         finishedAt:
           type: string
           format: date-time
         id:
           type: string
           format: uuid
+        maxAttempts:
+          type: integer
+          format: int32
+          description: "The attempts the turn may take: its first and its retries\
+            \ after a lost holder"
         parentEntryId:
           type: string
           format: uuid
@@ -13918,6 +13927,11 @@ components:
         partial:
           $ref: "#/components/schemas/ConversationTurnPartial"
           description: Hephaestus's answer in progress; only while the turn runs
+        phase:
+          $ref: "#/components/schemas/ConversationTurnPhase"
+          description: "Where the running attempt stands. STARTING: it prepares, and\
+            \ the server admitted none of its model calls yet. WORKING: the server\
+            \ admitted a model call of the attempt. Only while the turn runs."
         requestId:
           type: string
           description: The submission or schedule key; the stimulus entry carries
@@ -13939,9 +13953,18 @@ components:
       - conversationId
       - createdAt
       - id
+      - maxAttempts
       - requestId
       - status
       - surface
+    ConversationTurnFailureReason:
+      type: string
+      enum:
+      - START_WAIT_EXPIRED
+      - ATTEMPTS_EXHAUSTED
+      - MODEL_UNAVAILABLE
+      - CONTEXT_ERASED
+      - UNKNOWN
     ConversationTurnPartial:
       type: object
       description: What Hephaestus is doing in a running turn
@@ -13968,6 +13991,11 @@ components:
       - THINKING
       - WRITING
       - TOOL
+    ConversationTurnPhase:
+      type: string
+      enum:
+      - STARTING
+      - WORKING
     ConversationTurnRequest:
       type: object
       description: A question to Hephaestus from the app
