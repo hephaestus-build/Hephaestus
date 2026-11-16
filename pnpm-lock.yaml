@@ -205,8 +205,6 @@ catalogs:
       version: 4.6.7
 
 overrides:
-  follow-redirects@>=1.16.0 <1.16.2: 1.16.2
-  joi@>=17.1.1 <17.13.9: 17.13.9
   mermaid: 12.2.0
   vitest: 5.0.5
   '@vitest/browser': 5.0.5

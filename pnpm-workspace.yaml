@@ -71,10 +71,6 @@ packageExtensions:
       "@hylimo/wasm-libs": 3.0.0-alpha.2
 
 overrides:
-  # CVE-2026-116689.
-  "follow-redirects@>=1.16.0 <1.16.2": 1.16.2
-  # CVE-2026-118772.
-  "joi@>=17.1.1 <17.13.9": 17.13.9
   mermaid: 12.2.0
   vitest: "catalog:"
   "@vitest/browser": "catalog:"
