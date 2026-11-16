@@ -16,7 +16,7 @@ const meta = {
 	argTypes: {
 		state: {
 			control: "select",
-			options: ["PENDING", "ACTIVE", "PAUSED", "REVOKED"],
+			options: ["PENDING", "ACTIVE", "PAUSED", "REVOKED", "ACTIVATING", "FAILED"],
 			description: "The per-channel consent lifecycle state.",
 		},
 	},
@@ -36,3 +36,9 @@ export const Paused: Story = { args: { state: "PAUSED" } };
 
 /** REVOKED — terminal; nothing left to erase. */
 export const Revoked: Story = { args: { state: "REVOKED" } };
+
+/** ACTIVATING — activation queued; waiting for the announcement outbox to confirm. */
+export const Activating: Story = { args: { state: "ACTIVATING" } };
+
+/** FAILED — the outbox delivery failed; admin must retry via the activation dialog. */
+export const ActivationFailed: Story = { args: { state: "FAILED" } };

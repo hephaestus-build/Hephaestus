@@ -39,6 +39,15 @@ public enum ActionKind {
      */
     SLACK_POST(false, false),
 
+    /** A durable Slack DM notice, identified in Slack metadata and retried only after proven absence. */
+    SLACK_NOTICE(false, false),
+
+    /** Joins a registered public Slack channel; membership provides readback after an unknown outcome. */
+    SLACK_JOIN(false, false),
+
+    /** The consent announcement of one Slack channel setup, confirmed before ingestion starts. */
+    SLACK_CONSENT(false, false),
+
     /**
      * Publishes a private product-feedback issue as a new public one, for the instance, on a maintainer's
      * {@code /publish}. The new issue carries a marker, so an attempt whose write may have started looks for it first.

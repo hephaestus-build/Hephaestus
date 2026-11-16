@@ -15574,6 +15574,11 @@ export const SlackChannelConsentEventSchema = {
 	],
 } as const;
 
+export const SlackChannelConsentTargetSchema = {
+	type: "string",
+	enum: ["ACTIVE", "PAUSED", "REVOKED"],
+} as const;
+
 export const SlackMonitoredChannelSchema = {
 	type: "object",
 	description: "An allow-listed Slack channel with its consent state and person opt-out count",
@@ -15630,7 +15635,7 @@ export const SlackMonitoredChannelSchema = {
 
 export const SlackMonitoredChannelConsentStateSchema = {
 	type: "string",
-	enum: ["PENDING", "ACTIVE", "PAUSED", "REVOKED"],
+	enum: ["PENDING", "ACTIVATING", "ACTIVE", "FAILED", "PAUSED", "REVOKED"],
 } as const;
 
 export const SlackScopesSchema = {
@@ -16728,7 +16733,7 @@ export const UpdateSlackChannelConsentRequestSchema = {
 	description: "Transition a Slack channel to a target consent state",
 	properties: {
 		consentState: {
-			$ref: "#/components/schemas/SlackMonitoredChannelConsentState",
+			$ref: "#/components/schemas/SlackChannelConsentTarget",
 			description: "Target consent state",
 		},
 		reason: {

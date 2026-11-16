@@ -74,7 +74,8 @@ class DraftingService implements ProductFeedbackDrafts, ProductFeedbackDraftCall
                 mapper.valueToTree(new Payload(feedbackId, generation)),
                 accountId,
                 DRAFT_ATTEMPTS,
-                now.plus(EXPIRY));
+                now.plus(EXPIRY),
+                null);
     }
 
     @Override

@@ -55,6 +55,7 @@ public class Emails {
                         .set(EmailAdapter.PAYLOAD_EVENT, mapper.valueToTree(event)),
                 address.recipientAccountId(),
                 maxAttempts,
-                address.expiresAt());
+                address.expiresAt(),
+                null);
     }
 }

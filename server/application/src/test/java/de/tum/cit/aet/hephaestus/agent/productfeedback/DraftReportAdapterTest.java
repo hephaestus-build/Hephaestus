@@ -78,7 +78,8 @@ class DraftReportAdapterTest extends BaseUnitTest {
             1L,
             false,
             null,
-            () -> true);
+            () -> true,
+            null);
 
     @BeforeEach
     void setUp() {

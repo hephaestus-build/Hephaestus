@@ -99,7 +99,8 @@ class FeedbackSendTransactionsTest {
                 epoch,
                 false,
                 null,
-                () -> true);
+                () -> true,
+                null);
     }
 
     @Test

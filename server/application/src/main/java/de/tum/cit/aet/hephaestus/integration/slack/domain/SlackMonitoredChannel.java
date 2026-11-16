@@ -10,6 +10,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import java.time.Instant;
+import java.util.UUID;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -36,16 +37,14 @@ import org.jspecify.annotations.Nullable;
 public class SlackMonitoredChannel {
 
     /**
-     * Per-channel consent lifecycle (value-constrained by {@code chk_slack_monitored_channel_consent}):
-     * {@code PENDING → ACTIVE → (PAUSED ⇄ ACTIVE) → REVOKED}. Discovery lands a channel in {@code PENDING};
-     * a workspace admin activates it ({@code SlackChannelConsentService.transition}), which posts the in-channel
-     * consent announcement and stamps {@code consentAnnouncedAt} so ingestion is forward-only (only messages after
-     * the announcement flow). {@code PAUSED} stops ingestion but keeps stored data; {@code REVOKED} erases the
-     * channel's raw + derived data and can only be set up again through a new registration.
+     * Values of {@code chk_slack_monitored_channel_consent}. {@code SlackChannelConsentService} owns
+     * transitions and announcement confirmation.
      */
     public enum ConsentState {
         PENDING,
+        ACTIVATING,
         ACTIVE,
+        FAILED,
         PAUSED,
         REVOKED,
     }
@@ -71,12 +70,20 @@ public class SlackMonitoredChannel {
     @ColumnDefault("'PENDING'")
     private ConsentState consentState = ConsentState.PENDING;
 
+    /** The opaque announcement marker of this setup; explicit retries reuse it. */
+    @Column(name = "consent_announcement_id")
+    private @Nullable UUID consentAnnouncementId;
+
     @Column(name = "consent_announced_at")
     private @Nullable Instant consentAnnouncedAt;
 
+    /** Start of the current monitoring period; completed reconciliation windows do not advance it. */
+    @Column(name = "ingest_after")
+    private @Nullable Instant ingestAfter;
+
     /**
-     * Reconciliation watermark: the newest Slack {@code ts} the history sync has replayed for this channel. Null
-     * until the first completed sync window. Kept as the exact Slack ts string so it composes with the lexicographic
+     * Reconciliation floor: activation and resume exclude the preceding unmonitored period, then each completed
+     * history-sync window advances it. Kept as the exact Slack ts string so it composes with the lexicographic
      * comparisons used by the forward-only gate and the retention sweep.
      */
     @Column(name = "last_history_synced_ts", length = 32)

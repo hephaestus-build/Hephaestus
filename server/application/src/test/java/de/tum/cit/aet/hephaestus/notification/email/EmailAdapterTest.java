@@ -87,10 +87,20 @@ class EmailAdapterTest extends BaseUnitTest {
     /** One outbox attempt of the message under the given idempotency key. */
     private ActionResult execute(EmailAdapter adapter, EmailMessage message, String key) {
         return adapter.execute(new ActionAttempt(
-                UUID.randomUUID(), null, ActionKind.EMAIL, key, payload(message), 1, 1, false, null, () -> {
+                UUID.randomUUID(),
+                null,
+                ActionKind.EMAIL,
+                key,
+                payload(message),
+                1,
+                1,
+                false,
+                null,
+                () -> {
                     fenced++;
                     return fenceAccepts;
-                }));
+                },
+                null));
     }
 
     private static JsonNode payload(EmailMessage message) {

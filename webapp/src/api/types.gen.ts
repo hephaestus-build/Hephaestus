@@ -6615,6 +6615,8 @@ export type SlackChannelConsentEvent = {
 	toState: SlackMonitoredChannelConsentState;
 };
 
+export type SlackChannelConsentTarget = "ACTIVE" | "PAUSED" | "REVOKED";
+
 /**
  * An allow-listed Slack channel with its consent state and person opt-out count
  */
@@ -6653,7 +6655,13 @@ export type SlackMonitoredChannel = {
 	slackTeamId: string;
 };
 
-export type SlackMonitoredChannelConsentState = "PENDING" | "ACTIVE" | "PAUSED" | "REVOKED";
+export type SlackMonitoredChannelConsentState =
+	| "PENDING"
+	| "ACTIVATING"
+	| "ACTIVE"
+	| "FAILED"
+	| "PAUSED"
+	| "REVOKED";
 
 /**
  * The Slack scopes that Hephaestus requests and the workspace's Slack token does not hold
@@ -7334,7 +7342,7 @@ export type UpdateSlackChannelConsentRequest = {
 	/**
 	 * Target consent state
 	 */
-	consentState: SlackMonitoredChannelConsentState;
+	consentState: SlackChannelConsentTarget;
 	/**
 	 * Optional free-text reason recorded in the immutable audit trail
 	 */

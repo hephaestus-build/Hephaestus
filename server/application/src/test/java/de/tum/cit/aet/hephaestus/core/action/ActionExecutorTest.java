@@ -125,7 +125,7 @@ class ActionExecutorTest extends BaseUnitTest {
         ActionResult result = executor(attempt -> {
                     throw new IllegalStateException("socket closed");
                 })
-                .run(new ActionStore.Claim(ID, null, ActionKind.FILE_ISSUE, "key", "{}", 2, 7L, true, null));
+                .run(new ActionStore.Claim(ID, null, ActionKind.FILE_ISSUE, "key", "{}", 2, 7L, true, null, null));
 
         assertThat(result).isEqualTo(new ActionResult.Reread(ActionExecutor.backoff(2)));
     }
@@ -178,7 +178,7 @@ class ActionExecutorTest extends BaseUnitTest {
                         if (failure) throw new IllegalStateException("adapter failed");
                         return new ActionResult.Done(null);
                     })
-                    .run(new ActionStore.Claim(ID, 42L, ActionKind.EMAIL, "key", "{}", 3, 7L, false, null));
+                    .run(new ActionStore.Claim(ID, 42L, ActionKind.EMAIL, "key", "{}", 3, 7L, false, null, null));
 
             assertThat(during.get())
                     .containsEntry("action.id", ID.toString())
@@ -222,6 +222,6 @@ class ActionExecutorTest extends BaseUnitTest {
     }
 
     private static ActionStore.Claim claim(boolean writeStarted) {
-        return new ActionStore.Claim(ID, null, ActionKind.EMAIL, "key", "{}", 1, 7L, writeStarted, null);
+        return new ActionStore.Claim(ID, null, ActionKind.EMAIL, "key", "{}", 1, 7L, writeStarted, null, null);
     }
 }

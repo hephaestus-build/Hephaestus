@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.core.action;
 
 import de.tum.cit.aet.hephaestus.core.TimeOrderedIds;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collection;
@@ -36,7 +37,8 @@ class ActionStore {
             int attempts,
             long epoch,
             boolean writeStarted,
-            @Nullable String readbackRef) {}
+            @Nullable String readbackRef,
+            @Nullable String nativeRecipient) {}
 
     /** The state an action moved to, with its reason once it ended. */
     record Settled(
@@ -65,6 +67,19 @@ class ActionStore {
     private final AgentActionRepository actions;
     private final ObjectMapper mapper;
 
+    @Transactional(propagation = Propagation.MANDATORY)
+    public int eraseRecipient(long workspaceId, PersonIdentity recipient) {
+        return actions.eraseRecipient(workspaceId, mapper.writeValueAsString(recipient));
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public int eraseKinds(long workspaceId, Collection<ActionKind> kinds) {
+        return kinds.isEmpty()
+                ? 0
+                : actions.eraseKinds(
+                        workspaceId, kinds.stream().map(ActionKind::name).toList());
+    }
+
     /** Adds the action in the caller's transaction, or returns the one already enqueued under its key. */
     @Transactional
     public UUID enqueue(ActionRequest request) {
@@ -88,6 +103,7 @@ class ActionStore {
                 request.idempotencyKey(),
                 mapper.writeValueAsString(request.payload()),
                 request.subjectAccountId(),
+                request.nativeRecipient() == null ? null : mapper.writeValueAsString(request.nativeRecipient()),
                 request.maxAttempts(),
                 request.expiresAt(),
                 delay.toSeconds());
@@ -121,6 +137,7 @@ class ActionStore {
                         request.idempotencyKey(),
                         mapper.writeValueAsString(request.payload()),
                         request.subjectAccountId(),
+                        request.nativeRecipient() == null ? null : mapper.writeValueAsString(request.nativeRecipient()),
                         request.maxAttempts(),
                         request.expiresAt(),
                         lease.toSeconds())
@@ -259,6 +276,7 @@ class ActionStore {
                 row.getAttempts(),
                 row.getEpoch(),
                 row.getWriteStarted(),
-                row.getReadbackRef());
+                row.getReadbackRef(),
+                row.getNativeRecipient());
     }
 }

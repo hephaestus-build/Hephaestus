@@ -45,6 +45,7 @@ class PublishReportAdapter implements ActionAdapter {
                 mapper.valueToTree(new Payload(feedbackId)),
                 accountId,
                 MAX_ATTEMPTS,
+                null,
                 null);
     }
 

@@ -24,7 +24,7 @@ import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannel.
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannelRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackParticipantConsentRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackWorkspaceResolver;
-import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackMessageService;
+import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackInteractiveReplyAdapter;
 import de.tum.cit.aet.hephaestus.practices.spi.ConversationReadinessQuery;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceSummaryQuery;
@@ -58,7 +58,7 @@ class SlackAppHomeServiceTest extends BaseUnitTest {
     private ConversationAdmission conversationAdmission;
 
     @Mock
-    private SlackMessageService messageService;
+    private SlackInteractiveReplyAdapter messageService;
 
     @Mock
     private SlackOnboardingService onboardingService;

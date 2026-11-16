@@ -39,7 +39,7 @@ interface AgentActionRepository extends Repository<AgentAction, UUID> {
 
     String CLAIMED = """
             SELECT a.id AS "id", a.workspace_id AS "workspaceId", a.kind AS "kind", a.idempotency_key AS "idempotencyKey",
-            a.payload::text AS "payload", a.attempts AS "attempts", a.lease_epoch AS "epoch",
+            a.payload::text AS "payload", a.native_recipient::text AS "nativeRecipient", a.attempts AS "attempts", a.lease_epoch AS "epoch",
             a.write_started_at IS NOT NULL AS "writeStarted", a.readback_ref AS "readbackRef"
             """;
 
@@ -67,6 +67,9 @@ interface AgentActionRepository extends Repository<AgentAction, UUID> {
         String getIdempotencyKey();
 
         String getPayload();
+
+        @Nullable
+        String getNativeRecipient();
 
         int getAttempts();
 
@@ -101,9 +104,9 @@ interface AgentActionRepository extends Repository<AgentAction, UUID> {
     @Query(value = """
             WITH inserted AS (
               INSERT INTO agent_action (id, workspace_id, kind, lane_key, idempotency_key, state, payload,
-                subject_account_id, max_attempts, next_attempt_at, expires_at, created_at, updated_at)
+                subject_account_id, native_recipient, max_attempts, next_attempt_at, expires_at, created_at, updated_at)
               VALUES (:id, CAST(:workspaceId AS bigint), :kind, :laneKey, :key, 'ADMITTED', CAST(:payload AS jsonb),
-                CAST(:subject AS bigint), :maxAttempts, clock_timestamp() + make_interval(secs => :delay),
+                CAST(:subject AS bigint), CAST(:nativeRecipient AS jsonb), :maxAttempts, clock_timestamp() + make_interval(secs => :delay),
                 CAST(:expiresAt AS timestamptz), clock_timestamp(), clock_timestamp())
               ON CONFLICT (idempotency_key) DO NOTHING
               RETURNING id)
@@ -117,6 +120,7 @@ interface AgentActionRepository extends Repository<AgentAction, UUID> {
             @Param("key") String idempotencyKey,
             @Param("payload") String payload,
             @Param("subject") @Nullable Long subjectAccountId,
+            @Param("nativeRecipient") @Nullable String nativeRecipient,
             @Param("maxAttempts") int maxAttempts,
             @Param("expiresAt") @Nullable Instant expiresAt,
             @Param("delay") long delaySeconds);
@@ -215,10 +219,10 @@ interface AgentActionRepository extends Repository<AgentAction, UUID> {
     @Query(value = """
             WITH a AS (
               INSERT INTO agent_action (id, workspace_id, kind, lane_key, idempotency_key, state, payload,
-                subject_account_id, attempts, max_attempts, next_attempt_at, expires_at, lease_epoch, leased_until,
+                subject_account_id, native_recipient, attempts, max_attempts, next_attempt_at, expires_at, lease_epoch, leased_until,
                 created_at, updated_at)
               VALUES (:id, CAST(:workspaceId AS bigint), :kind, :laneKey, :key, 'EXECUTING', CAST(:payload AS jsonb),
-                CAST(:subject AS bigint), 1, :maxAttempts, clock_timestamp(), CAST(:expiresAt AS timestamptz), 1,
+                CAST(:subject AS bigint), CAST(:nativeRecipient AS jsonb), 1, :maxAttempts, clock_timestamp(), CAST(:expiresAt AS timestamptz), 1,
                 clock_timestamp() + make_interval(secs => :lease), clock_timestamp(), clock_timestamp())
               ON CONFLICT (idempotency_key) DO NOTHING
               RETURNING *)
@@ -231,6 +235,7 @@ interface AgentActionRepository extends Repository<AgentAction, UUID> {
             @Param("key") String idempotencyKey,
             @Param("payload") String payload,
             @Param("subject") @Nullable Long subjectAccountId,
+            @Param("nativeRecipient") @Nullable String nativeRecipient,
             @Param("maxAttempts") int maxAttempts,
             @Param("expiresAt") @Nullable Instant expiresAt,
             @Param("lease") long leaseSeconds);
@@ -467,4 +472,15 @@ interface AgentActionRepository extends Repository<AgentAction, UUID> {
                AND kind IN (:kinds) AND kind <> 'SLACK_POST'
             """, nativeQuery = true)
     int deleteEndedBefore(@Param("days") int retentionDays, @Param("kinds") Collection<String> kinds);
+
+    @Modifying
+    @Query(
+            value =
+                    "DELETE FROM agent_action WHERE workspace_id=:workspace AND native_recipient IS NOT NULL AND (native_recipient->>'subject')=(CAST(:recipient AS jsonb)->>'subject') AND native_recipient=CAST(:recipient AS jsonb)",
+            nativeQuery = true)
+    int eraseRecipient(@Param("workspace") long workspaceId, @Param("recipient") String recipient);
+
+    @Modifying
+    @Query(value = "DELETE FROM agent_action WHERE workspace_id=:workspace AND kind IN (:kinds)", nativeQuery = true)
+    int eraseKinds(@Param("workspace") long workspaceId, @Param("kinds") List<String> kinds);
 }

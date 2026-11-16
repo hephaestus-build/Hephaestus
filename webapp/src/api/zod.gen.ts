@@ -4791,9 +4791,13 @@ export const zReusedScanReportItem = z.object({
 	summary: z.string().nullable(),
 });
 
+export const zSlackChannelConsentTarget = z.enum(["ACTIVE", "PAUSED", "REVOKED"]);
+
 export const zSlackMonitoredChannelConsentState = z.enum([
 	"PENDING",
+	"ACTIVATING",
 	"ACTIVE",
+	"FAILED",
 	"PAUSED",
 	"REVOKED",
 ]);
@@ -5625,7 +5629,7 @@ export const zUpdateSilentModeRequest = z.object({
  * Transition a Slack channel to a target consent state
  */
 export const zUpdateSlackChannelConsentRequest = z.object({
-	consentState: zSlackMonitoredChannelConsentState,
+	consentState: zSlackChannelConsentTarget,
 	reason: z.string().min(0).max(2000).optional(),
 });
 

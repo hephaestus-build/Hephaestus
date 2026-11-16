@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.core.action;
 
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
 import java.util.Arrays;
@@ -106,7 +107,10 @@ public final class ActionTestSupport {
                                                 + " AND leased_until > clock_timestamp() + interval '60 seconds'",
                                         claim.id(),
                                         claim.epoch())
-                                == 1));
+                                == 1,
+                        claim.nativeRecipient() == null
+                                ? null
+                                : mapper.readValue(claim.nativeRecipient(), PersonIdentity.class)));
     }
 
     /**
@@ -193,7 +197,7 @@ public final class ActionTestSupport {
                                          OR (d.state = 'ADMITTED' AND b.id < d.id AND b.state IN ('PROPOSED', 'ADMITTED'))))
                     ORDER BY d.id LIMIT 1)
                 RETURNING c.id, c.workspace_id, c.kind, c.idempotency_key, c.payload::text AS payload, c.attempts,
-                          c.lease_epoch, c.write_started_at IS NOT NULL AS write_started, c.readback_ref
+                          c.lease_epoch, c.write_started_at IS NOT NULL AS write_started, c.readback_ref, c.native_recipient::text AS native_recipient
                 """,
                 (rs, row) -> new ActionStore.Claim(
                         rs.getObject("id", UUID.class),
@@ -204,7 +208,8 @@ public final class ActionTestSupport {
                         rs.getInt("attempts"),
                         rs.getLong("lease_epoch"),
                         rs.getBoolean("write_started"),
-                        rs.getString("readback_ref")),
+                        rs.getString("readback_ref"),
+                        rs.getString("native_recipient")),
                 laneKey);
         return claims.stream().findFirst();
     }
