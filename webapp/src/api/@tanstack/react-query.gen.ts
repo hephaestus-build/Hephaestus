@@ -216,6 +216,7 @@ export { bindPracticeGroupMutation } from "./react-query/bindPracticeGroup.gen.j
 export { callbackGetOptions, callbackGetQueryKey } from "./react-query/callbackGet.gen.js";
 export { callbackPostMutation } from "./react-query/callbackPost.gen.js";
 export { cancelReviewMutation } from "./react-query/cancelReview.gen.js";
+export { checkPracticeFilesMutation } from "./react-query/checkPracticeFiles.gen.js";
 export { checkResearchRemovalsMutation } from "./react-query/checkResearchRemovals.gen.js";
 export { claimGitHubInstallationMutation } from "./react-query/claimGitHubInstallation.gen.js";
 export { clearConversationVoteMutation } from "./react-query/clearConversationVote.gen.js";
@@ -258,6 +259,10 @@ export {
 	downloadDataExportOptions,
 	downloadDataExportQueryKey,
 } from "./react-query/downloadDataExport.gen.js";
+export {
+	downloadPracticeFilesOptions,
+	downloadPracticeFilesQueryKey,
+} from "./react-query/downloadPracticeFiles.gen.js";
 export { editMyProductFeedbackDraftMutation } from "./react-query/editMyProductFeedbackDraft.gen.js";
 export { exchangeClientSignInMutation } from "./react-query/exchangeClientSignIn.gen.js";
 export {

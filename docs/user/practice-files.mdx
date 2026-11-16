@@ -1,0 +1,80 @@
+---
+title: Practice files
+description: The folder of files that holds one practice, the fields of its front matter, and how to download and check a practice as files.
+page_type: reference
+---
+
+A practice can be written as a folder of files.
+The files hold the same definition that the practice editor saves.
+A folder is a second way to write a practice, not a second kind of practice.
+
+## Download a practice as files
+
+1. Open **Practices**.
+2. Open **More actions** on the practice's row, and select **Download as files**.
+
+You get a ZIP archive with one folder, named after the practice's slug.
+An MCP client gets the same files with the tool `export_practice` ([Connect MCP clients](/admin/mcp-clients)).
+
+## Check a practice folder
+
+The MCP tool `check_practice_files` checks a folder without saving it, and calls no model.
+It returns each problem with its file, line and column.
+The check applies the same rules as a save in the practice editor.
+
+## The folder
+
+The folder name is the practice's slug: lowercase letters and digits, with single hyphens.
+
+| File | Holds | Required |
+| --- | --- | --- |
+| `practice.md` | The front matter, then the criteria as the Markdown body | Yes |
+| `guide.md` | The text of the **Guide** tab | No |
+| `figures/<name>.svg` | A figure of the guide. `guide.md` shows it by its path, `figures/<name>.svg`. [Practice visual rules](./practice-visual-rules.mdx) has the syntax. | No |
+| `visual.svg` | The practice visual | No |
+| `script.ts` | The practice script | No |
+
+A folder holds no other files.
+Each file is at most 128 KiB, and the folder is at most 256 KiB.
+[Practice visual rules](./practice-visual-rules.mdx) lists what a visual, a guide and a figure can contain.
+
+## The front matter
+
+`practice.md` starts with a line `---`, then the YAML front matter, then another line `---`.
+Everything after the second `---` is the criteria.
+
+```markdown
+---
+format: hephaestus.practice/1
+name: Changesets speak to the reader
+kind: scm.pull_request
+reviewOn:
+  events: [scm.pull_request.opened, scm.pull_request.ready]
+about: AUTHOR
+reads:
+  contract: 3.0.0
+  sources:
+    - { source: scm.pull-request.core, need: REQUIRED }
+    - { source: scm.pull-request.diff, need: REQUIRED }
+reviewedBy:
+  by: HEPHAESTUS
+---
+REVIEW FOCUS: each changeset is a release note for an operator or a user.
+```
+
+| Key | Practice editor field | When you leave it out |
+| --- | --- | --- |
+| `format` | none | Required. Use `hephaestus.practice/1`. |
+| `name` | Name | Required |
+| `kind` | The kind of work that the practice reviews | Required |
+| `group` | Group, by its slug | The practice has no group. |
+| `reviewOn` | **Review on** (`events`) and **When** (`state`) | Required. Without `state`, every state matches. |
+| `about` | **About** | Required. `null` means **The work**. |
+| `appliesWhen` | **Applies when** | The practice applies to all work of its kind. |
+| `reads` | **Reads** | Required |
+| `reviewedBy` | **Reviewed by** (`by`, `humanReason`, `limits`) | Required. Without `limits`, there are none. |
+| `lineNotes` | Line notes | `false` |
+| `scan` | Scan settings | The practice has no scan. |
+| `guidance` | **Why it matters** (`whyItMatters`), **What good looks like** (`whatGoodLooksLike`), **Going well** (`goingWell`), and the description of the visual (`visualAlt`) | No guidance text. `visualAlt` is required with `visual.svg`. |
+
+Hephaestus refuses a key that is not in this table, and a `format` that it does not know.

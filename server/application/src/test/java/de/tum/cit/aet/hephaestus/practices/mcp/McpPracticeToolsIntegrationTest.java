@@ -41,6 +41,14 @@ class McpPracticeToolsIntegrationTest extends RealAuthIntegrationTest {
             {"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "list_practices", "arguments": {}}}
             """;
 
+    private static final String EXPORT_PRACTICE = """
+            {"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "export_practice", "arguments": {"slug": "any-practice"}}}
+            """;
+
+    private static final String CHECK_PRACTICE_FILES = """
+            {"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "check_practice_files", "arguments": {"slug": "any-practice", "files": {"practice.md": "x"}}}}
+            """;
+
     private static final String LIST_MEMBERS = """
             {"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "list_members", "arguments": {}}}
             """;
@@ -162,7 +170,7 @@ class McpPracticeToolsIntegrationTest extends RealAuthIntegrationTest {
         membershipRepository.save(membership);
 
         // list_members stands for a handler that any member may call, and still refuses a member.
-        for (String call : List.of(LIST_PRACTICES, LIST_MEMBERS)) {
+        for (String call : List.of(LIST_PRACTICES, LIST_MEMBERS, EXPORT_PRACTICE, CHECK_PRACTICE_FILES)) {
             flow.callTool(accessToken, workspace.getWorkspaceSlug(), call)
                     .expectStatus()
                     .isOk()

@@ -4274,6 +4274,70 @@ export type PracticeDefinitionOptions = {
 
 export type PracticeDeliveryStatus = "ACTIVE" | "PAUSED";
 
+/**
+ * The result of checking a practice folder. Nothing was saved, and no model was called.
+ */
+export type PracticeFileCheck = {
+	/**
+	 * The group slug that the folder names, when the folder is valid and names one
+	 */
+	groupSlug?: string;
+	/**
+	 * The item kind that the practice reviews, when the folder is valid
+	 */
+	kind?: string;
+	/**
+	 * The practice name, when the folder is valid
+	 */
+	name?: string;
+	/**
+	 * Why the folder cannot become a practice. Empty when it is valid
+	 */
+	problems?: Array<PracticeFileProblem>;
+	/**
+	 * Whether the folder is a valid practice
+	 */
+	valid: boolean;
+};
+
+/**
+ * The files of one practice folder, by path relative to the folder
+ */
+export type PracticeFileCheckRequest = {
+	/**
+	 * File contents by path, such as practice.md, guide.md, visual.svg, script.ts and figures/<name>.svg
+	 */
+	files: {
+		[key: string]: string;
+	};
+};
+
+/**
+ * One reason why a practice folder cannot become a practice
+ */
+export type PracticeFileProblem = {
+	/**
+	 * Extensible enum: a client must accept other values.
+	 */
+	code?: string;
+	/**
+	 * The column, counting from 1, when the problem has one
+	 */
+	column?: number;
+	/**
+	 * The file, relative to the practice folder, such as practice.md
+	 */
+	file?: string;
+	/**
+	 * The line, counting from 1, when the problem has one
+	 */
+	line?: number;
+	/**
+	 * What to change, in plain words
+	 */
+	message?: string;
+};
+
 export type PracticeGroup = {
 	catalogOrigin: CatalogOrigin;
 	color: string | null;
@@ -16758,6 +16822,52 @@ export type SetPracticeFeedbackModeResponses = {
 
 export type SetPracticeFeedbackModeResponse =
 	SetPracticeFeedbackModeResponses[keyof SetPracticeFeedbackModeResponses];
+
+export type CheckPracticeFilesData = {
+	body: PracticeFileCheckRequest;
+	path: {
+		/**
+		 * Workspace slug
+		 */
+		workspaceSlug: string;
+		practiceSlug: string;
+	};
+	query?: never;
+	url: "/workspaces/{workspaceSlug}/practices/{practiceSlug}/file-check";
+};
+
+export type CheckPracticeFilesResponses = {
+	/**
+	 * OK
+	 */
+	200: PracticeFileCheck;
+};
+
+export type CheckPracticeFilesResponse =
+	CheckPracticeFilesResponses[keyof CheckPracticeFilesResponses];
+
+export type DownloadPracticeFilesData = {
+	body?: never;
+	path: {
+		/**
+		 * Workspace slug
+		 */
+		workspaceSlug: string;
+		practiceSlug: string;
+	};
+	query?: never;
+	url: "/workspaces/{workspaceSlug}/practices/{practiceSlug}/files";
+};
+
+export type DownloadPracticeFilesResponses = {
+	/**
+	 * A ZIP archive with the practice folder
+	 */
+	200: Blob | File;
+};
+
+export type DownloadPracticeFilesResponse =
+	DownloadPracticeFilesResponses[keyof DownloadPracticeFilesResponses];
 
 export type MovePracticeData = {
 	body: MovePracticeRequest;

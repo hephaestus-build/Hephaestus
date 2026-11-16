@@ -19,4 +19,11 @@ public @interface McpToolFor {
 
     /** The handler method's name; it is unique within the controller. */
     String method();
+
+    /**
+     * Whether the handler is a POST only because it takes a request body, and saves nothing, as a check does. The
+     * handler is then {@code @AuditExempt}, and the tool reads: it needs only {@code practices:read} and repeats the
+     * handler's {@code @AuditExempt}.
+     */
+    boolean savesNothing() default false;
 }

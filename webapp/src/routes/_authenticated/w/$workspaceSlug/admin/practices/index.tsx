@@ -8,7 +8,9 @@ import {
 import { createFileRoute, Link, retainSearchParams } from "@tanstack/react-router";
 import { ListChecks } from "lucide-react";
 import { type ReactNode, useState } from "react";
+import { downloadPracticeFiles } from "@/api/sdk.gen";
 import { currentDefinition } from "@/components/admin/practices/practice-definition-fields";
+import { saveBlobFile } from "@/lib/download";
 import { toast } from "@/lib/toast";
 
 import {
@@ -246,6 +248,21 @@ function PracticeCatalogRoute() {
 
 	const [deletingGroup, setDeletingGroup] = useState<PracticeGroup | null>(null);
 	const [deletingPractice, setDeletingPractice] = useState<Practice | null>(null);
+	const downloadPractice = useMutation({
+		mutationFn: async (practiceSlug: string) => {
+			const { data } = await downloadPracticeFiles({
+				path: { workspaceSlug, practiceSlug },
+				parseAs: "blob",
+				throwOnError: true,
+			});
+			if (!(data instanceof Blob)) {
+				throw new Error("The download did not return a ZIP archive.");
+			}
+			saveBlobFile(data, `${practiceSlug}.zip`);
+		},
+		onError: () =>
+			toast.error("We could not download the practice. Nothing was changed. Try again."),
+	});
 	const [staleLevelKey, setStaleLevelKey] = useState<string | null>(null);
 	const [conflictSlug, setConflictSlug] = useState<string | null>(null);
 	const [editorGeneration, setEditorGeneration] = useState(0);
@@ -513,6 +530,11 @@ function PracticeCatalogRoute() {
 						void updateGroup(groupSlug, patch).catch(() => undefined);
 					}}
 					onDeletePractice={setDeletingPractice}
+					onDownloadPractice={(practice) => {
+						if (!downloadPractice.isPending) {
+							downloadPractice.mutate(practice.slug);
+						}
+					}}
 					onMovePractice={(practiceSlug, groupSlug, position) =>
 						catalog.movePractice.mutate({
 							path: { workspaceSlug, practiceSlug },

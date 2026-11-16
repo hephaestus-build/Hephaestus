@@ -117,7 +117,7 @@ public final class PracticeGuidanceRules {
     private static final Pattern CLASS_SEPARATOR = Pattern.compile("\\s+");
 
     private static final Pattern FIGURE_NAME = Pattern.compile("[a-z0-9]+(?:-[a-z0-9]+)*");
-    private static final Pattern FIGURE_SOURCE = Pattern.compile("figures/(" + FIGURE_NAME.pattern() + ")\\.svg");
+    static final Pattern FIGURE_SOURCE = Pattern.compile("figures/(" + FIGURE_NAME.pattern() + ")\\.svg");
     private static final Pattern WEB_LINK = Pattern.compile("https?://\\S+", Pattern.CASE_INSENSITIVE);
 
     private static final Parser MARKDOWN = Parser.builder()
@@ -277,7 +277,7 @@ public final class PracticeGuidanceRules {
         return alt.toString().strip();
     }
 
-    private static void validateSvg(String subject, String svg) {
+    static void validateSvg(String subject, String svg) {
         if (svg.getBytes(StandardCharsets.UTF_8).length > MAX_SVG_BYTES) {
             throw new InvalidInputException(
                     subject + " is larger than " + MAX_SVG_BYTES / 1024 + " KB. Simplify the drawing.");

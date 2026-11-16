@@ -107,6 +107,8 @@ export interface WorkspacePracticeCatalogProps {
 	onReorderGroups: (orderedSlugs: string[]) => void;
 	onSetGroupVisual: (slug: string, patch: { icon?: string; color?: string }) => void;
 	onDeletePractice: (practice: Practice) => void;
+	/** Saves the practice as a ZIP archive of its folder of files. */
+	onDownloadPractice: (practice: Practice) => void;
 	onMovePractice: (practiceSlug: string, groupSlug: string | null, position: number) => void;
 	library?: PracticeLibrary;
 }
@@ -126,6 +128,7 @@ export function WorkspacePracticeCatalog({
 	onReorderGroups,
 	onSetGroupVisual,
 	onDeletePractice,
+	onDownloadPractice,
 	onMovePractice,
 	library,
 }: WorkspacePracticeCatalogProps) {
@@ -272,6 +275,7 @@ export function WorkspacePracticeCatalog({
 						actionTriggerRef={actionTriggerRef}
 						pending={pending.practiceSlugs.has(row.slug)}
 						onDelete={onDeletePractice}
+						onDownload={onDownloadPractice}
 					/>
 				)}
 				renderEntryPreview={(row) => (
@@ -493,6 +497,7 @@ function PracticeActions({
 	actionTriggerRef,
 	pending,
 	onDelete,
+	onDownload,
 }: {
 	practice: Practice;
 	workspaceSlug: string;
@@ -501,6 +506,7 @@ function PracticeActions({
 	actionTriggerRef: ActionTriggerRef;
 	pending: boolean;
 	onDelete: (practice: Practice) => void;
+	onDownload: (practice: Practice) => void;
 }) {
 	return (
 		<DropdownMenu>
@@ -520,6 +526,7 @@ function PracticeActions({
 				<DropdownMenuItem render={<DetailStackLink entry={practiceFormLevel(practice.slug)} />}>
 					Edit practice
 				</DropdownMenuItem>
+				<DropdownMenuItem onClick={() => onDownload(practice)}>Download as files</DropdownMenuItem>
 				<DropdownMenuSeparator />
 				<DropdownMenuItem
 					render={

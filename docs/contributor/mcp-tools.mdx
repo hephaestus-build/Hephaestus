@@ -17,6 +17,8 @@ The tool runs on the request thread, so the workspace context and the authentica
 1. **Choose the HTTP handler that the tool stands for.** A tool adds no second path: it calls that handler's service.
    Declare it on the class with `@McpToolFor(controller = …, method = "…")`.
    A handler that needs `@RequiresRecentSignIn` or the instance-admin role cannot have a tool.
+   A POST handler that only takes a body and saves nothing, such as a check, is `@AuditExempt`.
+   Its tool is a read: declare `savesNothing = true` and put the same `@AuditExempt` on `call`.
 2. **Put the tool in the module of the handler**, in its `mcp` package, such as `practices.mcp`.
    The module allows `core::mcp-spi` in its `package-info.java`.
 3. **Put `@RequireAtLeastWorkspaceAdmin` on the `call` method.** Every tool needs the admin role, even if its handler lets any member read.
