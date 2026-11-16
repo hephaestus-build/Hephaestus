@@ -391,8 +391,9 @@ function PracticeProfile() {
 					}
 				}
 				tourAction={
-					// Offered once the page has loaded: until then the tour has no real data to speak from.
-					readOnly || page.status !== "ready" ? undefined : (
+					// The page header offers it once the page has loaded: until then the tour has no real data
+					// to speak from.
+					readOnly ? undefined : (
 						<Button
 							pending={tourLoading}
 							variant="quiet"

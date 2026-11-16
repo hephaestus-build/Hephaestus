@@ -325,7 +325,8 @@ export function PracticeProfileTour({
 							still={still}
 							reserveTop={step?.example !== undefined}
 						>
-							<header className="flex items-start justify-between gap-3 border-b px-4 py-3">
+							{/* A div, not a header: a header outside a sectioning element is a second banner landmark. */}
+							<div className="flex items-start justify-between gap-3 border-b px-4 py-3">
 								<div className="flex min-w-0 flex-col gap-2">
 									<Dialog.Title className="font-semibold">Guided tour</Dialog.Title>
 									{step && chapter && (
@@ -343,7 +344,7 @@ export function PracticeProfileTour({
 								>
 									<XIcon aria-hidden />
 								</Dialog.Close>
-							</header>
+							</div>
 							<div
 								ref={body}
 								// A keyboard reaches the words of a long step, where the guide scrolls (WCAG 2.1.1).
