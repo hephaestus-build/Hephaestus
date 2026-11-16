@@ -16,7 +16,7 @@ import { type ActionsLanguage, openActionsLanguage } from "./lib/actions-languag
 import { requestArtifact } from "./lib/artifact-http.ts";
 import { asArray, asRecord, isRecord, parseJson } from "./lib/json.ts";
 import { CAPTURE_LIMIT_BYTES } from "./lib/process.ts";
-import { prepareShellCheck } from "./lib/shellcheck.ts";
+import { errexitDisabled, prepareShellCheck } from "./lib/shellcheck.ts";
 
 /** Actionlint passes these to ShellCheck too: each misreads a masked expression or a runner variable. */
 const SHELLCHECK_EXCLUDED = "SC1091,SC2194,SC2050,SC2154,SC2157";
@@ -118,6 +118,18 @@ function interpreter(shell: string): "bash" | "sh" | "python" | undefined {
 		return program;
 	}
 	return program === "python" || program === "python3" ? "python" : undefined;
+}
+
+/** A problem for each line of a `bash` or `sh` script that turns errexit or pipefail off. */
+function errexitProblems(where: string, shell: string, script: string | undefined): string[] {
+	const kind = interpreter(shell);
+	if (script === undefined || (kind !== "bash" && kind !== "sh")) {
+		return [];
+	}
+	return errexitDisabled(script).map(
+		(line) =>
+			`${where}: line ${line}: turns errexit off; record the status instead, as in \`cmd || status=$?\``,
+	);
 }
 
 /** Problems a script checker reports for one script, or an error when the checker is absent. */
@@ -485,10 +497,15 @@ export async function checkRepository(
 		}
 		const run = step.find("run");
 		const stepShell = text(step.find("shell")) ?? shell;
-		if (!scripts || run === undefined || stepShell === undefined) {
+		if (run === undefined || stepShell === undefined) {
 			return;
 		}
 		const body = script(run);
+		// ShellCheck has no rule for this, so it runs on the scripts that actionlint checks too.
+		problems.push(...errexitProblems(`${file}: ${label}`, stepShell, body));
+		if (!scripts) {
+			return;
+		}
 		if (body === undefined) {
 			problems.push(
 				`${file}: ${label}: the run script's expressions cannot be located in its source`,

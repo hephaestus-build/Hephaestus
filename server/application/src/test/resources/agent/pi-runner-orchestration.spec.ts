@@ -1001,6 +1001,7 @@ if (scenario !== undefined && scenario !== "") {
 							}
 							// The aborted call ends a moment later, and abort() settles once the session is
 							// idle — which a compaction still in flight keeps it from being.
+							// oxlint-disable-next-line no-restricted-globals -- the aborted call must end after abort() starts waiting, which is the order under test
 							setTimeout(() => releasePrompt?.(), 50);
 							return waitForIdle();
 						},

@@ -47,14 +47,14 @@ runs:
         exec 9>"$dir/lock"
         flock 9
         (
-          set +e
           source="ghcr.io/hephaestus-build/postgres:$BASE_SHA"
+          status=0
           if [ "$IMAGE_CHANGED" != "true" ] && docker pull "$source"; then
-            docker tag "$source" "$TAG"
+            docker tag "$source" "$TAG" || status=$?
           else
-            docker build -t "$TAG" docker/postgres
+            docker build -t "$TAG" docker/postgres || status=$?
           fi
-          echo $? >"$dir/status"
+          echo "$status" >"$dir/status"
         ) </dev/null >"$dir/log" 2>&1 &
         exec 9>&-
     - name: Wait for the PostgreSQL image

@@ -83,6 +83,7 @@ describe("refresh across tabs", () => {
 		// AbortSignal.timeout uses a platform timer; use the test clock for its deadline.
 		vi.spyOn(AbortSignal, "timeout").mockImplementation((ms) => {
 			const controller = new AbortController();
+			// oxlint-disable-next-line no-restricted-globals -- fake timers are on; this moves AbortSignal.timeout onto the test clock
 			setTimeout(() => controller.abort(new DOMException("Lock wait expired", "TimeoutError")), ms);
 			return controller.signal;
 		});

@@ -158,13 +158,13 @@ class ConversationControllerIntegrationTest extends AbstractWorkspaceIntegration
                 entryService.append(workspace.getId(), main.getId(), ConversationLedgerFixtures.hephaestus("One"));
         assertThat(lastAnswerAt()).isEqualTo(stored(first));
 
-        Thread.sleep(5);
+        Thread.sleep(5); // NOPMD - the next answer needs a later timestamp, which needs real elapsed time
         Conversation thread = conversations.openThread(workspace.getId(), first.getId());
         ConversationEntry inThread = entryService.append(
                 workspace.getId(), thread.getId(), ConversationLedgerFixtures.hephaestus("In a thread"));
         assertThat(lastAnswerAt()).as("an answer in a thread").isEqualTo(stored(inThread));
 
-        Thread.sleep(5);
+        Thread.sleep(5); // NOPMD - the next answer needs a later timestamp, which needs real elapsed time
         submit(main, "A question is not an answer.");
         entryService.append(
                 workspace.getId(),

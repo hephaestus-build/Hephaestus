@@ -72,6 +72,18 @@
     <rule ref="category/java/errorprone.xml/MisplacedNullCheck"/>
     <rule ref="category/java/errorprone.xml/UnconditionalIfStatement"/>
     <rule ref="category/java/errorprone.xml/UnnecessaryConversionTemporary"/>
+    <!-- A swallowed exception needs its reason in the catch: name it `ignored` or `expected`, or say why. -->
+    <rule ref="category/java/errorprone.xml/EmptyCatchBlock">
+        <properties>
+            <property name="allowCommentedBlocks" value="true"/>
+        </properties>
+    </rule>
+    <!-- A debt marker is a promise with no owner. Fix it, or record the work in an issue. -->
+    <rule ref="category/java/documentation.xml/CommentContent">
+        <properties>
+            <property name="forbiddenRegex" value="\b(TODO|FIXME|HACK|XXX)\b"/>
+        </properties>
+    </rule>
 
     <!-- Design -->
     <!--

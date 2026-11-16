@@ -5,6 +5,7 @@ import { copyFile, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { after, describe, test } from "node:test";
+// oxlint-disable-next-line no-restricted-imports -- fake reviews and tools take real time, which the host's timeouts and cancellation are tested against
 import { setTimeout as sleep } from "node:timers/promises";
 import { pathToFileURL } from "node:url";
 
@@ -1068,6 +1069,7 @@ void describe("a program that does not stop when the host stops it", { concurren
 				'{ meta: {}, async run() { await new Promise((end) => setTimeout(end, 1500)); throw new Error("stopped"); } }',
 			),
 		});
+		// oxlint-disable-next-line no-restricted-globals -- the cancel must arrive while the program runs, which is the behaviour under test
 		setTimeout(() => {
 			cancel.abort(new UnratedError("unavailable", "the tools side stopped"));
 		}, 700);

@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.core.database;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
+import static org.awaitility.Awaitility.await;
 
 import de.tum.cit.aet.hephaestus.core.TransientFailures;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
@@ -9,6 +10,7 @@ import jakarta.persistence.EntityManager;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -69,8 +71,12 @@ class IdleInTransactionTimeoutIntegrationTest extends BaseIntegrationTest {
         var backend = new AtomicReference<Integer>();
         Throwable failure = catchThrowable(() -> transactions.executeWithoutResult(status -> {
             idleLimitOfThisTransaction("200ms");
-            backend.set(Objects.requireNonNull(jdbc.queryForObject("SELECT pg_backend_pid()", Integer.class)));
-            sleep(1_000);
+            int pid = Objects.requireNonNull(jdbc.queryForObject("SELECT pg_backend_pid()", Integer.class));
+            backend.set(pid);
+            // The session stays idle while another connection watches PostgreSQL end it.
+            await().atMost(Duration.ofSeconds(10))
+                    .pollInterval(Duration.ofMillis(100))
+                    .until(() -> !running(pid));
             if (throughJpa) entityManager.createNativeQuery("SELECT 1").getSingleResult();
             else jdbc.queryForObject("SELECT 1", Integer.class);
         }));
@@ -79,7 +85,9 @@ class IdleInTransactionTimeoutIntegrationTest extends BaseIntegrationTest {
         // A transaction left idle for a minute is a defect, not an outage: the inbox counts its retries and then keeps
         // the event as a dead letter, and a scheduled job logs it as an error.
         assertThat(TransientFailures.isTransient(failure)).isFalse();
-        assertEnded(Objects.requireNonNull(backend.get()));
+        assertThat(running(Objects.requireNonNull(backend.get())))
+                .as("the ended backend is gone")
+                .isFalse();
         assertThat(jdbc.queryForObject("SELECT 1", Integer.class)).isEqualTo(1);
     }
 
@@ -88,13 +96,14 @@ class IdleInTransactionTimeoutIntegrationTest extends BaseIntegrationTest {
         jdbc.execute("SET LOCAL idle_in_transaction_session_timeout = '" + limit + "'");
     }
 
-    private void assertEnded(int backend) throws Exception {
+    /** Whether PostgreSQL still runs the backend, read through a connection outside the pool. */
+    private boolean running(int backend) throws SQLException {
         try (var observer = unpooled();
                 var query = observer.prepareStatement("SELECT count(*) FROM pg_stat_activity WHERE pid = ?")) {
             query.setInt(1, backend);
             try (var result = query.executeQuery()) {
                 result.next();
-                assertThat(result.getLong(1)).as("the ended backend is gone").isZero();
+                return result.getLong(1) > 0;
             }
         }
     }
@@ -105,15 +114,6 @@ class IdleInTransactionTimeoutIntegrationTest extends BaseIntegrationTest {
             if (cause instanceof SQLException sql && sql.getSQLState() != null) states.add(sql.getSQLState());
         }
         return states;
-    }
-
-    private static void sleep(long milliseconds) {
-        try {
-            Thread.sleep(milliseconds);
-        } catch (InterruptedException interrupted) {
-            Thread.currentThread().interrupt();
-            throw new IllegalStateException(interrupted);
-        }
     }
 
     /** A session as the LISTEN listeners open one: a plain driver connection from the data source properties. */

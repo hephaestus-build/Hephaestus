@@ -320,7 +320,7 @@ class SyncControllerIntegrationTest extends AbstractWorkspaceIntegrationTest {
                     long deadline = System.currentTimeMillis() + 5000;
                     while (!handle.isCancellationRequested() && System.currentTimeMillis() < deadline) {
                         try {
-                            Thread.sleep(25);
+                            Thread.sleep(25); // NOPMD - poll interval of a bounded wait
                         } catch (InterruptedException e) {
                             Thread.currentThread().interrupt();
                             return null;

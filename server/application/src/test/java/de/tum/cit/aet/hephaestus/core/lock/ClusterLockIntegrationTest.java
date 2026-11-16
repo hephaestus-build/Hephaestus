@@ -88,7 +88,7 @@ class ClusterLockIntegrationTest extends BaseIntegrationTest {
 
     private static void sleep(Duration duration) {
         try {
-            TimeUnit.MILLISECONDS.sleep(duration.toMillis());
+            TimeUnit.MILLISECONDS.sleep(duration.toMillis()); // NOPMD - the lock must outlive this time
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
         }

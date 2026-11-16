@@ -687,7 +687,7 @@ class McpAuthorizationConformanceIntegrationTest extends RealAuthIntegrationTest
             if (waiting != null && waiting > 0) {
                 return;
             }
-            Thread.sleep(20);
+            Thread.sleep(20); // NOPMD - poll interval of a bounded wait for PostgreSQL to report the lock wait
         }
         fail("the exchange never waited for the grant lock");
     }

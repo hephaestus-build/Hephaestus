@@ -24,12 +24,6 @@ export async function pending<T = never>(): Promise<T> {
 	return deferred<T>().promise;
 }
 
-export async function sleep(ms: number): Promise<void> {
-	const { promise, resolve } = deferred();
-	setTimeout(resolve, ms);
-	return promise;
-}
-
 export async function nextFrame(): Promise<void> {
 	const { promise, resolve } = deferred();
 	requestAnimationFrame(() => {

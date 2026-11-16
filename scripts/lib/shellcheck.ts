@@ -28,3 +28,25 @@ export async function prepareShellCheck(): Promise<string> {
 	}
 	return binary;
 }
+
+/**
+ * The lines of `script` (1-based) that turn errexit or pipefail off. ShellCheck has no rule for them,
+ * and a script that turns errexit off reports success for a command that failed. Record a status
+ * explicitly instead, as in `docker build … || status=$?`.
+ */
+export function errexitDisabled(script: string): number[] {
+	return script
+		.split("\n")
+		.flatMap((line, index) =>
+			/(?:^|[;&|({]|\b(?:then|do|else)\b)\s*set\s+(?:(?:[-+]o\s+[\w-]+|[-+][a-zA-Z]+)\s+)*(?:\+[a-zA-Z]*e[a-zA-Z]*|\+o\s+(?:errexit|pipefail))(?![\w-])/u.test(
+				executableText(line),
+			)
+				? [index + 1]
+				: [],
+		);
+}
+
+/** A line without its quoted text and its comment, so that neither can look like a command. */
+function executableText(line: string): string {
+	return line.replaceAll(/'[^']*'|"(?:[^"\\]|\\.)*"/gu, "''").replace(/(?:^|\s)#.*$/u, "");
+}

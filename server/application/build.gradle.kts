@@ -231,11 +231,13 @@ tasks.withType<Pmd>().configureEach {
     }
 }
 
-tasks.named("pmdTest") { enabled = false }
+// Tests get their own rules: the main rules judge production code.
+tasks.named<Pmd>("pmdTest") { ruleSetFiles = files(rootProject.file("pmd-test-ruleset.xml")) }
 
 tasks.named("dependencies") {
-    // PMD creates its auxiliary configuration lazily; lock updates must include that graph too.
+    // PMD creates its auxiliary configurations lazily; lock updates must include those graphs too.
     tasks.named("pmdMain").get()
+    tasks.named("pmdTest").get()
 }
 
 jacoco { toolVersion = libs.versions.jacoco.get() }
