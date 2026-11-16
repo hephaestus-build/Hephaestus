@@ -32,8 +32,11 @@ public class WorkspaceScopedWebMvcConfiguration implements WebMvcRegistrations {
 
         private static final String APPLICATION_PACKAGE = "de.tum.cit.aet.hephaestus.";
 
-        /** Provider webhooks and the sandbox gateway's connector; neither is part of the API. */
-        private static final List<String> OWN_ROOTS = List.of("/webhooks/", "/internal/");
+        /**
+         * Provider webhooks and the sandbox gateway's connector, neither part of the API, and OAuth discovery, which RFC
+         * 8414 § 3.1 and RFC 9728 § 3.1 place on the host root.
+         */
+        private static final List<String> OWN_ROOTS = List.of("/webhooks/", "/internal/", "/.well-known/oauth-");
 
         @Override
         protected void registerHandlerMethod(Object handler, Method method, RequestMappingInfo mapping) {

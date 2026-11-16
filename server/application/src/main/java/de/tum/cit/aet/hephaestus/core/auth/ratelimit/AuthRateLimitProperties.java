@@ -50,6 +50,7 @@ public record AuthRateLimitProperties(
         @Valid @NotNull Limit conversationTurns,
         @Valid @NotNull Limit reviewRequest,
         @Valid @NotNull Limit syncTrigger,
+        @Valid @NotNull Limit mcpCall,
         @Valid @NotNull Limit publicActivity,
         @Valid @NotNull Limit browserReports) {
 

@@ -2,19 +2,24 @@ package de.tum.cit.aet.hephaestus.architecture;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import de.tum.cit.aet.hephaestus.core.auth.AuthProperties;
 import de.tum.cit.aet.hephaestus.core.auth.ratelimit.AuthRateLimitFilter;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
+import jakarta.servlet.http.Cookie;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.IntStream;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.intercept.AuthorizationFilter;
@@ -26,6 +31,9 @@ class SecurityFilterChainRuntimeIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private List<SecurityFilterChain> filterChains;
+
+    @Autowired
+    private AuthProperties authProperties;
 
     @Autowired
     @Qualifier("requestMappingHandlerMapping")
@@ -72,22 +80,45 @@ class SecurityFilterChainRuntimeIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    void csrfFilterGuardsOnlyTheCookieAppChain() {
+    void csrfFilterGuardsOnlyTheCookieAppChain() throws Exception {
         assertThat(filterChains).isNotEmpty();
         // Only the app resource-server chain authenticates browser cookies. Worker/webhook and
-        // OAuth login chains use their own authentication and must not require a CSRF cookie.
+        // OAuth login chains use their own authentication and must not require a CSRF cookie. The MCP
+        // chain authenticates bearer headers only, so a browser cannot carry its cookie into a tool call.
         for (SecurityFilterChain chain : filterChains) {
             boolean hasCsrf = chain.getFilters().stream().anyMatch(CsrfFilter.class::isInstance);
-            boolean authenticatesUserTokens =
-                    chain.getFilters().stream().anyMatch(BearerTokenAuthenticationFilter.class::isInstance);
             assertThat(hasCsrf)
                     .as("only the cookie-authenticated resource-server chain may carry a CsrfFilter: %s", chain)
-                    .isEqualTo(authenticatesUserTokens);
+                    .isEqualTo(readsTheSessionCookie(chain));
         }
         // Guard against an accidental global CSRF disable: the cookie app chain must still enforce it.
         assertThat(filterChains)
                 .as("the cookie app chain must enforce CSRF")
                 .anyMatch(chain -> chain.getFilters().stream().anyMatch(CsrfFilter.class::isInstance));
+    }
+
+    /**
+     * Whether the chain's bearer authentication acts on a request that carries only a session cookie: it either
+     * rejects the request or authenticates it. The test decoder accepts any token, so both count.
+     */
+    private boolean readsTheSessionCookie(SecurityFilterChain chain) throws Exception {
+        var bearer = chain.getFilters().stream()
+                .filter(BearerTokenAuthenticationFilter.class::isInstance)
+                .findFirst();
+        if (bearer.isEmpty()) return false;
+        var request = new MockHttpServletRequest("GET", "/api/csrf-probe");
+        request.setCookies(new Cookie(authProperties.cookieName(), "not-a-token"));
+        var continued = new AtomicBoolean();
+        var authenticated = new AtomicBoolean();
+        try {
+            bearer.get().doFilter(request, new MockHttpServletResponse(), (ignoredRequest, ignoredResponse) -> {
+                continued.set(true);
+                authenticated.set(SecurityContextHolder.getContext().getAuthentication() != null);
+            });
+        } finally {
+            SecurityContextHolder.clearContext();
+        }
+        return !continued.get() || authenticated.get();
     }
 
     @Test

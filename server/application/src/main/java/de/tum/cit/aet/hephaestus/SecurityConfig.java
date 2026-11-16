@@ -382,6 +382,9 @@ public class SecurityConfig {
             // Exact matchers, so a later endpoint under /auth/client never inherits public access.
             requests.requestMatchers(CLIENT_CONFIGURATION_MATCHER).permitAll();
             requests.requestMatchers(CLIENT_SESSION_MATCHER).permitAll();
+            // The MCP authorization endpoint redirects a signed-out browser to sign in, and the token endpoint
+            // authenticates by the code or refresh secret in its body (ADR 0110). Exact matchers again.
+            requests.requestMatchers(MCP_AUTHORIZE_MATCHER, MCP_TOKEN_MATCHER).permitAll();
             // Public workspace provider discovery (workspace creation UI)
             requests.requestMatchers(api.matcher(HttpMethod.GET, "/workspaces/providers"))
                     .permitAll();
@@ -457,6 +460,16 @@ public class SecurityConfig {
             ApiPath.matchers().matcher(HttpMethod.POST, "/auth/client/refresh"),
             ApiPath.matchers().matcher(HttpMethod.POST, "/auth/client/logout"));
 
+    /** The MCP authorization endpoint: a safe GET that only redirects. */
+    static final RequestMatcher MCP_AUTHORIZE_MATCHER =
+            ApiPath.matchers().matcher(HttpMethod.GET, "/mcp/oauth/authorize");
+
+    /**
+     * The MCP token endpoint acts only on the code or refresh secret in its form body, like the installed-client
+     * session endpoints, so it is CSRF-exempt only when the request carries no session cookie.
+     */
+    static final RequestMatcher MCP_TOKEN_MATCHER = ApiPath.matchers().matcher(HttpMethod.POST, "/mcp/oauth/token");
+
     /** An installed client's dev sign-in (a safe GET ending in a handoff redirect); absent in production. */
     static final RequestMatcher DEV_CLIENT_LOGIN_MATCHER =
             ApiPath.matchers().matcher(HttpMethod.GET, "/auth/dev-login/client");
@@ -479,7 +492,8 @@ public class SecurityConfig {
         if (authorization != null && authorization.regionMatches(true, 0, "Bearer ", 0, 7) && !hasAuthCookie(request)) {
             return false;
         }
-        if (CLIENT_SESSION_MATCHER.matches(request) && !hasAuthCookie(request)) {
+        if ((CLIENT_SESSION_MATCHER.matches(request) || MCP_TOKEN_MATCHER.matches(request))
+                && !hasAuthCookie(request)) {
             return false;
         }
         if (devLoginEnabled && DEV_LOGIN_MATCHER.matches(request)) {

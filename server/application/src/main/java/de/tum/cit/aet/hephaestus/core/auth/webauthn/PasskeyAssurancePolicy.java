@@ -48,6 +48,24 @@ public class PasskeyAssurancePolicy implements AdminPasskeyAccess {
         require(SecurityContextHolder.getContext().getAuthentication(), elevated, workspaceRequired, sensitive, true);
     }
 
+    @Override
+    public boolean workspaceAdminNeedsProof(long accountId, boolean workspaceRequired) {
+        if (!auth.assuranceEnforced()) {
+            return false;
+        }
+        return accounts.findById(accountId)
+                .map(account -> needsProof(account, false, true, workspaceRequired))
+                .orElse(true);
+    }
+
+    private boolean needsProof(Account account, boolean instanceAdmin, boolean workspace, boolean workspaceRequired) {
+        return account.isPasskeyProtectionEnabled()
+                || account.isPasskeyRecoveryRequired()
+                || ((instanceAdmin || account.getAppRole() == Account.AppRole.APP_ADMIN)
+                        && properties.instanceAdminRequired())
+                || (workspace && (workspaceRequired || properties.workspaceAdminRequired()));
+    }
+
     public void requireInstanceAdmin(@Nullable Authentication authentication, boolean sensitive) {
         require(authentication, true, false, sensitive, false);
     }
@@ -75,12 +93,7 @@ public class PasskeyAssurancePolicy implements AdminPasskeyAccess {
         if (!auth.assuranceEnforced()) {
             return;
         }
-        boolean needsProof = account.isPasskeyProtectionEnabled()
-                || account.isPasskeyRecoveryRequired()
-                || ((instanceAdmin || account.getAppRole() == Account.AppRole.APP_ADMIN)
-                        && properties.instanceAdminRequired())
-                || (workspace && (workspaceRequired || properties.workspaceAdminRequired()));
-        if (!needsProof) {
+        if (!needsProof(account, instanceAdmin, workspace, workspaceRequired)) {
             return;
         }
         if (account.isPasskeyRecoveryRequired()

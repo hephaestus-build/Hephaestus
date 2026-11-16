@@ -93,7 +93,7 @@ erDiagram
         UUID id PK
         BIGINT account_id FK "NOT NULL"
         TIMESTAMPTZ auth_time "NOT NULL"
-        VARCHAR(64) client_id "NOT NULL"
+        VARCHAR(2048) client_id "NOT NULL"
         VARCHAR(32) client_kind "NOT NULL"
         TIMESTAMPTZ created_at "NOT NULL"
         TIMESTAMPTZ revoked_at
@@ -105,14 +105,15 @@ erDiagram
         VARCHAR(64) code_hash PK
         BIGINT account_id FK "NOT NULL"
         TIMESTAMPTZ auth_time "NOT NULL"
-        VARCHAR(64) client_id "NOT NULL"
+        VARCHAR(2048) client_id "NOT NULL"
         VARCHAR(32) client_kind "NOT NULL"
         VARCHAR(64) code_challenge "NOT NULL"
         TIMESTAMPTZ consumed_at
         TIMESTAMPTZ created_at "NOT NULL"
         TIMESTAMPTZ expires_at "NOT NULL"
-        VARCHAR(255) redirect_uri "NOT NULL"
+        VARCHAR(2048) redirect_uri "NOT NULL"
         TIMESTAMPTZ session_expires_at "NOT NULL"
+        UUID mcp_client_grant_id
     }
 
     ConfigAuditEvent {
@@ -212,6 +213,25 @@ erDiagram
         TIMESTAMPTZ updated_at "NOT NULL"
     }
 
+    McpClientGrant {
+        UUID id PK
+        BIGINT account_id "NOT NULL"
+        TIMESTAMPTZ approved_at
+        VARCHAR(2048) client_id "NOT NULL"
+        VARCHAR(80) client_name "NOT NULL"
+        UUID client_session_id
+        VARCHAR(64) code_challenge "NOT NULL"
+        TIMESTAMPTZ created_at "NOT NULL"
+        TIMESTAMPTZ ended_at
+        TIMESTAMPTZ expires_at "NOT NULL"
+        VARCHAR(2048) redirect_uri "NOT NULL"
+        VARCHAR(2048) resource "NOT NULL"
+        VARCHAR(128) scopes "NOT NULL"
+        VARCHAR(512) state
+        VARCHAR(16) status "NOT NULL"
+        BIGINT workspace_id FK "NOT NULL"
+    }
+
     PasskeyChallenge {
         UUID id PK
         TIMESTAMPTZ expires_at "NOT NULL"
@@ -300,6 +320,7 @@ erDiagram
     Account ||--o{ InstanceSetting : has
     Account ||--o{ IssuedJwt : has
     ClientSession ||--o{ IssuedJwt : has
+    Workspace ||--o{ McpClientGrant : has
     Account ||--o{ PasskeyChallenge : has
     Account ||--o{ PasskeyCredential : has
     Account ||--o{ PasskeyRecoveryCode : has

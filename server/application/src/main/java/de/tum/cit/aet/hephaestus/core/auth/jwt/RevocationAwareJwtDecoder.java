@@ -52,6 +52,9 @@ public class RevocationAwareJwtDecoder implements JwtDecoder {
     private static final Logger log = LoggerFactory.getLogger(RevocationAwareJwtDecoder.class);
 
     private final NimbusJwtDecoder delegate;
+    private final JwtSigningKeyService keyService;
+    private final AuthProperties properties;
+    private final CacheManager cacheManager;
     private final AccessTokenAdmission admission;
     private final AuthEventLogger authEventLogger;
     private final Cache cache;
@@ -66,7 +69,30 @@ public class RevocationAwareJwtDecoder implements JwtDecoder {
             CacheManager cacheManager,
             Clock clock,
             AuthMetrics metrics) {
-        this.delegate = localSignatureDecoder(keyService, properties);
+        this(
+                keyService,
+                admission,
+                authEventLogger,
+                properties,
+                cacheManager,
+                clock,
+                metrics,
+                webAppAudience(properties));
+    }
+
+    private RevocationAwareJwtDecoder(
+            JwtSigningKeyService keyService,
+            AccessTokenAdmission admission,
+            AuthEventLogger authEventLogger,
+            AuthProperties properties,
+            CacheManager cacheManager,
+            Clock clock,
+            AuthMetrics metrics,
+            OAuth2TokenValidator<Jwt> audience) {
+        this.delegate = localSignatureDecoder(keyService, properties, audience);
+        this.keyService = keyService;
+        this.properties = properties;
+        this.cacheManager = cacheManager;
         this.admission = admission;
         this.authEventLogger = authEventLogger;
         this.cache = Objects.requireNonNull(cacheManager.getCache(CACHE_NAME));
@@ -74,23 +100,42 @@ public class RevocationAwareJwtDecoder implements JwtDecoder {
         this.metrics = metrics;
     }
 
+    /**
+     * A decoder whose tokens must carry another audience, such as the workspace MCP endpoint's (ADR 0110).
+     * Signature, issuer, deadline and revocation checks stay those of this decoder.
+     */
+    public RevocationAwareJwtDecoder forAudience(OAuth2TokenValidator<Jwt> audience) {
+        return new RevocationAwareJwtDecoder(
+                keyService, admission, authEventLogger, properties, cacheManager, clock, metrics, audience);
+    }
+
     /** Signature and claim validation without the database-backed revocation check. */
     public static NimbusJwtDecoder localSignatureDecoder(JwtSigningKeyService keyService, AuthProperties properties) {
+        return localSignatureDecoder(keyService, properties, webAppAudience(properties));
+    }
+
+    private static NimbusJwtDecoder localSignatureDecoder(
+            JwtSigningKeyService keyService, AuthProperties properties, OAuth2TokenValidator<Jwt> audience) {
         ConfigurableJWTProcessor<SecurityContext> processor = new DefaultJWTProcessor<>();
         JWSKeySelector<SecurityContext> selector = new JWSVerificationKeySelector<>(JWSAlgorithm.ES256, keyService);
         processor.setJWSKeySelector(selector);
         NimbusJwtDecoder nimbus = new NimbusJwtDecoder(processor);
-        nimbus.setJwtValidator(buildValidator(properties));
+        nimbus.setJwtValidator(buildValidator(properties, audience));
         return nimbus;
     }
 
-    private static OAuth2TokenValidator<Jwt> buildValidator(AuthProperties properties) {
+    /** The web app's audience: the REST API refuses every token that does not name it. */
+    private static OAuth2TokenValidator<Jwt> webAppAudience(AuthProperties properties) {
+        return new JwtClaimValidator<List<String>>(
+                JwtClaimNames.AUD, aud -> aud != null && aud.contains(properties.audience()));
+    }
+
+    private static OAuth2TokenValidator<Jwt> buildValidator(
+            AuthProperties properties, OAuth2TokenValidator<Jwt> audience) {
         OAuth2TokenValidator<Jwt> defaults = JwtValidators.createDefault();
         OAuth2TokenValidator<Jwt> issuer = new JwtClaimValidator<String>(
                 JwtClaimNames.ISS,
                 iss -> iss != null && iss.equals(properties.issuer().toString()));
-        OAuth2TokenValidator<Jwt> audience = new JwtClaimValidator<List<String>>(
-                JwtClaimNames.AUD, aud -> aud != null && aud.contains(properties.audience()));
         // A delegated token names one account as acting for another; nothing here may act for anyone.
         OAuth2TokenValidator<Jwt> notDelegated = jwt -> jwt.hasClaim("act")
                 ? OAuth2TokenValidatorResult.failure(new OAuth2Error(

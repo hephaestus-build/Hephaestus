@@ -12,6 +12,7 @@
             "core::event",
             "core::exception",
             "core::logging",
+            "core::mcp-spi",
             "core::person-data",
             // Feedback is signed when it is prepared: its provenance record (EU AI Act Art. 50(2)).
             "core::provenance",

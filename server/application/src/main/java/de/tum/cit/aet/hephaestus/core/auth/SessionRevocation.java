@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.core.auth.clientsession.ClientSignInHandoffRepo
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwt;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwtRepository;
+import de.tum.cit.aet.hephaestus.core.auth.mcp.McpClientGrantRepository;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import java.time.Clock;
 import java.time.Instant;
@@ -31,6 +32,7 @@ public class SessionRevocation {
     private final ClientSessionRepository clientSessionRepository;
     private final ClientSignInHandoffRepository handoffRepository;
     private final IssuedJwtRepository issuedJwtRepository;
+    private final McpClientGrantRepository grantRepository;
     private final Clock clock;
 
     public SessionRevocation(
@@ -38,11 +40,13 @@ public class SessionRevocation {
             ClientSessionRepository clientSessionRepository,
             ClientSignInHandoffRepository handoffRepository,
             IssuedJwtRepository issuedJwtRepository,
+            McpClientGrantRepository grantRepository,
             Clock clock) {
         this.accountRepository = accountRepository;
         this.clientSessionRepository = clientSessionRepository;
         this.handoffRepository = handoffRepository;
         this.issuedJwtRepository = issuedJwtRepository;
+        this.grantRepository = grantRepository;
         this.clock = clock;
     }
 
@@ -70,9 +74,11 @@ public class SessionRevocation {
         Instant now = clock.instant();
         handoffRepository.consumeAllForAccount(accountId, now);
         if (exceptSessionId != null) {
+            grantRepository.revokeAllForAccountExceptSession(accountId, exceptSessionId, now);
             clientSessionRepository.endAllForAccountExcept(accountId, exceptSessionId, now, reason);
             return issuedJwtRepository.revokeAllForAccountExceptSession(accountId, exceptSessionId, now, reason);
         }
+        grantRepository.revokeAllForAccount(accountId, now);
         clientSessionRepository.endAllForAccount(accountId, now, reason);
         if (exceptJti != null) {
             return issuedJwtRepository.revokeAllForAccountExcept(accountId, exceptJti, now, reason);

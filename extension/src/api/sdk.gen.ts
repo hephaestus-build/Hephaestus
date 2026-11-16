@@ -147,12 +147,16 @@ import type {
 	AllowMyProductFeedbackPublicResponses,
 	AnswerPublicActivityOnboardingData,
 	AnswerPublicActivityOnboardingResponses,
+	ApproveMcpConsentRequestData,
+	ApproveMcpConsentRequestResponses,
 	AssignMemberRoleData,
 	AssignMemberRoleErrors,
 	AssignMemberRoleResponses,
 	AssignModelData,
 	AssignModelErrors,
 	AssignModelResponses,
+	AuthorizeMcpClientData,
+	AuthorizeMcpClientResponses,
 	BindPracticeGroupData,
 	BindPracticeGroupResponses,
 	CallbackGetData,
@@ -302,6 +306,12 @@ import type {
 	GetJwksResponses,
 	GetLlmUsageReportData,
 	GetLlmUsageReportResponses,
+	GetMcpAuthorizationServerMetadataData,
+	GetMcpAuthorizationServerMetadataResponses,
+	GetMcpConsentRequestData,
+	GetMcpConsentRequestResponses,
+	GetMcpResourceMetadataData,
+	GetMcpResourceMetadataResponses,
 	GetMemberOnboardingData,
 	GetMemberOnboardingLinkOptionsData,
 	GetMemberOnboardingLinkOptionsResponses,
@@ -479,6 +489,8 @@ import type {
 	ListInstanceProviderRepairsResponses,
 	ListLinkedIdentitiesData,
 	ListLinkedIdentitiesResponses,
+	ListMcpClientGrantsData,
+	ListMcpClientGrantsResponses,
 	ListMembershipsData,
 	ListMembershipsResponses,
 	ListModelAssignmentsData,
@@ -560,6 +572,8 @@ import type {
 	MakeMyProductFeedbackPrivateResponses,
 	MarkConversationReadData,
 	MarkConversationReadResponses,
+	McpTokenData,
+	McpTokenResponses,
 	MoveCatalogPracticeData,
 	MoveCatalogPracticeResponses,
 	MovePracticeData,
@@ -588,6 +602,8 @@ import type {
 	RefreshData,
 	RefreshErrors,
 	RefreshResponses,
+	RefuseMcpConsentRequestData,
+	RefuseMcpConsentRequestResponses,
 	RegisterOutlineCollectionData,
 	RegisterOutlineCollectionErrors,
 	RegisterOutlineCollectionResponses,
@@ -657,6 +673,8 @@ import type {
 	RetryFeedbackResponses,
 	RetryProductFeedbackFilingData,
 	RetryProductFeedbackFilingResponses,
+	RevokeMcpClientGrantData,
+	RevokeMcpClientGrantResponses,
 	RevokeOtherSessionsData,
 	RevokeOtherSessionsResponses,
 	RevokeSessionData,
@@ -843,6 +861,34 @@ export const getJwks = <ThrowOnError extends boolean = false>(
 	(options?.client ?? client).get<GetJwksResponses, unknown, ThrowOnError>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/.well-known/jwks.json",
+		...options,
+	});
+
+/**
+ * Authorization server metadata (RFC 8414)
+ */
+export const getMcpAuthorizationServerMetadata = <ThrowOnError extends boolean = false>(
+	options?: Options<GetMcpAuthorizationServerMetadataData, ThrowOnError>,
+): RequestResult<GetMcpAuthorizationServerMetadataResponses, unknown, ThrowOnError> =>
+	(options?.client ?? client).get<
+		GetMcpAuthorizationServerMetadataResponses,
+		unknown,
+		ThrowOnError
+	>({
+		security: [{ scheme: "bearer", type: "http" }],
+		url: "/.well-known/oauth-authorization-server",
+		...options,
+	});
+
+/**
+ * Protected resource metadata of a workspace MCP endpoint (RFC 9728)
+ */
+export const getMcpResourceMetadata = <ThrowOnError extends boolean = false>(
+	options: Options<GetMcpResourceMetadataData, ThrowOnError>,
+): RequestResult<GetMcpResourceMetadataResponses, unknown, ThrowOnError> =>
+	(options.client ?? client).get<GetMcpResourceMetadataResponses, unknown, ThrowOnError>({
+		security: [{ scheme: "bearer", type: "http" }],
+		url: "/.well-known/oauth-protected-resource/{resourcePath}",
 		...options,
 	});
 
@@ -2263,6 +2309,71 @@ export const listIdentityProviders = <ThrowOnError extends boolean = false>(
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/identity-providers",
 		...options,
+	});
+
+/**
+ * Start an MCP client authorization (RFC 6749 § 4.1.1)
+ */
+export const authorizeMcpClient = <ThrowOnError extends boolean = false>(
+	options?: Options<AuthorizeMcpClientData, ThrowOnError>,
+): RequestResult<AuthorizeMcpClientResponses, unknown, ThrowOnError> =>
+	(options?.client ?? client).get<AuthorizeMcpClientResponses, unknown, ThrowOnError>({
+		security: [{ scheme: "bearer", type: "http" }],
+		url: "/mcp/oauth/authorize",
+		...options,
+	});
+
+/**
+ * Refuse an MCP client
+ */
+export const refuseMcpConsentRequest = <ThrowOnError extends boolean = false>(
+	options: Options<RefuseMcpConsentRequestData, ThrowOnError>,
+): RequestResult<RefuseMcpConsentRequestResponses, unknown, ThrowOnError> =>
+	(options.client ?? client).delete<RefuseMcpConsentRequestResponses, unknown, ThrowOnError>({
+		security: [{ scheme: "bearer", type: "http" }],
+		url: "/mcp/oauth/requests/{requestId}",
+		...options,
+	});
+
+/**
+ * Read a pending MCP client consent request
+ */
+export const getMcpConsentRequest = <ThrowOnError extends boolean = false>(
+	options: Options<GetMcpConsentRequestData, ThrowOnError>,
+): RequestResult<GetMcpConsentRequestResponses, unknown, ThrowOnError> =>
+	(options.client ?? client).get<GetMcpConsentRequestResponses, unknown, ThrowOnError>({
+		security: [{ scheme: "bearer", type: "http" }],
+		url: "/mcp/oauth/requests/{requestId}",
+		...options,
+	});
+
+/**
+ * Approve an MCP client for a workspace
+ */
+export const approveMcpConsentRequest = <ThrowOnError extends boolean = false>(
+	options: Options<ApproveMcpConsentRequestData, ThrowOnError>,
+): RequestResult<ApproveMcpConsentRequestResponses, unknown, ThrowOnError> =>
+	(options.client ?? client).put<ApproveMcpConsentRequestResponses, unknown, ThrowOnError>({
+		security: [{ scheme: "bearer", type: "http" }],
+		url: "/mcp/oauth/requests/{requestId}/approval",
+		...options,
+	});
+
+/**
+ * Exchange a code or rotate a refresh token (RFC 6749 § 3.2)
+ */
+export const mcpToken = <ThrowOnError extends boolean = false>(
+	options?: Options<McpTokenData, ThrowOnError>,
+): RequestResult<McpTokenResponses, unknown, ThrowOnError> =>
+	(options?.client ?? client).post<McpTokenResponses, unknown, ThrowOnError>({
+		...urlSearchParamsBodySerializer,
+		security: [{ scheme: "bearer", type: "http" }],
+		url: "/mcp/oauth/token",
+		...options,
+		headers: {
+			"Content-Type": "application/x-www-form-urlencoded",
+			...options?.headers,
+		},
 	});
 
 /**
@@ -3874,6 +3985,30 @@ export const getLlmUsageReport = <ThrowOnError extends boolean = false>(
 	(options.client ?? client).get<GetLlmUsageReportResponses, unknown, ThrowOnError>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/llm/usage",
+		...options,
+	});
+
+/**
+ * List the MCP clients connected to the workspace
+ */
+export const listMcpClientGrants = <ThrowOnError extends boolean = false>(
+	options: Options<ListMcpClientGrantsData, ThrowOnError>,
+): RequestResult<ListMcpClientGrantsResponses, unknown, ThrowOnError> =>
+	(options.client ?? client).get<ListMcpClientGrantsResponses, unknown, ThrowOnError>({
+		security: [{ scheme: "bearer", type: "http" }],
+		url: "/workspaces/{workspaceSlug}/mcp-grants",
+		...options,
+	});
+
+/**
+ * Disconnect an MCP client from the workspace
+ */
+export const revokeMcpClientGrant = <ThrowOnError extends boolean = false>(
+	options: Options<RevokeMcpClientGrantData, ThrowOnError>,
+): RequestResult<RevokeMcpClientGrantResponses, unknown, ThrowOnError> =>
+	(options.client ?? client).delete<RevokeMcpClientGrantResponses, unknown, ThrowOnError>({
+		security: [{ scheme: "bearer", type: "http" }],
+		url: "/workspaces/{workspaceSlug}/mcp-grants/{grantId}",
 		...options,
 	});
 

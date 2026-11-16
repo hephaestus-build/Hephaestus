@@ -1442,3 +1442,51 @@ describe("instance administrator workspace settings", () => {
 		]);
 	});
 });
+
+describe("the connected MCP clients", () => {
+	it("leaves the section out while the instance has MCP clients turned off", async () => {
+		renderSettingsRoute(true);
+		await screen.findByRole("heading", { name: "Capabilities" }, ROUTE_RENDER_WAIT);
+		expect(screen.queryByRole("heading", { name: "Connected MCP clients" })).toBeNull();
+	});
+
+	it("names each client by its host and who allowed it, and disconnects it", async () => {
+		const revoked: string[] = [];
+		let grants = [
+			{
+				id: "8a1f6c3e-2b47-4d55-9f0e-1c2d3e4f5a6b",
+				clientHost: "claude.ai",
+				clientName: "Claude Code",
+				approvedBy: {
+					id: "7",
+					status: "ACTIVE",
+					displayName: "Octo Cat",
+					identities: [],
+				},
+				scopes: ["practices:read"],
+				approvedAt: "2026-11-15T09:30:00Z",
+			},
+		];
+		server.use(
+			http.get("*/workspaces/acme/mcp-grants", () => HttpResponse.json(grants)),
+			http.delete("*/workspaces/acme/mcp-grants/:grantId", ({ params }) => {
+				revoked.push(String(params.grantId));
+				grants = [];
+				return new HttpResponse(null, { status: 204 });
+			}),
+		);
+		renderSettingsRoute(true);
+		const section = await screen.findByRole(
+			"region",
+			{ name: "Connected MCP clients" },
+			ROUTE_RENDER_WAIT,
+		);
+		within(section).getByText("claude.ai");
+		within(section).getByText(
+			/Calls itself Claude Code\. Allowed by Octo Cat on 15 November 2026\./u,
+		);
+		await userEvent.click(within(section).getByRole("button", { name: "Disconnect claude.ai" }));
+		await within(section).findByText("No client is connected.");
+		expect(revoked).toStrictEqual(["8a1f6c3e-2b47-4d55-9f0e-1c2d3e4f5a6b"]);
+	});
+});

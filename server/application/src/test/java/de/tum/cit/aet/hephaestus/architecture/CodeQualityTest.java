@@ -121,7 +121,11 @@ class CodeQualityTest extends HephaestusArchitectureTest {
         void methodsHaveLimitedParameters() {
             Set<String> allowedMethods = Set.of(
                     // Activity writes carry the event identity and its context through the SPI.
-                    "ActivityEventService.record", "ActivityRecorder.record");
+                    "ActivityEventService.record",
+                    "ActivityRecorder.record",
+                    // OAuth protocol endpoints bind each RFC 6749 parameter by its registered snake_case name.
+                    "McpAuthorizationController.authorize",
+                    "McpAuthorizationController.token");
 
             // Repository native SQL methods require individual @Param annotations and cannot use
             // parameter objects. These are atomic upsert operations that map directly to DB columns.

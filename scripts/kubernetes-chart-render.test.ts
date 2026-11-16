@@ -3972,6 +3972,47 @@ await test("one value turns browser fault reports on for the server and for the 
 	}
 });
 
+await test("one value turns the workspace MCP endpoint on for the server, off by default", () => {
+	assert.equal(
+		envValue(workload(rendered(layersFor("small")), "server"), "HEPHAESTUS_MCP_ENABLED"),
+		"false",
+	);
+	const resources = rendered([...layersFor("small"), { config: { mcpEnabled: true } }]);
+	assert.equal(envValue(workload(resources, "server"), "HEPHAESTUS_MCP_ENABLED"), "true");
+});
+
+await test("with MCP on, OAuth discovery on the host root reaches the server without a rewrite", () => {
+	const discovery = (resources: Resource[]) =>
+		list(
+			get(
+				resources.find((resource) => kindOf(resource) === "HTTPRoute"),
+				"spec",
+				"rules",
+			),
+		).filter((rule) =>
+			list(get(rule, "matches")).some((match) =>
+				String(get(match, "path", "value")).startsWith("/.well-known/oauth-"),
+			),
+		);
+	assert.deepEqual(discovery(rendered(layersFor("small"))), []);
+	const [rule, ...others] = discovery(
+		rendered([...layersFor("small"), { config: { mcpEnabled: true } }]),
+	);
+	assert.deepEqual(others, []);
+	assert.deepEqual(
+		list(get(rule, "matches")).map((match) => get(match, "path")),
+		[
+			{ type: "Exact", value: "/.well-known/oauth-authorization-server" },
+			{ type: "PathPrefix", value: "/.well-known/oauth-protected-resource/" },
+		],
+	);
+	assert.deepEqual(get(rule, "backendRefs"), [{ name: "heph-server", port: 8080 }]);
+	assert.deepEqual(
+		list(get(rule, "filters")).map((filter) => get(filter, "type")),
+		["ResponseHeaderModifier"],
+	);
+});
+
 await test("workspace hosts reach only the SPA and share the apex origin settings", () => {
 	const layers = [profile("small"), prepared, operator, reviews];
 	const off = rendered(layers);

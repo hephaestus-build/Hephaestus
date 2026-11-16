@@ -1,4 +1,4 @@
-import { MonitorIcon, PuzzleIcon } from "lucide-react";
+import { BotIcon, MonitorIcon, PuzzleIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
 import type { SessionView } from "@/api/types.gen";
@@ -68,12 +68,22 @@ function describeUserAgent(ua?: string): string {
 
 /**
  * The label a person recognises a session by. A browser extension signs in on its own, beside the
- * browser tab it lives in, so its row says so rather than repeating that browser's label.
+ * browser tab it lives in, so its row says so rather than repeating that browser's label. An MCP
+ * client's user agent is an HTTP library, so its row names the kind of client instead.
  */
 function describeSession(session: SessionView): string {
+	if (session.client === "MCP_CLIENT") {
+		return "MCP client";
+	}
 	const device = describeUserAgent(session.userAgent);
 	return session.client === "BROWSER_EXTENSION" ? `Browser extension in ${device}` : device;
 }
+
+const SESSION_ICONS = {
+	WEB: MonitorIcon,
+	BROWSER_EXTENSION: PuzzleIcon,
+	MCP_CLIENT: BotIcon,
+} satisfies Record<SessionView["client"], unknown>;
 
 export type SessionsState =
 	| { status: "loading" }
@@ -136,7 +146,7 @@ export function SessionsSection({ state }: SessionsSectionProps) {
 					const issuedAt = asDate(session.issuedAt);
 					const expiresAt = asDate(session.expiresAt);
 					const deviceLabel = describeSession(session);
-					const SessionIcon = session.client === "BROWSER_EXTENSION" ? PuzzleIcon : MonitorIcon;
+					const SessionIcon = SESSION_ICONS[session.client];
 					const isRevokingThis = state.revokingJti === session.jti;
 					return (
 						<div

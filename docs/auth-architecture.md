@@ -138,6 +138,27 @@ sequenceDiagram
   latest JTI; revoking any JTI of the family ends the session. Cleanup removes expired handoffs and
   sessions past their deadline or revoked for a day, with their token rows.
 
+## MCP clients
+
+An *MCP client*, such as Claude Code, is a third-party program that calls the workspace MCP endpoint for a
+workspace admin. [ADR 0110](decisions/0110-a-workspace-admins-mcp-client-configures-practices-through-the-workspace-mcp-endpoint.md)
+records the decision; `core.auth.mcp` implements the authorization server, and `core.mcp` the endpoint.
+
+- **One revocation store.** An approved client gets a `client_session` of the kind `MCP_CLIENT`. Its code is a
+  `client_sign_in_handoff` row, and its tokens are `issued_jwt` rows, so every revocation path above ends it.
+- **The grant binds the workspace.** The workspace-owned `mcp_client_grant` row holds the workspace, the literal
+  resource URI, the scopes and an explicit status. Every MCP request checks that its session holds an active
+  grant for the endpoint and for the workspace that the slug names now.
+- **Clients register by metadata document.** The `client_id` is the HTTPS URL of a client ID metadata document,
+  fetched through the connect-time SSRF guard for every authorization request. Redirects match it exactly,
+  except that a listed loopback redirect matches with any port.
+- **Consent in the web app.** The authorization endpoint only redirects. The web app's `/mcp/authorize` page signs
+  the account in and shows the request; approval and refusal are cookie requests with the CSRF token. Approval
+  holds the account's issuance lock and re-checks the approving token, so it cannot outlive "sign out everywhere".
+- **Token shape.** An MCP token's `aud` is the workspace endpoint alone, it carries `scope` and no `roles`, and the
+  MCP chain decodes it with the revocation-aware decoder and the MCP audience rule. The REST API refuses it, and
+  the MCP endpoint refuses web-app tokens and the session cookie.
+
 ## Browser session coordination
 
 Renewal and logout use the browser's

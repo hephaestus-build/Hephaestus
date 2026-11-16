@@ -58,6 +58,8 @@ tags:
   name: Instance Settings
 - description: Per-workspace LLM spend rollup and budget status
   name: LLM Usage
+- description: OAuth endpoints and consent for MCP clients
+  name: MCP authorization
 - description: The model that serves each purpose in a workspace
   name: Model assignments
 - name: Notification preferences
@@ -130,6 +132,9 @@ tags:
 - name: instance-feedback
 - name: instance-provider-resource-repair
 - name: item
+- description: The MCP clients that members connected to this workspace; admins list
+    and revoke them (ADR 0110).
+  name: mcp-client-grant
 - name: membership
 - description: A person's own product feedback reports and their choice about public
     issues.
@@ -194,6 +199,40 @@ paths:
       summary: JWK set (public keys only)
       tags:
       - Auth discovery
+  /.well-known/oauth-authorization-server:
+    get:
+      operationId: getMcpAuthorizationServerMetadata
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: OK
+      summary: Authorization server metadata (RFC 8414)
+      tags:
+      - MCP authorization
+  /.well-known/oauth-protected-resource/{resourcePath}:
+    get:
+      operationId: getMcpResourceMetadata
+      parameters:
+      - in: path
+        name: resourcePath
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: OK
+      summary: Protected resource metadata of a workspace MCP endpoint (RFC 9728)
+      tags:
+      - MCP authorization
   /admin/audit:
     get:
       operationId: adminListAuthEvents
@@ -2577,6 +2616,155 @@ paths:
       summary: List available identity providers
       tags:
       - Auth discovery
+  /mcp/oauth/authorize:
+    get:
+      operationId: authorizeMcpClient
+      parameters:
+      - in: query
+        name: response_type
+        required: false
+        schema:
+          type: string
+      - in: query
+        name: client_id
+        required: false
+        schema:
+          type: string
+      - in: query
+        name: redirect_uri
+        required: false
+        schema:
+          type: string
+      - in: query
+        name: code_challenge
+        required: false
+        schema:
+          type: string
+      - in: query
+        name: code_challenge_method
+        required: false
+        schema:
+          type: string
+      - in: query
+        name: state
+        required: false
+        schema:
+          type: string
+      - in: query
+        name: resource
+        required: false
+        schema:
+          type: string
+      - in: query
+        name: scope
+        required: false
+        schema:
+          type: string
+      - in: query
+        name: prompt
+        required: false
+        schema:
+          type: string
+      responses:
+        "200":
+          description: OK
+      summary: Start an MCP client authorization (RFC 6749 § 4.1.1)
+      tags:
+      - MCP authorization
+  /mcp/oauth/requests/{requestId}:
+    delete:
+      operationId: refuseMcpConsentRequest
+      parameters:
+      - in: path
+        name: requestId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/McpConsentRedirect"
+          description: OK
+      summary: Refuse an MCP client
+      tags:
+      - MCP authorization
+    get:
+      operationId: getMcpConsentRequest
+      parameters:
+      - in: path
+        name: requestId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/McpConsentRequest"
+          description: OK
+      summary: Read a pending MCP client consent request
+      tags:
+      - MCP authorization
+  /mcp/oauth/requests/{requestId}/approval:
+    put:
+      operationId: approveMcpConsentRequest
+      parameters:
+      - in: path
+        name: requestId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/McpConsentRedirect"
+          description: OK
+      summary: Approve an MCP client for a workspace
+      tags:
+      - MCP authorization
+  /mcp/oauth/token:
+    post:
+      operationId: mcpToken
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                client_id:
+                  type: string
+                code:
+                  type: string
+                code_verifier:
+                  type: string
+                grant_type:
+                  type: string
+                redirect_uri:
+                  type: string
+                refresh_token:
+                  type: string
+                resource:
+                  type: string
+                scope:
+                  type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+          description: OK
+      summary: Exchange a code or rotate a refresh token (RFC 6749 § 3.2)
+      tags:
+      - MCP authorization
   /notifications/unsubscribe/{token}:
     post:
       operationId: unsubscribeEmail
@@ -6117,6 +6305,56 @@ paths:
       summary: Get the workspace's LLM usage report for one month
       tags:
       - LLM Usage
+  /workspaces/{workspaceSlug}/mcp-grants:
+    get:
+      operationId: listMcpClientGrants
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/McpClientGrant"
+          description: OK
+      summary: List the MCP clients connected to the workspace
+      tags:
+      - mcp-client-grant
+  /workspaces/{workspaceSlug}/mcp-grants/{grantId}:
+    delete:
+      operationId: revokeMcpClientGrant
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+      - in: path
+        name: grantId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          description: OK
+      summary: Disconnect an MCP client from the workspace
+      tags:
+      - mcp-client-grant
   /workspaces/{workspaceSlug}/members:
     get:
       operationId: listMemberships
@@ -12238,6 +12476,9 @@ components:
       - PRODUCT_FEEDBACK_FILED_BY_ADMIN
       - RESEARCH_DATASET_RELEASED
       - RESEARCH_REMOVAL_RECORDED
+      - MCP_CLIENT_APPROVED
+      - MCP_CLIENT_REFUSED
+      - MCP_CLIENT_REVOKED
     AuthEventResult:
       type: string
       enum:
@@ -16981,6 +17222,91 @@ components:
       - scopes
       - type
       - updatedAt
+    McpClientGrant:
+      type: object
+      description: "One active MCP client grant of a workspace, as its admins see\
+        \ it (ADR 0110)."
+      properties:
+        approvedAt:
+          type: string
+          format: date-time
+        approvedBy:
+          $ref: "#/components/schemas/AccountRef"
+          description: The account that approved the client
+        clientHost:
+          type: string
+          description: The host of the client's metadata document URL
+        clientName:
+          type: string
+          description: "The client's self-declared name, plain text"
+        id:
+          type: string
+          format: uuid
+        scopes:
+          type: array
+          items:
+            type: string
+      required:
+      - approvedBy
+      - clientHost
+      - clientName
+      - id
+      - scopes
+    McpConsentRedirect:
+      type: object
+      description: "Where the browser goes next: the client's redirect, with the code\
+        \ or the refusal."
+      properties:
+        redirectUri:
+          type: string
+      required:
+      - redirectUri
+    McpConsentRequest:
+      type: object
+      description: "A pending MCP client consent request, as the consent page shows\
+        \ it."
+      properties:
+        clientHost:
+          type: string
+          description: The host of the client's metadata document URL; the client
+            cannot choose it
+        clientName:
+          type: string
+          description: "The client's self-declared name, plain text"
+        id:
+          type: string
+          format: uuid
+        loopbackRedirect:
+          type: boolean
+          description: The code goes to this machine only
+        redirectHost:
+          type: string
+        refusal:
+          $ref: "#/components/schemas/McpConsentRequestMcpConsentRefusal"
+          description: Why this account cannot approve the request; absent when it
+            can
+        scopes:
+          type: array
+          items:
+            type: string
+        workspaceName:
+          type: string
+        workspaceSlug:
+          type: string
+      required:
+      - clientHost
+      - clientName
+      - id
+      - loopbackRedirect
+      - redirectHost
+      - scopes
+      - workspaceName
+      - workspaceSlug
+    McpConsentRequestMcpConsentRefusal:
+      type: string
+      enum:
+      - NOT_ADMIN
+      - PASSKEY_REQUIRED
     MemberReviewReadiness:
       type: object
       description: "Whether and how the workspace reviews one member's work, from\
@@ -24005,6 +24331,7 @@ components:
       enum:
       - WEB
       - BROWSER_EXTENSION
+      - MCP_CLIENT
     SessionView:
       type: object
       properties:

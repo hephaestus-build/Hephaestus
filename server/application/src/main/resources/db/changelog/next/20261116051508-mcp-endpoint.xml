@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1794731722469-1" author="hephaestus">
+        <createTable tableName="mcp_client_grant">
+            <column name="id" type="UUID">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="mcp_client_grantPK"/>
+            </column>
+            <column name="account_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="approved_at" type="TIMESTAMP(6) WITH TIME ZONE"/>
+            <column name="client_id" type="VARCHAR(2048)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="client_name" type="VARCHAR(80)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="client_session_id" type="UUID"/>
+            <column name="code_challenge" type="VARCHAR(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="TIMESTAMP(6) WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="ended_at" type="TIMESTAMP(6) WITH TIME ZONE"/>
+            <column name="expires_at" type="TIMESTAMP(6) WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="redirect_uri" type="VARCHAR(2048)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="resource" type="VARCHAR(2048)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="scopes" type="VARCHAR(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="state" type="VARCHAR(512)"/>
+            <column name="status" type="VARCHAR(16)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="workspace_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+    <changeSet id="1794731722469-2" author="hephaestus">
+        <addColumn tableName="client_sign_in_handoff">
+            <column name="mcp_client_grant_id" type="UUID"/>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1794731722469-3" author="hephaestus">
+        <createIndex indexName="ix_mcp_client_grant_account_id" tableName="mcp_client_grant">
+            <column name="account_id"/>
+        </createIndex>
+    </changeSet>
+    <changeSet id="1794731722469-4" author="hephaestus">
+        <createIndex indexName="ix_mcp_client_grant_client_session_id" tableName="mcp_client_grant">
+            <column name="client_session_id"/>
+        </createIndex>
+    </changeSet>
+    <changeSet id="1794731722469-5" author="hephaestus">
+        <createIndex indexName="ix_mcp_client_grant_workspace_id" tableName="mcp_client_grant">
+            <column name="workspace_id"/>
+        </createIndex>
+    </changeSet>
+    <changeSet id="1794731722469-6" author="hephaestus">
+        <modifyDataType columnName="client_id" newDataType="varchar(2048)" tableName="client_session"/>
+    </changeSet>
+    <changeSet id="1794731722469-7" author="hephaestus">
+        <modifyDataType columnName="client_id" newDataType="varchar(2048)" tableName="client_sign_in_handoff"/>
+    </changeSet>
+    <changeSet id="1794731722469-8" author="hephaestus">
+        <modifyDataType columnName="redirect_uri" newDataType="varchar(2048)" tableName="client_sign_in_handoff"/>
+    </changeSet>
+    <changeSet id="1794731722469-9" author="hephaestus">
+        <comment>A workspace purge removes the workspace's MCP client grants.</comment>
+        <addForeignKeyConstraint baseTableName="mcp_client_grant" baseColumnNames="workspace_id" constraintName="sfk_mcp_client_grant_workspace" referencedTableName="workspace" referencedColumnNames="id" onDelete="CASCADE" validate="true"/>
+    </changeSet>
+    <changeSet id="1794731722469-10" author="hephaestus">
+        <preConditions onFail="HALT" onError="HALT">
+            <sqlCheck expectedResult="1">SELECT count(*) FROM pg_constraint WHERE conrelid='public.auth_event'::regclass AND conname='ck_auth_event_event_type' AND contype='c'</sqlCheck>
+        </preConditions>
+        <comment>Preserve every existing audit event type and admit the MCP client consent and revocation events.</comment>
+        <sql><![CDATA[
+ALTER TABLE auth_event DROP CONSTRAINT ck_auth_event_event_type;
+ALTER TABLE auth_event ADD CONSTRAINT ck_auth_event_event_type CHECK (event_type IN ('USER_VIEW', 'LOGIN', 'PASSKEY_CHANGED', 'PASSKEY_VERIFIED', 'LOGIN_FAILED', 'LOGOUT', 'TOKEN_REFRESH', 'JWT_REVOKED', 'IDENTITY_LINKED', 'IDENTITY_UNLINKED', 'IMPERSONATION_BEGIN', 'IMPERSONATION_END', 'ACCOUNT_DELETED', 'EXPORT_REQUESTED', 'PERSON_DATA_PREVIEWED', 'PERSON_DATA_EXPORTED', 'PERSON_DATA_ERASURE_REQUESTED', 'APP_ROLE_CHANGED', 'ACCOUNT_STATUS_CHANGED', 'RESEARCH_CONSENT_REVOKED', 'WORKSPACE_ELEVATION', 'INSTALLATION_EVENT_REPLAYED', 'GITHUB_INSTALLATION_ADOPTED', 'GITHUB_INSTALLATION_DECLINED', 'WORKSPACE_OWNER_CHANGE', 'WORKSPACE_DELETION', 'PROVIDER_RESOURCE_RELEASE', 'LLM_CONNECTION_CREATED', 'LLM_CONNECTION_UPDATED', 'LLM_CONNECTION_DELETED', 'LLM_MODEL_CREATED', 'LLM_MODEL_UPDATED', 'LLM_MODEL_DELETED', 'LLM_MODEL_PRICE_CHANGED', 'LLM_MODEL_SHARING_CHANGED', 'LLM_SETTINGS_CHANGED', 'LOGIN_PROVIDER_CREATED', 'LOGIN_PROVIDER_UPDATED', 'LOGIN_PROVIDER_DELETED', 'SILENT_MODE_CHANGED', 'PUBLIC_ACTIVITY_CHANGED', 'PRODUCT_FEEDBACK_DESTINATIONS_CHANGED', 'PRODUCT_FEEDBACK_CLEANUP_CONFIRMED', 'PRODUCT_FEEDBACK_FILED_BY_ADMIN', 'RESEARCH_DATASET_RELEASED', 'RESEARCH_REMOVAL_RECORDED', 'MCP_CLIENT_APPROVED', 'MCP_CLIENT_REFUSED', 'MCP_CLIENT_REVOKED'));
+        ]]></sql>
+        <rollback><sql splitStatements="false"><![CDATA[
+DO $mcp_client_audit_rollback$
+BEGIN
+    IF EXISTS (SELECT 1 FROM auth_event WHERE event_type IN ('MCP_CLIENT_APPROVED', 'MCP_CLIENT_REFUSED', 'MCP_CLIENT_REVOKED')) THEN
+        RAISE EXCEPTION 'MCP client audit rows exist; retain the widened audit constraint';
+    END IF;
+    ALTER TABLE auth_event DROP CONSTRAINT ck_auth_event_event_type;
+    ALTER TABLE auth_event ADD CONSTRAINT ck_auth_event_event_type CHECK (event_type IN ('USER_VIEW', 'LOGIN', 'PASSKEY_CHANGED', 'PASSKEY_VERIFIED', 'LOGIN_FAILED', 'LOGOUT', 'TOKEN_REFRESH', 'JWT_REVOKED', 'IDENTITY_LINKED', 'IDENTITY_UNLINKED', 'IMPERSONATION_BEGIN', 'IMPERSONATION_END', 'ACCOUNT_DELETED', 'EXPORT_REQUESTED', 'PERSON_DATA_PREVIEWED', 'PERSON_DATA_EXPORTED', 'PERSON_DATA_ERASURE_REQUESTED', 'APP_ROLE_CHANGED', 'ACCOUNT_STATUS_CHANGED', 'RESEARCH_CONSENT_REVOKED', 'WORKSPACE_ELEVATION', 'INSTALLATION_EVENT_REPLAYED', 'GITHUB_INSTALLATION_ADOPTED', 'GITHUB_INSTALLATION_DECLINED', 'WORKSPACE_OWNER_CHANGE', 'WORKSPACE_DELETION', 'PROVIDER_RESOURCE_RELEASE', 'LLM_CONNECTION_CREATED', 'LLM_CONNECTION_UPDATED', 'LLM_CONNECTION_DELETED', 'LLM_MODEL_CREATED', 'LLM_MODEL_UPDATED', 'LLM_MODEL_DELETED', 'LLM_MODEL_PRICE_CHANGED', 'LLM_MODEL_SHARING_CHANGED', 'LLM_SETTINGS_CHANGED', 'LOGIN_PROVIDER_CREATED', 'LOGIN_PROVIDER_UPDATED', 'LOGIN_PROVIDER_DELETED', 'SILENT_MODE_CHANGED', 'PUBLIC_ACTIVITY_CHANGED', 'PRODUCT_FEEDBACK_DESTINATIONS_CHANGED', 'PRODUCT_FEEDBACK_CLEANUP_CONFIRMED', 'PRODUCT_FEEDBACK_FILED_BY_ADMIN', 'RESEARCH_DATASET_RELEASED', 'RESEARCH_REMOVAL_RECORDED'));
+END
+$mcp_client_audit_rollback$;
+        ]]></sql></rollback>
+    </changeSet>
+</databaseChangeLog>

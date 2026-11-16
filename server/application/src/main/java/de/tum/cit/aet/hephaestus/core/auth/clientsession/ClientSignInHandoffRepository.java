@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.core.auth.clientsession;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import java.time.Instant;
 import java.util.Optional;
+import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -16,6 +17,10 @@ public interface ClientSignInHandoffRepository extends JpaRepository<ClientSignI
     /** The account a code was issued to, read without loading the row, so the account lock can come first. */
     @Query("SELECT h.accountId FROM ClientSignInHandoff h WHERE h.codeHash = :codeHash")
     Optional<Long> findAccountId(@Param("codeHash") String codeHash);
+
+    /** The MCP client grant a code was approved for, read without consuming the code. */
+    @Query("SELECT h.mcpClientGrantId FROM ClientSignInHandoff h WHERE h.codeHash = :codeHash")
+    Optional<UUID> findMcpClientGrantId(@Param("codeHash") String codeHash);
 
     /** Marks an unexpired code used; 1 for exactly one caller, however many race for it. */
     @Modifying
@@ -37,6 +42,16 @@ public interface ClientSignInHandoffRepository extends JpaRepository<ClientSignI
            AND h.consumedAt IS NULL
         """)
     int consumeAllForAccount(@Param("accountId") Long accountId, @Param("now") Instant now);
+
+    /** Burns the code of an approved MCP client grant that a workspace admin revokes before its exchange. */
+    @Modifying
+    @Query("""
+        UPDATE ClientSignInHandoff h
+           SET h.consumedAt = :now
+         WHERE h.mcpClientGrantId = :grantId
+           AND h.consumedAt IS NULL
+        """)
+    int consumeForGrant(@Param("grantId") UUID grantId, @Param("now") Instant now);
 
     @Modifying
     @Query("DELETE FROM ClientSignInHandoff h WHERE h.expiresAt < :cutoff")

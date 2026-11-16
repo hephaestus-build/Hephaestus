@@ -8,6 +8,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 import java.time.Instant;
+import java.util.UUID;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.CreationTimestamp;
@@ -41,10 +42,10 @@ public class ClientSignInHandoff {
     @Column(name = "client_kind", nullable = false, length = 32)
     private InstalledClientKind clientKind;
 
-    @Column(name = "client_id", nullable = false, length = 64)
+    @Column(name = "client_id", nullable = false, length = 2048)
     private String clientId;
 
-    @Column(name = "redirect_uri", nullable = false, length = 255)
+    @Column(name = "redirect_uri", nullable = false, length = 2048)
     private String redirectUri;
 
     /** Base64url S256 PKCE challenge (RFC 7636). */
@@ -60,6 +61,10 @@ public class ClientSignInHandoff {
     @Column(name = "expires_at", nullable = false)
     private Instant expiresAt;
 
+    /** The MCP client grant this code was approved for; absent for a first-party installed client. */
+    @Column(name = "mcp_client_grant_id", columnDefinition = "uuid")
+    private @Nullable UUID mcpClientGrantId;
+
     @Column(name = "consumed_at")
     private @Nullable Instant consumedAt;
 
@@ -74,7 +79,8 @@ public class ClientSignInHandoff {
             String codeChallenge,
             Instant sessionExpiresAt,
             Instant authTime,
-            Instant expiresAt) {
+            Instant expiresAt,
+            @Nullable UUID mcpClientGrantId) {
         this.codeHash = codeHash;
         this.accountId = accountId;
         this.clientKind = client.kind();
@@ -84,5 +90,6 @@ public class ClientSignInHandoff {
         this.sessionExpiresAt = sessionExpiresAt;
         this.authTime = authTime;
         this.expiresAt = expiresAt;
+        this.mcpClientGrantId = mcpClientGrantId;
     }
 }

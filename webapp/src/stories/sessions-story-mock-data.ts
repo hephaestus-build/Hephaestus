@@ -43,4 +43,13 @@ export const storySessions: SessionView[] = [
 		issuedAt: hoursBefore(2),
 		expiresAt: daysAfter(7),
 	},
+	{
+		jti: "sess-mcp-005",
+		client: "MCP_CLIENT",
+		current: false,
+		userAgent: "node",
+		ip: "192.0.2.10",
+		issuedAt: hoursBefore(1),
+		expiresAt: daysAfter(7),
+	},
 ];

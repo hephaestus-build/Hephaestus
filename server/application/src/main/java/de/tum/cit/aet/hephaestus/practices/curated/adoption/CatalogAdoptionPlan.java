@@ -7,7 +7,7 @@ import de.tum.cit.aet.hephaestus.practices.catalog.CatalogPracticeDocument;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackMode;
 import org.jspecify.annotations.Nullable;
 
-record CatalogAdoptionPlan(
+public record CatalogAdoptionPlan(
         String slug,
         CatalogPracticeDocument document,
         CatalogAdoptionAvailability availability,
@@ -52,7 +52,7 @@ record CatalogAdoptionPlan(
                 tag);
     }
 
-    CatalogPracticePreviewDTO preview() {
+    public CatalogPracticePreviewDTO preview() {
         return new CatalogPracticePreviewDTO(
                 slug,
                 document.kind().value(),

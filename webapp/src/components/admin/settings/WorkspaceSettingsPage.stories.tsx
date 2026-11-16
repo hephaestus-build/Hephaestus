@@ -2,6 +2,9 @@ import type { Meta, StoryObj } from "@storybook/react";
 import { expect, fn, within } from "storybook/test";
 
 import { withStandardPage } from "@/stories/decorators";
+import { daysBefore } from "@/stories/story-clock";
+
+import { WorkspaceMcpClientGrantsSection } from "./WorkspaceMcpClientGrantsSection";
 
 import { WorkspaceSettingsPage, type WorkspaceSettingsPageProps } from "./WorkspaceSettingsPage";
 
@@ -101,5 +104,31 @@ export const PracticeReviewsOff: Story = {
 	play: async ({ canvas }) => {
 		const capabilities = within(canvas.getByRole("region", { name: "Capabilities" }));
 		await expect(capabilities.getByText(/^Off\./u)).toBeVisible();
+	},
+};
+
+/** An instance with MCP clients on shows the clients that an admin connected, before the danger zone. */
+export const WithConnectedMcpClients: Story = {
+	args: {
+		mcpClients: (
+			<WorkspaceMcpClientGrantsSection
+				grants={[
+					{
+						id: "8a1f6c3e-2b47-4d55-9f0e-1c2d3e4f5a6b",
+						clientHost: "claude.ai",
+						clientName: "Claude Code",
+						approvedBy: "Ada Lovelace",
+						scopes: ["practices:read"],
+						approvedAt: daysBefore(3),
+					},
+				]}
+				onRetry={fn()}
+				onRevoke={fn()}
+			/>
+		),
+	},
+	play: async ({ canvas }) => {
+		const clients = within(canvas.getByRole("region", { name: "Connected MCP clients" }));
+		await expect(clients.getByRole("button", { name: "Disconnect claude.ai" })).toBeEnabled();
 	},
 };

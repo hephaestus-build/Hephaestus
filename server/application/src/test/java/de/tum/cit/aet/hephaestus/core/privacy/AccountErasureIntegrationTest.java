@@ -999,6 +999,19 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
                     'pkce-credential-canary',CURRENT_TIMESTAMP+INTERVAL '1 hour',CURRENT_TIMESTAMP,
                     CURRENT_TIMESTAMP+INTERVAL '60 seconds',CURRENT_TIMESTAMP)
                 """, entry.getKey().toString(), entry.getValue().getId());
+            jdbc.update(
+                    """
+                INSERT INTO mcp_client_grant(id,workspace_id,account_id,client_id,client_name,redirect_uri,resource,
+                    scopes,code_challenge,state,status,client_session_id,expires_at,created_at,approved_at)
+                VALUES (?,?,?,'https://client.example.test/client.json','Privacy client',
+                    'http://127.0.0.1:53111/callback','https://hephaestus.example.test/api/workspaces/privacy-nonce/mcp',
+                    'practices:read','pkce-credential-canary','state-credential-canary','ACTIVE',?,
+                    CURRENT_TIMESTAMP+INTERVAL '1 hour',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)
+                """,
+                    UUID.randomUUID(),
+                    nonceWorkspace.getId(),
+                    entry.getValue().getId(),
+                    entry.getKey());
         }
         User target = users.saveAndFlush(TestUserFactory.createUser(42L, "target", scm));
         User other = users.saveAndFlush(TestUserFactory.createUser(84L, "other", scm));
@@ -1211,6 +1224,9 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
         assertThat(counts.get("oauth_state_nonce")).isEqualTo(1L);
         assertThat(counts.get("client_session")).isEqualTo(1L);
         assertThat(counts.get("client_sign_in_handoff")).isEqualTo(1L);
+        assertThat(counts.get("mcp_client_grant")).isEqualTo(1L);
+        assertThat(export.path("stores").path("mcp_client_grant").toString())
+                .doesNotContain("code_challenge", "state-credential-canary");
         assertThat(export.path("stores").path("client_sign_in_handoff").toString())
                 .doesNotContain(targetSession.toString(), "code_hash", "code_challenge");
 

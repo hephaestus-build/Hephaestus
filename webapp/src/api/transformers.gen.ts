@@ -111,6 +111,7 @@ import type {
 	ListInstallationDeadLettersResponse,
 	ListInstanceProviderRepairsResponse,
 	ListLinkedIdentitiesResponse,
+	ListMcpClientGrantsResponse,
 	ListMembershipsResponse,
 	ListMyProductFeedbackResponse,
 	ListOutlineCollectionsResponse,
@@ -1569,6 +1570,20 @@ export const getLlmUsageReportResponseTransformer = async (
 	data: any,
 ): Promise<GetLlmUsageReportResponse> => {
 	data = workspaceLlmUsageReportSchemaResponseTransformer(data);
+	return data;
+};
+
+const mcpClientGrantSchemaResponseTransformer = (data: any) => {
+	if (data.approvedAt) {
+		data.approvedAt = new Date(data.approvedAt);
+	}
+	return data;
+};
+
+export const listMcpClientGrantsResponseTransformer = async (
+	data: any,
+): Promise<ListMcpClientGrantsResponse> => {
+	data = data.map((item: any) => mcpClientGrantSchemaResponseTransformer(item));
 	return data;
 };
 

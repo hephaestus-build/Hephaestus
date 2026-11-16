@@ -1,0 +1,86 @@
+---
+title: Connect MCP clients
+description: Turn on the workspace MCP endpoint, connect an MCP client such as Claude Code to a workspace, and revoke its access.
+page_type: how-to
+---
+
+An MCP client, such as Claude Code, can read a workspace's practice configuration for a workspace admin.
+It uses the workspace MCP endpoint, which speaks the [Model Context Protocol](https://modelcontextprotocol.io/).
+The client signs in with OAuth through Hephaestus, and the admin approves it once for one workspace.
+
+The client reads practice settings, review settings, the members' provider logins and review status.
+It never reads source code, observations, feedback, conversations or secrets.
+[ADR 0110](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0110-a-workspace-admins-mcp-client-configures-practices-through-the-workspace-mcp-endpoint.md) lists every field that a tool returns.
+
+## Turn on the endpoint
+
+The endpoint is off by default.
+Turn it on in the chart values and upgrade the release:
+
+```yaml
+config:
+  mcpEnabled: true
+```
+
+The server reads it as `HEPHAESTUS_MCP_ENABLED`.
+When it is off, the endpoint, its metadata and its sign-in endpoints answer 404.
+
+With the value on, the chart's route also sends two discovery paths on the instance host to the server: `/.well-known/oauth-authorization-server` and `/.well-known/oauth-protected-resource/`.
+MCP clients find the sign-in endpoints there.
+If a proxy sits in front of the Gateway, it must pass both paths through unchanged.
+
+The endpoint uses the instance host that `hephaestus.auth.issuer` names.
+A [workspace address](./workspace-subdomains.mdx) does not serve it.
+
+## Connect a client to a workspace
+
+A workspace admin connects the client.
+The admin needs a real admin or owner membership of the workspace.
+Instance admin access without a membership does not count.
+
+1. Add the workspace's endpoint to the client. For Claude Code:
+
+   ```bash
+   claude mcp add --transport http hephaestus https://<instance host>/api/workspaces/<workspace slug>/mcp
+   ```
+
+2. Start the client's sign-in. The client opens a browser.
+3. Sign in to Hephaestus if you are not signed in.
+4. Read the consent page. It shows the host that publishes the client's metadata, the name that the client gives itself, the workspace, and what the client may read.
+5. Select **Allow** to approve, or **Deny** to refuse. If you signed in more than 5 minutes ago, Hephaestus asks you to confirm access first and then returns you to the same request.
+
+The client then calls the endpoint until its session ends.
+It signs in again after the absolute session deadline that also applies to the web app.
+
+### When consent is refused
+
+| The page says | Why |
+|---|---|
+| You are not an admin of this workspace | Only an admin or owner can approve a client. |
+| This workspace requires a passkey for admin changes | An MCP client cannot hold a passkey proof. Use the web app for this workspace. |
+| This request has expired | A consent request waits 10 minutes. Start the client's sign-in again. |
+| This client cannot connect | The client's metadata document could not be read, or it lists a redirect that is not HTTPS or a loopback address. |
+
+## Revoke a client
+
+Each of these ends a client's access at once:
+
+- A workspace admin disconnects it in **Workspace settings → Connected MCP clients**.
+- The person who approved it ends the session in their session list.
+- **Sign out everywhere** ends every client session of the account.
+- Suspending or deleting the account ends them all.
+
+A demotion or removal from the workspace takes effect on the client's next call.
+
+## Limits
+
+Calls to a workspace MCP endpoint share one budget for each account: 120 calls a minute.
+The sign-in endpoints share the budgets of web sign-in and of installed clients.
+Each replica keeps its own budget, so the real limit is the replica count times this number.
+These budgets are fixed and have no chart value. They stop a runaway client. An agent that configures practices stays far below them.
+
+## Check that it worked
+
+- `GET https://<instance host>/.well-known/oauth-authorization-server` answers with the issuer and the sign-in endpoints.
+- `POST https://<instance host>/api/workspaces/<slug>/mcp` without a token answers 401 with a `resource_metadata` link.
+- If a client reports that it cannot find the authorization server, compare `hephaestus.auth.issuer` with the host in the client's endpoint URL.

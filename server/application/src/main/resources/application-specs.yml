@@ -23,6 +23,9 @@ spring:
             # Spec generation introspects controllers and must not access the database during startup.
             ddl-auto: none
 hephaestus:
+    # The spec describes every shipped endpoint, including those an operator turns on.
+    mcp:
+        enabled: true
     # Contract generation runs against H2 and starts no background work (ConditionalOnBackgroundWork).
     background-work:
         enabled: false

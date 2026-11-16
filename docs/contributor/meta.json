@@ -38,6 +38,7 @@
 		"outbox",
 		"lifecycles",
 		"workspace-context",
+		"mcp-tools",
 		"sync-lifecycle",
 		"database-schema",
 		"database-migration",

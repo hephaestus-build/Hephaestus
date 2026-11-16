@@ -172,11 +172,17 @@ public class HephaestusJwtIssuer {
         JwtClaimsSet.Builder claims = JwtClaimsSet.builder()
                 .issuer(properties.issuer().toString())
                 .subject(String.valueOf(principal.accountId()))
-                .audience(List.of(properties.audience()))
                 .id(jti.toString())
                 .issuedAt(now)
-                .expiresAt(expiresAt)
-                .claim("roles", List.copyOf(principal.roles()));
+                .expiresAt(expiresAt);
+        TokenConstraints.McpAudience mcp = constraints.mcp();
+        if (mcp == null) {
+            claims.audience(List.of(properties.audience())).claim("roles", List.copyOf(principal.roles()));
+        } else {
+            // An MCP token reaches one workspace endpoint and nothing else: no web-app audience, so the REST
+            // decoder refuses it, and no roles, so instance-admin elevation cannot happen on its path.
+            claims.audience(List.of(mcp.resource())).claim("scope", mcp.scope());
+        }
         if (sessionExpiresAt != null) {
             // Absolute session ceiling (epoch seconds), constant across refreshes (OWASP absolute timeout).
             claims.claim("session_exp", sessionExpiresAt.getEpochSecond());
