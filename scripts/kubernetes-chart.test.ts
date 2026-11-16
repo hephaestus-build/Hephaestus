@@ -512,7 +512,7 @@ await test("the route rewrites no path and keeps every webhook path whole", () =
 	for (const text of rules) {
 		assert.equal(
 			text.includes("{{ toJson $hsts }}"),
-			backendOf(text)[0] === "webapp",
+			backendOf(text)?.[0] === "webapp",
 			"HSTS only on the web app's rules",
 		);
 	}
