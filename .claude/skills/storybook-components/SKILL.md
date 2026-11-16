@@ -26,6 +26,7 @@ Load the one file that answers your question.
 | `rules/story-args-and-coverage.md` | Which states earn a story, and how do the Controls stay wired to the real component? |
 | `rules/play-assertions.md` | Can this play function fail, and how do I assert against a portal or a just-opened overlay? |
 | `rules/a11y.md` | What does axe not catch here, and what must a component name for itself? |
+| `vp exec modern-web-guidance retrieve <id>` | What does the platform do natively here (forms, dialogs, focus, IME, text scale)? The pinned guides from the browser vendors. `list` names the ids. Never `npx` it: that skips the pin. |
 | `traps.md` | Something passed that should not have. Read this before debugging a green-but-wrong story. |
 | `RUBRIC.md` | Grading a diff across nine dimensions, D→A+, with the anti-criteria that look like quality and are not. |
 
