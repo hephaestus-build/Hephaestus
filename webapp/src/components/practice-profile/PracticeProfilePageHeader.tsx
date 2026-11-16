@@ -119,7 +119,12 @@ export function PracticeProfilePageHeader({
 					{PRACTICE_PROFILE_INTRO} {AUDIENCE_INFO}
 				</p>
 			</div>
-			{tourAction !== undefined && <div className="-ml-2.5 flex">{tourAction}</div>}
+			{/* The action's row holds its place while the page loads, so nothing under it moves when it comes. */}
+			{tourAction !== undefined && (
+				<div className="-ml-2.5 flex">
+					{isLoading ? <Skeleton className="ml-2.5 h-7 w-28" /> : tourAction}
+				</div>
+			)}
 			{/* One link names the destination and covers the card with a pseudo-element, so the whole
 			    card is the pointer path while the words stay the keyboard path. The words turn highlight
 			    blue while the card is hovered, as every inline link on the practice surfaces does on

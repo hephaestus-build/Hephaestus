@@ -55,7 +55,7 @@ interface Inset {
 }
 
 /** The app's own content area, under its top bar and beside its sidebar; the whole window without one. */
-function contentInset(): Inset | null {
+export function contentInset(): Inset | null {
 	const main =
 		document.querySelector('[data-slot="sidebar-inset"] > main') ??
 		document.querySelector('[data-slot="sidebar-inset"]');
@@ -63,7 +63,9 @@ function contentInset(): Inset | null {
 		return null;
 	}
 	const area = main.getBoundingClientRect();
-	return { top: area.top, left: area.left };
+	// The top bar scrolls with the page. Where the reader's page is scrolled past it, the area starts
+	// above the window, and a layer placed there would hold the top of the example out of reach.
+	return { top: Math.max(area.top, 0), left: area.left };
 }
 
 export interface TourExampleLayerProps {
