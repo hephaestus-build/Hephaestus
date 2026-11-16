@@ -944,8 +944,14 @@ async function judgeDowntime(
 	});
 	const health = await podHealth(cluster, cluster.sandboxes);
 	const stillRunning = health.filter((pod) => pod.phase === "Running");
+	// A Pod whose claim has no agent_sandbox row any more was shut down by the server after its review ended: that is
+	// the normal release, not the controller's downtime moving it.
+	const released = (pod: { name: string }) =>
+		!during.sandboxes.some((sandbox) => sandbox.claim_name === pod.name);
 	const moved = sandboxPods.filter(
-		(pod) => !stillRunning.some((now) => now.uid === pod.uid && now.restarts === pod.restarts),
+		(pod) =>
+			!stillRunning.some((now) => now.uid === pod.uid && now.restarts === pod.restarts) &&
+			!(released(pod) && !stillRunning.some((now) => now.uid === pod.uid)),
 	);
 	evidence.check({
 		id: "D4-existing-keep",
@@ -968,6 +974,8 @@ async function judgeDowntime(
 			run.state === "ENDED" &&
 			run.stop_reason !== "COMPLETED" &&
 			run.stop_reason !== "CANCELLED" &&
+			// A REVIEW run ends HANDED_OFF when its review moves on to composition.
+			run.stop_reason !== "HANDED_OFF" &&
 			Date.parse(run.ended_at ?? "") > Date.parse(startedAt),
 	);
 	evidence.check({
