@@ -270,7 +270,8 @@ function feedback(
 ): Wire<PracticePageFeedback> {
 	return {
 		body: text.body,
-		cleanNeeded: 2,
+		// The product resolves a card after three clean pieces of work in a row.
+		cleanNeeded: 3,
 		cleanWork: [],
 		closedAt: null,
 		closedBy: null,
@@ -288,7 +289,8 @@ function feedback(
 		nextStep: text.nextStep,
 		practiceName: practice.name,
 		practiceSlug: practice.slug,
-		preparedAt: daysAgo(evidence[1].daysAgo),
+		// Raised once the pattern recurs: after the review of the second piece of work, never with it.
+		preparedAt: new Date(Date.parse(daysAgo(evidence[1].daysAgo)) + 12 * 60_000).toISOString(),
 		readAt: null,
 		response: null,
 		unverifiedHistory: false,
@@ -312,7 +314,7 @@ const practiceFeedback: Wire<PracticePageFeedback>[] =
 					},
 					{
 						headline: "Reviewers cannot see how to check your change",
-						body: "Your last two pull requests describe the change well, but neither says how a reviewer can see that it works.",
+						body: "Your last two pull requests say what changed, but neither says how a reviewer can see that it works.",
 						nextStep:
 							"Add a short “How to verify” section with the command or the screen that shows the result.",
 					},
