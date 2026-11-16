@@ -209,6 +209,56 @@ export function noteProblems(note: Note): string[] {
 	return problems.map((problem) => `${note.file}: ${problem}.`);
 }
 
+/** `1.0.0-rc.7` as numbers; a release sorts after its own release candidates. Null for any other text. */
+function versionKey(version: string): number[] | null {
+	const match = /^(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)(?:-rc\.(?<pre>\d+))?$/u.exec(
+		version,
+	)?.groups;
+	if (match === undefined) {
+		return null;
+	}
+	const pre = match.pre === undefined ? Number.MAX_SAFE_INTEGER : Number(match.pre);
+	return [Number(match.major), Number(match.minor), Number(match.patch), pre];
+}
+
+function compareKeys(left: number[], right: number[]): number {
+	for (let index = 0; index < left.length; index += 1) {
+		const difference = (left[index] ?? 0) - (right[index] ?? 0);
+		if (difference !== 0) {
+			return difference;
+		}
+	}
+	return 0;
+}
+
+/**
+ * The guide section that stands for `after`. A cut that failed after its Version PR merged burns its number, and the
+ * next Version PR folds the burned section into the published release that shipped it (`foldUnpublished` in
+ * `scripts/lib/release-headings.ts`). So a page that names a burned number reads the oldest section newer than it,
+ * and the page still lists by hand everything up to that number. The fold merges a published release's own section
+ * into the same heading, so a page must not name a burned number older than a release with entries of its own.
+ * A version that no section precedes and follows, such as a typo, is an error.
+ */
+export function sectionFor(versions: readonly string[], after: string): string {
+	if (versions.includes(after)) {
+		return after;
+	}
+	const key = versionKey(after);
+	const keyed = versions.flatMap((version) => {
+		const versionKeyed = versionKey(version);
+		return versionKeyed === null ? [] : [{ version, key: versionKeyed }];
+	});
+	const newer =
+		key === null ? [] : keyed.filter((candidate) => compareKeys(candidate.key, key) > 0);
+	const older =
+		key === null ? [] : keyed.filter((candidate) => compareKeys(candidate.key, key) < 0);
+	const shipped = newer.toSorted((left, right) => compareKeys(left.key, right.key))[0];
+	if (shipped === undefined || older.length === 0) {
+		throw new Error(`The migration guide has no section for ${after}`);
+	}
+	return shipped.version;
+}
+
 /** What an upgrade page reads: the guide's releases, newest first, and every entry. */
 export interface MigrationGuide {
 	versions: string[];

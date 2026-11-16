@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import { describe, test } from "node:test";
 
-import { migrationEntries, noteProblems } from "./migration-entries.ts";
+import { migrationEntries, noteProblems, sectionFor } from "./migration-entries.ts";
 
 const repository = "https://github.com/o/r/blob/main";
 const fields = "- **When:** before the window\n- **Action:** Do it now.\n";
@@ -252,7 +252,20 @@ await test("the migration guide and every pending note parse", () => {
 		notes,
 		repository,
 	);
-	assert.ok(versions.includes("1.0.0-rc.7"));
+	// Each upgrade page names the last release that it lists by hand. Before and after the Version PR folds a burned
+	// release number, that name must stand for a section of the guide.
+	const pages = readdirSync(new URL("docs/admin/", root)).filter((name) => name.endsWith(".mdx"));
+	const afters = pages.flatMap((name) =>
+		[
+			...readFileSync(new URL(`docs/admin/${name}`, root), "utf8").matchAll(
+				/<MigrationEntries after="(?<after>[^"]+)"/gu,
+			),
+		].flatMap((match) => (match.groups?.after === undefined ? [] : [match.groups.after])),
+	);
+	assert.ok(afters.length > 0);
+	for (const after of afters) {
+		assert.ok(versions.includes(sectionFor(versions, after)));
+	}
 	assert.equal(entries.filter((entry) => entry.version === null).length, notes.length);
 	assert.ok(entries.every((entry) => entry.title !== ""));
 	assert.ok(
@@ -260,4 +273,30 @@ await test("the migration guide and every pending note parse", () => {
 			(entry) => entry.version !== null || (entry.when !== null && entry.action !== null),
 		),
 	);
+});
+
+await describe("sectionFor", async () => {
+	// Newest first, as `migrationEntries` lists them.
+	const unfolded = ["1.0.0-rc.7", "1.0.0-rc.6", "1.0.0-rc.5"];
+	const folded = ["1.0.0-rc.9", "1.0.0-rc.8", "1.0.0-rc.5"];
+
+	await test("a version with its own section stands for itself", () => {
+		assert.equal(sectionFor(unfolded, "1.0.0-rc.7"), "1.0.0-rc.7");
+	});
+
+	await test("a burned version stands for the published release that the Version PR folded it into", () => {
+		assert.equal(sectionFor(folded, "1.0.0-rc.7"), "1.0.0-rc.8");
+		assert.equal(sectionFor(folded, "1.0.0-rc.6"), "1.0.0-rc.8");
+	});
+
+	await test("a version outside the guide's history is an error", () => {
+		assert.throws(() => sectionFor(folded, "1.0.0-rc.77"), /no section for 1\.0\.0-rc\.77/u);
+		assert.throws(() => sectionFor(folded, "0.1.0"), /no section for 0\.1\.0/u);
+		assert.throws(() => sectionFor(folded, "rc.7"), /no section for rc\.7/u);
+		assert.throws(() => sectionFor(folded, "1.0.0-rc.10"), /no section for 1\.0\.0-rc\.10/u);
+	});
+
+	await test("a release sorts after its own release candidates", () => {
+		assert.equal(sectionFor(["1.0.0", "1.0.0-rc.8"], "1.0.0-rc.9"), "1.0.0");
+	});
 });

@@ -1,7 +1,7 @@
 import { Fragment, type ReactNode } from "react";
 import guide from "virtual:migration-entries";
 
-import type { MigrationEntry } from "@/lib/migration-entries";
+import { sectionFor, type MigrationEntry } from "@/lib/migration-entries";
 
 interface MigrationEntriesProps {
 	/** The last release whose entries the page lists by hand; later entries and pending notes appear here. */
@@ -53,10 +53,7 @@ function Title({ entry }: { entry: MigrationEntry }): ReactNode {
  */
 export function MigrationEntries({ after, group }: MigrationEntriesProps): ReactNode {
 	// The guide lists its releases newest first, so a later release has a lower position.
-	const position = guide.versions.indexOf(after);
-	if (position === -1) {
-		throw new Error(`The migration guide has no section for ${after}`);
-	}
+	const position = guide.versions.indexOf(sectionFor(guide.versions, after));
 	const later = guide.entries.filter(
 		(entry) => entry.version === null || guide.versions.indexOf(entry.version) < position,
 	);
