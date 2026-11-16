@@ -635,14 +635,20 @@ It first composes the review on the work, then the private feedback, which reads
 The gateway keeps a transcript of each composition claim.
 It holds the sessions that the gateway issued, their turns, and the tool answers that it gave.
 It also holds each reply that it served, linked to the exact conversation that the reply answered, and each tool call.
-The transcript holds digests, never the content.
+The transcript holds digests, not the content.
+The one exception is the answer that a served conversation got, which the transcript keeps while the claim holds the run.
+When the run leaves that lease, a trigger on `agent_run` clears it.
 
 The gateway forwards a model request of the claim only if the request continues that conversation as the composer does.
 The request has the session's instructions, tools and settings, and then the session's input.
 After that, each served reply follows the conversation that it answered.
 The answers to the reply's calls come next, with the session's nudge at most once.
 A reply without calls gets the session's finish, at most once.
-A conversation that already got its answer is not sent again, but copies sent at the same time can each get one.
+
+A conversation that already got its answer gets that answer again, from the transcript and with no model call.
+Thus a composer whose answer was lost on the way after the gateway recorded it goes on from the same answer.
+Copies sent at the same time can each get an answer from the model, and the transcript keeps the first.
+After the claim ends, the gateway answers its requests with `409`, and the cleared answer is never served.
 
 Any other request gets `403` with the refusal `NOT_COMPOSER_REQUEST`.
 

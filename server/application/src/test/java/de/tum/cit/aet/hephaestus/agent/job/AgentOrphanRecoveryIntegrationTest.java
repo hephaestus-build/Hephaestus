@@ -47,7 +47,9 @@ import de.tum.cit.aet.hephaestus.agent.usage.LlmPriceSnapshot;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityRepository;
+import de.tum.cit.aet.hephaestus.core.privacy.PersonDataRegistry;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonCopyIdentity;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
@@ -110,6 +112,7 @@ import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.tracing.Tracer;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -168,6 +171,12 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private AgentRuns agentRuns;
+
+    @Autowired
+    private ReviewJobLifecycleService lifecycle;
+
+    @Autowired
+    private PersonDataRegistry personData;
 
     /** The jobs each test worker holds, by the worker's name. */
     private final Map<String, List<UUID>> owned = new HashMap<>();
@@ -1016,6 +1025,68 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
         assertThat(compositionBasisRepository.findByWorkspaceIdAndJobId(workspace.getId(), jobId))
                 .isPresent();
         assertThat(usageCalls(jobId)).containsExactly("SETTLED:UNVERIFIABLE", "SETTLED:UNVERIFIABLE");
+    }
+
+    /**
+     * Erasure reaches a composer answer only through the job: it cancels the job, the job's cancel ends the run that the
+     * job points at, and that run's trigger clears the answer. So the job must point at its composition run once the
+     * measuring run handed the review on, or the answer would outlive the cancel.
+     */
+    @Test
+    @DisplayName("cancelling a job that handed off to its composition run clears the answer that run's claim kept")
+    void shouldClearTheComposerAnswerWhenTheJobThatHandedOffToItsCompositionRunIsCancelled() {
+        UUID jobId = runningJobOwnedBy("cancelled-owner", Instant.now(), 0);
+        admitWithResult(jobId);
+        acceptPublicReview(jobId);
+        keepOriginalInputs(jobId, 0, "READY", "COMPLETE", Instant.now().plus(Duration.ofHours(1)));
+        ReviewJob running = jobRepository.findById(jobId).orElseThrow();
+        assertThat(results().measured(jobId, running, RuntimeJobTestData.fence(jdbc, running), 0, TIMED_OUT))
+                .isNull();
+        UUID composeRun = jobRepository.findById(jobId).orElseThrow().getRunId();
+        String subject = Objects.requireNonNull(
+                jdbc.queryForObject("SELECT concurrency_key FROM agent_run WHERE id=?", String.class, composeRun));
+        var claims = composeClaims();
+        var claimed = Objects.requireNonNull(transactionTemplate.execute(status -> {
+            var lease = agentRuns.claimSubject(workspace.getId(), subject, Set.of(AgentRunKind.REVIEW_COMPOSE));
+            return claims.claimLeased(lease.orElseThrow().fence());
+        }));
+        AgentRunFence fence = claimed.orElseThrow().fence();
+        assertThat(fence.runId()).as("the composition run holds the review").isEqualTo(composeRun);
+        jdbc.update(
+                "INSERT INTO composer_transcript_part (id, workspace_id, run_id, lease_epoch, kind, digest, answer)"
+                        + " VALUES (gen_random_uuid(), ?, ?, ?, 'SERVED', 'conversation-1', ?)",
+                workspace.getId(),
+                fence.runId(),
+                fence.epoch(),
+                "{\"choices\":[]}".getBytes(StandardCharsets.UTF_8));
+
+        // Erasure selects the job's transcript through the composition run, which wrote the answer, not the measuring
+        // run.
+        var owner = personData.stores().stream()
+                .filter(store -> store.store().equals("composer_transcript_part"))
+                .findFirst()
+                .orElseThrow();
+        var selected = owner.select(
+                new PersonScope(null, List.of(), List.of(), List.of(), List.of(), List.of(), List.of(jobId)));
+        assertThat(jobRepository.findById(jobId).orElseThrow().getHandedOffRunId())
+                .as("the measuring run that handed the job on")
+                .isNotNull()
+                .isNotEqualTo(composeRun);
+        assertThat(selected.rows())
+                .hasSize(1)
+                .extracting(row -> row.columns().get("id"))
+                .containsExactlyElementsOf(jdbc.queryForList(
+                        "SELECT id::text FROM composer_transcript_part WHERE run_id=?", String.class, composeRun));
+
+        lifecycle.cancel(workspace.getId(), jobId);
+
+        assertThat(jobRepository.findById(jobId).orElseThrow().getStatus()).isEqualTo(ReviewJobStatus.CANCELLED);
+        assertThat(jdbc.queryForObject(
+                        "SELECT answer IS NULL FROM composer_transcript_part WHERE run_id=? AND kind='SERVED'",
+                        Boolean.class,
+                        composeRun))
+                .as("the cancelled job's composition run keeps no answer")
+                .isTrue();
     }
 
     /**

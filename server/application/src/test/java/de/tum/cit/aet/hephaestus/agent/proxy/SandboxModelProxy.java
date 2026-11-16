@@ -30,12 +30,17 @@ public final class SandboxModelProxy {
     private SandboxModelProxy() {}
 
     public static Object controller(ApplicationContext context) {
-        var policy = mock(ProxyRequestPolicy.class);
-        when(policy.allows(any())).thenReturn(true);
         var permits = mock(LlmCallPermits.class);
         var permit = mock(LlmCallPermits.Permit.class);
         when(permit.revoked()).thenReturn(Mono.never());
         when(permits.acquire(anyLong(), any(), any(), any(), any())).thenReturn(permit);
+        return controller(context, permits);
+    }
+
+    /** The same gateway with the caller's call permits, so a test can see which calls took one. */
+    static LlmProxyController controller(ApplicationContext context, LlmCallPermits permits) {
+        var policy = mock(ProxyRequestPolicy.class);
+        when(policy.allows(any())).thenReturn(true);
         var mapper = context.getBean(ObjectMapper.class);
         var budgets = mock(ProxyBudgetGate.class);
         var meters = context.getBean(MeterRegistry.class);

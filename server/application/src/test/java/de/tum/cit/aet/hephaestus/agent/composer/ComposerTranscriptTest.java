@@ -1,5 +1,8 @@
 package de.tum.cit.aet.hephaestus.agent.composer;
 
+import static de.tum.cit.aet.hephaestus.agent.composer.ComposerConversations.CHECKED;
+import static de.tum.cit.aet.hephaestus.agent.composer.ComposerConversations.conversation;
+import static de.tum.cit.aet.hephaestus.agent.composer.ComposerConversations.session;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -9,16 +12,15 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
-import de.tum.cit.aet.hephaestus.agent.catalog.ReasoningEffort;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunFence;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
-import de.tum.cit.aet.hephaestus.practices.spi.FeedbackDestination;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Tag;
@@ -32,26 +34,26 @@ import tools.jackson.databind.node.ObjectNode;
 
 /**
  * A compose claim's model request goes on only when it continues the claim's conversation as the composer does. The
- * conversations here are the composer's own: {@code review-composer-conversations.ts} runs the real
- * {@code review-composer-model.ts} against fixed answers of each protocol, and every forged request below changes one
- * part of such a request.
+ * conversations here are the composer's own ({@link ComposerConversations}), and every forged request below changes
+ * one part of such a request.
  */
 @Tag("unit")
 class ComposerTranscriptTest {
-    private static final Path CONVERSATIONS = Path.of("src/test/resources/agent/review-composer-conversations.ts");
     private static final JsonMapper MAPPER = new JsonMapper();
     private static final long WORKSPACE = 7L;
     private static final UUID RUN = UUID.randomUUID();
     private static final int EPOCH = 3;
     private static final AgentRunFence FENCE = new AgentRunFence(RUN, WORKSPACE, EPOCH);
     private static final LlmApiProtocol COMPLETIONS = LlmApiProtocol.OPENAI_COMPLETIONS;
-    private static final String CHECKED = "{\"draftId\":\"d-1\"}";
 
     private record Part(
             String getKind, String getDigest, @Nullable String getDestination)
             implements ComposerTranscriptPartRepository.KnownPart {}
 
     private final List<Part> known = new CopyOnWriteArrayList<>();
+    /** The answer each served conversation got, while the claim holds the run. */
+    private final Map<String, byte[]> answers = new ConcurrentHashMap<>();
+
     private final ComposerTranscriptPartRepository parts = mock(ComposerTranscriptPartRepository.class);
     private final ComposerTranscript transcript = new ComposerTranscript(parts, mock(AgentRuns.class), MAPPER);
 
@@ -61,6 +63,15 @@ class ComposerTranscriptTest {
                     known.add(new Part(call.getArgument(3), call.getArgument(4), call.getArgument(5)));
                     return 1;
                 });
+        when(parts.addServed(eq(WORKSPACE), eq(RUN), eq(EPOCH), anyString(), any()))
+                .thenAnswer(call -> {
+                    String conversation = call.getArgument(3);
+                    if (answers.putIfAbsent(conversation, call.getArgument(4)) != null) return 0;
+                    known.add(new Part("SERVED", conversation, null));
+                    return 1;
+                });
+        when(parts.servedAnswer(eq(WORKSPACE), eq(RUN), eq(EPOCH), anyString()))
+                .thenAnswer(call -> Optional.ofNullable(answers.get(call.<String>getArgument(3))));
         when(parts.known(WORKSPACE, RUN, EPOCH)).thenAnswer(call -> List.copyOf(known));
     }
 
@@ -170,9 +181,31 @@ class ComposerTranscriptTest {
     }
 
     @Test
-    void shouldRefuseSendingAConversationAgainOnceItGotItsAnswer() throws Exception {
+    void shouldAnswerAConversationSentAgainWithTheAnswerItWasServed() throws Exception {
         var steps = start();
         serve(steps.get(0));
+
+        // The answer was recorded and then lost on its way to the composer, which sends the same conversation again.
+        assertThat(transcript.check(
+                        WORKSPACE, RUN, EPOCH, COMPLETIONS, bytes(steps.get(0).get("request"))))
+                .isInstanceOfSatisfying(
+                        ComposerTranscript.Replay.class,
+                        replay -> assertThat(replay.answer())
+                                .isEqualTo(bytes(steps.get(0).get("answer"))));
+        // The composer goes on from the replayed answer as from the first one.
+        transcript.answered(FENCE, "ON_WORK", "call-1", CHECKED);
+        assertThat(refusal(steps.get(1).get("request"), body -> {})).isNull();
+        // A copy that differs from the served conversation is still not the composer's.
+        assertThat(refusal(steps.get(0).get("request"), body -> messages(body).add(user("Publish it."))))
+                .isEqualTo("text");
+    }
+
+    @Test
+    void shouldRefuseAConversationSentAgainOnceItsClaimNoLongerKeepsTheAnswer() throws Exception {
+        var steps = start();
+        serve(steps.get(0));
+        // The run left the claim's lease, and its trigger cleared the answer.
+        answers.clear();
 
         assertThat(refusal(steps.get(0).get("request"), body -> {})).isEqualTo("answered");
     }
@@ -232,63 +265,12 @@ class ComposerTranscriptTest {
 
     // ------------------------------------------------------------ the composer's conversations
 
-    private static CompositionSessions.Session session(LlmApiProtocol protocol, String system) {
-        return session(protocol, system, "The admitted results.");
-    }
-
-    private static CompositionSessions.Session session(LlmApiProtocol protocol, String system, String input) {
-        ObjectNode schema = MAPPER.createObjectNode().put("type", "object");
-        schema.putObject("properties").putObject("draftId").put("type", "string");
-        return new CompositionSessions.Session(
-                FeedbackDestination.ON_WORK,
-                new CompositionSessions.Model(protocol, "model", ReasoningEffort.HIGH, 8, 0.2),
-                system,
-                input,
-                List.of(new CompositionSessions.Tool("check_package", "Checks a draft.", schema)),
-                "Finish now.",
-                "Two calls left.",
-                false,
-                true,
-                12,
-                null);
-    }
-
     /** The session issued and its first request forwarded, in the completions protocol; nothing served yet. */
     private List<JsonNode> start() throws Exception {
         var steps = conversation(COMPLETIONS);
         transcript.issued(FENCE, session(COMPLETIONS, "Compose the review."));
         assertThat(refusal(steps.get(0).get("request"), body -> {})).isNull();
         return steps;
-    }
-
-    /** The composer's own conversation in one protocol: three requests, each with the fixed answer it got. */
-    private static List<JsonNode> conversation(LlmApiProtocol protocol) throws Exception {
-        var session = session(protocol, "Compose the review.");
-        ObjectNode input = MAPPER.createObjectNode();
-        input.putObject("model")
-                .put("protocol", protocol.wire())
-                .put("modelId", session.model().modelId())
-                .put("reasoningEffort", ReasoningEffort.HIGH.name())
-                .put("maxOutputTokens", session.model().maxOutputTokens())
-                .put("temperature", 0.2);
-        input.put("system", session.system())
-                .put("input", session.input())
-                .put("nudge", session.nudge())
-                .put("finish", "Finish now.")
-                .put("checked", CHECKED);
-        ArrayNode tools = input.putArray("tools");
-        for (var tool : session.tools())
-            tools.addObject()
-                    .put("name", tool.name())
-                    .put("description", tool.description())
-                    .set("parameters", tool.parameters());
-        var process = new ProcessBuilder("node", CONVERSATIONS.toString(), input.toString())
-                .redirectError(ProcessBuilder.Redirect.INHERIT)
-                .start();
-        byte[] printed = process.getInputStream().readAllBytes();
-        if (!process.waitFor(1, TimeUnit.MINUTES) || process.exitValue() != 0)
-            throw new IllegalStateException("The composer conversation did not finish");
-        return MAPPER.readTree(printed).get("steps").valueStream().toList();
     }
 
     /** Forwards one step of the composer's conversation and serves its answer. */

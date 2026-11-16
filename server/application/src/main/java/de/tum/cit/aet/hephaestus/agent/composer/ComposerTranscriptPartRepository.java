@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.composer;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -37,6 +38,36 @@ interface ComposerTranscriptPartRepository extends JpaRepository<ComposerTranscr
             @Param("kind") String kind,
             @Param("digest") String digest,
             @Param("destination") @Nullable String destination);
+
+    /** Records the conversation that got this answer, once: a copy that got another answer keeps the first. */
+    @Modifying
+    @Query(value = """
+            INSERT INTO composer_transcript_part (id, workspace_id, run_id, lease_epoch, kind, digest, answer)
+            SELECT gen_random_uuid(), :workspaceId, :runId, :epoch, 'SERVED', :conversation, :answer
+             WHERE NOT EXISTS (SELECT 1 FROM composer_transcript_part
+                                WHERE workspace_id = :workspaceId AND run_id = :runId AND lease_epoch = :epoch
+                                  AND kind = 'SERVED' AND digest = :conversation)""", nativeQuery = true)
+    int addServed(
+            @Param("workspaceId") long workspaceId,
+            @Param("runId") UUID runId,
+            @Param("epoch") int epoch,
+            @Param("conversation") String conversation,
+            @Param("answer") byte[] answer);
+
+    /**
+     * The first answer a served conversation of the claim got; empty once the claim ended, or when none was kept. Copies
+     * served at the same time can each add one.
+     */
+    @Query(value = """
+            SELECT answer FROM composer_transcript_part
+             WHERE workspace_id = :workspaceId AND run_id = :runId AND lease_epoch = :epoch
+               AND kind = 'SERVED' AND digest = :conversation AND answer IS NOT NULL
+             ORDER BY created_at, id LIMIT 1""", nativeQuery = true)
+    Optional<byte[]> servedAnswer(
+            @Param("workspaceId") long workspaceId,
+            @Param("runId") UUID runId,
+            @Param("epoch") int epoch,
+            @Param("conversation") String conversation);
 
     /** Adds a tool call that the model wrote; a call it wrote twice gets two rows, each used once. */
     @Modifying

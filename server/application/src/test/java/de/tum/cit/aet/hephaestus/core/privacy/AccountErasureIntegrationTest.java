@@ -858,6 +858,66 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
                 .isEqualTo(otherRow);
     }
 
+    @Test
+    void shouldDeleteTheSelectedJobsComposerTranscriptAndExportNoneOfIt() {
+        var provider = providers.saveAndFlush(
+                new IdentityProvider(IdentityProviderType.GITLAB, "https://composer-transcript.example.test"));
+        var target = users.saveAndFlush(TestUserFactory.createUser(42L, "composer-transcript", provider));
+        var administrator = new Account("Administrator");
+        administrator.setAppRole(Account.AppRole.APP_ADMIN);
+        long administratorId =
+                Objects.requireNonNull(accounts.saveAndFlush(administrator).getId());
+        var workspace = workspaces.saveAndFlush(WorkspaceTestFixtures.activeWorkspace("composer-transcript"));
+        long workspaceId = Objects.requireNonNull(workspace.getId());
+        var work = modelFixtures.work(workspace, "composer-transcript-" + workspaceId, "scm.pull_request", 42L);
+        modelFixtures.result(work, Objects.requireNonNull(accountFor(target).getId()), "Composed result");
+        UUID runId = Objects.requireNonNull(work.job().getRunId());
+        var otherWorkspace =
+                workspaces.saveAndFlush(WorkspaceTestFixtures.activeWorkspace("composer-transcript-other"));
+        long otherWorkspaceId = Objects.requireNonNull(otherWorkspace.getId());
+        var otherWork = modelFixtures.work(otherWorkspace, "composer-transcript-other", "scm.pull_request", 77L);
+        UUID otherRun = Objects.requireNonNull(otherWork.job().getRunId());
+        transcriptPart(workspaceId, runId, "SERVED", "ANSWER-NAMES-THE-DEVELOPER-CANARY");
+        transcriptPart(workspaceId, runId, "REPLY", null);
+        transcriptPart(otherWorkspaceId, otherRun, "SERVED", "OTHER-WORKSPACE-ANSWER");
+
+        long providerId = Objects.requireNonNull(provider.getId());
+        var preview = personData.preview(administratorId, null, List.of(new PersonIdentity(providerId, "42", null)));
+        UUID requestId = preview.request().getId();
+        Map<String, Long> counts = mapper.readValue(preview.request().getCountsJson(), new TypeReference<>() {});
+        assertThat(counts.get("composer_transcript_part")).isEqualTo(2L);
+        var export = personData.export(requestId);
+        assertThat(export.path("stores").path("composer_transcript_part")).isEmpty();
+        assertThat(export.toString()).doesNotContain("ANSWER-NAMES-THE-DEVELOPER-CANARY");
+        // A claim that still runs adds a part after the preview; the erasure deletes it too.
+        transcriptPart(workspaceId, runId, "TEXT", null);
+
+        personData.requestErasure(requestId, administratorId, false);
+        personData.run(requestId);
+
+        assertThat(personData.get(requestId).request().getState()).isEqualTo(PersonDataRequest.State.COMPLETE);
+        assertThat(jdbc.queryForObject(
+                        "SELECT count(*) FROM composer_transcript_part WHERE workspace_id=?", Long.class, workspaceId))
+                .isZero();
+        assertThat(jdbc.queryForList(
+                        "SELECT convert_from(answer, 'UTF8') FROM composer_transcript_part WHERE workspace_id=?",
+                        String.class,
+                        otherWorkspaceId))
+                .as("another workspace's transcript stays")
+                .containsExactly("OTHER-WORKSPACE-ANSWER");
+    }
+
+    private void transcriptPart(long workspaceId, UUID runId, String kind, @Nullable String answer) {
+        jdbc.update(
+                "INSERT INTO composer_transcript_part (id, workspace_id, run_id, lease_epoch, kind, digest, answer)"
+                        + " VALUES (gen_random_uuid(), ?, ?, 1, ?, ?, ?)",
+                workspaceId,
+                runId,
+                kind,
+                UUID.randomUUID().toString(),
+                answer == null ? null : answer.getBytes(StandardCharsets.UTF_8));
+    }
+
     /** Opens one call row under the run's current claim, as the proxy does before the call leaves. */
     private UUID openCall(
             long workspaceId,
@@ -1199,6 +1259,16 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
                     contributor.export(
                             Objects.requireNonNull(otherSelection.get(contributor.store())), otherPrimaryScope));
         allStores.seedRoleChangeNotifications(subject.account(), Objects.requireNonNull(otherAccount.getId()));
+        // The composer transcript of one of the person's jobs: a digest, as a run keeps it after its claim ended.
+        assertThat(jdbc.update("""
+                        INSERT INTO composer_transcript_part (id, workspace_id, run_id, lease_epoch, kind, digest)
+                        SELECT gen_random_uuid(), j.workspace_id, j.run_id, 1, 'SERVED', 'all-stores-transcript'
+                          FROM review_job j
+                         WHERE EXISTS (SELECT 1 FROM result x
+                                        WHERE (x.review_id, x.workspace_id) = (j.review_id, j.workspace_id)
+                                          AND x.developer_id = ?)
+                         ORDER BY j.id LIMIT 1
+                        """, targetAccount.getId())).isOne();
         long administratorId = Objects.requireNonNull(administrator.getId());
         var preview = personData.preview(administratorId, targetAccount.getId(), List.of());
         UUID requestId = preview.request().getId();
@@ -1280,11 +1350,14 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
                 .contains("Target guidance copied into another conversation")
                 .doesNotContain("Other reply to erased feedback", "account_id", "credential-canary");
         assertThat(counts.get("slack_message")).isEqualTo(2L);
+        // Tool results in another member's conversation are redacted, and a composer transcript is transient and
+        // derived from inputs exported elsewhere: both are erased, never exported.
+        Set<String> erasedNotExported =
+                Set.of(ConversationEntryRepository.COPIES_PERSON_DATA_STORE, "composer_transcript_part");
         counts.forEach((store, count) -> assertThat(
                         (long) export.path("stores").path(store).size())
                 .as("Frozen preview/export parity for %s", store)
-                // Tool results in another member's conversation are redacted, never exported.
-                .isEqualTo(store.equals(ConversationEntryRepository.COPIES_PERSON_DATA_STORE) ? 0L : count));
+                .isEqualTo(erasedNotExported.contains(store) ? 0L : count));
         assertThat(export.path("stores").path("conversation_entry"))
                 .allSatisfy(
                         row -> assertThat(row.path("text").asString()).isIn("Delivered guidance", "Retained question"));

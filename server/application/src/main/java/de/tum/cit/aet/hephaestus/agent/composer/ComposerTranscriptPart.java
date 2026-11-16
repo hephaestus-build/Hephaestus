@@ -20,8 +20,9 @@ import org.jspecify.annotations.Nullable;
 /**
  * One part of a {@code review_compose} run's model conversation that the server issued or served to the run's claim:
  * a session (with its destination), a turn or tool answer it gave the composer, a model reply, or a tool call the model
- * wrote. The row keeps a digest, never the content. Only {@link ComposerTranscript} writes it, through conditional statements;
- * this entity only maps the table.
+ * wrote. The row keeps a digest, never the content, except the answer of a served conversation while its claim holds
+ * the run, so that a resent conversation gets the same answer; the run's trigger clears it when the claim ends. Only
+ * {@link ComposerTranscript} writes it, through conditional statements; this entity only maps the table.
  */
 @Entity
 @Table(
@@ -46,7 +47,7 @@ public class ComposerTranscriptPart {
         ANSWER,
         /** A model reply, linked to the exact conversation it answered. */
         REPLY,
-        /** A conversation that got its answer, so that it is not sent again. */
+        /** A conversation that got its answer; a resent copy gets the same answer, never a new one. */
         SERVED,
         /** A tool call that the model wrote; a composition route uses it once. */
         CALL
@@ -88,4 +89,8 @@ public class ComposerTranscriptPart {
 
     @Column(name = "used_at")
     private @Nullable Instant usedAt;
+
+    /** The answer that a {@link Kind#SERVED} conversation got, while the claim that it answered holds the run. */
+    @Column(name = "answer", updatable = false)
+    private byte @Nullable [] answer;
 }

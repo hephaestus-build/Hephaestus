@@ -32,8 +32,9 @@ import tools.jackson.databind.ObjectMapper;
  *   <li>The gateway forwards a model request of the claim only when it continues the conversation as the composer does:
  *       the session as issued, with its settings; the session's input; then each served reply to exactly the
  *       conversation before it, followed by the answers to its calls (with the session's nudge once) or, for a reply
- *       without calls, by the session's finish once. A conversation that already got its answer is not sent again;
- *       copies sent at the same time can each get one, and each is the model's own. No
+ *       without calls, by the session's finish once. A conversation that already got its answer gets that answer again,
+ *       from the transcript and with no model call, as when the answer was lost on its way to the composer; copies
+ *       sent at the same time can each get one from the model, and the transcript keeps the first. No
  *       text that a sandbox process writes, and no reply sampled for another conversation, reaches the model.
  *   <li>A composition tool route runs a call only when the claim's model wrote it in a session of the same
  *       destination, and only once.
@@ -59,7 +60,7 @@ public class ComposerTranscript {
     }
 
     /** What the gateway does with a model request of a compose claim. */
-    public sealed interface Check permits Forward, Refuse {}
+    public sealed interface Check permits Forward, Replay, Refuse {}
 
     /**
      * Forward the request.
@@ -68,6 +69,23 @@ public class ComposerTranscript {
      * @param destination the destination of the request's session
      */
     public record Forward(String conversation, String destination) implements Check {}
+
+    /**
+     * Answer the request with the answer its conversation already got, which the composer did not receive: the gateway
+     * recorded it before it left. A class, not a record: a record compares an array by identity.
+     */
+    public static final class Replay implements Check {
+        private final byte[] answer;
+
+        public Replay(byte[] answer) {
+            this.answer = answer;
+        }
+
+        /** The recorded answer's bytes, exactly as the gateway served them. */
+        public byte[] answer() {
+            return answer.clone();
+        }
+    }
 
     /** @param reason a fixed reason, never content of the request */
     public record Refuse(String reason) implements Check {}
@@ -196,14 +214,21 @@ public class ComposerTranscript {
                 at++;
             }
         }
-        // The composer sends a conversation again only when it got no answer to keep.
-        if (served.contains(conversation)) return new Refuse("answered");
+        // The composer sends a conversation again only when it got no answer to keep: it gets the one it was served.
+        if (served.contains(conversation))
+            return parts.servedAnswer(workspaceId, runId, epoch, conversation)
+                    .<Check>map(Replay::new)
+                    .orElseGet(() -> new Refuse("answered"));
         return new Forward(conversation, destination);
     }
 
     /**
-     * Records the reply and tool calls of an answer that the gateway served for a forwarded request, before the answer
-     * leaves. An answer that is not JSON records nothing.
+     * Records the reply and tool calls of an answer that the gateway served for a forwarded request, and the answer
+     * itself, before the answer leaves, so that the conversation sent again gets it. An answer that is not JSON records
+     * nothing.
+     *
+     * @throws de.tum.cit.aet.hephaestus.agent.run.StaleRunException when the claim no longer holds the run, so that no
+     *     answer is kept after the run's trigger cleared the claim's answers
      */
     @Transactional
     public void served(long workspaceId, UUID runId, int epoch, LlmApiProtocol protocol, Forward forward, byte[] body) {
@@ -214,10 +239,11 @@ public class ComposerTranscript {
             return;
         }
         var fence = new AgentRunFence(runId, workspaceId, epoch);
+        runs.requireCurrent(fence);
         Reply reply = requests.reply(protocol, answer);
         if (reply != null) {
             add(fence, Kind.REPLY, ComposerRequests.link(forward.conversation(), reply.digest()));
-            add(fence, Kind.SERVED, forward.conversation());
+            parts.addServed(workspaceId, runId, epoch, forward.conversation(), body);
         }
         for (var call : requests.calls(protocol, answer)) {
             if (call.id().isBlank() || call.id().length() > MAX_CALL_ID) continue;

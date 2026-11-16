@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1794802188463-1" author="hephaestus">
+        <comment>A served conversation keeps its answer while the claim that it answered holds the run, so that a copy the composer sends again after the answer was lost gets the same answer. When the run leaves that lease (end, requeue, reap, cancel or a new epoch), the trigger clears the answers of that epoch, so the row holds content only during the live claim.</comment>
+        <sql splitStatements="false"><![CDATA[
+ALTER TABLE composer_transcript_part ADD COLUMN answer bytea;
+ALTER TABLE composer_transcript_part ADD CONSTRAINT ck_composer_transcript_part_answer
+    CHECK (answer IS NULL OR kind = 'SERVED');
+CREATE FUNCTION clear_composer_answers() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    UPDATE composer_transcript_part SET answer = NULL
+     WHERE run_id = OLD.id AND workspace_id = OLD.workspace_id AND lease_epoch = OLD.lease_epoch
+       AND answer IS NOT NULL;
+    RETURN NULL;
+END $$;
+CREATE TRIGGER agent_run_clears_composer_answers AFTER UPDATE OF state, lease_epoch ON agent_run
+    FOR EACH ROW
+    WHEN (OLD.kind = 'REVIEW_COMPOSE' AND OLD.state = 'LEASED'
+          AND (NEW.state <> 'LEASED' OR NEW.lease_epoch <> OLD.lease_epoch))
+    EXECUTE FUNCTION clear_composer_answers();
+        ]]></sql>
+        <rollback>
+DROP TRIGGER agent_run_clears_composer_answers ON agent_run;
+DROP FUNCTION clear_composer_answers();
+ALTER TABLE composer_transcript_part DROP CONSTRAINT ck_composer_transcript_part_answer;
+ALTER TABLE composer_transcript_part DROP COLUMN answer;
+        </rollback>
+    </changeSet>
+</databaseChangeLog>
