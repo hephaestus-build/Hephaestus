@@ -3,10 +3,10 @@ package de.tum.cit.aet.hephaestus.integration.scm.github.workspace;
 import static de.tum.cit.aet.hephaestus.core.TransactionCallbacks.afterCommit;
 
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
-import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationLifecycleListener;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ProvisioningListener;
+import de.tum.cit.aet.hephaestus.integration.scm.github.installation.adoption.GitHubInstallationAccountKind;
 import de.tum.cit.aet.hephaestus.integration.scm.github.installation.adoption.GitHubInstallationRequests;
-import de.tum.cit.aet.hephaestus.integration.scm.github.lifecycle.GitHubLifecycleListener;
+import de.tum.cit.aet.hephaestus.integration.scm.github.lifecycle.GitHubInstallationLifecycle;
 import de.tum.cit.aet.hephaestus.integration.scm.workspace.WorkspaceRepositoryMonitorService;
 import de.tum.cit.aet.hephaestus.workspace.RepositorySelection;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
@@ -26,7 +26,7 @@ public class GitHubWorkspaceProvisioningAdapter implements ProvisioningListener 
 
     private static final Logger log = LoggerFactory.getLogger(GitHubWorkspaceProvisioningAdapter.class);
 
-    private final GitHubLifecycleListener githubLifecycleListener;
+    private final GitHubInstallationLifecycle installationLifecycle;
     private final WorkspaceRepositoryMonitorService repositoryMonitorService;
     private final WorkspaceScopeFilter workspaceScopeFilter;
     private final GitHubInstallationRequests installationRequests;
@@ -35,13 +35,13 @@ public class GitHubWorkspaceProvisioningAdapter implements ProvisioningListener 
     private final AsyncTaskExecutor monitoringExecutor;
 
     public GitHubWorkspaceProvisioningAdapter(
-            GitHubLifecycleListener githubLifecycleListener,
+            GitHubInstallationLifecycle installationLifecycle,
             WorkspaceRepositoryMonitorService repositoryMonitorService,
             WorkspaceScopeFilter workspaceScopeFilter,
             GitHubWorkspaceDataSyncTrigger dataSyncTrigger,
             @Qualifier("monitoringExecutor") AsyncTaskExecutor monitoringExecutor,
             GitHubInstallationRequests installationRequests) {
-        this.githubLifecycleListener = githubLifecycleListener;
+        this.installationLifecycle = installationLifecycle;
         this.installationRequests = installationRequests;
         this.repositoryMonitorService = repositoryMonitorService;
         this.workspaceScopeFilter = workspaceScopeFilter;
@@ -76,7 +76,7 @@ public class GitHubWorkspaceProvisioningAdapter implements ProvisioningListener 
         }
 
         RepositorySelection selection = RepositorySelection.SELECTED;
-        Workspace workspace = githubLifecycleListener.createOrUpdateFromInstallation(
+        Workspace workspace = installationLifecycle.createOrUpdateFromInstallation(
                 installation.installationId(),
                 installation.accountId(),
                 installation.accountLogin(),
@@ -147,7 +147,7 @@ public class GitHubWorkspaceProvisioningAdapter implements ProvisioningListener 
         // looks for it, and one that has not started finds no record afterwards. A workspace deletion takes these two
         // locks in the other order; PostgreSQL then aborts one of the two, and both the inbox and the owner retry.
         installationRequests.lockForUninstall(installationId);
-        githubLifecycleListener.purgeWorkspaceForInstallation(installationId);
+        installationLifecycle.purgeWorkspaceForInstallation(installationId);
         installationRequests.forgetUnadopted(installationId);
 
         log.info("Completed installation cleanup: installationId={}", installationId);
@@ -210,7 +210,7 @@ public class GitHubWorkspaceProvisioningAdapter implements ProvisioningListener 
             return;
         }
 
-        githubLifecycleListener.handleAccountRename(installationId, oldLogin, newLogin);
+        installationLifecycle.handleAccountRename(installationId, oldLogin, newLogin);
     }
 
     @Override
@@ -220,7 +220,7 @@ public class GitHubWorkspaceProvisioningAdapter implements ProvisioningListener 
             return;
         }
 
-        githubLifecycleListener.suspendForInstallation(installationId);
+        installationLifecycle.suspendForInstallation(installationId);
         log.info("Suspended installation: installationId={}", installationId);
     }
 
@@ -231,7 +231,7 @@ public class GitHubWorkspaceProvisioningAdapter implements ProvisioningListener 
             return;
         }
 
-        githubLifecycleListener
+        installationLifecycle
                 .resumeForInstallation(installationId)
                 .filter(workspace -> workspace.getStatus() == Workspace.WorkspaceStatus.ACTIVE)
                 .ifPresent(workspace -> {
@@ -250,7 +250,7 @@ public class GitHubWorkspaceProvisioningAdapter implements ProvisioningListener 
         }
 
         RepositorySelection repoSelection = parseRepositorySelection(selection);
-        githubLifecycleListener.updateRepositorySelection(installationId, repoSelection);
+        installationLifecycle.updateRepositorySelection(installationId, repoSelection);
         log.debug("Updated repository selection: installationId={}, selection={}", installationId, repoSelection);
     }
 
@@ -284,18 +284,13 @@ public class GitHubWorkspaceProvisioningAdapter implements ProvisioningListener 
         return RepositorySelection.SELECTED;
     }
 
-    /**
-     * Bridges the GitHub-shaped {@link ProvisioningListener.AccountType} (2 values) to the
-     * framework-wide {@link IntegrationLifecycleListener.AccountKind} (3 values, including
-     * {@code TEAM_WORKSPACE} for Slack) — the third value is unreachable from the GitHub SPI surface.
-     */
-    private static IntegrationLifecycleListener.AccountKind mapAccountKind(ProvisioningListener.AccountType type) {
+    private static GitHubInstallationAccountKind mapAccountKind(ProvisioningListener.AccountType type) {
         if (type == null) {
-            return IntegrationLifecycleListener.AccountKind.ORGANIZATION;
+            return GitHubInstallationAccountKind.ORGANIZATION;
         }
         return switch (type) {
-            case ORGANIZATION -> IntegrationLifecycleListener.AccountKind.ORGANIZATION;
-            case USER -> IntegrationLifecycleListener.AccountKind.USER;
+            case ORGANIZATION -> GitHubInstallationAccountKind.ORGANIZATION;
+            case USER -> GitHubInstallationAccountKind.USER;
         };
     }
 }

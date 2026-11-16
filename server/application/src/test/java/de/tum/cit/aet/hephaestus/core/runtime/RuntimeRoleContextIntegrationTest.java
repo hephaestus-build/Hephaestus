@@ -29,7 +29,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.MonitoredRepositoryQuery;
 import de.tum.cit.aet.hephaestus.integration.core.webhook.ProviderEventReceiver;
 import de.tum.cit.aet.hephaestus.integration.core.webhook.WebhookPayloadSizeFilter;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.item.ScmRepositoryItemLifecycle;
-import de.tum.cit.aet.hephaestus.integration.scm.github.lifecycle.GitHubLifecycleListener;
+import de.tum.cit.aet.hephaestus.integration.scm.github.lifecycle.GitHubInstallationLifecycle;
 import de.tum.cit.aet.hephaestus.integration.scm.github.workspace.GitHubInstallationReconciler;
 import de.tum.cit.aet.hephaestus.integration.scm.github.workspace.GitHubWorkspaceProvisioningAdapter;
 import de.tum.cit.aet.hephaestus.integration.slack.channel.SlackConsentBlocks;
@@ -166,7 +166,7 @@ class RuntimeRoleContextIntegrationTest {
             assertThat(application).hasSingleBean(MonitoredRepositoryQuery.class);
             assertThat(application).hasSingleBean(PracticeReviewCoverageService.class);
             assertThat(application).hasSingleBean(ResultAdmissionPolicy.class);
-            assertThat(application).hasSingleBean(GitHubLifecycleListener.class);
+            assertThat(application).hasSingleBean(GitHubInstallationLifecycle.class);
             assertThat(application).hasSingleBean(GitHubInstallationReconciler.class);
             assertThat(application).hasSingleBean(GitHubWorkspaceProvisioningAdapter.class);
             assertThat(application).hasSingleBean(SlackRetentionPurger.class);

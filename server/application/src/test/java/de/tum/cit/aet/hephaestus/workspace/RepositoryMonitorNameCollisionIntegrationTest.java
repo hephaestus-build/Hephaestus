@@ -54,7 +54,7 @@ class RepositoryMonitorNameCollisionIntegrationTest extends AbstractWorkspaceInt
         original.setRepositorySyncedAt(checkpoint);
         monitors.saveAndFlush(original);
 
-        githubLifecycleListener.handleAccountRename(installation, "old", "new");
+        installationLifecycle.handleAccountRename(installation, "old", "new");
 
         var preserved = monitors.findById(original.getId()).orElseThrow();
         assertThat(preserved.getNameWithOwner()).isEqualTo("old/shared");

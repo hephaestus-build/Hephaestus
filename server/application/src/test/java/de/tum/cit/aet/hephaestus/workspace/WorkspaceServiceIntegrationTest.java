@@ -6,9 +6,9 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
-import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationLifecycleListener.AccountKind;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationService;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
+import de.tum.cit.aet.hephaestus.integration.scm.github.installation.adoption.GitHubInstallationAccountKind;
 import de.tum.cit.aet.hephaestus.workspace.exception.InvalidWorkspaceSlugException;
 import de.tum.cit.aet.hephaestus.workspace.exception.WorkspaceLifecycleViolationException;
 import java.util.Objects;
@@ -32,18 +32,16 @@ class WorkspaceServiceIntegrationTest extends AbstractWorkspaceIntegrationTest {
     private OrganizationService organizationService;
 
     @ParameterizedTest
-    @EnumSource(
-            value = AccountKind.class,
-            names = {"USER", "ORGANIZATION"})
-    void shouldKeepInstallationsSeparateWhenTheProviderAccountIdentityIsUnproven(AccountKind kind) {
+    @EnumSource(GitHubInstallationAccountKind.class)
+    void shouldKeepInstallationsSeparateWhenTheProviderAccountIdentityIsUnproven(GitHubInstallationAccountKind kind) {
         User formerAccount = persistUser("reused-personal-account");
         Workspace existing = createWorkspace(
                 "reused-personal-account",
                 "Existing",
                 "reused-personal-account",
-                kind == AccountKind.USER ? AccountType.USER : AccountType.ORG,
+                kind == GitHubInstallationAccountKind.USER ? AccountType.USER : AccountType.ORG,
                 formerAccount);
-        if (kind == AccountKind.ORGANIZATION) {
+        if (kind == GitHubInstallationAccountKind.ORGANIZATION) {
             existing.setOrganizationId(organizationService
                     .upsertIdentity(
                             998880L,
@@ -53,7 +51,7 @@ class WorkspaceServiceIntegrationTest extends AbstractWorkspaceIntegrationTest {
             workspaceRepository.saveAndFlush(existing);
         }
 
-        Workspace incoming = githubLifecycleListener.createOrUpdateFromInstallation(
+        Workspace incoming = installationLifecycle.createOrUpdateFromInstallation(
                 998881L, 998882L, "reused-personal-account", kind, null, RepositorySelection.ALL);
 
         assertNotNull(incoming);
@@ -65,7 +63,7 @@ class WorkspaceServiceIntegrationTest extends AbstractWorkspaceIntegrationTest {
                         incoming.getId(), accountId(formerAccount)))
                 .isEmpty();
 
-        Workspace renamed = githubLifecycleListener.createOrUpdateFromInstallation(
+        Workspace renamed = installationLifecycle.createOrUpdateFromInstallation(
                 998881L, 998882L, "renamed-installed-account", kind, null, RepositorySelection.ALL);
         assertNotNull(renamed);
         assertThat(renamed.getId()).isEqualTo(incoming.getId());
@@ -76,11 +74,11 @@ class WorkspaceServiceIntegrationTest extends AbstractWorkspaceIntegrationTest {
         User formerLoginOwner = persistUser("reassigned-installation");
         long installedAccountId = 998877L;
 
-        Workspace workspace = githubLifecycleListener.createOrUpdateFromInstallation(
+        Workspace workspace = installationLifecycle.createOrUpdateFromInstallation(
                 998878L,
                 installedAccountId,
                 "reassigned-installation",
-                AccountKind.USER,
+                GitHubInstallationAccountKind.USER,
                 null,
                 RepositorySelection.ALL);
 
@@ -164,8 +162,13 @@ class WorkspaceServiceIntegrationTest extends AbstractWorkspaceIntegrationTest {
         // "PAT_ORG without token" shape the migration replaces. The lifecycle listener
         // should promote it cleanly to a GitHub App Connection.
 
-        Workspace promoted = githubLifecycleListener.createOrUpdateFromInstallation(
-                95711017L, 95711018L, "ls1intum", AccountKind.ORGANIZATION, null, RepositorySelection.ALL);
+        Workspace promoted = installationLifecycle.createOrUpdateFromInstallation(
+                95711017L,
+                95711018L,
+                "ls1intum",
+                GitHubInstallationAccountKind.ORGANIZATION,
+                null,
+                RepositorySelection.ALL);
 
         // provider mode + installation id live on the Connection
         // registry now, not on Workspace.

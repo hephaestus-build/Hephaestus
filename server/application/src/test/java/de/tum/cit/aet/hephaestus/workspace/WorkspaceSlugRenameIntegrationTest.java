@@ -5,9 +5,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
-import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationLifecycleListener.AccountKind;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationService;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
+import de.tum.cit.aet.hephaestus.integration.scm.github.installation.adoption.GitHubInstallationAccountKind;
 import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
 import de.tum.cit.aet.hephaestus.testconfig.WithAdminUser;
 import de.tum.cit.aet.hephaestus.workspace.dto.CreateWorkspaceRequestDTO;
@@ -197,11 +197,11 @@ class WorkspaceSlugRenameIntegrationTest extends AbstractWorkspaceIntegrationTes
 
         workspaceService.renameSlug(workspace.getId(), "install-alpha-renamed");
 
-        Workspace created = githubLifecycleListener.createOrUpdateFromInstallation(
+        Workspace created = installationLifecycle.createOrUpdateFromInstallation(
                 999L,
                 installationAccount.getNativeId(),
                 "install-alpha",
-                AccountKind.USER,
+                GitHubInstallationAccountKind.USER,
                 null,
                 RepositorySelection.ALL);
 
@@ -228,8 +228,8 @@ class WorkspaceSlugRenameIntegrationTest extends AbstractWorkspaceIntegrationTes
                 .getId());
         workspaceRepository.saveAndFlush(existing);
 
-        Workspace linked = githubLifecycleListener.createOrUpdateFromInstallation(
-                1111L, 1112L, "collision", AccountKind.ORGANIZATION, null, RepositorySelection.ALL);
+        Workspace linked = installationLifecycle.createOrUpdateFromInstallation(
+                1111L, 1112L, "collision", GitHubInstallationAccountKind.ORGANIZATION, null, RepositorySelection.ALL);
 
         assertThat(linked).isNotNull();
         assertThat(linked.getId()).isEqualTo(existing.getId());

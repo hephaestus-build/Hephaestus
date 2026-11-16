@@ -17,11 +17,11 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IdentityProviderLookup;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
-import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationLifecycleListener.AccountKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationService;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.github.app.GitHubAppTokenService;
+import de.tum.cit.aet.hephaestus.integration.scm.github.installation.adoption.GitHubInstallationAccountKind;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.RepositorySelection;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
@@ -37,7 +37,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.Mock;
 
-class GitHubLifecycleListenerPurgeTest extends BaseUnitTest {
+class GitHubInstallationLifecyclePurgeTest extends BaseUnitTest {
 
     private static final long INSTALLATION_ID = 5001L;
 
@@ -65,12 +65,12 @@ class GitHubLifecycleListenerPurgeTest extends BaseUnitTest {
     @Mock
     private IdentityProviderLookup identityProviders;
 
-    private GitHubLifecycleListener listener;
+    private GitHubInstallationLifecycle listener;
 
     @BeforeEach
     void setUp() {
         var roots = new WorkspaceRootsAdapter(workspaceRepository, mock());
-        listener = new GitHubLifecycleListener(
+        listener = new GitHubInstallationLifecycle(
                 roots,
                 roots,
                 mock(),
@@ -125,18 +125,6 @@ class GitHubLifecycleListenerPurgeTest extends BaseUnitTest {
     }
 
     @Test
-    @DisplayName("the SPI uninstall hook purges rather than flipping a status")
-    void onInstanceUninstalled_purgesTheWorkspace() {
-        Workspace workspace = workspace(11L, "acme");
-        locked(workspace);
-        when(workspaceLifecycleService.purgeWorkspace("acme")).thenReturn(workspace);
-
-        listener.onInstanceUninstalled(new IntegrationRef(IntegrationKind.GITHUB, 11L, Long.toString(INSTALLATION_ID)));
-
-        verify(workspaceLifecycleService).purgeWorkspace("acme");
-    }
-
-    @Test
     @DisplayName("an installation with no bound workspace purges nothing")
     void purgeWorkspaceForInstallation_withoutAWorkspace_isASilentNoOp() {
         when(workspaceRepository.findByInstallationIdForUpdate(INSTALLATION_ID)).thenReturn(Optional.empty());
@@ -153,7 +141,12 @@ class GitHubLifecycleListenerPurgeTest extends BaseUnitTest {
         locked(workspace);
 
         Workspace result = listener.createOrUpdateFromInstallation(
-                INSTALLATION_ID, 99L, "acme", AccountKind.ORGANIZATION, null, RepositorySelection.ALL);
+                INSTALLATION_ID,
+                99L,
+                "acme",
+                GitHubInstallationAccountKind.ORGANIZATION,
+                null,
+                RepositorySelection.ALL);
 
         assertThat(result).isNull();
         assertThat(workspace.getStatus()).isEqualTo(Workspace.WorkspaceStatus.PURGED);
@@ -172,7 +165,12 @@ class GitHubLifecycleListenerPurgeTest extends BaseUnitTest {
         when(workspaceRepository.findByOrganizationIdForUpdate(7L)).thenReturn(Optional.of(workspace));
 
         Workspace result = listener.createOrUpdateFromInstallation(
-                INSTALLATION_ID, 99L, "acme", AccountKind.ORGANIZATION, null, RepositorySelection.ALL);
+                INSTALLATION_ID,
+                99L,
+                "acme",
+                GitHubInstallationAccountKind.ORGANIZATION,
+                null,
+                RepositorySelection.ALL);
 
         assertThat(result).isNull();
         verify(workspaceRepository, never()).save(workspace);

@@ -8,7 +8,6 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider;
 import de.tum.cit.aet.hephaestus.integration.core.spi.Capability;
 import de.tum.cit.aet.hephaestus.integration.core.spi.EventTypeKey;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
-import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationLifecycleListener;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationManifest;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SubjectKeyDeriver;
@@ -31,14 +30,12 @@ class IntegrationFrameworkBootstrapTest extends BaseUnitTest {
     @Test
     void manifestWithNoCapabilitiesValidatesCleanly() {
         // Regression: an outbound-only kind declares zero capabilities. The universal
-        // credential-provider + lifecycle-listener beans are still required, but the per-capability
+        // credential-provider bean is still required, but the per-capability
         // checks must be a no-op — and must not trip EnumSet.copyOf on the empty declared set.
         IntegrationManifestRegistry registry =
                 new IntegrationManifestRegistry(List.of(manifest(IntegrationKind.SLACK, Set.of())));
-        IntegrationFrameworkBootstrap bootstrap = bootstrap(
-                registry,
-                List.of(credentialProvider(IntegrationKind.SLACK)),
-                List.of(lifecycleListener(IntegrationKind.SLACK)));
+        IntegrationFrameworkBootstrap bootstrap =
+                bootstrap(registry, List.of(credentialProvider(IntegrationKind.SLACK)));
 
         assertThatCode(bootstrap::validate).doesNotThrowAnyException();
     }
@@ -49,10 +46,8 @@ class IntegrationFrameworkBootstrapTest extends BaseUnitTest {
                 List.of(manifest(IntegrationKind.GITHUB, Set.of(Capability.WEBHOOK_INGEST))));
         // Universal beans present, but no WebhookSignatureVerifier backing the WEBHOOK_INGEST
         // claim.
-        IntegrationFrameworkBootstrap bootstrap = bootstrap(
-                registry,
-                List.of(credentialProvider(IntegrationKind.GITHUB)),
-                List.of(lifecycleListener(IntegrationKind.GITHUB)));
+        IntegrationFrameworkBootstrap bootstrap =
+                bootstrap(registry, List.of(credentialProvider(IntegrationKind.GITHUB)));
 
         assertThatThrownBy(bootstrap::validate)
                 .isInstanceOf(IllegalStateException.class)
@@ -66,7 +61,6 @@ class IntegrationFrameworkBootstrapTest extends BaseUnitTest {
         IntegrationFrameworkBootstrap bootstrap = bootstrap(
                 registry,
                 List.of(credentialProvider(IntegrationKind.SLACK)),
-                List.of(lifecycleListener(IntegrationKind.SLACK)),
                 List.of(webhookSignatureVerifier(IntegrationKind.SLACK)),
                 List.of(subjectKeyDeriver(IntegrationKind.SLACK)),
                 List.of(subjectParser(IntegrationKind.SLACK)));
@@ -83,27 +77,19 @@ class IntegrationFrameworkBootstrapTest extends BaseUnitTest {
         IntegrationManifestRegistry registry =
                 new IntegrationManifestRegistry(List.of(manifest(kind, Set.of(Capability.WEBHOOK_INGEST))));
         IntegrationFrameworkBootstrap bootstrap = bootstrap(
-                registry,
-                List.of(credentialProvider(kind)),
-                List.of(lifecycleListener(kind)),
-                List.of(),
-                List.of(),
-                List.of(subjectParser(kind)));
+                registry, List.of(credentialProvider(kind)), List.of(), List.of(), List.of(subjectParser(kind)));
 
         assertThatCode(bootstrap::validate).doesNotThrowAnyException();
     }
 
     private static IntegrationFrameworkBootstrap bootstrap(
-            IntegrationManifestRegistry registry,
-            List<ApiCredentialProvider> credentialProviders,
-            List<IntegrationLifecycleListener> lifecycleListeners) {
-        return bootstrap(registry, credentialProviders, lifecycleListeners, List.of(), List.of(), List.of());
+            IntegrationManifestRegistry registry, List<ApiCredentialProvider> credentialProviders) {
+        return bootstrap(registry, credentialProviders, List.of(), List.of(), List.of());
     }
 
     private static IntegrationFrameworkBootstrap bootstrap(
             IntegrationManifestRegistry registry,
             List<ApiCredentialProvider> credentialProviders,
-            List<IntegrationLifecycleListener> lifecycleListeners,
             List<WebhookSignatureVerifier> signatureVerifiers,
             List<SubjectKeyDeriver> subjectKeyDerivers,
             List<SubjectParser> subjectParsers) {
@@ -116,8 +102,6 @@ class IntegrationFrameworkBootstrapTest extends BaseUnitTest {
                 List.of(), // tokenRefreshers
                 List.of(), // feedbackChannels
                 List.of(), // inlineFeedbackChannels
-                List.of(), // approvalChannels
-                lifecycleListeners,
                 // A validator over an empty world: these tests are about capability wiring, and
                 // every manifest
                 // below contributes nothing to review, so the review contract has nothing to say
@@ -163,10 +147,6 @@ class IntegrationFrameworkBootstrapTest extends BaseUnitTest {
                 return Optional.empty();
             }
         };
-    }
-
-    private static IntegrationLifecycleListener lifecycleListener(IntegrationKind kind) {
-        return () -> kind;
     }
 
     private static WebhookSignatureVerifier webhookSignatureVerifier(IntegrationKind kind) {

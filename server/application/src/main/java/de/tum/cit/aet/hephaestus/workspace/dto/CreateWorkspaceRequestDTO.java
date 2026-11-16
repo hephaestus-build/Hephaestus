@@ -21,7 +21,7 @@ import org.jspecify.annotations.Nullable;
  * <p>Supports PAT-backed GitHub and GitLab workspaces. {@code kind} discriminates;
  * {@code personalAccessToken} carries the PAT (encrypted at rest by the registry);
  * {@code serverUrl} is optional for self-hosted instances. GitHub App workspaces are
- * provisioned automatically by the lifecycle listener, not via this endpoint. A GitLab workspace
+ * provisioned automatically from their GitHub App installation, not via this endpoint. A GitLab workspace
  * monitors every project of its group unless {@code repositorySelection} is {@code SELECTED}.
  */
 @Schema(description = "Request to create a new workspace")

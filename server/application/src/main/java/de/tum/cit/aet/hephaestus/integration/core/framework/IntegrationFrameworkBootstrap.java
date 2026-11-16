@@ -2,10 +2,8 @@ package de.tum.cit.aet.hephaestus.integration.core.framework;
 
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider;
-import de.tum.cit.aet.hephaestus.integration.core.spi.ApprovalWriter;
 import de.tum.cit.aet.hephaestus.integration.core.spi.Capability;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
-import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationLifecycleListener;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationManifest;
 import de.tum.cit.aet.hephaestus.integration.core.spi.LineNoteWriter;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SubjectKeyDeriver;
@@ -46,8 +44,6 @@ public class IntegrationFrameworkBootstrap {
     private final List<TokenRefresher> tokenRefreshers;
     private final List<SummaryWriter> feedbackChannels;
     private final List<LineNoteWriter> inlineFeedbackChannels;
-    private final List<ApprovalWriter> approvalChannels;
-    private final List<IntegrationLifecycleListener> lifecycleListeners;
     private final ReviewContractValidator reviewContract;
     private final IntegrationKindRouting sharedWebhookRoutes;
 
@@ -60,8 +56,6 @@ public class IntegrationFrameworkBootstrap {
             List<TokenRefresher> tokenRefreshers,
             List<SummaryWriter> feedbackChannels,
             List<LineNoteWriter> inlineFeedbackChannels,
-            List<ApprovalWriter> approvalChannels,
-            List<IntegrationLifecycleListener> lifecycleListeners,
             ReviewContractValidator reviewContract,
             IntegrationKindRouting sharedWebhookRoutes) {
         this.manifests = manifests;
@@ -72,8 +66,6 @@ public class IntegrationFrameworkBootstrap {
         this.tokenRefreshers = tokenRefreshers;
         this.feedbackChannels = feedbackChannels;
         this.inlineFeedbackChannels = inlineFeedbackChannels;
-        this.approvalChannels = approvalChannels;
-        this.lifecycleListeners = lifecycleListeners;
         this.reviewContract = reviewContract;
         this.sharedWebhookRoutes = sharedWebhookRoutes;
     }
@@ -110,15 +102,6 @@ public class IntegrationFrameworkBootstrap {
         // Universal: every registered kind needs a credential provider.
         require(kind, "ApiCredentialProvider", anyMatchKind(credentialProviders, p -> p.kind() == kind), violations);
 
-        // Universal: every registered kind needs a lifecycle listener so Connection state
-        // transitions can be wired into the right vendor adapter (even when the body is
-        // a no-op stub — that's per-kind policy, not a framework gap).
-        require(
-                kind,
-                "IntegrationLifecycleListener",
-                anyMatchKind(lifecycleListeners, l -> l.kind() == kind),
-                violations);
-
         if (declared.contains(Capability.WEBHOOK_INGEST)) {
             // No WebhookSecretSource check here: Slack resolves its signing secret via
             // SlackSignatureVerifier, not this SPI, so requiring it would fail Slack's boot;
@@ -144,19 +127,6 @@ public class IntegrationFrameworkBootstrap {
         if (declared.contains(Capability.INLINE_FEEDBACK)) {
             require(kind, "LineNoteWriter", anyMatchKind(inlineFeedbackChannels, f -> f.kind() == kind), violations);
         }
-        if (declared.contains(Capability.APPROVAL_WORKFLOW)) {
-            require(kind, "ApprovalWriter", anyMatchKind(approvalChannels, f -> f.kind() == kind), violations);
-        }
-        if (declared.contains(Capability.SCOPE_CHANGES)) {
-            // SCOPE_CHANGES says "this vendor will fire onScopeChanged" — the listener
-            // must therefore have a real body. We can't introspect for that, but we
-            // can at least force the listener bean to be wired.
-            require(
-                    kind,
-                    "IntegrationLifecycleListener (scope-change emitter)",
-                    anyMatchKind(lifecycleListeners, l -> l.kind() == kind),
-                    violations);
-        }
 
         // Forward-compat: the moment a new Capability is added to the enum without a
         // matching check above, fail loud at boot instead of silently treating it as
@@ -179,9 +149,7 @@ public class IntegrationFrameworkBootstrap {
             Capability.WEBHOOK_INGEST,
             Capability.TOKEN_REFRESH,
             Capability.FEEDBACK_DELIVERY,
-            Capability.INLINE_FEEDBACK,
-            Capability.APPROVAL_WORKFLOW,
-            Capability.SCOPE_CHANGES);
+            Capability.INLINE_FEEDBACK);
 
     private static <T> boolean anyMatchKind(List<T> beans, Predicate<T> predicate) {
         return beans.stream().anyMatch(predicate);

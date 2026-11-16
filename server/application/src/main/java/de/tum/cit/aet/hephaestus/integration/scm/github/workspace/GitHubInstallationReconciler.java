@@ -6,11 +6,11 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import de.tum.cit.aet.hephaestus.core.WebClientConnectors;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
-import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationLifecycleListener;
 import de.tum.cit.aet.hephaestus.integration.core.spi.WorkspaceProvisioningHook;
 import de.tum.cit.aet.hephaestus.integration.scm.github.app.GitHubAppTokenService;
+import de.tum.cit.aet.hephaestus.integration.scm.github.installation.adoption.GitHubInstallationAccountKind;
 import de.tum.cit.aet.hephaestus.integration.scm.github.installation.adoption.GitHubInstallationRequests;
-import de.tum.cit.aet.hephaestus.integration.scm.github.lifecycle.GitHubLifecycleListener;
+import de.tum.cit.aet.hephaestus.integration.scm.github.lifecycle.GitHubInstallationLifecycle;
 import de.tum.cit.aet.hephaestus.workspace.RepositorySelection;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceScopeFilter;
@@ -58,7 +58,7 @@ public class GitHubInstallationReconciler implements WorkspaceProvisioningHook {
     private static final Logger log = LoggerFactory.getLogger(GitHubInstallationReconciler.class);
 
     private final GitHubAppTokenService gitHubAppTokenService;
-    private final GitHubLifecycleListener githubLifecycleListener;
+    private final GitHubInstallationLifecycle installationLifecycle;
     private final WorkspaceSummaryQuery workspaces;
     private final WorkspaceService workspaceService;
     private final WorkspaceScopeFilter workspaceScopeFilter;
@@ -67,7 +67,7 @@ public class GitHubInstallationReconciler implements WorkspaceProvisioningHook {
 
     public GitHubInstallationReconciler(
             GitHubAppTokenService gitHubAppTokenService,
-            GitHubLifecycleListener githubLifecycleListener,
+            GitHubInstallationLifecycle installationLifecycle,
             WorkspaceSummaryQuery workspaces,
             WorkspaceService workspaceService,
             WorkspaceScopeFilter workspaceScopeFilter,
@@ -75,7 +75,7 @@ public class GitHubInstallationReconciler implements WorkspaceProvisioningHook {
             WebClient.Builder webClients) {
         this.installationRequests = installationRequests;
         this.gitHubAppTokenService = gitHubAppTokenService;
-        this.githubLifecycleListener = githubLifecycleListener;
+        this.installationLifecycle = installationLifecycle;
         this.workspaces = workspaces;
         this.workspaceService = workspaceService;
         this.workspaceScopeFilter = workspaceScopeFilter;
@@ -167,7 +167,7 @@ public class GitHubInstallationReconciler implements WorkspaceProvisioningHook {
             gitHubAppTokenService.markInstallationSuspended(installation.id());
             workspaces.findStateByInstallationId(installation.id()).ifPresent(ws -> {
                 if (!Workspace.WorkspaceStatus.SUSPENDED.name().equals(ws.status())) {
-                    githubLifecycleListener.suspendForInstallation(installation.id());
+                    installationLifecycle.suspendForInstallation(installation.id());
                 }
             });
             return;
@@ -176,9 +176,9 @@ public class GitHubInstallationReconciler implements WorkspaceProvisioningHook {
 
         String login = installation.account().login();
         String accountType = installation.account().type();
-        IntegrationLifecycleListener.AccountKind wsAccountKind = "Organization".equalsIgnoreCase(accountType)
-                ? IntegrationLifecycleListener.AccountKind.ORGANIZATION
-                : IntegrationLifecycleListener.AccountKind.USER;
+        GitHubInstallationAccountKind wsAccountKind = "Organization".equalsIgnoreCase(accountType)
+                ? GitHubInstallationAccountKind.ORGANIZATION
+                : GitHubInstallationAccountKind.USER;
 
         if (workspaceScopeFilter.isActive() && !workspaceScopeFilter.isOrganizationAllowed(login)) {
             log.info("Skipped installation sync: reason=filteredByScope, installationId={}", installation.id());
@@ -194,7 +194,7 @@ public class GitHubInstallationReconciler implements WorkspaceProvisioningHook {
 
         var account = installation.account();
 
-        Workspace workspace = githubLifecycleListener.createOrUpdateFromInstallation(
+        Workspace workspace = installationLifecycle.createOrUpdateFromInstallation(
                 installationId, account.id(), login, wsAccountKind, account.avatarUrl(), selection);
 
         if (workspace == null) {

@@ -12,7 +12,6 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.CopyUpdateReceipt;
 import de.tum.cit.aet.hephaestus.integration.core.spi.EventTypeKey;
 import de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackTarget;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
-import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationLifecycleListener;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationManifest;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemDescriptor;
@@ -214,10 +213,6 @@ final class FixtureIntegration {
                 return Optional.empty();
             }
         };
-    }
-
-    static IntegrationLifecycleListener lifecycleListener() {
-        return () -> KIND;
     }
 
     static SummaryWriter summaryWriter() {

@@ -117,3 +117,10 @@ Each rule names its test or says that it is not enforced. Rules 10, 15 and 17 re
 - [ADR 0023](0023-outline-documentation-integration.md#6-privacy-divergence-from-messaging-ingestion): an opt-out for each author, an announcement in Outline, and app-level encryption of document bodies.
 - [ADR 0023](0023-outline-documentation-integration.md#7-retention-driver-is-upstream-freshness-plus-a-size-cap-not-a-wall-clock): wall-clock retention of documents.
 - [ADR 0023](0023-outline-documentation-integration.md#8-identity-linking-is-link-only-oauth-never-a-sign-in): Outline as a sign-in provider, the `openid` scope, and account match by email.
+
+## Update — 2026-11-16: boot no longer requires a lifecycle listener
+
+Rule 6 required a lifecycle listener for every kind.
+No code dispatched its install, uninstall, scope and rename hooks, so each listener was an empty marker, and the provider adapters own these events.
+The listener SPI and the approval writer SPI are removed.
+Boot now requires a credential provider for every kind and the beans of each declared capability.

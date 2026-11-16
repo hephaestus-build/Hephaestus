@@ -125,8 +125,6 @@ class FixtureIntegrationBootstrapTest extends BaseUnitTest {
                 List.of(),
                 List.of(FixtureIntegration.summaryWriter()),
                 List.of(),
-                List.of(),
-                List.of(FixtureIntegration.lifecycleListener()),
                 validator(),
                 new IntegrationKindRouting());
     }

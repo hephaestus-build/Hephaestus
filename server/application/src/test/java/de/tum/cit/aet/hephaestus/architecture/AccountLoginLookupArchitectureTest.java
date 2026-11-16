@@ -19,7 +19,7 @@ class AccountLoginLookupArchitectureTest extends HephaestusArchitectureTest {
 
     private static final Set<String> ALLOWED_CALLERS = Set.of(
             "de.tum.cit.aet.hephaestus.workspace.adapter.WorkspaceContextResolverAdapter",
-            "de.tum.cit.aet.hephaestus.integration.scm.github.lifecycle.GitHubLifecycleListener");
+            "de.tum.cit.aet.hephaestus.integration.scm.github.lifecycle.GitHubInstallationLifecycle");
 
     @Test
     void shouldNameOnlyExistingClassesInAllowedCallers() {

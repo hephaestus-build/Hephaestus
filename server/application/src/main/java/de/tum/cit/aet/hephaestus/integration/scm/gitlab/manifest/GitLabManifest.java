@@ -14,14 +14,13 @@ import org.springframework.stereotype.Component;
 /**
  * GitLab integration manifest.
  *
- * <p>Feedback-delivery, inline-feedback and approval capabilities are gated on
+ * <p>Feedback-delivery and inline-feedback capabilities are gated on
  * {@code hephaestus.integration.gitlab.enabled}, the same flag the GraphQL provider and channel beans require —
  * the bootstrap demands matching SPI beans for every declared capability. GitLab is opt-in (default off), but
  * the manifest bean stays registered either way so a workspace can be told that connecting GitLab would wake a
  * dormant practice.
  *
- * <p>No {@code RATE_LIMITED}: no per-kind {@code RateLimitTracker}. No {@code SCOPE_CHANGES}: GitLab has no
- * install/uninstall/scope webhooks to fire it.
+ * <p>No {@code RATE_LIMITED}: no per-kind {@code RateLimitTracker}.
  */
 @Component
 public class GitLabManifest implements IntegrationManifest {
@@ -53,7 +52,6 @@ public class GitLabManifest implements IntegrationManifest {
         if (gitlabStackEnabled) {
             capabilities.add(Capability.FEEDBACK_DELIVERY);
             capabilities.add(Capability.INLINE_FEEDBACK);
-            capabilities.add(Capability.APPROVAL_WORKFLOW);
         }
         return Set.copyOf(capabilities);
     }

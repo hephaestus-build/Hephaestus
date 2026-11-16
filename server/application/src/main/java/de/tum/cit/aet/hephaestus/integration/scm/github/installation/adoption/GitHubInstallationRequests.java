@@ -4,7 +4,6 @@ import de.tum.cit.aet.hephaestus.core.auth.spi.GitProviderRegistry;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
-import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationLifecycleListener.AccountKind;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceProperties;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceSummaryQuery;
 import java.util.List;
@@ -68,17 +67,18 @@ public class GitHubInstallationRequests {
      * @return whether the installation is recorded
      */
     @Transactional(propagation = Propagation.MANDATORY)
-    public boolean recordPending(long installationId, @Nullable Long accountId, String accountLogin, AccountKind kind) {
+    public boolean recordPending(
+            long installationId, @Nullable Long accountId, String accountLogin, GitHubInstallationAccountKind kind) {
         return record(installationId, accountId, accountLogin, kind);
     }
 
-    private boolean record(long installationId, @Nullable Long accountId, String accountLogin, AccountKind kind) {
-        GitHubInstallationAccountKind accountKind = GitHubInstallationAccountKind.of(kind);
-        if (!admit(accountId, accountKind)) {
+    private boolean record(
+            long installationId, @Nullable Long accountId, String accountLogin, GitHubInstallationAccountKind kind) {
+        if (!admit(accountId, kind)) {
             log.info("Skipped installation record: reason=accountNotAdmitted, installationId={}", installationId);
             return false;
         }
-        requests.recordPending(installationId, accountId, accountLogin, accountKind.name());
+        requests.recordPending(installationId, accountId, accountLogin, kind.name());
         return true;
     }
 
@@ -104,7 +104,8 @@ public class GitHubInstallationRequests {
      * that it filters out and that has no workspace still waits for the admin's decision.
      */
     @Transactional
-    public void recordFiltered(long installationId, @Nullable Long accountId, String accountLogin, AccountKind kind) {
+    public void recordFiltered(
+            long installationId, @Nullable Long accountId, String accountLogin, GitHubInstallationAccountKind kind) {
         if (requiresApproval()
                 && workspaces.findStateByInstallationId(installationId).isEmpty()) {
             record(installationId, accountId, accountLogin, kind);
