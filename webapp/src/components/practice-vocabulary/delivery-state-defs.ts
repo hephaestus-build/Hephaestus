@@ -12,13 +12,20 @@ import {
 	UserRoundIcon,
 	XCircleIcon,
 } from "lucide-react";
-import { definitionFor, type StatusDef, type StatusDefs } from "@/components/common/status-def";
+import {
+	definitionFor,
+	type StatusDef,
+	type StatusDefs,
+	UNKNOWN_STATUS_DEF,
+} from "@/components/common/status-def";
 
 import type { ReviewFeedback } from "@/api/types.gen";
 
 import { FEEDBACK_DECISION_DEFS } from "./feedback-decision-defs";
 
 export type DeliveryState = ReviewFeedback["state"];
+/** A delivery state that this build names; the API can send others. */
+export type KnownDeliveryState = keyof typeof DELIVERY_STATE_DEFS;
 
 export type DeliveryFacts = Pick<
 	ReviewFeedback,
@@ -43,7 +50,7 @@ export function partialDeliveryDescription(feedback: PartialFacts): string {
 		: "Part of this feedback appeared on the work. The rest is not confirmed yet.";
 }
 
-export const DELIVERY_STATE_DEFS: StatusDefs<DeliveryState> = {
+export const DELIVERY_STATE_DEFS = {
 	AWAITING_APPROVAL: {
 		label: "Awaiting approval",
 		icon: ClipboardCheckIcon,
@@ -94,7 +101,7 @@ export const DELIVERY_STATE_DEFS: StatusDefs<DeliveryState> = {
 		badgeVariant: "destructive",
 		description: "Sending was attempted and did not succeed.",
 	},
-};
+} satisfies StatusDefs<string>;
 
 // Refined delivery labels must begin with the base state label so filters still match what rows say.
 const CONVERSATION_OVERRIDES = {
@@ -139,6 +146,13 @@ const ON_WORK_READY: StatusDef = {
 	description: "It is cleared to send. Provider delivery is in progress and may be retried safely.",
 };
 
+// A destination that this build does not know: it is ready, but this build cannot say where it waits.
+const UNKNOWN_DESTINATION_READY: StatusDef = {
+	...UNKNOWN_STATUS_DEF,
+	label: "Ready",
+	description: "It is ready for a place that this version of Hephaestus does not recognize.",
+};
+
 // A withdrawal keeps the stored state, so feedback withdrawn while ready still reads READY. No
 // destination delivers it while the withdrawal stands, so it must not read as waiting to be sent.
 const WITHDRAWN_READY: StatusDef = {
@@ -176,7 +190,10 @@ export function deliveryOutcome(feedback: DeliveryFacts): StatusDef {
 		}
 	}
 	if (state === "READY") {
-		return destination === "PRACTICE_PAGE" ? PRACTICE_PAGE_READY : ON_WORK_READY;
+		if (destination === "PRACTICE_PAGE") {
+			return PRACTICE_PAGE_READY;
+		}
+		return destination === "ON_WORK" ? ON_WORK_READY : UNKNOWN_DESTINATION_READY;
 	}
 	return definitionFor(DELIVERY_STATE_DEFS, state);
 }

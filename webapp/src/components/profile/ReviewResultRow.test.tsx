@@ -172,6 +172,14 @@ describe("ReviewResultRow", () => {
 		expect(screen.getAllByText("Marked incorrect").length).toBeGreaterThan(0);
 	});
 
+	it("reads a currentness that this build does not know as unverified, never as current", () => {
+		renderOpen({ result: { ...result, currentness: "SUPERSEDED" } });
+
+		expect(
+			screen.getAllByText(/cannot tell whether this observation is current/u).length,
+		).toBeGreaterThan(0);
+	});
+
 	it("lists each piece of a result's feedback with where it went, and offers no response there", () => {
 		renderOpen({
 			result: {

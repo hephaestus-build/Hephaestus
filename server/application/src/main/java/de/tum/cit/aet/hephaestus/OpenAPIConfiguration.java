@@ -25,9 +25,15 @@ import io.swagger.v3.oas.models.media.Schema;
 import io.swagger.v3.oas.models.media.StringSchema;
 import io.swagger.v3.oas.models.parameters.HeaderParameter;
 import io.swagger.v3.oas.models.parameters.Parameter;
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -45,7 +51,10 @@ import org.springdoc.core.utils.SpringDocUtils;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.io.ClassPathResource;
+import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
 
 /**
  * OpenAPI configuration: processes server DTOs (strips the {@code DTO} suffix from schema
@@ -174,7 +183,83 @@ public class OpenAPIConfiguration {
             declareExactDecimals(openApi);
             declareProviderIdentityKinds(openApi);
             declareProblemShape(openApi);
+            openPublicResponseEnums(openApi, readPublicOperations());
         };
+    }
+
+    private static final String COMPONENTS = "#/components/schemas/";
+
+    /**
+     * The enums that the public contract keeps closed. A new value changes what an observation means, so it waits for
+     * a major release (compatibility policy § Open enums).
+     */
+    static final Set<String> CLOSED_ENUMS = Set.of("ResultOutcome", "Severity");
+
+    static final String OPEN_ENUM_NOTE = "Extensible enum: a client accepts a value that the examples do not name.";
+
+    /** Each public operation as {@code METHOD /path}, from server/public-api-operations.json in the JAR. */
+    private static Set<String> readPublicOperations() {
+        try (var in = new ClassPathResource("openapi/public-api-operations.json").getInputStream()) {
+            return Set.copyOf(JsonMapper.shared().readValue(in, new TypeReference<List<String>>() {}));
+        } catch (IOException e) {
+            throw new UncheckedIOException("The JAR lacks openapi/public-api-operations.json", e);
+        }
+    }
+
+    /**
+     * ADR 0103 rule 3: an enum that a public operation returns is open. JSON Schema's {@code enum} is closed, and a
+     * strict generator fails on a value it does not list. So the spec writes such an enum as a string with its known
+     * values as {@code examples}, everywhere it appears. The closed enums keep {@code enum}.
+     */
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    static void openPublicResponseEnums(OpenAPI openApi, Set<String> operations) {
+        if (openApi.getPaths() == null || openApi.getComponents() == null) return;
+        Map<String, Schema> schemas = openApi.getComponents().getSchemas();
+        Set<Schema> closed = Collections.newSetFromMap(new IdentityHashMap<>());
+        CLOSED_ENUMS.stream().map(schemas::get).filter(Objects::nonNull).forEach(closed::add);
+        Set<Schema> seen = Collections.newSetFromMap(new IdentityHashMap<>());
+        Deque<Schema> pending = new ArrayDeque<>();
+        openApi.getPaths()
+                .forEach((path, item) -> item.readOperationsMap().forEach((method, operation) -> {
+                    if (operation.getResponses() == null || !operations.contains(method.name() + " " + path)) return;
+                    operation.getResponses().values().stream()
+                            .filter(response -> response.getContent() != null)
+                            .flatMap(response -> response.getContent().values().stream())
+                            .map(media -> media.getSchema())
+                            .filter(Objects::nonNull)
+                            .forEach(pending::add);
+                }));
+        while (!pending.isEmpty()) {
+            Schema schema = pending.pop();
+            if (!seen.add(schema)) continue;
+            if (schema.get$ref() != null && schema.get$ref().startsWith(COMPONENTS)) {
+                Schema target = schemas.get(schema.get$ref().substring(COMPONENTS.length()));
+                if (target != null) pending.add(target);
+            }
+            if (schema.getEnum() != null && !closed.contains(schema)) open(schema);
+            if (schema.getProperties() != null)
+                pending.addAll(schema.getProperties().values());
+            Stream.of(schema.getItems(), schema.getNot())
+                    .filter(Objects::nonNull)
+                    .forEach(pending::add);
+            Stream.of(schema.getAllOf(), schema.getAnyOf(), schema.getOneOf())
+                    .filter(Objects::nonNull)
+                    .forEach(pending::addAll);
+            if (schema.getAdditionalProperties() instanceof Schema values) pending.add(values);
+        }
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private static void open(Schema schema) {
+        List<Object> known = ((List<Object>) schema.getEnum())
+                .stream().filter(Objects::nonNull).toList();
+        boolean nullable = schema.getEnum().contains(null);
+        schema.setEnum(null);
+        schema.setExamples(new ArrayList<>(known));
+        String description = schema.getDescription();
+        schema.setDescription(
+                description == null || description.isBlank() ? OPEN_ENUM_NOTE : OPEN_ENUM_NOTE + " " + description);
+        if (nullable && schema.getTypes() == null) schema.setTypes(new LinkedHashSet<>(List.of("string", "null")));
     }
 
     /**

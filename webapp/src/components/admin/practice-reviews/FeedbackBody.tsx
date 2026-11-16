@@ -1,7 +1,7 @@
 import type { ReviewFeedback } from "@/api/types.gen";
 import { UNTRUSTED_MARKDOWN_PROSE, LazyMarkdown } from "@/components/common/UntrustedMarkdown";
 import { WrittenByHephaestusNote } from "@/components/common/WrittenByHephaestusNote";
-import { ADMIN_WITHHELD_TEXT } from "@/components/practice-vocabulary/feedback-destination-defs";
+import { adminWithheldText } from "@/components/practice-vocabulary/feedback-destination-defs";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import {
 	CodeBlock,
@@ -33,7 +33,7 @@ export interface FeedbackBodyProps {
 export function FeedbackBody({ feedback, className }: FeedbackBodyProps) {
 	const { body } = feedback;
 	const FeedbackMarkdown = useLazyComponent(feedbackMarkdown);
-	const withheld = ADMIN_WITHHELD_TEXT[feedback.destination];
+	const withheld = adminWithheldText(feedback.destination);
 
 	// Private-destination text must stay hidden even if the caller supplies it.
 	if (withheld) {

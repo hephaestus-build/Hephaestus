@@ -246,6 +246,32 @@ describe("one pending action, confirmed once", () => {
 		});
 	});
 
+	it("says a refusal's reason is not recognized when a newer server names one this build does not know", async () => {
+		const h = harness();
+		const id = await h.launch();
+		h.api.requestReview.mockResolvedValueOnce({
+			status: "REFUSED",
+			reason: "QUOTA_REACHED",
+		});
+		await expect(confirmAction(h.env, h.deps, id, WINDOW_TAB)).resolves.toStrictEqual({
+			kind: "request-review",
+			status: "REFUSED",
+			reasonDescription:
+				"It did not start, for a reason that this version of Hephaestus does not recognize.",
+		});
+	});
+
+	it("claims neither a started nor a refused review for a status that this build does not know", async () => {
+		const h = harness();
+		const id = await h.launch();
+		h.api.requestReview.mockResolvedValueOnce({ status: "DEFERRED" });
+		await expect(confirmAction(h.env, h.deps, id, WINDOW_TAB)).resolves.toStrictEqual({
+			kind: "request-review",
+			status: "UNRECOGNIZED",
+		});
+		expect(h.api.requestReview).toHaveBeenCalledOnce();
+	});
+
 	it("reports a refusal without a reason as one, without inventing a sentence", async () => {
 		const h = harness();
 		const id = await h.launch();

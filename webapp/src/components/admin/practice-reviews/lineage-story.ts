@@ -1,9 +1,8 @@
 import type { ItemEvent, ReviewDetail, ReviewRef } from "@/api/types.gen";
-import type { StatusDef } from "@/components/common/status-def";
+import { definitionFor, type StatusDef, UNKNOWN_STATUS_DEF } from "@/components/common/status-def";
 import {
 	REVIEW_STATUS_DEFS,
-	REVIEW_STOP_REASON_SENTENCES,
-	type ReviewStatus,
+	reviewStopReasonSentence,
 } from "@/components/practice-vocabulary/review-status-defs";
 
 import {
@@ -23,32 +22,37 @@ export interface ReviewStepState {
 	assessedNothing: string;
 }
 
-const ASSESSED_NOTHING: Record<ReviewStatus, string> = {
+export const ASSESSED_NOTHING = {
 	QUEUED: "The review has not started, so it has recorded nothing yet.",
 	RUNNING: "The review finishes its practice checks before recording observations here.",
 	COMPLETE: "The review ran to the end and recorded no observation.",
 	PARTIAL: "The review closed before it recorded an observation.",
 	FAILED: "The review stopped before it recorded an observation.",
 	CANCELLED: "The review was cancelled before it recorded an observation.",
-};
+} satisfies Record<string, string>;
 
 export function reviewStepState(
 	review: ReviewRef,
 	detail?: Pick<ReviewDetail, "stopReason" | "practices">,
 ): ReviewStepState {
-	const def = REVIEW_STATUS_DEFS[review.status];
+	const def = definitionFor(REVIEW_STATUS_DEFS, review.status);
+	const known = def !== UNKNOWN_STATUS_DEF;
 	const stopReason = detail?.stopReason ?? null;
 	const withheld =
 		detail?.practices.filter((practice) => practice.status === "WITHHELD").length ?? 0;
 	return {
 		def,
-		title: `Review ${def.label.toLowerCase()}`,
-		note: stopReason === null ? undefined : REVIEW_STOP_REASON_SENTENCES[stopReason],
+		title: known ? `Review ${def.label.toLowerCase()}` : "Review status unknown",
+		note: stopReason === null ? undefined : reviewStopReasonSentence(stopReason),
 		// Withheld practices have reasons, not observations; an empty observation list must preserve that distinction.
 		assessedNothing:
 			withheld > 0
 				? `${countOf(withheld, "practice was", "practices were")} withheld with a recorded reason, so no observation stands for ${withheld === 1 ? "it" : "them"}.`
-				: ASSESSED_NOTHING[review.status],
+				: definitionFor(
+						ASSESSED_NOTHING,
+						review.status,
+						"This review has recorded no observation.",
+					),
 	};
 }
 

@@ -4,6 +4,7 @@ import type { ConnectionSyncStatus, IntegrationCatalogEntry } from "@/api/types.
 import { DotSeparator } from "@/components/common/DotSeparator";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { RelativeTime } from "@/components/common/RelativeTime";
+import { definitionFor, isKnownValue, UNKNOWN_STATUS_DEF } from "@/components/common/status-def";
 import { useNow } from "@/components/common/use-now";
 import { GitHubIcon, GitLabIcon, OutlineIcon, SlackIcon } from "@/components/icons/brand";
 import { buttonVariants } from "@/components/ui/button";
@@ -17,24 +18,24 @@ import { WorkspaceConnectionStateNotice } from "./WorkspaceConnectionStateNotice
 import { WorkspaceIntegrationCardHeading } from "./WorkspaceIntegrationCardHeading";
 import { WorkspaceSyncNowButton } from "./WorkspaceSyncNowButton";
 
-const DETAIL_ROUTE: Record<
-	IntegrationCatalogEntry["kind"],
-	| "/w/$workspaceSlug/admin/integrations/scm"
-	| "/w/$workspaceSlug/admin/integrations/slack"
-	| "/w/$workspaceSlug/admin/integrations/outline"
-> = {
+export const DETAIL_ROUTE = {
 	GITHUB: "/w/$workspaceSlug/admin/integrations/scm",
 	GITLAB: "/w/$workspaceSlug/admin/integrations/scm",
 	SLACK: "/w/$workspaceSlug/admin/integrations/slack",
 	OUTLINE: "/w/$workspaceSlug/admin/integrations/outline",
-};
+} as const satisfies Record<string, string>;
 
-const KIND_ICON: Record<IntegrationCatalogEntry["kind"], React.ReactNode> = {
+type DetailRoute = (typeof DETAIL_ROUTE)[keyof typeof DETAIL_ROUTE];
+
+export const KIND_ICON = {
 	GITHUB: <GitHubIcon className="size-5" />,
 	GITLAB: <GitLabIcon className="size-5" />,
 	SLACK: <SlackIcon className="size-5" />,
 	OUTLINE: <OutlineIcon className="size-5" />,
-};
+} satisfies Record<string, React.ReactNode>;
+
+/** An integration kind that this build does not know has no page here and a neutral mark. */
+const UnknownKindIcon = UNKNOWN_STATUS_DEF.icon;
 
 /**
  * The two ways a connection can read healthy overall and still be failing its job: errored resources,
@@ -82,7 +83,7 @@ export function WorkspaceIntegrationOverviewCard({
 	isTriggering = false,
 	onSync,
 }: WorkspaceIntegrationOverviewCardProps) {
-	const detailTo = DETAIL_ROUTE[entry.kind];
+	const detailTo = isKnownValue(DETAIL_ROUTE, entry.kind) ? DETAIL_ROUTE[entry.kind] : undefined;
 	const isConnectionActive = entry.connectionState === "ACTIVE";
 
 	return (
@@ -91,7 +92,7 @@ export function WorkspaceIntegrationOverviewCard({
 		<Card className="h-full">
 			<CardHeader>
 				<WorkspaceIntegrationCardHeading className="flex items-center gap-2">
-					{KIND_ICON[entry.kind]}
+					{definitionFor(KIND_ICON, entry.kind, <UnknownKindIcon className="size-5" />)}
 					{entry.displayName}
 				</WorkspaceIntegrationCardHeading>
 				{/* Health is what sync reports; beside a token the server cannot read it would only mislead. */}
@@ -142,14 +143,16 @@ export function WorkspaceIntegrationOverviewCard({
 							}
 						/>
 					)}
-					<Link
-						to={detailTo}
-						params={{ workspaceSlug }}
-						className={buttonVariants({ size: "sm", variant: "ghost" })}
-					>
-						View details<span className="sr-only"> for {entry.displayName}</span>
-						<ArrowRightIcon className="size-3.5" />
-					</Link>
+					{detailTo !== undefined && (
+						<Link
+							to={detailTo}
+							params={{ workspaceSlug }}
+							className={buttonVariants({ size: "sm", variant: "ghost" })}
+						>
+							View details<span className="sr-only"> for {entry.displayName}</span>
+							<ArrowRightIcon className="size-3.5" />
+						</Link>
+					)}
 				</CardFooter>
 			)}
 		</Card>
@@ -159,7 +162,7 @@ export function WorkspaceIntegrationOverviewCard({
 interface OverviewBodyProps {
 	workspaceSlug: string;
 	entry: IntegrationCatalogEntry;
-	detailTo: (typeof DETAIL_ROUTE)[IntegrationCatalogEntry["kind"]];
+	detailTo: DetailRoute | undefined;
 	isConnectionActive: boolean;
 	status: ConnectionSyncStatus | undefined;
 	isStatusLoading: boolean;
@@ -177,7 +180,7 @@ function DisconnectedAction({
 }: {
 	entry: IntegrationCatalogEntry;
 	isScm: boolean;
-	detailTo: (typeof DETAIL_ROUTE)[IntegrationCatalogEntry["kind"]];
+	detailTo: DetailRoute | undefined;
 	workspaceSlug: string;
 }) {
 	if (isScm) {
@@ -187,7 +190,8 @@ function DisconnectedAction({
 			</p>
 		);
 	}
-	if (!entry.connectable) {
+	// A kind that this build does not know has no connect page.
+	if (!entry.connectable || detailTo === undefined) {
 		return <p className="text-sm text-muted-foreground">Not enabled on this instance.</p>;
 	}
 	return (

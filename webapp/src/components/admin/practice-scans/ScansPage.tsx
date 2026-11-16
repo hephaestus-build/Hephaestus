@@ -14,7 +14,7 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { PageLayout } from "@/components/layout/PageLayout";
 import {
 	REVIEW_STATUS_DEFS,
-	type ReviewStatus,
+	type KnownReviewStatus,
 } from "@/components/practice-vocabulary/review-status-defs";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Table, TableHeader, TableRow } from "@/components/ui/table";
@@ -44,7 +44,7 @@ export interface ScansPageProps {
 	onFiltersChange: (next: ScanListFilters) => void;
 }
 
-type StatusFilter = ReviewStatus | "ALL";
+type StatusFilter = KnownReviewStatus | "ALL";
 
 const STATUS_OPTIONS: readonly FilterOption<StatusFilter>[] = [
 	{ value: "ALL", label: "All" },

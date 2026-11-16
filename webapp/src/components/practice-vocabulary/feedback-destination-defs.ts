@@ -2,11 +2,11 @@ import { BotMessageSquareIcon, MessageSquareQuoteIcon, UserRoundIcon } from "luc
 
 import type { ReviewFeedback } from "@/api/types.gen";
 
-import type { StatusDefs } from "@/components/common/status-def";
+import { isKnownValue, type StatusDefs } from "@/components/common/status-def";
 
 export type FeedbackDestination = ReviewFeedback["destination"];
 
-export const FEEDBACK_DESTINATION_DEFS: StatusDefs<FeedbackDestination> = {
+export const FEEDBACK_DESTINATION_DEFS = {
 	ON_WORK: {
 		label: "On the work",
 		icon: MessageSquareQuoteIcon,
@@ -27,12 +27,10 @@ export const FEEDBACK_DESTINATION_DEFS: StatusDefs<FeedbackDestination> = {
 		description:
 			"Shown only on the developer’s own practice pages, which is also what delivers it. The text is withheld from every admin page, including this one.",
 	},
-};
+} satisfies StatusDefs<string>;
 
 // Private destination text is withheld; its absence must not be presented as missing evidence.
-export const ADMIN_WITHHELD_TEXT: Partial<
-	Record<FeedbackDestination, { title: string; detail: string }>
-> = {
+export const ADMIN_WITHHELD_TEXT = {
 	CONVERSATION: {
 		title: "Notes for the conversation are private",
 		detail:
@@ -43,4 +41,23 @@ export const ADMIN_WITHHELD_TEXT: Partial<
 		detail:
 			"The text was written for the developer’s own practice pages and is withheld from admins.",
 	},
-};
+} satisfies Partial<Record<string, { title: string; detail: string }>>;
+
+/**
+ * The words that stand in for a private destination's text, or undefined where an admin may read
+ * it. A destination that this build does not know may be private, so its text stays withheld.
+ */
+export function adminWithheldText(
+	destination: FeedbackDestination,
+): { title: string; detail: string } | undefined {
+	if (isKnownValue(ADMIN_WITHHELD_TEXT, destination)) {
+		return ADMIN_WITHHELD_TEXT[destination];
+	}
+	return isKnownValue(FEEDBACK_DESTINATION_DEFS, destination)
+		? undefined
+		: {
+				title: "Text is withheld",
+				detail:
+					"This version of Hephaestus does not recognize where this feedback goes, so it does not show the text.",
+			};
+}

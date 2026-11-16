@@ -22,6 +22,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { Skeleton } from "@/components/ui/skeleton";
 import { asDate } from "@/lib/dates";
 import { docUrl } from "@/lib/docs-url";
+import { hasText } from "@/lib/text";
 import type { RefreshFailure } from "@/runtime/tanstack-query/infinite-list";
 
 import {
@@ -74,6 +75,10 @@ function releaseLabel({ version, channel }: Pick<ReleaseStatus["running"], "vers
 			return `commit ${version.slice(0, 7)}`;
 		}
 		case "DEVELOPMENT": {
+			return version;
+		}
+		// A channel that this build does not know: the version as the server names it.
+		default: {
 			return version;
 		}
 	}
@@ -146,10 +151,14 @@ function CheckSummary({ release }: { release: ReleaseStatus }) {
 			return (
 				<>
 					{description}
-					{release.failure ? (
+					{hasText(release.failure) ? (
 						<>
 							{" "}
-							{RELEASE_CHECK_FAILURE_LABELS[release.failure]}{" "}
+							{definitionFor(
+								RELEASE_CHECK_FAILURE_LABELS,
+								release.failure,
+								"The check failed",
+							)}{" "}
 							<RelativeTime value={release.lastAttempt} fallback="at an unknown time" />
 							{release.nextCheck ? (
 								<>
@@ -180,6 +189,10 @@ function CheckSummary({ release }: { release: ReleaseStatus }) {
 			);
 		}
 		case "NOT_APPLICABLE": {
+			return description;
+		}
+		// A status that this build does not know: its words say so, with nothing else to add.
+		default: {
 			return description;
 		}
 	}

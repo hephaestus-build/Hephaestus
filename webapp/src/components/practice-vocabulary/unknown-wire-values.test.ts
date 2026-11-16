@@ -8,7 +8,19 @@ import { facetPills } from "@/components/admin/practice-reviews/AppliedFacetPill
 import { itemKindLabel, itemKindNoun, itemName } from "@/lib/item-kinds";
 import { mockDocumentItemType } from "@/mocks/fixtures/practice";
 
+import { isKnownValue, UNKNOWN_STATUS_DEF } from "@/components/common/status-def";
+
+import { claimCurrentnessNote, currentnessCopy, UNKNOWN_CURRENTNESS } from "./claim-currentness";
 import { evidenceSourceDef } from "./evidence-source-defs";
+import { copyKindsPhrase } from "./feedback-copy-defs";
+import { adminWithheldText } from "./feedback-destination-defs";
+import { itemEventReasonSentence } from "./item-event-defs";
+import {
+	partialReviewScope,
+	REVIEW_STATUS_DEFS,
+	reviewStopReasonSentence,
+	shownReviewStatusDef,
+} from "./review-status-defs";
 
 // Provider vocabularies can reach the client before labels do; unknown values must not become misleading copy.
 describe("a value this build has no words for", () => {
@@ -77,6 +89,60 @@ describe("the words for the kinds a scan and a reviewer read", () => {
 		).toBe("Repository ls1intum/Hephaestus");
 		expect(itemName({ kind: "scm.file", provider: "GITLAB", label: "src/app.ts" })).toBe(
 			"File src/app.ts",
+		);
+	});
+});
+
+// The API types these enums as open strings: a newer server can send a value that this build has no
+// words for, and each surface says so instead of showing nothing or crashing.
+describe("an open enum value that this build does not know", () => {
+	const value = "SOMETHING_NEW";
+
+	it("is not mistaken for a known one", () => {
+		expect(isKnownValue(REVIEW_STATUS_DEFS, value)).toBe(false);
+		expect(isKnownValue(REVIEW_STATUS_DEFS, "QUEUED")).toBe(true);
+	});
+
+	it("shows a review status as Unknown", () => {
+		expect(shownReviewStatusDef(REVIEW_STATUS_DEFS, value, undefined)).toBe(UNKNOWN_STATUS_DEF);
+		expect(UNKNOWN_STATUS_DEF.label).toBe("Unknown");
+	});
+
+	it("says that a stop reason, or the reason a review did not start, is not recognized", () => {
+		expect(reviewStopReasonSentence(value)).toBe(
+			"It stopped for a reason that this version of Hephaestus does not recognize.",
+		);
+		expect(itemEventReasonSentence(value)).toBe(
+			"It did not start, for a reason that this version of Hephaestus does not recognize.",
+		);
+	});
+
+	it("names no scope for a review kind", () => {
+		expect(partialReviewScope(value)).toBeUndefined();
+		expect(partialReviewScope("SCAN")).toBe("Its observations cover only the work it reached.");
+	});
+
+	it("reads an observation's currentness as unknown, never as current", () => {
+		expect(currentnessCopy({ currentness: value })).toBe(UNKNOWN_CURRENTNESS);
+		expect(UNKNOWN_CURRENTNESS.badge).toBe("Status unknown");
+		expect(claimCurrentnessNote({ currentness: value })).toBe(
+			"This version of Hephaestus cannot tell whether this observation is current.",
+		);
+	});
+
+	it("keeps the text of feedback for an unknown destination withheld from admins", () => {
+		expect(adminWithheldText(value)).toStrictEqual({
+			title: "Text is withheld",
+			detail:
+				"This version of Hephaestus does not recognize where this feedback goes, so it does not show the text.",
+		});
+		expect(adminWithheldText("ON_WORK")).toBeUndefined();
+		expect(adminWithheldText("PRACTICE_PAGE")?.title).toBe("Text is private to the developer");
+	});
+
+	it("counts a copy of an unknown kind as a copy of another kind", () => {
+		expect(copyKindsPhrase([{ kind: value }, { kind: "SUMMARY" }])).toBe(
+			"a copy of another kind and a summary",
 		);
 	});
 });

@@ -13,6 +13,7 @@ import {
 	installOasdiff,
 	latestStableTag,
 	readAcceptedBreaks,
+	enumChanges,
 	nullTypes,
 	removedFromContract,
 } from "./check-api-compatibility.ts";
@@ -429,4 +430,62 @@ void test("null outside the public operations is no problem", () => {
 	const nullable = spec({ optional: { title: { type: ["string", "null"] } } });
 	assert.deepEqual(nullTypes(nullable, new Set(["DELETE /items/{id}"])), []);
 	assert.notDeepEqual(nullTypes(nullable, new Set(["POST /items"])), []);
+});
+
+function withPublicStatus(status: object) {
+	const fixture = { ...spec(), components: { schemas: { Status: status } } };
+	fixture.paths["/items"].get.responses["200"] = {
+		description: "Items",
+		...json({ type: "object", properties: { status: { $ref: "#/components/schemas/Status" } } }),
+	};
+	return fixture;
+}
+
+void test("a closed public enum gains no value, and an open one neither closes nor drops a known value", () => {
+	const items = new Set(["GET /items"]);
+	const closed = withPublicStatus({ type: "string", enum: ["MET"] });
+	const open = withPublicStatus({ type: "string", examples: ["RUNNING", "DONE"] });
+	assert.equal(
+		enumChanges(closed, withPublicStatus({ type: "string", examples: ["MET"] }), items).length,
+		1,
+	);
+	assert.deepEqual(
+		enumChanges(closed, withPublicStatus({ type: "string", enum: ["MET", "NEW"] }), items).length,
+		1,
+	);
+	assert.deepEqual(
+		enumChanges(open, withPublicStatus({ type: "string", enum: ["RUNNING", "DONE"] }), items)
+			.length,
+		1,
+	);
+	assert.deepEqual(
+		enumChanges(open, withPublicStatus({ type: "string", examples: ["RUNNING"] }), items).length,
+		1,
+	);
+	assert.deepEqual(
+		enumChanges(
+			open,
+			withPublicStatus({ type: "string", examples: ["RUNNING", "DONE", "NEW"] }),
+			items,
+		),
+		[],
+	);
+	assert.deepEqual(
+		enumChanges(closed, withPublicStatus({ type: "string", enum: ["MET", "NEW"] }), new Set()),
+		[],
+	);
+});
+
+void test("from a 1.0 base, a closed public enum that gains a value fails the gate", async () => {
+	const result = await compare(
+		withPublicStatus({ type: "string", enum: ["MET", "NEW"] }),
+		"",
+		"v1.0.0",
+		false,
+		withPublicStatus({ type: "string", enum: ["MET"] }),
+	);
+	assert.ok(
+		result.problems.some((problem) => problem.includes("Status gains NEW")),
+		result.problems.join("\n"),
+	);
 });

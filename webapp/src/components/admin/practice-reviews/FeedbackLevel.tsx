@@ -44,7 +44,6 @@ import {
 	type FeedbackDecisionReason,
 	feedbackDecisionReasonLabel,
 } from "@/components/practice-vocabulary/feedback-decision-defs";
-import type { FeedbackDestination } from "@/components/practice-vocabulary/feedback-destination-defs";
 import { FEEDBACK_LOCATION_DEFS } from "@/components/practice-vocabulary/feedback-location-defs";
 import { FEEDBACK_RESOLUTION_DEFS } from "@/components/practice-vocabulary/feedback-resolution-defs";
 import {
@@ -709,14 +708,14 @@ function responseEvent(feedback: FeedbackRecord): SheetEvent | undefined {
 	};
 }
 
-const WITHDRAWN_NOW: Record<FeedbackDestination, string> = {
+export const WITHDRAWN_NOW = {
 	ON_WORK:
 		"It is withdrawn. Copies it posted on the work are retracted there, and their receipts stay in this history. The observations behind it are unchanged.",
 	PRACTICE_PAGE:
 		"It is off the developer’s practice pages and out of the feedback given to later reviews and conversations. The observations behind it are unchanged.",
 	CONVERSATION:
 		"It is withdrawn, so Hephaestus does not raise it in a conversation. The observations behind it are unchanged.",
-};
+} satisfies Record<string, string>;
 
 /** Where removing withdrawn feedback from the work stands; the copy counts come from their receipts. */
 function withdrawnOnWorkNow(feedback: FeedbackRecord): string {
@@ -753,7 +752,11 @@ function feedbackNow(feedback: FeedbackRecord): ReactNode {
 	if (feedback.withdrawn) {
 		return feedback.destination === "ON_WORK"
 			? withdrawnOnWorkNow(feedback)
-			: WITHDRAWN_NOW[feedback.destination];
+			: definitionFor(
+					WITHDRAWN_NOW,
+					feedback.destination,
+					"It is withdrawn. The observations behind it are unchanged.",
+				);
 	}
 	if (feedback.disagreedAt !== null) {
 		return "While the developer’s disagreement stands, a later review of the same work does not raise the same point again.";
@@ -775,6 +778,10 @@ function feedbackNow(feedback: FeedbackRecord): ReactNode {
 		case "WITHHELD":
 		case "REJECTED":
 		case "REPLACED": {
+			return undefined;
+		}
+		// Its state badge already says that this build does not know the state.
+		default: {
 			return undefined;
 		}
 	}
@@ -825,6 +832,9 @@ function readyLine(feedback: FeedbackRecord): string {
 			return feedback.sends.some((send) => send.state === "UNCERTAIN")
 				? "A write was not confirmed. The provider is checked before anything is posted again."
 				: "Delivery is still in progress. This updates as the copies not yet posted are tried again.";
+		}
+		default: {
+			return "It is ready. This version of Hephaestus does not recognize where it goes.";
 		}
 	}
 }
@@ -906,14 +916,14 @@ function canChangeWithdrawal(feedback: FeedbackRecord): boolean {
 	);
 }
 
-const WITHDRAW_DESCRIPTIONS: Record<FeedbackDestination, string> = {
+export const WITHDRAW_DESCRIPTIONS = {
 	ON_WORK:
 		"Copies already posted on the work are retracted there, and nothing more is posted. Their receipts stay on this sheet, and the observations behind it are unchanged.",
 	PRACTICE_PAGE:
 		"It comes off the developer’s practice pages and out of the feedback given to later reviews and conversations. The observations behind it are unchanged. A developer who already saw it sees that it was withdrawn, not your reason.",
 	CONVERSATION:
 		"Hephaestus does not raise it in a conversation, and it leaves the feedback given to later reviews. The observations behind it are unchanged.",
-};
+} satisfies Record<string, string>;
 
 // No removal can reach a comment whose write is unknown: it has no provider reference until found.
 const UNKNOWN_WRITE_WITHDRAW_DESCRIPTION =
@@ -931,7 +941,11 @@ function withdrawalCopy(feedback: FeedbackRecord): CorrectionReasonCopy {
 			placeholder: "Why the feedback was right after all…",
 		};
 	}
-	let description = WITHDRAW_DESCRIPTIONS[feedback.destination];
+	let description = definitionFor(
+		WITHDRAW_DESCRIPTIONS,
+		feedback.destination,
+		"It is withdrawn wherever it went. The observations behind it are unchanged.",
+	);
 	if (deliveryCheck(feedback) !== undefined) {
 		// Posted copies beside the unknown one are still retracted the usual way.
 		description = feedback.copies.some((copy) => copy.state === "POSTED")

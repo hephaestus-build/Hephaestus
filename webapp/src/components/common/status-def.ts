@@ -30,7 +30,9 @@ export type BadgeVariant =
 /**
  * A total registry over an enum. `Record` rather than `Partial<Record>` on purpose: a value the
  * server adds fails `typecheck:webapp` on the registry that has no words for it, instead of
- * rendering as a blank cell in production.
+ * rendering as a blank cell in production. An open enum, which the API types as a plain string,
+ * keeps its registry's literal keys with `satisfies StatusDefs<string>`, and
+ * `open-enum-registries.test.ts` holds those keys to the values that the API names.
  */
 export type StatusDefs<TValue extends string> = Record<TValue, StatusDef>;
 
@@ -47,13 +49,29 @@ export function definitionFor<T, TFallback>(
 	value: string,
 	fallback: TFallback,
 ): T | TFallback;
-/** A newer server can send a value that this build's generated union does not yet contain. */
+/**
+ * A newer server can send a value that this build's generated union does not yet contain. A fallback
+ * given as `undefined` stays `undefined`; only a call without one falls back to Unknown.
+ */
 export function definitionFor<T, TFallback>(
 	defs: Readonly<Record<string, T>>,
 	value: string,
-	fallback: TFallback | StatusDef = UNKNOWN_STATUS_DEF,
+	...rest: [] | [fallback: TFallback]
 ): T | TFallback | StatusDef {
-	return Object.hasOwn(defs, value) ? (defs[value] ?? fallback) : fallback;
+	const fallback = rest.length === 1 ? rest[0] : UNKNOWN_STATUS_DEF;
+	const known = Object.hasOwn(defs, value) ? defs[value] : undefined;
+	return known ?? fallback;
+}
+
+/**
+ * Whether an open value, which the API types as a plain string, is one that this build's registry
+ * names. A newer server can send another value; a surface then shows its fallback instead.
+ */
+export function isKnownValue<TKey extends string>(
+	defs: Readonly<Record<TKey, unknown>>,
+	value: string,
+): value is TKey {
+	return Object.hasOwn(defs, value);
 }
 
 /** Icon colour matching a badge variant, for the places an icon appears outside a badge. */

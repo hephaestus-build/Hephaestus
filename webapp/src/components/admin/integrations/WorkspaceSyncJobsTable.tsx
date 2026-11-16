@@ -1,6 +1,7 @@
 import type { VariantProps } from "class-variance-authority";
 import { formatDistanceStrict } from "date-fns";
 import { AlertCircleIcon, ChevronDownIcon, HistoryIcon } from "lucide-react";
+import { definitionFor } from "@/components/common/status-def";
 
 import { cn } from "cn";
 import type { SyncJob } from "@/api/types.gen";
@@ -28,9 +29,9 @@ import { hasText } from "@/lib/text";
 import type { RefreshFailure } from "@/runtime/tanstack-query/infinite-list";
 
 import {
-	JOB_STATUS_LABEL,
-	JOB_TRIGGER_LABEL,
-	JOB_TYPE_LABEL,
+	jobStatusLabel,
+	jobTriggerLabel,
+	jobTypeLabel,
 	jobProgress,
 	phaseLabel,
 	type SyncJobProgress,
@@ -38,14 +39,14 @@ import {
 
 type BadgeVariant = NonNullable<VariantProps<typeof badgeVariants>["variant"]>;
 
-const STATUS_VARIANT: Record<SyncJob["status"], BadgeVariant> = {
+export const STATUS_VARIANT = {
 	PENDING: "secondary",
 	RUNNING: "default",
 	SUCCEEDED: "success",
 	SUCCEEDED_WITH_WARNINGS: "warning",
 	FAILED: "destructive",
 	CANCELLED: "secondary",
-};
+} satisfies Record<string, BadgeVariant>;
 
 export interface WorkspaceSyncJobsTableProps {
 	jobs: SyncJob[];
@@ -203,15 +204,17 @@ function JobRow({ job }: { job: SyncJob }) {
 				)}
 			</TableCell>
 			<TableCell>
-				<Badge variant={STATUS_VARIANT[job.status]}>{JOB_STATUS_LABEL[job.status]}</Badge>
+				<Badge variant={definitionFor(STATUS_VARIANT, job.status, "outline")}>
+					{jobStatusLabel(job.status)}
+				</Badge>
 			</TableCell>
 			{/* Type and trigger are one fact read as one phrase — "Reconciliation · scheduled" — not two
 			    columns, since the trigger would repeat the same word down every row of a scheduled connection. */}
 			<TableCell>
-				{JOB_TYPE_LABEL[job.type]}
+				{jobTypeLabel(job.type)}
 				<span className="text-muted-foreground">
 					<DotSeparator inline />
-					{JOB_TRIGGER_LABEL[job.trigger].toLowerCase()}
+					{jobTriggerLabel(job.trigger).toLowerCase()}
 				</span>
 			</TableCell>
 			<TableCell className="text-muted-foreground">

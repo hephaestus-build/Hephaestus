@@ -7,7 +7,12 @@ import type {
 	ReviewLineageNode,
 	ReviewRef,
 } from "@/api/types.gen";
-import { definitionFor, type BadgeVariant, type StatusDef } from "@/components/common/status-def";
+import {
+	definitionFor,
+	UNKNOWN_STATUS_DEF,
+	type BadgeVariant,
+	type StatusDef,
+} from "@/components/common/status-def";
 
 import { deliveryOutcome } from "@/components/practice-vocabulary/delivery-state-defs";
 import {
@@ -139,10 +144,11 @@ export function feedbackOf(
 	return feedback.filter((entry) => entry.basis.includes(resultId));
 }
 
+/** Where feedback went; undefined for a destination that this build does not know. */
 export function feedbackLocation(
 	feedback: Pick<ReviewBoundFeedback, "destination">,
 	item: ItemRef | undefined,
-): FeedbackLocation {
+): FeedbackLocation | undefined {
 	switch (feedback.destination) {
 		case "ON_WORK": {
 			if (item?.provider === "GITHUB") {
@@ -159,7 +165,28 @@ export function feedbackLocation(
 		case "PRACTICE_PAGE": {
 			return "PRACTICE_PAGES";
 		}
+		default: {
+			return undefined;
+		}
 	}
+}
+
+/** Where feedback went when this build does not know its destination. It reads after a verb. */
+export const UNKNOWN_LOCATION_DEF: StatusDef = {
+	...UNKNOWN_STATUS_DEF,
+	label: "In a place that this version of Hephaestus does not recognize",
+	description: "This version of Hephaestus does not recognize where this feedback goes.",
+};
+
+/** The words for where feedback went, named as unknown for a destination that this build does not know. */
+export function feedbackLocationDef(
+	feedback: Pick<ReviewBoundFeedback, "destination">,
+	item: ItemRef | undefined,
+): StatusDef {
+	const location = feedbackLocation(feedback, item);
+	return location === undefined
+		? UNKNOWN_LOCATION_DEF
+		: definitionFor(FEEDBACK_LOCATION_DEFS, location);
 }
 
 /** "On GitHub" reads "on GitHub" after a verb; a provider name keeps its case. */
@@ -192,7 +219,7 @@ export function branchOutcome(
 	item: ItemRef | undefined,
 ): BranchOutcome {
 	const def = feedbackStatus(feedback);
-	const location = definitionFor(FEEDBACK_LOCATION_DEFS, feedbackLocation(feedback, item));
+	const location = feedbackLocationDef(feedback, item);
 	const at = feedback.deliveredAt ?? undefined;
 	if (feedback.withdrawn) {
 		return {
@@ -242,6 +269,9 @@ export function branchOutcome(
 			return at === undefined || feedback.destination !== "ON_WORK"
 				? { def, text: def.label, kind: "other" }
 				: { def, text: "Partly delivered, the rest unconfirmed", at, kind: "delivered" };
+		}
+		default: {
+			return { def, text: def.label, kind: "other" };
 		}
 	}
 }

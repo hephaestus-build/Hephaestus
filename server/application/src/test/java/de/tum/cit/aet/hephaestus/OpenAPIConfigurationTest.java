@@ -20,6 +20,7 @@ import io.swagger.v3.oas.models.responses.ApiResponse;
 import io.swagger.v3.oas.models.responses.ApiResponses;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -223,10 +224,50 @@ class OpenAPIConfigurationTest {
                 .hasMessageContaining("PracticeStanding");
     }
 
+    @Test
+    void shouldOpenTheEnumsThatAPublicOperationReturnsAndKeepTheClosedOnes() {
+        var listed = objectWithFields();
+        listed.addProperty("status", new Schema<>().$ref("#/components/schemas/ReviewStatus"));
+        listed.addProperty("outcome", new Schema<>().$ref("#/components/schemas/ResultOutcome"));
+        var internal = objectWithFields();
+        internal.addProperty("state", new Schema<>().$ref("#/components/schemas/QueueState"));
+        var api = api(
+                new Components()
+                        .addSchemas("ResultList", listed)
+                        .addSchemas("Internal", internal)
+                        .addSchemas("ReviewStatus", enumSchema("RUNNING", "DONE"))
+                        .addSchemas("ResultOutcome", enumSchema("MET", "NOT_MET"))
+                        .addSchemas("QueueState", enumSchema("WAITING")),
+                responseOperation("ResultList"));
+        api.getPaths().addPathItem("/internal", new PathItem().get(responseOperation("Internal")));
+
+        OpenAPIConfiguration.openPublicResponseEnums(api, Set.of("GET /practices"));
+
+        Schema<?> status = component(api, "ReviewStatus");
+        assertThat(status.getEnum()).isNull();
+        List<Object> known = List.copyOf(status.getExamples());
+        assertThat(known).containsExactly("RUNNING", "DONE");
+        assertThat(status.getDescription()).startsWith(OpenAPIConfiguration.OPEN_ENUM_NOTE);
+        assertThat(component(api, "ResultOutcome").getEnum()).isNotNull();
+        assertThat(component(api, "QueueState").getEnum()).isNotNull();
+    }
+
     private static Schema<?> responseSchema(Operation operation) {
         var response = Objects.requireNonNull(operation.getResponses().get("200"));
         var media = Objects.requireNonNull(response.getContent().get("application/json"));
         return Objects.requireNonNull(media.getSchema());
+    }
+
+    private static Schema<?> component(OpenAPI api, String name) {
+        Schema<?> schema = api.getComponents().getSchemas().get(name);
+        return Objects.requireNonNull(schema);
+    }
+
+    private static Schema<Object> enumSchema(String... values) {
+        Schema<Object> schema = new Schema<>();
+        schema.setType("string");
+        for (String value : values) schema.addEnumItemObject(value);
+        return schema;
     }
 
     private static Schema<Object> objectWithFields(String... fields) {

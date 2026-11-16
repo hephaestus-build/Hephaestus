@@ -44,7 +44,7 @@ interface ComposedGroupOverview {
 	practiceSentences: Record<string, FeedbackTextSegment[][] | undefined>;
 }
 
-type ChangeKind = "resolved" | "reset" | "down" | "up" | "first" | "trend";
+type ChangeKind = "resolved" | "reset" | "down" | "up" | "first" | "trend" | "unrecognized";
 type EventKind = ChangeKind;
 type EventLevel = "practice" | "group";
 
@@ -68,11 +68,27 @@ interface ProfileEvent {
 
 type ChangeEvent = ProfileEvent & { kind: ChangeKind };
 
-const PRECEDENCE: readonly EventKind[] = ["resolved", "reset", "down", "up", "first", "trend"];
+const PRECEDENCE: readonly EventKind[] = [
+	"resolved",
+	"reset",
+	"down",
+	"up",
+	"first",
+	"trend",
+	"unrecognized",
+];
 const rank = (event: ProfileEvent) => PRECEDENCE.indexOf(event.kind);
 
 /** The table's reading order: what needs the reader first, then what it can be glad about. */
-const SENTENCE_ORDER: readonly ChangeKind[] = ["reset", "resolved", "down", "up", "first", "trend"];
+const SENTENCE_ORDER: readonly ChangeKind[] = [
+	"reset",
+	"resolved",
+	"down",
+	"up",
+	"first",
+	"trend",
+	"unrecognized",
+];
 
 /** The registries' words, keyed by the enum values the wire carries. */
 const STANDING_LABELS = new Map(
@@ -132,6 +148,10 @@ function changeEvent(change: ProfileChange): ChangeEvent | undefined {
 		}
 		case "TREND_TURNED": {
 			return { ...base, kind: "trend", label: trendLabel(change.to) };
+		}
+		// A change type that this build does not know is still a change: say so, and claim nothing more.
+		default: {
+			return { ...base, kind: "unrecognized" };
 		}
 	}
 }
@@ -310,6 +330,11 @@ const WORDING = {
 		predicate: (event, plural) => `now show${plural ? "" : "s"} ${trendShown(event)}`,
 		alone: (event) => `now shows ${trendShown(event)}`,
 		seenOn: " over ",
+	},
+	unrecognized: {
+		predicate: (_event, plural) =>
+			`${plural ? "have" : "has"} a change that this version of Hephaestus does not recognize`,
+		alone: () => "a change that this version of Hephaestus does not recognize",
 	},
 } satisfies Record<ChangeKind, Wording>;
 

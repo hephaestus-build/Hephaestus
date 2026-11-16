@@ -25,7 +25,7 @@ import {
 } from "@/components/ui/table";
 import type { MorePages } from "@/runtime/tanstack-query/infinite-list";
 
-import { ACCOUNT_STATUS_LABELS, APP_ROLE_LABELS, type AppRole } from "./account-labels";
+import { accountStatusLabel, APP_ROLE_LABELS, type AppRole } from "./account-labels";
 
 export interface AdminUsersTableProps extends Pick<MorePages, "loadMoreError" | "refreshFailure"> {
 	users: AdminAccountView[];
@@ -217,9 +217,7 @@ function UserRows({
 					<Badge variant={roleBadgeVariant(user.appRole)}>{APP_ROLE_LABELS[user.appRole]}</Badge>
 				</TableCell>
 				<TableCell>
-					<Badge variant={statusBadgeVariant(user.status)}>
-						{ACCOUNT_STATUS_LABELS[user.status]}
-					</Badge>
+					<Badge variant={statusBadgeVariant(user.status)}>{accountStatusLabel(user.status)}</Badge>
 				</TableCell>
 				<TableCell className="text-right">
 					<DropdownMenu>

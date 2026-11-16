@@ -349,6 +349,14 @@ describe("applyTurn", () => {
 		});
 	});
 
+	it("takes a turn whose status this build does not know off the running ones", () => {
+		conversation({ activeTurns: [turn("RUNNING")] });
+
+		applyTurn(queryClient, SLUG, turn("PAUSED"));
+
+		expect(queryClient.getQueryData<Conversation>(conversationKey)?.activeTurns).toStrictEqual([]);
+	});
+
 	it("moves a queued turn to running", () => {
 		conversation({ activeTurns: [turn("QUEUED")] });
 

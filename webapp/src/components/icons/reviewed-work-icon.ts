@@ -1,3 +1,4 @@
+import { isKnownValue } from "@/components/common/status-def";
 import { PROVIDER_ICONS } from "@/components/icons/integration-provider-icons";
 import { type ItemKindIcon, itemKindIcon, type ItemProvider } from "@/lib/item-kinds";
 
@@ -7,5 +8,8 @@ import { type ItemKindIcon, itemKindIcon, type ItemProvider } from "@/lib/item-k
  * leave the reader no way to tell a GitHub request from a GitLab one.
  */
 export function reviewedWorkIcon(kind: string | undefined, provider?: ItemProvider): ItemKindIcon {
-	return provider ? PROVIDER_ICONS[provider] : itemKindIcon(kind);
+	// A provider that this build does not know has no mark, so the kind's glyph stands in.
+	return provider !== undefined && isKnownValue(PROVIDER_ICONS, provider)
+		? PROVIDER_ICONS[provider]
+		: itemKindIcon(kind);
 }

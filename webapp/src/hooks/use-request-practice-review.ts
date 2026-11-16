@@ -5,7 +5,7 @@ import { toast } from "@/lib/toast";
 import { requestReviewMutation } from "@/api/@tanstack/react-query.gen";
 import type { CreateReviewRequest, RequestReviewData, ReviewRequestOutcome } from "@/api/types.gen";
 import { PRACTICE_REVIEW_READS } from "@/components/admin/practice-reviews/review-search";
-import { ITEM_EVENT_REASON_SENTENCES } from "@/components/practice-vocabulary/item-event-defs";
+import { itemEventReasonSentence } from "@/components/practice-vocabulary/item-event-defs";
 import { problemDetailOf } from "@/lib/problem-detail";
 import { invalidateWorkspaceReads } from "@/runtime/tanstack-query/invalidate-workspace-reads";
 
@@ -72,14 +72,20 @@ export function useRequestPracticeReview(
 				} else {
 					toast.warning("Review request declined", {
 						description:
-							outcome.reason === undefined
-								? undefined
-								: ITEM_EVENT_REASON_SENTENCES[outcome.reason],
+							outcome.reason === undefined ? undefined : itemEventReasonSentence(outcome.reason),
 					});
 				}
 				return;
 			}
 			void invalidateWorkspaceReads(queryClient, path.workspaceSlug, READS_OF_STARTED_REVIEW);
+			if (outcome.status !== "SUBMITTED") {
+				// A newer server can answer with a status that this build does not know: claim neither.
+				toast.warning("Answer not recognized", {
+					description:
+						"This version of Hephaestus does not recognize the answer. Reload the page to see whether a review started.",
+				});
+				return;
+			}
 			// Accepted is not started: the new review's own read says whether it is queued or running.
 			toast.success("Review requested");
 		},

@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
 import type { ReviewRequestOutcome } from "@/api/types.gen";
-import { ITEM_EVENT_REASON_SENTENCES } from "@/components/practice-vocabulary/item-event-defs";
+import { itemEventReasonSentence } from "@/components/practice-vocabulary/item-event-defs";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 export interface TraceRefusalAlertProps {
@@ -28,7 +28,7 @@ export function TraceRefusalAlert({ refusal, fix }: TraceRefusalAlertProps) {
 				<span>
 					{refusal.reason === undefined
 						? "No reason was given."
-						: ITEM_EVENT_REASON_SENTENCES[refusal.reason]}
+						: itemEventReasonSentence(refusal.reason)}
 				</span>
 				{fix}
 			</AlertDescription>

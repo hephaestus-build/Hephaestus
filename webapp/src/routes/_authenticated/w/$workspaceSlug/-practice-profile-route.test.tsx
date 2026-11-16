@@ -749,6 +749,28 @@ describe("practice profile route", () => {
 		expect(asked).toStrictEqual([{ itemId: failed?.review.item.id }]);
 	});
 
+	it("claims neither a started nor a refused review for an answer that this version does not know", async () => {
+		server.use(
+			http.post("*/workspaces/:workspaceSlug/practices/review-requests", () =>
+				HttpResponse.json({ status: "DEFERRED" }),
+			),
+		);
+		await renderProfile();
+		fireEvent.click(await openReviewsChip());
+
+		fireEvent.click(
+			await screen.findByRole(
+				"button",
+				{ name: "Request another review: #890" },
+				ROUTE_RENDER_WAIT,
+			),
+		);
+
+		await screen.findByText("Answer not recognized", undefined, ROUTE_RENDER_WAIT);
+		expect(screen.queryByText("Review requested")).toBeNull();
+		expect(screen.queryByText("Review request declined")).toBeNull();
+	});
+
 	it("opens the earlier review that recorded a reused result in place of this one, without this one's filter", async () => {
 		server.use(reviewReads(reusingDetail));
 		const { router } = renderRouteAtWithRouter(

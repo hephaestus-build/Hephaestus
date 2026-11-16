@@ -96,6 +96,13 @@ describe("composeChangeSentences", () => {
 	it("says nothing for a week without changes", () => {
 		expect(composeChangeSentences([])).toStrictEqual([]);
 	});
+
+	it("says that a change of a type this version does not know happened, and claims nothing more", () => {
+		const sentences = composeChangeSentences([change("STANDING_PAUSED", "small-prs", "Small PRs")]);
+		expect(sentences.map(plain).join(" ")).toContain(
+			"has a change that this version of Hephaestus does not recognize",
+		);
+	});
 });
 
 describe("composeOverview", () => {

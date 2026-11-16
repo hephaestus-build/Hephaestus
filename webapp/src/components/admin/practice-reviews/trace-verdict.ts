@@ -1,16 +1,15 @@
 import type { ItemEvent, ItemRef, ReviewLineage, ReviewRef } from "@/api/types.gen";
 import { definitionFor, type BadgeVariant } from "@/components/common/status-def";
 
-import { FEEDBACK_LOCATION_DEFS } from "@/components/practice-vocabulary/feedback-location-defs";
 import {
-	ITEM_EVENT_REASON_SENTENCES,
+	itemEventReasonSentence,
 	ITEM_EVENT_STATE_DEFS,
 } from "@/components/practice-vocabulary/item-event-defs";
 import { durationBetween } from "@/lib/dates";
 
 import {
 	countOf,
-	feedbackLocation,
+	feedbackLocationDef,
 	feedbackOf,
 	type LineageFeedback,
 	type LineageRecords,
@@ -92,10 +91,7 @@ interface FeedbackFate {
 	phrase: string;
 }
 
-const READY_FOR: Record<
-	LineageFeedback["destination"],
-	{ end: string; sentence: string; phrase: string }
-> = {
+export const READY_FOR = {
 	ON_WORK: {
 		end: "it is ready to be posted on the work",
 		sentence: "it is ready to be posted on the work",
@@ -111,7 +107,16 @@ const READY_FOR: Record<
 		sentence: "it is ready for their next conversation with Hephaestus",
 		phrase: "ready for a conversation",
 	},
-};
+} satisfies Record<string, { end: string; sentence: string; phrase: string }>;
+
+/** Where ready feedback waits; a destination that this build does not know is named as such. */
+function readyFor(destination: LineageFeedback["destination"]) {
+	return definitionFor(READY_FOR, destination, {
+		end: "it is ready for a destination that this version of Hephaestus does not recognize",
+		sentence: "it is ready for a destination that this version of Hephaestus does not recognize",
+		phrase: "ready",
+	});
+}
 
 function feedbackFate(feedback: LineageFeedback, item: ItemRef | undefined): FeedbackFate {
 	const at = feedback.deliveredAt ?? undefined;
@@ -149,7 +154,7 @@ function feedbackFate(feedback: LineageFeedback, item: ItemRef | undefined): Fee
 			};
 		}
 		case "READY": {
-			const ready = READY_FOR[feedback.destination];
+			const ready = readyFor(feedback.destination);
 			return {
 				end: end("open", ready.end),
 				clause: [`is ${ready.phrase}`, `are ${ready.phrase}`],
@@ -221,22 +226,28 @@ function feedbackFate(feedback: LineageFeedback, item: ItemRef | undefined): Fee
 					};
 		}
 		case "DELIVERED": {
-			const place = lowerFirst(
-				definitionFor(FEEDBACK_LOCATION_DEFS, feedbackLocation(feedback, item)).label,
-			);
+			const place = lowerFirst(feedbackLocationDef(feedback, item).label);
 			return {
 				end: end("delivered", `it reached the developer ${place}`, { at }),
 				clause: ["was delivered", "were delivered"],
 				phrase: "delivered",
 			};
 		}
+		default: {
+			return {
+				end: end("open", "this version of Hephaestus does not recognize its state"),
+				clause: [
+					"is in a state that this version of Hephaestus does not recognize",
+					"are in a state that this version of Hephaestus does not recognize",
+				],
+				phrase: "in an unrecognized state",
+			};
+		}
 	}
 }
 
 function feedbackSentence(feedback: LineageFeedback, item: ItemRef | undefined): string {
-	const place = lowerFirst(
-		definitionFor(FEEDBACK_LOCATION_DEFS, feedbackLocation(feedback, item)).label,
-	);
+	const place = lowerFirst(feedbackLocationDef(feedback, item).label);
 	const reached = `This feedback reached the developer ${place}`;
 	if (feedback.withdrawn) {
 		return reachedDeveloper(feedback)
@@ -251,7 +262,7 @@ function feedbackSentence(feedback: LineageFeedback, item: ItemRef | undefined):
 			return "This feedback has not reached the developer yet: it awaits an admin’s approval.";
 		}
 		case "READY": {
-			return `This feedback has not reached the developer yet: ${READY_FOR[feedback.destination].sentence}.`;
+			return `This feedback has not reached the developer yet: ${readyFor(feedback.destination).sentence}.`;
 		}
 		case "REPLACED": {
 			return feedback.deliveredAt === null
@@ -275,6 +286,9 @@ function feedbackSentence(feedback: LineageFeedback, item: ItemRef | undefined):
 		}
 		case "DELIVERED": {
 			return `${reached}.`;
+		}
+		default: {
+			return "This version of Hephaestus does not recognize the state of this feedback.";
 		}
 	}
 }
@@ -451,10 +465,10 @@ function resultVerdict(records: LineageRecords, result: LineageResult): TraceVer
 // A review
 // ------------------------------------------------------------------------------------------------
 
-const STOPPED: Partial<Record<ReviewRef["status"], string>> = {
+const STOPPED = {
 	FAILED: "failed",
 	CANCELLED: "was cancelled",
-};
+} satisfies Partial<Record<string, string>>;
 
 function reviewVerdict(records: LineageRecords): TraceVerdict {
 	const review = chainReview(records);
@@ -495,7 +509,7 @@ function reviewVerdict(records: LineageRecords): TraceVerdict {
 			end: end("open", "the review remains open", { since: review.createdAt }),
 		};
 	}
-	const how = STOPPED[review.status];
+	const how = definitionFor(STOPPED, review.status, undefined);
 	if (how !== undefined) {
 		const after = took === undefined ? "" : ` after ${took}`;
 		let what = `and composed ${countOf(own.length, "piece", "pieces")} of feedback`;
@@ -583,7 +597,7 @@ export function unreviewedVerdict(
 ): TraceVerdict {
 	const staleOff = event.reason === "PRACTICES_DISABLED" && practicesEnabled === true;
 	const reason =
-		event.reason === null || staleOff ? undefined : ITEM_EVENT_REASON_SENTENCES[event.reason];
+		event.reason === null || staleOff ? undefined : itemEventReasonSentence(event.reason);
 	switch (event.state) {
 		case "WAITING": {
 			return {
