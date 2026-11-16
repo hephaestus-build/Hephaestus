@@ -91,11 +91,11 @@ class ReviewJobTerminalStorageIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    void shouldPreserveEvidenceRefusalAndEndItsRunAsFailed() {
-        var job = running("runtime-evidence-refused");
+    void shouldPreserveARefusalAndEndItsRunAsFailed() {
+        var job = running("runtime-refused");
         var fence = RuntimeJobTestData.fence(jdbc, job);
         var terminal = new ReviewJobTerminal(jobs, runs, mock(ReviewCompositionContinuation.class));
-        var refusal = new JsonMapper().createObjectNode().put("outcome", "INSUFFICIENT_EVIDENCE");
+        var refusal = new JsonMapper().createObjectNode().put("outcome", RefusalOutcome.WORKSPACE_REFUSED.name());
 
         assertThat(transactions.<Integer>execute(tx -> terminal.refuse(job.getId(), fence, refusal)))
                 .isEqualTo(1);

@@ -304,7 +304,7 @@ class ReviewPublishedPreparationTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldKeepPublishedProvenanceWhenAnEvidenceRefusalStampsItAgain() {
+    void shouldKeepPublishedProvenanceWhenACompletionWithoutSandboxStampsItAgain() {
         var initial = prepare(first);
         var original = initial.stagedInputs();
         try (original) {

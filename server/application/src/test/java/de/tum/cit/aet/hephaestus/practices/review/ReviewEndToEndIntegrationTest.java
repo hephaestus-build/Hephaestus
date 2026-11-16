@@ -683,6 +683,53 @@ class ReviewEndToEndIntegrationTest extends AbstractWorkspaceIntegrationTest {
     }
 
     /**
+     * The only server crashes after the attempt staged its practice, and the staged copy expires before the next
+     * attempt. That attempt finds no open practice, and its seal refuses the staged result. The seal admits only that
+     * the other practice does not apply: nothing new was measured, so no feedback composition runs.
+     */
+    @Test
+    void shouldCompleteWithoutCompositionWhenTheSealRefusesWhatALostAttemptStaged() {
+        var work = work(IdentityProviderType.GITHUB);
+        var practice = practice(work.workspace(), Reads.THE_WORK);
+        var merged = practice(
+                work.workspace(),
+                "concerns-a-merge",
+                AboutRole.AUTHOR,
+                List.of(read("scm.pull-request.core")),
+                new AppliesWhen(
+                        List.of(new AppliesWhenClause(null, null, null, true)), "The pull request is not merged."));
+        sandbox.prepare(() -> {});
+        sandbox.crashAfterNextStage(runId -> {
+            assertThat(jdbc.update(
+                            "UPDATE review_item SET staged_payload = jsonb_set(staged_payload, '{evidence,expiresAt}',"
+                                    + " to_jsonb(CAST(? AS text))) WHERE practice_id = ? AND state = 'STAGED'",
+                            Instant.now().minusSeconds(1).toString(),
+                            practice.getId()))
+                    .isEqualTo(1);
+            expireLease(runId);
+        });
+
+        UUID reviewId = requested(work, practice, merged);
+        settle(reviewId);
+
+        assertThat(jdbc.queryForList(
+                        "SELECT kind || '/' || state || '/' || coalesce(stop_reason, '') FROM agent_run"
+                                + " WHERE workspace_id = ? ORDER BY created_at",
+                        String.class,
+                        work.workspace().getId()))
+                .as(sandbox.calls.toString())
+                .containsExactly("REVIEW/ENDED/COMPLETED");
+        assertThat(membership(reviewId, practice))
+                .containsEntry("state", "WITHHELD")
+                .containsEntry("reason", "COPY_AUTHORITY_UNAVAILABLE");
+        assertThat(jdbc.queryForList("SELECT outcome FROM result WHERE review_id = ?", String.class, reviewId))
+                .containsExactly("DOES_NOT_APPLY");
+        assertThat(jdbc.queryForMap("SELECT status, error_message FROM review_job WHERE review_id = ?", reviewId))
+                .containsEntry("status", "COMPLETED")
+                .containsEntry("error_message", null);
+    }
+
+    /**
      * A practice that only a merge can concern does not apply to open work. Its capture admits that result without a
      * sandbox, and the attempt completes: no feedback composition runs for a review that measured nothing new.
      */

@@ -162,27 +162,34 @@ public class ResultAdmissionService {
 
     /** Seals the retained set once. Candidates are read from memberships, never resubmitted by the runner. */
     public AdmissionResponseDTO admit(AdmissionIdentity identity, SealResultsRequestDTO request) {
-        return admittedResponse(withAttemptFolder(identity, () -> seal(identity, request)));
+        return admittedResponse(
+                withAttemptFolder(identity, () -> seal(identity, request)).job());
     }
 
     /**
      * Seals an attempt that measured nothing, as {@link #admit} does, with no runtime to answer. The answer would read
      * the attempt's copied evidence, which an attempt that captured nothing does not have.
+     *
+     * @return whether the seal admitted a result that an earlier attempt staged, whose feedback is then composed; false
+     *     when it refused every staged copy, and on a repeated seal
      */
-    public void sealUnmeasured(AdmissionIdentity identity, SealResultsRequestDTO request) {
-        withAttemptFolder(identity, () -> seal(identity, request));
+    public boolean sealUnmeasured(AdmissionIdentity identity, SealResultsRequestDTO request) {
+        return withAttemptFolder(identity, () -> seal(identity, request)).tookStaged();
     }
 
-    private ReviewJob seal(AdmissionIdentity identity, SealResultsRequestDTO request) {
+    /** @param tookStaged whether this seal admitted a result that an earlier attempt staged */
+    private record Sealed(ReviewJob job, boolean tookStaged) {}
+
+    private Sealed seal(AdmissionIdentity identity, SealResultsRequestDTO request) {
         String digest = ProvenanceDigest.sha256Hex(mapper.writeValueAsBytes(request));
-        ReviewJob recorded = Objects.requireNonNull(transactions.execute(status -> {
+        return Objects.requireNonNull(transactions.execute(status -> {
             files.holdCopyAdmission();
             ReviewJob owned = ownedJob(identity);
             requireIdentity(owned, request.reviewId(), request.jobId(), request.attempt());
             if (isAdmitted(owned)) {
                 if (isContinuation(owned) || !digest.equals(owned.getAdmissionDigest()))
                     throw new AdmissionConflictException();
-                return owned;
+                return new Sealed(owned, false);
             }
             if (!assignments.open(owned).isEmpty()) throw new AdmissionConflictException();
             var staged = staging.staged(owned);
@@ -231,9 +238,8 @@ public class ResultAdmissionService {
             owned.setAdmissionAttempt(identity.attempt());
             staging.retainSealBasis(identity, owned, digest, staged);
             jobs.saveAndFlush(owned);
-            return owned;
+            return new Sealed(owned, staged.stream().anyMatch(value -> value.candidate() != null));
         }));
-        return recorded;
     }
 
     /** A retry with every practice ended seals without capturing or starting a sandbox. */
@@ -281,12 +287,13 @@ public class ResultAdmissionService {
                     if (isAdmitted(job)) return job;
                     staging.failOpen(job, reason);
                     return seal(
-                            identity,
-                            new SealResultsRequestDTO(
-                                    SandboxLayout.PRACTICE_CONTRACT_VERSION,
-                                    job.getReviewId(),
-                                    job.getId(),
-                                    job.getAttempt()));
+                                    identity,
+                                    new SealResultsRequestDTO(
+                                            SandboxLayout.PRACTICE_CONTRACT_VERSION,
+                                            job.getReviewId(),
+                                            job.getId(),
+                                            job.getAttempt()))
+                            .job();
                 })));
     }
 

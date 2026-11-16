@@ -356,10 +356,11 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
             @Param("epoch") int epoch,
             @Param("snapshot") String snapshot);
 
-    @WorkspaceAgnostic("ID-based evidence-refusal transition; job ID + owner from worker-local execution context")
+    @WorkspaceAgnostic("ID-based refusal transition; job ID + owner from worker-local execution context")
     @Modifying(flushAutomatically = true, clearAutomatically = true)
-    @Query(EVIDENCE_REFUSAL_TRANSITION)
-    int transitionToEvidenceRefused(
+    @Query("UPDATE ReviewJob j SET j.status = 'FAILED', j.completedAt = :now, j.output = :output "
+            + "WHERE j.id = :id AND j.runId = :runId AND j.attempt = :attempt AND j.status = 'RUNNING'")
+    int transitionToRefused(
             @Param("id") UUID id,
             @Param("runId") UUID runId,
             @Param("attempt") int attempt,
@@ -565,9 +566,6 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
     }
 
     String NOT_ADMITTED = "j.admissionDigest IS NULL";
-    String EVIDENCE_REFUSAL_TRANSITION =
-            "UPDATE ReviewJob j SET j.status = 'FAILED', j.completedAt = :now, j.output = :output "
-                    + "WHERE j.id = :id AND j.runId = :runId AND j.attempt = :attempt AND j.status = 'RUNNING'";
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT j FROM ReviewJob j WHERE j.id = :id AND j.workspaceId = :workspaceId")

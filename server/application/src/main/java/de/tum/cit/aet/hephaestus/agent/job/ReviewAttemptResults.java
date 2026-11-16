@@ -1,11 +1,9 @@
 package de.tum.cit.aet.hephaestus.agent.job;
 
-import de.tum.cit.aet.hephaestus.agent.context.InsufficientEvidenceException;
 import de.tum.cit.aet.hephaestus.agent.gateway.WorkspaceBudgetExceededException;
 import de.tum.cit.aet.hephaestus.agent.handler.DefaultReviewExecutionHandler;
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobPreparationException;
-import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedJobInputs;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.ReviewSourceNotReadyException;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.practice.PracticePiAdapter;
@@ -458,16 +456,15 @@ public class ReviewAttemptResults {
     }
 
     /**
-     * The attempt failed before its sandbox measured anything. Too little evidence or an over-budget workspace ends it
-     * refused. A failure that another attempt can outlast requeues it and spends a retry. Any other ends it failed,
-     * with its preparation's bounded diagnosis.
+     * The attempt failed before its sandbox measured anything. An over-budget workspace ends it refused. A failure that
+     * another attempt can outlast requeues it and spends a retry. Any other ends it failed, with its preparation's
+     * bounded diagnosis.
      *
      * @param preparation the failed preparation; null when the failure came after the attempt's execution started
      */
     void unprepared(
             ReviewJob job, AgentRunFence fence, @Nullable PreparationFailure preparation, RuntimeException failure) {
         switch (failure) {
-            case InsufficientEvidenceException refused -> refuseForEvidence(job, fence, refused);
             case WorkspaceBudgetExceededException exceeded ->
                 refuse(
                         job,
@@ -479,21 +476,6 @@ public class ReviewAttemptResults {
                         "workspace_budget_exceeded");
             default -> fail(job, fence, failure, preparation);
         }
-    }
-
-    private void refuseForEvidence(ReviewJob job, AgentRunFence fence, InsufficientEvidenceException refused) {
-        // This evidence was not staged, so no attempt owns its cleanup.
-        try (PreparedJobInputs inputs = refused.preparedInputs()) {
-            preparation.persistPreparedEvidence(job.getId(), fence, job.getWorkspaceId(), job.getAttempt(), inputs);
-        } catch (RuntimeException persistence) {
-            fail(job, fence, persistence, PreparationFailure.of(PreparationFailure.Stage.PROVENANCE, persistence));
-            return;
-        }
-        refuse(
-                job,
-                fence,
-                new RefusedExecution(RefusalOutcome.INSUFFICIENT_EVIDENCE, null, null),
-                "insufficient_evidence");
     }
 
     private void refuse(ReviewJob job, AgentRunFence fence, RefusedExecution refusal, String reason) {

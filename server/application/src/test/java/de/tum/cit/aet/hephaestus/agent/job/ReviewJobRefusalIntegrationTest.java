@@ -15,7 +15,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.ObjectMapper;
 
-class ReviewJobEvidenceRefusalIntegrationTest extends BaseIntegrationTest {
+class ReviewJobRefusalIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private ReviewJobRepository jobs;
@@ -33,28 +33,28 @@ class ReviewJobEvidenceRefusalIntegrationTest extends BaseIntegrationTest {
     private JdbcTemplate jdbc;
 
     @Test
-    void evidenceRefusalFailsOnlyTheOwningAttempt() {
+    void shouldFailOnlyTheOwningAttemptWhenItIsRefused() {
         databaseTestUtils.cleanDatabase();
         var job = new ReviewJob();
         RuntimeJobTestData.initialize(
                 job,
                 workspaces
-                        .save(TestEntities.activeWorkspace("evidence-refusal"))
+                        .save(TestEntities.activeWorkspace("execution-refusal"))
                         .getId());
 
         job.setStatus(ReviewJobStatus.RUNNING);
         job.setConfigSnapshot(mapper.createObjectNode());
         var id = jobs.saveAndFlush(RuntimeJobTestData.persistParent(jdbc, job)).getId();
-        var output = mapper.createObjectNode().put("outcome", "INSUFFICIENT_EVIDENCE");
+        var output = mapper.createObjectNode().put("outcome", RefusalOutcome.WORKSPACE_REFUSED.name());
         Integer refused = transactions.execute(
-                status -> jobs.transitionToEvidenceRefused(id, UUID.randomUUID(), 0, Instant.now(), output));
+                status -> jobs.transitionToRefused(id, UUID.randomUUID(), 0, Instant.now(), output));
         assertThat(refused).isZero();
-        Integer stale = transactions.execute(
-                status -> jobs.transitionToEvidenceRefused(id, job.getRunId(), 1, Instant.now(), output));
+        Integer stale =
+                transactions.execute(status -> jobs.transitionToRefused(id, job.getRunId(), 1, Instant.now(), output));
         assertThat(stale).isZero();
         // The run ends with its job, as the executor's refusal ends it.
         Integer settled = transactions.execute(status -> {
-            int ended = jobs.transitionToEvidenceRefused(id, job.getRunId(), 0, Instant.now(), output);
+            int ended = jobs.transitionToRefused(id, job.getRunId(), 0, Instant.now(), output);
             RuntimeJobTestData.agree(jdbc, id);
             return ended;
         });

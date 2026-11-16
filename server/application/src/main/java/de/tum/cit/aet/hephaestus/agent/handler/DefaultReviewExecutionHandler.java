@@ -385,8 +385,9 @@ public class DefaultReviewExecutionHandler {
         return admission.admittedResults(job);
     }
 
-    public void completeWithoutExecution(ReviewJob job) {
-        admission.sealUnmeasured(
+    /** @return whether the seal admitted a result that an earlier attempt staged, whose feedback is then composed */
+    public boolean completeWithoutExecution(ReviewJob job) {
+        return admission.sealUnmeasured(
                 new ResultAdmissionService.AdmissionIdentity(
                         job.getId(), job.getWorkspaceId(), job.getAttempt(), job.getRunId()),
                 new SealResultsRequestDTO(
