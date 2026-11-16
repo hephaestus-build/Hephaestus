@@ -172,7 +172,8 @@ class ScmWorkspaceErasureIntegrationTest extends BaseIntegrationTest {
                             new FabricLayout(root.toString()),
                             GitTransportFixtures.guarded(),
                             mock(RepositoryRefState.class),
-                            GitTransportFixtures.copyFence()),
+                            GitTransportFixtures.copyFence(),
+                            new SimpleMeterRegistry()),
                     repositoryRepository,
                     properties,
                     new SimpleMeterRegistry());
@@ -210,7 +211,8 @@ class ScmWorkspaceErasureIntegrationTest extends BaseIntegrationTest {
                         new FabricLayout(mirrorRoot.toString()),
                         GitTransportFixtures.guarded(),
                         mock(RepositoryRefState.class),
-                        GitTransportFixtures.copyFence()),
+                        GitTransportFixtures.copyFence(),
+                        new SimpleMeterRegistry()),
                 repositoryRepository,
                 properties,
                 new SimpleMeterRegistry());

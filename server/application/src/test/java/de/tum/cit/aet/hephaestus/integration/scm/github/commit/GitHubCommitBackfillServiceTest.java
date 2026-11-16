@@ -36,6 +36,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.RepositoryKey;
 import de.tum.cit.aet.hephaestus.integration.scm.github.app.GitHubAppTokenService;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.testconfig.TestEntities;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.List;
@@ -113,7 +114,8 @@ class GitHubCommitBackfillServiceTest extends BaseUnitTest {
                 new FabricLayout(temporary.resolve("fabric").toString()),
                 GitTransportFixtures.guarded(),
                 mock(RepositoryRefState.class),
-                GitTransportFixtures.copyFence());
+                GitTransportFixtures.copyFence(),
+                new SimpleMeterRegistry());
         var localTransport = spy(localGit);
         doAnswer(invocation -> {
                     localGit.ensureRepository(KEY, remote.toUri().toString(), null);

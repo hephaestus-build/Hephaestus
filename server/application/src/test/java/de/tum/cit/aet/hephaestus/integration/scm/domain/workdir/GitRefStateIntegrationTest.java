@@ -18,6 +18,7 @@ import de.tum.cit.aet.hephaestus.practices.review.ReviewLookupData;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
@@ -225,6 +226,7 @@ class GitRefStateIntegrationTest extends BaseIntegrationTest {
                 new FabricLayout(root.resolve(role).toString()),
                 GitTransportFixtures.guarded(),
                 refs,
-                GitTransportFixtures.copyFence());
+                GitTransportFixtures.copyFence(),
+                new SimpleMeterRegistry());
     }
 }

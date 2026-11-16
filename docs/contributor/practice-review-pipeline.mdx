@@ -414,6 +414,9 @@ An optional read must name a supported source.
 Its data can still be unavailable.
 
 For GitHub and GitLab reviews, a Git transport failure records `UNAVAILABLE` with `REPOSITORY_FETCH_FAILED` for the repository tree.
+A fetch whose provider sends nothing for 60 seconds is such a failure.
+So is a capture that waits 5 minutes for another fetch of the same mirror.
+Either way the fetch releases the mirror, and the next capture of the repository fetches again.
 An unreadable pinned base or head records `REVIEW_VERSION_UNAVAILABLE`.
 
 The pinned diff, file citations and commit records currently require the same Git objects.

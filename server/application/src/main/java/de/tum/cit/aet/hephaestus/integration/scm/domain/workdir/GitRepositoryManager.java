@@ -10,8 +10,12 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryRefState;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitDetails;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitDetails.FileChange;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitFileChange.ChangeType;
+import de.tum.cit.aet.hephaestus.integration.scm.metrics.ScmMetrics;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.io.Closeable;
 import java.io.IOException;
+import java.io.InterruptedIOException;
 import java.io.Serial;
 import java.io.Writer;
 import java.nio.ByteBuffer;
@@ -79,6 +83,7 @@ import org.eclipse.jgit.util.io.DisabledOutputStream;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.stereotype.Service;
 import org.springframework.util.FileSystemUtils;
@@ -129,14 +134,46 @@ public class GitRepositoryManager {
     private final GuardedGitTransport transports;
     private final RepositoryRefState refs;
     private final PersonDataCopyFence copyFence;
+    private final int transportTimeoutSeconds;
+    private final Duration captureMirrorWait;
+    private final Counter transportSilent;
+    private final Counter mirrorBusy;
 
+    @Autowired
     public GitRepositoryManager(
             GitRepositoryProperties properties,
             GitRepositoryLockManager locks,
             FabricLayout layout,
             GuardedGitTransport transports,
             RepositoryRefState refs,
-            PersonDataCopyFence copyFence) {
+            PersonDataCopyFence copyFence,
+            MeterRegistry meters) {
+        this(
+                properties,
+                locks,
+                layout,
+                transports,
+                refs,
+                copyFence,
+                meters,
+                TRANSPORT_TIMEOUT_SECONDS,
+                CAPTURE_MIRROR_WAIT);
+    }
+
+    /**
+     * @param transportTimeoutSeconds how long a fetch may wait for the provider in one read or write
+     * @param captureMirrorWait how long a capture waits for another fetch of the same mirror
+     */
+    GitRepositoryManager(
+            GitRepositoryProperties properties,
+            GitRepositoryLockManager locks,
+            FabricLayout layout,
+            GuardedGitTransport transports,
+            RepositoryRefState refs,
+            PersonDataCopyFence copyFence,
+            MeterRegistry meters,
+            int transportTimeoutSeconds,
+            Duration captureMirrorWait) {
         this.copyFence = copyFence;
         this.refs = refs;
         this.transports = transports;
@@ -144,6 +181,17 @@ public class GitRepositoryManager {
         this.locks = locks;
         this.layout = layout;
         this.ingestionPermits = new Semaphore(properties.maxConcurrentIngestions());
+        this.transportTimeoutSeconds = transportTimeoutSeconds;
+        this.captureMirrorWait = captureMirrorWait;
+        this.transportSilent = fetchStopped(meters, "transport_silent");
+        this.mirrorBusy = fetchStopped(meters, "mirror_busy");
+    }
+
+    private static Counter fetchStopped(MeterRegistry meters, String cause) {
+        return Counter.builder(ScmMetrics.GIT_FETCH_STOPPED)
+                .description("Fetches that stopped because the provider went silent or the mirror stayed busy")
+                .tag("cause", cause)
+                .register(meters);
     }
 
     public void invalidateRefs(long nativeId, long providerId) {
@@ -251,8 +299,9 @@ public class GitRepositoryManager {
 
     /**
      * Deletes one workspace's mirror unless {@code retained} holds. The check runs under the mirror's write lock, so a
-     * fetch or a read that started before it finishes first, and one that starts after it finds no mirror. A capture
-     * fetch has no timeout, so this waits at most {@code wait} for the lock and then leaves the mirror for a later call.
+     * fetch or a read that started before it finishes first, and one that starts after it finds no mirror. A fetch can
+     * run for minutes while it receives data, so this waits at most {@code wait} for the lock and then leaves the
+     * mirror for a later call.
      *
      * @return whether the mirror was deleted
      */
@@ -277,28 +326,48 @@ public class GitRepositoryManager {
         }
     }
 
+    /**
+     * Fetches the mirror for a capture. It waits at most {@link #CAPTURE_MIRROR_WAIT} for the mirror's lock, and the
+     * fetch fails when the provider is silent for {@link #TRANSPORT_TIMEOUT_SECONDS}. Either way the lock is released
+     * and the call throws {@link RepositoryFetchException}: the capture records the repository as unavailable, and the
+     * next capture of this repository fetches again.
+     */
     public void ensureRepository(RepositoryKey repository, String cloneUrl, @Nullable String token) {
-        ensure(repository, cloneUrl, token, () -> false, 0);
+        long deadline = System.nanoTime() + captureMirrorWait.toNanos();
+        try {
+            ensure(repository, cloneUrl, token, () -> System.nanoTime() - deadline > 0, transportTimeoutSeconds);
+        } catch (CancellationException busy) {
+            stopped(mirrorBusy, repository, "mirror_busy");
+            throw new RepositoryFetchException("The mirror stayed busy with another fetch", busy);
+        }
     }
 
     /**
-     * How long a reader's fetch may wait for the provider in one read or write, in seconds. A capture's fetch has no
-     * such bound.
+     * How long any fetch may wait for the provider in one read or write, in seconds. A provider that streams a large
+     * pack keeps the transport busy, and one that says nothing for this long has stopped; the fetch then fails and
+     * releases the mirror's lock.
      */
-    public static final int READER_TRANSPORT_TIMEOUT_SECONDS = 60;
+    public static final int TRANSPORT_TIMEOUT_SECONDS = 60;
+
+    /**
+     * How long a capture waits for another fetch of the same mirror. Every fetch stops after {@link
+     * #TRANSPORT_TIMEOUT_SECONDS} of silence, so the wait covers only fetches that still receive data, such as the
+     * first fetch of a large repository.
+     */
+    public static final Duration CAPTURE_MIRROR_WAIT = Duration.ofMinutes(5);
 
     /**
      * As {@link #ensureRepository(RepositoryKey, String, String)}, for a reader that may stop waiting: when
      * {@code abandoned} holds once the mirror's lock is taken, nothing is fetched and the call throws
      * {@link CancellationException}. Its fetch fails when the provider is silent for
-     * {@link #READER_TRANSPORT_TIMEOUT_SECONDS}, so it releases the mirror's lock.
+     * {@link #TRANSPORT_TIMEOUT_SECONDS}, so it releases the mirror's lock.
      */
     public void ensureRepository(
             RepositoryKey repository, String cloneUrl, @Nullable String token, BooleanSupplier abandoned) {
-        ensure(repository, cloneUrl, token, abandoned, READER_TRANSPORT_TIMEOUT_SECONDS);
+        ensure(repository, cloneUrl, token, abandoned, transportTimeoutSeconds);
     }
 
-    /** @param timeoutSeconds JGit's transport timeout; 0 waits as long as the provider takes */
+    /** @param timeoutSeconds JGit's transport timeout: how long one read or write may wait for the provider */
     private void ensure(
             RepositoryKey repository,
             String cloneUrl,
@@ -352,6 +421,7 @@ public class GitRepositoryManager {
                 Files.setLastModifiedTime(mirror, FileTime.from(Instant.now()));
                 return null;
             } catch (InvalidRemoteException | TransportException e) {
+                if (silent(e)) stopped(transportSilent, repository, "transport_silent");
                 throw new RepositoryFetchException(e);
             } catch (GitAPIException | IOException e) {
                 throw new GitOperationException("Cannot fetch repository " + repository.repositoryId(), e);
@@ -359,24 +429,30 @@ public class GitRepositoryManager {
         });
     }
 
-    /** Fetches the provider's review ref for a head no branch reaches, such as a fork's, and pins it. */
-    public boolean fetchRemoteCommit(
-            RepositoryKey repository, String cloneUrl, String remoteRef, String expectedSha, @Nullable String token) {
-        return fetchRemoteCommit(repository, cloneUrl, remoteRef, expectedSha, token, 0);
+    /** Whether the fetch stopped because the provider said nothing for the transport timeout. */
+    private static boolean silent(Throwable failure) {
+        for (Throwable cause = failure; cause != null; cause = cause.getCause())
+            if (cause instanceof InterruptedIOException) return true;
+        return false;
+    }
+
+    private void stopped(Counter counter, RepositoryKey repository, String cause) {
+        counter.increment();
+        log.atWarn()
+                .addKeyValue("event.name", "scm.mirror.fetch.stopped")
+                .addKeyValue("git.fetch.stop_cause", cause)
+                .addKeyValue("workspace.id", repository.workspaceId())
+                .addKeyValue("repository.id", repository.repositoryId())
+                .log("A mirror fetch stopped; its capture records the repository as unavailable");
     }
 
     /**
-     * As {@link #fetchRemoteCommit(RepositoryKey, String, String, String, String)}, for a reader: the fetch fails when
-     * the provider is silent for {@code timeoutSeconds} ({@link #READER_TRANSPORT_TIMEOUT_SECONDS}), so it releases
-     * the mirror's lock.
+     * Fetches the provider's review ref for a head no branch reaches, such as a fork's, and pins it. The fetch fails
+     * when the provider is silent for {@link #TRANSPORT_TIMEOUT_SECONDS}, so it releases the mirror's lock.
      */
     public boolean fetchRemoteCommit(
-            RepositoryKey repository,
-            String cloneUrl,
-            String remoteRef,
-            String expectedSha,
-            @Nullable String token,
-            int timeoutSeconds) {
+            RepositoryKey repository, String cloneUrl, String remoteRef, String expectedSha, @Nullable String token) {
+        int timeoutSeconds = transportTimeoutSeconds;
         requireEnabled();
         if (!Repository.isValidRefName(remoteRef) || !ObjectId.isId(expectedSha)) {
             throw new IllegalArgumentException("Invalid remote review ref or expected commit SHA");
@@ -396,6 +472,7 @@ public class GitRepositoryManager {
                 ObjectId resolved = git.getRepository().resolve(localRef);
                 return resolved != null && resolved.getName().equals(expectedSha.toLowerCase(Locale.ROOT));
             } catch (InvalidRemoteException | TransportException e) {
+                if (silent(e)) stopped(transportSilent, repository, "transport_silent");
                 throw new RepositoryFetchException(e);
             } catch (GitAPIException | IOException e) {
                 throw new GitOperationException("Cannot fetch review commit " + expectedSha, e);
@@ -1124,6 +1201,10 @@ public class GitRepositoryManager {
 
         public RepositoryFetchException(GitAPIException cause) {
             super("Repository Git transport is unavailable", cause);
+        }
+
+        RepositoryFetchException(String message, Throwable cause) {
+            super(message, cause);
         }
     }
 

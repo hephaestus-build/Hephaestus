@@ -434,7 +434,8 @@ class EvidenceAcrossServersIntegrationTest extends BaseIntegrationTest {
                 new FabricLayout(temporary.resolve("checkout-lock-order").toString()),
                 GitTransportFixtures.guarded(),
                 mock(RepositoryRefState.class),
-                admission);
+                admission,
+                new SimpleMeterRegistry());
         manager.ensureRepository(key, upstream.toUri().toString(), null);
         try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
             Future<GitRepositoryManager.GitTreeSnapshot> copy;
@@ -470,7 +471,8 @@ class EvidenceAcrossServersIntegrationTest extends BaseIntegrationTest {
                 new FabricLayout(temporary.resolve("checkout-transaction").toString()),
                 GitTransportFixtures.guarded(),
                 mock(RepositoryRefState.class),
-                new PostgresPersonDataCopyFence(guardedSource, new JdbcTemplate(guardedSource)));
+                new PostgresPersonDataCopyFence(guardedSource, new JdbcTemplate(guardedSource)),
+                new SimpleMeterRegistry());
         manager.ensureRepository(key, upstream.toUri().toString(), null);
         String tree;
         try (var git = Git.open(upstream.toFile())) {
@@ -804,7 +806,8 @@ class EvidenceAcrossServersIntegrationTest extends BaseIntegrationTest {
                     new FabricLayout(root.toString()),
                     GitTransportFixtures.guarded(),
                     mock(RepositoryRefState.class),
-                    fence);
+                    fence,
+                    new SimpleMeterRegistry());
             // The server's sync has mirrored the monitored repository.
             git.ensureRepository(key, upstream.toUri().toString(), null);
             catalog = new EvidenceFolderPersonDataCatalog(

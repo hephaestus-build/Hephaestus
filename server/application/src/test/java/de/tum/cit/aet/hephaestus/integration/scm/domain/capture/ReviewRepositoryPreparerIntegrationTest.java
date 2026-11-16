@@ -36,6 +36,7 @@ import de.tum.cit.aet.hephaestus.testconfig.ItemFixtures;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.time.Instant;
@@ -180,7 +181,8 @@ class ReviewRepositoryPreparerIntegrationTest extends BaseIntegrationTest {
                 new FabricLayout(temporary.resolve("fabric").toString()),
                 GitTransportFixtures.simulator(upstream.getPort()),
                 mock(RepositoryRefState.class),
-                GitTransportFixtures.copyFence());
+                GitTransportFixtures.copyFence(),
+                new SimpleMeterRegistry());
         var realPreparer = new ReviewRepositoryPreparer(git, pullRequests, connections, List.of(tokens), repositories);
 
         var remote = realPreparer.remote(context.pinned(), context.work());
@@ -200,7 +202,8 @@ class ReviewRepositoryPreparerIntegrationTest extends BaseIntegrationTest {
                 new FabricLayout(temporary.resolve("fabric").toString()),
                 GitTransportFixtures.simulator(upstream.getPort()),
                 mock(RepositoryRefState.class),
-                GitTransportFixtures.copyFence());
+                GitTransportFixtures.copyFence(),
+                new SimpleMeterRegistry());
         var realPreparer = new ReviewRepositoryPreparer(git, pullRequests, connections, List.of(tokens), repositories);
         var content =
                 new PullRequestContentSource(new JsonMapper(), git, pullRequests, comments, realPreparer, delivered);
