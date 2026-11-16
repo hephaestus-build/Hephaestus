@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @RestController
 @ConditionalOnServerRole
+@WorkspaceAgnostic("The instance's public keys, the same for every workspace")
 @Tag(name = "Provenance", description = "Public keys that verify the provenance records of generated text")
 public class ProvenanceKeysController {
 
@@ -27,7 +28,6 @@ public class ProvenanceKeysController {
 
     @GetMapping(value = "/.well-known/hephaestus-provenance-keys.json", produces = MediaType.APPLICATION_JSON_VALUE)
     @PreAuthorize("permitAll()")
-    @WorkspaceAgnostic("The instance's public keys, the same for every workspace")
     @Operation(summary = "Public keys of the provenance records", operationId = "getProvenanceKeys")
     public Map<String, Object> keys() {
         return keys.publicJwkSet().toJSONObject();

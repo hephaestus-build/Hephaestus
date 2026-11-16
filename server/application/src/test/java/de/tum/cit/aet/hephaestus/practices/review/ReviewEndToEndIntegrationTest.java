@@ -83,6 +83,7 @@ import java.math.BigDecimal;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -303,6 +304,47 @@ class ReviewEndToEndIntegrationTest extends AbstractWorkspaceIntegrationTest {
     @Test
     void shouldMeasureThePracticeWhenTheWorkDidNotChange() {
         assertMeasured(review(Between.NOTHING));
+    }
+
+    /**
+     * Another workspace measured a practice of the same slug on its own pull request number 32. This workspace's sandbox
+     * then starts, asks the model, stages and seals with its own credential, over the real gateway, while the tenancy
+     * check throws on any statement that names no workspace. The other workspace's review stays as it was.
+     */
+    @Test
+    void shouldLeaveAnotherWorkspacesReviewAsItWasWhileThisWorkspaceIsMeasured() {
+        var other = work(IdentityProviderType.GITHUB);
+        sandbox.prepare(() -> {});
+        UUID otherReview = requested(other, practice(other.workspace(), Reads.THE_WORK));
+        settle(otherReview);
+        var recorded = recorded(otherReview);
+        assertThat(recorded).anySatisfy(row -> assertThat(row).containsEntry("outcome", "MET"));
+
+        var reviewed = review(Between.NOTHING);
+
+        assertMeasured(reviewed);
+        assertThat(sandbox.calls).anySatisfy(call -> assertThat(call.path()).isEqualTo("stage-result"));
+        assertThat(recorded(otherReview)).isEqualTo(recorded);
+    }
+
+    /** What a review recorded: its status, each practice and membership, its results, and its job's seal. */
+    private List<Map<String, @Nullable Object>> recorded(UUID reviewId) {
+        var rows = new ArrayList<Map<String, @Nullable Object>>();
+        rows.addAll(jdbc.queryForList("SELECT status, stop_reason FROM review WHERE id = ?", reviewId));
+        rows.addAll(jdbc.queryForList(
+                "SELECT practice_id, status, reason FROM review_practice WHERE review_id = ? ORDER BY practice_id",
+                reviewId));
+        rows.addAll(jdbc.queryForList(
+                "SELECT practice_id, item_id, state, reason FROM review_item WHERE review_id = ?"
+                        + " ORDER BY practice_id, item_id",
+                reviewId));
+        rows.addAll(jdbc.queryForList(
+                "SELECT id, outcome, ended_at, end_reason FROM result WHERE review_id = ? ORDER BY id", reviewId));
+        rows.addAll(jdbc.queryForList(
+                "SELECT id, status, admission_attempt, admission_digest FROM review_job WHERE review_id = ?"
+                        + " ORDER BY id",
+                reviewId));
+        return rows;
     }
 
     /**

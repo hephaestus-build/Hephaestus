@@ -52,6 +52,7 @@ import java.sql.Types;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
@@ -96,6 +97,24 @@ public class ReviewIntegrationData {
 
     @Transactional
     public Scenario scenario(ItemKind kind, PracticeDefinition definition) {
+        return scenario(
+                kind,
+                definition,
+                ThreadLocalRandom.current().nextLong(1000000000000L, Long.MAX_VALUE),
+                "s5-practice-" + UUID.randomUUID().toString().substring(0, 8));
+    }
+
+    /** A new workspace with a practice of the same slug on the same provider work: only the workspace differs. */
+    @Transactional
+    public Scenario inAnotherWorkspace(Scenario s) {
+        return scenario(
+                s.item().getKind(),
+                DefinitionTestFixtures.definition(),
+                Objects.requireNonNull(s.item().getSourceId()),
+                s.practice().getSlug());
+    }
+
+    private Scenario scenario(ItemKind kind, PracticeDefinition definition, long sourceId, String practiceSlug) {
         var workspace = WorkspaceTestFixtures.activeWorkspace("s5-" + UUID.randomUUID());
         workspace.getFeatures().setPracticesEnabled(true);
         workspaces.saveAndFlush(workspace);
@@ -108,17 +127,11 @@ public class ReviewIntegrationData {
         var item = new Item();
         item.setWorkspaceId(workspace.getId());
         item.setKind(kind);
-        item.setSourceId(ThreadLocalRandom.current().nextLong(1000000000000L, Long.MAX_VALUE));
+        item.setSourceId(sourceId);
         item.setCreatedAt(Instant.now().minusSeconds(3600));
         items.saveAndFlush(item);
         var practice = versions.create(new PracticeVersionService.NewPractice(
-                workspace.getId(),
-                "s5-practice-" + UUID.randomUUID().toString().substring(0, 8),
-                item.getKind(),
-                definition,
-                null,
-                0,
-                account.getId()));
+                workspace.getId(), practiceSlug, item.getKind(), definition, null, 0, account.getId()));
         return new Scenario(workspace, account, practice, item);
     }
 

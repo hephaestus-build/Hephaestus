@@ -3,7 +3,6 @@ package de.tum.cit.aet.hephaestus.agent.proxy;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
 import de.tum.cit.aet.hephaestus.agent.composer.ComposerStreamAnswer;
 import de.tum.cit.aet.hephaestus.agent.composer.ComposerTranscript;
-import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -37,7 +36,7 @@ import tools.jackson.databind.ObjectMapper;
 @RestController
 @RequestMapping("/internal/llm")
 @ConditionalOnAgentRuntime
-class LlmProxyController {
+public class LlmProxyController {
     private static final Logger log = LoggerFactory.getLogger(LlmProxyController.class);
     private static final String PREFIX = "/internal/llm";
 
@@ -58,7 +57,6 @@ class LlmProxyController {
     }
 
     @PostMapping({"/chat/completions", "/responses", "/v1/messages"})
-    @WorkspaceAgnostic("Authenticated sandbox token carries and constrains the workspace route")
     public @Nullable ResponseEntity<?> proxy(
             HttpServletRequest request,
             HttpServletResponse response,
