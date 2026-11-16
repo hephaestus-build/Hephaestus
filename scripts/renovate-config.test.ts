@@ -168,8 +168,17 @@ void test("Gradle artifact updates use the repository JDK and retain human check
 	}
 });
 
-void test("dependency updates normalize optional peer snapshots with the pinned pnpm", () => {
-	assert.deepEqual(config.postUpdateOptions, ["pnpmDedupe"]);
+void test("an update does not deduplicate the tree; only the weekly lock refresh does", () => {
+	// A dedupe after each update also moved unrelated transitive packages, so a one-package update
+	// failed the dependency baseline. The lock refresh, whose purpose is the whole tree, keeps it.
+	assert.equal(config.postUpdateOptions, undefined);
+	assert.ok(Array.isArray(config.packageRules));
+	assert.deepEqual(
+		config.packageRules.filter(isRecord).filter((rule) => rule.postUpdateOptions !== undefined),
+		[],
+	);
+	assert.ok(isRecord(config.lockFileMaintenance));
+	assert.deepEqual(config.lockFileMaintenance.postUpdateOptions, ["pnpmDedupe"]);
 });
 
 /**
