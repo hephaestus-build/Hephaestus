@@ -16,6 +16,7 @@ import {
 	WorkspaceOnboardingPage,
 } from "@/components/onboarding/WorkspaceOnboardingPage";
 import type { MemberAiChoice } from "@/components/practice-vocabulary/data-handling-defs";
+import { practiceProfileOverviewQueryScope } from "@/hooks/practice-profile-overview-scope";
 import { memberOnboardingQueryScope } from "@/hooks/use-member-onboarding";
 import { openRequiredLinks } from "@/lib/onboarding-links";
 import { pageHead } from "@/lib/page-title";
@@ -114,6 +115,8 @@ function OnboardingRoute() {
 				queryKey: memberOnboardingQueryScope(),
 				refetchType: "none",
 			});
+			// Each workspace's overview says whether a review waits for the choice, and Get started reads it.
+			void queryClient.invalidateQueries({ queryKey: practiceProfileOverviewQueryScope() });
 		},
 	});
 	const dismissal = useMutation({ ...dismissMemberOnboardingMutation(), onSuccess: updateCache });
