@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anySet;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
@@ -39,6 +40,7 @@ import de.tum.cit.aet.hephaestus.agent.sandbox.claim.SandboxOwnerFixtures;
 import de.tum.cit.aet.hephaestus.core.auth.ratelimit.BucketResolver;
 import de.tum.cit.aet.hephaestus.core.exception.GlobalControllerAdvice;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
+import de.tum.cit.aet.hephaestus.core.tenancy.TenancyViolations;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.practices.review.AbstractResultAdmissionIntegrationTest;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewAdmissionData;
@@ -49,8 +51,10 @@ import de.tum.cit.aet.hephaestus.practices.spi.ProcessingStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobSnapshot;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewRuntimeSnapshot;
+import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import io.micrometer.tracing.Tracer;
+import jakarta.persistence.EntityManager;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -96,7 +100,8 @@ import tools.jackson.databind.node.ObjectNode;
  * The results routes and the model route take their workspace from the caller's credential alone: a review attempt's
  * token for {@code start-practice}, {@code admit-results} and {@code stage-result}, and a sandbox's token for the
  * composer's model calls. Each call goes over real HTTP through the gateway's security chain to the real controllers,
- * with the tenancy check throwing on any statement that names no workspace. Another workspace holds a practice of the
+ * with the tenancy check throwing on any statement that names no workspace. A start catches a refused source sync and
+ * only logs it, so each call also leaves the count of refused statements as it was. Another workspace holds a practice of the
  * same slug on the same work, or a composition of the same subject, and its rows stay as they were. Only the model
  * provider behind the proxy is a stand-in. The worker role is off in the test context, so the gateway runs as a small
  * application of its own.
@@ -145,6 +150,12 @@ class AttemptCredentialWorkspaceIntegrationTest extends AbstractResultAdmissionI
 
     @Autowired
     private JsonMapper json;
+
+    @Autowired
+    private MeterRegistry meters;
+
+    @Autowired
+    private EntityManager entities;
 
     private final AttemptTokenIssuer issuer = new AttemptTokenIssuer(AttemptKeyFixtures.keyring(KEY));
     private final HttpClient http = HttpClient.newHttpClient();
@@ -210,6 +221,7 @@ class AttemptCredentialWorkspaceIntegrationTest extends AbstractResultAdmissionI
         long other = attempt(data.inAnotherWorkspace(scenario)).workspaceId();
         sourcesNow(attempt, CAPTURED);
         var before = rows(other);
+        double refused = TenancyViolations.count(meters);
 
         var started = post(attempt.token(), "start-practice", start(scenario));
 
@@ -217,6 +229,32 @@ class AttemptCredentialWorkspaceIntegrationTest extends AbstractResultAdmissionI
         assertThat(json.readTree(started.body()).path("current").asBoolean()).isTrue();
         assertThat(practiceStatus(attempt)).isEqualTo("RUNNING");
         assertThat(rows(other)).isEqualTo(before);
+        assertThat(TenancyViolations.count(meters)).isEqualTo(refused);
+    }
+
+    /**
+     * The guard on the assertion above: a source sync that reads every workspace's practices is refused, and the start
+     * only logs that and goes on, so the count of refused statements is what shows it.
+     */
+    @Test
+    void shouldCountARefusedSourceSyncThatThePracticeStartOnlyLogs() throws Exception {
+        var scenario = data.scenario();
+        var attempt = attempt(scenario);
+        long other = attempt(data.inAnotherWorkspace(scenario)).workspaceId();
+        sourcesNow(attempt, CAPTURED);
+        doAnswer(call -> entities.createNativeQuery("SELECT count(*) FROM review_practice")
+                        .getSingleResult())
+                .when(productItems)
+                .sync(any(), anySet(), any());
+        var before = rows(other);
+        double refused = TenancyViolations.count(meters, "review_practice");
+
+        var started = post(attempt.token(), "start-practice", start(scenario));
+
+        assertThat(started.statusCode()).as(started.body()).isEqualTo(200);
+        assertThat(practiceStatus(attempt)).isEqualTo("RUNNING");
+        assertThat(rows(other)).isEqualTo(before);
+        assertThat(TenancyViolations.count(meters, "review_practice")).isGreaterThan(refused);
     }
 
     @Test
@@ -227,6 +265,7 @@ class AttemptCredentialWorkspaceIntegrationTest extends AbstractResultAdmissionI
         // The work moved on after its capture, so the practice is withheld at its start and the attempt seals at once.
         sourcesNow(attempt, "b".repeat(64));
         var before = rows(other);
+        double refused = TenancyViolations.count(meters);
 
         var started = post(attempt.token(), "start-practice", start(scenario));
         var sealed = post(attempt.token(), "admit-results", envelope(attempt));
@@ -246,6 +285,7 @@ class AttemptCredentialWorkspaceIntegrationTest extends AbstractResultAdmissionI
                 .isNotNull();
         assertThat(late.statusCode()).as(late.body()).isEqualTo(409);
         assertThat(rows(other)).isEqualTo(before);
+        assertThat(TenancyViolations.count(meters)).isEqualTo(refused);
     }
 
     @Test
@@ -277,6 +317,7 @@ class AttemptCredentialWorkspaceIntegrationTest extends AbstractResultAdmissionI
                 .when(provider)
                 .proxy(any(), any(), any(), any(), any());
         var before = rows(other);
+        double refused = TenancyViolations.count(meters);
 
         var served = model(token, own, request);
         // The composer lost the answer and sends the conversation again: it gets the answer this claim was served.
@@ -295,6 +336,7 @@ class AttemptCredentialWorkspaceIntegrationTest extends AbstractResultAdmissionI
                         own.runId()))
                 .isOne();
         assertThat(rows(other)).isEqualTo(before);
+        assertThat(TenancyViolations.count(meters)).isEqualTo(refused);
     }
 
     /** The scenario's pending review with its job running at attempt 0, as the runtime reports it. */

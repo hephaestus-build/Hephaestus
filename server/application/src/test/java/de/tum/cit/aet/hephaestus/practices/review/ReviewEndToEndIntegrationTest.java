@@ -27,6 +27,7 @@ import de.tum.cit.aet.hephaestus.agent.run.AgentRunReaper;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxKind;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxes;
+import de.tum.cit.aet.hephaestus.core.tenancy.TenancyViolations;
 import de.tum.cit.aet.hephaestus.evidence.ClasspathSourceCatalogRegistry;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemIndexService;
@@ -78,6 +79,7 @@ import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContextHolder;
 import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import io.fabric8.kubernetes.client.KubernetesClient;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.sql.Timestamp;
@@ -184,6 +186,9 @@ class ReviewEndToEndIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     @Autowired
     private ReviewSandboxStub sandbox;
+
+    @Autowired
+    private MeterRegistry meters;
 
     @Autowired
     private SandboxDispatcher dispatcher;
@@ -309,7 +314,8 @@ class ReviewEndToEndIntegrationTest extends AbstractWorkspaceIntegrationTest {
     /**
      * Another workspace measured a practice of the same slug on its own pull request number 32. This workspace's sandbox
      * then starts, asks the model, stages and seals with its own credential, over the real gateway, while the tenancy
-     * check throws on any statement that names no workspace. The other workspace's review stays as it was.
+     * check throws on any statement that names no workspace. The other workspace's review stays as it was, and no
+     * statement was refused, also none that a caller caught and only logged.
      */
     @Test
     void shouldLeaveAnotherWorkspacesReviewAsItWasWhileThisWorkspaceIsMeasured() {
@@ -319,12 +325,14 @@ class ReviewEndToEndIntegrationTest extends AbstractWorkspaceIntegrationTest {
         settle(otherReview);
         var recorded = recorded(otherReview);
         assertThat(recorded).anySatisfy(row -> assertThat(row).containsEntry("outcome", "MET"));
+        double refused = TenancyViolations.count(meters);
 
         var reviewed = review(Between.NOTHING);
 
         assertMeasured(reviewed);
         assertThat(sandbox.calls).anySatisfy(call -> assertThat(call.path()).isEqualTo("stage-result"));
         assertThat(recorded(otherReview)).isEqualTo(recorded);
+        assertThat(TenancyViolations.count(meters)).isEqualTo(refused);
     }
 
     /** What a review recorded: its status, each practice and membership, its results, and its job's seal. */
