@@ -205,7 +205,7 @@ export async function releasesOf(source: Pin["source"]) {
 		return releases;
 	}
 	const headers: Record<string, string> = { accept: "application/vnd.github+json" };
-	const token = process.env.GITHUB_TOKEN ?? process.env.GH_TOKEN;
+	const token = process.env.GITHUB_TOKEN;
 	if (token !== undefined && token !== "") {
 		headers.authorization = `Bearer ${token}`;
 	}

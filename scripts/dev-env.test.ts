@@ -458,26 +458,45 @@ await describe("the host ports of a worktree", async () => {
 });
 
 await describe("resetting the local database", async () => {
-	await test("a database without a password or project name stops under Compose's default project and is removed", async () => {
+	await test("a database without a project name is refused and kept, because the default project is shared", async () => {
 		await checkout(async (paths) => {
 			await mkdir(paths.dataDirectory);
 			await writeFile(path.join(paths.dataDirectory, "PG_VERSION"), "18");
 			await writeFile(paths.envFile, "SERVER_PORT=8090\n");
-			const calls: { args: string[]; env: Record<string, string> }[] = [];
+			const calls: string[][] = [];
+			await assert.rejects(
+				resetLocalDatabase({
+					...paths,
+					environment: {},
+					compose: async (args) => {
+						calls.push(args);
+					},
+				}),
+				/COMPOSE_PROJECT_NAME/u,
+			);
+			assert.deepEqual(calls, []);
+			const kept = await stat(paths.dataDirectory);
+			assert.ok(kept.isDirectory());
+		});
+	});
+
+	await test("a database without a password stops under its project and is removed", async () => {
+		await checkout(async (paths) => {
+			await mkdir(paths.dataDirectory);
+			await writeFile(path.join(paths.dataDirectory, "PG_VERSION"), "18");
+			await writeFile(paths.envFile, "COMPOSE_PROJECT_NAME=mine\n");
+			const envs: Record<string, string>[] = [];
 			await resetLocalDatabase({
 				...paths,
 				environment: {},
-				compose: async (args, env) => {
-					calls.push({ args, env });
+				compose: async (_args, env) => {
+					envs.push(env);
 				},
 			});
-			assert.deepEqual(
-				calls.map(({ args }) => args),
-				[["down", "-v"]],
-			);
-			assert.equal(calls[0]?.env.COMPOSE_PROJECT_NAME, "server");
+			assert.deepEqual(envs, [
+				{ COMPOSE_PROJECT_NAME: "mine", POSTGRES_PASSWORD: "unused-when-stopping" },
+			]);
 			await assert.rejects(stat(paths.dataDirectory));
-			assert.equal(await readFile(paths.envFile, "utf8"), "SERVER_PORT=8090\n");
 		});
 	});
 

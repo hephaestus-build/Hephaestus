@@ -27,7 +27,7 @@ import { commandsOf, loadTasks } from "./lib/task-graph.ts";
 
 void test("workflow and docs edits run their static checks without complete suites or builds", async () => {
 	const selected = pushTasks([".github/workflows/cicd.yml", "docs/contributor/ci-cd.mdx"]);
-	assert.equal(selected.length, 14);
+	assert.equal(selected.length, 15);
 	for (const owner of [
 		"gate:agents-lint",
 		"gate:scripts-typecheck",
@@ -35,6 +35,7 @@ void test("workflow and docs edits run their static checks without complete suit
 		"gate:prose",
 		"gate:docs-pages",
 		"gate:adr-confirmation",
+		"gate:no-legacy",
 	]) {
 		assert.ok(selected.includes(owner));
 	}

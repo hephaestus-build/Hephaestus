@@ -7,25 +7,10 @@ import { describe, it } from "node:test";
 
 import { environmentForGitFixture } from "./lib/git-environment.ts";
 
-import {
-	check,
-	findings,
-	parseBaseline,
-	violations,
-	type BaselineEntry,
-} from "./check-no-legacy.ts";
+import { check, findings } from "./check-no-legacy.ts";
 
 const server = "server/application/src/main/java/example/Settings.java";
 const route = "webapp/src/routes/previous.tsx";
-const entry: BaselineEntry = {
-	rule: "route-alias",
-	file: route,
-	text: 'throw redirect({ to: "/current" });',
-	count: 1,
-	digest: "a".repeat(64),
-	owner: "LEGACY #4179",
-};
-const actual = [{ ...entry, line: 4 }];
 await describe("owned source and configuration", async () => {
 	for (const [file, source] of [
 		[server, "@Deprecated\nclass Settings {}"],
@@ -99,76 +84,28 @@ await describe("route, server and docs redirects", async () => {
 		);
 	});
 });
-await describe("the baseline", async () => {
-	await it("admits only the recorded number of existing occurrences", () => {
-		assert.deepEqual(violations(actual, [entry], [entry], "1.0.0-rc.6"), []);
-		assert.ok(
-			violations([...actual, { ...entry, line: 5 }], [entry], [entry], "1.0.0-rc.6").length > 0,
-		);
-	});
-	await it("refuses a new baseline entry or a higher occurrence count", () => {
-		assert.ok(violations(actual, [entry], [], "1.0.0-rc.6").some((e) => e.includes("cannot grow")));
-		assert.ok(
-			violations(actual, [{ ...entry, count: 2 }], [entry], "1.0.0-rc.6").some((e) =>
-				e.includes("cannot grow"),
-			),
-		);
-	});
-	await it("requires removal of stale entries", () =>
-		assert.ok(violations([], [entry], [entry], "1.0.0-rc.6").some((e) => e.includes("stale"))));
-	await it("requires an empty baseline for stable 1.0 and later versions", () => {
-		for (const version of ["1.0.0", "1.1.0", "2.0.0"]) {
-			assert.ok(violations(actual, [entry], [entry], version).some((e) => e.includes("empty")));
-		}
-		assert.deepEqual(violations([], [], [entry], "1.0.0"), []);
-	});
-	await it("validates the parsed trust boundary", () => {
-		for (const invalid of [
-			"{}",
-			"[{}]",
-			JSON.stringify([{ ...entry, count: 0 }]),
-			JSON.stringify([{ ...entry, owner: "" }]),
-			JSON.stringify([entry, entry]),
-		]) {
-			assert.throws(() => parseBaseline(invalid));
-		}
-		assert.deepEqual(parseBaseline(JSON.stringify([entry])), [entry]);
-	});
-});
-
-await it("scans untracked source and refuses a baseline added beside the violation", () => {
+await it("scans tracked and untracked source through the real git boundary", () => {
 	const root = mkdtempSync(path.join(tmpdir(), "no-legacy-"));
 	try {
-		const git = (...args: string[]) =>
-			execFileSync("git", args, { cwd: root, env: environmentForGitFixture(), stdio: "pipe" });
+		execFileSync("git", ["init", "--quiet"], {
+			cwd: root,
+			env: environmentForGitFixture(),
+			stdio: "pipe",
+		});
 		mkdirSync(path.join(root, "scripts"));
-		writeFileSync(path.join(root, "package.json"), JSON.stringify({ version: "1.0.0-rc.6" }));
-		writeFileSync(path.join(root, "scripts/no-legacy-baseline.json"), "[]\n");
-		git("init", "--quiet");
-		git("add", ".");
-		git(
-			"-c",
-			"commit.gpgsign=false",
-			"-c",
-			"user.name=Test",
-			"-c",
-			"user.email=test@example.test",
-			"commit",
-			"--quiet",
-			"-m",
-			"base",
-		);
-		git("update-ref", "refs/remotes/origin/main", "HEAD");
-		assert.deepEqual(check(root, "origin/main"), []);
-		const source = "/** @deprecated */\nexport const previous = true;";
-		writeFileSync(path.join(root, "scripts/previous.ts"), source);
-		assert.ok(check(root, "origin/main").some((error) => error.includes("source-deprecation")));
-		const current = findings("scripts/previous.ts", source);
+		writeFileSync(path.join(root, "scripts/current.ts"), "export const current = true;\n");
+		assert.deepEqual(check(root), []);
 		writeFileSync(
-			path.join(root, "scripts/no-legacy-baseline.json"),
-			JSON.stringify(current.map((finding) => ({ ...finding, count: 1, owner: "new exemption" }))),
+			path.join(root, "scripts/previous.ts"),
+			"/** @deprecated */\nexport const previous = true;",
 		);
-		assert.ok(check(root, "origin/main").some((error) => error.includes("cannot grow")));
+		assert.ok(check(root).some((error) => error.includes("source-deprecation")));
+		mkdirSync(path.join(root, "docs/static/previous"), { recursive: true });
+		writeFileSync(
+			path.join(root, "docs/static/previous/index.html"),
+			'<meta http-equiv="refresh" content="0; url=/current">',
+		);
+		assert.ok(check(root).some((error) => error.includes("docs-redirect")));
 	} finally {
 		rmSync(root, { recursive: true, force: true });
 	}
@@ -177,17 +114,6 @@ await it("scans untracked source and refuses a baseline added beside the violati
 await it("does not mistake a path default for an alias", () => {
 	const source = `cache="\${TRIVY_CACHE_DIR:-$HOME/.cache/trivy}"`;
 	assert.deepEqual(findings(".github/actions/download/action.yml", source), []);
-});
-await it("rejects changed redirect lists inside a baseline file", () => {
-	const file = "docs/docusaurus.config.ts";
-	const source = 'const config = { redirects: [{from: "/a", to: "/b"}] };';
-	const original = findings(file, source);
-	// The plugin marker is present in real docs configuration. Use the JSON form here.
-	const json = '{"redirects":[{"from":"/a","to":"/b"}]}';
-	const before = findings(file, json).map((finding) => ({ ...finding, count: 1, owner: "LEGACY" }));
-	const after = findings(file, json.replace("/b", "/b2"));
-	assert.ok(violations(after, before, before, "1.0.0-rc.6").length > 0);
-	assert.ok(original.some((finding) => finding.rule === "docs-redirect"));
 });
 await it("rejects the common permanent redirect forms and component disguises", () => {
 	for (const [file, source] of [
@@ -211,86 +137,8 @@ await it("rejects the common permanent redirect forms and component disguises", 
 		),
 	);
 });
-await it("scans an untracked HTML redirect stub through the real git boundary", () => {
-	const root = mkdtempSync(path.join(tmpdir(), "no-legacy-html-"));
-	try {
-		const git = (...args: string[]) =>
-			execFileSync("git", args, { cwd: root, env: environmentForGitFixture(), stdio: "pipe" });
-		mkdirSync(path.join(root, "scripts"));
-		writeFileSync(path.join(root, "package.json"), '{"version":"1.0.0-rc.6"}');
-		writeFileSync(path.join(root, "scripts/no-legacy-baseline.json"), "[]\n");
-		git("init", "--quiet");
-		git("add", ".");
-		git(
-			"-c",
-			"user.name=Test",
-			"-c",
-			"user.email=test@example.test",
-			"commit",
-			"--quiet",
-			"-m",
-			"base",
-		);
-		git("update-ref", "refs/remotes/origin/main", "HEAD");
-		mkdirSync(path.join(root, "docs/static/previous"), { recursive: true });
-		writeFileSync(
-			path.join(root, "docs/static/previous/index.html"),
-			'<meta http-equiv="refresh" content="0; url=/current">',
-		);
-		assert.ok(check(root, "origin/main").some((error) => error.includes("docs-redirect")));
-	} finally {
-		rmSync(root, { recursive: true, force: true });
-	}
-});
 
-await it("the first baseline admits only unchanged debt from the base commit", () => {
-	const root = mkdtempSync(path.join(tmpdir(), "no-legacy-bootstrap-"));
-	try {
-		const git = (...args: string[]) =>
-			execFileSync("git", args, { cwd: root, env: environmentForGitFixture(), stdio: "pipe" });
-		mkdirSync(path.join(root, "scripts"));
-		mkdirSync(path.join(root, "docs"));
-		writeFileSync(path.join(root, "package.json"), '{"version":"1.0.0-rc.6"}');
-		const file = "docs/docusaurus.config.ts";
-		const source = '{\n"redirects":[\n{"from":"/old","to":"/current"}\n]\n}';
-		writeFileSync(path.join(root, file), source);
-		git("init", "--quiet");
-		git("add", ".");
-		git(
-			"-c",
-			"user.name=Test",
-			"-c",
-			"user.email=test@example.test",
-			"commit",
-			"--quiet",
-			"-m",
-			"base",
-		);
-		git("update-ref", "refs/remotes/origin/main", "HEAD");
-		const baseline = findings(file, source).map((finding) => ({
-			...finding,
-			count: 1,
-			owner: "LEGACY",
-		}));
-		const baselinePath = path.join(root, "scripts/no-legacy-baseline.json");
-		writeFileSync(baselinePath, JSON.stringify(baseline));
-		assert.deepEqual(check(root, "origin/main"), []);
-		const changed = source.replace('"/current"', '"/current"},{"from":"/another","to":"/current"');
-		writeFileSync(path.join(root, file), changed);
-		assert.ok(check(root, "origin/main").some((error) => error.includes("source of a baseline")));
-		writeFileSync(
-			baselinePath,
-			JSON.stringify(
-				findings(file, changed).map((finding) => ({ ...finding, count: 1, owner: "LEGACY" })),
-			),
-		);
-		assert.ok(check(root, "origin/main").some((error) => error.includes("cannot grow")));
-	} finally {
-		rmSync(root, { recursive: true, force: true });
-	}
-});
-
-await it("source fingerprints do not depend on checkout line endings", () => {
+await it("findings do not depend on checkout line endings", () => {
 	const text = "/** @deprecated */\nexport const previous = true;\n";
 	assert.deepEqual(
 		findings("scripts/previous.ts", text),
@@ -363,6 +211,28 @@ await it("refuses a re-added redirect plugin or config in each supported docs fo
 			found.some((finding) => finding.rule === "docs-redirect"),
 			source,
 		);
-		assert.ok(violations(found, [], [], "1.0.0-rc.6").length > 0, source);
 	}
+});
+
+await it("only the renamed-slug redirect of the workspace filter is a current flow", () => {
+	const file =
+		"server/application/src/main/java/de/tum/cit/aet/hephaestus/workspace/context/WorkspaceContextFilter.java";
+	const original = readFileSync(path.join(import.meta.dirname, "../", file), "utf8");
+	const redirect = "response.setStatus(HttpStatus.PERMANENT_REDIRECT.value());";
+	assert.deepEqual(findings(file, original), []);
+	assert.ok(
+		findings(file, original.replace(redirect, `${redirect}\n        ${redirect}`)).some(
+			(finding) => finding.rule === "path-alias",
+		),
+	);
+	assert.ok(
+		findings(
+			file,
+			original.replaceAll(
+				"workspaceSlugHistoryRepository.findFirstByOldSlugOrderByChangedAtDesc(",
+				"lookup(",
+			),
+		).some((finding) => finding.rule === "path-alias"),
+	);
+	assert.ok(findings(server, redirect).some((finding) => finding.rule === "path-alias"));
 });

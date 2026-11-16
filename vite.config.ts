@@ -133,6 +133,7 @@ const policyGates = [
 	"gate:contracts",
 	"gate:env",
 	"gate:quarantine",
+	"gate:no-legacy",
 	"gate:api-pagination",
 	"gate:configuration-reference",
 	"gate:shell",
@@ -280,6 +281,9 @@ export default defineConfig({
 			"gate:prose": run("node --test scripts/check-prose.test.ts && node scripts/check-prose.ts"),
 			"gate:quarantine": run(
 				"node --test scripts/check-quarantine.test.ts && node scripts/check-quarantine.ts",
+			),
+			"gate:no-legacy": run(
+				"node --test scripts/check-no-legacy.test.ts && node scripts/check-no-legacy.ts",
 			),
 			"lint:prose": run("node scripts/check-prose.ts"),
 			"report:prose": run("node scripts/report-prose.ts"),
@@ -485,13 +489,23 @@ export default defineConfig({
 			"ci:windows": group(checkTasks.filter((gate) => !linuxOnly.has(gate))),
 
 			// Scoped selections for check:affected
-			"affected:agents": group([...agentGates, "gate:adr-confirmation"]),
+			"affected:agents": group([...agentGates, "gate:adr-confirmation", "gate:no-legacy"]),
 			"affected:changesets": group(changesetGates),
-			"affected:docs": group([...docsGates, "gate:instructions", "gate:prose"]),
+			"affected:docs": group([...docsGates, "gate:instructions", "gate:prose", "gate:no-legacy"]),
 			// The pagination policy reads only server/openapi.yaml, which selects this scope.
-			"affected:server": group([...serverGates, "gate:adr-confirmation", "gate:api-pagination"]),
-			"affected:webapp": group([...webappGates, "gate:prose", "gate:adr-confirmation"]),
-			"affected:extension": group([...extensionGates, "gate:adr-confirmation"]),
+			"affected:server": group([
+				...serverGates,
+				"gate:adr-confirmation",
+				"gate:api-pagination",
+				"gate:no-legacy",
+			]),
+			"affected:webapp": group([
+				...webappGates,
+				"gate:prose",
+				"gate:adr-confirmation",
+				"gate:no-legacy",
+			]),
+			"affected:extension": group([...extensionGates, "gate:adr-confirmation", "gate:no-legacy"]),
 
 			// The credential-free builds and suites that verification adds to quality
 			"verification:storybook-tests": group(["test:webapp:stories"]),

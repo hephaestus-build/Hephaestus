@@ -21,7 +21,12 @@ export const changesetGates = ["gate:changesets", "gate:docs-lint", "gate:prose"
 // Each scope runs what `check:affected` runs for it, except the exclusions that
 // `scripts/check-push.test.ts` names with their reasons. Each added gate takes seconds.
 export const pushStaticTasks = {
-	agents: [...agentStaticGates, "gate:release-image-inventory", "gate:adr-confirmation"],
+	agents: [
+		...agentStaticGates,
+		"gate:release-image-inventory",
+		"gate:adr-confirmation",
+		"gate:no-legacy",
+	],
 	changesets: changesetGates,
 	docs: [
 		...docsStaticGates,
@@ -31,15 +36,23 @@ export const pushStaticTasks = {
 		"gate:docs-pages",
 		"gate:adr-confirmation",
 		"gate:instructions",
+		"gate:no-legacy",
 	],
-	extension: [...extensionGates, "gate:adr-confirmation"],
+	extension: [...extensionGates, "gate:adr-confirmation", "gate:no-legacy"],
 	// One Gradle invocation: formatting, PMD, test compilation and the architecture tier.
 	server: [
 		...serverStaticGates,
 		"check:push:server",
 		"gate:adr-confirmation",
 		"gate:api-pagination",
+		"gate:no-legacy",
 	],
 	// The build enforces the bundle budget; it takes seconds, and the browser suites build the same bundle.
-	webapp: [...webappGates, "gate:prose", "gate:adr-confirmation", "verification:webapp-build"],
+	webapp: [
+		...webappGates,
+		"gate:prose",
+		"gate:adr-confirmation",
+		"gate:no-legacy",
+		"verification:webapp-build",
+	],
 };
