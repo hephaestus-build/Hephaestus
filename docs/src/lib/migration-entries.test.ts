@@ -181,6 +181,23 @@ await describe("noteProblems", async () => {
 			note(`#### Rename a key\n\n${fields}\n| Where | Old | New |\n| --- | --- | --- |\n`),
 			[".migration/a.md: the values table's columns must be Where, Before, After."],
 		);
+		// An unescaped pipe in a cell adds a fourth cell, which would shift the Before and After values.
+		assert.deepEqual(
+			note(
+				`#### Rename a key\n\n${fields}\n| Where | Before | After |\n| --- | --- | --- |\n| Shell | \`a | b\` | \`c\` |\n`,
+			),
+			[
+				'.migration/a.md: the values table row "| Shell | `a | b` | `c` |" needs 3 cells; write a pipe inside a cell as \\|.',
+			],
+		);
+		// A second entry heading would become a released entry without its fields; a fenced one is an example.
+		assert.deepEqual(note(`#### Rename a key\n\n${fields}\n#### Another entry\n\nText.\n`), [
+			".migration/a.md: split the note into one note per entry: its body holds a heading of level 4 or above.",
+		]);
+		assert.deepEqual(
+			note(`#### Rename a key\n\n${fields}\n\`\`\`md\n#### An example\n\`\`\`\n##### A detail\n`),
+			[],
+		);
 		// A separator with fewer cells than the header is no table on GitHub either.
 		assert.deepEqual(
 			note(

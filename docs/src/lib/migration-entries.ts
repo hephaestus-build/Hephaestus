@@ -121,7 +121,15 @@ function valuesTable(body: string): { rows: [string, string, string][]; problem?
 		if (!line.trim().startsWith("|")) {
 			break;
 		}
-		const [where = "", before = "", after = ""] = cells(line);
+		const row = cells(line);
+		// An unescaped pipe adds a cell, and the page would show the wrong Before and After.
+		if (row.length !== VALUES_HEADER.length) {
+			return {
+				rows: [],
+				problem: `the values table row "${line.trim()}" needs ${String(VALUES_HEADER.length)} cells; write a pipe inside a cell as \\|`,
+			};
+		}
+		const [where = "", before = "", after = ""] = row;
 		rows.push([where, before, after]);
 	}
 	return { rows };
@@ -189,9 +197,16 @@ export function noteProblems(note: Note): string[] {
 	if (!HEADING.test(heading)) {
 		return [`${note.file}:1: Start the migration note with a "#### " heading.`];
 	}
-	return entry(heading, body.join("\n"), null, note.file).problems.map(
-		(problem) => `${note.file}: ${problem}.`,
-	);
+	// A release copies the note into MIGRATION.md, where such a heading would start another entry or
+	// end the release's section.
+	const nested = prose(body.join("\n")).some((line) => /^#{1,4} /u.test(line));
+	const { problems } = entry(heading, body.join("\n"), null, note.file);
+	if (nested) {
+		problems.push(
+			"split the note into one note per entry: its body holds a heading of level 4 or above",
+		);
+	}
+	return problems.map((problem) => `${note.file}: ${problem}.`);
 }
 
 /** What an upgrade page reads: the guide's releases, newest first, and every entry. */
