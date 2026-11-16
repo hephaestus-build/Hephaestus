@@ -132,7 +132,25 @@ Hephaestus manages project webhooks as it manages the group webhook:
 - A deleted project loses its webhook with it.
 - A new routing key replaces every project webhook.
 - Every 6 hours, Hephaestus replaces a project webhook that GitLab deleted or disabled.
-- A disconnect removes every project webhook.
+
+A workspace removal does not remove the group webhook or the project webhooks at GitLab.
+Hephaestus erases the access token first, so GitLab keeps the webhooks.
+GitLab then sends events for the removed workspace, and Hephaestus does not store them.
+Each webhook shows as a block under **Instance administration → Provider removals**, and its removal waits for authorization.
+To remove a webhook after a workspace removal:
+
+1. In GitLab, open the group, or each project that the workspace monitored, then **Settings → Webhooks**.
+2. Delete the webhook whose URL contains `/webhooks/gitlab/connections/`.
+3. Release its block, as [Provider removals](./instance-admin#provider-removals) describes.
+
+**Administration → Integrations** has no **Disconnect** for GitLab yet.
+A disconnect through the API removes every webhook of the connection, and keeps the workspace.
+It erases the synced work of the connection, as a workspace removal does.
+Afterwards, the GitLab page of the workspace offers **Reconnect GitLab**.
+To disconnect, call the API as [Call the API](./instance-admin#call-the-api) describes:
+
+1. Send `GET https://<host>/api/workspaces/<slug>/connections`, and note the `id` of the GitLab connection.
+2. Send `PATCH https://<host>/api/workspaces/<slug>/connections/<id>/status` with the body `{"state": "UNINSTALLED"}`.
 
 Project webhooks do not send member, subgroup, and project events.
 Membership changes, new subgroups, and new projects show after the next sync.

@@ -116,7 +116,7 @@ Reconnecting does not restore it, and starts a new first sync.
 | Integration | Hephaestus erases | Hephaestus removes at the provider |
 | --- | --- | --- |
 | GitHub | The repository mirror and the work synced from it | The GitHub App installation. For a token-managed workspace, revoke the token in GitHub yourself. |
-| GitLab | The repository mirror and the work synced from it | The group webhook, or the webhook of each project. Revoke the access token in GitLab yourself. |
+| GitLab | The repository mirror and the work synced from it | Nothing yet: the group webhook, or the webhook of each project, stays in GitLab. Delete it in GitLab under **Settings → Webhooks**, then ask an instance admin to release its block under **Provider removals**. Revoke the access token in GitLab yourself. |
 | Slack | Stored messages, threads, channels and their consent records. Every question from Slack and its answer. | The bot token, if no other Hephaestus workspace uses the same Slack workspace |
 | Outline | Mirrored documents, collections and document events | The webhook subscription. Revoke the API key in Outline yourself. |
 
