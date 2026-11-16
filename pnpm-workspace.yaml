@@ -63,7 +63,7 @@ packageExtensions:
 
 overrides:
   # CVE-2026-116689.
-  "follow-redirects@>=1.16.0 <1.16.2": 1.16.2
+  "follow-redirects@>=1.16.0 <1.16.2": 1.16.3
   # CVE-2026-118772.
   "joi@>=17.1.1 <17.13.9": 17.13.9
   mermaid: 12.2.0
