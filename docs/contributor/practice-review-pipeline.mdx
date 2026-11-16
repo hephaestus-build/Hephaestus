@@ -1,11 +1,7 @@
 ---
-id: practice-review-pipeline
-sidebar_position: 1
 title: Practice review pipeline
 description: The four practice review stages and their refusal vocabulary. The seam between measurement and delivery, and where the work runs.
 ---
-
-# Practice review pipeline
 
 A review has four boundaries: selection, capture, result admission and delivery.
 Each boundary can stop with its own reason.
@@ -144,13 +140,13 @@ sequenceDiagram
 
 These are the parts of the review that the arrows alone do not explain:
 
-- **Durability.** The provider gets its `202` only after the event is a row in the `provider_event` inbox. The event consumer leases the oldest open event of each scope ([Ingest durability](./ingest-durability.md)). A server can stop at any step, and the next one starts again from PostgreSQL.
+- **Durability.** The provider gets its `202` only after the event is a row in the `provider_event` inbox. The event consumer leases the oldest open event of each scope ([Ingest durability](./ingest-durability.mdx)). A server can stop at any step, and the next one starts again from PostgreSQL.
 - **The fence.** Each lease raises the run's epoch. The gateway accepts a call on a run (`…/runs/{runId}/…`) only with the current epoch. Thus a sandbox that lost its lease cannot write.
   Capture runs on the run's first request, `…/runs/{runId}/context` (`ReviewAttemptPreparation`), under the same fence.
 - **Admission commits on each request.** Each staged result and the seal commit on their own requests, under the fence. A run that stops after them keeps what the server admitted.
 - **Two runs, one lease each.** One subject has at most one leased run. The measuring run therefore ends before its continuation exists. `ReviewRunKind.continueToCompose` ends `REVIEW` and inserts `REVIEW_COMPOSE` in one transaction. The new run keeps the lineage ([Agent runs](./agent-runs.mdx)).
 - **Admission.** The sandbox only proposes. The server admits every candidate and every feedback proposal against the evidence that it captured with its own credentials.
-- **External delivery.** Each copy is an `agent_action` row. The outbox executor writes each copy and then reads it back ([The outbox](./outbox.md)).
+- **External delivery.** Each copy is an `agent_action` row. The outbox executor writes each copy and then reads it back ([The outbox](./outbox.mdx)).
 
 The review's sandbox stays for both runs and goes when the review has no queued or leased run.
 
@@ -320,7 +316,7 @@ Thus, practices of other reviews of the repository can start and verify their tr
 [GitHub](https://docs.github.com/en/webhooks/webhook-events-and-payloads#push) and [GitLab](https://docs.gitlab.com/user/project/integrations/webhook_events/#push-events) can omit bulk ref events.
 An omitted event is detected only by a later fetch, as with other source changes that have not synced.
 
-The [sync lifecycle](./sync-lifecycle.md) owns adapter lifecycle details.
+The [sync lifecycle](./sync-lifecycle.mdx) owns adapter lifecycle details.
 The [operations guide](/admin/practice-review-operations) owns queue timing and deployment controls.
 
 ## Capture evidence
@@ -454,7 +450,7 @@ The result's developer is not the only source-person dependency.
 A missing required AI choice is a policy refusal, not an evidence gap.
 
 The [source contract](./item-source-contract.mdx#capture-state) owns capture states.
-The [workspace ABI](./agent/workspace-abi.mdx) owns the staged files.
+The [workspace ABI](./agent/agent-workspace-abi.mdx) owns the staged files.
 Captured text is evidence, not instructions that can override the review contract.
 
 ## Admit results
@@ -559,7 +555,7 @@ In an item review that reads a checkout, a result that says the repository lacks
 Otherwise admission withholds it as `consulted_source_unread`.
 The search must also name what the result says is absent, or admission withholds it as `absence_not_searched`.
 When a search that names the claim found matches, the result must say what they are, or the reason is `absence_hits_unexplained`.
-[Workspace ABI § Claims that the repository lacks something](./agent/workspace-abi.mdx#claims-that-the-repository-lacks-something) has the rules.
+[Workspace ABI § Claims that the repository lacks something](./agent/agent-workspace-abi.mdx#claims-that-the-repository-lacks-something) has the rules.
 
 A result may cite, or name as consulted, only the sources that its practice declares, and the change and the checkout.
 Every session reads the change and the checkout through Git.
@@ -593,9 +589,9 @@ These checks bound the witnesses. They do not prove the claimed consequence.
 A missing domain verifier cannot authorize a version-dependent claim.
 This keeps provider and diff meaning outside core admission.
 
-The [product outcome contract](./practice-feedback-language.md#observation-outcomes) owns outcome meanings.
+The [product outcome contract](./practice-feedback-language.mdx#observation-outcomes) owns outcome meanings.
 The [script runner](./practice-script-runner.mdx) owns strict candidate fields and limits.
-The [data model](./practice-feedback-schema.md) owns current-result identity and ordering.
+The [data model](./practice-feedback-schema.mdx) owns current-result identity and ordering.
 
 ## Compose feedback
 
@@ -944,7 +940,7 @@ It is delivered only when the completed answer shows its words through `show_fee
 The weekly digest creates no copy and changes no delivery.
 The [Conversation runtime](./unified-pi-runtime.mdx#delivery-of-shown-feedback) owns the claim and the receipt.
 
-The [feedback model](./practice-feedback-schema.md#feedback-and-delivery) owns durable receipts.
+The [feedback model](./practice-feedback-schema.mdx#feedback-and-delivery) owns durable receipts.
 The [user guide](/user/practice-reviews) owns approval, retry and diagnosis procedures.
 
 ## Correct results and feedback

@@ -59,7 +59,7 @@ public class AgentImageReferenceGuard {
     /** Docker's tag grammar. A reference whose tag is empty or malformed only fails at the daemon. */
     private static final Pattern TAG = Pattern.compile("[A-Za-z0-9_][A-Za-z0-9._-]{0,127}");
 
-    private static final String DOCS = "See docs/admin/release-image-lock.md.";
+    private static final String DOCS = "See docs/admin/release-image-lock.mdx.";
 
     private static final String FIX =
             "Pin the digest, or leave the reference unset so it follows this deployment's image tag. " + DOCS;

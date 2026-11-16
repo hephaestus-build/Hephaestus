@@ -1,7 +1,7 @@
 # Webapp E2E (Playwright)
 
 These tests drive the SPA against the real backend using the local dev login. See
-[the contributor guide](../../docs/contributor/e2e-testing.md) for the live practice-review setup.
+[the contributor guide](../../docs/contributor/e2e-testing.mdx) for the live practice-review setup.
 
 ## Run locally
 
@@ -45,7 +45,7 @@ Set `E2E_MUTATE_LIVE_INTEGRATIONS=true` as well to run the provider-sync mutatio
 `conversation.spec.ts` drives the Hephaestus page with no model: the packaged-server suite has no sandbox runtime
 (`hephaestus.agent.enabled=false`), so a question stays queued. The CI proof that a seeded member's question, in the app
 or in Slack, gets its answer is the k3d turn drill, not this suite
-([End-to-end testing](../../docs/contributor/e2e-testing.md#conversation-turns)).
+([End-to-end testing](../../docs/contributor/e2e-testing.mdx#conversation-turns)).
 `conversation.live.spec.ts` checks that Hephaestus answers from a real model. It needs a server with the agent runtime on
 (the `e2e` profile without `playwright`) and its sandboxes in a k3d cluster, as `vp run dev` starts them. It is skipped unless
 `E2E_LLM_BASE_URL`, `E2E_LLM_KEY` and `E2E_MODEL` are set. It reads and provisions the model with the same
@@ -64,7 +64,7 @@ Hephaestus in the `e2e` workspace and binds the seeded model again when it ends.
 
 `accessibility.spec.ts` is the integrated half of the accessibility evaluation: axe on every route in both
 colour schemes, a Tab walk, reflow, menus, dialogs and three keyboard-only processes. It needs only the
-`e2e` account and runs on any browser project; `docs/contributor/accessibility-audit-plan.md` says what it
+`e2e` account and runs on any browser project; `docs/contributor/accessibility-audit-plan.mdx` says what it
 leaves to a person with a screen reader.
 
 ## Journey budgets

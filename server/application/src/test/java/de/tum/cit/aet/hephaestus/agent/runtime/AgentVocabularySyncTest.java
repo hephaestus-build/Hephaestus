@@ -42,7 +42,7 @@ class AgentVocabularySyncTest extends BaseUnitTest {
 
     @Test
     void shouldKeepRetiredPracticeWordsOutOfGenerationInstructions() throws IOException {
-        // docs/contributor/practice-feedback-language.md retires this word for practices and what recurs.
+        // docs/contributor/practice-feedback-language.mdx retires this word for practices and what recurs.
         Pattern retired = Pattern.compile("\\bhabits?\\b", Pattern.CASE_INSENSITIVE);
         List<Path> instructions;
         try (Stream<Path> agent = Files.walk(resolveResource("agent"))) {

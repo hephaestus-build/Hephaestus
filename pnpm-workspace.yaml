@@ -31,6 +31,10 @@ blockExoticSubdeps: true
 # every locked entry needs each package's full registry metadata, more memory than Renovate's
 # hosted job has. The setup-toolchain install in CI still verifies every entry (--no-trust-lockfile).
 trustLockfile: true
+# Astro takes `sharp` as an optional dependency. No docs build transforms an image (docs/astro.config.ts),
+# and the libvips binaries that `sharp` brings are LGPL.
+ignoredOptionalDependencies:
+  - sharp
 allowBuilds:
   "@google/genai": false
   "@swc/core": true
@@ -51,14 +55,7 @@ catalog:
   "@vitest/coverage-v8": 5.0.5
   vite: npm:@voidzero-dev/vite-plus-core@1.4.0
 
-# The plugin imports these without declaring them; under `nodeLinker: isolated` it cannot reach them.
-# As peers they resolve to the versions `docs/package.json` pins beside the rest of Docusaurus.
 packageExtensions:
-  "@signalwire/docusaurus-plugin-llms-txt@1.2.2":
-    peerDependencies:
-      "@docusaurus/logger": ^3
-      "@docusaurus/utils": ^3
-      "@docusaurus/utils-validation": ^3
   # Its SVG renderer imports the wasm libraries without declaring them (render-diagrams.ts).
   "@hylimo/diagram-render-svg@3.0.0-alpha.2":
     dependencies:
@@ -69,7 +66,6 @@ overrides:
   "follow-redirects@>=1.16.0 <1.16.2": 1.16.2
   # CVE-2026-118772.
   "joi@>=17.1.1 <17.13.9": 17.13.9
-  "@docusaurus/core>tinypool": 2.1.2
   mermaid: 12.2.0
   vitest: "catalog:"
   "@vitest/browser": "catalog:"
@@ -79,8 +75,6 @@ overrides:
   "re2js@<2.8.7": 2.8.8
   # CVE-2026-110816 (GHSA-6pq8-jhm2-2vcw) reaches 6.16.0 itself.
   "qs@>=2.2.5 <6.16.1": 6.16.1
-  # CVE-2026-115754 and CVE-2026-115897 (GHSA-m5mm-p8h7-m29v).
-  serialize-javascript: 7.1.4
   "shell-quote@<1.11.0": 1.11.0
   "undici@>=8.0.0 <8.12.2": 8.12.2
   "uuid@<11.1.1": 11.1.1

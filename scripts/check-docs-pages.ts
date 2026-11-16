@@ -1,4 +1,4 @@
-/** The page rules of `docs/contributor/documentation-guide.md` that a machine can hold. */
+/** The page rules of `docs/contributor/documentation-guide.mdx` that a machine can hold. */
 import { statSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
@@ -8,6 +8,8 @@ const repositoryRoot = path.resolve(import.meta.dirname, "..");
 
 const GUIDES = ["user", "admin", "contributor"] as const;
 export type Guide = (typeof GUIDES)[number];
+const DOCUSAURUS_KEYS = ["id", "slug", "sidebar_label", "sidebar_position"] as const;
+
 const PAGE_TYPES: Record<Guide, readonly string[]> = {
 	user: ["overview", "tutorial", "feature", "reference"],
 	admin: ["overview", "tutorial", "how-to", "reference", "explanation", "troubleshooting"],
@@ -130,18 +132,12 @@ function frontMatterProblems(frontMatter: unknown, guide: Guide): Problem[] {
 	if (description !== undefined && description.length > MAX_DESCRIPTION) {
 		report(`Shorten the description to ${MAX_DESCRIPTION} characters (${description.length}).`);
 	}
-	if (field(frontMatter, "id") !== undefined) {
-		report("Remove the id. The file name is the ID.");
-	}
 	return problems;
 }
 
 function lineProblems({ number, text }: Line, guide: Guide, pageType?: string): Problem[] {
 	const problems: string[] = [];
 	const heading = /^(?<level>#{1,6})\s+(?<name>.+?)\s*$/u.exec(text)?.groups;
-	if (heading?.level === "#") {
-		problems.push("Remove the # heading. The front matter title is the page heading.");
-	}
 	const replacement = SECTION_NAMES.get(heading?.name ?? "");
 	if (replacement !== undefined) {
 		problems.push(`Name the section "${replacement}".`);
@@ -204,7 +200,22 @@ export function checkPage(file: string, guide: Guide, source: string): string[] 
 			message: `page_type "${pageType}" is not a ${guide} guide type: ${PAGE_TYPES[guide].join(", ")}.`,
 		});
 	}
+	// The site shows the title as the heading and reads no other key of the old site.
+	for (const key of DOCUSAURUS_KEYS) {
+		if (field(frontMatter, key) !== undefined) {
+			problems.push({
+				line: 1,
+				message: `Remove the ${key}. The site does not read it: the file name is the URL, and meta.json is the sidebar.`,
+			});
+		}
+	}
 	for (const { number, text } of body) {
+		if (/^#\s/u.test(text)) {
+			problems.push({
+				line: number,
+				message: "Remove the # heading. The front matter title is the page heading.",
+			});
+		}
 		const callout = /^\s*:{3,}(?<type>\w+)/u.exec(text)?.groups?.type;
 		if (callout !== undefined && !CALLOUTS.has(callout)) {
 			problems.push({
@@ -329,7 +340,7 @@ function docsLinkProblems(
 	);
 }
 
-// The anchors of a page: an explicit MDX id comment, else the slug of the heading text.
+// The anchors of a page: an explicit id (`## Drain [#drain-queues]`), else the slug of the heading text.
 export function headingAnchors(source: string): Set<string> {
 	return new Set(
 		readPage(source).body.flatMap(({ text }) => {
@@ -337,7 +348,7 @@ export function headingAnchors(source: string): Set<string> {
 			if (heading === undefined) {
 				return [];
 			}
-			const explicit = /\{\/\*#(?<id>[^*]+)\*\/\}/u.exec(heading)?.groups?.id;
+			const explicit = /\[#(?<id>[^\]]+)\]\s*$/u.exec(heading)?.groups?.id;
 			return [
 				explicit ??
 					heading
@@ -364,7 +375,7 @@ async function pagesOf(directory: string): Promise<string[]> {
 					.split(path.sep)
 					.join("/"),
 			)
-			// A leading `_` on a file or a directory marks a partial that pages import; Docusaurus
+			// A leading `_` on a file or a directory marks a partial that pages include; the site
 			// does not publish it.
 			.filter((file) => !file.split("/").some((segment) => segment.startsWith("_")))
 			.toSorted()
@@ -419,7 +430,7 @@ if (import.meta.main) {
 	problems.push(...migrationNoteProblems(notes, upgradeSources.join("\n"), anchorsOf));
 	if (problems.length > 0) {
 		process.stderr.write(
-			`${problems.join("\n")}\nThe rules: docs/contributor/documentation-guide.md.\n`,
+			`${problems.join("\n")}\nThe rules: docs/contributor/documentation-guide.mdx.\n`,
 		);
 		process.exit(1);
 	}

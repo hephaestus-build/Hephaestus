@@ -1,0 +1,43 @@
+---
+import { ClientRouter } from "astro:transitions";
+
+import { themeCookieScript } from "@/components/theme-cookie";
+import { BASE, DESCRIPTION, SITE_TITLE, SITE_URL } from "@/lib/site";
+import { channel } from "@/lib/version";
+import "@/styles/app.css";
+
+interface Props {
+	title?: string;
+	description?: string;
+	/** The page's published path, with the base path, for the canonical link. */
+	canonical?: string;
+	/** The page's Markdown twin, with the base path. */
+	markdown?: string;
+}
+
+const { title, description = DESCRIPTION, canonical, markdown } = Astro.props;
+const base = BASE;
+---
+
+<html lang="en" transition:animate="none">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>{title === undefined ? SITE_TITLE : `${title} | ${SITE_TITLE}`}</title>
+		<meta name="description" content={description} />
+		<meta property="og:title" content={title ?? SITE_TITLE} />
+		<meta property="og:description" content={description} />
+		<meta property="og:image" content={`${SITE_URL}${base}img/hephaestus-social-card.png`} />
+		<meta name="twitter:card" content="summary_large_image" />
+		{/* The unreleased docs repeat most pages of the release docs, so search engines index only the release. */}
+		{channel === "next" && <meta name="robots" content="noindex, nofollow" />}
+		{canonical !== undefined && <link rel="canonical" href={`${SITE_URL}${canonical}`} />}
+		{markdown !== undefined && <link rel="alternate" type="text/markdown" href={markdown} />}
+		<link rel="icon" href={`${base}img/favicon.png`} />
+		<script is:inline set:html={themeCookieScript} />
+		<ClientRouter />
+	</head>
+	<body class="flex min-h-screen flex-col">
+		<slot />
+	</body>
+</html>

@@ -27,7 +27,7 @@ export function technicalNames(markdown: string): string[] {
 }
 
 export const productTerms = technicalNames(
-	readFileSync(new URL("docs/contributor/practice-feedback-language.md", steRoot), "utf8"),
+	readFileSync(new URL("docs/contributor/practice-feedback-language.mdx", steRoot), "utf8"),
 );
 if (productTerms.length === 0) {
 	throw new Error(

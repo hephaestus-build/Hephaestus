@@ -13,7 +13,7 @@ metadata:
 
 # Storybook + component API
 
-Follow the [writing standard](../../../docs/contributor/simplified-technical-english.md) for all prose.
+Follow the [writing standard](../../../docs/contributor/simplified-technical-english.mdx) for all prose.
 
 Load the one file that answers your question.
 

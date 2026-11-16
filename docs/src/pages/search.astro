@@ -1,0 +1,27 @@
+---
+import { SearchHome } from "@/components/home";
+import Layout from "@/layouts/layout.astro";
+import { BASE, GUIDES } from "@/lib/site";
+
+---
+
+<Layout title="Search">
+	<SearchHome client:load pathname={Astro.url.pathname} params={Astro.params}>
+		<main class="mx-auto w-full max-w-xl flex-1 px-4 py-16">
+			<h1 class="mb-4 text-3xl font-semibold">Search the docs</h1>
+			<p class="text-fd-muted-foreground mb-6">Press Ctrl K or ⌘ K to open search.</p>
+			<ul class="space-y-2">
+				{
+					GUIDES.map((guide) => (
+						<li>
+							<a class="text-fd-primary font-medium underline" href={`${BASE}${guide.path}/overview`}>
+								{guide.label}
+							</a>
+							<span class="text-fd-muted-foreground"> — {guide.description}</span>
+						</li>
+					))
+				}
+			</ul>
+		</main>
+	</SearchHome>
+</Layout>

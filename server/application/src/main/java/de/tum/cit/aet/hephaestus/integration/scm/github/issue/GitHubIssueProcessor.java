@@ -164,7 +164,7 @@ public class GitHubIssueProcessor extends BaseGitHubProcessor {
         Optional<Issue> existingOpt = issueRepository.findByRepositoryIdAndNumber(repository.getId(), dto.number());
         boolean isNew = existingOpt.isEmpty();
 
-        // An older payload would restore older work and record it as new (sync-lifecycle.md).
+        // An older payload would restore older work and record it as new (sync-lifecycle.mdx).
         if (!isNew
                 && ProviderStateVersion.refuses(
                         dto.updatedAt(),

@@ -23,7 +23,10 @@
 	"dependencyDashboardTitle": "Dependency Dashboard",
 	"lockFileMaintenance": {
 		"enabled": true,
-		"schedule": ["before 7am on monday"]
+		"schedule": ["before 7am on monday"],
+		"prBodyNotes": [
+			"If this pull request changes a package in the Fumadocs row of [Exceptions to the bar](https://docs.hephaestus.build/contributor/dependencies#exceptions-to-the-bar), examine that row before you approve."
+		]
 	},
 	"rangeStrategy": "replace",
 	"constraints": { "java": "21" },
@@ -147,6 +150,38 @@
 			"matchPackageNames": ["typescript"],
 			"allowedVersions": "6.x",
 			"groupName": "Hey API"
+		},
+		{
+			"description": "The docs site runs on 0.x packages whose Markdown compiler can change between minor releases (ADR 0111), so each one moves in its own pull request",
+			"matchManagers": ["npm"],
+			"matchFileNames": ["docs/package.json"],
+			"matchPackageNames": [
+				"@fumadocs/astro",
+				"@fumadocs/satteri",
+				"satteri",
+				"@astrojs/markdown-satteri"
+			],
+			"groupName": null,
+			"prBodyNotes": [
+				"Run `vp run docs:build` and `node --test docs/src/lib/plugins.test.ts`. A changed compiler fails a plugin test before it changes a page."
+			]
+		},
+		{
+			"description": "One npm account publishes the Fumadocs packages, and zbsearch has no provenance, so a maintainer examines their exception row on each update",
+			"matchManagers": ["npm"],
+			"matchPackageNames": ["fumadocs-core", "@fumadocs/*", "fumadocs-typescript", "zbsearch"],
+			"automerge": false,
+			"addLabels": ["supply-chain-review"],
+			"prBodyNotes": [
+				"Examine the Fumadocs row in [Exceptions to the bar](https://docs.hephaestus.build/contributor/dependencies#exceptions-to-the-bar) before you approve. Check that the new versions keep npm provenance and add no install script."
+			]
+		},
+		{
+			"description": "`astro check` runs on the TypeScript 6 compiler API",
+			"matchManagers": ["npm"],
+			"matchFileNames": ["docs/package.json"],
+			"matchPackageNames": ["typescript"],
+			"allowedVersions": "6.x"
 		},
 		{
 			"description": "Both API clients use one stable generator; prerelease snapshots do not match npm advisory ranges",

@@ -30,7 +30,7 @@ Choose a [profile](./helm-chart#profiles):
 - `dev.yaml` is for a trial on a workstation cluster, such as k3d or kind. It runs no practice reviews.
   Skip each step below that is for `small.yaml` only.
 
-## 1. Verify the release chart {/*#verify-the-release-chart*/}
+## 1. Verify the release chart [#verify-the-release-chart]
 
 Run these commands in the directory of your values file.
 If one command fails, stop: do not install the chart.
@@ -85,7 +85,7 @@ You need two files from it: `hephaestus-keys.sh` and, for `small.yaml`, `k3s-age
    kubectl -n agent-sandbox-system rollout status deployment/agent-sandbox-controller
    ```
 
-## 3. Create the Secret {/*#create-the-secret*/}
+## 3. Create the Secret [#create-the-secret]
 
 The chart reads secret values from one Secret in the release namespace, with fixed key names.
 It never writes a secret value.
@@ -136,7 +136,7 @@ If Git holds your release, for example with Argo CD or Flux, run the script once
 Keep the Secret out of Git.
 To write the Secret yourself instead, generate each value as [Generation and rotation](./secret-custody#generation-and-rotation) gives it.
 
-## 4. Create the PostgreSQL TLS Secret {/*#postgresql-tls-secret*/}
+## 4. Create the PostgreSQL TLS Secret [#postgresql-tls-secret]
 
 The server and the migration Job connect to PostgreSQL with `sslmode=verify-full`.
 They check the server certificate against a CA, and they check that the certificate names the host.
@@ -181,7 +181,7 @@ Keep `ca.key` outside the cluster: you need it to renew the server certificate.
 For an external PostgreSQL, the Secret holds only `ca.crt`.
 [TLS certificates](./secret-custody#tls-certificates) gives the renewal of each certificate.
 
-## 5. Prepare the Gateway {/*#prepare-the-gateway*/}
+## 5. Prepare the Gateway [#prepare-the-gateway]
 
 The chart attaches one `HTTPRoute` to the Gateways in `route.parentRefs`.
 It installs no Gateway, no Gateway controller, and no certificate.
@@ -276,7 +276,7 @@ kubectl get pods --namespace kube-system --selector app.kubernetes.io/name=traef
 Change the namespace and the label for another Gateway controller.
 A Pod gets a new address when it restarts, so `trustedProxies` matches the Pod network, not one address.
 
-## 6. Write the values file {/*#write-the-values-file*/}
+## 6. Write the values file [#write-the-values-file]
 
 Write your values file, `site.yaml`.
 This example is for `small.yaml` and the k3s Traefik above:
@@ -342,7 +342,7 @@ config:
 Do not set `release` or `images`: the release chart sets them.
 For `dev.yaml`, leave out `networkPolicy.kubernetesApi` and `sandbox`.
 
-## 7. Install the chart {/*#install*/}
+## 7. Install the chart [#install]
 
 1. Render the chart with your profile and your values. This step needs no cluster:
 

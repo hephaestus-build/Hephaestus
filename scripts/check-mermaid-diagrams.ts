@@ -2,7 +2,7 @@
  * Parses every committed diagram with the mermaid the docs site actually resolves — both the standalone
  * `.mmd` files and the ```mermaid blocks fenced inside `.md` and `.mdx`.
  *
- * Docusaurus renders mermaid in the browser, so a diagram it cannot parse builds green and publishes
+ * The docs site renders mermaid in the browser, so a diagram it cannot parse builds green and publishes
  * as an error box on the page. That is how the generated ER schema shipped unreadable: the resolved
  * mermaid rejected `NUMERIC(12,6)`, and nothing in the toolchain had an opinion about it.
  *
@@ -53,7 +53,9 @@ interface Diagram {
 const diagrams: Diagram[] = [];
 for (const root of ROOTS) {
 	for (const entry of await readdir(root, { recursive: true })) {
-		if (entry.split(path.sep).includes("node_modules")) {
+		// The site build writes a Markdown copy of each page, with its included diagrams inlined.
+		const [first] = entry.split(path.sep);
+		if (entry.split(path.sep).includes("node_modules") || first === "build" || first === ".astro") {
 			continue;
 		}
 		const file = path.join(root, entry);

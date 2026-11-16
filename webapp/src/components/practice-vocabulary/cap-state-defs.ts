@@ -30,7 +30,7 @@ function capStateDefs(limit: "budget" | "cap"): StatusDefs<CapState> {
 	};
 }
 
-/** The host's limit is a budget and the workspace's own is a cap (`llm-cost-vocabulary.md` Rule 3). */
+/** The host's limit is a budget and the workspace's own is a cap (`llm-cost-vocabulary.mdx` Rule 3). */
 export const CAP_STATE_DEFS = {
 	SHARED: capStateDefs("budget"),
 	OWN_PROVIDER: capStateDefs("cap"),

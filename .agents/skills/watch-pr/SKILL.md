@@ -17,7 +17,7 @@ metadata:
 
 # Watch a pull request
 
-Follow the [writing standard](../../../docs/contributor/simplified-technical-english.md) for all prose.
+Follow the [writing standard](../../../docs/contributor/simplified-technical-english.mdx) for all prose.
 
 You stop at **ready**, not at merged.
 Only a maintainer adds a pull request to the merge queue.

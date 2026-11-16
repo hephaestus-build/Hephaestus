@@ -1,10 +1,11 @@
 import { execFileSync } from "node:child_process";
-import { readdir, writeFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { isSet } from "./lib/env.ts";
-import { asRecord, asString, isRecord, readJsonFile } from "./lib/json.ts";
-import { compareLinks, renderPreviewComments, type PreviewLink } from "./lib/preview-comment.ts";
+import { asRecord, asString, readJsonFile } from "./lib/json.ts";
+import { renderPreviewComments, type PreviewLink } from "./lib/preview-comment.ts";
 import { CAPTURE_LIMIT_BYTES } from "./lib/process.ts";
 
 function argument(index: number): string {
@@ -34,36 +35,43 @@ const changedFiles = new Set(
 
 const baseUrl = new URL(previewUrl);
 
+const SITE_TITLE_SUFFIX = " | Hephaestus documentation";
+const ENTITIES: Record<string, string> = {
+	amp: "&",
+	lt: "<",
+	gt: ">",
+	quot: '"',
+	"#39": "'",
+	"#x27": "'",
+};
+
+/**
+ * A page's URL is its path under its guide (`docs/admin/upgrade.mdx` → `/admin/upgrade`, an `index` file → its folder).
+ * A changed page is published when the build has its HTML file, and the link names the page by its `<title>`.
+ */
 async function renderDocs(): Promise<string[]> {
 	const links = new Map<string, PreviewLink>();
-	for (const file of await readdir(artifactDirectory, { recursive: true })) {
-		if (!file.endsWith(".json")) {
+	for (const source of changedFiles) {
+		const route = /^docs\/(?<route>(?:user|admin|contributor)\/.+)\.mdx?$/u
+			.exec(source)
+			?.groups?.route?.replace(/\/index$/u, "");
+		if (route === undefined || route.split("/").some((part) => part.startsWith("_"))) {
 			continue;
 		}
-		const metadata = await readJsonFile(path.resolve(artifactDirectory, file));
-		if (!isRecord(metadata)) {
+		const file = path.resolve(artifactDirectory, `${route}.html`);
+		if (!existsSync(file)) {
 			continue;
 		}
-		const { source: sourcePath, permalink, title } = metadata;
-		if (
-			typeof sourcePath !== "string" ||
-			typeof permalink !== "string" ||
-			typeof title !== "string"
-		) {
-			continue;
-		}
-		const source = `docs/${sourcePath.replace(/^@site\//u, "")}`;
-		if (changedFiles.has(source)) {
-			const url = new URL(permalink, baseUrl);
-			const existing = links.get(url.href);
-			const link = { group: path.posix.dirname(source), title, url: url.href };
-			if (
-				url.origin === baseUrl.origin &&
-				(existing === undefined || compareLinks(link, existing) < 0)
-			) {
-				links.set(url.href, link);
-			}
-		}
+		const heading =
+			/<title>(?<title>[^<]*)<\/title>/u.exec(await readFile(file, "utf8"))?.groups?.title ?? route;
+		const title = heading
+			.replace(SITE_TITLE_SUFFIX, "")
+			.replaceAll(
+				/&(?<name>amp|lt|gt|quot|#39|#x27);/gu,
+				(_, name: string) => ENTITIES[name] ?? "",
+			);
+		const url = new URL(route, baseUrl);
+		links.set(url.href, { group: path.posix.dirname(source), title, url: url.href });
 	}
 	return comment(
 		"📚 Documentation preview",

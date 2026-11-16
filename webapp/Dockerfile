@@ -23,7 +23,7 @@ COPY scripts/ /repo/scripts/
 COPY webapp/ /repo/webapp/
 # The prose rule reads the shared words, enforced paths, and product vocabulary at lint time.
 COPY .vale/ /repo/.vale/
-COPY docs/contributor/practice-feedback-language.md /repo/docs/contributor/practice-feedback-language.md
+COPY docs/contributor/practice-feedback-language.mdx /repo/docs/contributor/practice-feedback-language.mdx
 COPY server/application/src/main/resources/practices/default-catalog.json /repo/server/application/src/main/resources/practices/default-catalog.json
 # The build emits no source maps; the image fails rather than ship one that appears later.
 RUN pnpm --filter webapp run build && \

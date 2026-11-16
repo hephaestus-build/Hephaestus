@@ -202,7 +202,7 @@ name in the release namespace, so its certificate must name exactly that host.
 {{- end -}}
 
 {{/*
-Each database purpose has its own login (docs/admin/helm-chart.md § Database roles). When the release Secret
+Each database purpose has its own login (docs/admin/helm-chart.mdx § Database roles). When the release Secret
 exists, a missing key fails the render, and so do the keys of the single superuser login before 1.0, which no
 Pod reads. Without a cluster, as in `helm template`, the kubelet refuses a Pod whose key is missing.
 */}}
@@ -216,7 +216,7 @@ Pod reads. Without a cluster, as in `helm template`, the kubelet refuses a Pod w
 {{- end -}}
 {{- range $required -}}
 {{- if not (hasKey $data .) -}}
-{{- fail (printf "the Secret %s needs the key %s: see docs/admin/helm-chart.md § Database roles" $.Values.secret.name .) -}}
+{{- fail (printf "the Secret %s needs the key %s: see docs/admin/helm-chart.mdx § Database roles" $.Values.secret.name .) -}}
 {{- end -}}
 {{- end -}}
 {{- range list "DATABASE_USERNAME" "DATABASE_PASSWORD" -}}

@@ -59,11 +59,20 @@ await describe("checkPage", async () => {
 		);
 	});
 
-	await test("rejects an id, because the file name is the ID", () => {
+	await test("rejects an id, because the file name is the URL", () => {
 		assert.deepEqual(
 			check(page("id: activity\ntitle: A\ndescription: B.\npage_type: feature", "Text.")),
-			["page.md:1: Remove the id. The file name is the ID."],
+			[
+				"page.md:1: Remove the id. The site does not read it: the file name is the URL, and meta.json is the sidebar.",
+			],
 		);
+	});
+
+	await test("rejects a sidebar label and a # heading in every guide", () => {
+		assert.deepEqual(check(page("title: A\nsidebar_label: B", "# A\n\nText."), "contributor"), [
+			"page.md:1: Remove the sidebar_label. The site does not read it: the file name is the URL, and meta.json is the sidebar.",
+			"page.md:6: Remove the # heading. The front matter title is the page heading.",
+		]);
 	});
 
 	await test("names the section a synonym stands for", () => {
@@ -236,7 +245,7 @@ await describe("migrationNoteProblems", async () => {
 const anchors = (docsPage: string) =>
 	docsPage === "admin/upgrade"
 		? headingAnchors(
-				"## Stopped schema upgrades\n\n```md\n## Not a heading\n```\n## Drain {/*#drain-queues*/}\n",
+				"## Stopped schema upgrades\n\n```md\n## Not a heading\n```\n## Drain [#drain-queues]\n",
 			)
 		: undefined;
 const linking = (link: string) => [

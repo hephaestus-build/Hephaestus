@@ -7,7 +7,7 @@ import org.jspecify.annotations.Nullable;
 /**
  * The identity of one provider event on an item: its source key. The occasion and the activity entry of an event share
  * it, and the webhook, a late or repeated delivery and the sync derive the same key for the same change. Thus each of
- * them records the change once (sync-lifecycle.md § A redelivered or older payload changes nothing).
+ * them records the change once (sync-lifecycle.mdx § A redelivered or older payload changes nothing).
  */
 public final class ScmEventIdentity {
 

@@ -34,7 +34,7 @@ const STYLE_MARKER = "// @shared-style";
 // Resolving runs nothing: the CLI starts only in the child process below.
 const CLI = fileURLToPath(import.meta.resolve("@hylimo/cli"));
 
-/** The background of each scheme is the docs page color (`docs/src/css/custom.css`), so the SVG sits on the page. */
+/** The background of each scheme is the docs page color (`--background` in `webapp/src/styles/theme-tokens.css`), so the SVG sits on the page. */
 const SCHEMES = {
 	light: {
 		dark: false,

@@ -8,8 +8,8 @@ This page lists what a self-hosted instance stores, where, and for how long.
 Each period comes from the code or the shipped configuration.
 "No automatic deletion" means that no scheduled job deletes the data.
 The **Deleted by** column then names what still removes it.
-The [personal-data map](./dsms/personal-data-map.md) describes workspace purge, disconnection, and verified person erasure.
-The operator's [record of processing](./dsms/record-of-processing.md) gives the legal basis of each category.
+The [personal-data map](./dsms/personal-data-map.mdx) describes workspace purge, disconnection, and verified person erasure.
+The operator's [record of processing](./dsms/record-of-processing.mdx) gives the legal basis of each category.
 
 The **Setting** column names the environment variable when the supported stack forwards it from `.env`.
 Otherwise, it names the Spring property, and the value is fixed in the supported stack.
@@ -51,7 +51,7 @@ Each server keeps these files under `/data/git-repos`, on its `git-cache` volume
 | Temporary review capture and context copies | Until close succeeds. A failed close retains custody and is retried. Startup removes abandoned copies before admitting work. Failed startup cleanup stops the server. | None | The copy owner closes it. The existing evidence reconciler retries failed closes. [Temporary evidence and restarts](./practice-review-operations#temporary-evidence-and-restarts) inventories the paths. |
 | Inputs of an attempt, including review gateway archives | Until the result is admitted. Otherwise, 1 hour after the attempt ends. A server restart deletes them. An erased copy is removed by reconciliation once its lease is released and removal succeeds. | None | A server reconcile pass every 30 seconds, and at once after each erasure |
 | Checkouts that a server built for another server's capture | As their mirror: they are kept inside it | None | The mirror check every minute |
-| Repository mirrors, one for each workspace and repository | As [Git repository history and short-lived attempts](./dsms/personal-data-map.md#git-repository-history-and-short-lived-attempts) describes | None | A server check every minute |
+| Repository mirrors, one for each workspace and repository | As [Git repository history and short-lived attempts](./dsms/personal-data-map.mdx#git-repository-history-and-short-lived-attempts) describes | None | A server check every minute |
 
 ## PostgreSQL
 

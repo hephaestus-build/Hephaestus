@@ -2,7 +2,7 @@
  * The curated style of the bundled practice guidance under `practices/guidance/`. The server already
  * refuses unsafe markup, a missing file, and a file outside the practice's own folder. It accepts any
  * safe picture and any guide, and it never sees a file that nothing references. These checks cover
- * that gap. `docs/contributor/practice-visuals.md` is the style guide that they enforce.
+ * that gap. `docs/contributor/practice-visuals.mdx` is the style guide that they enforce.
  */
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";

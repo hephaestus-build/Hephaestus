@@ -1,5 +1,5 @@
 /**
- * The failure drills D1–D5 of docs/contributor/qualify-a-release.md. Each drill injects its failure, watches, and then
+ * The failure drills D1–D5 of docs/contributor/qualify-a-release.mdx. Each drill injects its failure, watches, and then
  * judges the expected outcome from read-only SQL on `agent_run`, `agent_sandbox`, `agent_action`, `llm_call_permit`,
  * `llm_usage_event`, `review` and the reaper counters.
  *

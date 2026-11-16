@@ -3,7 +3,7 @@
  * gateway port and nothing else, holds no Kubernetes token, runs as a non-root user and, on the default
  * runtime, in a user namespace of its own and under a PID limit; and that the sandbox namespace refuses
  * a Pod that the Restricted Pod Security Standard refuses. The CI cluster legs run it against the chart's
- * templates (docs/admin/sandboxes.md § Sandbox isolation gate).
+ * templates (docs/admin/sandboxes.mdx § Sandbox isolation gate).
  *
  * It clones the template, with its Pod spec, labels and policies, and changes only the command, so
  * that the container waits instead of running a loop. It claims two sandboxes from the clone, so each

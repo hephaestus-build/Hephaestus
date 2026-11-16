@@ -1,6 +1,4 @@
 ---
-id: coding-guidelines
-sidebar_position: 6
 title: Coding & Design Guidelines
 description: Shared principles for the React client and the Spring Boot server.
 ---
@@ -44,7 +42,7 @@ These guidelines keep every service aligned. Keep changes focused. Mention any d
 - Use the shared questionnaire and native fieldset so one question has one accessible answer group. Do not pre-select a first answer. A saved answer may appear checked when the member returns. See [W3C grouping controls](https://www.w3.org/WAI/tutorials/forms/grouping/) and [GOV.UK radios](https://design-system.service.gov.uk/components/radios/).
 - Give the three AI answers equal prominence. State each consequence before the member chooses. Do not make a logo stand in for a data-handling promise. A workspace may name a model it has configured, but the account-wide answer is not a model picker. See [EDPB guidance on deceptive design](https://www.edpb.europa.eu/system/files/documents/2023-02/edpb_03-2022_guidelines_on_deceptive_design_patterns_in_social_media_platform_interfaces_v2_en_0.pdf).
 - Keep account linking separate from the AI answer. A member can save either without the other. An answer not set up in this workspace remains selectable, with a clear consequence. Give disabled actions a visible reason. Test narrow screens and keyboard use.
-- Use the product terms in [practice-feedback language](./practice-feedback-language.md#member-onboarding-and-ai-choices). The current behavior and data boundaries belong in the [user privacy guide](/user/privacy#your-ai-choice), not in a second screen-by-screen specification here.
+- Use the product terms in [practice-feedback language](./practice-feedback-language.mdx#member-onboarding-and-ai-choices). The current behavior and data boundaries belong in the [user privacy guide](/user/privacy#your-ai-choice), not in a second screen-by-screen specification here.
 
 ### Quality gates
 
@@ -63,7 +61,7 @@ These guidelines keep every service aligned. Keep changes focused. Mention any d
 - Repositories return `Optional<T>` instead of `null`.
 - Services take their collaborators through the constructor, over `private final` fields. Do not use field injection with `@Autowired`. If a service depends on many collaborators, split the responsibility.
 - Set up loggers with `LoggerFactory.getLogger`. Use structured log messages.
-- [Transactions and side effects](./transactions.md) owns where `@Transactional` goes and how work leaves a transaction.
+- [Transactions and side effects](./transactions.mdx) owns where `@Transactional` goes and how work leaves a transaction.
 
 ### Coding conventions
 
@@ -97,9 +95,9 @@ These guidelines keep every service aligned. Keep changes focused. Mention any d
 
 ## Docs site (`/docs`)
 
-- Docusaurus 3 powers the documentation. Install dependencies with `vp install` and run
-  `vp run docs:dev` from the repository root to preview.
-- Keep the front matter `id` and `title` unique, and add every new page to `sidebars.*.ts` — the sidebars are explicit.
+- Fumadocs on Astro builds the documentation ([`docs/README.md`](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/README.md)).
+  Install dependencies with `vp install`, and run `vp run docs:dev` from the repository root to preview.
+- Keep each `title` unique, and add every new page to its guide's `meta.json`. The sidebars are explicit.
 - Use MDX components from `docs/src/components/**` to keep styling consistent.
 - Run `vp run docs:build` before committing structural changes to confirm the static export succeeds.
 

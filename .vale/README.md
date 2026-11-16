@@ -1,6 +1,6 @@
 # Prose checks
 
-The [writing standard](../docs/contributor/simplified-technical-english.md) is the project policy.
+The [writing standard](../docs/contributor/simplified-technical-english.mdx) is the project policy.
 This directory contains the inputs for the checks.
 
 ## Word source
@@ -54,7 +54,7 @@ JavaScript strings keep their literal meaning.
 
 ## Product voice
 
-The [writing standard](../docs/contributor/simplified-technical-english.md) defines the product voice.
+The [writing standard](../docs/contributor/simplified-technical-english.mdx) defines the product voice.
 `.vale.ini` scopes it to `docs/user/` and to the practice guides in `server/application/src/main/resources/practices/guidance/`.
 The `voice` profile in `scripts/lib/ste-words.ts` gives the UI rule the same negative contraction list.
 `.vale/fixtures/docs/user/` repeats the path of the real docs on purpose, because the `**/docs/user/**` glob must match the fixtures.

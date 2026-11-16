@@ -47,9 +47,9 @@ function fixture() {
 	writeFileSync(path.join(cwd, "scripts/feedback-eval/compositions.json"), corpus);
 	mkdirSync(path.join(cwd, "docs/contributor"), { recursive: true });
 	const rubric = readFileSync(
-		new URL("../docs/contributor/composition-label-rubric.md", import.meta.url),
+		new URL("../docs/contributor/composition-label-rubric.mdx", import.meta.url),
 	);
-	writeFileSync(path.join(cwd, "docs/contributor/composition-label-rubric.md"), rubric);
+	writeFileSync(path.join(cwd, "docs/contributor/composition-label-rubric.mdx"), rubric);
 	writeFileSync(path.join(cwd, "scripts/feedback-eval/private-cases.json"), privatePanel);
 	writeFileSync(path.join(cwd, "scripts/feedback-eval/occasion-cases.json"), occasionPanel);
 	mkdirSync(path.join(cwd, "server/application/src/test/resources/practices"), { recursive: true });

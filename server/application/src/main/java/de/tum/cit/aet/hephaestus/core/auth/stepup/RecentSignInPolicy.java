@@ -30,7 +30,7 @@ import org.springframework.stereotype.Service;
  * sign in again.
  *
  * <p>This is a re-authentication gate, not a second factor: the upstream IdP decides whether it
- * challenges for anything, and {@code docs/contributor/instance-admin.md} states what the gate does and
+ * challenges for anything, and {@code docs/contributor/instance-admin.mdx} states what the gate does and
  * does not stop.
  */
 @ConditionalOnServerRole

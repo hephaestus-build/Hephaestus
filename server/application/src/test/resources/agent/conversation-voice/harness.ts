@@ -121,12 +121,15 @@ function systemPrompt(): string {
 	}
 	const system = readFileSync(new URL("system.md", RESOURCES), "utf8");
 	const language = readFileSync(
-		new URL("../../../../../../../docs/contributor/practice-feedback-language.md", import.meta.url),
+		new URL(
+			"../../../../../../../docs/contributor/practice-feedback-language.mdx",
+			import.meta.url,
+		),
 		"utf8",
 	).replaceAll("\r\n", "\n");
 	const heading = "## Writing feedback\n";
 	const start = language.indexOf(heading);
-	assert.notEqual(start, -1, "practice-feedback-language.md has its Writing feedback section");
+	assert.notEqual(start, -1, "practice-feedback-language.mdx has its Writing feedback section");
 	const end = language.indexOf("\n## ", start + heading.length);
 	return `${system}\n\n${language.slice(start, end === -1 ? undefined : end).trim()}`;
 }

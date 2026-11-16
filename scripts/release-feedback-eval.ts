@@ -284,7 +284,7 @@ const complete =
 	outputs.size === run.cases.length &&
 	outputs.size === ids.size &&
 	[...outputs.keys()].every((id) => ids.has(id));
-const rubricSha256 = digest("docs/contributor/composition-label-rubric.md");
+const rubricSha256 = digest("docs/contributor/composition-label-rubric.mdx");
 const labelBinding =
 	runSha256 !== null &&
 	labels?.runSha256 === runSha256 &&

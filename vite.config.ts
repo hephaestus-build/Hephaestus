@@ -91,7 +91,7 @@ const markdownScope = asStringArray(markdownlintConfig.globs, "docs/.markdownlin
 const docsLintInputs = [
 	"docs/**",
 	"!docs/build/**",
-	"!docs/.docusaurus/**",
+	"!docs/.astro/**",
 	"!docs/node_modules/**",
 	...markdownScope,
 	"webapp/tools/oxlint/**",
@@ -136,7 +136,6 @@ const docsGates = [
 	"gate:docs",
 	"gate:diagrams",
 	"gate:system-diagrams",
-	"gate:docs-tokens",
 	"gate:docs-pages",
 	"gate:adr-confirmation",
 ];
@@ -327,9 +326,6 @@ export default defineConfig({
 			"gate:stories": cached(
 				"node scripts/check-story-prose.ts && node scripts/check-story-states.ts",
 			),
-			"gate:docs-tokens": cached(
-				"node scripts/check-docs-tokens.ts && node --test scripts/check-docs-tokens.test.ts",
-			),
 			"verification:webapp-tests": group(["test:webapp"]),
 			"test:webapp": run("vp run --filter webapp test"),
 			"test:webapp:stories": run([
@@ -382,7 +378,7 @@ export default defineConfig({
 				"node --test scripts/kubernetes-chart.test.ts scripts/kubernetes-chart-render.test.ts",
 			),
 			"test:tooling": run(
-				`node --test ${nodeTestFiles} scripts/*.test.ts scripts/api-generator/*.test.ts server/application/src/test/resources/integration/scm/sarif/*.test.ts`,
+				`node --test ${nodeTestFiles} scripts/*.test.ts scripts/api-generator/*.test.ts docs/src/lib/*.test.ts server/application/src/test/resources/integration/scm/sarif/*.test.ts`,
 			),
 
 			// The Prometheus alert rules that operators load: promtool's checks and unit tests, in Docker.
@@ -404,7 +400,8 @@ export default defineConfig({
 			),
 			"gate:docs-format": cached(`vp fmt --check ${docsSources}`),
 			"gate:docs-lint": cachedOn(
-				"vp -C docs lint --type-aware --type-check . && vp -C docs exec markdownlint-cli2",
+				// `astro check` type-checks the `.astro` files and writes the content types that the lint's type check reads.
+				"node scripts/docs-astro.ts check && vp -C docs lint --type-aware --type-check . && vp -C docs exec markdownlint-cli2",
 				docsLintInputs,
 			),
 			"gate:diagrams": cached("node scripts/check-mermaid-diagrams.ts"),
@@ -422,7 +419,7 @@ export default defineConfig({
 			),
 			"gate:docs": group(docsStaticGates),
 			"docs:lint": group(["gate:docs-lint"]),
-			"docs:dev": run("vp run --filter docs start"),
+			"docs:dev": run("vp run --filter docs dev"),
 			"docs:build": run("vp run --filter docs build"),
 			"docs:serve": run("vp run --filter docs serve"),
 			// The user-guide screenshots, from the built app and the synthetic workspace in `webapp/e2e/screenshots/`.
@@ -461,7 +458,6 @@ export default defineConfig({
 				...webappGates,
 				"gate:adr-confirmation",
 				"gate:owned-code",
-				"gate:docs-tokens",
 				"verification:webapp-tests",
 			]),
 			// The build regenerates the route tree, so it never runs beside a gate that reads it. A

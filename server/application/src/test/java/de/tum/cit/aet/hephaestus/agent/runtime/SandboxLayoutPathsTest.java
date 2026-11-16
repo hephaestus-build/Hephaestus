@@ -12,7 +12,7 @@ import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 
 /**
- * The job folder mounts its inputs under {@code context/} ({@code docs/contributor/agent/workspace-abi.mdx}),
+ * The job folder mounts its inputs under {@code context/} ({@code docs/contributor/agent/agent-workspace-abi.mdx}),
  * so a hidden {@code .context/} path in the bundled Pi runtime resources would read nothing.
  */
 class SandboxLayoutPathsTest extends HephaestusArchitectureTest {

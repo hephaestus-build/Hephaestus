@@ -12,7 +12,7 @@ name: gh-stack
 ---
 # gh-stack
 
-Follow the [writing standard](../../../docs/contributor/simplified-technical-english.md) for all prose.
+Follow the [writing standard](../../../docs/contributor/simplified-technical-english.mdx) for all prose.
 
 `gh stack` is a [GitHub CLI](https://cli.github.com/) extension for managing **stacked branches and pull requests**.
 A stack is an ordered list of branches.

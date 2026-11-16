@@ -2,7 +2,7 @@ package de.tum.cit.aet.hephaestus.observability;
 
 /**
  * The names of the log context (MDC) keys that a scope sets for every record inside it. A record writes them in its
- * {@code context} object; the operator contract that lists them is docs/admin/log-records.md § Fields. A key holds an
+ * {@code context} object; the operator contract that lists them is docs/admin/log-records.mdx § Fields. A key holds an
  * id or a closed code, never a login, an email address or text that a person wrote.
  *
  * <p>{@code core} cannot depend on this module, so the outbox writes the {@code action.*} keys as literals.

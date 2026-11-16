@@ -1,10 +1,10 @@
 /**
  * Every docs page and heading that the web app links to exists in the built docs site.
- * `webapp/src/lib/doc-targets.ts` names them. Docusaurus checks the links inside the site
- * (`onBrokenLinks`, `onBrokenAnchors`), but not an address that another program writes. Thus, a
+ * `webapp/src/lib/doc-targets.ts` names them. `check-docs-links.ts` checks the links inside the site,
+ * but not an address that another program writes. Thus, a
  * renamed page or heading fails the docs build here instead of breaking a link in the app.
  *
- * `docs/package.json` runs it after `docusaurus build`, on the output in `docs/build`. Run on its own,
+ * `docs/package.json` runs it after the build, on the output in `docs/build`. Run on its own,
  * it reads whatever build is there.
  */
 import { existsSync, readFileSync } from "node:fs";
@@ -33,8 +33,8 @@ export function anchorsOf(html: string): Set<string> {
 }
 
 /**
- * The page's HTML in the build output, or `undefined` if the site has no such page. With
- * `trailingSlash: false`, Docusaurus writes the page `admin/upgrade` to `admin/upgrade.html`.
+ * The page's HTML in the build output, or `undefined` if the site has no such page.
+ * `build.format: "file"` in `docs/astro.config.ts` writes the page `admin/upgrade` to `admin/upgrade.html`.
  */
 export function readBuiltPage(buildDirectory: string, page: string): string | undefined {
 	const file = path.join(buildDirectory, `${page}.html`);

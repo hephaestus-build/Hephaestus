@@ -1,11 +1,7 @@
 ---
-id: practice-review-runtime
-sidebar_position: 3
 title: Practice review runtime
 description: Runtime roles, execution boundaries, and safe extension points for practice reviews.
 ---
-
-# Practice review runtime
 
 The practices module owns reviews, assignments, results and feedback history.
 The runtime owns job claims, attempts, preparation, scripts and transient evidence.
@@ -62,7 +58,7 @@ The server returns allocated result and problem identities with verified citatio
 Composition can refer only to those admitted records.
 An ids-only admission response cannot authorize an invented problem reference.
 
-The [workspace ABI](./agent/workspace-abi.mdx) owns the exact result and history paths.
+The [workspace ABI](./agent/agent-workspace-abi.mdx) owns the exact result and history paths.
 A history refusal is not an empty result list.
 Source custody is checked before confirmed historical words enter the sandbox.
 

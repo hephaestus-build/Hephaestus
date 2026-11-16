@@ -158,7 +158,7 @@ public class GitLabPullRequestReviewCommentProcessor {
 
     private PullRequestReviewComment updateComment(
             PullRequestReviewComment existing, DiffNoteData data, CommentContext context) {
-        // An older hook would restore older words (sync-lifecycle.md).
+        // An older hook would restore older words (sync-lifecycle.mdx).
         if (existing.getUpdatedAt() != null
                 && data.updatedAt() != null
                 && data.updatedAt().isBefore(existing.getUpdatedAt())) {

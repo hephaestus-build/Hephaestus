@@ -1,0 +1,200 @@
+---
+import { BASE } from "@/lib/site";
+import Footer from "@/components/footer.astro";
+import { Home } from "@/components/home";
+import Layout from "@/layouts/layout.astro";
+import feedbackSceneDark from "@images/readme/feedback-scene-dark.webp";
+import feedbackSceneLight from "@images/readme/feedback-scene-light.webp";
+
+const base = BASE;
+
+const guides = [
+	{
+		title: "User guide",
+		audience: "You use Hephaestus",
+		description: "What the feedback is, where it reaches you, and how to talk it through.",
+		to: "/user/overview",
+		links: [
+			{ label: "Getting started", to: "/user/getting-started" },
+			{ label: "Practice profile", to: "/user/practice-profile" },
+			{ label: "Activity", to: "/user/activity" },
+			{ label: "Practice feedback", to: "/user/ai-code-review" },
+			{ label: "Ask Hephaestus", to: "/user/ask-hephaestus" },
+			{ label: "Chrome extension", to: "/user/browser-extension" },
+		],
+	},
+	{
+		title: "Admin guide",
+		audience: "You run a deployment",
+		description: "Install it, connect a source and an AI provider, and keep it healthy.",
+		to: "/admin/overview",
+		links: [
+			{ label: "Install with Helm", to: "/admin/kubernetes" },
+			{ label: "Connect an AI provider", to: "/admin/ai-providers" },
+			{ label: "Practice catalog", to: "/admin/practice-catalog" },
+		],
+	},
+	{
+		title: "Contributor guide",
+		audience: "You change the code",
+		description: "Set up the services, follow the standards, and ship a change.",
+		to: "/contributor/overview",
+		links: [
+			{ label: "Local development", to: "/contributor/local-development" },
+			{ label: "Coding guidelines", to: "/contributor/coding-guidelines" },
+			{ label: "Release management", to: "/contributor/release-management" },
+		],
+	},
+];
+
+/** The six product features, named the same way in the README, the webapp and these docs. */
+const features = [
+	{
+		title: "Practices",
+		description:
+			"Start from a curated catalog or write your own. Each states what good work looks like.",
+		cta: { label: "Practice catalog", to: "/admin/practice-catalog" },
+	},
+	{
+		title: "Feedback on the Work",
+		description: "A comment on the pull request, merge request, or issue.",
+		cta: { label: "Practice feedback", to: "/user/ai-code-review" },
+	},
+	{
+		title: "Practice Page",
+		description:
+			"Each developer’s private view of feedback and progress per practice. Workspace admins see the observations and delivery status behind it.",
+		cta: { label: "Practice profile", to: "/user/practice-profile" },
+	},
+	{
+		title: "Conversations",
+		description:
+			"A weekly digest you can turn on arrives in the conversation. Developers ask why, ask for an example, or disagree.",
+		cta: { label: "Ask Hephaestus", to: "/user/ask-hephaestus" },
+	},
+	{
+		title: "Feedback Mode",
+		description:
+			"Off, Approve first, or Automatic, per workspace, practice group, or practice. Approve first holds feedback on the work until a workspace admin approves it.",
+		cta: { label: "Feedback mode", to: "/user/practice-reviews#feedback-mode" },
+	},
+	{
+		title: "Your Stack",
+		description:
+			"Works with GitHub, GitLab, Slack, and Outline. Your own model provider: OpenAI, Azure OpenAI, or any OpenAI-compatible endpoint. Helm on your Kubernetes.",
+		cta: { label: "Install with Helm", to: "/admin/kubernetes" },
+	},
+];
+---
+
+<Layout>
+	<Home client:load pathname={Astro.url.pathname} params={Astro.params}>
+		<main class="flex-1">
+				<header class="mx-auto grid max-w-(--fd-layout-width) items-center gap-10 px-4 py-14 lg:grid-cols-2">
+					<div>
+						<p class="text-fd-primary mb-3 text-sm font-medium">
+							Open-source practice feedback for software teams
+						</p>
+						<h1 class="mb-5 text-4xl font-semibold tracking-tight text-balance sm:text-5xl">
+							Learn from the work you’re already doing
+						</h1>
+						<p class="text-fd-muted-foreground mb-4 text-lg">
+							Hephaestus reviews the pull requests, issues, and code reviews your team already
+							writes against the engineering practices you choose. It gives each developer feedback
+							that cites their work and names a next step.
+						</p>
+						<p class="text-fd-muted-foreground mb-8 text-lg">
+							Feedback appears on the work itself, on each developer’s private practice page, and in
+							a conversation. There, developers can ask why, ask for an example, or disagree.
+							Workspace admins can approve feedback before it appears on the work.
+						</p>
+						<div class="flex flex-wrap gap-3">
+							<a
+								class="bg-fd-primary text-fd-primary-foreground rounded-lg px-4 py-2.5 font-medium"
+								href={`${base}user/overview`}
+							>
+								Read the user guide
+							</a>
+							<a
+								class="border-fd-border rounded-lg border px-4 py-2.5 font-medium"
+								href={`${base}admin/kubernetes`}
+							>
+								Install it yourself
+							</a>
+						</div>
+					</div>
+					<figure>
+						<img
+							class="h-auto w-full dark:hidden"
+							src={feedbackSceneLight.src}
+							width={1792}
+							height={1426}
+							alt="Four cards from one change: an issue, a pull request, a review and the merge. Each card has the practice feedback that Hephaestus attached to it."
+						/>
+						<img
+							class="hidden h-auto w-full dark:block"
+							src={feedbackSceneDark.src}
+							width={1792}
+							height={1426}
+							alt="Four cards from one change: an issue, a pull request, a review and the merge. Each card has the practice feedback that Hephaestus attached to it."
+						/>
+					</figure>
+				</header>
+				<section class="mx-auto max-w-(--fd-layout-width) px-4 py-10">
+					<h2 class="mb-1 text-2xl font-semibold">Pick the guide that matches your role</h2>
+					<p class="text-fd-muted-foreground mb-6">
+						Every page says who it is for in its first line.
+					</p>
+					<div class="grid gap-4 md:grid-cols-3">
+						{guides.map((guide) => (
+							<div class="border-fd-border bg-fd-card rounded-xl border p-5">
+								<p class="text-fd-muted-foreground mb-1 text-sm">{guide.audience}</p>
+								<h3 class="mb-2 text-lg font-semibold">
+									<a class="hover:text-fd-primary" href={`${base}${(guide.to).slice(1)}`}>
+										{guide.title}
+									</a>
+								</h3>
+								<p class="text-fd-muted-foreground mb-4 text-sm">{guide.description}</p>
+								<ul class="space-y-1.5 text-sm">
+									{guide.links.map((link) => (
+										<li>
+											<a class="text-fd-primary hover:underline" href={`${base}${(link.to).slice(1)}`}>
+												{link.label}
+											</a>
+										</li>
+									))}
+								</ul>
+							</div>
+						))}
+					</div>
+				</section>
+				<section
+					class="mx-auto max-w-(--fd-layout-width) px-4 pt-6 pb-16"
+					aria-labelledby="homepage-features-heading"
+				>
+					<h2 id="homepage-features-heading" class="mb-6 text-2xl font-semibold">
+						Features
+					</h2>
+					<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+						{features.map((feature) => (
+							<div
+								class="border-fd-border flex flex-col rounded-xl border p-5"
+							>
+								<h3 class="mb-2 font-semibold">{feature.title}</h3>
+								<p class="text-fd-muted-foreground mb-4 flex-1 text-sm">
+									{feature.description}
+								</p>
+								<a
+									class="text-fd-primary text-sm font-medium hover:underline"
+									href={`${base}${feature.cta.to.slice(1)}`}
+								>
+									{feature.cta.label}
+								</a>
+							</div>
+						))}
+					</div>
+				</section>
+			</main>
+		<Footer />
+	</Home>
+</Layout>

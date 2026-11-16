@@ -2,7 +2,7 @@
  * Every docs page and section that the web app links to, by a name that says what the reader gets.
  * A component names an entry (`<DocLink doc="upgradeGuide">`), never a URL. When a docs page moves,
  * its entry here is the one line in the app to change. A reworded heading keeps its ID
- * (`docs/contributor/documentation-guide.md` § File names), so its entry stays.
+ * (`docs/contributor/documentation-guide.mdx` § File names), so its entry stays.
  * `docs/package.json` runs `scripts/check-doc-targets.ts` after each docs build: a target that the
  * built site does not have fails the build.
  *
@@ -14,7 +14,7 @@
 export interface DocTarget {
 	readonly path: `${"user" | "admin" | "contributor"}/${string}`;
 	// The heading's `id` in the built page. A reworded heading keeps it with an explicit ID, in the
-	// compact form that this MDX site builds and lints: `## New words {/*#old-id*/}`.
+	// form that the docs site reads: `## New words [#old-id]`.
 	readonly anchor?: string;
 }
 

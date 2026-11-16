@@ -8,30 +8,6 @@
 		"owner": "#4179 API prefix"
 	},
 	{
-		"rule": "docs-redirect",
-		"file": "docs/docusaurus.config.ts",
-		"text": "redirects: [",
-		"digest": "de627aff12f293d960a4e9317c8f0a4f08ed476fea64530f9bbfe69c955833ee",
-		"count": 1,
-		"owner": "LEGACY docs"
-	},
-	{
-		"rule": "docs-redirect",
-		"file": "docs/docusaurus.config.ts",
-		"text": "\"@docusaurus/plugin-client-redirects\",",
-		"digest": "de627aff12f293d960a4e9317c8f0a4f08ed476fea64530f9bbfe69c955833ee",
-		"count": 1,
-		"owner": "LEGACY docs"
-	},
-	{
-		"rule": "docs-redirect",
-		"file": "docs/package.json",
-		"text": "\"@docusaurus/plugin-client-redirects\": \"3.10.2\",",
-		"digest": "86d599218a522aac9fb7a78887d4de0a28410786339233f03ce7300c32ddba88",
-		"count": 1,
-		"owner": "LEGACY docs after #4243 lockfile"
-	},
-	{
 		"rule": "config-alias",
 		"file": "scripts/write-platform-exceptions.ts",
 		"text": "const token = process.env.GITHUB_TOKEN ?? process.env.GH_TOKEN;",

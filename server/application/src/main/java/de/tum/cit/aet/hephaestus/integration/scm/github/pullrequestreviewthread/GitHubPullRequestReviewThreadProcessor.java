@@ -142,7 +142,7 @@ public class GitHubPullRequestReviewThreadProcessor {
 
     /**
      * A redelivery can arrive hours after a later resolve or unresolve, and must not flip the thread back
-     * (sync-lifecycle.md). Events of the same second keep their arrival order: GitHub dates them to the second, and
+     * (sync-lifecycle.mdx). Events of the same second keep their arrival order: GitHub dates them to the second, and
      * a redelivery of the same act finds the state it would set.
      */
     private static boolean isOlderThanStoredChange(

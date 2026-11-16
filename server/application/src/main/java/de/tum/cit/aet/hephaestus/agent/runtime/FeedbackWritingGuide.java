@@ -17,7 +17,7 @@ public final class FeedbackWritingGuide {
 
     private static String load() {
         return section(new String(
-                PiRuntimeFactory.loadClasspathResource("practice-feedback-language.md"), StandardCharsets.UTF_8));
+                PiRuntimeFactory.loadClasspathResource("practice-feedback-language.mdx"), StandardCharsets.UTF_8));
     }
 
     /** The "Writing feedback" section of the page, to the next heading of its level or the end. */

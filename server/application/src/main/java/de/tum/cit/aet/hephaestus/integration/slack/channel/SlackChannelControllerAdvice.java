@@ -12,7 +12,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 /**
  * Maps Slack domain exceptions to RFC-7807 {@code ProblemDetail} for every Slack REST route, per
- * {@code docs/contributor/api-error-handling.md}. Not-found / validation / auth flow through the global advice.
+ * {@code docs/contributor/api-error-handling.mdx}. Not-found / validation / auth flow through the global advice.
  */
 @RestControllerAdvice(basePackages = "de.tum.cit.aet.hephaestus.integration.slack")
 @Order(Ordered.HIGHEST_PRECEDENCE)

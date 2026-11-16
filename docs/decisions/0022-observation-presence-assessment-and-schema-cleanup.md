@@ -28,7 +28,7 @@ represent a practice with both good and bad aspects.
 ### 1. Split the evaluation into two orthogonal columns on the observation; drop `Practice.kind`
 
 The current contract is owned by
-[practice feedback language](../contributor/practice-feedback-language.md#observation-assessment-axes).
+[practice feedback language](../contributor/practice-feedback-language.mdx#observation-assessment-axes).
 The pre-1.0 amendment separates assessment status from presence and assesses the specified behavior’s contextual
 desirability. POSITIVE/NEGATIVE is derived from presence × assessment. Severity is populated exactly
 for negative outcomes. Neither unassessed status is a verdict or a substitute for failed capture.

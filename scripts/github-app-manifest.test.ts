@@ -10,7 +10,7 @@ import { test } from "node:test";
 
 import { asRecord, asString, asStringArray, parseJson } from "./lib/json.ts";
 
-const PAGE = "docs/admin/github-app-permissions.md";
+const PAGE = "docs/admin/github-app-permissions.mdx";
 const EVENT_TYPES =
 	"server/application/src/main/java/de/tum/cit/aet/hephaestus/integration/scm/github/common/GitHubEventType.java";
 

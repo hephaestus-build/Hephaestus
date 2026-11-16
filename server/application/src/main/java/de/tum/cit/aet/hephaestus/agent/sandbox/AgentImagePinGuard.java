@@ -23,7 +23,7 @@ public class AgentImagePinGuard {
             throw new IllegalStateException(setting + " must be digest-pinned (ending in @sha256:<64 lowercase hex>) "
                     + "when hephaestus.agent.image.require-digest=true. Got: "
                     + Objects.requireNonNullElse(reference, "<not set>")
-                    + ". See docs/admin/release-image-lock.md.");
+                    + ". See docs/admin/release-image-lock.mdx.");
         }
     }
 }

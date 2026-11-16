@@ -220,7 +220,7 @@ public class GitHubPullRequestReviewCommentProcessor {
         return commentRepository
                 .findForUpdateByNativeIdAndProviderId(dto.id(), Objects.requireNonNull(context.providerId()))
                 .map(comment -> {
-                    // An older edit would restore older words (sync-lifecycle.md).
+                    // An older edit would restore older words (sync-lifecycle.mdx).
                     if (comment.getUpdatedAt() != null
                             && dto.updatedAt() != null
                             && dto.updatedAt().isBefore(comment.getUpdatedAt())) {

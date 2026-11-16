@@ -27,7 +27,7 @@ class AgentImagePinGuardTest extends BaseUnitTest {
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining(reference)
                 .hasMessageContaining("hephaestus.agent.image.require-digest")
-                .hasMessageContaining("docs/admin/release-image-lock.md");
+                .hasMessageContaining("docs/admin/release-image-lock.mdx");
     }
 
     /** The reference carries no compiled-in default, so an unresolved one reaches this guard as null. */

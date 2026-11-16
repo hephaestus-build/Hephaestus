@@ -15,7 +15,7 @@ A workspace can also connect its own provider, as [AI models and spending](/user
 - Get an API key for the provider account that pays for the shared models.
 - For an endpoint on your own network, first allow it in the chart. [Admit a model endpoint on a private network](./private-network#admit-a-model-endpoint-on-a-private-network) gives the steps.
 
-## Connect the provider {/*#1-the-staged-flow-and-why-it-is-staged*/}
+## Connect the provider [#1-the-staged-flow-and-why-it-is-staged]
 
 A new connection and a new model start inactive.
 A model can become active only after its connection is active and its price is set.
@@ -33,7 +33,7 @@ A model can become active only after its connection is active and its price is s
 **Base URL**, **API**, and the authentication cannot change after you save.
 To move to another endpoint, add a connection, test it, point the assignments to its models, and turn off the old one.
 
-## Add and price a model {/*#4-pricing-a-model*/}
+## Add and price a model [#4-pricing-a-model]
 
 1. Select **Add model** on the connection.
 2. Enter the **Upstream model ID**. The test fills the suggestions.
@@ -56,7 +56,7 @@ Choose it as [Data handling and AI choices](/user/ai-models#data-handling-and-ai
 A new price replaces the old one from that moment.
 Past usage keeps the rates that it was charged at.
 
-## Activate and share the model {/*#5-sharing-an-instance-model*/}
+## Activate and share the model [#5-sharing-an-instance-model]
 
 1. Turn on **Active** for the connection.
 2. Edit the model, turn on **Active**, and select **Save changes**.
@@ -92,7 +92,7 @@ Under **Settings** on **AI models**:
 Leave **API key** blank to keep the stored key.
 To delete the stored key, select **Remove stored API key**.
 
-## Replace a model {/*#replace-an-unavailable-model*/}
+## Replace a model [#replace-an-unavailable-model]
 
 When a provider withdraws a model, add its replacement before you remove it.
 
@@ -209,7 +209,7 @@ Calls that start at the same moment can pass a cap by their upper bounds.
 A server that ignores the output limit can pass it by more.
 Hephaestus never estimates tokens or charges.
 
-#### Unpriced and unmeasured usage {/*#missing-prices-and-unverified-measurements*/}
+#### Unpriced and unmeasured usage [#missing-prices-and-unverified-measurements]
 
 A call of a model without a price, or without a rate that the call uses, has no cost and no upper bound.
 The **AI usage** pages show it as **Unavailable cost**, and the spend that they show is a lower bound.
@@ -222,10 +222,10 @@ A call whose usage Hephaestus cannot measure counts at its upper bound, and the 
 #### Alerts
 
 Hephaestus sends no notification when a workspace reaches a cap.
-`HephaestusBudgetExhausted` and `HephaestusBudgetBlocked` in [Alerts](./alert-rules.md#alerts) watch the budgets, and [Metrics](./metrics.md) lists the usage counters.
+`HephaestusBudgetExhausted` and `HephaestusBudgetBlocked` in [Alerts](./alert-rules.mdx#alerts) watch the budgets, and [Metrics](./metrics.mdx) lists the usage counters.
 Each pause also logs a warning.
 
-### Provider capacity {/*#6-sharing-provider-capacity*/}
+### Provider capacity [#6-sharing-provider-capacity]
 
 Each model has a call pool that learns how many calls in flight the provider serves, across all servers and workspaces.
 When the provider refuses calls or slows down, every caller of that model waits.
@@ -276,7 +276,7 @@ The server fails a call whose stream sends nothing for 2 minutes.
 1. For nginx, set `proxy_buffering off` on the completions path.
 2. For other gateways, turn off response buffering for `text/event-stream`.
 
-### A model thinks on every call {/*#models-that-think-by-default*/}
+### A model thinks on every call [#models-that-think-by-default]
 
 Some model servers make a model think unless the request turns thinking off with a field of their own, such as Qwen3 on vLLM.
 Hephaestus sends only the standard reasoning effort, so **None** does not turn that thinking off.

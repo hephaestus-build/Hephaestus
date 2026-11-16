@@ -517,3 +517,35 @@ void test("the tools vite-plus bundles move only with vite-plus", () => {
 	assert.ok(bump, "the vite-plus bump must say what to run");
 	assert.match(String(bump.prBodyNotes), /sync:toolchain-pins/u);
 });
+
+void test("each update of a package in the Fumadocs exception row waits for a maintainer to examine the row", async () => {
+	const page = await readFile("docs/contributor/dependencies.mdx", "utf8");
+	const row = page.split("\n").find((line) => line.startsWith("| `fumadocs-core`"));
+	assert.ok(
+		row !== undefined,
+		"docs/contributor/dependencies.mdx has the Fumadocs row under Exceptions to the bar",
+	);
+	const packages = [...(row.split("|")[1] ?? "").matchAll(/`(?<name>[^`]+)`/gu)].map(
+		(match) => match.groups?.name ?? "",
+	);
+	assert.ok(packages.length > 1);
+	assert.ok(Array.isArray(config.packageRules));
+	const rule = config.packageRules
+		.filter(isRecord)
+		.find(
+			(candidate) =>
+				Array.isArray(candidate.addLabels) && candidate.addLabels.includes("supply-chain-review"),
+		);
+	assert.ok(rule, "a package rule adds the supply-chain-review label");
+	const names: unknown = rule.matchPackageNames;
+	assert.ok(Array.isArray(names) && names.every((name) => typeof name === "string"));
+	assert.deepEqual(names.toSorted(), packages.toSorted());
+	assert.equal(rule.automerge, false);
+	const anchor = "https://docs.hephaestus.build/contributor/dependencies#exceptions-to-the-bar";
+	const notes = (value: unknown) =>
+		Array.isArray(value) && value.some((note) => typeof note === "string" && note.includes(anchor));
+	assert.ok(notes(rule.prBodyNotes));
+	// Four of the packages are transitive, so only lockfile maintenance moves them on its own.
+	assert.ok(isRecord(config.lockFileMaintenance));
+	assert.ok(notes(config.lockFileMaintenance.prBodyNotes));
+});

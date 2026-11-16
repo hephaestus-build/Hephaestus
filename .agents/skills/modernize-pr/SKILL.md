@@ -18,7 +18,7 @@ metadata:
 
 # Modernize a pull request
 
-Follow the [writing standard](../../../docs/contributor/simplified-technical-english.md) for all prose.
+Follow the [writing standard](../../../docs/contributor/simplified-technical-english.mdx) for all prose.
 
 Modernize the idea, not only the branch.
 A clean rebase does not prove that the pull request still belongs in the product.

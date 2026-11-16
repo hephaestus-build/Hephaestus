@@ -51,7 +51,7 @@ Logging: [guide](../docs/contributor/structured-logging.mdx).
 `@Tag("integration")`, `@Tag("live")`) · declare a new endpoint's permission explicitly.
 
 **Ask first** — schema changes · security configuration · a new Gradle dependency
-(`docs/contributor/dependencies.md`) · workspace authorization logic.
+(`docs/contributor/dependencies.mdx`) · workspace authorization logic.
 
 **Never** — commit credentials · `System.out.println` · `@Transactional` on a controller (service layer only) · expose an entity from a
 controller.
@@ -117,7 +117,7 @@ Never write cleanup that another test depends on having run.
 - **Build every HTTP client from the builder Spring injects** (`WebClient.Builder`, `RestClient.Builder`,
   `RestTemplateBuilder`), so the application's codecs, observation and customizers apply. Set the client's own
   connector, request factory or codecs on that builder. `HttpClientConstructionArchTest` enforces it.
-- **Transactions follow [Transactions and side effects](../docs/contributor/transactions.md).** It owns the
+- **Transactions follow [Transactions and side effects](../docs/contributor/transactions.mdx).** It owns the
   boundary, the after-commit, the network-call and the locking rules. `SpringCorrectnessArchitectureTest` enforces the ones a test can see.
 - **Keep proxied methods overridable.** Spring's class-based proxies and Hibernate entity proxies
   cannot intercept a `final` method. To avoid an overridable constructor call, use constructor-local
@@ -155,11 +155,11 @@ Never write cleanup that another test depends on having run.
   A `/user-view` handler addressed at a user is a `GET` carrying `@UserViewRead`.
   This annotation records the `USER_VIEW` row before the handler runs.
   `UserViewArchitectureTest` enforces both requirements.
-  `docs/contributor/instance-admin.md` § Read-only user views has the mechanism. Admin mutations declare
+  `docs/contributor/instance-admin.mdx` § Read-only user views has the mechanism. Admin mutations declare
   `@Audited` or `@AuditExempt` — an ArchUnit rule enforces it.
 - Express lifecycle transitions as HTTP methods (`PATCH /workspaces/{slug}/status`), not RPC verbs.
 - Every error is an RFC-7807 `ProblemDetail` produced by a `@RestControllerAdvice` — the rules are in
-  `docs/contributor/api-error-handling.md`.
+  `docs/contributor/api-error-handling.mdx`.
 - **A schema type without a `DTO` suffix is dropped from the generated spec** unless it is listed in
   `OpenAPIConfiguration.ALLOWED_DOMAIN_OBJECTS`. A reference from a published type also keeps it.
   Otherwise the webapp client simply has no type for it, with no error anywhere.
@@ -204,7 +204,7 @@ One `POST /webhooks/{kind}` entry point serves GitHub and the Slack Events API.
 It resolves the kind through `IntegrationKindRouting` and hands it to `WebhookIngestPipeline`.
 The pipeline selects that adapter's `WebhookSignatureVerifier` and `SubjectKeyDeriver`.
 It stores the verified envelope in the provider event inbox (`provider_event`), one row for each subscribing workspace, in the request's transaction.
-`ProviderEventConsumer` claims and handles the rows: `docs/contributor/ingest-durability.md`.
+`ProviderEventConsumer` claims and handles the rows: `docs/contributor/ingest-durability.mdx`.
 
 The server runs the receiver. There is no separate webhook role.
 

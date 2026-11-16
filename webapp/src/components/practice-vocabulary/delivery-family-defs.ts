@@ -4,7 +4,7 @@ import { DELIVERY_STATE_DEFS, type DeliveryState } from "./delivery-state-defs";
 
 /**
  * The delivery families a count of feedback uses in place of the stored delivery states. What each
- * holds, and why, is defined in `docs/contributor/practice-feedback-language.md` (delivery family);
+ * holds, and why, is defined in `docs/contributor/practice-feedback-language.mdx` (delivery family);
  * this registry is its code, and every family opens its list filtered to exactly
  * {@link DELIVERY_FAMILY_STATES}.
  */

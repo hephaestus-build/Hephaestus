@@ -704,7 +704,7 @@ This update supersedes the `Recreate` and single-replica restriction in § Runti
 [ADR 0080](0080-provider-events-go-to-a-postgresql-inbox.md) supplies per-scope PostgreSQL leases and epoch-fenced completion. There is one current provider event per scope across replicas.
 The chart can therefore run two servers with a rolling update. The small profile keeps one steady server and reserves its replacement.
 
-[Helm chart](../admin/helm-chart.md) owns the rollout, disruption budget and capacity rules.
+[Helm chart](../admin/helm-chart.mdx) owns the rollout, disruption budget and capacity rules.
 [Upgrade](../admin/upgrade.mdx) keeps the stopped procedure for incompatible schemas and the initial 1.0 cutover.
 
 The server's model connection can stop during a rollout. The native sandbox runtime retries a cut stream within its run deadline and discards its partial answer. Per-call usage rows retain the interrupted attempt separately from the measured completion. The run epoch admits the result once.

@@ -42,7 +42,7 @@ const fullGateInputs = [
 	/(?:^|\/)CLAUDE\.md$/u,
 ];
 
-// The palette both trees import, and the docs site's copies are pinned to (`gate:docs-tokens`).
+// The palette that the web app, the extension and the docs site import.
 const SHARED_THEME_TOKENS = "webapp/src/styles/theme-tokens.css";
 
 // Webapp files the extension imports by path (`@/…`), the files those import, and the stylesheet
@@ -72,7 +72,7 @@ const serverInputsOfTheWebapp = [
 
 // The docs page the server packages into its jar (`processResources` in `server/application/build.gradle.kts`):
 // the composers and Hephaestus read its feedback writing guide. Keep in step with the server filters in `cicd.yml`.
-export const FEEDBACK_WRITING_GUIDE = "docs/contributor/practice-feedback-language.md";
+export const FEEDBACK_WRITING_GUIDE = "docs/contributor/practice-feedback-language.mdx";
 
 // Server resources the tooling tests judge (`practice-catalog-schema.test.ts`, `practice-guidance.test.ts`).
 // Keep in step with the `tooling` filter in `cicd.yml`.

@@ -130,7 +130,7 @@ results and recovery distinguishable.
 
 - [Practice review pipeline](../contributor/practice-review-pipeline.mdx)
 - [Practice review glossary](../contributor/practice-review-glossary.mdx)
-- [Practice review data model](../contributor/practice-feedback-schema.md)
+- [Practice review data model](../contributor/practice-feedback-schema.mdx)
 - `agent/feedback-composer.md`, `agent.composer`, and `agent.handler.composition`
 
 ## Sources

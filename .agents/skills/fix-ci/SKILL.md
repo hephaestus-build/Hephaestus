@@ -19,7 +19,7 @@ metadata:
 
 # Fix CI
 
-Follow the [writing standard](../../../docs/contributor/simplified-technical-english.md) for all prose.
+Follow the [writing standard](../../../docs/contributor/simplified-technical-english.mdx) for all prose.
 
 Diagnose every failing check in one pass.
 Then push once.

@@ -5,11 +5,22 @@ on:
     branches: [main]
     paths:
       - "docs/**"
+      # The docs build runs these scripts and checks the web app's docs targets.
+      - "scripts/docs-astro.ts"
+      - "scripts/check-docs-links.ts"
+      - "scripts/check-doc-targets.ts"
+      - "webapp/src/lib/doc-targets.ts"
       - ".github/workflows/cd-docs.yml"
   pull_request:
     types: [opened, synchronize, reopened]
     paths:
       - "docs/**"
+      - "scripts/docs-astro.ts"
+      - "scripts/check-docs-links.ts"
+      - "scripts/check-doc-targets.ts"
+      - "webapp/src/lib/doc-targets.ts"
+      # Lockfile maintenance alone moves the transitive packages of the site.
+      - "pnpm-lock.yaml"
       - "scripts/docs-preview.ts"
       - "scripts/render-preview-comment.ts"
       - "scripts/publish-preview-comments.ts"
@@ -57,21 +68,19 @@ jobs:
       - uses: ./.github/actions/setup-toolchain
         with:
           install: "frozen"
-      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: |
-            docs/.docusaurus
-            docs/node_modules/.cache
-          key: ${{ runner.os }}-docusaurus-preview-${{ hashFiles('pnpm-lock.yaml') }}-${{ hashFiles('docs/**/*.md', 'docs/**/*.mdx', 'docs/**/*.ts') }}
-          restore-keys: |
-            ${{ runner.os }}-docusaurus-preview-${{ hashFiles('pnpm-lock.yaml') }}-
-            ${{ runner.os }}-docusaurus-preview-
+      # The deployed site also has a /next/ build. Its link check catches a link that leaves the base path, which a
+      # build at the root cannot see.
+      - name: Build at /next/
+        run: vp run --filter docs build
+        env:
+          DOCS_BASE_URL: "/next/"
+          DOCS_CHANNEL: next
       - run: vp run --filter docs build
         env:
-          DOCUSAURUS_BASE_URL: "/"
+          DOCS_BASE_URL: "/"
       - name: Prepare preview links
         run: >-
-          node scripts/render-preview-comment.ts docs docs/.docusaurus
+          node scripts/render-preview-comment.ts docs docs/build
           "https://$PREVIEW_URL"
           ${{ github.event.pull_request.base.sha }} docs-preview-comment.json
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -137,22 +146,15 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ needs.release-ref.outputs.tag }}
+          # Each page's last-updated date and sitemap entry come from its own last commit.
+          fetch-depth: 0
           persist-credentials: false
       - uses: ./.github/actions/setup-toolchain
         with:
           install: "frozen"
-      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: |
-            docs/.docusaurus
-            docs/node_modules/.cache
-          key: ${{ runner.os }}-docusaurus-latest-${{ hashFiles('pnpm-lock.yaml') }}-${{ hashFiles('docs/**/*.md', 'docs/**/*.mdx', 'docs/**/*.ts') }}
-          restore-keys: |
-            ${{ runner.os }}-docusaurus-latest-${{ hashFiles('pnpm-lock.yaml') }}-
-            ${{ runner.os }}-docusaurus-latest-
       - run: vp run --filter docs build
         env:
-          DOCUSAURUS_BASE_URL: "/"
+          DOCS_BASE_URL: "/"
           DOCS_CHANNEL: latest
           DOCS_RELEASE: ${{ needs.release-ref.outputs.tag }}
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -177,22 +179,15 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: main
+          # Each page's last-updated date and sitemap entry come from its own last commit.
+          fetch-depth: 0
           persist-credentials: false
       - uses: ./.github/actions/setup-toolchain
         with:
           install: "frozen"
-      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: |
-            docs/.docusaurus
-            docs/node_modules/.cache
-          key: ${{ runner.os }}-docusaurus-next-${{ hashFiles('pnpm-lock.yaml') }}-${{ hashFiles('docs/**/*.md', 'docs/**/*.mdx', 'docs/**/*.ts') }}
-          restore-keys: |
-            ${{ runner.os }}-docusaurus-next-${{ hashFiles('pnpm-lock.yaml') }}-
-            ${{ runner.os }}-docusaurus-next-
       - run: vp run --filter docs build
         env:
-          DOCUSAURUS_BASE_URL: "/next/"
+          DOCS_BASE_URL: "/next/"
           DOCS_CHANNEL: next
           DOCS_RELEASE: ${{ needs.release-ref.outputs.tag }}
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

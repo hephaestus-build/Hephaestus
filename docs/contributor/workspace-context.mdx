@@ -1,6 +1,4 @@
 ---
-id: workspace-context
-sidebar_position: 5
 title: Workspace-Scoped Endpoints
 description: How to build tenant-aware controllers that route through /workspaces/{slug}.
 ---
@@ -59,7 +57,7 @@ No publication setting opens member endpoints to non-members.
 `WorkspaceContextFilter` answers a signed-in non-member with the 404 of an unknown workspace, so a request cannot tell which workspaces exist ([ADR 0053](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0053-workspace-addresses-are-a-presentation-origin.md)).
 A member without the required role gets 403.
 
-The privilege and audit policy lives in [Instance administration](./instance-admin.md#who-is-an-instance-admin).
+The privilege and audit policy lives in [Instance administration](./instance-admin.mdx#who-is-an-instance-admin).
 
 Check roles through the context:
 

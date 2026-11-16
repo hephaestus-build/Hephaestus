@@ -16,7 +16,7 @@ The title and the Decision of ADR 0044 say that the event publication registry d
 Since ADR 0079, each email is an `email` action in the `agent_action` outbox, and the registry is not the record of a delivery.
 ADR 0044 also bundled about twelve rules and the survey records, which the 1.0 cutover removes.
 This ADR states the notification email of 1.0 as rules.
-[The outbox](../contributor/outbox.md) and [Transactions and side effects](../contributor/transactions.md) keep the detailed design.
+[The outbox](../contributor/outbox.mdx) and [Transactions and side effects](../contributor/transactions.mdx) keep the detailed design.
 
 An email has no readback. After a crash, the server cannot ask the relay whether it accepted a message.
 Thus, the server must choose between a possible duplicate and a possible loss.
@@ -65,7 +65,7 @@ Thus, the server must choose between a possible duplicate and a possible loss.
     Enforced by: `NotificationSubscriptionIntegrationTest#shouldRequireExplicitAnonymousPostAndLeaveOtherSubscriptionsEnabled`, and `EmailAdapterTest#shouldAdvertiseOneClickOnlyForHttpsUnsubscribeLinks` and `#shouldRefuseOptionalMailWithoutAnUnsubscribeCapability`.
 11. **Shared capacity.** A PostgreSQL-backed Bucket4j budget limits attempts across all replicas. The optional budget is smaller than the total, so essential email keeps capacity. When the store fails, the attempt waits.
     Enforced by: `EmailRateLimiterTest#shouldShareCapacityAcrossSendersAndReserveEssentialAttempts` and `#shouldWithholdWhenCapacityStoreIsUnavailable`.
-12. **The transport is Spring Boot's `spring.mail.*`, and the sender is `hephaestus.email.*`.** A blank host registers no sender, and email is then off. Authenticated SMTP requires TLS. SMTP does not gate startup or readiness. [Set up email](../admin/set-up-email.md) owns the settings.
+12. **The transport is Spring Boot's `spring.mail.*`, and the sender is `hephaestus.email.*`.** A blank host registers no sender, and email is then off. Authenticated SMTP requires TLS. SMTP does not gate startup or readiness. [Set up email](../admin/set-up-email.mdx) owns the settings.
     Enforced by: `EmailTransportConfigurationTest` (`#shouldRegisterNoSenderWhenTheHostIsBlank`, `#shouldRejectAuthenticatedSmtpWithoutRequiredEncryption`).
 13. **Erasure deletes the queued email.** Account erasure deletes the account's actions in every state and its subscriptions ([ADR 0079](0079-one-agent-system.md#update--2026-11-09-erasure-deletes-the-actions-of-an-account)). An export holds the choices, never a token.
     Enforced by: `ActionStoreIntegrationTest#shouldDeleteTheActionsOfAnErasedAccount` and `NotificationSubscriptionIntegrationTest#shouldExportOnlyChoicesAndEraseOnlyTheTargetAccountsSubscriptions`.

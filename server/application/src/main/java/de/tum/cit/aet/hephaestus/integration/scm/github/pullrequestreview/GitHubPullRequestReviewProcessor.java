@@ -215,7 +215,7 @@ public class GitHubPullRequestReviewProcessor extends BaseGitHubProcessor {
             PullRequestReview review,
             GitHubPullRequestReviewEventDTO.GitHubReviewDTO dto,
             @NonNull ProcessingContext context) {
-        // An older payload would restore an older review, also one dismissed since (sync-lifecycle.md).
+        // An older payload would restore an older review, also one dismissed since (sync-lifecycle.mdx).
         if (review.getUpdatedAt() != null
                 && dto.updatedAt() != null
                 && dto.updatedAt().isBefore(review.getUpdatedAt())) {

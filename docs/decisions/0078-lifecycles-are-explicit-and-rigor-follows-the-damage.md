@@ -3,7 +3,7 @@
 **Status:** Accepted
 **Date:** 2026-11-06
 **Authors:** Felix T.J. Dietrich
-**Relates to:** [Lifecycles](../contributor/lifecycles.md) (the current rules), [ADR 0072](0072-few-dependencies-owned-slivers-kept-foundations.md) (dependencies), [ADR 0075](0075-a-transaction-is-one-use-case-and-talks-to-nothing.md) (transactions).
+**Relates to:** [Lifecycles](../contributor/lifecycles.mdx) (the current rules), [ADR 0072](0072-few-dependencies-owned-slivers-kept-foundations.md) (dependencies), [ADR 0075](0075-a-transaction-is-one-use-case-and-talks-to-nothing.md) (transactions).
 
 ## Context
 
@@ -49,7 +49,7 @@ Published experience points the same way, with limits that we note:
 
 Each lifecycle states its legal transitions once, and the database refuses what it can express.
 Rigor rises with the damage of a wrong transition.
-[Lifecycles](../contributor/lifecycles.md) holds the levels.
+[Lifecycles](../contributor/lifecycles.mdx) holds the levels.
 
 A formal model is optional, because our evidence does not yet show that one finds a defect that the other levels miss.
 We try one small model of a concurrent protocol and keep it outside CI.
@@ -67,7 +67,7 @@ A model states a design. It does not prove the code. We do not check traces of t
 
 Not enforced as a whole.
 Each CHECK constraint refuses a stored state outside its list.
-No test finds a lifecycle without its CHECK or its table. Review against the levels in [Lifecycles](../contributor/lifecycles.md) catches it.
+No test finds a lifecycle without its CHECK or its table. Review against the levels in [Lifecycles](../contributor/lifecycles.mdx) catches it.
 
 ## Revisit trigger
 

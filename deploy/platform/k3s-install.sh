@@ -1,5 +1,5 @@
 #!/bin/sh
-# The one-host install of Hephaestus on k3s: docs/admin/k3s.md.
+# The one-host install of Hephaestus on k3s: docs/admin/k3s.mdx.
 #
 # Run it as a user with sudo rights, from the folder where you unpacked the verified
 # hephaestus-k3s-X.Y.Z.tar.gz bundle of one release:

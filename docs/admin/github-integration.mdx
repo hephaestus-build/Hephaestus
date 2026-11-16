@@ -18,7 +18,7 @@ Sign-in with GitHub uses a separate OAuth App, also one for each instance, as [F
 The commands use the release namespace `hephaestus` and the release Secret `hephaestus-app`.
 Replace these names if your release uses other names.
 
-## Register the GitHub App {/*#github-app-mode*/}
+## Register the GitHub App [#github-app-mode]
 
 1. Open `https://github.com/organizations/<org>/settings/apps/new`.
 2. Set **GitHub App name** to a name for this instance, such as `acme-hephaestus`.
@@ -52,7 +52,7 @@ Thus, the **Webhook URL** must reach the server directly, on the host of the ins
 Thus, use the value that the release Secret holds, and do not make a new one.
 If the Secret has no `WEBHOOK_SECRET`, run `hephaestus-keys.sh` again, as [Create the Secret](./kubernetes#create-the-secret) describes.
 
-## Set the Helm values and Secret keys {/*#install-and-configure*/}
+## Set the Helm values and Secret keys [#install-and-configure]
 
 1. Type the client secret of the App. The shell does not show it:
 

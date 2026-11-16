@@ -51,7 +51,7 @@ function upstreamPackage(purl: string) {
 	return { type: "library", name, version, purl };
 }
 
-/** The header format belongs to docs/contributor/dependencies.md. */
+/** The header format belongs to docs/contributor/dependencies.mdx. */
 export function ownedComponent(file: string, input: string | Uint8Array) {
 	if (!isShippedFile(file)) {
 		return;

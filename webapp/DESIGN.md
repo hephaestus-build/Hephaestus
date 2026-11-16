@@ -11,7 +11,7 @@ Other documents link to this section and do not restate it.
 
 Each principle rests on a page of the [Apple Human Interface Guidelines](https://developer.apple.com/design/human-interface-guidelines/design-principles) (HIG).
 We apply the reasons, not Apple's visual style.
-Words follow the [writing standard](../docs/contributor/simplified-technical-english.md) and the [product vocabulary](../docs/contributor/practice-feedback-language.md).
+Words follow the [writing standard](../docs/contributor/simplified-technical-english.mdx) and the [product vocabulary](../docs/contributor/practice-feedback-language.mdx).
 
 **1. The work comes first.**
 Feedback, its evidence, and the next step get the space and the attention.
@@ -72,7 +72,7 @@ The existing system is the starting point:
 | Component family and registry style | `components.json` |
 | Control geometry and semantic variants | `src/components/ui/` |
 | Brand artwork | `../docs/contributor/brand-assets.mdx` |
-| Product language | `../docs/contributor/practice-feedback-language.md` |
+| Product language | `../docs/contributor/practice-feedback-language.mdx` |
 
 These owners define the values. A CLI fallback preset or an external design reference does not replace them.
 

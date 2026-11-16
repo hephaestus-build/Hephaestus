@@ -45,7 +45,7 @@ import tools.jackson.databind.node.ObjectNode;
  * The labelled composition cases of {@code scripts/feedback-eval/compositions.json}, each rendered by main's review
  * composer: the opening turn and the check_package tool that {@link CompositionSessions#reviewTurn} renders, and
  * the acceptance check of {@link ReviewOnWork#read}. Each case becomes a scenario in the layout of the golden
- * pull-request scenario. {@code docs/contributor/feedback-quality-evals.md} owns the use.
+ * pull-request scenario. {@code docs/contributor/feedback-quality-evals.mdx} owns the use.
  */
 final class CompositionEvalCases {
     static final JsonNodeFactory JSON = JsonNodeFactory.instance;

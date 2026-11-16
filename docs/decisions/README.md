@@ -6,7 +6,7 @@ The rules below say how to write one and how it changes over time.
 
 ## These are repo-only, not on the docs site
 
-`docs/decisions/`, `docs/auth-architecture.md` and `docs/auth-glossary.md` are not registered with a Docusaurus plugin.
+`docs/decisions/`, `docs/auth-architecture.md` and `docs/auth-glossary.md` are outside the three guides that the docs site reads.
 They never appear on [the site](https://docs.hephaestus.build/).
 This is a decision.
 They use internal class names, the pull request that changes the code also changes them, and their reader has the repository open.
@@ -52,7 +52,7 @@ An ADR records a decision. It is not a changelog. A bug fix after the fact goes 
 
 | Change | What to do |
 | --- | --- |
-| A name, a path or a link is stale, or the prose breaks the [writing standard](../contributor/simplified-technical-english.md) | **Correct** it in place. Add no update block. Git history records the change. Do not change what was decided. |
+| A name, a path or a link is stale, or the prose breaks the [writing standard](../contributor/simplified-technical-english.mdx) | **Correct** it in place. Add no update block. Git history records the change. Do not change what was decided. |
 | One rule or one consequence of the decision changed | **Update.** Append `## Update — YYYY-MM-DD: <what changed>` with the reason. Never rewrite the text above it. If another ADR made the change, add it to `**Amended by:**`. |
 | The Decision no longer holds as written, or the ADR would get its third update | **Supersede.** Write a new ADR that states what is true now. Cite each ADR that it replaces. List their rejected options under "Already priced and declined", with links. Set the status of each old ADR to `Superseded by NNNN`, and change nothing else in it. |
 | The decision no longer applies, and nothing replaces it | **Deprecate.** Set the status to `Deprecated` and append one update with the reason. |
@@ -178,6 +178,7 @@ Rejected options are never deleted. A superseded ADR keeps them, and the new ADR
 | [0103](0103-the-public-api-grows-only-by-addition-and-every-client-tolerates-what-it-does-not-know.md) | The public API grows only by addition, and every client tolerates what it does not know | Proposed |
 | [0104](0104-the-system-key-and-the-signing-key-rotate-without-a-stop.md) | The system key and the signing key rotate without a stop | Accepted |
 | [0105](0105-generated-text-carries-a-signed-provenance-record.md) | Generated text carries a signed provenance record | Accepted |
+| [0111](0111-the-docs-site-is-a-static-fumadocs-build-on-astro.md) | The docs site is a static Fumadocs build on Astro | Proposed |
 | [0113](0113-the-mobile-apps-are-native-clients-of-the-server-api.md) | The mobile apps are native SwiftUI and Jetpack Compose clients of the server API | Accepted |
 | [0114](0114-one-store-app-signs-in-to-any-instance-by-its-address.md) | One store app for each platform signs in to any instance by its address, through a claimed HTTPS redirect and a checked issuer | Accepted |
 | [0115](0115-the-mobile-apps-release-with-the-stores-own-tools.md) | The mobile apps build and code-sign in GitHub Actions with the stores' own tools, and release on a version line of their own | Accepted |

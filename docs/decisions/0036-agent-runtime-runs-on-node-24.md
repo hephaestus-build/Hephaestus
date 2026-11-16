@@ -90,7 +90,7 @@ holds no credential. Node permissions stay defense in depth, and Docker isolatio
 boundary. [ADR 0055](0055-practice-scripts-use-one-result-contract.md) records how a program
 calls models and how its results are admitted.
 
-[Workspace ABI § Practice script validation and limits](../contributor/agent/workspace-abi.mdx#practice-script-validation-and-limits)
+[Workspace ABI § Practice script validation and limits](../contributor/agent/agent-workspace-abi.mdx#practice-script-validation-and-limits)
 owns the current grants and limits.
 [Context and trust](../contributor/practice-script-runner.mdx#context-and-trust) owns the
 threat model.

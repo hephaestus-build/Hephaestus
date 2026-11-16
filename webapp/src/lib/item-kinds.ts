@@ -50,7 +50,7 @@ interface Noun {
 
 /**
  * Every kind's noun as it reads mid-sentence. A pull request's is the provider's to decide, so
- * without one it is "pull or merge request" (`docs/contributor/practice-feedback-language.md`).
+ * without one it is "pull or merge request" (`docs/contributor/practice-feedback-language.mdx`).
  */
 const ITEM_KIND_NOUNS: Record<KnownItemKind, Noun> = {
 	[ITEM_KIND.pullRequest]: { one: "pull or merge request", many: "pull or merge requests" },

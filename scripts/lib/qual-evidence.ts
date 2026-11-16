@@ -7,7 +7,7 @@ import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 /** The page that defines each check and its bar; a check's `rule` points into it. */
-export const RULES = "docs/contributor/qualification-checks.md";
+export const RULES = "docs/contributor/qualification-checks.mdx";
 
 export type Status = "pass" | "fail" | "recorded" | "not-run";
 

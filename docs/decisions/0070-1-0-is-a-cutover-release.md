@@ -159,14 +159,14 @@ This update amends § In-flight work and § Schema step for the reviews.
 
 Hephaestus also answers in a developer's conversation.
 The product area is **Ask Hephaestus**.
-The [product vocabulary](../contributor/practice-feedback-language.md#people-and-product-surfaces) owns these names.
+The [product vocabulary](../contributor/practice-feedback-language.mdx#people-and-product-surfaces) owns these names.
 This update amends F-18 and resolves its persona decision.
 
 F-18 now names the worker capacity **conversation turns**, in the conversation loop layer.
 The unpublished chart value becomes `worker.conversationTurns` in 0.95.
 Configuration, environment variable, metric, API and storage identifiers change once at the 1.0 cutover.
 `/mentor` links redirect to `/conversation` until the rename of these identifiers.
-The [retired words](../contributor/practice-feedback-language.md#retired-words) state which Slack wire identifiers remain.
+The [retired words](../contributor/practice-feedback-language.mdx#retired-words) state which Slack wire identifiers remain.
 
 ## Update — 2026-11-09: amended by ADR 0079
 

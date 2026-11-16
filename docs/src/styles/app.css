@@ -1,0 +1,25 @@
+@import "tailwindcss";
+@import "fumadocs-ui/css/shadcn.css";
+@import "fumadocs-ui/css/preset.css";
+/* The web app's palette, radius and dark mode: one file for the product and its docs (ADR 0111). */
+@import "../../../webapp/src/styles/theme-tokens.css";
+
+/* The docs accent is the app's highlight blue, as the app uses it for links and the active item. */
+:root,
+.dark {
+	--color-fd-primary: var(--highlight);
+	--color-fd-primary-foreground: var(--highlight-foreground);
+}
+
+body {
+	/* The web app's font stack. */
+	font-family:
+		-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Fira Sans",
+		"Droid Sans", "Helvetica Neue", sans-serif;
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+}
+
+html {
+	scrollbar-gutter: stable;
+}

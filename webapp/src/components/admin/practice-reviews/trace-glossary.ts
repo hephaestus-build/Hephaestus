@@ -10,7 +10,7 @@ export interface TraceTermDef {
 
 /**
  * The glossary the story's tooltips read. The words come from the product vocabulary
- * (`docs/contributor/practice-feedback-language.md`) and the practice review glossary.
+ * (`docs/contributor/practice-feedback-language.mdx`) and the practice review glossary.
  */
 export const TRACE_TERMS: Record<TraceTerm, TraceTermDef> = {
 	event: {

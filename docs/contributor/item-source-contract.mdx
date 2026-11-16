@@ -1,11 +1,7 @@
 ---
-id: item-source-contract
-sidebar_position: 6
 title: Source contract
 description: Versioned evidence sources, capture states and practice readiness requirements.
 ---
-
-# Source contract
 
 Hephaestus may review work against a practice only from evidence with explicit semantics.
 Contract `3.0.0` defines the logical source catalog, its capture states, and how well each source must be captured.
@@ -20,7 +16,7 @@ It does not prove that a practice is empirically observable.
 The server renders permitted database records in one read-only repeatable-read transaction.
 Integration-owned projections and history visibility checks remain the authorization boundary. The folder index records capture facts separately from practice readiness and typed source refusals.
 Another repository's records cannot make a missing primary source ready.
-The [workspace ABI](./agent/workspace-abi.mdx) owns paths, quote coordinates, transfer budget and retention.
+The [workspace ABI](./agent/agent-workspace-abi.mdx) owns paths, quote coordinates, transfer budget and retention.
 
 ## Contract boundary
 
@@ -152,7 +148,7 @@ The constraints with direct authoring consequences are:
   GitHub supplies check runs and commit statuses.
   GitLab supplies none yet, because its pipeline hooks cannot show which runs finished.
   Slack threads and Outline documents have no check runs.
-  The [sync lifecycle](./sync-lifecycle.md#check-runs-of-the-head) owns how the runs are read.
+  The [sync lifecycle](./sync-lifecycle.mdx#check-runs-of-the-head) owns how the runs are read.
 - The review discussion source (`scm.review-threads`) carries `review_decision` in `review_threads.json`.
   The core record carries no aggregate review decision.
 - Two cannot be partial: the pull-request diff and the document core record. An available diff is
@@ -305,7 +301,7 @@ Domain verifiers check source-specific side, version and claim-basis meaning.
 A failed check withholds the candidate at admission. Feedback composition cannot admit it as a result.
 This proves traceable grounding, not model causality.
 
-The [workspace ABI](./agent/workspace-abi.mdx#evidence-and-read-receipts) owns manifest fields, read receipts and coordinate verification.
+The [workspace ABI](./agent/agent-workspace-abi.mdx#evidence-and-read-receipts) owns manifest fields, read receipts and coordinate verification.
 The [script runner](./practice-script-runner.mdx) owns the candidate citation shape.
 Shell output alone is not an authorized source.
 
@@ -439,7 +435,7 @@ The stopped 1.0 upgrade creates current versions for practices that pin 2.0.0, i
 It also updates their catalog comparison bases.
 Historical versions stay unchanged.
 The [currentness rules](#change-and-staleness) apply after the update.
-The [catalog update path](./practice-catalog.md#workspace-adoption-lifecycle) owns workspace proposal and acceptance behavior.
+The [catalog update path](./practice-catalog.mdx#workspace-adoption-lifecycle) owns workspace proposal and acceptance behavior.
 
 ### Validation
 

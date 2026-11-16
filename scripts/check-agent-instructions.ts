@@ -145,12 +145,12 @@ interface ClaimException {
 
 const INTENTIONALLY_MISSING_PATHS = [
 	{
-		document: "docs/contributor/agent/workspace-abi.mdx",
+		document: "docs/contributor/agent/agent-workspace-abi.mdx",
 		value: ".sessions",
 		reason: "a per-run directory created inside the agent workspace",
 	},
 	{
-		document: "docs/contributor/agent/workspace-abi.mdx",
+		document: "docs/contributor/agent/agent-workspace-abi.mdx",
 		value: "description.md",
 		reason: "a captured item written into the agent workspace",
 	},
@@ -160,22 +160,22 @@ const INTENTIONALLY_MISSING_PATHS = [
 		reason: "the review's notes file, created inside the agent workspace",
 	},
 	{
-		document: "docs/contributor/agent/workspace-abi.mdx",
+		document: "docs/contributor/agent/agent-workspace-abi.mdx",
 		value: "context/commits.json",
 		reason: "the staged commit record, written into the agent workspace",
 	},
 	{
-		document: "docs/contributor/agent/workspace-abi.mdx",
+		document: "docs/contributor/agent/agent-workspace-abi.mdx",
 		value: "context/item.json",
 		reason: "the pinned scan item record, written into the agent workspace",
 	},
 	{
-		document: "docs/contributor/agent/workspace-abi.mdx",
+		document: "docs/contributor/agent/agent-workspace-abi.mdx",
 		value: "inputs/history/results.json",
 		reason: "the staged history record, written into the agent workspace",
 	},
 	{
-		document: "docs/contributor/practice-catalog.md",
+		document: "docs/contributor/practice-catalog.mdx",
 		value: "work/practice-scripts-out/<slug>.md",
 		reason:
 			"the practice script section of a practice, written inside the agent workspace for its turn",
@@ -226,17 +226,17 @@ const INTENTIONALLY_MISSING_PATHS = [
 		reason: "a developer-local environment file that must stay untracked",
 	},
 	{
-		document: "docs/contributor/agent/workspace-abi.mdx",
+		document: "docs/contributor/agent/agent-workspace-abi.mdx",
 		value: "INDEX.md",
 		reason: "a path inside the staged agent workspace, not the repository checkout",
 	},
 	{
-		document: "docs/contributor/agent/workspace-abi.mdx",
+		document: "docs/contributor/agent/agent-workspace-abi.mdx",
 		value: "out/result.json",
 		reason: "a path inside the staged agent workspace, not the repository checkout",
 	},
 	{
-		document: "docs/contributor/agent/workspace-abi.mdx",
+		document: "docs/contributor/agent/agent-workspace-abi.mdx",
 		value: "out/watchdog-killed.json",
 		reason: "a path inside the staged agent workspace, not the repository checkout",
 	},

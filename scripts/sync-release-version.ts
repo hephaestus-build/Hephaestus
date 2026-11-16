@@ -51,7 +51,7 @@ if (tags.status === 0 && existsSync("CHANGELOG.md")) {
 
 const edits = [
 	{
-		file: "docs/admin/k3s.md",
+		file: "docs/admin/k3s.mdx",
 		re: /^(?<indent>[ \t]*)VERSION=\S+(?<comment>\s+# the release, without the leading "v".*)$/mu,
 		line: `$<indent>VERSION=${version}$<comment>`,
 	},

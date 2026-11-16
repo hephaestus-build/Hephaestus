@@ -1,0 +1,32 @@
+{
+	"title": "User guide",
+	"root": true,
+	"pages": [
+		"---Start here---",
+		"overview",
+		"getting-started",
+		"privacy",
+		"---Using Hephaestus---",
+		"ai-code-review",
+		"practice-profile",
+		"practices-across-the-workspace",
+		"activity",
+		"public-activity",
+		"ask-hephaestus",
+		"user-settings",
+		"passkeys",
+		"browser-extension",
+		"browser-extension-privacy",
+		"product-feedback",
+		"---For workspace admins---",
+		"workspace",
+		"[Slack and Outline](/user/integrations)",
+		"practices",
+		"practice-visual-rules",
+		"practice-reviews",
+		"scans",
+		"ai-models",
+		"publish-public-activity",
+		"[Accessibility](/user/accessibility)"
+	]
+}

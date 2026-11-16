@@ -13,7 +13,7 @@ levels, and a weekly Slack digest of the leaderboard, each behind a workspace sw
 were already retired in v0.79.0.
 
 The layer contradicted what the product says about feedback — advisory, about the work, never a grade
-([practice feedback language](../contributor/practice-feedback-language.md)) — and the evidence on
+([practice feedback language](../contributor/practice-feedback-language.mdx)) — and the evidence on
 measuring developers points the same way:
 
 - **SPACE** (Forsgren, Storey, Maddila, Zimmermann, Houck and Butler,

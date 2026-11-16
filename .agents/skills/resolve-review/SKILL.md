@@ -18,7 +18,7 @@ metadata:
 
 # Resolve review comments
 
-Follow the [writing standard](../../../docs/contributor/simplified-technical-english.md) for all prose.
+Follow the [writing standard](../../../docs/contributor/simplified-technical-english.mdx) for all prose.
 
 Works for any reviewer — human, Copilot, CodeRabbit.
 

@@ -4,14 +4,32 @@
 
 **Live Site:** [https://docs.hephaestus.build/](https://docs.hephaestus.build/)
 
-This site is built with [Docusaurus 3](https://docusaurus.io/); `docusaurus.config.ts` is its configuration. The content is split into three guides:
+The site is [Fumadocs](https://fumadocs.dev/) on [Astro](https://astro.build/), built to static HTML ([ADR 0111](decisions/0111-the-docs-site-is-a-static-fumadocs-build-on-astro.md)).
+`astro.config.ts` configures the build and the Markdown plugins, `src/content.config.ts` the content collections, and `src/` holds the pages, layouts and components.
+`vite.config.ts` holds only the lint configuration for `vp lint`.
 
-- **User guide** (`user/`) – End-user workflows (practice feedback, activity, Hephaestus, workspace management)
-- **Contributor guide** (`contributor/`) – Engineering guides, the generated ERD, and local development setup
-- **Admin guide** (`admin/`) – Install, integrations, and production operations
+The content of a page is static HTML. Only the layout (sidebar, table of contents, search, theme and page actions) is a React island that runs in the browser.
+The island imports the sidebar's page tree from one module (`virtual:docs-page-tree` in `astro.config.ts`), so the browser loads the tree once for all pages.
 
-Those three directories are the whole site: each is one `@docusaurus/plugin-content-docs` instance in
-`docusaurus.config.ts`, and every page in them must be reachable from its sidebar.
+The content is split into three guides:
+
+- **User guide** (`user/`): end-user workflows, such as practice feedback, activity, Hephaestus, and workspace management.
+- **Contributor guide** (`contributor/`): engineering guides, the generated ERD, and local development setup.
+- **Admin guide** (`admin/`): install, integrations, and production operations.
+
+Those three directories are the whole site.
+Each one is a root folder with its own sidebar in its `meta.json`.
+Every page is an `.mdx` file: the Fumadocs integration compiles only `.mdx`.
+A file or a folder whose name starts with `_` is a partial: a page inlines it with `::include[./_file.mdx]`, and it is no page.
+The callouts, the guard against an unparsed callout, the text of unused directives, and Mermaid are plugins of the Sätteri compiler (`src/lib/plugins.ts`).
+`src/lib/plugins.test.ts` tests each one on a fixture page.
+
+## URLs
+
+The URL of a page is its path in its guide: `admin/upgrade.mdx` is `/admin/upgrade`, and `admin/dsms/index.mdx` is `/admin/dsms`.
+The build writes `admin/upgrade.html`, which GitHub Pages serves at `/admin/upgrade`, with no trailing slash.
+The site has no redirects.
+A rename changes a URL, so rename a page only in a change to the structure of a guide.
 
 ## Versions
 
@@ -33,22 +51,33 @@ It also builds them after a run of the release workflow that published a release
 The repository holds one copy of the docs: the release docs come from the tag, not from a copied tree.
 
 `DOCS_CHANNEL` (`latest` or `next`) and `DOCS_RELEASE` (the tag) set the banner and the switcher.
+`DOCS_BASE_URL` (`/` or `/next/`) sets the base path.
 A local build or a pull-request preview shows `main`, so it is `next`.
 
 ## Markdown for AI assistants
 
-`@signalwire/docusaurus-plugin-llms-txt` converts the built pages to Markdown after the build:
+`llms()` from `fumadocs-core` writes these files at build time (`src/lib/llms.ts`):
 
 - `/llms.txt` is the index of every page, grouped by guide.
 - `/llms-full.txt` holds every page.
-- `/<page>.md` is the Markdown twin of each page. Its links point at other twins.
+- `/<page>.md` is the Markdown twin of each page.
 
-The plugin reads the rendered HTML, so links and MDX components come out as the reader sees them.
-Mermaid draws its diagrams in the browser, so a diagram is not in a twin.
-The plugin imports three Docusaurus packages that it does not declare. `pnpm-workspace.yaml` § `packageExtensions` adds them as its peers, and `package.json` pins them with the rest of Docusaurus.
+A twin is the processed Markdown of the page: an `::include` is inlined, and a component stays as JSX.
+Mermaid draws its diagrams in the browser, so a twin holds the diagram source.
 
-The **Copy page** button on each page (`src/components/PageActions`) copies the twin, and its menu opens the twin in ChatGPT or Claude.
-The twins exist only in a build, not in `docs:dev`.
+The **Copy Markdown** button on each page copies the twin, and its menu opens the twin in an assistant.
+The dev server serves them too.
+
+## Search
+
+[Pagefind](https://pagefind.app/) indexes the built pages after the build (`pagefind --site build`).
+The browser loads only the parts of the index that a query needs, and no hosted service runs.
+The index exists only in a build, not in `docs:dev`.
+
+## Theme
+
+The site imports `webapp/src/styles/theme-tokens.css` with the Fumadocs shadcn preset, so the docs and the web app share one palette.
+The theme is the `hephaestus-theme` cookie of ADR 0053: a head script reads it before paint, and a change of theme writes it back (`src/components/theme-cookie.tsx`).
 
 ## Diagrams
 
@@ -83,10 +112,13 @@ Run from the repo root:
 
 ```bash
 vp run docs:dev     # Development server at http://localhost:3000/
-vp run docs:build   # Production build; a broken link, anchor or Markdown link fails it
+vp run docs:build   # Production build; a broken link or anchor fails it (scripts/check-docs-links.ts)
 vp run docs:serve   # Preview the production build
 vp run docs:lint    # TypeScript check and markdownlint
 ```
+
+Every docs script starts Astro through `scripts/docs-astro.ts`, which turns off Astro's anonymous telemetry.
+`docs:lint` runs `astro check`, which type-checks the `.astro` files and writes the content types (`.astro/`, ignored by Git) that the lint's type check reads.
 
 `docs:lint` is part of `vp run check`; `docs:build` is part of `vp run verify`, and the deployment
 workflow runs the same package script.
