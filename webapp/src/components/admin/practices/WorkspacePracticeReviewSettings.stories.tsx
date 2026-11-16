@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect, fn, screen, userEvent, within } from "storybook/test";
+import { expect, fireEvent, fn, screen, userEvent, within } from "storybook/test";
 import type { ModelAssignment, PracticeReviewScopePreview } from "@/api/types.gen";
 import { expectNoPageOverflow } from "@/stories/reflow";
 import { pending } from "@/test/async";
@@ -179,6 +179,31 @@ export const LongRepositoryAndBranchAtReflow: Story = {
 		);
 		await expect(canvas.getByTitle(longBranch)).toBeVisible();
 		await expectNoPageOverflow();
+	},
+};
+
+/**
+ * Enter also confirms an input method's conversion, so an Enter while composing leaves the branch
+ * name in the field. An Enter after it adds the branch.
+ */
+export const EnterWhileComposingDoesNotAddABranch: Story = {
+	args: LongRepositoryAndBranchAtReflow.args,
+	play: async ({ canvas }) => {
+		await userEvent.click(
+			canvas.getByRole("button", { name: `Base branches for ${longRepository}` }),
+		);
+		const field = canvas.getByRole("textbox", {
+			name: `Base branch limits for ${longRepository}`,
+		});
+		await userEvent.type(field, "release");
+		await fireEvent.keyDown(field, { key: "Enter", isComposing: true });
+		// Safari sends the confirming Enter after the composition, with only key code 229 to tell.
+		await fireEvent.keyDown(field, { key: "Enter", keyCode: 229 });
+		await expect(field).toHaveValue("release");
+		await expect(canvas.queryByTitle("release")).toBeNull();
+		await fireEvent.keyDown(field, { key: "Enter" });
+		await expect(canvas.getByTitle("release")).toBeVisible();
+		await expect(field).toHaveValue("");
 	},
 };
 

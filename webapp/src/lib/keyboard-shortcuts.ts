@@ -16,3 +16,13 @@ export function isFeedbackShortcut(event: KeyboardEvent): boolean {
 		: event.code === "KeyF";
 	return (event.metaKey || event.ctrlKey) && event.shiftKey && pressed;
 }
+
+/**
+ * Whether this key press belongs to an input method's composition, such as the Enter that confirms a
+ * Japanese conversion: it is not a request to submit. Safari can send that Enter after
+ * `compositionend`, without `isComposing` but with key code 229, which every composition key carries.
+ */
+export function isComposing(event: KeyboardEvent): boolean {
+	// oxlint-disable-next-line typescript/no-deprecated -- Safari reports the confirming Enter only through keyCode 229.
+	return event.isComposing || event.keyCode === 229;
+}

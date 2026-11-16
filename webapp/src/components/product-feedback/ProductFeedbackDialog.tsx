@@ -23,7 +23,7 @@ import {
 } from "@/components/ui/field";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
-import { SEND_SHORTCUT_ARIA, SEND_SHORTCUT_LABEL } from "@/lib/keyboard-shortcuts";
+import { isComposing, SEND_SHORTCUT_ARIA, SEND_SHORTCUT_LABEL } from "@/lib/keyboard-shortcuts";
 import { formatNumber } from "@/lib/numbers";
 import { hasText } from "@/lib/text";
 
@@ -133,7 +133,7 @@ export function ProductFeedbackDialog({
 					onKeyDown={(event) => {
 						if (
 							(event.metaKey || event.ctrlKey) &&
-							!event.nativeEvent.isComposing &&
+							!isComposing(event.nativeEvent) &&
 							event.key === "Enter"
 						) {
 							event.preventDefault();
