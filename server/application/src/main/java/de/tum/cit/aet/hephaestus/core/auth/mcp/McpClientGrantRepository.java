@@ -19,7 +19,8 @@ public interface McpClientGrantRepository extends JpaRepository<McpClientGrant, 
     /** Takes the grant's row lock, last in the order account, session, grant. */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT g FROM McpClientGrant g WHERE g.id = :id")
-    @WorkspaceAgnostic("The OAuth endpoints address a grant by its id before a workspace context exists")
+    @WorkspaceAgnostic("Locked by grant id: a consent answer of the account that owns the request, the exchange of the"
+            + " grant's own code, or a revoke whose workspace was checked first")
     Optional<McpClientGrant> lockById(@Param("id") UUID id);
 
     /** The grant that a client session holds, read on every MCP request and every refresh. */
@@ -51,7 +52,9 @@ public interface McpClientGrantRepository extends JpaRepository<McpClientGrant, 
 
     /** The grant's current session link, read again under the grant lock to detect a racing exchange. */
     @Query("SELECT g.clientSessionId FROM McpClientGrant g WHERE g.id = :id")
-    @WorkspaceAgnostic("Read by id within a revoke whose workspace was checked first")
+    @WorkspaceAgnostic(
+            "Read by grant id, within a revoke whose workspace was checked first or the exchange of the grant's"
+                    + " own code")
     Optional<UUID> findSessionId(@Param("id") UUID id);
 
     /** Revokes an open grant by id; 1 when it was open. */
@@ -62,7 +65,8 @@ public interface McpClientGrantRepository extends JpaRepository<McpClientGrant, 
          WHERE g.id = :id
            AND g.status IN ('PENDING', 'APPROVED', 'ACTIVE')
         """)
-    @WorkspaceAgnostic("Revoked by id within a revoke whose workspace was checked first")
+    @WorkspaceAgnostic("Revoked by grant id, within a revoke whose workspace was checked first or when the grant's own"
+            + " code returns")
     int revokeIfOpen(@Param("id") UUID id, @Param("now") Instant now);
 
     /** Account-wide revocation ends every grant of the account, so no workspace lists a grant whose session is gone. */
