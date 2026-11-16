@@ -145,7 +145,13 @@ class DeveloperPracticeStandingsAdapterTest {
                 .completedAt(at);
         if (origin == ReviewOrigin.EVENT) review.eventId(UUID.randomUUID());
         return new ResultView(
-                view.result(), view.practice(), view.version(), review.build(), view.item(), Freshness.current(null));
+                view.result(),
+                view.practice(),
+                view.version(),
+                review.build(),
+                view.item(),
+                Freshness.current(null),
+                view.sealedFeedbackMode());
     }
 
     private static Object ids(Collection<Result> rows) {

@@ -7,8 +7,11 @@ import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeVersion;
 import de.tum.cit.aet.hephaestus.practices.model.Result;
 import de.tum.cit.aet.hephaestus.practices.review.ProductReferenceQuery;
+import de.tum.cit.aet.hephaestus.practices.review.ReviewPracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewRepository;
 import de.tum.cit.aet.hephaestus.practices.review.model.Review;
+import de.tum.cit.aet.hephaestus.practices.review.model.ReviewPractice;
+import de.tum.cit.aet.hephaestus.practices.spi.FeedbackMode;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
@@ -30,6 +33,7 @@ public class ResultViewQuery {
     private final PracticeRepository practices;
     private final PracticeVersionRepository versions;
     private final ReviewRepository reviews;
+    private final ReviewPracticeRepository reviewPractices;
     private final ProductReferenceQuery references;
     private final ResultRepository results;
     private final ResultFreshness freshness;
@@ -80,6 +84,15 @@ public class ResultViewQuery {
                 .collect(Collectors.toMap(
                         Map.Entry::getKey, entry -> entry.getValue().ref()));
         var sourceStates = freshness.freshness(workspaceId, results, activeItems);
+        var sealedModes = new HashMap<ReviewPractice.Id, FeedbackMode>();
+        reviewPractices
+                .findByWorkspaceIdAndReviewIdInOrderByReviewIdAscPracticeIdAsc(workspaceId, reviewById.keySet())
+                .forEach(assignment -> {
+                    var mode = assignment.getSealedFeedbackMode();
+                    if (mode != null)
+                        sealedModes.put(
+                                new ReviewPractice.Id(assignment.getReviewId(), assignment.getPracticeId()), mode);
+                });
         return results.stream()
                 .map(result -> new ResultView(
                         result,
@@ -87,7 +100,8 @@ public class ResultViewQuery {
                         versionById.get(result.getPracticeVersionId()),
                         Objects.requireNonNull(reviewById.get(result.getReviewId())),
                         Objects.requireNonNull(itemById.get(result.getItemId())).reference(),
-                        Objects.requireNonNull(sourceStates.get(result.getId()))))
+                        Objects.requireNonNull(sourceStates.get(result.getId())),
+                        sealedModes.get(new ReviewPractice.Id(result.getReviewId(), result.getPracticeId()))))
                 .toList();
     }
 }

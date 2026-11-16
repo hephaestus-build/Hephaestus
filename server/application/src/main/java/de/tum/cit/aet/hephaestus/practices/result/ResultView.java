@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeVersion;
 import de.tum.cit.aet.hephaestus.practices.model.Result;
 import de.tum.cit.aet.hephaestus.practices.review.model.Review;
+import de.tum.cit.aet.hephaestus.practices.spi.FeedbackMode;
 import java.util.Objects;
 import org.jspecify.annotations.Nullable;
 
@@ -14,7 +15,8 @@ public record ResultView(
         @Nullable PracticeVersion version,
         Review review,
         ItemRefDTO item,
-        Freshness sourceFreshness) {
+        Freshness sourceFreshness,
+        @Nullable FeedbackMode sealedFeedbackMode) {
 
     public ResultView {
         long workspaceId = result.getWorkspaceId();

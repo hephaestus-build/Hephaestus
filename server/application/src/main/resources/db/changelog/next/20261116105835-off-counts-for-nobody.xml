@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1794826715510-1" author="hephaestus">
+        <comment>Record each review practice's effective feedback mode when its first observation is admitted, so standing skips observations sealed in Off (ADR 0118).</comment>
+        <addColumn tableName="review_practice">
+            <column name="sealed_feedback_mode" type="VARCHAR(16)"/>
+        </addColumn>
+        <sql>ALTER TABLE review_practice ADD CONSTRAINT ck_review_practice_sealed_feedback_mode CHECK(sealed_feedback_mode IS NULL OR sealed_feedback_mode IN ('OFF','APPROVE_FIRST','AUTOMATIC'));</sql>
+        <rollback>
+            <sql>ALTER TABLE review_practice DROP CONSTRAINT ck_review_practice_sealed_feedback_mode;</sql>
+            <dropColumn tableName="review_practice" columnName="sealed_feedback_mode"/>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

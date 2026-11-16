@@ -17,6 +17,7 @@ import de.tum.cit.aet.hephaestus.practices.result.trend.WorkResolution;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewOrder;
 import de.tum.cit.aet.hephaestus.practices.spi.CurrentDeveloperLookup;
 import de.tum.cit.aet.hephaestus.practices.spi.Currentness;
+import de.tum.cit.aet.hephaestus.practices.spi.FeedbackMode;
 import de.tum.cit.aet.hephaestus.practices.spi.PracticeStanding;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultEndReason;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
@@ -421,8 +422,10 @@ public class PracticeStandingService {
                 view.review().getId());
     }
 
+    // An observation sealed in feedback mode Off was seen by admins only, so it never counts (ADR 0118 decision 6).
     private static boolean isLive(ResultView view) {
-        return view.review().getOrigin() == ReviewOrigin.EVENT || view.review().getOrigin() == ReviewOrigin.SCHEDULE;
+        return (view.review().getOrigin() == ReviewOrigin.EVENT || view.review().getOrigin() == ReviewOrigin.SCHEDULE)
+                && view.sealedFeedbackMode() != FeedbackMode.OFF;
     }
 
     private static Map<String, List<ResultView>> byPractice(Stream<ResultView> rows, Set<UUID> readable) {

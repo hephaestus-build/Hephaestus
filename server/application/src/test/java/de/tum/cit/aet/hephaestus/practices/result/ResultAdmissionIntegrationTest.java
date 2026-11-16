@@ -727,6 +727,30 @@ class ResultAdmissionIntegrationTest extends AbstractResultAdmissionIntegrationT
         assertThat(results.findById(id).orElseThrow().getOutcome()).isEqualTo(ResultOutcome.NOT_MET);
     }
 
+    @ParameterizedTest
+    @EnumSource(
+            value = FeedbackMode.class,
+            names = {"OFF", "AUTOMATIC"})
+    void shouldRecordThePracticesEffectiveFeedbackModeWhenItsObservationIsAdmitted(FeedbackMode mode) {
+        var pending = admissions.pending(scenario, Instant.now(), scenarioAccountId);
+        jdbc.sql("UPDATE practice SET feedback_mode=:mode WHERE workspace_id=:ws AND id=:id")
+                .param("mode", mode.name())
+                .param("ws", scenario.workspace().getId())
+                .param("id", scenario.practice().getId())
+                .update();
+
+        admit(pending, ResultOutcome.NOT_MET);
+
+        assertThat(jdbc.sql("SELECT sealed_feedback_mode FROM review_practice"
+                                + " WHERE workspace_id=:ws AND review_id=:review AND practice_id=:practice")
+                        .param("ws", scenario.workspace().getId())
+                        .param("review", pending.review().getId())
+                        .param("practice", scenario.practice().getId())
+                        .query(String.class)
+                        .single())
+                .isEqualTo(mode.name());
+    }
+
     @Test
     void shouldStopAChangedPracticeBeforeMeasurementAndPreserveOtherMemberships() {
         var pending = admissions.pending(scenario, Instant.now(), scenarioAccountId);

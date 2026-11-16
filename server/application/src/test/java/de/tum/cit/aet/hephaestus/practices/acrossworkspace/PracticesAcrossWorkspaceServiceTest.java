@@ -269,7 +269,13 @@ class PracticesAcrossWorkspaceServiceTest {
                 .developerId(developer)
                 .build();
         data.add(new ResultView(
-                row, practice, practice.getCurrentVersion(), base.review(), base.item(), Freshness.current(null)));
+                row,
+                practice,
+                practice.getCurrentVersion(),
+                base.review(),
+                base.item(),
+                Freshness.current(null),
+                base.sealedFeedbackMode()));
     }
 
     private static PracticeGroup group(String slug, int position) {

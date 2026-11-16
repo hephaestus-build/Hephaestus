@@ -38,6 +38,8 @@ Database indexes permit one active job per review and one active scan per worksp
 Job cleanup does not remove the product review or its results.
 
 `review_practice` freezes the definition and complete method used for each practice.
+It also records the practice's effective feedback mode when the review admits its first observation of that practice.
+Standing skips an observation that was admitted in feedback mode Off, and a later mode change does not alter that record ([ADR 0118](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0118-a-workspace-keeps-its-practices-in-one-repository-and-a-trial-reviews-a-draft-practice-without-an-observation.md)).
 `review_item` owns the selected practice/item pairs and their proof references.
 Its stored states are LISTED, STAGED, JUDGED, REUSED and WITHHELD.
 `ReviewItemState` owns the transition table, and `ReviewItem` changes its state only through `stage`, `judge`, `reuse` and `withhold`.
