@@ -328,13 +328,16 @@ as triggers, partitioning and partial-index predicates. Verify those through dat
 After each upgrade, the driver runs the release that the upgrade started from in two ways:
 
 1. **Previous server on the new schema.** The previous release starts while the candidate runs.
-   It runs the server and its agent runtime in one process, with the Docker sandbox and its own agent image.
+   It runs the server and its agent runtime in one process, with its own agent image and a sandbox namespace.
    The e2e profile validates every entity against the schema at start.
    The previous release then passes readiness and the authenticated reads, and creates a workspace.
-   It claims a queued review through the native claim queries and writes the job back.
+   It also binds a review model to a workspace.
+   It runs no review, because a sandbox claims its own run and the upgrade job has no cluster.
+   The upgrade test does not prove that the previous release claims a queued review.
+   The Kubernetes drill is to cover that claim ([#4601](https://github.com/hephaestus-build/Hephaestus/issues/4601)).
 2. **Previous server on a partial schema.** An event trigger stops the candidate's migration of a copy at a DDL statement.
    The migration stops after about half of the new change sets.
-   The previous release passes the same checks on that copy, including the claim.
+   The previous release passes the same checks on that copy.
    Then the migration runs again and must complete.
    If no later change set runs DDL, the migration completes.
    The log then says that no partial schema exists.

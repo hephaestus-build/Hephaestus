@@ -162,19 +162,12 @@ for (const scenario of ["rolling", "stopped"] as const) {
 			const preload = path.join(directory, "stubs.mjs");
 			writeFileSync(
 				preload,
-				`import fs, { appendFileSync } from "node:fs";
-import { syncBuiltinESMExports } from "node:module";
+				`import { appendFileSync } from "node:fs";
 import { mock } from "node:test";
 import * as childProcess from "node:child_process";
 const commands = ${JSON.stringify(commands)};
 const fixtures = ${JSON.stringify(fixtures)};
 const stopped = ${JSON.stringify(stopped)};
-if (!stopped) {
-  // The previous release's worker mounts the host's Docker socket, which a Windows runner lacks.
-  const statSync = fs.statSync;
-  fs.statSync = (file, ...rest) => (file === "/var/run/docker.sock" ? { gid: 0 } : statSync(file, ...rest));
-  syncBuiltinESMExports();
-}
 {
   mock.module(${JSON.stringify(new URL("lib/migration-guide.ts", import.meta.url).href)}, {
     exports: { stopEveryRoleEntries: () => (stopped ? ["#### 🔴 Stop every role for the upgrade"] : []) }
@@ -196,7 +189,7 @@ globalThis.fetch = async (input, init) => {
   }
   if (url.endsWith("/practices")) return Response.json([{ slug: "fixture" }]);
   // A rolling upgrade first runs the previous release on the candidate's schema and binds a review model there.
-  if ((url.includes("/admin/llm/") || url.endsWith("/agents/PRACTICE_REVIEW"))) {
+  if ((url.includes("/admin/llm/") || url.endsWith("/model-assignments/PRACTICE_REVIEW"))) {
     return Response.json({ id: 1 });
   }
   throw new Error("Unexpected HTTP request: " + url);
@@ -217,7 +210,6 @@ mock.module("node:child_process", { exports: {
         stdout = "account|1\\nidentity|1\\nuser|1\\nworkspace|1\\nmembership|1\\nconnection|1";
       }
       else if (sql.includes("LEFT JOIN practice_version")) stdout = "0";
-      else if (sql.includes("FROM review_job WHERE id=")) stdout = "1|true|RUNNING|status=RUNNING";
       else if (sql.includes("count(*)")) stdout = "1";
     }
     return { status, stdout, stderr };
