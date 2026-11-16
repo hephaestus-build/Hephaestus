@@ -148,7 +148,7 @@ An older release cannot move aliases after a newer stable release publishes, reg
 A full workflow rerun still skips an already-published version.
 
 Version-commit reverts are no longer part of recovery, but their exemption remains.
-`verify-changesets` normally freezes `MIGRATION.md` and the released changesets in feature PRs, except for their docs URLs.
+`verify-changesets` normally freezes released text in feature PRs, except for its docs URLs (`.changeset/README.md`).
 It also prevents deletion of pending changesets or migration fragments.
 A **verified revert** lifts these restrictions.
 

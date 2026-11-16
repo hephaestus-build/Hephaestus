@@ -42,9 +42,9 @@ const maskedLines = (text: string) =>
 
 /**
  * Whether a change to released text only rewrites docs.hephaestus.build URLs: the same number of lines, and each line
- * identical once its docs URLs are masked. Released text is MIGRATION.md and the consumed changesets under
- * `.changeset/pre/`. It never changes, but its links must keep resolving: the docs site's upgrade page renders
- * MIGRATION.md, and the stable release's notes repeat the consumed changesets.
+ * identical once its docs URLs are masked. Released text is CHANGELOG.md, MIGRATION.md and the consumed changesets
+ * under `.changeset/pre/` (`.changeset/README.md`). It never changes, but readers follow its links: the docs site's
+ * upgrade page renders MIGRATION.md, and the stable release's notes repeat the consumed changesets.
  */
 export function changeIsLinkOnly(before: string, after: string): boolean {
 	const old = maskedLines(before);
@@ -92,6 +92,11 @@ export function releaseNoteProblems(base: string, cwd = process.cwd()): string[]
 		const [before, after] = [show(mergeBase, file), show("HEAD", file)];
 		return before !== "" && after !== "" && changeIsLinkOnly(before, after);
 	};
+	if (changed("ACDMRT", "CHANGELOG.md").length > 0 && !linkOnly("CHANGELOG.md")) {
+		problems.push(
+			`Do not edit CHANGELOG.md in a feature PR, except to rewrite a docs URL: versioning writes it from the changesets. Restore it with \`git checkout ${base} -- CHANGELOG.md\`, and put the release note in a changeset.`,
+		);
+	}
 	if (changed("ACDMRT", "MIGRATION.md").length > 0 && !linkOnly("MIGRATION.md")) {
 		problems.push(
 			`Do not edit MIGRATION.md in a feature PR. Restore it with \`git checkout ${base} -- MIGRATION.md\`, and put the upgrade step in .migration/<changeset-slug>.md (.changeset/README.md has the format).`,

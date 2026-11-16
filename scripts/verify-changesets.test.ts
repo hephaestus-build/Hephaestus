@@ -377,6 +377,9 @@ void test("the release-note rules hold a branch to what CI requires, against ori
 	git("config", "user.name", "Test");
 	git("config", "user.email", "test@example.invalid");
 	await write("MIGRATION.md", "# Migration\n");
+	const changelog =
+		"## 1.0.0-rc.8\n\n- Read [Upgrade](https://docs.hephaestus.build/admin/kubernetes#upgrade).\n";
+	await write("CHANGELOG.md", changelog);
 	await write(".changeset/pending.md", "---\n---\n\nCI only. No shipped application changes.\n");
 	await write(".migration/pending.md", "#### Pending\n");
 	const released =
@@ -408,6 +411,15 @@ void test("the release-note rules hold a branch to what CI requires, against ori
 		);
 	}, /changes shipped code but carries no changeset: webapp\/src\/a\.ts\nCreate \.changeset\/feature\.md with this content, commit it, and push again:\n\n---\n"hephaestus": patch\n---/u);
 	await attempt(async () => write("MIGRATION.md", "# Edited\n"), /Do not edit MIGRATION\.md/u);
+	await attempt(
+		async () => write("CHANGELOG.md", changelog.replace("Read", "See")),
+		/Do not edit CHANGELOG\.md in a feature PR, except to rewrite a docs URL/u,
+	);
+	await write("CHANGELOG.md", changelog.replace("admin/kubernetes#upgrade", "admin/upgrade"));
+	git("add", "--all");
+	git("commit", "--quiet", "-m", "changelog link only");
+	assert.equal(problems(), "");
+	git("reset", "--quiet", "--hard", "origin/main");
 	await attempt(() => {
 		git("rm", "--quiet", ".migration/pending.md");
 	}, /Pending migration fragments may be edited, but not deleted or renamed/u);
