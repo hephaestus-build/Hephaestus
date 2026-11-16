@@ -45,7 +45,7 @@ export function Docs({
 	const data = useFumadocsLoader({ tree });
 	return (
 		<Provider {...props}>
-			<DocsLayout {...baseOptions()} tree={data.tree}>
+			<DocsLayout {...baseOptions({ guides: false })} tree={data.tree}>
 				<DocsPage toc={toc} tableOfContent={{ style: "clerk" }} data-pagefind-body="">
 					<DocsTitle>{title}</DocsTitle>
 					<DocsDescription>{description}</DocsDescription>

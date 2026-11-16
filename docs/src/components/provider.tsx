@@ -53,8 +53,11 @@ function ThemeCookie(): ReactNode {
 }
 
 export function Provider({ pathname, params, children }: ProviderProps) {
+	// With `build.format: "file"`, the build renders `user/overview` at `/user/overview.html`. The page tree and the
+	// served URL have no extension, and the sidebar finds the current guide and page only by that URL.
+	const url = pathname.replace(/\.html$/u, "");
 	return (
-		<RootProvider pathname={pathname} params={params} navigate={navigate} search={{ SearchDialog }}>
+		<RootProvider pathname={url} params={params} navigate={navigate} search={{ SearchDialog }}>
 			<ThemeCookie />
 			<Announcement />
 			{children}
