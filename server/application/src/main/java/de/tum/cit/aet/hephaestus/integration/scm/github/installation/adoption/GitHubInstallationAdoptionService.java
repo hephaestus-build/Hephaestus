@@ -3,7 +3,7 @@ package de.tum.cit.aet.hephaestus.integration.scm.github.installation.adoption;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.auth.spi.GitHubInstallationDecisionAudit;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
-import de.tum.cit.aet.hephaestus.integration.scm.github.lifecycle.GitHubLifecycleListener;
+import de.tum.cit.aet.hephaestus.integration.scm.github.lifecycle.GitHubInstallationLifecycle;
 import de.tum.cit.aet.hephaestus.integration.scm.github.workspace.GitHubWorkspaceDataSyncTrigger;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import java.time.Instant;
@@ -33,7 +33,7 @@ public class GitHubInstallationAdoptionService {
     private final GitHubInstallationRequestRepository requests;
     private final GitHubInstallationRequests gate;
     private final GitHubInstallationReader github;
-    private final GitHubLifecycleListener lifecycle;
+    private final GitHubInstallationLifecycle lifecycle;
     private final GitHubInstallationDecisionAudit audit;
     private final GitHubWorkspaceDataSyncTrigger dataSync;
     private final AsyncTaskExecutor monitoringExecutor;
@@ -43,7 +43,7 @@ public class GitHubInstallationAdoptionService {
             GitHubInstallationRequestRepository requests,
             GitHubInstallationRequests gate,
             GitHubInstallationReader github,
-            GitHubLifecycleListener lifecycle,
+            GitHubInstallationLifecycle lifecycle,
             GitHubInstallationDecisionAudit audit,
             GitHubWorkspaceDataSyncTrigger dataSync,
             @Qualifier("monitoringExecutor") AsyncTaskExecutor monitoringExecutor,

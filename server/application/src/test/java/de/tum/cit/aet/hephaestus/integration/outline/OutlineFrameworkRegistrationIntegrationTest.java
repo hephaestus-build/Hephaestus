@@ -10,7 +10,6 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepositor
 import de.tum.cit.aet.hephaestus.integration.core.metrics.IntegrationCoreMetrics;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
-import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationLifecycleListener;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationManifest;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.outline.webhook.OutlineRouteCredential;
@@ -53,9 +52,9 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * With the integration enabled, Outline becomes a registered kind — which means
- * {@code IntegrationFrameworkBootstrap} demands an {@link ApiCredentialProvider} and an
- * {@link IntegrationLifecycleListener} for it or the context fails to start. This test booting at all
- * is the proof those beans land together; the assertions pin the registration.
+ * {@code IntegrationFrameworkBootstrap} demands an {@link ApiCredentialProvider} for it or the context fails
+ * to start. This test booting at all is the proof those beans land together; the assertions pin the
+ * registration.
  */
 @TestPropertySource(properties = "hephaestus.integration.outline.enabled=true")
 class OutlineFrameworkRegistrationIntegrationTest extends BaseIntegrationTest {
@@ -66,14 +65,10 @@ class OutlineFrameworkRegistrationIntegrationTest extends BaseIntegrationTest {
     @Autowired
     private List<ApiCredentialProvider> credentialProviders;
 
-    @Autowired
-    private List<IntegrationLifecycleListener> lifecycleListeners;
-
     @Test
     void outlineIsRegisteredWithTheRequiredFrameworkBeans() {
         assertThat(manifests).anyMatch(m -> m.kind() == IntegrationKind.OUTLINE);
         assertThat(credentialProviders).anyMatch(p -> p.kind() == IntegrationKind.OUTLINE);
-        assertThat(lifecycleListeners).anyMatch(l -> l.kind() == IntegrationKind.OUTLINE);
     }
 
     @Autowired

@@ -38,8 +38,7 @@ public class GitHubManifest implements IntegrationManifest {
                 Capability.WEBHOOK_INGEST,
                 Capability.TOKEN_REFRESH,
                 Capability.FEEDBACK_DELIVERY,
-                Capability.INLINE_FEEDBACK,
-                Capability.APPROVAL_WORKFLOW);
+                Capability.INLINE_FEEDBACK);
     }
 
     @Override

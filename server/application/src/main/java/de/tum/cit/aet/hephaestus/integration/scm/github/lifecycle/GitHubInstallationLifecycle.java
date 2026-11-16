@@ -10,7 +10,6 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.IntegrationAttentio
 import de.tum.cit.aet.hephaestus.integration.core.events.IntegrationAttentionChangedEvent;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IdentityProviderLookup;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
-import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationLifecycleListener;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.Organization;
@@ -19,6 +18,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRep
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.github.app.GitHubAppTokenService;
+import de.tum.cit.aet.hephaestus.integration.scm.github.installation.adoption.GitHubInstallationAccountKind;
 import de.tum.cit.aet.hephaestus.integration.scm.github.installation.adoption.GitHubInstallationRequests;
 import de.tum.cit.aet.hephaestus.integration.scm.workspace.ScmWorkspaceContentEraser;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
@@ -43,14 +43,12 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * Owns workspace lifecycle mutations for {@code GitHubWorkspaceProvisioningAdapter} webhook events
  * and {@code GitHubInstallationReconciler} reconciliation.
- *
- * <p>Suspension and resumption use the status helpers, not installation lifecycle SPI events.
  */
 @Component
 @ConditionalOnServerRole
-public class GitHubLifecycleListener implements IntegrationLifecycleListener {
+public class GitHubInstallationLifecycle {
 
-    private static final Logger log = LoggerFactory.getLogger(GitHubLifecycleListener.class);
+    private static final Logger log = LoggerFactory.getLogger(GitHubInstallationLifecycle.class);
 
     private final WorkspaceRoots workspaces;
 
@@ -72,7 +70,7 @@ public class GitHubLifecycleListener implements IntegrationLifecycleListener {
     private final ScmWorkspaceContentEraser contentEraser;
     private final GitHubInstallationRequests installationRequests;
 
-    public GitHubLifecycleListener(
+    public GitHubInstallationLifecycle(
             WorkspaceRoots workspaces,
             WorkspaceLocks workspaceLocks,
             WorkspaceRepositoryMonitors monitors,
@@ -107,89 +105,6 @@ public class GitHubLifecycleListener implements IntegrationLifecycleListener {
         this.installationRequests = installationRequests;
     }
 
-    @Override
-    public IntegrationKind kind() {
-        return IntegrationKind.GITHUB;
-    }
-
-    // SPI hooks (IntegrationLifecycleListener)
-
-    /**
-     * SPI hook: bridge to {@link #createOrUpdateFromInstallation} by parsing the
-     * installation id from {@link IntegrationRef#instanceKey()}.
-     *
-     * <p>The {@code initialResources} list is ignored: repository monitor creation lives
-     * in {@code GitHubWorkspaceProvisioningAdapter}, which holds the monitor-service dependency
-     * that plain SPI dispatch doesn't carry.
-     */
-    @Override
-    public void onInstanceInstalled(InstanceProvisioned event) {
-        IntegrationRef ref = event.ref();
-        Long installationId = parseInstallationId(ref);
-        if (installationId == null) {
-            log.warn("GitHub onInstanceInstalled: skipped, reason=invalidInstanceKey, ref={}", ref);
-            return;
-        }
-        TenantAccount account = event.account();
-        createOrUpdateFromInstallationInternal(
-                installationId,
-                account != null ? parseAccountIdNullable(account.externalId()) : null,
-                account != null ? account.displayName() : null,
-                account != null ? account.kind() : AccountKind.ORGANIZATION,
-                account != null ? account.avatarUrl() : null,
-                RepositorySelection.SELECTED,
-                null);
-    }
-
-    /**
-     * SPI hook: run the full workspace purge for a vendor-side uninstall.
-     * Delegates to {@link #purgeWorkspaceForInstallation(long)} — see there for why a bare
-     * status write is not an acceptable substitute.
-     */
-    @Override
-    public void onInstanceUninstalled(IntegrationRef ref) {
-        Long installationId = parseInstallationId(ref);
-        if (installationId == null) {
-            log.warn("GitHub onInstanceUninstalled: skipped, reason=invalidInstanceKey, ref={}", ref);
-            return;
-        }
-        purgeWorkspaceForInstallationInternal(installationId);
-    }
-
-    /**
-     * SPI hook: log scope delta sizes. The actual repository-monitor reconciliation
-     * runs in {@code GitHubWorkspaceProvisioningAdapter.onRepositoriesAdded/Removed} which
-     * holds the monitor-service dependency. Empty deltas short-circuit so duplicate
-     * webhook deliveries don't flap audit logs.
-     */
-    @Override
-    public void onScopeChanged(IntegrationRef ref, ScopeDelta delta) {
-        int added = delta.added() != null ? delta.added().size() : 0;
-        int removed =
-                delta.removedExternalIds() != null ? delta.removedExternalIds().size() : 0;
-        if (added == 0 && removed == 0) {
-            return;
-        }
-        log.info("GitHub scope change: ref={}, added={}, removed={}", ref, added, removed);
-    }
-
-    /**
-     * SPI hook: full account rename handling — workspace login update, monitor
-     * retargeting, repo renaming, event subject rotation. Bridges
-     * {@link IntegrationRef#instanceKey()} to {@link #handleAccountRename}.
-     */
-    @Override
-    public void onTenantRenamed(IntegrationRef ref, String oldName, String newName) {
-        Long installationId = parseInstallationId(ref);
-        if (installationId == null) {
-            log.warn("GitHub onTenantRenamed: skipped, reason=invalidInstanceKey, ref={}", ref);
-            return;
-        }
-        handleAccountRenameInternal(installationId, oldName, newName);
-    }
-
-    // Public helpers — called by adapter / provisioning service (non-SPI)
-
     /**
      * Creates or updates a workspace from a GitHub App installation with full account info.
      *
@@ -206,7 +121,7 @@ public class GitHubLifecycleListener implements IntegrationLifecycleListener {
             long installationId,
             @Nullable Long accountId,
             @Nullable String accountLogin,
-            AccountKind accountKind,
+            GitHubInstallationAccountKind accountKind,
             @Nullable String avatarUrl,
             @Nullable RepositorySelection repositorySelection) {
         return createOrUpdateFromInstallationInternal(
@@ -217,7 +132,7 @@ public class GitHubLifecycleListener implements IntegrationLifecycleListener {
     public record InstallationAccount(
             long id,
             String login,
-            AccountKind kind,
+            GitHubInstallationAccountKind kind,
             @Nullable String avatarUrl) {}
 
     /**
@@ -246,7 +161,7 @@ public class GitHubLifecycleListener implements IntegrationLifecycleListener {
             long installationId,
             @Nullable Long accountId,
             @Nullable String accountLogin,
-            AccountKind accountKind,
+            GitHubInstallationAccountKind accountKind,
             @Nullable String avatarUrl,
             @Nullable RepositorySelection repositorySelection,
             @Nullable Long adminAccountId) {
@@ -265,7 +180,7 @@ public class GitHubLifecycleListener implements IntegrationLifecycleListener {
 
         // A login is not unique and a personal account's workspace cannot prove its owner, so only an
         // organization's immutable id finds the workspace that the installation joins.
-        if (workspace == null && accountKind == AccountKind.ORGANIZATION && accountId != null) {
+        if (workspace == null && accountKind == GitHubInstallationAccountKind.ORGANIZATION && accountId != null) {
             Workspace existing = organizationService
                     .findId(accountId, githubProviderId())
                     .flatMap(workspaceLocks::lockByOrganization)
@@ -340,7 +255,8 @@ public class GitHubLifecycleListener implements IntegrationLifecycleListener {
                 ownerAccountId = humanAccountOf(ownerUserId);
             }
 
-            AccountType wsAccountType = accountKind == AccountKind.ORGANIZATION ? AccountType.ORG : AccountType.USER;
+            AccountType wsAccountType =
+                    accountKind == GitHubInstallationAccountKind.ORGANIZATION ? AccountType.ORG : AccountType.USER;
 
             String availableSlug = workspaceSlugService.allocate(login, "install-" + installationId + "-" + login);
 
@@ -373,7 +289,7 @@ public class GitHubLifecycleListener implements IntegrationLifecycleListener {
         }
 
         // Organization must exist before repositories are created so they get organization_id set.
-        if (accountKind == AccountKind.ORGANIZATION && accountId != null) {
+        if (accountKind == GitHubInstallationAccountKind.ORGANIZATION && accountId != null) {
             Organization org = organizationService.upsertIdentity(
                     accountId, Objects.requireNonNull(accountLogin), githubProviderId());
             workspaces.linkOrganization(workspace.getId(), org.getId());
@@ -426,10 +342,6 @@ public class GitHubLifecycleListener implements IntegrationLifecycleListener {
      */
     @Transactional
     public Optional<Workspace> purgeWorkspaceForInstallation(long installationId) {
-        return purgeWorkspaceForInstallationInternal(installationId);
-    }
-
-    private Optional<Workspace> purgeWorkspaceForInstallationInternal(long installationId) {
         var workspaceOpt = workspaceLocks.lockByInstallation(installationId);
         if (workspaceOpt.isEmpty()) {
             log.warn(
@@ -538,10 +450,6 @@ public class GitHubLifecycleListener implements IntegrationLifecycleListener {
      */
     @Transactional
     public void handleAccountRename(long installationId, @Nullable String previousLogin, String newLogin) {
-        handleAccountRenameInternal(installationId, previousLogin, newLogin);
-    }
-
-    private void handleAccountRenameInternal(long installationId, @Nullable String previousLogin, String newLogin) {
         if (isBlank(newLogin)) {
             log.warn("Skipped account rename: reason=missingTargetLogin, installationId={}", installationId);
             return;
@@ -671,14 +579,15 @@ public class GitHubLifecycleListener implements IntegrationLifecycleListener {
             long installationId,
             @Nullable Long accountId,
             String accountLogin,
-            AccountKind accountKind,
+            GitHubInstallationAccountKind accountKind,
             @Nullable String avatarUrl) {
         // Three-step upsert (lock, free conflicts, insert) avoids uk_user_login_lower
         // violations under concurrent installs.
         if (accountId != null) {
             String htmlUrl = "https://github.com/" + accountLogin;
-            String typeStr =
-                    accountKind == AccountKind.ORGANIZATION ? User.Type.ORGANIZATION.name() : User.Type.USER.name();
+            String typeStr = accountKind == GitHubInstallationAccountKind.ORGANIZATION
+                    ? User.Type.ORGANIZATION.name()
+                    : User.Type.USER.name();
 
             long providerId = githubProviderId();
 
@@ -722,27 +631,5 @@ public class GitHubLifecycleListener implements IntegrationLifecycleListener {
 
     private boolean isBlank(@Nullable String value) {
         return value == null || value.isBlank();
-    }
-
-    private static @Nullable Long parseInstallationId(@Nullable IntegrationRef ref) {
-        if (ref == null || ref.instanceKey() == null) {
-            return null;
-        }
-        try {
-            return Long.parseLong(ref.instanceKey());
-        } catch (NumberFormatException ex) {
-            return null;
-        }
-    }
-
-    private static @Nullable Long parseAccountIdNullable(@Nullable String externalId) {
-        if (externalId == null || externalId.isBlank()) {
-            return null;
-        }
-        try {
-            return Long.parseLong(externalId);
-        } catch (NumberFormatException ex) {
-            return null;
-        }
     }
 }

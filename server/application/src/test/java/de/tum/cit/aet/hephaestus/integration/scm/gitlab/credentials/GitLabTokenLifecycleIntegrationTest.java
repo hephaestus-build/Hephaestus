@@ -39,7 +39,6 @@ import de.tum.cit.aet.hephaestus.workspace.metrics.WorkspaceMetrics;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceLookup;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.micrometer.core.instrument.MeterRegistry;
-import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
@@ -49,7 +48,6 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Pattern;
 import org.junit.jupiter.api.Test;
@@ -57,8 +55,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
-import org.springframework.core.io.buffer.DataBuffer;
-import org.springframework.core.io.buffer.DefaultDataBufferFactory;
 import org.springframework.graphql.client.HttpGraphQlClient;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -72,7 +68,6 @@ import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.reactive.function.client.ClientResponse;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
-import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 @RecordApplicationEvents
@@ -343,42 +338,6 @@ class GitLabTokenLifecycleIntegrationTest extends AbstractWorkspaceIntegrationTe
         assertThat(syncState.describe(connection.toRef(), connection.getId()).vendorHealthDegraded())
                 .isFalse();
         assertThat(changes(connection)).hasSize(2);
-    }
-
-    @Test
-    void shouldNotRevokeAValidTokenWhenGitLabRefusesSelfApproval() {
-        var connection = connection("author");
-        health.observe(connection.getWorkspace().getId(), "author", true);
-        var bodyConsumed = new AtomicBoolean();
-        var probeAfterConsumption = new AtomicBoolean();
-        String refusal = "{\"message\":\"An author cannot approve their own merge request\"}";
-        var client = WebClient.builder()
-                .filter(filter.filter())
-                .exchangeFunction(request -> {
-                    if (request.url().getPath().endsWith("/approve")) {
-                        return Mono.just(ClientResponse.create(HttpStatus.UNAUTHORIZED)
-                                .body(Flux.<DataBuffer>just(DefaultDataBufferFactory.sharedInstance.wrap(
-                                                refusal.getBytes(StandardCharsets.UTF_8)))
-                                        .doOnComplete(() -> bodyConsumed.set(true)))
-                                .build());
-                    }
-                    probeAfterConsumption.set(bodyConsumed.get());
-                    return Mono.just(ClientResponse.create(HttpStatus.OK).build());
-                })
-                .build();
-        String returnedBody = client.post()
-                .uri("https://gitlab.com/api/v4/projects/1/merge_requests/1/approve")
-                .header(HttpHeaders.AUTHORIZATION, "Bearer author")
-                .attribute(
-                        GitLabGraphQlClientProvider.SCOPE_ID_ATTRIBUTE,
-                        connection.getWorkspace().getId())
-                .exchangeToMono(response -> response.bodyToMono(String.class))
-                .block();
-        assertThat(returnedBody).isEqualTo(refusal);
-        assertThat(probeAfterConsumption).isTrue();
-        assertThat(current(connection).getAttentionProblem()).isNull();
-        assertThat(changes(connection)).hasSize(2);
-        assertThat(changes(connection).getLast().recovered()).isTrue();
     }
 
     @Test

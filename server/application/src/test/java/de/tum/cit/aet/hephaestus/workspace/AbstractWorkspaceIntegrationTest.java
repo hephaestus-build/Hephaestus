@@ -16,7 +16,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
-import de.tum.cit.aet.hephaestus.integration.scm.github.lifecycle.GitHubLifecycleListener;
+import de.tum.cit.aet.hephaestus.integration.scm.github.lifecycle.GitHubInstallationLifecycle;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.TestUserFactory;
 import java.time.Instant;
@@ -39,7 +39,7 @@ public abstract class AbstractWorkspaceIntegrationTest extends BaseIntegrationTe
     protected WorkspaceService workspaceService;
 
     @Autowired
-    protected GitHubLifecycleListener githubLifecycleListener;
+    protected GitHubInstallationLifecycle installationLifecycle;
 
     @Autowired
     protected MembershipService workspaceMembershipService;

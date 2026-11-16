@@ -22,7 +22,7 @@
             "core::webhook",
             "evidence",
             "evidence::capture",
-            // Connection registry + SPI ports (credential provider, manifest, lifecycle listener, connect strategy).
+            // Connection registry + SPI ports (credential provider, manifest, connect strategy).
             "integration.core",
             // The scope consumer is reconciled when the stored subscription id changes.
             "integration.core::consumer",

@@ -23,7 +23,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 class GitHubAccountRenameRepositoryIdentityIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
-    private GitHubLifecycleListener listener;
+    private GitHubInstallationLifecycle listener;
 
     @Autowired
     private IdentityProviderRepository providers;

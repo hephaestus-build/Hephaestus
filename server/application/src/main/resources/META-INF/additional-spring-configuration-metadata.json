@@ -59,7 +59,7 @@
     {
       "name": "hephaestus.integration.slack.enabled",
       "type": "java.lang.Boolean",
-      "description": "Master toggle for the Slack integration (OAuth install, lifecycle listeners, outbound messaging)"
+      "description": "Master toggle for the Slack integration (OAuth install, event intake, outbound messaging)"
     },
     {
       "name": "hephaestus.integration.slack.client-id",

@@ -262,7 +262,7 @@ public class WorkspaceService {
                     "create-workspace-" + workspace.getId());
         } else {
             // kind == GITHUB → PAT-backed; App installations bypass this DTO entirely
-            // (they arrive via GitHubLifecycleListener.createOrUpdateFromInstallation).
+            // (they arrive via GitHubInstallationLifecycle.createOrUpdateFromInstallation).
             // The DTO validator rejects any other kind.
             workspaceRepository.save(workspace);
             connectionService.provisionPatConnection(

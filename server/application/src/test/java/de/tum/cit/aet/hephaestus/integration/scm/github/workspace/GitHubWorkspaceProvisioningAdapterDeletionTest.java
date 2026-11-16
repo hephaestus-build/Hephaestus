@@ -8,7 +8,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import de.tum.cit.aet.hephaestus.integration.scm.github.lifecycle.GitHubLifecycleListener;
+import de.tum.cit.aet.hephaestus.integration.scm.github.lifecycle.GitHubInstallationLifecycle;
 import de.tum.cit.aet.hephaestus.integration.scm.workspace.WorkspaceRepositoryMonitorService;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
@@ -26,7 +26,7 @@ class GitHubWorkspaceProvisioningAdapterDeletionTest extends BaseUnitTest {
     private static final long INSTALLATION_ID = 5001L;
 
     @Mock
-    private GitHubLifecycleListener githubLifecycleListener;
+    private GitHubInstallationLifecycle installationLifecycle;
 
     @Mock
     private WorkspaceRepositoryMonitorService repositoryMonitorService;
@@ -45,7 +45,7 @@ class GitHubWorkspaceProvisioningAdapterDeletionTest extends BaseUnitTest {
     @BeforeEach
     void setUp() {
         adapter = new GitHubWorkspaceProvisioningAdapter(
-                githubLifecycleListener,
+                installationLifecycle,
                 repositoryMonitorService,
                 workspaceScopeFilter,
                 dataSyncTrigger,
@@ -58,10 +58,10 @@ class GitHubWorkspaceProvisioningAdapterDeletionTest extends BaseUnitTest {
     void onInstallationDeleted_runsTheWorkspacePurgeChain() {
         adapter.onInstallationDeleted(INSTALLATION_ID);
 
-        verify(githubLifecycleListener).purgeWorkspaceForInstallation(INSTALLATION_ID);
+        verify(installationLifecycle).purgeWorkspaceForInstallation(INSTALLATION_ID);
         // A bare status write is exactly the defect: it leaves the contributors unrun.
-        verify(githubLifecycleListener, never()).suspendForInstallation(anyLong());
-        verify(githubLifecycleListener, never()).resumeForInstallation(anyLong());
+        verify(installationLifecycle, never()).suspendForInstallation(anyLong());
+        verify(installationLifecycle, never()).resumeForInstallation(anyLong());
     }
 
     @Test
@@ -81,7 +81,7 @@ class GitHubWorkspaceProvisioningAdapterDeletionTest extends BaseUnitTest {
     void onInstallationDeleted_withoutAnInstallationId_purgesNothing() {
         adapter.onInstallationDeleted(null);
 
-        verifyNoInteractions(githubLifecycleListener, repositoryMonitorService);
+        verifyNoInteractions(installationLifecycle, repositoryMonitorService);
     }
 
     @Test
@@ -89,8 +89,8 @@ class GitHubWorkspaceProvisioningAdapterDeletionTest extends BaseUnitTest {
     void onInstallationSuspended_stillWritesStatusOnly() {
         adapter.onInstallationSuspended(INSTALLATION_ID);
 
-        verify(githubLifecycleListener).suspendForInstallation(INSTALLATION_ID);
-        verify(githubLifecycleListener, never()).purgeWorkspaceForInstallation(anyLong());
+        verify(installationLifecycle).suspendForInstallation(INSTALLATION_ID);
+        verify(installationLifecycle, never()).purgeWorkspaceForInstallation(anyLong());
     }
 
     @Test
@@ -98,7 +98,7 @@ class GitHubWorkspaceProvisioningAdapterDeletionTest extends BaseUnitTest {
         Workspace workspace = new Workspace();
         workspace.setId(11L);
         WorkspaceStatusFixture.markPurged(workspace);
-        when(githubLifecycleListener.resumeForInstallation(INSTALLATION_ID)).thenReturn(Optional.of(workspace));
+        when(installationLifecycle.resumeForInstallation(INSTALLATION_ID)).thenReturn(Optional.of(workspace));
 
         adapter.onInstallationActivated(INSTALLATION_ID);
 

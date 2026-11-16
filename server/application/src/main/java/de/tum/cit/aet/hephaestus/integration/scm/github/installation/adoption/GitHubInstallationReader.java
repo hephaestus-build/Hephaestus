@@ -4,7 +4,7 @@ import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.exception.InstallationNotFoundException;
 import de.tum.cit.aet.hephaestus.integration.scm.github.app.GitHubAppTokenService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.app.GitHubAppTokenService.AppInstallation;
-import de.tum.cit.aet.hephaestus.integration.scm.github.lifecycle.GitHubLifecycleListener.InstallationAccount;
+import de.tum.cit.aet.hephaestus.integration.scm.github.lifecycle.GitHubInstallationLifecycle.InstallationAccount;
 import de.tum.cit.aet.hephaestus.workspace.RepositorySelection;
 import java.io.UncheckedIOException;
 import org.slf4j.Logger;
@@ -66,7 +66,7 @@ class GitHubInstallationReader {
                     "Hephaestus supports installations on a GitHub user or organization account only.");
         }
         return new Installation(
-                new InstallationAccount(account.id(), login, kind.accountKind(), account.avatarUrl()),
+                new InstallationAccount(account.id(), login, kind, account.avatarUrl()),
                 kind,
                 "all".equals(installation.repositorySelection())
                         ? RepositorySelection.ALL

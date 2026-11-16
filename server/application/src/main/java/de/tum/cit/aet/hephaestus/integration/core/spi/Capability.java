@@ -16,7 +16,4 @@ public enum Capability {
 
     FEEDBACK_DELIVERY,
     INLINE_FEEDBACK,
-    APPROVAL_WORKFLOW,
-    /** Listener emits {@code onScopeChanged} (channel join/leave, repo add/remove). */
-    SCOPE_CHANGES,
 }

@@ -513,8 +513,6 @@ A practice that must review every push also selects **Opened**, **Ready** or **S
 - **Cross-owner GitHub transfer heals only on reconcile.** The event derives the *new* owner's
   subject and so reaches no filter of the old workspace. The next reconcile resolves the monitor by
   `native_id`. GitLab has the identical residual across root groups.
-- **Legacy rows without `native_id`** fall back to a previous-`owner/name` lookup, which a
-  simultaneous rename-and-transfer can miss. Those rows acquire a `native_id` on their next sync.
 - **A reused repository name.** After a GitHub rename, a new repository can take the old name.
   GitHub webhooks select the repository row by `repository.id`, so they file events correctly.
   An earlier version selected it by name and could file an issue or a pull request under the wrong row.

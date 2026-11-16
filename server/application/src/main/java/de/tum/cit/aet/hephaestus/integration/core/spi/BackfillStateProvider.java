@@ -71,7 +71,8 @@ public interface BackfillStateProvider {
      * Reconciles a sync target's stable identity against what the provider currently reports for the
      * repository, healing a rename/transfer:
      * <ul>
-     *   <li>If the target has no {@code nativeId} yet (legacy/PAT row), captures {@code resolvedNativeId}.</li>
+     *   <li>If the stored {@code nativeId} belongs to another provider instance's repository, replaces it with
+     *       {@code resolvedNativeId}.</li>
      *   <li>If {@code resolvedNameWithOwner} differs from the stored name — and the stable id agrees —
      *       re-keys the monitor's {@code nameWithOwner} and refreshes the workspace's inbox consumer so
      *       the subject filter tracks the new name. Never renames by name alone.</li>
