@@ -508,8 +508,14 @@ await test("the route rewrites no path and keeps every webhook path whole", () =
 	assert.deepEqual(backendOf(rule("PathPrefix", "/")), ["webapp", "8080"]);
 	// The server serves the paths it receives, so no rule rewrites one.
 	assert.doesNotMatch(rules.join("\n"), /URLRewrite/u);
-	// HSTS has nowhere else to come from, so every rule carries it.
-	assert.equal(rules.filter((text) => text.includes("{{ toJson $hsts }}")).length, rules.length);
+	// The server sends its own HSTS. Only the web app's rules add it, because nginx sends none.
+	for (const text of rules) {
+		assert.equal(
+			text.includes("{{ toJson $hsts }}"),
+			backendOf(text)?.[0] === "webapp",
+			"HSTS only on the web app's rules",
+		);
+	}
 });
 
 await test("the webapp runs the non-root image as it is, with only /tmp writable", () => {

@@ -3,12 +3,20 @@ package de.tum.cit.aet.hephaestus.core.auth.web;
 import static org.hamcrest.Matchers.allOf;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.not;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 
+import de.tum.cit.aet.hephaestus.core.web.ApiPath;
 import de.tum.cit.aet.hephaestus.testconfig.RealAuthIntegrationTest;
+import jakarta.servlet.Filter;
 import org.hamcrest.MatcherAssert;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.web.reactive.server.WebTestClient;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import org.springframework.web.context.WebApplicationContext;
 
 /**
  * Pins that {@code core.security.SecurityHeaders} is actually applied on the live security chain.
@@ -19,14 +27,17 @@ import org.springframework.test.web.reactive.server.WebTestClient;
  */
 class SecurityHeadersIntegrationTest extends RealAuthIntegrationTest {
 
+    /** The policy browsers already keep; the chart's route sets the same value on the web app's rules. */
+    private static final String HSTS = "max-age=2592000 ; includeSubDomains";
+
     @Autowired
     private WebTestClient webTestClient;
 
+    @Autowired
+    private WebApplicationContext application;
+
     @Test
     void publicResponseCarriesTheHardenedSecurityHeaders() {
-        // Strict-Transport-Security is intentionally NOT asserted here: Spring's HstsHeaderWriter only
-        // emits it over HTTPS (requireSecure), and WebTestClient drives the app over plain HTTP. The
-        // remaining hardening headers are protocol-independent and must always be present.
         webTestClient
                 .get()
                 .uri("/identity-providers")
@@ -66,5 +77,30 @@ class SecurityHeadersIntegrationTest extends RealAuthIntegrationTest {
                 .expectHeader()
                 .doesNotExist("Content-Security-Policy-Report-Only")
                 .expectBody(Void.class);
+    }
+
+    /**
+     * Spring writes HSTS only on a secure request, and the WebTestClient above drives plain HTTP. MockMvc over the
+     * same context and filter chain sends a secure request without a second application context.
+     */
+    private MockMvc secureMvc() {
+        return MockMvcBuilders.webAppContextSetup(application)
+                .addFilter(application.getBean("springSecurityFilterChain", Filter.class))
+                .build();
+    }
+
+    @Test
+    void shouldSendTheServerHstsPolicyWhenAnApiRequestIsSecure() throws Exception {
+        secureMvc()
+                .perform(get(ApiPath.of("/identity-providers")).secure(true))
+                .andExpect(header().string("Strict-Transport-Security", HSTS));
+    }
+
+    @Test
+    void shouldSendTheSameHstsPolicyWhenAWebhookRequestIsSecure() throws Exception {
+        secureMvc()
+                .perform(post("/webhooks/github").secure(true))
+                .andExpect(header().string("Strict-Transport-Security", HSTS))
+                .andExpect(header().string("X-Content-Type-Options", "nosniff"));
     }
 }
