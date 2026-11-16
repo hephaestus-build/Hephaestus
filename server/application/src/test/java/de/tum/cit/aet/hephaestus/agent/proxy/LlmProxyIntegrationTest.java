@@ -1103,8 +1103,12 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
             upstream.start();
             var pool = streamUntilTheProviderEnds(upstream.url("/v1").toString(), 8, null, Duration.ofMinutes(2));
 
-            assertThat(pool.getNoCallBefore()).isNull();
-            assertThat(pool.getLearnedLimit()).isEqualTo(8);
+            // served() decides on the response head whether a bucket is empty, and only then starts the write. With no
+            // rate headers it returns first, so the row and the counter read after the response are final.
+            var stored = callPools.findById(pool.getId()).orElseThrow();
+            assertThat(stored.getNoCallBefore()).isNull();
+            assertThat(stored.getLearnedLimit()).isEqualTo(8);
+            assertThat(bucketsReached(pool)).isZero();
             assertThat(calls(pool, "completed")).isEqualTo(1);
             assertThat(calls(pool, "error")).isZero();
             assertThat(upstream.getRequestCount()).isEqualTo(1);
@@ -1122,6 +1126,7 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
                     .body("{\"type\":\"error\",\"error\":{\"type\":\"rate_limit_error\",\"message\":\"Rate limited\"}}")
                     .build());
             upstream.start();
+            Instant began = databaseNow();
             var call = callOnce(
                     upstream.url("/v1").toString(),
                     8,
@@ -1134,11 +1139,26 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
             var answer = Objects.requireNonNull(call.ownAnswer());
             assertThat(answer.getStatusCode().value()).isEqualTo(429);
             assertThat(answer.getHeaders().getFirst("Retry-After")).isEqualTo("3600");
-            assertThat(pool.getNoCallBefore()).isNotNull().isAfter(databaseNow());
+            // The pool pauses for this test's 5 min maxCooldown, not the hour the provider asked for.
+            // throttled() writes the pause in the request's own transaction, so the row is final when the call returns.
+            assertThat(pool.getNoCallBefore())
+                    .isNotNull()
+                    .isAfterOrEqualTo(began.plus(Duration.ofMinutes(5)))
+                    .isBeforeOrEqualTo(databaseNow().plus(Duration.ofMinutes(5)));
             assertThat(pool.getLearnedLimit()).isEqualTo(5);
             assertThat(callRows.countActive(pool.getId())).isZero();
             assertThat(upstream.getRequestCount()).isEqualTo(1);
         }
+    }
+
+    private double bucketsReached(LlmCallPool pool) {
+        return meterRegistry
+                .get(AgentMetrics.LLM_POOL_UPSTREAM_BUCKET_REACHED)
+                .tag("pool", pool.getSlug())
+                .counters()
+                .stream()
+                .mapToDouble(Counter::count)
+                .sum();
     }
 
     private Instant databaseNow() {
