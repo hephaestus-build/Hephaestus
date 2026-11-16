@@ -447,7 +447,14 @@ function GitLabWizard({ serverUrl }: { serverUrl: string }) {
 					{state.step === 1 && (
 						<ConnectGitLabStep
 							validating={preflight.isPending}
-							unreachable={preflight.isError && isForCurrentToken(state, preflight.variables.body)}
+							checkFailure={
+								preflight.isError && isForCurrentToken(state, preflight.variables.body)
+									? problemDetailOf(
+											preflight.error,
+											"The GitLab instance did not answer. Try again in a moment.",
+										)
+									: undefined
+							}
 							onValidate={(body) => {
 								// A new check drops the answer to an earlier token.
 								preflight.reset();

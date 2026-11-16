@@ -78,6 +78,8 @@ public class AuthRateLimitFilter extends OncePerRequestFilter {
         CONVERSATION_TURNS("conversation-turns", true, false),
         REVIEW_REQUEST("review-request", true, false),
         SYNC_TRIGGER("sync-trigger", true, false),
+        // Checks a token that the caller gives, or lists its groups or projects: each call is a request to GitLab.
+        GITLAB_PREFLIGHT("gitlab-preflight", true, false),
         // Workspace MCP endpoint calls, keyed by the account that approved the client (ADR 0110).
         MCP_CALL("mcp-call", true, false),
         PUBLIC_ACTIVITY("public-activity", false, false),
@@ -216,6 +218,12 @@ public class AuthRateLimitFilter extends OncePerRequestFilter {
         if ("POST".equals(method) && path.matches("/workspaces/[^/]+/connections/[^/]+/sync/jobs")) {
             return Endpoint.SYNC_TRIGGER;
         }
+        if ("POST".equals(method)
+                && (path.equals("/workspaces/gitlab/preflight")
+                        || path.equals("/workspaces/gitlab/groups")
+                        || path.equals("/workspaces/gitlab/projects"))) {
+            return Endpoint.GITLAB_PREFLIGHT;
+        }
         if ("POST".equals(method) && (path.equals("/web-vitals") || path.equals("/browser-faults"))) {
             return Endpoint.BROWSER_REPORTS;
         }
@@ -234,6 +242,7 @@ public class AuthRateLimitFilter extends OncePerRequestFilter {
             case CONVERSATION_TURNS -> properties.conversationTurns();
             case REVIEW_REQUEST -> properties.reviewRequest();
             case SYNC_TRIGGER -> properties.syncTrigger();
+            case GITLAB_PREFLIGHT -> properties.gitlabPreflight();
             case MCP_CALL -> properties.mcpCall();
             case PUBLIC_ACTIVITY -> properties.publicActivity();
             case BROWSER_REPORTS -> properties.browserReports();

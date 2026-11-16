@@ -207,6 +207,31 @@ describe("GitLab workspace wizard", () => {
 		).toStrictEqual([lrz, lrz, lrz]);
 	});
 
+	it("shows the server's reason when it turns a token check away", async () => {
+		const user = userEvent.setup();
+		serveGitLab();
+		server.use(
+			http.post("*/workspaces/gitlab/preflight", () =>
+				HttpResponse.json(
+					{
+						title: "Too many requests",
+						status: 429,
+						detail: "Too many requests. Wait 420 seconds, then try again.",
+					},
+					{ status: 429, headers: { "Content-Type": "application/problem+json" } },
+				),
+			),
+		);
+		renderRouteAt("/workspaces/new/gitlab");
+
+		await screen.findByDisplayValue(lrz, {}, ROUTE_RENDER_WAIT);
+		await user.type(screen.getByLabelText("Access token"), "glpat-secret");
+		await user.click(screen.getByRole("button", { name: "Validate token" }));
+
+		await screen.findByText("Too many requests. Wait 420 seconds, then try again.");
+		expect(screen.queryByText(/did not answer/u)).toBeNull();
+	});
+
 	it("ignores a validation that answers after the token was edited", async () => {
 		const user = userEvent.setup();
 		const firstAnswer = deferred();

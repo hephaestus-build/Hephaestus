@@ -402,6 +402,10 @@ hephaestus:
             sync-trigger:
                 capacity: ${HEPHAESTUS_RATE_LIMIT_SYNC_TRIGGER_CAPACITY:10}
                 period: ${HEPHAESTUS_RATE_LIMIT_SYNC_TRIGGER_PERIOD:1h}
+            # POST /workspaces/gitlab/{preflight,groups,projects} — each call sends a caller-given token to GitLab; keyed by account
+            gitlab-preflight:
+                capacity: ${HEPHAESTUS_RATE_LIMIT_GITLAB_PREFLIGHT_CAPACITY:30}
+                period: ${HEPHAESTUS_RATE_LIMIT_GITLAB_PREFLIGHT_PERIOD:10m}
             # POST /workspaces/{slug}/mcp — workspace MCP endpoint calls, keyed by account (ADR 0110)
             mcp-call:
                 capacity: ${HEPHAESTUS_RATE_LIMIT_MCP_CALL_CAPACITY:120}

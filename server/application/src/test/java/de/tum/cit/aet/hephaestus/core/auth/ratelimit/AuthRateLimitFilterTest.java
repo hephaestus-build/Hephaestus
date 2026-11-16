@@ -105,6 +105,7 @@ class AuthRateLimitFilterTest extends BaseUnitTest {
                 defaults.conversationTurns(),
                 defaults.reviewRequest(),
                 defaults.syncTrigger(),
+                defaults.gitlabPreflight(),
                 defaults.mcpCall(),
                 new AuthRateLimitProperties.Limit(1, Duration.ofHours(1)),
                 defaults.browserReports());
@@ -161,6 +162,7 @@ class AuthRateLimitFilterTest extends BaseUnitTest {
                 new AuthRateLimitProperties.Limit(20, Duration.ofMinutes(10)),
                 new AuthRateLimitProperties.Limit(10, Duration.ofHours(1)),
                 new AuthRateLimitProperties.Limit(10, Duration.ofHours(1)),
+                new AuthRateLimitProperties.Limit(30, Duration.ofMinutes(10)),
                 new AuthRateLimitProperties.Limit(120, Duration.ofMinutes(1)),
                 new AuthRateLimitProperties.Limit(60, Duration.ofMinutes(1)),
                 new AuthRateLimitProperties.Limit(2, Duration.ofMinutes(1)));
@@ -202,6 +204,7 @@ class AuthRateLimitFilterTest extends BaseUnitTest {
                 new AuthRateLimitProperties.Limit(1, Duration.ofMinutes(1)),
                 new AuthRateLimitProperties.Limit(1, Duration.ofMinutes(1)),
                 new AuthRateLimitProperties.Limit(1, Duration.ofMinutes(1)),
+                new AuthRateLimitProperties.Limit(1, Duration.ofHours(1)),
                 new AuthRateLimitProperties.Limit(1, Duration.ofHours(1)),
                 new AuthRateLimitProperties.Limit(1, Duration.ofHours(1)),
                 new AuthRateLimitProperties.Limit(1, Duration.ofHours(1)),
@@ -410,7 +413,10 @@ class AuthRateLimitFilterTest extends BaseUnitTest {
             strings = {
                 "/api/workspaces/demo/conversation/turns",
                 "/api/workspaces/demo/practices/review-requests",
-                "/api/workspaces/demo/connections/7/sync/jobs"
+                "/api/workspaces/demo/connections/7/sync/jobs",
+                "/api/workspaces/gitlab/preflight",
+                "/api/workspaces/gitlab/groups",
+                "/api/workspaces/gitlab/projects"
             })
     void expensiveEndpointsUseAccountBuckets(String path) throws Exception {
         authenticateAs("42");
@@ -422,6 +428,22 @@ class AuthRateLimitFilterTest extends BaseUnitTest {
 
         verify(chain).doFilter(request, response);
         assertThat(store.keySet()).singleElement().asString().endsWith(":acct:42");
+    }
+
+    @Test
+    void gitLabTokenChecksShareOneBucketPerAccount() throws Exception {
+        authenticateAs("42");
+        AuthRateLimitFilter f = filter(props());
+
+        for (String path : List.of(
+                "/api/workspaces/gitlab/preflight",
+                "/api/workspaces/gitlab/groups",
+                "/api/workspaces/gitlab/projects")) {
+            f.doFilter(
+                    new MockHttpServletRequest("POST", path), new MockHttpServletResponse(), mock(FilterChain.class));
+        }
+
+        assertThat(store).containsOnlyKeys("gitlab-preflight:acct:42");
     }
 
     @Test

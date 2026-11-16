@@ -131,7 +131,19 @@ export const Validating: Story = {
 
 /** The GitLab instance did not answer the last check of this token. */
 export const Unreachable: Story = {
-	args: { unreachable: true },
+	args: { checkFailure: "The GitLab instance did not answer. Try again in a moment." },
+	decorators: [
+		withWizardState({
+			step: 1,
+			serverUrl,
+			personalAccessToken: "glpat-abc123def456",
+		}),
+	],
+};
+
+/** The server turned the check away because this account checked too often; its words name the wait. */
+export const RateLimited: Story = {
+	args: { checkFailure: "Too many requests. Wait 420 seconds, then try again." },
 	decorators: [
 		withWizardState({
 			step: 1,

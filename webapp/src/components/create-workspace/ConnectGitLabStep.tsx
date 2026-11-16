@@ -21,15 +21,15 @@ import { useWizard } from "./wizard-context";
 export interface ConnectGitLabStepProps {
 	/** A check of the token is under way. */
 	validating?: boolean;
-	/** The last check of the current token got no answer from the GitLab instance. */
-	unreachable?: boolean;
+	/** Why the last check of the current token got no answer, in words for the reader. */
+	checkFailure?: string;
 	/** Checks the token against the instance. The wizard state receives the answer. */
 	onValidate: (request: GitLabPreflightRequest) => void;
 }
 
 export function ConnectGitLabStep({
 	validating = false,
-	unreachable = false,
+	checkFailure,
 	onValidate,
 }: ConnectGitLabStepProps) {
 	const { state, dispatch } = useWizard();
@@ -148,13 +148,11 @@ export function ConnectGitLabStep({
 				</Alert>
 			)}
 
-			{unreachable && (
+			{checkFailure !== undefined && (
 				<Alert variant="destructive">
 					<OctagonXIcon aria-hidden="true" />
-					<AlertTitle>We could not reach GitLab</AlertTitle>
-					<AlertDescription>
-						The GitLab instance did not answer. Try again in a moment.
-					</AlertDescription>
+					<AlertTitle>We could not check that token</AlertTitle>
+					<AlertDescription>{checkFailure}</AlertDescription>
 				</Alert>
 			)}
 		</div>
