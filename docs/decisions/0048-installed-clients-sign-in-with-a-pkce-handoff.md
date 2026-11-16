@@ -4,6 +4,7 @@
 **Date:** 2026-09-26
 **Authors:** Felix T.J. Dietrich
 **Amends:** [ADR 0017](0017-replace-keycloak-with-spring-native-auth.md)
+**Amended by:** [ADR 0114](0114-one-store-app-signs-in-to-any-instance-by-its-address.md)
 
 ## Context
 
@@ -148,3 +149,14 @@ Option 6.
   reopen option 4 with evidence.
 - Chrome changes how `identity.launchWebAuthFlow` redirects, or offers a platform credential the
   extension could hold instead.
+
+## Update — 2026-11-15: the mobile apps are installed clients
+
+[ADR 0114](0114-one-store-app-signs-in-to-any-instance-by-its-address.md) amends this decision for the store apps of iOS and Android:
+
+- `InstalledClientKind` gains the two mobile apps.
+- The official mobile apps are allowed by default, unlike the extension. An operator can turn them off.
+- A mobile session has its own absolute deadline.
+- Every handoff response names its issuer, so that a client that knows many instances detects a mix-up between them (RFC 9207).
+
+The reason is that one store app signs in to any instance by its address. ADR 0114 gives the rules and the rejected options.
