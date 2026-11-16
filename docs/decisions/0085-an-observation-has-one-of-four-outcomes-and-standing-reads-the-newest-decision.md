@@ -6,6 +6,8 @@
 
 **Supersedes:** [ADR 0050](0050-one-practice-standard-one-outcome.md), [ADR 0056](0056-one-practice-model-for-items-and-scans.md), [ADR 0065](0065-standing-counts-the-newest-observation-of-each-item.md)
 
+**Amended by:** [ADR 0118](0118-a-workspace-keeps-its-practices-in-one-repository-and-a-trial-reviews-a-draft-practice-without-an-observation.md) (standing skips observations sealed in feedback mode Off)
+
 **Builds on:** [ADR 0055](0055-practice-scripts-use-one-result-contract.md), [ADR 0064](0064-one-evidence-contract-for-every-producer.md), [ADR 0070](0070-1-0-is-a-cutover-release.md)
 
 **Relates to:** [ADR 0051](0051-practices-across-the-workspace-counts-developers.md), [ADR 0081](0081-one-server-role-and-sandboxes-that-reach-only-the-server.md), ADR 0086
@@ -114,3 +116,13 @@ The missing-fact case of decision 4, the Slack and Outline capabilities of decis
 - [ADR 0069 § Freshness](0069-practices-run-when-ready-and-stay-current-by-their-sources.md#freshness): version equality, a map from version parts, one verdict per version, and shared-brief fingerprints.
 - [ADR 0022](0022-observation-presence-assessment-and-schema-cleanup.md#2-the-reaction-anchors-on-feedback-only): an open verb or event log for reactions.
 - [ADR 0021](0021-observations-feedback-synthesis-seam.md#rejected-alternatives) and [ADR 0029](0029-measurement-intervention-seam-and-channel-levels.md#alternatives-considered): advice stored on an observation, and every observation rendered as feedback.
+
+## Update — 2026-11-16: standing skips observations sealed in feedback mode Off
+
+[ADR 0118](0118-a-workspace-keeps-its-practices-in-one-repository-and-a-trial-reviews-a-draft-practice-without-an-observation.md) decision 6 changes decision 15.
+The user docs say that feedback mode Off sends no feedback to practice pages, but standing counted observations of practices in Off.
+
+- Each review practice records its effective feedback mode when the review seals.
+- An observation sealed in Off neither counts nor hides the live one, as for a requested or backfilled review.
+- A later change of the mode does not change the classification of an earlier observation. An observation sealed in Off never counts, and a live one stays live.
+- The claim rules of decision 10 do not change.
