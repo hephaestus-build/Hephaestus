@@ -569,6 +569,43 @@ class LlmCallPoolLearningIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void shouldGiveTheSlotsOfAServerThatDiedMidCallBackOverAMinuteAndKeepTheReserve() {
+        long pool = ownPool();
+        // A server holds the six background calls that a limit of eight allows, then dies: its grants stop renewing.
+        for (int i = 0; i < 6; i++) admit(workerA, pool, AgentRunBand.BATCH, 1);
+        // Their leases ran out 25 seconds ago, so 6 × (1 − 25/60) = 3.5 slots are still held, and 3 rounded down.
+        jdbc.update(
+                "UPDATE llm_call_permit SET renewed_at = clock_timestamp() - make_interval(secs => ?)"
+                        + " WHERE pool_id = ? AND state = 'ACTIVE'",
+                LlmCallPermitsTestFixtures.PROPERTIES.permitLease().toSeconds() + 25,
+                pool);
+
+        // The replacement server gets half the slots back now, not all six in one round.
+        List<LlmCallPermits.Permit> calls = new ArrayList<>();
+        for (int i = 0; i < 6; i++) {
+            var call = briefly(workerB, pool, AgentRunBand.BATCH, 1);
+            if (call != null) calls.add(call);
+        }
+        assertThat(calls).hasSize(3);
+        assertThat(Objects.requireNonNull(jdbc.queryForObject(
+                        "SELECT count(*) FROM llm_call_permit WHERE pool_id = ? AND lapsed", Long.class, pool)))
+                .isEqualTo(6);
+        // A conversation's reserve does not wait for the lapsed slots.
+        assertThat(probe(workerB, pool, AgentRunBand.INTERACTIVE, 2, Duration.ofMillis(200)))
+                .isNotNull();
+
+        // A minute after the lapse, every slot is back, and the server's death cut no limit.
+        jdbc.update(
+                "UPDATE llm_call_permit SET closed_at = closed_at - interval '36 seconds' WHERE pool_id = ? AND lapsed",
+                pool);
+        for (int i = 0; i < 3; i++) calls.add(Objects.requireNonNull(briefly(workerB, pool, AgentRunBand.BATCH, 1)));
+        assertThat(rows.countNotInteractive(pool)).isEqualTo(6);
+        assertThat(limit(pool)).isEqualTo(8);
+
+        calls.forEach(LlmCallPermits.Permit::close);
+    }
+
+    @Test
     void shouldGrantInTurnBetweenWideAndNarrowReviewsAndWorkspaces() throws Exception {
         long pool = ownPool();
         setLimit(pool, 8);
@@ -877,6 +914,17 @@ class LlmCallPoolLearningIntegrationTest extends BaseIntegrationTest {
                 new LlmCallPermits.Caller(workspace, source, 0, null),
                 ended::get,
                 Instant.now().plusSeconds(60));
+    }
+
+    /** A call that waits a moment for its grant and, once granted, stays in flight. */
+    private static LlmCallPermits.@Nullable Permit briefly(
+            LlmCallPermits worker, long pool, AgentRunBand kind, long workspace) {
+        return worker.acquire(
+                pool,
+                kind,
+                new LlmCallPermits.Caller(workspace, UUID.randomUUID(), 0, null),
+                () -> false,
+                Instant.now().plusMillis(300));
     }
 
     private static LlmCallPermits.@Nullable Permit probe(

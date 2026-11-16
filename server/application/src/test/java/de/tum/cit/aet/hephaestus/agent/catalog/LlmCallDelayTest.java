@@ -13,7 +13,7 @@ class LlmCallDelayTest {
     /** Feeds a whole window, at a limit of eight, whose fastest first token is {@code fastest}. */
     private static LlmCallDelay.Step window(LlmCallDelay from, int fastest, int limit) {
         var delay = from;
-        for (int i = 0; i < Math.max(4, limit / 2) - 1; i++)
+        for (int i = 0; i < Math.max(LlmCallDelay.SMALLEST_WINDOW, limit / 2) - 1; i++)
             delay = delay.afterFirstToken(fastest + 100_000, limit).delay();
         return delay.afterFirstToken(fastest, limit);
     }
@@ -32,6 +32,24 @@ class LlmCallDelayTest {
 
         assertThat(step.keep()).isEqualTo(1);
         assertThat(step.delay()).isEqualTo(new LlmCallDelay(900, 60_000, 1));
+    }
+
+    @Test
+    void shouldNotLowerALowLimitOnFourSlowCallsWhenTheWindowsFastestDidNotWait() {
+        int limit = 4;
+        var delay = new LlmCallDelay(489, null, 0);
+        for (int call = 0; call < 4; call++) {
+            var step = delay.afterFirstToken(7_000, limit);
+            assertThat(step.keep()).as("call %d of the window", call + 1).isEqualTo(1);
+            delay = step.delay();
+        }
+        for (int call = 0; call < 3; call++)
+            delay = delay.afterFirstToken(7_000, limit).delay();
+
+        var last = delay.afterFirstToken(900, limit);
+
+        assertThat(last.keep()).isEqualTo(1);
+        assertThat(last.delay()).isEqualTo(new LlmCallDelay(489, null, 0));
     }
 
     @Test

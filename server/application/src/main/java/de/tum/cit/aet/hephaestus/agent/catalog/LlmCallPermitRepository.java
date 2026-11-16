@@ -78,7 +78,7 @@ public interface LlmCallPermitRepository extends JpaRepository<LlmCallPermit, UU
      */
     @Query(value = """
             WITH expired AS (
-              UPDATE llm_call_permit SET state='CLOSED',closed_at=renewed_at+make_interval(secs => :staleSeconds)
+              UPDATE llm_call_permit SET state='CLOSED',closed_at=renewed_at+make_interval(secs => :staleSeconds),lapsed=TRUE
               WHERE pool_id=:poolId AND state='ACTIVE'
                 AND renewed_at < clock_timestamp()-make_interval(secs => :staleSeconds)
               RETURNING id
@@ -250,6 +250,21 @@ public interface LlmCallPermitRepository extends JpaRepository<LlmCallPermit, UU
             @Param("workerId") String workerId,
             @Param("ids") Collection<UUID> ids,
             @Param("staleSeconds") long staleSeconds);
+
+    /**
+     * The slots that lapsed permits still hold, as a fraction that the caller rounds down: lapsed permits return their
+     * slots evenly over the minute after their leases ran out, the minute a closed call keeps its rate debit, so one
+     * lapsed permit returns at once and a crash's many return one after another. A server that dies mid-call lapses all its permits at once;
+     * granting them all again in one round would send the provider a burst of calls beside the cut ones it may still be
+     * answering.
+     */
+    @Query(value = """
+                    SELECT COALESCE(sum(1 - EXTRACT(EPOCH FROM (clock_timestamp() - closed_at)) / 60), 0)
+                      FROM llm_call_permit
+                     WHERE pool_id = :poolId AND state = 'CLOSED' AND lapsed
+                       AND closed_at > clock_timestamp() - interval '1 minute'
+                    """, nativeQuery = true)
+    double lapsedHold(@Param("poolId") long poolId);
 
     /** The UUID fences a release, including closure after lease expiry, from every later grant. */
     @Modifying

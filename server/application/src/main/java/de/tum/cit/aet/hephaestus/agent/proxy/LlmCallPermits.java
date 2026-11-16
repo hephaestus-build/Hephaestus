@@ -401,13 +401,14 @@ public class LlmCallPermits {
     /**
      * What one round may grant. An interactive call may use the reserve, also when the calls in flight fill the limit. A
      * call that is not interactive may not: calls that a lowered limit left in flight must not cost a person the
-     * reserve.
+     * reserve. The slots that lapsed permits still hold count as in flight, except against the reserve.
      */
     private LlmCallPermitRepository.Room room(long poolId, LlmCallPoolRepository.Admission pool) {
         int limit = limit(pool);
         int reserve = LlmCallLimit.reserve(limit);
-        long active = rows.countActive(poolId);
-        long notInteractive = rows.countNotInteractive(poolId);
+        long held = (long) Math.floor(rows.lapsedHold(poolId));
+        long active = rows.countActive(poolId) + held;
+        long notInteractive = rows.countNotInteractive(poolId) + held;
         var used = rows.rates(poolId);
         long bound = tokenBound(pool);
         Integer perMinute = pool.getRequestsPerMinute();
