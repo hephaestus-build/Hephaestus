@@ -2,12 +2,18 @@ package de.tum.cit.aet.hephaestus.agent.job;
 
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunFence;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunHold;
+import de.tum.cit.aet.hephaestus.evidence.AutomatedReviewReadinessDecision;
+import de.tum.cit.aet.hephaestus.evidence.AutomatedReviewReadinessReport;
+import de.tum.cit.aet.hephaestus.evidence.SourceContractVersion;
+import de.tum.cit.aet.hephaestus.evidence.SourceKind;
+import de.tum.cit.aet.hephaestus.evidence.SourceReadinessCheck;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentId;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.function.Supplier;
@@ -24,6 +30,22 @@ public final class RuntimeJobTestData {
     public static final Duration LEASE = Duration.ofMinutes(10);
 
     private RuntimeJobTestData() {}
+
+    /** A capture's readiness report in which one practice runs, as every attempt that starts its sandbox has one. */
+    public static AutomatedReviewReadinessReport readyReport(String itemKind, Instant decidedAt) {
+        var contract = new SourceContractVersion("3.0.0");
+        var check = new SourceReadinessCheck(
+                new SourceKind("scm.pull-request.core"), contract, decidedAt, decidedAt, true, List.of());
+        return new AutomatedReviewReadinessReport(
+                contract,
+                "a".repeat(64),
+                itemKind,
+                decidedAt,
+                decidedAt,
+                List.of(new AutomatedReviewReadinessDecision(
+                        "test-practice", decidedAt, true, List.of(), List.of(check))),
+                Map.of());
+    }
 
     public static void initialize(ReviewJob job, long workspaceId) {
         if (job.getId() == null) job.setId(UUID.randomUUID());

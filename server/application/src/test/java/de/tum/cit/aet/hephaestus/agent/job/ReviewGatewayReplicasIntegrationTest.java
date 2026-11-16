@@ -447,23 +447,23 @@ class ReviewGatewayReplicasIntegrationTest extends BaseIntegrationTest {
                             new ItemKind("scm.pull_request"),
                             Map.of(new SourceKind("scm.repository.tree"), CaptureContribution.empty()))
                     .manifest());
-            AutomatedReviewReadinessReport readiness = null;
-            if (publication == Publication.COMPLETION_FAILED) {
-                Instant decided = manifest.capturedAt();
-                readiness = new AutomatedReviewReadinessReport(
-                        manifest.contractVersion(),
-                        manifest.catalogDigest(),
-                        manifest.itemKind(),
-                        manifest.capturedAt(),
-                        decided,
-                        List.of(new AutomatedReviewReadinessDecision(
-                                "test-practice",
-                                decided,
-                                false,
-                                List.of(AutomatedReviewReadinessReason.NO_AUTOMATED_REVIEW),
-                                List.of())),
-                        Map.of());
-            }
+            // The practice runs, except where the test completes the prepared inputs without a sandbox.
+            Instant decided = manifest.capturedAt();
+            var readiness = publication == Publication.COMPLETION_FAILED
+                    ? new AutomatedReviewReadinessReport(
+                            manifest.contractVersion(),
+                            manifest.catalogDigest(),
+                            manifest.itemKind(),
+                            manifest.capturedAt(),
+                            decided,
+                            List.of(new AutomatedReviewReadinessDecision(
+                                    "test-practice",
+                                    decided,
+                                    false,
+                                    List.of(AutomatedReviewReadinessReason.NO_AUTOMATED_REVIEW),
+                                    List.of())),
+                            Map.of())
+                    : RuntimeJobTestData.readyReport(manifest.itemKind(), decided);
             files.beginPersonCapture(current);
             return files.prepare(
                     current,

@@ -23,6 +23,7 @@ import de.tum.cit.aet.hephaestus.agent.gateway.SandboxRun;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxRunKind;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobCompletionService;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunReaper;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxKind;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxes;
@@ -31,6 +32,7 @@ import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemIndexService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
+import de.tum.cit.aet.hephaestus.integration.core.spi.AboutRole;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRegistration;
@@ -48,6 +50,8 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.events.EventContext;
 import de.tum.cit.aet.hephaestus.integration.scm.events.ScmDomainEvent;
 import de.tum.cit.aet.hephaestus.integration.scm.events.ScmEventPayload;
+import de.tum.cit.aet.hephaestus.practices.AppliesWhen;
+import de.tum.cit.aet.hephaestus.practices.AppliesWhenClause;
 import de.tum.cit.aet.hephaestus.practices.DefinitionTestFixtures;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinition;
 import de.tum.cit.aet.hephaestus.practices.PracticeReadSource;
@@ -79,6 +83,7 @@ import java.math.BigDecimal;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -117,6 +122,7 @@ import tools.jackson.databind.ObjectMapper;
  * model's judgement stubbed. The server requests the review's sandbox; the sandbox ({@link ReviewSandboxStub}) pulls its
  * run, which captures the work, and speaks the runner's protocol over the gateway with its own token; the review model
  * is a stub provider behind the real proxy. Between the capture and the first practice start the work may change, as it does on a live install.
+ * A review whose readiness withholds every practice spends no attempt on it and shows no failed job.
  */
 // The agent runtime without a cluster, as AgentRuntimeWithoutCluster builds it; the sandbox is the runner stub.
 @MockitoBean(name = "sandboxKubernetesClient", types = KubernetesClient.class, enforceOverride = true)
@@ -249,6 +255,9 @@ class ReviewEndToEndIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     @Autowired
     private TransactionTemplate transactions;
+
+    @Autowired
+    private AgentRunReaper reaper;
 
     @BeforeAll
     static void startProvider() throws IOException {
@@ -456,11 +465,394 @@ class ReviewEndToEndIntegrationTest extends AbstractWorkspaceIntegrationTest {
         assertThat(reviewed.modelRequests()).isEqualTo(1);
     }
 
+    @Test
+    void shouldCreateNoJobAndNoRunWhenSelectionWithholdsEveryPractice() {
+        var work = work(IdentityProviderType.GITHUB);
+        var assignee = practice(
+                work.workspace(), "about-its-assignee", AboutRole.ASSIGNEE, List.of(read("scm.pull-request.core")));
+        var checks = practice(
+                work.workspace(),
+                "waits-for-its-checks",
+                AboutRole.AUTHOR,
+                List.of(
+                        read("scm.pull-request.core"),
+                        new PracticeReadSource(PullRequestChecksRecord.KIND, ReadNeed.REQUIRED)));
+
+        UUID reviewId = requested(work, assignee, checks);
+
+        assertThat(reviewRow(reviewId))
+                .containsEntry("status", "PARTIAL")
+                .containsEntry("stop_reason", "READINESS_REFUSED");
+        assertThat(membership(reviewId, assignee))
+                .containsEntry("state", "WITHHELD")
+                .containsEntry("reason", "ROLE_UNAVAILABLE");
+        assertThat(membership(reviewId, checks))
+                .containsEntry("state", "WITHHELD")
+                .containsEntry("reason", "NO_CHECKS_REPORTED");
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM review_job WHERE review_id = ?", Long.class, reviewId))
+                .isZero();
+        assertThat(runs(work)).isZero();
+    }
+
+    @Test
+    void shouldRunOnlyTheReadyPracticesWhenSelectionWithholdsSome() {
+        var work = work(IdentityProviderType.GITHUB);
+        var ready = practice(work.workspace(), Reads.THE_WORK);
+        var assignee = practice(
+                work.workspace(), "about-its-assignee", AboutRole.ASSIGNEE, List.of(read("scm.pull-request.core")));
+        sandbox.prepare(() -> {});
+
+        UUID reviewId = requested(work, ready, assignee);
+
+        assertThat(membership(reviewId, ready)).containsEntry("state", "LISTED");
+        assertThat(membership(reviewId, assignee))
+                .containsEntry("state", "WITHHELD")
+                .containsEntry("reason", "ROLE_UNAVAILABLE");
+        assertThat(await().atMost(Duration.ofSeconds(30))
+                        .until(
+                                () -> jdbc.queryForObject(
+                                        "SELECT count(*) FROM review_job WHERE review_id = ?", Long.class, reviewId),
+                                count -> count > 0))
+                .isEqualTo(1);
+        assertThat(runs(work)).isEqualTo(1);
+
+        settle(reviewId);
+
+        assertThat(sandbox.calls)
+                .as("only the ready practice starts")
+                .filteredOn(call -> call.path().equals("start-practice"))
+                .singleElement()
+                .satisfies(call -> assertThat(call.body()).contains(ready.getSlug()));
+        assertThat(membership(reviewId, ready)).containsEntry("state", "JUDGED");
+        assertThat(membership(reviewId, assignee))
+                .containsEntry("state", "WITHHELD")
+                .containsEntry("reason", "ROLE_UNAVAILABLE");
+        assertThat(reviewRow(reviewId))
+                .as("a practice withheld on purpose is not a runtime that fell short")
+                .containsEntry("status", "PARTIAL")
+                .containsEntry("stop_reason", "READINESS_REFUSED");
+    }
+
+    /** The mirror has not read the whole discussion, so a practice that requires it whole is not ready at capture. */
+    @Test
+    void shouldCompleteTheAttemptWithoutASandboxWhenCaptureReadinessWithholdsEveryPractice() {
+        var work = work(IdentityProviderType.GITHUB);
+        var whole = wholeDiscussion(work);
+        sandbox.prepare(() -> {});
+        int providerRequests = PROVIDER.getRequestCount();
+
+        UUID reviewId = requested(work, whole);
+        settle(reviewId);
+
+        assertCompletedWithoutMeasurement(reviewId, 0);
+        assertThat(PROVIDER.getRequestCount()).isEqualTo(providerRequests);
+        assertThat(membership(reviewId, whole))
+                .containsEntry("state", "WITHHELD")
+                .containsEntry("reason", "READINESS_REFUSED");
+        assertThat(reviewRow(reviewId))
+                .containsEntry("status", "PARTIAL")
+                .containsEntry("stop_reason", "READINESS_REFUSED");
+    }
+
+    /** Selection withholds one practice for its role, and capture withholds the other: the review was not ready. */
+    @Test
+    void shouldEndAsNotReadyWhenSelectionAndCaptureEachWithholdAPractice() {
+        var work = work(IdentityProviderType.GITHUB);
+        var assignee = practice(
+                work.workspace(), "about-its-assignee", AboutRole.ASSIGNEE, List.of(read("scm.pull-request.core")));
+        var whole = wholeDiscussion(work);
+        sandbox.prepare(() -> {});
+
+        UUID reviewId = requested(work, assignee, whole);
+        settle(reviewId);
+
+        assertCompletedWithoutMeasurement(reviewId, 0);
+        assertThat(membership(reviewId, assignee))
+                .containsEntry("state", "WITHHELD")
+                .containsEntry("reason", "ROLE_UNAVAILABLE");
+        assertThat(membership(reviewId, whole))
+                .containsEntry("state", "WITHHELD")
+                .containsEntry("reason", "READINESS_REFUSED");
+        assertThat(reviewRow(reviewId))
+                .containsEntry("status", "PARTIAL")
+                .containsEntry("stop_reason", "READINESS_REFUSED");
+    }
+
+    /**
+     * The only server crashes after the attempt staged its practice and before it sealed. The next attempt finds no
+     * open practice: it seals the staged result without a sandbox, and the result's feedback is composed.
+     */
+    @Test
+    void shouldComposeWhatALostAttemptStagedWhenTheNextAttemptFindsNoOpenPractice() {
+        var work = work(IdentityProviderType.GITHUB);
+        var practice = practice(work.workspace(), Reads.THE_WORK);
+        sandbox.prepare(() -> {});
+        sandbox.crashAfterNextStage(this::expireLease);
+        int providerRequests = PROVIDER.getRequestCount();
+
+        UUID reviewId = requested(work, practice);
+        settle(reviewId);
+
+        assertComposedWithoutMeasurement(reviewId, work);
+        assertThat(membership(reviewId, practice)).containsEntry("state", "JUDGED");
+        assertThat(reviewRow(reviewId)).containsEntry("status", "COMPLETE").containsEntry("stop_reason", null);
+        assertThat(PROVIDER.getRequestCount() - providerRequests).isEqualTo(1);
+    }
+
+    /**
+     * As above, but the pull request moved on before the next attempt. The next attempt seals the staged result
+     * without capturing the work again, and composes its feedback from the inputs that staging kept: those of the
+     * version it measured. Nothing fails.
+     */
+    @Test
+    void shouldComposeWhatALostAttemptStagedWhenTheWorkMovedOnBeforeTheNextAttempt() {
+        var work = work(IdentityProviderType.GITHUB);
+        var practice = practice(work.workspace(), Reads.THE_WORK);
+        sandbox.prepare(() -> {});
+        sandbox.crashAfterNextStage(runId -> {
+            jdbc.update(
+                    "UPDATE issue SET head_ref_oid = ? WHERE id = ?",
+                    "c".repeat(40),
+                    work.pull().getId());
+            expireLease(runId);
+        });
+
+        UUID reviewId = requested(work, practice);
+        settle(reviewId);
+
+        assertComposedWithoutMeasurement(reviewId, work);
+        assertThat(membership(reviewId, practice)).containsEntry("state", "JUDGED");
+        assertThat(jdbc.queryForObject(
+                        "SELECT count(*) FROM review_composition_basis b JOIN review_job j ON j.id = b.job_id"
+                                + " WHERE j.review_id = ?",
+                        Long.class,
+                        reviewId))
+                .as("the composition reads the inputs that staging kept")
+                .isEqualTo(1);
+        assertThat(reviewRow(reviewId).get("status")).isNotEqualTo("FAILED");
+    }
+
+    /**
+     * A practice that only a merge can concern does not apply to open work. Its capture admits that result without a
+     * sandbox, and the attempt completes: no feedback composition runs for a review that measured nothing new.
+     */
+    @Test
+    void shouldCompleteWithoutCompositionWhenCaptureFindsEveryPracticeInapplicable() {
+        var work = work(IdentityProviderType.GITHUB);
+        var merged = practice(
+                work.workspace(),
+                "concerns-a-merge",
+                AboutRole.AUTHOR,
+                List.of(read("scm.pull-request.core")),
+                new AppliesWhen(
+                        List.of(new AppliesWhenClause(null, null, null, true)), "The pull request is not merged."));
+        sandbox.prepare(() -> {});
+
+        UUID reviewId = requested(work, merged);
+        settle(reviewId);
+
+        assertThat(jdbc.queryForList(
+                        "SELECT kind || '/' || state || '/' || coalesce(stop_reason, '') FROM agent_run"
+                                + " WHERE workspace_id = ? ORDER BY created_at",
+                        String.class,
+                        work.workspace().getId()))
+                .as(sandbox.calls.toString())
+                .containsExactly("REVIEW/ENDED/COMPLETED");
+        assertThat(jdbc.queryForList("SELECT outcome FROM result WHERE review_id = ?", String.class, reviewId))
+                .containsExactly("DOES_NOT_APPLY");
+        assertThat(jdbc.queryForMap("SELECT status, error_message FROM review_job WHERE review_id = ?", reviewId))
+                .containsEntry("status", "COMPLETED")
+                .containsEntry("error_message", null);
+    }
+
+    /**
+     * As above, but one practice was still open after the crash, and the next capture finds it not ready: the staged
+     * result is still composed, and the other practice keeps its readiness reason.
+     */
+    @Test
+    void shouldComposeWhatALostAttemptStagedWhenCaptureReadinessWithholdsTheRest() {
+        var work = work(IdentityProviderType.GITHUB);
+        discussionReadWhole(work, true);
+        var first = wholeDiscussion(work, "reads-the-whole-discussion");
+        var second = wholeDiscussion(work, "reads-the-whole-discussion-too");
+        sandbox.prepare(() -> {});
+        sandbox.crashAfterNextStage(runId -> {
+            discussionReadWhole(work, false);
+            expireLease(runId);
+        });
+        int providerRequests = PROVIDER.getRequestCount();
+
+        UUID reviewId = requested(work, first, second);
+        settle(reviewId);
+
+        assertComposedWithoutMeasurement(reviewId, work);
+        assertThat(List.of(membership(reviewId, first), membership(reviewId, second)))
+                .extracting(member -> member.get("state") + "/" + member.get("reason"))
+                .containsExactlyInAnyOrder("JUDGED/null", "WITHHELD/READINESS_REFUSED");
+        assertThat(reviewRow(reviewId))
+                .containsEntry("status", "PARTIAL")
+                .containsEntry("stop_reason", "READINESS_REFUSED");
+        assertThat(PROVIDER.getRequestCount() - providerRequests).isEqualTo(1);
+    }
+
+    /**
+     * The work changes between the capture and the practice start, so the start withholds the practice as replaced.
+     * Then the only server is lost before the attempt seals, and the next attempt finds no open practice.
+     */
+    @Test
+    void shouldCompleteTheNextAttemptWithoutASandboxWhenEveryPracticeEndedAtItsStart() {
+        var work = work(IdentityProviderType.GITHUB);
+        var practice = practice(work.workspace(), Reads.THE_WORK);
+        sandbox.prepare(() -> remark(work.pull(), work.developer(), "A later remark", "2026-10-01T12:00:00Z"));
+        var lost = new AtomicReference<Map<String, @Nullable Object>>();
+        sandbox.loseGatewayBeforeNextSeal(runId -> lost.set(jdbc.queryForMap(
+                "SELECT j.status AS job, r.state AS run, r.attempt FROM review_job j"
+                        + " JOIN agent_run r ON r.id = j.run_id WHERE j.run_id = ?::uuid",
+                runId)));
+        int providerRequests = PROVIDER.getRequestCount();
+
+        UUID reviewId = requested(work, practice);
+        settle(reviewId);
+
+        assertThat(sandbox.calls)
+                .as("the first attempt starts the practice, and the start withholds it")
+                .anySatisfy(call -> assertThat(call.path() + " " + call.body())
+                        .contains("start-practice")
+                        .contains("\"current\":false"));
+        assertThat(lost.get())
+                .as("the lost attempt waits for its next one, with one retry spent")
+                .containsEntry("job", "QUEUED")
+                .containsEntry("run", "QUEUED")
+                .containsEntry("attempt", 1);
+        assertCompletedWithoutMeasurement(reviewId, 1);
+        assertThat(PROVIDER.getRequestCount()).isEqualTo(providerRequests);
+        assertThat(membership(reviewId, practice))
+                .containsEntry("state", "WITHHELD")
+                .containsEntry("reason", "REPLACED");
+        assertThat(reviewRow(reviewId)).containsEntry("status", "PARTIAL").containsEntry("stop_reason", "REPLACED");
+    }
+
+    /**
+     * The attempt ended while it prepared: its job completed with no error, and its run ended completed. No sandbox
+     * measured, and the attempt spent no retry: the run's spent attempts stay at {@code spent}.
+     */
+    private void assertCompletedWithoutMeasurement(UUID reviewId, int spent) {
+        assertThat(jdbc.queryForMap(
+                        "SELECT j.status AS job, j.error_message, j.execution_started_at, r.state AS run,"
+                                + " r.stop_reason AS run_stop, r.attempt AS spent"
+                                + " FROM review_job j JOIN agent_run r ON r.id = j.run_id WHERE j.review_id = ?",
+                        reviewId))
+                .as(sandbox.calls.toString())
+                .containsEntry("job", "COMPLETED")
+                .containsEntry("error_message", null)
+                .containsEntry("execution_started_at", null)
+                .containsEntry("run", "ENDED")
+                .containsEntry("run_stop", "COMPLETED")
+                .containsEntry("spent", spent);
+        assertThat(sandbox.calls)
+                .as("the attempt stops at its preparation")
+                .anySatisfy(
+                        call -> assertThat(call.path() + " " + call.status()).isEqualTo("context 409"))
+                .noneSatisfy(call -> assertThat(call.path()).isIn("completions", "stage-result", "admit-results"));
+    }
+
+    private Map<String, @Nullable Object> reviewRow(UUID reviewId) {
+        return jdbc.queryForMap("SELECT status, stop_reason FROM review WHERE id = ?", reviewId);
+    }
+
+    private Map<String, @Nullable Object> membership(UUID reviewId, Practice practice) {
+        return jdbc.queryForMap(
+                "SELECT state, reason FROM review_item WHERE review_id = ? AND practice_id = ?",
+                reviewId,
+                practice.getId());
+    }
+
+    private long runs(Work work) {
+        return Objects.requireNonNull(jdbc.queryForObject(
+                "SELECT count(*) FROM agent_run WHERE workspace_id = ?",
+                Long.class,
+                work.workspace().getId()));
+    }
+
+    /** A practice that requires the whole discussion, on work whose mirror has not read it whole. */
+    private Practice wholeDiscussion(Work work) {
+        discussionReadWhole(work, false);
+        return wholeDiscussion(work, "reads-the-whole-discussion");
+    }
+
+    private Practice wholeDiscussion(Work work, String slug) {
+        return practice(
+                work.workspace(),
+                slug,
+                AboutRole.AUTHOR,
+                List.of(
+                        read("scm.pull-request.core"),
+                        new PracticeReadSource(new SourceKind("scm.general-review-comments"), ReadNeed.COMPLETE)));
+    }
+
+    private void discussionReadWhole(Work work, boolean whole) {
+        jdbc.update(
+                "UPDATE issue SET discussion_read_whole = ? WHERE id = ?",
+                whole,
+                work.pull().getId());
+    }
+
+    /** The crashed attempt's lease expires, and the reaper queues its run again, due at once. */
+    private void expireLease(String runId) {
+        jdbc.update(
+                "UPDATE agent_run SET leased_until = clock_timestamp() - interval '1 second' WHERE id = ?::uuid",
+                runId);
+        reaper.reap();
+        jdbc.update(
+                "UPDATE agent_run SET available_at = clock_timestamp() - interval '1 second'"
+                        + " WHERE id = ?::uuid AND state = 'QUEUED'",
+                runId);
+    }
+
+    /**
+     * The attempt after the crash sealed the staged results without a sandbox and handed them on: its review run ended
+     * handed off, and the run that composed their feedback ended. No practice started again.
+     */
+    private void assertComposedWithoutMeasurement(UUID reviewId, Work work) {
+        assertThat(jdbc.queryForList(
+                        "SELECT kind || '/' || state || '/' || coalesce(stop_reason, '') FROM agent_run"
+                                + " WHERE workspace_id = ? ORDER BY created_at",
+                        String.class,
+                        work.workspace().getId()))
+                .as(sandbox.calls.toString())
+                .containsExactly("REVIEW/ENDED/HANDED_OFF", "REVIEW_COMPOSE/ENDED/COMPLETED");
+        assertThat(sandbox.calls)
+                .as("the attempt after the crash stops at its preparation")
+                .anySatisfy(
+                        call -> assertThat(call.path() + " " + call.status()).isEqualTo("context 409"))
+                .noneSatisfy(call -> assertThat(call.path()).isEqualTo("admit-results"))
+                .filteredOn(call -> call.path().equals("start-practice"))
+                .hasSize(1);
+        assertThat(jdbc.queryForList("SELECT outcome FROM result WHERE review_id = ?", String.class, reviewId))
+                .containsExactly("MET");
+        assertThat(jdbc.queryForMap(
+                        "SELECT j.status AS job, j.error_message, r.attempt AS spent FROM review_job j"
+                                + " JOIN agent_run r ON r.workspace_id = j.workspace_id AND r.kind = 'REVIEW'"
+                                + " WHERE j.review_id = ?",
+                        reviewId))
+                .as("the attempt after the crash spent no retry: only the crash did")
+                .containsEntry("job", "COMPLETED")
+                .containsEntry("error_message", null)
+                .containsEntry("spent", 1);
+    }
+
+    private static PracticeReadSource read(String source) {
+        return new PracticeReadSource(new SourceKind(source), ReadNeed.REQUIRED);
+    }
+
     private Reviewed review(IdentityProviderType type, Asked asked, Between between) {
         return review(type, asked, between, Reads.THE_WORK);
     }
 
-    private Reviewed review(IdentityProviderType type, Asked asked, Between between, Reads reads) {
+    /** A pull request by its developer, in a workspace that reviews it with the stub model. */
+    private record Work(Workspace workspace, ItemRef item, PullRequest pull, User developer) {}
+
+    private Work work(IdentityProviderType type) {
         var provider = type == IdentityProviderType.GITHUB ? ensureGitHubProvider() : ensureGitLabProvider();
         User persisted = persistUser("review-end-to-end-" + UUID.randomUUID());
         persisted.setProvider(provider);
@@ -472,6 +864,15 @@ class ReviewEndToEndIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 workspace.getId(), new ItemKind("scm.repository"), repository.getId(), null, null));
         ItemRef item = itemWriter.upsert(new ItemRegistration(
                 workspace.getId(), new ItemKind("scm.pull_request"), pull.getId(), holder.itemId(), null));
+        return new Work(workspace, item, pull, developer);
+    }
+
+    private Reviewed review(IdentityProviderType type, Asked asked, Between between, Reads reads) {
+        var work = work(type);
+        Workspace workspace = work.workspace();
+        ItemRef item = work.item();
+        PullRequest pull = work.pull();
+        User developer = work.developer();
         Practice practice = practice(workspace, reads);
         // A review can start while the discussion sync still runs: the mirror has not read the whole discussion yet.
         if (between == Between.THE_DISCUSSION_SYNC_FINISHES)
@@ -496,32 +897,9 @@ class ReviewEndToEndIntegrationTest extends AbstractWorkspaceIntegrationTest {
         });
         int providerRequests = PROVIDER.getRequestCount();
 
-        UUID reviewId = asked == Asked.BY_EVENT
-                ? opened(workspace, item, pull, type, developer)
-                : requested(workspace, item, practice, developer);
-
-        // The dispatch starts the review's sandbox, the sandbox measures and ends its run, and the server's completion
-        // settles each practice of the review: each pass here does what a scheduler does outside the test profile.
-        try {
-            await().atMost(Duration.ofMinutes(2))
-                    .pollInterval(Duration.ofMillis(250))
-                    .until(() -> {
-                        dispatcher.dispatch();
-                        sandbox.drive();
-                        composeQueued(reviewId);
-                        completion.tick();
-                        // A practice withheld at its start is final before the review that held it ends.
-                        return !jdbc.queryForList(
-                                        "SELECT p.status FROM review_practice p JOIN review r ON r.id = p.review_id"
-                                                + " WHERE p.review_id = ? AND p.status IN ('DONE', 'WITHHELD', 'FAILED')"
-                                                + " AND r.status NOT IN ('QUEUED', 'RUNNING')",
-                                        String.class,
-                                        reviewId)
-                                .isEmpty();
-                    });
-        } catch (ConditionTimeoutException timeout) {
-            throw new AssertionError("The review did not settle: " + state(reviewId) + " " + sandbox.calls, timeout);
-        }
+        UUID reviewId =
+                asked == Asked.BY_EVENT ? opened(workspace, item, pull, type, developer) : requested(work, practice);
+        settle(reviewId);
         return new Reviewed(
                 jdbc.queryForMap("SELECT status, stop_reason FROM review WHERE id = ?", reviewId),
                 jdbc.queryForMap(
@@ -552,26 +930,53 @@ class ReviewEndToEndIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 sandbox.calls.toString());
     }
 
-    private UUID requested(Workspace workspace, ItemRef item, Practice practice, User developer) {
+    /**
+     * The dispatch starts the review's sandbox, the sandbox measures and ends its run, and the server's completion
+     * settles each practice of the review: each pass here does what a scheduler does outside the test profile.
+     */
+    private void settle(UUID reviewId) {
+        try {
+            await().atMost(Duration.ofMinutes(2))
+                    .pollInterval(Duration.ofMillis(250))
+                    .until(() -> {
+                        dispatcher.dispatch();
+                        sandbox.drive();
+                        composeQueued(reviewId);
+                        completion.tick();
+                        // A practice withheld at its start is final before the review that held it ends.
+                        return !jdbc.queryForList(
+                                        "SELECT p.status FROM review_practice p JOIN review r ON r.id = p.review_id"
+                                                + " WHERE p.review_id = ? AND p.status IN ('DONE', 'WITHHELD', 'FAILED')"
+                                                + " AND r.status NOT IN ('QUEUED', 'RUNNING')",
+                                        String.class,
+                                        reviewId)
+                                .isEmpty();
+                    });
+        } catch (ConditionTimeoutException timeout) {
+            throw new AssertionError("The review did not settle: " + state(reviewId) + " " + sandbox.calls, timeout);
+        }
+    }
+
+    private UUID requested(Work work, Practice... practices) {
         var pinned = itemSources.stream()
-                .filter(source -> source.supports(item))
+                .filter(source -> source.supports(work.item()))
                 .findFirst()
                 .orElseThrow()
-                .current(item)
+                .current(work.item())
                 .orElseThrow();
         return reviews.request(new ReviewRequest(
-                workspace.getId(),
-                item.itemId(),
+                work.workspace().getId(),
+                work.item().itemId(),
                 ReviewKind.ITEM,
                 pinned.version(),
                 ReviewOrigin.REQUEST,
                 null,
-                accountId(developer),
+                accountId(work.developer()),
                 null,
                 null,
                 null,
                 null,
-                List.of(practice.getId()),
+                Arrays.stream(practices).map(Practice::getId).toList(),
                 false,
                 Set.of(),
                 null,
@@ -761,41 +1166,52 @@ class ReviewEndToEndIntegrationTest extends AbstractWorkspaceIntegrationTest {
     }
 
     private Practice practice(Workspace workspace, Reads reads) {
+        return practice(
+                workspace,
+                "states-its-change",
+                AboutRole.AUTHOR,
+                reads == Reads.NOT_THE_RECORD
+                        ? List.of(
+                                new PracticeReadSource(
+                                        new SourceKind("scm.general-review-comments"), ReadNeed.REQUIRED),
+                                new PracticeReadSource(new SourceKind("scm.pull-request.diff"), ReadNeed.OPTIONAL),
+                                new PracticeReadSource(new SourceKind("scm.repository.tree"), ReadNeed.OPTIONAL))
+                        : List.of(
+                                new PracticeReadSource(new SourceKind("scm.pull-request.core"), ReadNeed.REQUIRED),
+                                new PracticeReadSource(
+                                        new SourceKind("scm.general-review-comments"), ReadNeed.OPTIONAL),
+                                new PracticeReadSource(new SourceKind("scm.review-threads"), ReadNeed.OPTIONAL),
+                                new PracticeReadSource(new SourceKind("scm.linked-work-items"), ReadNeed.OPTIONAL),
+                                new PracticeReadSource(PullRequestChecksRecord.KIND, ReadNeed.OPTIONAL)));
+    }
+
+    private Practice practice(Workspace workspace, String slug, AboutRole about, List<PracticeReadSource> reads) {
+        return practice(workspace, slug, about, reads, null);
+    }
+
+    private Practice practice(
+            Workspace workspace,
+            String slug,
+            AboutRole about,
+            List<PracticeReadSource> reads,
+            @Nullable AppliesWhen appliesWhen) {
         var kind = new ItemKind("scm.pull_request");
         var base = DefinitionTestFixtures.definition(
                 kind, "States its change", "# The title states the change\n\nThe title names what changes.", null);
         var definition = new PracticeDefinition(
                 base.name(),
                 base.reviewOn(),
-                base.appliesWhen(),
-                base.about(),
-                new PracticeReads(
-                        ClasspathSourceCatalogRegistry.CURRENT_VERSION.value(),
-                        reads == Reads.NOT_THE_RECORD
-                                ? List.of(
-                                        new PracticeReadSource(
-                                                new SourceKind("scm.general-review-comments"), ReadNeed.REQUIRED),
-                                        new PracticeReadSource(
-                                                new SourceKind("scm.pull-request.diff"), ReadNeed.OPTIONAL),
-                                        new PracticeReadSource(
-                                                new SourceKind("scm.repository.tree"), ReadNeed.OPTIONAL))
-                                : List.of(
-                                        new PracticeReadSource(
-                                                new SourceKind("scm.pull-request.core"), ReadNeed.REQUIRED),
-                                        new PracticeReadSource(
-                                                new SourceKind("scm.general-review-comments"), ReadNeed.OPTIONAL),
-                                        new PracticeReadSource(new SourceKind("scm.review-threads"), ReadNeed.OPTIONAL),
-                                        new PracticeReadSource(
-                                                new SourceKind("scm.linked-work-items"), ReadNeed.OPTIONAL),
-                                        new PracticeReadSource(PullRequestChecksRecord.KIND, ReadNeed.OPTIONAL))),
+                appliesWhen,
+                about,
+                new PracticeReads(ClasspathSourceCatalogRegistry.CURRENT_VERSION.value(), reads),
                 base.reviewedBy(),
                 base.criteria(),
                 base.script(),
                 base.scan(),
                 base.lineNotes(),
                 base.guidance());
-        Practice practice = practiceVersions.create(new PracticeVersionService.NewPractice(
-                workspace.getId(), "states-its-change", kind, definition, null, 0, null));
+        Practice practice = practiceVersions.create(
+                new PracticeVersionService.NewPractice(workspace.getId(), slug, kind, definition, null, 0, null));
         practice.setFeedbackMode(FeedbackMode.OFF);
         return practices.saveAndFlush(practice);
     }

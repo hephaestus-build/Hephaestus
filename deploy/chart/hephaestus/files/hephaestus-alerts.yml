@@ -796,20 +796,21 @@ groups:
           summary: Fewer than 75 % of page loads showed their main content within 2.5 seconds over seven days
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       # An item review that does not end complete leaves a developer without feedback for part of its practices.
-      # Readiness waits and budget stops are decisions of policy with their own signals, so they count on neither side.
+      # Readiness waits, budget stops, replaced work and changed review settings are decisions of policy with their own
+      # signals, so they count on neither side.
       - alert: HephaestusReviewsIncomplete
         expr: >-
           sum(
-            increase(practice_review_ended_total{job="hephaestus",kind="item",status=~"partial|failed",reason!~"readiness_refused|budget|replaced"}[6h])
+            increase(practice_review_ended_total{job="hephaestus",kind="item",status=~"partial|failed",reason!~"readiness_refused|budget|replaced|stale_rollout_revision"}[6h])
             or increase(practice_review_ended_total{job="hephaestus",kind="item",status="cancelled",reason="no_sandbox_room"}[6h])
           )
           / sum(
-            increase(practice_review_ended_total{job="hephaestus",kind="item",status=~"partial|failed",reason!~"readiness_refused|budget|replaced"}[6h])
+            increase(practice_review_ended_total{job="hephaestus",kind="item",status=~"partial|failed",reason!~"readiness_refused|budget|replaced|stale_rollout_revision"}[6h])
             or increase(practice_review_ended_total{job="hephaestus",kind="item",status="cancelled",reason="no_sandbox_room"}[6h])
             or increase(practice_review_ended_total{job="hephaestus",kind="item",status="complete"}[6h])
           ) > 0.25
           and sum(
-            increase(practice_review_ended_total{job="hephaestus",kind="item",status=~"partial|failed",reason!~"readiness_refused|budget|replaced"}[6h])
+            increase(practice_review_ended_total{job="hephaestus",kind="item",status=~"partial|failed",reason!~"readiness_refused|budget|replaced|stale_rollout_revision"}[6h])
             or increase(practice_review_ended_total{job="hephaestus",kind="item",status="cancelled",reason="no_sandbox_room"}[6h])
             or increase(practice_review_ended_total{job="hephaestus",kind="item",status="complete"}[6h])
           ) >= 4

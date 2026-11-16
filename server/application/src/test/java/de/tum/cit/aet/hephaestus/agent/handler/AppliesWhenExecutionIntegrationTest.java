@@ -1,8 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.handler;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -11,7 +9,6 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.context.AppliesWhenEvaluator;
-import de.tum.cit.aet.hephaestus.agent.context.InsufficientEvidenceException;
 import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.JobFolderIndex;
 import de.tum.cit.aet.hephaestus.agent.context.JobFolderIndexBuilder;
@@ -92,6 +89,7 @@ import de.tum.cit.aet.hephaestus.practices.review.ReviewAdmissionData;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewIntegrationData;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewItemRepository;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewPracticeRepository;
+import de.tum.cit.aet.hephaestus.practices.review.ReviewRepository;
 import de.tum.cit.aet.hephaestus.practices.spi.AdmittedResultQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.HistoryCustody;
 import de.tum.cit.aet.hephaestus.practices.spi.ProcessingStatus;
@@ -100,12 +98,16 @@ import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultStore;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentId;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentStore;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewCompletion;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewItemState;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobSnapshot;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewPracticeStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewRuntimeSnapshot;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewService;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStopReason;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewWithholdings;
 import de.tum.cit.aet.hephaestus.practices.spi.ScriptRunStatus;
 import de.tum.cit.aet.hephaestus.testconfig.ItemFixtures;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
@@ -136,6 +138,12 @@ class AppliesWhenExecutionIntegrationTest extends AbstractResultAdmissionIntegra
 
     @Autowired
     ReviewIntegrationData data;
+
+    @Autowired
+    ReviewService reviews;
+
+    @Autowired
+    ReviewRepository reviewRows;
 
     @Autowired
     ReviewAdmissionData admissions;
@@ -482,25 +490,17 @@ class AppliesWhenExecutionIntegrationTest extends AbstractResultAdmissionIntegra
         var job = jobs.findById(pending.jobId()).orElseThrow();
         var handler = bundledHandler(job, false);
 
-        var failure = catchThrowable(() -> {
-            try (var prepared = handler.prepareInputs(job)) {
-                assertThat(prepared.folderIndex()).isNotNull();
-                new ReviewOutputService(
-                                assignments,
-                                mock(CandidateEvidenceVerifier.class),
-                                store,
-                                mapper,
-                                files,
-                                catalogs,
-                                members)
-                        .seal(job, List.of());
-            }
-        });
+        try (var prepared = handler.prepareInputs(job)) {
+            var report = Objects.requireNonNull(prepared.automatedReviewReadinessReport());
+            assertThat(report.decisions()).noneMatch(report::runs);
+            new ReviewOutputService(
+                            assignments, mock(CandidateEvidenceVerifier.class), store, mapper, files, catalogs, members)
+                    .seal(job, List.of());
+        }
         assertThat(results.findByWorkspaceIdAndReviewIdOrderByRecordedAtAscIdAsc(
                         job.getWorkspaceId(), job.getReviewId()))
                 .extracting(result -> result.getOutcome())
                 .isEmpty();
-        assertThat(failure).isInstanceOf(InsufficientEvidenceException.class);
 
         var practice = practices
                 .findByWorkspaceIdAndReviewIdAndPracticeId(
@@ -509,7 +509,7 @@ class AppliesWhenExecutionIntegrationTest extends AbstractResultAdmissionIntegra
                         pending.scenario().practice().getId())
                 .orElseThrow();
         assertThat(practice.getStatus()).isEqualTo(ReviewPracticeStatus.WITHHELD);
-        assertThat(practice.getReason()).isEqualTo("readiness_refused");
+        assertThat(practice.getReason()).isEqualTo(ReviewStopReason.READINESS_REFUSED.name());
         var manifest = Objects.requireNonNull(mapper.treeToValue(
                 Objects.requireNonNull(job.getCapture()).path("manifest"), JobFolderIndex.Retained.class));
         var kinds = Set.of(
@@ -719,14 +719,17 @@ class AppliesWhenExecutionIntegrationTest extends AbstractResultAdmissionIntegra
         var pending = pending();
         var job = jobs.findById(pending.jobId()).orElseThrow();
         var handler = handler(job, false, Set.of());
-        assertThatThrownBy(() -> handler.prepareInputs(job)).isInstanceOf(InsufficientEvidenceException.class);
+        try (var prepared = handler.prepareInputs(job)) {
+            var report = Objects.requireNonNull(prepared.automatedReviewReadinessReport());
+            assertThat(report.decisions()).noneMatch(report::runs);
+        }
         var practice = practices
                 .findByWorkspaceIdAndReviewIdAndPracticeId(
                         job.getWorkspaceId(),
                         job.getReviewId(),
                         pending.scenario().practice().getId())
                 .orElseThrow();
-        assertThat(practice.getReason()).isEqualTo("readiness_refused");
+        assertThat(practice.getReason()).isEqualTo(ReviewStopReason.READINESS_REFUSED.name());
         assertThat(practice.getCaptureDecision()).isNotNull();
         assertThat(Objects.requireNonNull(practice.getCaptureDecision())
                         .path("applicability")
@@ -756,8 +759,9 @@ class AppliesWhenExecutionIntegrationTest extends AbstractResultAdmissionIntegra
     }
 
     /**
-     * Scope: the handler and the real assignment store, not the executor. It drives the same admissible lookup and
-     * PREPARATION_FAILED call that terminal settlement makes after an evidence refusal with no readiness report.
+     * Scope: the handler, the real assignment store and the review's completion, not the executor. Nothing is left
+     * open, so the attempt seals and completes without a sandbox, and its settlement completes the review with no
+     * reason of its own.
      */
     @Test
     void shouldKeepTheUnsupportedSourceRefusalThroughSettlementWhenNoPracticeCanBeCaptured() {
@@ -795,21 +799,13 @@ class AppliesWhenExecutionIntegrationTest extends AbstractResultAdmissionIntegra
         var handler = handler(new WorkspaceContextBuilder(
                 List.of(), List.of(source), catalogs, new JobFolderIndexBuilder(catalogs, mapper, Clock.systemUTC())));
 
-        assertThatThrownBy(() -> handler.prepareInputs(job))
-                .isInstanceOfSatisfying(
-                        InsufficientEvidenceException.class,
-                        refusal -> assertThat(refusal.preparedInputs().automatedReviewReadinessReport())
-                                .isNull());
-        // Terminal settlement: no readiness report, so every pinned practice is still admissible and is failed.
-        var admissible = assignments.admissible(job);
-        assertThat(admissible).extracting(a -> a.id()).containsExactly(assignment.id());
-        for (var settled : admissible)
-            members.fail(
-                    job.getWorkspaceId(),
-                    settled.id(),
-                    job.getId(),
-                    ReviewStopReason.PREPARATION_FAILED,
-                    "The execution ended without an admitted result");
+        try (var prepared = handler.prepareInputs(job)) {
+            assertThat(prepared.automatedReviewReadinessReport()).isNull();
+        }
+        assertThat(assignments.open(job)).isEmpty();
+        var now = Instant.now();
+        reviews.complete(
+                job.getWorkspaceId(), job.getReviewId(), new ReviewCompletion(ReviewStatus.COMPLETE, null, now, now));
 
         var practice = practices
                 .findByWorkspaceIdAndReviewIdAndPracticeId(
@@ -818,7 +814,7 @@ class AppliesWhenExecutionIntegrationTest extends AbstractResultAdmissionIntegra
                         assignment.practice().practiceId())
                 .orElseThrow();
         assertThat(practice.getStatus()).isEqualTo(ReviewPracticeStatus.WITHHELD);
-        assertThat(practice.getReason()).isEqualTo(DefaultReviewExecutionHandler.SOURCE_CONTRACT_UNSUPPORTED);
+        assertThat(practice.getReason()).isEqualTo(ReviewWithholdings.SOURCE_CONTRACT_UNSUPPORTED);
         assertThat(Objects.requireNonNull(practice.getCaptureDecision())
                         .path("unsupportedSources")
                         .get(0)
@@ -833,9 +829,16 @@ class AppliesWhenExecutionIntegrationTest extends AbstractResultAdmissionIntegra
                         assignment.item().itemId())
                 .orElseThrow();
         assertThat(member.getState()).isEqualTo(ReviewItemState.WITHHELD);
-        assertThat(member.getReason()).isEqualTo(DefaultReviewExecutionHandler.SOURCE_CONTRACT_UNSUPPORTED);
+        assertThat(member.getReason()).isEqualTo(ReviewWithholdings.SOURCE_CONTRACT_UNSUPPORTED);
         assertThat(proof.forAttempt(job.getWorkspaceId(), job.getReviewId(), job.getId(), job.getAttempt()))
                 .isEmpty();
+        var review = reviewRows
+                .findByIdAndWorkspaceId(job.getReviewId(), job.getWorkspaceId())
+                .orElseThrow();
+        assertThat(review.getStatus()).isEqualTo(ReviewStatus.PARTIAL);
+        assertThat(review.getStopReason())
+                .as("a practice that does not fit the work was withheld on purpose")
+                .isEqualTo(ReviewStopReason.READINESS_REFUSED);
     }
 
     /**
@@ -893,7 +896,7 @@ class AppliesWhenExecutionIntegrationTest extends AbstractResultAdmissionIntegra
                         scenario.item().getId())
                 .orElseThrow();
         assertThat(withheld.getState()).isEqualTo(ReviewItemState.WITHHELD);
-        assertThat(withheld.getReason()).isEqualTo(DefaultReviewExecutionHandler.SOURCE_CONTRACT_UNSUPPORTED);
+        assertThat(withheld.getReason()).isEqualTo(ReviewWithholdings.SOURCE_CONTRACT_UNSUPPORTED);
 
         running(pending, 2);
         var retry = jobs.findById(pending.jobId()).orElseThrow();
@@ -919,7 +922,7 @@ class AppliesWhenExecutionIntegrationTest extends AbstractResultAdmissionIntegra
                         scenario.item().getId())
                 .orElseThrow();
         assertThat(kept.getState()).isEqualTo(ReviewItemState.WITHHELD);
-        assertThat(kept.getReason()).isEqualTo(DefaultReviewExecutionHandler.SOURCE_CONTRACT_UNSUPPORTED);
+        assertThat(kept.getReason()).isEqualTo(ReviewWithholdings.SOURCE_CONTRACT_UNSUPPORTED);
         assertThat(kept.getAttemptedAt()).isEqualTo(withheld.getAttemptedAt());
     }
 
@@ -937,7 +940,7 @@ class AppliesWhenExecutionIntegrationTest extends AbstractResultAdmissionIntegra
                 0,
                 scenario.account().getId()));
         admissions.assigned(pending, ended);
-        admissions.withheld(pending, DefaultReviewExecutionHandler.SOURCE_CONTRACT_UNSUPPORTED);
+        admissions.withheld(pending, ReviewWithholdings.SOURCE_CONTRACT_UNSUPPORTED);
         long workspaceId = scenario.workspace().getId();
         var reviewId = pending.review().getId();
         assertThat(members.endedPractices(workspaceId, reviewId, pending.jobId()))

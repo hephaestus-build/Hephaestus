@@ -321,16 +321,22 @@ public class ReviewSandboxRuns implements SandboxRunKind {
                 try {
                     SandboxSpec spec = prepared.spec();
                     if (spec == null) {
-                        // Nothing is left to measure: the attempt completes without its sandbox.
-                        transactions.executeWithoutResult(status -> {
-                            if (terminal.transition(
-                                            job.getId(), run.fence(), ReviewJobStatus.COMPLETED, Instant.now(), null)
-                                    > 0)
-                                jobs.findById(job.getId()).ifPresent(completed -> {
-                                    completed.setProcessingStatus(ProcessingStatus.PENDING);
-                                    jobs.saveAndFlush(completed);
-                                });
-                        });
+                        // Nothing is left to measure: the attempt completes without its sandbox. When its seal
+                        // admitted results that an earlier attempt staged, their feedback is composed first.
+                        if (!prepared.sealedStaged() || !results.handOnUnmeasured(job.getId(), run.fence()))
+                            transactions.executeWithoutResult(status -> {
+                                if (terminal.transition(
+                                                job.getId(),
+                                                run.fence(),
+                                                ReviewJobStatus.COMPLETED,
+                                                Instant.now(),
+                                                null)
+                                        > 0)
+                                    jobs.findById(job.getId()).ifPresent(completed -> {
+                                        completed.setProcessingStatus(ProcessingStatus.PENDING);
+                                        jobs.saveAndFlush(completed);
+                                    });
+                            });
                         custody.release(attempt);
                         throw new StaleRunException(run.fence());
                     }

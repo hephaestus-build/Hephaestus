@@ -161,7 +161,7 @@ class ReviewSandboxRunsTest extends BaseUnitTest {
         });
         verifyNoInteractions(terminal, results, reviewRuns, transactions, runs, workspaces);
         when(preparation.prepare(eq(jobId), eq(job), eq(fence), any(), any()))
-                .thenReturn(new ReviewAttemptPreparation.PreparedSandbox(spec, inputs));
+                .thenReturn(new ReviewAttemptPreparation.PreparedSandbox(spec, inputs, false));
         runtime.context(run);
         var session = runtime.session(run);
         assertThat(archive).exists();

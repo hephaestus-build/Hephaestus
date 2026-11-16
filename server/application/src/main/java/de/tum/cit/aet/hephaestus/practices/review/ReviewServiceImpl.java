@@ -48,6 +48,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewSnapshot;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStart;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStopReason;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewWithholdings;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewedByKind;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceQueries;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceQueries.ReviewWorkspace;
@@ -80,19 +81,6 @@ import tools.jackson.databind.node.ObjectNode;
 @ConditionalOnServerRole
 @RequiredArgsConstructor
 public class ReviewServiceImpl implements ReviewService {
-    /**
-     * Membership reasons of a practice that was never measured and is still owed: it waits for the item's checks, a
-     * newer occasion replaced its review, or it was not ready. Not ready covers sources that could not be verified at
-     * practice start or seal, too little evidence and a spent workspace budget; none of them says that the practice
-     * does not apply. The next edge selects it again, whatever that edge's occasions select.
-     */
-    private static final List<String> CARRIED_REASONS = List.of(
-            "CHECKS_PENDING",
-            "NO_CHECKS_REPORTED",
-            "CHECKS_AWAITING_APPROVAL",
-            ReviewStopReason.REPLACED.name(),
-            ReviewStopReason.READINESS_REFUSED.name());
-
     /** Where a review that a comment requested answers that comment when no feedback does. */
     static final String COMMENT_ANSWER = "commentAnswer";
 
@@ -343,7 +331,7 @@ public class ReviewServiceImpl implements ReviewService {
             boolean event = request.origin() == ReviewOrigin.EVENT;
             Set<Long> carried = event
                     ? Set.copyOf(memberships.lastWithheldPracticeIds(
-                            request.workspaceId(), request.itemId(), CARRIED_REASONS))
+                            request.workspaceId(), request.itemId(), ReviewWithholdings.CARRIED))
                     : Set.of();
             selected = switch (gate.evaluate(
                     workspace, pinned, request.origin(), occasions, carried, request.practiceIds())) {
@@ -566,9 +554,9 @@ public class ReviewServiceImpl implements ReviewService {
         if (checksSource == null || !needsChecks(definition, checksSource)) return null;
         return switch (checks) {
             case SETTLED -> null;
-            case PENDING -> "CHECKS_PENDING";
-            case AWAITING_APPROVAL -> "CHECKS_AWAITING_APPROVAL";
-            case NONE_REPORTED -> "NO_CHECKS_REPORTED";
+            case PENDING -> ReviewWithholdings.CHECKS_PENDING;
+            case AWAITING_APPROVAL -> ReviewWithholdings.CHECKS_AWAITING_APPROVAL;
+            case NONE_REPORTED -> ReviewWithholdings.NO_CHECKS_REPORTED;
         };
     }
 
@@ -590,7 +578,7 @@ public class ReviewServiceImpl implements ReviewService {
                 ? null
                 : roles.isEmpty()
                         ? missingRoleReason(definition.about(), pinned)
-                        : roles.size() > 1 ? "ROLE_AMBIGUOUS" : null;
+                        : roles.size() > 1 ? ReviewWithholdings.ROLE_AMBIGUOUS : null;
         if (reason == null
                 && !covered.admission()
                         .admits(
@@ -599,7 +587,7 @@ public class ReviewServiceImpl implements ReviewService {
                                 roles.size() == 1 ? roles.getFirst() : null,
                                 pinned.item().kind().value().equals("scm.pull_request")
                                         || pinned.item().kind().value().equals("scm.pull_request_review")))
-            reason = "OUTSIDE_REVIEW_SCOPE";
+            reason = ReviewWithholdings.OUTSIDE_REVIEW_SCOPE;
         if (reason == null) reason = readiness(definition, checksSource, checks);
         return new SelectedPractice(practice, version, roles, reason);
     }
@@ -610,8 +598,8 @@ public class ReviewServiceImpl implements ReviewService {
         var holders =
                 item.roles().stream().filter(holder -> holder.role() == role).toList();
         return authoredWork && !holders.isEmpty() && holders.stream().allMatch(RoleHolder::bot)
-                ? role == AboutRole.REVIEWER ? "BOT_REVIEWER" : "BOT_AUTHOR"
-                : "ROLE_UNAVAILABLE";
+                ? role == AboutRole.REVIEWER ? ReviewWithholdings.BOT_REVIEWER : ReviewWithholdings.BOT_AUTHOR
+                : ReviewWithholdings.ROLE_UNAVAILABLE;
     }
 
     private Set<SourceKind> queuedKinds(ItemSnapshot item, List<SelectedPractice> plans) {
@@ -772,28 +760,35 @@ public class ReviewServiceImpl implements ReviewService {
     }
 
     /**
-     * Why a review whose run ended without a reason of its own left practices unmeasured: the one reason that all of
-     * them share, when Hephaestus withheld each on purpose. A practice whose work changed after the capture is
-     * {@code REPLACED}, and one that waits for the item's checks or its verification is not ready. A practice the run
-     * left open, or a mix of reasons, is execution that did not finish.
+     * Why a review whose run ended without a reason of its own left practices unmeasured. When Hephaestus withheld
+     * each of them on purpose ({@link ReviewWithholdings#DELIBERATE}), the review was not ready, as selection records
+     * when it withholds every practice: {@code REPLACED} when the work changed for every one of them,
+     * {@code STALE_ROLLOUT_REVISION} when the review settings changed for every one of them, and
+     * {@code READINESS_REFUSED} otherwise. A practice that the run left open, or one that a run or admission withheld
+     * for a fault, is execution that did not finish. Measured practices count neither way.
      */
     private ReviewStopReason unmeasuredReason(Review review) {
         if (review.getKind() != ReviewKind.ITEM) return ReviewStopReason.EXECUTION_INCOMPLETE;
-        var reasons = new HashSet<ReviewStopReason>();
+        var reasons = new HashSet<@Nullable String>();
         for (var member : memberships.findByWorkspaceIdAndReviewIdOrderByPracticeIdAscItemIdAsc(
                 review.getWorkspaceId(), review.getId())) {
             if (member.getState() == ReviewItemState.LISTED || member.getState() == ReviewItemState.STAGED)
                 return ReviewStopReason.EXECUTION_INCOMPLETE;
-            if (member.getState() == ReviewItemState.WITHHELD) reasons.add(owed(member.getReason()));
+            if (member.getState() == ReviewItemState.WITHHELD) reasons.add(member.getReason());
         }
-        return reasons.size() == 1 ? reasons.iterator().next() : ReviewStopReason.EXECUTION_INCOMPLETE;
+        return unmeasuredReason(reasons);
     }
 
-    private static ReviewStopReason owed(@Nullable String reason) {
-        if (ReviewStopReason.REPLACED.name().equals(reason)) return ReviewStopReason.REPLACED;
-        return CARRIED_REASONS.contains(reason)
-                ? ReviewStopReason.READINESS_REFUSED
-                : ReviewStopReason.EXECUTION_INCOMPLETE;
+    /** {@link #unmeasuredReason(Review)} for the reasons of the review's withheld memberships. */
+    static ReviewStopReason unmeasuredReason(Set<@Nullable String> withheld) {
+        if (withheld.isEmpty()
+                || !withheld.stream()
+                        .allMatch(reason -> reason != null && ReviewWithholdings.DELIBERATE.contains(reason)))
+            return ReviewStopReason.EXECUTION_INCOMPLETE;
+        if (withheld.equals(Set.of(ReviewStopReason.REPLACED.name()))) return ReviewStopReason.REPLACED;
+        if (withheld.equals(Set.of(ReviewWithholdings.STALE_ROLLOUT_REVISION)))
+            return ReviewStopReason.STALE_ROLLOUT_REVISION;
+        return ReviewStopReason.READINESS_REFUSED;
     }
 
     private boolean hasUnsettledInvocation(long workspaceId, UUID reviewId) {

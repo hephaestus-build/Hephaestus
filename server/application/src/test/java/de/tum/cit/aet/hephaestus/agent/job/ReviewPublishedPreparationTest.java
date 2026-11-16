@@ -220,7 +220,7 @@ class ReviewPublishedPreparationTest extends BaseUnitTest {
                                 CHECKOUT,
                                 snapshot.stagingDir(),
                                 new CheckoutKey(KEY.repositoryId(), head, snapshot.treeSha(), null, null)))),
-                null);
+                RuntimeJobTestData.readyReport(manifest.itemKind(), manifest.capturedAt()));
     }
 
     private ReviewAttemptPreparation preparation(JobEvidenceFiles files) {

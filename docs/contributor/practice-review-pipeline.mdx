@@ -189,9 +189,16 @@ A refusal that can pass, such as an exhausted budget, keeps every event of the w
 
 A practice that starts after its sources changed is withheld with `REPLACED` too.
 A run that withheld every practice at its start ends with an empty result, not as a failed run.
-A review whose run ended without a reason of its own takes the one reason that all its withheld practices share.
-That is `REPLACED` when the work changed, and `READINESS_REFUSED` when they wait for the checks or the sources cannot be verified.
-A practice that the run left open, or a mix of reasons, gives `EXECUTION_INCOMPLETE`, which points to the runtime.
+
+A review whose run ended without a reason of its own takes its reason from its withheld practices.
+When Hephaestus withheld each of them on purpose, the review was not ready.
+On purpose means a selection reason (role, bot or scope), a readiness reason, a capture fit reason, `REPLACED`, or an admission policy reason (`WORKSPACE_INACTIVE` or `STALE_ROLLOUT_REVISION`).
+`ReviewWithholdings` holds that set.
+The review ends with `REPLACED` when the work changed for every withheld practice, and with `STALE_ROLLOUT_REVISION` when the review settings changed for every one.
+Otherwise it ends with `READINESS_REFUSED`, which selection also records when it withholds every practice.
+
+A practice that the run left open, or one that a run or admission withheld for a fault, gives `EXECUTION_INCOMPLETE`, which points to the runtime.
+Measured practices do not change the reason.
 
 A person's request selects every practice, with no such removal.
 At capture, each ready practice can keep its result instead of running.
@@ -324,7 +331,7 @@ The [operations guide](/admin/practice-review-operations) owns queue timing and 
 The domain source supplies the pinned record, version, roles and authorized material.
 Capture records availability, content, completeness and collection outcome separately.
 Every required source must meet the practice's declared read requirements.
-A missing, failed, redacted or incomplete required source records a readiness refusal.
+A missing, failed, redacted or incomplete required source records a readiness refusal, with the reason `READINESS_REFUSED`.
 It produces no result for that practice.
 Other practices can run when their required sources are available.
 
@@ -392,7 +399,16 @@ The retry does not capture or measure it again, also when an earlier refusal cam
 The retry's readiness report lists only the open practices.
 The withholdings of the earlier attempt stay on the review's practices and their membership, with their reasons.
 
-If no practice can be captured, the review records a readiness refusal and the sandbox does not start.
+If capture withholds every practice that is still open, the attempt completes without a sandbox, as when every practice keeps its result.
+The same applies to a retry that finds no open practice.
+An example is a retry after a restart lost an attempt whose practices were all withheld at their start.
+The attempt seals what earlier attempts ended, its job completes with no error, and it spends no retry.
+The review then takes its reason from its withheld practices ([Select a review](#select-a-review)).
+
+When the seal takes results that an earlier attempt staged, the attempt hands them on to the run that composes their feedback.
+Staging kept the inputs that this composition reads, so the attempt does not capture the work again.
+Thus, the staged results are sealed also when the work moved on since.
+An attempt whose seal admits only its own results, such as Does not apply, completes without a composition.
 
 An optional read must name a supported source.
 Its data can still be unavailable.

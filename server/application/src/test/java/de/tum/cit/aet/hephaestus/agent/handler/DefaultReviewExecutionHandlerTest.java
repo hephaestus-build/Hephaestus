@@ -3,6 +3,8 @@ package de.tum.cit.aet.hephaestus.agent.handler;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
@@ -13,7 +15,6 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.context.AppliesWhenEvaluator;
-import de.tum.cit.aet.hephaestus.agent.context.InsufficientEvidenceException;
 import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.JobFolderIndex;
 import de.tum.cit.aet.hephaestus.agent.context.JobFolderIndexBuilder;
@@ -72,6 +73,8 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewCaptureDecision;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewOrigin;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewPracticeStatus;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewStopReason;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewWithholdings;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.testconfig.ItemFixtures;
 import java.time.Clock;
@@ -248,9 +251,12 @@ class DefaultReviewExecutionHandlerTest extends BaseUnitTest {
         long practiceId = RuntimeReviewTestData.assignment(5L, null).practice().practiceId();
         when(members.endedPractices(1L, job.getReviewId(), job.getId())).thenReturn(Set.of(practiceId));
 
-        assertThatThrownBy(() -> handler.prepareInputs(job)).isInstanceOf(InsufficientEvidenceException.class);
+        try (var prepared = handler.prepareInputs(job)) {
+            assertThat(prepared.automatedReviewReadinessReport()).isNull();
+            assertThat(prepared.filesOnDisk()).isEmpty();
+        }
 
-        verify(members).capture(eq(1L), eq(job.getReviewId()), eq(job.getId()), eq(job.getAttempt()), eq(List.of()));
+        verify(members, never()).capture(anyLong(), any(), any(), anyInt(), any());
         verify(context, never()).prepare(any(), any());
         verifyNoInteractions(catalog);
     }
@@ -316,9 +322,22 @@ class DefaultReviewExecutionHandlerTest extends BaseUnitTest {
     @Test
     void captureRefusalRecordsWithheldAndNeverInventsAResult() {
         var job = prepare(false);
-        assertThatThrownBy(() -> handler.prepareInputs(job)).isInstanceOf(InsufficientEvidenceException.class);
-        assertDecision(job, ReviewPracticeStatus.WITHHELD);
-        verify(files).abortPersonCapture(job);
+        try (var prepared = handler.prepareInputs(job)) {
+            assertThat(prepared.folderIndex()).isNotNull();
+        }
+        assertThat(recordedDecisions(job)).singleElement().satisfies(decision -> {
+            assertThat(decision.status()).isEqualTo(ReviewPracticeStatus.WITHHELD);
+            assertThat(decision.reason()).isEqualTo(ReviewStopReason.READINESS_REFUSED.name());
+        });
+        verify(files)
+                .prepare(
+                        eq(job),
+                        any(),
+                        argThat(report ->
+                                report != null && report.decisions().stream().noneMatch(report::runs)));
+        verify(catalog).inject(any(), eq(List.of()), eq(ReviewKind.ITEM), eq(Map.of()));
+        verify(source, never()).record(any(), any());
+        verify(files, never()).abortPersonCapture(job);
     }
 
     private ReviewJob prepareApplicability(boolean available, Set<String> paths) {
@@ -439,7 +458,7 @@ class DefaultReviewExecutionHandlerTest extends BaseUnitTest {
     @Test
     void shouldKeepTheCaptureFailureWhenTheApplicabilitySourceIsUnavailable() {
         var job = prepareApplicability(false, Set.of());
-        assertThatThrownBy(() -> handler.prepareInputs(job)).isInstanceOf(InsufficientEvidenceException.class);
+        handler.prepareInputs(job).close();
         assertDecision(job, ReviewPracticeStatus.WITHHELD);
         var facts = ArgumentCaptor.forClass(PreparedEvidence.class);
         var report = ArgumentCaptor.forClass(AutomatedReviewReadinessReport.class);
@@ -695,7 +714,7 @@ class DefaultReviewExecutionHandlerTest extends BaseUnitTest {
                 new SourceCaptureFacts(NOW, null, null, "docs:one"),
                 List.of("The capture did not include every comment."));
         var job = prepare(ReadNeed.COMPLETE, partial);
-        assertThatThrownBy(() -> handler.prepareInputs(job)).isInstanceOf(InsufficientEvidenceException.class);
+        handler.prepareInputs(job).close();
         assertDecision(job, ReviewPracticeStatus.WITHHELD);
     }
 
@@ -873,8 +892,7 @@ class DefaultReviewExecutionHandlerTest extends BaseUnitTest {
                         decision -> {
                             assertThat(decision.practiceId()).isEqualTo(41L);
                             assertThat(decision.status()).isEqualTo(ReviewPracticeStatus.WITHHELD);
-                            assertThat(decision.reason())
-                                    .isEqualTo(DefaultReviewExecutionHandler.SOURCE_CONTRACT_UNSUPPORTED);
+                            assertThat(decision.reason()).isEqualTo(ReviewWithholdings.SOURCE_CONTRACT_UNSUPPORTED);
                             assertThat(decision.facts().path("unsupportedSources"))
                                     .isEqualTo(mapper.readTree(
                                             "[{\"source\":\"outline.documents\",\"need\":\"OPTIONAL\"}]"));
@@ -920,7 +938,7 @@ class DefaultReviewExecutionHandlerTest extends BaseUnitTest {
                 .filter(d -> d.practiceId() == 51L)
                 .findFirst()
                 .orElseThrow();
-        assertThat(older.reason()).isEqualTo(DefaultReviewExecutionHandler.SOURCE_CONTRACT_UNSUPPORTED);
+        assertThat(older.reason()).isEqualTo(ReviewWithholdings.SOURCE_CONTRACT_UNSUPPORTED);
         assertThat(older.facts().path("sourceContract").asString()).isEqualTo("1.3.0");
         assertThat(older.facts().path("currentSourceContract").asString()).isEqualTo("3.0.0");
         var issue = decisions.stream()
@@ -937,22 +955,20 @@ class DefaultReviewExecutionHandlerTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldRefuseWithoutCapturingWhenNoAssignedPracticeCanBeCaptured() {
+    void shouldWithholdWithoutCapturingWhenNoAssignedPracticeCanBeCaptured() {
         var job = RuntimeReviewTestData.job();
         var legacy = legacyWikiPractice(RuntimeReviewTestData.assignment(5L, null));
         when(assignments.load(job)).thenReturn(List.of(legacy));
         when(assignments.review(job)).thenReturn(RuntimeReviewTestData.review(ReviewKind.ITEM, legacy));
         var strict = strictHandler(job, PULL_REQUEST);
 
-        assertThatThrownBy(() -> strict.prepareInputs(job))
-                .isInstanceOfSatisfying(InsufficientEvidenceException.class, refusal -> {
-                    assertThat(refusal.preparedInputs().folderIndex()).isNull();
-                    assertThat(refusal.preparedInputs().automatedReviewReadinessReport())
-                            .isNull();
-                });
+        try (var prepared = strict.prepareInputs(job)) {
+            assertThat(prepared.folderIndex()).isNull();
+            assertThat(prepared.automatedReviewReadinessReport()).isNull();
+        }
         assertThat(recordedDecisions(job)).singleElement().satisfies(decision -> {
             assertThat(decision.status()).isEqualTo(ReviewPracticeStatus.WITHHELD);
-            assertThat(decision.reason()).isEqualTo(DefaultReviewExecutionHandler.SOURCE_CONTRACT_UNSUPPORTED);
+            assertThat(decision.reason()).isEqualTo(ReviewWithholdings.SOURCE_CONTRACT_UNSUPPORTED);
         });
         verify(source, never()).pin(any(), any());
         verify(files, never()).beginPersonCapture(job);
@@ -993,11 +1009,11 @@ class DefaultReviewExecutionHandlerTest extends BaseUnitTest {
         when(assignments.review(job)).thenReturn(RuntimeReviewTestData.review(ReviewKind.SCAN, assignment));
         var strict = strictHandler(job, assignment.item());
 
-        assertThatThrownBy(() -> strict.prepareInputs(job)).isInstanceOf(InsufficientEvidenceException.class);
+        strict.prepareInputs(job).close();
         assertThat(recordedDecisions(job))
                 .singleElement()
-                .satisfies(decision -> assertThat(decision.reason())
-                        .isEqualTo(DefaultReviewExecutionHandler.SOURCE_CONTRACT_UNSUPPORTED));
+                .satisfies(decision ->
+                        assertThat(decision.reason()).isEqualTo(ReviewWithholdings.SOURCE_CONTRACT_UNSUPPORTED));
         verify(source, never()).pin(any(), any());
     }
 
@@ -1064,7 +1080,7 @@ class DefaultReviewExecutionHandlerTest extends BaseUnitTest {
                 .singleElement()
                 .satisfies(decision -> {
                     assertThat(decision.status()).isEqualTo(ReviewPracticeStatus.WITHHELD);
-                    assertThat(decision.reason()).isEqualTo(DefaultReviewExecutionHandler.ITEM_CAPABILITY_UNSUPPORTED);
+                    assertThat(decision.reason()).isEqualTo(ReviewWithholdings.ITEM_CAPABILITY_UNSUPPORTED);
                     assertThat(decision.facts().path("itemKind").asString()).isEqualTo("scm.pull_request");
                     assertThat(decision.facts().path("unofferedEvents"))
                             .isEqualTo(mapper.readTree("[\"scm.pull_request_review.submitted\"]"));
@@ -1135,8 +1151,7 @@ class DefaultReviewExecutionHandlerTest extends BaseUnitTest {
                         decision -> {
                             assertThat(decision.practiceId()).isEqualTo(92L);
                             assertThat(decision.status()).isEqualTo(ReviewPracticeStatus.WITHHELD);
-                            assertThat(decision.reason())
-                                    .isEqualTo(DefaultReviewExecutionHandler.ITEM_CAPABILITY_UNSUPPORTED);
+                            assertThat(decision.reason()).isEqualTo(ReviewWithholdings.ITEM_CAPABILITY_UNSUPPORTED);
                             assertThat(decision.facts().path("unofferedEvents").isEmpty())
                                     .isTrue();
                             assertThat(decision.facts().path("unofferedAbout").asString())
@@ -1146,22 +1161,20 @@ class DefaultReviewExecutionHandlerTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldRefuseWithoutCapturingWhenEveryPracticeDeclaresWhatItsItemKindDoesNotOffer() {
+    void shouldWithholdWithoutCapturingWhenEveryPracticeDeclaresWhatItsItemKindDoesNotOffer() {
         var job = RuntimeReviewTestData.job();
         var legacy = legacyReviewThoroughness();
         when(assignments.load(job)).thenReturn(List.of(legacy));
         when(assignments.review(job)).thenReturn(RuntimeReviewTestData.review(ReviewKind.ITEM, legacy));
         var strict = strictHandler(job, PULL_REQUEST);
 
-        assertThatThrownBy(() -> strict.prepareInputs(job))
-                .isInstanceOfSatisfying(InsufficientEvidenceException.class, refusal -> {
-                    assertThat(refusal.preparedInputs().folderIndex()).isNull();
-                    assertThat(refusal.preparedInputs().automatedReviewReadinessReport())
-                            .isNull();
-                });
+        try (var prepared = strict.prepareInputs(job)) {
+            assertThat(prepared.folderIndex()).isNull();
+            assertThat(prepared.automatedReviewReadinessReport()).isNull();
+        }
         assertThat(recordedDecisions(job)).singleElement().satisfies(decision -> {
             assertThat(decision.status()).isEqualTo(ReviewPracticeStatus.WITHHELD);
-            assertThat(decision.reason()).isEqualTo(DefaultReviewExecutionHandler.ITEM_CAPABILITY_UNSUPPORTED);
+            assertThat(decision.reason()).isEqualTo(ReviewWithholdings.ITEM_CAPABILITY_UNSUPPORTED);
         });
         verify(source, never()).pin(any(), any());
         verify(files, never()).beginPersonCapture(job);

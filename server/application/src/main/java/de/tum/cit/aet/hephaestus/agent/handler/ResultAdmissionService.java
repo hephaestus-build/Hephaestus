@@ -165,6 +165,14 @@ public class ResultAdmissionService {
         return admittedResponse(withAttemptFolder(identity, () -> seal(identity, request)));
     }
 
+    /**
+     * Seals an attempt that measured nothing, as {@link #admit} does, with no runtime to answer. The answer would read
+     * the attempt's copied evidence, which an attempt that captured nothing does not have.
+     */
+    public void sealUnmeasured(AdmissionIdentity identity, SealResultsRequestDTO request) {
+        withAttemptFolder(identity, () -> seal(identity, request));
+    }
+
     private ReviewJob seal(AdmissionIdentity identity, SealResultsRequestDTO request) {
         String digest = ProvenanceDigest.sha256Hex(mapper.writeValueAsBytes(request));
         ReviewJob recorded = Objects.requireNonNull(transactions.execute(status -> {
@@ -575,6 +583,13 @@ public class ResultAdmissionService {
 
     public static boolean isAdmitted(ReviewJob job) {
         return job.getAdmissionAttempt() != null && job.getAdmissionDigest() != null;
+    }
+
+    /** Whether the job's seal admitted a result, whose feedback its composition then decides. */
+    public boolean admittedResults(ReviewJob job) {
+        return isAdmitted(job)
+                && !proof.forAttempt(job.getWorkspaceId(), job.getReviewId(), job.getId(), citationAttempt(job))
+                        .isEmpty();
     }
 
     /** The private feedback this review's attempts already prepared on its admitted results, per destination. */
