@@ -149,6 +149,30 @@ void test("a 503 that has not cleared when the work ends fails as unreachable, s
 	assert.equal(calls, 1);
 });
 
+void test("a 503 whose body fails is still waited out, not ended as the runner's own failure", async () => {
+	let calls = 0;
+	assert.equal(
+		await startPractice(
+			"names",
+			async () => {
+				calls += 1;
+				if (calls === 1) {
+					const body = new ReadableStream({
+						start(controller) {
+							controller.error(new TypeError("terminated"));
+						},
+					});
+					return new Response(body, { status: 503 });
+				}
+				return Response.json({ practiceSlug: "names", current: true });
+			},
+			patience,
+		),
+		true,
+	);
+	assert.equal(calls, 2);
+});
+
 void test("a server that answers 503 while its database is gone is asked again until it takes the call", async () => {
 	let busy = 0;
 	assert.equal(

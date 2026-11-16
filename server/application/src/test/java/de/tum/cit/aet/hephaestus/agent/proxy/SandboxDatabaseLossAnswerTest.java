@@ -19,7 +19,9 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import org.hibernate.exception.JDBCConnectionException;
 import org.junit.jupiter.api.Test;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -63,13 +65,25 @@ class SandboxDatabaseLossAnswerTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldKeepAProtocolViolationTheServersOwnError() throws Exception {
-        var violation = new JpaSystemException(
-                new RuntimeException(new SQLException("Tried to send an out-of-range integer", "08P01")));
+    void shouldKeepAProtocolViolationTheServersOwnErrorHoweverItIsWrapped() throws Exception {
+        var violation = new SQLException("Tried to send an out-of-range integer", "08P01");
+        for (RuntimeException wrapped : List.of(
+                new JpaSystemException(new RuntimeException(violation)),
+                new JpaSystemException(new JDBCConnectionException("could not execute statement", violation)),
+                new DataAccessResourceFailureException("could not execute statement", violation)))
+            assertThat(admitFailingWith(wrapped, mock(AttemptCaptureFailures.class))
+                            .getStatus())
+                    .as(wrapped.toString())
+                    .isEqualTo(500);
+    }
 
-        assertThat(admitFailingWith(violation, mock(AttemptCaptureFailures.class))
-                        .getStatus())
-                .isEqualTo(500);
+    @Test
+    void shouldReadALostConnectionBelowAnExceptionWithoutAState() throws Exception {
+        var wrapped = new JpaSystemException(
+                new RuntimeException(new SQLException("wrapper", new SQLException("Connection is closed", "08003"))));
+
+        assertThat(admitFailingWith(wrapped, mock(AttemptCaptureFailures.class)).getStatus())
+                .isEqualTo(503);
     }
 
     @Test

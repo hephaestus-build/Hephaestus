@@ -110,11 +110,16 @@ public class AgentGatewayErrors {
      * The SQLSTATEs of a connection that failed or was closed, and of a server that shut down or is starting. Not
      * {@code 08P01}: a protocol violation repeats on the next call.
      */
+    private static final String PROTOCOL_VIOLATION = "08P01";
+
     private static final Set<String> LOST_CONNECTION_STATES =
             Set.of("08000", "08001", "08003", "08004", "08006", "57P01", "57P02", "57P03");
 
     /** Whether {@code failure} or one of its causes is a lost or refused database connection. */
     static boolean connectionLost(Throwable failure) {
+        // Hibernate maps all of SQLSTATE class 08 to JDBCConnectionException, a protocol violation included.
+        for (Throwable cause = failure; cause != null; cause = cause.getCause())
+            if (cause instanceof SQLException sql && PROTOCOL_VIOLATION.equals(sql.getSQLState())) return false;
         for (Throwable cause = failure; cause != null; cause = cause.getCause()) {
             if (cause instanceof DataAccessResourceFailureException
                     || cause instanceof RecoverableDataAccessException
@@ -123,7 +128,9 @@ public class AgentGatewayErrors {
                     || cause instanceof SQLRecoverableException
                     || cause instanceof SQLTransientConnectionException
                     || cause instanceof SQLNonTransientConnectionException) return true;
-            if (cause instanceof SQLException sql && LOST_CONNECTION_STATES.contains(sql.getSQLState())) return true;
+            if (cause instanceof SQLException sql
+                    && sql.getSQLState() != null
+                    && LOST_CONNECTION_STATES.contains(sql.getSQLState())) return true;
         }
         return false;
     }

@@ -115,7 +115,8 @@ async function postAdmission(
 		if (response.status !== 503 || patience.aborted) {
 			break;
 		}
-		await response.body?.cancel();
+		// The status is known; a body that already failed must not turn the wait into another failure.
+		await response.body?.cancel().catch(() => undefined);
 		if (Number.isInteger(Math.log2(busy))) {
 			diagnose("gateway.waiting", { waits: busy });
 		}
