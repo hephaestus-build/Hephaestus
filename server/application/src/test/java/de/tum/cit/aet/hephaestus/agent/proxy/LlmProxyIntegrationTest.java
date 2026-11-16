@@ -1083,14 +1083,18 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
             Instant began = databaseNow();
             var pool = streamUntilTheProviderEnds(upstream.url("/v1").toString(), 8, null, Duration.ofMinutes(2));
 
-            Awaitility.await().atMost(Duration.ofSeconds(5)).untilAsserted(() -> {
-                var stored = callPools.findById(pool.getId()).orElseThrow();
-                assertThat(stored.getNoCallBefore())
-                        .isNotNull()
-                        .isAfterOrEqualTo(began.plusMillis(pauseMillis))
-                        .isBeforeOrEqualTo(databaseNow().plusMillis(pauseMillis));
-                assertThat(stored.getLearnedLimit()).isEqualTo(8);
-            });
+            // The pause is written on its own thread: wait only for it to exist. The bound is checked once afterwards,
+            // against the database time read as soon as it appeared, so a wrong pause cannot pass once time moves on.
+            Awaitility.await()
+                    .atMost(Duration.ofSeconds(5))
+                    .pollInterval(Duration.ofMillis(10))
+                    .until(() -> callPools.findById(pool.getId()).orElseThrow().getNoCallBefore() != null);
+            Instant seen = databaseNow();
+            var stored = callPools.findById(pool.getId()).orElseThrow();
+            assertThat(stored.getNoCallBefore())
+                    .isAfterOrEqualTo(began.plusMillis(pauseMillis))
+                    .isBeforeOrEqualTo(seen.plusMillis(pauseMillis));
+            assertThat(stored.getLearnedLimit()).isEqualTo(8);
             assertThat(calls(pool, "completed")).isEqualTo(1);
             assertThat(upstream.getRequestCount()).isEqualTo(1);
         }
