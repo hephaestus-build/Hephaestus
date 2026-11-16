@@ -43,7 +43,20 @@ public class ResultViewQuery {
                 .map(result -> views(workspaceId, List.of(result)).getFirst());
     }
 
+    /** Views with the feedback mode that each observation was sealed in, for standing and every developer read. */
     public List<ResultView> views(long workspaceId, Collection<Result> results) {
+        return views(workspaceId, results, true);
+    }
+
+    /**
+     * Views for an operator's read of review results, lineage and scan reports. It shows every observation and
+     * never asks whether one counts, so it skips the feedback-mode read: each view's mode is null.
+     */
+    public List<ResultView> operatorViews(long workspaceId, Collection<Result> results) {
+        return views(workspaceId, results, false);
+    }
+
+    private List<ResultView> views(long workspaceId, Collection<Result> results, boolean sealedFeedbackModes) {
         if (results.isEmpty()) {
             return List.of();
         }
@@ -85,10 +98,11 @@ public class ResultViewQuery {
                         Map.Entry::getKey, entry -> entry.getValue().ref()));
         var sourceStates = freshness.freshness(workspaceId, results, activeItems);
         var sealedModes = new HashMap<ReviewPractice.Id, FeedbackMode>();
-        reviewPractices
-                .findSealedFeedbackModes(workspaceId, reviewById.keySet())
-                .forEach(recorded -> sealedModes.put(
-                        new ReviewPractice.Id(recorded.reviewId(), recorded.practiceId()), recorded.mode()));
+        if (sealedFeedbackModes)
+            reviewPractices
+                    .findSealedFeedbackModes(workspaceId, reviewById.keySet())
+                    .forEach(recorded -> sealedModes.put(
+                            new ReviewPractice.Id(recorded.reviewId(), recorded.practiceId()), recorded.mode()));
         return results.stream()
                 .map(result -> new ResultView(
                         result,

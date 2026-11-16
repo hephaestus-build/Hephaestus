@@ -116,7 +116,7 @@ public class ReviewLineageService {
         }
         var rows = results.findByWorkspaceIdAndIdIn(ws, resultIds);
         var permitted = authorization.permitsAll(ws, rows, SourceUsePurpose.OPERATOR_EVIDENCE_REVIEW);
-        for (var v : views.views(ws, rows)) {
+        for (var v : views.operatorViews(ws, rows)) {
             var r = v.result();
             var resultKey = key(LineageKind.RESULT, r.getId());
             nodes.put(

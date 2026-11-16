@@ -91,7 +91,7 @@ public class ReviewResultQueryService {
                         .distinct()
                         .toList());
         return new PageImpl<>(
-                views.views(workspaceId, rows.getContent()).stream()
+                views.operatorViews(workspaceId, rows.getContent()).stream()
                         .map(v -> {
                             var r = v.result();
                             var activeMarks = marked.getOrDefault(r.getId(), Map.of());
@@ -130,7 +130,7 @@ public class ReviewResultQueryService {
 
     public ReviewResultDetailDTO get(long ws, UUID id) {
         var r = require(ws, id);
-        var v = views.views(ws, List.of(r)).getFirst();
+        var v = views.operatorViews(ws, List.of(r)).getFirst();
         boolean permitted = authorization.permits(ws, r, SourceUsePurpose.OPERATOR_EVIDENCE_REVIEW);
         var freshness = presentation.freshness(v);
         return new ReviewResultDetailDTO(
@@ -182,7 +182,7 @@ public class ReviewResultQueryService {
                 .orElseThrow(() -> new EntityNotFoundException("Problem", id.toString()));
         var row = problemRow(ws, p);
         var r = require(ws, p.getResultId());
-        var v = views.views(ws, List.of(r)).getFirst();
+        var v = views.operatorViews(ws, List.of(r)).getFirst();
         return new ReviewProblemDetailDTO(
                 row.id(),
                 row.resultId(),
@@ -232,7 +232,7 @@ public class ReviewResultQueryService {
 
     private ReviewProblemDTO problemRow(long ws, Problem p) {
         var r = require(ws, p.getResultId());
-        var v = views.views(ws, List.of(r)).getFirst();
+        var v = views.operatorViews(ws, List.of(r)).getFirst();
         boolean permitted = authorization.permits(ws, r, SourceUsePurpose.OPERATOR_EVIDENCE_REVIEW);
         var dto = presentation.problem(p, permitted);
         var primary = dto.citations().isEmpty() ? null : dto.citations().getFirst();
