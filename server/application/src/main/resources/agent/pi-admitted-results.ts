@@ -1,4 +1,6 @@
-import { untilGatewayTakes } from "./gateway-connection.ts";
+import { setTimeout as sleep } from "node:timers/promises";
+
+import { GATEWAY_RECONNECT_MS, untilGatewayTakes } from "./gateway-connection.ts";
 import { diagnose, errorKind } from "./pi-diagnostics.ts";
 import { errorText } from "./pi-error-text.ts";
 import {
@@ -67,38 +69,62 @@ async function postAdmission(
 	patience: AbortSignal,
 ): Promise<unknown> {
 	let response: Response;
-	try {
-		// A refused connection reached no server; each new connection gets its own attempt timeout. The end of the
-		// work also ends a call in flight, so the sandbox's deadline never stops the runner mid-call.
-		response = await untilGatewayTakes(
-			async () =>
-				send(body, AbortSignal.any([AbortSignal.timeout(ADMISSION_ATTEMPT_TIMEOUT_MS), patience])),
-			patience,
-			(waits) => {
-				if (Number.isInteger(Math.log2(waits))) {
-					diagnose("gateway.waiting", { waits });
-				}
-			},
-		);
-	} catch (error) {
-		if (patience.aborted) {
-			// The work ended before the gateway took or answered the call. The attempt ends retryable, and the next one
-			// sends the same recorded request again.
+	for (let busy = 1; ; busy += 1) {
+		try {
+			// A refused connection reached no server; each new connection gets its own attempt timeout. The end of the
+			// work also ends a call in flight, so the sandbox's deadline never stops the runner mid-call.
+			response = await untilGatewayTakes(
+				async () =>
+					send(
+						body,
+						AbortSignal.any([AbortSignal.timeout(ADMISSION_ATTEMPT_TIMEOUT_MS), patience]),
+					),
+				patience,
+				(waits) => {
+					if (Number.isInteger(Math.log2(waits))) {
+						diagnose("gateway.waiting", { waits });
+					}
+				},
+			);
+		} catch (error) {
+			if (patience.aborted) {
+				// The work ended before the gateway took or answered the call. The attempt ends retryable, and the next one
+				// sends the same recorded request again.
+				throw new AdmissionUnreachableError(
+					`result admission did not reach the gateway before the work ended: ${errorText(error)}`,
+				);
+			}
+			if (isTimeoutAbort(error)) {
+				// The server is still verifying; a second attempt would only queue the same work behind it.
+				throw new Error(
+					`result admission did not answer within ${ADMISSION_ATTEMPT_TIMEOUT_MS}ms`,
+					{
+						cause: error,
+					},
+				);
+			}
+			// Node reports every transport failure as `TypeError: fetch failed`; only the cause says which
+			// one it was, and a report that has just the message cannot tell a restart from a wrong URL.
 			throw new AdmissionUnreachableError(
-				`result admission did not reach the gateway before the work ended: ${errorText(error)}`,
+				`result admission could not be sent: ${errorText(error)}${causeText(error)}`,
 			);
 		}
-		if (isTimeoutAbort(error)) {
-			// The server is still verifying; a second attempt would only queue the same work behind it.
-			throw new Error(`result admission did not answer within ${ADMISSION_ATTEMPT_TIMEOUT_MS}ms`, {
-				cause: error,
-			});
+		// A 503 says the server could not finish the call: a write waited past its lock bound, or the server lost its
+		// database connection. Each route accepts an identical replay, so like a refused connection the call is sent again
+		// every second until the work ends.
+		if (response.status !== 503 || patience.aborted) {
+			break;
 		}
-		// Node reports every transport failure as `TypeError: fetch failed`; only the cause says which
-		// one it was, and a report that has just the message cannot tell a restart from a wrong URL.
-		throw new AdmissionUnreachableError(
-			`result admission could not be sent: ${errorText(error)}${causeText(error)}`,
-		);
+		// The status is known; a body that already failed must not turn the wait into another failure.
+		await response.body?.cancel().catch(() => undefined);
+		if (Number.isInteger(Math.log2(busy))) {
+			diagnose("gateway.waiting", { waits: busy });
+		}
+		try {
+			await sleep(GATEWAY_RECONNECT_MS, undefined, { signal: patience });
+		} catch {
+			break;
+		}
 	}
 	if (isRetryableStatus(response.status)) {
 		throw new AdmissionUnreachableError(`result admission failed: HTTP ${response.status}`);

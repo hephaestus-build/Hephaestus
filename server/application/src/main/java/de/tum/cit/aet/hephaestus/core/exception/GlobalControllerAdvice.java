@@ -205,6 +205,11 @@ public class GlobalControllerAdvice extends ResponseEntityExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     ProblemDetail handleGeneric(Exception exception) {
+        return unhandled(exception);
+    }
+
+    /** The answer and log line for an exception that no handler maps; other advice that only narrows a type uses it. */
+    public static ProblemDetail unhandled(Exception exception) {
         log.error(
                 "Caught unhandled exception: exceptionType={}",
                 exception.getClass().getSimpleName(),
