@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.agent.job.ReviewJobLifecycleService;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.JdbcPersonDataStore;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.LiveJdbcPersonDataStore;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCatalog;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataContributor;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataSelection;
@@ -31,7 +32,13 @@ import tools.jackson.databind.ObjectMapper;
 @Component
 @ConditionalOnServerRole
 @RequiredArgsConstructor
-@PersonDataStores({"review_job", "review_composition_basis", "llm_usage_event", "instance_llm_settings"})
+@PersonDataStores({
+    "review_job",
+    "review_composition_basis",
+    "composer_transcript_part",
+    "llm_usage_event",
+    "instance_llm_settings"
+})
 public class AgentPersonDataCatalog implements PersonDataCatalog {
     private static final String SUBJECT_JOBS = """
         SELECT j.id FROM review_job j JOIN review r ON (r.id,r.workspace_id)=(j.review_id,j.workspace_id)
@@ -81,6 +88,7 @@ public class AgentPersonDataCatalog implements PersonDataCatalog {
                         "job_id,workspace_id",
                         "",
                         -82),
+                new ComposerTranscriptStore(),
                 new AgentJobStore(),
                 new LedgerStore(
                         jdbc,
@@ -115,6 +123,34 @@ public class AgentPersonDataCatalog implements PersonDataCatalog {
 
     /** One job exactly as the frozen selection names it: its id together with its own workspace. */
     private record JobKey(UUID id, long workspaceId) {}
+
+    /**
+     * The transcripts of the selected jobs' runs: the job's run, which after a handoff is the composition run that wrote
+     * the answers, and the measuring run that handed it on. A served answer can name the developer and quote their
+     * work, but only while its claim holds the run; the rest are digests. So export has no rows: what an answer drew on
+     * is exported from its own store, and the answer is transient and derived. Erasure deletes the rows before the job
+     * store forgets the runs, and also deletes the rows that a still-running claim adds after the preview.
+     */
+    private final class ComposerTranscriptStore extends LiveJdbcPersonDataStore {
+        ComposerTranscriptStore() {
+            super(
+                    jdbc,
+                    mapper,
+                    "composer_transcript_part",
+                    "composer_transcript_part",
+                    "EXISTS(SELECT 1 FROM review_job j WHERE j.workspace_id=t.workspace_id"
+                            + " AND t.run_id IN (j.run_id,j.handed_off_run_id) AND j.id IN (" + SELECTED_JOBS + "))",
+                    "id",
+                    "id,workspace_id",
+                    "",
+                    -81);
+        }
+
+        @Override
+        public List<JsonNode> export(PersonDataSelection selection, PersonScope frozenScope) {
+            return List.of();
+        }
+    }
 
     private final class AgentJobStore extends JdbcPersonDataStore {
         AgentJobStore() {

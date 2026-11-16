@@ -16,6 +16,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -78,6 +79,13 @@ class LlmProxyController {
                     return ResponseEntity.status(HttpStatus.FORBIDDEN)
                             .header(LlmProxyService.REFUSAL_HEADER, ProxyRefusal.NOT_COMPOSER_REQUEST.name())
                             .body("This request does not continue this composition's conversation: " + refuse.reason());
+                }
+                case ComposerTranscript.Replay replay -> {
+                    // The composer lost the answer on its way; the model is not asked again.
+                    log.info("Served a composer conversation its recorded answer again: runId={}", composing.runId());
+                    return ResponseEntity.ok()
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .body(replay.answer());
                 }
                 case ComposerTranscript.Forward found -> forward = found;
             }

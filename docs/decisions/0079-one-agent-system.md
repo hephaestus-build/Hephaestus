@@ -724,9 +724,11 @@ A composition tool route runs a call only when the claim's model wrote it in a s
 
 Thus a process that holds the sandbox token cannot write any text that the model reads.
 It can only choose among the server's texts and the model's own replies, in the order that the composer uses them.
-It cannot send a conversation again after the conversation got its answer, and it cannot run a tool call that the model did not write.
+It cannot run a tool call that the model did not write.
+
+A conversation sent again after it got its answer gets the same answer again.
+Thus a composer whose answer is lost on the way after the gateway recorded it goes on from that answer (#4528).
 Copies of one request sent at the same time can each get an answer, so it can choose among several of the model's own answers.
-A composer whose answer is lost on the way after the gateway recorded it cannot send that request again, and its attempt ends `UNEXPECTED`.
 [Practice review pipeline](../contributor/practice-review-pipeline.mdx#compose-feedback) owns the behavior.
 
 ## Update — 2026-11-13: composition claims survive a server replica change
