@@ -144,10 +144,22 @@ class PracticeStandingServiceTest {
     }
 
     @Test
-    void feedbackModeOffStillContributesResults() {
+    void shouldKeepCountingAnObservationRecordedBeforeThePracticeWasSetToFeedbackModeOff() {
         add(1, ResultOutcome.MET);
         data.getFirst().practice().setFeedbackMode(FeedbackMode.OFF);
         assertThat(card().standing()).isEqualTo(PracticeStanding.STRENGTH);
+    }
+
+    @Test
+    void shouldGiveNoStandingAndQuoteNothingWhenEveryObservationWasSealedInFeedbackModeOff() {
+        add(1, ResultOutcome.NOT_MET);
+        data.set(0, sealedIn(data.getFirst(), FeedbackMode.OFF));
+
+        var standing = only(service.getStandingSnapshots(1L, 7L, List.of(now)).getFirst());
+        assertThat(standing.dto().standing()).isEqualTo(PracticeStanding.NOT_OBSERVED);
+        assertThat(standing.dto().toWorkOn()).isEmpty();
+        assertThat(standing.dto().strengths()).isEmpty();
+        assertThat(standing.evidence()).isEmpty();
     }
 
     @Test
@@ -229,6 +241,7 @@ class PracticeStandingServiceTest {
         var standing = only(service.getStandingSnapshots(1L, 7L, List.of(now)).getFirst());
         assertThat(standing.dto().standing()).isEqualTo(before);
         assertThat(standing.liveRuns()).extracting(ResultView::result).containsExactly(live.result());
+        assertThat(standing.dto().strengths()).isEmpty();
     }
 
     @Test

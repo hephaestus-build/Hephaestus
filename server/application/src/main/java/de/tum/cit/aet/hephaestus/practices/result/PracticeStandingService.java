@@ -422,7 +422,7 @@ public class PracticeStandingService {
                 view.review().getId());
     }
 
-    // An observation sealed in feedback mode Off was seen by admins only, so it never counts (ADR 0118 decision 6).
+    // An observation sealed in feedback mode Off never counts, so the chain reads past it (ADR 0118 decision 6).
     private static boolean isLive(ResultView view) {
         return (view.review().getOrigin() == ReviewOrigin.EVENT || view.review().getOrigin() == ReviewOrigin.SCHEDULE)
                 && view.sealedFeedbackMode() != FeedbackMode.OFF;
@@ -472,8 +472,12 @@ public class PracticeStandingService {
             Eligibility eligibility,
             Map<UUID, String> deliveredGuidance,
             Instant since) {
+        // An observation sealed in feedback mode Off neither decides nor is quoted (ADR 0118 decision 6).
         Map<String, List<ResultView>> current = byPractice(
-                rows.current().stream().filter(view -> !view.result().isMigratedHistory()), readable.standing());
+                rows.current().stream()
+                        .filter(view -> !view.result().isMigratedHistory())
+                        .filter(view -> view.sealedFeedbackMode() != FeedbackMode.OFF),
+                readable.standing());
         Map<String, List<ResultView>> earlier = byPractice(
                 Stream.concat(rows.current().stream(), rows.live().stream())
                         .filter(view -> view.result().isMigratedHistory())

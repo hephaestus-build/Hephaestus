@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.practices.review;
 
 import de.tum.cit.aet.hephaestus.practices.result.ResultSourceCapture;
+import de.tum.cit.aet.hephaestus.practices.result.SealedFeedbackMode;
 import de.tum.cit.aet.hephaestus.practices.review.model.ReviewPractice;
 import jakarta.persistence.LockModeType;
 import java.util.Collection;
@@ -20,6 +21,12 @@ public interface ReviewPracticeRepository extends JpaRepository<ReviewPractice, 
 
     List<ReviewPractice> findByWorkspaceIdAndReviewIdInOrderByReviewIdAscPracticeIdAsc(
             long workspaceId, Collection<UUID> reviewIds);
+
+    @Query("SELECT new de.tum.cit.aet.hephaestus.practices.result.SealedFeedbackMode(p.reviewId, p.practiceId,"
+            + " p.sealedFeedbackMode) FROM ReviewPractice p WHERE p.workspaceId = :workspaceId AND p.reviewId IN"
+            + " :reviewIds AND p.sealedFeedbackMode IS NOT NULL")
+    List<SealedFeedbackMode> findSealedFeedbackModes(
+            @Param("workspaceId") long workspaceId, @Param("reviewIds") Collection<UUID> reviewIds);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT p FROM ReviewPractice p WHERE p.workspaceId = :workspaceId AND p.reviewId = :reviewId ORDER BY"

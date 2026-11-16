@@ -86,13 +86,9 @@ public class ResultViewQuery {
         var sourceStates = freshness.freshness(workspaceId, results, activeItems);
         var sealedModes = new HashMap<ReviewPractice.Id, FeedbackMode>();
         reviewPractices
-                .findByWorkspaceIdAndReviewIdInOrderByReviewIdAscPracticeIdAsc(workspaceId, reviewById.keySet())
-                .forEach(assignment -> {
-                    var mode = assignment.getSealedFeedbackMode();
-                    if (mode != null)
-                        sealedModes.put(
-                                new ReviewPractice.Id(assignment.getReviewId(), assignment.getPracticeId()), mode);
-                });
+                .findSealedFeedbackModes(workspaceId, reviewById.keySet())
+                .forEach(recorded -> sealedModes.put(
+                        new ReviewPractice.Id(recorded.reviewId(), recorded.practiceId()), recorded.mode()));
         return results.stream()
                 .map(result -> new ResultView(
                         result,
