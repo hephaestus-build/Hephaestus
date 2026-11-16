@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.core.auth.mcp;
 
-import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEvent;
 import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEventLogger;
 import de.tum.cit.aet.hephaestus.core.auth.clientsession.ClientSessionService;
@@ -204,7 +203,6 @@ public class McpAuthorizationService implements McpClientGrants {
 
     /** A pending request of this account, for the consent page; empty once it is answered or expired. */
     @Transactional(readOnly = true)
-    @WorkspaceAgnostic("The consent page addresses its request by id, before a workspace context exists")
     public Optional<ConsentRequest> consentRequest(UUID id, Long accountId) {
         return grants.findById(id)
                 .filter(grant -> isOpenFor(grant, accountId))
