@@ -302,7 +302,8 @@ function judgeJvm(
 		? ""
 		: " (no load in the window: the 2× limit rule needs the bench load, so it is recorded only)";
 	// B8a: the JVM roles. Peak ≤ 90 % of the limit; the limit ≤ 2 × the peak. The JVM sizes its heap from the limit, so a
-	// limit keeps headroom above the peak (sizing.mdx § Memory headroom); above 2 × it needs a reason stated there.
+	// limit keeps headroom above the peak (sizing.mdx § Memory headroom). Above 2 × the check fails: a lower limit or a
+	// reason stated there, accepted in the release review.
 	const heap = metricSeries(
 		data.prometheus,
 		"jvm_memory_used_bytes",

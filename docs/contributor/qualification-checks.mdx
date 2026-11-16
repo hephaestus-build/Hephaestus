@@ -59,7 +59,8 @@ The bar has two parts:
 
 The JVM sizes its heap from the limit, so the limit keeps headroom above the peak.
 [Memory headroom](/admin/sizing#memory-headroom) states that headroom and the round that measured it.
-A limit above 2 times the peak needs a reason in that section.
+Above 2 times, the check fails.
+Then lower the limit, or state the reason in that section and accept the failed check in the release review.
 The check also records the heap maximum, the GC rate and the CPU p95.
 
 ### B8b
