@@ -289,7 +289,7 @@ public final class ComposerStreamAnswer implements Consumer<byte[]> {
         private String append(String field, JsonNode text) {
             if (!text.isString()) return "";
             texts.computeIfAbsent(
-                            field, unused -> new StringBuilder(start.path(field).asString("")))
+                            field, _ -> new StringBuilder(start.path(field).asString("")))
                     .append(text.asString());
             return text.asString();
         }
