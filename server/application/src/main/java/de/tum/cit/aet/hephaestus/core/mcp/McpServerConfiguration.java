@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.core.mcp;
 
+import de.tum.cit.aet.hephaestus.core.auth.mcp.McpCallGrant;
 import de.tum.cit.aet.hephaestus.core.auth.mcp.McpGrantGuard;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.web.ApiPath;
@@ -100,6 +101,13 @@ class McpServerConfiguration {
     static McpSchema.CallToolResult invoke(
             McpTool tool, McpSchema.CallToolRequest request, McpRefusals refusals, McpToolMetrics metrics) {
         String name = tool.definition().name();
+        // The write-scope filter answers the challenge; this check is the one that a write never passes without the
+        // scope.
+        if (tool.writes() && !McpCallGrant.current().map(McpCallGrant::writes).orElse(false)) {
+            metrics.record(name, McpToolMetrics.Outcome.REFUSED);
+            return error(
+                    "This client may only read this workspace. Ask an admin to connect it again and allow changes.");
+        }
         try {
             McpSchema.CallToolResult result = tool.call(request.arguments() == null ? Map.of() : request.arguments());
             metrics.record(name, McpToolMetrics.Outcome.OK);
@@ -108,6 +116,9 @@ class McpServerConfiguration {
             metrics.record(name, McpToolMetrics.Outcome.REFUSED);
             return error("Your role in this workspace does not allow this tool.");
         } catch (ResponseStatusException refused) {
+            if (refused.getStatusCode().is5xxServerError()) {
+                return failed(name, refused, metrics);
+            }
             metrics.record(name, McpToolMetrics.Outcome.REFUSED);
             String reason = refused.getReason();
             return error(reason == null ? "The request was refused." : reason);
@@ -117,11 +128,15 @@ class McpServerConfiguration {
                 metrics.record(name, McpToolMetrics.Outcome.REFUSED);
                 return error(refusal.get());
             }
-            // A server error's message may name internals, so the client gets none of it.
-            metrics.record(name, McpToolMetrics.Outcome.FAILED);
-            log.error("mcp: tool {} failed", name, failed);
-            return error("The tool failed. Try again later.");
+            return failed(name, failed, metrics);
         }
+    }
+
+    /** A server error's message may name internals, so the client gets none of it. */
+    private static McpSchema.CallToolResult failed(String name, RuntimeException failure, McpToolMetrics metrics) {
+        metrics.record(name, McpToolMetrics.Outcome.FAILED);
+        log.error("mcp: tool {} failed", name, failure);
+        return error("The tool failed. Try again later.");
     }
 
     /** The controller of the handler that the tool stands for, whose advice decides how a refusal reads. */

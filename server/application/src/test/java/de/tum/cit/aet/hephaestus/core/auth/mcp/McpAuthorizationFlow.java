@@ -241,6 +241,11 @@ public final class McpAuthorizationFlow {
     }
 
     public WebTestClient.ResponseSpec callTool(String accessToken, String slug, String body) {
+        return callTool(accessToken, slug, body.getBytes(StandardCharsets.UTF_8));
+    }
+
+    /** The same, for a body that is not valid UTF-8 text. */
+    public WebTestClient.ResponseSpec callTool(String accessToken, String slug, byte[] body) {
         return client.post()
                 .uri("/workspaces/{slug}/mcp", slug)
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)

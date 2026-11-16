@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.core.mcp;
 import de.tum.cit.aet.hephaestus.core.auth.mcp.McpCallGrant;
 import de.tum.cit.aet.hephaestus.core.auth.mcp.McpGrantGuard;
 import de.tum.cit.aet.hephaestus.core.auth.mcp.McpScope;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -52,11 +53,15 @@ final class McpWriteScopeFilter implements HandlerFilterFunction<ServerResponse,
         return next.handle(ServerRequest.from(request).body(body).build());
     }
 
-    /** A JSON-RPC message, or a batch of them, that calls a write tool. A body that is not JSON goes on to the server's own refusal. */
+    /**
+     * A JSON-RPC message, or a batch of them, that calls a write tool. It reads the body as the MCP server does, as UTF-8
+     * text with malformed bytes replaced, so the two cannot see different messages. A body that is not JSON goes on to
+     * the server's own refusal; the tool invocation checks the scope again in any case.
+     */
     private boolean callsAWriteTool(byte[] body) {
         JsonNode message;
         try {
-            message = jsonMapper.readTree(body);
+            message = jsonMapper.readTree(new String(body, StandardCharsets.UTF_8));
         } catch (JacksonException malformed) {
             return false;
         }

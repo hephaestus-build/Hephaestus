@@ -17,6 +17,7 @@ import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -125,6 +126,26 @@ class McpWriteToolsIntegrationTest extends RealAuthIntegrationTest {
                 .isFalse();
         assertThat(counter("mcp.auth.refusals", "reason", "insufficient_scope")).isEqualTo(refusedBefore + 1);
         assertThat(counter("mcp.tool.calls", "tool", "get_review_settings")).isEqualTo(readsBefore + 1);
+    }
+
+    /** The SDK reads a malformed byte as a replacement character, so the scope check must read the body the same way. */
+    @Test
+    void shouldAskForTheWriteScopeWhenTheBodyIsNotValidUtf8() {
+        String readToken = flow.connect(cookie, workspace.getWorkspaceSlug()).accessToken();
+        byte[] text = request("set_feedback_delivery", Map.of("etag", "\"MALFORMED\"", "deliveryStatus", "PAUSED"))
+                .getBytes(StandardCharsets.UTF_8);
+        String marker = "MALFORMED";
+        int at = new String(text, StandardCharsets.UTF_8).indexOf(marker);
+        byte[] body = new byte[text.length - marker.length() + 1];
+        System.arraycopy(text, 0, body, 0, at);
+        body[at] = (byte) 0xFF;
+        System.arraycopy(text, at + marker.length(), body, at + 1, text.length - at - marker.length());
+
+        flow.callTool(readToken, workspace.getWorkspaceSlug(), body)
+                .expectStatus()
+                .isForbidden()
+                .expectBody(Void.class);
+        assertThat(setting("practice_delivery_status")).isNotEqualTo("PAUSED");
     }
 
     @Test

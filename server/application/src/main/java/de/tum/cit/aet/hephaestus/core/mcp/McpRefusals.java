@@ -53,10 +53,23 @@ final class McpRefusals {
                     || handler.getParameterTypes()[0] == RuntimeException.class) {
                 break;
             }
-            ReflectionUtils.makeAccessible(handler);
-            ProblemDetail problem = problemOf(
-                    ReflectionUtils.invokeMethod(handler, advice.bean().resolveBean(), exception));
-            return problem == null ? Optional.empty() : clientError(problem);
+            // The resolver also matches an exception's cause, so the handler gets the throwable of its own type.
+            Throwable matched = exception;
+            while (matched != null && !handler.getParameterTypes()[0].isInstance(matched)) {
+                matched = matched.getCause();
+            }
+            if (matched == null) {
+                return Optional.empty();
+            }
+            try {
+                ReflectionUtils.makeAccessible(handler);
+                ProblemDetail problem = problemOf(
+                        ReflectionUtils.invokeMethod(handler, advice.bean().resolveBean(), matched));
+                return problem == null ? Optional.empty() : clientError(problem);
+            } catch (RuntimeException unanswerable) {
+                // A handler that cannot answer here leaves the exception a server error.
+                return Optional.empty();
+            }
         }
         return exception instanceof ErrorResponse response ? clientError(response.getBody()) : Optional.empty();
     }

@@ -46,8 +46,10 @@ class ResetPracticeTool implements McpTool {
                         "Reset a practice to the catalog",
                         "Returns a practice that came from the catalog to the catalog version that preview_practice_reset"
                                 + " showed, and drops the workspace's changes to it. If the practice or the catalog changed"
-                                + " since the preview, it changes nothing. Before you reset, keep the definition that"
-                                + " get_practice returns: undo the reset with update_practice and that definition."),
+                                + " since the preview, it changes nothing. It also moves the practice back into its"
+                                + " catalog group. Before you reset, keep what get_practice returns: undo the reset with"
+                                + " update_practice and that definition, and with move_practice_to_group and that"
+                                + " groupSlug."),
                 INPUT_SCHEMA,
                 McpProjections.PRACTICE_SCHEMA,
                 McpTools.Effect.REPLACES);
