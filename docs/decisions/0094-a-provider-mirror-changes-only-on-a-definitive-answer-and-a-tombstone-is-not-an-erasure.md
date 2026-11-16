@@ -68,10 +68,12 @@ A rule that main does not satisfy yet says "1.0 target".
     Enforced by: `AccountErasureIntegrationTest#erasesTargetAcrossTwoWorkspacesAndEveryRegisteredStoreWithoutTouchingAnotherPerson`.
 15. **A restore reapplies person erasures before work resumes.** Off-host pgBackRest backups are optional and off by default. Erased data stays in a backup until that backup expires. After a restore, the `erasure-recovery` profile reapplies each later person erasure from a private manifest. It does this before schedulers and consumers start.
     Enforced by: `PersonDataRecoveryIntegrationTest#shouldReapplyAnErasureLostByARestoreBeforeProcessingStarts`, `PersonDataRecoveryStartupIntegrationTest#shouldBindTheRecoveryProfileAndCompleteBeforeSchedulersAndConsumersStart`.
-16. **An erasure survives a backup restore.** The `erasure-recovery` profile reapplies every erasure after the recovery point. It reapplies disconnects, workspace purges and person erasures, also of accounts that their owners deleted.
-    The operator lists them in a version 2 manifest outside the database. The profile runs with background work off and refuses to start beside it, so the purge needs no quiescence guard.
+16. **An erasure survives a backup restore.** The `erasure-recovery` profile reapplies the erasures after the recovery point. It reapplies disconnects, workspace purges, erased Outline collections and deleted conversation messages.
+    It also reapplies person erasures, also of accounts that their owners deleted.
+    The operator redoes repository removals, including the removal of a stopped GitLab project's kept work, before egress opens.
+    The operator lists them in a version 3 manifest outside the database. The profile runs with background work off and refuses to start beside it, so the purge needs no quiescence guard.
     [Reapply erasures after a restore](../admin/erasure-recovery.mdx) owns the procedure.
-    Enforced by: `ErasureRecoveryRestoreIntegrationTest#shouldPurgeAgainAWorkspaceThatARestoreBroughtBack`, `ErasureRecoveryRestoreIntegrationTest#shouldDisconnectAgainAConnectionThatARestoreBroughtBack`, `PersonDataRecoveryIntegrationTest#shouldRefuseToRecoverBesideBackgroundWork`.
+    Enforced by: `ErasureRecoveryRestoreIntegrationTest#shouldPurgeAgainAWorkspaceThatARestoreBroughtBack`, `ErasureRecoveryRestoreIntegrationTest#shouldDisconnectAgainAConnectionThatARestoreBroughtBack`, `ErasureRecoveryRestoreIntegrationTest#shouldDeleteAgainAMessageThatARestoreBroughtBack`, `ErasureRecoveryRestoreIntegrationTest#shouldEraseAgainAnOutlineCollectionThatARestoreBroughtBack`, `PersonDataRecoveryIntegrationTest#shouldRefuseToRecoverBesideBackgroundWork`.
 
 ## What changed, and why
 

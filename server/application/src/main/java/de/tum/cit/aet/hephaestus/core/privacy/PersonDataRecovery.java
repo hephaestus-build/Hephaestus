@@ -3,7 +3,9 @@ package de.tum.cit.aet.hephaestus.core.privacy;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentityResolver;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.RestoredCollectionErasures;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.RestoredDisconnects;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.RestoredMessageDeletions;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.RestoredWorkspacePurges;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnBackgroundWork;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
@@ -27,9 +29,10 @@ import tools.jackson.databind.ObjectMapper;
 
 /**
  * Reapplies the erasures that a database restore undid, from the operator-held manifest: disconnects, then workspace
- * purges, then people. It runs only in a server with background work off, so no scheduled task, claimer or inbox
- * subscriber writes while it skips the purge's quiescence guards; the {@code erasure-recovery} profile turns
- * background work off, and startup stops if anything turns it on again.
+ * purges, then erased documentation collections and deleted conversation messages, then people. It runs only in a
+ * server with background work off, so no scheduled task, claimer or inbox subscriber writes while it skips the purge's
+ * quiescence guards; the {@code erasure-recovery} profile turns background work off, and startup stops if anything
+ * turns it on again.
  */
 @Component
 @Profile("erasure-recovery")
@@ -56,6 +59,8 @@ final class PersonDataRecovery implements SmartLifecycle {
     private final PersonDataRequestRepository requests;
     private final RestoredWorkspacePurges purges;
     private final RestoredDisconnects disconnects;
+    private final RestoredMessageDeletions messages;
+    private final RestoredCollectionErasures collections;
     private final String manifestPath;
     private boolean running;
 
@@ -67,6 +72,8 @@ final class PersonDataRecovery implements SmartLifecycle {
             PersonDataRequestRepository requests,
             RestoredWorkspacePurges purges,
             RestoredDisconnects disconnects,
+            RestoredMessageDeletions messages,
+            RestoredCollectionErasures collections,
             PersonDataRecoveryProperties properties) {
         this.service = service;
         this.resolver = resolver;
@@ -75,10 +82,15 @@ final class PersonDataRecovery implements SmartLifecycle {
         this.requests = requests;
         this.purges = purges;
         this.disconnects = disconnects;
+        this.messages = messages;
+        this.collections = collections;
         this.manifestPath = properties.recoveryManifest();
     }
 
-    /** Version 2 adds the purges and disconnects; a version 1 manifest cannot say that there were none. */
+    /**
+     * Version 3 adds the erased collections and the deleted messages, as version 2 added the purges and disconnects: an
+     * earlier manifest cannot say that there were none.
+     */
     record Manifest(
             int version,
             Instant restorePoint,
@@ -86,11 +98,19 @@ final class PersonDataRecovery implements SmartLifecycle {
             @Nullable Long administratorAccountId,
             List<Person> people,
             List<WorkspacePurge> workspacePurges,
-            List<Disconnect> disconnects) {}
+            List<Disconnect> disconnects,
+            List<CollectionErasure> collectionErasures,
+            List<MessageDeletion> messageDeletions) {}
 
     record WorkspacePurge(long workspaceId) {}
 
     record Disconnect(long workspaceId, long connectionId) {}
+
+    /** A documentation collection that an admin erased from the workspace's mirror. */
+    record CollectionErasure(long workspaceId, long connectionId, String collectionId) {}
+
+    /** A conversation message that its developer deleted. */
+    record MessageDeletion(long workspaceId, UUID entryId) {}
 
     record Person(@Nullable Long accountId, List<NativeIdentity> identities, boolean externalCopiesRemoved) {}
 
@@ -121,20 +141,31 @@ final class PersonDataRecovery implements SmartLifecycle {
                     .with(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
                     .readValue(Files.readAllBytes(path));
             reason = FailureReason.MANIFEST_VERSION;
-            if (manifest.version() != 2) throw new IllegalStateException();
+            if (manifest.version() != 3) throw new IllegalStateException();
             reason = FailureReason.MANIFEST_INVALID;
             Objects.requireNonNull(manifest.restorePoint());
             Objects.requireNonNull(manifest.people());
             Objects.requireNonNull(manifest.workspacePurges());
             Objects.requireNonNull(manifest.disconnects());
+            Objects.requireNonNull(manifest.collectionErasures());
+            Objects.requireNonNull(manifest.messageDeletions());
             boolean none = manifest.people().isEmpty()
                     && manifest.workspacePurges().isEmpty()
-                    && manifest.disconnects().isEmpty();
+                    && manifest.disconnects().isEmpty()
+                    && manifest.collectionErasures().isEmpty()
+                    && manifest.messageDeletions().isEmpty();
             if (manifest.restorePoint().isAfter(Instant.now())
                     || manifest.noLaterErasures() != none
                     || manifest.workspacePurges().stream().anyMatch(purge -> purge.workspaceId() <= 0)
                     || manifest.disconnects().stream()
-                            .anyMatch(disconnect -> disconnect.workspaceId() <= 0 || disconnect.connectionId() <= 0)) {
+                            .anyMatch(disconnect -> disconnect.workspaceId() <= 0 || disconnect.connectionId() <= 0)
+                    || manifest.collectionErasures().stream()
+                            .anyMatch(collection -> collection.workspaceId() <= 0
+                                    || collection.connectionId() <= 0
+                                    || collection.collectionId() == null
+                                    || collection.collectionId().isBlank())
+                    || manifest.messageDeletions().stream()
+                            .anyMatch(message -> message.workspaceId() <= 0 || message.entryId() == null)) {
                 throw new IllegalStateException();
             }
             // Validate every native identity before the first erasure changes a store.
@@ -159,6 +190,10 @@ final class PersonDataRecovery implements SmartLifecycle {
             for (Disconnect disconnect : manifest.disconnects())
                 disconnects.disconnectAgain(disconnect.workspaceId(), disconnect.connectionId());
             for (WorkspacePurge purge : manifest.workspacePurges()) purges.purgeAgain(purge.workspaceId());
+            for (CollectionErasure collection : manifest.collectionErasures())
+                collections.eraseAgain(collection.workspaceId(), collection.connectionId(), collection.collectionId());
+            for (MessageDeletion message : manifest.messageDeletions())
+                messages.deleteAgain(message.workspaceId(), message.entryId());
             if (!manifest.people().isEmpty()) {
                 for (int index = 0; index < manifest.people().size(); index++) {
                     reapplyErasure(

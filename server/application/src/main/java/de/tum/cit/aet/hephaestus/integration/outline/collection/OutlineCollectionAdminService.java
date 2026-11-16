@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.outline.collection;
 
 import de.tum.cit.aet.hephaestus.core.LoggingUtils;
+import de.tum.cit.aet.hephaestus.core.TransactionCallbacks;
 import de.tum.cit.aet.hephaestus.core.event.AgentContextChangedEvent;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
@@ -20,6 +21,7 @@ import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineCollectionRep
 import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineDocumentRepository;
 import de.tum.cit.aet.hephaestus.integration.outline.sync.OutlineDocumentSyncScheduler;
 import de.tum.cit.aet.hephaestus.integration.outline.sync.OutlineSyncDispatch;
+import de.tum.cit.aet.hephaestus.observability.StructuredLogKeys;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
@@ -222,12 +224,19 @@ public class OutlineCollectionAdminService {
                 workspaceId, install.connectionId(), collectionId);
         collectionRepository.delete(row);
         eventPublisher.publishEvent(new AgentContextChangedEvent(workspaceId));
-        log.info(
-                "outline.audit: collection erase — actor={} removed collectionId={} from the mirror for workspaceId={} ({} mirrored document(s) erased)",
-                SecurityUtils.getCurrentAccountId().map(id -> "account " + id).orElse("system"),
-                LoggingUtils.sanitizeForLog(collectionId),
-                workspaceId,
-                erased);
+        String actor =
+                SecurityUtils.getCurrentAccountId().map(id -> "account " + id).orElse("system");
+        // An erasure recovery manifest lists this erase after its recovery point, so a rolled-back erase logs nothing.
+        TransactionCallbacks.afterCommit(() -> log.atInfo()
+                .addKeyValue("event.name", "outline.collection_erased")
+                .addKeyValue(StructuredLogKeys.WORKSPACE_ID, workspaceId)
+                .addKeyValue("connection.id", install.connectionId())
+                .addKeyValue("outline.collection.id", LoggingUtils.sanitizeForLog(collectionId))
+                .log(
+                        "outline.audit: collection erase — actor={} removed the collection from the mirror ({} mirrored"
+                                + " document(s) erased)",
+                        actor,
+                        erased));
     }
 
     private List<OutlineCollection> registeredRows(OutlineInstall install) {
