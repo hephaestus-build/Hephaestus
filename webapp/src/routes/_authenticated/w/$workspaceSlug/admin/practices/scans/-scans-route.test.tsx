@@ -1,4 +1,3 @@
-import { QueryClient } from "@tanstack/react-query";
 import { createMemoryHistory, createRouter } from "@tanstack/react-router";
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -10,7 +9,12 @@ import { ownMembership, workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
 import { routeTree } from "@/routeTree.gen";
 import { deferred } from "@/test/async";
-import { loadRouteCode, ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
+import {
+	loadRouteCode,
+	ROUTE_RENDER_WAIT,
+	renderRouteAtWithRouter,
+	testQueryClient,
+} from "@/test/router-harness";
 
 import {
 	adminHandlers,
@@ -266,7 +270,7 @@ describe("scan routes under the admin gate", () => {
 			...ROUTER_SEARCH,
 			routeTree,
 			history: createMemoryHistory({ initialEntries: [url] }),
-			context: { queryClient: new QueryClient(), auth: undefined },
+			context: { queryClient: testQueryClient(), auth: undefined },
 		});
 		await router.load();
 		await waitFor(() => expect(router.state.location.pathname).toBe("/w/acme/practice-profile"));

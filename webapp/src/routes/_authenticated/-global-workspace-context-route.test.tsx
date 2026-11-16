@@ -1,4 +1,4 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider } from "@tanstack/react-query";
 import {
 	createMemoryHistory,
 	createRootRoute,
@@ -11,6 +11,7 @@ import {
 import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
+import { testQueryClient } from "@/test/router-harness";
 
 import { listWorkspacesOptions } from "@/api/@tanstack/react-query.gen";
 import Header from "@/components/layout/Header";
@@ -65,9 +66,7 @@ function Chrome() {
 }
 
 function renderNavigation(initialEntry = "/w/beta/conversation") {
-	const queryClient = new QueryClient({
-		defaultOptions: { queries: { staleTime: QUERY_STALE_TIME_MS } },
-	});
+	const queryClient = testQueryClient({ staleTime: QUERY_STALE_TIME_MS });
 	queryClient.setQueryData(listWorkspacesOptions().queryKey, [
 		workspaceListItem("alpha"),
 		workspaceListItem("beta", { providerType: "GITLAB" }),

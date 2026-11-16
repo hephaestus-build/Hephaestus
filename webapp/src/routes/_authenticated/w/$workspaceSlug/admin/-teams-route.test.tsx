@@ -1,4 +1,4 @@
-import { QueryClient } from "@tanstack/react-query";
+import type { QueryClient } from "@tanstack/react-query";
 import { act, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http, type HttpResponseResolver } from "msw";
@@ -12,7 +12,12 @@ import { ownMembership, workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
 import { QUERY_STALE_TIME_MS } from "@/runtime/tanstack-query/query-defaults";
 import { type Deferred, deferred, pending } from "@/test/async";
-import { loadRouteCode, ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
+import {
+	loadRouteCode,
+	ROUTE_RENDER_WAIT,
+	renderRouteAtWithRouter,
+	testQueryClient,
+} from "@/test/router-harness";
 
 beforeAll(async () => loadRouteCode("/w/acme/admin/teams"), ROUTE_RENDER_WAIT.timeout);
 
@@ -72,12 +77,7 @@ const BETA_TEAMS_KEY = getAllTeamsQueryKey({ path: { workspaceSlug: "beta" } });
 
 /** The production client's freshness: an unchanged read is not asked for again within 30 s. */
 function productionClient() {
-	return new QueryClient({
-		defaultOptions: {
-			queries: { staleTime: QUERY_STALE_TIME_MS, retry: false },
-			mutations: { retry: false },
-		},
-	});
+	return testQueryClient({ staleTime: QUERY_STALE_TIME_MS });
 }
 
 /**

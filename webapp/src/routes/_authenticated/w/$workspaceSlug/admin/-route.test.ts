@@ -1,4 +1,3 @@
-import { QueryClient } from "@tanstack/react-query";
 import { createMemoryHistory, createRouter } from "@tanstack/react-router";
 import { HttpResponse, http } from "msw";
 import { beforeAll, beforeEach, describe, expect, it, onTestFinished } from "vitest";
@@ -13,7 +12,7 @@ import { ownMembership, workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
 import { routeTree } from "@/routeTree.gen";
 import { clearUserView, USER_VIEW_STORAGE_KEY } from "@/runtime/user-view/session";
-import { loadRouteCode, ROUTE_RENDER_WAIT } from "@/test/router-harness";
+import { loadRouteCode, ROUTE_RENDER_WAIT, testQueryClient } from "@/test/router-harness";
 
 // The workspace reviews practices, so its home is the Practice profile.
 const WORKSPACE_HOME = "/w/acme/practice-profile";
@@ -31,7 +30,7 @@ beforeAll(
 	ROUTE_RENDER_WAIT.timeout,
 );
 
-function newRouter(url?: string, queryClient = new QueryClient()) {
+function newRouter(url?: string, queryClient = testQueryClient()) {
 	return createRouter({
 		...ROUTER_SEARCH,
 		routeTree,
@@ -149,7 +148,7 @@ describe("workspace-admin route gate", () => {
 			}),
 		);
 		mockMembership(null);
-		const queryClient = new QueryClient();
+		const queryClient = testQueryClient();
 		const router = newRouter("/w/tutors/admin/settings", queryClient);
 		await router.load();
 		expect(router.state.location.pathname).toBe("/w/tutors/admin/settings");
@@ -182,7 +181,7 @@ describe("workspace-admin route gate", () => {
 			),
 		);
 		mockMembership(null);
-		const queryClient = new QueryClient();
+		const queryClient = testQueryClient();
 		const router = newRouter("/w/tutors/admin/settings", queryClient);
 		await router.load();
 		server.use(
