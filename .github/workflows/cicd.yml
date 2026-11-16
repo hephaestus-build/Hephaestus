@@ -111,8 +111,8 @@ jobs:
       # group aliases nothing, so one that runs the Kubernetes legs builds every image they install.
       all-images: ${{ steps.alias_base.outputs.commit == '' || steps.release_candidate.outputs.release-candidate == 'true' || (github.event_name == 'merge_group' && steps.filter.outputs.kubernetes == 'true') }}
       # A push and a dispatch validate a commit whole; a pull request and a merge group are each a
-      # diff, which paths-filter reads for a group from `merge_group.base_sha..head_sha` without
-      # being told.
+      # diff. A merge group's diff starts where the group leaves main (the `group_base` step), so it
+      # covers every pull request the group would merge.
       unfiltered: ${{ github.event_name == 'push' || github.event_name == 'workflow_dispatch' }}
       # PRs use the fast tier; ci:full reproduces a queue failure. An unreadable label read retains
       # the full tier. Release evidence selection is separate. Every merge group still runs the
@@ -150,6 +150,21 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      # GitHub sets a merge group's base_sha to its parent commit. Behind another group, that parent
+      # is the group ahead, so its diff holds only its own pull request, and the queue merges every
+      # pull request of a group that passes. The diff therefore starts where the group leaves main.
+      # A failed lookup fails the run rather than judging a narrower diff.
+      - name: Resolve where the merge group leaves main
+        id: group_base
+        if: github.event_name == 'merge_group'
+        env:
+          BASE_REF: ${{ github.event.merge_group.base_ref }}
+        run: |
+          git fetch --no-tags --quiet origin "+$BASE_REF:refs/remotes/origin/merge-group-base"
+          base=$(git merge-base refs/remotes/origin/merge-group-base HEAD)
+          echo "Changes are detected from $base, where this group leaves ${BASE_REF#refs/heads/}."
+          echo "sha=$base" >> "$GITHUB_OUTPUT"
+
       # Scorecard's Binary-Artifacts check exempts the committed `gradle-wrapper.jar` only when it finds
       # `gradle/actions/wrapper-validation@` in a workflow file AND a successful run of that same file at
       # the latest commit. A reusable workflow produces no run under its own name, so this has to live in
@@ -171,7 +186,7 @@ jobs:
         id: release_candidate
         env:
           HEAD_BRANCH: ${{ github.head_ref || github.ref_name }}
-          MERGE_BASE_SHA: ${{ github.event.merge_group.base_sha }}
+          MERGE_BASE_SHA: ${{ steps.group_base.outputs.sha }}
         run: |
           version_branch="changeset-release/$(jq -r .baseBranch .changeset/config.json)"
           [ "$HEAD_BRANCH" = "$version_branch" ] && on_version_branch=true || on_version_branch=false
@@ -264,6 +279,9 @@ jobs:
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         id: filter
         with:
+          # Empty except in a merge group, which then diffs from where it leaves main. A manual base
+          # takes precedence over the event's base_sha.
+          base: ${{ steps.group_base.outputs.sha }}
           predicate-quantifier: some-with-excludes
           filters: |
             webapp:

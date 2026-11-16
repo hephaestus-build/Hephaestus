@@ -430,7 +430,7 @@ Zizmor reports every `pull_request_target` and `workflow_run` trigger as `danger
 `pull-request-policy.yml` carries an ignore comment with its reason.
 `scripts/ci-contract.test.ts` also refuses any workflow that runs on `pull_request_target`, so an ignore comment cannot admit one.
 
-A merge group uses a synthetic ref, not the Version PR branch name. If its aggregate tree changes `package.json`'s version relative to the group's base, it is a release candidate.
+A merge group uses a synthetic ref, not the Version PR branch name. If its aggregate tree changes `package.json`'s version relative to the commit where the group leaves `main`, it is a release candidate.
 It builds every release image on both platforms and must pass release evidence preflight on that exact tree.
 Missing base/version data fails detection rather than silently skipping release validation.
 
@@ -1029,8 +1029,12 @@ The `kubernetes` filter includes `docker/**`, `application*.yml`, `*Properties.j
 
 `detect-changes` in `cicd.yml` selects legs from changed paths for two diff events.
 A pull request compares with its base.
-A merge group compares `merge_group.base_sha..head_sha`. A
-push to `main` and a dispatch publish `unfiltered` selection flags rather than filtering a diff.
+A merge group compares the commit where it leaves `main` with its head.
+
+GitHub's `merge_group.base_sha` is the group's parent commit. Behind another group, that parent is the group ahead, and its diff would hold only its own pull request.
+The queue merges every pull request of a group that passes, so the group's checks must cover all of them.
+
+A push to `main` and a dispatch publish `unfiltered` selection flags rather than filtering a diff.
 
 Selection does not override outer event guards.
 Ordinary main pushes omit Quality, Server tests, Security and Workflow lint.
