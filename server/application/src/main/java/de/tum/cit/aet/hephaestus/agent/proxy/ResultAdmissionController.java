@@ -12,7 +12,6 @@ import de.tum.cit.aet.hephaestus.agent.proxy.dto.PracticeStartRequestDTO;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.PracticeStartResponseDTO;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.SealResultsRequestDTO;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.StageResponseDTO;
-import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CheckoutUnverifiedException;
 import jakarta.validation.Valid;
@@ -39,7 +38,6 @@ public class ResultAdmissionController {
     }
 
     @PostMapping("/start-practice")
-    @WorkspaceAgnostic("The attempt credential supplies the workspace and exact job attempt")
     public PracticeStartResponseDTO startPractice(
             @Valid @RequestBody PracticeStartRequestDTO request, Authentication authentication) {
         var identity = attemptOf(authentication);
@@ -47,7 +45,6 @@ public class ResultAdmissionController {
     }
 
     @PostMapping("/admit-results")
-    @WorkspaceAgnostic("The attempt credential supplies the workspace and exact job attempt")
     public AdmissionResponseDTO admitResults(
             @Valid @RequestBody SealResultsRequestDTO request, Authentication authentication) {
         var identity = attemptOf(authentication);
@@ -55,7 +52,6 @@ public class ResultAdmissionController {
     }
 
     @PostMapping("/stage-result")
-    @WorkspaceAgnostic("The attempt credential supplies the workspace and exact job attempt")
     public StageResponseDTO stageResult(
             @Valid @RequestBody AdmissionRequestDTO request, Authentication authentication) {
         var identity = attemptOf(authentication);

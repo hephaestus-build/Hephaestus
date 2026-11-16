@@ -22,6 +22,8 @@ import de.tum.cit.aet.hephaestus.agent.gateway.AgentNextController;
 import de.tum.cit.aet.hephaestus.agent.gateway.AgentRunController;
 import de.tum.cit.aet.hephaestus.agent.gateway.CompositionController;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewSandboxController;
+import de.tum.cit.aet.hephaestus.agent.proxy.LlmProxyController;
+import de.tum.cit.aet.hephaestus.agent.proxy.ResultAdmissionController;
 import de.tum.cit.aet.hephaestus.architecture.conditions.WorkspaceParameters;
 import de.tum.cit.aet.hephaestus.architecture.conditions.WorkspaceQueryParameters;
 import de.tum.cit.aet.hephaestus.core.RequireInstanceAdmin;
@@ -327,6 +329,11 @@ class MultiTenancyArchitectureTest extends HephaestusArchitectureTest {
             ReviewSandboxController.class,
             ConversationTurnController.class,
             TurnContextController.class,
+            // The attempt credential: a review attempt's token, or a sandbox token whose run resolves as above, names
+            // the workspace, job and attempt. Every read and write of a model call or a result is bound to them.
+            // AttemptCredentialWorkspaceIntegrationTest proves that another workspace's rows stay as they were.
+            LlmProxyController.class,
+            ResultAdmissionController.class,
             // Anonymous public pages of a workspace. Each read needs the instance switch on, and one query must
             // find the slug opted in and ACTIVE; every read then binds that workspace's id.
             // ActivityControllerIntegrationTest proves the not-found answers and that two public workspaces never
