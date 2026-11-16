@@ -498,7 +498,7 @@ It does not include the WAL, temporary files or the space of the filesystem.
 ## HTTP route metrics
 
 `http.server.requests` uses route templates, not individual workspace slugs, message IDs, or query
-strings. Its URI-tag budget is 320: enough for the supported route inventory and the framework's
+strings. Its URI-tag budget is 384: enough for the supported route inventory and the framework's
 bounded unmatched-request and management tags. A new URI beyond the budget is refused rather than
 creating unbounded time series. A limit warning therefore means metrics are incomplete and needs
 investigation, not a logging-level change.
