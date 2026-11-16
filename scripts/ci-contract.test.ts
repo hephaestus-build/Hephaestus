@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, test } from "node:test";
 import { data, Evaluator, Lexer, Parser } from "@actions/expressions";
-import { isMap, isScalar, isSeq } from "yaml";
+import { isMap, isScalar, isSeq, visit } from "yaml";
 import {
 	assertNeeds,
 	bashRunsRunnerSteps,
@@ -13,6 +14,7 @@ import {
 	CI_ONLY_GATES,
 	escapeRegExp,
 	expandExpressions,
+	invokedTasks,
 	job,
 	limitMinutes,
 	namedStep,
@@ -20,10 +22,12 @@ import {
 	parseDocument,
 	pathFilter,
 	posixGlob,
+	readSources,
 	runScript,
 	runStep,
 	step,
 	stepInputs,
+	TASK_INVOCATION,
 	taskClosure,
 	VP_INVOCATION,
 	workflowSources,
@@ -32,6 +36,15 @@ import { isSet } from "./lib/env.ts";
 import { environmentForGitFixture } from "./lib/git-environment.ts";
 import { asArray, asRecord, asString, isRecord } from "./lib/json.ts";
 import { commandsOf, loadTasks } from "./lib/task-graph.ts";
+
+// Check scripts that are local tools, not verdicts: `check:ports` reports the ports of a developer's
+// stack, `check:push` is the pre-push hook, which runs checks that CI also runs, and `check:affected`
+// selects the checks of a local change.
+const LOCAL_CHECK_SCRIPTS = new Set([
+	"scripts/check-affected.ts",
+	"scripts/check-ports.ts",
+	"scripts/check-push.ts",
+]);
 
 void describe("ci-contract: tooling", () => {
 	void test("task names follow the vocabulary in the local verification guide", async () => {
@@ -76,6 +89,73 @@ void describe("ci-contract: tooling", () => {
 			[...CI_ONLY_GATES].toSorted(),
 			"every gate must be reachable from quality or listed as CI-only",
 		);
+	});
+
+	void test("every check script runs in a CI job or in quality", async () => {
+		const tasks = await loadTasks();
+		const workflows = await workflowSources();
+		const actions = await readSources(await posixGlob(".github/actions/*/action.yml"));
+		const roots = new Set(["quality"]);
+		for (const source of workflows.values()) {
+			const jobs = parseDocument(source).get("jobs");
+			for (const item of isMap(jobs) ? jobs.items : []) {
+				if (isMap(item.value)) {
+					for (const name of invokedTasks(item.value)) {
+						roots.add(name);
+					}
+				}
+			}
+		}
+		for (const source of actions.values()) {
+			for (const invocation of source.matchAll(TASK_INVOCATION)) {
+				const name = invocation.groups?.name;
+				if (name !== undefined && !name.includes("${{")) {
+					roots.add(name);
+				}
+			}
+		}
+		const commands = [
+			...taskClosure(
+				tasks,
+				[...roots].filter((name) => name in tasks),
+			),
+		]
+			.flatMap((name) => commandsOf(tasks[name]))
+			.join("\n");
+		// Only commands count: a path in a comment or a `paths` filter runs nothing.
+		const steps: string[] = [];
+		for (const source of [...workflows.values(), ...actions.values()]) {
+			visit(parseDocument(source), {
+				Pair(_key, pair) {
+					if (isScalar(pair.key) && pair.key.value === "run" && isScalar(pair.value)) {
+						steps.push(String(pair.value.value));
+					}
+				},
+			});
+		}
+		const docsScripts = Object.values(
+			asRecord(
+				asRecord(JSON.parse(await readFile("docs/package.json", "utf8")), "docs").scripts,
+				"scripts",
+			),
+		).map((command) => asString(command, "docs script"));
+		const ran = (script: string) =>
+			[commands, ...steps, ...docsScripts].some((command) => command.includes(script));
+		const checks = await posixGlob("scripts/check-*.ts");
+		// A module without a command line is a library: the scripts that import it run it.
+		const scripts = checks.filter(
+			(file) =>
+				!file.endsWith(".test.ts") && readFileSync(file, "utf8").includes("import.meta.main"),
+		);
+		assert.deepEqual(
+			scripts.filter((script) => !LOCAL_CHECK_SCRIPTS.has(script) && !ran(script)),
+			[],
+			"a check script must run in a CI job or in a task that quality reaches",
+		);
+		for (const script of LOCAL_CHECK_SCRIPTS) {
+			assert.ok(scripts.includes(script), `${script} is listed as a local tool but does not exist`);
+			assert.ok(!ran(script), `${script} runs in CI or quality, so it is not only a local tool`);
+		}
 	});
 
 	void test("required tooling CI renders docs after its checks", async () => {

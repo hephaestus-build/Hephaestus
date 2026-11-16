@@ -349,9 +349,9 @@ export async function ensureLocalEnvironment(): Promise<void> {
 }
 
 /**
- * Removes this checkout's local database, also one whose password or project name is missing, which
- * `ensureLocalEnvironment` refuses. Without a configured name, the containers run under Compose's default
- * project, the folder name `server`. Compose resolves the password even to stop them, and stopping reads none.
+ * Removes this checkout's local database, also one whose password is missing, which `ensureLocalEnvironment`
+ * refuses. It needs the project name: Compose's default project, the folder name `server`, is shared by every
+ * checkout. Compose resolves the password even to stop the containers, and stopping reads none.
  */
 export async function resetLocalDatabase({
 	envFile,
@@ -365,10 +365,13 @@ export async function resetLocalDatabase({
 	compose: (args: string[], env: Record<string, string>) => Promise<void>;
 }): Promise<void> {
 	const values = { ...(await readEnvFile(envFile)), ...environment };
+	if (!isSet(values.COMPOSE_PROJECT_NAME)) {
+		throw new Error(
+			"server/.env has no COMPOSE_PROJECT_NAME. Set the project of this checkout's containers (`docker compose ls` lists them), then run `vp run dev:reset` again.",
+		);
+	}
 	await compose(["down", "-v"], {
-		COMPOSE_PROJECT_NAME: isSet(values.COMPOSE_PROJECT_NAME)
-			? values.COMPOSE_PROJECT_NAME
-			: "server",
+		COMPOSE_PROJECT_NAME: values.COMPOSE_PROJECT_NAME,
 		POSTGRES_PASSWORD: isSet(values.POSTGRES_PASSWORD)
 			? values.POSTGRES_PASSWORD
 			: "unused-when-stopping",

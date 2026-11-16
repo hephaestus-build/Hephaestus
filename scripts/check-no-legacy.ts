@@ -1,30 +1,15 @@
 import { execFileSync } from "node:child_process";
-import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
-import { isSet } from "./lib/env.ts";
 import { environmentWithoutGitRepository } from "./lib/git-environment.ts";
-import { asArray, asRecord, asString, parseJson } from "./lib/json.ts";
 
 export interface Finding {
 	rule: string;
 	file: string;
 	line: number;
 	text: string;
-	digest: string;
 }
-export interface BaselineEntry {
-	rule: string;
-	file: string;
-	text: string;
-	digest: string;
-	count: number;
-	owner: string;
-}
-const sourceDigest = (source: string): string =>
-	createHash("sha256").update(source.replaceAll("\r\n", "\n")).digest("hex");
-const baselineFile = "scripts/no-legacy-baseline.json";
 const code = /\.(?:java|kt|[cm]?[jt]sx?)$/u;
 const fixtures =
 	/(?:^|\/)(?:test|tests|testing|fixtures|snapshots|corpus|generated-clients)(?:\/|$)|\.(?:test|spec|stories)\.[^.]+$|(?:routeTree|types|sdk)\.gen\./u;
@@ -107,7 +92,51 @@ function canonicalWorkspaceRedirect(file: string, source: string, statement: str
 	return entries.length === 1 && entries[0] === canonicalEntry;
 }
 
-/** Find obsolete paths, not authentication, current landing pages or provider schema directives. */
+/**
+ * A renamed workspace's old slug answers 308 with its current address for members. It is a current flow, not an old
+ * path: the slug history keeps the old slug from every other workspace while the redirect exists.
+ */
+function renamedSlugRedirect(file: string, source: string, statement: string): boolean {
+	const redirect = "response.setStatus(HttpStatus.PERMANENT_REDIRECT.value());";
+	return (
+		file ===
+			"server/application/src/main/java/de/tum/cit/aet/hephaestus/workspace/context/WorkspaceContextFilter.java" &&
+		statement === redirect &&
+		source.split(redirect).length === 2 &&
+		source.includes("workspaceSlugHistoryRepository.findFirstByOldSlugOrderByChangedAtDesc(")
+	);
+}
+
+/** Permanent redirects and forwards in server code. */
+function javaRedirects(
+	file: string,
+	source: string,
+	add: (rule: string, offset: number) => void,
+): void {
+	const matches = (rule: string, pattern: RegExp) => {
+		for (const match of source.matchAll(pattern)) {
+			add(rule, match.index);
+		}
+	};
+	for (const match of source.matchAll(
+		/\b(?:SC_MOVED_PERMANENTLY|MOVED_PERMANENTLY|PERMANENT_REDIRECT)\b/gu,
+	)) {
+		const start = source.lastIndexOf("\n", match.index - 1) + 1;
+		const end = source.indexOf("\n", match.index);
+		if (
+			!renamedSlugRedirect(file, source, source.slice(start, end === -1 ? undefined : end).trim())
+		) {
+			add("path-alias", match.index);
+		}
+	}
+	matches("path-alias", /["'](?:redirect|forward):(?:\/|https?:\/\/)/gu);
+	matches("path-alias", /\b(?:setStatus|status|valueOf)\(\s*30[178]\s*\)/gu);
+	if (!/\/(?:core\/auth|integration\/core\/oauth)\//u.test(file)) {
+		matches("path-alias", /(?:\.sendRedirect|new\s+RedirectView)\(\s*["']\//gu);
+	}
+}
+
+/** Find obsolete paths, not authentication, current landing pages, the renamed-slug redirect or provider schema directives. */
 export function findings(file: string, source: string, files: readonly string[] = []): Finding[] {
 	if (fixtures.test(file) || /^(?:webapp|extension)\/src\/api\//u.test(file)) {
 		return [];
@@ -121,7 +150,6 @@ export function findings(file: string, source: string, files: readonly string[] 
 			file,
 			line: source.slice(0, offset).split("\n").length,
 			text: source.slice(start, end === -1 ? undefined : end).trim(),
-			digest: sourceDigest(source),
 		});
 	};
 	const matches = (rule: string, pattern: RegExp) => {
@@ -154,12 +182,7 @@ export function findings(file: string, source: string, files: readonly string[] 
 			/(?:getProperty|getenv)\(\s*"[^"]+"\s*,\s*(?:\w+\.)*(?:getProperty|getenv)\(/gu,
 		);
 		if (file.endsWith(".java")) {
-			matches("path-alias", /\b(?:SC_MOVED_PERMANENTLY|MOVED_PERMANENTLY|PERMANENT_REDIRECT)\b/gu);
-			matches("path-alias", /["'](?:redirect|forward):(?:\/|https?:\/\/)/gu);
-			matches("path-alias", /\b(?:setStatus|status|valueOf)\(\s*30[178]\s*\)/gu);
-			if (!/\/(?:core\/auth|integration\/core\/oauth)\//u.test(file)) {
-				matches("path-alias", /(?:\.sendRedirect|new\s+RedirectView)\(\s*["']\//gu);
-			}
+			javaRedirects(file, source, add);
 		}
 		const routeRedirect = redirectOnlyRoute(file, source, files);
 		if (routeRedirect !== undefined) {
@@ -204,112 +227,21 @@ export function findings(file: string, source: string, files: readonly string[] 
 	);
 }
 
-export function parseBaseline(source: string): BaselineEntry[] {
-	const result = asArray(parseJson(source), "baseline").map((value) => {
-		const entry = asRecord(value, "baseline entry");
-		const rule = asString(entry.rule, "rule");
-		const file = asString(entry.file, "file");
-		const text = asString(entry.text, "text");
-		const digest = asString(entry.digest, "digest");
-		const owner = asString(entry.owner, "owner");
-		const { count } = entry;
-		if (
-			!/^[a-f0-9]{64}$/u.test(digest) ||
-			owner.trim() === "" ||
-			typeof count !== "number" ||
-			!Number.isSafeInteger(count) ||
-			count < 1
-		) {
-			throw new Error("Invalid baseline digest, owner or count.");
-		}
-		return { rule, file, text, digest, owner, count };
-	});
-	if (new Set(result.map(key)).size !== result.length) {
-		throw new Error("Duplicate no-legacy baseline entry.");
-	}
-	return result;
-}
-
-const key = (entry: Pick<BaselineEntry, "rule" | "file" | "text">): string =>
-	JSON.stringify([entry.rule, entry.file, entry.text]);
-
-export function violations(
-	actual: Finding[],
-	baseline: BaselineEntry[],
-	previous: BaselineEntry[],
-	version: string,
-): string[] {
-	const errors: string[] = [];
-	const counts = new Map<string, number>();
-	for (const item of actual) {
-		counts.set(key(item), (counts.get(key(item)) ?? 0) + 1);
-	}
-	const allowed = new Map(baseline.map((entry) => [key(entry), entry]));
-	const before = new Map(previous.map((entry) => [key(entry), entry]));
-	for (const entry of baseline) {
-		if (
-			entry.count > (before.get(key(entry))?.count ?? 0) ||
-			entry.digest !== before.get(key(entry))?.digest
-		) {
-			errors.push(`The baseline cannot grow: ${entry.file} (${entry.rule}).`);
-		}
-		if ((counts.get(key(entry)) ?? 0) < entry.count) {
-			errors.push(`Remove the stale baseline entry: ${entry.file} (${entry.rule}).`);
-		}
-	}
-	for (const item of actual) {
-		const allowance = allowed.get(key(item));
-		if (allowance === undefined) {
-			errors.push(`${item.file}:${item.line}: ${item.rule}: ${item.text}`);
-			continue;
-		}
-		if (allowance.digest !== item.digest || (counts.get(key(item)) ?? 0) > allowance.count) {
-			errors.push(`The source of a baseline entry changed: ${item.file}. Remove its old path.`);
-		}
-	}
-
-	if (/^[1-9]\d*\./u.test(version) && !version.includes("-") && baseline.length > 0) {
-		errors.push("The no-legacy baseline must be empty for 1.0 and later stable releases.");
-	}
-	return [...new Set(errors)];
-}
-
-function baseReference(): string {
-	if (isSet(process.env.PR_BASE_SHA)) {
-		return process.env.PR_BASE_SHA;
-	}
-	if (isSet(process.env.GITHUB_BASE_REF)) {
-		return `origin/${process.env.GITHUB_BASE_REF}`;
-	}
-	return "origin/main";
-}
-
-export function check(root: string, requestedBase = baseReference()): string[] {
-	const git = (...args: string[]) =>
-		execFileSync("git", args, {
+/** Every finding in the files that Git tracks or would add. A finding has no baseline: remove the old path. */
+export function check(root: string): string[] {
+	const files = execFileSync(
+		"git",
+		["ls-files", "-z", "--cached", "--others", "--exclude-standard"],
+		{
 			cwd: root,
 			env: environmentWithoutGitRepository(),
 			encoding: "utf8",
 			maxBuffer: 32 * 1024 * 1024,
-		});
-	const base = git("merge-base", "HEAD", requestedBase).trim();
-	const baseline = parseBaseline(readFileSync(path.join(root, baselineFile), "utf8"));
-	const baseFiles = git("ls-tree", "--name-only", base, "--", baselineFile).trim();
-	// The first guard commit records the existing debt; every later baseline can only shrink.
-	const previous =
-		baseFiles === ""
-			? baseline.map((entry) => {
-					const exists = git("ls-tree", "--name-only", base, "--", entry.file).trim() !== "";
-					return {
-						...entry,
-						digest: exists ? sourceDigest(git("show", `${base}:${entry.file}`)) : "",
-					};
-				})
-			: parseBaseline(git("show", `${base}:${baselineFile}`));
-	const files = git("ls-files", "-z", "--cached", "--others", "--exclude-standard")
+		},
+	)
 		.split("\0")
 		.filter(Boolean);
-	const actual = files.flatMap((file) => {
+	return files.flatMap((file) => {
 		if (
 			!code.test(file) &&
 			!/\.(?:mdx?|html?|json|ya?ml|properties|env|sh|tpl|conf)$/u.test(file) &&
@@ -317,25 +249,19 @@ export function check(root: string, requestedBase = baseReference()): string[] {
 		) {
 			return [];
 		}
+		let source: string;
 		try {
-			return findings(file, readFileSync(path.join(root, file), "utf8"), files);
+			source = readFileSync(path.join(root, file), "utf8");
 		} catch (error) {
 			if (error instanceof Error && "code" in error && error.code === "ENOENT") {
 				return [];
 			}
 			throw error;
 		}
+		return findings(file, source, files).map(
+			(finding) => `${finding.file}:${finding.line}: ${finding.rule}: ${finding.text}`,
+		);
 	});
-	const manifest: unknown = JSON.parse(readFileSync(path.join(root, "package.json"), "utf8"));
-	if (
-		typeof manifest !== "object" ||
-		manifest === null ||
-		!("version" in manifest) ||
-		typeof manifest.version !== "string"
-	) {
-		throw new Error("package.json needs a version.");
-	}
-	return violations(actual, baseline, previous, manifest.version);
 }
 if (import.meta.main) {
 	const root = path.resolve(import.meta.dirname, "..");
@@ -344,6 +270,6 @@ if (import.meta.main) {
 		console.error(errors.join("\n"));
 		process.exitCode = 1;
 	} else {
-		console.log("No new legacy paths; the baseline can only shrink.");
+		console.log("No legacy paths.");
 	}
 }

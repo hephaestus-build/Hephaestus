@@ -1,8 +1,6 @@
-import { writeFileSync } from "node:fs";
 import path from "node:path";
 
 import { isSet } from "./lib/env.ts";
-import { readJsonFileSync } from "./lib/json.ts";
 
 type JsonObject = Record<string, unknown>;
 
@@ -529,26 +527,4 @@ export function validateReleaseSbom(
 		packagesWithLicense: artifacts.length - missingLicenses.length,
 		packagesWithoutLicense: missingLicenses,
 	};
-}
-
-if (import.meta.main) {
-	const [syftPath, spdxPath, cycloneDxPath, repository, digest, platform, outputPath] =
-		process.argv.slice(2);
-	if (
-		!isSet(syftPath) ||
-		!isSet(spdxPath) ||
-		!isSet(cycloneDxPath) ||
-		!isSet(repository) ||
-		!isSet(digest) ||
-		!isSet(platform) ||
-		!isSet(outputPath)
-	) {
-		throw new Error(
-			"usage: check-release-sbom <syft> <spdx> <cyclonedx> <repository> <digest> <platform> <output>",
-		);
-	}
-	writeFileSync(
-		outputPath,
-		`${JSON.stringify(validateReleaseSbom(readJsonFileSync(syftPath), readJsonFileSync(spdxPath), readJsonFileSync(cycloneDxPath), { repository, digest, platform }), null, 2)}\n`,
-	);
 }
