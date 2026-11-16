@@ -44,7 +44,7 @@ class SetDefaultFeedbackModeTool implements McpTool {
                         "Set the default feedback mode",
                         "Sets the feedback mode of every practice and group in this workspace that sets none, or null to"
                                 + " return to the instance's default. Undo it with this tool and the earlier"
-                                + " defaultFeedbackMode from get_review_settings."),
+                                + " defaultFeedbackModeOverride from get_review_settings, null included."),
                 INPUT_SCHEMA,
                 McpProjections.REVIEW_SETTINGS_SCHEMA,
                 McpTools.Effect.CHANGES);

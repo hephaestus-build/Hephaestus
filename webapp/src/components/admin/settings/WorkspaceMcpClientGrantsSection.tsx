@@ -83,15 +83,15 @@ export function WorkspaceMcpClientGrantsSection({
 							<Item key={grant.id} render={<li />} variant="row">
 								<ItemContent>
 									<ItemTitle>{grant.clientHost}</ItemTitle>
+									{/* Outside the clamped description, so a long name never hides what the client may do. */}
+									<p className="text-sm font-medium">
+										{grant.scopes.includes("practices:write")
+											? "Reads and changes the practice configuration"
+											: "Reads the practice configuration"}
+									</p>
 									<ItemDescription>
 										Calls itself {grant.clientName}. Allowed by {grant.approvedBy}
-										{grant.approvedAt === undefined
-											? ""
-											: ` on ${formatDate(grant.approvedAt)}`} to{" "}
-										{grant.scopes.includes("practices:write")
-											? "read and change the practice configuration"
-											: "read the practice configuration"}
-										.
+										{grant.approvedAt === undefined ? "" : ` on ${formatDate(grant.approvedAt)}`}.
 									</ItemDescription>
 								</ItemContent>
 								<ItemActions>

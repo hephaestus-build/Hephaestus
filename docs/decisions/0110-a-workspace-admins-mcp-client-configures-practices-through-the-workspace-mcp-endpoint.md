@@ -161,7 +161,7 @@ Every tool runs under the workspace of its endpoint and maps to one existing ser
 | `set_practice_feedback_mode` | `PracticeCatalogController.mode` | admin | the same tool with the earlier value; `null` inherits |
 | `move_practice_to_group` | `PracticeCatalogController.bind` | admin | the same tool with the earlier group |
 | `set_review_scope` | `PracticeReviewSettingsController.update` | admin | the same tool with the scope that `get_review_settings` returned |
-| `set_default_feedback_mode` | the same | admin | the same tool, or reset to inherit |
+| `set_default_feedback_mode` | the same | admin | the same tool with the earlier `defaultFeedbackModeOverride`, which is null when the workspace inherits |
 | `set_feedback_delivery` | the same, `deliveryStatus` | admin | `PAUSED` and `ACTIVE` reverse each other |
 | `request_review` | `ReviewRequestController.requestReview` | member | `cancel_review` |
 | `cancel_review` | `ReviewSummaryController.cancelReview` | admin | `request_review` |

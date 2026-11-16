@@ -24,7 +24,7 @@ type Story = StoryObj<typeof meta>;
 
 export const Connected: Story = {
 	play: async ({ canvas, args, userEvent }) => {
-		await expect(canvas.getByText(/to read the practice configuration/u)).toBeVisible();
+		await expect(canvas.getByText("Reads the practice configuration")).toBeVisible();
 		await userEvent.click(canvas.getByRole("button", { name: "Disconnect claude.ai" }));
 		await expect(args.onRevoke).toHaveBeenCalledWith(grant.id);
 	},
@@ -34,7 +34,7 @@ export const Connected: Story = {
 export const MayChange: Story = {
 	args: { grants: [{ ...grant, scopes: ["practices:read", "practices:write"] }] },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByText(/to read and change the practice configuration/u)).toBeVisible();
+		await expect(canvas.getByText("Reads and changes the practice configuration")).toBeVisible();
 	},
 };
 

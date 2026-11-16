@@ -19,6 +19,7 @@ import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -286,6 +287,38 @@ class McpWriteToolsIntegrationTest extends RealAuthIntegrationTest {
                 .isEqualTo(adopted.path("definition").path("criteria").asString());
     }
 
+    /** A reset also restores the catalog group, so a move after the preview must make the preview stale. */
+    @Test
+    void shouldRefuseAResetWithAStalePreviewWhenThePracticeMovedSince() {
+        String slug =
+                catalog.effectiveCatalog().installablePractices().getFirst().slug();
+        JsonNode preview = structured(call(writeToken, "preview_catalog_practice", Map.of("slug", slug)));
+        structured(call(
+                writeToken,
+                "adopt_catalog_practice",
+                Map.of("slug", slug, "previewEtag", preview.path("previewEtag").asString())));
+        groups.createGroup(context(), "mcp-elsewhere", new GroupAttributes("Elsewhere", null, null, null, null), true);
+        JsonNode resetPreview = structured(call(writeToken, "preview_practice_reset", Map.of("slug", slug)));
+
+        structured(call(writeToken, "move_practice_to_group", Map.of("slug", slug, "groupSlug", "mcp-elsewhere")));
+        JsonNode stale = call(
+                writeToken,
+                "reset_practice",
+                Map.of("slug", slug, "resetEtag", resetPreview.path("resetEtag").asString()));
+
+        assertThat(stale.path("isError").asBoolean()).isTrue();
+        assertThat(structured(call(writeToken, "get_practice", Map.of("slug", slug)))
+                        .path("groupSlug")
+                        .asString())
+                .isEqualTo("mcp-elsewhere");
+        JsonNode fresh = structured(call(writeToken, "preview_practice_reset", Map.of("slug", slug)));
+        JsonNode reset = structured(call(
+                writeToken,
+                "reset_practice",
+                Map.of("slug", slug, "resetEtag", fresh.path("resetEtag").asString())));
+        assertThat(reset.path("groupSlug").asString()).isNotEqualTo("mcp-elsewhere");
+    }
+
     @Test
     void shouldAdoptACatalogGroupAsPreviewedAndRemoveWhatItAdded() {
         String group = catalog.effectiveCatalog().installableGroups().getFirst().slug();
@@ -308,13 +341,22 @@ class McpWriteToolsIntegrationTest extends RealAuthIntegrationTest {
         // A group adoption writes one definition row for each practice that it adds or moves, as over HTTP.
         long changed =
                 (long) adopted.path("added").size() + adopted.path("moved").size();
-        assertThat(jdbc.queryForObject(
-                        "SELECT count(*) FROM config_audit_event WHERE workspace_id = ?"
-                                + " AND entity_type = 'PRACTICE_DEFINITION' AND mcp_client_grant_id = ?",
-                        Long.class,
+        List<String> expected = new ArrayList<>();
+        adopted.path("added")
+                .forEach(practice ->
+                        expected.add("CREATED " + practice.path("slug").asString()));
+        adopted.path("moved")
+                .forEach(practice ->
+                        expected.add("UPDATED " + practice.path("slug").asString()));
+        assertThat(jdbc.queryForList(
+                        "SELECT e.action || ' ' || p.slug FROM config_audit_event e"
+                                + " JOIN practice p ON p.id::text = e.entity_id AND p.workspace_id = e.workspace_id"
+                                + " WHERE e.workspace_id = ? AND e.entity_type = 'PRACTICE_DEFINITION'"
+                                + " AND e.mcp_client_grant_id = ?",
+                        String.class,
                         workspace.getId(),
                         grantOf(writeToken)))
-                .isEqualTo(changed);
+                .containsExactlyInAnyOrderElementsOf(expected);
         AuditedRequestCheck.acceptBulk(AdoptCatalogGroupTool.class, "call", changed);
 
         for (JsonNode practice : adopted.path("added")) {
@@ -394,18 +436,31 @@ class McpWriteToolsIntegrationTest extends RealAuthIntegrationTest {
                 "set_default_feedback_mode",
                 Map.of("etag", restored.path("etag").asString(), "defaultFeedbackMode", "APPROVE_FIRST")));
         assertThat(approveFirst.path("defaultFeedbackMode").asString()).isEqualTo("APPROVE_FIRST");
-        Map<String, Object> inherit = new HashMap<>();
-        inherit.put("etag", approveFirst.path("etag").asString());
-        inherit.put("defaultFeedbackMode", null);
-        structured(call(writeToken, "set_default_feedback_mode", inherit));
+        assertThat(approveFirst.path("defaultFeedbackModeOverride").asString()).isEqualTo("APPROVE_FIRST");
+        // The undo names the earlier override, so a workspace that inherited inherits again.
+        assertThat(settings.path("defaultFeedbackModeOverride").isNull()).isTrue();
+        Map<String, Object> undo = new HashMap<>();
+        undo.put("etag", approveFirst.path("etag").asString());
+        undo.put("defaultFeedbackMode", null);
+        JsonNode undone = structured(call(writeToken, "set_default_feedback_mode", undo));
+        assertThat(undone.path("defaultFeedbackModeOverride").isNull()).isTrue();
+        assertThat(undone.path("defaultFeedbackMode").asString())
+                .isEqualTo(settings.path("defaultFeedbackMode").asString());
 
-        assertThat(jdbc.queryForObject(
-                        "SELECT count(*) FROM config_audit_event WHERE workspace_id = ?"
-                                + " AND entity_type = 'PRACTICE_REVIEW_SETTINGS' AND mcp_client_grant_id = ?",
-                        Long.class,
+        assertThat(jdbc.queryForList(
+                        "SELECT e.action || ' ' || array_to_string(e.changed_keys, ',') FROM config_audit_event e"
+                                + " WHERE e.workspace_id = ? AND e.entity_type = 'PRACTICE_REVIEW_SETTINGS'"
+                                + " AND e.mcp_client_grant_id = ? ORDER BY e.id",
+                        String.class,
                         workspace.getId(),
                         grantOf(writeToken)))
-                .isEqualTo(6L);
+                .containsExactly(
+                        "UPDATED deliveryStatus,revision",
+                        "UPDATED deliveryStatus,revision",
+                        "UPDATED reviewScope.accountIds,reviewScope.personMode,revision",
+                        "UPDATED reviewScope.accountIds,reviewScope.personMode,revision",
+                        "UPDATED defaultFeedbackMode,revision",
+                        "UPDATED defaultFeedbackMode,revision");
     }
 
     private JsonNode call(String token, String tool, Map<String, Object> arguments) {

@@ -98,6 +98,7 @@ final class McpProjections {
             String etag,
             String deliveryStatus,
             String defaultFeedbackMode,
+            @Nullable String defaultFeedbackModeOverride,
             boolean deliverToMerged,
             int cooldownMinutes,
             Scope reviewScope,
@@ -105,10 +106,12 @@ final class McpProjections {
         static ReviewSettings of(PracticeReviewSettingsDTO current) {
             var scope = current.reviewScope();
             var summary = current.scopeSummary();
+            var override = current.defaultFeedbackModeOverride();
             return new ReviewSettings(
                     current.etag(),
                     current.deliveryStatus().name(),
                     current.defaultFeedbackMode().name(),
+                    override == null ? null : override.name(),
                     current.deliverToMerged(),
                     current.cooldownMinutes(),
                     new Scope(
@@ -182,11 +185,13 @@ final class McpProjections {
 
     static final String REVIEW_SETTINGS_SCHEMA = """
             {"type": "object", "additionalProperties": false,
-             "required": ["etag", "deliveryStatus", "defaultFeedbackMode", "deliverToMerged", "cooldownMinutes", "reviewScope", "scopeSummary"],
+             "required": ["etag", "deliveryStatus", "defaultFeedbackMode", "defaultFeedbackModeOverride", "deliverToMerged", "cooldownMinutes", "reviewScope", "scopeSummary"],
              "properties": {
                "etag": {"type": "string", "description": "Send this with a change to the settings"},
                "deliveryStatus": {"type": "string", "description": "ACTIVE, or PAUSED when no new feedback leaves"},
-               "defaultFeedbackMode": {"type": "string"}, "deliverToMerged": {"type": "boolean"}, "cooldownMinutes": {"type": "integer"},
+               "defaultFeedbackMode": {"type": "string"},
+               "defaultFeedbackModeOverride": {"type": ["string", "null"], "description": "The workspace's own default; null inherits the instance's"},
+               "deliverToMerged": {"type": "boolean"}, "cooldownMinutes": {"type": "integer"},
                "reviewScope": {"type": "object", "required": ["repositories", "people", "selectedRepositories", "accountIds"], "additionalProperties": false,
                  "properties": {"repositories": {"type": "string"}, "people": {"type": "string"},
                    "selectedRepositories": {"type": "array", "items": {"type": "object", "required": ["repositoryItemId", "baseBranches"], "additionalProperties": false,
