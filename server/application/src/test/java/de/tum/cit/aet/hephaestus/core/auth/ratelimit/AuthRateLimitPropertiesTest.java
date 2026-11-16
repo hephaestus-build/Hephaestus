@@ -41,6 +41,7 @@ class AuthRateLimitPropertiesTest extends BaseUnitTest {
                         "conversationTurns",
                         "reviewRequest",
                         "syncTrigger",
+                        "gitlabPreflight",
                         "mcpCall",
                         "publicActivity",
                         "browserReports")));
@@ -69,6 +70,7 @@ class AuthRateLimitPropertiesTest extends BaseUnitTest {
         assertThat(properties.deleteUser()).isEqualTo(new Limit(3, Duration.ofHours(1)));
         assertThat(properties.export()).isEqualTo(new Limit(10, Duration.ofHours(1)));
         assertThat(properties.browserReports()).isEqualTo(new Limit(30, Duration.ofMinutes(1)));
+        assertThat(properties.gitlabPreflight()).isEqualTo(new Limit(30, Duration.ofMinutes(10)));
     }
 
     @Configuration(proxyBeanMethods = false)

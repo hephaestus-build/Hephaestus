@@ -50,6 +50,7 @@ class AuthRateLimitStoreIntegrationTest extends BaseIntegrationTest {
                 configured.conversationTurns(),
                 configured.reviewRequest(),
                 configured.syncTrigger(),
+                configured.gitlabPreflight(),
                 configured.mcpCall(),
                 configured.publicActivity(),
                 configured.browserReports());
