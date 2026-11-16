@@ -821,6 +821,7 @@ async function d4(evidence: Evidence, notes: string[]): Promise<void> {
 			down,
 			sandboxPods,
 			during,
+			sandboxesBefore: before.state.sandboxes,
 			startedAt: before.state.at,
 			queued: queued.length,
 		});
@@ -911,12 +912,16 @@ async function d4(evidence: Evidence, notes: string[]): Promise<void> {
 	);
 }
 
+/** Run ends that are not a failure. A REVIEW run ends HANDED_OFF when its review moves on to composition. */
+const NORMAL_ENDS = new Set(["COMPLETED", "CANCELLED", "HANDED_OFF"]);
+
 interface Downtime {
 	review: boolean;
 	probe: string;
 	down: number;
 	sandboxPods: Awaited<ReturnType<typeof podHealth>>;
 	during: Snapshot;
+	sandboxesBefore: Snapshot["sandboxes"];
 	startedAt: string;
 	queued: number;
 }
@@ -924,7 +929,7 @@ interface Downtime {
 /** D4's checks at the end of the controller's downtime. */
 async function judgeDowntime(
 	evidence: Evidence,
-	{ review, probe, down, sandboxPods, during, startedAt, queued }: Downtime,
+	{ review, probe, down, sandboxPods, during, sandboxesBefore, startedAt, queued }: Downtime,
 ): Promise<void> {
 	const listed = await cluster.kubectlRaw([
 		"-n",
@@ -944,8 +949,27 @@ async function judgeDowntime(
 	});
 	const health = await podHealth(cluster, cluster.sandboxes);
 	const stillRunning = health.filter((pod) => pod.phase === "Running");
+	// The server deletes a sandbox after a run of its subject ended normally: that Pod was released, not moved by the
+	// downtime. A reaped or revoked sandbox also loses its row, so the row alone does not prove a release.
+	const released = (pod: { name: string }) => {
+		const sandbox = sandboxesBefore.find((row) => row.claim_name === pod.name);
+		return (
+			during.errors.length === 0 &&
+			sandbox !== undefined &&
+			!during.sandboxes.some((row) => row.claim_name === pod.name) &&
+			during.runs.some(
+				(run) =>
+					run.concurrency_key === sandbox.subject_key &&
+					run.state === "ENDED" &&
+					NORMAL_ENDS.has(run.stop_reason ?? "") &&
+					Date.parse(run.ended_at ?? "") > Date.parse(startedAt),
+			)
+		);
+	};
 	const moved = sandboxPods.filter(
-		(pod) => !stillRunning.some((now) => now.uid === pod.uid && now.restarts === pod.restarts),
+		(pod) =>
+			!stillRunning.some((now) => now.uid === pod.uid && now.restarts === pod.restarts) &&
+			!(released(pod) && !stillRunning.some((now) => now.uid === pod.uid)),
 	);
 	evidence.check({
 		id: "D4-existing-keep",
@@ -966,8 +990,7 @@ async function judgeDowntime(
 	const badEnds = during.runs.filter(
 		(run) =>
 			run.state === "ENDED" &&
-			run.stop_reason !== "COMPLETED" &&
-			run.stop_reason !== "CANCELLED" &&
+			!NORMAL_ENDS.has(run.stop_reason ?? "") &&
 			Date.parse(run.ended_at ?? "") > Date.parse(startedAt),
 	);
 	evidence.check({
