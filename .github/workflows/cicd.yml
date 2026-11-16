@@ -770,7 +770,7 @@ jobs:
               - 'scripts/check-gradle-verification-metadata.ts'
             # What the feedback eval gate checks: the prompts and the writing guide they include, the
             # practice catalog and its scripts, the composer, and the gate with its fixed case set.
-            # feedback-eval-panel.yml composes on a subset of these paths.
+            # feedback-eval-panel.yml composes the model panel when a person starts it.
             feedback-eval:
               - 'server/application/src/main/resources/agent/*.md'
               - 'server/application/src/main/resources/agent/conversation/**'

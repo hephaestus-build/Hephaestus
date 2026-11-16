@@ -674,6 +674,8 @@ export const UNCANCELLED_PULL_REQUEST_RUNS: Record<string, string> = {
 		"Any label starts it, so an unrelated label would cancel the run that commits the regeneration.",
 	".github/workflows/retarget.yml":
 		"Any edit starts it, so a title change would cancel a retarget after it cancelled the old run, and nothing re-runs CI.",
+	".github/workflows/feedback-eval-panel.yml":
+		"A person starts each run, and a run spends model calls on a shared endpoint, so a later run waits for it instead of discarding what it spent.",
 };
 
 /** A workflow value as the runner expands it: each `${{ }}` evaluated against `context`. */

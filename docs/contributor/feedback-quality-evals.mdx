@@ -336,14 +336,14 @@ The job stops after 40 minutes.
 
 ### When the panel runs
 
-The `CI / Feedback eval panel` workflow runs the whole panel:
+A person starts every run of the `CI / Feedback eval panel` workflow, and each run composes the whole panel:
 
-- Each night on `main`.
-- On a manual run.
-- On a pull request with the `eval:run` label, when the label is added and on each later push.
+- A manual run.
+- A maintainer adds the `eval:run` label to a pull request from this repository. The run composes the head at that moment. A later push starts nothing: to run on a newer head, remove the label and add it again.
 
-Any other push to a pull request that changes what the composer reads composes the prompt-safety subset.
-The workflow's path filter lists those paths. A pull request outside them runs neither, even with the label.
+Nothing starts the panel on a path change or a schedule, and its result is never a required check.
+A pull request from a fork gets no run, because it has no secrets.
+One panel runs at a time, and none cancels another: a later run waits until the earlier one ends.
 
 The panel runs only with the [CI model connection](./ci-cd.mdx#ci-model-connection), which also says what happens without it.
 
@@ -352,30 +352,7 @@ The panel runs only with the [CI model connection](./ci-cd.mdx#ci-model-connecti
 With the connection, the panel is skipped when the endpoint gives no composition for a panel case.
 An endpoint failure is never retried.
 A skip is not a pass: the panel job fails and names the reason.
-
-With the connection, a night can fall below a floor, be skipped or not finish.
-Each such night comments on one tracking issue, "The nightly feedback eval panel is not green".
-The workflow opens the issue if it is not open.
-
-The comment links the run, the kept result and the commits since the last night whose panel measured and passed.
-[Feedback eval panel state](./ci-cd.mdx#feedback-eval-panel-state) says how the workflow keeps that night.
-The next night that measures and passes closes the issue with a link to its run.
-
-A pull request run and a manual run report in their job summary only.
-If the report job itself fails, or the night is cancelled after its panel started, `CI / Scheduled failures` writes to the same issue.
-Both call one script, `scripts/feedback-eval-night.ts`, so the fallback gives the same commit range and result link.
-
-Each comment carries a marker of its run attempt. A replay of an attempt that a panel issue already holds, open or closed, adds nothing.
-The check reads only issues updated since the attempt started. If it fails, the report still goes out and says that the duplicate check could not complete.
-
-The cicd job keeps `feedback-eval-gate.json` as the `feedback-eval-gate` artifact for 14 days. The panel keeps it as `feedback-eval-panel`.
-The file holds each check, each measure or safety row, the model name and the SHA-256 of the endpoint. It never holds the endpoint or the key.
-
-The gate runs locally without a model, as pull request CI runs it:
-
-```bash
-node scripts/feedback-eval-gate.ts
-```
+The run reports in its job summary, which the person who started it reads.
 
 ## Composition replay cases
 
