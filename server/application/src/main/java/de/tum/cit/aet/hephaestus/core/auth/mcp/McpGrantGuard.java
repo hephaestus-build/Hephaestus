@@ -64,7 +64,16 @@ public class McpGrantGuard implements HandlerFilterFunction<ServerResponse, Serv
         if (!grant.get().grants(McpScope.READ)) {
             return refuse(slug, HttpStatus.FORBIDDEN, "insufficient_scope", McpScope.READ.value());
         }
+        request.attributes()
+                .put(
+                        McpCallGrant.ATTRIBUTE,
+                        new McpCallGrant(grant.get().getId(), grant.get().grants(McpScope.WRITE)));
         return next.handle(request);
+    }
+
+    /** The answer to a tool call that needs a scope the grant lacks, so the client can ask for it (ADR 0110 decision 14). */
+    public ServerResponse insufficientScope(String slug, McpScope scope) {
+        return refuse(slug, HttpStatus.FORBIDDEN, "insufficient_scope", scope.value());
     }
 
     private ServerResponse refuse(String slug, HttpStatus status, String error, @Nullable String scope) {

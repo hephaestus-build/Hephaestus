@@ -71,7 +71,7 @@ public class McpMetadataController {
         Map<String, Object> metadata = new LinkedHashMap<>();
         metadata.put("resource", resource);
         metadata.put("authorization_servers", List.of(resources.issuer()));
-        metadata.put("scopes_supported", List.of(McpScope.READ.value()));
+        metadata.put("scopes_supported", List.of(McpScope.READ.value(), McpScope.WRITE.value()));
         metadata.put("bearer_methods_supported", List.of("header"));
         return ResponseEntity.ok(metadata);
     }

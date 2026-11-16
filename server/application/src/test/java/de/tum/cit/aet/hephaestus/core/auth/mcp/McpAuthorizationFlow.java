@@ -24,7 +24,6 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.web.reactive.function.BodyInserters;
-import org.springframework.web.util.UriComponentsBuilder;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -121,9 +120,12 @@ public final class McpAuthorizationFlow {
 
     /** The authorization endpoint's 302 target. */
     public URI authorize(@Nullable String cookie, Map<String, String> parameters) {
-        UriComponentsBuilder uri = UriComponentsBuilder.fromPath("/mcp/oauth/authorize");
-        parameters.forEach(uri::queryParam);
-        var request = client.get().uri(uri.encode().build().toUriString());
+        // Each value is a template variable, so the client encodes it once: a space in a scope list stays a space.
+        var request = client.get().uri(builder -> {
+            builder.path("/mcp/oauth/authorize");
+            parameters.keySet().forEach(name -> builder.queryParam(name, "{" + name + "}"));
+            return builder.build(parameters);
+        });
         if (cookie != null) {
             request = request.header(HttpHeaders.COOKIE, cookieName + "=" + cookie);
         }
@@ -225,8 +227,15 @@ public final class McpAuthorizationFlow {
 
     /** Signs in through consent and exchanges the code: a client's first session. */
     public Tokens connect(String cookie, String slug) {
+        return connect(cookie, slug, "practices:read");
+    }
+
+    /** The same, for the scopes that the client asks for. */
+    public Tokens connect(String cookie, String slug, String scope) {
         Pkce pkce = newPkce();
-        URI consent = authorize(cookie, parameters(slug, pkce, LOOPBACK_REDIRECT));
+        Map<String, String> parameters = parameters(slug, pkce, LOOPBACK_REDIRECT);
+        parameters.put("scope", scope);
+        URI consent = authorize(cookie, parameters);
         URI callback = approve(cookie, consentRequest(consent));
         return tokens(token(codeForm(code(callback), pkce, slug, LOOPBACK_REDIRECT)));
     }

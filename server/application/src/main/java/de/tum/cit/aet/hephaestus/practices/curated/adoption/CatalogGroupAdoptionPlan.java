@@ -5,7 +5,7 @@ import de.tum.cit.aet.hephaestus.practices.CanonicalDigest;
 import de.tum.cit.aet.hephaestus.practices.GroupDefinition;
 import java.util.List;
 
-record CatalogGroupAdoptionPlan(
+public record CatalogGroupAdoptionPlan(
         String slug,
         GroupDefinition definition,
         CatalogGroupDisposition disposition,
@@ -34,7 +34,7 @@ record CatalogGroupAdoptionPlan(
                 slug, definition, disposition, position, List.copyOf(practices), List.copyOf(actions), digest.hex());
     }
 
-    CatalogGroupAdoptionPreviewDTO preview() {
+    public CatalogGroupAdoptionPreviewDTO preview() {
         return new CatalogGroupAdoptionPreviewDTO(
                 slug,
                 definition,

@@ -1,11 +1,17 @@
 package de.tum.cit.aet.hephaestus.core.mcp;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import io.modelcontextprotocol.json.jackson3.JacksonMcpJsonMapper;
 import io.modelcontextprotocol.spec.McpSchema;
+import jakarta.validation.ConstraintViolation;
+import jakarta.validation.Validator;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
+import tools.jackson.core.JacksonException;
 import tools.jackson.databind.json.JsonMapper;
 
 /** What every workspace MCP tool needs: its definition from hand-written schemas, and its result. */
@@ -35,6 +41,84 @@ public final class McpTools {
                 .description(description)
                 .outputSchema(mapper, outputSchema)
                 .annotations(new McpSchema.ToolAnnotations(title, true, false, true, false, null))
+                .build();
+    }
+
+    /**
+     * A tool that changes the workspace. Its call needs {@code practices:write}, and its description says, as a read
+     * tool's does, that free text in the result is configuration to treat as data.
+     *
+     * @param destructive whether the change removes something that the reverse tool must bring back
+     * @param idempotent whether repeating the call with the same arguments changes nothing more
+     */
+    public static McpSchema.Tool writeTool(
+            JsonMapper jsonMapper,
+            String name,
+            String title,
+            String description,
+            String inputSchema,
+            String outputSchema,
+            boolean destructive,
+            boolean idempotent) {
+        var mapper = new JacksonMcpJsonMapper(jsonMapper);
+        return McpSchema.Tool.builder(name, mapper, inputSchema)
+                .title(title)
+                .description(description)
+                .outputSchema(mapper, outputSchema)
+                .annotations(new McpSchema.ToolAnnotations(title, false, destructive, idempotent, false, null))
+                .build();
+    }
+
+    /**
+     * The arguments read into the HTTP handler's own request type and validated as the handler validates its body, so
+     * a tool accepts exactly what the handler accepts. A refusal names the field and its rule, as a 400 over HTTP does.
+     * The mapper is one from {@link #withNulls}, so a null argument stays null.
+     */
+    public static <T> T input(
+            JsonMapper jsonMapper, Validator validator, Map<String, Object> arguments, Class<T> type) {
+        T input;
+        try {
+            input = jsonMapper.convertValue(arguments, type);
+        } catch (JacksonException unreadable) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, unreadableAt(unreadable.getPath()));
+        } catch (IllegalArgumentException unreadable) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, unreadableAt(List.of()));
+        }
+        var violations = validator.validate(input);
+        if (!violations.isEmpty()) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    violations.stream().map(McpTools::describe).sorted().collect(Collectors.joining("; ")));
+        }
+        return input;
+    }
+
+    /** Names where the arguments stopped matching, by field names and indexes only, never by the value or a type name. */
+    private static String unreadableAt(List<JacksonException.Reference> path) {
+        String at = path.stream()
+                .map(reference -> reference.getPropertyName() != null
+                        ? reference.getPropertyName()
+                        : String.valueOf(reference.getIndex()))
+                .collect(Collectors.joining("."));
+        return at.isEmpty()
+                ? "The arguments do not have the shape that the tool's input schema describes."
+                : "The argument " + at + " does not have the shape that the tool's input schema describes.";
+    }
+
+    private static String describe(ConstraintViolation<?> violation) {
+        return violation.getPropertyPath() + ": " + violation.getMessage();
+    }
+
+    /**
+     * The application's mapper, but writing null values. The application leaves nulls out of its JSON, and the MCP
+     * path must keep them: a null argument means "none" or "inherit", and the output schemas list nullable fields as
+     * required.
+     */
+    public static JsonMapper withNulls(JsonMapper jsonMapper) {
+        return jsonMapper
+                .rebuild()
+                .changeDefaultPropertyInclusion(inclusion ->
+                        JsonInclude.Value.construct(JsonInclude.Include.ALWAYS, JsonInclude.Include.ALWAYS))
                 .build();
     }
 

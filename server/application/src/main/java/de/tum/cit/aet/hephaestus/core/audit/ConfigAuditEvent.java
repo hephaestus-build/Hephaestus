@@ -13,6 +13,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.List;
+import java.util.UUID;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.ColumnDefault;
@@ -74,6 +75,14 @@ public class ConfigAuditEvent {
     @Column(name = "elevated_via_instance_admin", nullable = false)
     private boolean elevatedViaInstanceAdmin;
 
+    /**
+     * The MCP client grant that made the change through the workspace MCP endpoint (ADR 0110 decision 16), or null for
+     * a change in the web app. Null as well once retention or erasure removed the grant.
+     */
+    @Column(name = "mcp_client_grant_id")
+    @Nullable
+    private UUID mcpClientGrantId;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "entity_type", nullable = false, length = 48)
     private ConfigAuditEntityType entityType;
@@ -116,6 +125,7 @@ public class ConfigAuditEvent {
         e.actorAccountId = actor.accountId();
         e.actingAccountId = actor.actingAccountId();
         e.elevatedViaInstanceAdmin = actor.elevatedViaInstanceAdmin();
+        e.mcpClientGrantId = actor.mcpClientGrantId();
         e.entityType = entityType;
         e.entityId = entityId;
         e.action = action;
