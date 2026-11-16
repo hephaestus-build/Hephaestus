@@ -13,7 +13,7 @@ export const getUserFeaturesQueryKey = (options?: Options<GetUserFeaturesData>) 
 /**
  * Get feature flags for the current user
  *
- * Returns all feature flags evaluated for the authenticated user. Combines role checks and server-side config toggles.
+ * Returns the operational feature flags from the server configuration.
  */
 export const getUserFeaturesOptions = (options?: Options<GetUserFeaturesData>) =>
 	queryOptions<

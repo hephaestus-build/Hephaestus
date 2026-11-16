@@ -42,8 +42,7 @@ describe("useFeatureFlags", () => {
 		server.use(
 			http.get("*/user/features", () =>
 				HttpResponse.json({
-					ADMIN: "true",
-					PAGE_EXPERIENCE_METRICS: true,
+					PAGE_EXPERIENCE_METRICS: "true",
 				}),
 			),
 		);

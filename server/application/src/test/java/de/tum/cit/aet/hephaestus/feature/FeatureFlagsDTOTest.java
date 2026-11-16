@@ -59,15 +59,9 @@ class FeatureFlagsDTOTest extends BaseUnitTest {
         void fromMapsEachFlagCorrectly(FeatureFlag flag) throws Exception {
             // Stub only the target flag to return true, all others return false
             for (FeatureFlag f : FeatureFlag.values()) {
-                if (f.kind() == FeatureFlag.Kind.CONFIG) {
-                    lenient().when(featureProperties.isEnabled(f.key())).thenReturn(f == flag);
-                }
+                lenient().when(featureProperties.isEnabled(f.key())).thenReturn(f == flag);
             }
 
-            // For ROLE flags, we cannot set SecurityContext per-flag in a simple
-            // parameterized test, so we test the mapping direction differently:
-            // Build the DTO and verify the field named after the flag matches the
-            // service's isEnabled result for that flag.
             boolean expected = featureFlagService.isEnabled(flag);
             FeatureFlagsDTO dto = FeatureFlagsDTO.from(featureFlagService);
 
@@ -85,13 +79,11 @@ class FeatureFlagsDTOTest extends BaseUnitTest {
 
         @Test
         void fromMapsEnabledConfigFlag() {
-            // Stub all CONFIG flags — from() calls isEnabled on every flag
+            // from() calls isEnabled on every flag
             for (FeatureFlag f : FeatureFlag.values()) {
-                if (f.kind() == FeatureFlag.Kind.CONFIG) {
-                    lenient()
-                            .when(featureProperties.isEnabled(f.key()))
-                            .thenReturn(f == FeatureFlag.PAGE_EXPERIENCE_METRICS);
-                }
+                lenient()
+                        .when(featureProperties.isEnabled(f.key()))
+                        .thenReturn(f == FeatureFlag.PAGE_EXPERIENCE_METRICS);
             }
 
             FeatureFlagsDTO dto = FeatureFlagsDTO.from(featureFlagService);

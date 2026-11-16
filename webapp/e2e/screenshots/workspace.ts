@@ -421,7 +421,6 @@ const consent: ConsentStatus = {
 	participateInResearch: false,
 };
 const features: FeatureFlags = {
-	ADMIN: false,
 	PAGE_EXPERIENCE_METRICS: false,
 };
 

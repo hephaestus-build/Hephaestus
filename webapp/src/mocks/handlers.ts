@@ -99,7 +99,6 @@ export const handlers = [
 	// nothing configured and nothing waiting; a test of one of these surfaces installs its own answer.
 	http.get("*/user/features", () =>
 		HttpResponse.json({
-			ADMIN: currentUser.appRole === "APP_ADMIN",
 			PAGE_EXPERIENCE_METRICS: false,
 		} satisfies FeatureFlags),
 	),

@@ -17,7 +17,6 @@ export type FeatureFlagName = keyof FeatureFlags;
  * server adds later is dropped, not rejected.
  */
 const featureFlagsSchema = z.object({
-	ADMIN: z.boolean(),
 	PAGE_EXPERIENCE_METRICS: z.boolean(),
 }) satisfies z.ZodType<FeatureFlags>;
 
@@ -29,7 +28,6 @@ async function fetchFeatureFlags(): Promise<FeatureFlags> {
 
 // The administrator's flags never apply in a view.
 const USER_VIEW_FLAGS: FeatureFlags = {
-	ADMIN: false,
 	PAGE_EXPERIENCE_METRICS: false,
 };
 
