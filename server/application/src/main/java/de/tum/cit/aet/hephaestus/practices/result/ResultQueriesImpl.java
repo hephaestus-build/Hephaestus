@@ -156,9 +156,8 @@ public class ResultQueriesImpl implements ResultQueries {
             sourceCurrentness(workspaceId, JOIN, where, params, Currentness.CURRENT);
         }
         // Only the facts a history needs, with coverage, explanation and evidence as presence flags and the source
-        // kinds
-        // that the result recorded: a recorded row loads no evidence. UUIDs compare as their text does, so the order of
-        // the earlier id::text sort is unchanged.
+        // kinds that the result recorded: a recorded row loads no evidence. UUIDs compare as their text does, so the
+        // order of the earlier id::text sort is unchanged.
         List<Object[]> rows = session()
                 .createNativeQuery(
                         "SELECT r.id,r.workspace_id,r.review_id,r.practice_id,"
