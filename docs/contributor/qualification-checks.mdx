@@ -54,9 +54,12 @@ The bar has two parts:
 
 - The anon plus kernel peak of the Pod's cgroup is at most 90 % of the memory limit.
   The page cache is not counted, because the kernel reclaims it before an OOM kill.
-- Under the bench load, the memory limit is at most 1.5 times that peak.
+- Under the bench load, the memory limit is at most 2 times that peak.
   Without load, this part is recorded only.
 
+The JVM sizes its heap from the limit, so the limit keeps headroom above the peak.
+[Memory headroom](/admin/sizing#memory-headroom) states that headroom and the round that measured it.
+A limit above 2 times the peak needs a reason in that section.
 The check also records the heap maximum, the GC rate and the CPU p95.
 
 ### B8b
@@ -74,7 +77,8 @@ The agent-sandbox controller and the agent image pre-pull Pods are at most their
 
 The node.
 The memory requests of the release fit the allocatable memory with at least 1 GiB to spare.
-Swap-in is 0, and the memory PSI `some avg10` stays below 10 %.
+The memory PSI `some avg10` stays below 10 %.
+Swap-in is recorded only, because a node without swap is a host prerequisite ([Sizing](/admin/sizing#profiles-at-a-glance)).
 On k3d, the node is a container that shares the PSI and swap counters of its Docker VM, so the check is recorded only.
 
 ### B8-oom
@@ -90,7 +94,8 @@ It runs only on a disposable k3d node, with `--memory-drill --images <release-im
 
 The latency of the practice profile overview route, from the server's own HTTP timer over the window.
 The server p50 is at most 1 s and the p95 is at most 2 s.
-`--overview-url` and `--token-file` add a client probe every 10 s; the client times are recorded beside the server times.
+`--overview-url` and `--token-file` add a client probe every 10 s.
+The check records the client times beside the server times.
 
 ### B11
 

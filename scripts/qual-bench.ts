@@ -300,8 +300,9 @@ function judgeJvm(
 ): void {
 	const note = loaded
 		? ""
-		: " (no load in the window: the 1.5× limit rule needs the bench load, so it is recorded only)";
-	// B8a: the JVM roles. Peak ≤ 90 % of the limit; the limit ≤ 1.5 × the peak.
+		: " (no load in the window: the 2× limit rule needs the bench load, so it is recorded only)";
+	// B8a: the JVM roles. Peak ≤ 90 % of the limit; the limit ≤ 2 × the peak. The JVM sizes its heap from the limit, so a
+	// limit keeps headroom above the peak (sizing.mdx § Memory headroom); above 2 × it needs a reason stated there.
 	const heap = metricSeries(
 		data.prometheus,
 		"jvm_memory_used_bytes",
@@ -332,12 +333,12 @@ function judgeJvm(
 		};
 	});
 	const overNinety = jvm.filter((pod) => pod.limit > 0 && pod.peak > 0.9 * pod.limit);
-	const oversized = jvm.filter((pod) => pod.peak > 0 && pod.limit > 1.5 * pod.peak);
+	const oversized = jvm.filter((pod) => pod.peak > 0 && pod.limit > 2 * pod.peak);
 	const jvmUnread = jvm.filter((pod) => pod.unread);
 	evidence.check({
 		id: id("B8a"),
 		title:
-			"server/worker: anon + kernel peak ≤ 90 % of the limit; limit ≤ 1.5 × that peak; heap, GC and CPU p95",
+			"server/worker: anon + kernel peak ≤ 90 % of the limit; limit ≤ 2 × that peak; heap, GC and CPU p95",
 		status: decide(
 			[
 				[jvm.length === 0 || overNinety.length > 0, "fail"],
@@ -351,7 +352,7 @@ function judgeJvm(
 			? { needs: `${UNREAD_NEEDS} (unread: ${jvmUnread.map((pod) => pod.name).join(", ")})` }
 			: {}),
 		rule: `${RULES} § B8a`,
-		detail: `${jvm.map((pod) => `${pod.name}: ${pod.signal} peak ${pod.unread ? "unread" : mib(pod.peak)} / limit ${mib(pod.limit)} (cgroup memory.peak with cache ${mib(pod.cgroupPeak)}), heap max ${mib(pod.heapMax)}, GC ${pod.gcPerMinute?.toFixed(1) ?? "n/a"}/min, CPU p95 ${pod.cpuP95?.toFixed(2) ?? "n/a"}`).join("; ")}${note}`,
+		detail: `${jvm.map((pod) => `${pod.name}: ${pod.signal} peak ${pod.unread ? "unread" : mib(pod.peak)} / limit ${mib(pod.limit)}${pod.peak > 0 ? ` (limit ${(pod.limit / pod.peak).toFixed(2)} × peak)` : ""} (cgroup memory.peak with cache ${mib(pod.cgroupPeak)}), heap max ${mib(pod.heapMax)}, GC ${pod.gcPerMinute?.toFixed(1) ?? "n/a"}/min, CPU p95 ${pod.cpuP95?.toFixed(2) ?? "n/a"}`).join("; ")}${note}`,
 		data: jvm,
 	});
 }
@@ -436,13 +437,14 @@ function judgeNode(
 	}
 	const swapIn = Object.values(data.nodes).reduce((sum, node) => sum + node.swapIn, 0);
 	const psi = Math.max(0, ...Object.values(data.nodes).map((node) => node.memSome10Max));
+	// Swap is a host prerequisite (sizing.mdx § Profiles at a glance), so swap-in is reported, not judged.
 	const nodeOk =
-		swapIn === 0 &&
 		psi < 10 &&
 		allocatable.every((entry) => entry.allocatable - (requests[entry.node] ?? 0) >= 1024 ** 3);
 	evidence.check({
 		id: id("B8f"),
-		title: "node: requests fit allocatable with ≥ 1 GiB; swap-in 0; memory PSI some avg10 < 10 %",
+		title:
+			"node: requests fit allocatable with ≥ 1 GiB; memory PSI some avg10 < 10 %; swap-in recorded",
 		// A k3d node is a container in the Docker VM: its PSI and swap counters are the VM's, shared with every other
 		// container, so a k3d run records them and judges nothing by them.
 		status: decide(

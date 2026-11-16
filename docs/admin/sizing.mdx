@@ -17,6 +17,9 @@ They are scheduling requests, not measured peaks. Keep room for the operating sy
 | [One host](./k3s): `small.yaml` with `k3s-values.yaml` | The node of `small.yaml` | 1 | As `small.yaml` | As `small.yaml` | 4 | 9, or 6 with backups on (`auto`) |
 | `cluster.yaml` | Several nodes, with sandbox nodes that hold the review and conversation quotas | 2 | 500m CPU, 3 GiB memory, 70 GiB Git cache | 250m CPU, 2 GiB memory, 20 GiB volume | 12 | 8 |
 
+Turn swap off on each node.
+With swap on, the kernel can move the memory of a Pod to disk, and the Pod slows down with no OOM kill.
+
 Each server's memory request equals its limit, because the JVM sizes its heap from the limit.
 The server's CPU limit is 4 cores, and 2 with `dev.yaml` and `preview.yaml`.
 The Git cache is node storage of each server ([Storage and retention](./helm-chart#storage-and-retention)).
