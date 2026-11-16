@@ -145,18 +145,18 @@ const drawerContentVariants = cva("", {
 	defaultVariants: { size: "default" },
 });
 
-/**
- * `dimWhenNested` is a deliberate departure from the upstream shadcn drawer, which fades a covered
- * drawer's content to nothing. That reads correctly for a bottom sheet, where only a sliver
- * of the parent shows; a wide side panel leaves a real column of the parent on screen, and an empty
- * column is worse than a readable one.
- */
 /** The id of the level's title, once one is mounted, so the body can take it as its name. */
 const DrawerTitleContext = createContext<{
 	titleId: string | undefined;
 	setTitleId: (id: string | undefined) => void;
 } | null>(null);
 
+/**
+ * `dimWhenNested` is a deliberate departure from the upstream shadcn drawer, which fades a covered
+ * drawer's content to nothing. That reads correctly for a bottom sheet, where only a sliver
+ * of the parent shows; a wide side panel leaves a real column of the parent on screen, and an empty
+ * column is worse than a readable one.
+ */
 function DrawerContent({
 	className,
 	children,
@@ -256,7 +256,6 @@ function DrawerBody({ className, ...props }: React.ComponentProps<"div">) {
 			className={cn("min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 pb-6", className)}
 			// A form disables every control while it submits, and then nothing in here is focusable —
 			// but the panel's overflow still has to be readable to the end. Same call as `ui/table`.
-			// oxlint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- The scroll region must stay keyboard-reachable when nothing inside it is.
 			tabIndex={0}
 			{...props}
 		/>

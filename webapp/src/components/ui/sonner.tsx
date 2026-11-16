@@ -11,6 +11,13 @@ import { Toaster as Sonner, type ToasterProps } from "sonner";
 import { useTheme } from "@/runtime/theme/ThemeContext";
 
 /**
+ * An outline, not a shadow, so the focus also shows in forced colours. Important, because sonner's
+ * unlayered `[data-button] { outline: 0 }` beats every rule in Tailwind's utilities layer.
+ */
+const FOCUS_OUTLINE =
+	"focus-visible:outline-2! focus-visible:outline-offset-2! focus-visible:outline-ring!";
+
+/**
  * Every toast announces politely, `toast.error` included: sonner exposes no assertive path.
  *
  * ⚠️ Diverges from the shadcn registry: every toast has a close button, because a failure stays until
@@ -18,10 +25,6 @@ import { useTheme } from "@/runtime/theme/ThemeContext";
  * open moves focus to their list (`keepFocusAmongToasts`). And a toast's action and cancel buttons draw
  * a focus outline, which sonner's own styles do not (WCAG 2.2 SC 2.4.7). Re-vendoring drops all three.
  */
-/** An outline, not a shadow, so the focus also shows in forced colours. */
-const FOCUS_OUTLINE =
-	"focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring";
-
 function Toaster({ ...props }: ToasterProps) {
 	const { theme } = useTheme();
 
