@@ -22,7 +22,7 @@ import org.junit.jupiter.api.Test;
 @Tag("database")
 class ComposerAnswerMigrationTest {
     private static final TestDatabase DATABASE = PostgreSQLTestContainer.createDatabase("composer_answer");
-    private static final String CHANGELOG = "db/changelog/next/20261116083306-fix-composer-replays-recorded-answer.xml";
+    private static final String CHANGELOG = "db/changelog/next/20261116103004-fix-composer-replays-recorded-answer.xml";
 
     @Test
     void shouldClearOnlyTheEndedComposeClaimsAnswersAndRollBackToTheDigestOnlyTranscript() throws Exception {
