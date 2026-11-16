@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.job;
 
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
+import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.practices.spi.ProcessingStatus;
@@ -86,6 +87,8 @@ public class ReviewJobCompletionService {
                         : RefusalOutcome.PROVIDER_UNAVAILABLE.name().equals(outcome)
                                 ? ReviewStopReason.PROVIDER_UNAVAILABLE
                                 : job.getExecutionStartedAt() == null
+                                                || Objects.equals(
+                                                        job.getExitCode(), SandboxLayout.EXIT_WORKSPACE_UNPREPARED)
                                         ? ReviewStopReason.PREPARATION_FAILED
                                         : ReviewStopReason.EXECUTION_FAILED;
         // A cancel for room ends the practices whether or not a server claimed the job, so a scan stops binding them.

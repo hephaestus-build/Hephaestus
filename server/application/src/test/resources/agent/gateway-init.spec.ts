@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { once } from "node:events";
 import { statSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
@@ -12,9 +13,12 @@ import { fileURLToPath } from "node:url";
 import { gzipSync } from "node:zlib";
 
 import {
+	EXIT_WORKSPACE_UNPREPARED,
+	WorkspaceUnpreparedError,
 	downloadWorkspace,
 	extract,
 	extractArguments,
+	reportUnprepared,
 } from "../../../main/resources/agent/gateway-init.ts";
 
 /** The sandbox token and the run's claim, as main() sends them with every gateway call. */
@@ -38,8 +42,54 @@ void test("the initializer refuses to start without the run's claim, before any 
 			encoding: "utf8",
 		},
 	);
+	// Without the claim nothing can report the failure, so the server retries the attempt.
 	assert.equal(child.status, 1);
 	assert.match(child.stderr, /LLM_PROXY_CLAIM is missing/u);
+});
+
+void test("a workspace that no attempt can prepare is reported as the attempt's result with its exit", async () => {
+	const received: { headers: Record<string, string | string[] | undefined>; bytes: number }[] = [];
+	const server = createServer((request, response) => {
+		if (request.method !== "POST" || request.url !== "/runtime/result") {
+			response.writeHead(404).end();
+			return;
+		}
+		const chunks: Buffer[] = [];
+		request.on("data", (chunk: Buffer) => {
+			chunks.push(chunk);
+		});
+		request.on("end", () => {
+			const body = Buffer.concat(chunks);
+			received.push({ headers: request.headers, bytes: body.length });
+			const etag = `"${createHash("sha256").update(body).digest("hex")}"`;
+			response.writeHead(204, { etag }).end();
+		});
+	});
+	try {
+		server.listen(0, "127.0.0.1");
+		await once(server, "listening");
+		const address = server.address();
+		assert.ok(address !== null && typeof address !== "string");
+		await reportUnprepared(
+			`http://127.0.0.1:${address.port}/runtime`,
+			"attempt-token",
+			{ "x-agent-run": "run-1", "x-agent-epoch": "2" },
+			Date.now() + 30_000,
+		);
+		assert.equal(received.length, 1);
+		const [report] = received;
+		assert.ok(report !== undefined);
+		assert.equal(report.headers["x-sandbox-exit-code"], String(EXIT_WORKSPACE_UNPREPARED));
+		assert.equal(report.headers["x-sandbox-timed-out"], "false");
+		assert.equal(report.headers["x-agent-run"], "run-1");
+		assert.equal(report.headers.authorization, "Bearer attempt-token");
+		assert.equal(report.bytes, 1024, "an empty tar archive: the attempt measured nothing");
+	} finally {
+		const closed = once(server, "close");
+		server.close();
+		server.closeAllConnections();
+		await closed;
+	}
 });
 
 void test("retries a truncated workspace from byte zero", async () => {
@@ -230,7 +280,9 @@ void test("rejects an archive above the advertised budget without retry", async 
 				path.join(directory, "workspace.tar"),
 				AbortSignal.timeout(30_000),
 			),
-			/Workspace exceeded its advertised byte budget/u,
+			(error: unknown) =>
+				error instanceof WorkspaceUnpreparedError &&
+				/Workspace exceeded its advertised byte budget/u.test(error.message),
 		);
 		assert.equal(requests, 1);
 	} finally {
@@ -441,6 +493,26 @@ void test(
 			assert.equal(await readFile(`/tmp/${unique}/work/README.md`, "utf8"), "readme");
 		} finally {
 			await rm(`/tmp/${unique}`, { recursive: true, force: true });
+		}
+	},
+);
+
+void test(
+	"an archive that tar refuses is a workspace no attempt can prepare",
+	{ skip: skipUnless(noGnuTar) },
+	async () => {
+		requirePrecondition(noGnuTar);
+		const directory = await mkdtemp(path.join(tmpdir(), "gateway-extract-test-"));
+		try {
+			const archive = path.join(directory, "workspace.tar");
+			await writeFile(archive, "not a tar archive");
+			await mkdir(path.join(directory, "workspace"));
+			await assert.rejects(
+				extract(archive, path.join(directory, "workspace"), []),
+				WorkspaceUnpreparedError,
+			);
+		} finally {
+			await rm(directory, { recursive: true, force: true });
 		}
 	},
 );

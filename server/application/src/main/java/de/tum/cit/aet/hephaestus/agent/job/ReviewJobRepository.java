@@ -616,23 +616,6 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
             @Param("runId") UUID runId,
             @Param("diagnosis") String diagnosis);
 
-    /** The sandbox initializer's failure of the last attempt, beside a preparation failure: for operators only. */
-    @Modifying(flushAutomatically = true)
-    @Query(
-            value =
-                    "UPDATE review_job SET capture = jsonb_set(COALESCE(capture, '{}'::jsonb), '{initializationFailure}',"
-                            + " CAST(:diagnosis AS jsonb)) WHERE id = :id AND workspace_id = :workspaceId AND status ="
-                            + " 'FAILED' AND run_id = :runId AND (SELECT " + ReviewRunKind.ATTEMPT_OF_RUN
-                            + " FROM agent_run r WHERE r.id = run_id)"
-                            + " = :attempt",
-            nativeQuery = true)
-    int recordInitializationFailure(
-            @Param("id") UUID id,
-            @Param("workspaceId") long workspaceId,
-            @Param("attempt") int attempt,
-            @Param("runId") UUID runId,
-            @Param("diagnosis") String diagnosis);
-
     /** Its own transaction: a caller may run outside one. */
     @Transactional
     @Modifying(flushAutomatically = true)

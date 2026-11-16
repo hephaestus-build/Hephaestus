@@ -10,6 +10,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.handler.RuntimeReviewTestData;
+import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.practices.spi.ProcessingStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentStore;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewCompletion;
@@ -136,6 +137,31 @@ class ReviewJobCompletionServiceTest extends BaseUnitTest {
                         any(),
                         argThat(completion -> completion.status() == ReviewStatus.PARTIAL
                                 && completion.reason() == ReviewStopReason.COMPOSITION_UNCONFIRMED));
+    }
+
+    @Test
+    void shouldCloseAReviewWhoseWorkspaceTheSandboxCouldNotPrepareAsAPreparationFailure() {
+        var job = RuntimeReviewTestData.job();
+        job.setStatus(ReviewJobStatus.FAILED);
+        job.setStartedAt(Instant.now());
+        job.setExecutionStartedAt(Instant.now());
+        job.setExitCode(SandboxLayout.EXIT_WORKSPACE_UNPREPARED);
+
+        service(job, ReviewKind.ITEM).tick();
+
+        // A capture failure: it says nothing about the work, and it is not an execution that failed.
+        verify(members)
+                .fail(
+                        1,
+                        RuntimeReviewTestData.assignment(null, null).id(),
+                        job.getId(),
+                        ReviewStopReason.PREPARATION_FAILED,
+                        "The execution ended without an admitted result");
+        verify(reviews)
+                .complete(
+                        anyLong(),
+                        any(),
+                        argThat(completion -> completion.reason() == ReviewStopReason.PREPARATION_FAILED));
     }
 
     @Test

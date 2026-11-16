@@ -8,6 +8,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -54,6 +55,7 @@ import de.tum.cit.aet.hephaestus.agent.run.AgentRunHold;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunRef;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
+import de.tum.cit.aet.hephaestus.agent.runtime.AgentResult;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxWorkspaceManager;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxKind;
@@ -332,6 +334,25 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
         assertThat(metrics.counter(AgentMetrics.AGENT_JOB_INFRA_RETRY_REQUEUED, "cause", "preparation")
                         .count())
                 .isEqualTo(1);
+    }
+
+    @Test
+    void shouldEndAnAttemptWhoseWorkspaceNoAttemptCanPrepareWithoutSpendingARetry() {
+        var job = queued(binding(DataHandlingTier.IN_HOUSE));
+        var fence = claimLeased(job).orElseThrow().fence();
+        var metrics = new SimpleMeterRegistry();
+
+        measure(results(metrics), job, fence, SandboxLayout.EXIT_WORKSPACE_UNPREPARED);
+
+        var failed = jobs.findById(job.getId()).orElseThrow();
+        assertThat(failed.getStatus())
+                .as("another attempt would meet the same cause, so none runs")
+                .isEqualTo(ReviewJobStatus.FAILED);
+        assertThat(failed.getExitCode()).isEqualTo(SandboxLayout.EXIT_WORKSPACE_UNPREPARED);
+        assertThat(failed.spentAttempts()).as("it spends no retry").isZero();
+        assertThat(RuntimeJobTestData.runState(jdbc, failed)).isEqualTo("ENDED");
+        assertThat(metrics.find(AgentMetrics.AGENT_JOB_INFRA_RETRY_REQUEUED).counters())
+                .allSatisfy(counter -> assertThat(counter.count()).isZero());
     }
 
     @Test
@@ -821,10 +842,17 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
         var preparation = mock(ReviewAttemptPreparation.class);
         when(preparation.owned(any(), any()))
                 .thenAnswer(call -> jobs.findById(call.getArgument(0)).orElseThrow());
+        // As the runner's parser reads a result with no files: a failure that names the exit code.
+        var practiceAgent = mock(PracticePiAdapter.class);
+        lenient()
+                .when(practiceAgent.parseResult(any()))
+                .thenAnswer(call -> new AgentResult(
+                        false,
+                        Map.of("exitCode", call.<SandboxResult>getArgument(0).exitCode())));
         return new ReviewAttemptResults(
                 jobs,
                 handler,
-                mock(PracticePiAdapter.class),
+                practiceAgent,
                 preparation,
                 new ReviewJobTerminal(jobs, agentRuns, context.getBeanProvider(ReviewCompositionContinuation.class)),
                 reviewRuns,

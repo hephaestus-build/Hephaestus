@@ -161,6 +161,13 @@ public final class SandboxLayout {
     /** The result was not acknowledged before the upload deadline. */
     public static final int EXIT_UPLOAD_FAILED = 43;
 
+    /**
+     * The workspace initializer's exit for a workspace that another attempt could not prepare either: an archive past
+     * its budget or without a valid length, one that tar refuses, or a change view that fails. It reported this as the attempt's
+     * result, so the server records the failure and spends no retry on it.
+     */
+    public static final int EXIT_WORKSPACE_UNPREPARED = 44;
+
     /** The child was stopped at the work deadline; upload still had its own window. */
     public static final int EXIT_WORK_TIMEOUT = 124;
 

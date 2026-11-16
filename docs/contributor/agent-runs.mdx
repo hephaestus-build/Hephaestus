@@ -537,6 +537,12 @@ A review's `REVIEW` run is measured in the review's own sandbox (`ReviewSandboxR
    The kind first empties `/workspace`. Thus, a requeued attempt that the same sandbox pulls starts from its own captured workspace, not from the files that an earlier attempt left in `/workspace`.
 5. The runner's result arrives at `…/runs/{runId}/runtime/result`, with the runner's exit. `ReviewAttemptResults` then ends the attempt, requeues it, or hands an admitted review on to its `REVIEW_COMPOSE` run (`ReviewRunKind.continueToCompose`), which the same sandbox pulls next.
 
+The workspace initializer (`agent/gateway-init.ts`) can fail for a cause that every attempt meets.
+Such a cause is an archive past its budget or without a valid length, an archive that tar refuses, or a change view that fails.
+The initializer then reports an empty result with exit 44 on `…/runtime/result` ([The runner's exit](#the-runners-exit)).
+Any other failure of the initializer is a lost attempt, which runs again within the retry limit.
+Examples are a cut download, a signal, and a report that does not arrive.
+
 #### The runner's exit
 
 `SandboxLayout` owns each code. The runner's constants name the same values, and `SandboxLayoutSyncTest` holds them equal.
@@ -548,6 +554,7 @@ A review's `REVIEW` run is measured in the review's own sandbox (`ReviewSandboxR
 | 2 | Stopped on an error that it has no class for | Ends the job failed |
 | 42 | Could not use `task.json` | Ends the job failed |
 | 43 | The upload was not acknowledged before its deadline | The run hands on |
+| 44 | The workspace initializer could not prepare the workspace for a cause that every attempt meets | Ends the attempt with what it staged and records the rest as `PREPARATION_FAILED`, with no retry |
 | 75 | The gateway stayed unreachable until the work ended, or repeatedly cut a model response | Requeues the attempt, which spends a retry |
 | 76 | The model provider answered none of its calls | Requeues the attempt |
 | 77 | The server answered staging or admission with its own error | Ends the attempt with what it staged |

@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.agent.context.InsufficientEvidenceException;
 import de.tum.cit.aet.hephaestus.agent.gateway.WorkspaceBudgetExceededException;
 import de.tum.cit.aet.hephaestus.agent.handler.DefaultReviewExecutionHandler;
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
+import de.tum.cit.aet.hephaestus.agent.handler.spi.JobPreparationException;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedJobInputs;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.ReviewSourceNotReadyException;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
@@ -138,7 +139,9 @@ public class ReviewAttemptResults {
                                 ? "The runner did not return a valid result."
                                 : sandboxResult.exitCode() == SandboxLayout.EXIT_SERVER_ERROR
                                         ? "The server answered the review's results with its own error."
-                                        : "The container exited with code " + sandboxResult.exitCode() + ".";
+                                        : sandboxResult.exitCode() == SandboxLayout.EXIT_WORKSPACE_UNPREPARED
+                                                ? "The sandbox could not prepare the attempt's workspace."
+                                                : "The container exited with code " + sandboxResult.exitCode() + ".";
             default -> null;
         };
     }
@@ -218,6 +221,9 @@ public class ReviewAttemptResults {
             serverErrors.increment();
             log.error("The server refused a review's results with its own error, so the attempt ends: jobId={}", jobId);
         }
+        // The sandbox could not prepare the workspace for a cause that every attempt meets: a capture failure. The
+        // attempt keeps what it staged and ends the rest as a preparation failure, with no retry.
+        boolean unprepared = result.exitCode() == SandboxLayout.EXIT_WORKSPACE_UNPREPARED;
         // The provider answered none of the run's calls, and the proxy's record of them shows an outage, not an
         // answered
         // error. The outage is not the review's: it keeps what it staged and spends no retry until its outage window
@@ -231,7 +237,7 @@ public class ReviewAttemptResults {
                 && !handler.completeStaged(retained)) {
             if (outage != null) {
                 if (awaitProvider(retained, fence, outage)) return null;
-            } else if (!serverError) {
+            } else if (!serverError && !unprepared) {
                 // A slow provider can take many attempts. Each one that moved the review on keeps the retries for
                 // the attempts that move nothing.
                 if (handler.endedPractices(retained) > endedBefore && continueProgressed(retained, fence)) return null;
@@ -241,11 +247,13 @@ public class ReviewAttemptResults {
                     retained,
                     serverError
                             ? ReviewStopReason.EXECUTION_FAILED
-                            : providerUnreachable
-                                    ? ReviewStopReason.PROVIDER_UNAVAILABLE
-                                    : result.timedOut()
-                                            ? ReviewStopReason.DEADLINE
-                                            : ReviewStopReason.EXECUTION_INCOMPLETE);
+                            : unprepared
+                                    ? ReviewStopReason.PREPARATION_FAILED
+                                    : providerUnreachable
+                                            ? ReviewStopReason.PROVIDER_UNAVAILABLE
+                                            : result.timedOut()
+                                                    ? ReviewStopReason.DEADLINE
+                                                    : ReviewStopReason.EXECUTION_INCOMPLETE);
         }
 
         if (outage != null) {
@@ -281,13 +289,27 @@ public class ReviewAttemptResults {
             return null;
         }
         if (ResultAdmissionService.isAdmitted(measured)) {
-            handOnToCompose(jobId, fence, new Measured(agentResult, result));
+            boolean handedOn = handOnToCompose(jobId, fence, new Measured(agentResult, result));
+            if (unprepared) workspaceUnprepared(job, handedOn ? "STAGED_KEPT" : "OWNERSHIP_LOST");
             return null;
         }
 
         ReviewJobStatus terminalStatus = persistTerminalState(jobId, fence, agentResult, result);
         if (terminalStatus != null) forgetCompositionInputs(job);
+        if (unprepared) workspaceUnprepared(job, terminalStatus == null ? "OWNERSHIP_LOST" : terminalStatus.name());
         return terminalStatus;
+    }
+
+    /** The sandbox could not prepare the workspace for a cause that every attempt meets, as {@code result} ended it. */
+    private void workspaceUnprepared(ReviewJob job, String result) {
+        jobTelemetry.preparationFailed(
+                job,
+                PreparationFailure.of(
+                        PreparationFailure.Stage.WORKSPACE,
+                        new JobPreparationException(
+                                JobPreparationException.Reason.WORKSPACE_RENDERING_FAILED,
+                                "The sandbox could not prepare the attempt's workspace")),
+                result);
     }
 
     /** Its feedback is decided: no attempt reads the retained inputs again. The retention sweep removes what this leaves. */
