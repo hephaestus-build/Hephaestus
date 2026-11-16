@@ -36,6 +36,56 @@ With `cluster.yaml`, also add the agent-sandbox controller (10m CPU, 64 MiB).
 During an install or an upgrade, the migration Job requests 250m CPU and 1536 MiB more.
 Check the rendered requests against the allocatable resources of your nodes before you install.
 
+## Measured throughput and latency
+
+These measurements used the `small.yaml` cell: one server with a CPU limit of 4 cores, 5 reviews and 11 conversation turns at once.
+The sandboxes ran without gVisor. The one host was not measured separately.
+Use the numbers to estimate what one node gives. Your model provider sets most of the time, so measure with your own model before you promise a time.
+
+### Reviews
+
+A node of 16 GiB ran 5 reviews at once, with an open-weight model of 27 billion parameters. Each round used the same five pull requests.
+The server had a 2,304 MiB memory limit in both rounds ([Memory headroom](#memory-headroom)).
+Each review sent its model calls through the model pool, which also limits how many calls run at the same time.
+
+| Round | Review time, p50 and p95 | Mean model call | Mean wait for a model permit | Reviews each hour |
+| --- | --- | --- | --- | --- |
+| First | 14.2 and 14.3 min | 72 s | 44 s | About 21 |
+| Second | 8.5 and 10.5 min | 41 s | 33 s | About 35 |
+
+Most of the review time is model time.
+In the first round, the reviews sent 107 model calls, against 57 in the second.
+Each call also took 75 % longer and waited 35 % longer for a permit.
+Thus, the same node finished fewer reviews each hour.
+When a model call takes much longer, a review can need more than one measurement, and its time grows faster than the call time.
+`gen_ai_client_operation_duration_seconds` and `llm_pool_permit_wait_seconds` show these two times on your installation ([Metrics](./metrics.mdx)).
+
+### Conversation turns
+
+A test cluster on a shared host of 20 cores ran the `small.yaml` server with its 3 GiB memory limit.
+Synthetic users each asked three questions, 30 seconds apart.
+A replay model sent its first token after 300 ms and its answers at 50 tokens each second.
+The first answer text is the time from the question to the first text that the user sees.
+
+| Users at once | First answer text, p50 | First answer text, p95 | Within 10 seconds | Runs |
+| --- | --- | --- | --- | --- |
+| 5 | 4.3 s | 31.6 s | 10 of 15 | 1 |
+| 11 | 3.3 to 7.3 s | 7.6 to 32.9 s | 19 to 33 of 33 | 6 |
+| 40, all in one second | 36 to 49 s | 77 to 86 s | 3 to 11 of 120 | 3 |
+
+With 40 users, the node completed 1,250 to 1,570 turns each hour while the queue drained.
+
+After a turn started, its first answer text came 0.7 to 1.1 seconds later.
+The rest of the time is the wait for the turn to start.
+
+Above 11 users, turns wait for a free turn.
+Below that, the wait is the start of the conversation sandbox.
+The first turns after a server start waited longest.
+The runs shared a host with other work. The p95 values grew with the load on that host.
+
+Add your model's time to first token to these numbers.
+`conversation_turn_queue_wait_seconds` shows the wait for a turn on your installation.
+
 ## Raise capacity
 
 | To get | Change | Also needs |
