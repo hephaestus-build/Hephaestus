@@ -4,11 +4,14 @@
  * addresses it instead of the throwaway repository it built for itself — `git config`, `git commit`
  * and `git tag` have all landed on a contributor's checkout that way.
  *
- * Two things keep them apart and both are asserted here: the hook drops the variables before it
- * starts the gate, and every repository test that runs `git` builds its environment in one place.
+ * Three things keep them apart and all are asserted here: the hook drops the variables before it
+ * starts the gate, every repository test that runs `git` builds its environment in one place, and
+ * that environment stops a `git` outside its fixture from finding the checkout that holds the
+ * temporary directory.
  */
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import {
 	chmodSync,
 	cpSync,
@@ -22,6 +25,7 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { after, test } from "node:test";
+import { pathToFileURL } from "node:url";
 
 import { environmentForGitFixture, GIT_REPOSITORY_VARIABLES } from "./lib/git-environment.ts";
 
@@ -92,6 +96,7 @@ void test("a gate that runs git the wrong way cannot reach the repository being 
 	git(decoy, "add", "-A");
 	git(decoy, "commit", "--quiet", "-m", "decoy");
 	const before = fingerprint(decoy);
+	const intruder = `intruder-${randomUUID()}`;
 
 	// Stands in for `vp run check`: a task that runs git in whatever environment it was handed, and
 	// records that it ran so a hook that never reached it cannot pass this test. The hooks run the `vp`
@@ -104,7 +109,7 @@ void test("a gate that runs git the wrong way cannot reach the repository being 
 	const stub = path.join(bin, "vp");
 	writeFileSync(
 		stub,
-		`#!/bin/sh\nprintf ran > "${marker}"\ngit config user.name intruder\ngit tag intruder\nexit 0\n`,
+		`#!/bin/sh\nprintf ran > "${marker}"\ngit config user.name ${intruder}\ngit tag ${intruder}\nexit 0\n`,
 	);
 	chmodSync(stub, 0o755);
 
@@ -132,6 +137,39 @@ void test("a gate that runs git the wrong way cannot reach the repository being 
 
 	assert.equal(readFileSync(marker, "utf8"), "ran");
 	assert.deepEqual(fingerprint(decoy), before);
+	// The checkout this test runs in is the other repository the gate could have reached.
+	assert.ok(!git(REPO_ROOT, "config", "--list").includes(intruder));
+	assert.equal(git(REPO_ROOT, "tag", "--list", intruder), "");
+});
+
+void test("a fixture's git stops at the temporary directory, even inside a checkout", () => {
+	const enclosing = temporaryDirectory("git-environment-enclosing-");
+	git(enclosing, "init", "--quiet", "--initial-branch=main");
+	const temporary = path.join(enclosing, "tmp");
+	mkdirSync(temporary);
+	const configuration = path.join(enclosing, ".git", "config");
+	const before = readFileSync(configuration, "utf8");
+
+	// The temporary directory is read when the process starts, so a child process takes the one
+	// inside the checkout and runs git outside any fixture, as the gate above does.
+	const library = pathToFileURL(path.join(SCRIPTS, "lib", "git-environment.ts")).href;
+	const script = [
+		'import { spawnSync } from "node:child_process";',
+		'import { mkdtempSync } from "node:fs";',
+		'import { tmpdir } from "node:os";',
+		'import path from "node:path";',
+		`import { environmentForGitFixture } from ${JSON.stringify(library)};`,
+		'const cwd = mkdtempSync(path.join(tmpdir(), "outside-"));',
+		'const result = spawnSync("git", ["config", "user.name", "intruder"], { cwd, env: environmentForGitFixture() });',
+		"process.stdout.write(String(result.status));",
+	].join("\n");
+	const status = execFileSync(process.execPath, ["--input-type=module", "--eval", script], {
+		encoding: "utf8",
+		env: environmentForGitFixture({ TEMP: temporary, TMP: temporary, TMPDIR: temporary }),
+	});
+
+	assert.notEqual(status, "0", "git found a repository outside the temporary directory");
+	assert.equal(readFileSync(configuration, "utf8"), before);
 });
 
 void test("a repository test that runs git builds its environment in one place", () => {

@@ -36,6 +36,10 @@ export function environmentWithoutGitRepository(): NodeJS.ProcessEnv {
  * The environment for a `git` that acts on a throwaway fixture: no inherited `GIT_*` at all, and
  * neither the machine's global nor its system configuration, whose `core.hooksPath`,
  * `commit.gpgsign` or `tag.gpgSign` would otherwise decide what the fixture does.
+ *
+ * Fixtures live in the temporary directory, and a `git` that runs in one which is not a repository
+ * searches the parent directories for one. When the temporary directory lies inside a checkout,
+ * that search ends in the checkout, so the search stops at the temporary directory.
  */
 export function environmentForGitFixture(overrides: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv {
 	const environment: NodeJS.ProcessEnv = { ...process.env };
@@ -46,6 +50,7 @@ export function environmentForGitFixture(overrides: NodeJS.ProcessEnv = {}): Nod
 	}
 	return {
 		...environment,
+		GIT_CEILING_DIRECTORIES: tmpdir(),
 		GIT_CONFIG_GLOBAL: emptyGlobalConfiguration(),
 		GIT_CONFIG_NOSYSTEM: "1",
 		...overrides,
