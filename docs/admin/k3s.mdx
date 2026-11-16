@@ -56,7 +56,7 @@ If your network cannot reach its own public address, the DNS check fails. Then r
    Use the version of the newest release on the [releases page](https://github.com/hephaestus-build/Hephaestus/releases).
 
    ```bash
-   VERSION=1.0.0-rc.8   # the release, without the leading "v"
+   VERSION=1.0.0-rc.9   # the release, without the leading "v"
    mkdir -p ~/hephaestus && cd ~/hephaestus
    ```
 
