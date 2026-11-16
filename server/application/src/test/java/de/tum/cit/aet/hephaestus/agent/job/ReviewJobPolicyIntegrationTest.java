@@ -960,8 +960,8 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                 busy.close();
                 var granted = Objects.requireNonNull(repeated.get(12, TimeUnit.SECONDS));
                 assertThat(granted.isRevoked()).isFalse();
-                // The wait requeued the run for a later pull; the next pull is now.
-                jdbc.update("UPDATE agent_run SET available_at=clock_timestamp() WHERE id=?", job.getRunId());
+                // The wait deferred the run for a later pull; the next pull is now.
+                jdbc.update("UPDATE agent_run SET deferred_until=clock_timestamp() WHERE id=?", job.getRunId());
                 assertThat(claimLeased(job, claims)).isPresent();
                 assertThat(context.getBean(LlmCallPermitRepository.class).countActive(poolId))
                         .isEqualTo(1);
@@ -1112,6 +1112,12 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
         assertThat(RuntimeJobTestData.runState(jdbc, queued))
                 .as("the wait requeued the run")
                 .isEqualTo("QUEUED");
+        assertThat(jdbc.queryForObject(
+                        "SELECT deferred_until > clock_timestamp() FROM agent_run WHERE id = ?",
+                        Boolean.class,
+                        queued.getRunId()))
+                .as("the claim deferred the run, which keeps its place")
+                .isTrue();
         assertThat(queued.getExecutionStartedAt()).isNull();
     }
 

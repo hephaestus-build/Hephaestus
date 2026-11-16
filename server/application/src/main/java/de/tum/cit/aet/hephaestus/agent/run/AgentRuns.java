@@ -4,6 +4,8 @@ import de.tum.cit.aet.hephaestus.agent.AgentCapacityProperties;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.core.TransactionCallbacks;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
+import de.tum.cit.aet.hephaestus.observability.StructuredLogKeys;
+import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import jakarta.persistence.EntityManager;
@@ -21,6 +23,8 @@ import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.random.RandomGenerator;
 import org.jspecify.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -31,6 +35,14 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Service
 public class AgentRuns {
+
+    private static final Logger log = LoggerFactory.getLogger(AgentRuns.class);
+
+    /**
+     * How long no claim takes a deferred run ({@link #defer}). It does not grow: the runs that wait for one pool would
+     * then try it at different rates, and the newest would take its room first.
+     */
+    static final Duration DEFER_WAIT = Duration.ofSeconds(5);
 
     /** The longest wait before a requeued run is offered again. */
     static final Duration BACKOFF_CAP = Duration.ofMinutes(15);
@@ -63,6 +75,8 @@ public class AgentRuns {
         // Registered at start, so a percentile over a band that has had no claim yet reads a series.
         for (AgentRunKind kind : AgentRunKind.values())
             for (AgentRunBand band : AgentRunBand.values()) claimWait(kind, tag(band));
+        for (AgentRunKind kind : AgentRunKind.values())
+            for (Deferral reason : Deferral.values()) deferred(tag(kind), reason);
     }
 
     /** The capacity numbers that leases and their kinds' attempt budgets follow. */
@@ -335,6 +349,51 @@ public class AgentRuns {
             wake(fence);
         }
         return requeued;
+    }
+
+    /** Why a claim could not start its run now. */
+    public enum Deferral {
+        /** A lifecycle write holds the run's domain row. */
+        LOCKED,
+        /** The run's model pool has review calls waiting. */
+        MODEL_POOL
+    }
+
+    /**
+     * Puts back a run that its claim cannot start now, and spends nothing. The run stays due since its {@code
+     * available_at}: it keeps its place in the claim order, and the run gauges count its wait. No claim takes it again
+     * for {@link #DEFER_WAIT}. The model calls that the claim left open are settled with it.
+     *
+     * @return whether the holder still held the run
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public boolean defer(AgentRunFence fence, Deferral reason) {
+        var deferred = runs.defer(fence.runId(), fence.workspaceId(), fence.epoch(), DEFER_WAIT.toSeconds());
+        if (deferred.isEmpty()) return false;
+        settled(runs.settleOpenCalls(fence.runId(), fence.workspaceId(), fence.epoch()));
+        var row = deferred.get();
+        TransactionCallbacks.afterCommit(() -> {
+            deferred(row.getKind().toLowerCase(Locale.ROOT), reason).increment();
+            log.atInfo()
+                    .addKeyValue("event.name", "agent.run.deferred")
+                    .addKeyValue(StructuredLogKeys.RUN_ID, fence.runId())
+                    .addKeyValue(StructuredLogKeys.RUN_EPOCH, fence.epoch())
+                    .addKeyValue(StructuredLogKeys.SUBJECT_KEY, row.getConcurrencyKey())
+                    .addKeyValue(StructuredLogKeys.WORKSPACE_ID, fence.workspaceId())
+                    .addKeyValue("run.kind", row.getKind())
+                    .addKeyValue("run.deferral.reason", tag(reason))
+                    .addKeyValue("run.due_seconds", Math.round(row.getDueSeconds()))
+                    .log("A claim could not start its run, so the run waits and keeps its place");
+        });
+        return true;
+    }
+
+    private Counter deferred(String kind, Deferral reason) {
+        return Counter.builder(AgentMetrics.AGENT_RUN_DEFERRED)
+                .description("Claims that could not start their run and deferred it")
+                .tag("kind", kind)
+                .tag("reason", tag(reason))
+                .register(meters);
     }
 
     /**
