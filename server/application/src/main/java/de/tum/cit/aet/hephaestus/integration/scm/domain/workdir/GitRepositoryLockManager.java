@@ -26,8 +26,8 @@ public class GitRepositoryLockManager {
     }
 
     /**
-     * Like {@link #withWriteLock(RepositoryKey, Supplier)}, but stops waiting once {@code abandoned} holds. A capture
-     * fetch has no timeout, so a reader that gave up must not wait behind it for as long as the fetch takes.
+     * Like {@link #withWriteLock(RepositoryKey, Supplier)}, but stops waiting once {@code abandoned} holds. A fetch can
+     * run for minutes while it receives data, so a reader that gave up must not wait behind it for as long as it takes.
      *
      * @throws CancellationException when {@code abandoned} holds before the lock is taken
      */

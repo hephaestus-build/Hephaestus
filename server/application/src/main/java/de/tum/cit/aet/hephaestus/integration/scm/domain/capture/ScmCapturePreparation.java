@@ -4,11 +4,17 @@ import de.tum.cit.aet.hephaestus.evidence.SourceAbsenceReason;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureCode;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureException;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;
 
-// Share one fetch and its availability fact across the sources in this capture.
+/**
+ * Shares one fetch and its availability fact across the sources in this capture. A lock, not a monitor, guards it: on
+ * Java 21 a virtual thread that waits on a network fetch inside {@code synchronized} keeps its carrier, and the sandbox
+ * gateway's requests prepare captures on such threads.
+ */
 public final class ScmCapturePreparation {
+    private final ReentrantLock lock = new ReentrantLock();
     private boolean fetched;
     private ReviewRepositoryPreparer.@Nullable PreparedReview prepared;
     private @Nullable RuntimeException failure;
@@ -27,34 +33,54 @@ public final class ScmCapturePreparation {
     /**
      * The review prepared so far, or null when no source has asked yet or the preparation failed.
      */
-    public synchronized ReviewRepositoryPreparer.@Nullable PreparedReview prepared() {
-        return prepared;
+    public ReviewRepositoryPreparer.@Nullable PreparedReview prepared() {
+        lock.lock();
+        try {
+            return prepared;
+        } finally {
+            lock.unlock();
+        }
     }
 
-    public synchronized @Nullable SourceAbsenceReason unavailableReason() {
-        return unavailable;
+    public @Nullable SourceAbsenceReason unavailableReason() {
+        lock.lock();
+        try {
+            return unavailable;
+        } finally {
+            lock.unlock();
+        }
     }
 
     /**
      * Runs the capture's fetch, before its transaction. What it cannot fetch is what {@link #prepare} answers for: a
      * source that never reads the clone is not refused for it.
      */
-    public synchronized void fetch(Runnable fetch) {
-        fetched = true;
-        settle(() -> {
-            fetch.run();
-            return null;
-        });
+    public void fetch(Runnable fetch) {
+        lock.lock();
+        try {
+            fetched = true;
+            settle(() -> {
+                fetch.run();
+                return null;
+            });
+        } finally {
+            lock.unlock();
+        }
     }
 
-    public synchronized ReviewRepositoryPreparer.@Nullable PreparedReview prepare(
+    public ReviewRepositoryPreparer.@Nullable PreparedReview prepare(
             ReviewRepositoryPreparer preparer, ScmCaptureContext capture) {
-        if (prepared == null && failure == null && unavailable == null) {
-            if (!fetched) throw new IllegalStateException("A capture reads the clone only after its fetch");
-            prepared = settle(() -> preparer.prepare(capture));
+        lock.lock();
+        try {
+            if (prepared == null && failure == null && unavailable == null) {
+                if (!fetched) throw new IllegalStateException("A capture reads the clone only after its fetch");
+                prepared = settle(() -> preparer.prepare(capture));
+            }
+            if (failure != null) throw failure;
+            return prepared;
+        } finally {
+            lock.unlock();
         }
-        if (failure != null) throw failure;
-        return prepared;
     }
 
     private ReviewRepositoryPreparer.@Nullable PreparedReview settle(

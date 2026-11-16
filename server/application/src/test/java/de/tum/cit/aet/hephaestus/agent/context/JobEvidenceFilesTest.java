@@ -523,7 +523,8 @@ class JobEvidenceFilesTest extends BaseUnitTest {
                 layout,
                 GitTransportFixtures.guarded(),
                 mock(RepositoryRefState.class),
-                GitTransportFixtures.copyFence());
+                GitTransportFixtures.copyFence(),
+                new SimpleMeterRegistry());
         manager.ensureRepository(key, source.toUri().toString(), null);
         Path staging;
         try (var snapshot = manager.readTreeSnapshot(key, sha)) {

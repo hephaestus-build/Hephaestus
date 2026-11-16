@@ -55,6 +55,7 @@ import de.tum.cit.aet.hephaestus.testconfig.TestUserFactory;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Instant;
@@ -378,7 +379,8 @@ class ScmItemFetchIntegrationTest extends BaseIntegrationTest {
                 new FabricLayout(root.resolve("fabric").toString()),
                 GitTransportFixtures.guarded(),
                 mock(RepositoryRefState.class),
-                GitTransportFixtures.copyFence());
+                GitTransportFixtures.copyFence(),
+                new SimpleMeterRegistry());
         var cold = pipeline(noMirror).reader();
         var pullRef = pullRequestItem(fixture());
         var kinds = Set.of(PullRequestContentSource.DIFF, LinkedWorkItemContentSource.KIND);

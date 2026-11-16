@@ -744,6 +744,27 @@ tests:
               summary: A role's Git cache stayed above 90 percent of its eviction budget, and eviction cannot free it
               runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
+  - name: three stopped fetches of one cause in an hour fire with their cause, a few do not
+    interval: 1m
+    input_series:
+      - series: 'git_fetch_stopped_total{job="hephaestus",instance="server-b:9090",cause="transport_silent"}'
+        values: "0x10 1x10 3x20"
+      - series: 'git_fetch_stopped_total{job="hephaestus",instance="server-b:9090",cause="mirror_busy"}'
+        values: "0x40"
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: HephaestusGitFetchesStopping
+        exp_alerts: []
+      - eval_time: 25m
+        alertname: HephaestusGitFetchesStopping
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              cause: transport_silent
+            exp_annotations:
+              summary: Git fetches stopped because the provider went silent or a mirror stayed busy; those reviews record the repository as unavailable
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+
   - name: five evictions in one hour fire, a few do not
     interval: 1m
     input_series:

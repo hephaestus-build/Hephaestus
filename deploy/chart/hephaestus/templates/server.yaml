@@ -105,14 +105,18 @@ spec:
             - name: SPRING_PROFILES_ACTIVE
               value: prod
             # The buildpack's 10M direct-memory default sits below this role's HTTP footprint.
+            # A flight recording runs at all times, in /tmp, which survives a container restart: after a liveness
+            # restart, the previous process's pinned virtual threads and monitor waits are on disk.
+            # docs/admin/production-operations-runbook.mdx, HephaestusServerRestarting.
+            {{- $recording := "-XX:FlightRecorderOptions=repository=/tmp/jfr -XX:StartFlightRecording=settings=default,disk=true,maxage=6h,maxsize=256m,dumponexit=true,filename=/tmp/jfr/exit-%t.jfr" }}
             {{- if $sandbox.enabled }}
             # A blocked socket call pins its carrier on Java 21, so the scheduler may need a carrier for each
             # gateway connection. This is a ceiling, not the usual count: docs/admin/sizing.mdx § Memory headroom.
             - name: JAVA_TOOL_OPTIONS
-              value: -XX:MaxDirectMemorySize=128M -Djdk.virtualThreadScheduler.maxPoolSize={{ add (int $sandbox.gateway.maxConnections) 256 }}
+              value: -XX:MaxDirectMemorySize=128M -Djdk.virtualThreadScheduler.maxPoolSize={{ add (int $sandbox.gateway.maxConnections) 256 }} {{ $recording }}
             {{- else }}
             - name: JAVA_TOOL_OPTIONS
-              value: -XX:MaxDirectMemorySize=128M
+              value: -XX:MaxDirectMemorySize=128M {{ $recording }}
             {{- end }}
             # The buildpack's memory calculator sizes the heap from these and the limit: values.yaml § server.jvm.
             - name: BPL_JVM_HEAD_ROOM

@@ -141,13 +141,8 @@ public class ScmRepositoryCheckouts implements RepositoryCheckouts {
         if (!git.commitExists(remote.key(), head)) {
             remote.source()
                     .reviewHeadRef(number)
-                    .ifPresent(ref -> git.fetchRemoteCommit(
-                            remote.key(),
-                            remote.cloneUrl(),
-                            ref,
-                            head,
-                            remote.token(),
-                            GitRepositoryManager.READER_TRANSPORT_TIMEOUT_SECONDS));
+                    .ifPresent(
+                            ref -> git.fetchRemoteCommit(remote.key(), remote.cloneUrl(), ref, head, remote.token()));
         }
         if (!git.commitExists(remote.key(), head)) throw refNotFound();
         return head;

@@ -41,6 +41,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.spi.ScmTokenSource;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.testconfig.GitTestFixtures;
 import de.tum.cit.aet.hephaestus.testconfig.ItemFixtures;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -162,7 +163,8 @@ class ScmItemRecordTest extends BaseUnitTest {
                 new FabricLayout(root.resolve("fabric").toString()),
                 GitTransportFixtures.guarded(),
                 mock(RepositoryRefState.class),
-                GitTransportFixtures.copyFence());
+                GitTransportFixtures.copyFence(),
+                new SimpleMeterRegistry());
         var gitTree = new ScmGitTree(manager);
         var versions = new ScmFileVersions(mapper);
         ReflectionTestUtils.setField(service, "tree", gitTree);

@@ -9,6 +9,7 @@ import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
 import java.time.Duration;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.IntSupplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -26,6 +27,8 @@ public class EvidenceReconciler {
     private static final Logger log = LoggerFactory.getLogger(EvidenceReconciler.class);
 
     public static final Duration INTERVAL = Duration.ofSeconds(30);
+
+    private final ReentrantLock passes = new ReentrantLock();
 
     private final JobEvidenceFiles files;
     private final EvidenceFolderPersonDataCatalog copies;
@@ -59,19 +62,26 @@ public class EvidenceReconciler {
      * remains counts as a failure, and the last success stays where it was, so the stalled-reconcile alert sees an
      * erasure that does not reach this server and a folder that cleanup cannot remove.
      */
-    public synchronized void reconcile() {
-        int remaining = step(() -> copies.removeErasedFolders().remaining())
-                + step(files::cleanEndedAttempts)
-                + step(() -> {
-                    inputs.removeEnded();
-                    return 0;
-                });
-        if (remaining > 0) {
-            failures.increment(remaining);
-            log.warn("Evidence reconcile left copies for the next pass: count={}", remaining);
-            return;
+    public void reconcile() {
+        // A lock, not a monitor: a pass deletes files and writes rows, and a virtual thread that waits under a monitor
+        // keeps its carrier on Java 21.
+        passes.lock();
+        try {
+            int remaining = step(() -> copies.removeErasedFolders().remaining())
+                    + step(files::cleanEndedAttempts)
+                    + step(() -> {
+                        inputs.removeEnded();
+                        return 0;
+                    });
+            if (remaining > 0) {
+                failures.increment(remaining);
+                log.warn("Evidence reconcile left copies for the next pass: count={}", remaining);
+                return;
+            }
+            lastSuccess.set(clock.instant().getEpochSecond());
+        } finally {
+            passes.unlock();
         }
-        lastSuccess.set(clock.instant().getEpochSecond());
     }
 
     private static int step(IntSupplier cleanup) {

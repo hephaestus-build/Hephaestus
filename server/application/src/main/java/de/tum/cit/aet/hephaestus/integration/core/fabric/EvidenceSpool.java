@@ -15,6 +15,7 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -33,6 +34,13 @@ public final class EvidenceSpool {
     private static final String LEASE = ".lease";
     private static final Logger log = LoggerFactory.getLogger(EvidenceSpool.class);
     private static final Map<Path, Copy> COPIES = new ConcurrentHashMap<>();
+    /**
+     * Allocation and orphan removal share it, before either opens a lease file. A lock, not a monitor, throughout this
+     * class: these sections do file I/O and SQL, and on Java 21 a virtual thread that blocks or waits to enter under a
+     * monitor keeps its carrier.
+     */
+    private static final ReentrantLock COPIES_LOCK = new ReentrantLock();
+
     private static final Set<Path> HOMES = ConcurrentHashMap.newKeySet();
     private static final ThreadLocal<Capture> ACTIVE = new ThreadLocal<>();
 
@@ -73,8 +81,11 @@ public final class EvidenceSpool {
         CaptureGroup capture = current.group;
         if (!capture.owner.root.equals(root) || capture.workspaceId != workspaceId)
             throw new IllegalStateException("A capture cannot copy another evidence home's or workspace's evidence");
-        synchronized (COPIES) {
+        COPIES_LOCK.lock();
+        try {
             return allocate(workspaceId, capture);
+        } finally {
+            COPIES_LOCK.unlock();
         }
     }
 
@@ -212,11 +223,14 @@ public final class EvidenceSpool {
     }
 
     private static boolean removeOrphan(Path entry) {
-        synchronized (COPIES) {
+        COPIES_LOCK.lock();
+        try {
             // Closing a second channel can release this JVM's existing lease on some platforms.
             // Allocation and this lookup share the registry lock, before either opens the lease file.
             if (COPIES.containsKey(entry.resolve("content"))) return true;
             return reclaimOrphan(entry);
+        } finally {
+            COPIES_LOCK.unlock();
         }
     }
 
@@ -264,6 +278,7 @@ public final class EvidenceSpool {
     public static final class Capture implements PersonDataCopyFence.Lease {
         private final CaptureGroup group;
         private final @Nullable Capture previous;
+        private final ReentrantLock lock = new ReentrantLock();
         private volatile boolean closed;
 
         private Capture(CaptureGroup group, @Nullable Capture previous) {
@@ -279,13 +294,18 @@ public final class EvidenceSpool {
 
         /** Detaches the creating thread; copies retain admission until their last physical removal. */
         @Override
-        public synchronized void close() {
-            if (closed) return;
-            if (ACTIVE.get() != this)
-                throw new IllegalStateException("Capture scopes must close in their nesting order");
-            closed = true;
-            if (previous == null) ACTIVE.remove();
-            else ACTIVE.set(previous);
+        public void close() {
+            lock.lock();
+            try {
+                if (closed) return;
+                if (ACTIVE.get() != this)
+                    throw new IllegalStateException("Capture scopes must close in their nesting order");
+                closed = true;
+                if (previous == null) ACTIVE.remove();
+                else ACTIVE.set(previous);
+            } finally {
+                lock.unlock();
+            }
             group.closeScope();
         }
     }
@@ -295,6 +315,7 @@ public final class EvidenceSpool {
         private final long workspaceId;
         private final PersonDataCopyFence.Lease admission;
         private final Set<Copy> copies = new HashSet<>();
+        private final ReentrantLock lock = new ReentrantLock();
         private int scopes;
         private boolean released;
 
@@ -304,29 +325,53 @@ public final class EvidenceSpool {
             this.admission = admission;
         }
 
-        synchronized void open() {
-            scopes++;
-        }
-
-        synchronized void add(Copy copy) {
-            copies.add(copy);
-        }
-
-        synchronized void removed(Copy copy) {
-            copies.remove(copy);
-            releaseIfEmpty();
-        }
-
-        synchronized void closeScope() {
-            scopes--;
-            releaseIfEmpty();
-        }
-
-        private void releaseIfEmpty() {
-            if (!released && scopes == 0 && copies.isEmpty()) {
-                released = true;
-                admission.close();
+        void open() {
+            lock.lock();
+            try {
+                scopes++;
+            } finally {
+                lock.unlock();
             }
+        }
+
+        void add(Copy copy) {
+            lock.lock();
+            try {
+                copies.add(copy);
+            } finally {
+                lock.unlock();
+            }
+        }
+
+        void removed(Copy copy) {
+            boolean release;
+            lock.lock();
+            try {
+                copies.remove(copy);
+                release = releasable();
+            } finally {
+                lock.unlock();
+            }
+            if (release) admission.close();
+        }
+
+        void closeScope() {
+            boolean release;
+            lock.lock();
+            try {
+                scopes--;
+                release = releasable();
+            } finally {
+                lock.unlock();
+            }
+            if (release) admission.close();
+        }
+
+        /** Marks the group released when it has nothing left; the caller closes the admission, whose unlock is SQL. */
+        private boolean releasable() {
+            if (released || scopes != 0 || !copies.isEmpty()) return false;
+            released = true;
+            return true;
         }
     }
 
@@ -344,6 +389,7 @@ public final class EvidenceSpool {
             CLOSED
         }
 
+        private final ReentrantLock lock = new ReentrantLock();
         private volatile State state = State.OPEN;
 
         private Copy(
@@ -361,10 +407,11 @@ public final class EvidenceSpool {
         }
 
         @Override
-        public synchronized void close() throws IOException {
-            if (state == State.CLOSED) return;
-            state = State.REMOVING;
+        public void close() throws IOException {
+            lock.lock();
             try {
+                if (state == State.CLOSED) return;
+                state = State.REMOVING;
                 FileSystemUtils.deleteRecursively(path);
                 // The lease is released only after the payload is physically removed.
                 Files.deleteIfExists(entry.resolve(LEASE));
@@ -380,6 +427,8 @@ public final class EvidenceSpool {
             } catch (RuntimeException failure) {
                 recordRemovalFailure(failure);
                 throw new IOException("Could not release evidence-copy custody", failure);
+            } finally {
+                lock.unlock();
             }
         }
 

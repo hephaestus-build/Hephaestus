@@ -12,6 +12,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitDetails;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitFileChange.ChangeType;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.testconfig.GitTestFixtures;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -86,7 +87,8 @@ class GitRepositoryManagerTest extends BaseUnitTest {
                 new FabricLayout(fabric.toString()),
                 GitTransportFixtures.guarded(),
                 mock(RepositoryRefState.class),
-                GitTransportFixtures.copyFence());
+                GitTransportFixtures.copyFence(),
+                new SimpleMeterRegistry());
     }
 
     @Test
@@ -445,7 +447,8 @@ class GitRepositoryManagerTest extends BaseUnitTest {
                     new FabricLayout(fabric.resolve("other-role").toString()),
                     GitTransportFixtures.guarded(),
                     mock(RepositoryRefState.class),
-                    GitTransportFixtures.copyFence());
+                    GitTransportFixtures.copyFence(),
+                    new SimpleMeterRegistry());
             other.ensureRepository(KEY, source.toUri().toString(), null);
             try (var first = manager.readTreeSnapshot(KEY, main);
                     var second = other.readTreeSnapshot(KEY, main);
