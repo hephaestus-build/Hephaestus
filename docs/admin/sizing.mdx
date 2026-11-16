@@ -86,6 +86,20 @@ Add your model's time to first token to these numbers.
 `conversation_turn_queue_wait_seconds` shows the wait before a turn starts on your installation.
 It also counts the wait behind an earlier question of the same conversation.
 
+### What these measurements qualify
+
+Hephaestus 1.0 is qualified at the caps of `small.yaml` on one node of 4 vCPU and 16 GiB.
+The caps are 5 reviews and 11 conversation turns at once.
+The server keeps its 3 GiB memory limit ([Memory headroom](#memory-headroom)).
+
+These measurements leave some loads out.
+Reviews and conversation turns did not run at full load in the same server at the same time.
+No round ran more than 5 reviews at once, or looked for the load at which a model provider slows down.
+Each round lasted less than one hour, so no peak of two hours and no soak of one day ran.
+The one host with gVisor was not measured.
+
+If you raise a cap, measure your installation with the signals in [Raise capacity](#raise-capacity).
+
 ## Raise capacity
 
 | To get | Change | Also needs |
