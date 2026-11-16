@@ -549,3 +549,30 @@ void test("each update of a package in the Fumadocs exception row waits for a ma
 	assert.ok(isRecord(config.lockFileMaintenance));
 	assert.ok(notes(config.lockFileMaintenance.prBodyNotes));
 });
+
+void test("catalog packages keep their batch, the React hold and one TypeScript update", () => {
+	assert.ok(Array.isArray(config.packageRules));
+	const rules = config.packageRules.filter(isRecord);
+	const matching = (predicate: (rule: Record<string, unknown>) => boolean) =>
+		rules.findLast(predicate);
+	const catalog = matching(
+		(rule) =>
+			Array.isArray(rule.matchDepTypes) && rule.matchDepTypes.includes("pnpm.catalog.default"),
+	);
+	assert.equal(catalog?.groupName, "webapp and extension dependencies");
+	const react = matching(
+		(rule) => Array.isArray(rule.matchPackageNames) && rule.matchPackageNames.includes("react"),
+	);
+	assert.equal(react?.allowedVersions, "<19.3");
+	const typescript = matching(
+		(rule) =>
+			Array.isArray(rule.matchPackageNames) &&
+			rule.matchPackageNames.includes("typescript") &&
+			Array.isArray(rule.matchFileNames) &&
+			rule.matchFileNames.includes("pnpm-workspace.yaml"),
+	);
+	assert.deepEqual(typescript?.matchFileNames, [
+		"pnpm-workspace.yaml",
+		"docker/agents/pi/package.json",
+	]);
+});
