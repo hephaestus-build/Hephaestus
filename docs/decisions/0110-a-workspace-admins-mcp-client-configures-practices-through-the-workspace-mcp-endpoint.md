@@ -199,7 +199,7 @@ No tool returns:
 Only two kinds of free text go out: catalog content and workspace configuration.
 A workspace admin of the same workspace, or the catalog maintainers, wrote it.
 A different admin of the same workspace can therefore plant instructions in practice text, and a write that a client makes because of them is recorded under the account that approved the client.
-The tool descriptions are static, and they state that the fields `criteria`, `guidance`, `script` and `whyItMatters` are configuration text to treat as data.
+The tool descriptions are static, and they state that the practice definition, including `criteria`, `guidance` and `script`, and the catalog's `whyItMatters` are configuration text to treat as data.
 Every result is JSON in `structuredContent`, with free text only in those named fields.
 The consent page shows the client's self-declared name as plain text below the host that the client cannot choose.
 

@@ -3,10 +3,12 @@ package de.tum.cit.aet.hephaestus.core.mcp;
 import de.tum.cit.aet.hephaestus.core.auth.mcp.McpCallGrant;
 import de.tum.cit.aet.hephaestus.core.auth.mcp.McpGrantGuard;
 import de.tum.cit.aet.hephaestus.core.auth.mcp.McpScope;
+import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
+import org.springframework.http.MediaType;
 import org.springframework.web.servlet.function.HandlerFilterFunction;
 import org.springframework.web.servlet.function.HandlerFunction;
 import org.springframework.web.servlet.function.ServerRequest;
@@ -46,7 +48,9 @@ final class McpWriteScopeFilter implements HandlerFilterFunction<ServerResponse,
             return next.handle(request);
         }
         byte[] body = request.body(byte[].class);
-        if (callsAWriteTool(body)) {
+        Charset charset =
+                request.headers().contentType().map(MediaType::getCharset).orElse(StandardCharsets.UTF_8);
+        if (callsAWriteTool(new String(body, charset))) {
             return grantGuard.insufficientScope(request.pathVariable("workspaceSlug"), McpScope.WRITE);
         }
         // The body is read once; the MCP server reads this copy of it.
@@ -54,14 +58,14 @@ final class McpWriteScopeFilter implements HandlerFilterFunction<ServerResponse,
     }
 
     /**
-     * A JSON-RPC message, or a batch of them, that calls a write tool. It reads the body as the MCP server does, as UTF-8
-     * text with malformed bytes replaced, so the two cannot see different messages. A body that is not JSON goes on to
+     * A JSON-RPC message, or a batch of them, that calls a write tool. It reads the body as the MCP server does, as text
+     * in the request's charset with malformed bytes replaced, so the two cannot see different messages. A body that is not JSON goes on to
      * the server's own refusal; the tool invocation checks the scope again in any case.
      */
-    private boolean callsAWriteTool(byte[] body) {
+    private boolean callsAWriteTool(String body) {
         JsonNode message;
         try {
-            message = jsonMapper.readTree(new String(body, StandardCharsets.UTF_8));
+            message = jsonMapper.readTree(body);
         } catch (JacksonException malformed) {
             return false;
         }
