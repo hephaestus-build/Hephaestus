@@ -416,7 +416,8 @@ describe("source-control credential recovery", () => {
 
 		const installationLink = await screen.findByRole(
 			"link",
-			{ name: "Manage installation on GitHub" },
+			// jsdom's name drops the space before the new-tab words; Chromium keeps it, and the stories check it.
+			{ name: /^Manage installation on GitHub/u },
 			ROUTE_RENDER_WAIT,
 		);
 		expect(installationLink.getAttribute("href")).toBe("https://github.com/settings/installations");
