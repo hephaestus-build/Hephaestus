@@ -309,6 +309,8 @@ A test waits for the event that it needs, not for a fixed time.
 CI keeps the summary with those reports.
 The `coverage.thresholds` in `webapp/vite.config.ts` set a floor for statements, branches, functions and lines.
 The run fails when coverage falls below a floor.
+
+In CI, each of the three test shards runs without the floors, and the `Webapp test report` job checks them on the merged coverage of all three.
 When coverage rises, raise the floors to the new values, rounded down to whole percent.
 The floors are set by hand: Vitest's `autoUpdate` would rewrite the config on every local run.
 

@@ -60,7 +60,7 @@ Workflow lint
 Security / Dependencies, secrets and policy
 Image advisories
 Pinned upstream images
-Quality / Server, Webapp, Extension, Tooling and docs, Tooling and docs tests (1 of 2), Tooling and docs tests (2 of 2), Windows, Clean install, Webapp stories
+Quality / Server, Webapp, Webapp tests (1 of 3), Webapp tests (2 of 3), Webapp tests (3 of 3), Webapp test report, Extension, Tooling and docs, Tooling and docs tests (1 of 2), Tooling and docs tests (2 of 2), Windows, Clean install, Webapp stories
 Server package
 Build / Generated API, Database migrations, PostgreSQL drills
 Server tests / Unit, Architecture, Integration (review), Integration (1 of 8) … Integration (8 of 8)
@@ -107,7 +107,8 @@ The job's own limit cancels the run and can lose its log, so the list is the evi
 | ------------------------------------- | ----------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Quality → Server | Spotless and PMD, NullAway policy, the test analysis (`gate:server-test-analysis`), the PMD canary when PMD inputs changed, source-use contracts, setting delivery per runtime role. On a pull request that changes Gradle inputs, the verification metadata check | `vp run gate:server`, `gate:java-nullness`, `gate:contracts`, `gate:env`, `node scripts/check-gradle-verification-metadata.ts` |
 | Quality → Tooling and docs                                              | toolchain and agent-runtime pins, the runner and lint contracts, `gate:agents`, load-test format and syntax, agent specs, instruction mirrors, docs format and `docs:lint`, Mermaid parse. The pinned ShellCheck on every tracked `.sh` script and the Git hooks | `vp run gate:agents`, `gate:docs`, `test:agents`, `gate:shell`           |
-| Quality → Webapp                                                        | `vp check`, presentational components, story prose, docs color tokens, unit tests with [coverage floors](testing.mdx#web-app-coverage), Vite build with a `routeTree.gen.ts` diff and the bundle budget against the base build                                                               | `vp run check:webapp`, `test:webapp`, `verification:webapp-build`        |
+| Quality → Webapp                                                        | `vp check`, presentational components, story prose, docs color tokens, Vite build with a `routeTree.gen.ts` diff and the bundle budget against the base build                                                               | `vp run check:webapp`, `test:webapp`, `verification:webapp-build`        |
+| Quality → Webapp tests (1 of 3) to (3 of 3), Webapp test report | One third of the web app's unit tests each. The report merges the three, checks the [coverage floors](testing.mdx#web-app-coverage) on the whole suite and runs the lint-rule tests | `vp run test:webapp` |
 | Quality → Webapp stories                                               | Storybook interaction tests, `export:assets` diff, Storybook build, Chromatic                                                                                                                             | `vp run test:webapp:stories`                                             |
 | Quality → Extension                                                     | `vp check` for `extension/`, format, unit and story tests, the production zip and its manifest check. Keeps the zip as `extension-chrome-*`                                                               | `vp run ci:extension`                                                    |
 | Quality → Windows                                                       | Every gate that needs neither Gradle, Docker nor the agent sandbox, on `windows-latest`, uncached                                                                                                         | `vp run --no-cache ci:windows`                                           |
@@ -1341,6 +1342,12 @@ Right after a merge, that run is still building, so the pull request builds ever
   Those two suites took 9 of the leg's 12 minutes in one job.
   `HEPHAESTUS_NODE_TEST_SHARD` (`1/2` or `2/2`) passes Node's [`--test-shard`](https://nodejs.org/api/cli.html#--test-shard) to both suites, so each test file runs in exactly one half.
   Locally the variable is unset, and each suite runs whole.
+- The `Webapp` leg runs its gates and build in one job and its unit tests in three, with Vitest's `--shard`.
+  The unit tests took most of the leg's time in one job.
+  Vitest assigns each file by a hash of its path, and the thirds take about the same time.
+  Each shard writes a blob report without the coverage floors.
+  `Webapp test report` merges them with `--merge-reports`, so the floors and the test report cover the whole suite.
+  It runs after a failed shard too, to report the failures.
   The two native platform jobs run independently. No matrix cancels a sibling.
   A failed platform cancels a merge group through the isolated helper. Other events collect both scans.
 - All images of a run share one build job per platform and one manifest job.

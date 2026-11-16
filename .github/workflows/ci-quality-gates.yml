@@ -128,6 +128,15 @@ jobs:
         if: env.QUALITY_LEG == 'extension'
         uses: ./.github/actions/setup-browsers
 
+      # The report leg merges the shards' blob reports into one result for the whole suite.
+      - name: Download the web app's test shards
+        if: env.QUALITY_LEG == 'webapp-report'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: webapp-tests-*-blob-${{ github.run_attempt }}
+          path: webapp/test-results/blobs
+          merge-multiple: true
+
       - name: Quality gates
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -144,6 +153,8 @@ jobs:
             server) deadline vp run ci:server ;;
             tooling) if [ -n "$HEPHAESTUS_NODE_TEST_SHARD" ]; then deadline vp run ci:tooling-tests; else deadline vp run ci:tooling; fi ;;
             webapp) deadline vp run ci:webapp ;;
+            webapp-tests) deadline vp run ci:webapp-tests ;;
+            webapp-report) deadline vp run ci:webapp-test-report ;;
             extension) node scripts/ci-browser.ts node scripts/ci-deadline.ts 900 vp run ci:extension ;;
             windows) deadline vp run --no-cache ci:windows ;;
             *) echo "::error::Unknown quality leg: $LEG"; exit 1 ;;
@@ -152,6 +163,16 @@ jobs:
       - name: Task report
         if: ${{ !cancelled() }}
         run: vp run --last-details | node scripts/report-task-run.ts
+
+      # A shard with failing tests still writes its blob, so the report names the failures.
+      - name: Upload the web app's test shard
+        if: env.QUALITY_LEG == 'webapp-tests' && !cancelled()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ${{ github.job }}-blob-${{ github.run_attempt }}
+          path: webapp/test-results/blobs
+          if-no-files-found: error
+          retention-days: 1
 
       # The log names a file that PMD could not analyze, not why; its XML report keeps the stack trace.
       - name: Retain the PMD report
@@ -220,11 +241,11 @@ jobs:
           test "$(cat "$probe")" = ran
 
       - name: Upload application test results
-        if: (env.QUALITY_LEG == 'webapp' || env.QUALITY_LEG == 'extension') && !cancelled()
+        if: (env.QUALITY_LEG == 'webapp-report' || env.QUALITY_LEG == 'extension') && !cancelled()
         uses: dorny/test-reporter@d1b5dff021aa968b288b02285a8bf47471c5928a # v3.2.0
         with:
-          name: "Test Results - ${{ env.QUALITY_LEG == 'webapp' && 'Webapp' || 'Extension' }}"
-          path: "${{ env.QUALITY_LEG }}/test-results/junit-*.xml"
+          name: "Test Results - ${{ env.QUALITY_LEG == 'extension' && 'Extension' || 'Webapp' }}"
+          path: "${{ env.QUALITY_LEG == 'extension' && 'extension' || 'webapp' }}/test-results/junit-*.xml"
           reporter: java-junit
           list-suites: failed
           list-tests: failed
@@ -234,27 +255,27 @@ jobs:
           fail-on-empty: ${{ job.status == 'success' }}
 
       - name: Retain application test reports
-        if: (env.QUALITY_LEG == 'webapp' || env.QUALITY_LEG == 'extension') && !cancelled()
+        if: (env.QUALITY_LEG == 'webapp-report' || env.QUALITY_LEG == 'extension') && !cancelled()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: ${{ env.QUALITY_LEG }}-unit-reports-${{ github.run_attempt }}
-          path: ${{ env.QUALITY_LEG }}/test-results
+          name: ${{ env.QUALITY_LEG == 'extension' && 'extension' || 'webapp' }}-unit-reports-${{ github.run_attempt }}
+          path: ${{ env.QUALITY_LEG == 'extension' && 'extension' || 'webapp' }}/test-results
           retention-days: 14
           if-no-files-found: warn
 
       - name: Summarize application tests
-        if: (env.QUALITY_LEG == 'webapp' || env.QUALITY_LEG == 'extension') && !cancelled()
+        if: (env.QUALITY_LEG == 'webapp-report' || env.QUALITY_LEG == 'extension') && !cancelled()
         continue-on-error: true
         env:
-          APPLICATION_LEG: ${{ env.QUALITY_LEG }}
+          APPLICATION_LEG: ${{ env.QUALITY_LEG == 'extension' && 'extension' || 'webapp' }}
         run: vp run report:test-results "$APPLICATION_LEG tests" "$APPLICATION_LEG/test-results" "ci-metrics/$APPLICATION_LEG-unit.json"
 
       - name: Upload application test metrics
-        if: (env.QUALITY_LEG == 'webapp' || env.QUALITY_LEG == 'extension') && !cancelled()
+        if: (env.QUALITY_LEG == 'webapp-report' || env.QUALITY_LEG == 'extension') && !cancelled()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: test-metrics-${{ env.QUALITY_LEG }}-unit
-          path: ci-metrics/${{ env.QUALITY_LEG }}-unit.json
+          name: test-metrics-${{ env.QUALITY_LEG == 'extension' && 'extension' || 'webapp' }}-unit
+          path: ci-metrics/${{ env.QUALITY_LEG == 'extension' && 'extension' || 'webapp' }}-unit.json
           if-no-files-found: ignore
           retention-days: 14
 
@@ -290,6 +311,77 @@ jobs:
         shell: bash
     env:
       QUALITY_LEG: webapp
+      NODE_TEST_SHARD: ""
+    steps: *quality-steps
+
+  webapp-tests-1:
+    name: Webapp tests (1 of 3)
+    if: inputs.should_skip != 'true' && inputs.webapp_changed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      checks: write
+      packages: read
+    defaults:
+      run:
+        shell: bash
+    env:
+      QUALITY_LEG: webapp-tests
+      NODE_TEST_SHARD: "1/3"
+    steps: *quality-steps
+
+  webapp-tests-2:
+    name: Webapp tests (2 of 3)
+    if: inputs.should_skip != 'true' && inputs.webapp_changed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      checks: write
+      packages: read
+    defaults:
+      run:
+        shell: bash
+    env:
+      QUALITY_LEG: webapp-tests
+      NODE_TEST_SHARD: "2/3"
+    steps: *quality-steps
+
+  webapp-tests-3:
+    name: Webapp tests (3 of 3)
+    if: inputs.should_skip != 'true' && inputs.webapp_changed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      checks: write
+      packages: read
+    defaults:
+      run:
+        shell: bash
+    env:
+      QUALITY_LEG: webapp-tests
+      NODE_TEST_SHARD: "3/3"
+    steps: *quality-steps
+
+  # The coverage floors and the test report cover the whole suite, so one job merges the shards.
+  # It runs after a failed shard too, to report the failures.
+  webapp-test-report:
+    name: Webapp test report
+    needs: [webapp-tests-1, webapp-tests-2, webapp-tests-3]
+    if: ${{ !cancelled() && inputs.should_skip != 'true' && inputs.webapp_changed == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      checks: write
+      packages: read
+    defaults:
+      run:
+        shell: bash
+    env:
+      QUALITY_LEG: webapp-report
       NODE_TEST_SHARD: ""
     steps: *quality-steps
 
@@ -584,6 +676,38 @@ jobs:
   fail-fast-webapp:
     name: Stop the merge group early
     needs: [webapp]
+    if: ${{ always() && github.event_name == 'merge_group' && contains(needs.*.result, 'failure') }}
+    permissions:
+      actions: write
+    uses: ./.github/workflows/merge-group-cancel.yml
+
+  fail-fast-webapp-tests-1:
+    name: Stop the merge group early
+    needs: [webapp-tests-1]
+    if: ${{ always() && github.event_name == 'merge_group' && contains(needs.*.result, 'failure') }}
+    permissions:
+      actions: write
+    uses: ./.github/workflows/merge-group-cancel.yml
+
+  fail-fast-webapp-tests-2:
+    name: Stop the merge group early
+    needs: [webapp-tests-2]
+    if: ${{ always() && github.event_name == 'merge_group' && contains(needs.*.result, 'failure') }}
+    permissions:
+      actions: write
+    uses: ./.github/workflows/merge-group-cancel.yml
+
+  fail-fast-webapp-tests-3:
+    name: Stop the merge group early
+    needs: [webapp-tests-3]
+    if: ${{ always() && github.event_name == 'merge_group' && contains(needs.*.result, 'failure') }}
+    permissions:
+      actions: write
+    uses: ./.github/workflows/merge-group-cancel.yml
+
+  fail-fast-webapp-test-report:
+    name: Stop the merge group early
+    needs: [webapp-test-report]
     if: ${{ always() && github.event_name == 'merge_group' && contains(needs.*.result, 'failure') }}
     permissions:
       actions: write

@@ -2060,7 +2060,7 @@ void describe("CI contract", () => {
 						).parse();
 						const context: unknown = JSON.parse(
 							JSON.stringify({
-								env: { QUALITY_LEG: "webapp" },
+								env: { QUALITY_LEG: "webapp-report" },
 								steps: {
 									chromatic: { outputs: { storybookUrl: "https://example.test/storybook" } },
 								},
@@ -8337,3 +8337,47 @@ void test(
 		assert.doesNotMatch(empty.calls, /^gh run rerun /mu);
 	},
 );
+
+void test("the web app's unit test shards cover the suite once, and one report merges them all", async () => {
+	const workflow = asRecord(
+		parseDocument(await readFile(".github/workflows/ci-quality-gates.yml", "utf8")).toJS(),
+		"workflow",
+	);
+	const jobs = asRecord(workflow.jobs, "jobs");
+	const shards = Object.entries(jobs)
+		.map(([key, value]) => [key, asRecord(value, key).env] as const)
+		.filter(([, env]) => isRecord(env) && env.QUALITY_LEG === "webapp-tests")
+		.map(([key, env]) => [key, asRecord(env, `${key} env`)] as const);
+	const total = shards.length;
+	assert.ok(total >= 2, "the web app's unit tests run in shards");
+	// Every index from 1 to the total, once, each with the same total: Vitest then runs each file once.
+	assert.deepEqual(
+		shards.map(([, env]) => String(env.NODE_TEST_SHARD)).toSorted((a, b) => a.localeCompare(b)),
+		Array.from({ length: total }, (_, index) => `${String(index + 1)}/${String(total)}`),
+	);
+	// The report needs every shard and runs after a failed one; the gate judges the reusable
+	// workflow, so a failed shard or report fails `Quality` and CI Status Gate.
+	const report = asRecord(jobs["webapp-test-report"], "webapp-test-report");
+	assert.deepEqual(
+		asStringArray(report.needs, "report needs").toSorted(),
+		shards.map(([key]) => key).toSorted(),
+	);
+	assert.match(String(report.if), /!cancelled\(\)/u);
+	assert.equal(asRecord(report.env, "report env").QUALITY_LEG, "webapp-report");
+	const tasks = await readFile("vite.config.ts", "utf8");
+	// A shard drops the coverage floors, and the merged report applies them to the whole suite.
+	assert.match(
+		tasks,
+		/"ci:webapp-tests": run\(\s*`vp -C webapp test --run --coverage \$\{noCoverageFloors\}/u,
+	);
+	assert.match(tasks, /--reporter=blob/u);
+	assert.match(
+		tasks,
+		/"vp -C webapp test --run --merge-reports=\.\/test-results\/blobs --coverage"/u,
+	);
+	const config = await readFile("webapp/vite.config.ts", "utf8");
+	assert.match(
+		config,
+		/thresholds: \{ statements: \d+, branches: \d+, functions: \d+, lines: \d+ \}/u,
+	);
+});
