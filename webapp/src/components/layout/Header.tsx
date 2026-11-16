@@ -26,7 +26,6 @@ import { type EnvironmentTone, resolveHeaderBadge } from "./version";
 
 const ENV_DOT: Record<EnvironmentTone, string> = {
 	staging: "bg-warning",
-	preview: "bg-highlight",
 	local: "bg-muted-foreground/50",
 };
 
@@ -35,8 +34,6 @@ export interface HeaderProps {
 	version: string;
 	environmentName: string;
 	isProduction: boolean;
-	/** The pull request a preview deployment is of; absent on every other environment. */
-	pullRequest?: number;
 	/** Unavailable means that the server cannot say who is signed in, so the header offers no sign-in. */
 	session: Session;
 	name?: string;
@@ -56,7 +53,6 @@ export default function Header({
 	version,
 	environmentName,
 	isProduction,
-	pullRequest,
 	session,
 	name,
 	username,
@@ -70,7 +66,7 @@ export default function Header({
 }: HeaderProps) {
 	const initials = getInitials(name, username);
 	const hasWorkspace = Boolean(workspaceSlug);
-	const badge = resolveHeaderBadge(version, environmentName, isProduction, pullRequest);
+	const badge = resolveHeaderBadge(version, environmentName, isProduction);
 	const logo = (
 		<span className="inline-flex">
 			<HephaestusLogo
@@ -127,22 +123,9 @@ export default function Header({
 						</Tooltip>
 					) : (
 						<Tooltip>
-							<TooltipTrigger
-								render={
-									<Badge
-										variant="muted"
-										className="hidden sm:inline-flex"
-										render={
-											hasText(badge.href) ? (
-												<a href={badge.href} target="_blank" rel="noopener noreferrer" />
-											) : undefined
-										}
-									/>
-								}
-							>
+							<TooltipTrigger render={<Badge variant="muted" className="hidden sm:inline-flex" />}>
 								<span className={cn("size-1.5 rounded-full", ENV_DOT[badge.tone])} />
 								{badge.label}
-								{hasText(badge.href) && <OutboundMark />}
 							</TooltipTrigger>
 							<TooltipContent>{badge.tooltip}</TooltipContent>
 						</Tooltip>

@@ -57,36 +57,6 @@ export const Staging: Story = {
 	},
 };
 
-export const Preview: Story = {
-	args: {
-		session: "signed-in",
-		environmentName: "Preview",
-		isProduction: false,
-	},
-};
-
-export const PreviewOfAPullRequest: Story = {
-	args: {
-		session: "signed-in",
-		environmentName: "Preview",
-		isProduction: false,
-		pullRequest: 2042,
-	},
-	play: async ({ canvas }) => {
-		// Every preview is called "Preview", so the pill has to say which pull request it is of and
-		// take the reader there. Queried by the visible text, which is what names the link: an
-		// accessible name that omits it is one a speech-input user cannot say. The link opens a new
-		// tab, so its name ends with the words that say so.
-		const link = await canvas.findByRole("link", {
-			name: "Preview · PR #2042 (opens in a new tab)",
-		});
-		await expect(link).toHaveAttribute(
-			"href",
-			"https://github.com/hephaestus-build/Hephaestus/pull/2042",
-		);
-	},
-};
-
 export const Development: Story = {
 	args: {
 		session: "signed-in",

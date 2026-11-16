@@ -346,7 +346,6 @@ function HeaderContainer() {
 			sidebarTrigger={isAuthenticated && <SidebarToggle />}
 			version={environment.version}
 			environmentName={environment.deployment.name}
-			pullRequest={environment.deployment.pullRequest}
 			isProduction={environment.deployment.isProduction}
 			session={session}
 			name={effectiveName}
