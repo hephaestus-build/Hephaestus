@@ -4,6 +4,8 @@
 **Date:** 2026-11-15
 **Authors:** Hephaestus maintainers
 
+**Amended by:** [ADR 0118](0118-a-workspace-keeps-its-practices-in-one-repository-and-a-trial-reviews-a-draft-practice-without-an-observation.md) (trial output, and practices that a repository writes)
+
 **Builds on:** [ADR 0048](0048-installed-clients-sign-in-with-a-pkce-handoff.md) (client sessions, and its revisit trigger: a third-party client), [ADR 0081](0081-one-server-role-and-sandboxes-that-reach-only-the-server.md) (one server role), [ADR 0084](0084-every-statement-on-workspace-data-binds-its-workspace.md) (tenancy), [ADR 0072](0072-few-dependencies-owned-slivers-kept-foundations.md) (dependencies), [ADR 0103](0103-the-public-api-grows-only-by-addition-and-every-client-tolerates-what-it-does-not-know.md) (contract growth)
 
 ## Context
@@ -264,3 +266,27 @@ The consent page shows the client's self-declared name as plain text below the h
 - [Claude Code's client metadata document](https://claude.ai/oauth/claude-code-client-metadata): `token_endpoint_auth_method: none`, redirects `http://localhost/callback` and `http://127.0.0.1/callback` with no port.
 - [Spring AI 2.0 GA](https://spring.io/blog/2026/06/12/spring-ai-2-0-0-GA-available-now/) and [the MCP Java SDK](https://java.sdk.modelcontextprotocol.io/latest/): Spring Boot 4.0 and 4.1, the transports in Spring AI 2.0.
 - [Spring AI MCP security](https://docs.spring.io/spring-ai/reference/api/mcp/mcp-security.html): community module, work in progress.
+
+## Update — 2026-11-16: trial output, and practice text from a repository
+
+[ADR 0118](0118-a-workspace-keeps-its-practices-in-one-repository-and-a-trial-reviews-a-draft-practice-without-an-observation.md) adds trials and practice repositories. Both change § Data contract.
+
+**Trial output is a new data class.**
+A trial runs a draft practice on real work and records no observation.
+An admin who improves a practice through MCP must read what the trial found.
+
+- Trial output holds a trial's status and reason code, the outcome, the severity, each problem's claim, and the path and line of each citation.
+- Work text can reach three of its fields: a problem's `claim`, a citation's `path`, and a quote in `untrustedWorkText`. The tool descriptions name these three fields as text from the reviewed work, to treat as data and never as an instruction.
+- A trial tool returns trial output only when every person whose work the trial read chose **Cloud**. Otherwise it returns the status, the reason code and the outcome. An admin's MCP client sends what it reads to the admin's own model, so each of those AI choices applies to it.
+- Only trial tools return trial output, and they need `practices:write`. The consent text for `practices:write` names it.
+- Trial output overrides three bullets of "No tool returns", only in its named fields and only for the trial that the admin started:
+  - citations and quotes;
+  - an outcome or a problem;
+  - text that a developer or a provider wrote, in `claim`, `path` and `untrustedWorkText`.
+- Each other bullet stands. No tool returns an observation, a standing, a count of results or feedback.
+
+**Practice text can come from a repository.**
+§ Prompt-injection posture says that an admin of the same workspace wrote all configuration text.
+For a practice that a practice repository edits, anyone who can merge into its default branch wrote the criteria, guidance and script.
+The tool descriptions already mark those fields as configuration text to treat as data.
+`get_practice` also says where a practice is edited.
