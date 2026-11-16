@@ -1,0 +1,68 @@
+{
+	"schema": "ichnaea.suite/1",
+	"id": "composition-set",
+	"version": "2",
+	"objective": "A change to the feedback composer or its prompts does not make its review decisions worse.",
+	"construct": "The composer's raise and withhold decisions, main's acceptance and mechanical cleanliness, on fixed synthetic cases.",
+	"decision": "Merge, hold or roll back a change to the feedback composer, its prompts or the practices it reads.",
+	"scope": "The 72 cases of the composition set under fixed-cases: on these 72 cases, beyond run-to-run noise.",
+	"nonCoverage": "New inputs, the wording quality of feedback, the developer's practice pages and conversations, and the practice review runtime.",
+	"estimand": "fixed-cases",
+	"caseSet": {
+		"id": "composition-set",
+		"path": "scripts/feedback-eval/ichnaea/case-set.json",
+		"digest": "sha256:83a8447d5bcee5bc33c0afa288a90aedcf9278279dcdffe078379b12c6f18fca"
+	},
+	"replicates": 2,
+	"replicatesFor": [
+		{
+			"slice": "expected",
+			"value": "withhold",
+			"replicates": 3,
+			"reason": "Withhold correctness applies to 29 cases. A third trial on each raises its power to find a drop, for 29 more model calls per arm."
+		}
+	],
+	"primary": [
+		{
+			"measure": "hephaestus/accepted",
+			"margin": 0.1,
+			"marginStatus": "registered",
+			"marginReason": "Up to a 10-point drop in first-pass acceptance costs retries but no trust; more than that degrades delivery noticeably. Registered by the coordinator for the maintainer on 16 November 2026, before the first no-change run."
+		},
+		{
+			"measure": "hephaestus/mechanically-clean",
+			"margin": 0.05,
+			"marginStatus": "registered",
+			"marginReason": "Mechanical defects are visible to every reader and should be near zero; a 5-point rise is a real regression. Registered by the coordinator for the maintainer on 16 November 2026, before the first no-change run."
+		},
+		{
+			"measure": "hephaestus/raises-expected",
+			"margin": 0.1,
+			"marginStatus": "registered",
+			"marginReason": "Missed raises lose value but send nothing wrong. Registered by the coordinator for the maintainer on 16 November 2026, before the first no-change run."
+		},
+		{
+			"measure": "hephaestus/withholds-expected",
+			"margin": 0.05,
+			"marginStatus": "registered",
+			"marginReason": "A wrong send is a trust failure, so the cap is the tightest. Registered by the coordinator for the maintainer on 16 November 2026, before the first no-change run."
+		}
+	],
+	"secondary": [
+		"hephaestus/case-good"
+	],
+	"budget": {
+		"maxCalls": 4152,
+		"callsPerTrial": 12
+	},
+	"policy": {
+		"onRegression": "block",
+		"onInconclusive": "report",
+		"onEstimateOnly": "report"
+	},
+	"threats": [
+		"The composition set is public and used to develop prompts, so the decision can overfit it.",
+		"The cases are synthetic; they stand for the work the composer meets, not a sample of it."
+	],
+	"measureReviewDate": "2027-05-01"
+}

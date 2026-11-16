@@ -23,8 +23,8 @@ const first = (): CompositionSet => {
 	return copy;
 };
 
-void test("the composition set holds 60 cases and labels every rubric code", () => {
-	assert.equal(set.cases.length, 60);
+void test("the composition set holds 72 cases and labels every rubric code", () => {
+	assert.equal(set.cases.length, 72);
 	const used = new Set(
 		set.cases.flatMap((item) => item.compositions.flatMap((each) => each.label.codes)),
 	);

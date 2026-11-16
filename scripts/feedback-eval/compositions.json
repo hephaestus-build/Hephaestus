@@ -10970,6 +10970,1800 @@
 				}
 			],
 			"criteriaQuestion": null
+		},
+		{
+			"limits": [],
+			"notReached": [],
+			"alreadySaid": [],
+			"discussion": [],
+			"discussionCapture": "COMPLETE",
+			"criteriaQuestion": null,
+			"id": "wh-e-01-commented-out-line-in-view-ios",
+			"provider": "github",
+			"theme": "below-bar",
+			"work": {
+				"repository": "basil-apps/pantry",
+				"number": 58,
+				"title": "Show the quantity of each pantry item",
+				"description": "Adds the quantity to each row of the shelf list so people see how much is left without opening the item.\n\nOpen the shelf in the simulator and check that each row shows its quantity.",
+				"state": "open",
+				"draft": false,
+				"sourceBranch": "feat/shelf-quantity",
+				"targetBranch": "main",
+				"author": "ines-okafor"
+			},
+			"files": {
+				"Sources/Pantry/ShelfView.swift": "import SwiftUI\n\nstruct ShelfView: View {\n    let items: [PantryItem]\n\n    var body: some View {\n        List(items) { item in\n            HStack {\n                Text(item.name)\n                Spacer()\n                // Text(item.brand)\n                Text(item.quantity.formatted())\n            }\n        }\n        .navigationTitle(\"Shelf\")\n    }\n}\n"
+			},
+			"results": [
+				{
+					"id": "r1",
+					"practice": "leaves-the-code-clean-with-intent-revealing-comments",
+					"summary": "One line of code is left commented out",
+					"explanation": "`// Text(item.brand)` keeps an old line as a comment in the row.",
+					"summaryOnly": false,
+					"citations": [
+						{
+							"path": "Sources/Pantry/ShelfView.swift",
+							"startLine": 11,
+							"endLine": 11
+						}
+					],
+					"problems": [
+						{
+							"id": "p1",
+							"summary": "Commented-out code in the row",
+							"explanation": "The comment holds a line of code that no longer runs.",
+							"severity": "TRIVIAL",
+							"nextStep": "Delete the commented-out line.",
+							"citations": [
+								{
+									"path": "Sources/Pantry/ShelfView.swift",
+									"startLine": 11,
+									"endLine": 11,
+									"anchorable": true
+								}
+							]
+						}
+					]
+				}
+			],
+			"expected": {
+				"r1": "BELOW_BAR"
+			},
+			"expectedWhy": "One commented-out line in a small view is trivial. It is not worth the author's attention, so nothing is written.",
+			"compositions": [
+				{
+					"id": "reference",
+					"review": {
+						"decisions": [
+							{
+								"resultId": "r1",
+								"disposition": "BELOW_BAR",
+								"witnessIds": []
+							}
+						],
+						"summary": null,
+						"inline": []
+					},
+					"label": {
+						"good": true,
+						"codes": [],
+						"why": "The only result is trivial and withheld; the review writes nothing."
+					}
+				},
+				{
+					"id": "alt-1",
+					"review": {
+						"decisions": [
+							{
+								"resultId": "r1",
+								"disposition": "RAISE",
+								"witnessIds": []
+							}
+						],
+						"summary": null,
+						"inline": [
+							{
+								"body": "`// Text(item.brand)` is a line of code left as a comment. Delete it.",
+								"basedOn": [
+									"p1"
+								],
+								"anchor": {
+									"problemId": "p1",
+									"citationIndex": 0
+								}
+							}
+						]
+					},
+					"label": {
+						"good": false,
+						"codes": [
+							"D1"
+						],
+						"why": "It raises a trivial point that the case says to withhold."
+					}
+				}
+			]
+		},
+		{
+			"limits": [],
+			"notReached": [],
+			"alreadySaid": [],
+			"discussion": [],
+			"discussionCapture": "COMPLETE",
+			"criteriaQuestion": null,
+			"id": "wh-e-02-swallowed-row-error-and-restating-comment-python",
+			"provider": "gitlab",
+			"theme": "below-bar",
+			"work": {
+				"repository": "ledgerline/back-office",
+				"number": 131,
+				"title": "Export invoices as CSV for the accountant",
+				"description": "Adds a CSV export of invoices so the accountant can import them.\n\nRun `pytest tests/billing` and open the exported file.",
+				"state": "open",
+				"draft": false,
+				"sourceBranch": "feat/invoice-csv",
+				"targetBranch": "main",
+				"author": "tomasz-wilk"
+			},
+			"files": {
+				"src/billing/export.py": "import csv\nimport logging\nfrom pathlib import Path\n\nlogger = logging.getLogger(__name__)\n\n\ndef export_invoices(invoices, target: Path) -> int:\n    written = 0\n    with target.open(\"w\", newline=\"\") as handle:\n        writer = csv.writer(handle)\n        for invoice in invoices:\n            try:\n                writer.writerow([invoice.number, invoice.total, invoice.currency])\n                # count the row\n                written += 1\n            except Exception:\n                pass\n    return written\n"
+			},
+			"results": [
+				{
+					"id": "r1",
+					"practice": "handles-errors-instead-of-swallowing-them",
+					"summary": "A failed row is dropped without a trace",
+					"explanation": "The `except Exception: pass` around `writer.writerow` hides every failure, so an invoice can be missing from the export with no record.",
+					"summaryOnly": false,
+					"citations": [
+						{
+							"path": "src/billing/export.py",
+							"startLine": 17,
+							"endLine": 18
+						}
+					],
+					"problems": [
+						{
+							"id": "p1",
+							"summary": "`except Exception: pass` discards export failures",
+							"explanation": "A row that fails to write is skipped silently, and the returned count does not show it.",
+							"severity": "MAJOR",
+							"nextStep": "Log the failed invoice number with `logger` or let the error reach the caller.",
+							"citations": [
+								{
+									"path": "src/billing/export.py",
+									"startLine": 17,
+									"endLine": 18,
+									"anchorable": true
+								}
+							]
+						}
+					]
+				},
+				{
+					"id": "r2",
+					"practice": "leaves-the-code-clean-with-intent-revealing-comments",
+					"summary": "One comment restates the next line",
+					"explanation": "`# count the row` repeats what `written += 1` does.",
+					"summaryOnly": false,
+					"citations": [
+						{
+							"path": "src/billing/export.py",
+							"startLine": 15,
+							"endLine": 15
+						}
+					],
+					"problems": [
+						{
+							"id": "p2",
+							"summary": "Comment restates the code",
+							"explanation": "The comment says what the next line already says.",
+							"severity": "TRIVIAL",
+							"nextStep": "Remove the comment.",
+							"citations": [
+								{
+									"path": "src/billing/export.py",
+									"startLine": 15,
+									"endLine": 15,
+									"anchorable": true
+								}
+							]
+						}
+					]
+				}
+			],
+			"expected": {
+				"r1": "RAISE",
+				"r2": "BELOW_BAR"
+			},
+			"expectedWhy": "The swallowed export error can lose an invoice and must be raised. The restating comment is trivial and is withheld.",
+			"compositions": [
+				{
+					"id": "reference",
+					"review": {
+						"decisions": [
+							{
+								"resultId": "r1",
+								"disposition": "RAISE",
+								"witnessIds": []
+							},
+							{
+								"resultId": "r2",
+								"disposition": "BELOW_BAR",
+								"witnessIds": []
+							}
+						],
+						"summary": null,
+						"inline": [
+							{
+								"body": "This `except Exception: pass` hides a failed `writerow`, so an invoice can drop out of the export unnoticed. Log the invoice number with `logger`, or let the error reach the caller.",
+								"basedOn": [
+									"p1"
+								],
+								"anchor": {
+									"problemId": "p1",
+									"citationIndex": 0
+								}
+							}
+						]
+					},
+					"label": {
+						"good": true,
+						"codes": [],
+						"why": "Raises the lost-invoice risk and stays quiet on the trivial comment."
+					}
+				},
+				{
+					"id": "alt-1",
+					"review": {
+						"decisions": [
+							{
+								"resultId": "r1",
+								"disposition": "RAISE",
+								"witnessIds": []
+							},
+							{
+								"resultId": "r2",
+								"disposition": "RAISE",
+								"witnessIds": []
+							}
+						],
+						"summary": null,
+						"inline": [
+							{
+								"body": "This `except Exception: pass` hides a failed `writerow`. Log the invoice number or let the error reach the caller.",
+								"basedOn": [
+									"p1"
+								],
+								"anchor": {
+									"problemId": "p1",
+									"citationIndex": 0
+								}
+							},
+							{
+								"body": "`# count the row` only repeats `written += 1`. Remove it.",
+								"basedOn": [
+									"p2"
+								],
+								"anchor": {
+									"problemId": "p2",
+									"citationIndex": 0
+								}
+							}
+						]
+					},
+					"label": {
+						"good": false,
+						"codes": [
+							"D1"
+						],
+						"why": "It also raises the trivial comment that the case says to withhold."
+					}
+				}
+			]
+		},
+		{
+			"limits": [],
+			"notReached": [],
+			"alreadySaid": [],
+			"discussion": [],
+			"discussionCapture": "COMPLETE",
+			"criteriaQuestion": null,
+			"id": "wh-e-03-two-repeated-lines-in-price-tag-web",
+			"provider": "github",
+			"theme": "below-bar",
+			"work": {
+				"repository": "orchard-shop/storefront",
+				"number": 402,
+				"title": "Add a compact price tag for the basket",
+				"description": "The basket needs a smaller price tag. `PriceTag` takes `compact` and switches its class.\n\nOpen the basket and check that prices use the compact style.",
+				"state": "open",
+				"draft": false,
+				"sourceBranch": "feat/compact-price",
+				"targetBranch": "main",
+				"author": "lucia-ferreira"
+			},
+			"files": {
+				"src/components/PriceTag.tsx": "type Props = { cents: number; currency: string; compact?: boolean };\n\nexport function PriceTag({ cents, currency, compact = false }: Props) {\n\tif (compact) {\n\t\tconst amount = (cents / 100).toFixed(2);\n\t\treturn <span className=\"price price--compact\">{amount} {currency}</span>;\n\t}\n\tconst amount = (cents / 100).toFixed(2);\n\treturn <span className=\"price\">{amount} {currency}</span>;\n}\n"
+			},
+			"results": [
+				{
+					"id": "r1",
+					"practice": "removes-duplication-instead-of-copy-pasting",
+					"summary": "The amount is formatted twice",
+					"explanation": "`(cents / 100).toFixed(2)` appears in both branches of `PriceTag`.",
+					"summaryOnly": false,
+					"citations": [
+						{
+							"path": "src/components/PriceTag.tsx",
+							"startLine": 4,
+							"endLine": 9
+						}
+					],
+					"problems": [
+						{
+							"id": "p1",
+							"summary": "One expression repeated in both branches",
+							"explanation": "The two branches differ only in the class name, and each formats the amount itself.",
+							"severity": "TRIVIAL",
+							"nextStep": "Format the amount once before the branch.",
+							"citations": [
+								{
+									"path": "src/components/PriceTag.tsx",
+									"startLine": 4,
+									"endLine": 9,
+									"anchorable": true
+								}
+							]
+						}
+					]
+				}
+			],
+			"expected": {
+				"r1": "BELOW_BAR"
+			},
+			"expectedWhy": "A single repeated expression in a ten-line component is trivial and does not warrant a note.",
+			"compositions": [
+				{
+					"id": "reference",
+					"review": {
+						"decisions": [
+							{
+								"resultId": "r1",
+								"disposition": "BELOW_BAR",
+								"witnessIds": []
+							}
+						],
+						"summary": null,
+						"inline": []
+					},
+					"label": {
+						"good": true,
+						"codes": [],
+						"why": "The repetition is trivial; nothing is written."
+					}
+				},
+				{
+					"id": "alt-1",
+					"review": {
+						"decisions": [
+							{
+								"resultId": "r1",
+								"disposition": "RAISE",
+								"witnessIds": []
+							}
+						],
+						"summary": {
+							"body": "`PriceTag` formats the amount in both branches. Compute it once before the `if`.",
+							"basedOn": [
+								"p1"
+							]
+						},
+						"inline": []
+					},
+					"label": {
+						"good": false,
+						"codes": [
+							"D1"
+						],
+						"why": "It raises a trivial repetition that the case says to withhold."
+					}
+				}
+			]
+		},
+		{
+			"limits": [],
+			"notReached": [],
+			"alreadySaid": [
+				{
+					"id": "w1",
+					"practice": "logs-through-the-platform-logger",
+					"deliveredAt": "2026-10-28T10:00:00Z",
+					"body": null,
+					"notes": [
+						{
+							"path": "src/main/kotlin/io/fernhill/rota/ShiftImporter.kt",
+							"line": 12,
+							"body": "This `println` reports a skipped shift. Use the class's `log` instead."
+						}
+					],
+					"currentness": "CURRENT",
+					"sameVersion": true
+				}
+			],
+			"discussion": [],
+			"discussionCapture": "COMPLETE",
+			"criteriaQuestion": null,
+			"id": "wh-e-04-println-said-on-same-head-kotlin",
+			"provider": "gitlab",
+			"theme": "already-said",
+			"work": {
+				"repository": "fernhill/rota-service",
+				"number": 88,
+				"title": "Skip shifts whose start is not before their end",
+				"description": "Rows with a start at or after their end are skipped, so one bad row no longer stops the import.\n\nRun `ShiftImporterTest`.",
+				"state": "open",
+				"draft": false,
+				"sourceBranch": "fix/skip-inverted-shifts",
+				"targetBranch": "main",
+				"author": "oskar-lind"
+			},
+			"files": {
+				"src/main/kotlin/io/fernhill/rota/ShiftImporter.kt": "package io.fernhill.rota\n\nimport org.slf4j.LoggerFactory\n\nclass ShiftImporter(private val repository: ShiftRepository) {\n    private val log = LoggerFactory.getLogger(ShiftImporter::class.java)\n\n    fun import(rows: List<ShiftRow>): Int {\n        var imported = 0\n        for (row in rows) {\n            if (row.start >= row.end) {\n                println(\"Skipping shift ${row.id}: start is not before end\")\n                continue\n            }\n            repository.save(row.toShift())\n            imported++\n        }\n        log.info(\"Imported {} shifts\", imported)\n        return imported\n    }\n}\n"
+			},
+			"results": [
+				{
+					"id": "r1",
+					"practice": "logs-through-the-platform-logger",
+					"summary": "A skipped shift is reported with `println`",
+					"explanation": "The importer reports a skipped row with `println`, although the class already has `log`.",
+					"summaryOnly": false,
+					"citations": [
+						{
+							"path": "src/main/kotlin/io/fernhill/rota/ShiftImporter.kt",
+							"startLine": 12,
+							"endLine": 12
+						}
+					],
+					"problems": [
+						{
+							"id": "p1",
+							"summary": "`println` used for a diagnostic",
+							"explanation": "The message bypasses the logger the class defines.",
+							"severity": "MINOR",
+							"nextStep": "Use `log.warn` for the skipped shift.",
+							"citations": [
+								{
+									"path": "src/main/kotlin/io/fernhill/rota/ShiftImporter.kt",
+									"startLine": 12,
+									"endLine": 12,
+									"anchorable": true
+								}
+							]
+						}
+					]
+				}
+			],
+			"expected": {
+				"r1": "ALREADY_SAID"
+			},
+			"expectedWhy": "The same advice was delivered on this same head, and nothing changed since. Saying it again adds nothing.",
+			"compositions": [
+				{
+					"id": "reference",
+					"review": {
+						"decisions": [
+							{
+								"resultId": "r1",
+								"disposition": "ALREADY_SAID",
+								"witnessIds": [
+									"w1"
+								]
+							}
+						],
+						"summary": null,
+						"inline": []
+					},
+					"label": {
+						"good": true,
+						"codes": [],
+						"why": "The delivered note still covers the point on the same head; the review stays quiet."
+					}
+				},
+				{
+					"id": "alt-1",
+					"review": {
+						"decisions": [
+							{
+								"resultId": "r1",
+								"disposition": "RAISE",
+								"witnessIds": []
+							}
+						],
+						"summary": null,
+						"inline": [
+							{
+								"body": "`println` reports the skipped shift here. Use `log.warn` instead.",
+								"basedOn": [
+									"p1"
+								],
+								"anchor": {
+									"problemId": "p1",
+									"citationIndex": 0
+								}
+							}
+						]
+					},
+					"label": {
+						"good": false,
+						"codes": [
+							"D1",
+							"Q8"
+						],
+						"why": "It raises advice already delivered on this head (D1) and repeats it (Q8)."
+					}
+				}
+			]
+		},
+		{
+			"limits": [],
+			"notReached": [],
+			"alreadySaid": [
+				{
+					"id": "w1",
+					"practice": "validates-inputs-and-edge-cases-at-the-boundary",
+					"deliveredAt": "2026-10-28T14:00:00Z",
+					"body": null,
+					"notes": [
+						{
+							"path": "src/routes/orders.ts",
+							"line": 8,
+							"body": "`limit` comes straight from the query. Reject values outside 1 to 100."
+						}
+					],
+					"currentness": "CURRENT",
+					"sameVersion": true
+				}
+			],
+			"discussion": [],
+			"discussionCapture": "COMPLETE",
+			"criteriaQuestion": null,
+			"id": "wh-e-05-limit-said-swallow-new-web",
+			"provider": "github",
+			"theme": "already-said",
+			"work": {
+				"repository": "tallow-co/orders-api",
+				"number": 276,
+				"title": "Let clients choose how many orders to list",
+				"description": "`GET /orders` reads `limit` from the query, so the dashboard can ask for fewer rows.\n\nCall `/orders?limit=5` and check that five orders come back.",
+				"state": "open",
+				"draft": false,
+				"sourceBranch": "feat/orders-limit",
+				"targetBranch": "main",
+				"author": "kemal-aydin"
+			},
+			"files": {
+				"src/routes/orders.ts": "import { Router } from \"express\";\n\nimport { listOrders } from \"../orders/repository.js\";\n\nexport const orders = Router();\n\norders.get(\"/orders\", async (req, res) => {\n\tconst limit = Number(req.query.limit ?? 50);\n\ttry {\n\t\tres.json(await listOrders({ limit }));\n\t} catch {\n\t\tres.json([]);\n\t}\n});\n"
+			},
+			"results": [
+				{
+					"id": "r1",
+					"practice": "validates-inputs-and-edge-cases-at-the-boundary",
+					"summary": "`limit` from the query is not bounded",
+					"explanation": "`Number(req.query.limit)` accepts 0, negative numbers and `NaN`, and any large value.",
+					"summaryOnly": false,
+					"citations": [
+						{
+							"path": "src/routes/orders.ts",
+							"startLine": 8,
+							"endLine": 8
+						}
+					],
+					"problems": [
+						{
+							"id": "p1",
+							"summary": "Unbounded `limit` from the request",
+							"explanation": "A client can ask for every order at once or pass a value that is not a number.",
+							"severity": "MINOR",
+							"nextStep": "Reject values outside 1 to 100 with a 400 response.",
+							"citations": [
+								{
+									"path": "src/routes/orders.ts",
+									"startLine": 8,
+									"endLine": 8,
+									"anchorable": true
+								}
+							]
+						}
+					]
+				},
+				{
+					"id": "r2",
+					"practice": "handles-errors-instead-of-swallowing-them",
+					"summary": "A failed query answers with an empty list",
+					"explanation": "The bare `catch` turns a database failure into `[]`, so the dashboard shows no orders instead of an error.",
+					"summaryOnly": false,
+					"citations": [
+						{
+							"path": "src/routes/orders.ts",
+							"startLine": 11,
+							"endLine": 12
+						}
+					],
+					"problems": [
+						{
+							"id": "p2",
+							"summary": "`catch` hides a failed `listOrders`",
+							"explanation": "The client cannot tell an outage from an empty result.",
+							"severity": "MAJOR",
+							"nextStep": "Let the error reach the error handler, or answer 500 and log it.",
+							"citations": [
+								{
+									"path": "src/routes/orders.ts",
+									"startLine": 11,
+									"endLine": 12,
+									"anchorable": true
+								}
+							]
+						}
+					]
+				}
+			],
+			"expected": {
+				"r1": "ALREADY_SAID",
+				"r2": "RAISE"
+			},
+			"expectedWhy": "The bound on `limit` was already delivered on this same head. The swallowed query failure was never said and hides outages, so it is raised.",
+			"compositions": [
+				{
+					"id": "reference",
+					"review": {
+						"decisions": [
+							{
+								"resultId": "r1",
+								"disposition": "ALREADY_SAID",
+								"witnessIds": [
+									"w1"
+								]
+							},
+							{
+								"resultId": "r2",
+								"disposition": "RAISE",
+								"witnessIds": []
+							}
+						],
+						"summary": null,
+						"inline": [
+							{
+								"body": "This `catch` answers `[]` when `listOrders` fails, so the dashboard shows no orders during an outage. Let the error reach the error handler, or answer 500 and log it.",
+								"basedOn": [
+									"p2"
+								],
+								"anchor": {
+									"problemId": "p2",
+									"citationIndex": 0
+								}
+							}
+						]
+					},
+					"label": {
+						"good": true,
+						"codes": [],
+						"why": "Only the new point is raised; the delivered note on `limit` is not repeated."
+					}
+				},
+				{
+					"id": "alt-1",
+					"review": {
+						"decisions": [
+							{
+								"resultId": "r1",
+								"disposition": "RAISE",
+								"witnessIds": []
+							},
+							{
+								"resultId": "r2",
+								"disposition": "RAISE",
+								"witnessIds": []
+							}
+						],
+						"summary": null,
+						"inline": [
+							{
+								"body": "`limit` is not bounded. Reject values outside 1 to 100.",
+								"basedOn": [
+									"p1"
+								],
+								"anchor": {
+									"problemId": "p1",
+									"citationIndex": 0
+								}
+							},
+							{
+								"body": "This `catch` answers `[]` when `listOrders` fails. Let the error reach the error handler.",
+								"basedOn": [
+									"p2"
+								],
+								"anchor": {
+									"problemId": "p2",
+									"citationIndex": 0
+								}
+							}
+						]
+					},
+					"label": {
+						"good": false,
+						"codes": [
+							"D1",
+							"Q8"
+						],
+						"why": "It repeats the delivered note on `limit` (D1, Q8) beside the new point."
+					}
+				}
+			]
+		},
+		{
+			"limits": [],
+			"notReached": [],
+			"alreadySaid": [
+				{
+					"id": "w1",
+					"practice": "avoids-unsafe-panics-and-chosen-crashes",
+					"deliveredAt": "2026-10-28T09:30:00Z",
+					"body": null,
+					"notes": [
+						{
+							"path": "Sources/Tides/TideClient.swift",
+							"line": 8,
+							"body": "This `URL(string:)!` crashes when the station name makes the URL invalid. Use `URLComponents` and throw instead."
+						}
+					],
+					"currentness": "CURRENT",
+					"sameVersion": false
+				}
+			],
+			"discussion": [],
+			"discussionCapture": "COMPLETE",
+			"criteriaQuestion": null,
+			"id": "wh-e-06-force-unwrap-unchanged-new-head-ios",
+			"provider": "github",
+			"theme": "already-said",
+			"work": {
+				"repository": "saltmarsh/tides-ios",
+				"number": 144,
+				"title": "Show the next high tide on the home screen",
+				"description": "Fetches the next high tide for the saved station.\n\nUpdate: decoding moved into `TideResponse`.\n\nCloses #139.",
+				"state": "open",
+				"draft": false,
+				"sourceBranch": "feat/next-high-tide",
+				"targetBranch": "main",
+				"author": "maren-holt"
+			},
+			"files": {
+				"Sources/Tides/TideClient.swift": "import Foundation\n\nstruct TideClient {\n    let session: URLSession\n    let station: String\n\n    func nextHighTide() async throws -> Date {\n        let url = URL(string: \"https://tides.example.org/v2/\\(station)/high\")!\n        let (data, _) = try await session.data(from: url)\n        let response = try JSONDecoder().decode(TideResponse.self, from: data)\n        return response.times.first ?? .distantFuture\n    }\n}\n"
+			},
+			"results": [
+				{
+					"id": "r1",
+					"practice": "avoids-unsafe-panics-and-chosen-crashes",
+					"summary": "The station URL is force-unwrapped",
+					"explanation": "`URL(string:)!` crashes the app when a station name holds a character that makes the URL invalid.",
+					"summaryOnly": false,
+					"citations": [
+						{
+							"path": "Sources/Tides/TideClient.swift",
+							"startLine": 8,
+							"endLine": 8
+						}
+					],
+					"problems": [
+						{
+							"id": "p1",
+							"summary": "Force unwrap of a URL built from input",
+							"explanation": "The station name is user data, so the unwrap can fail at run time.",
+							"severity": "MAJOR",
+							"nextStep": "Build the URL with `URLComponents` and throw when it is nil.",
+							"citations": [
+								{
+									"path": "Sources/Tides/TideClient.swift",
+									"startLine": 8,
+									"endLine": 8,
+									"anchorable": true
+								}
+							]
+						}
+					]
+				}
+			],
+			"expected": {
+				"r1": "NO_MATERIAL_CHANGE"
+			},
+			"expectedWhy": "The advice was given on an earlier head. The new head only moved decoding; the force unwrap is unchanged, so nothing new is worth saying. ALREADY_SAID is also acceptable.",
+			"compositions": [
+				{
+					"id": "reference",
+					"review": {
+						"decisions": [
+							{
+								"resultId": "r1",
+								"disposition": "NO_MATERIAL_CHANGE",
+								"witnessIds": [
+									"w1"
+								]
+							}
+						],
+						"summary": null,
+						"inline": []
+					},
+					"label": {
+						"good": true,
+						"codes": [],
+						"why": "The earlier note still stands on an unchanged line; the review stays quiet."
+					}
+				},
+				{
+					"id": "alt-1",
+					"review": {
+						"decisions": [
+							{
+								"resultId": "r1",
+								"disposition": "ALREADY_SAID",
+								"witnessIds": [
+									"w1"
+								]
+							}
+						],
+						"summary": null,
+						"inline": []
+					},
+					"label": {
+						"good": true,
+						"codes": [],
+						"why": "Withholding as ALREADY_SAID with w1 is equally supported."
+					}
+				},
+				{
+					"id": "alt-2",
+					"review": {
+						"decisions": [
+							{
+								"resultId": "r1",
+								"disposition": "RAISE",
+								"witnessIds": []
+							}
+						],
+						"summary": null,
+						"inline": [
+							{
+								"body": "`URL(string:)!` still crashes on an invalid station name. Use `URLComponents` and throw instead.",
+								"basedOn": [
+									"p1"
+								],
+								"anchor": {
+									"problemId": "p1",
+									"citationIndex": 0
+								}
+							}
+						]
+					},
+					"label": {
+						"good": false,
+						"codes": [
+							"D1",
+							"Q8"
+						],
+						"why": "It raises unchanged advice from the earlier note (D1) and repeats it (Q8)."
+					}
+				}
+			]
+		},
+		{
+			"limits": [],
+			"notReached": [],
+			"alreadySaid": [],
+			"discussion": [
+				{
+					"id": "d1",
+					"author": "hana-sato",
+					"body": "Please add a test for `parse_duration`: one per unit, and one that checks `ValueError` for something like `5x`.",
+					"statedAt": "2026-10-29T08:15:00Z",
+					"path": null,
+					"line": null
+				}
+			],
+			"discussionCapture": "COMPLETE",
+			"criteriaQuestion": null,
+			"id": "wh-e-07-reviewer-asked-for-parser-test-python",
+			"provider": "gitlab",
+			"theme": "reviewer-said",
+			"work": {
+				"repository": "brightwater/scheduler",
+				"number": 59,
+				"title": "Accept durations like 30s, 5m and 2h",
+				"description": "Job timeouts can now be written with a unit, for example `5m`.\n\nCloses #51.",
+				"state": "open",
+				"draft": false,
+				"sourceBranch": "feat/duration-units",
+				"targetBranch": "main",
+				"author": "ade-bello"
+			},
+			"files": {
+				"src/parsing/duration.py": "import re\n\n_UNITS = {\"s\": 1, \"m\": 60, \"h\": 3600}\n_PATTERN = re.compile(r\"^(\\d+)([smh])$\")\n\n\ndef parse_duration(text: str) -> int:\n    match = _PATTERN.match(text.strip())\n    if match is None:\n        raise ValueError(f\"not a duration: {text!r}\")\n    amount, unit = match.groups()\n    return int(amount) * _UNITS[unit]\n"
+			},
+			"results": [
+				{
+					"id": "r1",
+					"practice": "ships-tests-with-the-change",
+					"summary": "`parse_duration` has no test",
+					"explanation": "The new parser is not exercised by any test in the merge request.",
+					"summaryOnly": false,
+					"citations": [
+						{
+							"path": "src/parsing/duration.py",
+							"startLine": 7,
+							"endLine": 12
+						}
+					],
+					"problems": [
+						{
+							"id": "p1",
+							"summary": "New parser without a test",
+							"explanation": "No test file names `parse_duration`.",
+							"severity": "MINOR",
+							"nextStep": "Add tests for each unit and for an invalid value.",
+							"citations": [
+								{
+									"path": "src/parsing/duration.py",
+									"startLine": 7,
+									"endLine": 12,
+									"anchorable": false
+								}
+							]
+						}
+					]
+				}
+			],
+			"expected": {
+				"r1": "NO_MATERIAL_CHANGE"
+			},
+			"expectedWhy": "A reviewer's captured comment already asks for the same test, and the work has not changed since. Repeating it adds nothing.",
+			"compositions": [
+				{
+					"id": "reference",
+					"review": {
+						"decisions": [
+							{
+								"resultId": "r1",
+								"disposition": "NO_MATERIAL_CHANGE",
+								"witnessIds": [
+									"d1"
+								]
+							}
+						],
+						"summary": null,
+						"inline": []
+					},
+					"label": {
+						"good": true,
+						"codes": [],
+						"why": "The reviewer already asked for this test; the review stays quiet."
+					}
+				},
+				{
+					"id": "alt-1",
+					"review": {
+						"decisions": [
+							{
+								"resultId": "r1",
+								"disposition": "RAISE",
+								"witnessIds": []
+							}
+						],
+						"summary": {
+							"body": "`parse_duration` has no test. Add one per unit and one that expects `ValueError` for an invalid value.",
+							"basedOn": [
+								"p1"
+							]
+						},
+						"inline": []
+					},
+					"label": {
+						"good": false,
+						"codes": [
+							"D1",
+							"Q8"
+						],
+						"why": "It repeats the reviewer's request (D1, Q8)."
+					}
+				}
+			]
+		},
+		{
+			"limits": [],
+			"notReached": [],
+			"alreadySaid": [],
+			"discussion": [
+				{
+					"id": "d1",
+					"author": "elif-demir",
+					"body": "The `IOException` in `run` is swallowed. Can you log it with the time window, so we notice when the sync keeps failing?",
+					"statedAt": "2026-10-29T11:20:00Z",
+					"path": "src/main/java/org/kestrel/sync/ContactSync.java",
+					"line": 19
+				}
+			],
+			"discussionCapture": "COMPLETE",
+			"criteriaQuestion": null,
+			"id": "wh-e-08-reviewer-covered-catch-description-new-java",
+			"provider": "github",
+			"theme": "reviewer-said",
+			"work": {
+				"repository": "kestrel-crm/contacts",
+				"number": 517,
+				"title": "Update contact sync",
+				"description": "Updates the sync.",
+				"state": "open",
+				"draft": false,
+				"sourceBranch": "chore/contact-sync",
+				"targetBranch": "main",
+				"author": "rafael-quint"
+			},
+			"files": {
+				"src/main/java/org/kestrel/sync/ContactSync.java": "package org.kestrel.sync;\n\nimport java.io.IOException;\nimport java.util.List;\n\npublic final class ContactSync {\n    private final ContactApi api;\n    private final ContactStore store;\n\n    public ContactSync(ContactApi api, ContactStore store) {\n        this.api = api;\n        this.store = store;\n    }\n\n    public void run() {\n        try {\n            List<Contact> contacts = api.fetchChangedSince(store.lastSync());\n            store.saveAll(contacts);\n        } catch (IOException e) {\n            // try again next run\n        }\n    }\n}\n"
+			},
+			"results": [
+				{
+					"id": "r1",
+					"practice": "handles-errors-instead-of-swallowing-them",
+					"summary": "A failed fetch is dropped",
+					"explanation": "The `IOException` catch holds only a comment, so a failed sync leaves no record.",
+					"summaryOnly": false,
+					"citations": [
+						{
+							"path": "src/main/java/org/kestrel/sync/ContactSync.java",
+							"startLine": 19,
+							"endLine": 20
+						}
+					],
+					"problems": [
+						{
+							"id": "p1",
+							"summary": "`IOException` caught and discarded",
+							"explanation": "A sync that fails every run would never be noticed.",
+							"severity": "MAJOR",
+							"nextStep": "Log the failure with the sync window, or let it reach the scheduler.",
+							"citations": [
+								{
+									"path": "src/main/java/org/kestrel/sync/ContactSync.java",
+									"startLine": 19,
+									"endLine": 20,
+									"anchorable": true
+								}
+							]
+						}
+					]
+				},
+				{
+					"id": "r2",
+					"practice": "describe-what-and-why",
+					"summary": "The description does not say what changed or why",
+					"explanation": "\"Updates the sync.\" names neither the change nor its reason.",
+					"summaryOnly": true,
+					"citations": [
+						{
+							"path": "description",
+							"startLine": 1,
+							"endLine": 1
+						}
+					],
+					"problems": [
+						{
+							"id": "p2",
+							"summary": "Description without the what and the why",
+							"explanation": "A reviewer cannot tell from the description what the merge request changes or why.",
+							"severity": "MINOR",
+							"nextStep": "Say that the sync now reads only contacts changed since the last run, and why.",
+							"citations": [
+								{
+									"path": "description",
+									"startLine": 1,
+									"endLine": 1,
+									"anchorable": false
+								}
+							]
+						}
+					]
+				}
+			],
+			"expected": {
+				"r1": "NO_MATERIAL_CHANGE",
+				"r2": "RAISE"
+			},
+			"expectedWhy": "A reviewer already asked to log the swallowed `IOException`, and the code has not changed since. The thin description was never mentioned, so it is raised.",
+			"compositions": [
+				{
+					"id": "reference",
+					"review": {
+						"decisions": [
+							{
+								"resultId": "r1",
+								"disposition": "NO_MATERIAL_CHANGE",
+								"witnessIds": [
+									"d1"
+								]
+							},
+							{
+								"resultId": "r2",
+								"disposition": "RAISE",
+								"witnessIds": []
+							}
+						],
+						"summary": {
+							"body": "The description says only \"Updates the sync.\" Say what changed, for example that the sync now reads only contacts changed since the last run, and why.",
+							"basedOn": [
+								"p2"
+							]
+						},
+						"inline": []
+					},
+					"label": {
+						"good": true,
+						"codes": [],
+						"why": "Raises the new description point and leaves the reviewer's catch request alone."
+					}
+				},
+				{
+					"id": "alt-1",
+					"review": {
+						"decisions": [
+							{
+								"resultId": "r1",
+								"disposition": "RAISE",
+								"witnessIds": []
+							},
+							{
+								"resultId": "r2",
+								"disposition": "RAISE",
+								"witnessIds": []
+							}
+						],
+						"summary": {
+							"body": "Say in the description what the sync now does and why.",
+							"basedOn": [
+								"p2"
+							]
+						},
+						"inline": [
+							{
+								"body": "This catch drops the `IOException`. Log it with the sync window.",
+								"basedOn": [
+									"p1"
+								],
+								"anchor": {
+									"problemId": "p1",
+									"citationIndex": 0
+								}
+							}
+						]
+					},
+					"label": {
+						"good": false,
+						"codes": [
+							"D1",
+							"Q8"
+						],
+						"why": "It repeats the reviewer's catch request (D1, Q8)."
+					}
+				}
+			]
+		},
+		{
+			"limits": [],
+			"notReached": [],
+			"alreadySaid": [],
+			"discussion": [],
+			"discussionCapture": "COMPLETE",
+			"criteriaQuestion": null,
+			"id": "wh-e-09-two-trivial-points-all-withheld-kotlin",
+			"provider": "gitlab",
+			"theme": "below-bar",
+			"work": {
+				"repository": "quayside/fleet-planner",
+				"number": 23,
+				"title": "List boats by harbour",
+				"description": "Adds `byHarbour` so the planner can show the boats in one harbour.\n\nRun `BoatListTest`.",
+				"state": "open",
+				"draft": false,
+				"sourceBranch": "feat/boats-by-harbour",
+				"targetBranch": "main",
+				"author": "signe-berg"
+			},
+			"files": {
+				"src/main/kotlin/dev/quayside/fleet/BoatList.kt": "package dev.quayside.fleet\n\nclass BoatList(private val boats: List<Boat>) {\n    // returns the boats\n    fun all(): List<Boat> = boats\n\n    fun available(): List<Boat> = boats.filter { it.isAvailable }\n\n    fun byHarbour(harbour: String): List<Boat> =\n        boats.filter { it.harbour == harbour }\n}\n"
+			},
+			"results": [
+				{
+					"id": "r1",
+					"practice": "leaves-the-code-clean-with-intent-revealing-comments",
+					"summary": "A comment restates the function",
+					"explanation": "`// returns the boats` repeats the name `all`.",
+					"summaryOnly": false,
+					"citations": [
+						{
+							"path": "src/main/kotlin/dev/quayside/fleet/BoatList.kt",
+							"startLine": 4,
+							"endLine": 4
+						}
+					],
+					"problems": [
+						{
+							"id": "p1",
+							"summary": "Comment restates the code",
+							"explanation": "The comment adds nothing to the one-line function below it.",
+							"severity": "TRIVIAL",
+							"nextStep": "Remove the comment.",
+							"citations": [
+								{
+									"path": "src/main/kotlin/dev/quayside/fleet/BoatList.kt",
+									"startLine": 4,
+									"endLine": 4,
+									"anchorable": true
+								}
+							]
+						}
+					]
+				},
+				{
+					"id": "r2",
+					"practice": "leaves-the-code-clean-with-intent-revealing-comments",
+					"summary": "Trailing spaces after a line",
+					"explanation": "The `byHarbour` filter line ends with trailing spaces.",
+					"summaryOnly": false,
+					"citations": [
+						{
+							"path": "src/main/kotlin/dev/quayside/fleet/BoatList.kt",
+							"startLine": 10,
+							"endLine": 10
+						}
+					],
+					"problems": [
+						{
+							"id": "p2",
+							"summary": "Trailing whitespace",
+							"explanation": "The line ends with three spaces.",
+							"severity": "TRIVIAL",
+							"nextStep": "Remove the trailing spaces.",
+							"citations": [
+								{
+									"path": "src/main/kotlin/dev/quayside/fleet/BoatList.kt",
+									"startLine": 10,
+									"endLine": 10,
+									"anchorable": true
+								}
+							]
+						}
+					]
+				}
+			],
+			"expected": {
+				"r1": "BELOW_BAR",
+				"r2": "BELOW_BAR"
+			},
+			"expectedWhy": "Both points are trivial, so every result is withheld and nothing is written.",
+			"compositions": [
+				{
+					"id": "reference",
+					"review": {
+						"decisions": [
+							{
+								"resultId": "r1",
+								"disposition": "BELOW_BAR",
+								"witnessIds": []
+							},
+							{
+								"resultId": "r2",
+								"disposition": "BELOW_BAR",
+								"witnessIds": []
+							}
+						],
+						"summary": null,
+						"inline": []
+					},
+					"label": {
+						"good": true,
+						"codes": [],
+						"why": "Every result is trivial and withheld; the review writes nothing."
+					}
+				},
+				{
+					"id": "alt-1",
+					"review": {
+						"decisions": [
+							{
+								"resultId": "r1",
+								"disposition": "RAISE",
+								"witnessIds": []
+							},
+							{
+								"resultId": "r2",
+								"disposition": "BELOW_BAR",
+								"witnessIds": []
+							}
+						],
+						"summary": null,
+						"inline": [
+							{
+								"body": "`// returns the boats` only repeats `all`. Remove it.",
+								"basedOn": [
+									"p1"
+								],
+								"anchor": {
+									"problemId": "p1",
+									"citationIndex": 0
+								}
+							}
+						]
+					},
+					"label": {
+						"good": false,
+						"codes": [
+							"D1"
+						],
+						"why": "It raises a trivial comment that the case says to withhold."
+					}
+				}
+			]
+		},
+		{
+			"limits": [],
+			"notReached": [],
+			"alreadySaid": [
+				{
+					"id": "w1",
+					"practice": "states-how-to-verify-the-change",
+					"deliveredAt": "2026-10-29T16:00:00Z",
+					"body": "The description does not say how to check the export. Add where the menu is and which file a reviewer should receive.",
+					"notes": [],
+					"currentness": "CURRENT",
+					"sameVersion": true
+				}
+			],
+			"discussion": [],
+			"discussionCapture": "COMPLETE",
+			"criteriaQuestion": null,
+			"id": "wh-e-10-verify-steps-said-on-same-head-web",
+			"provider": "github",
+			"theme": "already-said",
+			"work": {
+				"repository": "mosaic-pm/console",
+				"number": 731,
+				"title": "Export a project as CSV or XLSX",
+				"description": "Adds an export menu to the project page that starts an export in the chosen format.",
+				"state": "open",
+				"draft": false,
+				"sourceBranch": "feat/project-export",
+				"targetBranch": "main",
+				"author": "noor-haddad"
+			},
+			"files": {
+				"src/features/export/useExport.ts": "import { useMutation } from \"@tanstack/react-query\";\n\nimport { requestExport } from \"../../api/exports\";\n\nexport function useExport(projectId: string) {\n\treturn useMutation({\n\t\tmutationFn: (format: \"csv\" | \"xlsx\") => requestExport(projectId, format),\n\t});\n}\n"
+			},
+			"results": [
+				{
+					"id": "r1",
+					"practice": "states-how-to-verify-the-change",
+					"summary": "The description gives no way to check the export",
+					"explanation": "The description says what was added but not how a reviewer can see it work.",
+					"summaryOnly": true,
+					"citations": [
+						{
+							"path": "description",
+							"startLine": 1,
+							"endLine": 1
+						}
+					],
+					"problems": [
+						{
+							"id": "p1",
+							"summary": "No verification steps",
+							"explanation": "There is no command, page or expected result to check.",
+							"severity": "MINOR",
+							"nextStep": "Say where the menu is and what file a reviewer should get.",
+							"citations": [
+								{
+									"path": "description",
+									"startLine": 1,
+									"endLine": 1,
+									"anchorable": false
+								}
+							]
+						}
+					]
+				}
+			],
+			"expected": {
+				"r1": "ALREADY_SAID"
+			},
+			"expectedWhy": "The same point was delivered in the summary on this same head and the description has not changed. Nothing new to say.",
+			"compositions": [
+				{
+					"id": "reference",
+					"review": {
+						"decisions": [
+							{
+								"resultId": "r1",
+								"disposition": "ALREADY_SAID",
+								"witnessIds": [
+									"w1"
+								]
+							}
+						],
+						"summary": null,
+						"inline": []
+					},
+					"label": {
+						"good": true,
+						"codes": [],
+						"why": "The delivered summary still covers the point; the review stays quiet."
+					}
+				},
+				{
+					"id": "alt-1",
+					"review": {
+						"decisions": [
+							{
+								"resultId": "r1",
+								"disposition": "RAISE",
+								"witnessIds": []
+							}
+						],
+						"summary": {
+							"body": "Add to the description how to check the export: where the menu is and which file a reviewer should get.",
+							"basedOn": [
+								"p1"
+							]
+						},
+						"inline": []
+					},
+					"label": {
+						"good": false,
+						"codes": [
+							"D1",
+							"Q8"
+						],
+						"why": "It repeats the summary already delivered on this head (D1, Q8)."
+					}
+				}
+			]
+		},
+		{
+			"limits": [],
+			"notReached": [],
+			"alreadySaid": [
+				{
+					"id": "w1",
+					"practice": "validates-and-escapes-untrusted-input",
+					"deliveredAt": "2026-10-27T13:00:00Z",
+					"body": "`parseUpload` and `parseRename` both cast the request body. Check both with a schema.",
+					"notes": [],
+					"currentness": "CURRENT",
+					"sameVersion": false
+				}
+			],
+			"discussion": [],
+			"discussionCapture": "COMPLETE",
+			"criteriaQuestion": null,
+			"id": "wh-e-11-one-of-two-checks-fixed-web",
+			"provider": "gitlab",
+			"theme": "partial-progress",
+			"work": {
+				"repository": "cinder-drive/files-api",
+				"number": 318,
+				"title": "Validate upload and rename requests",
+				"description": "Upload requests are now checked with a schema.\n\nUpdate: `parseUpload` uses zod.",
+				"state": "open",
+				"draft": false,
+				"sourceBranch": "fix/validate-requests",
+				"targetBranch": "main",
+				"author": "yuki-mori"
+			},
+			"files": {
+				"src/api/uploads.ts": "import { z } from \"zod\";\n\nconst Upload = z.object({ name: z.string().min(1).max(200), size: z.number().int().positive() });\n\nexport function parseUpload(body: unknown) {\n\treturn Upload.parse(body);\n}\n\nexport function parseRename(body: unknown) {\n\tconst { name } = body as { name: string };\n\treturn { name };\n}\n"
+			},
+			"results": [
+				{
+					"id": "r1",
+					"practice": "validates-and-escapes-untrusted-input",
+					"summary": "The rename body is cast, not checked",
+					"explanation": "`parseRename` casts the request body and trusts `name` without a check.",
+					"summaryOnly": false,
+					"citations": [
+						{
+							"path": "src/api/uploads.ts",
+							"startLine": 10,
+							"endLine": 11
+						}
+					],
+					"problems": [
+						{
+							"id": "p1",
+							"summary": "Unchecked cast of a request body",
+							"explanation": "A rename with a missing or very long name reaches storage.",
+							"severity": "MAJOR",
+							"nextStep": "Parse the rename body with a zod schema, as `parseUpload` now does.",
+							"citations": [
+								{
+									"path": "src/api/uploads.ts",
+									"startLine": 10,
+									"endLine": 11,
+									"anchorable": true
+								}
+							]
+						}
+					]
+				}
+			],
+			"expected": {
+				"r1": "NO_MATERIAL_CHANGE"
+			},
+			"expectedWhy": "The earlier advice named both functions. The new head fixed `parseUpload` only; the remaining gap is advice the work already received. ALREADY_SAID is also acceptable.",
+			"compositions": [
+				{
+					"id": "reference",
+					"review": {
+						"decisions": [
+							{
+								"resultId": "r1",
+								"disposition": "NO_MATERIAL_CHANGE",
+								"witnessIds": [
+									"w1"
+								]
+							}
+						],
+						"summary": null,
+						"inline": []
+					},
+					"label": {
+						"good": true,
+						"codes": [],
+						"why": "The remaining gap is covered by the delivered advice; the review stays quiet."
+					}
+				},
+				{
+					"id": "alt-1",
+					"review": {
+						"decisions": [
+							{
+								"resultId": "r1",
+								"disposition": "ALREADY_SAID",
+								"witnessIds": [
+									"w1"
+								]
+							}
+						],
+						"summary": null,
+						"inline": []
+					},
+					"label": {
+						"good": true,
+						"codes": [],
+						"why": "Withholding as ALREADY_SAID with w1 is equally supported."
+					}
+				},
+				{
+					"id": "alt-2",
+					"review": {
+						"decisions": [
+							{
+								"resultId": "r1",
+								"disposition": "RAISE",
+								"witnessIds": []
+							}
+						],
+						"summary": null,
+						"inline": [
+							{
+								"body": "`parseRename` still casts the body. Parse it with a zod schema, as `parseUpload` does.",
+								"basedOn": [
+									"p1"
+								],
+								"anchor": {
+									"problemId": "p1",
+									"citationIndex": 0
+								}
+							}
+						]
+					},
+					"label": {
+						"good": false,
+						"codes": [
+							"D1",
+							"Q8"
+						],
+						"why": "It repeats the delivered advice for the remaining gap (D1, Q8)."
+					}
+				}
+			]
+		},
+		{
+			"limits": [],
+			"notReached": [],
+			"alreadySaid": [],
+			"discussion": [],
+			"discussionCapture": "COMPLETE",
+			"criteriaQuestion": null,
+			"id": "wh-e-12-trust-all-certs-and-stale-todo-kotlin",
+			"provider": "github",
+			"theme": "below-bar",
+			"work": {
+				"repository": "harbourline/payments",
+				"number": 96,
+				"title": "Call the payment gateway over its new host",
+				"description": "Moves the gateway client to the new host so payments go through the regional endpoint.\n\nRun `GatewayClientTest`.",
+				"state": "open",
+				"draft": false,
+				"sourceBranch": "feat/gateway-host",
+				"targetBranch": "main",
+				"author": "camille-roux"
+			},
+			"files": {
+				"src/main/kotlin/net/harbourline/pay/GatewayClient.kt": "package net.harbourline.pay\n\nimport java.net.http.HttpClient\nimport javax.net.ssl.SSLContext\n\nobject GatewayClient {\n    // TODO: remove once staging works\n    fun create(): HttpClient {\n        val context = SSLContext.getInstance(\"TLS\")\n        context.init(null, arrayOf(TrustAllCerts), null)\n        return HttpClient.newBuilder().sslContext(context).build()\n    }\n}\n"
+			},
+			"results": [
+				{
+					"id": "r1",
+					"practice": "avoids-insecure-defaults-and-over-broad-permissions",
+					"summary": "The gateway client trusts every certificate",
+					"explanation": "`TrustAllCerts` turns off certificate checks for payment calls, so a man-in-the-middle can read and change them.",
+					"summaryOnly": false,
+					"citations": [
+						{
+							"path": "src/main/kotlin/net/harbourline/pay/GatewayClient.kt",
+							"startLine": 10,
+							"endLine": 10
+						}
+					],
+					"problems": [
+						{
+							"id": "p1",
+							"summary": "TLS certificate validation disabled",
+							"explanation": "Every server certificate is accepted on the payment path.",
+							"severity": "CRITICAL",
+							"nextStep": "Remove `TrustAllCerts` and use the default trust store, or pin the gateway's certificate.",
+							"citations": [
+								{
+									"path": "src/main/kotlin/net/harbourline/pay/GatewayClient.kt",
+									"startLine": 10,
+									"endLine": 10,
+									"anchorable": true
+								}
+							]
+						}
+					]
+				},
+				{
+					"id": "r2",
+					"practice": "leaves-the-code-clean-with-intent-revealing-comments",
+					"summary": "A TODO without an owner or issue",
+					"explanation": "`// TODO: remove once staging works` names no issue or owner.",
+					"summaryOnly": false,
+					"citations": [
+						{
+							"path": "src/main/kotlin/net/harbourline/pay/GatewayClient.kt",
+							"startLine": 7,
+							"endLine": 7
+						}
+					],
+					"problems": [
+						{
+							"id": "p2",
+							"summary": "Untracked TODO",
+							"explanation": "The comment gives no way to follow up.",
+							"severity": "TRIVIAL",
+							"nextStep": "Link the TODO to an issue.",
+							"citations": [
+								{
+									"path": "src/main/kotlin/net/harbourline/pay/GatewayClient.kt",
+									"startLine": 7,
+									"endLine": 7,
+									"anchorable": true
+								}
+							]
+						}
+					]
+				}
+			],
+			"expected": {
+				"r1": "RAISE",
+				"r2": "BELOW_BAR"
+			},
+			"expectedWhy": "Disabling certificate checks on the payment path is critical and must be raised. The TODO is trivial beside it and is withheld.",
+			"compositions": [
+				{
+					"id": "reference",
+					"review": {
+						"decisions": [
+							{
+								"resultId": "r1",
+								"disposition": "RAISE",
+								"witnessIds": []
+							},
+							{
+								"resultId": "r2",
+								"disposition": "BELOW_BAR",
+								"witnessIds": []
+							}
+						],
+						"summary": null,
+						"inline": [
+							{
+								"body": "`TrustAllCerts` accepts every certificate on the payment path, so anyone on the network can read and change payment calls. Remove it and use the default trust store, or pin the gateway's certificate.",
+								"basedOn": [
+									"p1"
+								],
+								"anchor": {
+									"problemId": "p1",
+									"citationIndex": 0
+								}
+							}
+						]
+					},
+					"label": {
+						"good": true,
+						"codes": [],
+						"why": "Raises the critical TLS point and stays quiet on the trivial TODO."
+					}
+				},
+				{
+					"id": "alt-1",
+					"review": {
+						"decisions": [
+							{
+								"resultId": "r1",
+								"disposition": "RAISE",
+								"witnessIds": []
+							},
+							{
+								"resultId": "r2",
+								"disposition": "RAISE",
+								"witnessIds": []
+							}
+						],
+						"summary": null,
+						"inline": [
+							{
+								"body": "`TrustAllCerts` accepts every certificate on the payment path. Remove it.",
+								"basedOn": [
+									"p1"
+								],
+								"anchor": {
+									"problemId": "p1",
+									"citationIndex": 0
+								}
+							},
+							{
+								"body": "Link this TODO to an issue.",
+								"basedOn": [
+									"p2"
+								],
+								"anchor": {
+									"problemId": "p2",
+									"citationIndex": 0
+								}
+							}
+						]
+					},
+					"label": {
+						"good": false,
+						"codes": [
+							"D1"
+						],
+						"why": "It also raises the trivial TODO that the case says to withhold."
+					}
+				}
+			]
 		}
 	]
 }

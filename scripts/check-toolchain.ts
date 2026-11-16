@@ -111,6 +111,39 @@ for (const [name, task] of Object.entries(tasks)) {
 		}
 	}
 }
+/**
+ * The packages that install from a commit of a build branch instead of the registry, and the one form their pin may
+ * take: a full commit, never a branch or a tag that moves. Each is a devDependency of the root manifest only, so no
+ * shipped package (the webapp, the extension or an agent image) holds it. docs/contributor/dependencies.mdx
+ * § Exceptions to the bar gives the reason and the step that verifies a new pin.
+ */
+const BUILD_COMMIT_PINS: Readonly<Record<string, RegExp>> = {
+	"@hephaestus-build/ichnaea": /^github:hephaestus-build\/ichnaea#[0-9a-f]{40}$/u,
+};
+
+/**
+ * Whether a dependency is a build-commit pin, which then has its one admitted form. It throws for such a package
+ * anywhere but the root manifest's devDependencies: it is evaluation tooling, and a shipped artifact never carries a
+ * Git dependency, so a release stays verifiable from the registry (AGENTS.md § What we will not compromise on, 3). It
+ * also throws for any other specifier of such a package, a catalog entry or a registry tag included, because only a
+ * full commit names the build that verify-build checked.
+ */
+function buildCommitPin(file: string, section: string, name: string, specifier: unknown): boolean {
+	const pin = BUILD_COMMIT_PINS[name];
+	if (pin === undefined) {
+		return false;
+	}
+	if (file !== "package.json" || section !== "devDependencies") {
+		throw new Error(
+			`${file}#${section}.${name} is evaluation tooling: only the root package.json may hold it, as a devDependency`,
+		);
+	}
+	if (typeof specifier !== "string" || !pin.test(specifier)) {
+		throw new Error(`${file}#${section}.${name} must pin a full commit: ${pin.source}`);
+	}
+	return true;
+}
+
 for (const file of [
 	"package.json",
 	"docs/package.json",
@@ -142,7 +175,7 @@ for (const file of [
 			if (name in BUNDLED_PINS && specifier !== "catalog:") {
 				throw new Error(`${file}#${section}.${name} must pin through the catalog`);
 			}
-			if (specifier === "catalog:") {
+			if (buildCommitPin(file, section, name, specifier) || specifier === "catalog:") {
 				continue;
 			}
 			if (typeof specifier !== "string" || !packageArgument.resolve(name, specifier).registry) {

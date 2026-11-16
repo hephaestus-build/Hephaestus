@@ -1,0 +1,406 @@
+name: CI / Feedback eval decision
+
+# The one decision path for a composer change: docs/contributor/feedback-quality-evals.mdx § Decision on the
+# composition set. A person starts every run: a manual run, or a maintainer who adds `eval:decide` to a pull request
+# from this repository that changes the composer's model, configuration, prompts or loop. A run composes all 72 cases
+# with main's composer (the base, at the merge base) and with the pull request's (the candidate), in the same jobs,
+# and Ichnaea decides the candidate against the base: on these 72 cases, beyond run-to-run noise. A manual run
+# compares the dispatched ref with the base ref it names.
+# Nothing starts it on a push or a schedule, and its result is not a required check: the composer noise plan must be
+# clean first (docs/contributor/feedback-quality-evals.mdx § Noise plan). Only adding the label starts a run, against
+# the head at that moment, so a run uses the commit that a maintainer labelled. A later push starts nothing: remove
+# the label and add it again to run on the new head. A pull request from a fork never calls a model, labelled or not.
+# A pull request from this repository that no run covers shows the neutral "not evaluated" check, never a pass. A
+# later labelled run on the same commit posts its result under the same check name, which replaces it. The colour of
+# that check follows the verdict alone: success for PASS, failure for REGRESSION, neutral for everything else. The
+# checks that need no model stay their own required job in cicd.yml.
+
+on:
+  workflow_dispatch:
+    inputs:
+      base:
+        description: "The base ref the dispatched ref is compared with"
+        required: true
+        default: "main"
+  pull_request:
+    # Only `labeled` with `eval:decide` starts a run. The other types report that nothing ran.
+    types: [opened, reopened, synchronize, labeled]
+    # The composer's model, configuration and prompts, as for the eval panel, and the composer loop, whose
+    # changes the decision exists to judge. docs/contributor/feedback-quality-evals.mdx § When a run starts
+    # lists them. ci-contract.test.ts keeps both sets and each path inside the feedback-eval filter of cicd.yml.
+    paths:
+      - "server/application/src/main/resources/agent/review-composer.md"
+      - "server/application/src/main/resources/agent/feedback-composer.md"
+      - "server/application/src/main/resources/agent/feedback-style.md"
+      - "docs/contributor/practice-feedback-language.mdx"
+      - "server/application/src/main/resources/practices/default-catalog.json"
+      - "server/application/src/main/resources/agent/review-composer-model.ts"
+      - "server/application/src/main/java/de/tum/cit/aet/hephaestus/agent/composer/CompositionSessions.java"
+      - "server/application/src/main/java/de/tum/cit/aet/hephaestus/agent/composer/ComposerRequests.java"
+      - "server/application/src/main/java/de/tum/cit/aet/hephaestus/agent/composer/ModelSession.java"
+      - "scripts/feedback-eval/gate.json"
+      - "server/application/src/main/resources/agent/review-composer.ts"
+      - "server/application/src/main/resources/agent/review-composer-gateway.ts"
+      - "server/application/src/main/java/de/tum/cit/aet/hephaestus/agent/composer/**"
+
+permissions: {}
+
+env:
+  # The name of the check run that shows this workflow's result on a pull request. The `not-evaluated` job and the
+  # `report` job post under it, so a later run replaces the earlier result.
+  CHECK_NAME: Feedback eval decision
+
+jobs:
+  # A pull request from this repository that no run covers shows a neutral check run: "not evaluated". The job
+  # checks out nothing and runs no pull request code. It lists the check runs of the commit under this name,
+  # posts one with fixed text unless a result is already there, and holds only `checks: write`, which includes
+  # reading. Neutral never blocks a merge and is never a pass.
+  not-evaluated:
+    name: Post the not-evaluated check
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.action != 'labeled' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-slim
+    timeout-minutes: 15
+    permissions:
+      checks: write # list and create check runs
+    steps:
+      - name: Post a neutral check run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          ACTION: ${{ github.event.action }}
+          HAS_LABEL: ${{ contains(github.event.pull_request.labels.*.name, 'eval:decide') }}
+        run: |
+          # Closing and reopening a pull request after a labelled run starts this job again on the same commit.
+          # Any run under this name that is not this job's own "not evaluated" is a result, so it stays.
+          results="$(gh api --method GET "repos/$REPOSITORY/commits/$HEAD_SHA/check-runs" --paginate \
+            -f "check_name=$CHECK_NAME" -f per_page=100 \
+            --jq '.check_runs[] | select(.external_id != "not-evaluated") | .id')"
+          if [ -n "$results" ]; then
+            echo "This commit already has a result under $CHECK_NAME, so nothing is posted."
+            exit 0
+          fi
+          # Only adding the label starts a run, so a label that is already there starts none on this commit.
+          if [ "$HAS_LABEL" = true ]; then
+            reason='adding `eval:decide` starts a run, so remove it and add it again'
+            detail='The label is already on this pull request, and only adding it starts a run, against the head at that moment. Remove it and add it again to run on this commit.'
+          else
+            reason='add `eval:decide`'
+            detail='Add the label when this commit is the one to evaluate.'
+          fi
+          gh api --silent --method POST "repos/$REPOSITORY/check-runs" \
+            -f "name=$CHECK_NAME" -f "head_sha=$HEAD_SHA" -f status=completed -f conclusion=neutral \
+            -f external_id=not-evaluated \
+            -f "output[title]=Decision not evaluated: $reason" \
+            -f "output[summary]=No model ran on this commit, so this check shows no verdict. $detail"
+
+  # The decision runs only with the CI model connection: docs/contributor/ci-cd.mdx § CI model
+  # connection. The base URL is a secret, and a job `if:` cannot read a secret, so this job checks
+  # the settings in a step.
+  provider:
+    name: Model connection
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'pull_request' && github.event.action == 'labeled' && github.event.label.name == 'eval:decide' &&
+        github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-slim
+    timeout-minutes: 15
+    permissions: {}
+    outputs:
+      configured: ${{ steps.check.outputs.configured }}
+    steps:
+      # Each expression is only whether a setting is set; no value reaches the step.
+      - name: Check the model connection
+        id: check
+        env:
+          BASE_URL_SET: ${{ secrets.CI_LLM_BASE_URL != '' }}
+          KEY_SET: ${{ secrets.CI_LLM_API_KEY != '' }}
+          MODEL_SET: ${{ vars.CI_LLM_MODEL != '' }}
+        run: |
+          if [ "$BASE_URL_SET" = true ] && [ "$KEY_SET" = true ] && [ "$MODEL_SET" = true ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "configured=false" >> "$GITHUB_OUTPUT"
+          missing=()
+          [ "$BASE_URL_SET" = true ] || missing+=("CI_LLM_BASE_URL")
+          [ "$KEY_SET" = true ] || missing+=("CI_LLM_API_KEY")
+          [ "$MODEL_SET" = true ] || missing+=("CI_LLM_MODEL")
+          echo "::notice title=Feedback eval decision::The CI model connection is not configured, so nothing was composed. Missing: ${missing[*]}."
+          {
+            echo "## Feedback eval decision"
+            echo
+            echo "The CI model connection is not configured, so nothing was composed. Missing: ${missing[*]}."
+            echo "docs/contributor/ci-cd.mdx § CI model connection lists the settings."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # The two commits that every later job uses: the head that a person asked about, never the pull request's merge
+  # commit, and its merge base with the base ref. A manual run's base input is a branch or a commit, fetched here.
+  commits:
+    name: Resolve the arms' commits
+    needs: [provider]
+    if: needs.provider.outputs.configured == 'true'
+    runs-on: ubuntu-slim
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    outputs:
+      head: ${{ steps.resolve.outputs.head }}
+      base: ${{ steps.resolve.outputs.base }}
+      cases: ${{ steps.resolve.outputs.cases }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Resolve the head and the merge base
+        id: resolve
+        env:
+          BASE_REF: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || inputs.base }}
+        run: |
+          # The input reaches git only as a revision, never as an option.
+          case "$BASE_REF" in
+            -* | "") echo "::error::The base ref must name a branch or a commit."; exit 1 ;;
+          esac
+          # Checkout fetches the other branches as origin/<name> only, so a branch name resolves there first.
+          if ! base_commit="$(git rev-parse --verify --quiet "refs/remotes/origin/$BASE_REF^{commit}")"; then
+            base_commit="$(git rev-parse --verify "$BASE_REF^{commit}")"
+          fi
+          head="$(git rev-parse HEAD)"
+          base="$(git merge-base "$head" "$base_commit")"
+          echo "head=$head" >> "$GITHUB_OUTPUT"
+          echo "base=$base" >> "$GITHUB_OUTPUT"
+          echo "The candidate is $head. The base is $base, its merge base with $BASE_REF." >> "$GITHUB_STEP_SUMMARY"
+          # Each arm's live test reads the cases from its own commit, so a change to them gives the arms different
+          # inputs under the same case IDs. Nothing composes then, and no model call is spent.
+          if git diff --quiet "$base" "$head" -- scripts/feedback-eval/compositions.json; then
+            echo "cases=same" >> "$GITHUB_OUTPUT"
+          else
+            echo "cases=changed" >> "$GITHUB_OUTPUT"
+            echo "This change edits scripts/feedback-eval/compositions.json, so the arms would compose different cases. Nothing was composed." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  # One job per replicate. Each composes both arms, case by case in turn, so both meet the same
+  # endpoint conditions. The suite gives the 29 withhold cases a third replicate. The replicates run one after
+  # another, so at most one composer calls the endpoint: the concurrency that the noise plan measured.
+  # Every job that calls the CI model endpoint, here and in feedback-eval-panel.yml, shares one concurrency group, so
+  # one composer at a time calls it, across runs and pull requests. None cancels a running one: a person started it,
+  # and it may have spent model calls. GitHub keeps one waiting job per group, so a job that starts to wait replaces
+  # the one that waited before it, and that run ends without a verdict.
+  compose:
+    name: Compose replicate ${{ matrix.replicate }}
+    needs: [provider, commits]
+    if: >-
+      needs.provider.outputs.configured == 'true' && needs.commits.outputs.cases == 'same' &&
+      (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+    concurrency:
+      group: ci-model-endpoint
+      cancel-in-progress: false
+    strategy:
+      fail-fast: true
+      max-parallel: 1
+      matrix:
+        replicate: [0, 1, 2]
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.commits.outputs.head }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      # The base arm is main's composer at the merge base, so the arms differ only in this change.
+      - name: Check out the base
+        env:
+          BASE_SHA: ${{ needs.commits.outputs.base }}
+        run: git worktree add "$RUNNER_TEMP/base" "$BASE_SHA"
+
+      - uses: ./.github/actions/setup-toolchain
+        with:
+          install: "frozen"
+
+      # The base composes from its own checkout, and its server build runs that checkout's TypeScript compiler.
+      - uses: ./.github/actions/setup-toolchain
+        with:
+          install: "frozen"
+          directory: ${{ runner.temp }}/base
+
+      - uses: ./.github/actions/setup-caches
+
+      - name: Compose both arms
+        env:
+          HEPHAESTUS_LIVE_LLM_BASE_URL: ${{ secrets.CI_LLM_BASE_URL }}
+          HEPHAESTUS_LIVE_LLM_MODEL: ${{ vars.CI_LLM_MODEL }}
+          HEPHAESTUS_LIVE_LLM_API_KEY: ${{ secrets.CI_LLM_API_KEY }}
+          REPLICATE: ${{ matrix.replicate }}
+        run: >-
+          node scripts/feedback-eval/ichnaea-compose.ts --replicate "$REPLICATE"
+          --base "$RUNNER_TEMP/base" --candidate . --out "$RUNNER_TEMP/compositions"
+
+      - name: Keep the compositions
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: feedback-eval-compositions-r${{ matrix.replicate }}
+          path: ${{ runner.temp }}/compositions
+          retention-days: 14
+          if-no-files-found: error
+
+  decide:
+    name: Decide
+    needs: [commits, compose]
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository
+    concurrency:
+      group: feedback-eval-decision-${{ github.event.pull_request.number || github.ref }}-decide
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    # The verdict of the decision record. The `report` job maps it to the check run, so the check's colour never
+    # follows this job's exit status, which the suite's CI policy decides.
+    outputs:
+      verdict: ${{ steps.decide.outputs.verdict }}
+      regressed: ${{ steps.decide.outputs.regressed }}
+      reason: ${{ steps.decide.outputs.reason }}
+      scope: ${{ steps.decide.outputs.scope }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.commits.outputs.head }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Check out the base
+        env:
+          BASE_SHA: ${{ needs.commits.outputs.base }}
+        run: git worktree add "$RUNNER_TEMP/base" "$BASE_SHA"
+
+      - uses: ./.github/actions/setup-toolchain
+        with:
+          install: "frozen"
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: feedback-eval-compositions-r*
+          merge-multiple: true
+          path: ${{ runner.temp }}/compositions
+
+      # The configurations name the model and the endpoint (by digest only), so Ichnaea can refuse
+      # arms whose models differ.
+      - name: Write both arms' configurations
+        env:
+          HEPHAESTUS_LIVE_LLM_BASE_URL: ${{ secrets.CI_LLM_BASE_URL }}
+          HEPHAESTUS_LIVE_LLM_MODEL: ${{ vars.CI_LLM_MODEL }}
+          BASE_SHA: ${{ needs.commits.outputs.base }}
+        run: |
+          node scripts/feedback-eval-configuration.ts --root "$RUNNER_TEMP/base" --commit "$BASE_SHA" --out "$RUNNER_TEMP/base-config.json"
+          node scripts/feedback-eval-configuration.ts --root . --out "$RUNNER_TEMP/candidate-config.json"
+
+      # The paths that differ between the arms' commits declare what the arms may differ in. Without renames, a moved
+      # file lists both its paths.
+      - name: Decide the candidate against the base
+        id: decide
+        env:
+          RUN_ID: ${{ github.event.pull_request.number && format('pr-{0}-{1}', github.event.pull_request.number, github.run_id) || format('run-{0}', github.run_id) }}
+          BASE_SHA: ${{ needs.commits.outputs.base }}
+        run: |
+          git diff --name-only --no-renames "$BASE_SHA" HEAD > "$RUNNER_TEMP/changed-paths"
+          node scripts/feedback-eval-decision.ts --results "$RUNNER_TEMP/compositions" \
+            --base-config "$RUNNER_TEMP/base-config.json" --candidate-config "$RUNNER_TEMP/candidate-config.json" \
+            --changed "$RUNNER_TEMP/changed-paths" --store "$RUNNER_TEMP/ichnaea" --run "$RUN_ID"
+
+      - name: Keep the records and the report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: feedback-eval-decision
+          path: ${{ runner.temp }}/ichnaea
+          retention-days: 30
+          if-no-files-found: warn
+
+  # The result of a labelled run replaces the neutral "not evaluated" check of the same commit: it posts under
+  # the same check name. The job checks out nothing and runs no pull request code. It reads only the results and
+  # outputs of the jobs above. Its text is fixed, apart from the cause, the measures and the scope that the
+  # decision record states: no title carries a case count of its own.
+  # The colour of the check is a claim about the change, so only a verdict carries one: PASS is success and
+  # REGRESSION is failure. INCONCLUSIVE, estimate-only, INVALID, a run that did not finish and a run that
+  # errored without a verdict are neutral, and the title names the state and its cause. A job that broke stays
+  # red under its own name. The suite's CI policy (`onRegression`) decides only whether this check is required.
+  report:
+    name: Post the decision check
+    needs: [provider, commits, compose, decide]
+    if: >-
+      !cancelled() &&
+      github.event_name == 'pull_request' && github.event.action == 'labeled' && github.event.label.name == 'eval:decide' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-slim
+    timeout-minutes: 15
+    permissions:
+      checks: write # create the check run
+    steps:
+      - name: Post the result under the same check name
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          CONFIGURED: ${{ needs.provider.outputs.configured }}
+          CASES: ${{ needs.commits.outputs.cases }}
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+          VERDICT: ${{ needs.decide.outputs.verdict }}
+          REGRESSED: ${{ needs.decide.outputs.regressed }}
+          REASON: ${{ needs.decide.outputs.reason }}
+          SCOPE: ${{ needs.decide.outputs.scope }}
+        run: |
+          detail='The verdict, its scope and the measures are in the job summary of the run.'
+          case "$VERDICT" in
+            PASS)
+              conclusion=success
+              title="Decision PASS ${SCOPE:-with no scope recorded}" ;;
+            REGRESSION)
+              conclusion=failure
+              title="Decision REGRESSION on ${REGRESSED:-a measure}" ;;
+            INCONCLUSIVE)
+              conclusion=neutral
+              title="Decision INCONCLUSIVE: ${REASON:-no cause recorded}" ;;
+            ESTIMATE-ONLY)
+              conclusion=neutral
+              title="Decision estimate-only: ${REASON:-no cause recorded}" ;;
+            INVALID)
+              conclusion=neutral
+              title="Decision INVALID: ${REASON:-no cause recorded}" ;;
+            *)
+              # No verdict, or a value that is no verdict: nothing is claimed about the change.
+              conclusion=neutral
+              if [ "$CONFIGURED" != true ]; then
+                title='Decision not evaluated: the CI model connection is not configured'
+                detail='The run composed nothing. docs/contributor/ci-cd.mdx § CI model connection lists the settings.'
+              elif [ "$CASES" = changed ]; then
+                title='Decision not evaluated: this change edits the composition cases'
+                detail='Each arm reads the cases from its own commit, so the arms would compose different cases. The run composed nothing. docs/contributor/feedback-quality-evals.mdx § When the decision runs says how to change the cases.'
+              else
+                case " $RESULTS " in
+                  *" failure "*)
+                    title='Decision errored without a verdict: a job of this run failed'
+                    detail='The failed job is red under its own name.' ;;
+                  *)
+                    title='Decision not evaluated: the run did not finish'
+                    detail='A job of this run did not finish.' ;;
+                esac
+              fi ;;
+          esac
+          gh api --silent --method POST "repos/$REPOSITORY/check-runs" \
+            -f "name=$CHECK_NAME" -f "head_sha=$HEAD_SHA" -f status=completed -f "conclusion=$conclusion" \
+            -f "details_url=$RUN_URL" \
+            -f "output[title]=${title:0:250}" -f "output[summary]=$detail See $RUN_URL."

@@ -281,6 +281,11 @@
 			"enabled": false
 		},
 		{
+			"description": "Ichnaea is pinned to a commit of its build branch, and only the pin step moves it: verify-build rebuilds that commit from its signed source commit first. A github: specifier has the repository as its package name, so the rule matches the manifest key. docs/contributor/dependencies.mdx § Exceptions to the bar",
+			"matchDepNames": ["@hephaestus-build/ichnaea"],
+			"enabled": false
+		},
+		{
 			"description": "Lock file maintenance spans every package file, so the practice-runtime approval would hold it. It refreshes locked versions within the declared ranges, so it runs on the weekly schedule. Last, so no earlier approval rule overrides it",
 			"matchUpdateTypes": ["lockFileMaintenance"],
 			"dependencyDashboardApproval": false

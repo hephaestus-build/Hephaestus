@@ -5,6 +5,10 @@ inputs:
     description: "none: the Node.js runtime alone, for dependency-free Node scripts or shell; frozen: pnpm as well, then pnpm install --frozen-lockfile --ignore-scripts --no-trust-lockfile and the installed Vite+ on PATH. No lifecycle script runs in CI, so pnpm-workspace.yaml#allowBuilds is exercised only by a contributor's install."
     required: false
     default: "none"
+  directory:
+    description: "The checkout whose dependencies a frozen install installs: the workspace by default. A second checkout in the same job, such as the base arm of feedback-eval-decision.yml, installs from its own lockfile. Node, pnpm and the Vite+ on PATH stay the workspace's."
+    required: false
+    default: "."
 runs:
   using: "composite"
   steps:
@@ -121,6 +125,7 @@ runs:
       id: pnpm-install
       if: inputs.install == 'frozen'
       shell: bash
+      working-directory: ${{ inputs.directory }}
       env:
         pnpm_config_trust_policy: no-downgrade
         pnpm_config_trust_policy_ignore_after: "43200"

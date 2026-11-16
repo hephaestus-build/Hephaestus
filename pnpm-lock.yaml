@@ -258,6 +258,9 @@ importers:
       '@earendil-works/pi-coding-agent':
         specifier: 1.4.0
         version: 1.4.0(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.32.2(supports-color@8.1.1)(zod@4.6.7))(@smithy/signature-v4@5.7.5)(supports-color@8.1.1)(ws@8.22.0)(zod@4.6.7)
+      '@hephaestus-build/ichnaea':
+        specifier: github:hephaestus-build/ichnaea#970b38b9425069c09a4484523775d98dd6c30f0b
+        version: https://codeload.github.com/hephaestus-build/ichnaea/tar.gz/970b38b9425069c09a4484523775d98dd6c30f0b(zod@4.6.7)
       '@hylimo/cli':
         specifier: 3.0.0-alpha.2
         version: 3.0.0-alpha.2
@@ -2009,6 +2012,14 @@ packages:
     peerDependenciesMeta:
       '@modelcontextprotocol/sdk':
         optional: true
+
+  '@hephaestus-build/ichnaea@https://codeload.github.com/hephaestus-build/ichnaea/tar.gz/970b38b9425069c09a4484523775d98dd6c30f0b':
+    resolution: {gitHosted: true, integrity: sha512-x8rJS3He80+rJCQ7616v7YMj5TJvYPVQPh4kLt90RL4Fk0EK1zYDh/KFeADZDXCjv8Rw4RwVA2hsbdzVR1ljYQ==, tarball: https://codeload.github.com/hephaestus-build/ichnaea/tar.gz/970b38b9425069c09a4484523775d98dd6c30f0b}
+    version: 0.0.0
+    engines: {node: '>=24.3'}
+    hasBin: true
+    peerDependencies:
+      zod: ^4.6.0
 
   '@hey-api/codegen-core@0.9.1':
     resolution: {integrity: sha512-s97jL1dgTMuiMHv2BZ1X4Tgd99Mf9GOvGdNqNcGwIMmnR+PgYNoraj4Zvp134MKsNCap/m7k0r0vKKnl56pj4w==}
@@ -11329,6 +11340,10 @@ snapshots:
       - bufferutil
       - supports-color
       - utf-8-validate
+
+  '@hephaestus-build/ichnaea@https://codeload.github.com/hephaestus-build/ichnaea/tar.gz/970b38b9425069c09a4484523775d98dd6c30f0b(zod@4.6.7)':
+    dependencies:
+      zod: 4.6.7
 
   '@hey-api/codegen-core@0.9.1(magicast@0.5.5)':
     dependencies:

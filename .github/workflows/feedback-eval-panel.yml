@@ -61,11 +61,11 @@ jobs:
     name: Model panel
     needs: [provider]
     if: needs.provider.outputs.configured == 'true'
-    # One panel at a time on the shared endpoint, and none cancels another: each run was started by a
-    # person and may already have spent model calls. On the job, not the workflow: a run for an
-    # unrelated label never enters the group.
+    # One composer at a time on the shared endpoint, panel or decision (feedback-eval-decision.yml), and
+    # none cancels another: each run was started by a person and may already have spent model calls. On
+    # the job, not the workflow: a run for an unrelated label never enters the group.
     concurrency:
-      group: feedback-eval-panel
+      group: ci-model-endpoint
       cancel-in-progress: false
     runs-on: ubuntu-latest
     timeout-minutes: 40

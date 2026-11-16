@@ -64,6 +64,12 @@ export interface GateFile {
 	version: 1;
 	checks: { caseId: string; compositionId: string; accepted: boolean; errors: string[] }[];
 }
+/**
+ * Run-file failures of the endpoint, not of the composer: the request never reached a model that answered. Such a case
+ * measures the endpoint, so a decision counts it as missing, never as failed, and the compose script retries it.
+ */
+export const ENDPOINT_FAILURES: ReadonlySet<string> = new Set(["PROVIDER", "CAPACITY"]);
+
 /** One composer run, checked by main's acceptance check, with the case's own ids. */
 export interface RunFile {
 	privateCases?: {

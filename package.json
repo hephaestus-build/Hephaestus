@@ -16,6 +16,7 @@
 		"@commitlint/config-conventional": "21.2.4",
 		"@earendil-works/pi-ai": "1.4.0",
 		"@earendil-works/pi-coding-agent": "1.4.0",
+		"@hephaestus-build/ichnaea": "github:hephaestus-build/ichnaea#970b38b9425069c09a4484523775d98dd6c30f0b",
 		"@hylimo/cli": "3.0.0-alpha.2",
 		"@hylimo/fonts": "3.0.0-alpha.2",
 		"@redocly/cli": "2.77.0",
