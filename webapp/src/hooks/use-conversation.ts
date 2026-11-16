@@ -386,9 +386,9 @@ export function useMarkConversationRead(workspaceSlug: string, enabled: boolean)
 	const mark = useMutation({
 		...markConversationReadMutation(),
 		mutationKey: readKey(workspaceSlug),
-		// The dot clears at once; a request that fails is sent again a few times, each wait longer.
+		// The dot clears at once; a request that fails is sent again a few times, each wait longer
+		// (TanStack Query's default backoff).
 		retry: READ_RETRIES,
-		retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 8000),
 		onSuccess: ({ lastReadAt }) => {
 			if (lastReadAt !== undefined) {
 				applyRead(queryClient, workspaceSlug, lastReadAt);

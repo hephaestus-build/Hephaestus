@@ -124,6 +124,16 @@ const firstVisitTest = base.extend({
 
 async function open(page: Page, path: string) {
 	await page.goto(path);
+	await loaded(page);
+}
+
+/**
+ * The router sets a page's own title once its route has loaded. `networkidle` alone can come first:
+ * a page whose scripts failed to load goes quiet at once and stays blank. The test's own timeout
+ * bounds the wait, so a busy server only slows it down.
+ */
+async function loaded(page: Page) {
+	await expect(page, "the page loads its route").toHaveTitle(PAGE_TITLE, { timeout: 0 });
 	await page.waitForLoadState("networkidle");
 }
 
@@ -131,7 +141,7 @@ async function open(page: Page, path: string) {
 async function reloadInDarkScheme(page: Page) {
 	await page.emulateMedia({ colorScheme: "dark" });
 	await page.reload();
-	await page.waitForLoadState("networkidle");
+	await loaded(page);
 	await expect(page.locator("html")).toHaveClass(/dark/u);
 }
 
