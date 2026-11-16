@@ -1,8 +1,9 @@
-import { ArrowRightIcon, ExternalLinkIcon } from "lucide-react";
+import { ArrowRightIcon } from "lucide-react";
 import type { ReactElement, ReactNode } from "react";
 import { definitionFor } from "@/components/common/status-def";
 
 import type { ItemRef, ReviewDetail, ReviewLineage } from "@/api/types.gen";
+import { OutboundMark } from "@/components/common/outbound-link";
 import { useNow } from "@/components/common/use-now";
 import { claimCurrentnessNote } from "@/components/practice-vocabulary/claim-currentness";
 import { feedbackLocationSentence } from "@/components/practice-vocabulary/feedback-location-defs";
@@ -162,7 +163,7 @@ function ItemFacts({ item }: { item: ItemRef }) {
 						className="inline-flex items-center gap-1 text-primary underline-offset-2 hover:underline"
 					>
 						{`Open on ${item.provider === undefined ? "its site" : PROVIDER_NAMES[item.provider]}`}
-						<ExternalLinkIcon aria-hidden className="size-3" />
+						<OutboundMark />
 					</a>
 				</Fact>
 			)}

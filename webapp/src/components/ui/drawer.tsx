@@ -3,7 +3,7 @@
 import { Drawer as DrawerPrimitive } from "@base-ui/react/drawer";
 import { cva, type VariantProps } from "class-variance-authority";
 import type * as React from "react";
-import { createContext, useContext } from "react";
+import { createContext, useContext, useId, useLayoutEffect, useState } from "react";
 
 import { cn } from "cn";
 
@@ -27,6 +27,8 @@ import { cn } from "cn";
  *    card colours inside the panel, so dark mode lifts the whole level, and a covered level recedes.
  * 8. `DrawerFooter` takes `tone`: `band` lays the footer on the `bg-sidebar` ground, for a footer
  *    whose one action leads off the drawer (`PracticeFocusFooter`).
+ * 9. `DrawerBody` is a region named by the level's `DrawerTitle`, so the Tab stop of 3. says where
+ *    the reader is. `DrawerTitle` registers its id with its `DrawerContent`.
  */
 interface DrawerContextProps {
 	hasSnapPoints: boolean;
@@ -143,6 +145,12 @@ const drawerContentVariants = cva("", {
 	defaultVariants: { size: "default" },
 });
 
+/** The id of the level's title, once one is mounted, so the body can take it as its name. */
+const DrawerTitleContext = createContext<{
+	titleId: string | undefined;
+	setTitleId: (id: string | undefined) => void;
+} | null>(null);
+
 /**
  * `dimWhenNested` is a deliberate departure from the upstream shadcn drawer, which fades a covered
  * drawer's content to nothing. That reads correctly for a bottom sheet, where only a sliver
@@ -159,6 +167,7 @@ function DrawerContent({
 	VariantProps<typeof drawerContentVariants> & { dimWhenNested?: boolean }) {
 	const { hasSnapPoints, modal, showSwipeHandle, swipeDirection } = useDrawer();
 	const swipeAxis = swipeDirection === "down" || swipeDirection === "up" ? "y" : "x";
+	const [titleId, setTitleId] = useState<string>();
 
 	return (
 		<DrawerPortal>
@@ -214,7 +223,7 @@ function DrawerContent({
 								"group-data-nested-drawer-open/drawer-popup:opacity-0 group-data-nested-drawer-swiping/drawer-popup:opacity-100",
 						)}
 					>
-						{children}
+						<DrawerTitleContext value={{ titleId, setTitleId }}>{children}</DrawerTitleContext>
 					</DrawerPrimitive.Content>
 				</DrawerPrimitive.Popup>
 			</DrawerPrimitive.Viewport>
@@ -237,15 +246,20 @@ function DrawerHeader({ className, ...props }: React.ComponentProps<"div">) {
  * The scrollable middle of a drawer. `min-h-0` is load-bearing — a flex item's automatic minimum
  * size is its content, so without it the body refuses to shrink and the panel overflows.
  */
-function DrawerBody({ className, ...props }: React.ComponentProps<"div">) {
+function DrawerBody({ className, tabIndex = 0, ...props }: React.ComponentProps<"div">) {
+	const titleId = useContext(DrawerTitleContext)?.titleId;
+	// Only a Tab stop needs a name. A body that its caller takes out of the Tab order, such as a
+	// conversation that names its own landmark, would otherwise repeat that landmark.
+	const named = titleId !== undefined && tabIndex >= 0;
 	return (
 		<div
 			data-slot="drawer-body"
+			role={named ? "region" : undefined}
+			aria-labelledby={named ? titleId : undefined}
 			className={cn("min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 pb-6", className)}
 			// A form disables every control while it submits, and then nothing in here is focusable —
 			// but the panel's overflow still has to be readable to the end. Same call as `ui/table`.
-			// oxlint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- The scroll region must stay keyboard-reachable when nothing inside it is.
-			tabIndex={0}
+			tabIndex={tabIndex}
 			{...props}
 		/>
 	);
@@ -277,9 +291,17 @@ function DrawerFooter({
 	);
 }
 
-function DrawerTitle({ className, ...props }: DrawerPrimitive.Title.Props) {
+function DrawerTitle({ className, id, ...props }: DrawerPrimitive.Title.Props) {
+	const ownId = useId();
+	const titleId = id ?? ownId;
+	const setTitleId = useContext(DrawerTitleContext)?.setTitleId;
+	useLayoutEffect(() => {
+		setTitleId?.(titleId);
+		return () => setTitleId?.(undefined);
+	}, [setTitleId, titleId]);
 	return (
 		<DrawerPrimitive.Title
+			id={titleId}
 			data-slot="drawer-title"
 			className={cn("text-base font-medium text-foreground", className)}
 			{...props}

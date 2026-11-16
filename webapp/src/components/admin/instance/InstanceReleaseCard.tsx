@@ -1,14 +1,9 @@
-import {
-	ExternalLinkIcon,
-	InfoIcon,
-	PackageIcon,
-	RefreshCwIcon,
-	TriangleAlertIcon,
-} from "lucide-react";
+import { InfoIcon, PackageIcon, RefreshCwIcon, TriangleAlertIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { definitionFor } from "@/components/common/status-def";
 
 import type { ReleaseStatus } from "@/api/types.gen";
+import { OutboundMark } from "@/components/common/outbound-link";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { RelativeTime } from "@/components/common/RelativeTime";
 import { StatusBadge } from "@/components/common/StatusBadge";
@@ -65,8 +60,7 @@ function ExternalLink({ href, children }: { href: string; children: ReactNode })
 			className="inline-flex items-center gap-1 underline underline-offset-4"
 		>
 			{children}
-			<ExternalLinkIcon className="size-3 shrink-0" aria-hidden />
-			<span className="sr-only"> (opens in a new tab)</span>
+			<OutboundMark />
 		</a>
 	);
 }

@@ -1,6 +1,7 @@
 import { definePlugin } from "@oxlint/plugins";
 
 import { focusOutlineInForcedColors } from "./rules/focus-outline-in-forced-colors.ts";
+import { newTabLinkSaysSo } from "./rules/new-tab-link-says-so.ts";
 import { noContextProvider } from "./rules/no-context-provider.ts";
 import { noManualQueryKey } from "./rules/no-manual-query-key.ts";
 import { noNonAsciiFilename } from "./rules/no-non-ascii-filename.ts";
@@ -23,6 +24,7 @@ export default definePlugin({
 	meta: { name: "hephaestus" },
 	rules: {
 		"ui-text-voice": uiTextVoice,
+		"new-tab-link-says-so": newTabLinkSaysSo,
 		"no-context-provider": noContextProvider,
 		"no-manual-query-key": noManualQueryKey,
 		"no-unsafe-definition-lookup": noUnsafeDefinitionLookup,

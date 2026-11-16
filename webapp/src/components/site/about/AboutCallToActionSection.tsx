@@ -1,3 +1,4 @@
+import { OutboundMark } from "@/components/common/outbound-link";
 import { GitHubIcon } from "@/components/icons/brand";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
@@ -28,7 +29,7 @@ export function AboutCallToActionSection() {
 				>
 					<GitHubIcon className="h-4 w-4" />
 					<span>View on GitHub</span>
-					<span className="sr-only">(opens in a new tab)</span>
+					<OutboundMark />
 				</a>
 				<a
 					href={docUrl("contributorGuide")}
@@ -37,7 +38,7 @@ export function AboutCallToActionSection() {
 					className={buttonVariants({ variant: "outline", size: "lg" })}
 				>
 					<span>Read the contributor guide</span>
-					<span className="sr-only">(opens in a new tab)</span>
+					<OutboundMark />
 				</a>
 			</div>
 		</section>

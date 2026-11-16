@@ -4,6 +4,7 @@ import type { ComponentProps } from "react";
 import { cn } from "cn";
 import type { LabelInfo, RepositoryInfo, TeamInfo } from "@/api/types.gen";
 import { LabelBadge } from "@/components/common/LabelBadge";
+import { OutboundMark } from "@/components/common/outbound-link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Popover, PopoverContent, PopoverTitle, PopoverTrigger } from "@/components/ui/popover";
@@ -60,12 +61,13 @@ export function RepositoryCard({
 								target="_blank"
 								rel="noopener noreferrer"
 								className={cn(
-									"block truncate text-sm font-medium hover:underline",
+									"flex min-w-0 items-center text-sm font-medium hover:underline",
 									team.hidden || repository.hiddenFromContributions ? "text-muted-foreground" : "",
 								)}
 								title={repository.nameWithOwner}
 							>
-								{repository.nameWithOwner}
+								<span className="min-w-0 truncate">{repository.nameWithOwner}</span>
+								<OutboundMark />
 							</a>
 						</div>
 						{repository.hiddenFromContributions && (

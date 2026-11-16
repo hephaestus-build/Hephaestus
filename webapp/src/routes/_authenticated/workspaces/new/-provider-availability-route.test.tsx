@@ -26,7 +26,9 @@ describe("workspace provider availability", () => {
 			{},
 			ROUTE_RENDER_WAIT,
 		);
-		expect(screen.queryByRole("link", { name: "Set up workspace with GitHub" })).toBeNull();
+		expect(
+			screen.queryByRole("link", { name: /^GitHub Install the Hephaestus GitHub App/u }),
+		).toBeNull();
 	});
 
 	it("hides GitHub setup when the installation URL arrives blank", async () => {
@@ -38,7 +40,9 @@ describe("workspace provider availability", () => {
 			{},
 			ROUTE_RENDER_WAIT,
 		);
-		expect(screen.queryByRole("link", { name: "Set up workspace with GitHub" })).toBeNull();
+		expect(
+			screen.queryByRole("link", { name: /^GitHub Install the Hephaestus GitHub App/u }),
+		).toBeNull();
 	});
 
 	it("keeps GitLab available when GitHub is not configured", async () => {
@@ -50,11 +54,13 @@ describe("workspace provider availability", () => {
 
 		const gitlab = await screen.findByRole(
 			"link",
-			{ name: "Set up workspace with GitLab" },
+			{ name: /^GitLab Connect with an access token/u },
 			ROUTE_RENDER_WAIT,
 		);
 		expect(gitlab.getAttribute("href")).toBe("/workspaces/new/gitlab");
-		expect(screen.queryByRole("link", { name: "Set up workspace with GitHub" })).toBeNull();
+		expect(
+			screen.queryByRole("link", { name: /^GitHub Install the Hephaestus GitHub App/u }),
+		).toBeNull();
 	});
 
 	it("explains unavailable GitHub setup when visiting its route directly", async () => {
@@ -80,7 +86,11 @@ describe("workspace provider availability", () => {
 		renderRouteAt("/workspaces/new");
 
 		await user.click(
-			await screen.findByRole("link", { name: "Set up workspace with GitHub" }, ROUTE_RENDER_WAIT),
+			await screen.findByRole(
+				"link",
+				{ name: /^GitHub Install the Hephaestus GitHub App/u },
+				ROUTE_RENDER_WAIT,
+			),
 		);
 		const install = await screen.findByRole(
 			"link",

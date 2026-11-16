@@ -2,6 +2,7 @@ import { CircleCheckIcon, EyeIcon, EyeOffIcon, OctagonXIcon } from "lucide-react
 import { useState } from "react";
 
 import type { GitLabPreflightRequest } from "@/api/types.gen";
+import { InlineLink } from "@/components/common/InlineLink";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Field, FieldDescription, FieldError, FieldLabel } from "@/components/ui/field";
@@ -105,13 +106,12 @@ export function ConnectGitLabStep({
 				</InputGroup>
 				<FieldDescription id="gitlab-pat-description">
 					Use a{" "}
-					<a
+					<InlineLink
 						href={`${state.serverUrl}/help/user/group/settings/group_access_tokens`}
-						target="_blank"
-						rel="noopener noreferrer"
+						external
 					>
 						group access token
-					</a>{" "}
+					</InlineLink>{" "}
 					with the <strong>Owner</strong> role and the <code className="text-xs">api</code> scope.
 					Webhook registration needs the Owner role. Turn on token rotation for long-lived setups.
 				</FieldDescription>

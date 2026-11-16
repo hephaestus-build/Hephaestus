@@ -1,4 +1,5 @@
 import { cn } from "cn";
+import { OutboundMark } from "@/components/common/outbound-link";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { getInitials } from "@/lib/avatar";
 
@@ -46,6 +47,7 @@ export function ContributorCard({ contributor, size = "md", className }: Contrib
 					)}
 				>
 					{contributor.name}
+					<OutboundMark />
 				</div>
 				<div className="w-full px-1 text-center text-xs leading-tight wrap-anywhere text-muted-foreground">
 					@{contributor.login}

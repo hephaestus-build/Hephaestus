@@ -3,6 +3,7 @@ import { CircleCheck, MessageSquare, Square } from "lucide-react";
 import { motion, stagger } from "motion/react";
 import { useMediaQuery } from "usehooks-ts";
 import { LandingSignInCta } from "@/components/auth/LandingSignInCta";
+import { OutboundMark } from "@/components/common/outbound-link";
 import { GitHubIcon, GitLabIcon, OutlineIcon, SlackIcon } from "@/components/icons/brand";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
@@ -272,7 +273,7 @@ export function LandingHeroSection({ onSignIn }: LandingHeroSectionProps) {
 						>
 							<GitHubIcon data-icon="inline-start" className="size-4" />
 							View on GitHub
-							<span className="sr-only">(opens in a new tab)</span>
+							<OutboundMark />
 						</a>
 					</motion.div>
 

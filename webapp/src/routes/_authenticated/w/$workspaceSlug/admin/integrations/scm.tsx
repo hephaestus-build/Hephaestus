@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { ExternalLinkIcon, WebhookIcon } from "lucide-react";
+import { WebhookIcon } from "lucide-react";
 import { z } from "zod";
 import { WorkspaceProviderRepairs } from "@/routes/_authenticated/-provider-repairs";
 
@@ -14,6 +14,7 @@ import { WorkspaceScmTokenSettings } from "@/components/admin/integrations/Works
 import { WorkspaceStoppedGitLabProjects } from "@/components/admin/integrations/WorkspaceStoppedGitLabProjects";
 import { WorkspaceSyncResourcesTable } from "@/components/admin/integrations/WorkspaceSyncResourcesTable";
 import { WorkspaceSyncStatusHeader } from "@/components/admin/integrations/WorkspaceSyncStatusHeader";
+import { OutboundMark } from "@/components/common/outbound-link";
 import { GitHubIcon, GitLabIcon } from "@/components/icons/brand";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { PageLayout } from "@/components/layout/PageLayout";
@@ -90,7 +91,7 @@ function ScmIntegrationPage() {
 							className={buttonVariants({ variant: "outline", size: "sm" })}
 						>
 							Manage installation on GitHub
-							<ExternalLinkIcon className="size-3.5" />
+							<OutboundMark />
 						</a>
 					) : undefined
 				}

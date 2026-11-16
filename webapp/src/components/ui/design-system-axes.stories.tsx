@@ -122,6 +122,37 @@ export const PressedTogglesLookSelectedInDarkMode: Story = {
 	globals: { theme: "dark" },
 };
 
+/** The ring colour under the story's theme, read from a probe that draws it. */
+function ringColour(): string {
+	const probe = document.createElement("div");
+	probe.className = "border border-ring";
+	document.body.append(probe);
+	const colour = getComputedStyle(probe).borderTopColor;
+	probe.remove();
+	return colour;
+}
+
+/** A keyboard-focused outline button draws its edge in the ring colour, the focus line other controls match. */
+export const OutlineFocusEdgeIsTheRing: Story = {
+	render: () => (
+		<Button variant="outline" className="transition-none">
+			Save
+		</Button>
+	),
+	play: async ({ canvas, userEvent }) => {
+		const button = canvas.getByRole("button", { name: "Save" });
+		await userEvent.tab();
+		await expect(button).toHaveFocus();
+		await expect(style(button).borderTopColor).toBe(ringColour());
+	},
+};
+
+/** `dark:border-input` outranks a plain `focus-visible:border-ring`, so the dark theme needs its own. */
+export const OutlineFocusEdgeIsTheRingInDarkMode: Story = {
+	...OutlineFocusEdgeIsTheRing,
+	globals: { theme: "dark" },
+};
+
 export const QuietRestsBelowFullContrast: Story = {
 	render: () => (
 		<div className="flex items-center gap-2 text-foreground">

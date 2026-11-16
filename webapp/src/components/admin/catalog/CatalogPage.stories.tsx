@@ -123,6 +123,36 @@ type Story = StoryObj<typeof meta>;
 
 export const Everything: Story = {};
 
+/** A screen reader hears the save: the row's live region is there before it and then names the group. */
+export const SavingIsAnnounced: Story = {
+	render: (args) => <GroupSave {...args} />,
+	play: async ({ canvas }) => {
+		const regions = canvas.getAllByRole("status");
+		await expect(regions.map((region) => region.textContent)).not.toContain(
+			"Saving Legacy conventions…",
+		);
+
+		await userEvent.click(
+			canvas.getByRole("switch", { name: "Include Legacy conventions for workspaces" }),
+		);
+
+		const announced = await waitFor(
+			() => {
+				const region = canvas
+					.getAllByRole("status")
+					.find((candidate) => candidate.textContent === "Saving Legacy conventions…");
+				if (region === undefined) {
+					throw new Error("No row announces the save yet");
+				}
+				return region;
+				// The text waits a second, so a quick save says nothing.
+			},
+			{ timeout: 5000 },
+		);
+		await expect(regions).toContain(announced);
+	},
+};
+
 export const ReviewsByPeopleAndNobodyAreVisible: Story = {
 	play: async ({ canvas }) => {
 		await expect(canvas.getByText("Guidance only")).toBeVisible();
@@ -192,6 +222,21 @@ export const UnavailableMoveDestinationIsNamed: Story = {
 		});
 	},
 };
+
+/** Marks the group a switch saves as pending, as the route does while the write runs. */
+function GroupSave(props: ComponentProps<typeof CatalogPage>) {
+	const [pendingGroupSlugs, setPendingGroupSlugs] = useState<ReadonlySet<string>>(new Set());
+	return (
+		<CatalogPage
+			{...props}
+			pendingGroupSlugs={pendingGroupSlugs}
+			onGroupStatusChange={(group, offered) => {
+				props.onGroupStatusChange(group, offered);
+				setPendingGroupSlugs(new Set([group.slug]));
+			}}
+		/>
+	);
+}
 
 function FilterTransition(props: ComponentProps<typeof CatalogPage>) {
 	const [search, setSearch] = useState<CatalogSearch>({});
