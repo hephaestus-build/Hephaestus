@@ -20,7 +20,7 @@ const TITLE = "chore(release): version packages";
 // GitHub refuses a pull request body above 65,536 characters.
 const BODY_LIMIT = 60_000;
 
-/** `.github/actions/setup-toolchain/action.yml`'s install; `ci-contract.test.ts` keeps the two equal. */
+/** `.github/actions/setup-toolchain/action.yml`'s install; `ci-contract*.test.ts` keeps the two equal. */
 export const INSTALL_ARGUMENTS = [
 	"install",
 	"--frozen-lockfile",

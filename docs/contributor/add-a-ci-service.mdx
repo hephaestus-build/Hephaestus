@@ -29,6 +29,6 @@ Extend the pipeline at the ownership boundary that changed. Do not copy an exist
 ## Check that it worked
 
 1. Run `node scripts/check-workflows.ts`. It reports no error.
-2. Run `node --test scripts/ci-contract.test.ts`. Every test passes.
+2. Run `node --test scripts/ci-contract*.test.ts`. Every test passes.
    This test owns the workflow invariants. If the service adds an invariant, add a test for it first.
 3. Open a pull request that changes the service's paths. The new jobs run, and a pull request that does not change them skips them.

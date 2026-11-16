@@ -159,17 +159,37 @@ export function focusedTests(paths: string[], cwd = process.cwd()): string[] {
 			tests.add(hookTest);
 		}
 	}
+	// A suite split by topic is `scripts/<family>.test.ts` and `scripts/<family>-<topic>.test.ts`.
+	const family = (name: string) => {
+		const directory = path.join(cwd, "scripts");
+		if (!existsSync(directory)) {
+			return [];
+		}
+		return readdirSync(directory)
+			.filter(
+				(entry) =>
+					entry === `${name}.test.ts` ||
+					(entry.startsWith(`${name}-`) && entry.endsWith(".test.ts")),
+			)
+			.map((entry) => `scripts/${entry}`);
+	};
 	for (const file of paths) {
 		for (const candidate of [file, file.replace(/\.ts$/u, ".test.ts")]) {
 			if (nativeTest.test(candidate) && existsSync(path.join(cwd, candidate))) {
 				tests.add(candidate);
 			}
 		}
+		// The helpers that a split suite shares run every file of that suite.
+		const support = /^scripts\/(?<name>[^/]+)-support\.ts$/u.exec(file)?.groups?.name;
+		if (support !== undefined) {
+			for (const member of family(support)) {
+				tests.add(member);
+			}
+		}
 		if (file.startsWith(".github/") || file === "vite.config.ts") {
 			for (const owner of ["ci-contract", "ci-windows-selection", "ci-image-set"]) {
-				const candidate = `scripts/${owner}.test.ts`;
-				if (existsSync(path.join(cwd, candidate))) {
-					tests.add(candidate);
+				for (const member of family(owner)) {
+					tests.add(member);
 				}
 			}
 		}

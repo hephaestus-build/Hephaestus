@@ -7,7 +7,7 @@
  * blocked by findings whose first appearance was the release itself.
  *
  * This walks the `images` half of `security/release-images.json`; the pinned upstream half is
- * `scan-upstream-images.ts`, and `ci-contract.test.ts` asserts the two together cover exactly what
+ * `scan-upstream-images.ts`, and `ci-contract*.test.ts` asserts the two together cover exactly what
  * the release evidence gate demands. Both share `lib/image-scan.ts`, which hands each Trivy report
  * to `check-release-vulnerabilities.ts`.
  *

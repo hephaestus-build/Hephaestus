@@ -309,7 +309,7 @@ const TEMPLATE_ENVIRONMENT = { HOME: "/tmp/home", XDG_CONFIG_HOME: "/tmp/home/.c
 
 /**
  * The Docker flags that give a benchmark container the review SandboxTemplate's root filesystem, volumes,
- * environment and limits. `kubernetes-chart-render.test.ts` compares them with the rendered template.
+ * environment and limits. `kubernetes-chart-render*.test.ts` compares them with the rendered template.
  */
 export function templateFlags(
 	volumes: readonly string[],
