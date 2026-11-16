@@ -2,7 +2,9 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, userEvent, within } from "storybook/test";
 
 import { ASK_HEPHAESTUS_LABEL } from "@/components/brand/HephaestusMark";
+import { GROUP_COLORS_NOTE } from "@/components/practice-vocabulary/group-visuals";
 import { Button } from "@/components/ui/button";
+import { settledPopup } from "@/stories/overlay";
 import { ALL_FEEDBACK_CARDS } from "@/stories/practice-feedback-cards-story-mock-data";
 import {
 	groups,
@@ -161,6 +163,17 @@ export const Default: Story = {
 };
 
 /** Each tab filters the cards in place: open ones, resolved ones in their resolved state, or all. */
+/** When a card appears and goes, and what the group colors mean, beside the cards they explain. */
+export const ExplainsTheCards: Story = {
+	play: async ({ canvas }) => {
+		await userEvent.click(canvas.getByRole("button", { name: "About feedback cards" }));
+		const panel = within(await settledPopup());
+		await expect(panel.getByText(/at least two pieces of your work/u)).toBeVisible();
+		await expect(panel.getByText(/come back clean/u)).toBeVisible();
+		await expect(panel.getByText(GROUP_COLORS_NOTE)).toBeVisible();
+	},
+};
+
 export const FeedbackTabs: Story = {
 	render: (args) => (
 		<Stateful initial={args.feedbackTab}>
@@ -242,10 +255,6 @@ export const DayOne: Story = {
 	play: async ({ canvas }) => {
 		await expect(canvas.getByText("No review of your work yet")).toBeVisible();
 		await expect(canvas.queryByText("No open feedback yet")).toBeNull();
-		await expect(canvas.getByRole("button", { name: "How to read this page" })).toHaveAttribute(
-			"aria-expanded",
-			"false",
-		);
 	},
 };
 

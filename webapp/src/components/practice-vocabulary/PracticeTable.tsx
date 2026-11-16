@@ -358,6 +358,7 @@ export function PracticeTableRow({
 }: PracticeTableRowProps) {
 	return (
 		<TableRow
+			data-tour-slot="row"
 			data-state={open ? "open" : undefined}
 			aria-current={marked || undefined}
 			// A badge's panel leaves a mouse press inside this row to the row (`TipPopover`).
@@ -417,8 +418,12 @@ export function StandingCell({ standing, direction, support, scope, basis }: Sta
 				{/* A little more room between the standing and its trend, so the two read as two facts;
 				    the note on earlier reviews keeps its own spacing. */}
 				<span className="flex flex-col items-start gap-2.5">
-					<StandingBadge standing={standing} scope={scope} support={support} />
-					<TrendNote direction={direction} support={support} scope={scope} />
+					<span data-tour-slot="standing" className="inline-flex max-w-full">
+						<StandingBadge standing={standing} scope={scope} support={support} />
+					</span>
+					<span data-tour-slot="trend" className="inline-flex max-w-full">
+						<TrendNote direction={direction} support={support} scope={scope} />
+					</span>
 				</span>
 				<StandingBasisNote basis={basis} />
 			</div>
@@ -457,7 +462,10 @@ export function SubjectCell({
 				{sentences !== undefined && sentences.length > 0 && (
 					// `w-full`: in the cell's `items-start` column the list would shrink to its words, and
 					// a row pill in a sentence would then wrap at its own width instead of the column's.
-					<ul className="w-full max-w-md list-disc space-y-1 pl-4 text-sm marker:text-muted-foreground">
+					<ul
+						data-tour-slot="changes"
+						className="w-full max-w-md list-disc space-y-1 pl-4 text-sm marker:text-muted-foreground"
+					>
 						{sentences.map((sentence, index) => (
 							<li key={index}>
 								<FeedbackText
@@ -511,6 +519,7 @@ function RowLinkCell({ link }: { link: PracticeTableRowLink | undefined }) {
 				<InlineLink
 					render={link.render ?? <button type="button" />}
 					data-row-link
+					data-tour-slot="row-link"
 					aria-label={`${link.text} ${link.name}`}
 					className={ROW_LINK_CLASS}
 				>

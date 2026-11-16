@@ -292,6 +292,7 @@ function UnverifiedHistoryNotice({ unverified }: { unverified?: boolean }) {
 
 export function PracticeFeedbackCard({
 	card: {
+		feedbackId,
 		practiceSlug,
 		practiceName,
 		group,
@@ -432,6 +433,7 @@ export function PracticeFeedbackCard({
 	return (
 		<article
 			aria-labelledby={headingId}
+			data-tour-card={feedbackId}
 			className={cn(
 				"group/card relative isolate flex flex-col overflow-hidden",
 				CARD_EDGE,

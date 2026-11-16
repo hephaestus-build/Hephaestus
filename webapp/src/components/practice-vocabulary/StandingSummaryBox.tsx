@@ -45,6 +45,8 @@ export interface StandingSummaryBoxProps {
 	layout?: StandingSummaryLayout;
 	/** Where the summary leads, after the legend; it stands while the counts load. */
 	children?: ReactNode;
+	/** An (i) after the label that says what the ring and its counts mean. */
+	info?: ReactNode;
 	className?: string;
 }
 
@@ -59,6 +61,7 @@ export function StandingSummaryBox({
 	isLoading = false,
 	layout = "fit",
 	children,
+	info,
 	className,
 }: StandingSummaryBoxProps) {
 	const { box, text, legend } = LAYOUTS[layout];
@@ -73,7 +76,10 @@ export function StandingSummaryBox({
 				{isLoading ? (
 					<Skeleton className="h-4 w-36" />
 				) : (
-					<span className="text-xs font-semibold text-muted-foreground">{label}</span>
+					<span className="text-xs font-semibold text-muted-foreground">
+						{label}
+						{info !== undefined && <> {info}</>}
+					</span>
 				)}
 				{isLoading ? (
 					<div className={legend}>

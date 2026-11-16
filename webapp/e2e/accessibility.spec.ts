@@ -4,6 +4,11 @@ import { AxeBuilder } from "@axe-core/playwright";
 import type { Locator, Page } from "@playwright/test";
 
 import { expect, test as base } from "./fixtures";
+import {
+	asFirstTourVisit,
+	asReturningTourReader,
+	tourOfferRecords,
+} from "./screenshots/tour-offer.ts";
 
 /**
  * The integrated half of the accessibility evaluation in
@@ -96,9 +101,25 @@ const publicTest = base.extend({
 	colorScheme: "light",
 	storageState: { cookies: [], origins: [] },
 });
+
 const signedInTest = base.extend({
 	colorScheme: "light",
 	storageState: async ({ adminSession }, use) => use(adminSession),
+	// A returning reader: the practice profile has offered its tour already, so a scan or a Tab walk
+	// meets the page itself.
+	context: async ({ context }, use) => {
+		await asReturningTourReader(context);
+		await use(context);
+	},
+});
+/** A reader on their first visit, to whom the practice profile offers its tour. */
+const firstVisitTest = base.extend({
+	colorScheme: "light",
+	storageState: async ({ adminSession }, use) => use(adminSession),
+	context: async ({ context }, use) => {
+		await asFirstTourVisit(context);
+		await use(context);
+	},
 });
 
 async function open(page: Page, path: string) {
@@ -336,6 +357,23 @@ base.describe("keyboard", () => {
 			await page.keyboard.press("Escape");
 			await expect(dialog).toBeHidden();
 			await expect(trigger).toBeFocused();
+		},
+	);
+
+	firstVisitTest(
+		"the first visit's tour holds focus, passes axe, and points at Take the tour on Escape",
+		async ({ page }) => {
+			await open(page, "/w/e2e/practice-profile");
+			const tour = page.getByRole("dialog", { name: "Guided tour" });
+			await expect(tour).toBeVisible();
+			await expect(tour.getByRole("button", { name: /How it works/u })).toBeFocused();
+			expect(await axeViolations(page, { overlay: true })).toEqual([]);
+
+			await page.keyboard.press("Escape");
+			await expect(tour).toBeHidden();
+			await expect(page.getByRole("button", { name: "Take the tour" })).toBeFocused();
+			// The browser remembers the offer for this account, so it does not open by itself again.
+			expect(await tourOfferRecords(page)).toHaveLength(1);
 		},
 	);
 

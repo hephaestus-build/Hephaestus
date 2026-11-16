@@ -16,7 +16,9 @@ import type {
 } from "@/api/types.gen";
 import { stackInSearch } from "@/components/layout/detail-drawer/detail-stack";
 import { reviewRangeStart } from "@/components/practice-profile/practice-profile-search";
+import { tourRecordKey } from "@/components/tour/tour-start";
 import { formatDayTime } from "@/lib/dates";
+import { currentUser } from "@/mocks/fixtures/auth";
 import { workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
 import { clearUserView } from "@/runtime/user-view/session";
@@ -38,7 +40,7 @@ import {
 	profileReviews,
 } from "@/stories/profile-reviews-story-mock-data";
 import { STORY_NOW } from "@/stories/story-clock";
-import { pending } from "@/test/async";
+import { deferred, pending } from "@/test/async";
 import { ObserverStub } from "@/test/observers";
 import { ROUTE_RENDER_WAIT, renderRouteAtWithRouter, loadRouteCode } from "@/test/router-harness";
 import { storeUserView } from "@/test/user-view";
@@ -46,6 +48,9 @@ import { storeUserView } from "@/test/user-view";
 // Mounting the real route pulls in the whole app shell and its lazy modules.
 
 const PAGE = "/w/acme/practice-profile";
+/** Where this browser remembers that the Practice profile offered its tour. */
+const TOUR_OFFERED = tourRecordKey("offered", String(currentUser.id));
+const TOUR_PROGRESS = tourRecordKey("progress", String(currentUser.id));
 
 beforeAll(
 	async () =>
@@ -329,20 +334,135 @@ describe("practice profile route", () => {
 		expect(practicePage).not.toHaveBeenCalled();
 	});
 
-	it("opens the guided tour only when asked, and a link in it hands over to the real level", async () => {
+	it("offers the guided tour once on a first visit, and points at Take the tour after Not now", async () => {
+		localStorage.clear();
+		await renderProfile();
+		const dialog = await screen.findByRole("dialog", { name: "Guided tour" }, ROUTE_RENDER_WAIT);
+		expect(dialog.textContent).toMatch(/“Take the tour” brings it back/u);
+		fireEvent.click(within(dialog).getByRole("button", { name: "Not now" }));
+		await waitFor(() => expect(screen.queryByRole("dialog", { name: "Guided tour" })).toBeNull());
+		const start = screen.getByRole("button", { name: "Take the tour" });
+		await waitFor(() => expect(document.activeElement).toBe(start));
+
+		// The browser remembers the offer: the next visit opens on the page.
+		cleanup();
+		await renderProfile();
+		await screen.findByRole("button", { name: "Take the tour" }, ROUTE_RENDER_WAIT);
+		expect(screen.queryByRole("dialog", { name: "Guided tour" })).toBeNull();
+	});
+
+	it("points at Take the tour after Not now, even when a link held focus before the offer", async () => {
+		localStorage.clear();
+		const overview = deferred();
+		server.use(
+			http.get("*/workspaces/:workspaceSlug/practice-profile/overview", async () => {
+				await overview.promise;
+				return HttpResponse.json(OVERVIEW_FIXTURE);
+			}),
+		);
+		renderRouteAtWithRouter(PAGE);
+		// The reader arrived from the sidebar, so a link still has focus when the page loads.
+		const [link] = await screen.findAllByRole("link", {}, ROUTE_RENDER_WAIT);
+		link?.focus();
+		overview.resolve();
+		const dialog = await screen.findByRole("dialog", { name: "Guided tour" }, ROUTE_RENDER_WAIT);
+		fireEvent.click(within(dialog).getByRole("button", { name: "Not now" }));
+		const start = await screen.findByRole("button", { name: "Take the tour" }, ROUTE_RENDER_WAIT);
+		await waitFor(() => expect(document.activeElement).toBe(start));
+	});
+
+	it("waits with the first visit's offer while the question about public activity is open", async () => {
+		localStorage.clear();
+		server.use(
+			http.get("*/workspaces", () =>
+				HttpResponse.json([
+					workspaceListItem("acme", { practicesEnabled: true, publishesPublicActivity: true }),
+				]),
+			),
+			http.get("*/user/public-activity/workspaces/:slug/onboarding", () =>
+				HttpResponse.json({ seen: false, visible: false }),
+			),
+		);
+		await renderProfile();
+		await screen.findByRole("button", { name: "Take the tour" }, ROUTE_RENDER_WAIT);
+		// The browser remembers the offer once the tour is on screen: an unset record is what proves
+		// that no offer opened.
+		expect(localStorage.getItem(TOUR_OFFERED)).toBeNull();
+		expect(screen.queryByRole("dialog", { name: "Guided tour" })).toBeNull();
+	});
+
+	it("offers the tour once the question about public activity is answered", async () => {
+		localStorage.clear();
+		server.use(
+			http.get("*/workspaces", () =>
+				HttpResponse.json([
+					workspaceListItem("acme", { practicesEnabled: true, publishesPublicActivity: true }),
+				]),
+			),
+			http.get("*/user/public-activity/workspaces/:slug/onboarding", () =>
+				HttpResponse.json({ seen: true, visible: false }),
+			),
+		);
+		await renderProfile();
+		await screen.findByRole("dialog", { name: "Guided tour" }, ROUTE_RENDER_WAIT);
+		expect(localStorage.getItem(TOUR_OFFERED)).toBe("1");
+	});
+
+	it("does not offer the tour to a first visit that a link opened on a level", async () => {
+		localStorage.clear();
+		// The level hides the page's own heading, so the level is waited for itself.
+		renderRouteAtWithRouter(
+			`${PAGE}?detail=${encodeURIComponent(JSON.stringify(["practice-groups:all"]))}`,
+		);
+		await screen.findByRole("table", { name: "All practice groups" }, ROUTE_RENDER_WAIT);
+		expect(localStorage.getItem(TOUR_OFFERED)).toBeNull();
+		expect(screen.queryByRole("dialog", { name: "Guided tour" })).toBeNull();
+	});
+
+	it("waits with the first visit's offer until the page has loaded", async () => {
+		localStorage.clear();
+		server.use(
+			http.get("*/workspaces/:workspaceSlug/practice-profile/overview", async () => pending()),
+		);
+		await renderProfile();
+		expect(localStorage.getItem(TOUR_OFFERED)).toBeNull();
+		expect(screen.queryByRole("dialog", { name: "Guided tour" })).toBeNull();
+	});
+
+	it("keeps another account's tour records on a shared browser out of the reader's tour", async () => {
+		localStorage.clear();
+		const finished = JSON.stringify({
+			place: { chapter: "your-profile", step: "why" },
+			done: ["how-it-works"],
+		});
+		// Another account on this browser, and a record from before records named their account.
+		localStorage.setItem(tourRecordKey("offered", "7"), "1");
+		localStorage.setItem(tourRecordKey("progress", "7"), finished);
+		localStorage.setItem("hephaestus:guided-tour:practice-profile:offered", "1");
+		localStorage.setItem("hephaestus:guided-tour:practice-profile", finished);
+		await renderProfile();
+		// The reader's own first visit is still owed: neither record counts as theirs.
+		const dialog = await screen.findByRole("dialog", { name: "Guided tour" }, ROUTE_RENDER_WAIT);
+		within(dialog).getByRole("button", { name: /How it works.*Start here/u });
+		expect(within(dialog).queryByText(/Continue at step/u)).toBeNull();
+		expect(within(dialog).queryByText("Done")).toBeNull();
+		expect(localStorage.getItem(TOUR_OFFERED)).toBe("1");
+	});
+
+	it("opens the guided tour when asked, and a link in it hands over to the real level", async () => {
+		localStorage.setItem(
+			TOUR_PROGRESS,
+			JSON.stringify({ place: { chapter: "going-deeper", step: "try" }, done: [] }),
+		);
 		const router = await renderProfile();
-		// The page has loaded without it: nothing starts by itself.
-		await screen.findByRole("heading", { level: 1, name: "Practice profile" }, ROUTE_RENDER_WAIT);
 		expect(screen.queryByRole("dialog", { name: "Guided tour" })).toBeNull();
 
 		fireEvent.click(
 			await screen.findByRole("button", { name: "Take the tour" }, ROUTE_RENDER_WAIT),
 		);
 		const dialog = await screen.findByRole("dialog", { name: "Guided tour" }, ROUTE_RENDER_WAIT);
-		fireEvent.click(within(dialog).getByRole("button", { name: /Going deeper/u }));
-		for (let step = 0; step < 3; step += 1) {
-			fireEvent.click(within(dialog).getByRole("button", { name: "Next" }));
-		}
+		// Going deeper ends on the step that hands over to the reader's own data.
+		fireEvent.click(within(dialog).getByRole("button", { name: /Going deeper.*Continue/u }));
 		fireEvent.click(await within(dialog).findByRole("link", { name: "See all practice groups" }));
 
 		await waitFor(() => expect(screen.queryByRole("dialog", { name: "Guided tour" })).toBeNull());
@@ -353,7 +473,7 @@ describe("practice profile route", () => {
 		);
 	});
 
-	it("returns focus to what started the tour, and to the heading after a click that left none", async () => {
+	it("returns focus to what started the tour, and to Take the tour after a click that left none", async () => {
 		await renderProfile();
 		const start = await screen.findByRole("button", { name: "Take the tour" }, ROUTE_RENDER_WAIT);
 		start.focus();
@@ -367,8 +487,7 @@ describe("practice profile route", () => {
 		fireEvent.click(start);
 		await screen.findByRole("dialog", { name: "Guided tour" }, ROUTE_RENDER_WAIT);
 		fireEvent.click(screen.getByRole("button", { name: "Close the tour" }));
-		const heading = screen.getByRole("heading", { level: 1, name: "Practice profile" });
-		await waitFor(() => expect(document.activeElement).toBe(heading));
+		await waitFor(() => expect(document.activeElement).toBe(start));
 	});
 
 	it("does not offer the guided tour until the page has loaded", async () => {
@@ -379,12 +498,14 @@ describe("practice profile route", () => {
 		expect(screen.queryByRole("button", { name: "Take the tour" })).toBeNull();
 	});
 
-	it("keeps the guided tour out of a user view", async () => {
+	it("keeps the guided tour out of a user view, even on a first visit", async () => {
+		localStorage.clear();
 		storeUserView({ workspaceSlug: "acme" });
 		await renderProfile();
 		await screen.findByRole("heading", { level: 1, name: "Practice profile" }, ROUTE_RENDER_WAIT);
 		expect(screen.queryByRole("button", { name: "Take the tour" })).toBeNull();
 		expect(screen.queryByRole("button", { name: "See how feedback comes about" })).toBeNull();
+		expect(screen.queryByRole("dialog", { name: "Guided tour" })).toBeNull();
 	});
 
 	it("stacks the list, a group and a practice in the detail param, one history entry each", async () => {
