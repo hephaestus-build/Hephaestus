@@ -52,8 +52,8 @@ class MovePracticeToGroupTool implements McpTool {
                 new McpTools.Text(
                         "move_practice_to_group",
                         "Move a practice to a group",
-                        "Moves a practice into a practice group, or out of every group with null. Undo it with this tool and"
-                                + " the earlier groupSlug from get_practice."),
+                        "Moves a practice into a practice group, or out of every group with null. It lands at the end of"
+                                + " the group. Undo it with this tool and the earlier groupSlug from get_practice."),
                 INPUT_SCHEMA,
                 McpProjections.PRACTICE_SCHEMA,
                 McpTools.Effect.CHANGES);

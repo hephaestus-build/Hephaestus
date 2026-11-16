@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.core.Audited;
 import de.tum.cit.aet.hephaestus.core.RequiresRecentSignIn;
 import de.tum.cit.aet.hephaestus.core.mcp.McpTool;
 import de.tum.cit.aet.hephaestus.core.mcp.McpToolFor;
+import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -19,6 +20,10 @@ import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.annotation.AnnotatedElementUtils;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 
 /**
  * A workspace MCP tool calls the service of one HTTP handler, so it is at least as strict as that handler
@@ -29,6 +34,11 @@ import org.springframework.security.access.prepost.PreAuthorize;
 class McpToolHandlerParityArchTest extends HephaestusArchitectureTest {
 
     private static final String ADMIN = "@workspaceSecure.isAdmin()";
+
+    /** A handler with one of these mappings changes the workspace, whatever its role or audit decision. */
+    private static final List<Class<? extends Annotation>> MUTATIONS =
+            List.of(PostMapping.class, PutMapping.class, PatchMapping.class, DeleteMapping.class);
+
     private static final Set<String> AT_MOST_ADMIN =
             Set.of("@workspaceSecure.isMember()", "@workspaceSecure.isMemberWithoutElevation()", ADMIN);
 
@@ -97,8 +107,9 @@ class McpToolHandlerParityArchTest extends HephaestusArchitectureTest {
                     .findFirst()
                     .orElseThrow();
             Method call = type.getMethod("call", Map.class);
-            boolean mutation =
-                    handler.isAnnotationPresent(Audited.class) || handler.isAnnotationPresent(AuditExempt.class);
+            boolean mutation = handler.isAnnotationPresent(Audited.class)
+                    || handler.isAnnotationPresent(AuditExempt.class)
+                    || MUTATIONS.stream().anyMatch(mapping -> AnnotatedElementUtils.hasAnnotation(handler, mapping));
             boolean writes = Arrays.stream(type.getDeclaredMethods())
                     .anyMatch(method -> method.getName().equals("writes"));
             if (mutation != writes) {

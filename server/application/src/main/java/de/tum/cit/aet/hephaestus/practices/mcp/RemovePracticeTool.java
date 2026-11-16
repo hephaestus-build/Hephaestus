@@ -46,8 +46,9 @@ class RemovePracticeTool implements McpTool {
                         "remove_practice",
                         "Remove a practice",
                         "Deletes a practice that has no review history. A practice with review history cannot be deleted:"
-                                + " set it to reviewed by nobody with update_practice instead. Undo it with"
-                                + " adopt_catalog_practice or create_practice."),
+                                + " set it to reviewed by nobody with update_practice instead. Before you remove it, keep what"
+                                + " get_practice returns: undo it with adopt_catalog_practice, or with create_practice and"
+                                + " that definition, then set its feedback mode and group again."),
                 INPUT_SCHEMA,
                 OUTPUT_SCHEMA,
                 McpTools.Effect.REMOVES);

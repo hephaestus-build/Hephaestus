@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.practices.DefinitionTestFixtures;
 import de.tum.cit.aet.hephaestus.practices.GroupAttributes;
 import de.tum.cit.aet.hephaestus.practices.PracticeGroupService;
 import de.tum.cit.aet.hephaestus.practices.catalog.CatalogService;
+import de.tum.cit.aet.hephaestus.testconfig.AuditedRequestCheck;
 import de.tum.cit.aet.hephaestus.testconfig.RealAuthIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Membership;
@@ -193,6 +194,7 @@ class McpWriteToolsIntegrationTest extends RealAuthIntegrationTest {
                 Map.of("slug", "mcp-invalid", "kind", "scm.pull_request", "definition", definition));
         assertThat(refused.path("isError").asBoolean()).isTrue();
         assertThat(text(refused)).doesNotContain("The tool failed");
+        assertThat(text(refused)).contains("criteria");
 
         Map<String, Object> created = new LinkedHashMap<>();
         created.put("slug", "mcp-stale");
@@ -285,6 +287,64 @@ class McpWriteToolsIntegrationTest extends RealAuthIntegrationTest {
     }
 
     @Test
+    void shouldAdoptACatalogGroupAsPreviewedAndRemoveWhatItAdded() {
+        String group = catalog.effectiveCatalog().installableGroups().getFirst().slug();
+        JsonNode preview = structured(call(writeToken, "preview_catalog_group", Map.of("slug", group)));
+        assertThat(preview.path("slug").asString()).isEqualTo(group);
+
+        JsonNode adopted = structured(call(
+                writeToken,
+                "adopt_catalog_group",
+                Map.of("slug", group, "previewEtag", preview.path("previewEtag").asString())));
+        assertThat(adopted.path("added").size()).isPositive();
+        for (JsonNode practice : adopted.path("added")) {
+            assertThat(practice.path("groupSlug").asString()).isEqualTo(group);
+        }
+        JsonNode again = call(
+                writeToken,
+                "adopt_catalog_group",
+                Map.of("slug", group, "previewEtag", preview.path("previewEtag").asString()));
+        assertThat(again.path("isError").asBoolean()).isTrue();
+        // A group adoption writes one definition row for each practice that it adds or moves, as over HTTP.
+        long changed =
+                (long) adopted.path("added").size() + adopted.path("moved").size();
+        assertThat(jdbc.queryForObject(
+                        "SELECT count(*) FROM config_audit_event WHERE workspace_id = ?"
+                                + " AND entity_type = 'PRACTICE_DEFINITION' AND mcp_client_grant_id = ?",
+                        Long.class,
+                        workspace.getId(),
+                        grantOf(writeToken)))
+                .isEqualTo(changed);
+        AuditedRequestCheck.acceptBulk(AdoptCatalogGroupTool.class, "call", changed);
+
+        for (JsonNode practice : adopted.path("added")) {
+            structured(call(
+                    writeToken,
+                    "remove_practice",
+                    Map.of("slug", practice.path("slug").asString())));
+        }
+        JsonNode listed = structured(call(writeToken, "list_practices", Map.of()));
+        for (JsonNode practice : adopted.path("added")) {
+            assertThat(listed.path("practices")
+                            .valueStream()
+                            .map(row -> row.path("slug").asString()))
+                    .doesNotContain(practice.path("slug").asString());
+        }
+    }
+
+    @Test
+    void shouldCountARefusedTokenAsInvalid() {
+        double before = counter("mcp.auth.refusals", "reason", "invalid_token");
+
+        flow.callTool("not-a-token", workspace.getWorkspaceSlug(), request("list_practices", Map.of()))
+                .expectStatus()
+                .isUnauthorized()
+                .expectBody(Void.class);
+
+        assertThat(counter("mcp.auth.refusals", "reason", "invalid_token")).isEqualTo(before + 1);
+    }
+
+    @Test
     void shouldPauseAndResumeFeedbackAndChangeTheScopeAndDefaultModeWithTheCurrentEtag() {
         JsonNode settings = structured(call(writeToken, "get_review_settings", Map.of()));
 
@@ -323,11 +383,16 @@ class McpWriteToolsIntegrationTest extends RealAuthIntegrationTest {
         assertThat(scoped.path("reviewScope").path("people").asString()).isEqualTo("SELECTED");
         assertThat(scoped.path("reviewScope").path("accountIds").get(0).asString())
                 .isEqualTo(String.valueOf(accountId));
+        JsonNode restored = structured(call(
+                writeToken,
+                "set_review_scope",
+                Map.of("etag", scoped.path("etag").asString(), "reviewScope", resumed.path("reviewScope"))));
+        assertThat(restored.path("reviewScope")).isEqualTo(resumed.path("reviewScope"));
 
         JsonNode approveFirst = structured(call(
                 writeToken,
                 "set_default_feedback_mode",
-                Map.of("etag", scoped.path("etag").asString(), "defaultFeedbackMode", "APPROVE_FIRST")));
+                Map.of("etag", restored.path("etag").asString(), "defaultFeedbackMode", "APPROVE_FIRST")));
         assertThat(approveFirst.path("defaultFeedbackMode").asString()).isEqualTo("APPROVE_FIRST");
         Map<String, Object> inherit = new HashMap<>();
         inherit.put("etag", approveFirst.path("etag").asString());
@@ -340,7 +405,7 @@ class McpWriteToolsIntegrationTest extends RealAuthIntegrationTest {
                         Long.class,
                         workspace.getId(),
                         grantOf(writeToken)))
-                .isEqualTo(5L);
+                .isEqualTo(6L);
     }
 
     private JsonNode call(String token, String tool, Map<String, Object> arguments) {

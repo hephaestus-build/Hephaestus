@@ -20,6 +20,7 @@ import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.security.ScmServerEndpointPolicy;
 import de.tum.cit.aet.hephaestus.core.security.SecurityHeaders;
 import de.tum.cit.aet.hephaestus.core.web.ApiPath;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.security.SecureRandom;
 import java.util.Base64;
 import javax.crypto.SecretKey;
@@ -326,10 +327,11 @@ public class AuthSecurityConfig {
             RevocationAwareJwtDecoder webAppDecoder,
             McpResources resources,
             AuthRateLimitFilter authRateLimitFilter,
-            Converter<Jwt, AbstractAuthenticationToken> authenticationConverter)
+            Converter<Jwt, AbstractAuthenticationToken> authenticationConverter,
+            MeterRegistry meterRegistry)
             throws Exception {
         JwtDecoder decoder = webAppDecoder.forAudience(McpTokenValidators.mcpAudience(resources));
-        McpChallenges challenges = new McpChallenges(resources);
+        McpChallenges challenges = new McpChallenges(resources, meterRegistry);
         http.securityMatcher(ApiPath.matchers().matcher("/workspaces/*/mcp"))
                 .sessionManagement(sessions -> sessions.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .csrf(csrf -> csrf.disable())

@@ -52,7 +52,9 @@ class AdoptCatalogGroupTool implements McpTool {
                         "Adds every available practice of a catalog group to this workspace and moves the group's practices"
                                 + " that the workspace already has into it, exactly as preview_catalog_group showed it. If the"
                                 + " catalog or the workspace changed since the preview, it changes nothing: preview again."
-                                + " Undo it with remove_practice for each added practice."),
+                                + " Before you adopt, keep what list_practices returns. Undo it with remove_practice for each"
+                                + " added practice and with move_practice_to_group for each moved practice and its earlier"
+                                + " group. A group that the adoption created stays, without practices."),
                 INPUT_SCHEMA,
                 OUTPUT_SCHEMA,
                 McpTools.Effect.ADDS);

@@ -25,7 +25,8 @@ The tool runs on the request thread, so the workspace context and the authentica
 4. **Write the input and output JSON Schemas by hand** as text blocks, and build the definition with `McpTools.readTool`.
    A write tool uses `McpTools.writeTool` with the `Effect` that names what it does, and overrides `writes()` to return `true`.
    A call of a write tool then needs `practices:write`: `McpWriteScopeFilter` answers 403 `insufficient_scope` before the tool runs.
-   A field that may be null is not in the schema's `required` list. The SDK checks the arguments without their null values.
+   A field whose null value has a meaning, such as "inherit", stays in the schema's `required` list with `null` among its values.
+   The server's mapper writes null values (`McpTools.withNulls`), so the SDK checks the arguments with them.
    Every object in the output schema has `"additionalProperties": false` and requires every property.
    The SDK validates each result against the output schema, so a field outside the schema fails the call.
 5. **Return a projection, never a DTO.** Build records that hold only the fields of the data contract.

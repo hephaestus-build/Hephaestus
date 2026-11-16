@@ -144,7 +144,7 @@ Every tool runs under the workspace of its endpoint and maps to one existing ser
 | `get_review_settings` | `PracticeReviewSettingsController.get` | review scope (modes, repository ids and branches, account ids), delivery status, default feedback mode, cooldown, deliver to merged, scope counts, `etag` |
 | `list_repositories` | `ItemController.list` for repository items | repository item id, provider, `owner/name` built from the structured fields, removed at |
 | `list_members` | `MembershipController.listMembers` | account id, provider login, role, review selected |
-| `check_practice_setup` (with the write tools) | review settings, practice definitions and the model assignments for reviews | for each practice, its [setup gaps](../contributor/practice-feedback-language.mdx#practices): no model assigned for a slot and tier, reviewed by people or nobody, an empty review scope (these stop reviews); feedback mode Off, delivery paused (these stop feedback) |
+| `check_practice_setup` (with the review tools) | review settings, practice definitions and the model assignments for reviews | for each practice, its [setup gaps](../contributor/practice-feedback-language.mdx#practices): no model assigned for a slot and tier, reviewed by people or nobody, an empty review scope (these stop reviews); feedback mode Off, delivery paused (these stop feedback) |
 | `list_reviews` | `ReviewSummaryController.list` | review id, kind, origin, status, created and completed times, stop reason code, item reference, and for each practice: slug, status, reason code |
 | `get_review` | `ReviewSummaryController.get` | the same for one review, with job status codes and timing. A practice withheld for its [practice readiness](../contributor/practice-review-glossary.mdx#runtime-terms) carries the readiness reason code, in the sense of ADR 0069 only |
 
@@ -153,10 +153,10 @@ Every tool runs under the workspace of its endpoint and maps to one existing ser
 | Tool | Maps to | Role | Reverse |
 |---|---|---|---|
 | `adopt_catalog_practice` | `CatalogAdoptionController.adopt` | admin | `remove_practice`; with review history, `update_practice` to reviewed by nobody |
-| `adopt_catalog_group` | `CatalogAdoptionController.adoptGroup` | admin | the same, for each adopted practice |
+| `adopt_catalog_group` | `CatalogAdoptionController.adoptGroup` | admin | `remove_practice` for each added practice, and `move_practice_to_group` for each moved practice to the group that `list_practices` showed before. A group that the adoption created stays, without practices |
 | `create_practice` | `PracticeCatalogController.create` | admin | `remove_practice` |
 | `update_practice` | `PracticeCatalogController.update` | admin | `update_practice` with the earlier definition, or `reset_practice` |
-| `reset_practice` | `PracticeCatalogController.reset` | admin | `update_practice` with the local definition, which `get_practice` returned before |
+| `reset_practice` | `PracticeCatalogController.reset` | admin | `update_practice` with the local definition, and `move_practice_to_group` with the group, which `get_practice` returned before |
 | `remove_practice` | `PracticeCatalogController.delete` | admin | `adopt_catalog_practice` or `create_practice` |
 | `set_practice_feedback_mode` | `PracticeCatalogController.mode` | admin | the same tool with the earlier value; `null` inherits |
 | `move_practice_to_group` | `PracticeCatalogController.bind` | admin | the same tool with the earlier group |
@@ -166,6 +166,8 @@ Every tool runs under the workspace of its endpoint and maps to one existing ser
 | `request_review` | `ReviewRequestController.requestReview` | member | `cancel_review` |
 | `cancel_review` | `ReviewSummaryController.cancelReview` | admin | `request_review` |
 
+`request_review` and `cancel_review` arrive with the review-tools pull request.
+A reverse restores what a person sees in the web app, with two limits that the web app has too: a practice moved back into a group lands at its end, not at its earlier position, and a reset also moves the practice's catalog base to the newest catalog release, so the undo does not bring back a pending catalog update.
 `adopt_catalog_practice`, `adopt_catalog_group` and `reset_practice` name the validator of the preview that the client read, as the web app sends it in `If-Match`. A change since the preview changes nothing.
 `update_practice` takes the changed fields of the definition and the `expectedVersionId`.
 It applies them to the current definition and calls the same update, so the service still validates the whole definition, writes a new version and audits it.
@@ -205,7 +207,7 @@ The consent page shows the client's self-declared name as plain text below the h
 
 ### Audit, limits and signals
 
-16\. **Every write is audited by the service that makes it.** Configuration writes record their `config_audit_event` row in the same transaction, with the account as the actor, as over HTTP. The row gains `mcp_client_grant_id` (nullable, `sfk_`), so the config history names the client through the retained grant. `request_review` records the requester on the review row, as over HTTP. Every cancel path records who cancelled the review, over HTTP and MCP alike; the write-tools pull request adds the recorded actor where a path lacks it. `AuditByDefaultArchTest` extends to tool methods.
+16\. **Every write is audited by the service that makes it.** Configuration writes record their `config_audit_event` row in the same transaction, with the account as the actor, as over HTTP. The row gains `mcp_client_grant_id` (nullable, `sfk_`), so the config history can name the client through the retained grant; the history view shows it from the review-tools pull request on. `request_review` records the requester on the review row, as over HTTP. Every cancel path records who cancelled the review, over HTTP and MCP alike; the review-tools pull request adds the recorded actor where a path lacks it. `McpToolHandlerParityArchTest` carries the audit-by-default rule for tool methods: a tool for a mutation has its handler's audit annotation.
 
 17\. **Workspace admins see and revoke the grants of their workspace.** The workspace console lists each active grant (client host and name, account, scopes, approved at) and revokes it. An account also ends its own MCP sessions from its session list.
 
@@ -239,7 +241,7 @@ The consent page shows the client's self-declared name as plain text below the h
 - Bad: we own the OAuth endpoints' request validation, the metadata document resolver and the consent flow. They are small, follow stable RFCs, and are tested over HTTP against PostgreSQL.
 - Bad: an MCP client cannot inspect outcomes or feedback, and it cannot work in a workspace that requires an admin passkey. Admins use the web app for both.
 - Bad: consent on every authorization. An admin approves again after the session ends.
-- Neutral: the write tools and their audit column, `check_practice_setup`, and the actor of every cancel path arrive with the write-tools pull request, with its own integration test.
+- Neutral: the configuration write tools and their audit column arrive with the write-tools pull request, with `McpWriteToolsIntegrationTest`. `request_review`, `cancel_review`, `check_practice_setup`, the actor of every cancel path, and the client in the config history view arrive with the review-tools pull request.
 
 ## Confirmation
 
