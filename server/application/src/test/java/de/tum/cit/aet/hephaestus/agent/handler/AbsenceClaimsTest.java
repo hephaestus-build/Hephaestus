@@ -7,6 +7,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
@@ -34,24 +35,21 @@ class AbsenceClaimsTest extends BaseUnitTest {
                 .toList();
 
         assertThat(markers).containsExactlyElementsOf(AbsenceClaims.MARKERS);
-        var disclaimer = Pattern.compile("export const ABSENCE_DISCLAIMER = String\\.raw`([^`]*)`;")
-                .matcher(runner);
-        assertThat(disclaimer.find())
-                .as("pi-session-reads.ts declares ABSENCE_DISCLAIMER")
-                .isTrue();
-        assertThat(disclaimer.group(1)).isEqualTo(AbsenceClaims.DISCLAIMER);
-        var clauseEnd = Pattern.compile("export const ABSENCE_CLAUSE_END = String\\.raw`([^`]*)`;")
-                .matcher(runner);
-        assertThat(clauseEnd.find())
-                .as("pi-session-reads.ts declares ABSENCE_CLAUSE_END")
-                .isTrue();
-        assertThat(clauseEnd.group(1)).isEqualTo(AbsenceClaims.CLAUSE_END);
-        var plainSearch = Pattern.compile("export const ABSENCE_PLAIN_SEARCH = String\\.raw`([^`]*)`;")
-                .matcher(runner);
-        assertThat(plainSearch.find())
-                .as("pi-session-reads.ts declares ABSENCE_PLAIN_SEARCH")
-                .isTrue();
-        assertThat(plainSearch.group(1)).isEqualTo(AbsenceClaims.PLAIN_SEARCH);
+        Map.of(
+                        "ABSENCE_DISCLAIMER", AbsenceClaims.DISCLAIMER,
+                        "ABSENCE_CLAUSE_END", AbsenceClaims.CLAUSE_END,
+                        "ABSENCE_PLAIN_SEARCH", AbsenceClaims.PLAIN_SEARCH,
+                        "ABSENCE_CATEGORY", AbsenceClaims.CATEGORY,
+                        "ABSENCE_NEGATION", AbsenceClaims.NEGATION,
+                        "ABSENCE_LIST_ITEM", AbsenceClaims.LIST_ITEM)
+                .forEach((name, expected) -> {
+                    var declared = Pattern.compile("export const " + name + " = String\\.raw`([^`]*)`;")
+                            .matcher(runner);
+                    assertThat(declared.find())
+                            .as("pi-session-reads.ts declares " + name)
+                            .isTrue();
+                    assertThat(declared.group(1)).as(name).isEqualTo(expected);
+                });
         var genericWords = Pattern.compile("export const ABSENCE_GENERIC_WORDS = \\[(.*?)\\n];", Pattern.DOTALL)
                 .matcher(runner);
         assertThat(genericWords.find())

@@ -565,6 +565,12 @@ export const ABSENCE_DISCLAIMER = String.raw`\b(?:did|does|do|could|can|would)(?
 export const ABSENCE_CLAUSE_END = String.raw`(?<=[.;:])[ \t\r\n\u00A0]+|,[ \t\r\n\u00A0]+(?=(?:but|and|so|yet|while|though|although)[ \t\r\n\u00A0])|[ \t\r\n\u00A0]+[—–-][ \t\r\n\u00A0]+|[ \t\r\n\u00A0]*[()][ \t\r\n\u00A0]*`;
 /** What `AbsenceClaims.java` reads as a plain search and as words that name no subject. */
 export const ABSENCE_PLAIN_SEARCH = String.raw`(?:\(\?i\))?(?:\\b)?[\p{L}\p{N}_-]+(?:\\b)?(?:\|(?:\\b)?[\p{L}\p{N}_-]+(?:\\b)?)*`;
+/** Words that make a claim about a category of things rather than the words that the search held. */
+export const ABSENCE_CATEGORY = String.raw`\b(?:vocabular(?:y|ies)|terminology|concepts?|constructs?|notions?|any (?:kind|sort|form) of|of any (?:kind|sort|form)|(?:kinds?|sorts?) of)\b|\b[\p{L}\p{N}]+-related\b`;
+/** Where a claim's negation starts its scope: a list before it names no absent subject. */
+export const ABSENCE_NEGATION = String.raw`\b(?:no|none|neither|nothing|not|nowhere|never|lacks?|without|missing|absent)\b|n['\u2019]t\b`;
+/** The items of a list of subjects inside one claim: "no A, B or C". */
+export const ABSENCE_LIST_ITEM = String.raw`,[ \t\r\n\u00A0]*(?:(?:and|or|nor)[ \t\r\n\u00A0]+)?|[ \t\r\n\u00A0]+(?:or|nor)[ \t\r\n\u00A0]+`;
 export const ABSENCE_GENERIC_WORDS = [
 	"a",
 	"across",
@@ -690,6 +696,13 @@ export const ABSENCE_GENERIC_WORDS = [
 const ABSENCE_PATTERNS = ABSENCE_MARKERS.map((marker) => new RegExp(marker, "iu"));
 const DISCLAIMER = new RegExp(ABSENCE_DISCLAIMER, "iu");
 const CLAUSE_END = new RegExp(ABSENCE_CLAUSE_END, "u");
+const CATEGORY = new RegExp(ABSENCE_CATEGORY, "iu");
+const LIST_ITEM = new RegExp(ABSENCE_LIST_ITEM, "iu");
+const NEGATION = new RegExp(ABSENCE_NEGATION, "iu");
+/** A clause that only ends a list, as "and C" ends "no A, B, and C". */
+const LIST_END = /^(?:and|or|nor)[ \t\r\n\u00A0]+/iu;
+/** A clause that a sentence end, not a comma, split off: no list goes on past it. */
+const SENTENCE_END = /[.;:]$/u;
 
 const PLAIN_SEARCH = new RegExp(`^(?:${ABSENCE_PLAIN_SEARCH})$`, "u");
 const WORD_BREAK = /(?<=\p{Ll})(?=\p{Lu})|[^\p{L}\p{N}]+/u;
@@ -866,7 +879,33 @@ export function unsearchedClaim(
 	consulted: boolean,
 ): string | undefined {
 	const terms = patterns.flatMap(termsOf);
-	return claimsOf(subject, texts, consulted).find((claim) => !holdsTerm(terms, claim));
+	return claimsOf(subject, texts, consulted).find((claim) => !backs(terms, claim));
+}
+
+/**
+ * Whether a search backs one claim. A claim may be no broader than its search: one about a category, such as "no
+ * persistence vocabulary", is backed by no plain search, and one that lists its subjects needs a searched word for
+ * each. `AbsenceClaims.java` decides the same at admission.
+ */
+function backs(terms: readonly SearchTerm[], claim: string): boolean {
+	if (CATEGORY.test(claim)) {
+		return false;
+	}
+	const items = listItems(claim);
+	return items.length < 2 ? holdsTerm(terms, claim) : items.every((item) => holdsTerm(terms, item));
+}
+
+/** The subjects that a claim lists after its negation, each with content words. */
+function listItems(claim: string): string[] {
+	return scopeOf(claim)
+		.split(LIST_ITEM)
+		.filter((item) => content(item).length > 0);
+}
+
+/** A claim from its negation on, or all of it without one. */
+function scopeOf(claim: string): string {
+	const negation = NEGATION.exec(claim);
+	return negation === null ? claim : claim.slice(negation.index);
 }
 
 /** The first claim that a search with matches names: the result must then say what they are. */
@@ -883,10 +922,33 @@ export function claimWithHits(
 /** The text of each claim: a clause that names its own subject, or else what the result looked for. */
 function claimsOf(subject: string, texts: readonly string[], consulted: boolean): string[] {
 	const clauses = texts
-		.flatMap((text) => text.split(CLAUSE_END))
-		.filter(claimed)
+		.flatMap(claimedClauses)
 		.map((clause) => (content(clause).length === 0 ? subject : clause));
 	return clauses.length === 0 && consulted ? [subject] : clauses;
+}
+
+/**
+ * The clauses of a text that say something is absent. The clause split ends "no A, B, and C" before "and C", so the
+ * last subject of a claim's list is a claim of its own. It is added, never joined, so that it cannot back the claim
+ * before it. `AbsenceClaims.java` reads the same claims.
+ */
+function claimedClauses(text: string): string[] {
+	const claims: string[] = [];
+	let listOpen = false;
+	for (const clause of text.split(CLAUSE_END)) {
+		if (claimed(clause)) {
+			claims.push(clause);
+			listOpen = scopeOf(clause).includes(",") && !SENTENCE_END.test(clause);
+			continue;
+		}
+		const end = LIST_END.exec(clause);
+		const item = end === null ? "" : clause.slice(end[0].length);
+		if (listOpen && content(item).length > 0) {
+			claims.push(item);
+		}
+		listOpen = false;
+	}
+	return claims;
 }
 
 /** The texts and warrants of a submission that the absence check reads, as the candidate carries them. */
@@ -971,12 +1033,18 @@ export function unreadCheckoutClaim(
 	if (searches.length > 0) {
 		const unsearched = unsearchedClaim(subject, textsOf(submission), searches, consulted);
 		if (unsearched !== undefined) {
-			return askUntied
+			if (!askUntied) {
+				return undefined;
+			}
+			return CATEGORY.test(unsearched)
 				? {
 						kind: "untied",
-						text: `no search of the whole checkout names what this claim says is absent: "${unsearched}". Either reword the claim to name what you searched for, or call the grep tool with ignoreCase and a plain word that the claim holds, alternatives joined by |. A pattern with any other syntax names nothing. If you can do neither, remove the claim and keep only what the cited lines show.`,
+						text: `this claim says a whole category is absent: "${unsearched}". No search can show that, because the category also takes forms whose words a search does not hold, such as annotations, framework types and configuration keys. Reword the claim to say which words no file contains, as in "no file contains the words persisted, contract or auth", or remove the claim and keep only what the cited lines show.`,
 					}
-				: undefined;
+				: {
+						kind: "untied",
+						text: `no search of the whole checkout names what this claim says is absent: "${unsearched}". Either reword the claim to name what you searched for, or call the grep tool with ignoreCase and a plain word that the claim holds, alternatives joined by |. A pattern with any other syntax names nothing. If you can do neither, remove the claim and keep only what the cited lines show.`,
+					};
 		}
 		const unexplained = claimWithHits(subject, textsOf(submission), withMatches, consulted);
 		const account = search?.hits ?? inapplicability?.hits;

@@ -777,6 +777,36 @@ class ReviewOutputServiceTest extends BaseUnitTest {
                 NAMED + ", but no search of the whole checkout names what it says is absent");
     }
 
+    /**
+     * PR 65 of the precision audit: the outcome was right, but the sentence claimed a whole vocabulary absent while the
+     * search held only its literal words. An entity, a repository interface and a controller held that vocabulary. The
+     * search holds a word of each listed subject, so only the claim about a category withholds it.
+     */
+    @Test
+    void shouldWithholdAClaimAboutAVocabularyThatASearchOfItsWordsCannotShow() {
+        pr50Capture(SourceCompleteness.COMPLETE);
+        String claim = "The checkout contains no persisted-model, wire-contract, mechanism, auth or removal vocabulary"
+                + " anywhere.";
+
+        prepare(
+                        job,
+                        pr50ErrorHandling(
+                                List.of(searched(PR50_HEAD, "(?i)persisted|contract|auth|removal")), candidate -> {
+                                    absenceOutcome(candidate, ResultOutcome.DOES_NOT_APPLY)
+                                            .put("summary", "No significant decision to record")
+                                            .put("explanation", claim);
+                                    ((ObjectNode) candidate.path("evidence").path("inapplicability"))
+                                            .put("prerequisite", "a persisted model, wire contract, auth or removal")
+                                            .put("ruledOutBy", claim);
+                                    return candidate;
+                                }))
+                .record(job);
+
+        assertWithheld(
+                CandidateRefusal.ABSENCE_NOT_SEARCHED,
+                NAMED + ", but no search of the whole checkout names what it says is absent");
+    }
+
     private ObjectNode testAbsence(ObjectNode candidate, String claim) {
         candidate.put("summary", "Test coverage").put("explanation", claim);
         ((ObjectNode) candidate.path("problems").get(0))
