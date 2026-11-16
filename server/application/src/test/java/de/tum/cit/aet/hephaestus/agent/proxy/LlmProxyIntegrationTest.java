@@ -93,8 +93,10 @@ import io.micrometer.tracing.Tracer;
 import java.lang.management.ManagementFactory;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
+import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -109,6 +111,7 @@ import mockwebserver3.Dispatcher;
 import mockwebserver3.MockResponse;
 import mockwebserver3.MockWebServer;
 import mockwebserver3.RecordedRequest;
+import org.awaitility.Awaitility;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -1051,6 +1054,131 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
         }
     }
 
+    // Header names and reset forms: https://developers.openai.com/api/docs/guides/rate-limits
+    // and https://platform.claude.com/docs/en/api/rate-limits#response-headers.
+    // The stub supplies documented wire shapes; this is not a live commercial-provider test.
+    @ParameterizedTest
+    @CsvSource({
+        "x-ratelimit-remaining-requests, x-ratelimit-reset-requests, 1s, 16",
+        "x-ratelimit-remaining-tokens, x-ratelimit-reset-tokens, 6m0s, 6000",
+        "anthropic-ratelimit-requests-remaining, anthropic-ratelimit-requests-reset, RFC3339, 10000",
+        "anthropic-ratelimit-tokens-remaining, anthropic-ratelimit-tokens-reset, RFC3339, 10000",
+        "anthropic-ratelimit-input-tokens-remaining, anthropic-ratelimit-input-tokens-reset, RFC3339, 10000",
+        "anthropic-ratelimit-output-tokens-remaining, anthropic-ratelimit-output-tokens-reset, RFC3339, 10000"
+    })
+    void shouldApplyDocumentedRateHeadersFromAStubProviderWithoutLoweringTheLimit(
+            String remaining, String reset, String resetValue, long pauseMillis) throws Exception {
+        try (var upstream = new MockWebServer()) {
+            String value = resetValue.equals("RFC3339")
+                    ? Instant.now()
+                            .plusSeconds(3600)
+                            .truncatedTo(ChronoUnit.SECONDS)
+                            .toString()
+                    : resetValue;
+            upstream.enqueue(completedStream()
+                    .addHeader(remaining, "0")
+                    .addHeader(reset, value)
+                    .build());
+            upstream.start();
+            Instant began = databaseNow();
+            var pool = streamUntilTheProviderEnds(upstream.url("/v1").toString(), 8, null, Duration.ofMinutes(2));
+
+            // The pause is written on its own thread: wait only for it to exist. The bound is checked once afterwards,
+            // against the database time read as soon as it appeared, so a wrong pause cannot pass once time moves on.
+            Awaitility.await()
+                    .atMost(Duration.ofSeconds(5))
+                    .pollInterval(Duration.ofMillis(10))
+                    .until(() -> callPools.findById(pool.getId()).orElseThrow().getNoCallBefore() != null);
+            Instant seen = databaseNow();
+            var stored = callPools.findById(pool.getId()).orElseThrow();
+            assertThat(stored.getNoCallBefore())
+                    .isAfterOrEqualTo(began.plusMillis(pauseMillis))
+                    .isBeforeOrEqualTo(seen.plusMillis(pauseMillis));
+            assertThat(stored.getLearnedLimit()).isEqualTo(8);
+            assertThat(calls(pool, "completed")).isEqualTo(1);
+            assertThat(upstream.getRequestCount()).isEqualTo(1);
+        }
+    }
+
+    @Test
+    void shouldUseTheLearnedLimitWhenTheStubProviderSendsNoRateHeaders() throws Exception {
+        try (var upstream = new MockWebServer()) {
+            upstream.enqueue(completedStream().build());
+            upstream.start();
+            var pool = streamUntilTheProviderEnds(upstream.url("/v1").toString(), 8, null, Duration.ofMinutes(2));
+
+            // served() decides on the response head whether a bucket is empty, and only then starts the write. With no
+            // rate headers it returns first, so the row and the counter read after the response are final.
+            var stored = callPools.findById(pool.getId()).orElseThrow();
+            assertThat(stored.getNoCallBefore()).isNull();
+            assertThat(stored.getLearnedLimit()).isEqualTo(8);
+            assertThat(bucketsReached(pool)).isZero();
+            assertThat(calls(pool, "completed")).isEqualTo(1);
+            assertThat(calls(pool, "error")).isZero();
+            assertThat(upstream.getRequestCount()).isEqualTo(1);
+        }
+    }
+
+    @Test
+    void shouldKeepTheStubProviders429AndRetryAfterWhenItOutlastsTheCaller() throws Exception {
+        // https://platform.claude.com/docs/en/api/rate-limits#response-headers specifies Retry-After in seconds.
+        try (var upstream = new MockWebServer()) {
+            upstream.enqueue(new MockResponse.Builder()
+                    .code(429)
+                    .addHeader("Content-Type", "application/json")
+                    .addHeader("Retry-After", "3600")
+                    .body("{\"type\":\"error\",\"error\":{\"type\":\"rate_limit_error\",\"message\":\"Rate limited\"}}")
+                    .build());
+            upstream.start();
+            Instant began = databaseNow();
+            var call = callOnce(
+                    upstream.url("/v1").toString(),
+                    8,
+                    null,
+                    Duration.ofMinutes(2),
+                    Duration.ofMinutes(5),
+                    new MockHttpServletResponse());
+            var pool = call.pool();
+
+            var answer = Objects.requireNonNull(call.ownAnswer());
+            assertThat(answer.getStatusCode().value()).isEqualTo(429);
+            assertThat(answer.getHeaders().getFirst("Retry-After")).isEqualTo("3600");
+            // The pool pauses for this test's 5 min maxCooldown, not the hour the provider asked for.
+            // throttled() writes the pause in the request's own transaction, so the row is final when the call returns.
+            assertThat(pool.getNoCallBefore())
+                    .isNotNull()
+                    .isAfterOrEqualTo(began.plus(Duration.ofMinutes(5)))
+                    .isBeforeOrEqualTo(databaseNow().plus(Duration.ofMinutes(5)));
+            assertThat(pool.getLearnedLimit()).isEqualTo(5);
+            assertThat(callRows.countActive(pool.getId())).isZero();
+            assertThat(upstream.getRequestCount()).isEqualTo(1);
+        }
+    }
+
+    private double bucketsReached(LlmCallPool pool) {
+        return meterRegistry
+                .get(AgentMetrics.LLM_POOL_UPSTREAM_BUCKET_REACHED)
+                .tag("pool", pool.getSlug())
+                .counters()
+                .stream()
+                .mapToDouble(Counter::count)
+                .sum();
+    }
+
+    private Instant databaseNow() {
+        return Objects.requireNonNull(jdbc.queryForObject("SELECT clock_timestamp()", Timestamp.class))
+                .toInstant();
+    }
+
+    private static MockResponse.Builder completedStream() {
+        return new MockResponse.Builder()
+                .code(200)
+                .addHeader("Content-Type", "text/event-stream")
+                .body("data: {\"choices\":[{\"delta\":{\"content\":\"Ready\"}}]}\n\n"
+                        + "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}]}\n\n"
+                        + "data: [DONE]\n\n");
+    }
+
     /**
      * The work window of a call that only the attempt's end may end. It must outlast the proxy's work before it calls
      * the provider, so a slow machine cannot end the attempt before its call starts.
@@ -1075,6 +1203,28 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
      */
     private LlmCallPool streamOnce(
             String baseUrl, int limit, @Nullable Integer baselineMillis, Duration silence, Duration workLeft)
+            throws Exception {
+        var response = new MockHttpServletResponse();
+        var call = callOnce(baseUrl, limit, baselineMillis, silence, workLeft, response);
+        // A streamed answer writes the response itself; an answer of the proxy's own is a call that never streamed.
+        assertThat(call.ownAnswer())
+                .as("the proxy answered instead of streaming the provider's call")
+                .isNull();
+        assertThat(response.getContentType()).startsWith("text/event-stream");
+        return call.pool();
+    }
+
+    /** The pool after one call, and the answer the proxy gave itself when it did not stream. */
+    private record Call(LlmCallPool pool, @Nullable ResponseEntity<?> ownAnswer) {}
+
+    /** One review call on the model's own pool that reaches the provider. */
+    private Call callOnce(
+            String baseUrl,
+            int limit,
+            @Nullable Integer baselineMillis,
+            Duration silence,
+            Duration workLeft,
+            MockHttpServletResponse response)
             throws Exception {
         ReviewJob job = reviewJob(baseUrl);
         job = jobRepository.saveAndFlush(job);
@@ -1106,7 +1256,6 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
         var request = new MockHttpServletRequest("POST", "/internal/llm/chat/completions");
         request.setRemoteAddr("127.0.0.1");
         request.addHeader("Authorization", "Bearer " + tokenFor(job, workLeft));
-        var response = new MockHttpServletResponse();
         var body = objectMapper.createObjectNode().put("model", "caller-model").put("stream", true);
         body.putArray("messages").addObject().put("role", "user").put("content", "Review.");
         AtomicReference<@Nullable ResponseEntity<?>> ownAnswer = new AtomicReference<>();
@@ -1115,12 +1264,7 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 response,
                 (ignoredRequest, ignoredResponse) -> ownAnswer.set(
                         service.proxy(request, response, new HttpHeaders(), objectMapper.writeValueAsBytes(body))));
-        // A streamed answer writes the response itself; an answer of the proxy's own is a call that never streamed.
-        assertThat(ownAnswer.get())
-                .as("the proxy answered instead of streaming the provider's call")
-                .isNull();
-        assertThat(response.getContentType()).startsWith("text/event-stream");
-        return callPools.findById(poolId).orElseThrow();
+        return new Call(callPools.findById(poolId).orElseThrow(), ownAnswer.get());
     }
 
     private double calls(LlmCallPool pool, String outcome) {
