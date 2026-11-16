@@ -64,11 +64,11 @@ export interface PracticeProfilePageProps {
 	 */
 	firstRun?: Omit<ProfileFirstRunProps, "reviewed">;
 	/**
-	 * The reader's next steps, which the route loads only while a setup step is open. While `shown`,
-	 * its review step says what the first-run state says, so the empty feedback list does not say it
-	 * twice. Absent in a user view.
+	 * The reader's next steps, which the route loads only while a setup step is open. While
+	 * `saysFirstRun`, the list's open first-review step says what the first-run state says, so the
+	 * empty feedback list does not say it twice. Absent in a user view.
 	 */
-	getStarted?: { list: ReactNode; shown: boolean };
+	getStarted?: { list: ReactNode; saysFirstRun: boolean };
 	state: LoadState;
 	/** The control that starts the guided tour; absent where the reader cannot take it, such as in a user view. */
 	tourAction?: ReactNode;
@@ -165,7 +165,7 @@ export function PracticeProfilePage({
 	const showFirstRun =
 		firstRun !== undefined &&
 		// While the list shows, its first-review step says this. A hidden list leaves it to the page.
-		getStarted?.shown !== true &&
+		getStarted?.saysFirstRun !== true &&
 		feedbackCards.length === 0 &&
 		firstRunApplies(firstRun.readiness, reviewed, firstRun.activeReview);
 

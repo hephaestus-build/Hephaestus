@@ -91,6 +91,22 @@ export function getStartedSetupOpen({
 	);
 }
 
+/**
+ * Whether the list's first-review step says what the page's first-run state says: the step shows
+ * and is not done. A decision leaves no step, so the page keeps saying why no review runs, also
+ * while a setup step keeps the list open.
+ */
+export function getStartedSaysFirstRun(
+	onboarding: GetStartedOnboarding | undefined,
+	review: GetStartedReview | undefined,
+): boolean {
+	if (onboarding === undefined || review === undefined) {
+		return false;
+	}
+	const status = reviewStepStatus(review, onboarding);
+	return status !== undefined && status !== "done";
+}
+
 /** The overview's facts about the first review, as the setup steps read them. */
 export function reviewFromOverview(
 	overview: Pick<PracticeProfileOverview, "latestReview" | "activeReview" | "reviewReadiness">,

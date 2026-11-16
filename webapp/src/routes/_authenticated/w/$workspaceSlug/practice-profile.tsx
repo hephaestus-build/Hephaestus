@@ -30,6 +30,7 @@ import { useSectionOpen } from "@/components/layout/section-folds";
 import {
 	getStartedFoldKey,
 	type GetStartedReview,
+	getStartedSaysFirstRun,
 	reviewFromOverview,
 } from "@/components/onboarding/get-started-open";
 import { isFocusSwitchStep } from "@/components/practice-focus/practice-focus";
@@ -77,7 +78,7 @@ import { useTourProgress } from "@/components/tour/tour-progress";
 import { TOUR_START_PROPS, tourOffered } from "@/components/tour/tour-start";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";
-import { useGetStartedShown } from "@/hooks/use-get-started-shown";
+import { useGetStartedMounted } from "@/hooks/use-get-started-mounted";
 import { REVIEW_PAGE_SIZE, usePracticeGroupDetail } from "@/hooks/use-practice-group-detail";
 import { usePracticePageFeedback } from "@/hooks/use-practice-page-feedback";
 import { usePracticeProfileOverview } from "@/hooks/use-practice-profile-overview";
@@ -101,6 +102,8 @@ const PracticeProfileTour = lazy(async () => {
 export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/practice-profile")({
 	component: PracticeProfile,
 	head: pageHead("Practice profile"),
+	// A workspace switch starts the page afresh, so no step seen in the last workspace reads as done here.
+	remountDeps: ({ params }) => params.workspaceSlug,
 	validateSearch: practiceProfileSearchSchema,
 	search: {
 		middlewares: [
@@ -167,11 +170,13 @@ const GetStartedSection = lazy(async () => {
  * Get started on the reader's own Practice profile: their setup from the member onboarding read, their
  * first review from the overview the page already polls, and the tour chapters they finished here.
  * The list loads only once a setup step is open, and then stays, so the step that closes it is still
- * announced. A list that cannot load shows nothing: it is optional guidance.
+ * announced. A list that cannot load shows nothing, because it is optional guidance, and the page says
+ * its first-run words itself.
  */
 function practiceProfileGetStarted({
 	mounted,
-	shown,
+	failed,
+	onFail,
 	workspaceSlug,
 	workspaceName,
 	memberOnboarding,
@@ -184,7 +189,9 @@ function practiceProfileGetStarted({
 	onStartChapter,
 }: {
 	mounted: boolean;
-	shown: boolean;
+	/** The list's code could not load, so the page says everything itself. */
+	failed: boolean;
+	onFail: () => void;
 	workspaceSlug: string;
 	workspaceName: string;
 	memberOnboarding: UseQueryResult<WorkspaceOnboarding>;
@@ -231,9 +238,17 @@ function practiceProfileGetStarted({
 		},
 	};
 	return {
-		shown: shown && fold.open,
+		// Only a list with an open first-review step can stand in for the page's words. A failed list,
+		// a hidden one, and one with no such step leave them to the page. While the list's code still
+		// downloads, neither shows: the words would only jump into the list a moment later.
+		saysFirstRun:
+			!failed &&
+			fold.open &&
+			inputs.onboarding.state.status === "ready" &&
+			overviewState.status === "ready" &&
+			getStartedSaysFirstRun(memberOnboarding.data, review),
 		list: (
-			<CatchBoundary getResetKey={() => "get-started"} errorComponent={() => null}>
+			<CatchBoundary getResetKey={() => "get-started"} onCatch={onFail} errorComponent={() => null}>
 				<Suspense fallback={null}>
 					<GetStartedSection inputs={inputs} fold={fold} />
 				</Suspense>
@@ -265,6 +280,7 @@ function PracticeProfile() {
 	const [getStartedOpen, setGetStartedOpen] = useSectionOpen(
 		getStartedFoldKey(accountId, workspaceSlug),
 	);
+	const [getStartedFailed, setGetStartedFailed] = useState(false);
 	// The workspace layout holds this read already; Get started takes the reader's setup from it.
 	const memberOnboarding = useQuery({
 		...getMemberOnboardingOptions({ path: { workspaceSlug } }),
@@ -292,7 +308,7 @@ function PracticeProfile() {
 	} = usePracticeStandings(workspaceSlug);
 	const { overview, ...overviewQuery } = usePracticeProfileOverview(workspaceSlug);
 	const reviewFacts = reviewFromOverview(overview);
-	const getStartedView = useGetStartedShown({
+	const getStartedMounted = useGetStartedMounted({
 		userView: readOnly,
 		onboarding: memberOnboarding.data,
 		review: reviewFacts,
@@ -493,8 +509,9 @@ function PracticeProfile() {
 	};
 	const closeTour = () => setTour(null);
 	const getStarted = practiceProfileGetStarted({
-		mounted: getStartedView.mounted,
-		shown: getStartedView.shown,
+		mounted: getStartedMounted,
+		failed: getStartedFailed,
+		onFail: () => setGetStartedFailed(true),
 		workspaceSlug,
 		workspaceName,
 		memberOnboarding,

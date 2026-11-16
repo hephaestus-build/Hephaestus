@@ -2049,6 +2049,60 @@ describe("Get started", () => {
 		expect(screen.getAllByText("Choose your AI to get reviews")).toHaveLength(1);
 	});
 
+	it.each([
+		{ blocker: "NO_AI", reason: "Hephaestus does not review your work here" },
+		{ blocker: "REVIEWS_OFF", reason: "Practice reviews are off here" },
+	] as const)(
+		"keeps saying why no review runs ($blocker) while an open account step keeps the list",
+		async ({ blocker, reason }) => {
+			server.use(
+				dayOneOverview({ ...READY_REVIEW_READINESS, blocker }),
+				onboardingAnswers({ enabled: true, links: [GITLAB_LINK] }),
+			);
+			await renderProfile();
+			const list = await getStarted();
+			within(list).getByRole("link", { name: "Connect GitLab" });
+			// A decision is no step, so the list has no first-review step and the page says the reason.
+			expect(within(list).queryByText("Your first practice review")).toBeNull();
+			await screen.findByText(reason, undefined, ROUTE_RENDER_WAIT);
+		},
+	);
+
+	it("starts afresh in another workspace, so no step there is announced as just done", async () => {
+		const overviews = new Map([
+			[
+				"acme",
+				{ ...OVERVIEW_FIXTURE, latestReview: null, reviewReadiness: READY_REVIEW_READINESS },
+			],
+			["beta", { ...OVERVIEW_FIXTURE, reviewReadiness: READY_REVIEW_READINESS }],
+		]);
+		server.use(
+			http.get("*/workspaces", () =>
+				HttpResponse.json([
+					workspaceListItem("acme", { practicesEnabled: true }),
+					workspaceListItem("beta", { practicesEnabled: true }),
+				]),
+			),
+			http.get("*/workspaces/:workspaceSlug/practice-profile/overview", ({ params }) =>
+				HttpResponse.json(overviews.get(String(params.workspaceSlug))),
+			),
+			onboardingAnswers({ enabled: true, links: [GITLAB_LINK] }),
+		);
+		const router = await renderProfile();
+		within(await getStarted()).getByText("0 of 2 done");
+
+		await router.navigate({
+			to: "/w/$workspaceSlug/practice-profile",
+			params: { workspaceSlug: "beta" },
+		});
+		// Beta's first review is done, and acme's was not: that is no news about this workspace.
+		await waitFor(
+			() => within(screen.getByRole("region", { name: "Get started" })).getByText("1 of 2 done"),
+			ROUTE_RENDER_WAIT,
+		);
+		expect(screen.queryByText(/^Done: /u)).toBeNull();
+	});
+
 	it("marks a step done only from the server's facts, and goes once every step is done", async () => {
 		server.use(
 			onboardingAnswers({

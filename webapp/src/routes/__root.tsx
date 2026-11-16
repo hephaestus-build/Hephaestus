@@ -23,7 +23,7 @@ import { lazy, type ReactNode, Suspense, useEffect, useState, useSyncExternalSto
 import {
 	getIntegrationCatalogOptions,
 	getMemberOnboardingOptions,
-	getOwnPracticeProfileOverviewQueryKey,
+	getOwnPracticeProfileOverviewOptions,
 } from "@/api/@tanstack/react-query.gen";
 import type { PracticeProfileOverview, WorkspaceOnboarding } from "@/api/types.gen";
 import { UserViewBanner } from "@/components/admin/users/UserViewBanner";
@@ -540,8 +540,10 @@ function AppSidebarContainer() {
 
 	// The overview as the Practice profile last read it: the sidebar never asks for it itself, so a
 	// page without the list makes no read for it. Until the profile has read it, only the setup counts.
-	const overview = useQuery<PracticeProfileOverview>({
-		queryKey: getOwnPracticeProfileOverviewQueryKey({
+	// A first review that lands while the reader is elsewhere clears the row once the profile reads
+	// the overview again; a poll on every page for one sidebar row would cost more than it is worth.
+	const overview = useQuery({
+		...getOwnPracticeProfileOverviewOptions({
 			path: { workspaceSlug: chromeWorkspaceSlug ?? "" },
 		}),
 		enabled: false,
