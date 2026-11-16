@@ -19,8 +19,11 @@
 		"github-actions",
 		"custom.regex"
 	],
-	"dependencyDashboard": true,
-	"dependencyDashboardTitle": "Dependency Dashboard",
+	"dependencyDashboard": {
+		"enabled": true,
+		"title": "Dependency Dashboard",
+		"osvVulnerabilitySummary": "unresolved"
+	},
 	"lockFileMaintenance": {
 		"enabled": true,
 		"schedule": ["before 7am on monday"],
@@ -463,6 +466,5 @@
 	"prConcurrentLimit": 2,
 	"branchConcurrentLimit": 2,
 	"prHourlyLimit": 2,
-	"osvVulnerabilityAlerts": true,
-	"dependencyDashboardOSVVulnerabilitySummary": "unresolved"
+	"osvVulnerabilityAlerts": true
 }

@@ -381,7 +381,8 @@ void test("an update that waits for approval does not hold the CI updates groupe
 
 void test("vulnerability remediation bypasses normal update latency", () => {
 	assert.equal(config.osvVulnerabilityAlerts, true);
-	assert.equal(config.dependencyDashboardOSVVulnerabilitySummary, "unresolved");
+	assert.ok(isRecord(config.dependencyDashboard));
+	assert.equal(config.dependencyDashboard.osvVulnerabilitySummary, "unresolved");
 	assert.deepEqual(config.vulnerabilityAlerts, {
 		rangeStrategy: "replace",
 		enabled: true,
