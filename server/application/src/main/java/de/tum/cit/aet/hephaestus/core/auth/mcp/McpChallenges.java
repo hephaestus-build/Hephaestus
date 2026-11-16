@@ -1,10 +1,16 @@
 package de.tum.cit.aet.hephaestus.core.auth.mcp;
 
+import de.tum.cit.aet.hephaestus.core.metrics.CoreMetrics;
 import de.tum.cit.aet.hephaestus.core.web.ApiPath;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import java.util.List;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import org.springframework.http.HttpHeaders;
 import org.springframework.security.core.AuthenticationException;
@@ -19,17 +25,38 @@ public final class McpChallenges implements AuthenticationEntryPoint {
 
     private static final Pattern ENDPOINT = Pattern.compile("^/workspaces/([a-z0-9-]{1,64})/mcp$");
 
-    private final McpResources resources;
+    /** The refusal reasons: the challenge's {@code error}, or {@code missing_token} for a request without a token. */
+    private static final List<String> REASONS = List.of("missing_token", "invalid_token", "insufficient_scope");
 
-    public McpChallenges(McpResources resources) {
+    private final McpResources resources;
+    private final Map<String, Counter> refusals;
+
+    public McpChallenges(McpResources resources, MeterRegistry meterRegistry) {
         this.resources = resources;
+        // Every reason registers at start (ADR 0110 decision 19); a second instance reads the same counters.
+        this.refusals = REASONS.stream()
+                .collect(Collectors.toUnmodifiableMap(
+                        reason -> reason,
+                        reason -> Counter.builder(CoreMetrics.MCP_AUTH_REFUSALS)
+                                .description("Workspace MCP requests refused with a challenge, by reason")
+                                .tag("reason", reason)
+                                .register(meterRegistry)));
     }
 
     @Override
     public void commence(HttpServletRequest request, HttpServletResponse response, AuthenticationException failure) {
         String error = failure instanceof InvalidBearerTokenException ? "invalid_token" : null;
+        count(error == null ? "missing_token" : error);
         response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
         response.setHeader(HttpHeaders.WWW_AUTHENTICATE, challenge(slugOf(request), error, null));
+    }
+
+    /** Counts one refusal of a workspace MCP request. */
+    void count(String reason) {
+        Counter refused = refusals.get(reason);
+        if (refused != null) {
+            refused.increment();
+        }
     }
 
     /** A {@code Bearer} challenge; {@code error} and {@code scope} are optional parameters. */

@@ -358,6 +358,13 @@ groups:
         annotations:
           summary: At least three feedback deliveries to one destination failed in one hour
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+      - alert: HephaestusMcpToolsFailing
+        expr: sum(increase(mcp_tool_calls_total{job="hephaestus",outcome="failed"}[1h])) >= 3
+        labels:
+          severity: warning
+        annotations:
+          summary: At least three workspace MCP tool calls failed with a server error in one hour
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusReviewSandboxFailing
         expr: sum(increase(agent_job_infra_retry_requeued_total{job="hephaestus",cause="sandbox"}[1h])) >= 3
         labels:

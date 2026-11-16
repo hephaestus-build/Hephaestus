@@ -12,6 +12,11 @@ public interface McpTool {
     /** The tool's name, description and input and output schemas. */
     McpSchema.Tool definition();
 
+    /** Whether the tool changes the workspace, so that a call needs {@code practices:write} (ADR 0110 decision 14). */
+    default boolean writes() {
+        return false;
+    }
+
     /** Runs the tool. The arguments have passed the input schema. */
     McpSchema.CallToolResult call(Map<String, Object> arguments);
 }

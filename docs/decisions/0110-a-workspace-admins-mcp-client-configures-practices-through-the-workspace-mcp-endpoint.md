@@ -99,7 +99,7 @@ Observations, problems, marks, feedback, scan reports, traces and conversations 
 6\. **Hephaestus is the authorization server, with standard endpoints over the client session of ADR 0048** (option 7).
 
 - **Server metadata** at `/.well-known/oauth-authorization-server` (RFC 8414). The issuer is `hephaestus.auth.issuer`. It lists `response_types_supported: ["code"]`, `grant_types_supported: ["authorization_code", "refresh_token"]`, `code_challenge_methods_supported: ["S256"]`, `token_endpoint_auth_methods_supported: ["none"]`, `client_id_metadata_document_supported: true`, `authorization_response_iss_parameter_supported: true` and the two scopes. It has no registration endpoint: dynamic registration is deprecated in the specification.
-- **Protected resource metadata** for each workspace endpoint (RFC 9728) at `/.well-known/oauth-protected-resource/api/workspaces/{slug}/mcp`, with the issuer and `scopes_supported: ["practices:read"]`. Every 401 and every 403 carries `WWW-Authenticate: Bearer resource_metadata="…"`.
+- **Protected resource metadata** for each workspace endpoint (RFC 9728) at `/.well-known/oauth-protected-resource/api/workspaces/{slug}/mcp`, with the issuer and `scopes_supported: ["practices:read", "practices:write"]`. The 401 challenge names no scope, so a client asks for the scopes it needs from this list, and the consent page shows each one. Every 401 and every 403 carries `WWW-Authenticate: Bearer resource_metadata="…"`.
 - **Clients register only by client ID metadata document.** A `client_id` is an HTTPS URL with a path and no userinfo, fragment or dot segment (CIMD § 3). The fetch runs through `SsrfGuardedResolverGroup`, which checks every resolved address at connect time and thus stops DNS rebinding, without `PrivateHostAllowlist`. It follows no redirect, reads at most 5 KB, and runs only for a signed-in account under the sign-in rate limit. The document is fetched for every authorization request and never cached, so every check runs on what the client publishes now. The document's `client_id` must equal the URL, and its `token_endpoint_auth_method` must be `none`. `client_name` is cut to 80 characters, and `logo_uri` is never rendered.
 - **Redirects match the document.** A document lists only HTTPS redirects and loopback HTTP redirects (OAuth 2.1 § 2.3.1); any other scheme makes the whole document invalid. A redirect must equal one in the document, except that a listed loopback redirect (`http://127.0.0.1`, `http://[::1]` or `http://localhost`) matches with any port when scheme, host and path are equal (RFC 8252 § 7.3). A document that lists no loopback redirect gets no loopback match.
 - **PKCE `S256` is required.** A wrong verifier burns the code. The authorization response carries `iss` (RFC 9207), errors included.
@@ -121,7 +121,7 @@ Observations, problems, marks, feedback, scan reports, traces and conversations 
 
 13\. **No token passes through.** A tool calls application services in the server. It never forwards the MCP token, and it never reads or uses a provider token, an LLM key or another secret.
 
-14\. **Scopes.** `practices:read` admits the read tools. `practices:write` admits the write tools and implies `practices:read`. A call without the scope gets 403 with `error="insufficient_scope"`, `scope="practices:write"` and `resource_metadata`.
+14\. **Scopes.** `practices:read` admits the read tools. `practices:write` admits the write tools and implies `practices:read`. A call of a write tool under a grant without `practices:write` gets HTTP 403 with `error="insufficient_scope"`, `scope="practices:write"` and `resource_metadata` before the tool runs, so the client can ask the admin for the scope again (step-up).
 
 15\. **Each tool declares the HTTP handler it stands for (`@McpToolFor`), and an ArchUnit test compares them.** Every tool requires at least the workspace admin role, because only an admin can connect a client and a grant outlives a demotion. A tool's handler may require at most that role, so the tool is never weaker than its handler. The test resolves the effective authorization as `AdminPasskeyAuthorizationConfiguration.scope` resolves it: on the method, then on the class. A tool never maps to an operation that needs `@RequiresRecentSignIn` or the instance-admin role. Roles are checked on every call, so a demotion, a removal or a suspension takes effect on the next call.
 
@@ -138,11 +138,13 @@ Every tool runs under the workspace of its endpoint and maps to one existing ser
 | `get_practice` | `PracticeCatalogController.get` | one practice with its full definition and the `expectedVersionId` for an update |
 | `list_practice_groups` | `PracticeGroupController.list` | slug, name, position, feedback mode |
 | `list_catalog_practices` | `CatalogAdoptionController.list` | slug, name, kind, why it matters, group, availability, reviewed by |
-| `preview_catalog_practice` | `CatalogAdoptionController.preview` | the catalog definition that adoption would copy |
+| `preview_catalog_practice` | `CatalogAdoptionController.preview` | the catalog definition that adoption would copy, and the `previewEtag` that adoption names |
+| `preview_catalog_group` | `CatalogAdoptionController.previewGroup` | each practice of the catalog group with its availability, the action for each, and the `previewEtag` |
+| `preview_practice_reset` | `PracticeReleaseController.get` | the catalog definition that a reset restores, and the `resetEtag` that the reset names |
 | `get_review_settings` | `PracticeReviewSettingsController.get` | review scope (modes, repository ids and branches, account ids), delivery status, default feedback mode, cooldown, deliver to merged, scope counts, `etag` |
 | `list_repositories` | `ItemController.list` for repository items | repository item id, provider, `owner/name` built from the structured fields, removed at |
 | `list_members` | `MembershipController.listMembers` | account id, provider login, role, review selected |
-| `check_practice_setup` (with the write tools) | review settings, practice definitions and the model assignments for reviews | for each practice, its [setup gaps](../contributor/practice-feedback-language.mdx#practices): no model assigned for a slot and tier, reviewed by people or nobody, an empty review scope (these stop reviews); feedback mode Off, delivery paused (these stop feedback) |
+| `check_practice_setup` (with the review tools) | review settings, practice definitions and the model assignments for reviews | for each practice, its [setup gaps](../contributor/practice-feedback-language.mdx#practices): no model assigned for a slot and tier, reviewed by people or nobody, an empty review scope (these stop reviews); feedback mode Off, delivery paused (these stop feedback) |
 | `list_reviews` | `ReviewSummaryController.list` | review id, kind, origin, status, created and completed times, stop reason code, item reference, and for each practice: slug, status, reason code |
 | `get_review` | `ReviewSummaryController.get` | the same for one review, with job status codes and timing. A practice withheld for its [practice readiness](../contributor/practice-review-glossary.mdx#runtime-terms) carries the readiness reason code, in the sense of ADR 0069 only |
 
@@ -151,19 +153,22 @@ Every tool runs under the workspace of its endpoint and maps to one existing ser
 | Tool | Maps to | Role | Reverse |
 |---|---|---|---|
 | `adopt_catalog_practice` | `CatalogAdoptionController.adopt` | admin | `remove_practice`; with review history, `update_practice` to reviewed by nobody |
-| `adopt_catalog_group` | `CatalogAdoptionController.adoptGroup` | admin | the same, for each adopted practice |
+| `adopt_catalog_group` | `CatalogAdoptionController.adoptGroup` | admin | `remove_practice` for each added practice, and `move_practice_to_group` for each moved practice to the group that `list_practices` showed before. A group that the adoption created stays, without practices |
 | `create_practice` | `PracticeCatalogController.create` | admin | `remove_practice` |
 | `update_practice` | `PracticeCatalogController.update` | admin | `update_practice` with the earlier definition, or `reset_practice` |
-| `reset_practice` | `PracticeCatalogController.reset` | admin | `update_practice` with the local definition, which `get_practice` returned before |
+| `reset_practice` | `PracticeCatalogController.reset` | admin | `update_practice` with the local definition, and `move_practice_to_group` with the group, which `get_practice` returned before |
 | `remove_practice` | `PracticeCatalogController.delete` | admin | `adopt_catalog_practice` or `create_practice` |
 | `set_practice_feedback_mode` | `PracticeCatalogController.mode` | admin | the same tool with the earlier value; `null` inherits |
 | `move_practice_to_group` | `PracticeCatalogController.bind` | admin | the same tool with the earlier group |
 | `set_review_scope` | `PracticeReviewSettingsController.update` | admin | the same tool with the scope that `get_review_settings` returned |
-| `set_default_feedback_mode` | the same | admin | the same tool, or reset to inherit |
+| `set_default_feedback_mode` | the same | admin | the same tool with the earlier `defaultFeedbackModeOverride`, which is null when the workspace inherits |
 | `set_feedback_delivery` | the same, `deliveryStatus` | admin | `PAUSED` and `ACTIVE` reverse each other |
 | `request_review` | `ReviewRequestController.requestReview` | member | `cancel_review` |
 | `cancel_review` | `ReviewSummaryController.cancelReview` | admin | `request_review` |
 
+`request_review` and `cancel_review` arrive with the review-tools pull request.
+A reverse restores what a person sees in the web app, with two limits that the web app has too: a practice moved back into a group lands at its end, not at its earlier position, and a reset also moves the practice's catalog base to the newest catalog release, so the undo does not bring back a pending catalog update.
+`adopt_catalog_practice`, `adopt_catalog_group` and `reset_practice` name the validator of the preview that the client read, as the web app sends it in `If-Match`. A change since the preview changes nothing.
 `update_practice` takes the changed fields of the definition and the `expectedVersionId`.
 It applies them to the current definition and calls the same update, so the service still validates the whole definition, writes a new version and audits it.
 A practice with review history cannot be deleted (409).
@@ -196,19 +201,19 @@ No tool returns:
 Only two kinds of free text go out: catalog content and workspace configuration.
 A workspace admin of the same workspace, or the catalog maintainers, wrote it.
 A different admin of the same workspace can therefore plant instructions in practice text, and a write that a client makes because of them is recorded under the account that approved the client.
-The tool descriptions are static, and they state that the fields `criteria`, `guidance`, `script` and `whyItMatters` are configuration text to treat as data.
+The tool descriptions are static, and they state that the practice definition, including `criteria`, `guidance` and `script`, and the catalog's `whyItMatters` are configuration text to treat as data.
 Every result is JSON in `structuredContent`, with free text only in those named fields.
 The consent page shows the client's self-declared name as plain text below the host that the client cannot choose.
 
 ### Audit, limits and signals
 
-16\. **Every write is audited by the service that makes it.** Configuration writes record their `config_audit_event` row in the same transaction, with the account as the actor, as over HTTP. The row gains `mcp_client_grant_id` (nullable, `sfk_`), so the config history names the client through the retained grant. `request_review` records the requester on the review row, as over HTTP. Every cancel path records who cancelled the review, over HTTP and MCP alike; the write-tools pull request adds the recorded actor where a path lacks it. `AuditByDefaultArchTest` extends to tool methods.
+16\. **Every write is audited by the service that makes it.** Configuration writes record their `config_audit_event` row in the same transaction, with the account as the actor, as over HTTP. The row gains `mcp_client_grant_id` (nullable, `sfk_`), so the config history can name the client through the retained grant; the history view shows it from the review-tools pull request on. `request_review` records the requester on the review row, as over HTTP. Every cancel path records who cancelled the review, over HTTP and MCP alike; the review-tools pull request adds the recorded actor where a path lacks it. `McpToolHandlerParityArchTest` carries the audit-by-default rule for tool methods: a tool for a mutation has its handler's audit annotation.
 
 17\. **Workspace admins see and revoke the grants of their workspace.** The workspace console lists each active grant (client host and name, account, scopes, approved at) and revokes it. An account also ends its own MCP sessions from its session list.
 
 18\. **Rate limits reuse the authentication rate-limit filter** (`core.auth.ratelimit`). The authorization endpoint and the consent decisions share the sign-in budget, which also bounds the metadata document fetches; the token endpoint shares the installed-client session budget; calls to a workspace MCP endpoint get their own budget for each account (`mcp-call`, 120 a minute). `request_review` keeps the review request budget when the write tools add it. The workspace's AI budget still applies to every review. These budgets are fixed by design, like every authentication rate limit, and the chart does not set them. They stop a runaway or hostile client; they do not size capacity. The `mcp-call` budget belongs to each approving account and each replica, so an instance with more admins or replicas gets more budget without a setting. An agent that configures practices makes a few calls a minute, far below 120. Only limits that follow an outside quota, such as e-mail sending and sync backfill, are operator values.
 
-19\. **Signals.** `mcp.tool.calls{tool, outcome}`, `mcp.auth.refusals{reason}` and `mcp.rate_limited{class}`. An alert fires on a sustained rate of 5xx outcomes. The runbook gets a row for "an MCP client cannot connect" (metadata, issuer or resource mismatch, passkey policy).
+19\. **Signals.** `mcp.tool.calls{tool, outcome}`, with the outcomes `ok`, `refused` and `failed`, and `mcp.auth.refusals{reason}`, with `missing_token` and the challenge errors `invalid_token` and `insufficient_scope`. A limited call counts in the existing `auth.ratelimit.blocked{bucket="mcp-call"}`. `HephaestusMcpToolsFailing` fires on three `failed` outcomes in one hour. Its runbook row also covers a client that cannot connect: `mcp.auth.refusals` names the reason, and the admin guide lists the consent refusals (metadata, issuer or resource mismatch, passkey policy).
 
 ### Surfaces
 
@@ -236,13 +241,15 @@ The consent page shows the client's self-declared name as plain text below the h
 - Bad: we own the OAuth endpoints' request validation, the metadata document resolver and the consent flow. They are small, follow stable RFCs, and are tested over HTTP against PostgreSQL.
 - Bad: an MCP client cannot inspect outcomes or feedback, and it cannot work in a workspace that requires an admin passkey. Admins use the web app for both.
 - Bad: consent on every authorization. An admin approves again after the session ends.
-- Neutral: the write tools and their audit column, `check_practice_setup`, and the actor of every cancel path arrive with the write-tools pull request, with its own integration test.
+- Neutral: the configuration write tools and their audit column arrive with the write-tools pull request, with `McpWriteToolsIntegrationTest`. `request_review`, `cancel_review`, `check_practice_setup`, the actor of every cancel path, and the client in the config history view arrive with the review-tools pull request.
 
 ## Confirmation
 
 - `McpAuthorizationConformanceIntegrationTest` checks one rule in each test, written from OAuth 2.1, RFC 8707, RFC 9207, RFC 8252 § 7.3 and the client ID metadata document draft. It fails when plain PKCE or a missing challenge is accepted, when a code works twice or after it expires, when a returning code leaves its session alive, when the first-party token endpoint redeems an MCP code, when a wrong verifier does not burn the code, when a redirect matches other than exactly or by the loopback port alone, when a token's audience is other than its resource, when a code is exchanged for another resource, when an authorization response lacks `iss`, when an old refresh secret does not end the session, when an MCP session refreshes at `/auth/client/refresh`, and when "sign out everywhere" leaves a code, a refresh secret or an access token working. It covers the two races of the round-3 review: an approval that races "sign out everywhere" writes no code, and an exchange never reactivates a grant that a console revoke ended, and an exchange waits for a console revoke's grant lock before it touches the code. It also fails when a web-app token, a token for another workspace, or a token whose workspace was renamed reaches a tool or refreshes, when a member who is not an admin can approve, and when a stale session can approve.
 - `McpPracticeToolsIntegrationTest` fails when a tool's output schema leaves an object open or a property optional, and when a demoted admin's next call is not refused with its reason. The SDK validates every result against its output schema, so a tool that returns a field outside the contract fails its call.
 - `McpToolHandlerParityArchTest` fails when a tool does not require the workspace admin role, when the handler it declares with `@McpToolFor` requires more, or when that handler needs the instance-admin role or a recent sign-in.
+- `McpWriteToolsIntegrationTest` fails when a grant without `practices:write` reaches a write tool instead of a 403 `insufficient_scope`, when a write tool accepts input that its handler refuses or names a different reason, when a write does not record its grant on the config audit row, or when a reverse tool does not restore what the write changed.
+- `McpToolHandlerParityArchTest` also fails when a tool for a mutation does not declare that it writes or does not carry its handler's audit annotation. `McpGrantAuditTrailDatabaseTest` fails when the prod trigger keeps an audit row from losing a deleted grant, or lets it change to another grant.
 - `ClientMetadataResolverTest` fails when a document with a redirect that is neither HTTPS nor loopback is accepted, or when a client name keeps control or bidi characters. `HttpClientMetadataSourceTest` fails when the fetch follows a redirect, reads more than 5 KB, waits past its timeout, or reaches a loopback or private address as shipped.
 - `McpProjectionsTest` fails when an item reference carries a title, a path or a channel name instead of a number.
 - `scripts/kubernetes-chart-render.test.ts` fails when the chart, with MCP on, does not route the two discovery paths to the server unchanged.

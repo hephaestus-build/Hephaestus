@@ -198,6 +198,13 @@ public class PracticeReleaseService {
                 .addNullable(
                         practice.getCatalogBase() == null ? null : mapper.writeValueAsString(practice.getCatalogBase()))
                 .add(offeredTag)
+                // A reset also restores the catalog group, so a move after the preview makes the preview stale.
+                .addNullable(
+                        practice.getGroup() == null
+                                ? null
+                                : Objects.requireNonNull(practice.getGroup().getId())
+                                        .toString())
+                .addInt(practice.getPosition())
                 .hex();
     }
 

@@ -78,7 +78,7 @@ class NativeHibernateJsonPersistenceIntegrationTest extends BaseIntegrationTest 
         var config = ConfigAuditEvent.create(
                 now,
                 null,
-                new ConfigAuditActor(ConfigAuditActorKind.SYSTEM, null, null, false),
+                new ConfigAuditActor(ConfigAuditActorKind.SYSTEM, null, null, false, null),
                 ConfigAuditEntityType.CATALOG_PRACTICE,
                 "text-fixture",
                 ConfigAuditAction.UPDATED,

@@ -175,6 +175,16 @@ public class AuditedRequestCheck {
         VIOLATIONS.removeIf(violation -> violation.handler().equals(handler) && violation.written() == 0);
     }
 
+    /**
+     * Accepts the requests of one bulk handler since the last check that wrote {@code rows} rows of its type: one
+     * for each thing it changed, such as each practice that a group adoption added or moved. The calling test vouches
+     * for the count. A request that wrote another count of its type still fails.
+     */
+    public static void acceptBulk(Class<?> handlerType, String method, long rows) {
+        String handler = handlerType.getName() + "." + method;
+        VIOLATIONS.removeIf(violation -> violation.handler().equals(handler) && violation.matching() == rows);
+    }
+
     /** Forgets violations that a request outside any test, such as in {@code @BeforeAll}, left behind. */
     public static void reset() {
         VIOLATIONS.clear();

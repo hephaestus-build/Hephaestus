@@ -103,7 +103,7 @@ public class CatalogAdoptionService {
         return new CatalogGroupAdoptionResult(added, List.copyOf(moved));
     }
 
-    record CatalogGroupAdoptionResult(List<Practice> added, List<Practice> moved) {}
+    public record CatalogGroupAdoptionResult(List<Practice> added, List<Practice> moved) {}
 
     /** Serialises adoptions into one workspace; nothing here writes the workspace row itself. */
     private void lockWorkspace(WorkspaceContext context) {

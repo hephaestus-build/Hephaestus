@@ -1,8 +1,10 @@
 package de.tum.cit.aet.hephaestus.core.mcp;
 
+import de.tum.cit.aet.hephaestus.core.auth.mcp.McpCallGrant;
 import de.tum.cit.aet.hephaestus.core.auth.mcp.McpGrantGuard;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.web.ApiPath;
+import io.micrometer.core.instrument.MeterRegistry;
 import io.modelcontextprotocol.json.jackson3.JacksonMcpJsonMapper;
 import io.modelcontextprotocol.server.McpServer;
 import io.modelcontextprotocol.server.McpStatelessServerFeatures;
@@ -11,12 +13,16 @@ import io.modelcontextprotocol.server.transport.DefaultServerTransportSecurityVa
 import io.modelcontextprotocol.spec.McpSchema;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.mcp.server.webmvc.transport.WebMvcStatelessServerTransport;
+import org.springframework.aop.support.AopUtils;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
+import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.annotation.AnnotationUtils;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.function.RouterFunction;
@@ -39,7 +45,7 @@ class McpServerConfiguration {
     WebMvcStatelessServerTransport mcpTransport(
             JsonMapper jsonMapper, @Value("${hephaestus.host-url}") String hostUrl) {
         return WebMvcStatelessServerTransport.builder()
-                .jsonMapper(new JacksonMcpJsonMapper(jsonMapper))
+                .jsonMapper(new JacksonMcpJsonMapper(McpTools.withNulls(jsonMapper)))
                 .messageEndpoint(ENDPOINT)
                 // A browser page on another origin must not drive the endpoint (DNS rebinding).
                 .securityValidator(DefaultServerTransportSecurityValidator.builder()
@@ -48,21 +54,37 @@ class McpServerConfiguration {
                 .build();
     }
 
-    /** Every request passes its grant check before the MCP server sees it. */
+    /**
+     * Every request passes its grant check, then the write-scope check, before the MCP server sees it. The filter
+     * added last runs first, so the grant guard is added last.
+     */
     @Bean
-    RouterFunction<ServerResponse> mcpRoutes(WebMvcStatelessServerTransport mcpTransport, McpGrantGuard grantGuard) {
-        return mcpTransport.getRouterFunction().filter(grantGuard);
+    RouterFunction<ServerResponse> mcpRoutes(
+            WebMvcStatelessServerTransport mcpTransport,
+            McpGrantGuard grantGuard,
+            List<McpTool> tools,
+            JsonMapper jsonMapper) {
+        return mcpTransport
+                .getRouterFunction()
+                .filter(new McpWriteScopeFilter(tools, jsonMapper, grantGuard))
+                .filter(grantGuard);
     }
 
     @Bean(destroyMethod = "close")
     McpStatelessSyncServer mcpServer(
-            WebMvcStatelessServerTransport mcpTransport, JsonMapper jsonMapper, List<McpTool> tools) {
+            WebMvcStatelessServerTransport mcpTransport,
+            JsonMapper jsonMapper,
+            List<McpTool> tools,
+            ApplicationContext applicationContext,
+            MeterRegistry meterRegistry) {
+        McpRefusals refusals = new McpRefusals(applicationContext);
+        McpToolMetrics metrics = new McpToolMetrics(meterRegistry, tools);
         List<McpStatelessServerFeatures.SyncToolSpecification> specifications = tools.stream()
                 .map(tool -> new McpStatelessServerFeatures.SyncToolSpecification(
-                        tool.definition(), (context, request) -> invoke(tool, request)))
+                        tool.definition(), (context, request) -> invoke(tool, request, refusals, metrics)))
                 .toList();
         return McpServer.sync(mcpTransport)
-                .jsonMapper(new JacksonMcpJsonMapper(jsonMapper))
+                .jsonMapper(new JacksonMcpJsonMapper(McpTools.withNulls(jsonMapper)))
                 .serverInfo("hephaestus", "1")
                 .capabilities(
                         McpSchema.ServerCapabilities.builder().tools(false).build())
@@ -76,19 +98,51 @@ class McpServerConfiguration {
      * A refusal is a tool error that names its reason, never a protocol failure: the client must see why
      * the tool did not do what it asked.
      */
-    static McpSchema.CallToolResult invoke(McpTool tool, McpSchema.CallToolRequest request) {
+    static McpSchema.CallToolResult invoke(
+            McpTool tool, McpSchema.CallToolRequest request, McpRefusals refusals, McpToolMetrics metrics) {
+        String name = tool.definition().name();
+        // The write-scope filter answers the challenge; this check is the one that a write never passes without the
+        // scope.
+        if (tool.writes() && !McpCallGrant.current().map(McpCallGrant::writes).orElse(false)) {
+            metrics.record(name, McpToolMetrics.Outcome.REFUSED);
+            return error(
+                    "This client may only read this workspace. Ask an admin to connect it again and allow changes.");
+        }
         try {
-            return tool.call(request.arguments() == null ? Map.of() : request.arguments());
+            McpSchema.CallToolResult result = tool.call(request.arguments() == null ? Map.of() : request.arguments());
+            metrics.record(name, McpToolMetrics.Outcome.OK);
+            return result;
         } catch (AccessDeniedException refused) {
+            metrics.record(name, McpToolMetrics.Outcome.REFUSED);
             return error("Your role in this workspace does not allow this tool.");
         } catch (ResponseStatusException refused) {
+            if (refused.getStatusCode().is5xxServerError()) {
+                return failed(name, refused, metrics);
+            }
+            metrics.record(name, McpToolMetrics.Outcome.REFUSED);
             String reason = refused.getReason();
             return error(reason == null ? "The request was refused." : reason);
         } catch (RuntimeException failed) {
-            // Any other message may name internals, so the client gets none of it.
-            log.error("mcp: tool {} failed", tool.definition().name(), failed);
-            return error("The tool failed. Try again later.");
+            Optional<String> refusal = refusals.clientError(controllerOf(tool), failed);
+            if (refusal.isPresent()) {
+                metrics.record(name, McpToolMetrics.Outcome.REFUSED);
+                return error(refusal.get());
+            }
+            return failed(name, failed, metrics);
         }
+    }
+
+    /** A server error's message may name internals, so the client gets none of it. */
+    private static McpSchema.CallToolResult failed(String name, RuntimeException failure, McpToolMetrics metrics) {
+        metrics.record(name, McpToolMetrics.Outcome.FAILED);
+        log.error("mcp: tool {} failed", name, failure);
+        return error("The tool failed. Try again later.");
+    }
+
+    /** The controller of the handler that the tool stands for, whose advice decides how a refusal reads. */
+    private static Class<?> controllerOf(McpTool tool) {
+        McpToolFor handler = AnnotationUtils.findAnnotation(AopUtils.getTargetClass(tool), McpToolFor.class);
+        return handler == null ? Object.class : handler.controller();
     }
 
     static McpSchema.CallToolResult error(String message) {

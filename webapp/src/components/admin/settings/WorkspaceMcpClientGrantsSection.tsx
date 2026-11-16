@@ -47,8 +47,8 @@ export function WorkspaceMcpClientGrantsSection({
 				Connected MCP clients
 			</h2>
 			<p className="mb-4 max-w-2xl text-sm text-muted-foreground">
-				Programs such as Claude Code that an admin allowed to read this workspace’s practice
-				configuration. Disconnecting one ends its access at once.
+				Programs such as Claude Code that an admin allowed to read, or to change, this workspace’s
+				practice configuration. Disconnecting one ends its access at once.
 			</p>
 			<div className="space-y-3">
 				{loading && (
@@ -83,6 +83,12 @@ export function WorkspaceMcpClientGrantsSection({
 							<Item key={grant.id} render={<li />} variant="row">
 								<ItemContent>
 									<ItemTitle>{grant.clientHost}</ItemTitle>
+									{/* Outside the clamped description, so a long name never hides what the client may do. */}
+									<p className="text-sm font-medium">
+										{grant.scopes.includes("practices:write")
+											? "Reads and changes the practice configuration"
+											: "Reads the practice configuration"}
+									</p>
 									<ItemDescription>
 										Calls itself {grant.clientName}. Allowed by {grant.approvedBy}
 										{grant.approvedAt === undefined ? "" : ` on ${formatDate(grant.approvedAt)}`}.

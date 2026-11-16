@@ -131,6 +131,7 @@ erDiagram
         TEXT old_value
         TEXT new_value
         BOOLEAN elevated_via_instance_admin "NOT NULL"
+        UUID mcp_client_grant_id FK
     }
 
     ConsentDecision {
@@ -312,6 +313,7 @@ erDiagram
     Account ||--o{ ClientSignInHandoff : has
     Account ||--o{ ConfigAuditEvent : acting_account_id
     Account ||--o{ ConfigAuditEvent : actor_account_id
+    McpClientGrant ||--o{ ConfigAuditEvent : has
     Workspace ||--o{ ConfigAuditEvent : has
     Account ||--o{ ConsentDecision : has
     Account ||--o{ Identity : has

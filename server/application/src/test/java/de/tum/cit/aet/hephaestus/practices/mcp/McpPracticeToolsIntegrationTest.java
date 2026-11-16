@@ -13,13 +13,17 @@ import de.tum.cit.aet.hephaestus.workspace.MembershipRepository;
 import de.tum.cit.aet.hephaestus.workspace.RepositorySelection;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 import io.modelcontextprotocol.server.McpStatelessSyncServer;
 import io.modelcontextprotocol.spec.McpSchema;
+import java.time.Duration;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import org.awaitility.Awaitility;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -55,6 +59,9 @@ class McpPracticeToolsIntegrationTest extends RealAuthIntegrationTest {
 
     @Autowired
     private McpStatelessSyncServer server;
+
+    @Autowired
+    private MeterRegistry meterRegistry;
 
     @Value("${hephaestus.auth.cookie-name:__Host-HEPHAESTUS_AT}")
     private String cookieName;
@@ -104,6 +111,33 @@ class McpPracticeToolsIntegrationTest extends RealAuthIntegrationTest {
                 .isEqualTo(false)
                 .jsonPath("$.result.structuredContent.practices[?(@.slug == 'mcp-listed')].versionNumber")
                 .isEqualTo(1);
+    }
+
+    /** A raw path would add one tag value per workspace until the URI-tag budget is spent. */
+    @Test
+    void shouldTagTheRequestMetricWithTheEndpointTemplateNotTheWorkspace() {
+        long before = endpointRequests();
+
+        flow.callTool(accessToken, workspace.getWorkspaceSlug(), LIST_PRACTICES)
+                .expectStatus()
+                .isOk()
+                .expectBody(Void.class);
+
+        // Earlier tests recorded the template too, so wait for this request's own count.
+        Awaitility.await().atMost(Duration.ofSeconds(5)).until(() -> endpointRequests() > before);
+        assertThat(meterRegistry.find("http.server.requests").timers())
+                .noneSatisfy(timer -> assertThat(timer.getId().getTag("uri")).contains(workspace.getWorkspaceSlug()));
+    }
+
+    /** The requests that the endpoint's template timer counted so far. */
+    private long endpointRequests() {
+        return meterRegistry
+                .find("http.server.requests")
+                .tag("uri", "/api/workspaces/{workspaceSlug}/mcp")
+                .timers()
+                .stream()
+                .mapToLong(Timer::count)
+                .sum();
     }
 
     @Test

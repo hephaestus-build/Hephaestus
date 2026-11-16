@@ -50,7 +50,8 @@ export interface McpConsentPageProps {
 const SCOPE_WORDS: Record<string, string> = {
 	"practices:read":
 		"Read this workspace’s practices, review settings, members’ provider logins and review status.",
-	"practices:write": "Change practices, feedback modes and who is reviewed, and request reviews.",
+	"practices:write":
+		"Add, change and remove practices, set feedback modes, choose the repositories and people that Hephaestus reviews, and pause feedback.",
 };
 
 const REFUSALS: Record<McpConsentRefusal, string> = {

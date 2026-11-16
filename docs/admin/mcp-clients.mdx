@@ -4,11 +4,12 @@ description: Turn on the workspace MCP endpoint, connect an MCP client such as C
 page_type: how-to
 ---
 
-An MCP client, such as Claude Code, can read a workspace's practice configuration for a workspace admin.
+An MCP client, such as Claude Code, can read and change a workspace's practice configuration for a workspace admin.
 It uses the workspace MCP endpoint, which speaks the [Model Context Protocol](https://modelcontextprotocol.io/).
 The client signs in with OAuth through Hephaestus, and the admin approves it once for one workspace.
 
 The client reads practice settings, review settings, the members' provider logins and review status.
+With the scope to change, it also adds, changes and removes practices, sets feedback modes, chooses the repositories and people that Hephaestus reviews, and pauses feedback.
 It never reads source code, observations, feedback, conversations or secrets.
 [ADR 0110](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0110-a-workspace-admins-mcp-client-configures-practices-through-the-workspace-mcp-endpoint.md) lists every field that a tool returns.
 
@@ -46,11 +47,23 @@ Instance admin access without a membership does not count.
 
 2. Start the client's sign-in. The client opens a browser.
 3. Sign in to Hephaestus if you are not signed in.
-4. Read the consent page. It shows the host that publishes the client's metadata, the name that the client gives itself, the workspace, and what the client may read.
+4. Read the consent page. It shows the host that publishes the client's metadata, the name that the client gives itself, the workspace, and what the client may read and change.
 5. Select **Allow** to approve, or **Deny** to refuse. If you signed in more than 5 minutes ago, Hephaestus asks you to confirm access first and then returns you to the same request.
 
 The client then calls the endpoint until its session ends.
 It signs in again after the absolute session deadline that also applies to the web app.
+
+### What the client may do
+
+| Scope | The client may |
+|---|---|
+| `practices:read` | Read the practice configuration. |
+| `practices:write` | Also change it: practices, feedback modes, the review scope, and whether feedback is paused. |
+
+The client asks for its scopes, and the consent page lists each one.
+A client that you allowed only to read asks again when it first tries a change.
+Hephaestus then shows the consent page once more, with both scopes.
+Each change that a client makes is recorded under your account, as a change in the web app is, and its audit record keeps which client made it.
 
 ### When consent is refused
 
