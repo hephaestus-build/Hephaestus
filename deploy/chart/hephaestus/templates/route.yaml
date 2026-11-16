@@ -59,8 +59,6 @@ spec:
         - path:
             type: PathPrefix
             value: /.well-known/oauth-protected-resource/
-      filters:
-        - {{ toJson $hsts }}
       backendRefs:
         - name: {{ include "hephaestus.name" (dict "root" . "component" "server") }}
           port: 8080
