@@ -1,4 +1,3 @@
-import defaultMdxComponents from "fumadocs-ui/mdx";
 import type { MDXComponents } from "mdx/types";
 import type { AnchorHTMLAttributes, ComponentPropsWithoutRef } from "react";
 
@@ -13,7 +12,8 @@ const ASSET = /\.(?:svg|webp|png|jpe?g|ya?ml|json|txt|pdf)$/u;
 const base = BASE;
 
 /*
- * The MDX components of a page. The content renders to static HTML with them; none of them hydrates.
+ * The MDX components of a page. They render as static HTML into the slots of the content island (`mdx-island.tsx`);
+ * none of them hydrates.
  * A link to a page file (`./upgrade.mdx`) resolves to the page URL, which carries the base path. A URL-relative link
  * (`./upgrade`) resolves against the page URL, as the browser would; a root-relative link (`/admin/upgrade`) gets the
  * base path.
@@ -21,8 +21,8 @@ const base = BASE;
 type HeadingTag = "h1" | "h2" | "h3" | "h4" | "h5" | "h6";
 
 /*
- * A heading links to its own anchor. Fumadocs' heading adds a copy button instead, but the content does not hydrate, so
- * that button does nothing, and its screen-reader text "Copy Anchor Link" enters each search result's heading.
+ * A heading links to its own anchor, as static HTML. Fumadocs' heading adds a copy button instead, and Pagefind would
+ * index its screen-reader text "Copy Anchor Link" as part of each search result's heading.
  */
 function anchoredHeading(Tag: HeadingTag) {
 	return function DocsHeading({
@@ -71,7 +71,6 @@ export function mdxComponents(page: DocsPage) {
 		);
 	}
 	return {
-		...defaultMdxComponents,
 		a: DocsAnchor,
 		h1: anchoredHeading("h1"),
 		h2: anchoredHeading("h2"),

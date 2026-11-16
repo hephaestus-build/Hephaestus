@@ -2,7 +2,6 @@ import { useFumadocsLoader } from "fumadocs-core/source/client";
 import type { TOCItemType } from "fumadocs-core/toc";
 import { DocsLayout } from "fumadocs-ui/layouts/docs";
 import {
-	DocsBody,
 	DocsDescription,
 	DocsPage,
 	DocsTitle,
@@ -53,7 +52,7 @@ export function Docs({
 						<MarkdownCopyButton markdownUrl={markdownUrl} />
 						<ViewOptionsPopover markdownUrl={markdownUrl} githubUrl={sourceUrl} pageUrl={pageUrl} />
 					</div>
-					<DocsBody>{children}</DocsBody>
+					{children}
 					<div className="text-fd-muted-foreground flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
 						<EditOnGitHub href={editUrl} />
 						<a className="underline" href={markdownUrl}>

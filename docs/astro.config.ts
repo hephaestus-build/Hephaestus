@@ -162,6 +162,7 @@ export default defineConfig({
 	publicDir: "./static",
 	integrations: [
 		fumadocs({
+			components: "./src/components/mdx-island.tsx",
 			collections: Object.fromEntries(GUIDES.map((guide) => [guide.path, { dir: guide.path }])),
 			lastModified: true,
 			includeProcessedMarkdown: { output: "function" },
