@@ -1989,7 +1989,7 @@ export const zAssignRoleRequest = z.object({
 });
 
 /**
- * Bind a model and execution limits to an agent purpose
+ * Assign a model and execution limits to a model purpose
  */
 export const zModelAssignmentRequest = z.object({
 	enabled: z.boolean().optional(),

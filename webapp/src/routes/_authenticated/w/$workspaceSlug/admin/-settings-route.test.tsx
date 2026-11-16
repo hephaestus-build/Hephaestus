@@ -327,7 +327,7 @@ describe("the setup summary", () => {
 	it("says Unknown for a fact whose refresh failed, and the fact again once it reads", async () => {
 		serveSetupReads("acme");
 		serveAcmeWorkspace();
-		const agents = serveRead("*/workspaces/acme/model-assignments", {
+		const assignments = serveRead("*/workspaces/acme/model-assignments", {
 			status: 200,
 			body: [
 				{
@@ -345,12 +345,12 @@ describe("the setup summary", () => {
 		await waitFor(() => expect(setupRow("Review model").textContent).toContain("Done"));
 
 		// The cache still holds the ready model; the failed read must not keep claiming it.
-		agents.answer = { status: 503 };
+		assignments.answer = { status: 503 };
 		await reread(queryClient, listModelAssignmentsQueryKey(ACME));
 		await waitFor(() => expect(setupRow("Review model").textContent).toContain("Unknown"));
 		expect(setupRow("Review model").textContent).not.toContain("Ready for every AI choice");
 
-		agents.answer = { status: 200, body: [] };
+		assignments.answer = { status: 200, body: [] };
 		await reread(queryClient, listModelAssignmentsQueryKey(ACME));
 		await waitFor(() =>
 			expect(setupRow("Review model").textContent).toContain(

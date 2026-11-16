@@ -405,7 +405,7 @@ async function configureLlm(api: Api, config: Config): Promise<number> {
 	return modelId;
 }
 
-async function bindAgents(api: Api, config: Config, modelId: number): Promise<void> {
+async function assignModels(api: Api, config: Config, modelId: number): Promise<void> {
 	for (const purpose of ["PRACTICE_REVIEW", "CONVERSATION"]) {
 		await api("PUT", `/workspaces/${config.workspaceSlug}/model-assignments/${purpose}`, {
 			workspaceModelId: modelId,
@@ -414,12 +414,12 @@ async function bindAgents(api: Api, config: Config, modelId: number): Promise<vo
 			timeoutSeconds: purpose === "CONVERSATION" ? 300 : 1200,
 		});
 	}
-	const agents = array(
+	const assignments = array(
 		await api("GET", `/workspaces/${config.workspaceSlug}/model-assignments`),
-		"agent bindings",
+		"model assignments",
 	);
-	if (agents.filter((agent) => agent.ready === true).length !== 2) {
-		throw new Error("both agent purposes must be ready");
+	if (assignments.filter((assignment) => assignment.ready === true).length !== 2) {
+		throw new Error("both model purposes must be ready");
 	}
 }
 
@@ -606,7 +606,7 @@ async function main(): Promise<void> {
 			},
 		);
 		const modelId = await configureLlm(api, config);
-		await bindAgents(api, config, modelId);
+		await assignModels(api, config, modelId);
 		await definePractices(api, config);
 		if (config.repository !== undefined) {
 			const monitored = await api("GET", `/workspaces/${config.workspaceSlug}/repositories`);

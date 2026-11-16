@@ -40,7 +40,7 @@ public record AvailableLlmModelDTO(
         DataHandlingTier dataHandlingTier,
 
         @NonNull
-        @Schema(description = "The purposes a binding may assign this model to, from its connection's protocol")
+        @Schema(description = "The model purposes this model can be assigned to, from its connection's protocol")
         List<ModelPurpose> purposes,
 
         @NonNull @Schema(description = "Pricing mode") PricingMode pricingMode,

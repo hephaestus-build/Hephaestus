@@ -125,7 +125,7 @@ public class ModelAssignmentService {
             @Nullable Long workspaceModelId) {
         if ((instanceModelId == null) == (workspaceModelId == null)) {
             throw new InvalidInputException(
-                    "A binding must reference exactly one model. Use a shared model or a model from your own"
+                    "A model assignment must reference exactly one model. Use a shared model or a model from your own"
                             + " provider.");
         }
         if (instanceModelId != null) {

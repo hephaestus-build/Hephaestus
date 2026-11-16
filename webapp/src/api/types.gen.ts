@@ -476,7 +476,7 @@ export type AvailableLlmModel = {
 	 */
 	pricingMode: PricingMode;
 	/**
-	 * The purposes a binding may assign this model to, from its connection's protocol
+	 * The model purposes this model can be assigned to, from its connection's protocol
 	 */
 	purposes: Array<ModelPurpose>;
 	/**
@@ -3417,11 +3417,11 @@ export type ModelAssignment = {
 	instanceModelId?: number;
 	purpose: ModelPurpose;
 	/**
-	 * True when the bound model is available to run right now
+	 * True when the assigned model is available to run right now
 	 */
 	ready: boolean;
 	/**
-	 * The members this binding serves now, named by the tier of their choice: IN_HOUSE and CLOUD for the members who chose them, UNDECLARED for the members who have not chosen. Empty when the binding serves no member.
+	 * The members this model assignment serves now, named by the tier of their choice: IN_HOUSE and CLOUD for the members who chose them, UNDECLARED for the members who have not chosen. Empty when the model assignment serves no member.
 	 */
 	servedTiers: Array<DataHandlingTier>;
 	timeoutSeconds?: number;
@@ -3429,7 +3429,7 @@ export type ModelAssignment = {
 };
 
 /**
- * Bind a model and execution limits to an agent purpose
+ * Assign a model and execution limits to a model purpose
  */
 export type ModelAssignmentRequest = {
 	/**

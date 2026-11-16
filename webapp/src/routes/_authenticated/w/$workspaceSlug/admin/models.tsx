@@ -83,7 +83,7 @@ export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/admin/mod
 	component: ModelsContainer,
 });
 
-const AGENT_WRITE_MUTATION_KEY = ["workspaceWriteAgent"];
+const MODEL_ASSIGNMENT_WRITE_MUTATION_KEY = ["workspaceWriteModelAssignment"];
 
 const isDataHandlingTier = (value: unknown): value is DataHandlingTier =>
 	typeof value === "string" && DATA_HANDLING_TIERS.some((tier) => tier === value);
@@ -124,8 +124,8 @@ function ModelsContainer() {
 	const setSearch = useSearchState();
 	const queryClient = useQueryClient();
 
-	const saveKey = [...AGENT_WRITE_MUTATION_KEY, workspaceSlug, "save"];
-	const clearKey = [...AGENT_WRITE_MUTATION_KEY, workspaceSlug, "clear"];
+	const saveKey = [...MODEL_ASSIGNMENT_WRITE_MUTATION_KEY, workspaceSlug, "save"];
+	const clearKey = [...MODEL_ASSIGNMENT_WRITE_MUTATION_KEY, workspaceSlug, "clear"];
 
 	const bindingsOptions = listModelAssignmentsOptions({ path: { workspaceSlug } });
 	const workspaceOptions = getWorkspaceOptions({ path: { workspaceSlug } });
