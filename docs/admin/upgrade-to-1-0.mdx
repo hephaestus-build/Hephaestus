@@ -351,3 +351,24 @@ The migration entry of a stopped change can give its own rollback notes.
 
 [Sizing and scaling](./sizing) states the workload and limits of its measurements.
 A successful upgrade does not qualify throughput or recovery time.
+
+## Troubleshooting
+
+### A server of 1.0.0-rc.9 stops answering, then restarts
+
+This is a known issue of 1.0.0-rc.9.
+A server can stop answering for about five minutes, until its liveness probe fails.
+This is rare.
+Kubernetes then restarts the server container.
+No data is lost.
+Each practice review that ran on that server loses one attempt.
+If the review has attempts left, it runs again.
+
+1. Confirm the cause: `kubectl --namespace <namespace> describe pod <pod>`.
+   The events show a failed liveness probe, and `Last State` shows the restart.
+2. If the server restarts again, follow the response for `HephaestusServerRestarting` in [Alert response](./production-operations-runbook#alert-response).
+
+One restart fires no alert.
+The bundled monitoring stack does not load the rule group `hephaestus-kubernetes`.
+If your own Prometheus loads it, `HephaestusServerRestarting` fires at three restarts in one hour.
+A fix is planned for a later release candidate.
