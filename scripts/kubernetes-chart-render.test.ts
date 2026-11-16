@@ -129,10 +129,7 @@ await test("admin assurance follows the operator's value and defaults to on", ()
 		envValue(serverOf(layersFor("small")), "HEPHAESTUS_AUTH_ASSURANCE_ENFORCED"),
 		"true",
 	);
-	assert.equal(
-		envValue(serverOf(layersFor("preview")), "HEPHAESTUS_AUTH_ASSURANCE_ENFORCED"),
-		"true",
-	);
+	assert.equal(envValue(serverOf(layersFor("dev")), "HEPHAESTUS_AUTH_ASSURANCE_ENFORCED"), "true");
 	assert.equal(
 		envValue(
 			serverOf([...layersFor("small"), { config: { auth: { assuranceEnforced: false } } }]),

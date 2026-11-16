@@ -472,7 +472,7 @@ await test("every revision migrates the database once, in a Job that only reache
 });
 
 await test("PostgreSQL containers reserve their full memory limits in bundled profiles", () => {
-	for (const name of ["small", "preview", "dev"] as const) {
+	for (const name of ["small", "dev"] as const) {
 		const backup = {
 			enabled: true,
 			clientTlsSecret: "backup-tls",
