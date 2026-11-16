@@ -2,7 +2,6 @@ package de.tum.cit.aet.hephaestus.agent.conversation.host;
 
 import de.tum.cit.aet.hephaestus.agent.conversation.sandbox.TurnContextLoads;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxRun;
-import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
@@ -38,7 +37,6 @@ import tools.jackson.databind.node.ObjectNode;
 @PreAuthorize("isAuthenticated()")
 @ConditionalOnAgentRuntime
 @Profile(ConversationTurnConfiguration.PROFILES)
-@WorkspaceAgnostic("The sandbox's run names the workspace, and its turn names the developer and the conversation")
 public class TurnContextController {
 
     /** The header of a load's archive that carries what the model reads about it, as Base64url of its JSON. */

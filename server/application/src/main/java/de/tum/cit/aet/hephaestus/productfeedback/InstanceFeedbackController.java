@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.productfeedback;
 
-import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.auth.web.CurrentAccount;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.productfeedback.FeedbackDTOs.FeedbackRequestDTO;
@@ -18,7 +17,6 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/product-feedback")
 @PreAuthorize("isAuthenticated()")
 @RequiredArgsConstructor
-@WorkspaceAgnostic("Feedback submitted without a workspace belongs to the instance")
 public class InstanceFeedbackController {
     private final FeedbackService service;
 

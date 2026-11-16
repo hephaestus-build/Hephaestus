@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.integration.slack.events;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.ActiveConnectionGuard;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
@@ -15,69 +16,78 @@ import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import java.util.Set;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataIntegrityViolationException;
 
+/**
+ * A signed Slack request names its workspace only through the one active connection of its team. A team that no
+ * active connection holds names none, and the database refuses a second active connection of a team, so no team can
+ * name two workspaces.
+ */
 class SlackWorkspaceResolverIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     @Autowired
-    private ConnectionRepository connectionRepository;
+    private ConnectionService connectionService;
 
     @Autowired
-    private ConnectionService connections;
+    private ConnectionRepository connections;
 
-    @Autowired
-    private ActiveConnectionGuard activeConnections;
+    private SlackWorkspaceResolver resolver;
 
-    @Test
-    void shouldResolveNothingWhenTeamHasNoActiveConnection() {
-        String team = uniqueTeam();
-        connectSlack(newWorkspace(), team, IntegrationState.UNINSTALLED);
-
-        assertThat(resolver().resolveWorkspaceId(team)).isEmpty();
+    @BeforeEach
+    void createResolver() {
+        resolver = new SlackWorkspaceResolver(connectionService, mock(ActiveConnectionGuard.class));
     }
 
     @Test
-    void shouldResolveOwnerWhenTeamHasOneActiveConnection() {
-        String team = uniqueTeam();
-        Workspace owner = newWorkspace();
-        connectSlack(owner, team, IntegrationState.ACTIVE);
-        connectSlack(newWorkspace(), team, IntegrationState.UNINSTALLED);
+    void shouldNameTheWorkspaceOfTheTeamsActiveConnection() {
+        Workspace workspace = workspace();
+        connect(workspace, "T-BOUND", IntegrationState.ACTIVE);
 
-        assertThat(resolver().resolveWorkspaceId(team)).contains(owner.getId());
+        assertThat(resolver.resolveWorkspaceId("T-BOUND")).contains(workspace.getId());
     }
 
     @Test
-    void shouldPreserveOwnerWhenAnotherWorkspaceTriesToActivateTheSameTeam() {
-        String team = uniqueTeam();
-        Workspace owner = newWorkspace();
-        Workspace otherWorkspace = newWorkspace();
-        connectSlack(owner, team, IntegrationState.ACTIVE);
+    void shouldNameNoWorkspaceForATeamThatNoActiveConnectionHolds() {
+        connect(workspace(), "T-ENDED", IntegrationState.UNINSTALLED);
 
-        assertThatThrownBy(() -> connectSlack(otherWorkspace, team, IntegrationState.ACTIVE))
+        assertThat(resolver.resolveWorkspaceId("T-UNBOUND")).isEmpty();
+        assertThat(resolver.resolveWorkspaceId("T-ENDED")).isEmpty();
+        assertThat(resolver.resolveWorkspaceId("")).isEmpty();
+    }
+
+    @Test
+    void shouldRefuseASecondActiveConnectionOfTheTeamSoNoTeamNamesTwoWorkspaces() {
+        Workspace first = workspace();
+        connect(first, "T-SHARED", IntegrationState.ACTIVE);
+
+        assertThatThrownBy(() -> connect(workspace(), "T-SHARED", IntegrationState.ACTIVE))
                 .isInstanceOf(DataIntegrityViolationException.class)
                 .hasMessageContaining("uq_connection_one_active_slack_per_team");
-        assertThat(resolver().resolveWorkspaceId(team)).contains(owner.getId());
+        assertThat(resolver.resolveWorkspaceId("T-SHARED")).contains(first.getId());
     }
 
-    private SlackWorkspaceResolver resolver() {
-        return new SlackWorkspaceResolver(connections, activeConnections);
+    @Test
+    void shouldNameOnlyTheActiveWorkspaceWhenTheTeamWasConnectedElsewhereBefore() {
+        Workspace before = workspace();
+        connect(before, "T-MOVED", IntegrationState.UNINSTALLED);
+        Workspace now = workspace();
+        connect(now, "T-MOVED", IntegrationState.ACTIVE);
+
+        assertThat(resolver.resolveWorkspaceId("T-MOVED")).contains(now.getId());
     }
 
-    private static String uniqueTeam() {
-        return "T" + System.nanoTime();
+    private Workspace workspace() {
+        String slug = "slack-team-" + System.nanoTime();
+        return createWorkspace(slug, "Slack team", slug, AccountType.ORG, persistUser(slug + "-owner"));
     }
 
-    private Workspace newWorkspace() {
-        String slug = "slack-resolver-" + System.nanoTime();
-        return createWorkspace(slug, "Slack Resolver", slug, AccountType.ORG, persistUser(slug + "-owner"));
-    }
-
-    private void connectSlack(Workspace workspace, String team, IntegrationState state) {
+    private void connect(Workspace workspace, String team, IntegrationState state) {
         Connection connection = new Connection(
                 workspace, IntegrationKind.SLACK, team, new ConnectionConfig.SlackConfig(team, null, null, Set.of()));
         ConnectionFixtures.reachState(connection, state);
-        connectionRepository.save(connection);
+        connections.saveAndFlush(connection);
     }
 }

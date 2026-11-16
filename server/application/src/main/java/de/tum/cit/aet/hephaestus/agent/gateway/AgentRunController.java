@@ -4,7 +4,6 @@ import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.run.StaleRunException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxes;
-import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -37,7 +36,6 @@ import tools.jackson.databind.JsonNode;
 @PreAuthorize("isAuthenticated()")
 @ConditionalOnAgentRuntime
 @Profile("!specs & !cds-training")
-@WorkspaceAgnostic("The sandbox token and the run's own row name the workspace, and the resolver checks both")
 public class AgentRunController {
 
     /** The end of a sandbox whose network policy did not hold, as its driver sends it. */

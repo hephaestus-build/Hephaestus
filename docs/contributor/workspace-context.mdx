@@ -167,6 +167,17 @@ public class WorkspaceRegistryController {
 }
 ```
 
+A controller outside a workspace declares where its tenancy comes from.
+The controller rule in `MultiTenancyArchitectureTest` decides by exact type and by class:
+
+- A controller that reads no workspace data carries a type-level `@WorkspaceAgnostic` with its reason.
+  The marker opens no runtime bypass.
+- A controller that touches workspace data takes its workspace from a verified credential.
+  Or it takes the workspace from the caller's own account or membership.
+  It is listed by class in `OUTSIDE_ANY_WORKSPACE`, with that source named.
+  Examples are the sandbox token, the Slack request signature and GitHub's own authorization.
+  A test proves that the credential bounds the workspace.
+
 ## Testing
 
 Integration tests must create a workspace and grant membership before hitting scoped endpoints:

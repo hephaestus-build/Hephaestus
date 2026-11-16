@@ -1,7 +1,6 @@
 package de.tum.cit.aet.hephaestus.productfeedback;
 
 import de.tum.cit.aet.hephaestus.core.AuditExempt;
-import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.auth.web.CurrentAccount;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.productfeedback.FilingDTOs.AllowPublicDTO;
@@ -29,7 +28,6 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/product-feedback")
 @PreAuthorize("isAuthenticated()")
 @RequiredArgsConstructor
-@WorkspaceAgnostic("A person's own product feedback belongs to their account, not to a workspace")
 public class MyProductFeedbackController {
     private final MyReportsService reports;
 

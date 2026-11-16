@@ -6,7 +6,6 @@ import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRecorder;
 import de.tum.cit.aet.hephaestus.conversation.ConversationEntryService;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurn;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurnProgress;
-import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
@@ -42,7 +41,6 @@ import tools.jackson.databind.JsonNode;
 @PreAuthorize("isAuthenticated()")
 @ConditionalOnAgentRuntime
 @Profile(ConversationTurnConfiguration.PROFILES)
-@WorkspaceAgnostic("The sandbox's run names the workspace, and its turn names the developer and the conversation")
 public class ConversationTurnController {
 
     private final ConversationTurnContexts contexts;

@@ -10,7 +10,6 @@ import de.tum.cit.aet.hephaestus.agent.job.ReviewCompositionContinuation;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewRunKind;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
 import de.tum.cit.aet.hephaestus.agent.run.StaleRunException;
-import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackDestination;
@@ -55,7 +54,6 @@ import tools.jackson.databind.JsonNode;
 @ConditionalOnAgentRuntime
 @ConditionalOnBooleanProperty(RuntimeRole.AGENT_ENABLED_PROPERTY)
 @Profile("!specs & !cds-training")
-@WorkspaceAgnostic("The sandbox token and the run's own row name the workspace, and the resolver checks both")
 public class CompositionController {
     private final ReviewComposeSandboxKind kind;
     private final CompositionSessions sessions;
