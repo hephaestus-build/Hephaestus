@@ -299,9 +299,11 @@ export function buildBrief(
  * workspace's INDEX.md, which lists every source of the review.
  */
 function sourceIndex(paths: BriefPaths, scope: BriefScope): string {
+	// A review whose practices read the change but not the repository captured no checkout (pi-change.ts).
+	const checkout = scope.available.has(TREE_SOURCE);
 	const lines = [...scope.declared].toSorted().map((kind) => {
 		if (kind === DIFF_SOURCE) {
-			return `- \`${kind}\`: \`${CHANGE_ROOT}/\`, derived here from the checkout`;
+			return `- \`${kind}\`: \`${CHANGE_ROOT}/\`, derived here from the ${checkout ? "checkout" : "captured diff"}`;
 		}
 		if (kind === TREE_SOURCE) {
 			return `- \`${kind}\`: the checkout at \`${paths.repositoryRoot}/\`, with its Git history`;
@@ -315,7 +317,10 @@ function sourceIndex(paths: BriefPaths, scope: BriefScope): string {
 			.toSorted();
 		return `- \`${kind}\`: ${files.length === 0 ? "captured, with no file" : files.join(", ")}`;
 	});
-	return `### The sources of this practice\nRead only these. The change and the checkout are always readable through Git.\n${lines.join("\n")}`;
+	const always = checkout
+		? "The change and the checkout are always readable through Git."
+		: `The change is always readable in \`${CHANGE_ROOT}/\`; this review captured no checkout.`;
+	return `### The sources of this practice\nRead only these. ${always}\n${lines.join("\n")}`;
 }
 
 /** A fence inside the content would end the block early; a longer fence cannot be closed by it. */

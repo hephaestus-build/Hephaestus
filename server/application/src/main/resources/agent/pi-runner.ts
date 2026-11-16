@@ -1067,12 +1067,7 @@ export async function runReviewJob(): Promise<void> {
 			throw new Error("A local problem draft requires a stable key.");
 		}
 		validateCitationScope(problem.citations, slug);
-		validateCitationSources(
-			problem.citations,
-			availableSourceKinds,
-			sourceFileSources,
-			`${taskEnvelope.paths.repositoryRoot.replace(/\/+$/u, "")}/`,
-		);
+		validateCitationSources(problem.citations, availableSourceKinds, sourceFileSources);
 		for (const citation of problem.citations) {
 			await verifySubmissionCitation(citation, notes);
 		}
@@ -1097,12 +1092,7 @@ export async function runReviewJob(): Promise<void> {
 		validateCitationScope(citations, slug);
 
 		try {
-			validateEvidenceSources(
-				submission,
-				availableSourceKinds,
-				sourceFileSources,
-				`${taskEnvelope.paths.repositoryRoot.replace(/\/+$/u, "")}/`,
-			);
+			validateEvidenceSources(submission, availableSourceKinds, sourceFileSources);
 		} catch (error) {
 			throw new Error(
 				`${errorText(error)}. Correction example: read(${JSON.stringify({ path: taskEnvelope.paths.manifest })}), then cite a captured source listed there.`,

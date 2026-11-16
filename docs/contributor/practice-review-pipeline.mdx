@@ -349,6 +349,11 @@ The manual **Run backfill** action reopens completed issue history when monitore
 After that backfill, a new review can use the recovered coverage.
 Existing results are not rewritten.
 
+A review whose practices read the diff but not the repository captures no checkout.
+Its sandbox builds the change view from the diff in `change.json` instead, which the server took from the same pinned range.
+Its files and line coordinates are those that admission checks a quote of the change against, and no repository content enters the workspace.
+It has no authored view of the description, since templates are files of the repository: a practice reads the captured description as it is.
+
 A changed text file over 2 MiB on either side is left out of the server's capture and named in `change.json` as `left_out`.
 The sandbox still builds `diff.patch` from Git, so the session can read the file's change.
 The diff source is `PARTIAL`, with the limitation `CHANGED_FILE_NOT_CAPTURED`. What a practice can then claim:

@@ -1,12 +1,21 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import {
+	existsSync,
+	mkdirSync,
+	mkdtempSync,
+	readFileSync,
+	rmSync,
+	symlinkSync,
+	writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 
 import { environmentForGitFixture } from "../../../../../../scripts/lib/git-environment.ts";
 
+import { deriveChangeView } from "../../../main/resources/agent/pi-change-view.ts";
 import {
 	annotateDiff,
 	authoredDescription,
@@ -14,6 +23,8 @@ import {
 	parseNameStatus,
 	readChange,
 	renderAuthoredDescription,
+	withPlainPaths,
+	writeCapturedChangeView,
 	writeChangeView,
 } from "../../../main/resources/agent/pi-change.ts";
 import {
@@ -355,6 +366,104 @@ void test("derives the change view from a real checkout with git", () => {
 	} finally {
 		rmSync(root, { recursive: true, force: true });
 	}
+});
+
+/** The summary line of a change view's `diff_stat.txt`. */
+function statSummary(root: string): string | undefined {
+	return readFileSync(path.join(root, "work/change/diff_stat.txt"), "utf8")
+		.trim()
+		.split("\n")
+		.at(-1);
+}
+
+void test("a review with no checkout gets the change view that git derives, from the captured diff", () => {
+	const { root, repo, base, head } = repositoryWithChange();
+	const captured = mkdtempSync(path.join(tmpdir(), "pi-change-captured-"));
+	try {
+		writeChangeView(root, repo, { base, head }, null);
+		// The server's diff of the same range, with its paths quoted as JGit and Git quote them by default.
+		const diff = git(repo, "-c", "core.quotePath=true", "diff", "--find-renames=50%", base, head);
+		assert.match(diff, /"b\/W\\303\\266rdle\.md"/u);
+
+		writeCapturedChangeView(captured, `${diff}\n`);
+
+		for (const file of ["diff.patch", "files.json"]) {
+			assert.equal(
+				readFileSync(path.join(captured, "work/change", file), "utf8"),
+				readFileSync(path.join(root, "work/change", file), "utf8"),
+				file,
+			);
+		}
+		// The counts and their summary are git's; only git's column alignment is not reproduced.
+		assert.equal(statSummary(captured), statSummary(root));
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+		rmSync(captured, { recursive: true, force: true });
+	}
+});
+
+void test("the initializer derives the view of a change whose review captured no checkout", () => {
+	const { root, repo, base, head } = repositoryWithChange();
+	const workspace = mkdtempSync(path.join(tmpdir(), "pi-change-no-checkout-"));
+	try {
+		const diff = git(repo, "diff", "--find-renames=50%", base, head);
+		mkdirSync(path.join(workspace, "context"));
+		writeFileSync(
+			path.join(workspace, "context/change.json"),
+			JSON.stringify({ base_sha: base, head_sha: head, diff: `${diff}\n` }),
+		);
+		writeFileSync(path.join(workspace, "context/description.md"), DESCRIPTION);
+		writeFileSync(
+			path.join(workspace, "task.json"),
+			JSON.stringify({
+				contextRoot: "context",
+				repositoryRoot: "repos/reviewed",
+				manifest: "INDEX.json",
+				practiceIndex: "practices/index.json",
+				preparedFeedback: "prepared",
+				practiceScripts: "scripts",
+			}),
+		);
+
+		deriveChangeView(workspace);
+
+		assert.match(
+			readFileSync(path.join(workspace, "work/change/diff.patch"), "utf8"),
+			/\[L2\] \+export const b = 20;/u,
+		);
+		// The templates are files of the repository: with none captured, no view claims to tell the form apart.
+		assert.ok(!existsSync(path.join(workspace, "work/change/description.authored.md")));
+		assert.ok(!existsSync(path.join(workspace, "work/change/checkout-commit")));
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+		rmSync(workspace, { recursive: true, force: true });
+	}
+});
+
+void test("hunk lines that look like path headers keep their bytes", () => {
+	const diff = [
+		String.raw`diff --git "a/\303\244.txt" "b/\303\244.txt"`,
+		"index 1111111..2222222 100644",
+		String.raw`--- "a/\303\244.txt"`,
+		String.raw`+++ "b/\303\244.txt"`,
+		"@@ -1,2 +1,2 @@",
+		String.raw`---- "a/\303\244.txt"`,
+		String.raw`++++ "b/\303\244.txt"`,
+		"",
+	].join("\n");
+	assert.equal(
+		withPlainPaths(diff),
+		[
+			"diff --git a/ä.txt b/ä.txt",
+			"index 1111111..2222222 100644",
+			"--- a/ä.txt",
+			"+++ b/ä.txt",
+			"@@ -1,2 +1,2 @@",
+			String.raw`---- "a/\303\244.txt"`,
+			String.raw`++++ "b/\303\244.txt"`,
+			"",
+		].join("\n"),
+	);
 });
 
 void test("a review without a captured change derives nothing", () => {
