@@ -43,15 +43,15 @@ class SetReviewScopeTool implements McpTool {
         this.changes = changes;
         this.definition = McpTools.writeTool(
                 jsonMapper,
-                "set_review_scope",
-                "Set the review scope",
-                "Replaces the repositories and people that Hephaestus reviews in this workspace. Before you change it,"
-                        + " keep the reviewScope that get_review_settings returns: undo the change with this tool and"
-                        + " that scope.",
+                new McpTools.Text(
+                        "set_review_scope",
+                        "Set the review scope",
+                        "Replaces the repositories and people that Hephaestus reviews in this workspace. Before you change it,"
+                                + " keep the reviewScope that get_review_settings returns: undo the change with this tool and"
+                                + " that scope."),
                 INPUT_SCHEMA,
                 McpProjections.REVIEW_SETTINGS_SCHEMA,
-                false,
-                true);
+                McpTools.Effect.CHANGES);
     }
 
     @Override

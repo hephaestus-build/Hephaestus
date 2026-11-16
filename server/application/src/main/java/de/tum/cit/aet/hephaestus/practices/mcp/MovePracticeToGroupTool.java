@@ -49,14 +49,14 @@ class MovePracticeToGroupTool implements McpTool {
         this.validator = validator;
         this.definition = McpTools.writeTool(
                 jsonMapper,
-                "move_practice_to_group",
-                "Move a practice to a group",
-                "Moves a practice into a practice group, or out of every group with null. Undo it with this tool and"
-                        + " the earlier groupSlug from get_practice.",
+                new McpTools.Text(
+                        "move_practice_to_group",
+                        "Move a practice to a group",
+                        "Moves a practice into a practice group, or out of every group with null. Undo it with this tool and"
+                                + " the earlier groupSlug from get_practice."),
                 INPUT_SCHEMA,
                 McpProjections.PRACTICE_SCHEMA,
-                false,
-                true);
+                McpTools.Effect.CHANGES);
     }
 
     @Override

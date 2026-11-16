@@ -41,16 +41,16 @@ class ResetPracticeTool implements McpTool {
         this.presenter = presenter;
         this.definition = McpTools.writeTool(
                 jsonMapper,
-                "reset_practice",
-                "Reset a practice to the catalog",
-                "Returns a practice that came from the catalog to the catalog version that preview_practice_reset"
-                        + " showed, and drops the workspace's changes to it. If the practice or the catalog changed"
-                        + " since the preview, it changes nothing. Before you reset, keep the definition that"
-                        + " get_practice returns: undo the reset with update_practice and that definition.",
+                new McpTools.Text(
+                        "reset_practice",
+                        "Reset a practice to the catalog",
+                        "Returns a practice that came from the catalog to the catalog version that preview_practice_reset"
+                                + " showed, and drops the workspace's changes to it. If the practice or the catalog changed"
+                                + " since the preview, it changes nothing. Before you reset, keep the definition that"
+                                + " get_practice returns: undo the reset with update_practice and that definition."),
                 INPUT_SCHEMA,
                 McpProjections.PRACTICE_SCHEMA,
-                true,
-                true);
+                McpTools.Effect.REPLACES);
     }
 
     @Override

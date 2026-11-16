@@ -52,14 +52,14 @@ class CreatePracticeTool implements McpTool {
         this.validator = validator;
         this.definition = McpTools.writeTool(
                 jsonMapper,
-                "create_practice",
-                "Create a practice",
-                "Creates a practice in this workspace from a complete definition, which the server checks as the web"
-                        + " app's practice editor does. Undo it with remove_practice.",
+                new McpTools.Text(
+                        "create_practice",
+                        "Create a practice",
+                        "Creates a practice in this workspace from a complete definition, which the server checks as the web"
+                                + " app's practice editor does. Undo it with remove_practice."),
                 INPUT_SCHEMA,
                 McpProjections.PRACTICE_SCHEMA,
-                false,
-                false);
+                McpTools.Effect.ADDS);
     }
 
     @Override

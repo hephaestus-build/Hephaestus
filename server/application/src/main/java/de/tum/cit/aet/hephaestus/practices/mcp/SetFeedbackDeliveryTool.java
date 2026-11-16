@@ -36,14 +36,14 @@ class SetFeedbackDeliveryTool implements McpTool {
         this.changes = changes;
         this.definition = McpTools.writeTool(
                 jsonMapper,
-                "set_feedback_delivery",
-                "Pause or resume feedback",
-                "Pauses the delivery of new feedback in this workspace, or resumes it. Resuming never delivers"
-                        + " feedback from an older revision. PAUSED and ACTIVE undo each other.",
+                new McpTools.Text(
+                        "set_feedback_delivery",
+                        "Pause or resume feedback",
+                        "Pauses the delivery of new feedback in this workspace, or resumes it. Resuming never delivers"
+                                + " feedback from an older revision. PAUSED and ACTIVE undo each other."),
                 INPUT_SCHEMA,
                 McpProjections.REVIEW_SETTINGS_SCHEMA,
-                false,
-                true);
+                McpTools.Effect.CHANGES);
     }
 
     @Override

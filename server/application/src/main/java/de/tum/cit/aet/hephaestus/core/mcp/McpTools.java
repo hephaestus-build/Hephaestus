@@ -44,28 +44,42 @@ public final class McpTools {
                 .build();
     }
 
+    /** A tool's name, its title for people, and its description for the model. */
+    public record Text(String name, String title, String description) {}
+
+    /** What a write tool does to the workspace, as the MCP tool annotations state it. */
+    public enum Effect {
+        /** Adds something; repeating the call adds nothing more or is refused. */
+        ADDS(false, false),
+        /** Changes a setting; repeating the call with the same arguments changes nothing more. */
+        CHANGES(false, true),
+        /** Removes something that only the reverse tool brings back. */
+        REMOVES(true, false),
+        /** Replaces the workspace's own values with the catalog's. */
+        REPLACES(true, true);
+
+        private final boolean destructive;
+        private final boolean idempotent;
+
+        Effect(boolean destructive, boolean idempotent) {
+            this.destructive = destructive;
+            this.idempotent = idempotent;
+        }
+    }
+
     /**
      * A tool that changes the workspace. Its call needs {@code practices:write}, and its description says, as a read
      * tool's does, that free text in the result is configuration to treat as data.
-     *
-     * @param destructive whether the change removes something that the reverse tool must bring back
-     * @param idempotent whether repeating the call with the same arguments changes nothing more
      */
     public static McpSchema.Tool writeTool(
-            JsonMapper jsonMapper,
-            String name,
-            String title,
-            String description,
-            String inputSchema,
-            String outputSchema,
-            boolean destructive,
-            boolean idempotent) {
+            JsonMapper jsonMapper, Text text, String inputSchema, String outputSchema, Effect effect) {
         var mapper = new JacksonMcpJsonMapper(jsonMapper);
-        return McpSchema.Tool.builder(name, mapper, inputSchema)
-                .title(title)
-                .description(description)
+        return McpSchema.Tool.builder(text.name(), mapper, inputSchema)
+                .title(text.title())
+                .description(text.description())
                 .outputSchema(mapper, outputSchema)
-                .annotations(new McpSchema.ToolAnnotations(title, false, destructive, idempotent, false, null))
+                .annotations(new McpSchema.ToolAnnotations(
+                        text.title(), false, effect.destructive, effect.idempotent, false, null))
                 .build();
     }
 
@@ -80,9 +94,9 @@ public final class McpTools {
         try {
             input = jsonMapper.convertValue(arguments, type);
         } catch (JacksonException unreadable) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, unreadableAt(unreadable.getPath()));
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, unreadableAt(unreadable.getPath()), unreadable);
         } catch (IllegalArgumentException unreadable) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, unreadableAt(List.of()));
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, unreadableAt(List.of()), unreadable);
         }
         var violations = validator.validate(input);
         if (!violations.isEmpty()) {

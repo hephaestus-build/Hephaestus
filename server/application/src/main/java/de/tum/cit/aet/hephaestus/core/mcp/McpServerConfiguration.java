@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.core.mcp;
 import de.tum.cit.aet.hephaestus.core.auth.mcp.McpGrantGuard;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.web.ApiPath;
+import io.micrometer.core.instrument.MeterRegistry;
 import io.modelcontextprotocol.json.jackson3.JacksonMcpJsonMapper;
 import io.modelcontextprotocol.server.McpServer;
 import io.modelcontextprotocol.server.McpStatelessServerFeatures;
@@ -73,11 +74,13 @@ class McpServerConfiguration {
             WebMvcStatelessServerTransport mcpTransport,
             JsonMapper jsonMapper,
             List<McpTool> tools,
-            ApplicationContext applicationContext) {
+            ApplicationContext applicationContext,
+            MeterRegistry meterRegistry) {
         McpRefusals refusals = new McpRefusals(applicationContext);
+        McpToolMetrics metrics = new McpToolMetrics(meterRegistry, tools);
         List<McpStatelessServerFeatures.SyncToolSpecification> specifications = tools.stream()
                 .map(tool -> new McpStatelessServerFeatures.SyncToolSpecification(
-                        tool.definition(), (context, request) -> invoke(tool, request, refusals)))
+                        tool.definition(), (context, request) -> invoke(tool, request, refusals, metrics)))
                 .toList();
         return McpServer.sync(mcpTransport)
                 .jsonMapper(new JacksonMcpJsonMapper(McpTools.withNulls(jsonMapper)))
@@ -94,21 +97,29 @@ class McpServerConfiguration {
      * A refusal is a tool error that names its reason, never a protocol failure: the client must see why
      * the tool did not do what it asked.
      */
-    static McpSchema.CallToolResult invoke(McpTool tool, McpSchema.CallToolRequest request, McpRefusals refusals) {
+    static McpSchema.CallToolResult invoke(
+            McpTool tool, McpSchema.CallToolRequest request, McpRefusals refusals, McpToolMetrics metrics) {
+        String name = tool.definition().name();
         try {
-            return tool.call(request.arguments() == null ? Map.of() : request.arguments());
+            McpSchema.CallToolResult result = tool.call(request.arguments() == null ? Map.of() : request.arguments());
+            metrics.record(name, McpToolMetrics.Outcome.OK);
+            return result;
         } catch (AccessDeniedException refused) {
+            metrics.record(name, McpToolMetrics.Outcome.REFUSED);
             return error("Your role in this workspace does not allow this tool.");
         } catch (ResponseStatusException refused) {
+            metrics.record(name, McpToolMetrics.Outcome.REFUSED);
             String reason = refused.getReason();
             return error(reason == null ? "The request was refused." : reason);
         } catch (RuntimeException failed) {
             Optional<String> refusal = refusals.clientError(controllerOf(tool), failed);
             if (refusal.isPresent()) {
+                metrics.record(name, McpToolMetrics.Outcome.REFUSED);
                 return error(refusal.get());
             }
             // A server error's message may name internals, so the client gets none of it.
-            log.error("mcp: tool {} failed", tool.definition().name(), failed);
+            metrics.record(name, McpToolMetrics.Outcome.FAILED);
+            log.error("mcp: tool {} failed", name, failed);
             return error("The tool failed. Try again later.");
         }
     }

@@ -40,16 +40,16 @@ class AdoptCatalogPracticeTool implements McpTool {
         this.presenter = presenter;
         this.definition = McpTools.writeTool(
                 jsonMapper,
-                "adopt_catalog_practice",
-                "Add a catalog practice",
-                "Adds a catalog practice to this workspace exactly as preview_catalog_practice showed it. If the"
-                        + " catalog or the workspace changed since the preview, it changes nothing: preview again."
-                        + " Undo it with remove_practice; a practice with review history is set to reviewed by"
-                        + " nobody with update_practice instead.",
+                new McpTools.Text(
+                        "adopt_catalog_practice",
+                        "Add a catalog practice",
+                        "Adds a catalog practice to this workspace exactly as preview_catalog_practice showed it. If the"
+                                + " catalog or the workspace changed since the preview, it changes nothing: preview again."
+                                + " Undo it with remove_practice; a practice with review history is set to reviewed by"
+                                + " nobody with update_practice instead."),
                 INPUT_SCHEMA,
                 McpProjections.PRACTICE_SCHEMA,
-                false,
-                false);
+                McpTools.Effect.ADDS);
     }
 
     @Override

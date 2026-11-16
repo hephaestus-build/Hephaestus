@@ -2442,6 +2442,26 @@ tests:
               summary: At least three feedback deliveries to one destination failed in one hour
               runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
+  - name: three failed MCP tool calls in one hour fire, refusals and two failures do not
+    interval: 1m
+    input_series:
+      - series: 'mcp_tool_calls_total{job="hephaestus",instance="server:9090",tool="update_practice",outcome="failed"}'
+        values: "0 1 2 2 3x30"
+      - series: 'mcp_tool_calls_total{job="hephaestus",instance="server:9090",tool="update_practice",outcome="refused"}'
+        values: "0+5x30"
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: HephaestusMcpToolsFailing
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: HephaestusMcpToolsFailing
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: At least three workspace MCP tool calls failed with a server error in one hour
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+
   - name: reviews whose first feedback mostly came after 30 minutes fire
     interval: 1m
     input_series:

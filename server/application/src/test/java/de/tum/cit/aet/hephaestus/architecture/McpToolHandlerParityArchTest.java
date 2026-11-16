@@ -3,6 +3,8 @@ package de.tum.cit.aet.hephaestus.architecture;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.core.AdminAccess;
+import de.tum.cit.aet.hephaestus.core.AuditExempt;
+import de.tum.cit.aet.hephaestus.core.Audited;
 import de.tum.cit.aet.hephaestus.core.RequiresRecentSignIn;
 import de.tum.cit.aet.hephaestus.core.mcp.McpTool;
 import de.tum.cit.aet.hephaestus.core.mcp.McpToolFor;
@@ -11,6 +13,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
@@ -69,6 +72,46 @@ class McpToolHandlerParityArchTest extends HephaestusArchitectureTest {
             if (AnnotatedElementUtils.hasAnnotation(handler, RequiresRecentSignIn.class)
                     || (access != null && access.value() == AdminAccess.Scope.INSTANCE)) {
                 problems.add(type.getSimpleName() + " stands for an instance-admin or recent-sign-in handler");
+            }
+        }
+        assertThat(problems).isEmpty();
+    }
+
+    /**
+     * A tool that stands for a mutation carries the same audit decision as its handler and needs {@code practices:write};
+     * a tool that stands for a read carries neither (ADR 0110 decision 16, the {@code AuditByDefaultArchTest} rule for tools).
+     */
+    @Test
+    void everyWriteToolCarriesTheAuditDecisionOfTheHandlerItStandsFor() throws Exception {
+        List<String> problems = new ArrayList<>();
+        for (var tool : classes.stream()
+                .filter(type -> type.isAssignableTo(McpTool.class) && !type.isInterface())
+                .toList()) {
+            Class<?> type = tool.reflect();
+            McpToolFor target = type.getAnnotation(McpToolFor.class);
+            if (target == null) {
+                continue;
+            }
+            Method handler = Arrays.stream(target.controller().getDeclaredMethods())
+                    .filter(method -> method.getName().equals(target.method()))
+                    .findFirst()
+                    .orElseThrow();
+            Method call = type.getMethod("call", Map.class);
+            boolean mutation =
+                    handler.isAnnotationPresent(Audited.class) || handler.isAnnotationPresent(AuditExempt.class);
+            boolean writes = Arrays.stream(type.getDeclaredMethods())
+                    .anyMatch(method -> method.getName().equals("writes"));
+            if (mutation != writes) {
+                problems.add(type.getSimpleName()
+                        + (mutation
+                                ? " stands for a mutation but does not declare that it writes"
+                                : " declares that it writes but stands for a read"));
+            }
+            if (!Objects.equals(handler.getAnnotation(Audited.class), call.getAnnotation(Audited.class))
+                    || !Objects.equals(
+                            handler.getAnnotation(AuditExempt.class), call.getAnnotation(AuditExempt.class))) {
+                problems.add(type.getSimpleName() + ".call does not carry the audit annotation of "
+                        + target.controller().getSimpleName() + "." + target.method());
             }
         }
         assertThat(problems).isEmpty();

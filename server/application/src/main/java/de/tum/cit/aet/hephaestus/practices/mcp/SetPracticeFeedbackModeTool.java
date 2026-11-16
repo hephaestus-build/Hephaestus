@@ -50,15 +50,15 @@ class SetPracticeFeedbackModeTool implements McpTool {
         this.validator = validator;
         this.definition = McpTools.writeTool(
                 jsonMapper,
-                "set_practice_feedback_mode",
-                "Set a practice's feedback mode",
-                "Sets how a practice's feedback reaches people: OFF, APPROVE_FIRST (an admin approves each one) or"
-                        + " AUTOMATIC, or null to inherit. Undo it with this tool and the earlier feedbackMode.override"
-                        + " from get_practice.",
+                new McpTools.Text(
+                        "set_practice_feedback_mode",
+                        "Set a practice's feedback mode",
+                        "Sets how a practice's feedback reaches people: OFF, APPROVE_FIRST (an admin approves each one) or"
+                                + " AUTOMATIC, or null to inherit. Undo it with this tool and the earlier feedbackMode.override"
+                                + " from get_practice."),
                 INPUT_SCHEMA,
                 McpProjections.PRACTICE_SCHEMA,
-                false,
-                true);
+                McpTools.Effect.CHANGES);
     }
 
     @Override

@@ -46,16 +46,16 @@ class AdoptCatalogGroupTool implements McpTool {
         this.presenter = presenter;
         this.definition = McpTools.writeTool(
                 jsonMapper,
-                "adopt_catalog_group",
-                "Add a catalog group",
-                "Adds every available practice of a catalog group to this workspace and moves the group's practices"
-                        + " that the workspace already has into it, exactly as preview_catalog_group showed it. If the"
-                        + " catalog or the workspace changed since the preview, it changes nothing: preview again."
-                        + " Undo it with remove_practice for each added practice.",
+                new McpTools.Text(
+                        "adopt_catalog_group",
+                        "Add a catalog group",
+                        "Adds every available practice of a catalog group to this workspace and moves the group's practices"
+                                + " that the workspace already has into it, exactly as preview_catalog_group showed it. If the"
+                                + " catalog or the workspace changed since the preview, it changes nothing: preview again."
+                                + " Undo it with remove_practice for each added practice."),
                 INPUT_SCHEMA,
                 OUTPUT_SCHEMA,
-                false,
-                false);
+                McpTools.Effect.ADDS);
     }
 
     @Override

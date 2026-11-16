@@ -1,10 +1,15 @@
 package de.tum.cit.aet.hephaestus.core.auth.mcp;
 
 import de.tum.cit.aet.hephaestus.core.auth.spi.McpWorkspaceDirectory;
+import de.tum.cit.aet.hephaestus.core.metrics.CoreMetrics;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
 import org.springframework.http.HttpHeaders;
@@ -29,16 +34,31 @@ import org.springframework.web.servlet.function.ServerResponse;
 @ConditionalOnBooleanProperty("hephaestus.mcp.enabled")
 public class McpGrantGuard implements HandlerFilterFunction<ServerResponse, ServerResponse> {
 
+    /** The refusal reasons, the {@code error} of each challenge; each registers at start (ADR 0110 decision 19). */
+    private static final List<String> REASONS = List.of("invalid_token", "insufficient_scope");
+
     private final McpClientGrantRepository grants;
     private final McpWorkspaceDirectory workspaces;
     private final McpResources resources;
     private final McpChallenges challenges;
+    private final Map<String, Counter> refusals;
 
-    McpGrantGuard(McpClientGrantRepository grants, McpWorkspaceDirectory workspaces, McpResources resources) {
+    McpGrantGuard(
+            McpClientGrantRepository grants,
+            McpWorkspaceDirectory workspaces,
+            McpResources resources,
+            MeterRegistry meterRegistry) {
         this.grants = grants;
         this.workspaces = workspaces;
         this.resources = resources;
         this.challenges = new McpChallenges(resources);
+        this.refusals = REASONS.stream()
+                .collect(Collectors.toUnmodifiableMap(
+                        reason -> reason,
+                        reason -> Counter.builder(CoreMetrics.MCP_AUTH_REFUSALS)
+                                .description("Workspace MCP requests that the grant check refused, by challenge error")
+                                .tag("reason", reason)
+                                .register(meterRegistry)));
     }
 
     @Override
@@ -77,6 +97,10 @@ public class McpGrantGuard implements HandlerFilterFunction<ServerResponse, Serv
     }
 
     private ServerResponse refuse(String slug, HttpStatus status, String error, @Nullable String scope) {
+        Counter refused = refusals.get(error);
+        if (refused != null) {
+            refused.increment();
+        }
         return ServerResponse.status(status)
                 .header(HttpHeaders.WWW_AUTHENTICATE, challenges.challenge(slug, error, scope))
                 .build();

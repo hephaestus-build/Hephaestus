@@ -15,6 +15,8 @@ import de.tum.cit.aet.hephaestus.workspace.RepositorySelection;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -62,6 +64,9 @@ class McpWriteToolsIntegrationTest extends RealAuthIntegrationTest {
     @Autowired
     private JdbcTemplate jdbc;
 
+    @Autowired
+    private MeterRegistry meterRegistry;
+
     @Value("${hephaestus.auth.cookie-name:__Host-HEPHAESTUS_AT}")
     private String cookieName;
 
@@ -96,6 +101,8 @@ class McpWriteToolsIntegrationTest extends RealAuthIntegrationTest {
     @Test
     void shouldAskForTheWriteScopeBeforeAWriteToolRunsWhenTheGrantOnlyReads() {
         String readToken = flow.connect(cookie, workspace.getWorkspaceSlug()).accessToken();
+        double refusedBefore = counter("mcp.auth.refusals", "reason", "insufficient_scope");
+        double readsBefore = counter("mcp.tool.calls", "tool", "get_review_settings");
 
         String challenge = flow.callTool(
                         readToken,
@@ -116,6 +123,8 @@ class McpWriteToolsIntegrationTest extends RealAuthIntegrationTest {
                         .path("isError")
                         .asBoolean())
                 .isFalse();
+        assertThat(counter("mcp.auth.refusals", "reason", "insufficient_scope")).isEqualTo(refusedBefore + 1);
+        assertThat(counter("mcp.tool.calls", "tool", "get_review_settings")).isEqualTo(readsBefore + 1);
     }
 
     @Test
@@ -355,6 +364,15 @@ class McpWriteToolsIntegrationTest extends RealAuthIntegrationTest {
     private String setting(String column) {
         return Objects.requireNonNull(jdbc.queryForObject(
                 "SELECT " + column + " FROM workspace WHERE id = ?", String.class, workspace.getId()));
+    }
+
+    /** The count of one tag value of a meter; for tool calls, only the calls that succeeded. */
+    private double counter(String name, String tag, String value) {
+        return meterRegistry.find(name).tag(tag, value).counters().stream()
+                .filter(counter -> !"mcp.tool.calls".equals(name)
+                        || "ok".equals(counter.getId().getTag("outcome")))
+                .mapToDouble(Counter::count)
+                .sum();
     }
 
     /** The fixture definition in the shape that a client sends. */

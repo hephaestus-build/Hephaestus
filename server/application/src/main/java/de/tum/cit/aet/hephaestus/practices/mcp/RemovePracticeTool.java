@@ -42,15 +42,15 @@ class RemovePracticeTool implements McpTool {
         this.practices = practices;
         this.definition = McpTools.writeTool(
                 jsonMapper,
-                "remove_practice",
-                "Remove a practice",
-                "Deletes a practice that has no review history. A practice with review history cannot be deleted:"
-                        + " set it to reviewed by nobody with update_practice instead. Undo it with"
-                        + " adopt_catalog_practice or create_practice.",
+                new McpTools.Text(
+                        "remove_practice",
+                        "Remove a practice",
+                        "Deletes a practice that has no review history. A practice with review history cannot be deleted:"
+                                + " set it to reviewed by nobody with update_practice instead. Undo it with"
+                                + " adopt_catalog_practice or create_practice."),
                 INPUT_SCHEMA,
                 OUTPUT_SCHEMA,
-                true,
-                false);
+                McpTools.Effect.REMOVES);
     }
 
     @Override

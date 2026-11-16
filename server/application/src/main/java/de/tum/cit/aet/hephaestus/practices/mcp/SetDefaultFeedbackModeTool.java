@@ -39,15 +39,15 @@ class SetDefaultFeedbackModeTool implements McpTool {
         this.changes = changes;
         this.definition = McpTools.writeTool(
                 jsonMapper,
-                "set_default_feedback_mode",
-                "Set the default feedback mode",
-                "Sets the feedback mode of every practice and group in this workspace that sets none, or null to"
-                        + " return to the instance's default. Undo it with this tool and the earlier"
-                        + " defaultFeedbackMode from get_review_settings.",
+                new McpTools.Text(
+                        "set_default_feedback_mode",
+                        "Set the default feedback mode",
+                        "Sets the feedback mode of every practice and group in this workspace that sets none, or null to"
+                                + " return to the instance's default. Undo it with this tool and the earlier"
+                                + " defaultFeedbackMode from get_review_settings."),
                 INPUT_SCHEMA,
                 McpProjections.REVIEW_SETTINGS_SCHEMA,
-                false,
-                true);
+                McpTools.Effect.CHANGES);
     }
 
     @Override
