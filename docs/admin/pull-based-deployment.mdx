@@ -564,6 +564,13 @@ unchanged channel does not advance it, so its age is not a reconciliation-livene
 A promotion waits for the public webapp to report the requested version. This
 checks the webapp version. Use cluster readiness, reconciliation metrics and logs to verify the workloads.
 
+If the webapp does not report it within 15 minutes, the promotion fails and names the version that the webapp still reports.
+The host reports nothing to GitHub, so the run names the possible causes: a paused reconcile timer, a failed tick, or a refused channel.
+The host's metrics and journal tell which.
+
+To keep Staging on one build, promote it with **freeze**.
+If you only pause the timer, the promotion of each later build of `main` fails.
+
 A promotion also records a GitHub deployment of the release or commit that it promotes.
 The record names who requested the promotion.
 Its final state tells whether the public webapp reported the version.

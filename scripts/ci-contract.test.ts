@@ -7041,6 +7041,54 @@ void test("the staging channel is signed by the release's keyless signer, over n
 	assert.doesNotMatch(run, /^\s*cosign /mu);
 });
 
+void test(
+	"a promotion the host did not apply names the version it still runs and the possible causes",
+	runnerStepsOnly,
+	async (context) => {
+		const workflow = parseDocument(await readFile(".github/workflows/promote.yml", "utf8"));
+		const verify = namedStep(workflow, ["jobs", "promote"], "Verify the public webapp version");
+		const directory = await mkdtemp(path.join(tmpdir(), "promote-verify-"));
+		context.after(async () => rm(directory, { recursive: true, force: true }));
+		// The public webapp serves an env-config script that names the version it runs.
+		await writeFile(
+			path.join(directory, "curl"),
+			`#!/bin/sh\ncase "$*" in\n  */env-config.*) echo 'window.ENV = { APPLICATION_VERSION: "1.0.0-rc.8" };' ;;\n  *) echo '<script src="/env-config.0123abcd.js"></script>' ;;\nesac\n`,
+		);
+		await writeFile(path.join(directory, "sleep"), "#!/bin/sh\nexec /bin/sleep 0.2\n");
+		await chmod(path.join(directory, "curl"), 0o755);
+		await chmod(path.join(directory, "sleep"), 0o755);
+		const verifyFor = (environment: string, expected: string) =>
+			spawnSync("bash", ["--noprofile", "--norc", "-c", asString(verify.get("run"), "verify")], {
+				encoding: "utf8",
+				env: {
+					PATH: `${directory}${path.delimiter}${process.env.PATH ?? ""}`,
+					EXPECTED: expected,
+					HOSTNAME: "staging.example.invalid",
+					ENVIRONMENT: environment,
+					WAIT_SECONDS: "1",
+				},
+			});
+
+		const applied = verifyFor("Staging", "1.0.0-rc.8");
+		assert.equal(applied.status, 0, applied.stdout + applied.stderr);
+
+		const held = verifyFor("Staging", "1.0.0-rc.9");
+		assert.equal(held.status, 1);
+		assert.match(held.stdout, /::error::.*still reports 1\.0\.0-rc\.8, not 1\.0\.0-rc\.9/u);
+		// GitHub cannot tell a paused host from a failed or refusing one, so the error names all three.
+		assert.match(
+			held.stdout,
+			/reconcile timer is paused, a reconcile tick failed, or the host refused/u,
+		);
+		assert.match(held.stdout, /::notice::.*promote it with freeze/u);
+
+		// Only Staging follows main, so only Staging can be held with a freeze.
+		const production = verifyFor("Production", "1.0.0-rc.9");
+		assert.equal(production.status, 1);
+		assert.doesNotMatch(production.stdout, /freeze/u);
+	},
+);
+
 // docs/contributor/ci-cd.mdx § Fail fast in the merge queue owns the reasons for the tests below.
 const CANCEL_WORKFLOW = ".github/workflows/merge-group-cancel.yml";
 const isCancelWorker = (worker: Record<string, unknown>) =>

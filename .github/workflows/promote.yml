@@ -157,10 +157,13 @@ jobs:
         env:
           EXPECTED: ${{ steps.release.outputs.version }}
           HOSTNAME: ${{ vars.APP_HOSTNAME }}
+          ENVIRONMENT: ${{ inputs.environment }}
+          WAIT_SECONDS: "900"
         run: |
           set -euo pipefail
           # Observe the public webapp version; host metrics report stack readiness separately.
-          deadline=$(( SECONDS + 900 ))
+          deadline=$(( SECONDS + WAIT_SECONDS ))
+          running=""
           while [ "$SECONDS" -lt "$deadline" ]; do
             config=$(curl -fsS --max-time 20 "https://${HOSTNAME}/" |
               grep -oE '/env-config\.[a-f0-9]{8}\.js' | head -1 || true)
@@ -171,7 +174,12 @@ jobs:
             fi
             sleep 20
           done
-          echo "::error::Public webapp at ${HOSTNAME} did not report ${EXPECTED} within 15 minutes"
+          # The host reports nothing to GitHub, so a host that did not move can mean any of these.
+          if [ -n "$running" ]; then reported="still reports ${running}"; else reported="reported no version"; fi
+          echo "::error::Public webapp at ${HOSTNAME} ${reported}, not ${EXPECTED}, after $(( WAIT_SECONDS / 60 )) minutes. The channel is published, but the host has not applied it: its reconcile timer is paused, a reconcile tick failed, or the host refused the channel. The host's metrics and journal tell which."
+          if [ "$ENVIRONMENT" = "Staging" ]; then
+            echo "::notice::To keep Staging on one build, promote it with freeze instead of pausing the timer: https://docs.hephaestus.build/admin/pull-based-deployment#operating-it"
+          fi
           exit 1
 
       - name: Finish the deployment record
