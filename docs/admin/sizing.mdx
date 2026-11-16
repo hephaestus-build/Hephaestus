@@ -39,7 +39,7 @@ Check the rendered requests against the allocatable resources of your nodes befo
 ## Measured throughput and latency
 
 These measurements used the `small.yaml` cell: one server with a CPU limit of 4 cores, 5 reviews and 11 conversation turns at once.
-The sandboxes ran without gVisor, so these numbers do not apply to the one host with `k3s-values.yaml`.
+The sandboxes ran without gVisor. The one host with `k3s-values.yaml` uses gVisor, so it runs fewer reviews and turns at once.
 Your model provider sets most of the time. Measure with your own model before you promise a time to your users.
 
 ### Reviews
