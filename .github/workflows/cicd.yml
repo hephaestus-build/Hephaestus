@@ -837,7 +837,7 @@ jobs:
         run: node scripts/check-workflows.ts
 
       # Without file arguments Actionlint reads every workflow, so an empty list must skip it.
-      - uses: reviewdog/action-actionlint@a7d35aaf8c309203a4ae861d32b7bd490baa7bf3 # v1.83.0
+      - uses: reviewdog/action-actionlint@ae857e78c1b42b3d0a49637181b09d3d56d402b4 # v1.84.1
         if: steps.native.outputs.compatible != ''
         env:
           SHELLCHECK_OPTS: --severity=warning

@@ -2,13 +2,13 @@
 	"githubRelease": "buildpacks/pack",
 	"assets": {
 		"linux-x64": {
-			"version": "v0.40.10",
-			"sha256": "687c3616e21824a449b56d4f989613ca68c921c6cce670b4de4459b025233806",
+			"version": "v0.40.11",
+			"sha256": "280a53ff6526f1aa26cc903b5c5aab515afef25e3d7abac977fe193331d3b301",
 			"name": "pack-v{version}-linux.tgz"
 		},
 		"linux-arm64": {
-			"version": "v0.40.10",
-			"sha256": "9a294abb0576fd95e19a009b3f9d5f5aa9fecdc2d7da7fa05e7e1e94f5085d77",
+			"version": "v0.40.11",
+			"sha256": "3f8ccaacd512a203849944b3591f19f3ec5994188203386cb0f7abfb5fa93c56",
 			"name": "pack-v{version}-linux-arm64.tgz"
 		}
 	}
