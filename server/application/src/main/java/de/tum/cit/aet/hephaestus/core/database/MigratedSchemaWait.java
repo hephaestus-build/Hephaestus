@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.core.database;
 
+import de.tum.cit.aet.hephaestus.core.web.DocsSite;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
@@ -60,16 +61,19 @@ public final class MigratedSchemaWait implements InitializingBean {
     private final LiquibaseProperties properties;
     private final ResourceLoader resourceLoader;
     private final Duration timeout;
+    private final String migrationGuide;
 
     public MigratedSchemaWait(
             DataSource dataSource,
             LiquibaseProperties properties,
             ResourceLoader resourceLoader,
-            @Value("${hephaestus.database.migration-wait}") Duration timeout) {
+            @Value("${hephaestus.database.migration-wait}") Duration timeout,
+            @Value("${spring.application.version:}") String version) {
         this.jdbc = new JdbcTemplate(dataSource);
         this.properties = properties;
         this.resourceLoader = resourceLoader;
         this.timeout = timeout;
+        this.migrationGuide = DocsSite.page(version, DatabaseMigration.GUIDE);
     }
 
     @Override
@@ -82,7 +86,7 @@ public final class MigratedSchemaWait implements InitializingBean {
             long now = System.nanoTime();
             if (now - start >= timeout.toNanos()) {
                 throw new IllegalStateException(
-                        attempt.describe() + " The wait ended after " + timeout + ". " + attempt.advice(),
+                        attempt.describe() + " The wait ended after " + timeout + ". " + attempt.advice(migrationGuide),
                         attempt.refusal());
             }
             if (now - nextReport >= 0) {
@@ -183,10 +187,9 @@ public final class MigratedSchemaWait implements InitializingBean {
                                     : refusal.getMostSpecificCause().getMessage());
         }
 
-        String advice() {
+        String advice(String migrationGuide) {
             return pending != null
-                    ? "Run this release's database migration, then start this process again. "
-                            + "https://docs.hephaestus.build/admin/runtime-roles#database-migrations"
+                    ? "Run this release's database migration, then start this process again. " + migrationGuide
                     : "Check the database address and credentials, and that PostgreSQL runs.";
         }
     }

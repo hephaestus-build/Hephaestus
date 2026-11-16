@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.core.security;
 
+import de.tum.cit.aet.hephaestus.core.web.DocsSite;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
@@ -58,9 +59,10 @@ public final class SystemSecrets {
         String active = properties.encryptionKey();
         // One rule in every profile: a missing key stops the start here, not later inside a migration or a request.
         if (active == null) {
+            // The build's version is not at hand in this constructor, so the link names the release docs.
             throw new IllegalStateException("No system encryption key. Set hephaestus.security.encryption-key"
                     + " (HEPHAESTUS_SECURITY_ENCRYPTION_KEY), as"
-                    + " https://docs.hephaestus.build/admin/secret-custody#keep-the-required-keys-outside-the-cluster"
+                    + " " + DocsSite.ROOT + "admin/secret-custody#keep-the-required-keys-outside-the-cluster"
                     + " describes.");
         }
         Map<Integer, SecretKey> configured = new HashMap<>();

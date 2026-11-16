@@ -218,7 +218,8 @@ class DatabaseMigrationTest {
         var properties = new LiquibaseProperties();
         properties.setChangeLog("classpath:db/master.xml");
         properties.setContexts(List.of("prod"));
-        var wait = new MigratedSchemaWait(dataSource(database), properties, new DefaultResourceLoader(), timeout);
+        var wait =
+                new MigratedSchemaWait(dataSource(database), properties, new DefaultResourceLoader(), timeout, "1.0.0");
         try {
             wait.afterPropertiesSet();
         } catch (Exception e) {

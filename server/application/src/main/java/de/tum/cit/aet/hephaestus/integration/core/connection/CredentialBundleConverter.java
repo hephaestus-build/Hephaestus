@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.integration.core.connection;
 import de.tum.cit.aet.hephaestus.core.security.EncryptionException;
 import de.tum.cit.aet.hephaestus.core.security.MissingCredentialKeyException;
 import de.tum.cit.aet.hephaestus.core.security.SecurityProperties;
+import de.tum.cit.aet.hephaestus.core.web.DocsSite;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.CredentialBundle;
 import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
@@ -78,9 +79,10 @@ public class CredentialBundleConverter {
         this.objectMapper = objectMapper;
         // As for the system key: a missing key stops the start in every profile.
         if (encryptionKey == null || encryptionKey.isBlank()) {
+            // The build's version is not at hand in this constructor, so the link names the release docs.
             throw new IllegalStateException("No credential encryption key. Set"
                     + " hephaestus.security.credential-encryption-key (HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY),"
-                    + " as https://docs.hephaestus.build/admin/secret-custody#keep-the-required-keys-outside-the-cluster"
+                    + " as " + DocsSite.ROOT + "admin/secret-custody#keep-the-required-keys-outside-the-cluster"
                     + " describes.");
         }
         SecretKey active = parseKey(encryptionKey, "credential-encryption-key");
