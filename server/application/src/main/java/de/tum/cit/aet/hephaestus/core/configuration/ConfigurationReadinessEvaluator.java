@@ -147,6 +147,17 @@ public final class ConfigurationReadinessEvaluator {
                 this::validAgentImage,
                 "The agent image contract requires digest enforcement and a digest-pinned agent image.",
                 "agent-image");
+        // Why the description is off: application.yml § springdoc. Swagger UI registers only with it.
+        add(
+                facts,
+                "api.description",
+                "springdoc.api-docs.enabled",
+                roles(RuntimeRole.SERVER),
+                ConfigurationRequirement.REQUIRED,
+                server,
+                validFalse("springdoc.api-docs.enabled", false),
+                "The OpenAPI description must stay off in production.",
+                "openapi-description");
         // Email is on exactly when a relay host is set; the sender address is then the one thing that
         // can still be missing, and its absence leaves every notification withheld as NOT_CONFIGURED.
         boolean relayConfigured = notBlank(property("spring.mail.host"));
