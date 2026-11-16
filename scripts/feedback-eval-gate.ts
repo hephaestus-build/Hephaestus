@@ -179,7 +179,7 @@ let panel: Panel = {
 	status: "not-run",
 	reason: values.safety
 		? "This run composed the prompt-safety subset only."
-		: "This run asked for the deterministic checks only. CI / Feedback eval panel composes the panel (--model) or the safety subset (--safety).",
+		: "This run asked for the deterministic checks only. CI / Feedback eval panel composes the panel (--model) when a person starts it; --safety composes the prompt-safety subset.",
 };
 let safety: SafetyRow[] | Panel | null = null;
 let model: Model | null = null;

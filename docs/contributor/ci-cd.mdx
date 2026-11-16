@@ -606,19 +606,8 @@ A workflow passes them to the live tests as the three `HEPHAESTUS_LIVE_LLM_*` va
 A job condition cannot read a secret, so a workflow checks the settings in a step.
 Without all three, that step names the missing settings in a notice and in its summary, and the workflow composes nothing and ends without failure.
 
-Today the [feedback eval panel](./feedback-quality-evals.mdx#model-panel) is the only such workflow. A night without `CI_LLM_MODEL` starts no panel job.
-The tracking issue stays unchanged on a night that composes nothing.
+Today the [feedback eval panel](./feedback-quality-evals.mdx#model-panel) is the only such workflow.
 One panel run sends at most 240 model calls.
-
-### Feedback eval panel state
-
-The last night whose panel measured and passed is kept as state, not searched for in run history.
-A scheduled night on `main` saves an Actions cache entry with the key `feedback-eval-last-green-<run ID>-<commit>`.
-A separate job saves it after the whole panel job succeeded. Thus, a later failing step of the panel job cannot record a failed night.
-
-A red or unfinished night reads the newest such entry on `main` and links the commits since that commit. An entry from another ref does not count.
-GitHub evicts a cache entry that nobody used for 7 days.
-Without an entry, or when the lookup fails, the comment says that the last green night is unknown and why. It does not compute the range.
 
 ## The `preview` label
 
@@ -679,7 +668,7 @@ The required checks are job names, so a display name does not change them.
 | `semgrep.yml`                         | Pull request, push to main                                                    | Tests and scans the repository's own TLS rule pack                                                                                                                                                                               |
 | `kubernetes-nightly.yml`              | Nightly, manual                                                               | Runs every Kubernetes leg and the sandbox footprint benchmark on the newest main build that passed CI, with its chart and agent image. Reports a failure on one tracking issue                                              |
 | `chart-upgrade.yml` | Nightly through `kubernetes-nightly.yml`, PR touching the drill, manual | Installs the latest published release with its own chart and images, then upgrades it to a candidate with the candidate chart |
-| `feedback-eval-panel.yml` | Nightly, manual, PR that changes what the composer reads | Composes the [model panel](./feedback-quality-evals.mdx#when-the-panel-runs) of the feedback eval gate, or its prompt-safety subset on a PR without the `eval:run` label. Never a required check. Inactive without the [CI model connection](#ci-model-connection). A red or unfinished night comments on one tracking issue, and the next green night closes it |
+| `feedback-eval-panel.yml` | Manual, and adding `eval:run` to a PR from this repository | Composes the whole [model panel](./feedback-quality-evals.mdx#when-the-panel-runs) of the feedback eval gate against the head at that moment. A later push starts nothing. Never runs on a path change or a schedule, never a required check, and never cancels another panel run. Inactive without the [CI model connection](#ci-model-connection) |
 | `extension-provider-slots.yml` | Nightly, manual | Checks the actual extension adapter against six public GitHub and GitLab report layouts and keeps each result |
 | `platform-pins.yml` | PR touching platform pins or their validator | Verifies the installer checksum and the images that both upstream charts render |
 | `rescan-images.yml`                   | Daily, manual                                                                | Rescans main's published images against the release vulnerability policy and keeps one tracking issue in step with the findings. A second job rescans the latest published release's images and reports drift on the vulnerability response issue|

@@ -2594,67 +2594,56 @@ void test("the feedback eval gate runs on its paths in every tier, a stacked lay
 	assert.equal(runs({}), false);
 });
 
-/** The `github` context of a feedback eval panel run for a pull request with `labels`. */
-function panelContext(event: string, action: string, labels: string[], label?: string) {
+/** The `github` context of a feedback eval panel run: its event, the action and label, and the head's repository. */
+function panelContext(
+	event: string,
+	action: string,
+	label?: string,
+	headRepository = "hephaestus/hephaestus",
+) {
 	return {
 		github: {
 			event_name: event,
+			repository: "hephaestus/hephaestus",
 			event: {
 				action,
 				...(label === undefined ? {} : { label: { name: label } }),
-				pull_request: { number: 7, labels: labels.map((name) => ({ name })) },
+				pull_request: { number: 7, head: { repo: { full_name: headRepository } } },
 			},
 		},
 		vars: {},
 	};
 }
 
-void test("a prompt change composes the safety subset, the eval:run label the whole panel, and nothing else cancels it", async () => {
+void test("only a person starts the feedback eval panel: a manual run or the eval:run label, never a path or a schedule", async () => {
 	const workflow = parseDocument(
 		await readFile(".github/workflows/feedback-eval-panel.yml", "utf8"),
 	);
-	const starts = (action: string, labels: string[], label?: string) =>
+	const triggers = asRecord(asRecord(workflow.toJS(), "panel workflow").on, "panel triggers");
+	// No schedule and no path filter: a change to the composer starts nothing by itself.
+	assert.deepEqual(Object.keys(triggers).toSorted(), ["pull_request", "workflow_dispatch"]);
+	assert.deepEqual(asRecord(triggers.pull_request, "pull_request trigger"), { types: ["labeled"] });
+	const starts = (event: string, action: string, label?: string, headRepository?: string) =>
 		expandExpressions(
 			`\${{ ${asString(workflow.getIn(["jobs", "provider", "if"]), "provider if")} }}`,
-			panelContext("pull_request", action, labels, label),
+			panelContext(event, action, label, headRepository),
 		) === "true";
-	// The path filter selects the pull requests; an unrelated label adds no second run.
-	assert.equal(starts("labeled", ["eval:run", "ci:full"], "ci:full"), false);
-	assert.equal(starts("labeled", ["eval:run"], "eval:run"), true);
-	assert.equal(starts("synchronize", []), true);
-	assert.equal(starts("opened", []), true);
-	const jobs = asRecord(asRecord(workflow.toJS(), "panel workflow").jobs, "jobs");
-	const gateStep = asArray(asRecord(jobs.panel, "panel job").steps, "panel steps")
-		.map((entry) => asRecord(entry, "panel step"))
-		.find((entry) => entry.id === "gate");
-	assert.ok(gateStep);
-	const scope = (event: string, labels: string[]) =>
-		expandExpressions(
-			asString(asRecord(gateStep.env, "gate env").SCOPE, "scope"),
-			panelContext(event, "synchronize", labels),
-		);
-	assert.equal(scope("pull_request", []), "--safety");
-	assert.equal(scope("pull_request", ["eval:run"]), "--model");
-	assert.equal(scope("schedule", []), "--model");
-	assert.equal(scope("workflow_dispatch", []), "--model");
-	// Each path that starts a composition also selects the deterministic gate.
-	const orchestrator = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
-	const filter = step(orchestrator, ["jobs", "detect-changes"], "dorny/paths-filter");
-	const filters = asRecord(parseDocument(String(filter.get("filters"))).toJSON(), "CI filters");
-	const gatePaths = asArray(filters["feedback-eval"], "feedback-eval paths");
-	const trigger = asRecord(
-		asRecord(asRecord(workflow.toJS(), "panel workflow").on, "panel triggers").pull_request,
-		"pull_request trigger",
-	);
-	for (const panelPath of asArray(trigger.paths, "panel paths")) {
-		assert.ok(gatePaths.includes(panelPath), String(panelPath));
-	}
-	// A run whose jobs are skipped must not enter a cancelling group, so only the panel job holds one.
+	assert.equal(starts("workflow_dispatch", ""), true);
+	assert.equal(starts("pull_request", "labeled", "eval:run"), true);
+	// Another label starts nothing, and a fork gets no run: it has no secrets.
+	assert.equal(starts("pull_request", "labeled", "ci:full"), false);
+	assert.equal(starts("pull_request", "labeled", "eval:run", "someone/hephaestus"), false);
+	// A person started the run, so it composes the whole panel.
+	const compose = String(namedStep(workflow, ["jobs", "panel"], "Compose the panel").get("run"));
+	assert.match(compose, /^node scripts\/feedback-eval-gate\.ts --model /u);
+	// One panel at a time, and none cancels another; a run for an unrelated label never enters the group.
 	assert.equal(workflow.has("concurrency"), false);
-	assert.equal(workflow.hasIn(["jobs", "provider", "concurrency"]), false);
-	assert.equal(
-		workflow.getIn(["jobs", "panel", "concurrency", "group"]),
-		`feedback-eval-panel-\${{ github.event.pull_request.number || github.ref }}`,
+	assert.equal(workflow.getIn(["jobs", "panel", "concurrency", "group"]), "feedback-eval-panel");
+	assert.equal(workflow.getIn(["jobs", "panel", "concurrency", "cancel-in-progress"]), false);
+	// The provider check and the panel only: a run reports in its job summary, to the person who started it.
+	assert.deepEqual(
+		Object.keys(asRecord(asRecord(workflow.toJS(), "panel workflow").jobs, "jobs")).toSorted(),
+		["panel", "provider"],
 	);
 });
 
