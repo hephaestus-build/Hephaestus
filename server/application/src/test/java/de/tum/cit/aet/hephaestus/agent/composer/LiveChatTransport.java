@@ -1,20 +1,29 @@
 package de.tum.cit.aet.hephaestus.agent.composer;
 
+import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
 import de.tum.cit.aet.hephaestus.testconfig.LiveLlmCredentials;
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import java.util.function.Function;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.ObjectNode;
 
-/** Sends a composer's chat request bytes to a live endpoint, without the proxy that fences and bills them. */
+/**
+ * Sends a composer's chat request bytes to a live endpoint, without the proxy that fences and bills them. The composer
+ * streams its calls, and {@link ModelSession} reads one body, so this transport assembles a streamed answer with the
+ * server's own {@link ComposerStreamAnswer}, as the proxy does.
+ */
 final class LiveChatTransport implements ModelSession.Transport {
     private static final JsonMapper MAPPER = new JsonMapper();
     private final HttpClient client =
@@ -88,16 +97,51 @@ final class LiveChatTransport implements ModelSession.Transport {
                 .build();
         try {
             var response = client.send(request, HttpResponse.BodyHandlers.ofByteArray());
-            if (response.statusCode() == 200) {
-                String served = MAPPER.readTree(response.body()).path("model").asString("");
-                if (!served.isBlank()) servedModels.add(served);
+            if (response.statusCode() != 200) {
+                return new ModelSession.Answer(response.statusCode(), response.body(), true, null);
             }
-            return new ModelSession.Answer(response.statusCode(), response.body(), true, null);
+            if (!isEventStream(response)) {
+                noteServedModel(MAPPER.readTree(response.body()));
+                return new ModelSession.Answer(200, response.body(), true, null);
+            }
+            var streamed = new ComposerStreamAnswer(LlmApiProtocol.OPENAI_COMPLETIONS, MAPPER);
+            streamed.accept(response.body());
+            JsonNode answer = streamed.answer();
+            // A stream cut before its end has no answer: the endpoint failed, as the proxy reports it.
+            if (answer == null) return new ModelSession.Answer(503, new byte[0], true, null);
+            noteStreamedModel(response.body());
+            return new ModelSession.Answer(200, MAPPER.writeValueAsBytes(answer), true, null);
         } catch (IOException failed) {
             return new ModelSession.Answer(503, new byte[0], true, null);
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
             return new ModelSession.Answer(503, new byte[0], true, null);
+        }
+    }
+
+    private static boolean isEventStream(HttpResponse<byte[]> response) {
+        return response.headers()
+                .firstValue("content-type")
+                .map(type -> type.toLowerCase(Locale.ROOT).startsWith("text/event-stream"))
+                .orElse(false);
+    }
+
+    private void noteServedModel(JsonNode answer) {
+        String served = answer.path("model").asString("");
+        if (!served.isBlank()) servedModels.add(served);
+    }
+
+    /** The model that a stream's chunks name: the assembled answer keeps the reply, not the chunks' model. */
+    private void noteStreamedModel(byte[] stream) {
+        for (String line : new String(stream, StandardCharsets.UTF_8).lines().toList()) {
+            if (!line.startsWith("data:")) continue;
+            String data = line.substring(5).strip();
+            if (data.isEmpty() || data.equals("[DONE]")) continue;
+            try {
+                noteServedModel(MAPPER.readTree(data));
+            } catch (JacksonException unreadable) {
+                // An event that is not JSON names no model; the assembler has already judged the stream.
+            }
         }
     }
 }
