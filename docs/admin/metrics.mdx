@@ -672,7 +672,7 @@ Each server replica counts its own requests.
 | Prometheus name | Type | Labels | Meaning |
 | --- | --- | --- | --- |
 | `mcp_tool_calls_total` | Counter | `tool`, `outcome` | Tool calls that ran. `ok` did what the tool says. `refused` gave the client the reason that the web app gives, such as a changed version or a missing role. `failed` was a server error, and the client saw only that the tool failed. A call whose arguments do not match the tool's input schema is refused before it runs and is not counted |
-| `mcp_auth_refusals_total` | Counter | `reason` | Requests refused with a challenge. `missing_token`: no bearer token. `invalid_token`: an expired, revoked or foreign token, or a grant that no longer holds for the workspace. `insufficient_scope`: a change under a grant that may only read |
+| `mcp_auth_refusals_total` | Counter | `reason` | Requests refused with a challenge. `missing_token`: no usable bearer token, such as none at all or a malformed header. `invalid_token`: an expired, revoked or foreign token, or a grant that no longer holds for the workspace. `insufficient_scope`: a change under a grant that may only read |
 
 Calls above the client budget count in `auth_ratelimit_blocked_total{bucket="mcp-call"}`.
 `HephaestusMcpToolsFailing` reads the `failed` outcome.

@@ -1483,7 +1483,7 @@ describe("the connected MCP clients", () => {
 		);
 		within(section).getByText("claude.ai");
 		within(section).getByText(
-			/Calls itself Claude Code\. Allowed by Octo Cat on 15 November 2026\./u,
+			/Calls itself Claude Code\. Allowed by Octo Cat on 15 November 2026 to read the practice configuration\./u,
 		);
 		await userEvent.click(within(section).getByRole("button", { name: "Disconnect claude.ai" }));
 		await within(section).findByText("No client is connected.");
