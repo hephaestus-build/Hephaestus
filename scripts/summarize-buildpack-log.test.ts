@@ -155,6 +155,9 @@ void test("an image whose JRE is not of the .java-version line fails the build",
 			{ input, encoding: "utf8" },
 		);
 	assert.equal(summarize(`\u001B[1m${jre(javaLine)}`).status, 0);
+	// A builder with a layer cache reuses the JRE layer and says so instead.
+	const reused = `[builder]   BellSoft Liberica JRE ${javaLine}.0.5: Reusing cached layer\n`;
+	assert.equal(summarize(reused).status, 0);
 	const other = String(Number(javaLine) - 4);
 	const fallback = summarize(jre(other));
 	assert.equal(fallback.status, 1);

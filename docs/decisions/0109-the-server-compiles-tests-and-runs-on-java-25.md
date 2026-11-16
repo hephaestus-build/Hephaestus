@@ -39,7 +39,7 @@ The Paketo Spring Boot buildpack deprecates the CDS switch of ADR 0067 in favor 
 
 **Option 4.** A reviewer can check each rule against the diff.
 
-1. `.java-version` contains `25`. Gradle, `actions/setup-java` and Renovate read it. No file pins a JDK inline.
+1. `.java-version` contains `25`. Gradle and `actions/setup-java` read it. Renovate's `constraints.java` restates it, and `gate:toolchain` compares the two. No other file pins a JDK.
 2. The image's JVM buildpack reads the JDK line from the JAR manifest (`Build-Jdk-Spec`, which Gradle writes from `.java-version`), so `server/application/project.toml` does not restate it. The JRE pin in `.github/ci-tools/buildpack-liberica-jre.json` belongs to that line, and its checksums come from the `buildpack.toml` of the Liberica buildpack in the pinned builder. `gate:toolchain` fails on drift.
 3. `-Werror` and `-Xlint:all,-processing` stay. A new finding is fixed, not suppressed. Missing annotation metadata goes on the compile-only classpath.
 4. The compiler arguments drop `-XDaddTypeAnnotationsToSymbol=true`. NullAway's JSpecify mode needs it only before JDK 22.
@@ -47,7 +47,7 @@ The Paketo Spring Boot buildpack deprecates the CDS switch of ADR 0067 in favor 
 6. `CacheLoads` and the locks stay. A comment that gives Java 21 pinning as the reason states the constraint that still holds, or goes.
 7. The server uses no preview feature and no incubator module.
 8. CDS stays as ADR 0067 decides. A separate change moves the image to the AOT cache and turns on compact object headers, with its own measurement, and updates ADR 0067. The training run and the runtime then need the same JVM options ([JEP 483](https://openjdk.org/jeps/483)).
-9. A separate change removes `jdk.virtualThreadScheduler.maxPoolSize` from the chart. On 25 a Tomcat socket wait unmounts, so the gateway no longer needs it. Until then it still caps the carriers that the scheduler adds for pinned file I/O.
+9. A separate change removes `jdk.virtualThreadScheduler.maxPoolSize` from the chart. On 25 a Tomcat socket wait unmounts, so the gateway no longer needs it. Until then it still caps the carriers that the scheduler adds while a virtual thread blocks in file I/O.
 
 ## Consequences
 

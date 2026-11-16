@@ -18,7 +18,8 @@ const download = /Downloading from (?<uri>\S+)/u;
 const failure = /^(?:\[\w+\]\s+)?(?:ERROR: |unable to )/u;
 // The JVM buildpack takes the image's Java line from the JAR manifest. Nothing else would notice if it took another
 // line, so the image must name the JRE of the tested one.
-const contributedJre = /BellSoft Liberica JRE (?<major>\d+)\.\S*: Contributing to layer/u;
+const contributedJre =
+	/BellSoft Liberica JRE (?<major>\d+)\.\S*: (?:Contributing to|Reusing cached) layer/u;
 const javaLine = readFileSync(new URL("../.java-version", import.meta.url), "utf8").trim();
 
 const output = process.argv[2];
@@ -86,7 +87,9 @@ if (buildFailed) {
 // A failed build contributes no JRE, and its own failure lines already name the cause.
 if (!buildFailed) {
 	if (jreLines.length === 0) {
-		console.log("::error::The buildpack log names no Liberica JRE, so the image's Java line is unknown.");
+		console.log(
+			"::error::The buildpack log names no Liberica JRE, so the image's Java line is unknown.",
+		);
 		process.exitCode = 1;
 	}
 	for (const major of new Set(jreLines)) {
