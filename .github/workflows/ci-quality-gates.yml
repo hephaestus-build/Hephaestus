@@ -3,6 +3,11 @@ name: CI / Quality
 on:
   workflow_call:
     inputs:
+      merge_group_base:
+        description: "Where a merge group leaves main (detect-changes); empty for other events"
+        required: false
+        type: string
+        default: ""
       should_skip:
         description: "Whether to skip the workflow"
         required: false
@@ -142,8 +147,9 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
           LEG: ${{ env.QUALITY_LEG }}
           PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          # The bundle budget compares with the entry ahead in the queue; a pull request uses its merge base.
-          BUNDLE_BASE: ${{ github.event.merge_group.base_sha }}
+          # A merge group's bundle budget compares with where the group leaves main, so a group behind
+          # another judges the growth of the pull requests ahead of it too. A pull request uses its merge base.
+          BUNDLE_BASE: ${{ inputs.merge_group_base }}
           HEPHAESTUS_NODE_TEST_SHARD: ${{ env.NODE_TEST_SHARD }}
         # 15 minutes, under the job's 20: a hung task is named in the log and the summary before the
         # job limit cancels the run, which can lose its log. The step takes 5 to 11 minutes.

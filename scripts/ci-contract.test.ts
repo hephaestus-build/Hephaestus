@@ -4904,7 +4904,7 @@ void describe("CI contract", () => {
 		assert.match(String(secretScan.get("version")), /^\d+\.\d+\.\d+@sha256:[a-f0-9]{64}$/u);
 		assert.equal(
 			workflow.getIn([...scanPath, "env", "EVENT_BASE"]),
-			`\${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before || '' }}`,
+			`\${{ github.event.pull_request.base.sha || inputs.merge_group_base || github.event.before || '' }}`,
 		);
 		assert.equal(secretScan.get("base"), `\${{ env.EVENT_BASE }}`);
 		assert.equal(
@@ -8464,4 +8464,55 @@ void test("a merge group stacked behind another detects changes from where the g
 		".github/workflows/ci-quality-gates.yml",
 		"webapp/src/tour.tsx",
 	]);
+	// Once the group ahead has merged, main holds it, and this group's own change remains to judge.
+	git(work, "push", "-q", "origin", `${ahead}:refs/heads/main`);
+	const resolved = async (baseRef: string) => {
+		await writeFile(output, "");
+		const result = spawnSync(
+			"bash",
+			["--noprofile", "--norc", "-e", "-c", String(resolve.get("run"))],
+			{
+				cwd: work,
+				encoding: "utf8",
+				env: { ...env, BASE_REF: baseRef, GITHUB_OUTPUT: output },
+			},
+		);
+		return { status: result.status, written: await readFile(output, "utf8") };
+	};
+	const merged = await resolved("refs/heads/main");
+	assert.equal(merged.written.trim(), `sha=${ahead}`);
+	// A base that cannot be resolved fails the run instead of judging a narrower diff.
+	const missing = await resolved("refs/heads/no-such-branch");
+	assert.notEqual(missing.status, 0);
+	assert.equal(missing.written, "");
+
+	// Every other check that measures a group from a base takes the same base.
+	const source = asRecord(workflow.toJS(), "workflow");
+	const jobs = asRecord(source.jobs, "jobs");
+	assert.equal(
+		asRecord(asRecord(jobs["detect-changes"], "detect-changes").outputs, "outputs")[
+			"merge-group-base"
+		],
+		`\${{ steps.group_base.outputs.sha }}`,
+	);
+	for (const caller of ["Security", "Quality"]) {
+		assert.equal(
+			asRecord(asRecord(jobs[caller], caller).with, `${caller} inputs`).merge_group_base,
+			`\${{ needs.detect-changes.outputs.merge-group-base }}`,
+			caller,
+		);
+	}
+	const scan = parseDocument(await readFile(".github/workflows/ci-security-scan.yml", "utf8"));
+	const scanPath = ["jobs", "security-scan"];
+	const ahead2 = namedStep(scan, scanPath, "Changelog immutability guard against the entry ahead");
+	assert.match(String(ahead2.get("if")), /github\.event_name == 'merge_group'/u);
+	assert.equal(ahead2.getIn(["env", "BASE"]), `\${{ github.event.merge_group.base_sha }}`);
+	assert.match(
+		String(namedStep(scan, scanPath, "Evaluate security and repository policy").get("run")),
+		/"\$CHANGELOG_AHEAD"/u,
+	);
+	assert.match(
+		await readFile(".github/workflows/ci-quality-gates.yml", "utf8"),
+		/BUNDLE_BASE: \$\{\{ inputs\.merge_group_base \}\}/u,
+	);
 });

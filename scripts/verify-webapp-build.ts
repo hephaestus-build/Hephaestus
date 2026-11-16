@@ -1,7 +1,7 @@
 /**
  * Builds the webapp, checks the committed route tree, and holds the bundle budget against the build
- * of the commit this change merges onto: `BUNDLE_BASE`, which the merge queue sets to the entry ahead,
- * or the merge base with `origin/main`. Both builds use one install, so neither a stale install nor
+ * of the commit this change merges onto: `BUNDLE_BASE`, which a merge group sets to where it leaves
+ * main, or the merge base with `origin/main`. Both builds use one install, so neither a stale install nor
  * growth that landed earlier counts against the change.
  */
 import { spawnSync } from "node:child_process";

@@ -288,6 +288,9 @@ The 1.0 cutover dropped every earlier pending contraction, so the table is empty
    Pull requests and merge groups both run it.
    A pull request run does not repeat when its base advances.
    Thus, the merge group judges migrations that reached `main` after that run.
+   A merge group's base is the commit where it leaves `main`.
+   Thus, a group behind another also judges the migrations of the groups ahead.
+   A second run against the group ahead keeps this group's migrations after that group's.
    No file under `db/changelog/` can change after it reaches the base branch.
    [The one replacement](#what-the-replacement-was-allowed-to-do) was the only exception.
    New migration files must have a valid UTC timestamp and sort after that branch’s existing migrations.

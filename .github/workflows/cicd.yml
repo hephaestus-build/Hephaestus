@@ -114,6 +114,9 @@ jobs:
       # diff. A merge group's diff starts where the group leaves main (the `group_base` step), so it
       # covers every pull request the group would merge.
       unfiltered: ${{ github.event_name == 'push' || github.event_name == 'workflow_dispatch' }}
+      # Where a merge group leaves main; empty for any other event. Every check that measures a group
+      # from a base uses it, so a group behind another judges the pull requests ahead of it too.
+      merge-group-base: ${{ steps.group_base.outputs.sha }}
       # PRs use the fast tier; ci:full reproduces a queue failure. An unreadable label read retains
       # the full tier. Release evidence selection is separate. Every merge group still runs the
       # queue tier: ci-cd.mdx § Two verification tiers.
@@ -907,6 +910,7 @@ jobs:
       security-events: write
       packages: read
     with:
+      merge_group_base: ${{ needs.detect-changes.outputs.merge-group-base }}
       should_skip: ${{ needs.detect-changes.outputs.should_skip }}
 
   # Image policy has one advisory set per attempt. Failed-job reruns retain the producer's
@@ -1038,6 +1042,7 @@ jobs:
       statuses: write
       packages: read
     with:
+      merge_group_base: ${{ needs.detect-changes.outputs.merge-group-base }}
       should_skip: ${{ needs.detect-changes.outputs.should_skip }}
       webapp_changed: ${{ (needs.detect-changes.outputs.webapp == 'true' || needs.detect-changes.outputs.quality-config == 'true' || needs.detect-changes.outputs.unfiltered == 'true') && 'true' || 'false' }}
       extension_changed: ${{ (needs.detect-changes.outputs.extension == 'true' || needs.detect-changes.outputs.quality-config == 'true' || needs.detect-changes.outputs.unfiltered == 'true') && 'true' || 'false' }}
