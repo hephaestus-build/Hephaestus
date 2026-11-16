@@ -1,7 +1,7 @@
 <div align="center">
   <h1>
-    <img alt="Hephaestus" width="484" src="./docs/static/img/brand/hephaestus-lockup-dark.png#gh-dark-mode-only">
-    <img alt="Hephaestus" width="484" src="./docs/static/img/brand/hephaestus-lockup-light.png#gh-light-mode-only">
+    <img alt="Hephaestus" width="484" src="./docs/public/img/brand/hephaestus-lockup-dark.png#gh-dark-mode-only">
+    <img alt="Hephaestus" width="484" src="./docs/public/img/brand/hephaestus-lockup-light.png#gh-light-mode-only">
   </h1>
   <!-- The product tagline, quoted verbatim. -->
   <!-- vale STE.Contractions = NO -->
@@ -36,8 +36,8 @@ Workspace admins can approve feedback before it appears on the work.
 </div>
 
 <div align="center">
-  <img alt="The practice profile in Hephaestus. A summary shows four practices in three groups: one needs attention, one is mixed and two are going well. Below it, a recurring feedback pattern for the practice State how to verify the change says that reviewers cannot see how to check the change, and why it was raised." src="./docs/static/img/user/practice-profile/overview.dark.webp#gh-dark-mode-only" width="1024">
-  <img alt="The practice profile in Hephaestus. A summary shows four practices in three groups: one needs attention, one is mixed and two are going well. Below it, a recurring feedback pattern for the practice State how to verify the change says that reviewers cannot see how to check the change, and why it was raised." src="./docs/static/img/user/practice-profile/overview.light.webp#gh-light-mode-only" width="1024">
+  <img alt="The practice profile in Hephaestus. A summary shows four practices in three groups: one needs attention, one is mixed and two are going well. Below it, a recurring feedback pattern for the practice State how to verify the change says that reviewers cannot see how to check the change, and why it was raised." src="./docs/public/img/user/practice-profile/overview.dark.webp#gh-dark-mode-only" width="1024">
+  <img alt="The practice profile in Hephaestus. A summary shows four practices in three groups: one needs attention, one is mixed and two are going well. Below it, a recurring feedback pattern for the practice State how to verify the change says that reviewers cannot see how to check the change, and why it was raised." src="./docs/public/img/user/practice-profile/overview.light.webp#gh-light-mode-only" width="1024">
 </div>
 
 ## Why Hephaestus
@@ -129,13 +129,13 @@ This let them make things for themselves.
 <p align="center">
   <strong>Developed by</strong><br><br>
   <a href="https://aet.cit.tum.de/#gh-dark-mode-only">
-    <img alt="Applied Education Technologies" align="middle" hspace="12" src="./docs/static/img/readme-brand/aet-mark-dark.svg#gh-dark-mode-only" height="72">
+    <img alt="Applied Education Technologies" align="middle" hspace="12" src="./docs/public/img/readme-brand/aet-mark-dark.svg#gh-dark-mode-only" height="72">
   </a>
   <a href="https://aet.cit.tum.de/#gh-light-mode-only">
     <img alt="Applied Education Technologies" align="middle" hspace="12" src="./webapp/public/brand/aet-mark.svg#gh-light-mode-only" height="72">
   </a>
   <a href="https://www.tum.de/en/#gh-dark-mode-only">
-    <img alt="Technical University of Munich" align="middle" hspace="12" src="./docs/static/img/readme-brand/tum-logo-dark.svg#gh-dark-mode-only" height="56">
+    <img alt="Technical University of Munich" align="middle" hspace="12" src="./docs/public/img/readme-brand/tum-logo-dark.svg#gh-dark-mode-only" height="56">
   </a>
   <a href="https://www.tum.de/en/#gh-light-mode-only">
     <img alt="Technical University of Munich" align="middle" hspace="12" src="./webapp/public/brand/tum-logo.svg#gh-light-mode-only" height="56">

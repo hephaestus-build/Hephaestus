@@ -1,7 +1,7 @@
 import { BASE } from "@/lib/site";
 
 interface ScreenshotProps {
-	/** `<page>/<name>` under `static/img/user/`, without the color scheme and the extension. */
+	/** `<page>/<name>` under `public/img/user/`, without the color scheme and the extension. */
 	src: string;
 	/** What the screen shows, in at most 155 characters. */
 	alt: string;

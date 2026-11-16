@@ -4,7 +4,7 @@
  * but not an address that another program writes. Thus, a
  * renamed page or heading fails the docs build here instead of breaking a link in the app.
  *
- * `docs/package.json` runs it after the build, on the output in `docs/build`. Run on its own,
+ * `docs/package.json` runs it after the build, on the output in `docs/dist`. Run on its own,
  * it reads whatever build is there.
  */
 import { existsSync, readFileSync } from "node:fs";
@@ -67,7 +67,7 @@ export function missingTargets(
 }
 
 if (import.meta.main) {
-	const buildDirectory = path.join(repositoryRoot, "docs", "build");
+	const buildDirectory = path.join(repositoryRoot, "docs", "dist");
 	const unbuilt = missingBuild(buildDirectory);
 	if (unbuilt !== undefined) {
 		console.error(unbuilt);

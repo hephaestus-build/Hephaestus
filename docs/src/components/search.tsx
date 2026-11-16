@@ -72,7 +72,7 @@ async function importPagefind(): Promise<Search> {
 let pagefind: Promise<Search> | undefined;
 
 /*
- * The build writes a Pagefind index of the static pages (`pagefind --site build`). The browser loads only the chunks
+ * The build writes a Pagefind index of the static pages (`pagefind --site dist`). The browser loads only the chunks
  * that a query needs, with no hosted service (ADR 0111). The index is not in the dev server.
  */
 async function loadPagefind(): Promise<Search> {

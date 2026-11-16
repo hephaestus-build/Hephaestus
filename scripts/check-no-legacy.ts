@@ -231,8 +231,7 @@ export function findings(file: string, source: string, files: readonly string[] 
 			"docs-redirect",
 			/<\s*(?:Redirect|Navigate)\b|http-equiv\s*=\s*["']?refresh\b|(?:window\.)?location\.(?:(?:replace|assign)\s*\(|href\s*=)/giu,
 		);
-		docsMatches(/\b(?:redirects|createRedirects)\s*(?::|\()/gu);
-		matches("docs-redirect", /@docusaurus\/plugin-client-redirects/gu);
+		docsMatches(/\bredirects\s*(?::|\()/gu);
 		matches(
 			"docs-redirect",
 			/^(?:#+\s+(?:This page has moved|Moved)|This (?:page|document) has moved\b)/gimu,

@@ -213,7 +213,7 @@ Choose the tool by what the diagram is:
 It has no C4 module. The C4 model is independent of notation, so a C4 level is drawn as a UML component or deployment diagram.
 
 1. Edit or add the source in `docs/diagrams/<name>.hyl`. Keep the line `// @shared-style`, and call one legend once. `docs/diagrams/style.hyl` holds the shared style and the legends.
-2. Run `vp run generate:diagrams`. `scripts/render-diagrams.ts` renders each source with the pinned `@hylimo/cli` into `docs/static/img/diagrams/<name>.light.svg` and `<name>.dark.svg`.
+2. Run `vp run generate:diagrams`. `scripts/render-diagrams.ts` renders each source with the pinned `@hylimo/cli` into `docs/public/img/diagrams/<name>.light.svg` and `<name>.dark.svg`.
 3. Show it with `<SystemDiagram name="<name>" title="<view>: <scope>" alt="…">` in the page. Every page has the component without an import. The title states the view and its scope. The alt text has at most 155 characters. The children are a table with every connection of the view. The page shows it under "Connections as text", and the image refers to it with `aria-describedby`.
 4. Commit the source and both SVGs. `gate:system-diagrams` fails when an SVG does not match its source.
 
@@ -286,7 +286,7 @@ The component shows the image of the reader's color scheme:
 - The app reads a synthetic workspace from `webapp/e2e/screenshots/workspace.ts`. No server or database runs. The user, workspace, membership, conversation, and feedback mode data come from the fixtures that the stories and tests share. A change to them can change an image.
 - The live event stream of the app stays open with no events. A new screen with another stream needs the same answer in `workspace.ts`.
 - The capture uses a 1024 by 640 viewport at twice the pixels, a fixed clock, and the UTC time zone. It blocks every request to another site, so no avatar of a real person appears. It hides the floating Hephaestus button, which covers the content.
-- Chromium encodes each image as WebP. Each screen is captured in the light and the dark color scheme. The images go to `docs/static/img/user/<page>/<name>.<scheme>.webp`.
+- Chromium encodes each image as WebP. Each screen is captured in the light and the dark color scheme. The images go to `docs/public/img/user/<page>/<name>.<scheme>.webp`.
 - An image of more than 150 KB fails the capture and `gate:docs-pages`.
 - A request that `workspace.ts` does not answer fails the capture, so no image shows an error by accident.
 
