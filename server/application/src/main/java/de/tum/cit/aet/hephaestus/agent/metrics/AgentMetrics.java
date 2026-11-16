@@ -43,6 +43,8 @@ public final class AgentMetrics {
     public static final String AGENT_SANDBOX_DISPATCH_FAILURE = "agent.sandbox.dispatch.failure";
     /** Live sandboxes that the server took back before the reaper would, by reason: {@code unisolated}. */
     public static final String AGENT_SANDBOX_REVOKED = "agent.sandbox.revoked";
+    /** Sandboxes whose claim the server deleted, by {@code kind} and by how the sandbox ended ({@code reason}). */
+    public static final String AGENT_SANDBOX_ENDED = "agent.sandbox.ended";
 
     public static final String AGENT_PI_ENVELOPE_MISMATCH = "agent.pi.envelope.mismatch";
     public static final String AGENT_PI_RESULT_PARSE_FAILURE = "agent.pi.result.parse.failure";
@@ -108,8 +110,6 @@ public final class AgentMetrics {
 
     public static final String SANDBOX_GATEWAY_REQUESTS = "sandbox.gateway.requests";
     public static final String SANDBOX_GATEWAY_REQUEST_SIZE = "sandbox.gateway.request.size";
-    /** Sandbox Pods removed, tagged by {@code kind} (what they ran) and {@code reason} (why they ended). */
-    public static final String SANDBOX_EXITS = "sandbox.exits";
 
     private AgentMetrics() {}
 }

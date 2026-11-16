@@ -319,10 +319,64 @@ public class AgentSandboxes {
         });
     }
 
-    /** Deletes a {@code DELETING} sandbox's claim, then its row. A failure leaves both for the reaper's next tick. */
+    /** Deletes a {@code DELETING} sandbox's claim, then its row, and reads how it ended before its Pod goes. */
     void deleteClaim(AgentSandboxRepository.SandboxRow row) {
+        deleteClaim(row, readEnd(row));
+    }
+
+    /**
+     * Deletes the claim, then the row. A failure leaves both for the reaper's next tick. Several replicas can delete
+     * the same row at once, and a later tick repeats a failed one, so only the call whose statement deletes the row
+     * records the end: each end is recorded once, after nothing of the deletion is left to fail.
+     *
+     * @param end how the sandbox ended, read before its claim goes
+     */
+    void deleteClaim(AgentSandboxRepository.SandboxRow row, SandboxEnd end) {
+        // Read while the row still holds the sandbox's lifetime.
+        UUID run = servedRun(row);
         claims.delete(row.getClaimName());
-        transactions.executeWithoutResult(status -> sandboxes.deleteGone(row.getId(), row.getWorkspaceId()));
+        Integer gone = transactions.execute(status -> sandboxes.deleteGone(row.getId(), row.getWorkspaceId()));
+        if (gone != null && gone == 1) recordEnd(row, end, run);
+    }
+
+    /** A read that fails never stops the deletion. */
+    private SandboxEnd readEnd(AgentSandboxRepository.SandboxRow row) {
+        try {
+            return claims.podEnd(row.getClaimName()).map(SandboxEnd::of).orElseGet(SandboxEnd::deleted);
+        } catch (RuntimeException e) {
+            return SandboxEnd.unread(e);
+        }
+    }
+
+    /** One record and one count for each ended sandbox. The record holds no output of the sandbox. */
+    private void recordEnd(AgentSandboxRepository.SandboxRow row, SandboxEnd end, @Nullable UUID run) {
+        meters.counter(
+                        AgentMetrics.AGENT_SANDBOX_ENDED,
+                        "kind",
+                        AgentSandboxKind.valueOf(row.getKind()).value(),
+                        "reason",
+                        end.reason().value())
+                .increment();
+        var event = SandboxEvents.event(log.atInfo(), "agent.sandbox.ended", row)
+                .addKeyValue("sandbox.reason", end.reason().value())
+                .addKeyValue("sandbox.oom", end.oom());
+        if (run != null) event = event.addKeyValue(StructuredLogKeys.RUN_ID, run);
+        if (end.exitCode() != null) event = event.addKeyValue("sandbox.exit_code", end.exitCode());
+        if (end.terminationReason() != null)
+            event = event.addKeyValue("sandbox.termination_reason", end.terminationReason());
+        if (end.restartCount() != null) event = event.addKeyValue("sandbox.restart_count", end.restartCount());
+        if (end.errorType() != null) event = event.addKeyValue("error.type", end.errorType());
+        if (end.httpStatus() != null) event = event.addKeyValue("http.response.status_code", end.httpStatus());
+        event.log("Sandbox ended");
+    }
+
+    /** The record names the sandbox's latest run when it can; a failed read leaves it out and keeps the deletion going. */
+    private @Nullable UUID servedRun(AgentSandboxRepository.SandboxRow row) {
+        try {
+            return sandboxes.findServedRunId(row.getId(), row.getWorkspaceId()).orElse(null);
+        } catch (RuntimeException e) {
+            return null;
+        }
     }
 
     /** A sandbox's claim name, which is also its Sandbox's and its Pod's. */

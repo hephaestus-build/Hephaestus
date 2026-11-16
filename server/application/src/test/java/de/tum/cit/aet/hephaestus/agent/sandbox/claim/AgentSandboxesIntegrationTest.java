@@ -3,6 +3,9 @@ package de.tum.cit.aet.hephaestus.agent.sandbox.claim;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import de.tum.cit.aet.hephaestus.agent.AgentCapacityProperties;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptKeyFixtures;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptSigningKey;
@@ -23,17 +26,20 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.function.Predicate;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataAccessException;
@@ -410,9 +416,11 @@ class AgentSandboxesIntegrationTest extends BaseIntegrationTest {
         // A stopped window deleted the claims outside the server, while every server was down.
         claims.created.remove(claimName(lost));
         claims.created.remove(claimName(requested));
+        // Its Pod may still be stopping; the server did not end it, so its end is deleted, whatever the Pod shows.
+        claims.pods.put(claimName(lost), new SandboxClaims.PodEnd("Running", null, null, null, 0, false));
         keepClaimsOfOtherReadySandboxes(Set.of(lost.id()));
 
-        reaper(Duration.ofHours(1)).reap();
+        var ended = ended(() -> reaper(Duration.ofHours(1)).reap(), claimName(lost));
 
         assertThat(repository.findById(lost.id()))
                 .as("the next pass takes the ready row back")
@@ -420,6 +428,11 @@ class AgentSandboxesIntegrationTest extends BaseIntegrationTest {
         assertThat(meters.counter(AgentMetrics.AGENT_SANDBOX_REAPED, "reason", "lost")
                         .count())
                 .isEqualTo(1);
+        assertThat(ended)
+                .singleElement()
+                .satisfies(end -> assertThat(end)
+                        .containsEntry("sandbox.reason", "deleted")
+                        .doesNotContainKeys("sandbox.exit_code", "sandbox.termination_reason", "error.type"));
         assertThat(state(requested))
                 .as("a requested sandbox can still be creating its claim, so the start limit decides it")
                 .isEqualTo("REQUESTED");
@@ -475,16 +488,18 @@ class AgentSandboxesIntegrationTest extends BaseIntegrationTest {
         waitPast(Duration.ofSeconds(1));
         claims.failDeletes = true;
 
-        reaper(Duration.ofHours(1)).reap();
+        var refused = ended(() -> reaper(Duration.ofHours(1)).reap(), claimName(sandbox));
         assertThat(state(sandbox)).isEqualTo("DELETING");
         assertThat(sandboxes.authenticate(token(sandbox)))
                 .as("its token stops at once")
                 .isEmpty();
+        assertThat(refused).as("a sandbox whose claim stays has not ended").isEmpty();
 
         claims.failDeletes = false;
-        reaper(Duration.ofHours(1)).reap();
+        var deleted = ended(() -> reaper(Duration.ofHours(1)).reap(), claimName(sandbox));
         assertThat(repository.findById(sandbox.id())).isEmpty();
         assertThat(claims.created).doesNotContainKey(claimName(sandbox));
+        assertThat(deleted).hasSize(1);
     }
 
     @Test
@@ -544,6 +559,161 @@ class AgentSandboxesIntegrationTest extends BaseIntegrationTest {
         assertThatThrownBy(() -> jdbc.update("UPDATE agent_sandbox SET state = 'READY' WHERE id = ?", sandbox.id()))
                 .isInstanceOf(DataAccessException.class)
                 .hasMessageContaining("never live again");
+    }
+
+    @Test
+    void shouldRecordHowASandboxEndedFromItsPodBeforeItsClaimIsDeleted() {
+        String subject = "review:" + UUID.randomUUID();
+        queueRun(subject);
+        var sandbox = ensure(subject, AgentSandboxKind.REVIEW);
+        sandboxes.authenticate(token(sandbox));
+        var lease = sandboxes
+                .lease(sandbox, Set.of(AgentRunKind.REVIEW), leased -> true)
+                .orElseThrow();
+        claims.pods.put(claimName(sandbox), new SandboxClaims.PodEnd("Running", null, "OOMKilled", 137, 2, false));
+
+        var ended = ended(() -> sandboxes.release(workspace, subject), claimName(sandbox));
+
+        assertThat(claims.created).doesNotContainKey(claimName(sandbox));
+        assertThat(repository.findById(sandbox.id())).isEmpty();
+        assertThat(meters.counter(AgentMetrics.AGENT_SANDBOX_ENDED, "kind", "review", "reason", "oom_killed")
+                        .count())
+                .isEqualTo(1);
+        assertThat(ended)
+                .singleElement()
+                .satisfies(end -> assertThat(end)
+                        .containsEntry(StructuredLogKeys.SUBJECT_KEY, subject)
+                        .containsEntry(StructuredLogKeys.WORKSPACE_ID, workspace)
+                        .containsEntry(StructuredLogKeys.RUN_ID, lease.runId())
+                        .containsEntry("sandbox.kind", "REVIEW")
+                        .containsEntry("sandbox.reason", "oom_killed")
+                        .containsEntry("sandbox.exit_code", 137)
+                        .containsEntry("sandbox.termination_reason", "OOMKilled")
+                        .containsEntry("sandbox.oom", true)
+                        .containsEntry("sandbox.restart_count", 2));
+    }
+
+    @Test
+    void shouldStillDeleteTheClaimWhenThePodsStatusCannotBeRead() {
+        var sandbox = ensure("conversation:" + UUID.randomUUID(), AgentSandboxKind.CONVERSATION);
+        claims.failPodReads = true;
+
+        var ended = ended(() -> sandboxes.release(workspace, sandbox.id()), claimName(sandbox));
+
+        assertThat(claims.created).doesNotContainKey(claimName(sandbox));
+        assertThat(repository.findById(sandbox.id())).isEmpty();
+        assertThat(meters.counter(AgentMetrics.AGENT_SANDBOX_ENDED, "kind", "conversation", "reason", "unread")
+                        .count())
+                .isEqualTo(1);
+        assertThat(ended)
+                .singleElement()
+                .satisfies(end -> assertThat(end)
+                        .containsEntry("sandbox.reason", "unread")
+                        .containsEntry("error.type", "io.fabric8.kubernetes.client.KubernetesClientException")
+                        .containsEntry("http.response.status_code", 403)
+                        .doesNotContainKey(StructuredLogKeys.RUN_ID));
+    }
+
+    @Test
+    void shouldRecordOneEndWhenTwoReplicasDeleteTheSameSandboxAtOnce() throws Exception {
+        var sandbox = ensure("review:" + UUID.randomUUID(), AgentSandboxKind.REVIEW);
+        claims.pods.put(claimName(sandbox), new SandboxClaims.PodEnd("Running", null, null, null, 0, false));
+        // A release took the sandbox back, and a reaper on another replica found the same DELETING row.
+        var row = Objects.requireNonNull(
+                        transactions.execute(status -> repository.releaseSandbox(sandbox.id(), workspace)))
+                .orElseThrow();
+
+        var ended = ended(
+                () -> {
+                    try (var pool = Executors.newFixedThreadPool(2)) {
+                        var deletes = List.of(
+                                pool.submit(() -> sandboxes.deleteClaim(row)),
+                                pool.submit(() -> sandboxes.deleteClaim(row)));
+                        for (var delete : deletes) delete.get();
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        throw new IllegalStateException(e);
+                    } catch (ExecutionException e) {
+                        throw new IllegalStateException(e);
+                    }
+                    // A later tick that repeats the deletion records nothing more.
+                    sandboxes.deleteClaim(row);
+                },
+                claimName(sandbox));
+
+        assertThat(repository.findById(sandbox.id())).isEmpty();
+        assertThat(ended).hasSize(1);
+        assertThat(meters.counter(AgentMetrics.AGENT_SANDBOX_ENDED, "kind", "review", "reason", "running")
+                                .count()
+                        + meters.counter(AgentMetrics.AGENT_SANDBOX_ENDED, "kind", "review", "reason", "deleted")
+                                .count())
+                .isEqualTo(1);
+    }
+
+    @Test
+    void shouldNameTheRunThatTheSandboxServedAndNotANewerSandboxsRun() {
+        String subject = "review:" + UUID.randomUUID();
+        queueRun(subject);
+        var older = ensure(subject, AgentSandboxKind.REVIEW);
+        sandboxes.authenticate(token(older));
+        var served = sandboxes
+                .lease(older, Set.of(AgentRunKind.REVIEW), leased -> true)
+                .orElseThrow();
+        AgentRuns.EndOutcome outcome = Objects.requireNonNull(
+                transactions.execute(status -> runs.end(served.fence(), AgentRunStopReason.COMPLETED)));
+        assertThat(outcome).isEqualTo(AgentRuns.EndOutcome.ENDED);
+        // The older sandbox is taken back, and its claim waits for deletion while the subject starts a newer one.
+        var row = Objects.requireNonNull(
+                        transactions.execute(status -> repository.releaseSandbox(older.id(), workspace)))
+                .orElseThrow();
+        queueRun(subject);
+        var newer = ensure(subject, AgentSandboxKind.REVIEW);
+        sandboxes.authenticate(token(newer));
+        var later = sandboxes
+                .lease(newer, Set.of(AgentRunKind.REVIEW), leased -> true)
+                .orElseThrow();
+
+        var ended = ended(() -> sandboxes.deleteClaim(row), claimName(older));
+
+        assertThat(later.runId()).isNotEqualTo(served.runId());
+        assertThat(ended)
+                .singleElement()
+                .satisfies(end -> assertThat(end).containsEntry(StructuredLogKeys.RUN_ID, served.runId()));
+    }
+
+    @Test
+    void shouldRecordASandboxWhosePodIsGoneAsDeleted() {
+        var sandbox = ensure("review:" + UUID.randomUUID(), AgentSandboxKind.REVIEW);
+
+        var ended = ended(() -> sandboxes.release(workspace, sandbox.id()), claimName(sandbox));
+
+        assertThat(meters.counter(AgentMetrics.AGENT_SANDBOX_ENDED, "kind", "review", "reason", "deleted")
+                        .count())
+                .isEqualTo(1);
+        assertThat(ended).singleElement().satisfies(end -> assertThat(end).containsEntry("sandbox.reason", "deleted"));
+    }
+
+    /** The fields of each {@code agent.sandbox.ended} record of the named sandbox that the action wrote. */
+    private static List<Map<String, Object>> ended(Runnable action, String sandboxName) {
+        var logger = (Logger) LoggerFactory.getLogger(AgentSandboxes.class);
+        var appender = new ListAppender<ILoggingEvent>();
+        appender.start();
+        logger.addAppender(appender);
+        try {
+            action.run();
+        } finally {
+            logger.detachAppender(appender);
+            appender.stop();
+        }
+        var records = new ArrayList<Map<String, Object>>();
+        for (var event : appender.list) {
+            if (event.getKeyValuePairs() == null) continue;
+            var fields = new HashMap<String, Object>();
+            event.getKeyValuePairs().forEach(pair -> fields.put(pair.key, pair.value));
+            if ("agent.sandbox.ended".equals(fields.get("event.name"))
+                    && sandboxName.equals(fields.get(StructuredLogKeys.SANDBOX_NAME))) records.add(fields);
+        }
+        return records;
     }
 
     /** Taken back means no longer ready; its row goes once the claim delete of a later step or tick removes it. */

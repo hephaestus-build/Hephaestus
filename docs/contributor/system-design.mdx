@@ -34,7 +34,7 @@ The server and the agent-sandbox controller never connect to each other. Both us
 | Server | GitHub, GitLab, Slack, Outline | HTTPS: reads and writes, with a provider token |
 | Server | Model provider | HTTPS: model calls, with an API key |
 | Server | Email server | SMTP, with the SMTP login |
-| Server | Kubernetes API server | HTTPS: `SandboxClaim` writes, with the server's ServiceAccount |
+| Server | Kubernetes API server | HTTPS: `SandboxClaim` writes and sandbox Pod status reads, with the server's ServiceAccount |
 | agent-sandbox controller | Kubernetes API server | HTTPS: watches the claims and creates the Pods, with the controller's ServiceAccount |
 | agent-sandbox controller | Sandbox | Creates it, through the Kubernetes API server |
 | Server | PostgreSQL | TCP 5432, with the database login |

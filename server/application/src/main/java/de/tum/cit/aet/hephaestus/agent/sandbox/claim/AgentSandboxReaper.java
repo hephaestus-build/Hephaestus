@@ -7,6 +7,8 @@ import io.micrometer.core.instrument.MeterRegistry;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
+import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -59,9 +61,9 @@ public class AgentSandboxReaper {
             // is gone, not still being created.
             var ready = sandboxes.findReady();
             var names = claims.names();
-            takeBackLost(ready, names);
+            var lost = takeBackLost(ready, names);
             deleteOrphans(names);
-            deleteClaims();
+            deleteClaims(lost);
         } catch (RuntimeException e) {
             meters.counter(AgentMetrics.AGENT_SANDBOX_REAPER_FAILURE).increment();
             log.atWarn()
@@ -90,29 +92,33 @@ public class AgentSandboxReaper {
     /**
      * Each in a short transaction that takes the row back only while it is still ready with that claim. At most
      * {@link #BATCH} per tick; the rest go on the next one.
+     *
+     * @return the sandboxes taken back, whose end is {@code deleted}: their claims were gone before the server ended them
      */
-    private void takeBackLost(List<AgentSandboxRepository.SandboxRow> ready, List<String> names) {
+    private Set<UUID> takeBackLost(List<AgentSandboxRepository.SandboxRow> ready, List<String> names) {
         var live = new HashSet<>(names);
-        int taken = 0;
+        var taken = new HashSet<UUID>();
         for (var row : ready) {
-            if (taken == BATCH) return;
+            if (taken.size() == BATCH) break;
             if (live.contains(row.getClaimName())) continue;
             var lost = transactions.execute(
                     status -> sandboxes.takeBackLost(row.getId(), row.getWorkspaceId(), row.getClaimName()));
             if (lost == null || lost.isEmpty()) continue;
-            taken++;
+            taken.add(row.getId());
             meters.counter(AgentMetrics.AGENT_SANDBOX_REAPED, "reason", "lost").increment();
             SandboxEvents.event(log.atInfo(), "agent.sandbox.taken_back", lost.get())
                     .addKeyValue("sandbox.reason", "lost")
                     .log("Ready sandbox without a claim taken back; its subject can start a new one");
         }
+        return taken;
     }
 
     /** Each claim on its own: one that the API refuses stays for the next tick, and the rest go on. */
-    private void deleteClaims() {
+    private void deleteClaims(Set<UUID> lost) {
         for (var row : sandboxes.findDeleting(BATCH)) {
             try {
-                owner.deleteClaim(row);
+                if (lost.contains(row.getId())) owner.deleteClaim(row, SandboxEnd.deleted());
+                else owner.deleteClaim(row);
             } catch (RuntimeException e) {
                 meters.counter(AgentMetrics.AGENT_SANDBOX_REAPER_FAILURE).increment();
                 SandboxEvents.event(log.atWarn(), "agent.sandbox.claim_delete_failed", row)

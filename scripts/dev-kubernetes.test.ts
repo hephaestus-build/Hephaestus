@@ -113,7 +113,7 @@ await test("host development applies sandbox templates and pools without an appl
 		assert.ok(role);
 		assert.deepEqual(
 			asArray(role.rules, "rules").map((rule) => asRecord(rule, "rule").resources),
-			[["sandboxclaims"]],
+			[["sandboxclaims"], ["pods"]],
 		);
 		assert.throws(
 			() => hostResources(rendered, namespace, { ...host, address: "host.k3d.internal" }),

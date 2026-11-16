@@ -739,4 +739,5 @@ The alert `HephaestusAgentSandboxUnisolated` fires on each such sandbox.
 - Its subject has no queued or leased run, and it leased no run for `hephaestus.agent.capacity.sandbox-idle` (1 minute). For a conversation, the limit is `conversation-sandbox-idle` (15 minutes).
 
 Then the reaper deletes the claims of the `DELETING` rows, and the rows after them. A claim that the API refuses stays for the next pass.
+Each claim deletion records how its sandbox ended (`AgentSandboxes.deleteClaim`). It reads the Pod's status before the claim deletion. It records the end only when its own statement deletes the row. A refused deletion therefore records nothing. Two replicas that delete the same row, or a later tick that repeats a deletion, record one end. `SandboxEnd` classifies the end. A sandbox that the reaper took back as lost ended as `deleted`, and its Pod is not read. A failed read records `unread` and never stops the deletion.
 Last, the reaper deletes each claim with the label `hephaestus.build/sandbox-id` that no row names, as after a workspace purge. Claims without the label, such as the isolation gate's, are not the server's.

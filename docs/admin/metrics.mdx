@@ -235,6 +235,7 @@ A turn has a second attempt only after a lease expiry ([Server runtime](./runtim
 | `agent_sandbox_dispatch_failure_total`   | Counter   | none      | Dispatch passes that failed to request the sandbox of a due run. It tries again at the next pass |
 | `agent_sandbox_reaper_failure_total`       | Counter   | none      | Sandbox reaper passes or claim deletes that failed. It tries each again next pass |
 | `agent_sandbox_revoked_total`            | Counter   | `reason`  | Live sandboxes that the server took back before the reaper would: `unisolated` for a sandbox whose network policy did not hold |
+| `agent_sandbox_ended_total`              | Counter   | `kind`, `reason` | Sandboxes whose claim the server deleted, by how the sandbox ended. `reason` is `completed`, `error`, `oom_killed`, `evicted`, `running`, `deleted`, `unread` or `other`. [Log records § Sandbox ends](./log-records#sandbox-ends) defines each reason |
 | `conversation_turn_duration_seconds`       | Histogram | none      | An attempt, from its claim to its end                                   |
 | `agent_run_first_token_seconds`          | Histogram | `kind`, `start` | From the run start to the first part of the answer. `kind="turn"`, `start="cold"` or `"warm"`         |
 | `conversation_turn_cost_usd`               | Summary   | none      | The cost of the calls of one attempt that ended by its end, in US dollars                            |

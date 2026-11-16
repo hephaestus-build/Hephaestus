@@ -255,6 +255,19 @@ interface AgentSandboxRepository extends JpaRepository<AgentSandbox, UUID> {
             """, nativeQuery = true)
     int deleteGone(@Param("id") UUID id, @Param("workspaceId") long workspaceId);
 
+    /**
+     * The latest run that the sandbox can have served: a run of its subject that started while the sandbox lived, up to
+     * its last lease. A newer sandbox of the subject leases later, so its runs are not named.
+     */
+    @Query(value = """
+            SELECT r.id FROM agent_sandbox s
+              JOIN agent_run r ON r.workspace_id = s.workspace_id AND r.concurrency_key = s.subject_key
+             WHERE s.id = :sandboxId AND s.workspace_id = :workspaceId
+               AND r.started_at BETWEEN s.created_at AND s.last_used_at
+             ORDER BY r.started_at DESC LIMIT 1
+            """, nativeQuery = true)
+    Optional<UUID> findServedRunId(@Param("sandboxId") UUID sandboxId, @Param("workspaceId") long workspaceId);
+
     /** Which of these claims a sandbox row names, in any state. */
     @WorkspaceAgnostic("The reaper compares every claim of the sandbox namespace with the rows of every workspace")
     @Query(value = "SELECT claim_name FROM agent_sandbox WHERE claim_name IN (:names)", nativeQuery = true)

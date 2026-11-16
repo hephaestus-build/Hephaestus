@@ -19,6 +19,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -121,6 +122,11 @@ final class ReviewSandboxStub implements SandboxClaims {
     @Override
     public List<String> names() {
         return List.copyOf(claims.keySet());
+    }
+
+    @Override
+    public Optional<PodEnd> podEnd(String name) {
+        return Optional.empty();
     }
 
     /**

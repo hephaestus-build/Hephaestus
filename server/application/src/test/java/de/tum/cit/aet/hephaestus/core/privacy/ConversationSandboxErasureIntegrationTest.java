@@ -33,6 +33,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -299,6 +300,11 @@ class ConversationSandboxErasureIntegrationTest extends AbstractWorkspaceIntegra
             } catch (IOException failure) {
                 throw new UncheckedIOException(failure);
             }
+        }
+
+        @Override
+        public Optional<PodEnd> podEnd(String name) {
+            return Optional.empty();
         }
     }
 }
