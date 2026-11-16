@@ -1405,6 +1405,59 @@ Right after a merge, that run is still building, so the pull request builds ever
   the newest successful build that descends from it. A replaced promotion thus strands no build. The
   image build moves the `main` tags only forward, and never leaves them behind a published commit.
 
+### One run at a time, in order
+
+A concurrency group keeps one pending run and cancels the others.
+Some workflows need every run to do its work, one at a time, in the order that the runs were queued.
+Such a workflow waits in a first job:
+
+```yaml
+jobs:
+  turn:
+    runs-on: ubuntu-slim
+    timeout-minutes: 310
+    permissions:
+      actions: read
+      pull-requests: read
+    outputs:
+      turn: ${{ steps.wait.outputs.turn }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-toolchain
+        with:
+          install: "none"
+      - id: wait
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/wait-for-earlier-runs.ts
+  work:
+    needs: turn
+    if: needs.turn.outputs.turn == 'true'
+```
+
+`scripts/wait-for-earlier-runs.ts` reads the runs of the same workflow once a minute.
+It waits while a run that was queued earlier is requested, pending, queued or in progress.
+A run's queue time is the start of its latest attempt, so a re-run queues behind the runs before it.
+Two runs from the same second go in the order of their run IDs.
+
+Each minute, the step reads the run list and the pull-request heads up to the first run that blocks.
+Thus, a waiting run makes about two API requests a minute.
+It does not wait for these runs:
+
+- A run that waits for an environment approval, or for the approval of a workflow from a fork.
+- A pull-request run whose pull request has a newer head. The newer run replaces it.
+
+Such a run can start later and overlap the run that has the turn.
+The step reads the runs of the last day. A re-run of an older run can also overlap.
+
+A hosted job stops after 6 hours, so the step stops waiting after 5 hours.
+It writes `turn=false` and a warning, and the job summary names the runs that are still ahead.
+The work job is then skipped. Re-run the workflow to queue again.
+A required check counts a skipped job as passed.
+If the work gates a merge, make the gate also read `turn`.
+
 ### Integration shards
 
 The `review` shard holds `ReviewEndToEndIntegrationTest`.
