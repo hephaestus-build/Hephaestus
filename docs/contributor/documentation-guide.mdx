@@ -326,11 +326,15 @@ Do not put two callouts in a row.
 - When you move, rename, or delete a page, update every link to it in the same pull request.
   Look in `docs/`, the code, the chart, and the repository instructions.
   The docs build fails on a broken link inside the docs.
-  Released entries in `CHANGELOG.md` and `MIGRATION.md` keep their links.
+  This includes the links in `CHANGELOG.md` and `MIGRATION.md`.
 - A released address is a contract with readers.
-  When you move or remove a page that a published release lists, add its old path to `docs/src/lib/released-redirects.ts`.
+  Did a published release list the page that you move or remove?
+  Then add its old path to `docs/src/lib/released-redirects.ts`.
   Point it at the page that now owns the content, never at the home page.
-  The docs build fails when a path in `docs/released-paths.txt` has neither a page nor a redirect.
+  A heading ID that a released file links to is part of the same contract.
+  Keep that heading ID, if necessary with an explicit `[#id]`.
+  The docs build fails when an address in `docs/released-paths.txt` reaches no page or no heading.
+  The build also checks each docs link in the repository, such as in `MIGRATION.md` or an alert rule.
   Add no redirect for a page that no release published, and no redirect to another redirect.
 - When a page keeps its topic, keep the IDs of the headings that other pages or the app link to.
   If you reword such a heading, give it its old ID at the end of the heading: `## Respond to feedback [#respond-to-feedback]`.

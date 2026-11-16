@@ -1,5 +1,6 @@
-# Every page path of a published release's sitemap. A path keeps a page or an entry in docs/src/lib/released-redirects.ts.
-# Append the paths of each new release; never remove one. scripts/check-docs-released-paths.ts reads this file.
+# The released addresses: every page path of a published release's sitemap, and every page#anchor that a released file
+# links to. Each keeps a page (or an entry in docs/src/lib/released-redirects.ts) and its anchor.
+# Append the addresses of each new release; never remove one. scripts/check-docs-addresses.ts reads this file.
 # v1.0.0-rc.8
 /
 /admin/activity-history-repair
@@ -145,3 +146,60 @@
 /user/public-activity
 /user/user-settings
 /user/workspace
+# v1.0.0-rc.8: anchors that files of the release link to
+/admin/activity-history-repair#run-the-repair
+/admin/ai-providers#model-limits
+/admin/backup-restore#back-up-the-database
+/admin/compatibility-policy#database-migrations
+/admin/compatibility-policy#support-for-1x
+/admin/compatibility-policy#supported-deployment
+/admin/compatibility-policy#upgrade-paths-to-10
+/admin/first-steps#1-configure-a-login-provider
+/admin/github-integration#who-creates-the-workspace-of-an-installation
+/admin/helm-chart#sandbox-capacity-budget
+/admin/kubernetes#a-first-install-fails
+/admin/kubernetes#create-the-secret
+/admin/kubernetes#install
+/admin/legal-pages#browser-fault-reports
+/admin/legal-pages#deployment-specific-overrides
+/admin/legal-pages#page-experience
+/admin/legal-pages#product-feedback-on-github
+/admin/legal-pages#the-optional-research-question
+/admin/maintenance#database-maintenance
+/admin/maintenance#planned-node-maintenance
+/admin/monitoring#ship-logs-to-a-log-store
+/admin/practice-review-operations#the-trace-line
+/admin/production-operations-runbook#alert-response
+/admin/pull-based-deployment#follow-a-channel-with-the-chart
+/admin/pull-based-deployment#operating-it
+/admin/pull-based-deployment#recover-a-stopped-cutover
+/admin/pull-based-deployment#watching-it
+/admin/release-image-lock#runtime-identity-handoff
+/admin/runtime-roles#call-pools
+/admin/runtime-roles#conversation-turn-capacity
+/admin/runtime-roles#database-migrations
+/admin/runtime-roles#graceful-drain
+/admin/runtime-roles#one-migration-at-a-time
+/admin/sandboxes#sandbox-prerequisites
+/admin/secret-custody#copy-the-keys-from-the-secret
+/admin/secret-custody#login-provider-secrets
+/admin/secret-custody#tls-certificates
+/admin/sizing#database-connections
+/admin/sizing#postgresql-memory
+/admin/upgrade#if-migration-fails
+/admin/upgrade#rollback
+/admin/upgrade#sandbox-capacity-during-upgrade
+/admin/upgrade#stopped-schema-upgrades
+/admin/webhook-ingestion-operations#failed-github-deliveries
+/contributor/api-error-handling#csrf-token-rejected
+/contributor/api-error-handling#problem-types
+/contributor/api-error-handling#step-up-required
+/contributor/ci-cd#gradle-dependency-inventory-and-the-vulnerabilities-exclusion
+/contributor/ci-cd#merge-policy
+/contributor/ci-cd#release-tool-downloads
+/contributor/ci-cd#the-preview-label
+/contributor/database-migration#expand-and-contract
+/contributor/local-development#updating-java-dependencies
+/contributor/practice-review-glossary#legacy-history-reasons
+/contributor/release-management#current-migration-guide-instructions
+/contributor/release-management#cut-100

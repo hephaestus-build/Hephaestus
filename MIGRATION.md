@@ -185,7 +185,7 @@ A worker of an earlier release cannot serve the turns of this release.
 
 **Operators:**
 
-1. Stop every role, as phase 1 of [Stopped schema upgrades](https://docs.hephaestus.build/admin/kubernetes#stopped-schema-upgrades) describes.
+1. Stop every role, as phase 1 of [Stopped schema upgrades](https://docs.hephaestus.build/admin/upgrade#stopped-schema-upgrades) describes.
 2. Before phase 2, add `HEPHAESTUS_CONVERSATION_LOOP_SECRET` to the release Secret.
    Run `hephaestus-keys.sh` from this release with your usual options. It adds only the keys that the Secret lacks.
    Or set the key yourself to 64 lowercase hexadecimal characters, the output of `openssl rand -hex 32`.
@@ -299,7 +299,7 @@ To roll back, stop every role and restore the verified backup from before this m
 #### 🔴 Give each database purpose its own login
 
 Before 1.0, the server, the worker, the migration Job and the bundled PostgreSQL shared one login: the PostgreSQL superuser in `DATABASE_USERNAME` and `DATABASE_PASSWORD`.
-Now each purpose has its own role ([Database roles](https://docs.hephaestus.build/admin/kubernetes#database-roles)):
+Now each purpose has its own role ([Database roles](https://docs.hephaestus.build/admin/helm-chart#database-roles)):
 
 - The server logs in as `hephaestus_app`, with `DATABASE_APP_PASSWORD`. It reads and writes rows only.
 - The migration Job logs in as `hephaestus_owner`, with `DATABASE_OWNER_PASSWORD`. It owns the database and its schema objects.
@@ -309,7 +309,7 @@ The chart's `files/database-roles.sql` creates both roles and moves the existing
 `REASSIGN OWNED BY` cannot do this for the bundled PostgreSQL: it refuses the bootstrap superuser, which owns the system catalogs.
 `helm upgrade` stops while a key is missing, or while the Secret still holds `DATABASE_USERNAME` or `DATABASE_PASSWORD`.
 
-**Operators:** do these steps with the [Database maintenance](https://docs.hephaestus.build/admin/kubernetes#database-maintenance) phases.
+**Operators:** do these steps with the [Database maintenance](https://docs.hephaestus.build/admin/maintenance#database-maintenance) phases.
 The steps use the namespace `hephaestus` and the Secret `hephaestus-app`.
 
 1. Back up the database.
@@ -327,7 +327,7 @@ The steps use the namespace `hephaestus` and the Secret `hephaestus-app`.
      Then run `hephaestus-keys.sh` of the new release, as [Create the Secret](https://docs.hephaestus.build/admin/kubernetes#create-the-secret) describes.
      It adds `DATABASE_OWNER_PASSWORD` and `DATABASE_APP_PASSWORD`.
      The migration Job of the next revision creates both roles with these passwords.
-   - With an external PostgreSQL, run `files/database-roles.sh` of the new release as your administrator, as [Database roles on an external PostgreSQL](https://docs.hephaestus.build/admin/kubernetes#database-roles-on-an-external-postgresql) describes.
+   - With an external PostgreSQL, run `files/database-roles.sh` of the new release as your administrator, as [Database roles on an external PostgreSQL](https://docs.hephaestus.build/admin/external-database#set-up-the-database-roles) describes.
      Then put `DATABASE_OWNER_PASSWORD` and `DATABASE_APP_PASSWORD` in the Secret, and remove `DATABASE_USERNAME` and `DATABASE_PASSWORD`.
 4. Do phases 3 and 4 with the new release.
    The migration Job sets up the roles, moves the schema objects and migrates as `hephaestus_owner`.
@@ -373,14 +373,14 @@ Update every query, saved search, collector rule and alert that reads them:
 
 #### 🔴 NATS broker certificate names
 
-The broker is removed; follow [Remove the retired sync broker values before upgrading](https://docs.hephaestus.build/admin/upgrade#remove-the-retired-sync-broker-values-before-upgrading) and its complete removal list instead of the previous broker instructions.
+The broker is removed; follow [Remove the retired sync broker values before upgrading](https://docs.hephaestus.build/admin/upgrade-to-1-0) and its complete removal list instead of the previous broker instructions.
 
 #### 🔴 Use the stopped procedure for one-host release changes
 
 The one-host installer now accepts only a first install or a reapply of the same successfully deployed release.
 It refuses a different, failed, or pending release before it changes the host.
 
-**Operators:** Follow [Stopped schema upgrades](https://docs.hephaestus.build/admin/kubernetes#stopped-schema-upgrades) for a release change.
+**Operators:** Follow [Stopped schema upgrades](https://docs.hephaestus.build/admin/upgrade#stopped-schema-upgrades) for a release change.
 Keep the current release files for the stop phase.
 Verify the final restore point with all roles stopped before the target migration starts, without automatic rollback.
 After a migration failure or refusal, restore that backup before you return to the old release.
@@ -494,7 +494,7 @@ Webhook deliveries now wait in the provider event inbox in PostgreSQL. The upgra
 
 #### 🔴 External NATS broker: NATS Server 2.11 or later
 
-The broker is removed; follow [Remove the retired sync broker values before upgrading](https://docs.hephaestus.build/admin/upgrade#remove-the-retired-sync-broker-values-before-upgrading) and its complete removal list instead of the previous broker instructions.
+The broker is removed; follow [Remove the retired sync broker values before upgrading](https://docs.hephaestus.build/admin/upgrade-to-1-0) and its complete removal list instead of the previous broker instructions.
 
 #### 🔴 Public activity pages count contributors without an account instead of naming them
 
@@ -779,7 +779,7 @@ If the upgrade stops, restore the verified backup before you start the previous 
 
 #### 🔴 Move the GitHub webhook byte bound into the stream map
 
-The broker is removed; follow [Remove the retired sync broker values before upgrading](https://docs.hephaestus.build/admin/upgrade#remove-the-retired-sync-broker-values-before-upgrading) and its complete removal list instead of the previous broker instructions.
+The broker is removed; follow [Remove the retired sync broker values before upgrading](https://docs.hephaestus.build/admin/upgrade-to-1-0) and its complete removal list instead of the previous broker instructions.
 
 ### v1.0.0-rc.5
 
@@ -991,7 +991,7 @@ Restart the upgraded roles only after it completes.
 
 The reconciler verifies a release with the tooling of the release before it. Tooling from before 1.0.0-rc.4 expects five chart images, and 1.0.0-rc.4 has nine, so it stops each run with `does not pin the v1.0.0-rc.4 images`. The running release is not affected. Helm installs that do not use pull-based deployment need no action.
 
-Follow [Hosts with reconciler tooling from before 1.0.0-rc.4](https://docs.hephaestus.build/admin/upgrade#hosts-with-reconciler-tooling-from-before-100-rc4) once, after the host runs 1.0.0-rc.4 or later, and before you resume the timer.
+Follow [Hosts with reconciler tooling from before 1.0.0-rc.4](https://docs.hephaestus.build/admin/upgrade-to-1-0#hosts-with-reconciler-tooling-from-before-100-rc4) once, after the host runs 1.0.0-rc.4 or later, and before you resume the timer.
 
 #### 🔴 Stop every role before product feedback renames its stored states
 
@@ -1216,7 +1216,7 @@ A RuntimeClass does not replace user namespaces.
 Every sandbox and probe Pod now sets `hostUsers: false`, including when an optional RuntimeClass is configured.
 The worker starts no sandbox until its isolation probe confirms a private user mapping.
 Check that `sandbox_isolation_passed` and `sandbox_isolation_user_namespaces` are both `1` after the worker starts.
-See [Sandbox prerequisites](https://docs.hephaestus.build/admin/kubernetes#sandbox-prerequisites).
+See [Sandbox prerequisites](https://docs.hephaestus.build/admin/sandboxes#sandbox-prerequisites).
 
 #### 🔴 Remove `PRACTICE_REVIEW_PRACTICE_CONCURRENCY`, and check two review budgets
 
@@ -1264,7 +1264,7 @@ After this change, a stored event older than 72 hours can no longer be replayed:
 1.0.0-rc.1 cannot run on the schema of this release.
 The migration drops the column `llm_call_pool.interactive_reserve` and replaces the unique constraint `uq_issue_provider_native_id`, and 1.0.0-rc.1 still uses both.
 
-Follow [Stopped schema upgrades](https://docs.hephaestus.build/admin/kubernetes#stopped-schema-upgrades):
+Follow [Stopped schema upgrades](https://docs.hephaestus.build/admin/upgrade#stopped-schema-upgrades):
 
 1. Back up PostgreSQL and JetStream, and verify the restore.
 2. Stop every role with the chart of 1.0.0-rc.1: the server, the workers and the webhook.
@@ -1313,7 +1313,7 @@ Remove `HEPHAESTUS_STACKS` and `HEPHAESTUS_MIN_FREE_GIB` from `/etc/hephaestus/r
 Set `HEPHAESTUS_WAIT_TIMEOUT=1200`, or keep a larger timeout that your deployment needs.
 The reconciler now uses Helm for every deployment.
 
-For the major upgrade, follow [Database maintenance](https://docs.hephaestus.build/admin/kubernetes#database-maintenance) with all writers stopped.
+For the major upgrade, follow [Database maintenance](https://docs.hephaestus.build/admin/maintenance#database-maintenance) with all writers stopped.
 If the cutover stops, keep reconciliation paused and follow [Recover a stopped cutover](https://docs.hephaestus.build/admin/pull-based-deployment#recover-a-stopped-cutover).
 A rollback across the 1.0 schema boundary requires a database restore, even with `allowRollback`.
 
@@ -1349,7 +1349,7 @@ The chart now blocks voluntary eviction of bundled PostgreSQL and NATS, the serv
 
 Pause reconciliation, record the replica counts, and back up the database and broker. Cordon the node, scale workers to zero, and wait for their Pods and sandboxes to stop while the database and broker remain available. Then stop the server and receiver, remove only this release's PodDisruptionBudgets, and drain the node. After maintenance, uncordon the node and reapply the verified release with its saved values to restore the replicas and budgets. Verify them before you resume reconciliation.
 
-Follow [Planned node maintenance](https://docs.hephaestus.build/admin/kubernetes#planned-node-maintenance) for the commands. The default worker drain is now thirty minutes, with termination grace of drain plus 120 seconds. The 16 GiB profile keeps its ten-minute drain and Recreate updates. A host shutdown still has only five minutes, so it relies on durable retry for interrupted reviews.
+Follow [Planned node maintenance](https://docs.hephaestus.build/admin/maintenance#planned-node-maintenance) for the commands. The default worker drain is now thirty minutes, with termination grace of drain plus 120 seconds. The 16 GiB profile keeps its ten-minute drain and Recreate updates. A host shutdown still has only five minutes, so it relies on durable retry for interrupted reviews.
 
 #### 🔴 Remove the obsolete webhook concurrency setting
 
@@ -1400,7 +1400,7 @@ Only the sandboxes call them.
 
 Back up the database and encryption keys. Stop all database writers, then run the database migration with the existing `HEPHAESTUS_SECURITY_ENCRYPTION_KEY` and `HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY`. Keep the active credential key version. Configure a key only if it is missing. Keep the prior credential key and its version configured if stored credentials still use them.
 
-For chart hosts, use [Stopped schema upgrades](https://docs.hephaestus.build/admin/kubernetes#stopped-schema-upgrades).
+For chart hosts, use [Stopped schema upgrades](https://docs.hephaestus.build/admin/upgrade#stopped-schema-upgrades).
 
 The migration encrypts plaintext login-provider and LLM connection secrets. It seals active and inactive JWT private keys without changing their signing identity. It authenticates integration credentials with no key version against the configured active, prior and legacy system keys, then encrypts them with the active credential key and records its version.
 
@@ -1409,7 +1409,7 @@ If a key is missing or cannot decrypt a stored credential, the conversion stops 
 #### 🔴 Recalculate custom PostgreSQL connection budgets
 
 The small profile now has an explicit PostgreSQL connection ceiling and separate role pools.
-Apply the change through the existing [stopped database-maintenance procedure](https://docs.hephaestus.build/admin/kubernetes#database-maintenance).
+Apply the change through the existing [stopped database-maintenance procedure](https://docs.hephaestus.build/admin/maintenance#database-maintenance).
 Do not lower the database ceiling while older, larger pools are still running.
 For custom worker replica counts or pool sizes, set `postgresql.parameters.max_connections` and each role's `databasePool` values together before upgrading.
 The chart rejects a ceiling that cannot hold the configured worker overlap and maintenance reserves.
@@ -1575,7 +1575,7 @@ On Kubernetes, stop all application replicas and set `migration.enabled=false` b
 Apply the SQL with `ON_ERROR_STOP=1`, then verify silent mode and paused feedback.
 Keep provider and model egress denied independently of silent mode.
 Enable migration and start the server alone only after those checks pass.
-The [restore procedure](https://docs.hephaestus.build/admin/kubernetes#restore) gives each phase.
+The [restore procedure](https://docs.hephaestus.build/admin/backup-restore#restore) gives each phase.
 
 #### 🔴 Stop every role before the source contract 3.0.0 upgrade
 
@@ -1669,7 +1669,7 @@ Keep the outage short.
    Its `hephaestus.agent.runtime-contract` label must be `9`.
 4. Run the [database migration step](https://docs.hephaestus.build/admin/runtime-roles#database-migrations) with this release while every runtime role stays stopped.
    Continue only after the migration completes successfully.
-   On Kubernetes, follow [Stopped schema upgrades](https://docs.hephaestus.build/admin/kubernetes#stopped-schema-upgrades), with all three replica counts at zero through migration success and no automatic rollback.
+   On Kubernetes, follow [Stopped schema upgrades](https://docs.hephaestus.build/admin/upgrade#stopped-schema-upgrades), with all three replica counts at zero through migration success and no automatic rollback.
 5. Start the server, worker and webhook roles.
 6. Update the Slack app, as **Slack app** below tells.
 
@@ -1691,7 +1691,7 @@ The manifest adds the bot scope `reactions:write` and removes the `app_context_c
 Reinstall the app in the Slack workspace.
 Then select **Reconnect Slack** in each Hephaestus workspace that uses it.
 Until then, Hephaestus cannot add 👀 to a question.
-See [Update an existing Slack app](https://docs.hephaestus.build/admin/production-setup#update-an-existing-slack-app).
+See [Update an existing Slack app](https://docs.hephaestus.build/admin/connect-slack#create-the-slack-app).
 
 **Configuration.**
 
@@ -1705,7 +1705,7 @@ See [Update an existing Slack app](https://docs.hephaestus.build/admin/productio
     The route must outrank the `/webhooks` route of `webhook-server`.
     `docker/compose.app.yaml` adds this route (`https-slack-interactivity`, priority 110).
     A custom proxy needs the same route.
-    If the Slack app's **Interactivity request URL** names a separate webhook host, point it at a host that reaches `application-server` ([Slack app configuration](https://docs.hephaestus.build/admin/production-setup#slack-app-configuration)).
+    If the Slack app's **Interactivity request URL** names a separate webhook host, point it at a host that reaches `application-server` ([Slack app configuration](https://docs.hephaestus.build/admin/connect-slack#create-the-slack-app)).
 - Remove the Traefik sticky-cookie labels (`__Secure-hep_workspace_aff`) from a custom proxy configuration.
   `docker/compose.app.yaml` does not have them.
   The `X-Hephaestus-Replica` response header is removed.
@@ -1723,36 +1723,36 @@ See [Update an existing Slack app](https://docs.hephaestus.build/admin/productio
   The `allowInternet` field of the agent-binding API and the `workspace_agent_binding.allow_internet` column are removed too.
   In the previous release, the switch gave Hephaestus's sandbox internet access.
   The Hephaestus host runs on an internal network with no internet access.
-  [Runtime roles](https://docs.hephaestus.build/admin/runtime-roles#the-conversation-host) gives the one exception: a worker that runs outside a container.
+  [Runtime roles](https://docs.hephaestus.build/admin/runtime-roles#conversation-turns) gives the one exception: a worker that runs outside a container.
 - The Hephaestus API under `/api/workspaces/{slug}/mentor/` changed.
   The `chat`, `sandbox` and `threads` endpoints are removed.
   Regenerate a custom API client from the `server/openapi.yaml` of this release.
-- [Tunables](https://docs.hephaestus.build/admin/runtime-roles#tunables) lists the new `hephaestus.mentor.turn.*` settings.
+- [Tunables](https://docs.hephaestus.build/admin/runtime-roles) lists the new `hephaestus.mentor.turn.*` settings.
   All roles must have the same values.
 
 **Worker and Hephaestus host.**
 In the previous release, a worker started one Hephaestus sandbox for each developer and workspace.
 In this release, each worker starts one Hephaestus host container when it claims its first Hephaestus turn.
 That host runs all Hephaestus turns of the worker.
-It has a fixed limit of 2 GiB of memory ([The Hephaestus host](https://docs.hephaestus.build/admin/runtime-roles#the-conversation-host)).
-The recommended single host increases from 16 GB to 24 GB of memory ([Install](https://docs.hephaestus.build/admin/install#requirements)).
+It has a fixed limit of 2 GiB of memory ([The Hephaestus host](https://docs.hephaestus.build/admin/runtime-roles#conversation-turns)).
+The recommended single host increases from 16 GB to 24 GB of memory ([Install](https://docs.hephaestus.build/admin/kubernetes#before-you-start)).
 
 - `HEPHAESTUS_WORKER_MENTOR_MAX` (`hephaestus.worker.capacity.mentor-max`) sets how many Hephaestus turns the Hephaestus host of one worker runs at the same time.
   Its `auto` default is 8.
   In the previous release, it limited the Hephaestus sandboxes of one worker, and `auto` was half the CPUs.
   [Hephaestus capacity](https://docs.hephaestus.build/admin/runtime-roles#conversation-turn-capacity) tells how to size it.
 - With the Docker sandbox runtime, a worker in a container that it cannot identify starts no Hephaestus host, and its Hephaestus turns fail.
-  [Docker configuration](https://docs.hephaestus.build/admin/configuration-readiness#docker-configuration) gives the hostname rule.
+  [Docker configuration](https://docs.hephaestus.build/admin/configuration-readiness) gives the hostname rule.
 - Hephaestus reads context documents, code and Git history in turn sandboxes on the worker, not in the Hephaestus host.
   With the Docker sandbox runtime, each worker keeps 2 empty turn sandboxes and starts one for each running Hephaestus turn that reads.
-  Each has 1 CPU, 1 GiB of memory and no network ([Turn sandboxes](https://docs.hephaestus.build/admin/runtime-roles#turn-sandboxes)).
-  With Kubernetes, use the chart's [sandbox sizes](https://docs.hephaestus.build/admin/kubernetes#sandbox-sizes).
+  Each has 1 CPU, 1 GiB of memory and no network ([Turn sandboxes](https://docs.hephaestus.build/admin/runtime-roles#sandbox-gateway)).
+  With Kubernetes, use the chart's [sandbox sizes](https://docs.hephaestus.build/admin/sandboxes#sandbox-sizes).
   Hephaestus reads repositories only where Git mirrors are enabled (`GIT_CHECKOUT_ENABLED`).
 
 **Models.**
 
 - Hephaestus refuses a model whose stated context window is below 32,768 tokens or whose output limit is below 4,096 tokens.
-  Check the Hephaestus model assignment of each workspace ([AI providers](https://docs.hephaestus.build/admin/ai-providers#the-smallest-conversation-model)).
+  Check the Hephaestus model assignment of each workspace ([AI providers](https://docs.hephaestus.build/admin/ai-providers#model-limits)).
 - A Hephaestus turn fails when its model provider sends no response headers for 5 minutes, or no byte of its stream for 2 minutes.
   SSE keep-alive comments count as bytes.
   `HEPHAESTUS_MENTOR_TURN_MODEL_FIRST_BYTE_TIMEOUT` and `HEPHAESTUS_MENTOR_TURN_MODEL_IDLE_TIMEOUT` change these bounds.
@@ -1763,7 +1763,7 @@ The recommended single host increases from 16 GB to 24 GB of memory ([Install](h
 
 **Metrics.**
 Update dashboards and alerts that use these series.
-[Hephaestus turn metrics](https://docs.hephaestus.build/admin/observability#conversation-turn-metrics) lists the series of this release.
+[Hephaestus turn metrics](https://docs.hephaestus.build/admin/metrics#conversation-turn-metrics) lists the series of this release.
 
 - These series are removed: `mentor_attach_*`, `mentor_session_*`, `mentor_relay_*`, `mentor_turn_runtime_ready_seconds`, `mentor_frame_parse_error_total`, `mentor_in_flight_reaper_failure_total`, `mentor_ring_buffer_dropped_total`, `mentor_send_frame_bytes`, `mentor_send_rejected_total`, `mentor_subscriber_dropped_total`, `mentor_subscriber_error_total`, `mentor_watchdog_targets` and `llm_proxy_unbillable_refused_total`.
 - The `worker_capacity_*{type="mentor"}` series are removed. Use `mentor_host_turns_active` for the Hephaestus turns that a worker runs.
@@ -1885,7 +1885,7 @@ The worker refuses to start if `SANDBOX_MEMORY_BYTES` is smaller.
 
 1. Set `SANDBOX_MEMORY_BYTES` to 2751463424 or more, or remove it to use the default of 3 GiB.
 
-On Kubernetes, remove `SANDBOX_MEMORY_BYTES` and use the chart's [sandbox sizes](https://docs.hephaestus.build/admin/kubernetes#sandbox-sizes).
+On Kubernetes, remove `SANDBOX_MEMORY_BYTES` and use the chart's [sandbox sizes](https://docs.hephaestus.build/admin/sandboxes#sandbox-sizes).
 
 #### 🔴 Grant the worker `watch` on ResourceQuotas if you manage its Role yourself
 
@@ -1912,7 +1912,7 @@ A review's repository was on the node's disk already.
 Encryption protects a stolen disk and a backup of it without the key.
 It does not protect against a compromised running node or a privileged workload on the node.
 
-**Operators:** before you upgrade, make sure that the disk of each node that runs sandboxes is encrypted, for example with LUKS or with the disk encryption of your cloud provider ([Kubernetes § Sandbox prerequisites](https://docs.hephaestus.build/admin/kubernetes#sandbox-prerequisites)).
+**Operators:** before you upgrade, make sure that the disk of each node that runs sandboxes is encrypted, for example with LUKS or with the disk encryption of your cloud provider ([Kubernetes § Sandbox prerequisites](https://docs.hephaestus.build/admin/sandboxes#sandbox-prerequisites)).
 
 #### 🔴 Leave room for the new PostgreSQL memory limit
 
@@ -1936,7 +1936,7 @@ Do not lower the broker budget below its stored data.
 
 The profile sets GitHub to 4 GiB and each other provider to 512 MiB, with a maximum age of seven days.
 Before you shorten those bounds, verify an off-host backup and test its restore.
-Follow [Changing a bound on a stream that already exists](https://docs.hephaestus.build/admin/webhook-ingestion-operations#changing-a-bound-on-a-stream-that-already-exists).
+Follow [Changing a bound on a stream that already exists](https://docs.hephaestus.build/admin/webhook-ingestion-operations).
 Keep `webhook.stream.allowDestructiveLimitUpdates` false until you approve the data removal.
 Enable it only for that change, then return it to false.
 A higher limit cannot recover deleted messages.
@@ -1975,7 +1975,7 @@ Hephaestus no longer sends errors to Sentry, from the server or from the browser
 4. Keep production logging at `INFO`.
    `DEBUG` on framework, client or driver packages can write request and provider content.
 
-To collect the logs, see [Collecting logs](https://docs.hephaestus.build/admin/observability#collecting-logs).
+To collect the logs, see [Collecting logs](https://docs.hephaestus.build/admin/monitoring#collect-logs).
 Collection is optional and sends nothing until you configure a destination.
 Start it only after this release runs: lines that an earlier release wrote are not redacted after the fact.
 
@@ -2018,7 +2018,7 @@ They run the container with a read-only root file system and a `tmpfs` at `/tmp/
 4. Make your legal override files readable by UID 101.
    The mount path `/usr/share/nginx/html/legal-overrides` does not change.
 
-See [Webapp container](https://docs.hephaestus.build/admin/runtime-roles#webapp-container).
+See [Webapp container](https://docs.hephaestus.build/admin/runtime-roles#server-role).
 
 #### 🔴 Replace the webhook publish timeout and retry count with one deadline
 
@@ -2070,7 +2070,7 @@ Use the correct public names and issuer. Omit `--staging` when you switch the st
 
 The installed manifest is root-only. Use `sudo` to copy it to a mode-0600 file that you own before reuse.
 
-[Run the installer](https://docs.hephaestus.build/admin/kubernetes#2-run-the-installer) gives the copy command and choices.
+[Run the installer](https://docs.hephaestus.build/admin/k3s#2-run-the-installer) gives the copy command and choices.
 The installer stops before host changes when no choice is explicit. A certificate preview does not change the host.
 
 ### v0.94.0
@@ -2088,14 +2088,14 @@ Old and new runtime roles cannot use the database together.
 There is no rolling upgrade or compatibility period.
 
 Before the outage, test this release's migration on a verified database restore.
-Follow the mandatory [pre-boot isolation procedure](https://docs.hephaestus.build/admin/production-operations-runbook#pre-boot-isolation--mandatory-for-every-restore) before restoring secrets or starting application code.
-Complete the [pilot rehearsal and history checks](https://docs.hephaestus.build/admin/practice-model-cutover#rehearse-the-pilot-upgrade), including the outage measurements.
+Follow the mandatory [pre-boot isolation procedure](https://docs.hephaestus.build/admin/backup-restore#deny-external-egress) before restoring secrets or starting application code.
+Complete the [pilot rehearsal and history checks](https://docs.hephaestus.build/admin/upgrade), including the outage measurements.
 Prepare any script changes with the procedure under **Custom practice scripts**.
 Repeat the test on a fresh restore until the migration completes.
 
 Before the upgrade:
 
-1. Pause [automatic reconciliation](https://docs.hephaestus.build/admin/production-operations-runbook#production-upgrade).
+1. Pause [automatic reconciliation](https://docs.hephaestus.build/admin/upgrade).
 2. Quiesce new review submission and provider input.
 3. Apply the script changes tested during the rehearsal through the previous release's server.
 4. Drain active worker operations through the [role drain procedure](https://docs.hephaestus.build/admin/runtime-roles#graceful-drain).
@@ -2115,12 +2115,12 @@ Upgrade:
 1. Install this release for the server, worker and webhook roles.
 2. Use this release's verified agent image.
 3. If HEPHAESTUS_IMAGE_AGENT_PI is overridden, update it to the matching agent-pi image.
-4. Start only the server role under the [silent deployment checklist](https://docs.hephaestus.build/admin/production-operations-runbook#silent-deployment-checklist).
+4. Start only the server role under the [silent deployment checklist](https://docs.hephaestus.build/admin/silent-deployment).
    That procedure requires egress isolation and silent-mode readback before reviews or provider ingress resume.
    Keep review execution disabled until the history checks pass.
 5. Deploy the matching webapp.
 6. Restore saved custom definitions with tested version 3 scripts.
-7. Complete the [retained pilot history checks](https://docs.hephaestus.build/admin/practice-model-cutover#check-retained-pilot-history).
+7. Complete the [retained pilot history checks](https://docs.hephaestus.build/admin/upgrade).
 8. Ask developers to update the browser extension.
 9. Update custom API clients before they use practice resources.
 10. Start the worker and webhook roles only at the checklist's permitted stage.
@@ -2131,7 +2131,7 @@ Upgrade:
 Stop all remaining containers from the previous release before you retry.
 A precondition failure does not undo earlier committed changesets.
 Check the recorded changelog before retrying.
-If the cutover has committed, use [failed-migration recovery](https://docs.hephaestus.build/admin/production-operations-runbook#if-migration-fails).
+If the cutover has committed, use [failed-migration recovery](https://docs.hephaestus.build/admin/upgrade#if-migration-fails).
 
 A recorded delivery lease or projection owner can remain after a container stops.
 Keep new reviews and provider input paused.
@@ -2139,10 +2139,10 @@ Run the previous release's server until its delivery recovery settles those reco
 Drain and stop it, then retry this release's server.
 Do not clear delivery ownership or provider receipts by hand: the provider can already have accepted the feedback.
 
-For any other refusal, use the [cutover diagnosis map](https://docs.hephaestus.build/admin/practice-model-cutover#diagnose-a-refused-cutover).
+For any other refusal, use the [cutover diagnosis map](https://docs.hephaestus.build/admin/upgrade).
 It identifies source records, supported recovery actions, and cases that need escalation with the previous release retained.
 
-See [Removed settings and diagnostic data](https://docs.hephaestus.build/contributor/database-migration#removed-settings-and-diagnostic-data) for the data the cutover removes.
+See [Removed settings and diagnostic data](https://docs.hephaestus.build/contributor/database-migration) for the data the cutover removes.
 
 The migration keeps every migrated result as history, including its ID, text, citations, feedback relationships and provider receipts.
 Every migrated result has evidence version 0, regardless of outcome.
@@ -2290,8 +2290,8 @@ Feedback response resolution and usefulness remain independent dimensions.
 Result outcomes and feedback response values are different enums.
 
 **Rollback.**
-Follow [failed-migration recovery](https://docs.hephaestus.build/admin/production-operations-runbook#if-migration-fails) to stop roles and restore the verified pre-upgrade backup.
-Complete its [JetStream and provider-divergence procedure](https://docs.hephaestus.build/admin/production-operations-runbook#choose-the-broker-recovery-strategy-before-starting-consumers) before starting consumers.
+Follow [failed-migration recovery](https://docs.hephaestus.build/admin/upgrade#if-migration-fails) to stop roles and restore the verified pre-upgrade backup.
+Complete its [JetStream and provider-divergence procedure](https://docs.hephaestus.build/admin/upgrade-to-1-0) before starting consumers.
 Start the previous release with its matching images and configuration under mandatory pre-boot isolation.
 Do not start old binaries against the migrated database.
 The backup does not contain data recorded after the upgrade.
@@ -2719,7 +2719,7 @@ Workspaces that are already connected keep working. The upgrade disconnects any 
 connection that never recorded its installation, because such a connection could not run. It also
 keeps each installation in the first workspace that connected it. Connections the upgrade
 disconnects are recorded in their connection history. See
-[GitHub integration](https://docs.hephaestus.build/admin/github-integration#connecting-an-installation-to-a-workspace).
+[GitHub integration](https://docs.hephaestus.build/admin/github-integration#who-creates-the-workspace-of-an-installation).
 
 #### 🔴 Set `WEBHOOK_ROUTING_SECRET` for GitLab group webhooks
 
@@ -2790,7 +2790,7 @@ owner it cannot establish, so two kinds of leftover now need removing by hand:
 
 A network with no recorded owner can be removed safely only while every application process of this
 installation that uses the Docker daemon is stopped. Plan that pause, then follow
-[Removing leftover sandbox networks](https://docs.hephaestus.build/admin/configuration-readiness#removing-leftover-sandbox-networks).
+[Removing leftover sandbox networks](https://docs.hephaestus.build/admin/sandboxes).
 Practice review sandboxes need no action.
 
 #### 🔴 Upgrade practice reviews to the frozen workspace folder
@@ -2818,7 +2818,7 @@ The default management port is now **9090**, separate from the application port.
 
 The supported Compose stacks already keep 9090 private: they expose it to `shared-network`, do not publish it to the host, and do not route it through the proxy. They bind management to the container’s own `shared-network` address through its network-qualified hostname, not to its sandbox interfaces. Their container probes and proxy readiness checks use the application-port paths and are updated automatically.
 
-**Operators with other deployment configurations:** before starting the new version, restrict management ingress to trusted private services with network and firewall policy. Do not publish the management port to the internet. Update custom management probes to port 9090, or set `MANAGEMENT_PORT` to a port distinct from both the application and sandbox gateway ports. Application-port liveness and readiness probes now use `/livez` and `/readyz`; update custom proxy checks that used `/actuator/health/liveness` or `/actuator/health/readiness` on the application port. See [Scrape metrics](https://docs.hephaestus.build/admin/observability#scrape-metrics) for scrape configuration and alert rules.
+**Operators with other deployment configurations:** before starting the new version, restrict management ingress to trusted private services with network and firewall policy. Do not publish the management port to the internet. Update custom management probes to port 9090, or set `MANAGEMENT_PORT` to a port distinct from both the application and sandbox gateway ports. Application-port liveness and readiness probes now use `/livez` and `/readyz`; update custom proxy checks that used `/actuator/health/liveness` or `/actuator/health/readiness` on the application port. See [Scrape metrics](https://docs.hephaestus.build/admin/monitoring#scrape-metrics) for scrape configuration and alert rules.
 
 #### 🔴 Impersonation replaced by read-only user views
 
@@ -3012,7 +3012,7 @@ The shipped single-host deployment still uses the local Docker socket and gatewa
   the interactive daemon.
 
 For defaults and connection requirements, see the
-[Docker configuration reference](https://docs.hephaestus.build/admin/configuration-readiness#docker-configuration).
+[Docker configuration reference](https://docs.hephaestus.build/admin/configuration-readiness).
 
 Restart `application-server` and `application-worker`, confirm their Docker health check, and run a
 practice review and an interactive mentor session. If gVisor is configured, inspect the created
@@ -3288,7 +3288,7 @@ cluster under the same name. Starting the new release without migrating is safe:
 container attached to PostgreSQL 17 data refuses to start rather than coming up healthy and empty.
 
 **Migration**: follow the current
-[Backup & Restore](https://docs.hephaestus.build/admin/backup-restore#postgresql-17-to-18)
+[Backup & Restore](https://docs.hephaestus.build/admin/backup-restore#unsupported-postgresql-versions)
 procedure. Where the entry above says to keep the PostgreSQL 17 volume until acceptance checks
 pass, keep the verified dump (with an off-host copy) instead — the old volume is removed during
 the upgrade, so the dump is the rollback artifact.
@@ -3370,7 +3370,7 @@ cluster under the same name. Starting the new release without migrating is safe:
 container attached to PostgreSQL 17 data refuses to start rather than coming up healthy and empty.
 
 **Migration**: follow the current
-[Backup & Restore](https://docs.hephaestus.build/admin/backup-restore#postgresql-17-to-18)
+[Backup & Restore](https://docs.hephaestus.build/admin/backup-restore#unsupported-postgresql-versions)
 procedure. Where the entry above says to keep the PostgreSQL 17 volume until acceptance checks
 pass, keep the verified dump (with an off-host copy) instead — the old volume is removed during
 the upgrade, so the dump is the rollback artifact.
@@ -3479,7 +3479,7 @@ cluster under the same name. Starting the new release without migrating is safe:
 container attached to PostgreSQL 17 data refuses to start rather than coming up healthy and empty.
 
 **Migration**: follow the current
-[Backup & Restore](https://docs.hephaestus.build/admin/backup-restore#postgresql-17-to-18)
+[Backup & Restore](https://docs.hephaestus.build/admin/backup-restore#unsupported-postgresql-versions)
 procedure. Where the entry above says to keep the PostgreSQL 17 volume until acceptance checks
 pass, keep the verified dump (with an off-host copy) instead — the old volume is removed during
 the upgrade, so the dump is the rollback artifact.
