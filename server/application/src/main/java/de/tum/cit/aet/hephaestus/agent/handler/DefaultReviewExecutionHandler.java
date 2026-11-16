@@ -3,7 +3,6 @@ package de.tum.cit.aet.hephaestus.agent.handler;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import de.tum.cit.aet.hephaestus.agent.context.AppliesWhenEvaluator;
 import de.tum.cit.aet.hephaestus.agent.context.CapturedSourceFingerprints;
-import de.tum.cit.aet.hephaestus.agent.context.InsufficientEvidenceException;
 import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.JobFolderIndex;
 import de.tum.cit.aet.hephaestus.agent.context.WorkspaceContextBuilder;
@@ -44,16 +43,19 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewCaptureDecision;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewPracticeStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStopReason;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewWithholdings;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewedByKind;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.UUID;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
@@ -66,11 +68,6 @@ import tools.jackson.databind.node.ObjectNode;
 @ConditionalOnServerRole
 @RequiredArgsConstructor
 public class DefaultReviewExecutionHandler {
-    /** A pinned practice whose reads the current source catalog cannot capture for the reviewed item. */
-    static final String SOURCE_CONTRACT_UNSUPPORTED = "source_contract_unsupported";
-    /** A pinned item practice that declares a review event or About role that its item kind does not offer. */
-    static final String ITEM_CAPABILITY_UNSUPPORTED = "item_capability_unsupported";
-
     private final ReviewJobAssignments assignments;
     private final List<ItemSource> sources;
     private final WorkspaceContextBuilder context;
@@ -109,13 +106,7 @@ public class DefaultReviewExecutionHandler {
             if (refusal != null) refused.put(assignment, refusal);
         }
         var pinned = assigned.stream().filter(a -> !refused.containsKey(a)).toList();
-        if (pinned.isEmpty()) {
-            capture.capture(
-                    job.getWorkspaceId(), review.id(), job.getId(), job.getAttempt(), List.copyOf(refused.values()));
-            throw new InsufficientEvidenceException(
-                    "No assigned practice has a pinned definition that this item supports",
-                    new PreparedJobInputs(Map.of(), List.of(), List.of(), null, null));
-        }
+        if (pinned.isEmpty()) return withoutCapture(job, review.id(), refused.values());
         var required = pinned.stream()
                 .flatMap(a -> (review.kind() == ReviewKind.SCAN
                                 ? Objects.requireNonNull(
@@ -215,7 +206,7 @@ public class DefaultReviewExecutionHandler {
                     captureDecisions.add(new ReviewCaptureDecision(
                             assignment.practice().practiceId(),
                             decision.ready() ? ReviewPracticeStatus.READY : ReviewPracticeStatus.WITHHELD,
-                            decision.ready() ? null : "readiness_refused",
+                            decision.ready() ? null : ReviewStopReason.READINESS_REFUSED.name(),
                             captureFacts(decision, checks.get(decision.practiceSlug()), sourceFingerprints)));
                 }
                 var reused = capture.capture(
@@ -264,12 +255,9 @@ public class DefaultReviewExecutionHandler {
                         mapper.writeValueAsBytes(TaskEnvelope.practiceReview(
                                 review.id(), job.getId(), job.getAttempt(), job.getWorkspaceId())));
                 // The attempt's copies of the occasion's record are kept no longer than the record itself.
-                var prepared = files.prepare(job, evidence.withFiles(staged), report)
+                // When no practice is ready, the report runs none, and the attempt seals without a sandbox.
+                return files.prepare(job, evidence.withFiles(staged), report)
                         .withCopiesExpireAt(review.evidenceExpiresAt());
-                if (decisions.stream().noneMatch(AutomatedReviewReadinessDecision::ready))
-                    throw new InsufficientEvidenceException(
-                            "No assigned practice has its required captured evidence", prepared);
-                return prepared;
             } catch (RuntimeException failure) {
                 evidence.close();
                 throw failure;
@@ -278,6 +266,13 @@ public class DefaultReviewExecutionHandler {
             files.abortPersonCapture(job);
             throw failure;
         }
+    }
+
+    /** Records the withholdings decided before capture, and returns inputs that start no sandbox. */
+    private PreparedJobInputs withoutCapture(ReviewJob job, UUID reviewId, Collection<ReviewCaptureDecision> refused) {
+        if (!refused.isEmpty())
+            capture.capture(job.getWorkspaceId(), reviewId, job.getId(), job.getAttempt(), List.copyOf(refused));
+        return new PreparedJobInputs(Map.of(), List.of(), List.of(), null, null);
     }
 
     /**
@@ -298,7 +293,7 @@ public class DefaultReviewExecutionHandler {
             if (unoffered != null)
                 return withheld(
                         assignment,
-                        ITEM_CAPABILITY_UNSUPPORTED,
+                        ReviewWithholdings.ITEM_CAPABILITY_UNSUPPORTED,
                         new UnofferedCapabilities(
                                 assignment.practiceSlug(),
                                 clock.instant(),
@@ -307,7 +302,7 @@ public class DefaultReviewExecutionHandler {
                                 unoffered.about()));
         }
         var reads = unsupportedReads(assignment, item.kind().value(), scope);
-        return reads == null ? null : withheld(assignment, SOURCE_CONTRACT_UNSUPPORTED, reads);
+        return reads == null ? null : withheld(assignment, ReviewWithholdings.SOURCE_CONTRACT_UNSUPPORTED, reads);
     }
 
     private ReviewCaptureDecision withheld(ReviewAssignmentSnapshot assignment, String reason, Record facts) {
@@ -369,8 +364,9 @@ public class DefaultReviewExecutionHandler {
         return admission.endedPractices(job);
     }
 
-    public boolean keptEveryResult(ReviewJob job) {
-        return assignments.keptEveryResult(job);
+    /** Whether every practice of the job ended, with a result or with a reason, so that nothing is left to capture. */
+    public boolean endedEveryPractice(ReviewJob job) {
+        return assignments.open(job).isEmpty();
     }
 
     public void finishInterrupted(ReviewJob job, ReviewStopReason reason) {
@@ -385,8 +381,12 @@ public class DefaultReviewExecutionHandler {
                 job.getId(), job.getWorkspaceId(), job.getAttempt(), job.getRunId()));
     }
 
+    public boolean admittedResults(ReviewJob job) {
+        return admission.admittedResults(job);
+    }
+
     public void completeWithoutExecution(ReviewJob job) {
-        admission.admit(
+        admission.sealUnmeasured(
                 new ResultAdmissionService.AdmissionIdentity(
                         job.getId(), job.getWorkspaceId(), job.getAttempt(), job.getRunId()),
                 new SealResultsRequestDTO(

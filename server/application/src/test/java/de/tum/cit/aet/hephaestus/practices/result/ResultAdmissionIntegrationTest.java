@@ -1199,7 +1199,8 @@ class ResultAdmissionIntegrationTest extends AbstractResultAdmissionIntegrationT
 
     /**
      * A practice withheld because its stored definition does not fit the work (an older catalog version, an event
-     * the item kind does not offer) needs an admin, so the review that ran everything else is still Partial.
+     * the item kind does not offer) needs an admin, so the review that ran everything else is still Partial. Capture
+     * withheld it on purpose before it ran, so the review was not ready, not a runtime that fell short.
      */
     @ParameterizedTest
     @ValueSource(strings = {"item_capability_unsupported", "source_contract_unsupported"})
@@ -1222,20 +1223,28 @@ class ResultAdmissionIntegrationTest extends AbstractResultAdmissionIntegrationT
                         pending.review().getId(), scenario.workspace().getId())
                 .orElseThrow();
         assertThat(review.getStatus()).isEqualTo(ReviewStatus.PARTIAL);
-        assertThat(review.getStopReason()).isEqualTo(ReviewStopReason.EXECUTION_INCOMPLETE);
+        assertThat(review.getStopReason()).isEqualTo(ReviewStopReason.READINESS_REFUSED);
     }
 
     /**
-     * A practice that Hephaestus withheld on purpose names why the review is Partial: the work changed after the
-     * capture, or the practice waits for the checks. Neither is a runtime that fell short. Practices withheld for
-     * different reasons share none, so the review keeps the general reason.
+     * A practice that Hephaestus withheld on purpose names why the review is Partial: the work changed
+     * or the review settings changed for every such practice, or the review was not ready, also for a mix of reasons.
+     * None is a runtime that fell short. A practice that a run or admission withheld for a fault keeps the general
+     * reason.
      */
     @ParameterizedTest
     @CsvSource({
         "REPLACED, REPLACED",
         "CHECKS_PENDING, READINESS_REFUSED",
         "READINESS_REFUSED, READINESS_REFUSED",
-        "REPLACED;CHECKS_PENDING, EXECUTION_INCOMPLETE"
+        "REPLACED;CHECKS_PENDING, READINESS_REFUSED",
+        "ROLE_UNAVAILABLE;READINESS_REFUSED, READINESS_REFUSED",
+        "STALE_ROLLOUT_REVISION, STALE_ROLLOUT_REVISION",
+        "WORKSPACE_INACTIVE, READINESS_REFUSED",
+        "STALE_ROLLOUT_REVISION;WORKSPACE_INACTIVE, READINESS_REFUSED",
+        "EXECUTION_FAILED, EXECUTION_INCOMPLETE",
+        "EXECUTION_FAILED;ROLE_UNAVAILABLE, EXECUTION_INCOMPLETE",
+        "COPY_AUTHORITY_UNAVAILABLE, EXECUTION_INCOMPLETE"
     })
     void shouldCloseTheReviewWithTheReasonItsWithheldPracticeCarries(String withheld, ReviewStopReason expected) {
         var pending = admissions.pending(scenario, Instant.now(), scenarioAccountId);

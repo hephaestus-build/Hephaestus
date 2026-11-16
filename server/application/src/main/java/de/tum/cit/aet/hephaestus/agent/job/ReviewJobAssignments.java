@@ -131,15 +131,6 @@ public class ReviewJobAssignments {
         return membership.reusedPractices(job.getWorkspaceId(), job.getReviewId(), job.getId());
     }
 
-    /** Whether an earlier attempt of this job kept a result for every practice, so that nothing is left to capture. */
-    public boolean keptEveryResult(ReviewJob job) {
-        var reused = reusedPractices(job);
-        return !reused.isEmpty()
-                && load(job).stream()
-                        .allMatch(assignment ->
-                                reused.contains(assignment.practice().practiceId()));
-    }
-
     public boolean hasStaged(ReviewJob job) {
         return membership.hasStaged(job.getWorkspaceId(), job.getReviewId(), job.getId());
     }

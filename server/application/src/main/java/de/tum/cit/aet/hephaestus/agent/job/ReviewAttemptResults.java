@@ -312,6 +312,23 @@ public class ReviewAttemptResults {
                 result);
     }
 
+    /**
+     * Hands on an attempt that measured nothing, whose seal took results that an earlier attempt staged, to the run
+     * that composes their feedback, as {@link #measured} does for an admitted attempt. The caller asks only after such
+     * a seal: an attempt whose seal admitted only its own results, such as Does not apply, completes directly.
+     *
+     * @return false when the seal admitted no result, or the attempt no longer holds its job
+     */
+    boolean handOnUnmeasured(UUID jobId, AgentRunFence fence) {
+        ReviewJob sealed;
+        try {
+            sealed = preparation.owned(jobId, fence);
+        } catch (ResultAdmissionService.StaleAttemptException lost) {
+            return false;
+        }
+        return handler.admittedResults(sealed) && handOnToCompose(jobId, fence, null);
+    }
+
     /** Its feedback is decided: no attempt reads the retained inputs again. The retention sweep removes what this leaves. */
     private void forgetCompositionInputs(ReviewJob job) {
         terminal.forgetCompositionInputs(job);

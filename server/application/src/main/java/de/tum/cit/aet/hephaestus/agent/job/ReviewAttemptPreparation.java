@@ -102,7 +102,12 @@ public class ReviewAttemptPreparation {
         return row;
     }
 
-    record PreparedSandbox(@Nullable SandboxSpec spec, PreparedJobInputs stagedInputs) {}
+    /**
+     * @param spec null when nothing is left to measure, and the attempt sealed without its sandbox
+     * @param sealedStaged whether that seal took results that an earlier attempt staged, whose feedback is then
+     *     composed; read before the seal, which ends their staging
+     */
+    record PreparedSandbox(@Nullable SandboxSpec spec, PreparedJobInputs stagedInputs, boolean sealedStaged) {}
 
     PreparedSandbox prepare(
             UUID jobId,
@@ -112,10 +117,13 @@ public class ReviewAttemptPreparation {
             AtomicReference<PreparationFailure.Stage> stage) {
         stage.set(PreparationFailure.Stage.INPUTS);
 
-        // Keeping a result commits at capture. If that attempt then failed, this one has nothing left to capture.
-        if (handler.keptEveryResult(owned(jobId, fence))) {
+        // Keeping a result, staging one and withholding a practice commit at capture, at practice start or at staging.
+        // If an earlier attempt ended every practice and then failed or was lost, this one has nothing left to capture.
+        // Staging kept the inputs that a staged result's composition reads.
+        if (handler.endedEveryPractice(owned(jobId, fence))) {
+            boolean staged = handler.hasStaged(owned(jobId, fence));
             completeWithoutExecution(owned(jobId, fence));
-            return new PreparedSandbox(null, new PreparedJobInputs(Map.of(), List.of(), List.of(), null, null));
+            return new PreparedSandbox(null, new PreparedJobInputs(Map.of(), List.of(), List.of(), null, null), staged);
         }
         var capture = jobTelemetry.stage(ReviewStageTelemetry.Stage.CAPTURE);
         PreparedJobInputs preparedInputs;
@@ -141,12 +149,17 @@ public class ReviewAttemptPreparation {
         capture.end(ReviewStageTelemetry.Outcome.OK);
 
         try {
+            // Nothing runs when readiness refused, kept or found inapplicable every practice. Inputs without a
+            // readiness report come only from a preparation that withheld every practice before capture.
             var report = preparedInputs.automatedReviewReadinessReport();
-            if (report != null && report.decisions().stream().noneMatch(report::runs)) {
+            if (report == null && !handler.endedEveryPractice(owned(jobId, fence)))
+                throw new IllegalStateException("Inputs without a readiness report leave a practice open");
+            if (report == null || report.decisions().stream().noneMatch(report::runs)) {
                 stage.set(PreparationFailure.Stage.PROVENANCE);
                 persistPreparedEvidence(jobId, fence, job.getWorkspaceId(), job.getAttempt(), preparedInputs);
+                boolean staged = handler.hasStaged(owned(jobId, fence));
                 completeWithoutExecution(owned(jobId, fence));
-                return new PreparedSandbox(null, preparedInputs);
+                return new PreparedSandbox(null, preparedInputs, staged);
             }
             stage.set(PreparationFailure.Stage.CREDENTIAL);
             // Sandboxes access providers through the LLM proxy with an attempt-scoped credential.
@@ -209,7 +222,7 @@ public class ReviewAttemptPreparation {
             } else {
                 persistProvenanceDigests(jobId, fence, job.getAttempt(), preparedInputs, program, started);
             }
-            return new PreparedSandbox(sandboxSpec, preparedInputs);
+            return new PreparedSandbox(sandboxSpec, preparedInputs, false);
         } catch (RuntimeException exception) {
             preparedInputs.close();
             throw exception;

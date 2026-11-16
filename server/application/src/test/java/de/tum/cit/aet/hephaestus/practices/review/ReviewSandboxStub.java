@@ -22,7 +22,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream;
@@ -54,7 +54,15 @@ final class ReviewSandboxStub implements SandboxClaims {
     private final Map<String, Claim> claims = new ConcurrentHashMap<>();
     private final Set<String> measured = ConcurrentHashMap.newKeySet();
     private volatile Runnable beforeStart = () -> {};
-    private final AtomicBoolean loseGateway = new AtomicBoolean();
+    /** Where the next measurement loses its server. */
+    private enum Loss {
+        AFTER_FIRST_START,
+        BEFORE_SEAL,
+        /** The sandbox stops after its first staged result, with no upload and no end, as a crashed replica leaves it. */
+        AFTER_FIRST_STAGE
+    }
+
+    private final AtomicReference<@Nullable Loss> loss = new AtomicReference<>();
     private volatile Consumer<String> afterLostAttempt = runId -> {};
 
     ReviewSandboxStub(ObjectMapper mapper) {
@@ -75,7 +83,29 @@ final class ReviewSandboxStub implements SandboxClaims {
      */
     void loseGatewayDuringNextMeasurement(Consumer<String> afterUpload) {
         afterLostAttempt = afterUpload;
-        loseGateway.set(true);
+        loss.set(Loss.AFTER_FIRST_START);
+    }
+
+    /**
+     * The next measurement loses its server after its practice starts and before it seals, as a hard restart of the
+     * only replica does. Unlike {@link #loseGatewayDuringNextMeasurement}, this holds also when every start was withheld.
+     *
+     * @param afterUpload reads what the lost attempt left, given its run's id
+     */
+    void loseGatewayBeforeNextSeal(Consumer<String> afterUpload) {
+        afterLostAttempt = afterUpload;
+        loss.set(Loss.BEFORE_SEAL);
+    }
+
+    /**
+     * The next measurement stops after its first staged result. It uploads nothing and does not end its run, so the
+     * run keeps its lease until it expires, as when the replica that held the sandbox crashes.
+     *
+     * @param afterCrash ends what the crash left, given its run's id
+     */
+    void crashAfterNextStage(Consumer<String> afterCrash) {
+        afterLostAttempt = afterCrash;
+        loss.set(Loss.AFTER_FIRST_STAGE);
     }
 
     @Override
@@ -124,14 +154,21 @@ final class ReviewSandboxStub implements SandboxClaims {
                     "X-Agent-Epoch",
                     Integer.toString(run.path("epoch").asInt()));
             String base = gateway + "/internal/agent/runs/" + runId;
-            send(base + "/context", headers, null);
-            boolean completed = measure(gateway + "/internal/llm", base + "/runtime", headers);
-            var ended = send(
-                    base + "/end",
-                    headers,
-                    mapper.writeValueAsBytes(mapper.createObjectNode().put("outcome", "completed")));
-            calls.add(new Call("end", ended.statusCode(), new String(ended.body(), StandardCharsets.UTF_8)));
-            if (!completed) {
+            var context = send(base + "/context", headers, null);
+            if (context.statusCode() == 409) {
+                // The attempt ended while it prepared, with nothing left to measure. The runner stops on a 409.
+                calls.add(new Call("context", 409, new String(context.body(), StandardCharsets.UTF_8)));
+                continue;
+            }
+            Loss lost = measure(gateway + "/internal/llm", base + "/runtime", headers);
+            if (lost != Loss.AFTER_FIRST_STAGE) {
+                var ended = send(
+                        base + "/end",
+                        headers,
+                        mapper.writeValueAsBytes(mapper.createObjectNode().put("outcome", "completed")));
+                calls.add(new Call("end", ended.statusCode(), new String(ended.body(), StandardCharsets.UTF_8)));
+            }
+            if (lost != null) {
                 measured.remove(claim.name());
                 afterLostAttempt.accept(runId);
             }
@@ -141,9 +178,9 @@ final class ReviewSandboxStub implements SandboxClaims {
     /**
      * The runner's review: {@code runReviewJob} in {@code pi-runner.ts}, with a fixed judgement.
      *
-     * @return whether it measured, rather than lost its server
+     * @return where it lost its server, or null when it measured
      */
-    private boolean measure(String proxy, String runtime, Map<String, String> token)
+    private @Nullable Loss measure(String proxy, String runtime, Map<String, String> token)
             throws IOException, InterruptedException {
         Map<String, byte[]> workspace =
                 untar(send(runtime + "/workspace", token, null).body());
@@ -162,9 +199,9 @@ final class ReviewSandboxStub implements SandboxClaims {
             var started = post(
                     proxy + "/start-practice", token, mapper.createObjectNode().put("practiceSlug", slug));
             if (!mapper.readTree(started).path("current").asBoolean()) continue;
-            if (loseGateway.compareAndSet(true, false)) {
+            if (loss.compareAndSet(Loss.AFTER_FIRST_START, null)) {
                 upload(runtime, token, Map.of(), SandboxLayout.EXIT_SERVER_UNREACHABLE);
-                return false;
+                return Loss.AFTER_FIRST_START;
             }
             // As the runner's model calls do: the proxy serves only streamed chat calls.
             var completion = mapper.createObjectNode()
@@ -183,13 +220,18 @@ final class ReviewSandboxStub implements SandboxClaims {
                     proxy + "/stage-result",
                     token,
                     admission(task, mapper.createArrayNode().add(result.deepCopy())));
+            if (loss.compareAndSet(Loss.AFTER_FIRST_STAGE, null)) return Loss.AFTER_FIRST_STAGE;
+        }
+        if (loss.compareAndSet(Loss.BEFORE_SEAL, null)) {
+            upload(runtime, token, Map.of(), SandboxLayout.EXIT_SERVER_UNREACHABLE);
+            return Loss.BEFORE_SEAL;
         }
         post(proxy + "/admit-results", token, envelope(task));
 
         // As the runner does, a review whose practices each started or were withheld at their start writes its result,
         // which is empty when every start was withheld.
         upload(runtime, token, Map.of("result.json", mapper.writeValueAsBytes(admission(task, results))), 0);
-        return true;
+        return null;
     }
 
     /** What gateway-run does after the runner exits: it uploads the output with the runner's exit. */

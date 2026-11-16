@@ -21,8 +21,10 @@ import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedJobInputs;
 import de.tum.cit.aet.hephaestus.agent.practice.PracticePiAdapter;
 import de.tum.cit.aet.hephaestus.agent.practice.PracticeSandboxSpec;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunFence;
+import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxTestLimits;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -52,7 +54,8 @@ class ReviewPreparationFailureTest extends BaseUnitTest {
         var files = mock(JobEvidenceFiles.class);
         when(files.preparation(job)).thenReturn(JobEvidenceFiles.Preparation.NEW);
         var handler = mock(DefaultReviewExecutionHandler.class);
-        when(handler.prepareInputs(job)).thenReturn(new PreparedJobInputs(Map.of(), List.of(), List.of(), null, null));
+        var ready = RuntimeJobTestData.readyReport("docs.document", Instant.parse("2026-11-13T12:00:00Z"));
+        when(handler.prepareInputs(job)).thenReturn(new PreparedJobInputs(Map.of(), List.of(), List.of(), null, ready));
         var issuer = mock(AttemptTokenIssuer.class);
         var adapter = mock(PracticePiAdapter.class);
         var failure = new IllegalStateException("The preparation stage failed");
@@ -70,7 +73,8 @@ class ReviewPreparationFailureTest extends BaseUnitTest {
                                 "agent:test",
                                 List.of("node", "program.js"),
                                 Map.of(),
-                                Map.of(),
+                                // The provenance snapshot keeps the captured manifest next to the readiness report.
+                                Map.of(SandboxLayout.MANIFEST_PATH, "{}".getBytes(StandardCharsets.UTF_8)),
                                 "attempt-token",
                                 null));
                 when(jobs.updateCapture(any(), anyLong(), any(), anyInt(), any()))

@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.practices.review.model.Review;
 import de.tum.cit.aet.hephaestus.practices.spi.HistoryCustody;
 import de.tum.cit.aet.hephaestus.practices.spi.HistoryCustodyQuery;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewWithholdings;
 import de.tum.cit.aet.hephaestus.workspace.spi.MembershipReviewSelection;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceQueries;
 import java.util.List;
@@ -24,9 +25,9 @@ public class ResultAdmissionPolicy {
     public Assessment assess(long workspaceId, Review review, UUID jobId) {
         var workspace = workspaces.findById(workspaceId).orElseThrow();
         String scopeReason = !workspace.active()
-                ? "WORKSPACE_INACTIVE"
+                ? ReviewWithholdings.WORKSPACE_INACTIVE
                 : workspace.reviewSettings().rolloutRevision() != review.getRolloutRevision()
-                        ? "STALE_ROLLOUT_REVISION"
+                        ? ReviewWithholdings.STALE_ROLLOUT_REVISION
                         : null;
         var authority = custody.find(workspaceId, List.of(jobId));
         return new Assessment(
@@ -46,7 +47,9 @@ public class ResultAdmissionPolicy {
                     ? "COPY_AUTHORITY_UNAVAILABLE"
                     : scopeReason != null
                             ? scopeReason
-                            : developerId != null && !eligible.contains(developerId) ? "ROLE_UNAVAILABLE" : null;
+                            : developerId != null && !eligible.contains(developerId)
+                                    ? ReviewWithholdings.ROLE_UNAVAILABLE
+                                    : null;
         }
     }
 }
