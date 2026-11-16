@@ -112,6 +112,10 @@ public final class PracticeGuidanceRules {
     // semicolon.
     private static final Pattern PLAIN_VALUE = Pattern.compile("[\\w\\s#.,%+()/-]*");
 
+    // The visual is drawn inside the app's page, so any other class name would pick up the app's own styles.
+    private static final Pattern THEME_CLASS = Pattern.compile("pv-[a-z0-9-]+");
+    private static final Pattern CLASS_SEPARATOR = Pattern.compile("\\s+");
+
     private static final Pattern FIGURE_NAME = Pattern.compile("[a-z0-9]+(?:-[a-z0-9]+)*");
     private static final Pattern FIGURE_SOURCE = Pattern.compile("figures/(" + FIGURE_NAME.pattern() + ")\\.svg");
     private static final Pattern WEB_LINK = Pattern.compile("https?://\\S+", Pattern.CASE_INSENSITIVE);
@@ -335,6 +339,19 @@ public final class PracticeGuidanceRules {
                         + " uses a character Hephaestus does not accept in “"
                         + attribute.getName()
                         + "”. Use only letters, digits, spaces and # . , % + ( ) / - _.");
+            }
+            if (namespace == null && "class".equals(attribute.getLocalName())) {
+                // Name by name: one pattern over the whole list backtracks on long runs of spaces and recurses
+                // once per name.
+                var other = CLASS_SEPARATOR
+                        .splitAsStream(value.strip())
+                        .filter(name ->
+                                !name.isEmpty() && !THEME_CLASS.matcher(name).matches())
+                        .findFirst();
+                if (other.isPresent()) {
+                    throw new InvalidInputException(
+                            subject + " uses the class “" + other.get() + "”. Use only the pv-* classes.");
+                }
             }
         }
         for (Node child = element.getFirstChild(); child != null; child = child.getNextSibling()) {

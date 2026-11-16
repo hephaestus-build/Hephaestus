@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import {
 	ALLOWED_ATTR,
 	ALLOWED_TAGS,
+	THEME_CLASS,
 	VALUE_PUNCTUATION,
 	guideFigure,
 	sanitizePracticeSvg,
@@ -63,6 +64,48 @@ describe("sanitizePracticeSvg", () => {
 		expect(VALUE_PUNCTUATION).toBe(server?.groups?.rest);
 	});
 
+	it("allows the same class names as the server", () => {
+		expect(THEME_CLASS).toBe(
+			/THEME_CLASS = Pattern\.compile\("(?<name>[^"]+)"\)/u.exec(guidanceRules)?.groups?.name,
+		);
+	});
+
+	it.each(["fixed inset-0", "pv-fill-ink hidden", "pvfill-ink", "Pv-fill-ink", "pv-"])(
+		"drops the class %s, which is not a theme class",
+		(classes) => {
+			const sanitized = sanitizePracticeSvg(
+				`<svg viewBox="0 0 1 1"><rect class="${classes}" width="1" height="1"/></svg>`,
+			);
+
+			expect(parts(sanitized)).toStrictEqual([
+				["svg", "viewBox"],
+				["rect", "width", "height"],
+			]);
+		},
+	);
+
+	it("keeps several theme classes on one shape", () => {
+		const sanitized = sanitizePracticeSvg(
+			'<svg viewBox="0 0 1 1"><text class=" pv-fill-muted \t\n pv-mono ">Hi</text></svg>',
+		);
+
+		expect(parts(sanitized)).toStrictEqual([
+			["svg", "viewBox"],
+			["text", "class"],
+		]);
+	});
+
+	it("checks a long class list at once", () => {
+		const many = `<svg viewBox="0 0 1 1"><rect class="${"pv-a ".repeat(6000)}"/></svg>`;
+		const spaces = `<svg viewBox="0 0 1 1"><rect class="${" ".repeat(60_000)}x"/></svg>`;
+
+		expect(parts(sanitizePracticeSvg(many))).toStrictEqual([
+			["svg", "viewBox"],
+			["rect", "class"],
+		]);
+		expect(parts(sanitizePracticeSvg(spaces))).toStrictEqual([["svg", "viewBox"], ["rect"]]);
+	});
+
 	it("keeps only the shapes, words and attribute values the server's allowlist names", () => {
 		expect(parts(sanitizePracticeSvg(HOSTILE))).toStrictEqual([
 			["svg", "viewBox"],
@@ -92,7 +135,7 @@ describe("sanitizePracticeSvg", () => {
 describe("usesThemeClasses", () => {
 	it("reads a pv-* class anywhere in a class list", () => {
 		expect(usesThemeClasses('<svg><rect class="pv-fill-ink"></rect></svg>')).toBe(true);
-		expect(usesThemeClasses('<svg><rect class="outline pv-stroke-line"></rect></svg>')).toBe(true);
+		expect(usesThemeClasses('<svg><rect class="pv-mono pv-stroke-line"></rect></svg>')).toBe(true);
 	});
 
 	it("ignores a class that only contains pv-, the font class, and markup with no class", () => {
