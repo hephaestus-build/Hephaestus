@@ -35,6 +35,22 @@ function changesetName(cwd: string): string {
 	return name === "" ? "my-change" : name;
 }
 
+const DOCS_URL = /https:\/\/docs\.hephaestus\.build\/[^\s)\]>"'`]*/gu;
+
+const maskedLines = (text: string) =>
+	text.split("\n").map((line) => line.replaceAll(DOCS_URL, "<docs-url>"));
+
+/**
+ * Whether a change to MIGRATION.md only rewrites docs.hephaestus.build URLs: the same number of lines, and each line
+ * identical once its docs URLs are masked. Released upgrade steps never change, but their links must keep resolving,
+ * because the docs site's upgrade page renders these entries for readers.
+ */
+export function migrationChangeIsLinkOnly(before: string, after: string): boolean {
+	const old = maskedLines(before);
+	const next = maskedLines(after);
+	return old.length === next.length && old.every((line, index) => line === next[index]);
+}
+
 /**
  * Why a pull request's release notes break the rules that hold for every pull request, compared from
  * its merge base with `base`: no edit to MIGRATION.md, no deleted pending fragment or changeset, and
@@ -55,7 +71,25 @@ export function releaseNoteProblems(base: string, cwd = process.cwd()): string[]
 			.split("\n")
 			.filter((file) => file !== "" && !file.endsWith("README.md"));
 	const problems: string[] = [];
-	if (changed("ACDMRT", "MIGRATION.md").length > 0) {
+	const show = (ref: string) => {
+		try {
+			return execFileSync("git", ["show", `${ref}:MIGRATION.md`], {
+				cwd,
+				encoding: "utf8",
+				maxBuffer: 16 * 1024 * 1024,
+			});
+		} catch {
+			// The file is absent at this ref.
+			return "";
+		}
+	};
+	const mergeBase = execFileSync("git", ["merge-base", base, "HEAD"], {
+		cwd,
+		encoding: "utf8",
+	}).trim();
+	const [before, after] = [show(mergeBase), show("HEAD")];
+	const linkOnly = before !== "" && after !== "" && migrationChangeIsLinkOnly(before, after);
+	if (changed("ACDMRT", "MIGRATION.md").length > 0 && !linkOnly) {
 		problems.push(
 			`Do not edit MIGRATION.md in a feature PR. Restore it with \`git checkout ${base} -- MIGRATION.md\`, and put the upgrade step in .migration/<changeset-slug>.md (.changeset/README.md has the format).`,
 		);
