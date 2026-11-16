@@ -22,6 +22,7 @@
 		"ai-providers",
 		"passkeys",
 		"browser-extension",
+		"mcp-clients",
 		"workspace-subdomains",
 		"public-activity",
 		"---Practices and feedback---",
