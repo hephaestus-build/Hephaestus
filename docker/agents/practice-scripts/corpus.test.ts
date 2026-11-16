@@ -9,6 +9,7 @@ import path from "node:path";
 import { test } from "node:test";
 
 import { CASES } from "./corpus-cases.ts";
+import { DIRECTION_CHARS } from "./lib/core/contract.ts";
 import { runBundledProgram } from "./run-bundled.ts";
 
 const SCRIPTS_DIR = path.resolve(
@@ -34,6 +35,13 @@ for (const slug of slugs) {
 		const runs: Record<string, unknown> = {};
 		for (const { name, run } of CASES) {
 			const { reviews, outcome } = await runBundledProgram(slug, run);
+			// The runtime cuts a longer direction with "…", and the model never reads its last instruction.
+			for (const direction of reviews.flatMap((review) => review.directions ?? [])) {
+				assert.ok(
+					direction.length <= DIRECTION_CHARS && !direction.endsWith("…"),
+					`${name}: a direction past ${String(DIRECTION_CHARS)} characters: ${direction}`,
+				);
+			}
 			if (!("error" in outcome)) {
 				runs[name] = reviews;
 				continue;

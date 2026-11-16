@@ -1119,8 +1119,140 @@ void test("#50: a claim that the checkout lacks something goes back to the model
 			hostCoverage([{ status: "SEARCHED", path: ".", pattern: "zzz_absent", matches: 0 }]),
 			ASK,
 		)?.text ?? "",
-		/no search of the whole checkout names what this claim says is absent.*reword the claim.*ignoreCase/u,
+		/no search of the whole checkout names what this claim says is absent.*searches of the checkout were "zzz_absent".*reword this claim.*ignoreCase/u,
 	);
+});
+
+void test("an unsearched lookedFor is named as the field, beside the searches the session ran", () => {
+	// No clause names its own subject, so the claim is what the result looked for: the field the model must change.
+	const stored = {
+		outcome: "NOT_MET",
+		summary: "The renamed fetchUser parameter ships without a note for its callers",
+		explanation: "The change renames the id parameter of fetchUser.",
+		evidence: {
+			search: {
+				consulted: ["scm.pull-request.diff", "scm.repository.tree"],
+				lookedFor: "consumer-facing documentation of the changed public surface",
+				boundary: BOUNDARY,
+			},
+		},
+	};
+	const symbols = hostCoverage([
+		{ status: "SEARCHED", path: ".", pattern: String.raw`\bfetchUser\b`, matches: 2 },
+	]);
+	const asked = unreadCheckoutClaim(stored, symbols, ASK);
+	assert.equal(asked?.kind, "untied");
+	assert.match(
+		asked.text,
+		/names what evidence\.search\.lookedFor says is absent: "consumer-facing documentation.*searches of the checkout were "\\bfetchUser\\b".*reword evidence\.search\.lookedFor/u,
+	);
+	// A lookedFor that holds the searched symbol is tied to that search; its matches are then owed an account.
+	const named = {
+		...stored,
+		evidence: {
+			search: {
+				...stored.evidence.search,
+				lookedFor: "consumer documentation of fetchUser",
+			},
+		},
+	};
+	assert.equal(unreadCheckoutClaim(named, symbols, ASK)?.kind, "hits");
+	assert.equal(
+		unreadCheckoutClaim(
+			{
+				...named,
+				evidence: {
+					search: {
+						...named.evidence.search,
+						hits: "One match declares fetchUser; the other calls it from the separate client package. Neither is documentation.",
+					},
+				},
+			},
+			symbols,
+			ASK,
+		),
+		undefined,
+	);
+});
+
+void test("an unsearched prerequisite is named as its field", () => {
+	const ruledOut = {
+		outcome: "DOES_NOT_APPLY",
+		summary: "No separate consumer depends on the changed declarations",
+		explanation: "The renamed function is used only inside its own module.",
+		evidence: {
+			inapplicability: {
+				consulted: ["scm.pull-request.diff", "scm.repository.tree"],
+				prerequisite: "a consumer outside the module",
+				ruledOutBy: "Every use sits in the same module.",
+			},
+		},
+	};
+	const asked = unreadCheckoutClaim(
+		ruledOut,
+		hostCoverage([
+			{ status: "SEARCHED", path: ".", pattern: String.raw`\bfetchUser\b`, matches: 1 },
+		]),
+		ASK,
+	);
+	assert.equal(asked?.kind, "untied");
+	assert.match(asked.text, /what evidence\.inapplicability\.prerequisite says is absent/u);
+});
+
+void test("the ask lists plain searches first, skips an empty one, and counts what it leaves out", () => {
+	const stored = notMet(PR50_ERROR_HANDLING, ["scm.pull-request.diff", "scm.repository.tree"]);
+	const many = hostCoverage(
+		["foo.*bar", "", "alpha", "alpha", "beta", "gamma", "delta", "epsilon"].map((pattern) => ({
+			status: "SEARCHED" as const,
+			path: ".",
+			pattern,
+			matches: 0,
+		})),
+	);
+	const text = unreadCheckoutClaim(stored, many, ASK)?.text ?? "";
+	assert.match(
+		text,
+		/searches of the checkout were "alpha", "beta", "gamma", "delta", "epsilon" and 1 more,/u,
+	);
+	assert.doesNotMatch(text, /""/u);
+});
+
+void test("a category in a field gets the category ask, which names the field", () => {
+	const stored = {
+		outcome: "DOES_NOT_APPLY",
+		summary: "Nothing here records a significant decision",
+		explanation: "The change edits one README line.",
+		evidence: {
+			inapplicability: {
+				consulted: ["scm.pull-request.diff", "scm.repository.tree"],
+				prerequisite: "persistence vocabulary",
+				ruledOutBy: "The change edits documentation only.",
+			},
+		},
+	};
+	const asked = unreadCheckoutClaim(
+		stored,
+		hostCoverage([{ status: "SEARCHED", path: ".", pattern: "(?i)persistence", matches: 0 }]),
+		ASK,
+	);
+	assert.equal(asked?.kind, "untied");
+	assert.match(
+		asked.text,
+		/a whole category is absent: "persistence vocabulary".*Reword evidence\.inapplicability\.prerequisite to say which words no file contains/u,
+	);
+});
+
+void test("the ask cuts a long search to 120 code points", () => {
+	const stored = notMet(PR50_ERROR_HANDLING, ["scm.pull-request.diff", "scm.repository.tree"]);
+	const long = "é".repeat(130);
+	const text =
+		unreadCheckoutClaim(
+			stored,
+			hostCoverage([{ status: "SEARCHED", path: ".", pattern: long, matches: 0 }]),
+			ASK,
+		)?.text ?? "";
+	assert.ok(text.includes(`"${"é".repeat(120)}…"`), text);
+	assert.match(text, /Never add a word that you searched for something else\./u);
 });
 
 void test("a search for something else has its own ask, once", () => {

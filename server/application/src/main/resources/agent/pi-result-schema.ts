@@ -31,7 +31,7 @@ export function resultToolSchemas(availableSourceKindValues: readonly string[]) 
 				type: "string",
 				minLength: 1,
 				description:
-					"The specific behavior whose absence you report, matching the behavior assessed in the summary and explanation.",
+					"The specific behavior whose absence you report, matching the behavior assessed in the summary and explanation. When consulted names scm.repository.tree, grep for a plain word of this behavior, such as the changed symbol, and write that word here. A search backs only a claim that holds a word it searched for; never add a word that you searched for something else.",
 			},
 			boundary: {
 				type: "string",
@@ -62,7 +62,8 @@ export function resultToolSchemas(availableSourceKindValues: readonly string[]) 
 			prerequisite: {
 				type: "string",
 				minLength: 1,
-				description: "The subject this practice's criteria judge.",
+				description:
+					"The subject this practice's criteria judge. When consulted names scm.repository.tree, grep for a plain word of this subject, such as the changed symbol, and write that word here; never add a word that you searched for something else.",
 			},
 			ruledOutBy: {
 				type: "string",

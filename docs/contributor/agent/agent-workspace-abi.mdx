@@ -161,6 +161,12 @@ A result that breaks one of these rules is withheld as `absence_not_searched`.
 The runner asks the session before each of these reasons, once for each.
 For a claim about a category, it asks for the words that no file contains, not for a new search.
 
+The ask names the field that holds the claim, such as `lookedFor`, and quotes the searches that the session ran.
+It forbids a word that the session searched for something else.
+`pi-result-schema.ts` and `pi-orchestrator.md` tell the model to name, in the claim, the word that it searched for.
+A practice program can prepare that search, as `documents-public-api-and-behaviour-changes` does for the declarations that a change adds.
+The runtime cuts a direction after `DIRECTION_CHARS`, so a program keeps each direction within that bound.
+
 A match does not refute "no other file references X", so a search with matches can back a claim.
 When a search that names a claim finds matches, the result must account for them.
 A Met or Not met result uses `evidence.search.hits`.

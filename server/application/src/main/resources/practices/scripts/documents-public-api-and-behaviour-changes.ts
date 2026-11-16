@@ -215,9 +215,14 @@ export default definePracticeScript({
 				: "The change updates no documentation, changelog or API-specification file, by path; doc-comments in source are not counted here. That statement rests on the diff: cite its file list, and do not name the checkout as searched for it.",
 		);
 		const pattern = plainPattern([...new Set([...publicNames, ...internalNames])], 280);
-		if (pattern !== "") {
+		if (pattern === "") {
 			directions.push(
-				"To show whether a separate consumer uses the changed declarations, search the whole checkout with the grep tool, not a shell command, using the next direction's pattern. A claim that nothing outside the change uses them names these symbols, in its text and in lookedFor.",
+				"This program found no declared name to search for. With scm.repository.tree consulted, grep the checkout with ignoreCase for a plain word of the changed surface, such as a route, and name it in lookedFor or prerequisite. Else name only the diff and description as consulted.",
+			);
+		} else {
+			directions.push(
+				"To show whether a separate consumer uses the changed declarations, or a file outside the change names them, search the whole checkout with the grep tool, not a shell command, using the pattern after the next direction.",
+				'With scm.repository.tree consulted, the claim names these symbols: a DOES_NOT_APPLY prerequisite such as "a separate consumer of <symbol>", or a NOT_MET lookedFor such as "consumer documentation of <symbol>". hits says what the matches are.',
 				pattern,
 			);
 		}

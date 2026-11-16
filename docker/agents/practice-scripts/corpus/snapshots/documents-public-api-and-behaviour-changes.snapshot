@@ -454,7 +454,8 @@
 				"The diff adds 40 declaration(s) but none are exported/public (e.g. modifier-less Swift is internal, non-exported TS, package-private Java, leading-underscore Python).",
 				"Investigate whether any public-facing behaviour actually changed before expecting public-API documentation.",
 				"The change updates no documentation, changelog or API-specification file, by path; doc-comments in source are not counted here. That statement rests on the diff: cite its file list, and do not name the checkout as searched for it.",
-				"To show whether a separate consumer uses the changed declarations, search the whole checkout with the grep tool, not a shell command, using the next direction's pattern. A claim that nothing outside the change uses them names these symbols, in its text and in lookedFor.",
+				"To show whether a separate consumer uses the changed declarations, or a file outside the change names them, search the whole checkout with the grep tool, not a shell command, using the pattern after the next direction.",
+				"With scm.repository.tree consulted, the claim names these symbols: a DOES_NOT_APPLY prerequisite such as \"a separate consumer of <symbol>\", or a NOT_MET lookedFor such as \"consumer documentation of <symbol>\". hits says what the matches are.",
 				"\\bCartView\\b|\\brefresh\\b|\\bsaveDraft\\b|\\bReport\\b"
 			]
 		}
@@ -649,7 +650,8 @@
 			"directions": [
 				"The diff adds 9 exported/public declaration(s) in a repo that ships a public product — investigate whether their documented behaviour or signature changed and whether that change is reflected in docs/comments.",
 				"The change updates 1 documentation, changelog or API-specification file(s): docs/notes.md.",
-				"To show whether a separate consumer uses the changed declarations, search the whole checkout with the grep tool, not a shell command, using the next direction's pattern. A claim that nothing outside the change uses them names these symbols, in its text and in lookedFor.",
+				"To show whether a separate consumer uses the changed declarations, or a file outside the change names them, search the whole checkout with the grep tool, not a shell command, using the pattern after the next direction.",
+				"With scm.repository.tree consulted, the claim names these symbols: a DOES_NOT_APPLY prerequisite such as \"a separate consumer of <symbol>\", or a NOT_MET lookedFor such as \"consumer documentation of <symbol>\". hits says what the matches are.",
 				"\\btotal\\b|\\bload\\b|\\bLoad\\b|\\bApp\\b|\\btestCart\\b"
 			]
 		}
@@ -667,7 +669,8 @@
 			"directions": [
 				"Scanned 2 added lines in 2 files for this practice's line patterns; none matched.",
 				"A pattern sees one line: what spans lines or has no keyword, such as an early return, a discarded result or a missing else, is yours to enumerate from the diff.",
-				"The change updates no documentation, changelog or API-specification file, by path; doc-comments in source are not counted here. That statement rests on the diff: cite its file list, and do not name the checkout as searched for it."
+				"The change updates no documentation, changelog or API-specification file, by path; doc-comments in source are not counted here. That statement rests on the diff: cite its file list, and do not name the checkout as searched for it.",
+				"This program found no declared name to search for. With scm.repository.tree consulted, grep the checkout with ignoreCase for a plain word of the changed surface, such as a route, and name it in lookedFor or prerequisite. Else name only the diff and description as consulted."
 			]
 		}
 	],
@@ -753,7 +756,8 @@
 				"Investigate whether this repo exposes any public API surface a consumer depends on before deciding documentation was owed.",
 				"The diff adds 1 exported/public declaration(s) — investigate whether their documented behaviour or signature changed and whether that change is reflected in docs/comments.",
 				"The change updates no documentation, changelog or API-specification file, by path; doc-comments in source are not counted here. That statement rests on the diff: cite its file list, and do not name the checkout as searched for it.",
-				"To show whether a separate consumer uses the changed declarations, search the whole checkout with the grep tool, not a shell command, using the next direction's pattern. A claim that nothing outside the change uses them names these symbols, in its text and in lookedFor.",
+				"To show whether a separate consumer uses the changed declarations, or a file outside the change names them, search the whole checkout with the grep tool, not a shell command, using the pattern after the next direction.",
+				"With scm.repository.tree consulted, the claim names these symbols: a DOES_NOT_APPLY prerequisite such as \"a separate consumer of <symbol>\", or a NOT_MET lookedFor such as \"consumer documentation of <symbol>\". hits says what the matches are.",
 				"\\btotal\\b"
 			]
 		}
@@ -1214,7 +1218,8 @@
 				"Investigate whether this repo exposes any public API surface a consumer depends on before deciding documentation was owed.",
 				"The diff adds 220 declaration(s) but none are exported/public (e.g. modifier-less Swift is internal, non-exported TS, package-private Java, leading-underscore Python).",
 				"Investigate whether any public-facing behaviour actually changed before expecting public-API documentation.",
-				"The change updates no documentation, changelog or API-specification file, by path; doc-comments in source are not counted here. That statement rests on the diff: cite its file list, and do not name the checkout as searched for it."
+				"The change updates no documentation, changelog or API-specification file, by path; doc-comments in source are not counted here. That statement rests on the diff: cite its file list, and do not name the checkout as searched for it.",
+				"This program found no declared name to search for. With scm.repository.tree consulted, grep the checkout with ignoreCase for a plain word of the changed surface, such as a route, and name it in lookedFor or prerequisite. Else name only the diff and description as consulted."
 			]
 		}
 	],
@@ -1233,7 +1238,8 @@
 				"Investigate whether this repo exposes any public API surface a consumer depends on before deciding documentation was owed.",
 				"Scanned 0 added lines in 0 files for this practice's line patterns; none matched.",
 				"A pattern sees one line: what spans lines or has no keyword, such as an early return, a discarded result or a missing else, is yours to enumerate from the diff.",
-				"The change updates no documentation, changelog or API-specification file, by path; doc-comments in source are not counted here. That statement rests on the diff: cite its file list, and do not name the checkout as searched for it."
+				"The change updates no documentation, changelog or API-specification file, by path; doc-comments in source are not counted here. That statement rests on the diff: cite its file list, and do not name the checkout as searched for it.",
+				"This program found no declared name to search for. With scm.repository.tree consulted, grep the checkout with ignoreCase for a plain word of the changed surface, such as a route, and name it in lookedFor or prerequisite. Else name only the diff and description as consulted."
 			]
 		}
 	],

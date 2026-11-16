@@ -878,8 +878,17 @@ export function unsearchedClaim(
 	patterns: readonly string[],
 	consulted: boolean,
 ): string | undefined {
+	return firstUnsearched(subject, texts, patterns, consulted)?.text;
+}
+
+function firstUnsearched(
+	subject: string,
+	texts: readonly string[],
+	patterns: readonly string[],
+	consulted: boolean,
+): Claim | undefined {
 	const terms = patterns.flatMap(termsOf);
-	return claimsOf(subject, texts, consulted).find((claim) => !backs(terms, claim));
+	return claimsOf(subject, texts, consulted).find((claim) => !backs(terms, claim.text));
 }
 
 /**
@@ -908,6 +917,23 @@ function scopeOf(claim: string): string {
 	return negation === null ? claim : claim.slice(negation.index);
 }
 
+/**
+ * The session's own search patterns, as an ask quotes them: plain ones first, because only they name anything, then
+ * at most five, each cut to 120 code points.
+ */
+function searchList(patterns: readonly string[]): string {
+	const unique = [...new Set(patterns.filter((pattern) => pattern !== ""))].toSorted(
+		(a, b) => Number(!PLAIN_SEARCH.test(a)) - Number(!PLAIN_SEARCH.test(b)),
+	);
+	const shown = unique.slice(0, 5).map((pattern) => {
+		const points = codePoints(pattern);
+		return `"${points.length > 120 ? `${points.slice(0, 120).join("")}…` : pattern}"`;
+	});
+	return unique.length > shown.length
+		? `${shown.join(", ")} and ${String(unique.length - shown.length)} more`
+		: shown.join(", ");
+}
+
 /** The first claim that a search with matches names: the result must then say what they are. */
 export function claimWithHits(
 	subject: string,
@@ -916,15 +942,36 @@ export function claimWithHits(
 	consulted: boolean,
 ): string | undefined {
 	const terms = patternsWithMatches.flatMap(termsOf);
-	return claimsOf(subject, texts, consulted).find((claim) => holdsTerm(terms, claim));
+	return claimsOf(subject, texts, consulted).find((claim) => holdsTerm(terms, claim.text))?.text;
+}
+
+/** Where the ask points the session for a claim: the clause itself, or the field that the claim's subject came from. */
+function claimField(claim: Claim, searched: boolean, inapplicable: boolean): string {
+	if (!claim.subject) {
+		return "this claim";
+	}
+	if (searched) {
+		return "evidence.search.lookedFor";
+	}
+	return inapplicable ? "evidence.inapplicability.prerequisite" : "the summary";
+}
+
+/** A claim's text, and whether it is the subject: what the result looked for, in place of a clause's own words. */
+interface Claim {
+	text: string;
+	subject: boolean;
 }
 
 /** The text of each claim: a clause that names its own subject, or else what the result looked for. */
-function claimsOf(subject: string, texts: readonly string[], consulted: boolean): string[] {
+function claimsOf(subject: string, texts: readonly string[], consulted: boolean): Claim[] {
 	const clauses = texts
 		.flatMap(claimedClauses)
-		.map((clause) => (content(clause).length === 0 ? subject : clause));
-	return clauses.length === 0 && consulted ? [subject] : clauses;
+		.map((clause) =>
+			content(clause).length === 0
+				? { text: subject, subject: true }
+				: { text: clause, subject: false },
+		);
+	return clauses.length === 0 && consulted ? [{ text: subject, subject: true }] : clauses;
 }
 
 /**
@@ -1031,20 +1078,23 @@ export function unreadCheckoutClaim(
 		return undefined;
 	}
 	if (searches.length > 0) {
-		const unsearched = unsearchedClaim(subject, textsOf(submission), searches, consulted);
+		const unsearched = firstUnsearched(subject, textsOf(submission), searches, consulted);
 		if (unsearched !== undefined) {
 			if (!askUntied) {
 				return undefined;
 			}
-			return CATEGORY.test(unsearched)
-				? {
-						kind: "untied",
-						text: `this claim says a whole category is absent: "${unsearched}". No search can show that, because the category also takes forms whose words a search does not hold, such as annotations, framework types and configuration keys. Reword the claim to say which words no file contains, as in "no file contains the words persisted, contract or auth", or remove the claim and keep only what the cited lines show.`,
-					}
-				: {
-						kind: "untied",
-						text: `no search of the whole checkout names what this claim says is absent: "${unsearched}". Either reword the claim to name what you searched for, or call the grep tool with ignoreCase and a plain word that the claim holds, alternatives joined by |. A pattern with any other syntax names nothing. If you can do neither, remove the claim and keep only what the cited lines show.`,
-					};
+			if (CATEGORY.test(unsearched.text)) {
+				return {
+					kind: "untied",
+					text: `this claim says a whole category is absent: "${unsearched.text}". No search can show that, because the category also takes forms whose words a search does not hold, such as annotations, framework types and configuration keys. Reword ${claimField(unsearched, search !== undefined, inapplicability !== undefined)} to say which words no file contains, as in "no file contains the words persisted, contract or auth", or remove the claim and keep only what the cited lines show.`,
+				};
+			}
+			// The model reads the quoted words as prose; it must hear which field they are and what it did search.
+			const field = claimField(unsearched, search !== undefined, inapplicability !== undefined);
+			return {
+				kind: "untied",
+				text: `no search of the whole checkout names what ${field} says is absent: "${unsearched.text}". Your searches of the checkout were ${searchList(searches)}, and a search names only the plain words of its pattern. Either reword ${field} to hold a word of the search that looked for it, or call the grep tool with ignoreCase and a plain word that ${field} holds, alternatives joined by |. Never add a word that you searched for something else. A pattern with any other syntax names nothing. If you can do neither, remove the claim and keep only what the cited lines show.`,
+			};
 		}
 		const unexplained = claimWithHits(subject, textsOf(submission), withMatches, consulted);
 		const account = search?.hits ?? inapplicability?.hits;
