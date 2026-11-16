@@ -234,11 +234,16 @@ function nextStep(
 		(m) => isRecord(m) && m.role === "assistant" && Array.isArray(m.tool_calls),
 	).length;
 	const has = (name: string) => tools.includes(name);
-	const search = searches[done - 1];
+	// A model follows the runner's steering. A user message after its first call is a steer, such as the nudge to
+	// record the result before the practice's input-token budget ends, so it submits instead of exploring further.
+	const firstCall = messages.findIndex((m) => isRecord(m) && m.role === "assistant");
+	const steered =
+		firstCall !== -1 && messages.slice(firstCall).some((m) => isRecord(m) && m.role === "user");
+	const search = steered ? undefined : searches[done - 1];
 	if (search !== undefined && has("grep")) {
 		return { name: "grep", args: { pattern: search, path: REPO } };
 	}
-	if (done < toolCalls && (has("read") || has("bash"))) {
+	if (!steered && done < toolCalls && (has("read") || has("bash"))) {
 		const pick = repoFiles[(seed + done * 7) % Math.max(1, repoFiles.length)] ?? "README.md";
 		const commands = [
 			`rg -n --max-count 40 "TODO|FIXME|catch|password|secret|token|print" ${REPO} | head -400`,
