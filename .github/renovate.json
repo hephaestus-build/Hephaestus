@@ -19,18 +19,21 @@
 		"github-actions",
 		"custom.regex"
 	],
-	"dependencyDashboard": true,
-	"dependencyDashboardTitle": "Dependency Dashboard",
+	"dependencyDashboard": {
+		"enabled": true,
+		"title": "Dependency Dashboard",
+		"osvVulnerabilitySummary": "unresolved"
+	},
 	"lockFileMaintenance": {
 		"enabled": true,
 		"schedule": ["before 7am on monday"],
+		"postUpdateOptions": ["pnpmDedupe"],
 		"prBodyNotes": [
 			"If this pull request changes a package in the Fumadocs row of [Exceptions to the bar](https://docs.hephaestus.build/contributor/dependencies#exceptions-to-the-bar), examine that row before you approve."
 		]
 	},
 	"rangeStrategy": "replace",
 	"constraints": { "java": "21" },
-	"postUpdateOptions": ["pnpmDedupe"],
 	"packageRules": [
 		{
 			"description": "CI tool checksums require independent supply-chain review",
@@ -463,6 +466,5 @@
 	"prConcurrentLimit": 2,
 	"branchConcurrentLimit": 2,
 	"prHourlyLimit": 2,
-	"osvVulnerabilityAlerts": true,
-	"dependencyDashboardOSVVulnerabilitySummary": "unresolved"
+	"osvVulnerabilityAlerts": true
 }

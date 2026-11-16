@@ -95,6 +95,10 @@ Renovate groups routine Gradle updates as server dependencies and webapp develop
 separately. Webapp production dependencies remain separate unless Renovate identifies a package
 family that must move together.
 
+A dependency update changes only the lock entries that it needs. Renovate does not deduplicate after
+it, so the dependency baseline judges that update alone. The weekly lock file maintenance refreshes
+every locked version within its range, and only it runs `pnpm dedupe` over the whole tree.
+
 Major updates and minor updates to pre-1.0 dependencies remain ungrouped, wait seven days, and require
 Dependency Dashboard approval. Native
 [branch and PR limits](https://docs.renovatebot.com/configuration-options/#branchconcurrentlimit)

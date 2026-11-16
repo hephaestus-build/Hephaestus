@@ -168,8 +168,17 @@ void test("Gradle artifact updates use the repository JDK and retain human check
 	}
 });
 
-void test("dependency updates normalize optional peer snapshots with the pinned pnpm", () => {
-	assert.deepEqual(config.postUpdateOptions, ["pnpmDedupe"]);
+void test("an update does not deduplicate the tree; only the weekly lock refresh does", () => {
+	// A dedupe after each update also moved unrelated transitive packages, so a one-package update
+	// failed the dependency baseline. The lock refresh, whose purpose is the whole tree, keeps it.
+	assert.equal(config.postUpdateOptions, undefined);
+	assert.ok(Array.isArray(config.packageRules));
+	assert.deepEqual(
+		config.packageRules.filter(isRecord).filter((rule) => rule.postUpdateOptions !== undefined),
+		[],
+	);
+	assert.ok(isRecord(config.lockFileMaintenance));
+	assert.deepEqual(config.lockFileMaintenance.postUpdateOptions, ["pnpmDedupe"]);
 });
 
 /**
@@ -372,7 +381,8 @@ void test("an update that waits for approval does not hold the CI updates groupe
 
 void test("vulnerability remediation bypasses normal update latency", () => {
 	assert.equal(config.osvVulnerabilityAlerts, true);
-	assert.equal(config.dependencyDashboardOSVVulnerabilitySummary, "unresolved");
+	assert.ok(isRecord(config.dependencyDashboard));
+	assert.equal(config.dependencyDashboard.osvVulnerabilitySummary, "unresolved");
 	assert.deepEqual(config.vulnerabilityAlerts, {
 		rangeStrategy: "replace",
 		enabled: true,
