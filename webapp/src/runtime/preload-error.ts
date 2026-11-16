@@ -2,8 +2,9 @@ import type { AnyRouter } from "@tanstack/react-router";
 
 import type { BrowserFaults } from "@/runtime/browser-faults";
 
-const MARKER_KEY = "hephaestus.preload-error-reload-at";
-const RELOAD_WINDOW_MS = 60_000;
+// `public/boot-recovery.js` shares this marker and window; its test fails when the two drift apart.
+export const MARKER_KEY = "hephaestus.preload-error-reload-at";
+export const RELOAD_WINDOW_MS = 60_000;
 
 /**
  * Claims the one reload that a failed chunk load allows. A second failure inside the window means

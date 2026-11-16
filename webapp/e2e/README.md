@@ -86,6 +86,12 @@ It counts document loads while links inside the app open pages, and while the br
 It also checks that a tab on Review settings keeps the scroll position.
 The lint rule `hephaestus/same-page-search-keeps-scroll` guards the same rule in the source.
 
+## Recovery from a failed start
+
+`boot-recovery.spec.ts` blocks React's chunk, so the app cannot start.
+The page reloads once, and then it says that it could not load.
+After the block ends, the page's Reload button loads the app.
+
 ## Reading the result
 
 `public-activity.spec.ts` uses the isolated `e2e-public` workspace in `seed.sql`.
