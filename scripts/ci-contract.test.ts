@@ -4226,7 +4226,7 @@ void describe("CI contract", () => {
 		);
 		assert.equal(
 			candidateStep.getIn(["env", "MERGE_BASE_SHA"]),
-			`\${{ github.event.merge_group.base_sha }}`,
+			`\${{ steps.group_base.outputs.sha }}`,
 		);
 		const directory = await mkdtemp(path.join(tmpdir(), "release-candidate-"));
 		context.after(async () => rm(directory, { recursive: true, force: true }));
@@ -4904,7 +4904,7 @@ void describe("CI contract", () => {
 		assert.match(String(secretScan.get("version")), /^\d+\.\d+\.\d+@sha256:[a-f0-9]{64}$/u);
 		assert.equal(
 			workflow.getIn([...scanPath, "env", "EVENT_BASE"]),
-			`\${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before || '' }}`,
+			`\${{ github.event.pull_request.base.sha || inputs.merge_group_base || github.event.before || '' }}`,
 		);
 		assert.equal(secretScan.get("base"), `\${{ env.EVENT_BASE }}`);
 		assert.equal(
@@ -8379,5 +8379,140 @@ void test("the web app's unit test shards cover the suite once, and one report m
 	assert.match(
 		config,
 		/thresholds: \{ statements: \d+, branches: \d+, functions: \d+, lines: \d+ \}/u,
+	);
+});
+
+void test("a merge group stacked behind another detects changes from where the group leaves main", async (context) => {
+	const workflow = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
+	const jobPath = ["jobs", "detect-changes"];
+	const resolve = namedStep(workflow, jobPath, "Resolve where the merge group leaves main");
+	assert.equal(resolve.get("id"), "group_base");
+	assert.equal(resolve.get("if"), "github.event_name == 'merge_group'");
+	assert.equal(resolve.getIn(["env", "BASE_REF"]), `\${{ github.event.merge_group.base_ref }}`);
+	// The filter and the release-candidate check judge the same diff.
+	assert.equal(
+		step(workflow, jobPath, "dorny/paths-filter").get("base"),
+		`\${{ steps.group_base.outputs.sha }}`,
+	);
+	assert.equal(
+		namedStep(workflow, jobPath, "Detect the release candidate").getIn(["env", "MERGE_BASE_SHA"]),
+		`\${{ steps.group_base.outputs.sha }}`,
+	);
+	const steps = workflow.getIn([...jobPath, "steps"]);
+	assert.ok(isSeq(steps));
+	const order = (name: string) =>
+		steps.items.findIndex(
+			(entry) => isMap(entry) && (entry.get("name") === name || entry.get("id") === name),
+		);
+	assert.ok(
+		order("group_base") < order("release_candidate") && order("group_base") < order("filter"),
+	);
+
+	// #4477's group failed the browser suite; #4536's group behind it changed only CI files, judged
+	// its own diff against #4477's group head, skipped the suite and passed, and the queue merged both.
+	const root = await mkdtemp(path.join(tmpdir(), "merge-group-base-"));
+	context.after(async () => rm(root, { recursive: true, force: true }));
+	const env = environmentForGitFixture();
+	const git = (cwd: string, ...args: string[]) => {
+		const result = spawnSync("git", args, { cwd, env, encoding: "utf8" });
+		assert.equal(result.status, 0, result.stderr);
+		return result.stdout.trim();
+	};
+	const origin = path.join(root, "origin.git");
+	const work = path.join(root, "work");
+	git(root, "init", "-q", "--bare", "--initial-branch=main", origin);
+	git(root, "clone", "-q", origin, work);
+	const commit = async (file: string, message: string) => {
+		await mkdir(path.dirname(path.join(work, file)), { recursive: true });
+		await writeFile(path.join(work, file), `${message}\n`);
+		git(work, "add", "--all");
+		git(
+			work,
+			"-c",
+			"user.name=Test",
+			"-c",
+			"user.email=test@example.com",
+			"commit",
+			"-qm",
+			message,
+		);
+		return git(work, "rev-parse", "HEAD");
+	};
+	const main = await commit("README.md", "main");
+	git(work, "push", "-q", "origin", "HEAD:refs/heads/main");
+	const ahead = await commit("webapp/src/tour.tsx", "the group ahead changes the web app");
+	const group = await commit(
+		".github/workflows/ci-quality-gates.yml",
+		"this group changes only CI",
+	);
+	git(work, "checkout", "-q", "--detach", group);
+	const output = path.join(root, "output");
+	await writeFile(output, "");
+	const run = spawnSync("bash", ["--noprofile", "--norc", "-e", "-c", String(resolve.get("run"))], {
+		cwd: work,
+		encoding: "utf8",
+		env: { ...env, BASE_REF: "refs/heads/main", GITHUB_OUTPUT: output },
+	});
+	assert.equal(run.status, 0, run.stderr);
+	const base = /^sha=(?<sha>[0-9a-f]{40})$/mu.exec(await readFile(output, "utf8"))?.groups?.sha;
+	assert.equal(base, main);
+	// The event's base_sha, the group ahead, would have hidden the web app change.
+	assert.deepEqual(git(work, "diff", "--name-only", ahead, group).split("\n"), [
+		".github/workflows/ci-quality-gates.yml",
+	]);
+	assert.deepEqual(git(work, "diff", "--name-only", main, group).split("\n").toSorted(), [
+		".github/workflows/ci-quality-gates.yml",
+		"webapp/src/tour.tsx",
+	]);
+	// Once the group ahead has merged, main holds it, and this group's own change remains to judge.
+	git(work, "push", "-q", "origin", `${ahead}:refs/heads/main`);
+	const resolved = async (baseRef: string) => {
+		await writeFile(output, "");
+		const result = spawnSync(
+			"bash",
+			["--noprofile", "--norc", "-e", "-c", String(resolve.get("run"))],
+			{
+				cwd: work,
+				encoding: "utf8",
+				env: { ...env, BASE_REF: baseRef, GITHUB_OUTPUT: output },
+			},
+		);
+		return { status: result.status, written: await readFile(output, "utf8") };
+	};
+	const merged = await resolved("refs/heads/main");
+	assert.equal(merged.written.trim(), `sha=${ahead}`);
+	// A base that cannot be resolved fails the run instead of judging a narrower diff.
+	const missing = await resolved("refs/heads/no-such-branch");
+	assert.notEqual(missing.status, 0);
+	assert.equal(missing.written, "");
+
+	// Every other check that measures a group from a base takes the same base.
+	const source = asRecord(workflow.toJS(), "workflow");
+	const jobs = asRecord(source.jobs, "jobs");
+	assert.equal(
+		asRecord(asRecord(jobs["detect-changes"], "detect-changes").outputs, "outputs")[
+			"merge-group-base"
+		],
+		`\${{ steps.group_base.outputs.sha }}`,
+	);
+	for (const caller of ["Security", "Quality"]) {
+		assert.equal(
+			asRecord(asRecord(jobs[caller], caller).with, `${caller} inputs`).merge_group_base,
+			`\${{ needs.detect-changes.outputs.merge-group-base }}`,
+			caller,
+		);
+	}
+	const scan = parseDocument(await readFile(".github/workflows/ci-security-scan.yml", "utf8"));
+	const scanPath = ["jobs", "security-scan"];
+	const ahead2 = namedStep(scan, scanPath, "Changelog immutability guard against the entry ahead");
+	assert.match(String(ahead2.get("if")), /github\.event_name == 'merge_group'/u);
+	assert.equal(ahead2.getIn(["env", "BASE"]), `\${{ github.event.merge_group.base_sha }}`);
+	assert.match(
+		String(namedStep(scan, scanPath, "Evaluate security and repository policy").get("run")),
+		/"\$CHANGELOG_AHEAD"/u,
+	);
+	assert.match(
+		await readFile(".github/workflows/ci-quality-gates.yml", "utf8"),
+		/BUNDLE_BASE: \$\{\{ inputs\.merge_group_base \}\}/u,
 	);
 });
