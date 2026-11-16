@@ -84,8 +84,14 @@ afterEach(async () => {
 }, SETTLE_HOOK_TIMEOUT);
 
 export function testQueryClient(): QueryClient {
+	// A query that brings its own `retry`, as membership does, overrides `retry: false`, and then waits
+	// the default backoff of 1 s and 2 s between attempts in real time. Without a delay, a test still
+	// sees every retry the app makes, without the wait.
 	return new QueryClient({
-		defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+		defaultOptions: {
+			queries: { retry: false, retryDelay: 0 },
+			mutations: { retry: false, retryDelay: 0 },
+		},
 	});
 }
 
