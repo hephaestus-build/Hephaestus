@@ -377,8 +377,14 @@ void test("the release-note rules hold a branch to what CI requires, against ori
 	git("config", "user.name", "Test");
 	git("config", "user.email", "test@example.invalid");
 	await write("MIGRATION.md", "# Migration\n");
+	const changelog =
+		"## 1.0.0-rc.8\n\n- Read [Upgrade](https://docs.hephaestus.build/admin/kubernetes#upgrade).\n";
+	await write("CHANGELOG.md", changelog);
 	await write(".changeset/pending.md", "---\n---\n\nCI only. No shipped application changes.\n");
 	await write(".migration/pending.md", "#### Pending\n");
+	const released =
+		'---\n"hephaestus": minor\n---\n\nSee [Faults](https://docs.hephaestus.build/admin/observability#faults).\n';
+	await write(".changeset/pre/released.md", released);
 	await write("webapp/src/a.ts", "export const a = 1;\n");
 	git("add", ".");
 	git("commit", "--quiet", "-m", "base");
@@ -405,9 +411,38 @@ void test("the release-note rules hold a branch to what CI requires, against ori
 		);
 	}, /changes shipped code but carries no changeset: webapp\/src\/a\.ts\nCreate \.changeset\/feature\.md with this content, commit it, and push again:\n\n---\n"hephaestus": patch\n---/u);
 	await attempt(async () => write("MIGRATION.md", "# Edited\n"), /Do not edit MIGRATION\.md/u);
+	await attempt(
+		async () => write("CHANGELOG.md", changelog.replace("Read", "See")),
+		/Do not edit CHANGELOG\.md in a feature PR, except to rewrite a docs URL/u,
+	);
+	await write("CHANGELOG.md", changelog.replace("admin/kubernetes#upgrade", "admin/upgrade"));
+	git("add", "--all");
+	git("commit", "--quiet", "-m", "changelog link only");
+	assert.equal(problems(), "");
+	git("reset", "--quiet", "--hard", "origin/main");
 	await attempt(() => {
 		git("rm", "--quiet", ".migration/pending.md");
 	}, /Pending migration fragments may be edited, but not deleted or renamed/u);
+	// A consumed changeset is released text, and the stable release's notes repeat it.
+	await attempt(
+		async () => write(".changeset/pre/released.md", released.replace("See", "Read")),
+		/Released changesets may change only their docs URLs: \.changeset\/pre\/released\.md/u,
+	);
+	// A consumed changeset is not this pull request's release note.
+	await attempt(async () => {
+		await write("webapp/src/a.ts", "export const a = 2;\n");
+		await write(".changeset/pre/added.md", '---\n"hephaestus": patch\n---\n\nThe value is two.\n');
+	}, /changes shipped code but carries no changeset/u);
+
+	// Its links follow the page that owns the content today.
+	await write(
+		".changeset/pre/released.md",
+		released.replace("admin/observability#faults", "admin/metrics#faults"),
+	);
+	git("add", "--all");
+	git("commit", "--quiet", "-m", "link only");
+	assert.equal(problems(), "");
+	git("reset", "--quiet", "--hard", "origin/main");
 
 	// Test support code is in no image, like the tests that import it.
 	await write("webapp/src/test/harness.tsx", "export const harness = 1;\n");

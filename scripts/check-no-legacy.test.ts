@@ -214,6 +214,31 @@ await it("refuses a re-added redirect plugin or config in each supported docs fo
 	}
 });
 
+await it("keeps released docs addresses only through the one redirect map", () => {
+	const map = 'export const RELEASED_REDIRECTS = {"/admin/old": "/admin/current"};';
+	assert.deepEqual(findings("docs/src/lib/released-redirects.ts", map), []);
+	assert.deepEqual(findings("docs/astro.config.ts", "redirects: RELEASED_REDIRECTS,"), []);
+	assert.deepEqual(
+		findings(
+			"docs/astro.config.ts",
+			"redirects: Object.fromEntries(\n\t\tObject.entries(RELEASED_REDIRECTS).map(([from, to]) => [from, to]),\n\t),",
+		),
+		[],
+	);
+	assert.ok(
+		findings(
+			"docs/astro.config.ts",
+			'redirects: RELEASED_REDIRECTS,\nconst extra = {redirects: {"/old": "/current"}};',
+		).some((finding) => finding.rule === "docs-redirect"),
+	);
+	assert.ok(
+		findings(
+			"docs/src/lib/other-redirects.ts",
+			'const config = {redirects: {"/old": "/current"}};',
+		).some((finding) => finding.rule === "docs-redirect"),
+	);
+});
+
 await it("only the renamed-slug redirect of the workspace filter is a current flow", () => {
 	const file =
 		"server/application/src/main/java/de/tum/cit/aet/hephaestus/workspace/context/WorkspaceContextFilter.java";

@@ -52,7 +52,8 @@ jobs:
           # pre-push hook runs the same rules through `vp run gate:changesets`.
           node scripts/verify-changesets.ts --release-notes "$BASE_SHA"
 
-          mapfile -t changesets_changed < <(git diff --diff-filter=AM --name-only "$BASE_SHA"...HEAD -- '.changeset/*.md' | grep -v 'README\.md' || true)
+          # Changesets parses only pending changesets. release-note-rules checks the consumed ones under pre/.
+          mapfile -t changesets_changed < <(git diff --diff-filter=AM --name-only "$BASE_SHA"...HEAD -- '.changeset/*.md' ':!.changeset/pre/**' | grep -v 'README\.md' || true)
           mapfile -t migration_changed < <(git diff --diff-filter=AM --name-only "$BASE_SHA"...HEAD -- '.migration/*.md' | grep -v 'README\.md' || true)
 
           if [ "${#changesets_changed[@]}" -gt 0 ]; then

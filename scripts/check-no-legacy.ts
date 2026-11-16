@@ -206,14 +206,32 @@ export function findings(file: string, source: string, files: readonly string[] 
 		matches("path-alias", /\brewrite\s+[^;]+\s+permanent\s*;/gu);
 		matches("path-alias", /^\s*(?:-\s*)?type:\s*URLRewrite\b/gmu);
 	}
-	if (file.startsWith("docs/") && !file.startsWith("docs/decisions/")) {
-		matches("docs-redirect", /^\s*(?:redirect_to|redirect_from|redirects|aliases)\s*:/gmu);
-		matches("docs-redirect", /["'](?:redirect_to|redirect_from|redirects|aliases)["']\s*:/gu);
+	// The one redirect map keeps the addresses of released pages working (docs/src/lib/released-redirects.ts).
+	// The site configuration may hand that map to Astro, and nothing else.
+	const usesReleasedRedirects = (index: number) =>
+		file === "docs/astro.config.ts" &&
+		/^\s*["']?redirects["']?\s*:\s*(?:Object\.fromEntries\(\s*Object\.entries\(\s*)?RELEASED_REDIRECTS\b/u.test(
+			source.slice(index),
+		);
+	const docsMatches = (pattern: RegExp) => {
+		for (const match of source.matchAll(pattern)) {
+			if (!usesReleasedRedirects(match.index)) {
+				add("docs-redirect", match.index);
+			}
+		}
+	};
+	if (
+		file.startsWith("docs/") &&
+		!file.startsWith("docs/decisions/") &&
+		file !== "docs/src/lib/released-redirects.ts"
+	) {
+		docsMatches(/^\s*(?:redirect_to|redirect_from|redirects|aliases)\s*:/gmu);
+		docsMatches(/["'](?:redirect_to|redirect_from|redirects|aliases)["']\s*:/gu);
 		matches(
 			"docs-redirect",
 			/<\s*(?:Redirect|Navigate)\b|http-equiv\s*=\s*["']?refresh\b|(?:window\.)?location\.(?:(?:replace|assign)\s*\(|href\s*=)/giu,
 		);
-		matches("docs-redirect", /\b(?:redirects|createRedirects)\s*(?::|\()/gu);
+		docsMatches(/\b(?:redirects|createRedirects)\s*(?::|\()/gu);
 		matches("docs-redirect", /@docusaurus\/plugin-client-redirects/gu);
 		matches(
 			"docs-redirect",

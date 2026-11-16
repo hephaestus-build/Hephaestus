@@ -23,7 +23,7 @@ If you are unsure, add one.
 `vp exec changeset` is interactive.
 If no TTY is available, as with agents or CI, write `.changeset/<slug>.md` by hand in the format below.
 This is the only permitted file to write by hand.
-Never change `CHANGELOG.md` directly.
+Versioning writes `CHANGELOG.md`, which is released text (**Released text**, below).
 
 **Bump = the operator's upgrade cost:**
 
@@ -49,8 +49,12 @@ The API compatibility gate then lets the break land.
 If the operator must act, state the action (`**Operators:** …`).
 Add `.migration/<changeset-slug>.md` exactly as a `major` would.
 The fragment contains the complete `#### 🔴 …` migration-guide entry, with the fields that `.migration/README.md` names.
-Never edit `MIGRATION.md`.
 The version process assembles and consumes fragments in filename order.
+
+**Released text:** `CHANGELOG.md`, `MIGRATION.md`, and the released changesets in `.changeset/pre/`.
+Never edit them in a feature PR.
+The one exception is a docs URL: point it at the page and heading that own its content today.
+Change nothing else on the line.
 
 A PR that removes or renames a chart value must name the old value in backticks, such as `` `config.gitlab.workspaceCreation` ``, in its changeset or fragment.
 CI compares the chart's schema with the base, because the chart refuses a value that its schema lacks.

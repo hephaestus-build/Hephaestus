@@ -35,9 +35,26 @@ function changesetName(cwd: string): string {
 	return name === "" ? "my-change" : name;
 }
 
+const DOCS_URL = /https:\/\/docs\.hephaestus\.build\/[^\s)\]>"'`]*/gu;
+
+const maskedLines = (text: string) =>
+	text.split("\n").map((line) => line.replaceAll(DOCS_URL, "<docs-url>"));
+
+/**
+ * Whether a change to released text only rewrites docs.hephaestus.build URLs: the same number of lines, and each line
+ * identical once its docs URLs are masked. Released text is CHANGELOG.md, MIGRATION.md and the consumed changesets
+ * under `.changeset/pre/` (`.changeset/README.md`). It never changes, but readers follow its links: the docs site's
+ * upgrade page renders MIGRATION.md, and the stable release's notes repeat the consumed changesets.
+ */
+export function changeIsLinkOnly(before: string, after: string): boolean {
+	const old = maskedLines(before);
+	const next = maskedLines(after);
+	return old.length === next.length && old.every((line, index) => line === next[index]);
+}
+
 /**
  * Why a pull request's release notes break the rules that hold for every pull request, compared from
- * its merge base with `base`: no edit to MIGRATION.md, no deleted pending fragment or changeset, and
+ * its merge base with `base`: no edit to released text but its docs URLs, no deleted pending fragment or changeset, and
  * a changeset for each change to shipped code. CI and the pre-push hook run the same rules; CI exempts
  * drafts, bots and verified reverts.
  */
@@ -55,7 +72,32 @@ export function releaseNoteProblems(base: string, cwd = process.cwd()): string[]
 			.split("\n")
 			.filter((file) => file !== "" && !file.endsWith("README.md"));
 	const problems: string[] = [];
-	if (changed("ACDMRT", "MIGRATION.md").length > 0) {
+	const show = (ref: string, file: string) => {
+		try {
+			return execFileSync("git", ["show", `${ref}:${file}`], {
+				cwd,
+				encoding: "utf8",
+				maxBuffer: 16 * 1024 * 1024,
+			});
+		} catch {
+			// The file is absent at this ref.
+			return "";
+		}
+	};
+	const mergeBase = execFileSync("git", ["merge-base", base, "HEAD"], {
+		cwd,
+		encoding: "utf8",
+	}).trim();
+	const linkOnly = (file: string) => {
+		const [before, after] = [show(mergeBase, file), show("HEAD", file)];
+		return before !== "" && after !== "" && changeIsLinkOnly(before, after);
+	};
+	if (changed("ACDMRT", "CHANGELOG.md").length > 0 && !linkOnly("CHANGELOG.md")) {
+		problems.push(
+			`Do not edit CHANGELOG.md in a feature PR, except to rewrite a docs URL: versioning writes it from the changesets. Restore it with \`git checkout ${base} -- CHANGELOG.md\`, and put the release note in a changeset.`,
+		);
+	}
+	if (changed("ACDMRT", "MIGRATION.md").length > 0 && !linkOnly("MIGRATION.md")) {
 		problems.push(
 			`Do not edit MIGRATION.md in a feature PR. Restore it with \`git checkout ${base} -- MIGRATION.md\`, and put the upgrade step in .migration/<changeset-slug>.md (.changeset/README.md has the format).`,
 		);
@@ -66,6 +108,12 @@ export function releaseNoteProblems(base: string, cwd = process.cwd()): string[]
 			`Pending migration fragments may be edited, but not deleted or renamed: ${fragmentsRemoved.join(", ")}. Restore them with \`git checkout ${base} -- ${fragmentsRemoved.join(" ")}\`.`,
 		);
 	}
+	const releasedChanged = changed("AM", ".changeset/pre/*.md").filter((file) => !linkOnly(file));
+	if (releasedChanged.length > 0) {
+		problems.push(
+			`Released changesets may change only their docs URLs: ${releasedChanged.join(", ")}. Restore them with \`git checkout ${base} -- ${releasedChanged.join(" ")}\`, and put the new release note in a new changeset.`,
+		);
+	}
 	const changesetsRemoved = changed("DR", ".changeset/*.md");
 	if (changesetsRemoved.length > 0) {
 		problems.push(
@@ -73,7 +121,7 @@ export function releaseNoteProblems(base: string, cwd = process.cwd()): string[]
 		);
 	}
 	const shipped = changed("ACDMRT", ...SHIPPED_PATHS);
-	if (shipped.length > 0 && changed("A", ".changeset/*.md").length === 0) {
+	if (shipped.length > 0 && changed("A", ".changeset/*.md", ":!.changeset/pre/**").length === 0) {
 		problems.push(
 			[
 				`This PR changes shipped code but carries no changeset: ${shipped.slice(0, 5).join(", ")}${shipped.length > 5 ? ", …" : ""}`,
