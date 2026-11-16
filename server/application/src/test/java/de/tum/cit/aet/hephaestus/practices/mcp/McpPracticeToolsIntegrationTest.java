@@ -13,13 +13,16 @@ import de.tum.cit.aet.hephaestus.workspace.MembershipRepository;
 import de.tum.cit.aet.hephaestus.workspace.RepositorySelection;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import io.micrometer.core.instrument.MeterRegistry;
 import io.modelcontextprotocol.server.McpStatelessSyncServer;
 import io.modelcontextprotocol.spec.McpSchema;
+import java.time.Duration;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import org.awaitility.Awaitility;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -55,6 +58,9 @@ class McpPracticeToolsIntegrationTest extends RealAuthIntegrationTest {
 
     @Autowired
     private McpStatelessSyncServer server;
+
+    @Autowired
+    private MeterRegistry meterRegistry;
 
     @Value("${hephaestus.auth.cookie-name:__Host-HEPHAESTUS_AT}")
     private String cookieName;
@@ -104,6 +110,24 @@ class McpPracticeToolsIntegrationTest extends RealAuthIntegrationTest {
                 .isEqualTo(false)
                 .jsonPath("$.result.structuredContent.practices[?(@.slug == 'mcp-listed')].versionNumber")
                 .isEqualTo(1);
+    }
+
+    /** A raw path would add one tag value per workspace until the URI-tag budget is spent. */
+    @Test
+    void shouldTagTheRequestMetricWithTheEndpointTemplateNotTheWorkspace() {
+        flow.callTool(accessToken, workspace.getWorkspaceSlug(), LIST_PRACTICES)
+                .expectStatus()
+                .isOk()
+                .expectBody(Void.class);
+
+        Awaitility.await()
+                .atMost(Duration.ofSeconds(5))
+                .untilAsserted(() -> assertThat(
+                                meterRegistry.find("http.server.requests").timers())
+                        .anySatisfy(timer -> assertThat(timer.getId().getTag("uri"))
+                                .isEqualTo("/api/workspaces/{workspaceSlug}/mcp")));
+        assertThat(meterRegistry.find("http.server.requests").timers())
+                .noneSatisfy(timer -> assertThat(timer.getId().getTag("uri")).contains(workspace.getWorkspaceSlug()));
     }
 
     @Test

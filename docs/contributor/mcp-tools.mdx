@@ -4,7 +4,7 @@ description: Add a tool to the workspace MCP endpoint that maps onto one HTTP ha
 page_type: how-to
 ---
 
-The workspace MCP endpoint lets an MCP client, such as Claude Code, read a workspace's practice configuration for an admin.
+The workspace MCP endpoint lets an MCP client, such as Claude Code, read and change a workspace's practice configuration for an admin.
 [ADR 0110](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0110-a-workspace-admins-mcp-client-configures-practices-through-the-workspace-mcp-endpoint.md) owns the design, the tool list and the data contract.
 The [admin guide](/admin/mcp-clients) tells operators how to turn it on.
 
@@ -23,20 +23,30 @@ The tool runs on the request thread, so the workspace context and the authentica
    A handler that requires more than admin, such as the owner role, cannot have a tool.
    `McpToolHandlerParityArchTest` checks both rules.
 4. **Write the input and output JSON Schemas by hand** as text blocks, and build the definition with `McpTools.readTool`.
+   A write tool uses `McpTools.writeTool` with the `Effect` that names what it does, and overrides `writes()` to return `true`.
+   A call of a write tool then needs `practices:write`: `McpWriteScopeFilter` answers 403 `insufficient_scope` before the tool runs.
+   A field that may be null is not in the schema's `required` list. The SDK checks the arguments without their null values.
    Every object in the output schema has `"additionalProperties": false` and requires every property.
    The SDK validates each result against the output schema, so a field outside the schema fails the call.
 5. **Return a projection, never a DTO.** Build records that hold only the fields of the data contract.
    Leave out text that a developer or a provider wrote: titles, bodies, comments, branch names, display names, channel and collection names, and free-text error messages.
    Send a stored reason only when it is code-shaped; `McpProjections.code` turns anything else into `UNKNOWN`.
 6. **Say in the description which fields hold configuration text**, such as `criteria`, and that a client treats them as data.
-7. **Add a row to the data contract** in ADR 0110 for any field of a new class, and the reverse tool for any write.
-8. **Test the tool over real HTTP** in an integration test that connects a client with `McpAuthorizationFlow`, as `McpPracticeToolsIntegrationTest` does.
-   Assert on what the tool returns, and on the rows that a write tool created.
+7. **Read a write tool's arguments into the handler's own request DTO** with `McpTools.input`.
+   It validates the DTO as the handler validates its body, so the tool accepts what the handler accepts.
+   Give it a mapper from `McpTools.withNulls`: the application's mapper leaves null values out.
+8. **Put the handler's audit annotation on `call`**, the same `@Audited` or `@AuditExempt`.
+   The service writes the config audit row, and `ConfigAuditActor` adds the client's grant to it.
+9. **Add a row to the data contract** in ADR 0110 for any field of a new class, and the reverse tool for any write.
+10. **Test the tool over real HTTP** in an integration test that connects a client with `McpAuthorizationFlow`, as `McpPracticeToolsIntegrationTest` and `McpWriteToolsIntegrationTest` do.
+    Assert on what the tool returns, on the rows that a write tool created, and on what its reverse tool restores.
 
 ## What a refusal looks like
 
 A tool does what its name says, or it refuses and says why.
 A refused role check or a `ResponseStatusException` from the service becomes a tool result with `isError: true` and the reason as its text.
+Any other exception goes to the `@RestControllerAdvice` handler that the HTTP request would reach. If that handler answers a client error, its detail is the reason.
+A server error gives the client only "The tool failed. Try again later." and counts as `failed` in `mcp_tool_calls_total`.
 Never map a request to a different effect.
 
 ## Check that it worked
@@ -45,9 +55,10 @@ From `server/`, run the tests that guard every tool:
 
 ```bash
 ./gradlew :application:architectureTest --tests '*McpToolHandlerParityArchTest'
-./gradlew :application:integrationTest --tests '*McpPracticeToolsIntegrationTest'
+./gradlew :application:integrationTest --tests '*McpPracticeToolsIntegrationTest' --tests '*McpWriteToolsIntegrationTest'
 ```
 
 The architecture test fails when the tool lacks the admin role or stands for a handler that needs more.
+It also fails when a tool for a mutation does not declare that it writes, or does not carry its handler's audit annotation.
 The integration test fails when an output schema leaves an object open or a property optional.
 Your own integration test shows that a client finds the tool when it lists the tools, and that a call returns only contract fields.
