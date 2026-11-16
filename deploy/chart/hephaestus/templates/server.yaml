@@ -110,8 +110,9 @@ spec:
             # docs/admin/production-operations-runbook.mdx, HephaestusServerRestarting.
             {{- $recording := "-XX:FlightRecorderOptions=repository=/tmp/jfr -XX:StartFlightRecording=settings=default,disk=true,maxage=6h,maxsize=256m,dumponexit=true,filename=/tmp/jfr/exit-%t.jfr" }}
             {{- if $sandbox.enabled }}
-            # The scheduler adds a carrier for each virtual thread that blocks in file I/O, and this caps them.
-            # This is a ceiling, not the usual count: docs/admin/sizing.mdx § Memory headroom.
+            # A ceiling on the carriers that the scheduler adds for pinned file I/O, not the usual count:
+            # docs/admin/sizing.mdx § Memory headroom. A gateway socket wait no longer pins (JEP 491), and
+            # ADR 0109 rule 9 removes the setting in a separate change.
             - name: JAVA_TOOL_OPTIONS
               value: -XX:MaxDirectMemorySize=128M -Djdk.virtualThreadScheduler.maxPoolSize={{ add (int $sandbox.gateway.maxConnections) 256 }} {{ $recording }}
             {{- else }}
