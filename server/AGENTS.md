@@ -220,7 +220,8 @@ That endpoint verifies a route credential and calls `WebhookIngestPipeline#publi
   recovers its effect.
 - **Subject grammar**: `github.<owner>.<repo>.<event>`, where dots inside a path segment become `~`.
   `ConsumerSubjectMath#buildSubjectPrefix` matches it.
-  GitLab has no shared endpoint. Each connection's group hook posts to its own route, and
+  GitLab has no shared endpoint. Each connection's group hook posts to its own route.
+  Where the tier has no group hooks, its project hooks post there instead.
   `GitLabSubjectKeyDeriver.deriveConnectionSubject` publishes `gitlab.?connection.<connectionId>.<event>`
   after the route credential is verified. `ConsumerSubjectMath#connectionFilter` matches it.
   Outline publishes `outline.<subscriptionId>.<event>`. Each subject parser accepts exactly its grammar's

@@ -21,7 +21,7 @@ import org.springframework.web.reactive.function.client.WebClientResponseExcepti
 import reactor.core.publisher.Mono;
 
 /**
- * Scope-based client for GitLab webhook CRUD operations.
+ * Scope-based client for GitLab group and project hook CRUD operations.
  *
  * <p>Uses <b>GraphQL</b> for group lookup (reuses existing infrastructure:
  * {@link GitLabGraphQlClientProvider}, {@link GitLabGroupResponse},
@@ -32,6 +32,7 @@ import reactor.core.publisher.Mono;
  * for each workspace via {@link GitLabTokenService}.
  *
  * @see <a href="https://docs.gitlab.com/ee/api/group_level_webhooks.html">GitLab Group Webhooks API</a>
+ * @see <a href="https://docs.gitlab.com/api/project_webhooks/">GitLab Project Webhooks API</a>
  */
 @Service
 @EgressExempt(EgressExemption.WEBHOOK_REGISTRATION)
@@ -109,11 +110,20 @@ public class GitLabWebhookClient {
      * @throws WebClientResponseException on API errors (e.g., 403 Forbidden)
      */
     public WebhookInfo registerGroupWebhook(Long scopeId, long groupId, WebhookConfig config) {
+        return register(scopeId, HookParent.GROUP, groupId, config);
+    }
+
+    /** Registers a project hook, which every GitLab tier offers. The payload's group-only events are ignored. */
+    public WebhookInfo registerProjectWebhook(Long scopeId, long projectId, WebhookConfig config) {
+        return register(scopeId, HookParent.PROJECT, projectId, config);
+    }
+
+    private WebhookInfo register(Long scopeId, HookParent parent, long parentId, WebhookConfig config) {
         ScopeCredentials credentials = resolveCredentials(scopeId);
 
         Map<String, Object> response = webClient
                 .post()
-                .uri(credentials.serverUrl() + "/api/v4/groups/{groupId}/hooks", groupId)
+                .uri(credentials.serverUrl() + parent.hooks(), parentId)
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + credentials.token())
                 .attribute(GitLabGraphQlClientProvider.SCOPE_ID_ATTRIBUTE, scopeId)
                 .bodyValue(config.toPayload())
@@ -122,59 +132,134 @@ public class GitLabWebhookClient {
                 .block(REQUEST_TIMEOUT);
 
         if (response == null) {
-            throw new IllegalStateException(
-                    "Null response from GitLab when registering webhook: scopeId=" + scopeId + ", groupId=" + groupId);
+            throw new IllegalStateException("Null response from GitLab when registering webhook: scopeId=" + scopeId
+                    + ", " + parent + "=" + parentId);
         }
 
         Map<String, Object> responseBody = Objects.requireNonNull(response);
         Number idValue = (Number) responseBody.get("id");
         if (idValue == null) {
             throw new IllegalStateException(
-                    "GitLab webhook response missing 'id' field: scopeId=" + scopeId + ", groupId=" + groupId);
+                    "GitLab webhook response missing 'id' field: scopeId=" + scopeId + ", " + parent + "=" + parentId);
         }
         long webhookId = idValue.longValue();
         String url = (String) responseBody.get("url");
-        log.info("Registered GitLab group webhook: scopeId={}, groupId={}, webhookId={}", scopeId, groupId, webhookId);
+        log.info(
+                "Registered GitLab webhook: scopeId={}, parent={}, parentId={}, webhookId={}",
+                scopeId,
+                parent,
+                parentId,
+                webhookId);
         return new WebhookInfo(webhookId, Objects.requireNonNull(url), (String) responseBody.get("alert_status"));
     }
 
     public boolean deregisterGroupWebhookWithCredentials(String serverUrl, String token, long groupId, long webhookId) {
+        return deregister(serverUrl, token, HookParent.GROUP, groupId, webhookId);
+    }
+
+    public boolean deregisterProjectWebhookWithCredentials(
+            String serverUrl, String token, long projectId, long webhookId) {
+        return deregister(serverUrl, token, HookParent.PROJECT, projectId, webhookId);
+    }
+
+    private boolean deregister(String serverUrl, String token, HookParent parent, long parentId, long webhookId) {
         var response = webClient
                 .delete()
-                .uri(serverUrl + "/api/v4/groups/{groupId}/hooks/{hookId}", groupId, webhookId)
+                .uri(serverUrl + parent.hooks() + "/{hookId}", parentId, webhookId)
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
                 .retrieve()
                 .toBodilessEntity()
                 .block(REQUEST_TIMEOUT);
-        // The group-hook API documents 204 as completed deletion; a 202 is only acceptance. Hidden 404 propagates.
+        // The hook APIs document 204 as completed deletion; a 202 is only acceptance. Hidden 404 propagates.
         return Objects.requireNonNull(response).getStatusCode().value() == 204;
     }
 
     /** Complete, authorized group-hook listing with the captured credential, independent of resumed configuration. */
     public List<WebhookInfo> listGroupWebhooksWithCredentials(String serverUrl, String token, long groupId) {
-        return Objects.requireNonNull(
-                groupHooks(new ScopeCredentials(serverUrl, token), groupId).block(REQUEST_TIMEOUT));
+        return Objects.requireNonNull(hooks(new ScopeCredentials(serverUrl, token), null, HookParent.GROUP, groupId)
+                .block(REQUEST_TIMEOUT));
+    }
+
+    /** Complete, authorized project-hook listing with the captured credential. */
+    public List<WebhookInfo> listProjectWebhooksWithCredentials(String serverUrl, String token, long projectId) {
+        return Objects.requireNonNull(hooks(new ScopeCredentials(serverUrl, token), null, HookParent.PROJECT, projectId)
+                .block(REQUEST_TIMEOUT));
+    }
+
+    /**
+     * Whether the credential reads project {@code projectId} ({@code false} on 404). A project that GitLab answers 404
+     * for, while the same credential reads the group, was deleted or moved out of the group.
+     */
+    public boolean projectReadableWithCredentials(String serverUrl, String token, long projectId) {
+        return readable(serverUrl + "/api/v4/projects/{id}", token, projectId);
+    }
+
+    /** Whether the credential reads group {@code groupId} ({@code false} on 404). */
+    public boolean groupReadableWithCredentials(String serverUrl, String token, long groupId) {
+        return readable(serverUrl + "/api/v4/groups/{id}?with_projects=false", token, groupId);
+    }
+
+    private boolean readable(String uri, String token, long id) {
+        try {
+            webClient
+                    .get()
+                    .uri(uri, id)
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                    .retrieve()
+                    .toBodilessEntity()
+                    .block(REQUEST_TIMEOUT);
+            return true;
+        } catch (WebClientResponseException e) {
+            if (e.getStatusCode().value() == 404) return false;
+            throw e;
+        }
+    }
+
+    /** Every hook of the project, across all pages. */
+    public List<WebhookInfo> listProjectWebhooks(Long scopeId, long projectId) {
+        return Objects.requireNonNull(hooks(resolveCredentials(scopeId), scopeId, HookParent.PROJECT, projectId)
+                .block(REQUEST_TIMEOUT));
+    }
+
+    /** Where GitLab keeps a group's or a project's hooks. */
+    enum HookParent {
+        GROUP("/api/v4/groups/{parentId}/hooks"),
+        PROJECT("/api/v4/projects/{parentId}/hooks");
+
+        private final String hooks;
+
+        HookParent(String hooks) {
+            this.hooks = hooks;
+        }
+
+        String hooks() {
+            return hooks;
+        }
     }
 
     private record HookPage(List<WebhookInfo> hooks, int next) {}
 
-    private Mono<List<WebhookInfo>> groupHooks(ScopeCredentials credentials, long groupId) {
-        return groupHookPage(credentials, groupId, 1)
-                .expand(page -> page.next() == 0 ? Mono.empty() : groupHookPage(credentials, groupId, page.next()))
+    private Mono<List<WebhookInfo>> hooks(
+            ScopeCredentials credentials, @Nullable Long scopeId, HookParent parent, long parentId) {
+        return hookPage(credentials, scopeId, parent, parentId, 1)
+                .expand(page ->
+                        page.next() == 0 ? Mono.empty() : hookPage(credentials, scopeId, parent, parentId, page.next()))
                 .concatMapIterable(HookPage::hooks)
                 .collectList();
     }
 
-    private Mono<HookPage> groupHookPage(ScopeCredentials credentials, long groupId, int page) {
-        return webClient
+    private Mono<HookPage> hookPage(
+            ScopeCredentials credentials, @Nullable Long scopeId, HookParent parent, long parentId, int page) {
+        var request = webClient
                 .get()
-                .uri(credentials.serverUrl() + "/api/v4/groups/{groupId}/hooks?per_page=100&page={page}", groupId, page)
-                .header(HttpHeaders.AUTHORIZATION, "Bearer " + credentials.token())
-                .retrieve()
+                .uri(credentials.serverUrl() + parent.hooks() + "?per_page=100&page={page}", parentId, page)
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + credentials.token());
+        if (scopeId != null) request = request.attribute(GitLabGraphQlClientProvider.SCOPE_ID_ATTRIBUTE, scopeId);
+        return request.retrieve()
                 .toEntity(new ParameterizedTypeReference<List<Map<String, Object>>>() {})
                 .map(response -> {
                     List<Map<String, Object>> body = response.getBody();
-                    if (body == null) throw new IllegalStateException("GitLab did not return its group hooks");
+                    if (body == null) throw new IllegalStateException("GitLab did not return its hooks");
                     List<WebhookInfo> hooks =
                             body.stream().map(GitLabWebhookClient::listedHook).toList();
                     String next = response.getHeaders().getFirst("X-Next-Page");
@@ -189,9 +274,9 @@ public class GitLabWebhookClient {
         Object id = hook.get("id");
         Object url = hook.get("url");
         if (!(id instanceof Number number) || !(url instanceof String address)) {
-            throw new IllegalStateException("GitLab returned an incomplete group hook");
+            throw new IllegalStateException("GitLab returned an incomplete hook");
         }
-        return new WebhookInfo(number.longValue(), address);
+        return new WebhookInfo(number.longValue(), address, hook.get("alert_status") instanceof String s ? s : null);
     }
 
     /**
@@ -203,12 +288,21 @@ public class GitLabWebhookClient {
      * @return the webhook info, or empty if not found (404)
      */
     public Optional<WebhookInfo> getGroupWebhook(Long scopeId, long groupId, long webhookId) {
+        return get(scopeId, HookParent.GROUP, groupId, webhookId);
+    }
+
+    /** The project hook with this id, or empty when GitLab answers 404. */
+    public Optional<WebhookInfo> getProjectWebhook(Long scopeId, long projectId, long webhookId) {
+        return get(scopeId, HookParent.PROJECT, projectId, webhookId);
+    }
+
+    private Optional<WebhookInfo> get(Long scopeId, HookParent parent, long parentId, long webhookId) {
         ScopeCredentials credentials = resolveCredentials(scopeId);
 
         try {
             Map<String, Object> response = webClient
                     .get()
-                    .uri(credentials.serverUrl() + "/api/v4/groups/{groupId}/hooks/{hookId}", groupId, webhookId)
+                    .uri(credentials.serverUrl() + parent.hooks() + "/{hookId}", parentId, webhookId)
                     .header(HttpHeaders.AUTHORIZATION, "Bearer " + credentials.token())
                     .attribute(GitLabGraphQlClientProvider.SCOPE_ID_ATTRIBUTE, scopeId)
                     .retrieve()
@@ -283,7 +377,7 @@ public class GitLabWebhookClient {
     public record GroupInfo(long id, String name, String fullPath) {}
 
     /**
-     * A GitLab group hook as read back from the API.
+     * A GitLab group or project hook as read back from the API.
      *
      * @param id          the numeric hook id
      * @param url         the delivery URL

@@ -90,6 +90,8 @@ public class WorkspaceAlertEmailListener implements EmailNotice<WorkspaceAlertEm
                         "The provider revoked this integration’s credentials. Reconnect it in workspace settings.";
                     case PROVIDER_SUSPENDED ->
                         "The provider suspended this integration. Restore it at the provider to start the sync again.";
+                    case WEBHOOK_UNAVAILABLE ->
+                        "GitLab accepted no webhook from Hephaestus, so changes show only after each scheduled sync. Give the token the Owner role on the group, or the Maintainer role on its projects.";
                     case PROVIDER_CLEANUP_UNCONFIRMED ->
                         switch (change.kind()) {
                             case GITHUB ->

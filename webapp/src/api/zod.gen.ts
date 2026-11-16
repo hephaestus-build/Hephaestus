@@ -1494,6 +1494,7 @@ export const zIntegrationAttentionChangedEventProblem = z.enum([
 	"CREDENTIAL_REVOKED",
 	"PROVIDER_SUSPENDED",
 	"PROVIDER_CLEANUP_UNCONFIRMED",
+	"WEBHOOK_UNAVAILABLE",
 ]);
 
 export const zIntegrationFamily = z.enum(["SCM", "MESSAGING", "DOCUMENTATION"]);
@@ -2794,6 +2795,7 @@ export const zMcpClientGrant = z.object({
 export const zProviderResourceAdapterResourceType = z.enum([
 	"INSTALLATION",
 	"GROUP_HOOK",
+	"PROJECT_HOOK",
 	"BOT_TOKEN",
 	"BOT_USER",
 	"SUBSCRIPTION",

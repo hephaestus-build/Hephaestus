@@ -155,7 +155,8 @@ public class ProviderResourceRepairDispatcher {
                     ScmOrigin.of(gitlab.serverUrl())
                                     .filter(target.origin()::equals)
                                     .isPresent()
-                            && gitlab.gitlabGroupId().toString().equals(target.parentId());
+                            && (gitlab.gitlabGroupId().toString().equals(target.parentId())
+                                    || target.parentId().startsWith(gitlab.gitlabGroupId() + "/"));
                 case ConnectionConfig.OutlineConfig outline ->
                     ScmOrigin.of(outline.serverUrl())
                             .filter(target.origin()::equals)

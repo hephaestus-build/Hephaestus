@@ -282,12 +282,25 @@ public class GitLabWorkspaceInitializationService {
     }
 
     /**
-     * Runs {@link #initialize} again when the workspace's group webhook should exist but was never
-     * registered, because an earlier initialization found discovery incomplete or the consumer not ready.
+     * Runs {@link #initialize} again when the workspace's webhook should exist but was never registered, because an
+     * earlier initialization found discovery incomplete or the consumer not ready. A workspace on project hooks
+     * instead registers the hooks of projects monitored since, and releases those of projects no longer monitored.
      *
      * @return whether the webhook is still missing afterwards
      */
     public boolean initializeIfWebhookMissing(long workspaceId) {
+        var webhookService = gitLabWebhookServiceProvider.getIfAvailable();
+        boolean projectHooks = connectionService
+                .findActiveGitLabConfig(workspaceId)
+                .filter(config -> !config.projectHooks().isEmpty())
+                .isPresent();
+        if (projectHooks && webhookService != null && webhookService.isRegistrationEnabled()) {
+            // Project hooks follow the monitors: a new project gets its hook, an unmonitored one loses it.
+            return workspaceLookup
+                    .find(workspaceId)
+                    .map(workspace -> !webhookService.registerWebhook(workspace).registered())
+                    .orElse(false);
+        }
         if (!isWebhookMissing(workspaceId)) {
             return false;
         }
@@ -302,7 +315,10 @@ public class GitLabWorkspaceInitializationService {
                 && webhookService.isRegistrationEnabled()
                 && connectionService
                         .findActiveGitLabConfig(workspaceId)
-                        .map(config -> config.gitlabWebhookId() == null)
+                        // GitLab refused every hook: the health check asks again, not each sync's initialization.
+                        .map(config -> config.gitlabWebhookId() == null
+                                && config.projectHooks().isEmpty()
+                                && config.webhooksRefusedAt() == null)
                         .orElse(false);
     }
 

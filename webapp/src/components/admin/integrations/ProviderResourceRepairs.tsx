@@ -22,6 +22,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 const RESOURCE_LABELS: Record<ProviderResourceRepair["resourceType"], string> = {
 	INSTALLATION: "App installation",
 	GROUP_HOOK: "Group webhook",
+	PROJECT_HOOK: "Project webhook",
 	BOT_TOKEN: "Bot token",
 	BOT_USER: "Bot user",
 	SUBSCRIPTION: "Webhook subscription",

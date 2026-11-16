@@ -16226,6 +16226,7 @@ components:
       - CREDENTIAL_REVOKED
       - PROVIDER_SUSPENDED
       - PROVIDER_CLEANUP_UNCONFIRMED
+      - WEBHOOK_UNAVAILABLE
     IntegrationCatalogEntry:
       type: object
       description: Integration kind availability + connection status for this workspace
@@ -20186,6 +20187,7 @@ components:
       enum:
       - INSTALLATION
       - GROUP_HOOK
+      - PROJECT_HOOK
       - BOT_TOKEN
       - BOT_USER
       - SUBSCRIPTION

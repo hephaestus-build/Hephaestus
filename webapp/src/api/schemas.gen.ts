@@ -5249,6 +5249,7 @@ export const IntegrationAttentionChangedEventProblemSchema = {
 		"CREDENTIAL_REVOKED",
 		"PROVIDER_SUSPENDED",
 		"PROVIDER_CLEANUP_UNCONFIRMED",
+		"WEBHOOK_UNAVAILABLE",
 	],
 } as const;
 
@@ -10132,6 +10133,7 @@ export const ProviderResourceAdapterResourceTypeSchema = {
 	enum: [
 		"INSTALLATION",
 		"GROUP_HOOK",
+		"PROJECT_HOOK",
 		"BOT_TOKEN",
 		"BOT_USER",
 		"SUBSCRIPTION",

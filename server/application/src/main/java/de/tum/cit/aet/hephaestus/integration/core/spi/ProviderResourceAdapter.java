@@ -38,6 +38,8 @@ public interface ProviderResourceAdapter {
     enum ResourceType {
         INSTALLATION,
         GROUP_HOOK,
+        /** A GitLab project hook. Its parent is {@code <groupId>/<projectId>}, so the group's credential removes it. */
+        PROJECT_HOOK,
         BOT_TOKEN,
         BOT_USER,
         SUBSCRIPTION,
