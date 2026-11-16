@@ -3,6 +3,7 @@ import { screen, waitFor } from "@testing-library/react";
 import { HttpResponse, http } from "msw";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { workspaceOnboarding } from "@/mocks/fixtures/onboarding";
 import { ownMembership, workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
 
@@ -32,7 +33,7 @@ async function leaveANavigationLoading(after: number) {
 		),
 		http.get("*/workspaces/beta/onboarding/me", async () => {
 			await onboarding.promise;
-			return HttpResponse.json({ needsSetup: false });
+			return HttpResponse.json(workspaceOnboarding());
 		}),
 	);
 	const { router } = renderRouteAtWithRouter("/w/acme/activity");

@@ -13,12 +13,15 @@ import type {
 	ResultDetail,
 	ReviewedPractice,
 	WorkspaceMembership,
+	WorkspaceOnboarding,
 } from "@/api/types.gen";
 import { stackInSearch } from "@/components/layout/detail-drawer/detail-stack";
+import { forgetSectionFold } from "@/components/layout/section-folds";
 import { reviewRangeStart } from "@/components/practice-profile/practice-profile-search";
 import { tourRecordKey } from "@/components/tour/tour-start";
 import { formatDayTime } from "@/lib/dates";
 import { currentUser } from "@/mocks/fixtures/auth";
+import { workspaceOnboarding } from "@/mocks/fixtures/onboarding";
 import { workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
 import { clearUserView } from "@/runtime/user-view/session";
@@ -2003,6 +2006,224 @@ const dayOneOverview = (reviewReadiness: PracticeProfileOverview["reviewReadines
 	http.get("*/workspaces/:workspaceSlug/practice-profile/overview", () =>
 		HttpResponse.json({ ...OVERVIEW_FIXTURE, latestReview: null, reviewReadiness }),
 	);
+
+/** The member onboarding read, with the reader's AI choice and accounts as the server reports them. */
+const onboardingAnswers = (overrides: Partial<WorkspaceOnboarding>) =>
+	http.get("*/workspaces/:workspaceSlug/onboarding/me", () =>
+		HttpResponse.json({ ...workspaceOnboarding(), ...overrides }),
+	);
+
+const GITLAB_LINK = {
+	available: true,
+	connectionId: 3,
+	displayName: "GitLab",
+	linked: false,
+	providerType: "GITLAB",
+	required: true,
+};
+
+const getStarted = async () =>
+	screen.findByRole("region", { name: "Get started" }, ROUTE_RENDER_WAIT);
+
+describe("Get started", () => {
+	// The reader's choice to hide the list lasts in this browser, so no case inherits another's.
+	afterEach(() => forgetSectionFold(`get-started:${String(currentUser.id)}:acme`));
+
+	it("lists a new member's real setup, and a review that waits for a step above offers no second way", async () => {
+		server.use(
+			dayOneOverview({ ...READY_REVIEW_READINESS, blocker: "CHOICE_REQUIRED" }),
+			onboardingAnswers({ enabled: true, aiChoiceRequired: true, links: [GITLAB_LINK] }),
+		);
+		await renderProfile();
+		const list = await getStarted();
+		within(list).getByText("0 of 3 done");
+		const choose = within(list).getByRole("link", { name: "Choose your AI" });
+		const href = new URL(String(choose.getAttribute("href")), "https://app.invalid");
+		expect(href.pathname).toBe("/w/acme/onboarding");
+		expect(href.searchParams.get("returnTo")).toBe("/w/acme/practice-profile");
+		within(list).getByRole("link", { name: "Connect GitLab" });
+		// The review cannot start before the choice, and the choice has one way on, above it.
+		within(list).getByText("Cannot start yet");
+		expect(within(list).getAllByRole("link", { name: /Choose your AI/u })).toHaveLength(1);
+		// The list says the first-run state, so the empty feedback list does not say it again.
+		expect(screen.getAllByText("Choose your AI to get reviews")).toHaveLength(1);
+	});
+
+	it.each([
+		{ blocker: "NO_AI", reason: "Hephaestus does not review your work here" },
+		{ blocker: "REVIEWS_OFF", reason: "Practice reviews are off here" },
+	] as const)(
+		"keeps saying why no review runs ($blocker) while an open account step keeps the list",
+		async ({ blocker, reason }) => {
+			server.use(
+				dayOneOverview({ ...READY_REVIEW_READINESS, blocker }),
+				onboardingAnswers({ enabled: true, links: [GITLAB_LINK] }),
+			);
+			await renderProfile();
+			const list = await getStarted();
+			within(list).getByRole("link", { name: "Connect GitLab" });
+			// A decision is no step, so the list has no first-review step and the page says the reason.
+			expect(within(list).queryByText("Your first practice review")).toBeNull();
+			await screen.findByText(reason, undefined, ROUTE_RENDER_WAIT);
+		},
+	);
+
+	it("starts afresh in another workspace, so no step there is announced as just done", async () => {
+		const overviews = new Map([
+			[
+				"acme",
+				{ ...OVERVIEW_FIXTURE, latestReview: null, reviewReadiness: READY_REVIEW_READINESS },
+			],
+			["beta", { ...OVERVIEW_FIXTURE, reviewReadiness: READY_REVIEW_READINESS }],
+		]);
+		server.use(
+			http.get("*/workspaces", () =>
+				HttpResponse.json([
+					workspaceListItem("acme", { practicesEnabled: true }),
+					workspaceListItem("beta", { practicesEnabled: true }),
+				]),
+			),
+			http.get("*/workspaces/:workspaceSlug/practice-profile/overview", ({ params }) =>
+				HttpResponse.json(overviews.get(String(params.workspaceSlug))),
+			),
+			onboardingAnswers({ enabled: true, links: [GITLAB_LINK] }),
+		);
+		const router = await renderProfile();
+		within(await getStarted()).getByText("0 of 2 done");
+
+		await router.navigate({
+			to: "/w/$workspaceSlug/practice-profile",
+			params: { workspaceSlug: "beta" },
+		});
+		// Beta's first review is done, and acme's was not: that is no news about this workspace.
+		await waitFor(
+			() => within(screen.getByRole("region", { name: "Get started" })).getByText("1 of 2 done"),
+			ROUTE_RENDER_WAIT,
+		);
+		expect(screen.queryByText(/^Done: /u)).toBeNull();
+	});
+
+	it("marks a step done only from the server's facts, and goes once every step is done", async () => {
+		server.use(
+			onboardingAnswers({
+				enabled: true,
+				aiChoiceRequired: true,
+				aiChoice: "IN_HOUSE_ONLY",
+				links: [{ ...GITLAB_LINK, linked: true }],
+			}),
+		);
+		await renderProfile();
+		await openReviewsChip();
+		expect(screen.queryByRole("region", { name: "Get started" })).toBeNull();
+		expect(screen.queryByRole("link", { name: "Get started" })).toBeNull();
+
+		cleanup();
+		server.use(dayOneOverview(READY_REVIEW_READINESS));
+		await renderProfile();
+		const list = await getStarted();
+		within(list).getByText("2 of 3 done");
+		within(list).getByText("You chose In-house.");
+		// The sidebar points at the list while it has a step open.
+		const pointer = screen.getByRole("link", { name: "Get started" });
+		expect(pointer.getAttribute("href")).toBe("/w/acme/practice-profile#get-started");
+	});
+
+	it("starts a tour chapter in place, and marks only the chapters this account finished here", async () => {
+		localStorage.setItem(TOUR_PROGRESS, JSON.stringify({ place: null, done: ["your-profile"] }));
+		localStorage.setItem(
+			tourRecordKey("progress", "7"),
+			JSON.stringify({ place: null, done: ["how-it-works"] }),
+		);
+		server.use(dayOneOverview(READY_REVIEW_READINESS));
+		await renderProfile();
+		const list = await getStarted();
+		const read = within(list).getByRole("button", { name: "Learn to read a feedback card" });
+		expect(read.closest("li")?.textContent).toMatch(/Finished/u);
+		const how = within(list).getByRole("button", { name: "See how your work becomes feedback" });
+		expect(how.closest("li")?.textContent).not.toMatch(/Finished/u);
+
+		how.focus();
+		fireEvent.click(how);
+		const dialog = await screen.findByRole("dialog", { name: "Guided tour" }, ROUTE_RENDER_WAIT);
+		await within(dialog).findByRole("heading", { name: "From your work to your profile" });
+		fireEvent.click(within(dialog).getByRole("button", { name: "Close the tour" }));
+		await waitFor(() => expect(document.activeElement).toBe(how));
+	});
+
+	it("marks a chapter finished as soon as the tour finishes it", async () => {
+		localStorage.setItem(
+			TOUR_PROGRESS,
+			JSON.stringify({ place: { chapter: "your-profile", step: "rate" }, done: [] }),
+		);
+		server.use(dayOneOverview(READY_REVIEW_READINESS));
+		await renderProfile();
+		const list = await getStarted();
+		const read = within(list).getByRole("button", { name: "Learn to read a feedback card" });
+		expect(read.closest("li")?.textContent).not.toMatch(/Finished/u);
+
+		// The tour's own list continues where this account stopped, on the chapter's last step.
+		fireEvent.click(screen.getByRole("button", { name: "Take the tour" }));
+		const dialog = await screen.findByRole("dialog", { name: "Guided tour" }, ROUTE_RENDER_WAIT);
+		fireEvent.click(await within(dialog).findByRole("button", { name: /Your profile.*Continue/u }));
+		fireEvent.click(await within(dialog).findByRole("button", { name: /^Next chapter/u }));
+		fireEvent.click(within(dialog).getByRole("button", { name: "Close the tour" }));
+		await waitFor(() => expect(screen.queryByRole("dialog", { name: "Guided tour" })).toBeNull());
+		expect(read.closest("li")?.textContent).toMatch(/Finished/u);
+	});
+
+	it("leaves no list and no pointer for a review that only an admin can unblock", async () => {
+		server.use(dayOneOverview({ ...READY_REVIEW_READINESS, blocker: "REVIEWS_OFF" }));
+		await renderProfile();
+		await screen.findByText("Practice reviews are off here", undefined, ROUTE_RENDER_WAIT);
+		expect(screen.queryByRole("region", { name: "Get started" })).toBeNull();
+		expect(screen.queryByRole("link", { name: "Get started" })).toBeNull();
+	});
+
+	it("keeps the reader's choice to hide it, and gives the reason back to the page while hidden", async () => {
+		server.use(dayOneOverview(READY_REVIEW_READINESS));
+		await renderProfile();
+		const list = await getStarted();
+		const fold = within(list).getByRole("button", { name: "Get started" });
+		expect(fold.getAttribute("aria-expanded")).toBe("true");
+		// The list says the first-run state, so the empty feedback list does not say it again.
+		expect(screen.getAllByText("No review of your work yet")).toHaveLength(1);
+		fireEvent.click(fold);
+		expect(fold.getAttribute("aria-expanded")).toBe("false");
+		// Hidden, the list keeps its words out of sight, and the page says them again.
+		await waitFor(() => expect(screen.getAllByText("No review of your work yet")).toHaveLength(2));
+
+		cleanup();
+		await renderProfile();
+		const again = within(await getStarted()).getByRole("button", { name: "Get started" });
+		expect(again.getAttribute("aria-expanded")).toBe("false");
+		within(await getStarted()).getByText("0 of 1 done");
+	});
+
+	it("offers Ask Hephaestus only where Hephaestus can answer", async () => {
+		server.use(dayOneOverview(READY_REVIEW_READINESS));
+		await renderProfile();
+		const ask = within(await getStarted()).getByRole("link", { name: "Ask Hephaestus a question" });
+		expect(ask.getAttribute("href")).toBe("/w/acme/conversation");
+
+		cleanup();
+		server.use(onboardingAnswers({ conversationRefusal: "UNAVAILABLE" }));
+		await renderProfile();
+		const list = await getStarted();
+		expect(within(list).queryByRole("link", { name: "Ask Hephaestus a question" })).toBeNull();
+	});
+
+	it("never shows in a user view, which reads someone else's page", async () => {
+		storeUserView({ workspaceSlug: "acme" });
+		try {
+			server.use(dayOneOverview(READY_REVIEW_READINESS));
+			await renderProfile();
+			await screen.findByText("No review of your work yet", undefined, ROUTE_RENDER_WAIT);
+			expect(screen.queryByRole("region", { name: "Get started" })).toBeNull();
+		} finally {
+			clearUserView();
+		}
+	});
+});
 
 describe("a profile without feedback", () => {
 	it("says what starts a first review, from the server's events", async () => {

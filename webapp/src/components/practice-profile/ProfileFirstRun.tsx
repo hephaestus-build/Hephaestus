@@ -184,22 +184,40 @@ export function firstRunWords({
 }
 
 /**
+ * What the first-run state says, apart from where it shows: on the Practice profile's empty feedback
+ * list, in the tour's last word, and in the review row of Get started. `stage` says whether a review
+ * is under way, cannot start, or waits for the reader's work; `blocker` names the reason a review
+ * cannot start.
+ */
+export interface FirstRunContent {
+	stage: "running" | "blocked" | "waiting";
+	blocker?: Blocker;
+	icon: ReactElement;
+	title: string;
+	description: ReactNode;
+	action?: ReactElement;
+	/** The facts under the description: what starts a review, and who approves its feedback. */
+	notes?: ReactNode;
+}
+
+/**
  * What the Practice profile says before it has any feedback, from the reader's real state: why no
  * review can run, a first review that is under way, or what starts one. Nothing once a review has
  * recorded something, where the page's own empty tab speaks. It claims nothing the server did not
  * say, and no time: the reader's own work starts a review.
  */
-export function ProfileFirstRun({
-	workspaceName,
-	readiness,
-	activeReview,
-	reviewed,
-	aiChoiceLink,
-	requestReviewLink,
-	adminLinks,
-	tourOffer,
-}: ProfileFirstRunProps) {
-	const provider = useWorkProvider();
+export function firstRunContent(
+	{
+		workspaceName,
+		readiness,
+		activeReview,
+		reviewed,
+		aiChoiceLink,
+		requestReviewLink,
+		adminLinks,
+	}: Omit<ProfileFirstRunProps, "tourOffer">,
+	provider: ReturnType<typeof useWorkProvider>,
+): FirstRunContent | undefined {
 	const approval = readiness.approvalBeforePosting
 		? `In ${workspaceName}, a workspace admin approves feedback before it is posted on your work.`
 		: undefined;
@@ -208,28 +226,25 @@ export function ProfileFirstRun({
 	// A review under way is real, so it speaks before any reason a future review would not start.
 	if (activeReview !== undefined && !reviewed) {
 		const { item } = activeReview;
-		return (
-			<FirstRunEmpty
-				offer={tourOffer}
-				icon={<SparklesIcon />}
-				title={FIRST_REVIEW_TITLE[firstReviewState(activeReview)]}
-				description={
-					<>
-						It is on{" "}
-						{hasText(item.url) ? (
-							<InlineLink href={item.url} external>
-								{itemName(item)}
-							</InlineLink>
-						) : (
-							itemName(item)
-						)}
-						. {firstReviewSentences(activeReview)} Its result appears here when it finishes.
-					</>
-				}
-			>
-				{approval !== undefined && <p>{approval}</p>}
-			</FirstRunEmpty>
-		);
+		return {
+			stage: "running",
+			icon: <SparklesIcon />,
+			title: FIRST_REVIEW_TITLE[firstReviewState(activeReview)],
+			description: (
+				<>
+					It is on{" "}
+					{hasText(item.url) ? (
+						<InlineLink href={item.url} external>
+							{itemName(item)}
+						</InlineLink>
+					) : (
+						itemName(item)
+					)}
+					. {firstReviewSentences(activeReview)} Its result appears on this page when it finishes.
+				</>
+			),
+			notes: approval === undefined ? undefined : <p>{approval}</p>,
+		};
 	}
 
 	if (blocker !== null && blocker !== "PERSON_ERASED") {
@@ -238,64 +253,100 @@ export function ProfileFirstRun({
 			copy.adminFix === undefined
 				? undefined
 				: adminLinks?.[copy.adminFix.page](copy.adminFix.label);
-		return (
-			<FirstRunEmpty
-				offer={tourOffer}
-				icon={<CircleSlashIcon />}
-				title={copy.title}
-				description={
-					adminLink === undefined && copy.askAdmin !== undefined
-						? `${copy.description(workspaceName)} ${copy.askAdmin}`
-						: copy.description(workspaceName)
-				}
-				action={blockerAction(blocker, copy, { aiChoiceLink, requestReviewLink })}
-			>
-				{/* A review that someone asks for here can still end in feedback that waits for approval. */}
-				{blocker === "ON_REQUEST_ONLY" && approval !== undefined && <p>{approval}</p>}
-				{adminLink !== undefined && <p>You can change this in the {adminLink}.</p>}
-			</FirstRunEmpty>
-		);
+		return {
+			stage: "blocked",
+			blocker,
+			icon: <CircleSlashIcon />,
+			title: copy.title,
+			description:
+				adminLink === undefined && copy.askAdmin !== undefined
+					? `${copy.description(workspaceName)} ${copy.askAdmin}`
+					: copy.description(workspaceName),
+			action: blockerAction(blocker, copy, { aiChoiceLink, requestReviewLink }),
+			notes: blockedNotes(
+				// A review that someone asks for here can still end in feedback that waits for approval.
+				blocker === "ON_REQUEST_ONLY" ? approval : undefined,
+				adminLink,
+			),
+		};
 	}
 
 	if (!reviewed && blocker === null) {
 		const phrases = reviewEventPhrases(readiness.events, provider);
-		return (
-			<FirstRunEmpty
-				offer={tourOffer}
-				icon={<MessageSquareTextIcon />}
-				title={NO_REVIEW_TITLE}
-				description={`Hephaestus reviews your work against the practices that ${workspaceName} chose.`}
-				action={
-					<InlineLink
-						render={<DetailStackLink entry={ALL_PRACTICE_GROUPS_LEVEL} />}
-						className="inline-flex items-center gap-1.5 text-sm font-medium"
-					>
-						See what this workspace reviews
-						<ArrowRightIcon className="size-3.5" aria-hidden />
-					</InlineLink>
-				}
-			>
-				{phrases.length > 0 && (
-					<div className="text-left">
-						<p>A review of your work can start when:</p>
-						<ul className="mt-1 list-disc space-y-0.5 pl-5">
-							{phrases.map((phrase) => (
-								<li key={phrase}>{phrase}</li>
-							))}
-						</ul>
-					</div>
-				)}
-				<p>
-					Whether it runs also depends on the repository and on each practice. Its result appears
-					beside the title. When reviews find the same problem in two pieces of your work, a
-					feedback card appears here.
-				</p>
-				{approval !== undefined && <p>{approval}</p>}
-			</FirstRunEmpty>
-		);
+		return {
+			stage: "waiting",
+			icon: <MessageSquareTextIcon />,
+			title: NO_REVIEW_TITLE,
+			description: `Hephaestus reviews your work against the practices that ${workspaceName} chose.`,
+			action: (
+				<InlineLink
+					render={<DetailStackLink entry={ALL_PRACTICE_GROUPS_LEVEL} />}
+					className="inline-flex items-center gap-1.5 text-sm font-medium"
+				>
+					See what this workspace reviews
+					<ArrowRightIcon className="size-3.5" aria-hidden />
+				</InlineLink>
+			),
+			notes: (
+				<>
+					{phrases.length > 0 && (
+						<div className="text-left">
+							<p>A review of your work can start when:</p>
+							<ul className="mt-1 list-disc space-y-0.5 pl-5">
+								{phrases.map((phrase) => (
+									<li key={phrase}>{phrase}</li>
+								))}
+							</ul>
+						</div>
+					)}
+					<p>
+						Whether it runs also depends on the repository and on each practice. Its result appears
+						beside the title. When reviews find the same problem in two pieces of your work, a
+						feedback card appears on this page.
+					</p>
+					{approval !== undefined && <p>{approval}</p>}
+				</>
+			),
+		};
 	}
 
-	return null;
+	return undefined;
+}
+
+/** What a blocked first run adds under its description, or nothing. */
+function blockedNotes(
+	approval: string | undefined,
+	adminLink: ReactElement | undefined,
+): ReactElement | undefined {
+	if (approval === undefined && adminLink === undefined) {
+		return;
+	}
+	return (
+		<>
+			{approval !== undefined && <p>{approval}</p>}
+			{adminLink !== undefined && <p>You can change this in the {adminLink}.</p>}
+		</>
+	);
+}
+
+/** The first-run state as the empty feedback list and the tour show it. */
+export function ProfileFirstRun({ tourOffer, ...props }: ProfileFirstRunProps) {
+	const content = firstRunContent(props, useWorkProvider());
+	if (content === undefined) {
+		return null;
+	}
+	const { icon, title, description, action, notes } = content;
+	return (
+		<FirstRunEmpty
+			offer={tourOffer}
+			icon={icon}
+			title={title}
+			description={description}
+			action={action}
+		>
+			{notes}
+		</FirstRunEmpty>
+	);
 }
 
 /** The way out of a blocker that the reader can act on: asking for a review, or their AI choice. */

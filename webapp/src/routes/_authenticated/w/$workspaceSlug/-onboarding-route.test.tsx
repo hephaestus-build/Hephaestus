@@ -6,6 +6,7 @@ import { deferred } from "@/test/async";
 import {
 	getMemberOnboardingQueryKey,
 	getMemberOnboardingSettingsQueryKey,
+	getOwnPracticeProfileOverviewQueryKey,
 } from "@/api/@tanstack/react-query.gen";
 import type { WorkspaceOnboarding, WorkspaceOnboardingLink } from "@/api/types.gen";
 import { workspaceOnboarding } from "@/mocks/fixtures/onboarding";
@@ -347,6 +348,37 @@ describe("workspace member onboarding route", () => {
 				getMemberOnboardingQueryKey({ path: { workspaceSlug: "acme" } }),
 			)?.needsSetup,
 		).toBe(false);
+	});
+
+	it("marks every workspace's overview stale once the choice saves, so no page shows the old reason", async () => {
+		let current: WorkspaceOnboarding = firstVisit;
+		mockWorkspace(current);
+		server.use(
+			http.get("*/workspaces/acme/onboarding/me", () => HttpResponse.json(current)),
+			http.put("*/workspaces/:workspaceSlug/onboarding/me/ai-choice", () => {
+				current = { ...current, aiChoice: "NO_AI", needsSetup: false };
+				return HttpResponse.json(current);
+			}),
+		);
+		const { queryClient, router } = renderRouteAtWithRouter("/w/acme/onboarding");
+		// The choice is the account's, so the overview of a workspace not open here goes stale too.
+		const overviews = ["acme", "beta"].map((workspaceSlug) =>
+			getOwnPracticeProfileOverviewQueryKey({ path: { workspaceSlug } }),
+		);
+		for (const key of overviews) {
+			queryClient.setQueryData(key, { latestReview: null });
+		}
+		await screen.findByRole("radio", { name: /^No AI /u }, ROUTE_RENDER_WAIT);
+		fireEvent.click(screen.getByRole("radio", { name: /^No AI /u }));
+		fireEvent.click(screen.getByRole("button", { name: "Save AI choice" }));
+		await waitFor(
+			() => expect(router.state.location.pathname).not.toBe("/w/acme/onboarding"),
+			ROUTE_RENDER_WAIT,
+		);
+		expect(overviews.map((key) => queryClient.getQueryState(key)?.isInvalidated)).toStrictEqual([
+			true,
+			true,
+		]);
 	});
 
 	it("does not send an AI choice when a member chooses Skip for now", async () => {

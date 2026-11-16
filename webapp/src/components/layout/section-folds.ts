@@ -32,17 +32,23 @@ export function useSectionOpen(
 	key: string | undefined,
 	{ defaultOpen = true }: { defaultOpen?: boolean } = {},
 ): [boolean, (open: boolean) => void] {
-	const [open, setOpen] = useState(() => {
-		if (key === undefined) {
+	const initial = (forKey: string | undefined) => {
+		if (forKey === undefined) {
 			return true;
 		}
-		const folded = readFolded(key);
+		const folded = readFolded(forKey);
 		return folded === undefined ? defaultOpen : !folded;
-	});
+	};
+	const [state, setState] = useState(() => ({ key, open: initial(key) }));
+	// A key that arrives after the first render, such as one that names the signed-in account, reads
+	// its own stored choice.
+	if (state.key !== key) {
+		setState({ key, open: initial(key) });
+	}
 	return [
-		open,
+		state.key === key ? state.open : initial(key),
 		(next) => {
-			setOpen(next);
+			setState({ key, open: next });
 			if (key !== undefined) {
 				storeFolded(key, !next);
 			}

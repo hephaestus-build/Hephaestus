@@ -63,6 +63,12 @@ export interface PracticeProfilePageProps {
 	 * before the overview loads; the plain empty tab speaks then.
 	 */
 	firstRun?: Omit<ProfileFirstRunProps, "reviewed">;
+	/**
+	 * The reader's next steps, which the route loads only while a setup step is open. While
+	 * `saysFirstRun`, the list's open first-review step says what the first-run state says, so the
+	 * empty feedback list does not say it twice. Absent in a user view.
+	 */
+	getStarted?: { list: ReactNode; saysFirstRun: boolean };
 	state: LoadState;
 	/** The control that starts the guided tour; absent where the reader cannot take it, such as in a user view. */
 	tourAction?: ReactNode;
@@ -143,6 +149,7 @@ export function PracticeProfilePage({
 	feedbackTab,
 	onFeedbackTabChange,
 	firstRun,
+	getStarted,
 	state,
 	tourAction,
 	firstCardOffer,
@@ -157,6 +164,8 @@ export function PracticeProfilePage({
 	const reviewed = latestReview !== undefined;
 	const showFirstRun =
 		firstRun !== undefined &&
+		// While the list shows, its first-review step says this. A hidden list leaves it to the page.
+		getStarted?.saysFirstRun !== true &&
 		feedbackCards.length === 0 &&
 		firstRunApplies(firstRun.readiness, reviewed, firstRun.activeReview);
 
@@ -188,6 +197,7 @@ export function PracticeProfilePage({
 				isLoading={isLoading}
 				tourAction={tourAction}
 			/>
+			{getStarted?.list}
 			<Section
 				data-tour-slot="feedback"
 				size="lg"

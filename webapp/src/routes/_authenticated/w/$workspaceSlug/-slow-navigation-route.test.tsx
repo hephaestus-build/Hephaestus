@@ -2,6 +2,7 @@ import { screen, waitFor } from "@testing-library/react";
 import { HttpResponse, http } from "msw";
 import { beforeAll, expect, it } from "vitest";
 
+import { workspaceOnboarding } from "@/mocks/fixtures/onboarding";
 import { ownMembership, workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
 import { deferred } from "@/test/async";
@@ -21,7 +22,7 @@ it("shows the page loading, not the previous page, while a slow navigation waits
 		// The gate holds the navigation until this read answers.
 		http.get("*/workspaces/beta/onboarding/me", async () => {
 			await onboarding.promise;
-			return HttpResponse.json({ needsSetup: false });
+			return HttpResponse.json(workspaceOnboarding());
 		}),
 	);
 	const { router } = renderRouteAtWithRouter("/w/acme/activity");
