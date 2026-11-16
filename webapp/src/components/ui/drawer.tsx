@@ -246,17 +246,20 @@ function DrawerHeader({ className, ...props }: React.ComponentProps<"div">) {
  * The scrollable middle of a drawer. `min-h-0` is load-bearing — a flex item's automatic minimum
  * size is its content, so without it the body refuses to shrink and the panel overflows.
  */
-function DrawerBody({ className, ...props }: React.ComponentProps<"div">) {
+function DrawerBody({ className, tabIndex = 0, ...props }: React.ComponentProps<"div">) {
 	const titleId = useContext(DrawerTitleContext)?.titleId;
+	// Only a Tab stop needs a name. A body that its caller takes out of the Tab order, such as a
+	// conversation that names its own landmark, would otherwise repeat that landmark.
+	const named = titleId !== undefined && tabIndex >= 0;
 	return (
 		<div
 			data-slot="drawer-body"
-			role={titleId === undefined ? undefined : "region"}
-			aria-labelledby={titleId}
+			role={named ? "region" : undefined}
+			aria-labelledby={named ? titleId : undefined}
 			className={cn("min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 pb-6", className)}
 			// A form disables every control while it submits, and then nothing in here is focusable —
 			// but the panel's overflow still has to be readable to the end. Same call as `ui/table`.
-			tabIndex={0}
+			tabIndex={tabIndex}
 			{...props}
 		/>
 	);
