@@ -4,7 +4,7 @@ This document helps you upgrade between versions of Hephaestus. For what a versi
 (public contract, upgrade guarantee, support statement), see the
 [Compatibility Policy](https://docs.hephaestus.build/admin/compatibility-policy).
 
-> ⚠️ **Pre-1.0 Notice**: We are in active development. Minor versions (0.x.0) may contain breaking changes. Always test in staging before production.
+> ⚠️ **Pre-1.0 notice**: Until 1.0.0, each release candidate (`1.0.0-rc.N`) can contain breaking changes. Read its entry below, and test each upgrade in staging before production. The [Compatibility Policy](https://docs.hephaestus.build/admin/compatibility-policy) says what each release promises.
 
 ## Quick Reference
 
@@ -18,7 +18,7 @@ This document helps you upgrade between versions of Hephaestus. For what a versi
 
 For the running version, follow the
 [runtime identity handoff](https://docs.hephaestus.build/admin/release-image-lock#runtime-identity-handoff).
-It explains how to check each runtime role against the signed release lock.
+It explains how to check the running images against the signed release lock.
 The administration overview shows the server's identity.
 
 ```bash
@@ -32,22 +32,11 @@ header, linked to its release notes.
 
 ---
 
-## Pre-1.0 Development (Current)
+## Before 1.0.0
 
-During pre-1.0, we follow [Semantic Versioning 0.x conventions](https://semver.org/#spec-item-4):
-
-> Major version zero (0.y.z) is for initial development. Anything MAY change at any time.
-
-### What This Means
-
-| Version Bump | May Contain |
-|--------------|-------------|
-| `0.x.0` → `0.y.0` | Breaking changes |
-| `0.x.y` → `0.x.z` | Bug and security fixes |
-
-### Upgrade Checklist
-
-Before upgrading to any new `0.x.0` version:
+Release candidates of 1.0.0 can contain breaking changes.
+An entry marked 🔴 needs operator action and says whether every role must stop first.
+Before you upgrade to any release:
 
 1. ✅ Read the [release notes](https://github.com/hephaestus-build/Hephaestus/releases)
 2. ✅ Check this migration guide for breaking changes
@@ -78,16 +67,6 @@ Entries exist only for releases that need operator action. Everything else is in
 | Database cutover | Follow the target release's migration entry | Complete any required procedure before starting the new runtime roles |
 | Environment variables | Check release notes | New config may be required |
 | Helm chart | Check the chart values of the target release | Values may be added or renamed |
-
----
-
-## Stability Roadmap
-
-### v1.0.0 (Future)
-
-The [Compatibility Policy](https://docs.hephaestus.build/admin/compatibility-policy) applies now,
-including its pre-1.0 exception. Its stable compatibility and upgrade guarantees begin at v1.0.0.
-Before then, minor releases can contain breaking changes.
 
 ---
 
