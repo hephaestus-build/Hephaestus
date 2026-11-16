@@ -196,12 +196,12 @@ export const EnterWhileComposingDoesNotAddABranch: Story = {
 			name: `Base branch limits for ${longRepository}`,
 		});
 		await userEvent.type(field, "release");
-		fireEvent.keyDown(field, { key: "Enter", isComposing: true });
+		await fireEvent.keyDown(field, { key: "Enter", isComposing: true });
 		// Safari sends the confirming Enter after the composition, with only key code 229 to tell.
-		fireEvent.keyDown(field, { key: "Enter", keyCode: 229 });
+		await fireEvent.keyDown(field, { key: "Enter", keyCode: 229 });
 		await expect(field).toHaveValue("release");
 		await expect(canvas.queryByTitle("release")).toBeNull();
-		fireEvent.keyDown(field, { key: "Enter" });
+		await fireEvent.keyDown(field, { key: "Enter" });
 		await expect(canvas.getByTitle("release")).toBeVisible();
 		await expect(field).toHaveValue("");
 	},

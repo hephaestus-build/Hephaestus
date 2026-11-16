@@ -36,10 +36,12 @@ describe("isComposing", () => {
 			true,
 		);
 		// Safari sends it after compositionend, with only the composition key code.
+		// oxlint-disable-next-line typescript/no-deprecated -- keyCode 229 is the only signal Safari sends.
 		expect(isComposing(new KeyboardEvent("keydown", { key: "Enter", keyCode: 229 }))).toBe(true);
 	});
 
 	it("lets a plain Enter through", () => {
+		// oxlint-disable-next-line typescript/no-deprecated -- keyCode 229 is the only signal Safari sends.
 		expect(isComposing(new KeyboardEvent("keydown", { key: "Enter", keyCode: 13 }))).toBe(false);
 	});
 });
