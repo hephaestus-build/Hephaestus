@@ -332,7 +332,7 @@ await test("the chart ships no image, tag or release identity of its own", () =>
 const load = (name: string) => asRecord(parse(read(`profiles/${name}`)), name);
 
 await test("every profile installs from the same templates with only the operator's values", () => {
-	assert.deepEqual(profiles.toSorted(), ["cluster.yaml", "dev.yaml", "preview.yaml", "small.yaml"]);
+	assert.deepEqual(profiles.toSorted(), ["cluster.yaml", "dev.yaml", "small.yaml"]);
 	for (const name of profiles) {
 		const profile = load(name);
 		for (const owned of ["release", "images", "secret", "host", "trustedProxies", "route"]) {

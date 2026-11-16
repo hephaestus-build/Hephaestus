@@ -132,11 +132,10 @@ Give the profile as the first `-f` file, before your own values.
 | Profile | Cluster | Sandboxes | PriorityClasses and agent-sandbox controller |
 | --- | --- | --- | --- |
 | `dev.yaml` | A disposable cluster on one workstation, such as k3d or kind | Off: no practice reviews and no conversation turns | The chart creates the classes. No controller is needed. |
-| `preview.yaml` | A short-lived preview of one pull request | Off | The chart creates the classes. No controller is needed. |
 | `small.yaml` | One node of 4 vCPU, at least 16 GiB of memory and 150 GiB of disk, such as the [one-host platform](./k3s) | On | The chart creates the classes. The cluster runs the controller of `k3s-agent-sandbox.yaml`. |
 | `cluster.yaml` | A cluster of several nodes | On | The [admin bundle](./managed-cluster#admin-handoff) creates the classes. The controller runs in the release namespace. |
 
-With `dev.yaml` or `preview.yaml`, the sandbox prerequisites do not apply.
+With `dev.yaml`, the sandbox prerequisites do not apply.
 Use `dev.yaml` to try Hephaestus on a workstation cluster.
 
 No profile is only for a cluster of several nodes on which you are cluster-admin.

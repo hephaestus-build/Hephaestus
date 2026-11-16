@@ -12,13 +12,13 @@ They are scheduling requests, not measured peaks. Keep room for the operating sy
 
 | Profile | Nodes | Servers | Requests of each server | PostgreSQL requests and volume | Reviews at once | Conversation turns at once |
 | --- | --- | --- | --- | --- | --- | --- |
-| `dev.yaml`, `preview.yaml` | One workstation node | 2 | 250m CPU, 3 GiB memory, 5 GiB Git cache | 100m CPU, 1 GiB memory, 5 GiB volume | 0: sandboxes are off | 0 |
+| `dev.yaml` | One workstation node | 2 | 250m CPU, 3 GiB memory, 5 GiB Git cache | 100m CPU, 1 GiB memory, 5 GiB volume | 0: sandboxes are off | 0 |
 | `small.yaml` | One node of 4 vCPU, at least 16 GiB of memory and 150 GiB of disk | 1 | 500m CPU, 3 GiB memory, 20 GiB Git cache | 250m CPU, 2 GiB memory, 20 GiB volume | 5 | 11, or 7 with backups on (`auto`) |
 | [One host](./k3s): `small.yaml` with `k3s-values.yaml` | The node of `small.yaml` | 1 | As `small.yaml` | As `small.yaml` | 4 | 9, or 6 with backups on (`auto`) |
 | `cluster.yaml` | Several nodes, with sandbox nodes that hold the review and conversation quotas | 2 | 500m CPU, 3 GiB memory, 70 GiB Git cache | 250m CPU, 2 GiB memory, 20 GiB volume | 12 | 8 |
 
 Each server's memory request equals its limit, because the JVM sizes its heap from the limit.
-The server's CPU limit is 4 cores, and 2 with `dev.yaml` and `preview.yaml`.
+The server's CPU limit is 4 cores, and 2 with `dev.yaml`.
 The Git cache is node storage of each server ([Storage and retention](./helm-chart#storage-and-retention)).
 
 The one host has fewer reviews and turns than `small.yaml` alone, because each gVisor sandbox Pod also takes 48 MiB and 10m CPU of RuntimeClass overhead.
@@ -173,7 +173,7 @@ pool = inbox handlers + 3 × reviews at once + 2 × long-load preparations
 The three connections of a review capture are its capture lease, a session lock and a transaction.
 A composition that withholds what is open holds the lock while it records the withholding.
 
-The result is 21 for `dev.yaml` and `preview.yaml`, 42 for `small.yaml`, 39 on one host, and 63 for `cluster.yaml`.
+The result is 21 for `dev.yaml`, 42 for `small.yaml`, 39 on one host, and 63 for `cluster.yaml`.
 An explicit `server.databasePool.maximumPoolSize` must hold the derived count. The chart refuses a smaller one.
 A model stream and a sandbox hold no pooled connection. Sandboxes reach the server through the gateway and have no database pool.
 

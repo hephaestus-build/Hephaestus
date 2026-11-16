@@ -323,8 +323,8 @@ export function assertReferencesResolve(
 	}
 }
 
-/** The four profiles, and the small one with an operator's external PostgreSQL. */
-export const profiles = ["dev", "preview", "small", "cluster", "external"] as const;
+/** The three profiles, and the small one with an operator's external PostgreSQL. */
+export const profiles = ["dev", "small", "cluster", "external"] as const;
 export const layersFor = (name: (typeof profiles)[number]) => {
 	switch (name) {
 		case "external": {
@@ -334,8 +334,7 @@ export const layersFor = (name: (typeof profiles)[number]) => {
 		case "cluster": {
 			return [profile(name), prepared, operator, reviews];
 		}
-		case "dev":
-		case "preview": {
+		case "dev": {
 			return [profile(name), prepared, operator];
 		}
 	}
