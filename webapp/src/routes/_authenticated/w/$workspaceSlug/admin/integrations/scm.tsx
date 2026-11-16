@@ -12,9 +12,9 @@ import { WorkspaceJobHistoryCard } from "@/components/admin/integrations/Workspa
 import { WorkspaceRepositoriesSettings } from "@/components/admin/integrations/WorkspaceRepositoriesSettings";
 import { WorkspaceScmTokenSettings } from "@/components/admin/integrations/WorkspaceScmTokenSettings";
 import { WorkspaceStoppedGitLabProjects } from "@/components/admin/integrations/WorkspaceStoppedGitLabProjects";
-import { OutboundMark } from "@/components/common/outbound-link";
 import { WorkspaceSyncResourcesTable } from "@/components/admin/integrations/WorkspaceSyncResourcesTable";
 import { WorkspaceSyncStatusHeader } from "@/components/admin/integrations/WorkspaceSyncStatusHeader";
+import { OutboundMark } from "@/components/common/outbound-link";
 import { GitHubIcon, GitLabIcon } from "@/components/icons/brand";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { PageLayout } from "@/components/layout/PageLayout";
