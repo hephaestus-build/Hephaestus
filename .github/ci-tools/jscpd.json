@@ -1,0 +1,36 @@
+{
+	"version": "5.4.3",
+	"url": "https://github.com/kucherenko/jscpd/releases/download/v5.4.3/",
+	"assets": {
+		"darwin-arm64": {
+			"name": "jscpd-darwin-arm64.tar.gz",
+			"sha256": "e119c4c5388118ad348a799c478589f7ad0fa707c0b7c819d6febc94f6f98522",
+			"member": "jscpd"
+		},
+		"darwin-x64": {
+			"name": "jscpd-darwin-x64.tar.gz",
+			"sha256": "7e5b81a0b30f1d261bf9cd8d8e72be43f0ce55a54a9374f1111123bb29362362",
+			"member": "jscpd"
+		},
+		"linux-arm64": {
+			"name": "jscpd-linux-arm64-gnu.tar.gz",
+			"sha256": "221a62a254ab4cc42f26e076943ca79ecd311ae41646a76a08e4b790ed8c5fbe",
+			"member": "jscpd"
+		},
+		"linux-x64": {
+			"name": "jscpd-linux-x64-gnu.tar.gz",
+			"sha256": "a19d719331b21a047a7537f982566dabcf6d6e5f51581c3b80d9c420979cc92c",
+			"member": "jscpd"
+		},
+		"win32-arm64": {
+			"name": "jscpd-windows-arm64-msvc.tar.gz",
+			"sha256": "ac398ff10ddee4c6f0e57dd82db32ab17a82a397238ea8fd56cbd419b8edb63b",
+			"member": "jscpd.exe"
+		},
+		"win32-x64": {
+			"name": "jscpd-windows-x64-msvc.tar.gz",
+			"sha256": "1e9416d179c54cbaf1f8854c764b2bc774a1a15850043160b7e58e63948ffb9d",
+			"member": "jscpd.exe"
+		}
+	}
+}

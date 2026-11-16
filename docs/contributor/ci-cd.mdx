@@ -1657,6 +1657,32 @@ GITHUB_REPOSITORY=owner/repository vp run report:flakes
 
 [Testing Guide § Flaky tests](testing.mdx#flaky-tests) has the policy.
 
+### Duplicated and moved code
+
+`CI / Duplicated code report` runs every Monday and on dispatch.
+It measures production code: `server/application/src/main`, `webapp/src`, `extension/src` and `scripts`.
+It leaves out generated clients, tests, stories and mocks.
+The report is information only. No gate reads it, and no pull request runs it.
+
+The pinned [jscpd](https://github.com/kucherenko/jscpd) finds exact clones of at least 50 tokens and 5 lines.
+Each file that needs the same types repeats their imports.
+Thus, a clone counts only if at least 5 lines remain without its import, package and blank lines.
+The base is the last commit of `main` before the week.
+A clone that the base does not contain is a new clone.
+
+The report also counts the lines that the week added to the Java and TypeScript files of the same paths.
+Of those lines, it counts the lines that `git diff --color-moved=blocks` marks as moved from another place.
+
+The job summary has a table for each area, and the run retains `duplication.json` for 90 days.
+Reproduce it locally:
+
+```bash
+vp run report:duplication --since "14 days ago"
+```
+
+`--base <commit>` sets the base directly.
+Add a gate only if the numbers grow.
+
 ### Server profiles
 
 PR and merge-queue test jobs retain JUnit XML reports for 14 days, separately for each suite,
@@ -1869,7 +1895,7 @@ Before merge, independently verify every changed asset checksum and Cosign trust
 The Renovate PR notes state this requirement for automated updates too.
 Cosign's existing bootstrap and signature checks remain required.
 
-The other pins are manual: Helm, Kind, k3d, Kubeconform, oasdiff, ShellCheck, Gateway API, Vale, ripgrep,
+The other pins are manual: Helm, Kind, k3d, Kubeconform, oasdiff, ShellCheck, jscpd, Gateway API, Vale, ripgrep,
 Liberica, bootstrap tools and buildpack dependencies.
 For a manual update, change the version, source URL and checksum together.
 Apply the same independent verification before merge.
