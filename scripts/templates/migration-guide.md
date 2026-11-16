@@ -35,7 +35,7 @@ header, linked to its release notes.
 ## Before 1.0.0
 
 Release candidates of 1.0.0 can contain breaking changes.
-An upgrade that needs every server stopped has an entry whose title starts with **🔴 Stop every role**.
+An entry marked 🔴 needs operator action and says whether every role must stop first.
 Before you upgrade to any release:
 
 1. ✅ Read the [release notes](https://github.com/hephaestus-build/Hephaestus/releases)

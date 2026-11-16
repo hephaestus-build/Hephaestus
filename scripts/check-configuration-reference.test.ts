@@ -3,7 +3,6 @@ import { test } from "node:test";
 
 import { judge, unsettable } from "./check-configuration-reference.ts";
 import {
-	slug,
 	chartRows,
 	environmentGroup,
 	helmGroup,
@@ -16,6 +15,8 @@ import {
 	REFERENCE_PARTS,
 	renderReference,
 	requiredVariables,
+	slug,
+	type ChartRow,
 	type Row,
 } from "./lib/configuration-reference.ts";
 import { applicationImage } from "./lib/deploy-topology.ts";
@@ -334,10 +335,30 @@ void test("an admin page may not offer a variable that no chart workload sets", 
 	);
 });
 
-await test("a group's file name keeps every letter of a camelCase group", () => {
+void test("a group's file name keeps every letter of a camelCase group", () => {
 	assert.equal(slug("config.credentialKey"), "config-credential-key");
 	assert.equal(slug("networkPolicy"), "network-policy");
 	assert.equal(slug("workspaceSubdomains"), "workspace-subdomains");
 	assert.equal(slug("hephaestus.llm"), "hephaestus-llm");
 	assert.equal(slug("top-level"), "top-level");
+});
+
+const booleanValue = (key: string): ChartRow => ({
+	description: "A setting.",
+	key,
+	defaultValue: true,
+	type: "boolean",
+	required: false,
+	constraint: "",
+});
+
+void test("two groups that would write one file stop the reference", () => {
+	assert.throws(
+		() =>
+			renderReference(
+				[],
+				[booleanValue("networkPolicy.enabled"), booleanValue("network-policy.enabled")],
+			),
+		/both write helm-network-policy\.mdx/u,
+	);
 });
