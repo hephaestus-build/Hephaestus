@@ -2,11 +2,12 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { HttpResponse, http } from "msw";
 import type { ReactNode } from "react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { getReviewOverviewQueryKey, listReviewsQueryKey } from "@/api/@tanstack/react-query.gen";
 import type { ReviewDetail } from "@/api/types.gen";
 import { reviewDetailCompleted } from "@/components/admin/practice-reviews/fixtures";
+import { ACTIVE_REVIEW_POLL_MS } from "@/components/admin/practice-reviews/review-search";
 import { server } from "@/mocks/server";
 
 import { type ReviewController, useReviewController } from "./use-review-controller";
@@ -73,6 +74,8 @@ describe("a review whose results are still processed", () => {
 				return HttpResponse.json([]);
 			}),
 		);
+		// The next poll comes on a timer: the test moves the clock to it instead of waiting it out.
+		vi.useFakeTimers({ shouldAdvanceTime: true });
 		const { result, unmount } = render(client);
 		try {
 			await waitFor(() =>
@@ -83,7 +86,8 @@ describe("a review whose results are still processed", () => {
 			for (const key of [rowKey, workKey, otherWorkKey]) {
 				client.setQueryData(key, { content: [] });
 			}
-			await waitFor(() => expect(processingOf(result.current)).toBe("DONE"), { timeout: 7000 });
+			await vi.advanceTimersByTimeAsync(ACTIVE_REVIEW_POLL_MS);
+			await waitFor(() => expect(processingOf(result.current)).toBe("DONE"));
 			await waitFor(() => expect(checksRead).toBeGreaterThan(before));
 			expect(client.getQueryState(rowKey)?.isInvalidated).toBe(true);
 			// Whether a review of the same work is still active is asked again; other work is not.
@@ -92,8 +96,9 @@ describe("a review whose results are still processed", () => {
 		} finally {
 			unmount();
 			client.clear();
+			vi.useRealTimers();
 		}
-	}, 10_000);
+	});
 });
 
 describe("cancelling a review", () => {

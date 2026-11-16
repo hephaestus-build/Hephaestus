@@ -29,7 +29,7 @@ import { invalidateWorkspaceReads } from "@/runtime/tanstack-query/invalidate-wo
 import { awaitingApprovalOptions } from "./use-feedback-awaiting-approval";
 
 /** How often feedback still being sent, checked, or removed is re-read until it settles. */
-const DELIVERY_POLL_MS = 2000;
+export const DELIVERY_POLL_MS = 2000;
 
 const READS_OF_FEEDBACK_DECISION: ReadonlySet<string> = new Set([
 	...PRACTICE_REVIEW_READS,

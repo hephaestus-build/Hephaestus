@@ -28,7 +28,6 @@ const COUNT_REFRESH_MS = 60_000;
  */
 const COUNT_READ = {
 	retry: retryQuery,
-	retryDelay: (attempt: number) => Math.min(1000 * 2 ** attempt, 8000),
 	refetchInterval: () => (sessionRetriesQueries() ? COUNT_REFRESH_MS : false),
 } as const;
 

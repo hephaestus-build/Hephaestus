@@ -1,10 +1,11 @@
 import { act, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
-import { beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 
 import { getNotificationPreferencesQueryKey } from "@/api/@tanstack/react-query.gen";
 import { WORDING_VERSION } from "@/components/auth/consent-wording";
+import { PENDING_SPINNER_DELAY_MS, PENDING_SPINNER_MIN_MS } from "@/lib/use-pending-spinner";
 import { currentUser } from "@/mocks/fixtures/auth";
 import { ownMembership, workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
@@ -44,7 +45,12 @@ describe("account email choices", () => {
 	});
 
 	it("sends the confirmed revision and keeps consent off until the server accepts it", async () => {
-		const user = userEvent.setup();
+		// The saving label waits a second and then stays half a second: the test moves the clock instead.
+		vi.useFakeTimers({ shouldAdvanceTime: true });
+		onTestFinished(() => {
+			vi.useRealTimers();
+		});
+		const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
 		const response = deferred();
 		let body: unknown;
 		let etag: string | null = null;
@@ -75,12 +81,14 @@ describe("account email choices", () => {
 		expect(product.getAttribute("aria-disabled")).toBe("true");
 
 		expect(screen.queryByText("Saving email choices…")).toBeNull();
-		const saving = await screen.findByText("Saving email choices…", {}, { timeout: 2000 });
+		await vi.advanceTimersByTimeAsync(PENDING_SPINNER_DELAY_MS);
+		const saving = await screen.findByText("Saving email choices…");
 		expect(saving.getAttribute("role")).toBe("status");
 		expect(saving.querySelector("svg")).not.toBeNull();
 
 		response.resolve();
 		await waitFor(() => expect(product.getAttribute("aria-checked")).toBe("true"));
+		await vi.advanceTimersByTimeAsync(PENDING_SPINNER_MIN_MS);
 		await waitFor(() => expect(screen.queryByText("Saving email choices…")).toBeNull());
 		expect(product.getAttribute("aria-disabled")).not.toBe("true");
 	});

@@ -2,7 +2,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
-import { beforeAll, assert, describe, expect, it } from "vitest";
+import { assert, beforeAll, describe, expect, it, onTestFinished, vi } from "vitest";
 
 import {
 	getReviewOverviewQueryKey,
@@ -18,6 +18,7 @@ import {
 	uncertainWriteFeedbackDetail,
 } from "@/components/admin/practice-reviews/fixtures";
 import { stackInSearch } from "@/components/layout/detail-drawer/detail-stack";
+import { DELIVERY_POLL_MS } from "@/hooks/use-feedback-controller";
 import { problemType } from "@/lib/problem-detail";
 import { hasText } from "@/lib/text";
 import { server } from "@/mocks/server";
@@ -854,6 +855,11 @@ describe("checking delivery of an unconfirmed comment", () => {
 	const UNKNOWN_NOW = /the provider has not confirmed whether it appeared/u;
 
 	it("asks once, follows the check without a reload, and shows what it found", async () => {
+		// The sheet's next poll comes on a timer: the test moves the clock to it instead of waiting it out.
+		vi.useFakeTimers({ shouldAdvanceTime: true });
+		onTestFinished(() => {
+			vi.useRealTimers();
+		});
 		let wire = unknownWire("unknown");
 		let rechecks = 0;
 		server.use(
@@ -882,6 +888,7 @@ describe("checking delivery of an unconfirmed comment", () => {
 		// Landed only once the sheet shows the check queued: nothing else re-reads it from here, so
 		// only the sheet's own poll can bring the receipt in.
 		wire = unknownWire("found");
+		await vi.advanceTimersByTimeAsync(DELIVERY_POLL_MS);
 		await screen.findByText("Summary posted", undefined, ROUTE_RENDER_WAIT);
 		expect(screen.queryByText(UNKNOWN_NOW)).toBeNull();
 		expect(rechecks).toBe(1);
