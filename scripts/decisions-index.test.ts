@@ -2,14 +2,12 @@ import assert from "node:assert/strict";
 import { readdir, readFile } from "node:fs/promises";
 import { test } from "node:test";
 
+import { indexTable, isDecisionFile, readDecisions } from "./decisions-index.ts";
+
 const directory = "docs/decisions";
 
-// The template is the shape an ADR is copied from, not a decision: its `NNNN` is a placeholder, so
-// it is neither numbered nor listed in the index.
 const entries = await readdir(directory);
-const files = entries
-	.filter((entry) => /^\d{4}-.+\.md$/u.test(entry) && entry !== "0000-template.md")
-	.toSorted();
+const files = entries.filter((entry) => isDecisionFile(entry)).toSorted();
 const adrs = await Promise.all(
 	files.map(async (file) => {
 		const content = await readFile(`${directory}/${file}`, "utf8");
@@ -20,15 +18,6 @@ const adrs = await Promise.all(
 		return { file, number: file.slice(0, 4), content, header, status };
 	}),
 );
-const readme = await readFile(`${directory}/README.md`, "utf8");
-const indexRows = [
-	...readme.matchAll(/^\| \[(?<number>\d{4})\]\((?<file>[^)]+)\) \| .+ \| (?<status>.+) \|$/gmu),
-].map(({ groups }) => ({
-	number: groups?.number ?? "",
-	file: groups?.file ?? "",
-	status: groups?.status ?? "",
-}));
-
 // The README § Status table is the vocabulary. A superseding link uses the relative file name.
 const statusPattern =
 	/^(?:Proposed|Accepted|Deprecated|Superseded by \[(?:ADR )?(?<target>\d{4})\]\((?<file>\d{4}-[^)]+\.md)\))$/u;
@@ -82,30 +71,6 @@ void test("each ADR link in a header points to an existing ADR", () => {
 	}
 });
 
-void test("the ADR index lists exactly the ADR files, each once, under its own number", () => {
-	assert.deepEqual(
-		indexRows.map(({ number, file }) => `${number} ${file}`).toSorted(),
-		files.map((file) => `${file.slice(0, 4)} ${file}`),
-		"every ADR file needs exactly one index row, and a row's number must match the file it links",
-	);
-});
-
-void test("the index shows the status of each ADR", () => {
-	for (const { file, status } of adrs) {
-		const row = indexRows.find((candidate) => candidate.file === file);
-		const expected = status.replace(
-			/^Superseded by \[ADR (?<target>\d{4})\]/u,
-			"Superseded by [$<target>]",
-		);
-
-		assert.equal(
-			row?.status,
-			expected,
-			`${file}: the index status differs from the ADR's status line`,
-		);
-	}
-});
-
 void test("an accepted ADR from 0081 names what confirms it", () => {
 	for (const { file, number, status, content } of adrs) {
 		if (number < firstConfirmedAdr || status !== "Accepted") {
@@ -114,4 +79,27 @@ void test("an accepted ADR from 0081 names what confirms it", () => {
 
 		assert.match(content, /^## Confirmation$/mu, `${file}: add a "## Confirmation" section`);
 	}
+});
+
+void test("the printed index lists each ADR once, with the title and status of its own file", async () => {
+	const decisions = await readDecisions(directory);
+	assert.deepEqual(
+		decisions.map(({ file }) => file),
+		files,
+	);
+	for (const { file, title, status } of decisions) {
+		assert.notEqual(title, "", `${file}: no "# ADR NNNN: title" heading`);
+		assert.equal(status, adrs.find((adr) => adr.file === file)?.status, file);
+	}
+	const rows = indexTable(decisions).split("\n").slice(2);
+	assert.equal(rows.length, files.length);
+	assert.equal(
+		rows[0],
+		`| [${decisions[0]?.number ?? ""}](${decisions[0]?.file ?? ""}) | ${decisions[0]?.title ?? ""} | ${decisions[0]?.status ?? ""} |`,
+	);
+});
+
+void test("the README keeps no hand-written index row, which every new ADR would conflict on", async () => {
+	const readme = await readFile(`${directory}/README.md`, "utf8");
+	assert.doesNotMatch(readme, /^\| \[\d{4}\]\(\d{4}-/mu);
 });

@@ -522,6 +522,7 @@ export default defineConfig({
 			"job:start": run("node scripts/job.ts start"),
 			"job:wait": run("node scripts/job.ts wait"),
 			"pr:rebase-generated": run("node scripts/rebase-generated.ts"),
+			"report:decisions": run("node scripts/decisions-index.ts"),
 			"release:version": run("changeset version && node scripts/sync-release-version.ts"),
 
 			// Local development
