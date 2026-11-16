@@ -1,6 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { appendFileSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { appendFileSync, readFileSync, readdirSync } from "node:fs";
 import process from "node:process";
 import { setTimeout as sleep } from "node:timers/promises";
 
@@ -53,7 +53,6 @@ const PREVIOUS_RELEASE_WORKSPACE_SLUG = "upgrade-previous-fixture";
 // A copy of the seeded database that the partial migration runs on.
 const PARTIAL_DATABASE = "hephaestus_partial";
 const MIGRATION_STOP_MESSAGE = "the upgrade test stops the migration here";
-const QUEUED_REVIEW_JOB = "00000000-0000-0000-0000-000000978041";
 const HTTP_TIMEOUT_MS = 30_000;
 const READINESS_TIMEOUT_MS = 2000;
 
@@ -128,40 +127,36 @@ function migrateCandidate(image: string, database = "hephaestus"): void {
 	}
 }
 
-/** The previous release's agent image, which its worker pulls and checks at start. */
+/** The previous release's agent image, which its agent runtime checks at start. */
 interface Worker {
 	readonly agentImage: string;
 }
 
-/** The previous release's server and worker roles in one JVM, which claims queued reviews through the Docker sandbox backend. */
+/** The previous release's server and agent runtime in one JVM, as the release runs them. */
 function workerEnvironment(worker: Worker | undefined): string[] {
 	if (worker === undefined) {
 		// Exercise the server/database upgrade without sandboxes: the previous release's worker role and the
 		// candidate's agent runtime stay off.
 		return ["--env", "HEPHAESTUS_RUNTIME_WORKER_ENABLED=false", "--env", "AGENT_ENABLED=false"];
 	}
-	const socket = "/var/run/docker.sock";
 	return [
-		"--volume",
-		`${socket}:${socket}`,
-		"--group-add",
-		String(statSync(socket).gid),
 		"--env",
 		"HEPHAESTUS_RUNTIME_WORKER_ENABLED=true",
 		"--env",
 		"AGENT_ENABLED=true",
 		"--env",
 		`HEPHAESTUS_AGENT_IMAGE_REFERENCE=${worker.agentImage}`,
-		// Labels every sandbox resource the worker starts, so the sweep finds them.
+		// The agent runtime claims its sandboxes from Kubernetes and refuses to start without a valid namespace.
+		// No cluster answers here, so it starts no sandbox.
 		"--env",
-		`SANDBOX_DOCKER_OWNER=${runId}`,
+		`HEPHAESTUS_SANDBOX_KUBERNETES_NAMESPACE=${runId}`,
 		// Readiness reports practice review down without Git checkout.
 		"--env",
 		"GIT_CHECKOUT_ENABLED=true",
 		"--env",
 		"HEPHAESTUS_FABRIC_ROOT=/tmp/hephaestus-git",
 
-		// The buildpack's 10M direct-memory default is too small for the Docker client.
+		// The buildpack's 10M direct-memory default is too small for the agent runtime's clients.
 		"--env",
 		"JAVA_TOOL_OPTIONS=-XX:MaxDirectMemorySize=128M",
 	];
@@ -645,30 +640,6 @@ function summarize(line: string): void {
 	}
 }
 
-/** Removes the sandbox containers, networks and volumes that the previous release's worker started. */
-function sweepSandboxes(): void {
-	const filter = `label=hephaestus.sandbox-owner=${runId}`;
-	for (const kind of ["container", "network", "volume"] as const) {
-		const listed = spawnSync(
-			"docker",
-			kind === "container"
-				? ["ps", "--all", "--quiet", "--filter", filter]
-				: [kind, "ls", "--quiet", "--filter", filter],
-			{ encoding: "utf8" },
-		);
-		// A docker that cannot start leaves nothing to sweep, and must not hide the error that ended the run.
-		if (listed.error !== undefined) {
-			continue;
-		}
-		const ids = listed.stdout.split("\n").filter(Boolean);
-		if (ids.length > 0) {
-			spawnSync("docker", kind === "container" ? ["rm", "--force", ...ids] : [kind, "rm", ...ids], {
-				stdio: "ignore",
-			});
-		}
-	}
-}
-
 function printLogs(name: string): void {
 	try {
 		console.error(`\n--- ${name} logs ---\n${docker("logs", name)}`);
@@ -679,8 +650,9 @@ function printLogs(name: string): void {
 
 /**
  * Starts the previous release on a schema that is ahead of it, as a rollout or a rollback does, and smokes it:
- * readiness, the core reads, and a new workspace, which writes the workspace and its practice catalog. The e2e
- * profile validates every entity against the schema at start. Its own migration finds nothing to apply.
+ * readiness, the core reads, a new workspace, which writes the workspace and its practice catalog, and a review model
+ * bound to a workspace. The e2e profile validates every entity against the schema at start. Its own migration finds
+ * nothing to apply. A sandbox claims its own run when it pulls, and no cluster runs here, so no review runs.
  */
 async function assertPreviousReleaseRuns(database: string, schema: string): Promise<void> {
 	const name = `${runId}-previous-on-${database}`;
@@ -695,22 +667,16 @@ async function assertPreviousReleaseRuns(database: string, schema: string): Prom
 		await completeTransparencyNotice(api, session);
 		await assertCoreReads(api, session);
 		await seedWorkspace(api, session, PREVIOUS_RELEASE_WORKSPACE_SLUG);
-		const modelId = await bindReviewModel(api, session);
-		withFixture(database, () => queueReview(database, modelId));
-		console.log(
-			`The previous release claimed the queued review on ${schema}: ${await claimedReview(database)}.`,
-		);
+		await bindReviewModel(api, session);
 	} catch (error) {
 		printLogs(name);
 		throw error;
 	} finally {
 		spawnSync("docker", ["rm", "--force", name], { stdio: "ignore" });
-		sweepSandboxes();
 	}
 	console.log(`The previous release runs on ${schema}.`);
 }
 
-const REVIEW_ID = "00000000-0000-0000-0000-000000978011";
 const REVIEW_WORKSPACE = "native-results";
 
 /** Runs the candidate's own fixture SQL, which fits the candidate's full schema, on `database`. */
@@ -732,8 +698,7 @@ function withFixture(database: string, seed: () => void): void {
 function seedReview(database: string): void {
 	executeFixture("result-parent.sql", database);
 	query(
-		`UPDATE review_item SET detail = '{"developerId":978003}' WHERE review_id = '${REVIEW_ID}';
-		INSERT INTO membership (workspace_id, account_id, role)
+		`INSERT INTO membership (workspace_id, account_id, role)
 		SELECT 978001, id, 'ADMIN' FROM account WHERE primary_email = 'alice@dev.invalid'`,
 		database,
 	);
@@ -764,9 +729,9 @@ async function write(
 
 /**
  * Creates an AI model on a connection that nothing answers, and binds it to practice reviews in the review's
- * workspace, through the previous release's own API. Returns the model id.
+ * workspace, through the previous release's own API.
  */
-async function bindReviewModel(api: string, alice: Session): Promise<number> {
+async function bindReviewModel(api: string, alice: Session): Promise<void> {
 	const root = await login(api, "root");
 	await completeTransparencyNotice(api, root);
 	const connection = await write(api, root, "POST", "/admin/llm/connections", {
@@ -790,95 +755,15 @@ async function bindReviewModel(api: string, alice: Session): Promise<number> {
 	});
 	await write(api, root, "PATCH", `/admin/llm/models/${modelId}`, { enabled: true });
 	await write(api, root, "PUT", `/admin/llm/models/${modelId}/sharing`, { visibility: "PUBLIC" });
-	await write(api, alice, "PUT", `/workspaces/${REVIEW_WORKSPACE}/agents/PRACTICE_REVIEW`, {
-		instanceModelId: modelId,
-		maxConcurrentJobs: 1,
-		enabled: true,
-	});
-	return modelId;
-}
-
-/**
- * Queues the review as the candidate's enqueue path (`ReviewJobService.enqueue`) writes it. The practice pins the
- * review method with every model slot (`ReviewModelBindingsAdapter`): `review` and `chat` hold the bound model, the
- * other slots hold none. The job freezes that model with its NO_CHARGE price, and also as the `CHAT` practice-script
- * model. The review item points at the job. The previous release's worker must admit all of it.
- */
-function queueReview(database: string, modelId: number): void {
-	const frozen = `jsonb_build_object('modelId', 'instance:' || m.id, 'providerProtocol', 'openai-completions',
-		'providerModelId', 'upgrade-model', 'reasoningEffort', null, 'options', jsonb_build_object(
-			'practiceModelCalls', 12, 'practiceOutputTokens', 16000,
-			'directModelTokensPerAttempt', 200000, 'directModelSearchUnitsPerAttempt', 1000))`;
-	const runtime = `jsonb_build_object('apiProtocol', 'openai-completions', 'baseUrl', 'http://127.0.0.1:9/v1',
-		'upstreamModelId', 'upgrade-model', 'connectionScope', 'INSTANCE', 'connectionId', m.connection_id,
-		'modelId', m.id, 'workspaceId', b.workspace_id, 'dataHandlingTier', b.data_handling_tier,
-		'reasoningEffort', null, 'priceSnapshot', jsonb_build_object('fundingSource', 'INSTANCE',
-			'pricingState', 'NO_CHARGE', 'appliedPriceId', p.id, 'appliedWorkspaceModelId', null,
-			'per1mInputUsd', p.per_1m_input_usd, 'per1mOutputUsd', p.per_1m_output_usd,
-			'per1mCacheReadUsd', p.per_1m_cache_read_usd, 'per1mCacheWriteUsd', p.per_1m_cache_write_usd))`;
-	const bound = `FROM llm_model m
-		JOIN llm_model_price p ON p.model_id = m.id AND p.effective_to IS NULL
-		JOIN workspace_model_assignment b ON b.instance_model_id = m.id AND b.workspace_id = 978001
-			AND b.purpose = 'PRACTICE_REVIEW'
-		WHERE m.id = ${modelId}`;
-	query(
-		`WITH method AS (SELECT jsonb_build_array(
-				jsonb_build_object('slot', 'chat', 'kind', 'CHAT', 'model', ${frozen}),
-				jsonb_build_object('slot', 'decision', 'kind', 'DECISION', 'model', null),
-				jsonb_build_object('slot', 'embedding', 'kind', 'EMBEDDING', 'model', null),
-				jsonb_build_object('slot', 'reranking', 'kind', 'RERANKING', 'model', null),
-				jsonb_build_object('slot', 'review', 'kind', 'CHAT', 'model', ${frozen})) AS models
-			${bound})
-		UPDATE review_practice SET method = jsonb_build_object('epoch', 1, 'models', method.models,
-			'modelDigest', review_model_digest(method.models))
-		FROM method WHERE review_id = '${REVIEW_ID}';
-		WITH snapshot AS (SELECT ${runtime} AS model, b.timeout_seconds ${bound})
-		INSERT INTO review_job (id,review_id,workspace_id,submitted_at,status,processing_status,trace_id,input,config_snapshot)
-		SELECT '${QUEUED_REVIEW_JOB}','${REVIEW_ID}',978001,now(),'QUEUED','NONE','00000000000000000000000000000001',
-			'{"itemId":978006,"assignments":[{"reviewId":"${REVIEW_ID}","practiceId":978004,"itemId":978006}]}',
-			jsonb_build_object('schemaVersion', 8, 'model', model, 'contextWindow', null, 'maxOutputTokens', null,
-				'timeoutSeconds', timeout_seconds, 'allowInternet', false,
-				'practiceScript', jsonb_build_object('CHAT', model))
-		FROM snapshot;
-		UPDATE review_item SET job_id = '${QUEUED_REVIEW_JOB}' WHERE review_id = '${REVIEW_ID}'`,
-		database,
-	);
-	if (count(`SELECT count(*) FROM review_job WHERE id = '${QUEUED_REVIEW_JOB}'`, database) !== 1) {
-		throw new Error(
-			"The queued review job was not written: the model, its price or its binding is missing",
-		);
-	}
-}
-
-/**
- * Waits until the previous release's worker claims the queued review through its native claim queries: the job is
- * started under this worker. The attempt fails afterwards, as it cannot capture the fixture's pull request.
- */
-async function claimedReview(database: string): Promise<string> {
-	const deadline = Date.now() + 120_000;
-	let job = "";
-	while (Date.now() < deadline) {
-		const row = query(
-			`SELECT attempt || '|' || (worker_id IS NOT NULL AND started_at IS NOT NULL) || '|' || status || '|'
-				|| concat_ws(' ', 'status=' || status, 'attempt=' || attempt, 'worker=' || worker_id,
-					'started=' || started_at, 'completed=' || completed_at, 'reason=' || cancellation_reason,
-					'error=' || left(error_message, 120))
-			FROM review_job WHERE id='${QUEUED_REVIEW_JOB}'`,
-			database,
-		);
-		const [attempt = "", running = "", status = "", ...summary] = row.split("|");
-		job = summary.join("|");
-		// A failed attempt can be requeued as an orphan between two reads: it then has no worker, but a higher attempt.
-		if (running === "true" || Number(attempt) > 0) {
-			return job;
-		}
-		if (row !== "" && status !== "QUEUED" && status !== "RUNNING") {
-			throw new Error(`The previous release ended the queued review without running it: ${job}`);
-		}
-		await sleep(2000);
-	}
-	throw new Error(
-		`The previous release did not claim the queued review within 120 seconds: ${job}`,
+	await write(
+		api,
+		alice,
+		"PUT",
+		`/workspaces/${REVIEW_WORKSPACE}/model-assignments/PRACTICE_REVIEW`,
+		{
+			instanceModelId: modelId,
+			enabled: true,
+		},
 	);
 }
 
@@ -1086,7 +971,6 @@ try {
 	}
 	throw error;
 } finally {
-	sweepSandboxes();
 	// --volumes removes only these containers' anonymous volumes, such as PostgreSQL's data.
 	spawnSync("docker", ["rm", "--force", "--volumes", application, postgres], {
 		stdio: "ignore",
