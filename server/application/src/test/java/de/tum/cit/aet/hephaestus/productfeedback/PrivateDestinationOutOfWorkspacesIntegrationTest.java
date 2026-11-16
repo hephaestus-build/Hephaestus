@@ -39,6 +39,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.workspace.WorkspaceRepositoryMo
 import de.tum.cit.aet.hephaestus.notification.email.CapturingMailTestConfiguration;
 import de.tum.cit.aet.hephaestus.productfeedback.FeedbackDTOs.FeedbackRequestDTO;
 import de.tum.cit.aet.hephaestus.productfeedback.FilingDTOs.UpdateProductFeedbackDestinationsDTO;
+import de.tum.cit.aet.hephaestus.productfeedback.metrics.ProductFeedbackMetrics;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.StubInstallationRepositoryEnumerator;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
@@ -46,6 +47,7 @@ import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.adapter.WorkspaceSyncTargetProvider;
+import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
 import java.time.Instant;
@@ -160,6 +162,9 @@ class PrivateDestinationOutOfWorkspacesIntegrationTest extends BaseIntegrationTe
 
     @Autowired
     private TransactionTemplate transactions;
+
+    @Autowired
+    private MeterRegistry meterRegistry;
 
     private Workspace workspace;
     private Workspace otherWorkspace;
@@ -297,6 +302,57 @@ class PrivateDestinationOutOfWorkspacesIntegrationTest extends BaseIntegrationTe
                         "SELECT COUNT(*) FROM item_event WHERE item_id = ? AND evidence::text LIKE '%The words%'",
                         keptItem))
                 .isEqualTo(1);
+    }
+
+    @Test
+    void aWorkspaceThatCannotBeEmptiedIsCountedAndTheOtherWorkspaceStillEmpties() throws Exception {
+        long otherItem = heldIn(otherWorkspace, PRIVATE_ID, 91L);
+        long keptMonitor = monitorOf(workspace, PRIVATE);
+        long otherMonitor = monitorOf(otherWorkspace, PRIVATE);
+        double before = notWithdrawn();
+        // Another transaction holds the workspace's row. Both of its withdrawal steps wait out the 5 s lock bound of
+        // WorkspaceRepository.findByIdForUpdate and fail, so this test takes about 10 s.
+        try (var holder = Objects.requireNonNull(jdbc.getDataSource()).getConnection()) {
+            holder.setAutoCommit(false);
+            try (var lock = holder.prepareStatement("SELECT id FROM workspace WHERE id = ? FOR UPDATE")) {
+                lock.setLong(1, workspace.getId());
+                lock.executeQuery().close();
+            }
+            save(PRIVATE);
+            holder.rollback();
+        }
+
+        assertThat(notWithdrawn()).isEqualTo(before + 1);
+        assertThat(monitorRows.findById(keptMonitor)).isPresent();
+        assertThat(monitorRows.findById(otherMonitor)).isEmpty();
+        assertThat(jdbc.queryForObject(
+                        "SELECT removed_at IS NOT NULL FROM item WHERE id = ?", Boolean.class, otherItem))
+                .isTrue();
+        assertThat(jdbc.queryForObject(
+                        "SELECT EXISTS (SELECT 1 FROM item_event WHERE item_id = ? AND evidence::text LIKE '%The words%')",
+                        Boolean.class, otherItem))
+                .isFalse();
+        assertThat(destinationRows
+                        .findById(ProductFeedbackDestination.SINGLETON)
+                        .orElseThrow()
+                        .getPrivateRepository())
+                .isEqualTo(PRIVATE);
+    }
+
+    private long monitorOf(Workspace holder, String name) {
+        return number(
+                "SELECT id FROM repository_to_monitor WHERE workspace_id = ? AND name_with_owner = ?",
+                holder.getId(),
+                name);
+    }
+
+    /** The one counter the not-withdrawn alert reads, found by its exact tags. */
+    private double notWithdrawn() {
+        return meterRegistry
+                .get(ProductFeedbackMetrics.STEPS)
+                .tags("step", "private_repository", "outcome", "not_withdrawn")
+                .counter()
+                .count();
     }
 
     @Test
