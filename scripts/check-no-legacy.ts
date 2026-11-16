@@ -206,7 +206,10 @@ export function findings(file: string, source: string, files: readonly string[] 
 		matches("path-alias", /\brewrite\s+[^;]+\s+permanent\s*;/gu);
 		matches("path-alias", /^\s*(?:-\s*)?type:\s*URLRewrite\b/gmu);
 	}
-	if (file.startsWith("docs/") && !file.startsWith("docs/decisions/")) {
+	// The one redirect map keeps the addresses of released pages working (docs/src/lib/released-redirects.ts).
+	const releasedRedirects =
+		file === "docs/src/lib/released-redirects.ts" || file === "docs/astro.config.ts";
+	if (file.startsWith("docs/") && !file.startsWith("docs/decisions/") && !releasedRedirects) {
 		matches("docs-redirect", /^\s*(?:redirect_to|redirect_from|redirects|aliases)\s*:/gmu);
 		matches("docs-redirect", /["'](?:redirect_to|redirect_from|redirects|aliases)["']\s*:/gu);
 		matches(

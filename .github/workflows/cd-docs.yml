@@ -8,6 +8,7 @@ on:
       # The docs build runs these scripts and checks the web app's docs targets.
       - "scripts/docs-astro.ts"
       - "scripts/check-docs-links.ts"
+      - "scripts/check-docs-released-paths.ts"
       - "scripts/check-doc-targets.ts"
       - "webapp/src/lib/doc-targets.ts"
       - ".github/workflows/cd-docs.yml"
@@ -19,6 +20,7 @@ on:
       - "docs/**"
       - "scripts/docs-astro.ts"
       - "scripts/check-docs-links.ts"
+      - "scripts/check-docs-released-paths.ts"
       - "scripts/check-doc-targets.ts"
       - "webapp/src/lib/doc-targets.ts"
       # Lockfile maintenance alone moves the transitive packages of the site.

@@ -14,6 +14,7 @@ import { parse } from "yaml";
 import { migrationEntries } from "./src/lib/migration-entries.ts";
 import { linksWithBasePath } from "./src/lib/page-tree.ts";
 import { callouts, rejectUnparsedAdmonitions, restoreUnusedDirectives } from "./src/lib/plugins.ts";
+import { RELEASED_REDIRECTS } from "./src/lib/released-redirects.ts";
 import { GUIDES, REPO_URL, SITE_URL } from "./src/lib/site.ts";
 
 /*
@@ -153,6 +154,13 @@ export default defineConfig({
 	// GitHub Pages serves `admin/upgrade.html` at `/admin/upgrade`, the URL that every published link uses.
 	build: { format: "file" },
 	trailingSlash: "never",
+	// Astro adds the base path to a redirect's source but not to its destination.
+	redirects: Object.fromEntries(
+		Object.entries(RELEASED_REDIRECTS).map(([from, to]) => [
+			from,
+			`${base.replace(/\/$/u, "")}${to}`,
+		]),
+	),
 	outDir: "./build",
 	// The site ships its images as committed. Without a transform, the build needs no `sharp`, which pnpm leaves out.
 	image: { service: passthroughImageService() },
