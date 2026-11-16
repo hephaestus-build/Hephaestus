@@ -42,7 +42,7 @@ class ScmCapturePreparationTest extends BaseUnitTest {
         var pinned = PinnedParks.during(() -> preparation.fetch(
                 () -> LockSupport.parkNanos(Duration.ofMillis(50).toNanos())));
 
-        assertThat(pinned).as("a monitor around the fetch pins the carrier").isEmpty();
+        assertThat(pinned).as("the fetch pins no carrier").isEmpty();
     }
 
     @Test
@@ -59,8 +59,7 @@ class ScmCapturePreparationTest extends BaseUnitTest {
 
         Thread second = Thread.ofVirtual().start(preparation::unavailableReason);
 
-        // A thread that waits on a lock parks (WAITING) and leaves its carrier; one that waits to enter a monitor is
-        // BLOCKED, and on Java 21 it keeps its carrier.
+        // A thread that waits on a lock parks (WAITING) and leaves its carrier.
         await().atMost(Duration.ofSeconds(5)).until(() -> second.getState() == Thread.State.WAITING);
         release.countDown();
         fetch.join();

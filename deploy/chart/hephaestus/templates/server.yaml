@@ -110,8 +110,8 @@ spec:
             # docs/admin/production-operations-runbook.mdx, HephaestusServerRestarting.
             {{- $recording := "-XX:FlightRecorderOptions=repository=/tmp/jfr -XX:StartFlightRecording=settings=default,disk=true,maxage=6h,maxsize=256m,dumponexit=true,filename=/tmp/jfr/exit-%t.jfr" }}
             {{- if $sandbox.enabled }}
-            # A blocked socket call pins its carrier on Java 21, so the scheduler may need a carrier for each
-            # gateway connection. This is a ceiling, not the usual count: docs/admin/sizing.mdx § Memory headroom.
+            # The scheduler adds a carrier for each virtual thread that blocks in file I/O, and this caps them.
+            # This is a ceiling, not the usual count: docs/admin/sizing.mdx § Memory headroom.
             - name: JAVA_TOOL_OPTIONS
               value: -XX:MaxDirectMemorySize=128M -Djdk.virtualThreadScheduler.maxPoolSize={{ add (int $sandbox.gateway.maxConnections) 256 }} {{ $recording }}
             {{- else }}

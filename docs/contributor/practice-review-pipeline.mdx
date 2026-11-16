@@ -1086,6 +1086,6 @@ stateDiagram-v2
     CLOSED --> [*]
 ```
 
-The [Java file-lock contract](https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/nio/channels/FileLock.html) makes locks process-owned and advisory.
+The [Java file-lock contract](https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/nio/channels/FileLock.html) makes locks process-owned and advisory.
 Allocation and reconciliation therefore use the same local registry lock, and reconciliation never opens a second channel for an active local copy's lease.
 The [PostgreSQL session-lock contract](https://www.postgresql.org/docs/current/explicit-locking.html#ADVISORY-LOCKS) lets the existing capture session cover file IO without an open row transaction.
