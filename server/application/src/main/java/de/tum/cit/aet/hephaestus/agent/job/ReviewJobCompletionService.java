@@ -127,11 +127,13 @@ public class ReviewJobCompletionService {
         job.setProcessingStatus(completed ? ProcessingStatus.DONE : ProcessingStatus.FAILED);
         jobs.saveAndFlush(job);
         if (review.kind() == ReviewKind.SCAN) return;
-        boolean readinessRefused = RefusalOutcome.INSUFFICIENT_EVIDENCE.name().equals(outcome)
-                || RefusalOutcome.WORKSPACE_REFUSED.name().equals(outcome);
+        // A refusal before measuring has its own reason: too little evidence, or more than a sandbox holds.
+        var refusal = RefusalOutcome.INSUFFICIENT_EVIDENCE.name().equals(outcome)
+                ? ReviewStopReason.READINESS_REFUSED
+                : RefusalOutcome.WORKSPACE_REFUSED.name().equals(outcome) ? ReviewStopReason.EVIDENCE_TOO_LARGE : null;
         var status = job.getStatus() == ReviewJobStatus.CANCELLED
                 ? ReviewStatus.CANCELLED
-                : readinessRefused
+                : refusal != null
                         ? ReviewStatus.PARTIAL
                         : completed
                                 ? runtimeIncomplete ? ReviewStatus.PARTIAL : ReviewStatus.COMPLETE
@@ -139,8 +141,8 @@ public class ReviewJobCompletionService {
                                         ? ReviewStatus.PARTIAL
                                         : ReviewStatus.FAILED;
         boolean unconfirmed = RefusalOutcome.COMPOSITION_UNCONFIRMED.name().equals(outcome);
-        var stop = readinessRefused
-                ? ReviewStopReason.READINESS_REFUSED
+        var stop = refusal != null
+                ? refusal
                 : unconfirmed
                         ? ReviewStopReason.COMPOSITION_UNCONFIRMED
                         : completed

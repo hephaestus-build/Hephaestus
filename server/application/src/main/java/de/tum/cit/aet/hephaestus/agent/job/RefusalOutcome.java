@@ -1,6 +1,10 @@
 package de.tum.cit.aet.hephaestus.agent.job;
 
 enum RefusalOutcome {
+    /**
+     * The captured evidence exceeded the sandbox's byte budget. "Workspace" here is the sandbox's working directory,
+     * not the tenant.
+     */
     WORKSPACE_REFUSED,
     INSUFFICIENT_EVIDENCE,
     /** Every attempt of an admitted review ended before it confirmed a decision for each destination. */

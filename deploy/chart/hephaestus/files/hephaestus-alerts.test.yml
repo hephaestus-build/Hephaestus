@@ -2364,6 +2364,8 @@ tests:
         values: "0 1 2 3 4 5 6x60"
       - series: 'practice_review_ended_total{job="hephaestus",instance="server:9090",kind="item",status="partial",reason="readiness_refused"}'
         values: "0+1x60"
+      - series: 'practice_review_ended_total{job="hephaestus",instance="server:9090",kind="item",status="partial",reason="evidence_too_large"}'
+        values: "0+1x60"
       - series: 'practice_review_ended_total{job="hephaestus",instance="server:9090",kind="item",status="partial",reason="budget"}'
         values: "0+1x60"
       - series: 'practice_review_ended_total{job="hephaestus",instance="server:9090",kind="item",status="partial",reason="replaced"}'
