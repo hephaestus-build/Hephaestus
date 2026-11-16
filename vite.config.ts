@@ -288,7 +288,7 @@ export default defineConfig({
 			"lint:prose": run("node scripts/check-prose.ts"),
 			"report:prose": run("node scripts/report-prose.ts"),
 			"gate:instructions": run(
-				"node scripts/check-agent-instructions.ts && node --test scripts/check-agent-instructions.test.ts",
+				"node scripts/check-agent-instructions.ts && node scripts/check-docs-page-paths.ts && node --test scripts/check-agent-instructions.test.ts scripts/check-docs-page-paths.test.ts",
 			),
 			"gate:changesets": run(
 				`node scripts/verify-changesets.ts --local && node --test --test-concurrency=${nodeTestConcurrency} scripts/verify-changesets.test.ts scripts/sync-release-version.test.ts`,
