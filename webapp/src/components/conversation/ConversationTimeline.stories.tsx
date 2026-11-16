@@ -791,16 +791,17 @@ export const SentQuestionAnchorsEveryTime: Story = {
 		const next = canvas.getByRole("button", { name: "Next" });
 		for (let send = 0; send < 20; send += 1) {
 			for (let phase = 0; phase < SEND_STEPS; phase += 1) {
+				// Asked for before the press, this frame callback runs ahead of any the press schedules,
+				// so it reads the layout that the press's first frame painted, and costs one frame.
+				const painted = nextFrame();
 				next.click();
-				for (let frame = 0; frame < 2; frame += 1) {
-					await nextFrame();
-					const row = rowOf(canvas.getByText(sentQuestion(send)));
-					const offset = row.getBoundingClientRect().top - viewport.getBoundingClientRect().top;
-					await expect(
-						Math.abs(offset - PEEK),
-						JSON.stringify({ send, phase, frame, offset }),
-					).toBeLessThanOrEqual(1);
-				}
+				await painted;
+				const row = rowOf(canvas.getByText(sentQuestion(send)));
+				const offset = row.getBoundingClientRect().top - viewport.getBoundingClientRect().top;
+				await expect(
+					Math.abs(offset - PEEK),
+					JSON.stringify({ send, phase, offset }),
+				).toBeLessThanOrEqual(1);
 			}
 		}
 	},
