@@ -1,4 +1,3 @@
-import { QueryClient } from "@tanstack/react-query";
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
@@ -18,7 +17,12 @@ import {
 	ACROSS_WORKSPACE,
 	ACROSS_WORKSPACE_TILES,
 } from "@/stories/practices-across-the-workspace-story-data";
-import { loadRouteCode, ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
+import {
+	loadRouteCode,
+	ROUTE_RENDER_WAIT,
+	renderRouteAtWithRouter,
+	testQueryClient,
+} from "@/test/router-harness";
 
 beforeAll(
 	async () => loadRouteCode("/w/acme/practices-across-the-workspace", "/w/acme/practice-profile"),
@@ -103,9 +107,7 @@ afterEach(() => {
  * the clock: a slow run would otherwise pass the app's 30 seconds and read again, as it should.
  */
 function appQueryClient() {
-	return new QueryClient({
-		defaultOptions: { queries: { retry: false, staleTime: Number.POSITIVE_INFINITY } },
-	});
+	return testQueryClient({ staleTime: Number.POSITIVE_INFINITY });
 }
 
 const readsOf = (path: string) => requests.filter((url) => url.pathname.endsWith(path)).length;

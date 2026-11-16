@@ -1,4 +1,3 @@
-import { QueryClient } from "@tanstack/react-query";
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
@@ -45,7 +44,12 @@ import { reviewHandlers } from "@/routes/_authenticated/w/$workspaceSlug/admin/p
 import { apiPathOf } from "@/test/api-path";
 import { deferred, pending } from "@/test/async";
 import { ObserverStub } from "@/test/observers";
-import { loadRouteCode, ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
+import {
+	loadRouteCode,
+	ROUTE_RENDER_WAIT,
+	renderRouteAtWithRouter,
+	testQueryClient,
+} from "@/test/router-harness";
 
 beforeAll(
 	async () =>
@@ -699,7 +703,7 @@ const unavailable = (detail: string) => HttpResponse.json({ status: 503, detail 
 
 // These cases keep retry admission and execute retries without wall-clock backoff.
 function traceQueryClient() {
-	return new QueryClient({ defaultOptions: { queries: { retry: false, retryDelay: 0 } } });
+	return testQueryClient();
 }
 
 describe("a review's trace while the review runs", () => {

@@ -1,4 +1,3 @@
-import { QueryClient } from "@tanstack/react-query";
 import { createMemoryHistory, createRouter } from "@tanstack/react-router";
 import { type HttpHandler, HttpResponse, http } from "msw";
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
@@ -11,7 +10,7 @@ import { currentUser } from "@/mocks/fixtures/auth";
 import { ownMembership, workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
 import { routeTree } from "@/routeTree.gen";
-import { loadRouteCode, ROUTE_RENDER_WAIT } from "@/test/router-harness";
+import { loadRouteCode, ROUTE_RENDER_WAIT, testQueryClient } from "@/test/router-harness";
 
 beforeAll(
 	async () =>
@@ -42,7 +41,7 @@ function newRouter(url?: string) {
 		routeTree,
 		...(hasText(url) ? { history: createMemoryHistory({ initialEntries: [url] }) } : {}),
 		// A fresh client per case: a shared cache would let one role's answer satisfy another's guard.
-		context: { queryClient: new QueryClient(), auth: undefined },
+		context: { queryClient: testQueryClient(), auth: undefined },
 	});
 }
 

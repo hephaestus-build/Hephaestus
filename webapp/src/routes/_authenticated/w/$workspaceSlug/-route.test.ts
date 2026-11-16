@@ -1,4 +1,4 @@
-import { noop, QueryClient } from "@tanstack/react-query";
+import { noop } from "@tanstack/react-query";
 import { createMemoryHistory, createRouter } from "@tanstack/react-router";
 import { HttpResponse, http } from "msw";
 import { beforeAll, describe, expect, it, vi } from "vitest";
@@ -11,7 +11,7 @@ import { server } from "@/mocks/server";
 import { routeTree } from "@/routeTree.gen";
 import { apiPathOf } from "@/test/api-path";
 import { deferred } from "@/test/async";
-import { loadRouteCode, ROUTE_RENDER_WAIT } from "@/test/router-harness";
+import { loadRouteCode, ROUTE_RENDER_WAIT, testQueryClient } from "@/test/router-harness";
 
 beforeAll(
 	async () =>
@@ -38,7 +38,7 @@ function listWorkspaces(...slugs: string[]) {
 	);
 }
 
-async function land(url: string, queryClient = new QueryClient()) {
+async function land(url: string, queryClient = testQueryClient()) {
 	const router = createRouter({
 		...ROUTER_SEARCH,
 		routeTree,
@@ -93,10 +93,7 @@ describe("workspace route gate", () => {
 		server.use(
 			http.get("*/workspaces/acme/onboarding/me", () => new HttpResponse(null, { status: 503 })),
 		);
-		const location = await land(
-			"/w/acme",
-			new QueryClient({ defaultOptions: { queries: { retry: false } } }),
-		);
+		const location = await land("/w/acme", testQueryClient());
 		expect(location.pathname).toBe(WORKSPACE_HOME);
 	});
 	it("returns an inaccessible workspace's deep link to an accessible workspace home", async () => {
@@ -145,7 +142,7 @@ describe("workspace route gate", () => {
 		listWorkspaces("acme");
 		// The app's own `staleTime` (`integrations/tanstack-query/root-provider.tsx`), so the gate
 		// answers from the list the creation wizard wrote rather than refetching past it.
-		const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: 30_000 } } });
+		const queryClient = testQueryClient({ staleTime: 30_000 });
 		queryClient.setQueryData(listWorkspacesQueryKey(), [
 			workspaceListItem("acme"),
 			workspaceListItem("brand-new"),

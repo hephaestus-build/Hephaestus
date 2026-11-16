@@ -1,4 +1,3 @@
-import { QueryClient } from "@tanstack/react-query";
 import { createMemoryHistory, createRouter } from "@tanstack/react-router";
 import { act, cleanup, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -26,7 +25,12 @@ import { apiPathOf } from "@/test/api-path";
 import { deferred, sleep } from "@/test/async";
 import { precedes } from "@/test/dom";
 import { ObserverStub } from "@/test/observers";
-import { loadRouteCode, ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
+import {
+	loadRouteCode,
+	ROUTE_RENDER_WAIT,
+	renderRouteAtWithRouter,
+	testQueryClient,
+} from "@/test/router-harness";
 
 beforeAll(
 	async () =>
@@ -615,7 +619,7 @@ async function robotsAt(url: string) {
 		...ROUTER_SEARCH,
 		routeTree,
 		history: createMemoryHistory({ initialEntries: [url] }),
-		context: { queryClient: new QueryClient(), auth: undefined },
+		context: { queryClient: testQueryClient(), auth: undefined },
 	});
 	await router.load();
 	return router.state.matches
@@ -1009,7 +1013,7 @@ describe("tenant workspace root", () => {
 				"https://acme.hephaestus.build",
 			),
 			history: createMemoryHistory({ initialEntries: ["/?range=30d"] }),
-			context: { queryClient: new QueryClient(), auth: undefined },
+			context: { queryClient: testQueryClient(), auth: undefined },
 		});
 		await router.load();
 		expect(router.state.location.pathname).toBe("/w/acme");
