@@ -58,6 +58,7 @@ import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.Import;
@@ -305,13 +306,14 @@ class PrivateDestinationOutOfWorkspacesIntegrationTest extends BaseIntegrationTe
     }
 
     @Test
+    @Timeout(60)
     void aWorkspaceThatCannotBeEmptiedIsCountedAndTheOtherWorkspaceStillEmpties() throws Exception {
         long otherItem = heldIn(otherWorkspace, PRIVATE_ID, 91L);
         long keptMonitor = monitorOf(workspace, PRIVATE);
         long otherMonitor = monitorOf(otherWorkspace, PRIVATE);
         double before = notWithdrawn();
-        // Another transaction holds the workspace's row. Both of its withdrawal steps wait out the 5 s lock bound of
-        // WorkspaceRepository.findByIdForUpdate and fail, so this test takes about 10 s.
+        // Another transaction holds the workspace's row, so each withdrawal step that locks it waits out the 5 s lock
+        // bound of WorkspaceRepository.findByIdForUpdate and fails. The timeout stops a hang if that bound is lost.
         try (var holder = Objects.requireNonNull(jdbc.getDataSource()).getConnection()) {
             holder.setAutoCommit(false);
             try (var lock = holder.prepareStatement("SELECT id FROM workspace WHERE id = ? FOR UPDATE")) {
