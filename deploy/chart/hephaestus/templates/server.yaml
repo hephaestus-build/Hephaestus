@@ -8,11 +8,7 @@
 {{- /* The schema wait (HEPHAESTUS_DATABASE_MIGRATION_WAIT, 10 minutes) plus two minutes to boot and finish starting. */}}
 {{- $startupFailures := 72 }}
 {{- if $sandbox.enabled }}
-{{- $api := .Values.networkPolicy.kubernetesApi }}
-{{- $_ := required "networkPolicy.kubernetesApi.cidr is required: state the API endpoint that the network plugin sees" $api.cidr }}
-{{- if eq (int $api.port) 0 }}
-{{- fail "networkPolicy.kubernetesApi.port is required: state the API endpoint port that the network plugin sees" }}
-{{- end }}
+{{- include "hephaestus.kubernetesApiCheck" . }}
 {{- end }}
 apiVersion: v1
 kind: ServiceAccount

@@ -1051,3 +1051,14 @@ drain. docs/admin/kubernetes.mdx § Sandbox prerequisites.
 - name: HEPHAESTUS_AGENT_SANDBOX_GATEWAY_URL
   value: {{ printf "http://%s.%s.svc:%v" (include "hephaestus.name" (dict "root" . "component" "sandbox-gateway")) .Release.Namespace $port | quote }}
 {{- end -}}
+
+{{/*
+Refuses to render sandboxes without the Kubernetes API endpoint that the network plugin sees.
+*/}}
+{{- define "hephaestus.kubernetesApiCheck" -}}
+{{- $api := .Values.networkPolicy.kubernetesApi }}
+{{- $_ := required "networkPolicy.kubernetesApi.cidr is required: state the API endpoint that the network plugin sees" $api.cidr }}
+{{- if eq (int $api.port) 0 }}
+{{- fail "networkPolicy.kubernetesApi.port is required: state the API endpoint port that the network plugin sees" }}
+{{- end }}
+{{- end }}

@@ -9,13 +9,6 @@
 # networkPolicy.kubernetesApi, and the chart refuses to render without them
 # (docs/admin/kubernetes.mdx § Install).
 postgresql:
-  bundled: true
-  # Shared-node policy. Keep the proven container ceiling until the loaded trial qualifies 1536Mi.
-  resources:
-    requests: { memory: 2Gi }
-  backup:
-    resources:
-      requests: { memory: 512Mi }
   parameters:
     shared_buffers: 256MB
     work_mem: 2MB
@@ -28,7 +21,7 @@ postgresql:
     max_parallel_workers_per_gather: 0
     max_wal_size: 1GB
 server:
-  databasePool: { maximumPoolSize: auto, minimumIdle: 2 }
+  databasePool: { minimumIdle: 2 }
   # Reserve a replacement beside the draining server within the single node budget.
   replicas: 1
   drainTimeoutSeconds: 600
