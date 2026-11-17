@@ -1245,11 +1245,20 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
         var requeued = jobs.findById(job.getId()).orElseThrow();
         assertThat(requeued.getStatus()).isEqualTo(ReviewJobStatus.QUEUED);
         assertThat(requeued.spentAttempts()).isEqualTo(runs().reviewRetries() + 1);
-        jdbc.update(
-                "UPDATE agent_run SET lease_epoch = lease_epoch + 1, available_at = clock_timestamp() - interval '1"
-                        + " second' WHERE id=?",
-                runId);
+        // A claim that waits, as one that a lifecycle write blocks: a new lease epoch, no attempt, no spent retry.
+        makeAvailable(runId);
+        Boolean deferred = transactions.execute(status -> agentRuns
+                .claimSubject(job.getWorkspaceId(), subject, Set.of(AgentRunKind.REVIEW))
+                .map(lease -> agentRuns.defer(lease.fence(), AgentRuns.Deferral.LOCKED))
+                .orElseThrow());
+        assertThat(deferred).isTrue();
+        makeAvailable(runId);
+        assertThat(jobs.findById(job.getId()).orElseThrow().spentAttempts()).isEqualTo(runs().reviewRetries() + 1);
         return requeued;
+    }
+
+    private void makeAvailable(UUID runId) {
+        jdbc.update("UPDATE agent_run SET available_at = clock_timestamp() - interval '1 second' WHERE id=?", runId);
     }
 
     private ReviewSandboxRuns reviewSandboxRuns(ReviewJobClaimService claims) {
