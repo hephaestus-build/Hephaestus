@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.core.exception.InvalidInputException;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import de.tum.cit.aet.hephaestus.practices.feedback.dto.ReviewBoundFeedbackDTO;
+import de.tum.cit.aet.hephaestus.practices.model.Result;
 import de.tum.cit.aet.hephaestus.practices.result.ProblemRepository;
 import de.tum.cit.aet.hephaestus.practices.result.ResultRepository;
 import de.tum.cit.aet.hephaestus.practices.result.ResultViewQuery;
@@ -115,10 +116,11 @@ public class ReviewLineageService {
             lineage.findFeedbackIdsOfReview(ws, id).stream().limit(LIMIT).forEach(feedbackIds::add);
         }
         var rows = results.findByWorkspaceIdAndIdIn(ws, resultIds);
-        var permitted = authorization.permitsAll(ws, rows, SourceUsePurpose.OPERATOR_EVIDENCE_REVIEW);
-        for (var v : views.operatorViews(ws, rows)) {
+        var facts = rows.stream().map(Result::facts).toList();
+        var permitted = authorization.permitsAll(ws, facts, SourceUsePurpose.OPERATOR_EVIDENCE_REVIEW);
+        for (var v : views.operatorViews(ws, facts)) {
             var r = v.result();
-            var resultKey = key(LineageKind.RESULT, r.getId());
+            var resultKey = key(LineageKind.RESULT, r.id());
             nodes.put(
                     resultKey,
                     new ReviewLineageNodeDTO(
@@ -126,11 +128,11 @@ public class ReviewLineageService {
                             LineageKind.RESULT,
                             null,
                             null,
-                            resultQuery.bound(v, permitted.contains(r.getId())),
+                            resultQuery.bound(v, permitted.contains(r.id())),
                             null,
                             null));
-            edges.add(new ReviewLineageEdgeDTO(key(LineageKind.REVIEW, r.getReviewId()), resultKey, "RECORDED"));
-            for (var child : problems.findByWorkspaceIdAndResultIdOrderByPositionAsc(ws, r.getId()).stream()
+            edges.add(new ReviewLineageEdgeDTO(key(LineageKind.REVIEW, r.reviewId()), resultKey, "RECORDED"));
+            for (var child : problems.findByWorkspaceIdAndResultIdOrderByPositionAsc(ws, r.id()).stream()
                     .limit(LIMIT)
                     .toList()) {
                 var childKey = key(LineageKind.PROBLEM, child.getId());
@@ -145,7 +147,7 @@ public class ReviewLineageService {
                                 new ProblemSummaryDTO(
                                         child.getId(),
                                         child.getSeverity(),
-                                        permitted.contains(r.getId()) ? child.getSummary() : "Evidence hidden"),
+                                        permitted.contains(r.id()) ? child.getSummary() : "Evidence hidden"),
                                 null));
                 edges.add(new ReviewLineageEdgeDTO(resultKey, childKey, "RECORDS"));
             }

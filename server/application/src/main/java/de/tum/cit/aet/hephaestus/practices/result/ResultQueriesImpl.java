@@ -2,13 +2,21 @@ package de.tum.cit.aet.hephaestus.practices.result;
 
 import de.tum.cit.aet.hephaestus.practices.model.Problem;
 import de.tum.cit.aet.hephaestus.practices.model.Result;
+import de.tum.cit.aet.hephaestus.practices.model.ResultFacts;
 import de.tum.cit.aet.hephaestus.practices.spi.Currentness;
+import de.tum.cit.aet.hephaestus.practices.spi.ResultEndReason;
+import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultSort;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewListSort;
+import de.tum.cit.aet.hephaestus.practices.spi.Severity;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
+import java.sql.Array;
+import java.sql.SQLException;
+import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -134,7 +142,7 @@ public class ResultQueriesImpl implements ResultQueries {
     }
 
     @Override
-    public List<Result> forDevelopersSince(
+    public List<ResultFacts> forDevelopersSince(
             long workspaceId, Collection<Long> developers, Instant since, boolean currentOnly) {
         if (developers.isEmpty()) return List.of();
         var where = new StringBuilder(
@@ -147,11 +155,73 @@ public class ResultQueriesImpl implements ResultQueries {
             where.append(" AND r.ended_at IS NULL AND NOT ").append(INCORRECT);
             sourceCurrentness(workspaceId, JOIN, where, params, Currentness.CURRENT);
         }
-        return session()
+        // Only the facts a history needs, with coverage, explanation and evidence as presence flags and the source
+        // kinds that the result recorded: a recorded row loads no evidence. UUIDs compare as their text does, so the
+        // order of the earlier id::text sort is unchanged.
+        List<Object[]> rows = session()
                 .createNativeQuery(
-                        "SELECT r.*" + JOIN + where + " ORDER BY r.recorded_at DESC,r.id::text DESC", Result.class)
+                        "SELECT r.id,r.workspace_id,r.review_id,r.practice_id,"
+                                + "r.practice_version_id,r.item_id,r.item_version,r.developer_id,r.outcome,r.severity,"
+                                + "r.summary,r.evidence_version,r.recorded_at,r.ended_at,r.end_reason,"
+                                + "r.explanation IS NOT NULL,r.evidence IS NOT NULL,r.coverage IS NOT NULL,"
+                                + "r.source_kinds"
+                                + JOIN + where + " ORDER BY r.recorded_at DESC,r.id DESC",
+                        Object[].class)
                 .setProperties(params)
                 .getResultList();
+        // A row without recorded kinds (an older server wrote it during an upgrade, or the upgrade has not reached it)
+        // is read whole, so its kinds come from its evidence as an insert records them.
+        var unrecorded = rows.stream()
+                .filter(row -> row[18] == null)
+                .map(row -> (UUID) row[0])
+                .toList();
+        Map<UUID, @Nullable List<String>> extracted = new HashMap<>();
+        if (!unrecorded.isEmpty())
+            session()
+                    .createSelectionQuery("FROM Result r WHERE r.workspaceId = :ws AND r.id IN :ids", Result.class)
+                    .setParameter("ws", workspaceId)
+                    .setParameterList("ids", unrecorded)
+                    .getResultList()
+                    .forEach(result -> extracted.put(result.getId(), result.sourceKinds()));
+        return rows.stream()
+                .map(row -> facts(row, row[18] != null ? kinds(row[18]) : extracted.get((UUID) row[0])))
+                .toList();
+    }
+
+    private static List<String> kinds(Object array) {
+        if (array instanceof String[] values) return List.of(values);
+        try {
+            return List.of((String[]) ((Array) array).getArray());
+        } catch (SQLException unreadable) {
+            throw new IllegalStateException("The recorded source kinds cannot be read", unreadable);
+        }
+    }
+
+    private ResultFacts facts(Object[] row, @Nullable List<String> sourceKinds) {
+        return new ResultFacts(
+                (UUID) row[0],
+                ((Number) row[1]).longValue(),
+                (UUID) row[2],
+                ((Number) row[3]).longValue(),
+                row[4] == null ? null : ((Number) row[4]).longValue(),
+                ((Number) row[5]).longValue(),
+                (String) row[6],
+                row[7] == null ? null : ((Number) row[7]).longValue(),
+                ResultOutcome.valueOf((String) row[8]),
+                row[9] == null ? null : Severity.valueOf((String) row[9]),
+                (String) row[10],
+                ((Number) row[11]).shortValue() == Result.MIGRATED_EVIDENCE_VERSION,
+                instant(row[12]),
+                row[13] == null ? null : instant(row[13]),
+                row[14] == null ? null : ResultEndReason.valueOf((String) row[14]),
+                (Boolean) row[15],
+                (Boolean) row[16],
+                (Boolean) row[17],
+                sourceKinds);
+    }
+
+    private static Instant instant(Object value) {
+        return value instanceof Instant instant ? instant : ((Timestamp) value).toInstant();
     }
 
     @Override
@@ -214,7 +284,7 @@ public class ResultQueriesImpl implements ResultQueries {
                         ResultFreshness.Claim.class)
                 .setProperties(params)
                 .getResultList();
-        var matching = freshness.getObject().statesFor(workspaceId, candidates).entrySet().stream()
+        var matching = freshness.getObject().currentness(workspaceId, candidates).entrySet().stream()
                 .filter(entry -> entry.getValue() == wanted)
                 .map(Map.Entry::getKey)
                 .toList();

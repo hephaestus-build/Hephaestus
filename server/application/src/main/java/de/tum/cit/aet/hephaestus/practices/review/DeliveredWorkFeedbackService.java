@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.practices.review;
 
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
+import de.tum.cit.aet.hephaestus.practices.model.Result;
 import de.tum.cit.aet.hephaestus.practices.result.ResultRepository;
 import de.tum.cit.aet.hephaestus.practices.result.ResultVisibilityPolicy;
 import de.tum.cit.aet.hephaestus.practices.review.dto.DeliveredWorkFeedbackDTO;
@@ -37,7 +38,9 @@ public class DeliveredWorkFeedbackService {
                     var basis = ledger.basis(ws, f.id());
                     var allowed = visibility.permitsHistory(
                             ws,
-                            results.findByWorkspaceIdAndIdIn(ws, basis),
+                            results.findByWorkspaceIdAndIdIn(ws, basis).stream()
+                                    .map(Result::facts)
+                                    .toList(),
                             SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY);
                     return new DeliveredWorkFeedbackItemDTO(
                             f.id(),

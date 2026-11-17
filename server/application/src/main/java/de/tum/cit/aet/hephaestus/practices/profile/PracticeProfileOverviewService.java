@@ -59,14 +59,14 @@ public class PracticeProfileOverviewService {
         var history = standings.history(ws.id(), account.get(), now.minus(OverviewWindow.LOOKBACK));
         var projected = history.permittedViews();
         var newest = new LinkedHashMap<UUID, ResultView>();
-        projected.forEach(v -> newest.putIfAbsent(v.result().getReviewId(), v));
+        projected.forEach(v -> newest.putIfAbsent(v.result().reviewId(), v));
         var newestReviews = List.copyOf(newest.values());
         var latest = views.latestForDeveloper(ws.id(), account.get()).orElse(null);
         var window = OverviewWindow.sincePreviousRun(
-                newestReviews.size() < 2 ? null : newestReviews.get(1).result().getRecordedAt(), now);
+                newestReviews.size() < 2 ? null : newestReviews.get(1).result().recordedAt(), now);
         var changes = profileChanges.changes(ws.id(), account.get(), window, history);
         var reviewed = projected.stream()
-                .filter(v -> window.contains(v.result().getRecordedAt()))
+                .filter(v -> window.contains(v.result().recordedAt()))
                 .map(ResultView::item)
                 .distinct()
                 .toList();
@@ -84,7 +84,7 @@ public class PracticeProfileOverviewService {
         var status = review.getStatus();
         return new ProfileReviewRefDTO(
                 review.getId(),
-                latest.result().getRecordedAt(),
+                latest.result().recordedAt(),
                 latest.item(),
                 status,
                 progress.progress(ws, Map.of(review.getId(), status)).get(review.getId()));

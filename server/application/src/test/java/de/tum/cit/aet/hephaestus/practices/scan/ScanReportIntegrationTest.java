@@ -29,6 +29,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRef;
 import de.tum.cit.aet.hephaestus.practices.adapter.PracticesPersonDataCatalog;
 import de.tum.cit.aet.hephaestus.practices.model.Result;
+import de.tum.cit.aet.hephaestus.practices.model.ResultFacts;
 import de.tum.cit.aet.hephaestus.practices.result.ResultMarkService;
 import de.tum.cit.aet.hephaestus.practices.result.ResultRetentionService;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewIntegrationData;
@@ -197,10 +198,10 @@ class ScanReportIntegrationTest extends BaseIntegrationTest {
                 .thenAnswer(call -> new HistoryCustody(false, false, List.of(), List.of(), call.getArgument(1)));
         when(authorization.permitsAll(anyLong(), anyCollection(), any())).thenAnswer(call -> {
             long workspace = call.getArgument(0);
-            Collection<Result> rows = call.getArgument(1);
+            Collection<ResultFacts> rows = call.getArgument(1);
             return rows.stream()
-                    .filter(r -> r.getWorkspaceId() == workspace)
-                    .map(Result::getId)
+                    .filter(r -> r.workspaceId() == workspace)
+                    .map(ResultFacts::id)
                     .collect(Collectors.toSet());
         });
         when(authorization.permits(anyLong(), any(), any()))

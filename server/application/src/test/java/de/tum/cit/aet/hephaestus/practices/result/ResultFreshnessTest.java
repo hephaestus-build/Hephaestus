@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.practices.result;
 
+import static de.tum.cit.aet.hephaestus.practices.result.ResultTestFixtures.facts;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -50,7 +51,7 @@ class ResultFreshnessTest {
         when(items.findAll(eq(1L), any())).thenReturn(Map.of(7L, item));
         when(items.fingerprints(eq(item), eq(Set.of(LINKED)), any())).thenReturn(Map.of());
 
-        assertThat(freshness.freshness(1, List.of(result), Map.of(7L, item)))
+        assertThat(freshness.freshness(1, facts(List.of(result)), Map.of(7L, item)))
                 .containsEntry(
                         result.getId(),
                         new Freshness(Currentness.UNVERIFIABLE, UnverifiableReason.WORK_UNREADABLE, CAPTURED_AT));
@@ -58,7 +59,7 @@ class ResultFreshnessTest {
 
         when(items.fingerprints(eq(item), eq(Set.of(LINKED)), any())).thenReturn(Map.of(LINKED, FINGERPRINT));
 
-        assertThat(freshness.freshness(1, List.of(result), Map.of(7L, item)))
+        assertThat(freshness.freshness(1, facts(List.of(result)), Map.of(7L, item)))
                 .containsEntry(result.getId(), Freshness.current(CAPTURED_AT));
     }
 
@@ -67,7 +68,7 @@ class ResultFreshnessTest {
         var result = result();
         when(practices.sourceCaptures(eq(1L), any(), any())).thenReturn(List.of());
 
-        assertThat(freshness.freshness(1, List.of(result), Map.of(7L, item)))
+        assertThat(freshness.freshness(1, facts(List.of(result)), Map.of(7L, item)))
                 .containsEntry(result.getId(), Freshness.recordMissing());
     }
 
@@ -77,7 +78,7 @@ class ResultFreshnessTest {
         captured(result, decision(CAPTURED_AT, Map.of(LINKED.value(), FINGERPRINT)));
         when(items.fingerprints(eq(item), eq(Set.of(LINKED)), any())).thenReturn(Map.of(LINKED, "b".repeat(64)));
 
-        assertThat(freshness.freshness(1, List.of(result), Map.of(7L, item)))
+        assertThat(freshness.freshness(1, facts(List.of(result)), Map.of(7L, item)))
                 .containsEntry(result.getId(), Freshness.stale(CAPTURED_AT));
     }
 
@@ -95,7 +96,9 @@ class ResultFreshnessTest {
         captured(result, facts);
         when(items.fingerprints(eq(item), eq(Set.of(LINKED)), any())).thenReturn(Map.of());
 
-        assertThat(freshness.freshness(1, List.of(result), Map.of(7L, item)).get(result.getId()))
+        assertThat(freshness
+                        .freshness(1, facts(List.of(result)), Map.of(7L, item))
+                        .get(result.getId()))
                 .isEqualTo(new Freshness(Currentness.UNVERIFIABLE, UnverifiableReason.WORK_UNREADABLE, CAPTURED_AT));
     }
 

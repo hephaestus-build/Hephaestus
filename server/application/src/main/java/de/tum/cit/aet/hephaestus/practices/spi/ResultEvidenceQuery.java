@@ -14,4 +14,12 @@ public interface ResultEvidenceQuery {
      * @return keyed by result id; a result without an id is absent
      */
     Map<UUID, List<JsonNode>> citations(long workspaceId, Collection<Result> results);
+
+    /**
+     * The citations of each result's problems alone, for a read that holds the result's recorded source kinds and not
+     * its evidence.
+     *
+     * @return keyed by result id; a result without problems is absent
+     */
+    Map<UUID, List<JsonNode>> problemCitations(long workspaceId, Collection<UUID> resultIds);
 }

@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.practices.spi;
 
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import de.tum.cit.aet.hephaestus.practices.model.Result;
+import de.tum.cit.aet.hephaestus.practices.model.ResultFacts;
 import java.util.Collection;
 import java.util.Set;
 import java.util.UUID;
@@ -22,7 +23,7 @@ public interface EvidenceAuthorization {
      *
      * @return the permitted result ids; never null, possibly empty
      */
-    Set<UUID> permitsAll(long workspaceId, Collection<Result> practiceResults, SourceUsePurpose purpose);
+    Set<UUID> permitsAll(long workspaceId, Collection<ResultFacts> practiceResults, SourceUsePurpose purpose);
 
     /**
      * Runs {@code read} as one read of the workspace: every authorization inside it shares its source checks, so a

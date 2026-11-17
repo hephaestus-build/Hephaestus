@@ -75,9 +75,9 @@ public record WorkResolution(List<Work> cleanWork, @Nullable Instant resolvedAt,
         public static Work of(ResultView view) {
             return new Work(
                     new ItemKind(view.item().kind()),
-                    view.result().getItemId(),
-                    view.result().getReviewId(),
-                    view.result().getRecordedAt());
+                    view.result().itemId(),
+                    view.result().reviewId(),
+                    view.result().recordedAt());
         }
 
         public long key() {

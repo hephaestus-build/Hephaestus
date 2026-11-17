@@ -16,6 +16,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ItemSourceAccess;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SourceReadAudience;
 import de.tum.cit.aet.hephaestus.practices.model.Problem;
 import de.tum.cit.aet.hephaestus.practices.model.Result;
+import de.tum.cit.aet.hephaestus.practices.model.ResultFacts;
 import de.tum.cit.aet.hephaestus.practices.review.ProductItemQuery;
 import de.tum.cit.aet.hephaestus.practices.review.ProductItemRepository;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewItemRepository;
@@ -60,14 +61,14 @@ public class ResultSourceAuthorization implements ResultProofAccess {
     private final ProductItemRepository itemRows;
     private final List<ItemSourceAccess> access;
 
-    public HistoryCustody custody(Result result) {
-        return custody(result, lookups(result.getWorkspaceId()));
+    public HistoryCustody custody(ResultFacts result) {
+        return custody(result, lookups(result.workspaceId()));
     }
 
-    private HistoryCustody custody(Result result, Lookups lookups) {
+    private HistoryCustody custody(ResultFacts result, Lookups lookups) {
         var producer = lookups.producer(result)
                 .filter(m -> produced(result, m)
-                        || (result.isMigratedHistory()
+                        || (result.migratedHistory()
                                 && m.getState() == ReviewItemState.WITHHELD
                                 && ReviewItem.LEGACY_AMBIGUOUS_RESULTS.equals(m.getReason())));
         var retained = lookups.retained(result).stream()
@@ -82,11 +83,11 @@ public class ResultSourceAuthorization implements ResultProofAccess {
         if (retained.size() > 1) return new HistoryCustody(false, true, List.of(), List.of(), List.of());
         var job = producer.map(m -> m.getJobId()).orElse(null);
         if (job == null) return new HistoryCustody(false, false, List.of(), List.of(), List.of());
-        return lookups.receipts.computeIfAbsent(job, ignored -> custody.find(result.getWorkspaceId(), List.of(job)));
+        return lookups.receipts.computeIfAbsent(job, ignored -> custody.find(result.workspaceId(), List.of(job)));
     }
 
-    private static boolean produced(Result result, ReviewItem assignment) {
-        return result.getId().equals(assignment.getResultId());
+    private static boolean produced(ResultFacts result, ReviewItem assignment) {
+        return result.id().equals(assignment.getResultId());
     }
 
     /**
@@ -95,26 +96,25 @@ public class ResultSourceAuthorization implements ResultProofAccess {
      * an assignment without a job, names no job. The custody's {@code sourceJobIds} also list copied dependencies, so
      * they cannot name it. The rows' assignments load in a bounded number of queries.
      */
-    Map<UUID, UUID> producingJobs(long workspaceId, Collection<Result> rows) {
+    Map<UUID, UUID> producingJobs(long workspaceId, Collection<ResultFacts> rows) {
         var owned = rows.stream()
-                .filter(result -> result.getWorkspaceId() == workspaceId)
+                .filter(result -> result.workspaceId() == workspaceId)
                 .toList();
         var byAssignment = assignmentsOf(workspaceId, owned);
         Map<UUID, UUID> jobs = new HashMap<>();
         for (var result : owned) {
-            var producer = byAssignment.get(
-                    new ReviewItem.Id(result.getReviewId(), result.getPracticeId(), result.getItemId()));
+            var producer = byAssignment.get(new ReviewItem.Id(result.reviewId(), result.practiceId(), result.itemId()));
             if (producer == null || !produced(result, producer)) continue;
             var job = producer.getJobId();
-            if (job != null) jobs.put(result.getId(), job);
+            if (job != null) jobs.put(result.id(), job);
         }
         return jobs;
     }
 
-    private Map<ReviewItem.Id, ReviewItem> assignmentsOf(long workspaceId, List<Result> owned) {
+    private Map<ReviewItem.Id, ReviewItem> assignmentsOf(long workspaceId, List<ResultFacts> owned) {
         Map<ReviewItem.Id, ReviewItem> byAssignment = new HashMap<>();
         for (var chunk :
-                chunks(owned.stream().map(Result::getReviewId).distinct().toList()))
+                chunks(owned.stream().map(ResultFacts::reviewId).distinct().toList()))
             assignments
                     .findByWorkspaceIdAndReviewIdIn(workspaceId, chunk)
                     .forEach(m ->
@@ -122,12 +122,12 @@ public class ResultSourceAuthorization implements ResultProofAccess {
         return byAssignment;
     }
 
-    public boolean authorized(Result result, HistoryCustody facts, SourceUsePurpose purpose) {
-        return authorized(result, facts, purpose, SourceReadAudience.PROCESSING, lookups(result.getWorkspaceId()));
+    public boolean authorized(ResultFacts result, HistoryCustody facts, SourceUsePurpose purpose) {
+        return authorized(result, facts, purpose, SourceReadAudience.PROCESSING, lookups(result.workspaceId()));
     }
 
     private boolean authorized(
-            Result result,
+            ResultFacts result,
             HistoryCustody facts,
             SourceUsePurpose purpose,
             SourceReadAudience audience,
@@ -148,7 +148,7 @@ public class ResultSourceAuthorization implements ResultProofAccess {
      * delivery reader uses, and those readers keep the full check.
      */
     @Transactional(readOnly = true)
-    public Set<UUID> permitsHumanStanding(long workspaceId, Collection<Result> rows) {
+    public Set<UUID> permitsHumanStanding(long workspaceId, Collection<ResultFacts> rows) {
         return admitted(
                 workspaceId,
                 rows,
@@ -159,13 +159,13 @@ public class ResultSourceAuthorization implements ResultProofAccess {
 
     @Override
     @Transactional(readOnly = true)
-    public Set<UUID> permitsAll(long workspaceId, Collection<Result> rows, SourceUsePurpose purpose) {
+    public Set<UUID> permitsAll(long workspaceId, Collection<ResultFacts> rows, SourceUsePurpose purpose) {
         return admitted(workspaceId, rows, purpose, SourceReadAudience.PROCESSING, false);
     }
 
     @Override
     @Transactional(readOnly = true)
-    public Set<UUID> permitsAllHistory(long workspaceId, Collection<Result> rows, SourceUsePurpose purpose) {
+    public Set<UUID> permitsAllHistory(long workspaceId, Collection<ResultFacts> rows, SourceUsePurpose purpose) {
         if (!ResultProofAccess.readsHistory(purpose)) return Set.of();
         return admitted(workspaceId, rows, purpose, SourceReadAudience.PROCESSING, true);
     }
@@ -178,23 +178,23 @@ public class ResultSourceAuthorization implements ResultProofAccess {
      */
     private Set<UUID> admitted(
             long workspaceId,
-            Collection<Result> rows,
+            Collection<ResultFacts> rows,
             SourceUsePurpose purpose,
             SourceReadAudience audience,
             boolean history) {
         var owned = rows.stream()
-                .filter(result -> result.getWorkspaceId() == workspaceId)
+                .filter(result -> result.workspaceId() == workspaceId)
                 .toList();
         if (owned.isEmpty()) return Set.of();
         var lookups = lookups(workspaceId);
         var custody = prefetchedCustody(workspaceId, owned, lookups);
         Set<UUID> permitted = new HashSet<>();
         for (var result : owned) {
-            var facts = Objects.requireNonNull(custody.get(result.getId()));
-            boolean admitted = (history && result.isMigratedHistory())
+            var facts = Objects.requireNonNull(custody.get(result.id()));
+            boolean admitted = (history && result.migratedHistory())
                     ? historyAuthorized(result, facts, purpose, audience, lookups)
                     : authorized(result, facts, purpose, audience, lookups);
-            if (admitted) permitted.add(result.getId());
+            if (admitted) permitted.add(result.id());
         }
         return permitted;
     }
@@ -208,28 +208,28 @@ public class ResultSourceAuthorization implements ResultProofAccess {
      * workspace are left out.
      */
     @Transactional(readOnly = true)
-    public Map<UUID, Check> checkAll(long workspaceId, Collection<Result> rows, SourceUsePurpose purpose) {
+    public Map<UUID, Check> checkAll(long workspaceId, Collection<ResultFacts> rows, SourceUsePurpose purpose) {
         var owned = rows.stream()
-                .filter(result -> result.getWorkspaceId() == workspaceId)
+                .filter(result -> result.workspaceId() == workspaceId)
                 .toList();
         if (owned.isEmpty()) return Map.of();
         var lookups = lookups(workspaceId);
         var custody = prefetchedCustody(workspaceId, owned, lookups);
         Map<UUID, Check> checked = new HashMap<>();
         for (var result : owned) {
-            var facts = Objects.requireNonNull(custody.get(result.getId()));
+            var facts = Objects.requireNonNull(custody.get(result.id()));
             checked.put(
-                    result.getId(),
+                    result.id(),
                     new Check(facts, authorized(result, facts, purpose, SourceReadAudience.PROCESSING, lookups)));
         }
         return checked;
     }
 
     /** Each row's custody, read after the rows' assignments and problems and before what its checks read. */
-    private Map<UUID, HistoryCustody> prefetchedCustody(long workspaceId, List<Result> owned, Lookups lookups) {
+    private Map<UUID, HistoryCustody> prefetchedCustody(long workspaceId, List<ResultFacts> owned, Lookups lookups) {
         lookups.prefetch(workspaceId, owned);
         Map<UUID, HistoryCustody> custody = new HashMap<>();
-        for (var result : owned) custody.put(result.getId(), custody(result, lookups));
+        for (var result : owned) custody.put(result.id(), custody(result, lookups));
         lookups.prefetchChecks(workspaceId, owned, custody.values());
         return custody;
     }
@@ -308,9 +308,9 @@ public class ResultSourceAuthorization implements ResultProofAccess {
          * queries, so the checks below read them from memory. The rows' producers are among their reviews'
          * assignments; retained custody includes assignments of other reviews that reused a row.
          */
-        void prefetch(long workspaceId, List<Result> owned) {
+        void prefetch(long workspaceId, List<ResultFacts> owned) {
             var reviews = owned.stream()
-                    .map(Result::getReviewId)
+                    .map(ResultFacts::reviewId)
                     .distinct()
                     .filter(prefetchedReviews::add)
                     .toList();
@@ -320,7 +320,7 @@ public class ResultSourceAuthorization implements ResultProofAccess {
                         .forEach(m ->
                                 producers.put(new ReviewItem.Id(m.getReviewId(), m.getPracticeId(), m.getItemId()), m));
             var ids = owned.stream()
-                    .map(Result::getId)
+                    .map(ResultFacts::id)
                     .distinct()
                     .filter(prefetchedResults::add)
                     .toList();
@@ -347,10 +347,10 @@ public class ResultSourceAuthorization implements ResultProofAccess {
          * for one reads all of its kind in chunked collection queries. An item that a read does not return is kept as
          * absent, as its single lookup finds it.
          */
-        void prefetchChecks(long workspaceId, List<Result> owned, Collection<HistoryCustody> custody) {
+        void prefetchChecks(long workspaceId, List<ResultFacts> owned, Collection<HistoryCustody> custody) {
             pendingWorkspace = workspaceId;
             owned.stream()
-                    .map(Result::getItemId)
+                    .map(ResultFacts::itemId)
                     .filter(id -> !items.containsKey(id))
                     .forEach(pendingItems::add);
             custody.forEach(facts -> facts.sourceJobIds().stream()
@@ -358,8 +358,8 @@ public class ResultSourceAuthorization implements ResultProofAccess {
                     .forEach(pendingJobs::add));
             // A row recorded before the current result model is checked by its review as a job.
             owned.stream()
-                    .filter(Result::isMigratedHistory)
-                    .map(Result::getReviewId)
+                    .filter(ResultFacts::migratedHistory)
+                    .map(ResultFacts::reviewId)
                     .filter(job -> !suppressedJobs.containsKey(job))
                     .forEach(pendingJobs::add);
         }
@@ -390,25 +390,25 @@ public class ResultSourceAuthorization implements ResultProofAccess {
             }
         }
 
-        Optional<ReviewItem> producer(Result result) {
-            if (!prefetchedReviews.contains(result.getReviewId()))
+        Optional<ReviewItem> producer(ResultFacts result) {
+            if (!prefetchedReviews.contains(result.reviewId()))
                 return assignments.findByWorkspaceIdAndReviewIdAndPracticeIdAndItemId(
-                        result.getWorkspaceId(), result.getReviewId(), result.getPracticeId(), result.getItemId());
+                        result.workspaceId(), result.reviewId(), result.practiceId(), result.itemId());
             return Optional.ofNullable(
-                    producers.get(new ReviewItem.Id(result.getReviewId(), result.getPracticeId(), result.getItemId())));
+                    producers.get(new ReviewItem.Id(result.reviewId(), result.practiceId(), result.itemId())));
         }
 
-        List<ReviewItem> retained(Result result) {
-            if (!prefetchedResults.contains(result.getId()))
+        List<ReviewItem> retained(ResultFacts result) {
+            if (!prefetchedResults.contains(result.id()))
                 return assignments.findByWorkspaceIdAndResultIdOrderByReviewIdAscPracticeIdAscItemIdAsc(
-                        result.getWorkspaceId(), result.getId());
-            return retained.getOrDefault(result.getId(), List.of());
+                        result.workspaceId(), result.id());
+            return retained.getOrDefault(result.id(), List.of());
         }
 
-        List<Problem> problems(Result result) {
-            if (!prefetchedResults.contains(result.getId()))
-                return problems.findByWorkspaceIdAndResultIdOrderByPositionAsc(result.getWorkspaceId(), result.getId());
-            return children.getOrDefault(result.getId(), List.of());
+        List<Problem> problems(ResultFacts result) {
+            if (!prefetchedResults.contains(result.id()))
+                return problems.findByWorkspaceIdAndResultIdOrderByPositionAsc(result.workspaceId(), result.id());
+            return children.getOrDefault(result.id(), List.of());
         }
 
         /** The live repository items of the workspace for a provider repository: one, unless it was removed or doubled. */
@@ -491,7 +491,7 @@ public class ResultSourceAuthorization implements ResultProofAccess {
             long providerId, String subject, @Nullable String teamId) {}
 
     private boolean custodyAuthorized(
-            Result result,
+            ResultFacts result,
             HistoryCustody facts,
             SourceUsePurpose purpose,
             SourceReadAudience audience,
@@ -521,10 +521,10 @@ public class ResultSourceAuthorization implements ResultProofAccess {
             }
         }
         for (var repositoryId : facts.repositoryIds()) {
-            var repositories = lookups.repositoryItems(result.getWorkspaceId(), repositoryId);
+            var repositories = lookups.repositoryItems(result.workspaceId(), repositoryId);
             if (repositories.size() != 1) return false;
             long repositoryItem = repositories.getFirst();
-            var repository = lookups.item(result.getWorkspaceId(), repositoryItem)
+            var repository = lookups.item(result.workspaceId(), repositoryItem)
                     .orElseThrow(() -> new EntityNotFoundException("Item", Long.toString(repositoryItem)));
             if (!source(repository, purpose, audience, lookups)) return false;
         }
@@ -537,9 +537,10 @@ public class ResultSourceAuthorization implements ResultProofAccess {
         if (!ResultProofAccess.readsHistory(purpose)) return false;
         var lookups = lookups(workspaceId);
         return results.findByIdAndWorkspaceId(resultId, workspaceId)
+                .map(Result::facts)
                 .map(result -> {
                     var facts = custody(result, lookups);
-                    if (!result.isMigratedHistory())
+                    if (!result.migratedHistory())
                         return authorized(result, facts, purpose, SourceReadAudience.PROCESSING, lookups);
                     return historyAuthorized(result, facts, purpose, SourceReadAudience.PROCESSING, lookups);
                 })
@@ -547,13 +548,13 @@ public class ResultSourceAuthorization implements ResultProofAccess {
     }
 
     private boolean historyAuthorized(
-            Result result,
+            ResultFacts result,
             HistoryCustody facts,
             SourceUsePurpose purpose,
             SourceReadAudience audience,
             Lookups lookups) {
-        if (lookups.jobSuppressed(result.getReviewId())) return false;
-        var developerId = result.getDeveloperId();
+        if (lookups.jobSuppressed(result.reviewId())) return false;
+        var developerId = result.developerId();
         if (developerId != null) {
             var developer = lookups.account(developerId);
             if (developer.isEmpty()
@@ -567,14 +568,18 @@ public class ResultSourceAuthorization implements ResultProofAccess {
     }
 
     private boolean sourceAuthorized(
-            Result result, SourceUsePurpose purpose, SourceReadAudience audience, Lookups lookups) {
+            ResultFacts result, SourceUsePurpose purpose, SourceReadAudience audience, Lookups lookups) {
         if (!visibleSource(result, purpose, audience, lookups)) return false;
-        var citations = ResultCitations.all(result, lookups.problems(result));
+        // Null when a cited or consulted source is not named, which withholds the result.
+        var own = result.sourceKinds();
+        if (own == null) return false;
         try {
-            for (var citation : citations)
-                if (!citation.path("sourceKind").isString()
-                        || !sources.isSourceUsePermitted(
-                                new SourceKind(citation.path("sourceKind").asString()), purpose)) return false;
+            for (var kind : own) if (!sources.isSourceUsePermitted(new SourceKind(kind), purpose)) return false;
+            for (var problem : lookups.problems(result))
+                for (var citation : problem.getCitations())
+                    if (!citation.path("sourceKind").isString()
+                            || !sources.isSourceUsePermitted(
+                                    new SourceKind(citation.path("sourceKind").asString()), purpose)) return false;
         } catch (IllegalArgumentException unavailable) {
             return false;
         }
@@ -582,8 +587,8 @@ public class ResultSourceAuthorization implements ResultProofAccess {
     }
 
     private boolean visibleSource(
-            Result result, SourceUsePurpose purpose, SourceReadAudience audience, Lookups lookups) {
-        var item = lookups.item(result.getWorkspaceId(), result.getItemId());
+            ResultFacts result, SourceUsePurpose purpose, SourceReadAudience audience, Lookups lookups) {
+        var item = lookups.item(result.workspaceId(), result.itemId());
         return item.isPresent() && source(item.orElseThrow(), purpose, audience, lookups);
     }
 
@@ -602,6 +607,7 @@ public class ResultSourceAuthorization implements ResultProofAccess {
     public boolean permits(long workspaceId, UUID resultId, SourceUsePurpose purpose) {
         var lookups = lookups(workspaceId);
         return results.findByIdAndWorkspaceId(resultId, workspaceId)
+                .map(Result::facts)
                 .map(result ->
                         authorized(result, custody(result, lookups), purpose, SourceReadAudience.PROCESSING, lookups))
                 .orElse(false);

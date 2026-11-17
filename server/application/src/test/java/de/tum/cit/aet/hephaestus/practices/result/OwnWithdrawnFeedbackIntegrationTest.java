@@ -10,6 +10,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRep
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.practices.feedback.dto.FeedbackResponseRequestDTO;
 import de.tum.cit.aet.hephaestus.practices.model.Result;
+import de.tum.cit.aet.hephaestus.practices.model.ResultFacts;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewIntegrationData;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewIntegrationData.Scenario;
 import de.tum.cit.aet.hephaestus.practices.spi.EvidenceAuthorization;
@@ -82,10 +83,10 @@ class OwnWithdrawnFeedbackIntegrationTest extends BaseIntegrationTest {
                         ArgumentMatchers.anyLong(), ArgumentMatchers.anyCollection(), ArgumentMatchers.any()))
                 .thenAnswer(i -> {
                     long ws = i.getArgument(0);
-                    Collection<Result> rows = i.getArgument(1);
+                    Collection<ResultFacts> rows = i.getArgument(1);
                     return rows.stream()
-                            .filter(r -> r.getWorkspaceId() == ws)
-                            .map(Result::getId)
+                            .filter(r -> r.workspaceId() == ws)
+                            .map(ResultFacts::id)
                             .collect(Collectors.toSet());
                 });
         databaseTestUtils.cleanDatabase();

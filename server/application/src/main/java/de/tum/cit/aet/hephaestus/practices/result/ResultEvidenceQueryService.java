@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.practices.result;
 import de.tum.cit.aet.hephaestus.practices.model.Problem;
 import de.tum.cit.aet.hephaestus.practices.model.Result;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultEvidenceQuery;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
@@ -34,6 +35,18 @@ public class ResultEvidenceQueryService implements ResultEvidenceQuery {
             UUID id = Objects.requireNonNull(result.getId());
             citations.put(id, ResultCitations.all(result, problemsByResult.getOrDefault(id, List.of())));
         }
+        return Map.copyOf(citations);
+    }
+
+    @Override
+    public Map<UUID, List<JsonNode>> problemCitations(long workspaceId, Collection<UUID> resultIds) {
+        if (resultIds.isEmpty()) return Map.of();
+        var citations = new HashMap<UUID, List<JsonNode>>();
+        for (var problem : problems.findCitations(workspaceId, List.copyOf(resultIds)))
+            problem.citations()
+                    .forEach(citation -> citations
+                            .computeIfAbsent(problem.resultId(), id -> new ArrayList<>())
+                            .add(citation));
         return Map.copyOf(citations);
     }
 }

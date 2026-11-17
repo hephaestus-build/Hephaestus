@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.practices.result;
 
+import static de.tum.cit.aet.hephaestus.practices.result.ResultTestFixtures.facts;
 import static de.tum.cit.aet.hephaestus.practices.result.ResultTestFixtures.resultBuilder;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
@@ -12,6 +13,7 @@ import de.tum.cit.aet.hephaestus.practices.PracticeVersionRepository;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeVersion;
 import de.tum.cit.aet.hephaestus.practices.model.Result;
+import de.tum.cit.aet.hephaestus.practices.model.ResultFacts;
 import de.tum.cit.aet.hephaestus.practices.model.ResultMark;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewTestData;
 import de.tum.cit.aet.hephaestus.practices.spi.Currentness;
@@ -22,7 +24,9 @@ import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
 import de.tum.cit.aet.hephaestus.practices.spi.UnverifiableReason;
 import java.time.Instant;
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -40,18 +44,13 @@ class ResultVisibilityPolicyTest {
     private final PracticeRepository practices = mock(PracticeRepository.class);
     private final PracticeVersionRepository versions = mock(PracticeVersionRepository.class);
     private final ResultSourceAuthorization sources = mock(ResultSourceAuthorization.class);
-    private final ResultFreshness freshness = mock(ResultFreshness.class);
+    private final KnownFreshness freshness = new KnownFreshness();
     private final ResultVisibilityPolicy policy =
             new ResultVisibilityPolicy(authorization, marks, practices, versions, sources, freshness);
     private final Practice practice = ReviewTestData.practice(1, 1, "test-practice");
 
     @BeforeEach
     void catalog() {
-        when(freshness.states(ArgumentMatchers.eq(1L), ArgumentMatchers.anyCollection()))
-                .thenAnswer(call -> {
-                    Collection<Result> rows = call.getArgument(1);
-                    return rows.stream().collect(Collectors.toMap(Result::getId, row -> Currentness.CURRENT));
-                });
         when(practices.findByWorkspaceIdAndIdIn(ArgumentMatchers.eq(1L), ArgumentMatchers.anyCollection()))
                 .thenReturn(List.of(practice));
         when(versions.findByWorkspaceIdAndIdIn(ArgumentMatchers.eq(1L), ArgumentMatchers.any()))
@@ -63,17 +62,29 @@ class ResultVisibilityPolicyTest {
     @Test
     void forwardsTheActualSourceAuthorizationForCurrentProof() {
         var r = result();
-        when(authorization.permitsAll(1L, List.of(r), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
+        when(authorization.permitsAll(1L, facts(List.of(r)), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
                 .thenReturn(Set.of(r.getId()));
-        assertThat(policy.permitsAll(1L, List.of(r), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
+        assertThat(policy.permitsAll(1L, facts(List.of(r)), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
                 .containsExactly(r.getId());
+    }
+
+    @Test
+    void shouldPermitOnlyTheResultWhoseSourcesAreCurrent() {
+        var current = result();
+        var stale = result();
+        freshness.stale(stale);
+        when(authorization.permitsAll(1L, facts(List.of(current)), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
+                .thenReturn(Set.of(current.getId()));
+
+        assertThat(policy.permitsAll(1L, facts(List.of(current, stale)), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
+                .containsExactly(current.getId());
     }
 
     @Test
     void endedProofNeverCountsAsCurrent() {
         var r = result();
         r.end(ResultEndReason.REPLACED, r.getRecordedAt().plusSeconds(1));
-        assertThat(policy.permitsAll(1L, List.of(r), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
+        assertThat(policy.permitsAll(1L, facts(List.of(r)), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
                 .isEmpty();
     }
 
@@ -82,16 +93,19 @@ class ResultVisibilityPolicyTest {
         var r = result();
         r = resultBuilder(r).evidenceVersion((short) 0).build();
         assertThat(ResultVisibilityPolicy.freshness(
-                        r,
+                        r.facts(),
                         practice.getCurrentVersion(),
                         practice.getCurrentVersion(),
                         Freshness.current(Instant.parse("2026-11-01T10:00:00Z"))))
                 .isEqualTo(new Freshness(Currentness.UNVERIFIABLE, UnverifiableReason.RECORD_MISSING, null));
-        assertThat(policy.permitsAll(1L, List.of(r), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
+        assertThat(policy.permitsAll(1L, facts(List.of(r)), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
                 .isEmpty();
         r.end(ResultEndReason.REPLACED, r.getRecordedAt().plusSeconds(1));
         assertThat(ResultVisibilityPolicy.freshness(
-                                r, practice.getCurrentVersion(), practice.getCurrentVersion(), Freshness.current(null))
+                                r.facts(),
+                                practice.getCurrentVersion(),
+                                practice.getCurrentVersion(),
+                                Freshness.current(null))
                         .currentness())
                 .isEqualTo(Currentness.UNVERIFIABLE);
     }
@@ -103,11 +117,11 @@ class ResultVisibilityPolicyTest {
         var unreadable = new Freshness(Currentness.UNVERIFIABLE, UnverifiableReason.WORK_UNREADABLE, capturedAt);
 
         assertThat(ResultVisibilityPolicy.freshness(
-                        r, practice.getCurrentVersion(), practice.getCurrentVersion(), unreadable))
+                        r.facts(), practice.getCurrentVersion(), practice.getCurrentVersion(), unreadable))
                 .isEqualTo(unreadable);
         r.end(ResultEndReason.REPLACED, r.getRecordedAt().plusSeconds(1));
         assertThat(ResultVisibilityPolicy.freshness(
-                        r, practice.getCurrentVersion(), practice.getCurrentVersion(), unreadable))
+                        r.facts(), practice.getCurrentVersion(), practice.getCurrentVersion(), unreadable))
                 .isEqualTo(Freshness.stale(capturedAt));
     }
 
@@ -117,7 +131,8 @@ class ResultVisibilityPolicyTest {
         var old = new PracticeVersion(
                 practice, 1, new JsonMapper().valueToTree(DefinitionTestFixtures.definition()), null);
         ReflectionTestUtils.setField(old, "reviewDigest", "v6:" + "b".repeat(64));
-        assertThat(ResultVisibilityPolicy.freshness(r, old, practice.getCurrentVersion(), Freshness.current(null))
+        assertThat(ResultVisibilityPolicy.freshness(
+                                r.facts(), old, practice.getCurrentVersion(), Freshness.current(null))
                         .currentness())
                 .isEqualTo(Currentness.STALE);
     }
@@ -135,7 +150,7 @@ class ResultVisibilityPolicyTest {
                 .build();
         when(marks.findByWorkspaceIdAndResultIdInAndRemovedAtIsNull(1L, List.of(r.getId())))
                 .thenReturn(List.of(mark));
-        assertThat(policy.permitsAll(1L, List.of(r), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
+        assertThat(policy.permitsAll(1L, facts(List.of(r)), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
                 .isEmpty();
     }
 
@@ -152,9 +167,9 @@ class ResultVisibilityPolicyTest {
                 .build();
         when(marks.findByWorkspaceIdAndResultIdInAndRemovedAtIsNull(1L, List.of(r.getId())))
                 .thenReturn(List.of(mark));
-        when(authorization.permitsAll(1L, List.of(r), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
+        when(authorization.permitsAll(1L, facts(List.of(r)), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
                 .thenReturn(Set.of(r.getId()));
-        assertThat(policy.permitsAll(1L, List.of(r), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
+        assertThat(policy.permitsAll(1L, facts(List.of(r)), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
                 .containsExactly(r.getId());
     }
 
@@ -162,7 +177,7 @@ class ResultVisibilityPolicyTest {
     void foreignRowsAreNotSentForSourceAuthorization() {
         var r = result();
         r = resultBuilder(r).workspaceId(2).build();
-        assertThat(policy.permitsHistory(1L, List.of(r), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
+        assertThat(policy.permitsHistory(1L, facts(List.of(r)), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
                 .isEmpty();
     }
 
@@ -190,12 +205,12 @@ class ResultVisibilityPolicyTest {
                         ArgumentMatchers.eq(1L),
                         ArgumentMatchers.any(),
                         ArgumentMatchers.eq(SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY)))
-                .thenAnswer(call -> call.<List<Result>>getArgument(1).stream()
-                        .map(Result::getId)
+                .thenAnswer(call -> call.<List<ResultFacts>>getArgument(1).stream()
+                        .map(ResultFacts::id)
                         .collect(Collectors.toSet()));
         assertThat(policy.permitsAt(
                         1L,
-                        List.of(missingSummary),
+                        facts(List.of(missingSummary)),
                         SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY,
                         missingSummary.getRecordedAt().plusSeconds(1)))
                 .isEmpty();
@@ -212,11 +227,12 @@ class ResultVisibilityPolicyTest {
                 practice, 2, new JsonMapper().valueToTree(DefinitionTestFixtures.definition()), null);
         ReflectionTestUtils.setField(changed, "reviewDigest", "v6:" + "b".repeat(64));
         practice.setCurrentVersion(changed);
-        when(authorization.permitsAll(1L, List.of(r), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
+        when(authorization.permitsAll(1L, facts(List.of(r)), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
                 .thenReturn(Set.of(r.getId()));
-        assertThat(policy.permitsAt(1L, List.of(r), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY, edge))
+        assertThat(policy.permitsAt(1L, facts(List.of(r)), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY, edge))
                 .containsExactly(r.getId());
-        assertThat(policy.permitsAt(1L, List.of(r), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY, edge.plusSeconds(1)))
+        assertThat(policy.permitsAt(
+                        1L, facts(List.of(r)), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY, edge.plusSeconds(1)))
                 .isEmpty();
     }
 
@@ -226,11 +242,31 @@ class ResultVisibilityPolicyTest {
                 .evidenceVersion((short) 0)
                 .practiceVersionId(null)
                 .build();
-        when(authorization.permitsAll(1L, List.of(archived), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
+        when(authorization.permitsAll(1L, facts(List.of(archived)), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
                 .thenReturn(Set.of(archived.getId()));
-        assertThat(policy.permitsShown(1L, List.of(archived), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
+        assertThat(policy.permitsShown(1L, facts(List.of(archived)), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
                 .containsExactly(archived.getId());
-        assertThat(policy.permitsAll(1L, List.of(archived), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
+        assertThat(policy.permitsAll(1L, facts(List.of(archived)), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
                 .isEmpty();
+    }
+
+    /**
+     * A freshness read that knows the currentness of each result's sources. A result's sources are current unless the
+     * test says they are stale.
+     */
+    private static final class KnownFreshness implements FreshnessRead {
+        private final Set<UUID> stale = new HashSet<>();
+
+        void stale(Result result) {
+            stale.add(result.getId());
+        }
+
+        @Override
+        public Map<UUID, Currentness> currentness(long workspaceId, Collection<ResultFreshness.Claim> claims) {
+            return claims.stream()
+                    .collect(Collectors.toMap(
+                            ResultFreshness.Claim::id,
+                            claim -> stale.contains(claim.id()) ? Currentness.STALE : Currentness.CURRENT));
+        }
     }
 }

@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.practices.feedback;
 
+import static de.tum.cit.aet.hephaestus.practices.result.ResultTestFixtures.facts;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
@@ -22,6 +23,7 @@ import de.tum.cit.aet.hephaestus.conversation.ConversationTurnService;
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import de.tum.cit.aet.hephaestus.practices.feedback.dto.OwnFeedbackRefDTO;
 import de.tum.cit.aet.hephaestus.practices.model.Result;
+import de.tum.cit.aet.hephaestus.practices.model.ResultFacts;
 import de.tum.cit.aet.hephaestus.practices.result.ResultPresentation;
 import de.tum.cit.aet.hephaestus.practices.result.ResultSourceAuthorization;
 import de.tum.cit.aet.hephaestus.practices.spi.Currentness;
@@ -107,14 +109,14 @@ class FeedbackHistoryQueryIntegrationTest extends AbstractFeedbackIntegrationTes
             return found;
         });
         when(publicPermission.checkAll(anyLong(), any(), any())).thenAnswer(call -> {
-            Collection<Result> rows = call.getArgument(1);
+            Collection<ResultFacts> rows = call.getArgument(1);
             SourceUsePurpose purpose = call.getArgument(2);
             Map<UUID, ResultSourceAuthorization.Check> checks = new HashMap<>();
             if (rows != null)
                 for (var row : rows) {
                     @Nullable HistoryCustody custody = publicPermission.custody(row);
                     checks.put(
-                            row.getId(),
+                            row.id(),
                             custody == null
                                     ? new ResultSourceAuthorization.Check(
                                             new HistoryCustody(false, false, List.of(), List.of(), List.of()), false)
@@ -431,7 +433,9 @@ class FeedbackHistoryQueryIntegrationTest extends AbstractFeedbackIntegrationTes
         assertThat(states.valueStream()
                         .map(row -> UUID.fromString(row.get("feedbackId").asString())))
                 .containsExactlyInAnyOrderElementsOf(visible);
-        assertThat(presentation.ownFeedback(workspace.getId(), List.of(proof)).get(proof.getId()))
+        assertThat(presentation
+                        .ownFeedback(workspace.getId(), facts(List.of(proof)))
+                        .get(proof.getId()))
                 .extracting(OwnFeedbackRefDTO::id)
                 .containsExactlyInAnyOrderElementsOf(visible);
         for (var id : visible)
@@ -719,12 +723,12 @@ class FeedbackHistoryQueryIntegrationTest extends AbstractFeedbackIntegrationTes
 
     private void authorize(Result proof) {
         var custody = new HistoryCustody(true, false, List.of(), List.of(), List.of());
-        when(publicPermission.custody(argThat(row -> row != null && row.getId().equals(proof.getId()))))
+        when(publicPermission.custody(argThat(row -> row != null && row.id().equals(proof.getId()))))
                 .thenReturn(custody);
         for (var purpose :
                 List.of(SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY, SourceUsePurpose.CONVERSATIONAL_MENTORING))
             when(publicPermission.authorized(
-                            argThat(row -> row != null && row.getId().equals(proof.getId())), eq(custody), eq(purpose)))
+                            argThat(row -> row != null && row.id().equals(proof.getId())), eq(custody), eq(purpose)))
                     .thenReturn(true);
         var retained = mock(ResultHistoryEntry.class);
         when(retained.copyAuthorityComplete()).thenReturn(true);

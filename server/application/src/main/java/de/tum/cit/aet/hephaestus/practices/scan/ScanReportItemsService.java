@@ -97,8 +97,12 @@ public class ScanReportItemsService {
         var unmarked = eligibility.unmarked(review, claims);
         var allRows = new LinkedHashMap<>(resultsById);
         claims.forEach(result -> allRows.putIfAbsent(result.getId(), result));
-        var allViews = views.operatorViews(workspaceId, new ArrayList<>(allRows.values())).stream()
-                .collect(Collectors.toMap(view -> view.result().getId(), Function.identity()));
+        var allViews = views
+                .operatorViews(
+                        workspaceId,
+                        allRows.values().stream().map(Result::facts).toList())
+                .stream()
+                .collect(Collectors.toMap(view -> view.result().id(), Function.identity()));
         var previous = presentation
                 .lists(
                         workspaceId,

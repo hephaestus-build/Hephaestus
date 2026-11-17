@@ -8,10 +8,16 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
+import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Set;
+import java.util.TreeSet;
 import java.util.UUID;
+import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Builder.Default;
@@ -93,6 +99,91 @@ public class Result {
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "coverage", columnDefinition = "jsonb")
     private @Nullable JsonNode coverage;
+
+    /**
+     * The {@linkplain #sourceKinds(JsonNode, JsonNode) source kinds that the result rests on}, recorded when the result
+     * is written, so a read that authorizes many results does not load their evidence. Null when one of them is not
+     * named, and on a row that an earlier release wrote: such a result is authorized from its full record.
+     */
+    @Getter(AccessLevel.NONE)
+    @JdbcTypeCode(SqlTypes.ARRAY)
+    @Column(name = "source_kinds", columnDefinition = "text[]")
+    private String @Nullable [] recordedSourceKinds;
+
+    /** The citations of this result's evidence, its open questions and its example. Authorization reads their sources. */
+    public List<JsonNode> citations() {
+        return citations(evidence, example);
+    }
+
+    public static List<JsonNode> citations(@Nullable JsonNode evidence, @Nullable JsonNode example) {
+        List<JsonNode> all = new ArrayList<>();
+        if (evidence != null) {
+            evidence.path("citations").forEach(all::add);
+            for (JsonNode question : evidence.path("openQuestions")) {
+                if (question.path("citation").isObject()) all.add(question.path("citation"));
+            }
+        }
+        if (example != null && example.path("citation").isObject()) all.add(example.path("citation"));
+        return List.copyOf(all);
+    }
+
+    /**
+     * The distinct source kinds that a result rests on: those its citations name, and those its search or
+     * inapplicability warrant consulted. Admission holds a result to the same sources. A Does not apply that a
+     * practice's path check proved cites nothing but rests on the source that the check read. Null when a citation or
+     * a warrant names a source that is not a string, which withholds the result.
+     */
+    public static @Nullable List<String> sourceKinds(@Nullable JsonNode evidence, @Nullable JsonNode example) {
+        Set<String> kinds = new TreeSet<>();
+        for (JsonNode citation : citations(evidence, example)) {
+            if (!citation.path("sourceKind").isString()) return null;
+            kinds.add(citation.path("sourceKind").asString());
+        }
+        if (evidence != null) {
+            for (String warrant : List.of("search", "inapplicability")) {
+                for (JsonNode consulted : evidence.path(warrant).path("consulted")) {
+                    if (!consulted.isString()) return null;
+                    kinds.add(consulted.asString());
+                }
+            }
+        }
+        return List.copyOf(kinds);
+    }
+
+    /** The recorded kinds, or the kinds of this full record when an earlier release wrote the row without them. */
+    public @Nullable List<String> sourceKinds() {
+        return recordedSourceKinds != null ? List.of(recordedSourceKinds) : sourceKinds(evidence, example);
+    }
+
+    /** The facts that a read of results needs, from this full record. */
+    public ResultFacts facts() {
+        return new ResultFacts(
+                id,
+                workspaceId,
+                reviewId,
+                practiceId,
+                practiceVersionId,
+                itemId,
+                itemVersion,
+                developerId,
+                outcome,
+                severity,
+                summary,
+                isMigratedHistory(),
+                recordedAt,
+                endedAt,
+                endReason,
+                explanation != null,
+                evidence != null,
+                coverage != null,
+                sourceKinds());
+    }
+
+    @PrePersist
+    void recordSourceKinds() {
+        var kinds = sourceKinds(evidence, example);
+        recordedSourceKinds = kinds == null ? null : kinds.toArray(String[]::new);
+    }
 
     /**
      * Migrated history (ADR 0070 F-1): a read-only earlier review. It is never current and never newly delivered. No current

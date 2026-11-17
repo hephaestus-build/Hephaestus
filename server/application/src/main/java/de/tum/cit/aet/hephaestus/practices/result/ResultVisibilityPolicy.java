@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.practices.PracticeVersionRepository;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeVersion;
 import de.tum.cit.aet.hephaestus.practices.model.Result;
+import de.tum.cit.aet.hephaestus.practices.model.ResultFacts;
 import de.tum.cit.aet.hephaestus.practices.spi.Currentness;
 import de.tum.cit.aet.hephaestus.practices.spi.EvidenceAuthorization;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultMarkKind;
@@ -34,7 +35,7 @@ public class ResultVisibilityPolicy {
     private final PracticeRepository practices;
     private final PracticeVersionRepository versions;
     private final ResultSourceAuthorization sources;
-    private final ResultFreshness freshness;
+    private final FreshnessRead freshness;
 
     /**
      * The rows a standing may be read off at {@code at}, out of rows the standing reader already selected. Unlike
@@ -49,10 +50,9 @@ public class ResultVisibilityPolicy {
      * must be one of this workspace's versions of the same practice. Nothing admitted here becomes quotable; quotes
      * keep {@link #permitsAt}.
      */
-    public Set<UUID> permitsStandingAt(long workspaceId, Collection<Result> selected, Instant at) {
+    public Set<UUID> permitsStandingAt(long workspaceId, Collection<ResultFacts> selected, Instant at) {
         var owned = selected.stream()
-                .filter(r ->
-                        r.getWorkspaceId() == workspaceId && !r.getRecordedAt().isAfter(at))
+                .filter(r -> r.workspaceId() == workspaceId && !r.recordedAt().isAfter(at))
                 .toList();
         if (owned.isEmpty()) return Set.of();
         var pinned = pinnedVersions(workspaceId, owned);
@@ -61,7 +61,7 @@ public class ResultVisibilityPolicy {
                         .findAt(
                                 workspaceId,
                                 owned.stream()
-                                        .map(Result::getPracticeId)
+                                        .map(ResultFacts::practiceId)
                                         .distinct()
                                         .toList(),
                                 at)
@@ -72,17 +72,16 @@ public class ResultVisibilityPolicy {
         return sources.permitsHumanStanding(
                 workspaceId,
                 owned.stream()
-                        .filter(r -> !incorrect.contains(r.getId()) && current.containsKey(r.getPracticeId()))
+                        .filter(r -> !incorrect.contains(r.id()) && current.containsKey(r.practiceId()))
                         .filter(r -> {
-                            var version =
-                                    r.getPracticeVersionId() == null ? null : pinned.get(r.getPracticeVersionId());
-                            if (r.isMigratedHistory()) {
-                                return r.getPracticeVersionId() == null
+                            var version = r.practiceVersionId() == null ? null : pinned.get(r.practiceVersionId());
+                            if (r.migratedHistory()) {
+                                return r.practiceVersionId() == null
                                         || (version != null
                                                 && Objects.equals(
-                                                        version.getPractice().getId(), r.getPracticeId()));
+                                                        version.getPractice().getId(), r.practiceId()));
                             }
-                            var currentVersion = current.get(r.getPracticeId());
+                            var currentVersion = current.get(r.practiceId());
                             return currentVersion != null
                                     && verifiable(r, version)
                                     && Objects.requireNonNull(version)
@@ -97,10 +96,10 @@ public class ResultVisibilityPolicy {
         return sources.asOneRead(workspaceId, read);
     }
 
-    private Set<UUID> incorrectAt(long workspaceId, List<Result> owned, Instant at) {
+    private Set<UUID> incorrectAt(long workspaceId, List<ResultFacts> owned, Instant at) {
         return marks
                 .findByWorkspaceIdAndResultIdIn(
-                        workspaceId, owned.stream().map(Result::getId).toList())
+                        workspaceId, owned.stream().map(ResultFacts::id).toList())
                 .stream()
                 .filter(m -> m.getKind() == ResultMarkKind.INCORRECT
                         && !m.getCreatedAt().isAfter(at)
@@ -109,40 +108,49 @@ public class ResultVisibilityPolicy {
                 .collect(Collectors.toSet());
     }
 
-    public Set<UUID> permitsAll(long workspaceId, Collection<Result> results, SourceUsePurpose purpose) {
-        return permitted(workspaceId, results, purpose, false);
+    public Set<UUID> permitsAll(long workspaceId, Collection<ResultFacts> results, SourceUsePurpose purpose) {
+        return evidenceAuthorization.permitsAll(workspaceId, eligible(workspaceId, results), purpose);
     }
 
+    /** A new delivery verifies each result's full citations, so it keeps the full records that the policy admits. */
     public Set<UUID> permitsForNewDelivery(long workspaceId, Collection<Result> results, SourceUsePurpose purpose) {
-        return permitted(workspaceId, results, purpose, true);
+        var admitted = eligible(workspaceId, results.stream().map(Result::facts).toList()).stream()
+                .map(ResultFacts::id)
+                .collect(Collectors.toSet());
+        return evidenceAuthorization.permitsForNewDelivery(
+                workspaceId,
+                results.stream()
+                        .filter(result -> admitted.contains(result.getId()))
+                        .toList(),
+                purpose);
     }
 
-    public Set<UUID> permitsShown(long workspaceId, Collection<Result> results, SourceUsePurpose purpose) {
-        List<Result> owned = results.stream()
-                .filter(result -> result.getWorkspaceId() == workspaceId)
+    public Set<UUID> permitsShown(long workspaceId, Collection<ResultFacts> results, SourceUsePurpose purpose) {
+        List<ResultFacts> owned = results.stream()
+                .filter(result -> result.workspaceId() == workspaceId)
                 .toList();
         Map<Long, PracticeVersion> pinned = pinnedVersions(workspaceId, owned);
-        List<Result> verifiable = owned.stream()
-                .filter(result -> result.isMigratedHistory()
-                        || (result.getPracticeVersionId() != null && pinned.containsKey(result.getPracticeVersionId())))
+        List<ResultFacts> verifiable = owned.stream()
+                .filter(result -> result.migratedHistory()
+                        || (result.practiceVersionId() != null && pinned.containsKey(result.practiceVersionId())))
                 .toList();
         return evidenceAuthorization.permitsAll(workspaceId, withoutIncorrect(workspaceId, verifiable), purpose);
     }
 
-    public Set<UUID> permitsHistory(long workspaceId, Collection<Result> results, SourceUsePurpose purpose) {
+    public Set<UUID> permitsHistory(long workspaceId, Collection<ResultFacts> results, SourceUsePurpose purpose) {
         return evidenceAuthorization.permitsAll(
                 workspaceId,
                 results.stream()
-                        .filter(result -> result.getWorkspaceId() == workspaceId)
+                        .filter(result -> result.workspaceId() == workspaceId)
                         .toList(),
                 purpose);
     }
 
     /** The result's freshness: its sources' freshness, unless the result or its practice says more. */
     public static Freshness freshness(
-            Result result, @Nullable PracticeVersion pinned, PracticeVersion current, Freshness source) {
-        if (result.isMigratedHistory()) return Freshness.recordMissing();
-        if (result.getEndedAt() != null) return Freshness.stale(source.capturedAt());
+            ResultFacts result, @Nullable PracticeVersion pinned, PracticeVersion current, Freshness source) {
+        if (result.migratedHistory()) return Freshness.recordMissing();
+        if (result.endedAt() != null) return Freshness.stale(source.capturedAt());
         if (!verifiable(result, pinned)) return Freshness.recordMissing();
         Objects.requireNonNull(pinned);
         return pinned.getReviewDigest().equals(current.getReviewDigest())
@@ -150,20 +158,20 @@ public class ResultVisibilityPolicy {
                 : Freshness.stale(source.capturedAt());
     }
 
-    private static boolean verifiable(Result result, @Nullable PracticeVersion pinned) {
+    private static boolean verifiable(ResultFacts result, @Nullable PracticeVersion pinned) {
         return pinned != null
-                && !result.isMigratedHistory()
-                && result.getSummary() != null
-                && result.getExplanation() != null
-                && result.getEvidence() != null
-                && result.getCoverage() != null;
+                && !result.migratedHistory()
+                && result.summary() != null
+                && result.hasExplanation()
+                && result.hasEvidence()
+                && result.hasCoverage();
     }
 
-    public Set<UUID> permitsAt(long workspaceId, Collection<Result> rows, SourceUsePurpose purpose, Instant at) {
+    public Set<UUID> permitsAt(long workspaceId, Collection<ResultFacts> rows, SourceUsePurpose purpose, Instant at) {
         var owned = rows.stream()
-                .filter(r -> r.getWorkspaceId() == workspaceId
-                        && !r.getRecordedAt().isAfter(at)
-                        && (r.getEndedAt() == null || r.getEndedAt().isAfter(at)))
+                .filter(r -> r.workspaceId() == workspaceId
+                        && !r.recordedAt().isAfter(at)
+                        && (r.endedAt() == null || r.endedAt().isAfter(at)))
                 .toList();
         var pinned = pinnedVersions(workspaceId, owned);
         var current =
@@ -171,7 +179,7 @@ public class ResultVisibilityPolicy {
                         .findAt(
                                 workspaceId,
                                 owned.stream()
-                                        .map(Result::getPracticeId)
+                                        .map(ResultFacts::practiceId)
                                         .distinct()
                                         .toList(),
                                 at)
@@ -181,7 +189,7 @@ public class ResultVisibilityPolicy {
         var incorrect =
                 marks
                         .findByWorkspaceIdAndResultIdIn(
-                                workspaceId, owned.stream().map(Result::getId).toList())
+                                workspaceId, owned.stream().map(ResultFacts::id).toList())
                         .stream()
                         .filter(m -> m.getKind() == ResultMarkKind.INCORRECT
                                 && !m.getCreatedAt().isAfter(at)
@@ -191,75 +199,72 @@ public class ResultVisibilityPolicy {
         return evidenceAuthorization.permitsAll(
                 workspaceId,
                 owned.stream()
-                        .filter(r -> !incorrect.contains(r.getId())
-                                && current.containsKey(r.getPracticeId())
-                                && verifiable(r, pinned.get(r.getPracticeVersionId()))
-                                && Objects.requireNonNull(pinned.get(r.getPracticeVersionId()))
+                        .filter(r -> !incorrect.contains(r.id())
+                                && current.containsKey(r.practiceId())
+                                && verifiable(r, pinned.get(r.practiceVersionId()))
+                                && Objects.requireNonNull(pinned.get(r.practiceVersionId()))
                                         .getReviewDigest()
-                                        .equals(current.get(r.getPracticeId()).getReviewDigest()))
+                                        .equals(current.get(r.practiceId()).getReviewDigest()))
                         .toList(),
                 purpose);
     }
 
-    private Set<UUID> permitted(
-            long workspaceId, Collection<Result> results, SourceUsePurpose purpose, boolean newDelivery) {
-        List<Result> owned = results.stream()
-                .filter(result -> result.getWorkspaceId() == workspaceId)
+    private List<ResultFacts> eligible(long workspaceId, Collection<ResultFacts> results) {
+        List<ResultFacts> owned = results.stream()
+                .filter(result -> result.workspaceId() == workspaceId)
                 .toList();
         if (owned.isEmpty()) {
-            return Set.of();
+            return List.of();
         }
         Map<Long, PracticeVersion> pinned = pinnedVersions(workspaceId, owned);
         Map<Long, Practice> current = practices
                 .findByWorkspaceIdAndIdIn(
                         workspaceId,
-                        owned.stream().map(Result::getPracticeId).distinct().toList())
+                        owned.stream().map(ResultFacts::practiceId).distinct().toList())
                 .stream()
                 .collect(Collectors.toMap(practice -> Objects.requireNonNull(practice.getId()), Function.identity()));
-        var sourceStates = freshness.states(workspaceId, owned);
-        List<Result> eligible = owned.stream()
+        var sourceStates = freshness.currentness(
+                workspaceId, owned.stream().map(ResultFreshness.Claim::of).toList());
+        List<ResultFacts> eligible = owned.stream()
                 .filter(result -> {
-                    Practice practice = current.get(result.getPracticeId());
+                    Practice practice = current.get(result.practiceId());
                     // The sources are checked first, so the policy checks only the result and its practice.
                     return practice != null
-                            && sourceStates.get(result.getId()) == Currentness.CURRENT
+                            && sourceStates.get(result.id()) == Currentness.CURRENT
                             && freshness(
                                                     result,
-                                                    pinned.get(result.getPracticeVersionId()),
+                                                    pinned.get(result.practiceVersionId()),
                                                     practice.getCurrentVersion(),
                                                     Freshness.current(null))
                                             .currentness()
                                     == Currentness.CURRENT;
                 })
                 .toList();
-        List<Result> unmarked = withoutIncorrect(workspaceId, eligible);
-        return newDelivery
-                ? evidenceAuthorization.permitsForNewDelivery(workspaceId, unmarked, purpose)
-                : evidenceAuthorization.permitsAll(workspaceId, unmarked, purpose);
+        return withoutIncorrect(workspaceId, eligible);
     }
 
-    private Map<Long, PracticeVersion> pinnedVersions(long workspaceId, Collection<Result> results) {
+    private Map<Long, PracticeVersion> pinnedVersions(long workspaceId, Collection<ResultFacts> results) {
         Set<Long> ids = results.stream()
-                .map(Result::getPracticeVersionId)
+                .map(ResultFacts::practiceVersionId)
                 .filter(Objects::nonNull)
                 .collect(Collectors.toSet());
         return versions.findByWorkspaceIdAndIdIn(workspaceId, ids).stream()
                 .collect(Collectors.toMap(version -> Objects.requireNonNull(version.getId()), Function.identity()));
     }
 
-    private List<Result> withoutIncorrect(long workspaceId, List<Result> results) {
+    private List<ResultFacts> withoutIncorrect(long workspaceId, List<ResultFacts> results) {
         if (results.isEmpty()) {
             return List.of();
         }
         Set<UUID> incorrect = marks
                 .findByWorkspaceIdAndResultIdInAndRemovedAtIsNull(
-                        workspaceId, results.stream().map(Result::getId).toList())
+                        workspaceId, results.stream().map(ResultFacts::id).toList())
                 .stream()
                 .filter(mark -> mark.getKind() == ResultMarkKind.INCORRECT)
                 .map(mark -> mark.getResultId())
                 .collect(Collectors.toSet());
         return results.stream()
-                .filter(result -> !incorrect.contains(result.getId()))
+                .filter(result -> !incorrect.contains(result.id()))
                 .toList();
     }
 }

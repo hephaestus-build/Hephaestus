@@ -185,8 +185,9 @@ class PracticeProfileReadCostIntegrationTest extends BaseIntegrationTest {
 
         assertThat(measured.value().latestReview()).isNotNull();
         // The page, its changes and both standing snapshots filter one history; the newest result is its own read.
+        // The history is the one result read bounded by the look-back; the first-opportunity read spans all results.
         assertThat(measured.sql())
-                .filteredOn(sql -> sql.startsWith("SELECT r.* FROM result r JOIN practice p"))
+                .filteredOn(sql -> sql.contains(" FROM result r ") && sql.contains("r.recorded_at>=?"))
                 .hasSize(1);
     }
 

@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.practices.result;
 
+import static de.tum.cit.aet.hephaestus.practices.result.ResultTestFixtures.facts;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -35,6 +36,7 @@ import de.tum.cit.aet.hephaestus.practices.PracticeVersionRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeVersionService;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackResponseService;
 import de.tum.cit.aet.hephaestus.practices.model.Result;
+import de.tum.cit.aet.hephaestus.practices.model.ResultFacts;
 import de.tum.cit.aet.hephaestus.practices.review.ProductItemQuery;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewAdmissionData;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewIntegrationData;
@@ -174,11 +176,11 @@ class ResultHistoryIntegrationTest extends BaseIntegrationTest {
         var facts = new HistoryCustody(true, false, List.of(), List.of(), List.of(UUID.randomUUID()));
         // doAnswer, so that a second stubbing does not run the first answer.
         doAnswer(call -> {
-                    Collection<Result> rows = call.getArgument(1);
+                    Collection<ResultFacts> rows = call.getArgument(1);
                     SourceUsePurpose purpose = call.getArgument(2);
                     Map<UUID, ResultSourceAuthorization.Check> checks = new HashMap<>();
-                    rows.forEach(row -> checks.put(
-                            row.getId(), new ResultSourceAuthorization.Check(facts, permitted.test(purpose))));
+                    rows.forEach(row ->
+                            checks.put(row.id(), new ResultSourceAuthorization.Check(facts, permitted.test(purpose))));
                     return checks;
                 })
                 .when(authorization)
@@ -704,8 +706,9 @@ class ResultHistoryIntegrationTest extends BaseIntegrationTest {
                 scenario.practice(),
                 itemRows.findById(ref.itemId()).orElseThrow());
         var recorded = data.result(work, ResultOutcome.NOT_MET, Instant.now(), Instant.now(), storedVersion(work));
-        assertThat(presentation.currentness(
-                        resultViews.views(ref.workspaceId(), List.of(recorded)).getFirst()))
+        assertThat(presentation.currentness(resultViews
+                        .views(ref.workspaceId(), facts(List.of(recorded)))
+                        .getFirst()))
                 .isEqualTo(Currentness.CURRENT);
 
         gitRefs.invalidate(
@@ -713,8 +716,9 @@ class ResultHistoryIntegrationTest extends BaseIntegrationTest {
                 Objects.requireNonNull(repository.getProvider().getId()));
         gitRefs.record(key.workspaceId(), key.repositoryId(), firstRead, "a".repeat(64));
         assertThat(gitRefs.current(key.workspaceId(), key.repositoryId())).isEmpty();
-        assertThat(presentation.currentness(
-                        resultViews.views(ref.workspaceId(), List.of(recorded)).getFirst()))
+        assertThat(presentation.currentness(resultViews
+                        .views(ref.workspaceId(), facts(List.of(recorded)))
+                        .getFirst()))
                 .isEqualTo(Currentness.UNVERIFIABLE);
         assertThat(read.findById(recorded.getId()).orElseThrow().getEndedAt()).isNull();
 
@@ -722,8 +726,9 @@ class ResultHistoryIntegrationTest extends BaseIntegrationTest {
         gitRefs.record(key.workspaceId(), key.repositoryId(), nextRead, "b".repeat(64));
         gitRefs.record(key.workspaceId(), key.repositoryId(), firstRead, "a".repeat(64));
         assertThat(gitRefs.current(key.workspaceId(), key.repositoryId())).contains("b".repeat(64));
-        assertThat(presentation.currentness(
-                        resultViews.views(ref.workspaceId(), List.of(recorded)).getFirst()))
+        assertThat(presentation.currentness(resultViews
+                        .views(ref.workspaceId(), facts(List.of(recorded)))
+                        .getFirst()))
                 .isEqualTo(Currentness.STALE);
         var other = data.scenario();
         var foreign = new RepositoryKey(other.workspace().getId(), key.repositoryId());
@@ -761,7 +766,7 @@ class ResultHistoryIntegrationTest extends BaseIntegrationTest {
         assignment.setCaptureDecision(facts);
         captureDecisions.saveAndFlush(assignment);
         assertThat(presentation.currentness(resultViews
-                        .views(recorded.getWorkspaceId(), List.of(recorded))
+                        .views(recorded.getWorkspaceId(), facts(List.of(recorded)))
                         .getFirst()))
                 .isEqualTo(Currentness.CURRENT);
         assertFilteredClaim(recorded, Currentness.CURRENT, true);
@@ -773,7 +778,7 @@ class ResultHistoryIntegrationTest extends BaseIntegrationTest {
         issues.saveAndFlush(pull);
 
         assertThat(presentation.currentness(resultViews
-                        .views(recorded.getWorkspaceId(), List.of(recorded))
+                        .views(recorded.getWorkspaceId(), facts(List.of(recorded)))
                         .getFirst()))
                 .isEqualTo(Currentness.STALE);
         assertFilteredClaim(recorded, Currentness.CURRENT, false);
@@ -827,7 +832,7 @@ class ResultHistoryIntegrationTest extends BaseIntegrationTest {
         assignment.setCaptureDecision(facts);
         captureDecisions.saveAndFlush(assignment);
         assertThat(presentation.currentness(resultViews
-                        .views(recorded.getWorkspaceId(), List.of(recorded))
+                        .views(recorded.getWorkspaceId(), facts(List.of(recorded)))
                         .getFirst()))
                 .isEqualTo(Currentness.UNVERIFIABLE);
         assertThat(read.findByIdAndWorkspaceId(recorded.getId(), recorded.getWorkspaceId())

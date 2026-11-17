@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.practices.result.trend;
 
+import static de.tum.cit.aet.hephaestus.practices.result.ResultTestFixtures.ended;
 import static de.tum.cit.aet.hephaestus.practices.result.trend.TrendResults.judged;
 import static de.tum.cit.aet.hephaestus.practices.result.trend.TrendResults.noVerdict;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -24,7 +25,7 @@ class OpportunityBundlerTest {
         UUID latest = UUID.randomUUID();
 
         var prior = judged(1, older, "2026-08-10T09:00:00Z", ResultOutcome.NOT_MET);
-        prior.result().end(ResultEndReason.REPLACED, Instant.parse("2026-08-11T09:00:00Z"));
+        prior = ended(prior, ResultEndReason.REPLACED, Instant.parse("2026-08-11T09:00:00Z"));
         OpportunityBundler.Bundles result = bundle(prior, judged(1, latest, "2026-08-11T09:00:00Z", ResultOutcome.MET));
 
         assertThat(result.current()).hasSize(1);
@@ -123,7 +124,7 @@ class OpportunityBundlerTest {
     @Test
     void shouldNotLetAVerdictlessRunSupersedeAnEarlierVerdictOnTheSameArtifact() {
         var prior = judged(1, UUID.randomUUID(), "2026-08-10T09:00:00Z", ResultOutcome.NOT_MET);
-        prior.result().end(ResultEndReason.REPLACED, Instant.parse("2026-08-11T09:00:00Z"));
+        prior = ended(prior, ResultEndReason.REPLACED, Instant.parse("2026-08-11T09:00:00Z"));
         OpportunityBundler.Bundles result = bundle(prior, noVerdict(1, UUID.randomUUID(), "2026-08-11T09:00:00Z"));
 
         assertThat(result.trail()).hasSize(1);

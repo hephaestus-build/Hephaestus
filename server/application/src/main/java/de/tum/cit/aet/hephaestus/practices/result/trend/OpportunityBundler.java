@@ -43,8 +43,7 @@ final class OpportunityBundler {
     static List<EvidenceOpportunity> opportunities(List<ResultView> results, Instant cutoff, boolean selfSelected) {
         return byItem(
                 results.stream()
-                        .filter(v ->
-                                v.result().getEndedAt() == null && !v.result().isMigratedHistory())
+                        .filter(v -> v.result().endedAt() == null && !v.result().migratedHistory())
                         .filter(v -> (v.review().getOrigin() == ReviewOrigin.REQUEST
                                         || v.review().getOrigin() == ReviewOrigin.BACKFILL)
                                 == selfSelected)
@@ -64,22 +63,22 @@ final class OpportunityBundler {
     private static List<EvidenceOpportunity> byItem(List<ResultView> admitted, Instant cutoff) {
         Map<Long, List<ResultView>> byItem = new LinkedHashMap<>();
         admitted.stream()
-                .filter(v -> !v.result().getRecordedAt().isBefore(cutoff))
-                .forEach(v -> byItem.computeIfAbsent(v.result().getItemId(), id -> new ArrayList<>())
+                .filter(v -> !v.result().recordedAt().isBefore(cutoff))
+                .forEach(v -> byItem.computeIfAbsent(v.result().itemId(), id -> new ArrayList<>())
                         .add(v));
         return byItem.entrySet().stream()
                 .map(e -> {
                     var latest = e.getValue().stream()
-                            .max(Comparator.comparing(v -> v.result().getRecordedAt()))
+                            .max(Comparator.comparing(v -> v.result().recordedAt()))
                             .orElseThrow();
                     var outcomes = e.getValue().stream()
-                            .map(v -> OutcomeVector.of(v.result().getOutcome()))
+                            .map(v -> OutcomeVector.of(v.result().outcome()))
                             .reduce(OutcomeVector.EMPTY, OutcomeVector::plus);
                     return new EvidenceOpportunity(
                             new ItemKind(latest.item().kind()),
                             e.getKey(),
                             latest.review().getId(),
-                            latest.result().getRecordedAt(),
+                            latest.result().recordedAt(),
                             outcomes,
                             TrendBundle.OLDER);
                 })

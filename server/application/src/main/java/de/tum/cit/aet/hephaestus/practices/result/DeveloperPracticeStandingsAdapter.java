@@ -60,9 +60,9 @@ class DeveloperPracticeStandingsAdapter implements DeveloperPracticeStandings {
             return live;
         }
         return (int) practice.evidence().stream()
-                .filter(view -> view.result().getOutcome() == ResultOutcome.MET
-                        || view.result().getOutcome() == ResultOutcome.NOT_MET)
-                .map(view -> view.result().getItemId())
+                .filter(view -> view.result().outcome() == ResultOutcome.MET
+                        || view.result().outcome() == ResultOutcome.NOT_MET)
+                .map(view -> view.result().itemId())
                 .distinct()
                 .count();
     }

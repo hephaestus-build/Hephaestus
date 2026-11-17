@@ -541,6 +541,41 @@ export const LoadFailed: Story = {
 	},
 };
 
+// A Does not apply that the practice's Applies when check proved quotes nothing. It shows its own
+// reason, not a source denial, and no evidence section.
+export const DoesNotApplyByPathCheck: Story = {
+	args: {
+		result: ready({
+			...reviewResultDetail,
+			outcome: "DOES_NOT_APPLY",
+			summary: "This practice does not apply",
+			explanation: "No changed path is under docs/.",
+			evidence: {
+				citations: [],
+				openQuestions: [],
+				search: null,
+				inapplicability: {
+					consulted: ["scm.pull-request.diff"],
+					prerequisite: "At least one Applies when condition must match",
+					ruledOutBy: "No changed path is under docs/.",
+				},
+			},
+			problems: [],
+			evidenceHidden: false,
+		}),
+	},
+	play: async () => {
+		const panel = within(await settledDrawerPanel());
+		await expect(
+			panel.getByRole("heading", { name: "This practice does not apply", level: 2 }),
+		).toBeVisible();
+		await expect(panel.getByText("No changed path is under docs/.")).toBeVisible();
+		await expect(panel.queryByRole("region", { name: "Evidence" })).not.toBeInTheDocument();
+		await expect(panel.queryByText(RESULT_WORDS_UNAVAILABLE)).not.toBeInTheDocument();
+		await expect(panel.queryByText(/could not be verified/u)).not.toBeInTheDocument();
+	},
+};
+
 // Source denial must not imply that no evidence was captured.
 export const TextUnavailable: Story = {
 	args: {

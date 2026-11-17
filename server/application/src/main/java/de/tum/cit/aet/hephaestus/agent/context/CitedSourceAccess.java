@@ -2,7 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.context;
 
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
-import de.tum.cit.aet.hephaestus.practices.model.Result;
+import de.tum.cit.aet.hephaestus.practices.model.ResultFacts;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultProofAccess;
 import java.util.Collection;
 import java.util.Set;
@@ -18,11 +18,11 @@ import org.springframework.stereotype.Component;
 public class CitedSourceAccess {
     private final ResultProofAccess results;
 
-    public Set<UUID> permitsAllHistory(long workspaceId, Collection<Result> rows, SourceUsePurpose purpose) {
+    public Set<UUID> permitsAllHistory(long workspaceId, Collection<ResultFacts> rows, SourceUsePurpose purpose) {
         return results.permitsAllHistory(workspaceId, rows, purpose);
     }
 
-    public Set<UUID> permitsAll(long workspaceId, Collection<Result> rows, SourceUsePurpose purpose) {
+    public Set<UUID> permitsAll(long workspaceId, Collection<ResultFacts> rows, SourceUsePurpose purpose) {
         return results.permitsAll(workspaceId, rows, purpose);
     }
 

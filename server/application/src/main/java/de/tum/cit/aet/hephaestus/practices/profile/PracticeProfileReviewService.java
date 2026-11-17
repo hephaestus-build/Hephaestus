@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.practices.profile;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import de.tum.cit.aet.hephaestus.practices.feedback.dto.OwnFeedbackRefDTO;
+import de.tum.cit.aet.hephaestus.practices.model.Result;
 import de.tum.cit.aet.hephaestus.practices.profile.dto.ProfileReviewDTO;
 import de.tum.cit.aet.hephaestus.practices.profile.dto.ProfileReviewDetailDTO;
 import de.tum.cit.aet.hephaestus.practices.result.ResultPresentation;
@@ -81,14 +82,14 @@ public class PracticeProfileReviewService {
                         || itemKinds.isEmpty()
                         || itemKinds.contains(v.item().kind()))
                 .filter(v -> itemId == null
-                        || v.result().getItemId() == itemId
+                        || v.result().itemId() == itemId
                         || (includeReviewChildren
                                 && v.item().kind().equals("scm.pull_request_review")
                                 && Long.toString(itemId).equals(v.item().parentId())))
                 .filter(v -> groupSlug == null
                         || (v.practice().getGroup() != null
                                 && v.practice().getGroup().getSlug().equals(groupSlug)))
-                .forEach(v -> byReview.computeIfAbsent(v.result().getReviewId(), id -> new ArrayList<>())
+                .forEach(v -> byReview.computeIfAbsent(v.result().reviewId(), id -> new ArrayList<>())
                         .add(v));
         var ordered = byReview.values().stream()
                 .filter(v -> statuses == null
@@ -126,7 +127,7 @@ public class PracticeProfileReviewService {
                                     Objects.requireNonNull(refs.get(review.getId())),
                                     v.stream()
                                             .map(r -> Objects.requireNonNull(
-                                                    listed.get(r.result().getId())))
+                                                    listed.get(r.result().id())))
                                             .toList(),
                                     feedbackOf(v, feedback),
                                     place.position(),
@@ -146,22 +147,23 @@ public class PracticeProfileReviewService {
                         reusedResults.of(ws.id(), id).stream())
                 .filter(r -> Objects.equals(r.getDeveloperId(), account))
                 .toList();
-        var permitted = authorization.permitsAll(ws.id(), rows, SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY);
-        var projected = views.views(ws.id(), rows);
+        var facts = rows.stream().map(Result::facts).toList();
+        var permitted = authorization.permitsAll(ws.id(), facts, SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY);
+        var projected = views.views(ws.id(), facts);
         var trace = traces.own(
                 ws.id(), rows.isEmpty() ? review.getItemId() : rows.getFirst().getItemId(), id);
         var counts = ReviewSummaryQueryService.counts(rows);
         return new ProfileReviewDetailDTO(
                 reviews.ref(review),
                 presentation.lists(ws.id(), projected, permitted),
-                feedbackOf(projected, presentation.ownFeedback(ws.id(), rows)),
+                feedbackOf(projected, presentation.ownFeedback(ws.id(), facts)),
                 trace,
                 new OutcomeVectorDTO(counts.met(), counts.notMet(), counts.doesNotApply(), counts.couldNotDetermine()));
     }
 
     private static List<OwnFeedbackRefDTO> feedbackOf(List<ResultView> v, Map<UUID, List<OwnFeedbackRefDTO>> feedback) {
         return v.stream()
-                .flatMap(r -> feedback.getOrDefault(r.result().getId(), List.of()).stream())
+                .flatMap(r -> feedback.getOrDefault(r.result().id(), List.of()).stream())
                 .distinct()
                 .toList();
     }

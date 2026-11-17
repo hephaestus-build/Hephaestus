@@ -148,9 +148,7 @@ class PracticeStandingReplacementIntegrationTest extends AbstractResultAdmission
         var practice = snapshot();
         assertThat(practice.dto().standing()).isEqualTo(PracticeStanding.STRENGTH);
         assertThat(practice.dto().basis()).isEqualTo(StandingBasis.EARLIER_REVIEWS);
-        assertThat(practice.evidence())
-                .extracting(view -> view.result().getId())
-                .containsExactly(earlier.getId());
+        assertThat(practice.evidence()).extracting(view -> view.result().id()).containsExactly(earlier.getId());
         assertThat(practice.dto().strengths()).isEmpty();
         assertThat(practice.dto().toWorkOn()).isEmpty();
         assertThat(practice.dto().direction()).isNull();
@@ -166,9 +164,7 @@ class PracticeStandingReplacementIntegrationTest extends AbstractResultAdmission
                 .isEqualTo(ResultEndReason.REPLACED);
         var practice = snapshot();
         assertThat(practice.dto().basis()).isEqualTo(StandingBasis.CURRENT_REVIEWS);
-        assertThat(practice.evidence())
-                .extracting(view -> view.result().getId())
-                .containsExactly(replacement.getId());
+        assertThat(practice.evidence()).extracting(view -> view.result().id()).containsExactly(replacement.getId());
         assertThat(practice.dto().toWorkOn())
                 .extracting(result -> result.resultId())
                 .containsExactly(replacement.getId());
@@ -182,9 +178,7 @@ class PracticeStandingReplacementIntegrationTest extends AbstractResultAdmission
 
         assertThat(processing.dto()).isEqualTo(human.dto());
         assertThat(processing.dto().basis()).isEqualTo(StandingBasis.CURRENT_REVIEWS);
-        assertThat(processing.evidence())
-                .extracting(view -> view.result().getId())
-                .containsExactly(result.getId());
+        assertThat(processing.evidence()).extracting(view -> view.result().id()).containsExactly(result.getId());
         assertThat(processing.dto().toWorkOn())
                 .extracting(row -> row.resultId())
                 .containsExactly(result.getId());
@@ -199,9 +193,7 @@ class PracticeStandingReplacementIntegrationTest extends AbstractResultAdmission
                 scenario.account().getId());
 
         assertThat(snapshot().dto().standing()).isEqualTo(PracticeStanding.STRENGTH);
-        assertThat(snapshot().evidence())
-                .extracting(view -> view.result().getId())
-                .containsExactly(result.getId());
+        assertThat(snapshot().evidence()).extracting(view -> view.result().id()).containsExactly(result.getId());
         assertNotProcessed();
     }
 
@@ -209,9 +201,7 @@ class PracticeStandingReplacementIntegrationTest extends AbstractResultAdmission
     void shouldKeepAMigratedStandingHumanOnly() {
         var earlier = historicalLiveAssessment();
         assertThat(snapshot().dto().basis()).isEqualTo(StandingBasis.EARLIER_REVIEWS);
-        assertThat(snapshot().evidence())
-                .extracting(view -> view.result().getId())
-                .containsExactly(earlier.getId());
+        assertThat(snapshot().evidence()).extracting(view -> view.result().id()).containsExactly(earlier.getId());
         assertNotProcessed();
     }
 
@@ -244,9 +234,7 @@ class PracticeStandingReplacementIntegrationTest extends AbstractResultAdmission
         jdbc.update("UPDATE account SET ai_choice='NO_AI',ai_choice_at=now() WHERE id=?", contributor.getId());
 
         assertThat(snapshot().dto().standing()).isEqualTo(PracticeStanding.STRENGTH);
-        assertThat(snapshot().evidence())
-                .extracting(view -> view.result().getId())
-                .containsExactly(result.getId());
+        assertThat(snapshot().evidence()).extracting(view -> view.result().id()).containsExactly(result.getId());
         assertNotProcessed();
     }
 
@@ -278,9 +266,7 @@ class PracticeStandingReplacementIntegrationTest extends AbstractResultAdmission
         var practice = snapshot();
         assertThat(practice.dto().standing()).isEqualTo(PracticeStanding.NO_OPPORTUNITY);
         assertThat(practice.dto().basis()).isNull();
-        assertThat(practice.evidence())
-                .extracting(view -> view.result().getId())
-                .doesNotContain(earlier.getId());
+        assertThat(practice.evidence()).extracting(view -> view.result().id()).doesNotContain(earlier.getId());
     }
 
     @Test
@@ -297,16 +283,14 @@ class PracticeStandingReplacementIntegrationTest extends AbstractResultAdmission
         var practice = snapshot();
         assertThat(practice.dto().standing()).isEqualTo(PracticeStanding.STRENGTH);
         assertThat(practice.dto().basis()).isEqualTo(StandingBasis.EARLIER_REVIEWS);
-        assertThat(practice.evidence())
-                .extracting(view -> view.result().getId())
-                .containsExactly(earlier.getId());
+        assertThat(practice.evidence()).extracting(view -> view.result().id()).containsExactly(earlier.getId());
     }
 
     @Test
     void shouldKeepTheLiveStandingAfterAWorkChangeThatNoReviewFollowed() {
         var live = asLive(admit(ResultOutcome.NOT_MET, itemVersion));
         var before = snapshot();
-        assertThat(before.liveRuns()).extracting(view -> view.result().getId()).containsExactly(live.getId());
+        assertThat(before.liveRuns()).extracting(view -> view.result().id()).containsExactly(live.getId());
 
         assertThat(store.endCurrent(
                         scenario.workspace().getId(),
@@ -319,7 +303,7 @@ class PracticeStandingReplacementIntegrationTest extends AbstractResultAdmission
         var after = snapshot();
         assertThat(after.dto().standing()).isEqualTo(before.dto().standing());
         assertThat(after.dto().basis()).isEqualTo(StandingBasis.CURRENT_REVIEWS);
-        assertThat(after.liveRuns()).extracting(view -> view.result().getId()).containsExactly(live.getId());
+        assertThat(after.liveRuns()).extracting(view -> view.result().id()).containsExactly(live.getId());
         // An ended result proves nothing current: it is not quoted, and Hephaestus does not read it.
         assertThat(after.dto().toWorkOn()).isEmpty();
         assertThat(processingSnapshot().liveRuns()).isEmpty();

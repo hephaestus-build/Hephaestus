@@ -10,6 +10,7 @@ import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import de.tum.cit.aet.hephaestus.practices.feedback.dto.FeedbackCopyCountsDTO;
 import de.tum.cit.aet.hephaestus.practices.feedback.response.FeedbackResponseRepository;
 import de.tum.cit.aet.hephaestus.practices.model.Result;
+import de.tum.cit.aet.hephaestus.practices.model.ResultFacts;
 import de.tum.cit.aet.hephaestus.practices.result.ResultRepository;
 import de.tum.cit.aet.hephaestus.practices.result.ResultViewQuery;
 import de.tum.cit.aet.hephaestus.practices.result.ResultVisibilityPolicy;
@@ -175,8 +176,8 @@ class FeedbackListVisibleReadIntegrationTest extends BaseIntegrationTest {
                         anyCollection(),
                         eq(SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY)))
                 .thenAnswer(invocation -> {
-                    Collection<Result> rows = invocation.getArgument(1);
-                    return rows.stream().map(Result::getId).collect(Collectors.toSet());
+                    Collection<ResultFacts> rows = invocation.getArgument(1);
+                    return rows.stream().map(ResultFacts::id).collect(Collectors.toSet());
                 });
         var query = query(policy);
         var small = reads.measure(() -> query.list(scenario.workspace().getId(), ALL, PageRequest.of(0, 32)));

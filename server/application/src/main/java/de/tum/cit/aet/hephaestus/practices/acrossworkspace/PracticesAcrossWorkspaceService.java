@@ -261,7 +261,7 @@ public class PracticesAcrossWorkspaceService {
     private static int reviewedWork(StandingSnapshot snapshot) {
         return (int) snapshot.practices().values().stream()
                 .flatMap(practice -> practice.evidence().stream())
-                .map(view -> view.result().getItemId())
+                .map(view -> view.result().itemId())
                 .distinct()
                 .count();
     }

@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.practices.result;
 
 import de.tum.cit.aet.hephaestus.practices.model.Problem;
 import de.tum.cit.aet.hephaestus.practices.model.Result;
+import de.tum.cit.aet.hephaestus.practices.model.ResultFacts;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultSort;
 import java.time.Instant;
 import java.util.Collection;
@@ -17,7 +18,8 @@ public interface ResultQueries {
 
     Page<Problem> problems(long workspaceId, ResultQueryFilter filter, ProblemQueryFilter child, Pageable page);
 
-    List<Result> forDevelopersSince(long workspaceId, Collection<Long> developers, Instant since, boolean currentOnly);
+    List<ResultFacts> forDevelopersSince(
+            long workspaceId, Collection<Long> developers, Instant since, boolean currentOnly);
 
     /** The developers with a result recorded from {@code since}, whatever its outcome or currentness. */
     List<Long> developersSince(long workspaceId, Instant since);

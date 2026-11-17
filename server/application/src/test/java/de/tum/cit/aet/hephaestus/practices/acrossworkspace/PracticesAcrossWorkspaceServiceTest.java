@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.practices.acrossworkspace;
 
-import static de.tum.cit.aet.hephaestus.practices.result.ResultTestFixtures.resultBuilder;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
@@ -28,6 +27,7 @@ import de.tum.cit.aet.hephaestus.practices.feedback.page.PracticePageFeedbackSer
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeGroup;
 import de.tum.cit.aet.hephaestus.practices.model.Result;
+import de.tum.cit.aet.hephaestus.practices.model.ResultFacts;
 import de.tum.cit.aet.hephaestus.practices.result.Freshness;
 import de.tum.cit.aet.hephaestus.practices.result.PracticeGroupStandingService;
 import de.tum.cit.aet.hephaestus.practices.result.PracticeStandingService;
@@ -137,8 +137,8 @@ class PracticesAcrossWorkspaceServiceTest {
         when(results.developersSince(eq(1L), any(Instant.class))).thenAnswer(i -> {
             Instant since = i.getArgument(1);
             return data.stream()
-                    .filter(v -> !v.result().getRecordedAt().isBefore(since))
-                    .map(v -> v.result().getDeveloperId())
+                    .filter(v -> !v.result().recordedAt().isBefore(since))
+                    .map(v -> v.result().developerId())
                     .distinct()
                     .toList();
         });
@@ -148,13 +148,14 @@ class PracticesAcrossWorkspaceServiceTest {
                     Instant since = i.getArgument(2);
                     return data.stream()
                             .map(ResultView::result)
-                            .filter(r -> developers.contains(r.getDeveloperId())
-                                    && !r.getRecordedAt().isBefore(since))
+                            .filter(r -> developers.contains(r.developerId())
+                                    && !r.recordedAt().isBefore(since))
                             .toList();
                 });
         when(views.views(eq(1L), anyCollection())).thenAnswer(i -> {
-            Collection<Result> rows = i.getArgument(1);
-            return data.stream().filter(v -> rows.contains(v.result())).toList();
+            Collection<ResultFacts> rows = i.getArgument(1);
+            var ids = rows.stream().map(ResultFacts::id).toList();
+            return data.stream().filter(v -> ids.contains(v.result().id())).toList();
         });
         when(visibility.permitsStandingAt(eq(1L), anyCollection(), any())).thenAnswer(i -> ids(i.getArgument(1)));
         when(visibility.permitsAt(eq(1L), anyCollection(), any(), any())).thenAnswer(i -> ids(i.getArgument(1)));
@@ -269,8 +270,8 @@ class PracticesAcrossWorkspaceServiceTest {
                 .isEqualTo(PracticeStanding.NOT_OBSERVED);
     }
 
-    private static Set<UUID> ids(Collection<Result> rows) {
-        return rows.stream().map(Result::getId).collect(Collectors.toSet());
+    private static Set<UUID> ids(Collection<ResultFacts> rows) {
+        return rows.stream().map(ResultFacts::id).collect(Collectors.toSet());
     }
 
     private void result(Practice practice, long developer, long item, int daysAgo, ResultOutcome outcome) {
@@ -290,13 +291,22 @@ class PracticesAcrossWorkspaceServiceTest {
                 now.minus(Duration.ofDays(daysAgo)),
                 new ItemKind("scm.pull_request"),
                 outcome);
-        var row = resultBuilder(base.result())
+        var recorded = base.result();
+        var row = Result.builder()
+                .id(recorded.id())
+                .workspaceId(recorded.workspaceId())
+                .reviewId(recorded.reviewId())
                 .practiceId(practice.getId())
                 .practiceVersionId(practice.getCurrentVersion().getId())
+                .itemId(recorded.itemId())
+                .itemVersion(recorded.itemVersion())
                 .developerId(developer)
+                .outcome(recorded.outcome())
+                .severity(recorded.severity())
+                .recordedAt(recorded.recordedAt())
                 .build();
         data.add(new ResultView(
-                row,
+                row.facts(),
                 practice,
                 practice.getCurrentVersion(),
                 base.review(),

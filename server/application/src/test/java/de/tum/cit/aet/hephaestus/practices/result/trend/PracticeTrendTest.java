@@ -31,7 +31,7 @@ class PracticeTrendTest {
         assertThat(cleanWork.since()).isEqualTo(Instant.parse("2026-05-03T09:00:00Z"));
         assertThat(cleanWork.kind()).isEqualTo(new ItemKind("scm.pull_request"));
         assertThat(cleanWork.reviewIds())
-                .containsExactly(newest.result().getReviewId(), older.result().getReviewId());
+                .containsExactly(newest.result().reviewId(), older.result().reviewId());
     }
 
     @Test

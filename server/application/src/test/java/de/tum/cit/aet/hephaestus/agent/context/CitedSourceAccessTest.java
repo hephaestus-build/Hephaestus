@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.context;
 
+import static de.tum.cit.aet.hephaestus.practices.result.ResultTestFixtures.facts;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -21,17 +22,17 @@ class CitedSourceAccessTest extends BaseUnitTest {
         var id = rows.getFirst().getId();
         var purpose = SourceUsePurpose.CONVERSATIONAL_MENTORING;
         var access = new CitedSourceAccess(results);
-        when(results.permitsAll(1, rows, purpose)).thenReturn(Set.of(id));
-        assertThat(access.permitsAll(1, rows, purpose)).containsExactly(id);
-        when(results.permitsAll(1, rows, purpose)).thenReturn(Set.of());
-        assertThat(access.permitsAll(1, rows, purpose)).isEmpty();
-        assertThat(access.permitsAll(9, rows, purpose)).isEmpty();
-        assertThat(access.permitsAll(1, rows, SourceUsePurpose.AUTOMATED_PRACTICE_REVIEW))
+        when(results.permitsAll(1, facts(rows), purpose)).thenReturn(Set.of(id));
+        assertThat(access.permitsAll(1, facts(rows), purpose)).containsExactly(id);
+        when(results.permitsAll(1, facts(rows), purpose)).thenReturn(Set.of());
+        assertThat(access.permitsAll(1, facts(rows), purpose)).isEmpty();
+        assertThat(access.permitsAll(9, facts(rows), purpose)).isEmpty();
+        assertThat(access.permitsAll(1, facts(rows), SourceUsePurpose.AUTOMATED_PRACTICE_REVIEW))
                 .isEmpty();
-        when(results.permitsAllHistory(1, rows, SourceUsePurpose.OPERATOR_EVIDENCE_REVIEW))
+        when(results.permitsAllHistory(1, facts(rows), SourceUsePurpose.OPERATOR_EVIDENCE_REVIEW))
                 .thenReturn(Set.of(id));
-        assertThat(access.permitsAllHistory(1, rows, SourceUsePurpose.OPERATOR_EVIDENCE_REVIEW))
+        assertThat(access.permitsAllHistory(1, facts(rows), SourceUsePurpose.OPERATOR_EVIDENCE_REVIEW))
                 .containsExactly(id);
-        assertThat(access.permitsAllHistory(1, rows, purpose)).isEmpty();
+        assertThat(access.permitsAllHistory(1, facts(rows), purpose)).isEmpty();
     }
 }

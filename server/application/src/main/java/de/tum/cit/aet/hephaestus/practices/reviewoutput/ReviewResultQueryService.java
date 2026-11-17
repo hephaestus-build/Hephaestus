@@ -59,8 +59,8 @@ public class ReviewResultQueryService {
     public Page<ReviewResultDTO> list(long workspaceId, ResultQueryFilter filter, ResultSort sort, Pageable page) {
         var rows = results.list(workspaceId, filter, sort, false, page);
         if (rows.isEmpty()) return new PageImpl<>(List.of(), page, rows.getTotalElements());
-        var permitted =
-                authorization.permitsAll(workspaceId, rows.getContent(), SourceUsePurpose.OPERATOR_EVIDENCE_REVIEW);
+        var facts = rows.getContent().stream().map(Result::facts).toList();
+        var permitted = authorization.permitsAll(workspaceId, facts, SourceUsePurpose.OPERATOR_EVIDENCE_REVIEW);
         var ids = rows.getContent().stream().map(Result::getId).toList();
         var marked = listRows.markTimes(workspaceId, ids).stream()
                 .collect(Collectors.groupingBy(
@@ -91,31 +91,31 @@ public class ReviewResultQueryService {
                         .distinct()
                         .toList());
         return new PageImpl<>(
-                views.operatorViews(workspaceId, rows.getContent()).stream()
+                views.operatorViews(workspaceId, facts).stream()
                         .map(v -> {
                             var r = v.result();
-                            var activeMarks = marked.getOrDefault(r.getId(), Map.of());
+                            var activeMarks = marked.getOrDefault(r.id(), Map.of());
                             var freshness = presentation.freshness(v);
                             return new ReviewResultDTO(
-                                    r.getId(),
-                                    r.getReviewId(),
+                                    r.id(),
+                                    r.reviewId(),
                                     v.item(),
                                     v.practice().getSlug(),
                                     presentation.name(v),
-                                    r.getOutcome(),
-                                    r.getSeverity(),
-                                    permitted.contains(r.getId()) ? r.getSummary() : null,
+                                    r.outcome(),
+                                    r.severity(),
+                                    permitted.contains(r.id()) ? r.summary() : null,
                                     v.review().getOrigin(),
-                                    r.getRecordedAt(),
+                                    r.recordedAt(),
                                     freshness.currentness(),
                                     freshness.unverifiableReason(),
                                     freshness.capturedAt(),
                                     activeMarks.get(ResultMarkKind.INCORRECT),
                                     activeMarks.get(ResultMarkKind.ACCEPTED),
-                                    summaries.getOrDefault(r.getId(), List.of()),
-                                    r.getDeveloperId() == null ? null : developers.get(r.getDeveloperId()),
-                                    Math.toIntExact(counts.getOrDefault(r.getId(), 0L)),
-                                    feedbackCounts(feedback.getOrDefault(r.getId(), List.of())));
+                                    summaries.getOrDefault(r.id(), List.of()),
+                                    r.developerId() == null ? null : developers.get(r.developerId()),
+                                    Math.toIntExact(counts.getOrDefault(r.id(), 0L)),
+                                    feedbackCounts(feedback.getOrDefault(r.id(), List.of())));
                         })
                         .toList(),
                 page,
@@ -130,7 +130,7 @@ public class ReviewResultQueryService {
 
     public ReviewResultDetailDTO get(long ws, UUID id) {
         var r = require(ws, id);
-        var v = views.operatorViews(ws, List.of(r)).getFirst();
+        var v = views.operatorViews(ws, List.of(r.facts())).getFirst();
         boolean permitted = authorization.permits(ws, r, SourceUsePurpose.OPERATOR_EVIDENCE_REVIEW);
         var freshness = presentation.freshness(v);
         return new ReviewResultDetailDTO(
@@ -182,7 +182,7 @@ public class ReviewResultQueryService {
                 .orElseThrow(() -> new EntityNotFoundException("Problem", id.toString()));
         var row = problemRow(ws, p);
         var r = require(ws, p.getResultId());
-        var v = views.operatorViews(ws, List.of(r)).getFirst();
+        var v = views.operatorViews(ws, List.of(r.facts())).getFirst();
         return new ReviewProblemDetailDTO(
                 row.id(),
                 row.resultId(),
@@ -215,16 +215,16 @@ public class ReviewResultQueryService {
         var r = v.result();
         var freshness = presentation.freshness(v);
         return new ReviewBoundResultDTO(
-                r.getId(),
-                r.getReviewId(),
+                r.id(),
+                r.reviewId(),
                 v.practice().getSlug(),
                 presentation.name(v),
-                r.getOutcome(),
-                r.getSeverity(),
-                permitted ? r.getSummary() : null,
+                r.outcome(),
+                r.severity(),
+                permitted ? r.summary() : null,
                 v.item(),
                 developer(v),
-                r.getRecordedAt(),
+                r.recordedAt(),
                 freshness.currentness(),
                 freshness.unverifiableReason(),
                 freshness.capturedAt());
@@ -232,7 +232,7 @@ public class ReviewResultQueryService {
 
     private ReviewProblemDTO problemRow(long ws, Problem p) {
         var r = require(ws, p.getResultId());
-        var v = views.operatorViews(ws, List.of(r)).getFirst();
+        var v = views.operatorViews(ws, List.of(r.facts())).getFirst();
         boolean permitted = authorization.permits(ws, r, SourceUsePurpose.OPERATOR_EVIDENCE_REVIEW);
         var dto = presentation.problem(p, permitted);
         var primary = dto.citations().isEmpty() ? null : dto.citations().getFirst();
@@ -276,10 +276,10 @@ public class ReviewResultQueryService {
 
     private @Nullable ReviewDeveloperDTO developer(ResultView v) {
         var r = v.result();
-        return r.getDeveloperId() == null
+        return r.developerId() == null
                 ? null
                 : references
-                        .developers(r.getWorkspaceId(), List.of(r.getDeveloperId()))
-                        .get(r.getDeveloperId());
+                        .developers(r.workspaceId(), List.of(r.developerId()))
+                        .get(r.developerId());
     }
 }
