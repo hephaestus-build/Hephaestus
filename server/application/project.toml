@@ -35,13 +35,17 @@ value = "true"
 # with another module or agent, rejects the cache and loads every class into Metaspace.
 # The buildpack starts the training run with this variable as its whole environment, so it also names
 # the training profile.
+# -XX:-UseBASE64Intrinsics turns off the JVM's AVX-512 Base64 decoder, which the reported pre-auth flaw
+# CVE-2026-114938 affects, until the pinned JRE is a fixed build. gate:toolchain refuses a JRE pin below
+# MITIGATED_BELOW in scripts/lib/buildpack-descriptor.ts without it. The training run sets it too, so
+# both runs keep the same options.
 [[io.buildpacks.build.env]]
 name = "TRAINING_RUN_JAVA_TOOL_OPTIONS"
-value = "--add-modules=jdk.jfr -Dspring.profiles.active=cds-training"
+value = "--add-modules=jdk.jfr -XX:-UseBASE64Intrinsics -Dspring.profiles.active=cds-training"
 
 [[io.buildpacks.build.env]]
 name = "BPE_APPEND_JAVA_TOOL_OPTIONS"
-value = "--add-modules=jdk.jfr"
+value = "--add-modules=jdk.jfr -XX:-UseBASE64Intrinsics"
 
 [[io.buildpacks.build.env]]
 name = "BPE_DELIM_JAVA_TOOL_OPTIONS"

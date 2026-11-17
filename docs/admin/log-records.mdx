@@ -101,6 +101,10 @@ Run production at `INFO`.
 The startup event `runtime.roles.configured` records the `runtime.server.enabled` boolean.
 It is informational when the server is enabled and warns when it is disabled. A role configuration log is not a readiness probe.
 
+The startup event `jvm.base64_intrinsics.configured` records `jvm.base64_intrinsics.enabled` and `jvm.option.origin`.
+While the image's Java runtime is below the fix of CVE-2026-114938, `jvm.base64_intrinsics.enabled` must be `false`.
+The event warns when the Java runtime does not report the option.
+
 At the shared HTTP boundary, `integration.request.failed` identifies the request method, upstream
 host, and exception class without recording the full URL, headers, or exception message.
 `database.constraint.conflict` identifies the exception class and a valid five-character SQLSTATE

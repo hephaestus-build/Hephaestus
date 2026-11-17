@@ -30,3 +30,28 @@ export function addedModules(options: string): readonly string[] {
 		(match) => match.groups?.modules?.split(",") ?? [],
 	);
 }
+
+/**
+ * The first JRE build that fixes CVE-2026-114938, a reported pre-auth flaw in the JVM's AVX-512 Base64
+ * decoder. A pinned JRE below it must run with the decoder turned off.
+ */
+export const MITIGATED_BELOW = [25, 0, 5, 1] as const;
+export const BASE64_MITIGATION = "-XX:-UseBASE64Intrinsics";
+
+/** Whether a Liberica version such as `25.0.5.0.3_5` is below `fixed`, compared part by part. */
+export function versionBelow(version: string, fixed: readonly number[]): boolean {
+	const parts = (version.split("_")[0] ?? "").split(".").map(Number);
+	for (let index = 0; index < Math.max(parts.length, fixed.length); index += 1) {
+		const left = parts[index] ?? 0;
+		const right = fixed[index] ?? 0;
+		if (left !== right) {
+			return left < right;
+		}
+	}
+	return false;
+}
+
+/** Whether every option string names the Base64 mitigation as a whole option. */
+export function hasBase64Mitigation(...options: readonly string[]): boolean {
+	return options.every((value) => value.split(/\s+/u).includes(BASE64_MITIGATION));
+}
