@@ -1,14 +1,14 @@
 {
-	"commit": "ae6685e99093857c81b7163660bec0e6a39dfe87",
+	"commit": "9134a2ca223b0a85f9d923dc223c76a7623fb870",
 	"images": {
 		"HEPHAESTUS_IMAGE_VICTORIA_METRICS": "docker.io/victoriametrics/victoria-metrics@sha256:da8a90ac0912f16589be2b96a6441a2fca4bca415c83783d972d92e3b5b66970",
 		"HEPHAESTUS_IMAGE_VMALERT": "docker.io/victoriametrics/vmalert@sha256:4fea7d1a888d4db4ff18804434ef0f3ca8eb6482e289c50d32001c2db218287c",
 		"HEPHAESTUS_IMAGE_ALERTMANAGER": "docker.io/prom/alertmanager@sha256:39d8bb3966c694a124428a3a88fbcffd40bd069129ecd47c059f8a3f17c55f3b",
 		"HEPHAESTUS_IMAGE_POSTGRES_EXPORTER": "docker.io/prometheuscommunity/postgres-exporter@sha256:c90657083f5d8ccbf9be16049d1174e221a55c3760121174a2c657a44e323ec6",
-		"HEPHAESTUS_IMAGE_WEBAPP": "ghcr.io/hephaestus-build/webapp@sha256:131ddf1d907f4c6badb0292e4a63c556778c03991c0f89caf91d8ab0b1e885b4",
-		"HEPHAESTUS_IMAGE_SERVER": "ghcr.io/hephaestus-build/server@sha256:382ac08f12131813611f8d5c4012466c6950228bb2736cf69918753aa49dd49f",
-		"HEPHAESTUS_IMAGE_AGENT": "ghcr.io/hephaestus-build/agent@sha256:9847b1029de8832ba14065d7fda6dece7ace2b7e8ab4abaaf562374b43250b2b",
-		"HEPHAESTUS_IMAGE_POSTGRES": "ghcr.io/hephaestus-build/postgres@sha256:6b1ddab4e594d07d6ec62d3ddffa5199ebe517ef5b8cd9e912c2b8f593dc9929"
+		"HEPHAESTUS_IMAGE_WEBAPP": "ghcr.io/hephaestus-build/webapp@sha256:2447d4754f001cc0ca2a57f22f47d4986bc88121c9374a2202acb5b23864e53e",
+		"HEPHAESTUS_IMAGE_SERVER": "ghcr.io/hephaestus-build/server@sha256:2c83b7b0e154ec8bb6b6c8154d84425b6a5093adad0aa30fbca2fa7c62ff9a72",
+		"HEPHAESTUS_IMAGE_AGENT": "ghcr.io/hephaestus-build/agent@sha256:af4828bdc229696edbeeeece99d26b882251f2fcedbb4223a19bae031182d2fe",
+		"HEPHAESTUS_IMAGE_POSTGRES": "ghcr.io/hephaestus-build/postgres@sha256:8df8da1218ba3c49fc42ae4a62958824dd8ecbcdf85837d5abe3e6a3b450c792"
 	},
 	"allowRollback": false,
 	"freeze": false,
