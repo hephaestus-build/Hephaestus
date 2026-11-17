@@ -13,6 +13,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewService;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStopReason;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewWithholdings;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewWriteGuard;
 import java.time.Clock;
 import java.util.Objects;
@@ -102,8 +103,8 @@ public class ReviewJobCompletionService {
                         job.getWorkspaceId(),
                         assignment,
                         job.getId(),
-                        reason,
-                        "The execution ended without an admitted result");
+                        ReviewWithholdings.unmeasured(reason),
+                        "The execution ended without an admitted result (" + reason.name() + ").");
         var capture = job.getCapture();
         boolean runtimeIncomplete =
                 admitted && capture != null && !capture.path("nonResults").isEmpty();
@@ -115,12 +116,14 @@ public class ReviewJobCompletionService {
                                 .equals(nonResult.path("practiceSlug").asString()))
                         .findFirst()
                         .orElseThrow();
+                var runtimeReason =
+                        ReviewStopReason.valueOf(nonResult.path("reason").asString());
                 members.fail(
                         job.getWorkspaceId(),
                         assignment.id(),
                         job.getId(),
-                        ReviewStopReason.valueOf(nonResult.path("reason").asString()),
-                        "Runtime execution ended without a result for this practice");
+                        ReviewWithholdings.unmeasured(runtimeReason),
+                        "Runtime execution ended without a result for this practice (" + runtimeReason.name() + ").");
             }
         }
         boolean completed = job.getStatus() == ReviewJobStatus.COMPLETED;

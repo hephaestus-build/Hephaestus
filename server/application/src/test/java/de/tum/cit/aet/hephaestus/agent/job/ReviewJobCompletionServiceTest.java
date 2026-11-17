@@ -100,9 +100,29 @@ class ReviewJobCompletionServiceTest extends BaseUnitTest {
                         assignment.id(),
                         job.getId(),
                         ReviewStopReason.EXECUTION_FAILED,
-                        "The execution ended without an admitted result");
+                        "The execution ended without an admitted result (EXECUTION_FAILED).");
         assertThat(job.getProcessingStatus()).isEqualTo(ProcessingStatus.FAILED);
         verifyNoInteractions(reviews);
+    }
+
+    /** A run that timed out before it measured anything owes its practices: they are carried, never lost. */
+    @Test
+    void shouldCarryEveryPracticeOfARunThatTimedOutBeforeItMeasuredOne() {
+        var job = RuntimeReviewTestData.job();
+        job.setStatus(ReviewJobStatus.TIMED_OUT);
+        job.setStartedAt(Instant.now());
+        job.setExecutionStartedAt(Instant.now());
+        var assignment = RuntimeReviewTestData.assignment(null, null);
+
+        service(job, ReviewKind.ITEM).tick();
+
+        verify(members)
+                .fail(
+                        1,
+                        assignment.id(),
+                        job.getId(),
+                        ReviewStopReason.NOT_RUN,
+                        "The execution ended without an admitted result (TIMED_OUT).");
     }
 
     @Test
@@ -159,7 +179,7 @@ class ReviewJobCompletionServiceTest extends BaseUnitTest {
                         RuntimeReviewTestData.assignment(null, null).id(),
                         job.getId(),
                         ReviewStopReason.PREPARATION_FAILED,
-                        "The execution ended without an admitted result");
+                        "The execution ended without an admitted result (PREPARATION_FAILED).");
         verify(reviews)
                 .complete(
                         anyLong(),
@@ -183,7 +203,7 @@ class ReviewJobCompletionServiceTest extends BaseUnitTest {
                         RuntimeReviewTestData.assignment(null, null).id(),
                         job.getId(),
                         ReviewStopReason.PROVIDER_UNAVAILABLE,
-                        "The execution ended without an admitted result");
+                        "The execution ended without an admitted result (PROVIDER_UNAVAILABLE).");
         verify(reviews)
                 .complete(
                         anyLong(),
@@ -232,7 +252,7 @@ class ReviewJobCompletionServiceTest extends BaseUnitTest {
                         assignment.id(),
                         job.getId(),
                         ReviewStopReason.BUDGET,
-                        "Runtime execution ended without a result for this practice");
+                        "Runtime execution ended without a result for this practice (BUDGET).");
         var completion = ArgumentCaptor.forClass(ReviewCompletion.class);
         verify(reviews).complete(ArgumentMatchers.eq(1L), ArgumentMatchers.eq(job.getReviewId()), completion.capture());
         assertThat(completion.getValue().status()).isEqualTo(ReviewStatus.PARTIAL);

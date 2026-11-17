@@ -15,6 +15,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewPracticeStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStopReason;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewWithholdings;
+import java.time.Clock;
 import java.time.Instant;
 import java.util.HashSet;
 import java.util.List;
@@ -34,9 +35,9 @@ class ReviewClosure {
     private final ScanReportService reports;
     private final ReviewOutcomeMeters outcomes;
     private final ApplicationEventPublisher events;
-    private final ReviewRepository reviews;
     private final ProductItemQuery items;
     private final ItemEventService itemEvents;
+    private final Clock clock;
 
     void close(Review review, ReviewStatus status, @Nullable ReviewStopReason reason, Instant at) {
         review.end(status, reason, at);
@@ -53,19 +54,25 @@ class ReviewClosure {
             events.publishEvent(new ReviewCompleted(id, workspace));
         if (review.getChecks().has(ReviewServiceImpl.COMMENT_ANSWER))
             events.publishEvent(new CommentRequestedReviewEnded(id, workspace));
-        followUp(review, at);
+        followUp(review);
     }
 
     /**
      * A review that ends owing practices asks for one follow-up occasion of its item at the same version: a moved source
      * or a spent deadline is no provider event, so nothing else would measure them before the work changes. The
-     * occasion selects nothing itself, so its readiness edge measures only the carried practices. An occasion is unique
-     * per item, name and version, so a version gets one follow-up: a practice that does not fit again stays carried
-     * until a real event. A newer review, or a newer version with its own event, measures them anyway.
+     * occasion selects nothing itself, so its readiness edge measures only the carried practices, and it reads its
+     * review's own occasion, under that occasion's expiry. An occasion is unique per item, name and version, so a
+     * version gets one follow-up: a practice that does not fit again stays carried until a real event. A review with
+     * no occasion of its own, a cancelled one, or one whose work moved on asks for none.
      */
-    private void followUp(Review review, Instant at) {
+    private void followUp(Review review) {
         var version = review.getItemVersion();
-        if (review.getKind() != ReviewKind.ITEM || version == null) return;
+        var occasion = review.getEventId();
+        if (review.getKind() != ReviewKind.ITEM
+                || review.getOrigin() != ReviewOrigin.EVENT
+                || occasion == null
+                || version == null
+                || review.getStatus() == ReviewStatus.CANCELLED) return;
         long workspace = review.getWorkspaceId();
         boolean owes =
                 memberships
@@ -74,23 +81,23 @@ class ReviewClosure {
                         .anyMatch(member -> member.getState() == ReviewItemState.WITHHELD
                                 && ReviewWithholdings.FOLLOW_UP.contains(member.getReason()));
         if (!owes
-                || reviews.existsNewerItemReview(workspace, review.getItemId(), review.getId(), review.getOrderedAt()))
-            return;
+                || !(items.currentWorkVersion(workspace, review.getItemId())
+                        instanceof ProductItemQuery.CurrentWorkVersion.Known(String current))
+                || !current.equals(version)) return;
         var item = items.find(workspace, review.getItemId()).orElse(null);
-        if (item == null
-                || !items.current(item)
-                        .map(current -> current.version().value().equals(version))
-                        .orElse(false)) return;
+        if (item == null) return;
         itemEvents.record(new ItemEventInput(
                 workspace,
                 item.itemId(),
                 ItemEventName.carried(item.kind()),
                 version,
                 null,
-                at,
+                clock.instant(),
                 FoundBy.SCHEDULE,
                 null,
-                null));
+                null,
+                null,
+                ItemEventService.carriedFrom(occasion)));
     }
 
     /**

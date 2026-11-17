@@ -154,18 +154,19 @@ An item event that waits has one of these reasons:
 - `REVIEW_IN_PROGRESS`: a practice that the window selects is still measured by an earlier review of the item. The window closes again one window later, until that review ends.
 
 A practice with the withheld membership reason `REPLACED` was in a review that a newer review of the item replaces.
-A queued review that a newer event stopped at claim writes it. A practice start writes it only when a newer review of the item exists.
+A queued review that a newer event stopped at claim writes it. A practice start writes it only when a newer review of the item measures the practice.
 The next readiness edge of the item selects it again.
 
 A practice with the withheld membership reason `SOURCES_MOVED` did not start, because a source that it reads changed after the capture.
-No newer review of the item exists.
+No newer review of the item measures it.
 The next readiness edge of the item selects it again.
-The review that ends with it asks for one follow-up occasion of the item, at the same version.
+An event review of an issue or a pull request can end with it.
+That review asks for one follow-up occasion of the item, at the same version.
 
 A practice with the withheld membership reason `NOT_RUN` is owed: no attempt measured it.
-Its attempt ended before it started or finished, by its deadline, a watchdog, or a lost sandbox.
+Its attempt ended before it started or finished, by its deadline, a time-out, a watchdog, or a lost sandbox.
 It says nothing about the work, and the run keeps its own stop reason.
-The next readiness edge of the item selects it again, and the review that ends with it asks for one follow-up occasion.
+The next readiness edge of the item selects it again, and an event review that ends with it asks for one follow-up occasion, as for `SOURCES_MOVED`.
 
 A practice with the withheld membership reason `READINESS_REFUSED` was not ready.
 Its sources could not be verified at practice start or seal, or its evidence was too little.

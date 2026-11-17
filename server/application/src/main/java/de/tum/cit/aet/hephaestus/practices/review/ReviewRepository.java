@@ -24,12 +24,17 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface ReviewRepository extends JpaRepository<Review, UUID>, ReviewQueries, ScanMembershipQueries {
-    /** Whether a later review of the item was ordered and not cancelled: it replaces this review's unmeasured work. */
+    /**
+     * Whether a later review of the item, ordered and not cancelled, also measures the practice: it replaces this
+     * review's measurement of it.
+     */
     @Query(value = """
-        SELECT EXISTS(SELECT 1 FROM review r WHERE r.workspace_id=:workspaceId AND r.item_id=:itemId AND r.kind='ITEM'
-          AND r.id<>:reviewId AND r.ordered_at>:orderedAt AND r.status<>'CANCELLED')
+        SELECT EXISTS(SELECT 1 FROM review r JOIN review_practice p ON p.review_id=r.id AND p.workspace_id=r.workspace_id
+          WHERE r.workspace_id=:workspaceId AND r.item_id=:itemId AND r.kind='ITEM' AND r.id<>:reviewId
+            AND r.ordered_at>:orderedAt AND r.status<>'CANCELLED' AND p.practice_id=:practiceId)
         """, nativeQuery = true)
-    boolean existsNewerItemReview(long workspaceId, long itemId, UUID reviewId, Instant orderedAt);
+    boolean existsNewerReviewOfPractice(
+            long workspaceId, long itemId, long practiceId, UUID reviewId, Instant orderedAt);
 
     /** The result counts of item reviews, per review and practice: the results each review recorded. */
     @Query(value = """

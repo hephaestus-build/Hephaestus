@@ -10,7 +10,6 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.job.RuntimeJobTestData;
@@ -29,7 +28,6 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ItemEventName;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemEventState;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRegistration;
-import de.tum.cit.aet.hephaestus.integration.core.spi.ItemSnapshot;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemVersion;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ReviewRequestReason;
 import de.tum.cit.aet.hephaestus.practices.DefinitionTestFixtures;
@@ -1416,24 +1414,41 @@ class ResultAdmissionIntegrationTest extends AbstractResultAdmissionIntegrationT
     }
 
     /**
-     * A review that ends owing practices asks for a follow-up of its item, as nothing else would measure them before
-     * the work changes. One per version: a practice that does not fit again stays carried until a real event.
+     * An event review that ends owing practices asks for a follow-up of its item, as nothing else would measure them
+     * before the work changes. The follow-up reads the review's own retained record, as a pull request's occasion must,
+     * and a version gets one: a practice that does not fit again stays carried until a real event.
      */
     @Test
-    void shouldAskOnceForAFollowUpOccasionOfTheSameVersionWhenReviewsEndOwingPractices() {
+    void shouldAskOnceForAFollowUpThatReadsTheReviewsOwnOccasionWhenReviewsEndOwingPractices() {
         String version = "item-version-" + UUID.randomUUID();
-        var ref = productItems.require(
-                scenario.workspace().getId(), scenario.item().getId());
-        var current = mock(ItemSnapshot.class);
-        when(current.version()).thenReturn(new ItemVersion(version, null));
-        doReturn(Optional.of(current)).when(productItems).current(ref);
+        long workspace = scenario.workspace().getId();
+        long item = scenario.item().getId();
+        doReturn(new ProductItemQuery.CurrentWorkVersion.Known(version))
+                .when(productItems)
+                .currentWorkVersion(workspace, item);
+        UUID occasion = itemEvents.record(new ItemEventInput(
+                workspace,
+                item,
+                new ItemEventName(scenario.item().getKind().value() + ".opened"),
+                version,
+                null,
+                Instant.now(),
+                FoundBy.WEBHOOK,
+                null,
+                null,
+                "{\"retained\":\"the occasion's own record\"}",
+                null));
         for (int review = 0; review < 2; review++) {
             var pending = admissions.pending(scenario, Instant.now(), scenarioAccountId, version);
+            jdbcTemplate.update(
+                    "UPDATE review SET origin='EVENT', requested_by_id=NULL, event_id=? WHERE id=?",
+                    occasion,
+                    pending.review().getId());
             admissions.withheld(pending, ReviewStopReason.NOT_RUN.name());
             admit(pending, ResultOutcome.MET);
             settle(pending);
             service.complete(
-                    scenario.workspace().getId(),
+                    workspace,
                     pending.review().getId(),
                     new ReviewCompletion(
                             ReviewStatus.COMPLETE,
@@ -1442,13 +1457,18 @@ class ResultAdmissionIntegrationTest extends AbstractResultAdmissionIntegrationT
                             pending.review().getOrderedAt()));
         }
 
-        assertThat(jdbcTemplate.queryForList(
-                        "SELECT item_version FROM item_event WHERE workspace_id=? AND item_id=? AND name=?",
-                        String.class,
-                        ref.workspaceId(),
-                        ref.itemId(),
-                        ItemEventName.carried(ref.kind()).value()))
-                .containsExactly(version);
+        var followUps = jdbcTemplate.queryForList(
+                "SELECT id FROM item_event WHERE workspace_id=? AND item_id=? AND name=? AND item_version=?",
+                UUID.class,
+                workspace,
+                item,
+                ItemEventName.carried(scenario.item().getKind()).value(),
+                version);
+        assertThat(followUps).as("a version gets one follow-up").hasSize(1);
+        assertThat(itemEvents.evidence(workspace, item, followUps.getFirst()).record())
+                .as("the follow-up reads the review's own occasion, under that occasion's expiry")
+                .isEqualTo(itemEvents.evidence(workspace, item, occasion).record())
+                .contains("the occasion's own record");
     }
 
     /**

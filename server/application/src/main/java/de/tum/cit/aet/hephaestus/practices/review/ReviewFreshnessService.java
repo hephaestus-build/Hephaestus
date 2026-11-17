@@ -104,7 +104,8 @@ public class ReviewFreshnessService implements ReviewFreshness {
         // REPLACED only when a newer review exists; otherwise this practice's own sources moved and it runs again.
         var reason = state != Currentness.STALE
                 ? ReviewStopReason.READINESS_REFUSED
-                : reviews.existsNewerItemReview(workspaceId, review.getItemId(), review.getId(), review.getOrderedAt())
+                : reviews.existsNewerReviewOfPractice(
+                                workspaceId, review.getItemId(), id.practiceId(), review.getId(), review.getOrderedAt())
                         ? ReviewStopReason.REPLACED
                         : ReviewStopReason.SOURCES_MOVED;
         member.withhold(
