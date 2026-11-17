@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { chmod, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, test } from "node:test";
@@ -21,6 +21,8 @@ import {
 	pathFilter,
 	posixGlob,
 	readSources,
+	runScript,
+	runStep,
 	step,
 	stepInputs,
 	taskClosure,
@@ -1025,6 +1027,34 @@ void describe("ci-contract: release", () => {
 		// The exemption is structural: a title or branch name is attacker-chosen and never read.
 		assert.doesNotMatch(source, /pull_request\.title|github\.head_ref/u);
 	});
+});
+
+void test("the site root publishes whichever folder the release tag's own docs build wrote", async () => {
+	const workflow = parseDocument(await readFile(".github/workflows/cd-docs.yml", "utf8"));
+	const jobPath = ["jobs", "build-release"];
+	const shell = runScript(workflow, jobPath, "Find the release build");
+	assert.equal(
+		step(workflow, jobPath, "actions/upload-artifact").get("path"),
+		`\${{ steps.release-build.outputs.path }}`,
+	);
+	const publishes = async (folders: string[]) => {
+		const root = await mkdtemp(path.join(tmpdir(), "docs-release-build-"));
+		try {
+			for (const folder of folders) {
+				await mkdir(path.join(root, folder), { recursive: true });
+			}
+			return await runStep(`cd ${JSON.stringify(root)}\n${shell}`, { TAG: "v1.0.0-rc.9" });
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
+	};
+	const dist = await publishes(["docs/dist"]);
+	assert.equal(dist.outputs.path, "docs/dist", dist.diagnosis);
+	const build = await publishes(["docs/build"]);
+	assert.equal(build.outputs.path, "docs/build", build.diagnosis);
+	const neither = await publishes(["docs"]);
+	assert.equal(neither.failed, true, neither.diagnosis);
+	assert.equal(neither.outputs.path, undefined);
 });
 
 void test("Semgrep scans PRs and main without a privileged trigger or mutable rules", async () => {

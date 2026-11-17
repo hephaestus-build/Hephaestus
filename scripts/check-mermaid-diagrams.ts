@@ -53,9 +53,15 @@ interface Diagram {
 const diagrams: Diagram[] = [];
 for (const root of ROOTS) {
 	for (const entry of await readdir(root, { recursive: true })) {
-		// The site build writes a Markdown copy of each page, with its included diagrams inlined.
+		// The site build writes a Markdown copy of each page, with its included diagrams inlined. A build
+		// of a release tag up to v1.0.0-rc.9 writes it to build/, which a checkout can still hold.
 		const [first] = entry.split(path.sep);
-		if (entry.split(path.sep).includes("node_modules") || first === "dist" || first === ".astro") {
+		if (
+			entry.split(path.sep).includes("node_modules") ||
+			first === "dist" ||
+			first === "build" ||
+			first === ".astro"
+		) {
 			continue;
 		}
 		const file = path.join(root, entry);
