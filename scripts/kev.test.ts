@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { parseKev } from "./kev.ts";
+import { parseKev } from "./lib/kev.ts";
 
 const entry = {
 	cveID: "CVE-2026-114938",
