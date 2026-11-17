@@ -10,6 +10,7 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentityResolver;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.RestoredCollectionErasures;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.RestoredDisconnects;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.RestoredMessageDeletions;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.RestoredSlackChannelErasures;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.RestoredSlackMessageChanges;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.RestoredWorkspacePurges;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnBackgroundWork;
@@ -33,6 +34,7 @@ import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineCollection;
 import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineCollectionRepository;
 import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineDocument;
 import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineDocumentRepository;
+import de.tum.cit.aet.hephaestus.integration.slack.events.SlackChannelErasure;
 import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
@@ -120,6 +122,9 @@ class ErasureRecoveryRestoreIntegrationTest extends AbstractWorkspaceIntegration
     private ConversationEntryService entries;
 
     @Autowired
+    private SlackChannelErasure channelErasure;
+
+    @Autowired
     private OutlineCollectionRepository outlineCollections;
 
     @Autowired
@@ -177,7 +182,7 @@ class ErasureRecoveryRestoreIntegrationTest extends AbstractWorkspaceIntegration
         assertThat(monitors.findByWorkspaceId(workspace.getId())).hasSize(1);
 
         String manifest = """
-                {"version":4,"slackMessageChanges":[],"collectionErasures":[],"messageDeletions":[],"restorePoint":"2026-01-01T00:00:00Z","noLaterErasures":false,"people":[],
+                {"version":4,"slackMessageChanges":[],"slackChannelErasures":[],"collectionErasures":[],"messageDeletions":[],"restorePoint":"2026-01-01T00:00:00Z","noLaterErasures":false,"people":[],
                  "workspacePurges":[],"disconnects":[{"workspaceId":%d,"connectionId":%d}]}
                 """.formatted(workspace.getId(), connection.getId());
         recover(manifest);
@@ -221,7 +226,7 @@ class ErasureRecoveryRestoreIntegrationTest extends AbstractWorkspaceIntegration
                 null));
 
         String manifest = """
-                {"version":4,"slackMessageChanges":[],"collectionErasures":[],"messageDeletions":[],"restorePoint":"2026-01-01T00:00:00Z","noLaterErasures":false,"people":[],
+                {"version":4,"slackMessageChanges":[],"slackChannelErasures":[],"collectionErasures":[],"messageDeletions":[],"restorePoint":"2026-01-01T00:00:00Z","noLaterErasures":false,"people":[],
                  "workspacePurges":[{"workspaceId":%d}],"disconnects":[]}
                 """.formatted(workspace.getId());
         recover(manifest);
@@ -256,7 +261,7 @@ class ErasureRecoveryRestoreIntegrationTest extends AbstractWorkspaceIntegration
         assertThat(words(message)).as("the restore brought the words back").contains("Words to take back");
 
         String manifest = """
-                {"version":4,"slackMessageChanges":[],"restorePoint":"2026-01-01T00:00:00Z","noLaterErasures":false,"people":[],
+                {"version":4,"slackMessageChanges":[],"slackChannelErasures":[],"restorePoint":"2026-01-01T00:00:00Z","noLaterErasures":false,"people":[],
                  "workspacePurges":[],"disconnects":[],"collectionErasures":[],
                  "messageDeletions":[{"workspaceId":%d,"entryId":"%s"}]}
                 """.formatted(workspace.getId(), message);
@@ -293,6 +298,7 @@ class ErasureRecoveryRestoreIntegrationTest extends AbstractWorkspaceIntegration
         String manifest = """
                 {"version":4,"restorePoint":"2026-01-01T00:00:00Z","noLaterErasures":false,"people":[],
                  "workspacePurges":[],"disconnects":[],"collectionErasures":[],"messageDeletions":[],
+                 "slackChannelErasures":[],
                  "slackMessageChanges":[{"workspaceId":%d,"messageId":%d,"change":"EDITED"},
                                         {"workspaceId":%d,"messageId":%d,"change":"DELETED"}]}
                 """.formatted(workspace.getId(), edited, workspace.getId(), deleted);
@@ -313,6 +319,52 @@ class ErasureRecoveryRestoreIntegrationTest extends AbstractWorkspaceIntegration
         recover(manifest);
         assertThat(slackText(edited)).isNull();
         assertThat(slackText(deleted)).isNull();
+    }
+
+    @Test
+    void shouldEraseAgainASlackChannelThatARestoreBroughtBack() throws Exception {
+        jdbc.update(
+                "INSERT INTO slack_monitored_channel (workspace_id, slack_team_id, slack_channel_id, consent_state)"
+                        + " VALUES (?, 'T-restore', 'C-erased', 'ACTIVE')",
+                workspace.getId());
+        long kept = slackMessage("1700000003.000300", "Words in a channel that is later erased");
+        jdbc.update("UPDATE slack_message SET slack_channel_id = 'C-erased' WHERE id = ?", kept);
+        var backup = Backup.of(jdbc, workspace.getId());
+        // The admin's revoke: the same erasure that Slack's channel_deleted runs.
+        channelErasure.erase(workspace.getId(), "C-erased");
+        assertThat(slackRows("C-erased")).isZero();
+
+        backup.restore();
+        assertThat(slackRows("C-erased"))
+                .as("the restore brought the channel's messages back")
+                .isOne();
+
+        String manifest = """
+                {"version":4,"restorePoint":"2026-01-01T00:00:00Z","noLaterErasures":false,"people":[],
+                 "workspacePurges":[],"disconnects":[],"collectionErasures":[],"messageDeletions":[],
+                 "slackMessageChanges":[],
+                 "slackChannelErasures":[{"workspaceId":%d,"channelId":"C-erased"}]}
+                """.formatted(workspace.getId());
+        recover(manifest);
+
+        assertThat(slackRows("C-erased")).isZero();
+        assertThat(jdbc.queryForObject(
+                        "SELECT consent_state FROM slack_monitored_channel WHERE workspace_id = ? AND slack_channel_id = ?",
+                        String.class,
+                        workspace.getId(),
+                        "C-erased"))
+                .isEqualTo("REVOKED");
+        // The same manifest is safe after a restart.
+        recover(manifest);
+        assertThat(slackRows("C-erased")).isZero();
+    }
+
+    private long slackRows(String channelId) {
+        return Objects.requireNonNull(jdbc.queryForObject(
+                "SELECT count(*) FROM slack_message WHERE workspace_id = ? AND slack_channel_id = ?",
+                Long.class,
+                workspace.getId(),
+                channelId));
     }
 
     private long slackMessage(String ts, String text) {
@@ -360,7 +412,7 @@ class ErasureRecoveryRestoreIntegrationTest extends AbstractWorkspaceIntegration
                 .isOne();
 
         String manifest = """
-                {"version":4,"slackMessageChanges":[],"restorePoint":"2026-01-01T00:00:00Z","noLaterErasures":false,"people":[],
+                {"version":4,"slackMessageChanges":[],"slackChannelErasures":[],"restorePoint":"2026-01-01T00:00:00Z","noLaterErasures":false,"people":[],
                  "workspacePurges":[],"disconnects":[],"messageDeletions":[],
                  "collectionErasures":[{"workspaceId":%d,"connectionId":%d,"collectionId":"%s"}]}
                 """.formatted(workspace.getId(), outlineId, collectionId);
@@ -436,6 +488,8 @@ class ErasureRecoveryRestoreIntegrationTest extends AbstractWorkspaceIntegration
                             beans.getBean(RestoredMessageDeletions.class),
                             beans.getBean(RestoredCollectionErasures.class),
                             beans.getBean(RestoredSlackMessageChanges.class),
+                            beans.getBean(RestoredSlackChannelErasures.class),
+                            beans.getBean(RestoredSlackChannelErasures.class),
                             new PersonDataRecoveryProperties(manifest.toString())));
             context.refresh();
             assertThat(context.getBean(PersonDataRecovery.class).isRunning()).isTrue();

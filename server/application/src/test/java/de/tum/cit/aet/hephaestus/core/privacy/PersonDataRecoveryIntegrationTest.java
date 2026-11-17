@@ -19,6 +19,7 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.RestoredCollectionErasures;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.RestoredDisconnects;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.RestoredMessageDeletions;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.RestoredSlackChannelErasures;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.RestoredSlackMessageChanges;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.RestoredWorkspacePurges;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnBackgroundWork;
@@ -87,7 +88,7 @@ class PersonDataRecoveryIntegrationTest extends BaseIntegrationTest {
     void shouldKeepProcessingStoppedWhenAnEmptyManifestDoesNotDeclareNoLaterErasures() throws Exception {
         assertBlocked(
                 manifest(
-                        "{\"version\":4,\"slackMessageChanges\":[],\"workspacePurges\":[],\"disconnects\":[],\"collectionErasures\":[],\"messageDeletions\":[],\"restorePoint\":\"2026-01-01T00:00:00Z\",\"people\":[]}"));
+                        "{\"version\":4,\"slackMessageChanges\":[],\"slackChannelErasures\":[],\"workspacePurges\":[],\"disconnects\":[],\"collectionErasures\":[],\"messageDeletions\":[],\"restorePoint\":\"2026-01-01T00:00:00Z\",\"people\":[]}"));
     }
 
     @Test
@@ -109,7 +110,7 @@ class PersonDataRecoveryIntegrationTest extends BaseIntegrationTest {
     @ValueSource(strings = {"true", ""})
     void shouldRefuseToRecoverBesideBackgroundWork(String backgroundWork, CapturedOutput output) throws Exception {
         Path manifest = manifest("""
-                {"version":4,"slackMessageChanges":[],"workspacePurges":[],"disconnects":[],"collectionErasures":[],"messageDeletions":[],"restorePoint":"2026-01-01T00:00:00Z",
+                {"version":4,"slackMessageChanges":[],"slackChannelErasures":[],"workspacePurges":[],"disconnects":[],"collectionErasures":[],"messageDeletions":[],"restorePoint":"2026-01-01T00:00:00Z",
                  "noLaterErasures":true,"people":[]}
                 """);
         var processing = new AtomicBoolean();
@@ -133,7 +134,7 @@ class PersonDataRecoveryIntegrationTest extends BaseIntegrationTest {
     @Test
     void shouldStartProcessingWhenTheOperatorDeclaresNoLaterErasures() throws Exception {
         Path manifest = manifest(
-                "{\"version\":4,\"slackMessageChanges\":[],\"workspacePurges\":[],\"disconnects\":[],\"collectionErasures\":[],\"messageDeletions\":[],\"restorePoint\":\"2026-01-01T00:00:00Z\",\"noLaterErasures\":true,\"people\":[]}");
+                "{\"version\":4,\"slackMessageChanges\":[],\"slackChannelErasures\":[],\"workspacePurges\":[],\"disconnects\":[],\"collectionErasures\":[],\"messageDeletions\":[],\"restorePoint\":\"2026-01-01T00:00:00Z\",\"noLaterErasures\":true,\"people\":[]}");
         var processing = new AtomicBoolean();
         try (var context = context(manifest, processing)) {
             context.refresh();
@@ -151,7 +152,7 @@ class PersonDataRecoveryIntegrationTest extends BaseIntegrationTest {
         person.setPrimaryEmail("restored-person@example.test");
         long personId = Objects.requireNonNull(accounts.saveAndFlush(person).getId());
         Path manifest = manifest("""
-                {"version":4,"slackMessageChanges":[],"workspacePurges":[],"disconnects":[],"collectionErasures":[],"messageDeletions":[],"restorePoint":"2026-01-01T00:00:00Z","administratorAccountId":%d,
+                {"version":4,"slackMessageChanges":[],"slackChannelErasures":[],"workspacePurges":[],"disconnects":[],"collectionErasures":[],"messageDeletions":[],"restorePoint":"2026-01-01T00:00:00Z","administratorAccountId":%d,
                  "people":[{"accountId":%d,"identities":[]}]}
                 """.formatted(administratorId, personId));
         var processing = new AtomicBoolean();
@@ -187,7 +188,7 @@ class PersonDataRecoveryIntegrationTest extends BaseIntegrationTest {
                 state,
                 request.getId());
         Path manifest = manifest("""
-                {"version":4,"slackMessageChanges":[],"workspacePurges":[],"disconnects":[],"collectionErasures":[],"messageDeletions":[],"restorePoint":"2026-01-01T00:00:00Z","administratorAccountId":%d,
+                {"version":4,"slackMessageChanges":[],"slackChannelErasures":[],"workspacePurges":[],"disconnects":[],"collectionErasures":[],"messageDeletions":[],"restorePoint":"2026-01-01T00:00:00Z","administratorAccountId":%d,
                  "people":[{"accountId":%d,"identities":[]}]}
                 """.formatted(administratorId, personId));
         var processing = new AtomicBoolean();
@@ -206,7 +207,7 @@ class PersonDataRecoveryIntegrationTest extends BaseIntegrationTest {
     @Test
     void shouldKeepProcessingStoppedWhenReapplicationCannotComplete() throws Exception {
         assertBlocked(manifest("""
-                {"version":4,"slackMessageChanges":[],"workspacePurges":[],"disconnects":[],"collectionErasures":[],"messageDeletions":[],"restorePoint":"2026-01-01T00:00:00Z","administratorAccountId":-1,
+                {"version":4,"slackMessageChanges":[],"slackChannelErasures":[],"workspacePurges":[],"disconnects":[],"collectionErasures":[],"messageDeletions":[],"restorePoint":"2026-01-01T00:00:00Z","administratorAccountId":-1,
                  "people":[{"accountId":1,"identities":[]}]}
                 """));
     }
@@ -214,7 +215,7 @@ class PersonDataRecoveryIntegrationTest extends BaseIntegrationTest {
     @Test
     void shouldRejectDisplayNamesAndHideManifestContentFromStartupFailures() throws Exception {
         assertBlocked(manifest("""
-                {"version":4,"slackMessageChanges":[],"workspacePurges":[],"disconnects":[],"collectionErasures":[],"messageDeletions":[],"restorePoint":"2026-01-01T00:00:00Z","administratorAccountId":1,
+                {"version":4,"slackMessageChanges":[],"slackChannelErasures":[],"workspacePurges":[],"disconnects":[],"collectionErasures":[],"messageDeletions":[],"restorePoint":"2026-01-01T00:00:00Z","administratorAccountId":1,
                  "people":[{"identities":[{"providerType":"GITHUB","serverUrl":"https://github.com",
                  "subject":"private-display-name-canary"}]}]}
                 """));
@@ -248,6 +249,7 @@ class PersonDataRecoveryIntegrationTest extends BaseIntegrationTest {
                 false,
                 administratorId,
                 List.of(new PersonDataRecovery.Person(null, identities, false)),
+                List.of(),
                 List.of(),
                 List.of(),
                 List.of(),
@@ -310,7 +312,7 @@ class PersonDataRecoveryIntegrationTest extends BaseIntegrationTest {
         var initialized = beans.getAutowireCapableBeanFactory().initializeBean(recoveryService, "recoveryFaultService");
         var advisedService = PersonDataService.class.cast(initialized);
         Path manifest = manifest("""
-                {"version":4,"slackMessageChanges":[],"workspacePurges":[],"disconnects":[],"collectionErasures":[],"messageDeletions":[],"restorePoint":"2026-01-01T00:00:00Z","administratorAccountId":%d,
+                {"version":4,"slackMessageChanges":[],"slackChannelErasures":[],"workspacePurges":[],"disconnects":[],"collectionErasures":[],"messageDeletions":[],"restorePoint":"2026-01-01T00:00:00Z","administratorAccountId":%d,
                  "people":[{"accountId":%d,"identities":[]}]}
                 """.formatted(administratorId, personId));
         var processing = new AtomicBoolean();
@@ -375,6 +377,7 @@ class PersonDataRecoveryIntegrationTest extends BaseIntegrationTest {
                         beans.getBean(RestoredMessageDeletions.class),
                         beans.getBean(RestoredCollectionErasures.class),
                         beans.getBean(RestoredSlackMessageChanges.class),
+                        beans.getBean(RestoredSlackChannelErasures.class),
                         new PersonDataRecoveryProperties(manifest.toString())));
         context.registerBean("processing", SmartLifecycle.class, () -> new SmartLifecycle() {
             @Override

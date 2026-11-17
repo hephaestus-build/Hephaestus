@@ -34,7 +34,7 @@ class PersonDataRecoveryStartupIntegrationTest extends BaseIntegrationTest {
         directory.toFile().deleteOnExit();
         var manifest = Files.writeString(
                 directory.resolve("manifest.json"),
-                "{\"version\":4,\"slackMessageChanges\":[],\"workspacePurges\":[],\"disconnects\":[],\"collectionErasures\":[],\"messageDeletions\":[],\"restorePoint\":\"2026-01-01T00:00:00Z\",\"noLaterErasures\":true,\"people\":[]}");
+                "{\"version\":4,\"slackMessageChanges\":[],\"slackChannelErasures\":[],\"workspacePurges\":[],\"disconnects\":[],\"collectionErasures\":[],\"messageDeletions\":[],\"restorePoint\":\"2026-01-01T00:00:00Z\",\"noLaterErasures\":true,\"people\":[]}");
         manifest.toFile().deleteOnExit();
         registry.add("hephaestus.privacy.recovery-manifest", manifest::toString);
         registry.add(RuntimeRole.SERVER_PROPERTY, () -> "true");
