@@ -3,8 +3,11 @@ package de.tum.cit.aet.hephaestus.core.webapp;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.List;
+import java.util.regex.Pattern;
+import java.util.stream.Stream;
 import org.springframework.boot.web.server.MimeMappings;
 import org.springframework.boot.web.server.WebServerFactoryCustomizer;
 import org.springframework.boot.web.server.servlet.ConfigurableServletWebServerFactory;
@@ -24,6 +27,7 @@ import org.springframework.web.servlet.function.RouterFunctions;
 import org.springframework.web.servlet.function.ServerRequest;
 import org.springframework.web.servlet.function.ServerResponse;
 import org.springframework.web.servlet.resource.EncodedResourceResolver;
+import org.springframework.web.util.UriUtils;
 
 /**
  * Serves the built web app (ADR 0100). Controllers come first, then {@code index.html} for each client route, then
@@ -38,19 +42,15 @@ import org.springframework.web.servlet.resource.EncodedResourceResolver;
 @ConditionalOnServerRole
 class WebAppConfiguration implements WebMvcConfigurer {
 
-    /** Path roots that the server answers itself, so none of them falls back to {@code index.html}. */
-    private static final List<String> SERVER_ROOTS = List.of(
-            "/api",
-            "/webhooks",
-            "/internal",
-            "/actuator",
-            "/.well-known",
-            "/v3",
-            "/swagger-ui",
-            "/error",
-            "/assets",
-            "/legal",
-            "/legal-overrides");
+    /** Roots of the web app's own files, which a missing file under them does not turn into the page. */
+    private static final List<String> FILE_ROOTS = List.of("/assets", "/legal", "/legal-overrides");
+
+    /**
+     * Images and fonts, which nginx answered with a 404 when missing, rather than with the page. Other dotted paths stay
+     * client routes: a login can contain a dot.
+     */
+    private static final Pattern STATIC_FILE =
+            Pattern.compile(".*\\.(?:ico|png|jpe?g|gif|webp|svg|woff2?|ttf|otf|eot)");
 
     private final WebAppProperties properties;
 
@@ -85,14 +85,16 @@ class WebAppConfiguration implements WebMvcConfigurer {
         if (path.equals("/index.html")) {
             return true;
         }
-        if (SERVER_ROOTS.stream().anyMatch(root -> path.equals(root) || path.startsWith(root + "/"))) {
+        if (Stream.concat(WebAppRequests.SERVER_ROOTS.stream(), FILE_ROOTS.stream())
+                .anyMatch(root -> path.equals(root) || path.startsWith(root + "/"))) {
             return false;
         }
-        return !index.hasFile(path);
+        return !index.hasFile(path) && !STATIC_FILE.matcher(path).matches();
     }
 
+    /** The decoded path, as the controllers and the security matchers see it. */
     private static String path(ServerRequest request) {
-        return request.requestPath().pathWithinApplication().value();
+        return UriUtils.decode(request.requestPath().pathWithinApplication().value(), StandardCharsets.UTF_8);
     }
 
     @Override

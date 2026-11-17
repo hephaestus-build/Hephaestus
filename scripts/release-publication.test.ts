@@ -325,12 +325,16 @@ async function writeWebApp(
 		spdxVersion: "SPDX-2.3",
 		dataLicense: "CC0-1.0",
 		documentNamespace: "https://example.invalid/web-app",
-		packages: artifacts.map(({ name, version }) => ({ name, versionInfo: version })),
+		packages: artifacts.map(({ name, version, purl }) => ({
+			name,
+			versionInfo: version,
+			externalRefs: [{ referenceType: "purl", referenceLocator: purl }],
+		})),
 	});
 	await json(`${prefix}.web-app.cdx.json`, {
 		bomFormat: "CycloneDX",
 		specVersion: "1.7",
-		components: artifacts.map(({ name, version }) => ({ name, version })),
+		components: artifacts.map(({ name, version, purl }) => ({ name, version, purl })),
 	});
 	// Trivy runs against the web app at `<reference>/web-app`, so the report names the image it came from.
 	await json(`${prefix}.web-app.trivy.json`, {

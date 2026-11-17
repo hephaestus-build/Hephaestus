@@ -84,8 +84,15 @@ if [ "$5" = '--raw' ]; then printf '%s' '{"layers":[]}'; else printf '%s' '${dig
 	await writeFile(
 		path.join(bin, "trivy"),
 		`#!/bin/sh
-printf '%s\n' "$9" >> '${directory}/scans'
-printf '%s' '{"Results":[]}' > "$8"
+if [ "$1" = rootfs ]; then
+ # trivy rootfs --skip-db-update --scanners vuln --list-all-pkgs --format json --output <report> <web app>
+ printf '%s\n' "\${10}" >> '${directory}/scans'
+ if [ "$WEB_APP_PACKAGES" = none ]; then printf '%s' '{"Results":[]}' > "$9"
+ else printf '%s' '{"Results":[{"Type":"node-pkg","Packages":[{"Name":"react"},{"Name":"react-dom"}]}]}' > "$9"; fi
+else
+ printf '%s\n' "$9" >> '${directory}/scans'
+ printf '%s' '{"Results":[]}' > "$8"
+fi
 `,
 		{ mode: 0o755 },
 	);
@@ -303,6 +310,33 @@ void test(
 			]);
 			assert.deepEqual(value.currentSecurity, { status: failWebApp ? "fail" : "pass" });
 		}
+	},
+);
+
+void test(
+	"a scan of the web app that lists no bundled react is unavailable, not a pass",
+	{ skip: process.platform === "win32" },
+	async () => {
+		const f = await fixture(release, ["server", "agent"]);
+		const child = execute(f, { PASS_SCAN: "true", WEB_APP: "true", WEB_APP_PACKAGES: "none" });
+		assert.notEqual(child.status, 0);
+		const value = await result(f);
+		assert.deepEqual(value.outcomes, [
+			{
+				image: "server",
+				platform: "linux/amd64",
+				passed: false,
+				error: "the scan of the web app lists no bundled react",
+			},
+			{ image: "agent", passed: true, platform: "linux/amd64" },
+			{
+				image: "server",
+				platform: "linux/arm64",
+				passed: false,
+				error: "the scan of the web app lists no bundled react",
+			},
+			{ image: "agent", passed: true, platform: "linux/arm64" },
+		]);
 	},
 );
 

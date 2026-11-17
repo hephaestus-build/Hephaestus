@@ -7,7 +7,6 @@ import { isBuiltin } from "node:module";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { data, Evaluator, Lexer, Parser } from "@actions/expressions";
-import { parse as parseJsonc } from "jsonc-parser";
 import {
 	type Document,
 	isMap,
@@ -583,45 +582,6 @@ export function taskClosure(tasks: Record<string, unknown>, roots: Iterable<stri
 		expand(root);
 	}
 	return closure;
-}
-
-/**
- * Every repository file a config reads: each `new URL("…", import.meta.url)` it names and, for a
- * lint config, every file its `extends` names in turn — the closure `loadLintConfig` walks.
- */
-export async function filesReadByConfig(config: string): Promise<Set<string>> {
-	const files = new Set<string>();
-	const collect = async (file: string): Promise<void> => {
-		if (files.has(file)) {
-			return;
-		}
-		files.add(file);
-		const source = await readFile(file, "utf8");
-		const references = file.endsWith(".ts")
-			? [...source.matchAll(/new URL\("(?<path>[^"]+)", import\.meta\.url\)/gu)].map(({ groups }) =>
-					asString(groups?.path, "config URL"),
-				)
-			: asArray(asRecord(parseJsonc(source), file).extends ?? [], `${file} extends`).map((entry) =>
-					asString(entry, `${file} extends path`),
-				);
-		for (const reference of references) {
-			await collect(path.posix.join(path.posix.dirname(file), reference));
-		}
-	};
-	await collect(config);
-	files.delete(config);
-	return files;
-}
-
-/** The repository paths the first stage of a Dockerfile copies, as written: files and `dir/` trees. */
-export function buildStageCopySources(dockerfile: string): string[] {
-	const buildStage = dockerfile.split(/^FROM /mu)[1] ?? "";
-	return [...buildStage.matchAll(/^COPY (?<arguments>.+)$/gmu)].flatMap(({ groups }) =>
-		(groups?.arguments ?? "")
-			.split(/\s+/u)
-			.filter((word) => !word.startsWith("--"))
-			.slice(0, -1),
-	);
 }
 
 /**

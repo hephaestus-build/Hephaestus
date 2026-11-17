@@ -13,6 +13,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import de.tum.cit.aet.hephaestus.testconfig.RealAuthIntegrationTest;
 import jakarta.servlet.Filter;
+import java.net.URI;
 import java.util.Objects;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -104,6 +105,21 @@ class WebAppIntegrationTest extends RealAuthIntegrationTest {
     }
 
     @Test
+    void shouldKeepTheApiAuthenticatedWhenItsPathIsEncoded() throws Exception {
+        // Spring MVC decodes `/%61pi/user` to the API's `/api/user`; the web app's permit must not reach it.
+        mvc().perform(get(URI.create("/%61pi/user"))).andExpect(status().isUnauthorized());
+        mvc().perform(onHost(get(URI.create("/%61pi/identity-providers")), "acme.hephaestus.build"))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void shouldAnswerNotFoundWhenAMissingImageIsRead() throws Exception {
+        mvc().perform(get("/missing.png")).andExpect(status().isNotFound());
+        // A dotted path that is no image stays a client route: a login can contain a dot.
+        mvc().perform(get("/w/acme/profile/jane.md")).andExpect(status().isOk());
+    }
+
+    @Test
     void shouldServeALegalPageAsMarkdownForThisDeploymentOnly() throws Exception {
         mvc().perform(get("/legal/_disclaimer/imprint.md"))
                 .andExpect(status().isOk())
@@ -141,7 +157,13 @@ class WebAppIntegrationTest extends RealAuthIntegrationTest {
     @Test
     void shouldServeOnlyTheWebAppWhenTheHostIsAWorkspaceHost() throws Exception {
         mvc().perform(onHost(get("/practices"), "acme.hephaestus.build")).andExpect(status().isOk());
-        for (String path : new String[] {"/api/identity-providers", "/login", "/webhooks/github", "/actuator/health"}) {
+        for (String path : new String[] {
+            "/api/identity-providers",
+            "/login",
+            "/webhooks/github",
+            "/actuator/health",
+            "/.well-known/oauth-authorization-server"
+        }) {
             mvc().perform(onHost(get(path), "acme.hephaestus.build")).andExpect(status().isNotFound());
         }
     }

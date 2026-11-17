@@ -6,6 +6,7 @@ import { isDeepStrictEqual } from "node:util";
 import {
 	assertBundledNpmInventory,
 	assertBundledNpmScan,
+	assertDirectoryFormatsCover,
 	SERVER_WEB_APP_BUNDLE,
 	WEBAPP_IMAGE_BUNDLE,
 	componentEvidence,
@@ -83,8 +84,59 @@ export function validateWebAppInventory(syft: unknown, trivy: unknown): void {
 	assertBundledNpmScan(syft, trivy, SERVER_WEB_APP_BUNDLE);
 }
 
+/**
+ * The web app documents of a server subject, checked and judged. Its findings are the server image's findings: the same
+ * image and digest under the same policy. No component exception applies to them, so they need no component evidence.
+ */
+function judgeWebApp(
+	prefix: string,
+	subject: Subject,
+	carriesWebApp: boolean,
+	policy: unknown,
+	evaluatedAt: Date,
+	historical: boolean,
+): ReturnType<typeof evaluate> | undefined {
+	if (!carriesWebApp) {
+		return undefined;
+	}
+	const trivy = readJsonFileSync(`${prefix}.${WEB_APP_STEM}.trivy.json`);
+	const syft = readJsonFileSync(`${prefix}.${WEB_APP_STEM}.syft.json`);
+	const artifact = webAppArtifact(`${subject.repository}@${subject.digest}`);
+	validateWebAppInventory(syft, trivy);
+	assertDirectoryFormatsCover(
+		syft,
+		readJsonFileSync(`${prefix}.${WEB_APP_STEM}.spdx.json`),
+		readJsonFileSync(`${prefix}.${WEB_APP_STEM}.cdx.json`),
+	);
+	// The scan ran with the license scanner too, so the report is the web app's license report.
+	validateLicenseReport(trivy, artifact);
+	return evaluate(
+		subject.image,
+		trivy,
+		policy,
+		evaluatedAt,
+		{
+			digest: subject.digest,
+			platform: subject.platform,
+			reference: artifact,
+		},
+		{ historical, advisories: new Map(), evidence: undefined },
+	);
+}
+
 /** The web app documents of a server subject, by the file kind that the checksums cover. */
 const WEB_APP_KINDS = ["syft", "spdx", "cdx", "trivy"] as const;
+
+/** The evidence files of one subject that the signed checksums must cover. */
+function subjectEvidenceFiles(subject: Subject, carriesWebApp: boolean): string[] {
+	const stem = `${subject.image}-${subject.platform.replace("/", "-")}`;
+	return [
+		...["syft", "spdx", "cdx", "license", "trivy", "sbom-validation", "policy"].map(
+			(kind) => `${stem}.${kind}.json`,
+		),
+		...(carriesWebApp ? WEB_APP_KINDS.map((kind) => `${stem}.${WEB_APP_STEM}.${kind}.json`) : []),
+	];
+}
 
 type VerificationMode = "verify" | "verify-signatures" | "write-validation" | "verify-capture";
 
@@ -463,17 +515,9 @@ export function verifyReleaseEvidence(
 	// digest; writing a validation always holds the bundle to the current schema.
 	const historical = mode === "verify" || mode === "verify-signatures";
 	requireChecksumCoverage(covered, [
-		...manifest.subjects.flatMap((subject) => {
-			const stem = `${subject.image}-${subject.platform.replace("/", "-")}`;
-			return [
-				...["syft", "spdx", "cdx", "license", "trivy", "sbom-validation", "policy"].map(
-					(kind) => `${stem}.${kind}.json`,
-				),
-				...(carriesWebApp(subject)
-					? WEB_APP_KINDS.map((kind) => `${stem}.${WEB_APP_STEM}.${kind}.json`)
-					: []),
-			];
-		}),
+		...manifest.subjects.flatMap((subject) =>
+			subjectEvidenceFiles(subject, carriesWebApp(subject)),
+		),
 		...componentAdvisories(policy, undefined, historical).map(advisoryFile),
 	]);
 	const evaluatedAt = evaluationTime(manifestValue, historical);
@@ -483,12 +527,6 @@ export function verifyReleaseEvidence(
 		const syft = readJsonFileSync(`${prefix}.syft.json`);
 		const trivy = readJsonFileSync(`${prefix}.trivy.json`);
 		validateImageBundleInventory(syft, trivy, subject.image, bundledNpm);
-		const webAppTrivy = carriesWebApp(subject)
-			? readJsonFileSync(`${prefix}.${WEB_APP_STEM}.trivy.json`)
-			: undefined;
-		if (webAppTrivy !== undefined) {
-			validateWebAppInventory(readJsonFileSync(`${prefix}.${WEB_APP_STEM}.syft.json`), webAppTrivy);
-		}
 		const sbom = validateReleaseSbom(
 			syft,
 			readJsonFileSync(`${prefix}.spdx.json`),
@@ -520,25 +558,17 @@ export function verifyReleaseEvidence(
 					: undefined,
 			},
 		);
-		// The web app's findings are the server image's findings: the same image and digest, judged by the same
-		// policy. No component exception applies to them, so they need no component evidence.
-		const webApp =
-			webAppTrivy === undefined
-				? undefined
-				: evaluate(
-						subject.image,
-						webAppTrivy,
-						policy,
-						evaluatedAt,
-						{
-							digest: subject.digest,
-							platform: subject.platform,
-							reference: webAppArtifact(reference),
-						},
-						{ historical, advisories: new Map(), evidence: undefined },
-					);
-		const failed = [result, ...(webApp === undefined ? [] : [webApp])].some(
-			(outcome) => outcome.errors.length > 0 || outcome.rejected.length > 0,
+		const webApp = judgeWebApp(
+			prefix,
+			subject,
+			carriesWebApp(subject),
+			policy,
+			evaluatedAt,
+			historical,
+		);
+		const failed = [result, webApp].some(
+			(outcome) =>
+				outcome !== undefined && (outcome.errors.length > 0 || outcome.rejected.length > 0),
 		);
 		const policyResult = {
 			image: subject.image,
