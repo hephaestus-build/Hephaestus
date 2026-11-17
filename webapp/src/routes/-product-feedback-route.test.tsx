@@ -127,6 +127,24 @@ describe("product feedback sent from a workspace page", () => {
 		expect(draft).toHaveProperty("value", "The chart overlaps.");
 	});
 
+	it("brings focus back into the open form with the shortcut", async () => {
+		const user = userEvent.setup();
+		renderRouteAt("/w/acme/activity");
+		await user.click(
+			await screen.findByRole(
+				"button",
+				{ name: "Send feedback about Hephaestus" },
+				ROUTE_RENDER_WAIT,
+			),
+		);
+		const message = await screen.findByRole("textbox", { name: "Your feedback" });
+		await user.click(screen.getByRole("button", { name: /^Account/u }));
+		await user.keyboard("{Escape}");
+		expect(document.activeElement).not.toBe(message);
+		await user.keyboard("{Control>}{Shift>}F{/Shift}{/Control}");
+		await waitFor(() => expect(document.activeElement).toBe(message));
+	});
+
 	it("opens the form from anywhere with the shortcut", async () => {
 		const user = userEvent.setup();
 		renderRouteAt("/w/acme/activity");

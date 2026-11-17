@@ -28,10 +28,10 @@ const send = () => screen.getByRole("button", { name: "Send" });
 const publicBox = () => screen.getByRole("checkbox", { name: "Post as a public GitHub issue" });
 
 describe("product feedback dialog", () => {
-	it("minimizes on Escape and on Minimize, and closes on Close", async () => {
+	it("minimizes a draft on Escape and on Minimize, and closes on Close", async () => {
 		const user = userEvent.setup();
 		const { props } = renderDialog();
-		await user.click(message());
+		await user.type(message(), "An idea");
 		await user.keyboard("{Escape}");
 		expect(props.onViewChange).toHaveBeenLastCalledWith("minimized");
 		await user.click(screen.getByRole("button", { name: "Minimize" }));
@@ -43,6 +43,7 @@ describe("product feedback dialog", () => {
 	it("leaves the page behind it reachable and does not close on a press there", async () => {
 		const user = userEvent.setup();
 		const onPageAction = vi.fn();
+		const onViewChange = vi.fn();
 		render(
 			<>
 				<button type="button" onClick={onPageAction}>
@@ -50,7 +51,7 @@ describe("product feedback dialog", () => {
 				</button>
 				<ProductFeedbackDialog
 					view="open"
-					onViewChange={vi.fn()}
+					onViewChange={onViewChange}
 					sharing={{ status: "off" }}
 					isSubmitting={false}
 					onSubmit={vi.fn(async () => true)}
@@ -60,7 +61,15 @@ describe("product feedback dialog", () => {
 		);
 		await user.click(screen.getByRole("button", { name: "Page action" }));
 		expect(onPageAction).toHaveBeenCalledOnce();
-		screen.getByRole("textbox", { name: "Your feedback" });
+		await user.keyboard("{Escape}");
+		expect(onViewChange).not.toHaveBeenCalled();
+	});
+
+	it("closes an empty form instead of keeping nothing in the corner", async () => {
+		const user = userEvent.setup();
+		const { props } = renderDialog();
+		await user.click(screen.getByRole("button", { name: "Minimize" }));
+		expect(props.onViewChange).toHaveBeenLastCalledWith("closed");
 	});
 
 	it("keeps the draft while minimized and names it in the corner", async () => {

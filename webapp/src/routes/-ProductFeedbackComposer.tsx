@@ -1,5 +1,5 @@
 import { Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useRef } from "react";
+import { type RefObject, useEffect, useRef } from "react";
 
 import { InlineLink } from "@/components/common/InlineLink";
 import {
@@ -17,6 +17,10 @@ interface ProductFeedbackComposerProps {
 	/** The screen the report is about, without the ids or search of its address. */
 	route: string;
 	workspaceSlug?: string;
+	/** The header button; Close returns focus there. */
+	returnFocus: RefObject<HTMLElement | null>;
+	/** Changes with each request to open the form. */
+	focusRequest: number;
 }
 
 /** The composer loads on the first send action, then stays mounted to preserve a closed draft. */
@@ -25,6 +29,8 @@ export default function ProductFeedbackComposer({
 	onViewChange,
 	route,
 	workspaceSlug,
+	returnFocus,
+	focusRequest,
 }: ProductFeedbackComposerProps) {
 	const navigate = useNavigate();
 	// A refusal the person can read in the panel needs no toast; a minimized or closed panel does.
@@ -66,6 +72,8 @@ export default function ProductFeedbackComposer({
 				onViewChange(next);
 			}}
 			pagePath={route.slice(0, PAGE_PATH_MAX_LENGTH)}
+			returnFocus={returnFocus}
+			focusRequest={focusRequest}
 			sharing={sharing}
 			isSubmitting={feedback.isPending}
 			error={feedback.error}

@@ -18,7 +18,15 @@ import {
 	useRouter,
 } from "@tanstack/react-router";
 import { cn } from "cn";
-import { lazy, type ReactNode, Suspense, useEffect, useState, useSyncExternalStore } from "react";
+import {
+	lazy,
+	type ReactNode,
+	Suspense,
+	useEffect,
+	useRef,
+	useState,
+	useSyncExternalStore,
+} from "react";
 
 import {
 	getIntegrationCatalogOptions,
@@ -235,10 +243,13 @@ function showFeedbackUnavailable() {
 function ProductFeedbackControls({ workspaceSlug }: { workspaceSlug?: string }) {
 	const route = useMatches({ select: (matches) => routeOf(matches.at(-1)?.fullPath) });
 	const [feedbackView, setFeedbackView] = useState<ProductFeedbackComposerView>("closed");
+	const [focusRequest, setFocusRequest] = useState(0);
+	const feedbackButton = useRef<HTMLButtonElement>(null);
 	// Mounted from the first open on, so a closed composer keeps its draft.
 	const [composerLoaded, setComposerLoaded] = useState(false);
 	const openComposer = () => {
 		setFeedbackView("open");
+		setFocusRequest((previous) => previous + 1);
 		setComposerLoaded(true);
 	};
 	useEffect(() => {
@@ -246,6 +257,7 @@ function ProductFeedbackControls({ workspaceSlug }: { workspaceSlug?: string }) 
 			if (isFeedbackShortcut(event)) {
 				event.preventDefault();
 				setFeedbackView("open");
+				setFocusRequest((previous) => previous + 1);
 				setComposerLoaded(true);
 			}
 		};
@@ -255,6 +267,7 @@ function ProductFeedbackControls({ workspaceSlug }: { workspaceSlug?: string }) 
 	return (
 		<>
 			<ProductFeedbackButton
+				ref={feedbackButton}
 				onSendFeedback={openComposer}
 				onPrepare={() => {
 					// The open reports a failed load, through the boundary below.
@@ -274,6 +287,8 @@ function ProductFeedbackControls({ workspaceSlug }: { workspaceSlug?: string }) 
 						<ProductFeedbackComposer
 							view={feedbackView}
 							onViewChange={setFeedbackView}
+							returnFocus={feedbackButton}
+							focusRequest={focusRequest}
 							route={route}
 							workspaceSlug={workspaceSlug}
 						/>

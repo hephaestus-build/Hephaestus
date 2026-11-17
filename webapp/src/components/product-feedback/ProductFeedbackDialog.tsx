@@ -1,6 +1,6 @@
 import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
 import { MessageSquarePlus, Minus, XIcon } from "lucide-react";
-import { type ReactNode, useId, useRef, useState } from "react";
+import { type ReactNode, type RefObject, useEffect, useId, useRef, useState } from "react";
 
 import type { FeedbackRequest } from "@/api/types.gen";
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,7 @@ import {
 import { Kbd } from "@/components/ui/kbd";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
 	FEEDBACK_SHORTCUT_LABEL,
 	isComposing,
@@ -78,6 +79,10 @@ export interface ProductFeedbackDialogProps {
 	/** Resolves to whether the submission was accepted; the draft is cleared only then. */
 	onSubmit: (request: FeedbackRequest) => Promise<boolean>;
 	reportsLink: ReactNode;
+	/** The control that opens the form; Close returns focus there. */
+	returnFocus?: RefObject<HTMLElement | null>;
+	/** Changes with each request to open the form, so a request while it is open moves focus into it. */
+	focusRequest?: number;
 }
 
 /**
@@ -96,9 +101,15 @@ export function ProductFeedbackDialog({
 	error,
 	onSubmit,
 	reportsLink,
+	returnFocus,
+	focusRequest,
 }: ProductFeedbackDialogProps) {
 	const id = useId();
 	const messageField = useRef<HTMLTextAreaElement>(null);
+	const popup = useRef<HTMLDivElement>(null);
+	const draftButton = useRef<HTMLButtonElement>(null);
+	// Where focus goes when the panel leaves: the corner button after Minimize, the opening control after Close.
+	const leavingTo = useRef<"minimized" | "closed">("closed");
 	const [message, setMessage] = useState("");
 	// A resumed draft still describes its original page, even after navigation to report history.
 	const [draftPage, setDraftPage] = useState<string>();
@@ -108,6 +119,23 @@ export function ProductFeedbackDialog({
 	const share = shareChoice ?? (sharing.status === "public" && sharing.remembered);
 	const messageInvalid = attempted && !message.trim();
 	const remaining = MESSAGE_MAX_LENGTH - message.length;
+	// A panel that is not modal cannot hold focus, so each request to open it, also one while it is open,
+	// brings focus back to the text.
+	useEffect(() => {
+		if (view !== "open") {
+			return;
+		}
+		leavingTo.current = "closed";
+		if (focusRequest !== undefined) {
+			messageField.current?.focus();
+		}
+	}, [focusRequest, view]);
+	const leave = (next: "minimized" | "closed") => {
+		leavingTo.current = next;
+		onViewChange(next);
+	};
+	// An empty form has no draft to keep in the corner, so setting it aside closes it.
+	const setAside = () => leave(hasText(message) ? "minimized" : "closed");
 	const submit = async () => {
 		if (isSubmitting) {
 			return;
@@ -137,6 +165,7 @@ export function ProductFeedbackDialog({
 				// Beside the corner launcher, not over it: a tucked-away draft must not hide another control.
 				<div className="fixed right-24 bottom-6 z-50">
 					<Button
+						ref={draftButton}
 						variant="outline"
 						shape="pill"
 						size="lg"
@@ -144,7 +173,7 @@ export function ProductFeedbackDialog({
 						onClick={() => onViewChange("open")}
 					>
 						<MessageSquarePlus data-icon="inline-start" aria-hidden />
-						{hasText(message) ? "Feedback draft" : "Send feedback"}
+						Feedback draft
 					</Button>
 				</div>
 			)}
@@ -157,14 +186,29 @@ export function ProductFeedbackDialog({
 						onViewChange("open");
 						return;
 					}
-					// Escape tucks the panel away instead of losing sight of the draft; Close hides it.
-					onViewChange(details.reason === "escape-key" ? "minimized" : "closed");
+					if (details.reason === "escape-key") {
+						// Base UI hears Escape on the whole page. One the page itself handles, such as clearing a
+						// search field, is not meant for a panel that the person works beside.
+						const { target } = details.event;
+						if (!(target instanceof Node) || popup.current?.contains(target) !== true) {
+							details.cancel();
+							return;
+						}
+						setAside();
+						return;
+					}
+					leave("closed");
 				}}
 			>
 				<DialogPrimitive.Portal>
 					<DialogPrimitive.Popup
+						ref={popup}
 						data-slot="product-feedback-composer"
 						initialFocus={messageField}
+						finalFocus={() =>
+							(leavingTo.current === "minimized" ? draftButton.current : returnFocus?.current) ??
+							true
+						}
 						className="fixed right-4 bottom-4 z-50 flex max-h-[calc(100svh-2rem)] w-[min(28rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-xl bg-background text-sm shadow-xl ring-1 ring-foreground/10 transition-[opacity,transform] duration-280 ease-enter focus-visible:outline-hidden data-ending-style:translate-y-2 data-ending-style:opacity-0 data-ending-style:duration-200 data-ending-style:ease-exit data-starting-style:translate-y-2 data-starting-style:opacity-0 motion-reduce:data-ending-style:translate-y-0 motion-reduce:data-starting-style:translate-y-0"
 					>
 						<DialogForm
@@ -192,22 +236,36 @@ export function ProductFeedbackDialog({
 										{FEEDBACK_SHORTCUT_LABEL}
 									</Kbd>
 								</DialogPrimitive.Title>
-								<Button
-									type="button"
-									variant="ghost"
-									size="icon-sm"
-									aria-label="Minimize"
-									onClick={() => onViewChange("minimized")}
-								>
-									<Minus />
-								</Button>
-								<DialogPrimitive.Close
-									render={
-										<Button type="button" variant="ghost" size="icon-sm" aria-label="Close" />
-									}
-								>
-									<XIcon />
-								</DialogPrimitive.Close>
+								<Tooltip>
+									<TooltipTrigger
+										render={
+											<Button
+												type="button"
+												variant="ghost"
+												size="icon-sm"
+												aria-label="Minimize"
+												onClick={setAside}
+											/>
+										}
+									>
+										<Minus />
+									</TooltipTrigger>
+									<TooltipContent>Minimize</TooltipContent>
+								</Tooltip>
+								<Tooltip>
+									<TooltipTrigger
+										render={
+											<DialogPrimitive.Close
+												render={
+													<Button type="button" variant="ghost" size="icon-sm" aria-label="Close" />
+												}
+											/>
+										}
+									>
+										<XIcon />
+									</TooltipTrigger>
+									<TooltipContent>Close</TooltipContent>
+								</Tooltip>
 							</div>
 							<div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain p-4">
 								<DialogPrimitive.Description className="text-muted-foreground">
