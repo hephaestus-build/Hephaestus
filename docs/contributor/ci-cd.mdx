@@ -1960,7 +1960,9 @@ The Renovate PR notes state this requirement for automated updates too.
 Cosign's existing bootstrap and signature checks remain required.
 
 The other pins are manual: Helm, Kind, k3d, Kubeconform, oasdiff, ShellCheck, jscpd, Gateway API, Vale, ripgrep,
-Liberica, bootstrap tools and buildpack dependencies.
+bootstrap tools and buildpack dependencies.
+For a newer JRE, **Security / Java runtime watch** proposes the builder digest and the buildpack dependency pins together
+([JRE updates](./vulnerability-remediation.mdx#jre-updates)).
 For a manual update, change the version, source URL and checksum together.
 Apply the same independent verification before merge.
 The resolver never selects a newer release.
