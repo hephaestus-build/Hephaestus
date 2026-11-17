@@ -228,11 +228,13 @@ From `server/`:
 ./gradlew :application:test                             # Unit tests
 ./gradlew :application:architectureTest                 # ArchUnit and Modulith
 ./gradlew :application:verification                     # Unit, architecture and coverage floors
-./gradlew :application:integrationTest                  # Spring and Testcontainers
+./gradlew :application:integrationTest --tests SomeIntegrationTest  # One integration test class
 ./gradlew :application:test --tests SomeTest            # One unit test class
 ./gradlew :application:test --tests 'SomeTest.method'    # One unit test method
 ./gradlew :application:bootJar                          # Executable JAR, without running tests
 ```
+
+The whole integration tier runs from the repository root with `vp run test:server:integration` ([CI/CD § Integration shards](./ci-cd.mdx#integration-shards)).
 
 Generation and compilation dependencies are automatic. Test tasks always execute when requested.
 Compilation remains incremental and cacheable. `--no-build-cache` prevents output restoration.

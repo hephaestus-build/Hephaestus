@@ -585,7 +585,14 @@ void describe("ci-contract: merge-queue", () => {
 			await readFile("server/application/build.gradle.kts", "utf8"),
 			/HEPHAESTUS_INTEGRATION_SHARD/u,
 		);
-		assert.match(tasks, /"test:server:integration": run\([\s\S]*?:application:integrationTest/u);
+		assert.match(
+			tasks,
+			/"test:server:integration": run\("node scripts\/test-server-integration\.ts"\)/u,
+		);
+		assert.match(
+			await readFile("scripts/test-server-integration.ts", "utf8"),
+			/":application:integrationTest"/u,
+		);
 		const orchestrator = await readFile(".github/workflows/cicd.yml", "utf8");
 		assert.match(job(orchestrator, "Test"), /uses: \.\/\.github\/workflows\/ci-tests.yml/u);
 		assert.ok(needsOf(parseDocument(orchestrator), "all-ci-passed").includes("Test"));

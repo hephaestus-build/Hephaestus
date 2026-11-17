@@ -1477,6 +1477,12 @@ The number of shards and the default seconds live in `server/application/integra
 The CI matrix lists `review` and each numbered shard, and `scripts/ci-contract*.test.ts` pins the matrix to the file.
 To change the number of shards, change `shards` in the file and the three matrices.
 
+Locally, `vp run test:server:integration` runs `review` and each numbered shard of the file one after another, each in a test JVM of its own.
+One JVM for the whole tier would cache more test contexts than its 4 GB heap holds.
+Each shard's reports move to `server/application/build/test-results/integrationTest-<shard>` and `build/reports/tests/integrationTest-<shard>`.
+The command runs every shard and then names the reports of each failed shard.
+With `HEPHAESTUS_INTEGRATION_SHARD` set, as in a CI job, or with a test selection (`--tests` or `-PcriteriaCases`), the command makes one Gradle run with the default report locations.
+
 The file is committed, so every run of a commit partitions the same way, locally too.
 A partition that changed on each push would move hundreds of classes into new JVMs at once.
 A test that relies on a row of an earlier test would then fail in some unrelated merge group.
