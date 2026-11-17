@@ -33,6 +33,15 @@ value = "true"
 name = "BP_HEALTH_CHECKER_ENABLED"
 value = "true"
 
+# The memory calculator sizes Metaspace from the number of classes that the JVM loads. By default it
+# estimates 35 % of the classes in the image, which is below what the server loads on Java 25. The value
+# is the count that the server loads after start-up and warm-up, plus a margin of about 20 %. The
+# environment-variables buildpack writes it as a launch default, so a deployment can still set its own
+# BPL_JVM_LOADED_CLASS_COUNT.
+[[io.buildpacks.build.env]]
+name = "BPE_DEFAULT_BPL_JVM_LOADED_CLASS_COUNT"
+value = "55000"
+
 # The CDS training run boots under application-cds-training.yml; the runtime SPRING_PROFILES_ACTIVE
 # overrides this buildpack default.
 [[io.buildpacks.build.env]]
