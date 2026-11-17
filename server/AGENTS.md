@@ -206,7 +206,7 @@ The pipeline selects that adapter's `WebhookSignatureVerifier` and `SubjectKeyDe
 It stores the verified envelope in the provider event inbox (`provider_event`), one row for each subscribing workspace, in the request's transaction.
 `ProviderEventConsumer` claims and handles the rows: `docs/contributor/ingest-durability.mdx`.
 
-The server runs the receiver. There is no separate webhook role.
+The server runs the receiver.
 
 Configuration binds to
 `hephaestus.webhook.*` through `core.webhook.WebhookProperties`, shared with auto-registration in

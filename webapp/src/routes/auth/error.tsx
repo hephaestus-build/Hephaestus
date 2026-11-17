@@ -28,7 +28,7 @@ function AuthErrorRoute() {
 	const { code, returnTo } = Route.useSearch();
 	const { isAuthenticated } = useAuth();
 	const recovery = code === "step_up_required";
-	// Linking always names where it was headed; a refusal from before it did falls back to where linking lives.
+	// A step-up refusal names where it was headed. Without that path, the destination is the settings page, where linking lives.
 	const destination = safeReturnTo(returnTo) === "/" ? "/settings" : safeReturnTo(returnTo);
 	const [confirming, setConfirming] = useState(false);
 	const confirmAccess = useConfirmAccess(confirming, destination);

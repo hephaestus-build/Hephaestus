@@ -302,7 +302,6 @@ The 1.0 cutover dropped every earlier pending contraction, so the table is empty
    It checks the changelogs that the latest release tag does not have.
    It reads the tags, so the job checks out the full history.
 4. **Seeded release upgrade** — `release-upgrade.yml` upgrades the previous supported release.
-   Until 1.0.0 publishes, that release is 1.0.0-rc.1.
    It then also upgrades from the latest published release, if that is a different release.
    Installations that follow the candidates run that release.
    It compares the fingerprint of the upgraded schema with a fresh install.

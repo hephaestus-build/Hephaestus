@@ -7,12 +7,6 @@ page_type: how-to
 A host polls a **channel** naming a release or commit, verifies its signature, and applies
 the verified Helm chart. Deployment needs no inbound administration connection to the host.
 
-:::note[Chart-only release]
-These instructions describe the chart-only release.
-For a 0.95.x deployment, use that release's versioned instructions and signed assets.
-The [0.x upgrade path](/admin/upgrade-to-1-0) requires 0.95.1 and its installed reconciler tooling before the cutover.
-:::
-
 ## What the host trusts
 
 For a chart release deployment, the host verifies three signatures:

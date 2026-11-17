@@ -12,12 +12,6 @@ promotion. We manage releases with [changesets](https://github.com/changesets/ch
 The [compatibility policy](https://docs.hephaestus.build/admin/compatibility-policy) defines what a released version number promises.
 A change to a bundled practice also needs the acceptance in [Practice catalog curation](./practice-catalog.mdx#accept-a-bundled-change).
 
-:::note[Chart-only release]
-These instructions describe the chart-only release.
-For a 0.95.x deployment, use that release's versioned instructions and signed assets.
-The [0.x upgrade path](/admin/upgrade-to-1-0) requires 0.95.1 and its installed reconciler tooling before the cutover.
-:::
-
 ## The flow
 
 ```mermaid
@@ -564,11 +558,7 @@ A changeset summary becomes the `CHANGELOG.md` entry **verbatim** — write it i
   An instance's update check reads it to flag the newer release in the admin overview.
   Only a migration that requires operator action belongs in the summary.
   Use `**Operators:** …` plus a `.migration/<changeset-slug>.md` fragment.
-- **Bump = the operator's upgrade cost**, not code semantics:
-  - `patch` — upgrade needs no action (bug fix, internal change, additive auto-applied migration).
-  - `minor` — new capability, still zero-action. Note any new *optional* env var / flag in the summary.
-  - `major` — operator must act first (required new env var, removed/renamed config, destructive/manual
-    migration, dropped API). State the action and add a `.migration` fragment.
+- **Bump = the operator's upgrade cost**, not code semantics. The [changeset README](https://github.com/hephaestus-build/Hephaestus/blob/main/.changeset/README.md) owns the bump table and the rule for `major`.
 
 No TTY (agents, CI)? `vp exec changeset` is interactive — write the file by hand instead: create
 `.changeset/<slug>.md` with frontmatter `"hephaestus": <bump>` and the summary as the body (see
@@ -580,12 +570,6 @@ A fragment whose heading starts with `#### 🔴 Stop every role` waives the rule
 The waiver covers the whole release: the changelog guard and the seeded-upgrade gate then skip that proof and write a warning to the job summary.
 Add it only for a release that an ADR or the maintainer allows to stop every role.
 [Expand and contract](./database-migration#expand-and-contract) owns the rule.
-
-:::caution[Before 1.0.0]
-The [changeset README](https://github.com/hephaestus-build/Hephaestus/blob/main/.changeset/README.md) owns the rule for `major`.
-Until 1.0.0 is out, a breaking change uses `minor` and states the operator action.
-It adds a migration fragment exactly as for a `major`.
-:::
 
 ### Release candidate policy
 

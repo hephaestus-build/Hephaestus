@@ -229,11 +229,9 @@ The flag does not replace the viewed-user identifier: elevated workspace adminis
 private user view are different permissions. `false` means "no elevation recorded", not "the actor
 was a member": rows written before the flag existed all read `false`.
 
-## Deferred / follow-up
+## LLM governance
 
-- **`APP_AUDITOR`** read-only tier: not built. A single-operator instance has no second audience for it.
-  The enum and authority design permit its addition.
-LLM governance is not on this list — it is built. An instance admin registers connections and models
+An instance admin registers connections and models
 under `/admin/llm/*`, prices them, and grants them to workspaces. A workspace may add its own
 connection when instance settings permit it. Usage is metered into `llm_usage_event`.
 Two independent monthly budgets cap it: the instance cap on shared-model spend and the workspace cap on its own provider.

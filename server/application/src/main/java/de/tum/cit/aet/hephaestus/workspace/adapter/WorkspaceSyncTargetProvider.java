@@ -263,7 +263,7 @@ public class WorkspaceSyncTargetProvider implements SyncTargetProvider, Reposito
     }
 
     private SyncMetadata toSyncMetadata(Workspace workspace) {
-        // Derive organization login: prefer the linked organization, fall back to accountLogin.
+        // The organization login is the workspace's accountLogin, with no lookup of a linked organization.
         // The accountLogin is always the GitHub account (org or user) that owns the repositories,
         // so it's safe to use for organization-level operations like team sync.
         // For user accounts, the team sync will simply find no teams (which is expected).
