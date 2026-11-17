@@ -24,6 +24,7 @@ import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import jdk.jfr.consumer.RecordedStackTrace;
 import jdk.jfr.consumer.RecordingStream;
 import org.eclipse.jgit.api.Git;
 import org.junit.jupiter.api.Test;
@@ -81,7 +82,9 @@ class GitRepositoryFetchBoundTest extends BaseUnitTest {
             events.enable("jdk.VirtualThreadPinned")
                     .withThreshold(Duration.ZERO)
                     .withStackTrace();
-            events.onEvent("jdk.VirtualThreadPinned", event -> pinned.add(String.valueOf(event.getStackTrace())));
+            events.onEvent("jdk.VirtualThreadPinned", event -> {
+                if (!onJdkSubPoller(event.getStackTrace())) pinned.add(String.valueOf(event.getStackTrace()));
+            });
             events.startAsync();
             var git = manager(provider.port(), 1, Duration.ofSeconds(5));
             List<Thread> requests = new ArrayList<>();
@@ -143,6 +146,18 @@ class GitRepositoryFetchBoundTest extends BaseUnitTest {
         holder.join();
         git.ensureRepository(KEY, source.toUri().toString(), null);
         assertThat(git.isRepositoryCloned(KEY)).isTrue();
+    }
+
+    /**
+     * On Linux, JDK 25 runs its socket sub-pollers as virtual threads, and JFR reports their loop as a pinned park.
+     * That loop belongs to the JDK, not to the capture path. Only that loop is left out: a capture thread that parks
+     * pinned in a socket read still counts.
+     */
+    private static boolean onJdkSubPoller(RecordedStackTrace stack) {
+        return stack != null
+                && stack.getFrames().stream()
+                        .anyMatch(frame -> frame.getMethod().getType().getName().equals("sun.nio.ch.Poller")
+                                && frame.getMethod().getName().equals("subPollerLoop"));
     }
 
     private GitRepositoryManager manager(int simulatorPort, int transportTimeoutSeconds, Duration mirrorWait) {
