@@ -22,14 +22,6 @@ variable "WRITE_CACHE" {
   default = "false"
 }
 
-variable "SOURCE_COMMIT" {
-  default = ""
-}
-
-variable "SOURCE_BRANCH" {
-  default = ""
-}
-
 function "repository" {
   params = [name]
   result = "${REGISTRY}/hephaestus-build/${name}"
@@ -38,26 +30,6 @@ function "repository" {
 target "image" {
   # A refreshed package stage does not invalidate cached descendants in BuildKit.
   no-cache-filter = ["os-packages", "runtime"]
-}
-
-target "webapp" {
-  inherits   = ["image", "webapp-metadata"]
-  labels = {
-    "org.opencontainers.image.title" = "Hephaestus Webapp"
-    "org.opencontainers.image.description" = "Web client for Hephaestus"
-    "org.opencontainers.image.vendor" = "AET TUM"
-    "org.opencontainers.image.licenses" = "MIT"
-    "hephaestus.component" = "webapp"
-  }
-  context    = "."
-  dockerfile = "webapp/Dockerfile"
-  args = {
-    SOURCE_COMMIT  = SOURCE_COMMIT
-    SOURCE_BRANCH = SOURCE_BRANCH
-  }
-  cache-from = ["type=registry,ref=${repository("webapp")}:cache-main-${PLATFORM_PAIR}"]
-  cache-to   = WRITE_CACHE == "true" ? ["type=registry,ref=${repository("webapp")}:cache-main-${PLATFORM_PAIR},mode=max"] : []
-  output     = PUBLISH == "true" ? ["type=image,\"name=${repository("webapp")}\",push-by-digest=true,name-canonical=true,push=true"] : ["type=cacheonly"]
 }
 
 target "agent" {

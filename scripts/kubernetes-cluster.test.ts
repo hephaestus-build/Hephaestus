@@ -53,7 +53,7 @@ import {
 
 const chart = fileURLToPath(new URL("../deploy/chart/hephaestus/", import.meta.url));
 const digest = (character: string) => `sha256:${character.repeat(64)}`;
-const resolved = ["webapp", "server", "agent", "postgres"].map((image, index) => ({
+const resolved = ["server", "agent", "postgres"].map((image, index) => ({
 	image,
 	repository: `ghcr.io/hephaestus-build/${image}`,
 	indexDigest: digest(String(index)),
@@ -77,16 +77,15 @@ const images = chartImagesFrom(resolved, upstream);
 
 await test("the chart's images come from the resolved first-party images and the upstream pins", () => {
 	assert.deepEqual(images, {
-		agent: `ghcr.io/hephaestus-build/agent@${digest("2")}`,
+		agent: `ghcr.io/hephaestus-build/agent@${digest("1")}`,
 		alertmanager: `docker.io/prom/alertmanager@${digest("8")}`,
-		server: `ghcr.io/hephaestus-build/server@${digest("1")}`,
-		postgres: `ghcr.io/hephaestus-build/postgres@${digest("3")}`,
+		server: `ghcr.io/hephaestus-build/server@${digest("0")}`,
+		postgres: `ghcr.io/hephaestus-build/postgres@${digest("2")}`,
 		"postgres-exporter": `docker.io/prometheuscommunity/postgres-exporter@${digest("7")}`,
 		"victoria-metrics": `docker.io/victoriametrics/victoria-metrics@${digest("f")}`,
 		vmalert: `docker.io/victoriametrics/vmalert@${digest("9")}`,
-		webapp: `ghcr.io/hephaestus-build/webapp@${digest("0")}`,
 	});
-	assert.throws(() => chartImagesFrom(resolved.slice(1), upstream), /no image for webapp/u);
+	assert.throws(() => chartImagesFrom(resolved.slice(1), upstream), /no image for server/u);
 });
 
 await test("the API endpoint is the address and port of the kubernetes Service's endpoint", () => {

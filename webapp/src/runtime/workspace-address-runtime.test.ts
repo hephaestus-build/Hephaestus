@@ -13,11 +13,9 @@ afterEach(() => {
 
 it("does not require an apex URL when workspace addresses are off", async () => {
 	vi.resetModules();
-	window.__ENV__ = { APPLICATION_CLIENT_URL: "", HEPHAESTUS_WORKSPACE_SUBDOMAINS_ENABLED: "false" };
 	const addresses = await import("./workspace-address");
 	expect(addresses.workspaceAddressConfig.apexOrigin).toBe("");
 	expect(addresses.workspaceReturnTo("/settings")).toBe("/settings");
-	delete window.__ENV__;
 });
 
 it("rejects a return path that becomes an authority after URL normalization", () => {

@@ -3313,14 +3313,14 @@ tests:
   - name: a container whose anonymous memory stays near its limit fires, a peak shorter than 10 minutes does not
     interval: 1m
     input_series:
-      # 3 GiB limits. The server holds 2.7 GiB (90 %) from minute 5. The webapp holds 90 % for minutes 0 to 9 only.
+      # 3 GiB limits. The server holds 2.7 GiB (90 %) from minute 5. The migration Job holds 90 % for minutes 0 to 9 only.
       - series: 'container_spec_memory_limit_bytes{namespace="hephaestus",pod="hephaestus-server-1",container="server"}'
         values: "3221225472x30"
       - series: 'container_memory_rss{namespace="hephaestus",pod="hephaestus-server-1",container="server"}'
         values: "1932735283x4 2899102925x26"
-      - series: 'container_spec_memory_limit_bytes{namespace="hephaestus",pod="hephaestus-webapp-1",container="webapp"}'
+      - series: 'container_spec_memory_limit_bytes{namespace="hephaestus",pod="hephaestus-migration-1",container="migration"}'
         values: "3221225472x30"
-      - series: 'container_memory_rss{namespace="hephaestus",pod="hephaestus-webapp-1",container="webapp"}'
+      - series: 'container_memory_rss{namespace="hephaestus",pod="hephaestus-migration-1",container="migration"}'
         values: "2899102925x9 1073741824x21"
       # The pod-level cgroup carries no container name and is ignored.
       - series: 'container_spec_memory_limit_bytes{namespace="hephaestus",pod="hephaestus-server-1",container=""}'

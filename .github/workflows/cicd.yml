@@ -45,7 +45,6 @@ jobs:
       contents: read
     outputs:
       webapp: ${{ steps.filter.outputs.webapp }}
-      webapp-image: ${{ steps.filter.outputs.webapp-image }}
       extension: ${{ steps.filter.outputs.extension }}
       server: ${{ steps.filter.outputs.server }}
       # Whether the server suites run. The package job reads it too, because the suites run its classes.
@@ -379,30 +378,6 @@ jobs:
               - 'package.json'
               - 'pnpm-lock.yaml'
               - 'pnpm-workspace.yaml'
-            webapp-image:
-              - '.vale/**'
-              - 'docs/contributor/practice-feedback-language.mdx'
-              - 'scripts/lib/ste-words.ts'
-              - 'scripts/lib/json.ts'
-              - 'webapp/src/**'
-              - '!webapp/src/**/*.test.*'
-              - '!webapp/src/**/*.stories.*'
-              - '!webapp/src/test/**'
-              - '.oxfmtrc.json'
-              - 'patches/**'
-              - 'docker/agents/pi/patches/**'
-              - 'webapp/public/**'
-              - 'webapp/docker/**'
-              - 'webapp/Dockerfile'
-              - 'webapp/index.html'
-              - 'webapp/package.json'
-              - 'webapp/tsconfig.json'
-              - 'webapp/vite.config.ts'
-              - 'webapp/vite.shared.ts'
-              - 'docs/package.json'
-              - 'package.json'
-              - 'pnpm-lock.yaml'
-              - 'pnpm-workspace.yaml'
             server:
               - 'tsconfig.agent-runtime.json'
               - 'scripts/compile-agent-runtime.ts'
@@ -500,6 +475,28 @@ jobs:
               - '!**/AGENTS.md'
               - '!**/CLAUDE.md'
             server-image:
+              # The server packages the built web app (ADR 0100).
+              - '.vale/**'
+              - 'scripts/lib/ste-words.ts'
+              - 'scripts/lib/json.ts'
+              - 'webapp/src/**'
+              - '!webapp/src/**/*.test.*'
+              - '!webapp/src/**/*.stories.*'
+              - '!webapp/src/test/**'
+              - '.oxfmtrc.json'
+              - 'patches/**'
+              - 'docker/agents/pi/patches/**'
+              - 'webapp/public/**'
+              - 'webapp/tools/**'
+              - 'webapp/index.html'
+              - 'webapp/package.json'
+              - 'webapp/tsconfig.json'
+              - 'webapp/vite.config.ts'
+              - 'webapp/vite.shared.ts'
+              - 'docs/package.json'
+              - 'package.json'
+              - 'pnpm-lock.yaml'
+              - 'pnpm-workspace.yaml'
               - '.github/ci-tools/pack.json'
               - '.github/ci-tools/buildpack-*.json'
               - 'scripts/buildpack-dependencies.ts'
@@ -981,7 +978,6 @@ jobs:
           needs.detect-changes.outputs.all-images == 'true' ||
           needs.detect-changes.outputs.server-image == 'true' ||
           needs.detect-changes.outputs.kubernetes == 'true' ||
-          needs.detect-changes.outputs.webapp-image == 'true' ||
           needs.detect-changes.outputs.agent-images == 'true' ||
           needs.detect-changes.outputs.postgres-image == 'true' ||
           needs.detect-changes.outputs.docker-config == 'true'
@@ -1161,6 +1157,14 @@ jobs:
           digest-mismatch: error
       - uses: ./.github/actions/setup-caches
         if: steps.reuse.outputs.artifact-id == ''
+      # The server packages the built web app (ADR 0100): this is the one build of the web app that ships.
+      - name: Build the web app
+        if: steps.reuse.outputs.artifact-id == ''
+        run: |
+          set -euo pipefail
+          vp run build:webapp
+          # The shipped web app carries no source map (ADR 0071).
+          if find webapp/dist -name '*.map' | grep .; then exit 1; fi
       - name: Package the server
         if: steps.reuse.outputs.artifact-id == ''
         working-directory: server
@@ -1177,6 +1181,7 @@ jobs:
           mapfile -t clients < <(find generated-clients/build/libs -maxdepth 1 -name 'hephaestus-generated-clients-*.jar' ! -name '*-sources.jar' ! -name '*-javadoc.jar')
           (( ${#jars[@]} == 1 )) && (( ${#clients[@]} == 1 ))
           unzip -p "${jars[0]}" META-INF/MANIFEST.MF | grep '^Main-Class: org.springframework.boot.loader' >/dev/null
+          unzip -l "${jars[0]}" | grep -q ' BOOT-INF/classes/web-app/index\.html$'
       - name: Upload the packaged server
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -1285,7 +1290,6 @@ jobs:
       reuse-run: ${{ needs.detect-changes.outputs.queue-run }}
       reuse-images: ${{ needs.detect-changes.outputs.queue-images }}
       scan-images: ${{ needs.detect-changes.outputs.release-preflight != 'true' }}
-      webapp_changed: ${{ (needs.detect-changes.outputs.webapp-image == 'true' || needs.detect-changes.outputs.docker-config == 'true' || needs.detect-changes.outputs.all-images == 'true') && 'true' || 'false' }}
       application_server_changed: ${{ (needs.detect-changes.outputs.server-image == 'true' || needs.detect-changes.outputs.kubernetes == 'true' || needs.detect-changes.outputs.all-images == 'true') && 'true' || 'false' }}
       agent_images_changed: ${{ (needs.detect-changes.outputs.agent-images == 'true' || needs.detect-changes.outputs.docker-config == 'true' || needs.detect-changes.outputs.all-images == 'true') && 'true' || 'false' }}
       # A merge group aliases nothing, so the seeded upgrade and the server image startup need this
@@ -1299,7 +1303,6 @@ jobs:
       run-image: "paketobuildpacks/ubuntu-noble-run-tiny@sha256:dc90cbdbbff35916ff5a26409f29f0525cbc7fa76cc317adca856c4127ebf2ba"
 
       server: ${{ ((needs.detect-changes.outputs.draft != 'true' && (needs.server-package.result == 'success' || (needs.server-package.result == 'skipped' && needs.detect-changes.outputs.queue-images-complete == 'true')) && needs.detect-changes.outputs.images == 'true' && (needs.detect-changes.outputs.server-image == 'true' || needs.detect-changes.outputs.kubernetes == 'true' || needs.detect-changes.outputs.all-images == 'true')) && 'true' || 'false') == 'true' }}
-      webapp: ${{ ((needs.detect-changes.outputs.should_skip != 'true' && needs.detect-changes.outputs.draft != 'true' && needs.detect-changes.outputs.images == 'true' && (needs.detect-changes.outputs.unfiltered == 'true' || needs.detect-changes.outputs.head-images == 'true' || needs.detect-changes.outputs.any-code == 'true' || needs.detect-changes.outputs.ci-config == 'true' || needs.detect-changes.outputs.kubernetes == 'true')) && 'true' || 'false') == 'true' && needs.detect-changes.outputs.should_skip != 'true' && ((needs.detect-changes.outputs.webapp-image == 'true' || needs.detect-changes.outputs.docker-config == 'true' || needs.detect-changes.outputs.all-images == 'true') && 'true' || 'false') == 'true' }}
       agent: ${{ ((needs.detect-changes.outputs.should_skip != 'true' && needs.detect-changes.outputs.draft != 'true' && needs.detect-changes.outputs.images == 'true' && (needs.detect-changes.outputs.unfiltered == 'true' || needs.detect-changes.outputs.head-images == 'true' || needs.detect-changes.outputs.any-code == 'true' || needs.detect-changes.outputs.ci-config == 'true' || needs.detect-changes.outputs.kubernetes == 'true')) && 'true' || 'false') == 'true' && needs.detect-changes.outputs.should_skip != 'true' && ((needs.detect-changes.outputs.agent-images == 'true' || needs.detect-changes.outputs.docker-config == 'true' || needs.detect-changes.outputs.all-images == 'true') && 'true' || 'false') == 'true' }}
       postgres: ${{ ((needs.detect-changes.outputs.should_skip != 'true' && needs.detect-changes.outputs.draft != 'true' && needs.detect-changes.outputs.images == 'true' && (needs.detect-changes.outputs.unfiltered == 'true' || needs.detect-changes.outputs.head-images == 'true' || needs.detect-changes.outputs.any-code == 'true' || needs.detect-changes.outputs.ci-config == 'true' || needs.detect-changes.outputs.kubernetes == 'true')) && 'true' || 'false') == 'true' && needs.detect-changes.outputs.should_skip != 'true' && ((needs.detect-changes.outputs.postgres-image == 'true' || needs.detect-changes.outputs.docker-config == 'true' || needs.detect-changes.outputs.all-images == 'true' || needs.detect-changes.outputs.queue-upgrade == 'true' || needs.detect-changes.outputs.queue-server-image == 'true') && 'true' || 'false') == 'true' }}
 

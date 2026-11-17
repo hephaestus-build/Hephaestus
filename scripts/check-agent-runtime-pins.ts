@@ -5,7 +5,6 @@ import { parse } from "yaml";
 import { asRecord, isRecord, parseJson } from "./lib/json.ts";
 
 const dockerfile = readFileSync("docker/agents/pi/Dockerfile", "utf8");
-const webappDockerfile = readFileSync("webapp/Dockerfile", "utf8");
 const packageJson = asRecord(parseJson(readFileSync("package.json", "utf8")), "package.json");
 const imagePackageJson = asRecord(
 	parseJson(readFileSync("docker/agents/pi/package.json", "utf8")),
@@ -31,13 +30,6 @@ const repoNodeVersion = devEnginesRuntime.version;
 if (repoNodeVersion !== nodeVersion) {
 	problems.push(
 		`package.json#devEngines.runtime pins Node ${String(repoNodeVersion)} but the agent image pins ${nodeVersion}.`,
-	);
-}
-const webappNodeVersion = /^ARG NODE_VERSION=(?<version>\S+)$/mu.exec(webappDockerfile)?.groups
-	?.version;
-if (webappNodeVersion !== nodeVersion) {
-	problems.push(
-		`webapp/Dockerfile pins Node ${String(webappNodeVersion)} but the agent image pins ${nodeVersion}.`,
 	);
 }
 const packagePiVersion = devDependencies["@earendil-works/pi-coding-agent"];

@@ -810,7 +810,7 @@ are unchanged. Steady includes one backup; upgrade includes migration/stanza Job
 {{- $_ := set $context "Values" $values -}}
 {{- $totals := dict "steady" (dict "cpu" 0 "memory" 0) "upgrade" (dict "cpu" 0 "memory" 0) -}}
 {{- $backup := false -}}
-{{- range $file := list "server.yaml" "webapp.yaml" "postgresql.yaml" "migration.yaml" "postgresql-backup.yaml" "postgresql-metrics.yaml" "observability-stack.yaml" "agent-sandbox-controller.yaml" "sandbox-templates.yaml" -}}
+{{- range $file := list "server.yaml" "postgresql.yaml" "migration.yaml" "postgresql-backup.yaml" "postgresql-metrics.yaml" "observability-stack.yaml" "agent-sandbox-controller.yaml" "sandbox-templates.yaml" -}}
 {{- range $document := splitList "\n---" (include (print $.Template.BasePath "/" $file) $context) -}}
 {{- $object := fromYaml $document | default dict -}}
 {{- $kind := get $object "kind" | default "" -}}

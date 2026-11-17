@@ -51,9 +51,9 @@ void describe("ci-contract: images", () => {
 			.filter(({ name }) => name !== "image");
 		assert.deepEqual(
 			targets.map(({ name }) => name),
-			["webapp", "agent", "postgres"],
+			["agent", "postgres"],
 		);
-		const dockerfiles = new Set(await posixGlob("{docker,webapp}/**/Dockerfile"));
+		const dockerfiles = new Set(await posixGlob("docker/**/Dockerfile"));
 		assert.ok(dockerfiles.size > 0);
 		for (const { name, body } of targets) {
 			assert.match(body, new RegExp(`inherits\\s*= \\["image", "${name}-metadata"\\]`, "u"));
@@ -99,7 +99,7 @@ void describe("ci-contract: images", () => {
 			pathFilter(orchestrator, "docker-config"),
 			/^ {14}- 'docker\/docker-bake\.hcl'$/mu,
 		);
-		for (const input of ["webapp_changed", "agent_images_changed", "postgres_image_changed"]) {
+		for (const input of ["agent_images_changed", "postgres_image_changed"]) {
 			assert.match(
 				job(orchestrator, "Docker"),
 				new RegExp(`${input}: .*docker-config == 'true'`, "u"),
@@ -107,56 +107,7 @@ void describe("ci-contract: images", () => {
 		}
 	});
 
-	void test("the webapp image copies every file its Vite config reads", async () => {
-		const reads = await filesReadByConfig("webapp/vite.config.ts");
-		assert.ok(
-			[...reads].some((file) => !file.startsWith("webapp/")),
-			"Expected the Vite config to read configuration from outside webapp/",
-		);
-		const sources = buildStageCopySources(await readFile("webapp/Dockerfile", "utf8"));
-		for (const file of reads) {
-			assert.ok(
-				sources.some((source) =>
-					source.endsWith("/") ? file.startsWith(source) : file === source,
-				),
-				`webapp/Dockerfile's build stage does not copy ${file}, which webapp/vite.config.ts reads`,
-			);
-		}
-	});
-
-	void test("the webapp image copies every workspace manifest before installing dependencies", async () => {
-		const workspace = parseDocument(await readFile("pnpm-workspace.yaml", "utf8"));
-		const packages = workspace.get("packages");
-		assert.ok(isSeq(packages));
-		const dockerfile = await readFile("webapp/Dockerfile", "utf8");
-		const fetch = dockerfile.indexOf("pnpm fetch --filter webapp");
-		assert.ok(fetch > 0);
-		const sources = buildStageCopySources(dockerfile.slice(0, fetch));
-		for (const item of packages.items) {
-			const directory = asString(isScalar(item) ? item.value : item, "workspace package");
-			const manifest = path.posix.join(directory, "package.json");
-			assert.ok(sources.includes(manifest), `The install layer must copy ${manifest}`);
-		}
-	});
-
-	void test("the webapp image copies the catalogue imported by preview fixtures", async () => {
-		const config = asRecord(parseJsonc(await readFile("webapp/tsconfig.json", "utf8")), "tsconfig");
-		const options = asRecord(config.compilerOptions, "compiler options");
-		const paths = asRecord(options.paths, "paths");
-		const resources = asArray(paths["@bundled-practices"], "bundled practices");
-		const sources = buildStageCopySources(await readFile("webapp/Dockerfile", "utf8"));
-		for (const resource of resources) {
-			const file = path.posix.join("webapp", asString(resource, "catalogue path"));
-			assert.ok(
-				sources.some((source) =>
-					source.endsWith("/") ? file.startsWith(source) : file === source,
-				),
-				`The webapp image must contain ${file} for type-aware lint`,
-			);
-		}
-	});
-
-	void test("path exclusions cannot select unrelated files for server tests or webapp images", async () => {
+	void test("path exclusions cannot select unrelated files for server tests or images", async () => {
 		const workflow = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
 		const steps = workflow.getIn(["jobs", "detect-changes", "steps"]);
 		assert.ok(isSeq(steps));
@@ -205,7 +156,6 @@ void describe("ci-contract: images", () => {
 		const exported = namedStep(workflow, build, "Export digests");
 		assert.equal(exported.hasIn(["env", "BAKE_METADATA"]), false);
 		for (const [variable, target] of [
-			["WEBAPP_DIGEST", ".webapp"],
 			["AGENT_DIGEST", "['agent']"],
 			["POSTGRES_DIGEST", ".postgres"],
 		] as const) {
@@ -224,27 +174,7 @@ void describe("ci-contract: images", () => {
 		assert.deepEqual(dependencies.toJSON(), ["build", "build-arm64"]);
 	});
 
-	void test("provides dependency patches before image installs and validates extension patch changes", async () => {
-		const dockerfile = await readFile("webapp/Dockerfile", "utf8");
-		const workspace = parseDocument(await readFile("pnpm-workspace.yaml", "utf8"));
-		const patched = workspace.get("patchedDependencies");
-		assert.ok(isMap(patched) && patched.items.length > 0, "The workspace configures patches");
-		// The filtered install still reads every configured patch.
-		for (const command of ["pnpm fetch --filter webapp", "pnpm install --offline"]) {
-			const at = dockerfile.indexOf(command);
-			assert.ok(at !== -1, `webapp/Dockerfile runs ${command}`);
-			const sources = buildStageCopySources(dockerfile.slice(0, at));
-			for (const { value } of patched.items) {
-				const file = isScalar(value) ? value.value : undefined;
-				assert.ok(typeof file === "string", "A patched dependency names its patch file");
-				assert.ok(
-					sources.some((source) =>
-						source.endsWith("/") ? file.startsWith(source) : file === source,
-					),
-					`${command} requires ${file} first`,
-				);
-			}
-		}
+	void test("validates extension patch changes", async () => {
 		const source = await readFile(".github/workflows/cicd.yml", "utf8");
 		const detection = job(source, "detect-changes");
 		for (const filter of ["extension", "extension-e2e"]) {
@@ -277,9 +207,8 @@ void describe("ci-contract: images", () => {
 		assert.match(inherited, /pr-\$PR_NUMBER/u);
 
 		const reusable = await readFile(".github/workflows/reusable-docker-build.yml", "utf8");
-		// The webapp image uploads no source maps anywhere, so no build is handed an upload credential.
-		const webappImage = await readFile("webapp/Dockerfile", "utf8");
-		for (const text of [source, docker, reusable, webappImage]) {
+		// The web app uploads no source maps anywhere, so no build is handed an upload credential.
+		for (const text of [source, docker, reusable]) {
 			assert.doesNotMatch(text, /sentry/iu);
 		}
 		assert.doesNotMatch(reusable, /single[-_]arch/u);
@@ -359,7 +288,7 @@ void describe("ci-contract: images", () => {
 		assert.equal(bake.getIn(["env", "PUBLISH"]), `\${{ inputs.publish }}`);
 		// Without publication each target exports to the build cache only.
 		const definition = await readFile("docker/docker-bake.hcl", "utf8");
-		assert.equal((definition.match(/: \["type=cacheonly"\]/gu) ?? []).length, 3);
+		assert.equal((definition.match(/: \["type=cacheonly"\]/gu) ?? []).length, 2);
 		assert.match(String(reusable.getIn(["jobs", "merge", "if"])), /inputs\.publish/u);
 		assert.equal(
 			namedStep(reusable, build, "Enforce the release vulnerability policy").get("if"),

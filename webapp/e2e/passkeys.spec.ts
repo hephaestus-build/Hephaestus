@@ -6,7 +6,7 @@ import { z } from "zod";
 import { problemType } from "@/lib/problem-detail";
 
 import { expect, loginAsDevAdmin, test } from "./fixtures";
-import { E2E_BASE_URL, E2E_API_URL, E2E_SERVER_URL } from "./urls";
+import { E2E_API_URL, E2E_BASE_URL } from "./urls";
 
 const statusSchema = z.object({
 	protectionEnabled: z.boolean(),
@@ -23,7 +23,7 @@ async function passkeyStatus(context: BrowserContext) {
 }
 
 async function csrfHeaders(context: BrowserContext) {
-	const cookies = await context.cookies(E2E_SERVER_URL);
+	const cookies = await context.cookies(E2E_BASE_URL);
 	const csrf = cookies.find((cookie) => cookie.name === "XSRF-TOKEN");
 	if (!csrf) {
 		throw new Error("The real sign-in must issue a CSRF cookie");
@@ -68,9 +68,9 @@ test("real user verification grants admin access and recovery requires re-enroll
 	page,
 	context,
 }) => {
-	for (const url of [E2E_SERVER_URL, E2E_BASE_URL]) {
-		expect(new URL(url).hostname, "Use only the disposable localhost E2E server").toBe("localhost");
-	}
+	expect(new URL(E2E_BASE_URL).hostname, "Use only the disposable localhost E2E server").toBe(
+		"localhost",
+	);
 	const username = `passkey-${randomUUID()}`;
 	const cdp = await context.newCDPSession(page);
 	await cdp.send("WebAuthn.enable", { enableUI: false });
