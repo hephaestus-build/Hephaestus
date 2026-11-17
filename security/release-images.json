@@ -1,6 +1,6 @@
 {
 	"schemaVersion": 1,
-	"images": ["webapp", "server", "agent", "postgres"],
+	"images": ["server", "agent", "postgres"],
 	"upstream": [
 		{
 			"name": "victoria-metrics",

@@ -2,7 +2,7 @@ import type { APIRequestContext, APIResponse, BrowserContext, Page } from "@play
 import { z } from "zod";
 
 import { expect, loginAsDevAdmin, test } from "./fixtures";
-import { E2E_API_URL, E2E_SERVER_URL } from "./urls.ts";
+import { E2E_API_URL, E2E_BASE_URL } from "./urls.ts";
 
 const userSchema = z.looseObject({ accessTokenExpiresAt: z.number() });
 
@@ -17,7 +17,7 @@ async function jsonOf(request: Promise<APIResponse>): Promise<unknown> {
 }
 
 async function accessCookie(context: BrowserContext, name = "HEPHAESTUS_AT") {
-	const cookies = await context.cookies(E2E_SERVER_URL);
+	const cookies = await context.cookies(E2E_BASE_URL);
 	const cookie = cookies.find((value) => value.name === name);
 	expect(cookie, "dev login must issue an HttpOnly access cookie").toBeDefined();
 	if (!cookie) {

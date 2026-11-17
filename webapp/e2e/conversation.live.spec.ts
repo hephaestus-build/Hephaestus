@@ -9,7 +9,7 @@ import {
 import { completeTransparencyNotice } from "../../scripts/lib/research-consent.ts";
 
 import { expect, loginAsDevAdmin, test } from "./fixtures";
-import { E2E_SERVER_URL } from "./urls.ts";
+import { E2E_BASE_URL } from "./urls.ts";
 
 // Hephaestus answering for real: a server with the agent runtime on (the `e2e` profile, not `playwright`) and its
 // sandboxes in a k3d cluster, as `vp run dev` starts them, and an OpenAI-compatible model. The model is read and provisioned by the same code as
@@ -29,7 +29,7 @@ test.skip(
 test.describe.configure({ mode: "serial", timeout: 2 * ANSWER_TIMEOUT });
 
 async function adminApi(): Promise<APIRequestContext> {
-	const signIn = await playwrightRequest.newContext({ baseURL: E2E_SERVER_URL });
+	const signIn = await playwrightRequest.newContext({ baseURL: E2E_BASE_URL });
 	const login = await signIn.post("/api/auth/dev-login", {
 		data: { username: "e2e", admin: true },
 	});
@@ -39,7 +39,7 @@ async function adminApi(): Promise<APIRequestContext> {
 	await signIn.dispose();
 	expect(token, "dev login returns an access token").not.toBe("");
 	return playwrightRequest.newContext({
-		baseURL: E2E_SERVER_URL,
+		baseURL: E2E_BASE_URL,
 		extraHTTPHeaders: { authorization: `Bearer ${token}` },
 	});
 }

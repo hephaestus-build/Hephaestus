@@ -600,40 +600,14 @@ for (const step of setupSteps.filter(isRecord)) {
 	}
 }
 
-const dockerfile = readFileSync("webapp/Dockerfile", "utf8");
-// No lifecycle script runs in the image: the platform binaries come from optional dependencies,
-// and the root `prepare` would look for a Git repository that an image build does not have.
-if (
-	!/^\s+pnpm install --offline --frozen-lockfile --ignore-scripts --filter webapp --store-dir \/pnpm\/store-cache$/mu.test(
-		dockerfile,
-	)
-) {
-	throw new Error(
-		"webapp/Dockerfile must install offline from the lockfile without lifecycle scripts",
-	);
-}
 const agentDockerfile = readFileSync("docker/agents/pi/Dockerfile", "utf8");
-// One tag over two digests is two different pnpm builds wearing a single version number.
+// The agent image installs with the pnpm that the repository pins, by digest.
 const pnpmImage = new RegExp(
 	`ghcr\\.io/pnpm/pnpm:${version.replaceAll(".", String.raw`\.`)}@(?<digest>sha256:[a-f0-9]{64})`,
 	"u",
 );
-const pnpmDigests = new Set(
-	(
-		[
-			["webapp/Dockerfile", dockerfile],
-			["docker/agents/pi/Dockerfile", agentDockerfile],
-		] as const
-	).map(([file, content]) => {
-		const digest = pnpmImage.exec(content)?.groups?.digest;
-		if (digest === undefined) {
-			throw new Error(`${file} must use the digest-pinned pnpm ${version} image`);
-		}
-		return digest;
-	}),
-);
-if (pnpmDigests.size !== 1) {
-	throw new Error("both Dockerfiles must pin one pnpm base digest");
+if (pnpmImage.exec(agentDockerfile) === null) {
+	throw new Error(`docker/agents/pi/Dockerfile must use the digest-pinned pnpm ${version} image`);
 }
 // Those settings only bind if the image copies them and lets pnpm read them.
 if (
@@ -646,18 +620,6 @@ if (
 		"docker/agents/pi/Dockerfile must install from its own workspace settings, without lifecycle scripts",
 	);
 }
-if (
-	!new RegExp(`^ARG NODE_VERSION=${nodeVersion.replaceAll(".", String.raw`\.`)}$`, "mu").test(
-		dockerfile,
-	) ||
-	!new RegExp(
-		[String.raw`^RUN pnpm runtime set node \$`, String.raw`\{NODE_VERSION\} -g$`].join(""),
-		"mu",
-	).test(dockerfile)
-) {
-	throw new Error(`webapp/Dockerfile must install Node ${nodeVersion} through pnpm`);
-}
-
 // Spelled so that this file passes the scan below.
 const retired = ["b", "un"].join("");
 const lane = ["pn", "pm"].join("");

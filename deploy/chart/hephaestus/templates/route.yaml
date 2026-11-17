@@ -1,9 +1,7 @@
 {{- /*
 The platform owns the Gateway API resources, the controller, the Gateway, its TLS certificate and
-the HTTP to HTTPS redirect. Every security header comes from the responses themselves, HSTS
-included: the server sends its own (SecurityHeaders, ADR 0100). nginx sends no HSTS, so only the
-web app's rules add it, with the server's value, through the controller's ResponseHeaderModifier.
-Those rules and this filter go when the server serves the web app (ADR 0100, stage 2).
+the HTTP to HTTPS redirect. The server answers every path and sends every security header, HSTS
+included (SecurityHeaders, ADR 0100), so no rule adds a filter or rewrites a path.
 */}}
 {{- if and .Values.workspaceSubdomains.enabled (gt (len .Values.host) 189) }}
 {{- fail "workspace subdomains need a host of at most 189 characters" }}
@@ -12,8 +10,6 @@ Those rules and this filter go when the server serves the web app (ADR 0100, sta
 {{- if eq (len $parentRefs) 0 }}
 {{- fail "route.parentRefs is required: name the Gateway that the platform operates." }}
 {{- end }}
-{{- /* Keep the value equal to SecurityHeaders.HSTS_MAX_AGE_SECONDS in the server. */}}
-{{- $hsts := dict "type" "ResponseHeaderModifier" "responseHeaderModifier" (dict "set" (list (dict "name" "Strict-Transport-Security" "value" "max-age=2592000; includeSubDomains"))) }}
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
@@ -27,55 +23,31 @@ spec:
     - {{ .Values.host | quote }}
   # The most specific match wins, so the order below is for the reader only.
   rules:
-    # The server's receiver owns the full /webhooks/{kind} path. It is never rewritten.
-    - matches:
-        - path:
-            type: PathPrefix
-            value: /webhooks
-      backendRefs:
-        - name: {{ include "hephaestus.name" (dict "root" . "component" "server") }}
-          port: 8080
-    # The server serves the API under /api itself, so no path is rewritten.
+    # The conversation live stream under /api stays open far longer than one request. Zero
+    # asks the controller to disable each deadline; a controller that cannot may use its longest
+    # value instead. Both are set because either one alone leaves the other to the implementation.
     - matches:
         - path:
             type: PathPrefix
             value: /api
-      # The conversation live stream under /api stays open far longer than one request. Zero
-      # asks the controller to disable each deadline; a controller that cannot may use its longest
-      # value instead. Both are set because either one alone leaves the other to the implementation.
       timeouts:
         request: 0s
         backendRequest: 0s
       backendRefs:
         - name: {{ include "hephaestus.name" (dict "root" . "component" "server") }}
           port: 8080
-    {{- if .Values.config.mcpEnabled }}
-    # MCP clients discover the authorization server (RFC 8414 § 3.1) and each workspace endpoint's
-    # protected resource metadata (RFC 9728 § 3.1) on the host root, so neither path carries /api.
-    - matches:
-        - path:
-            type: Exact
-            value: /.well-known/oauth-authorization-server
-        - path:
-            type: PathPrefix
-            value: /.well-known/oauth-protected-resource/
-      backendRefs:
-        - name: {{ include "hephaestus.name" (dict "root" . "component" "server") }}
-          port: 8080
-    {{- end }}
-    # Everything else is the SPA. The webapp serves index.html for an unknown path.
+    # Every other path: the web app, the provider webhooks and the documents under /.well-known.
     - matches:
         - path:
             type: PathPrefix
             value: /
-      filters:
-        - {{ toJson $hsts }}
       backendRefs:
-        - name: {{ include "hephaestus.name" (dict "root" . "component" "webapp") }}
+        - name: {{ include "hephaestus.name" (dict "root" . "component" "server") }}
           port: 8080
 
 {{- if .Values.workspaceSubdomains.enabled }}
 ---
+# A workspace host serves only the web app. The server refuses the API and sign-in there (WorkspaceHostGuard).
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
@@ -92,9 +64,7 @@ spec:
         - path:
             type: PathPrefix
             value: /
-      filters:
-        - {{ toJson $hsts }}
       backendRefs:
-        - name: {{ include "hephaestus.name" (dict "root" . "component" "webapp") }}
+        - name: {{ include "hephaestus.name" (dict "root" . "component" "server") }}
           port: 8080
 {{- end }}

@@ -19,10 +19,6 @@ on:
         type: boolean
         default: false
         description: "Publish the server image, built with Cloud Native Buildpacks from the executable JAR in application-artifact"
-      webapp:
-        type: boolean
-        default: false
-        description: "Publish the webapp image (a docker/docker-bake.hcl target)"
       agent:
         type: boolean
         default: false
@@ -77,11 +73,6 @@ on:
         type: string
         default: "false"
       # publish and platforms have no default; reusable-docker-build.yml says why.
-      webapp_changed:
-        description: "Whether webapp files changed (or should build for other reasons)"
-        required: false
-        type: string
-        default: "true"
       application_server_changed:
         description: "Whether the CI / Build workflow published an server image this run"
         required: false
@@ -110,9 +101,6 @@ on:
       server-digest:
         description: "Published server image index digest"
         value: ${{ jobs.merge.outputs.server-digest }}
-      webapp-digest:
-        description: "Published webapp image index digest"
-        value: ${{ jobs.merge.outputs.webapp-digest }}
       agent-digest:
         description: "Published agent image index digest"
         value: ${{ jobs.merge.outputs.agent-digest }}
@@ -125,7 +113,7 @@ permissions: {}
 env:
   # Every image this workflow can publish: the one list that each per-image input, check and step
   # follows. Each job selects the images whose input is true.
-  IMAGE_NAMES: '["server","webapp","agent","postgres"]'
+  IMAGE_NAMES: '["server","agent","postgres"]'
   INPUTS: ${{ toJSON(inputs) }}
   # Every tag is guarded on the event that started the run, so a consumer can derive from its own
   # event which tag exists. The commit tag is the one every consumer resolves through: `github.sha`
@@ -145,7 +133,6 @@ jobs:
     if: >-
       ${{ !cancelled() && contains(fromJSON(inputs.platforms), 'linux/amd64') && (
         (inputs.server && !contains(fromJSON(inputs.reuse-images), 'server')) ||
-        (inputs.webapp && !contains(fromJSON(inputs.reuse-images), 'webapp')) ||
         (inputs.agent && !contains(fromJSON(inputs.reuse-images), 'agent')) ||
         (inputs.postgres && !contains(fromJSON(inputs.reuse-images), 'postgres'))) }}
     timeout-minutes: 45
@@ -196,14 +183,6 @@ jobs:
 
       # Each produces the standard OCI labels for its bake target; only the version label reads the
       # tag: the commit, which a merge group and its push share.
-      - name: Extract webapp metadata
-        id: meta-webapp
-        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
-        with:
-          images: ${{ inputs.registry }}/hephaestus-build/webapp
-          tags: type=raw,value=${{ github.event.pull_request.head.sha || github.sha }}
-          bake-target: webapp-metadata
-
       - name: Extract agent metadata
         id: meta-agent
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
@@ -232,16 +211,10 @@ jobs:
           PUBLISH: ${{ inputs.publish }}
           # A push reuses the images its merge group built, so the merge group keeps the cache warm.
           WRITE_CACHE: ${{ github.ref == 'refs/heads/main' || github.event_name == 'merge_group' }}
-          SOURCE_COMMIT: ${{ github.sha }}
-          # Use the PR source branch; ref_name identifies GitHub's synthetic merge ref on pull
-          # requests. A merge group builds the image its push to the default branch reuses, so it
-          # names that branch.
-          SOURCE_BRANCH: ${{ github.head_ref || (github.event_name == 'merge_group' && github.event.repository.default_branch) || github.ref_name }}
         with:
           source: .
           files: |
             ./docker/docker-bake.hcl
-            ${{ steps.meta-webapp.outputs.bake-file-labels }}
             ${{ steps.meta-agent.outputs.bake-file-labels }}
             ${{ steps.meta-postgres.outputs.bake-file-labels }}
           targets: ${{ steps.prep.outputs.bake-targets }}
@@ -356,7 +329,6 @@ jobs:
           IMAGES: ${{ steps.prep.outputs.images }}
           # Only the digests: the full bake metadata carries provenance records too large for the
           # environment of a process.
-          WEBAPP_DIGEST: ${{ steps.bake.outputs.metadata && fromJSON(steps.bake.outputs.metadata).webapp['containerimage.digest'] || '' }}
           AGENT_DIGEST: ${{ steps.bake.outputs.metadata && fromJSON(steps.bake.outputs.metadata)['agent']['containerimage.digest'] || '' }}
           POSTGRES_DIGEST: ${{ steps.bake.outputs.metadata && fromJSON(steps.bake.outputs.metadata).postgres['containerimage.digest'] || '' }}
           BUILDPACKS_DIGEST: ${{ steps.build-buildpacks.outputs.digest }}
@@ -369,7 +341,6 @@ jobs:
           for name in $(jq -r '.[]' <<< "$IMAGES"); do
             case "$name" in
               server) digest=$BUILDPACKS_DIGEST outcome=$BUILDPACKS_OUTCOME ;;
-              webapp) digest=$WEBAPP_DIGEST outcome=$BAKE_OUTCOME ;;
               agent) digest=$AGENT_DIGEST outcome=$BAKE_OUTCOME ;;
               postgres) digest=$POSTGRES_DIGEST outcome=$BAKE_OUTCOME ;;
               *) digest= outcome= ;;
@@ -481,7 +452,6 @@ jobs:
     if: >-
       ${{ !cancelled() && contains(fromJSON(inputs.platforms), 'linux/arm64') && (
         (inputs.server && !contains(fromJSON(inputs.reuse-images), 'server')) ||
-        (inputs.webapp && !contains(fromJSON(inputs.reuse-images), 'webapp')) ||
         (inputs.agent && !contains(fromJSON(inputs.reuse-images), 'agent')) ||
         (inputs.postgres && !contains(fromJSON(inputs.reuse-images), 'postgres'))) }}
     timeout-minutes: 45
@@ -500,7 +470,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [build, build-arm64]
     # Wait for every platform; the signing identity stays in this workflow.
-    if: ${{ (inputs.server || inputs.webapp || inputs.agent || inputs.postgres) && inputs.publish && !cancelled() && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') }}
+    if: ${{ (inputs.server || inputs.agent || inputs.postgres) && inputs.publish && !cancelled() && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') }}
     permissions:
       # Compares this commit with the one the branch tag names.
       contents: read
@@ -512,7 +482,6 @@ jobs:
       INPUTS_REGISTRY: ${{ inputs.registry }}
     outputs:
       server-digest: ${{ steps.digest.outputs.server }}
-      webapp-digest: ${{ steps.digest.outputs.webapp }}
       agent-digest: ${{ steps.digest.outputs.agent }}
       postgres-digest: ${{ steps.digest.outputs.postgres }}
     steps:
@@ -618,7 +587,6 @@ jobs:
         with:
           images: |
             ${{ inputs.registry }}/hephaestus-build/server
-            ${{ inputs.registry }}/hephaestus-build/webapp
             ${{ inputs.registry }}/hephaestus-build/agent
             ${{ inputs.registry }}/hephaestus-build/postgres
           tags: ${{ env.STANDARD_IMAGE_TAGS }}
@@ -702,16 +670,6 @@ jobs:
           subject-digest: ${{ steps.digest.outputs.server }}
           push-to-registry: true
 
-      - name: Attest the webapp image
-        if: contains(fromJSON(steps.prep.outputs.built), 'webapp')
-        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
-        env:
-          NODE_OPTIONS: "--max-http-header-size=32768"
-        with:
-          subject-name: ${{ inputs.registry }}/hephaestus-build/webapp
-          subject-digest: ${{ steps.digest.outputs.webapp }}
-          push-to-registry: true
-
       - name: Attest the agent image
         if: contains(fromJSON(steps.prep.outputs.built), 'agent')
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
@@ -778,11 +736,11 @@ jobs:
           set -euo pipefail
           # Runs on main do not wait for each other, so an older commit's run can finish last. The branch
           # tag moves only forward: it stays when the commit it names already descends from this one. A
-          # run moves all four branch tags together, so the webapp image's revision label names that
+          # run moves all three branch tags together, so the agent image's revision label names that
           # commit. An unreadable label or comparison moves the tag, so it never stays behind.
           stale=""
           if [ "$GITHUB_EVENT_NAME" = push ]; then
-            current=$(docker buildx imagetools inspect "$INPUTS_REGISTRY/hephaestus-build/webapp:$GITHUB_REF_NAME" \
+            current=$(docker buildx imagetools inspect "$INPUTS_REGISTRY/hephaestus-build/agent:$GITHUB_REF_NAME" \
               --format '{{ json .Image }}' 2>/dev/null |
               jq -r '[.. | objects | .config?.Labels?["org.opencontainers.image.revision"]? // empty][0] // empty' ||
               true)
@@ -811,7 +769,7 @@ jobs:
     name: "Tag unchanged images"
     if: >-
       inputs.dockerfile_images == 'true' && inputs.should_skip != 'true' && inputs.publish && github.event_name == 'pull_request' &&
-      (inputs.webapp_changed != 'true' || inputs.application_server_changed != 'true' ||
+      (inputs.application_server_changed != 'true' ||
        inputs.agent_images_changed != 'true' ||
        inputs.postgres_image_changed != 'true')
     timeout-minutes: 15
@@ -836,7 +794,6 @@ jobs:
         id: tag
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          WEBAPP_CHANGED: ${{ inputs.webapp_changed }}
           APPLICATION_SERVER_CHANGED: ${{ inputs.application_server_changed }}
           AGENT_IMAGES_CHANGED: ${{ inputs.agent_images_changed }}
           POSTGRES_IMAGE_CHANGED: ${{ inputs.postgres_image_changed }}
@@ -884,7 +841,6 @@ jobs:
               "$verified"
           }
 
-          [ "$WEBAPP_CHANGED" = "true" ] || tag_image webapp
           [ "$APPLICATION_SERVER_CHANGED" = "true" ] || tag_image server
           [ "$AGENT_IMAGES_CHANGED" = "true" ] || tag_image agent
           [ "$POSTGRES_IMAGE_CHANGED" = "true" ] || tag_image postgres

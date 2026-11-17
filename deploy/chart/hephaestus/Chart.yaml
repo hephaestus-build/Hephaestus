@@ -1,6 +1,6 @@
 apiVersion: v2
 name: hephaestus
-description: Hephaestus server, webapp and sandboxes on Kubernetes, from one signed release lock.
+description: Hephaestus server and sandboxes on Kubernetes, from one signed release lock.
 type: application
 # Source checkouts carry no release version. Release packaging sets the chart version from the tag,
 # and writes the image references and the release identity into the packaged values.yaml

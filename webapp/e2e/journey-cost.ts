@@ -14,6 +14,7 @@ import { expect, type Page } from "@playwright/test";
 import { getResponse } from "msw";
 import type { WorkspaceMembership } from "@/api/types.gen";
 
+import { useFixtureApi } from "./config-record.ts";
 import { asReturningTourReader } from "./screenshots/tour-offer.ts";
 import { handlers, NOW, WORKSPACE } from "./screenshots/workspace.ts";
 import { E2E_BASE_URL } from "./urls.ts";
@@ -112,12 +113,7 @@ export async function openJourney(page: Page, role: WorkspaceMembership["role"])
 		(url) => url.origin !== API && url.origin !== APP,
 		async (route) => route.abort(),
 	);
-	await context.route("**/env-config.js", async (route) =>
-		route.fulfill({
-			contentType: "application/javascript",
-			body: `window.__ENV__ = ${JSON.stringify({ APPLICATION_SERVER_URL: API, APPLICATION_CLIENT_URL: APP })};`,
-		}),
-	);
+	await useFixtureApi(context, APP, API);
 	await context.route(`${API}/**`, async (route) => {
 		const request = route.request();
 		const url = new URL(request.url());

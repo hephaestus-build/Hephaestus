@@ -167,24 +167,20 @@ function redirectOnlyRoute(
 		: undefined;
 }
 
-function canonicalWorkspaceRedirect(file: string, source: string, statement: string): boolean {
-	if (
-		file !== "deploy/chart/hephaestus/templates/workspace-routing.yaml" ||
-		!/^return\s+308\s+\$workspace_redirect;$/u.test(statement)
-	) {
-		return false;
-	}
-	const map = /map[^\n]*\$workspace_redirect\s*\{(?<body>[\s\S]*?)^\s*\}/mu.exec(source);
-	if (map === null) {
-		return false;
-	}
-	const entries = (map.groups?.body ?? "")
-		.split("\n")
-		.map((line) => line.trim())
-		.filter((line) => line !== "" && line !== 'default "";');
-	const canonicalEntry =
-		'"~^{{ $domain }}:(?:GET|HEAD):/w/(?<workspace_slug>(?!(?:{{ $reserved }})(?:/|[?]|$))(?![a-z0-9-]*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])(?:/(?<workspace_tail>[^?]*))?(?<workspace_query>[?].*)?$" "https://$workspace_slug.{{ .Values.host }}/$workspace_tail$workspace_query";';
-	return entries.length === 1 && entries[0] === canonicalEntry;
+/**
+ * On the apex, `/w/<slug>/…` moves to the workspace's own host (ADR 0053). It is the current address of every
+ * workspace page when workspaces have their own hosts, not an old path.
+ */
+function workspaceHostRedirect(file: string, source: string, statement: string): boolean {
+	const redirect = "response.setStatus(HttpServletResponse.SC_PERMANENT_REDIRECT);";
+	return (
+		file ===
+			"server/application/src/main/java/de/tum/cit/aet/hephaestus/workspace/WorkspaceHostGuard.java" &&
+		statement === redirect &&
+		source.split(redirect).length === 2 &&
+		source.includes('Pattern.compile("/w/([^/]+)(/.*)?")') &&
+		source.includes('"https://" + workspacePath.group(1) + "." + baseDomain + tail + query')
+	);
 }
 
 /**
@@ -214,12 +210,14 @@ function javaRedirects(
 		}
 	};
 	for (const match of source.matchAll(
-		/\b(?:SC_MOVED_PERMANENTLY|MOVED_PERMANENTLY|PERMANENT_REDIRECT)\b/gu,
+		/\b(?:SC_MOVED_PERMANENTLY|SC_PERMANENT_REDIRECT|MOVED_PERMANENTLY|PERMANENT_REDIRECT)\b/gu,
 	)) {
 		const start = source.lastIndexOf("\n", match.index - 1) + 1;
 		const end = source.indexOf("\n", match.index);
+		const statement = source.slice(start, end === -1 ? undefined : end).trim();
 		if (
-			!renamedSlugRedirect(file, source, source.slice(start, end === -1 ? undefined : end).trim())
+			!renamedSlugRedirect(file, source, statement) &&
+			!workspaceHostRedirect(file, source, statement)
 		) {
 			add("path-alias", match.index);
 		}
@@ -293,11 +291,7 @@ export function findings(file: string, source: string, files: readonly string[] 
 			"config-alias",
 			/\.Values\.[\w.]+\s*\|\s*default\s+\.Values\.|\bcoalesce\s+\.Values\.[\w.]+\s+\.Values\./gu,
 		);
-		for (const match of source.matchAll(/\breturn\s+30[178]\s+[^;]+;/gu)) {
-			if (!canonicalWorkspaceRedirect(file, source, match[0])) {
-				add("path-alias", match.index);
-			}
-		}
+		matches("path-alias", /\breturn\s+30[178]\s+[^;]+;/gu);
 		matches("path-alias", /\brewrite\s+[^;]+\s+permanent\s*;/gu);
 		matches("path-alias", /^\s*(?:-\s*)?type:\s*URLRewrite\b/gmu);
 	}

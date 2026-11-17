@@ -221,6 +221,13 @@ spec:
               value: {{ $config.pageExperienceMetrics | quote }}
             - name: BROWSER_FAULT_REPORTS
               value: {{ $config.browserFaultReports | quote }}
+            # The web app's security contact and legal pages (ADR 0100).
+            - name: SECURITY_CONTACT
+              value: {{ .Values.server.securityContact | quote }}
+            {{- if .Values.server.legalOverrides }}
+            - name: LEGAL_OVERRIDES_DIRECTORY
+              value: /etc/hephaestus/legal
+            {{- end }}
             - name: HEPHAESTUS_MCP_ENABLED
               value: {{ $config.mcpEnabled | quote }}
             - name: HEPHAESTUS_INTEGRATION_SLACK_CLIENT_ID
@@ -284,6 +291,11 @@ spec:
               mountPath: /data/git-repos
             - name: tmp
               mountPath: /tmp
+            {{- if .Values.server.legalOverrides }}
+            - name: legal-overrides
+              mountPath: /etc/hephaestus/legal
+              readOnly: true
+            {{- end }}
             {{- include "hephaestus.postgresqlCaMount" . | nindent 12 }}
             {{- include "hephaestus.privateCaMount" . | nindent 12 }}
       volumes:
@@ -294,5 +306,10 @@ spec:
         - name: tmp
           emptyDir:
             sizeLimit: 1Gi
+        {{- with .Values.server.legalOverrides }}
+        - name: legal-overrides
+          configMap:
+            name: {{ . | quote }}
+        {{- end }}
         {{- include "hephaestus.postgresqlCaVolume" . | nindent 8 }}
         {{- include "hephaestus.privateCaVolume" . | nindent 8 }}

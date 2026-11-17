@@ -28,9 +28,9 @@ Run the suite:
 vp run --filter webapp test:e2e
 ```
 
-Keep the server and the web app on the same host. The default is `localhost` for both.
-The session cookie goes only to the same site, and `localhost` and `127.0.0.1` are different sites.
-The extension suite uses `E2E_SERVER_URL=http://127.0.0.1:…`. Do not reuse it here: the suite stops at start if the hosts differ.
+The suite runs against the packaged server, which serves the web app and the API on one origin, so it tests the artifact that ships.
+Build the web app (`vp run build:webapp`) before you package or start the server, then start it with the `e2e,playwright` profiles.
+The suite reads the server's origin from `E2E_BASE_URL` (default `http://localhost:8080`).
 
 Provider-backed integration checks are opt-in because they require configured live workspaces:
 

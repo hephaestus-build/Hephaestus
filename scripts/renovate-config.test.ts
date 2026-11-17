@@ -422,7 +422,7 @@ void test("every custom manager reads every file it claims to read", async () =>
 			"Track the gVisor release of the one-host platform",
 			["deploy/platform/k3s-containerd.toml.tmpl"],
 		],
-		["Track Dockerfile ARG version pins", ["docker/agents/pi/Dockerfile", "webapp/Dockerfile"]],
+		["Track Dockerfile ARG version pins", ["docker/agents/pi/Dockerfile"]],
 		[
 			"Track CI tool release tags and asset checksums together",
 			[
