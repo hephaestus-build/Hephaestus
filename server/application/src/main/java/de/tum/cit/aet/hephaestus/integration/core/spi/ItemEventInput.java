@@ -91,7 +91,11 @@ public record ItemEventInput(
     }
 
     public ItemEventInput {
-        if ((foundBy != FoundBy.WEBHOOK && foundBy != FoundBy.SYNC)
+        // A provider's occasion is found by its webhook or a sync; Hephaestus schedules only the follow-up of carried
+        // practices, which no provider latency measure counts.
+        if ((foundBy == FoundBy.SCHEDULE
+                        ? !name.value().endsWith(".carried")
+                        : foundBy != FoundBy.WEBHOOK && foundBy != FoundBy.SYNC)
                 || workspaceId <= 0
                 || itemId <= 0
                 || (itemVersion == null) == (pendingFence == null)

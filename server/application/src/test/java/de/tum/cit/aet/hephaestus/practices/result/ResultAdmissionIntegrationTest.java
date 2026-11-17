@@ -709,7 +709,7 @@ class ResultAdmissionIntegrationTest extends AbstractResultAdmissionIntegrationT
     }
 
     @Test
-    void shouldSettleAPracticeThatCaptureNeverReachedAsWithheldWithTheReviewsStopReason() {
+    void shouldSettleAPracticeThatCaptureNeverReachedAsOwedWhenTheReviewEndedEarly() {
         var id = requestRoleFreeVersion();
         var workspace = scenario.workspace().getId();
 
@@ -729,7 +729,9 @@ class ResultAdmissionIntegrationTest extends AbstractResultAdmissionIntegrationT
         assertThat(settled.getStatus())
                 .as("it recorded nothing, so it is not Done")
                 .isEqualTo(ReviewPracticeStatus.WITHHELD);
-        assertThat(settled.getReason()).isEqualTo(ReviewStopReason.EXECUTION_INCOMPLETE.name());
+        assertThat(settled.getReason())
+                .as("the review ended early, so the practice is owed and carried")
+                .isEqualTo(ReviewStopReason.NOT_RUN.name());
     }
 
     /** Requests a review of a practice that is about no role, so its practice waits for capture. */
