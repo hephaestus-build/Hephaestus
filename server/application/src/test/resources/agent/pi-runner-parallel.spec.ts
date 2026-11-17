@@ -3,6 +3,8 @@ import { mkdtempSync, realpathSync, readFileSync, rmSync, writeFileSync } from "
 import { tmpdir } from "node:os";
 import nodePath from "node:path";
 import { test } from "node:test";
+// oxlint-disable-next-line no-restricted-imports -- polls the runner's record while the run is still going
+import { setTimeout as sleep } from "node:timers/promises";
 
 import { executionReportSchema } from "../../../../../../docker/agents/practice-scripts/lib/core/contract.ts";
 import {
@@ -337,6 +339,56 @@ void test("a session stop failure preserves completed siblings for admission and
 			["a-finished"],
 		);
 		assert.ok(!capturedLines(cwd, "prompts").some((row) => field(row, "slug") === "b-queued"));
+	} finally {
+		rmSync(cwd, { recursive: true, force: true });
+	}
+});
+
+void test("while a session waits for its model, the runner's record names it and how long it has waited", async () => {
+	const cwd = realpathSync(mkdtempSync(nodePath.join(tmpdir(), "pi-open-sessions-")));
+	try {
+		stagePractices(
+			cwd,
+			["a-finished", "y-waiting"].map((slug) => ({ slug })),
+		);
+		const run = { ended: false };
+		const exit = (async () => {
+			try {
+				return await runRunner(
+					cwd,
+					{ "y-waiting": "hang" },
+					{ AGENT_BUDGET_MS: "6500", PI_HOST_COLD_LEADER: "y-waiting" },
+				);
+			} finally {
+				run.ended = true;
+			}
+		})();
+		let waiting: unknown;
+		while (waiting === undefined && !run.ended) {
+			await sleep(100);
+			let open: unknown;
+			try {
+				open = field(readJsonFile(cwd, "out/runner-debug.json"), "open");
+			} catch {
+				// Not written yet.
+				continue;
+			}
+			if (Array.isArray(open)) {
+				waiting = open.find(
+					(session: unknown) =>
+						field(session, "practice") === "y-waiting" &&
+						field(session, "phase") === "turn" &&
+						typeof field(session, "modelWaitMs") === "number",
+				);
+			}
+		}
+
+		assert.ok(waiting !== undefined, "the waiting session was never on record while it waited");
+		assert.equal(typeof field(waiting, "turn"), "string");
+		assert.equal(typeof field(waiting, "quietMs"), "number");
+		const ended = await exit;
+		assert.equal(ended.status, 78);
+		assert.deepEqual(field(readJsonFile(cwd, "out/runner-debug.json"), "open"), []);
 	} finally {
 		rmSync(cwd, { recursive: true, force: true });
 	}

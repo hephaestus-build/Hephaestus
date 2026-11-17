@@ -33,7 +33,7 @@ import org.jspecify.annotations.Nullable;
  * their {@code totalCalls}.
  *
  * <p>{@code sourceId} is a soft reference (no FK) to the originating {@code review_job.id} or {@code conversation_turn.id},
- * and {@code practiceId} to the practice whose script made the call: accounting must survive their deletion. The run
+ * and {@code practiceId} to the practice whose review session made the call: accounting must survive their deletion. The run
  * reference is cleared when the run is deleted, for the same reason.
  */
 @Entity

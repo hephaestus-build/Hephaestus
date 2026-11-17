@@ -295,6 +295,7 @@ class LlmProxyService {
         private final ProxyRouting routing;
         private final ProxyCallLedger.Bound bound;
         private final ProxyCallsInFlight.Call inFlight;
+        private final @Nullable Long practiceId;
         private @Nullable UUID id;
         private LlmUsageRecorder.@Nullable CallUsage unmeasured;
         private boolean ended;
@@ -303,15 +304,21 @@ class LlmProxyService {
          * @param inputBytes the bytes of the call's request, which bound its input tokens
          * @param outputTokens the output tokens that bound the call; {@code null} when nothing bounds them
          */
-        CallRow(ProxyRouting routing, long inputBytes, @Nullable Long outputTokens, ProxyCallsInFlight.Call inFlight) {
+        CallRow(
+                ProxyRouting routing,
+                long inputBytes,
+                @Nullable Long outputTokens,
+                ProxyCallsInFlight.Call inFlight,
+                @Nullable Long practiceId) {
             this.routing = routing;
+            this.practiceId = practiceId;
             this.bound = new ProxyCallLedger.Bound(inputBytes, outputTokens);
             this.inFlight = inFlight;
         }
 
         /** An upstream request leaves now; the first one opens the row. */
         void sending(String upstreamModel) {
-            if (id == null) id = accounting.calls().open(routing, bound, upstreamModel);
+            if (id == null) id = accounting.calls().open(routing, bound, upstreamModel, practiceId);
             unmeasured = null;
         }
 
@@ -396,7 +403,7 @@ class LlmProxyService {
             } catch (JacksonException unreadable) {
                 return ResponseEntity.badRequest().body("Request body must be valid JSON");
             }
-            row = new CallRow(routing, body.length, outputBound, call);
+            row = new CallRow(routing, body.length, outputBound, call, ProxyCallLedger.namedPractice(incomingHeaders));
             if (workTimeOver(routing)) return refusal(HttpStatus.FORBIDDEN, ProxyRefusal.WORK_TIME, WORK_TIME_OVER);
             // A provider's limit should slow a call, not fail it. It must still be heard: past this, or when the
             // provider

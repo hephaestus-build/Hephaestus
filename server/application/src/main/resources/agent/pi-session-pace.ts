@@ -17,12 +17,15 @@ export interface ModelWait {
 	call: () => () => void;
 	/** A session that waits spends no work: its call may be behind the whole pool. */
 	waitsForModel: () => boolean;
+	/** Since when the session has waited for the model without a break; null while no call waits. */
+	waitingSince: () => number | null;
 	holdsStarts: () => boolean;
 	onChange: () => void;
 }
 
-export function newModelWait(): ModelWait {
+export function newModelWait(now: () => number = Date.now): ModelWait {
 	let calls = 0;
+	let since: number | null = null;
 	let starting: NodeJS.Timeout | undefined;
 	const wait: ModelWait = {
 		start: (creditMs) => {
@@ -38,17 +41,22 @@ export function newModelWait(): ModelWait {
 		},
 		call: () => {
 			calls += 1;
+			since ??= now();
 			wait.started();
 			let open = true;
 			return () => {
 				if (open) {
 					open = false;
 					calls -= 1;
+					if (calls === 0) {
+						since = null;
+					}
 					wait.onChange();
 				}
 			};
 		},
 		waitsForModel: () => calls > 0,
+		waitingSince: () => since,
 		holdsStarts: () => calls > 0 || starting !== undefined,
 		onChange: () => undefined,
 	};

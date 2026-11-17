@@ -178,3 +178,19 @@ void test("two unanswered sessions in a row end measuring, and an answered one r
 	assert.equal(ends("stall"), false);
 	assert.equal(ends("stall"), true);
 });
+
+void test("a session names since when its model call has waited, and forgets it once served", () => {
+	let now = 1000;
+	const wait = newModelWait(() => now);
+	assert.equal(wait.waitingSince(), null);
+
+	const served = wait.call();
+	now = 61_000;
+	const retried = wait.call();
+
+	assert.equal(wait.waitingSince(), 1000);
+	served();
+	assert.equal(wait.waitingSince(), 1000);
+	retried();
+	assert.equal(wait.waitingSince(), null);
+});

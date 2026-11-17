@@ -10,6 +10,8 @@ export const practiceIndexSchema = z.array(
 		exhaustiveSources: z.array(z.string().min(1)),
 		knownLimitations: z.array(z.string().min(1)).default([]),
 		whyItMatters: z.string().min(1).optional(),
+		/** Named on each model call the practice's session makes, so the call's usage row names the practice. */
+		practiceId: decimalIdSchema.optional(),
 		versionId: decimalIdSchema.optional(),
 		contextPaths: z.array(z.string().min(1)).optional(),
 	}),

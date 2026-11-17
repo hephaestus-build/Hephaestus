@@ -42,6 +42,7 @@ public class PracticeCatalogInjector {
             index.add(new PracticeIndexEntry(
                     assignment.practiceSlug(),
                     definition.name(),
+                    Long.toString(practice.practiceId()),
                     Long.toString(practice.practiceVersionId()),
                     paths,
                     reads.sources().stream().map(read -> read.source().value()).toList(),
@@ -69,6 +70,7 @@ public class PracticeCatalogInjector {
     private record PracticeIndexEntry(
             String slug,
             String name,
+            String practiceId,
             String versionId,
             @Nullable List<String> contextPaths,
             List<String> readsSources,
