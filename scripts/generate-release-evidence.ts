@@ -2,10 +2,15 @@
  * Release publication and preflight share this generator so they verify the same evidence contract.
  * docs/contributor/release-management.mdx owns the bundle and its release-only signature checks.
  */
-import { copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { assertBundledNpmInventory, assertBundledNpmScan } from "./check-release-sbom.ts";
+import {
+	assertBundledNpmInventory,
+	assertBundledNpmScan,
+	SERVER_WEB_APP_BUNDLE,
+} from "./check-release-sbom.ts";
 import {
 	advisoryFile,
 	componentAdvisories,
@@ -16,7 +21,15 @@ import { isImageIndex, selectPlatformDigest } from "./lib/image-scan.ts";
 import { asRecord, asString, readJsonFile } from "./lib/json.ts";
 import { scanJvmRuntime } from "./lib/jvm-runtime.ts";
 import { output, run } from "./lib/process.ts";
-import { syftImageArguments } from "./lib/syft.ts";
+import { SYFT_CONFIG, syftImageArguments } from "./lib/syft.ts";
+import {
+	extractWebApp,
+	RUNNER_JAR,
+	webAppSyftArguments,
+	webAppTrivyArguments,
+	WEB_APP_IMAGE,
+	WEB_APP_STEM,
+} from "./lib/web-app-scan.ts";
 import { captureReleaseSourceSbom } from "./release-source-sbom.ts";
 import { parseResolvedImages, type ResolvedImage } from "./resolve-release-images.ts";
 import { planUpstreamSubjects } from "./scan-upstream-images.ts";
@@ -48,7 +61,7 @@ export interface ManifestMetadata {
 
 export interface EvidenceManifest extends ManifestMetadata {
 	readonly schemaVersion: 1;
-	readonly bundledNpmSbom: 1;
+	readonly bundledNpmSbom: 2;
 	readonly sourceSbom: 1;
 	readonly subjects: readonly Subject[];
 }
@@ -115,7 +128,7 @@ export function buildManifest(
 		sourceSbom: 1,
 		generatedAt: metadata.generatedAt,
 		durationSeconds: metadata.durationSeconds,
-		bundledNpmSbom: 1,
+		bundledNpmSbom: 2,
 		subjects,
 	};
 }
@@ -169,6 +182,52 @@ export async function captureSubjects(
 	}
 }
 
+/**
+ * The web app inside the server image's jar, which no image scan can see (`lib/web-app-scan.ts`, ADR 0100): its npm
+ * inventory and its vulnerability scan, from the same image digest.
+ */
+async function captureWebApp(
+	subject: Subject,
+	reference: string,
+	stem: string,
+	scan: (tool: string, args: string[]) => Promise<void>,
+): Promise<void> {
+	const directory = await mkdtemp(path.join(tmpdir(), "web-app-"));
+	try {
+		const webApp = await extractWebApp(reference, subject.platform, directory);
+		if (webApp === undefined) {
+			throw new Error(`${reference} carries no web app in ${RUNNER_JAR}`);
+		}
+		const web = `${stem}.${WEB_APP_STEM}`;
+		await scan("syft", [
+			...webAppSyftArguments(webApp, SYFT_CONFIG),
+			"-o",
+			`syft-json=${web}.syft.json`,
+			"-o",
+			`spdx-json=${web}.spdx.json`,
+			"-o",
+			`cyclonedx-json=${web}.cdx.json`,
+		]);
+		const inventory = await readJsonFile(`${web}.syft.json`);
+		assertBundledNpmInventory(inventory, SERVER_WEB_APP_BUNDLE);
+		await scan(
+			"trivy",
+			webAppTrivyArguments(webApp, `${web}.trivy.json`, [
+				"--skip-db-update",
+				"--skip-java-db-update",
+				"--cache-backend",
+				"memory",
+				"--scanners",
+				"vuln,license",
+				"--list-all-pkgs",
+			]),
+		);
+		assertBundledNpmScan(inventory, await readJsonFile(`${web}.trivy.json`), SERVER_WEB_APP_BUNDLE);
+	} finally {
+		await rm(directory, { recursive: true, force: true });
+	}
+}
+
 export async function captureSubject(subject: Subject, directory: string): Promise<void> {
 	const reference = `${subject.repository}@${subject.digest}`;
 	const stem = path.join(directory, evidenceStem(subject));
@@ -200,9 +259,6 @@ export async function captureSubject(subject: Subject, directory: string): Promi
 			"-o",
 			`cyclonedx-json=${stem}.cdx.json`,
 		]);
-		if (subject.image === "webapp") {
-			assertBundledNpmInventory(await readJsonFile(`${stem}.syft.json`));
-		}
 		await scan("trivy", [
 			"image",
 			"--skip-db-update",
@@ -228,11 +284,8 @@ export async function captureSubject(subject: Subject, directory: string): Promi
 				pinned: subject.provenance === "first-party",
 			}),
 		);
-		if (subject.image === "webapp") {
-			assertBundledNpmScan(
-				await readJsonFile(`${stem}.syft.json`),
-				await readJsonFile(`${stem}.trivy.json`),
-			);
+		if (subject.image === WEB_APP_IMAGE) {
+			await captureWebApp(subject, reference, stem, scan);
 		}
 		// Both evidence consumers receive the same digest-bound scan, in the bundle's report paths.
 		await copyFile(`${stem}.trivy.json`, `${stem}.license.json`);

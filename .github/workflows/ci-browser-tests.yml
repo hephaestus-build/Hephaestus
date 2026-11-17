@@ -105,7 +105,7 @@ jobs:
           # Fixture keys for this throwaway database; the e2e profile carries none.
           SERVER_PORT=8080 MANAGEMENT_PORT=9090 POSTGRES_PORT=5432 \
             HEPHAESTUS_SECURITY_ENCRYPTION_KEY=e2eFixtureSystemKeyNotForUse0001 HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY=e2eFixtureCredentialKeyNotUse001 \
-            SPRING_DOCKER_COMPOSE_ENABLED=false APPLICATION_HOST_URL=http://localhost:4200 \
+            SPRING_DOCKER_COMPOSE_ENABLED=false \
             setsid java -jar "$SERVER_JAR" --spring.profiles.active=e2e,playwright > e2e-server.log 2>&1 &
           SERVER_PID=$!
           # Liveness precedes ApplicationRunner completion; readiness includes signing-key initialization.

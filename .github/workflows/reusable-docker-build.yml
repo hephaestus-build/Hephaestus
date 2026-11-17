@@ -422,6 +422,11 @@ jobs:
                      "reports/$stem.policy.json"; }; then
               refused+=("$name")
             fi
+            # The server image carries the web app inside its jar, where the image scan cannot see it (ADR 0100).
+            if [ "$name" = server ] &&
+              ! node scripts/scan-web-app.ts "$image" "$SCAN_PLATFORM" "$digest" "$repository" "reports/$stem"; then
+              refused+=("$name web app")
+            fi
           done
           if (( ${#refused[@]} > 0 )); then
             echo "::error::The vulnerability scan or policy failed for: ${refused[*]}"

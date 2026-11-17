@@ -3,6 +3,8 @@ import { test } from "node:test";
 import {
 	assertBundledNpmInventory,
 	assertBundledNpmScan,
+	SERVER_WEB_APP_BUNDLE,
+	WEBAPP_IMAGE_BUNDLE,
 	componentEvidence,
 	imagePath,
 	validateReleaseSbom,
@@ -404,15 +406,24 @@ const scan = {
 };
 
 await test("release capture requires every bundled identity from its image manifest", () => {
-	assert.doesNotThrow(() => assertBundledNpmInventory(scan));
-	assert.throws(() => assertBundledNpmInventory({ ...scan, files: [] }), /no bundled npm/u);
-	assert.throws(() => assertBundledNpmInventory({ ...scan, artifacts: [] }), /omitted/u);
+	assert.doesNotThrow(() => assertBundledNpmInventory(scan, WEBAPP_IMAGE_BUNDLE));
+	assert.throws(
+		() => assertBundledNpmInventory({ ...scan, files: [] }, WEBAPP_IMAGE_BUNDLE),
+		/no bundled npm/u,
+	);
+	assert.throws(
+		() => assertBundledNpmInventory({ ...scan, artifacts: [] }, WEBAPP_IMAGE_BUNDLE),
+		/omitted/u,
+	);
 	assert.throws(
 		() =>
-			assertBundledNpmInventory({
-				...scan,
-				artifacts: scan.artifacts.map((item) => ({ ...item, version: "1.2.4" })),
-			}),
+			assertBundledNpmInventory(
+				{
+					...scan,
+					artifacts: scan.artifacts.map((item) => ({ ...item, version: "1.2.4" })),
+				},
+				WEBAPP_IMAGE_BUNDLE,
+			),
 		/omitted/u,
 	);
 });
@@ -439,7 +450,11 @@ await test("Trivy must retain every emitted npm identity at its image path", () 
 	const pkg = { Name: "example", Version: "1.2.3", FilePath: file.slice(1) };
 	const report = { Type: "node-pkg" };
 	assert.doesNotThrow(() =>
-		assertBundledNpmScan(inventory, { Results: [{ ...report, Packages: [pkg] }] }),
+		assertBundledNpmScan(
+			inventory,
+			{ Results: [{ ...report, Packages: [pkg] }] },
+			WEBAPP_IMAGE_BUNDLE,
+		),
 	);
 	for (const packages of [
 		[],
@@ -447,8 +462,50 @@ await test("Trivy must retain every emitted npm identity at its image path", () 
 		[{ ...pkg, FilePath: "different/package.json" }],
 	]) {
 		assert.throws(
-			() => assertBundledNpmScan(inventory, { Results: [{ ...report, Packages: packages }] }),
+			() =>
+				assertBundledNpmScan(
+					inventory,
+					{ Results: [{ ...report, Packages: packages }] },
+					WEBAPP_IMAGE_BUNDLE,
+				),
 			/Trivy omitted bundled npm/u,
 		);
 	}
+});
+
+/** The web app that the server image carries, as Syft lists it from the jar's extracted `web-app/` (ADR 0100). */
+const webAppManifest = (identity: string) =>
+	`/.vite/packages/${encodeURIComponent(identity)}/package.json`;
+const webAppScan = (identities: readonly string[]) => ({
+	files: identities.map((identity) => ({ location: { path: webAppManifest(identity) } })),
+	artifacts: identities.map((identity) => ({
+		type: "npm",
+		foundBy: "javascript-package-cataloger",
+		name: identity.replace(/@[^@]+$/u, ""),
+		version: identity.slice(identity.lastIndexOf("@") + 1),
+		locations: [{ path: webAppManifest(identity) }],
+	})),
+});
+
+await test("the server's web app inventory fails when a package every build bundles is missing", () => {
+	const complete = ["react@19.2.0", "react-dom@19.2.0", "@tanstack/react-query@5.90.0"];
+	assert.doesNotThrow(() => assertBundledNpmInventory(webAppScan(complete), SERVER_WEB_APP_BUNDLE));
+	// The silent drop: a scan that still lists packages, but not the web app's own.
+	assert.throws(
+		() =>
+			assertBundledNpmInventory(
+				webAppScan(complete.filter((identity) => !identity.startsWith("react-dom@"))),
+				SERVER_WEB_APP_BUNDLE,
+			),
+		/no bundled react-dom/u,
+	);
+	assert.throws(
+		() => assertBundledNpmInventory(webAppScan([]), SERVER_WEB_APP_BUNDLE),
+		/no bundled npm package manifests/u,
+	);
+	// The image's own inventory never satisfies the web app's: it has no file under the web app's root.
+	assert.throws(
+		() => assertBundledNpmInventory(scan, SERVER_WEB_APP_BUNDLE),
+		/no bundled npm package manifests/u,
+	);
 });
