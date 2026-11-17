@@ -401,14 +401,14 @@ class AgentSandboxesIntegrationTest extends BaseIntegrationTest {
         for (var sandbox : List.of(heldSandbox, waitingSandbox, ranOutSandbox)) sandboxes.authenticate(token(sandbox));
         waitPast(Duration.ofSeconds(AgentSandboxRepository.HELD_GRACE_SECONDS));
 
-        reaper(Duration.ofHours(1)).reap();
+        var takenBack = takenBack(() -> reaper(Duration.ofHours(1)).reap(), claimName(heldSandbox));
 
         assertThat(repository.findLive(workspace, held))
                 .as("a held review frees its sandbox at the next tick, while it is not idle")
                 .isEmpty();
-        assertThat(meters.counter(AgentMetrics.AGENT_SANDBOX_REAPED, "reason", "held")
-                        .count())
-                .isOne();
+        assertThat(takenBack)
+                .singleElement()
+                .satisfies(event -> assertThat(event).containsEntry("sandbox.reason", "held"));
         assertThat(repository.findLive(workspace, waiting))
                 .as("a review that is due keeps its sandbox")
                 .isPresent();
@@ -768,7 +768,16 @@ class AgentSandboxesIntegrationTest extends BaseIntegrationTest {
 
     /** The fields of each {@code agent.sandbox.ended} record of the named sandbox that the action wrote. */
     private static List<Map<String, Object>> ended(Runnable action, String sandboxName) {
-        var logger = (Logger) LoggerFactory.getLogger(AgentSandboxes.class);
+        return events(action, AgentSandboxes.class, "agent.sandbox.ended", sandboxName);
+    }
+
+    private static List<Map<String, Object>> takenBack(Runnable action, String sandboxName) {
+        return events(action, AgentSandboxReaper.class, "agent.sandbox.taken_back", sandboxName);
+    }
+
+    private static List<Map<String, Object>> events(
+            Runnable action, Class<?> source, String eventName, String sandboxName) {
+        var logger = (Logger) LoggerFactory.getLogger(source);
         var appender = new ListAppender<ILoggingEvent>();
         appender.start();
         logger.addAppender(appender);
@@ -783,7 +792,7 @@ class AgentSandboxesIntegrationTest extends BaseIntegrationTest {
             if (event.getKeyValuePairs() == null) continue;
             var fields = new HashMap<String, Object>();
             event.getKeyValuePairs().forEach(pair -> fields.put(pair.key, pair.value));
-            if ("agent.sandbox.ended".equals(fields.get("event.name"))
+            if (eventName.equals(fields.get("event.name"))
                     && sandboxName.equals(fields.get(StructuredLogKeys.SANDBOX_NAME))) records.add(fields);
         }
         return records;
