@@ -59,9 +59,3 @@ value = "true"
 [[io.buildpacks.build.env]]
 name = "BPE_DEFAULT_BPL_JVM_LOADED_CLASS_COUNT"
 value = "55000"
-
-# The CDS training run boots under application-cds-training.yml; the runtime SPRING_PROFILES_ACTIVE
-# overrides this buildpack default.
-[[io.buildpacks.build.env]]
-name = "SPRING_PROFILES_ACTIVE"
-value = "cds-training"

@@ -6,9 +6,8 @@ import org.springframework.stereotype.Component;
 
 /**
  * The cds-training profile exists for the image build's training run, which the buildpack starts with the JVM system
- * property {@code spring.context.exit=onRefresh}, so the process exits once the context refreshes. The image keeps that
- * profile as its default, so a container started without its own profile would otherwise serve with the build's
- * fixture keys. Read through {@link SpringProperties}, as Spring's exit check does: an environment variable or a
+ * property {@code spring.context.exit=onRefresh}, so the process exits once the context refreshes. A container started
+ * with that profile would otherwise serve with the build's fixture keys. Read through {@link SpringProperties}, as Spring's exit check does: an environment variable or a
  * command-line argument of the same name does not make the process exit, so it does not pass this guard either.
  */
 @Component

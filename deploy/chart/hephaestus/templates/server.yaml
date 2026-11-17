@@ -104,6 +104,8 @@ spec:
             # A flight recording runs at all times, in /tmp, which survives a container restart: after a liveness
             # restart, the previous process's pinned virtual threads and monitor waits are on disk.
             # docs/admin/production-operations-runbook.mdx, HephaestusServerRestarting.
+            # The image's AOT cache loads only with the module set that the image gives every launch, so these options
+            # add no module, agent or object-layout option (ADR 0067, update of 2026-11-17).
             {{- $recording := "-XX:FlightRecorderOptions=repository=/tmp/jfr -XX:StartFlightRecording=settings=default,disk=true,maxage=6h,maxsize=256m,dumponexit=true,filename=/tmp/jfr/exit-%t.jfr" }}
             {{- if $sandbox.enabled }}
             # A ceiling on the carriers that the scheduler adds for blocking file I/O, not the usual count:
