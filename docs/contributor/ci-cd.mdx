@@ -1529,6 +1529,10 @@ It preserves the cluster configuration and Secrets. It does not rehearse recover
    An unavailable or corrupt archive fails the check. The SHA-256 and executable checks still apply.
 2. Actionlint checks the workflows that use no native steps, because it cannot read native steps.
    It keeps its own ShellCheck and its metadata for popular remote actions.
+3. Zizmor audits every workflow and action at medium confidence. A finding fails the job.
+   In a merge group, it uploads nothing and its exit code fails the job.
+   In other runs, it writes SARIF and uploads it to code scanning, and a later step fails on a finding.
+   A regroup deletes the group's ref, and an upload to a deleted ref fails although the audit passed.
 
 For a workflow that uses native steps, the first validator also reads the `action.yml` of each
 public action pinned to a commit from `raw.githubusercontent.com`, without credentials.

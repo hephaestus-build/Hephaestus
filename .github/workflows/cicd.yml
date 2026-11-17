@@ -863,16 +863,21 @@ jobs:
           fail_level: error
           filter_mode: nofilter
           reporter: github-annotations
+      # A merge group uploads no SARIF: a regroup deletes the group's ref, and an upload to a deleted
+      # ref fails this job although the audit passed. That upload never updated the default branch's
+      # code-scanning results. Without SARIF, Zizmor's own exit code fails the step on a finding.
       - id: zizmor
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
         uses: zizmorcore/zizmor-action@70fb788f84895a7701f5643d103d587e460b5c99 # v0.6.3
         with:
+          advanced-security: ${{ github.event_name != 'merge_group' }}
           min-confidence: medium
           # renovate: datasource=github-releases depName=zizmorcore/zizmor
           version: 1.29.0
 
+      # SARIF mode keeps Zizmor's exit code 0 on a finding, so this step is the gate there.
       - name: Enforce Zizmor findings
-        if: ${{ !cancelled() && steps.zizmor.outcome == 'success' }}
+        if: ${{ !cancelled() && steps.zizmor.outcome == 'success' && github.event_name != 'merge_group' }}
         env:
           ZIZMOR_SARIF: ${{ steps.zizmor.outputs.output-file }}
         run: jq -e '[.runs[]?.results[]?] | length == 0' "$ZIZMOR_SARIF"
