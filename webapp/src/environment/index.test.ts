@@ -44,7 +44,7 @@ describe("config record", () => {
 	});
 
 	it("refuses a record that does not have the server's shape", async () => {
-		await expect(environmentFor({ ...record, serverUrl: 42 })).rejects.toThrow();
+		await expect(environmentFor({ ...record, serverUrl: 42 })).rejects.toThrow(/serverUrl/u);
 	});
 });
 

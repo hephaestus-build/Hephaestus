@@ -22,7 +22,7 @@ export async function useFixtureApi(
 		commit: "",
 		browserFaultReports: false,
 	};
-	const element = `<script type="application/json" id="hephaestus-config">${JSON.stringify(record).replaceAll("<", "\\u003c")}</script>`;
+	const element = `<script type="application/json" id="hephaestus-config">${JSON.stringify(record).replaceAll("<", String.raw`\u003c`)}</script>`;
 	await context.route(
 		(url) => url.origin === appOrigin,
 		async (route) => {
@@ -30,9 +30,8 @@ export async function useFixtureApi(
 				return route.fallback();
 			}
 			const response = await route.fetch();
-			const page = (await response.text())
-				.replace(ELEMENT, "")
-				.replace("</head>", `${element}</head>`);
+			const html = await response.text();
+			const page = html.replace(ELEMENT, "").replace("</head>", `${element}</head>`);
 			return route.fulfill({ response, body: page });
 		},
 	);

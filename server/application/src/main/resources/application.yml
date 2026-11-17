@@ -201,6 +201,9 @@ server:
     tomcat:
         max-http-form-post-size: 2MB
         max-swallow-size: 2MB
+    # The web app's legal pages are Markdown, which the servlet container's default types do not name.
+    mime-mappings:
+        md: text/markdown;charset=utf-8
 
 # Actuator on the management port; health probes for Kubernetes liveness/readiness.
 management:

@@ -17,8 +17,8 @@ const configRecord = z.object({
 
 /** The element's text is JSON from this deployment's server. A record that does not parse is a packaging fault. */
 function readConfigRecord(): z.infer<typeof configRecord> | undefined {
-	const text = document.querySelector("script#hephaestus-config")?.textContent;
-	return text ? configRecord.parse(JSON.parse(text)) : undefined;
+	const text = document.querySelector("script#hephaestus-config")?.textContent ?? "";
+	return text === "" ? undefined : configRecord.parse(JSON.parse(text));
 }
 
 const record = readConfigRecord();
@@ -33,10 +33,11 @@ const DEPLOYMENT_NAMES: Record<string, string> = {
 	local: "Local",
 };
 const deploymentEnvironment =
-	record?.deploymentEnvironment || (import.meta.env.DEV ? "local" : "unknown");
+	record?.deploymentEnvironment ?? (import.meta.env.DEV ? "local" : "unknown");
+const version = record?.version.replace(/^v/u, "") ?? "";
 
 const environment = {
-	version: record?.version.replace(/^v/u, "") || "DEV",
+	version: version === "" ? "DEV" : version,
 	deployment: {
 		environment: deploymentEnvironment,
 		// An operator can name a deployment anything, such as `dev`: the header shows that name, never a wrong one.
@@ -56,7 +57,7 @@ const environment = {
 	// The development server proxies `/api` to this worktree's server.
 	serverUrl: record?.serverUrl ?? `${window.location.origin}/api`,
 	// `__Host-`-prefixed in production; dropped for local http E2E, where the browser rejects `__Host-` cookies.
-	xsrfCookieName: record?.xsrfCookieName || SECURE_XSRF_COOKIE_NAME,
+	xsrfCookieName: record?.xsrfCookieName ?? SECURE_XSRF_COOKIE_NAME,
 
 	buildInfo: {
 		commit: record?.commit ?? "",

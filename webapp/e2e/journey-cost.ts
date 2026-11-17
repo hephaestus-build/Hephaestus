@@ -26,7 +26,7 @@ import {
 import { getResponse } from "msw";
 import type { WorkspaceMembership } from "@/api/types.gen";
 
-import { useFixtureApi } from "./config-record.ts";
+import { useFixtureApi } from "./screenshots/fixture-api.ts";
 import { asReturningReader } from "./screenshots/first-visit.ts";
 import { handlers, NOW, WORKSPACE } from "./screenshots/workspace.ts";
 import { E2E_BASE_URL } from "./urls.ts";
