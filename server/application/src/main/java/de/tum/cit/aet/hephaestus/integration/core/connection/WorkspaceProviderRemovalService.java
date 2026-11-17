@@ -63,13 +63,14 @@ class WorkspaceProviderRemovalService implements WorkspaceProviderRemoval {
                 transactions.executeWithoutResult(status -> connectionService.disconnectForRemoval(
                         connection,
                         // Its own event, new on each attempt: a purge that fails afterwards leaves the workspace, and a
-                        // reconnected connection must disconnect again on the next attempt.
+                        // reconnected connection must disconnect again on the next attempt. The audit's unique key
+                        // holds the connection, and its correlation column has 64 characters.
                         new ConnectionService.TransitionRequest(
                                 IntegrationState.UNINSTALLED,
                                 "WORKSPACE_REMOVAL",
                                 "SYSTEM",
                                 "workspace-purge",
-                                "workspace-" + workspaceId + "-removal-" + connection.getId() + "-" + UUID.randomUUID(),
+                                "workspace-removal-" + UUID.randomUUID(),
                                 "Disconnect before the workspace removal"),
                         () -> strategy.eraseLocalData(new IntegrationRef(
                                 connection.getKind(), workspaceId, connection.getInstanceKey(), connection.getId()))));
