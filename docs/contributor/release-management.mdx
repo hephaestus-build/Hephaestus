@@ -322,14 +322,27 @@ It remains a draft until later gates pass.
 For each image, the gate resolves the index and `linux/amd64` and `linux/arm64` manifests to digests.
 It reads each platform manifest from the registry and generates a Syft inventory, SPDX SBOM, and CycloneDX SBOM.
 
-The webapp preserves npm names, versions and licenses in `/usr/share/nginx/html/.vite/packages/` in the image.
+The web app preserves npm names, versions and licenses in its build, one `package.json` for each bundled package under `.vite/packages/`.
 Vite's native license report supplies this metadata, including lazy chunks.
-Syft's JavaScript cataloger reads the package manifests from the final image.
 
-Capture fails if the image has no bundle manifests, or if Syft or Trivy omits an identity.
-New captures declare `bundledNpmSbom: 1` in the signed manifest.
-Verification requires bundle manifests when that declaration is present.
-Archived releases that predate it keep their original contract.
+The server image carries the web app inside its application jar, `/workspace/runner.jar` ([ADR 0100](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0100-the-server-serves-the-web-app.md)).
+Neither Syft nor Trivy catalogs an npm package inside a jar, so the image scan alone does not see the web app.
+Thus, the server subject has a second scan of the same image digest (`scripts/lib/web-app-scan.ts`):
+
+1. The scan takes `web-app/` out of that image's `runner.jar`.
+2. Syft's JavaScript cataloger reads the package manifests (`syft dir:`).
+   Its Syft inventory, SPDX SBOM and CycloneDX SBOM are `server-<platform>.web-app.{syft,spdx,cdx}.json`.
+3. Trivy scans the same directory as a root file system (`server-<platform>.web-app.trivy.json`).
+   The release vulnerability and license policy judges its findings as findings of the server image.
+
+The image build gate (`scripts/scan-web-app.ts`) and the daily scans of `main` and the supported release run the same scan.
+
+Capture fails if the web app has no bundle manifests, if it lacks a package that every build bundles, or if Syft or Trivy omits an identity.
+Thus, a scan that stops seeing the bundle fails instead of passing with fewer packages.
+New captures declare `bundledNpmSbom: 2` in the signed manifest.
+Verification requires the web app documents of each server subject when that declaration is present.
+Releases that declare `bundledNpmSbom: 1` evidenced the bundle in the `webapp` image, at `/usr/share/nginx/html/.vite/packages/`.
+Archived releases keep their original contract.
 
 Trivy scans these packages under the release vulnerability and license policy.
 Vite's report does not identify worker bundles, CSS-only packages or font source packages.
@@ -481,7 +494,7 @@ Removal of upstream evidence from the bundle would make the verifier reject it.
 
 The webapp build emits no source maps and uploads nothing.
 No image build receives an upload credential.
-The webapp Dockerfile fails the build if a `.map` file appears in the output.
+The _Server package_ job fails the build if a `.map` file appears in the web app's output.
 `scripts/ci-contract*.test.ts` keeps the image workflows free of upload secrets.
 
 ### Operator verification
@@ -806,8 +819,8 @@ For continuous staging, it is `github-actions[bot]`.
 
 The final state claims only what the workflow observed:
 
-- `success`: the public webapp reports the promoted version. Host metrics report the other services.
-- `failure`: the channel is published, but the public webapp did not report the version in time.
+- `success`: the public instance metadata (`/.well-known/hephaestus.json`) reports the promoted version. Host metrics report the other services.
+- `failure`: the channel is published, but the public instance metadata did not report the version in time.
 - `error`: the workflow did not confirm that it published the channel.
 
 In Staging, a success makes the previous successful deployment `inactive`.

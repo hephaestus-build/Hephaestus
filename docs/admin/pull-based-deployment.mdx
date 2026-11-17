@@ -555,10 +555,10 @@ It covers a failing reconciler, a reconciler that finishes no run, absent metric
 `hephaestus_deploy_last_success_timestamp_seconds` records the last successful **apply**. An
 unchanged channel does not advance it, so its age is not a reconciliation-liveness check.
 
-A promotion waits for the public webapp to report the requested version. This
-checks the webapp version. Use cluster readiness, reconciliation metrics and logs to verify the workloads.
+A promotion waits until the public instance metadata, `/.well-known/hephaestus.json`, reports the requested version.
+This checks the version that the server serves. Use cluster readiness, reconciliation metrics and logs to verify the workloads.
 
-If the webapp does not report it within 15 minutes, the promotion fails and names the version that the webapp still reports.
+If the server does not report it within 15 minutes, the promotion fails and names the version that the server still reports.
 The host reports nothing to GitHub, so the run names the possible causes: a paused reconcile timer, a failed tick, or a refused channel.
 The host's metrics and journal tell which.
 
@@ -567,7 +567,7 @@ If you only pause the timer, the promotion of each later build of `main` fails.
 
 A promotion also records a GitHub deployment of the release or commit that it promotes.
 The record names who requested the promotion.
-Its final state tells whether the public webapp reported the version.
+Its final state tells whether the public instance metadata reported the version.
 Its time is when the promotion ran, not when a host applied it.
 
 Host metrics remain the record of what each host runs.

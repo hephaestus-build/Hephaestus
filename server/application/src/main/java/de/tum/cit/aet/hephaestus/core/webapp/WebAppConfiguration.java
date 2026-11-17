@@ -3,16 +3,17 @@ package de.tum.cit.aet.hephaestus.core.webapp;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.List;
+import org.springframework.boot.web.server.MimeMappings;
+import org.springframework.boot.web.server.WebServerFactoryCustomizer;
+import org.springframework.boot.web.server.servlet.ConfigurableServletWebServerFactory;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.CacheControl;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.web.servlet.HandlerInterceptor;
-import org.springframework.web.servlet.config.annotation.ContentNegotiationConfigurer;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
@@ -51,12 +52,20 @@ class WebAppConfiguration implements WebMvcConfigurer {
             "/legal",
             "/legal-overrides");
 
-    private static final MediaType MARKDOWN = new MediaType("text", "markdown", StandardCharsets.UTF_8);
-
     private final WebAppProperties properties;
 
     WebAppConfiguration(WebAppProperties properties) {
         this.properties = properties;
+    }
+
+    /** The legal pages are Markdown, which the servlet container's default types do not name. */
+    @Bean
+    WebServerFactoryCustomizer<ConfigurableServletWebServerFactory> markdownMimeMapping() {
+        return factory -> {
+            MimeMappings mappings = new MimeMappings(MimeMappings.DEFAULT);
+            mappings.add("md", "text/markdown;charset=utf-8");
+            factory.setMimeMappings(mappings);
+        };
     }
 
     @Bean
@@ -108,11 +117,6 @@ class WebAppConfiguration implements WebMvcConfigurer {
                 .setCacheControl(CacheControl.noCache())
                 .resourceChain(true)
                 .addResolver(new EncodedResourceResolver());
-    }
-
-    @Override
-    public void configureContentNegotiation(ContentNegotiationConfigurer configurer) {
-        configurer.mediaType("md", MARKDOWN);
     }
 
     /** Legal pages are for readers of this deployment, not for search engines or other origins. */

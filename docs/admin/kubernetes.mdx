@@ -18,7 +18,7 @@ The commands use the release `hephaestus` in the namespace `hephaestus`, and the
 - A cluster that meets the [supported cluster](./helm-chart#supported-clusters) requirements.
 - A host name, with a DNS record that points to your Gateway.
   Serve Hephaestus on HTTPS port 443 of that host name.
-  The webapp calls the API at `https://<host>/api`, without a port, and the chart has no setting for another port.
+  The web app calls the API at `https://<host>/api`, without a port, and the chart has no setting for another port.
 - A GitHub OAuth app, its client ID and its client secret, as [First steps § 1](./first-steps#1-configure-a-login-provider) describes.
 - The version of the newest release, from the [releases page](https://github.com/hephaestus-build/Hephaestus/releases), without the leading `v`.
 
@@ -333,8 +333,8 @@ config:
    Set `networkPolicy.kubernetesApi.port` to the value in `PORTS`.
    If `ENDPOINTS` lists one address for each control plane node, set a CIDR that holds all of them.
 6. Set `config.github.oauthClientId` and `config.auth.bootstrapAdmins`, as [First steps § 1 and § 2](./first-steps) describe.
-7. For a public instance, name your legal pages ConfigMap in `webapp.legalOverrides`, as [Legal pages](./legal-pages#deployment-specific-overrides) describes.
-   The webapp Pod waits until the ConfigMap that it names exists.
+7. For a public instance, name your legal pages ConfigMap in `server.legalOverrides`, as [Legal pages](./legal-pages#deployment-specific-overrides) describes.
+   The server Pods wait until the ConfigMap that it names exists.
 8. For the bundled PostgreSQL, turn on backups, as [Back up the database](./backup-restore#back-up-the-database) describes.
    They need the `--backups` keys of [§ 3](./kubernetes#create-the-secret) and a client TLS Secret signed by the CA of [§ 4](./kubernetes#postgresql-tls-secret).
    Without a backup, the loss of the PostgreSQL volume loses all data, and an upgrade has no verified recovery point.
