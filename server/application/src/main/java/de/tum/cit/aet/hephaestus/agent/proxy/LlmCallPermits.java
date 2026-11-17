@@ -136,8 +136,9 @@ public class LlmCallPermits {
         this.meters = new LlmPoolMeters(registry);
     }
 
-    /** The exact attempt fence, including its tenant, for a pending call. */
     /**
+     * The exact attempt fence, including its tenant, for a pending call.
+     *
      * @param sessionRank where the call's practice session stands in its job's start order; null for a call of no
      *     practice session
      */
