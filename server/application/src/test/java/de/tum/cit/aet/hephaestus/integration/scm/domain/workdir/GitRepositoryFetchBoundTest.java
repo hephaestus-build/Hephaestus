@@ -79,8 +79,10 @@ class GitRepositoryFetchBoundTest extends BaseUnitTest {
         List<ScmCapturePreparation> preparations = new ArrayList<>();
         try (var provider = new SilentProvider();
                 var events = new RecordingStream()) {
+            // The integration tier's bound. A thread's first run links classes and method handles through VM
+            // upcalls, which pins it briefly on JDK 25; a capture parked on the silent provider pins for seconds.
             events.enable("jdk.VirtualThreadPinned")
-                    .withThreshold(Duration.ZERO)
+                    .withThreshold(Duration.ofMillis(20))
                     .withStackTrace();
             events.onEvent("jdk.VirtualThreadPinned", event -> {
                 if (!PinnedParks.onJdkSubPoller(event.getStackTrace()))
