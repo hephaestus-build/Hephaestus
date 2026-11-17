@@ -296,7 +296,6 @@ class LlmProxyService {
         private final ProxyCallLedger.Bound bound;
         private final ProxyCallsInFlight.Call inFlight;
         private final @Nullable Long practiceId;
-        private final @Nullable Integer sessionRank;
         private @Nullable UUID id;
         private LlmUsageRecorder.@Nullable CallUsage unmeasured;
         private boolean ended;
@@ -310,19 +309,17 @@ class LlmProxyService {
                 long inputBytes,
                 @Nullable Long outputTokens,
                 ProxyCallsInFlight.Call inFlight,
-                @Nullable Long practiceId,
-                @Nullable Integer sessionRank) {
+                @Nullable Long practiceId) {
             this.routing = routing;
             this.practiceId = practiceId;
-            this.sessionRank = sessionRank;
             this.bound = new ProxyCallLedger.Bound(inputBytes, outputTokens);
             this.inFlight = inFlight;
         }
 
-        /** Where the call's practice session stands in its job's start order. */
+        /** Where the call's practice session stands in its job's start order; read only once the call may run. */
         @Nullable
         Integer sessionRank() {
-            return sessionRank;
+            return accounting.calls().sessionRank(routing, practiceId);
         }
 
         /** An upstream request leaves now; the first one opens the row. */
@@ -412,14 +409,7 @@ class LlmProxyService {
             } catch (JacksonException unreadable) {
                 return ResponseEntity.badRequest().body("Request body must be valid JSON");
             }
-            @Nullable Long practice = ProxyCallLedger.namedPractice(incomingHeaders);
-            row = new CallRow(
-                    routing,
-                    body.length,
-                    outputBound,
-                    call,
-                    practice,
-                    accounting.calls().sessionRank(routing, practice));
+            row = new CallRow(routing, body.length, outputBound, call, ProxyCallLedger.namedPractice(incomingHeaders));
             if (workTimeOver(routing)) return refusal(HttpStatus.FORBIDDEN, ProxyRefusal.WORK_TIME, WORK_TIME_OVER);
             // A provider's limit should slow a call, not fail it. It must still be heard: past this, or when the
             // provider
