@@ -557,8 +557,8 @@ await test("values that the chart does not accept fail the render", () => {
 	const cases: [string, Layer[], RegExp][] = [
 		[
 			"an image tag",
-			[...layersFor("small"), { images: { agent: "ghcr.io/hephaestus-build/agent:latest" } }],
-			/images[./]agent/u,
+			[...layersFor("small"), { images: { server: "ghcr.io/hephaestus-build/server:latest" } }],
+			/images[./]server/u,
 		],
 		["values without the prepared lock file", withoutPrepared, /images|release/u],
 		[
