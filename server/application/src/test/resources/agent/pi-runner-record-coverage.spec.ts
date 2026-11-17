@@ -358,3 +358,14 @@ void test("a session that cites a source its practice does not declare is refuse
 	);
 	assert.equal(capturedLines(cwd, "submitted").length, 0);
 });
+
+void test("a runner that cannot start records why for the server, which reads no log", async (t) => {
+	const cwd = mkdtempSync(path.join(tmpdir(), "pi-setup-crash-"));
+	t.after(() => rmSync(cwd, { recursive: true, force: true }));
+	stagePractices(cwd, [{ slug: "test-practice" }]);
+	const exit = await runRunner(cwd, {}, { AGENT_BUDGET_MS: "not-a-number" });
+	assert.equal(exit.status, 2, exit.stderr);
+	assert.deepEqual(readJsonFile(cwd, "out/runner-debug.json"), {
+		end: { event: "review.fatal", error: "Error" },
+	});
+});

@@ -44,6 +44,7 @@ import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxResult;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetDecision;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetService;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmPriceSnapshot;
+import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageEventRepository;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityRepository;
@@ -147,6 +148,9 @@ import tools.jackson.databind.json.JsonMapper;
 /** Verifies orphan recovery, retry fencing, and claim eligibility against PostgreSQL. */
 @DisplayName("Orphan recovery over PostgreSQL Integration")
 class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
+
+    @Autowired
+    private LlmUsageEventRepository usageEvents;
 
     private static final SandboxResult TIMED_OUT =
             new SandboxResult(124, Map.of(), "stopped", true, Duration.ofMinutes(15));
@@ -1145,7 +1149,8 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
                 transactionTemplate,
                 objectMapper,
                 meterRegistry,
-                telemetry);
+                telemetry,
+                usageEvents);
     }
 
     @Test

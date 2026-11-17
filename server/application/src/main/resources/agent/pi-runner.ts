@@ -585,9 +585,37 @@ ${subject} Each captured record keeps the attribution it was captured with: its 
 `;
 }
 
+// An error that the runner has no class for.
+const FATAL_EXIT = 2;
+
+/** Where the runner works: the server reads `out/` of it, and no log. */
+function runnerRoot(): string {
+	return process.env.PI_RUNNER_CWD ?? "/workspace";
+}
+
+/**
+ * Runs one review. A crash before the run installs its own handlers, such as an unreadable task, still records why in
+ * out/: the server reads its reason there, never from this log.
+ */
 export async function runReviewJob(): Promise<void> {
-	const WORKSPACE_ROOT = "/workspace";
-	const CWD = process.env.PI_RUNNER_CWD ?? WORKSPACE_ROOT;
+	try {
+		await review();
+	} catch (error) {
+		const end = { event: "review.fatal", error: errorKind(error) };
+		diagnose(end.event, { error: end.error });
+		try {
+			const output = nodePath.join(runnerRoot(), "out");
+			mkdirSync(output, { recursive: true });
+			writeFileSync(nodePath.join(output, "runner-debug.json"), JSON.stringify({ end }));
+		} catch {
+			// The exit code alone still ends the attempt.
+		}
+		process.exit(FATAL_EXIT);
+	}
+}
+
+async function review(): Promise<void> {
+	const CWD = runnerRoot();
 	const ENVELOPE_MISMATCH_EXIT = 42;
 	const TASK_PATH = `${CWD}/task.json`;
 
@@ -884,10 +912,13 @@ export async function runReviewJob(): Promise<void> {
 		}
 	}
 
-	/** Emits the runner's last diagnostic and keeps it for runner-debug.json. */
-	function ended(event: string, fields: { reason?: string; error?: string } = {}) {
+	/** Emits the runner's last diagnostic and keeps its closed codes for runner-debug.json. */
+	function ended(
+		event: string,
+		fields: { reason?: string; error?: string; unanswered_calls?: number } = {},
+	) {
 		diagnose(event, fields);
-		runnerDebug.end = { event, ...fields };
+		runnerDebug.end = { event, reason: fields.reason, error: fields.error };
 	}
 
 	function persistUsage() {
@@ -1977,8 +2008,6 @@ export async function runReviewJob(): Promise<void> {
 	const SERVER_ERROR_EXIT = 77;
 	// The review staged what it could and left at least one practice without a result.
 	const PARTIAL_REVIEW_EXIT = 78;
-	// An error that the runner has no class for.
-	const FATAL_EXIT = 2;
 
 	function readTaskEnvelope(): TaskEnvelope {
 		let raw: string;
@@ -2957,12 +2986,15 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 		}
 		if (!maybeWriteResultFile()) {
 			if ((providerFailures > 0 || measurementReply.asked) && !measurementReply.received) {
-				diagnose("review.unreachable", { unanswered_calls: providerFailures });
-				runnerDebug.end = { event: "review.unreachable" };
+				ended("review.unreachable", { unanswered_calls: providerFailures });
 				finalizeOutput();
 				process.exit(PROVIDER_UNREACHABLE_EXIT);
 			}
-			ended("review.failed", { reason: "no_practice" });
+			// A session's own fatal error is why no practice produced a result: it is not thrown above.
+			ended("review.failed", {
+				reason: "no_practice",
+				error: sessionFailure === undefined ? undefined : errorKind(sessionFailure.error),
+			});
 			finalizeOutput();
 			process.exit(1);
 		}

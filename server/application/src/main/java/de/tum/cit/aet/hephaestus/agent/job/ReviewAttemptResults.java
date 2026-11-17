@@ -18,6 +18,7 @@ import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.agent.runtime.StorableText;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxInfrastructureException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxResult;
+import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageEventRepository;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
 import de.tum.cit.aet.hephaestus.integration.core.metrics.ReviewRefusalRecorder;
@@ -38,7 +39,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.function.Supplier;
-import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -84,6 +84,7 @@ public class ReviewAttemptResults {
     private final ObjectMapper objectMapper;
     private final MeterRegistry meterRegistry;
     private final ReviewJobTelemetry jobTelemetry;
+    private final LlmUsageEventRepository usageEvents;
     private final RetryTemplate terminalPersistRetries = retryTemplate(TERMINAL_PERSIST_POLICY);
     private final Map<RequeueCause, Counter> infraRetryRequeued = new EnumMap<>(RequeueCause.class);
     private final Counter serverErrors;
@@ -100,7 +101,8 @@ public class ReviewAttemptResults {
             TransactionTemplate transactionTemplate,
             ObjectMapper objectMapper,
             MeterRegistry meterRegistry,
-            ReviewJobTelemetry jobTelemetry) {
+            ReviewJobTelemetry jobTelemetry,
+            LlmUsageEventRepository usageEvents) {
         this.jobRepository = jobRepository;
         this.handler = handler;
         this.practiceAgent = practiceAgent;
@@ -113,6 +115,7 @@ public class ReviewAttemptResults {
         this.objectMapper = objectMapper;
         this.meterRegistry = meterRegistry;
         this.jobTelemetry = jobTelemetry;
+        this.usageEvents = usageEvents;
         serverErrors = Counter.builder(AgentMetrics.AGENT_JOB_SERVER_ERROR)
                 .description("Attempts that ended because this server answered their results with its own error")
                 .register(meterRegistry);
@@ -129,53 +132,55 @@ public class ReviewAttemptResults {
                 .register(meterRegistry);
     }
 
+    /**
+     * What the server knows of an attempt beside the sandbox's own files.
+     *
+     * @param serverError how this server failed the attempt's results; null when it did not
+     * @param nothingRan no practice was evaluated, and the server's usage ledger holds no model call of the attempt
+     */
+    record AttemptFacts(@Nullable String serverError, boolean nothingRan) {
+        static final AttemptFacts NONE = new AttemptFacts(null, false);
+    }
+
     /** What a measuring attempt that ended with {@code status} reports as its error; null for a completed one. */
     static @Nullable String terminalError(
-            ReviewJobStatus status, SandboxResult sandboxResult, AgentResult agentResult, boolean storable) {
+            ReviewJobStatus status,
+            SandboxResult sandboxResult,
+            AgentResult agentResult,
+            AttemptFacts facts,
+            boolean storable) {
         return switch (status) {
             case TIMED_OUT -> "The container timed out.";
-            case FAILED -> !storable ? UNSTORABLE_RESULT_MESSAGE : failure(sandboxResult.exitCode(), agentResult);
+            case FAILED ->
+                !storable ? UNSTORABLE_RESULT_MESSAGE : failure(sandboxResult.exitCode(), agentResult, facts);
             default -> null;
         };
     }
 
-    private static String failure(int exitCode, AgentResult agentResult) {
-        if (exitCode == 0) return "The runner did not return a valid result.";
-        if (exitCode == SandboxLayout.EXIT_WORKSPACE_UNPREPARED)
-            return "The sandbox could not prepare the attempt's workspace.";
-        if (exitCode == SandboxLayout.EXIT_SERVER_ERROR)
-            // Only the runner's own counts say that nothing ran; a missing file says nothing.
-            return Integer.valueOf(0).equals(agentResult.output().get(PiResultParser.MODEL_CALLS))
-                            && Integer.valueOf(0).equals(agentResult.output().get(PiResultParser.PRACTICES_EVALUATED))
-                    ? "The server answered the review's results with its own error before any practice was evaluated"
-                            + " or any model was called."
-                    : "The server answered the review's results with its own error.";
-        String why = runnerEnd(agentResult.output());
-        return "The container exited with code " + exitCode + "." + (why == null ? "" : " " + why);
+    private static String failure(int exitCode, AgentResult agentResult, AttemptFacts facts) {
+        String failure;
+        if (exitCode == 0) failure = "The runner did not return a valid result.";
+        else if (exitCode == SandboxLayout.EXIT_WORKSPACE_UNPREPARED)
+            failure = "The sandbox could not prepare the attempt's workspace.";
+        else if (exitCode == SandboxLayout.EXIT_SERVER_ERROR)
+            failure = Objects.requireNonNullElse(
+                    facts.serverError(), "The server answered the review's results with its own error.");
+        else {
+            String why = RunnerEnd.describe(exitCode, agentResult.output());
+            failure = "The container exited with code " + exitCode + "." + (why == null ? "" : " " + why);
+        }
+        return facts.nothingRan() ? failure + " No practice was evaluated, and no model was called." : failure;
     }
 
-    /** A closed error code from runner-debug.json: the sandbox wrote it, so nothing else is shown. */
-    private static final Pattern ERROR_KIND = Pattern.compile("[A-Za-z][A-Za-z.-]{0,63}");
-
-    /** Why the runner says it stopped, from the closed codes it records in runner-debug.json; null when it did not say. */
-    private static @Nullable String runnerEnd(Map<String, Object> output) {
-        if (!(output.get("runnerDebug") instanceof Map<?, ?> debug) || !(debug.get("end") instanceof Map<?, ?> end))
-            return null;
-        Object error = end.get("error");
-        return switch (String.valueOf(end.get("event"))) {
-            case "review.failed" ->
-                switch (String.valueOf(end.get("reason"))) {
-                    case "no_practice" -> "No practice produced a result.";
-                    case "ceiling_before_start" -> "The attempt's time ran out before the review started.";
-                    default -> null;
-                };
-            case "review.fatal", "review.unhandled_rejection" ->
-                error instanceof String kind && ERROR_KIND.matcher(kind).matches()
-                        ? "The runner stopped on an unexpected error (" + kind + ")."
-                        : "The runner stopped on an unexpected error.";
-            case "review.unreachable" -> "No model call was answered.";
-            default -> null;
-        };
+    /** Read only for a failed attempt: a completed one reports no error. */
+    private AttemptFacts factsOf(ReviewJob job, AgentResult agentResult) {
+        boolean noneEvaluated = Integer.valueOf(0).equals(agentResult.output().get(PiResultParser.PRACTICES_EVALUATED));
+        boolean noCall = noneEvaluated
+                && usageEvents
+                                .countReviewCalls(job.getWorkspaceId(), job.getId(), job.getAttempt())
+                                .getCalls()
+                        == 0;
+        return new AttemptFacts(AttemptServerErrors.describe(job.getCapture(), job.getAttempt()), noCall);
     }
 
     static final String UNSTORABLE_RESULT_MESSAGE =
@@ -414,7 +419,14 @@ public class ReviewAttemptResults {
                             .put("status", status.name())
                             .put(
                                     "error",
-                                    terminalError(status, measured.sandboxResult(), measured.agentResult(), storable)));
+                                    terminalError(
+                                            status,
+                                            measured.sandboxResult(),
+                                            measured.agentResult(),
+                                            status == ReviewJobStatus.FAILED
+                                                    ? factsOf(locked, measured.agentResult())
+                                                    : AttemptFacts.NONE,
+                                            storable)));
         locked.setOutput(kept);
         locked.setExitCode(measured.sandboxResult().exitCode());
         jobRepository.saveAndFlush(locked);
@@ -694,7 +706,12 @@ public class ReviewAttemptResults {
             ReviewJobStatus determined = determineTerminalStatus(sandboxResult, agentResult, locked);
             ReviewJobStatus terminalStatus =
                     !storable && determined == ReviewJobStatus.COMPLETED ? ReviewJobStatus.FAILED : determined;
-            String errorMessage = terminalError(terminalStatus, sandboxResult, agentResult, storable);
+            String errorMessage = terminalError(
+                    terminalStatus,
+                    sandboxResult,
+                    agentResult,
+                    terminalStatus == ReviewJobStatus.FAILED ? factsOf(locked, agentResult) : AttemptFacts.NONE,
+                    storable);
             Instant finishedAt = Instant.now();
             int updated = terminal.transition(jobId, fence, terminalStatus, finishedAt, errorMessage);
             if (updated == 0) {

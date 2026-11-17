@@ -72,6 +72,10 @@ record PreparationFailure(
         String tag() {
             return name().toLowerCase(Locale.ROOT);
         }
+
+        String phrase() {
+            return phrase;
+        }
     }
 
     /** The bounded facts that the job row keeps for operators: never the exception's message. */

@@ -9,6 +9,7 @@ import de.tum.cit.aet.hephaestus.agent.attempt.AttemptJwt;
 import de.tum.cit.aet.hephaestus.agent.handler.AdmissionConflictException;
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.job.AttemptCaptureFailures;
+import de.tum.cit.aet.hephaestus.agent.job.AttemptServerErrors;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.SealResultsRequestDTO;
 import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
@@ -33,8 +34,10 @@ class ResultAdmissionControllerTest extends BaseUnitTest {
 
     @Test
     void shouldRejectCredentialsThatDoNotIdentifyAReviewWorker() {
-        var controller =
-                new ResultAdmissionController(mock(ResultAdmissionService.class), mock(AttemptCaptureFailures.class));
+        var controller = new ResultAdmissionController(
+                mock(ResultAdmissionService.class),
+                mock(AttemptCaptureFailures.class),
+                mock(AttemptServerErrors.class));
         var request = new SealResultsRequestDTO(3, UUID.randomUUID(), UUID.randomUUID(), 0);
         assertThatThrownBy(
                         () -> controller.admitResults(request, new TestingAuthenticationToken("mentor", "credential")))
@@ -65,7 +68,8 @@ class ResultAdmissionControllerTest extends BaseUnitTest {
         var authentication = new JobTokenAuthentication(identity, jwt.scopes());
         when(admission.admit(new ResultAdmissionService.AdmissionIdentity(id, 1L, 0, LEASE), request))
                 .thenThrow(conflict);
-        assertThatThrownBy(() -> new ResultAdmissionController(admission, mock(AttemptCaptureFailures.class))
+        assertThatThrownBy(() -> new ResultAdmissionController(
+                                admission, mock(AttemptCaptureFailures.class), mock(AttemptServerErrors.class))
                         .admitResults(request, authentication))
                 .isInstanceOfSatisfying(
                         ResponseStatusException.class,
@@ -93,8 +97,8 @@ class ResultAdmissionControllerTest extends BaseUnitTest {
         when(admission.admit(new ResultAdmissionService.AdmissionIdentity(id, 1L, 0, LEASE), request))
                 .thenThrow(new UncheckedIOException(new IOException("disk temporarily unavailable")));
         var authentication = new JobTokenAuthentication(ProxyIdentity.of(jwt), jwt.scopes());
-        assertThatThrownBy(
-                        () -> new ResultAdmissionController(admission, failures).admitResults(request, authentication))
+        assertThatThrownBy(() -> new ResultAdmissionController(admission, failures, mock(AttemptServerErrors.class))
+                        .admitResults(request, authentication))
                 .isInstanceOfSatisfying(
                         ResponseStatusException.class,
                         error ->

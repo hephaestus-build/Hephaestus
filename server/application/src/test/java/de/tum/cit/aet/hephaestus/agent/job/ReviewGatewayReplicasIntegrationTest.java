@@ -44,6 +44,7 @@ import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxWorkspaceManager;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxKind;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxes;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.SandboxOwnerFixtures;
+import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageEventRepository;
 import de.tum.cit.aet.hephaestus.core.auth.ratelimit.BucketResolver;
 import de.tum.cit.aet.hephaestus.core.exception.GlobalControllerAdvice;
 import de.tum.cit.aet.hephaestus.core.lock.ClusterLock;
@@ -133,6 +134,10 @@ import tools.jackson.databind.json.JsonMapper;
  * are fixtures; the run fence, published custody, recorded inputs, HTTP security and archive handling are real.
  */
 class ReviewGatewayReplicasIntegrationTest extends BaseIntegrationTest {
+
+    @Autowired
+    private LlmUsageEventRepository usageEvents;
+
     private static final AttemptSigningKey KEY = AttemptSigningKey.generate();
     private static final byte[] CAPTURED = "the frozen captured input".getBytes(StandardCharsets.UTF_8);
     private static final byte[] PROGRAM = "export {};".getBytes(StandardCharsets.UTF_8);
@@ -524,7 +529,8 @@ class ReviewGatewayReplicasIntegrationTest extends BaseIntegrationTest {
                 transactions,
                 mapper,
                 meters,
-                telemetry);
+                telemetry,
+                usageEvents);
         var kind = new ReviewSandboxRuns(
                 mock(ReviewJobClaimService.class),
                 preparation,
