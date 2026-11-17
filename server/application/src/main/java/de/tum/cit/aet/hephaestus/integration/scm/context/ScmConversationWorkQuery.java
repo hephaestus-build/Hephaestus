@@ -53,13 +53,23 @@ public class ScmConversationWorkQuery implements ConversationWorkQuery {
     }
 
     @Override
-    public ConversationUserCounts fetchUserCounts(
+    public Reach reach(Long workspaceId, Long accountId) {
+        return reachOf(actors(workspaceId, accountId));
+    }
+
+    /** What {@link #actors} found, as a reach: no connected instance, no linked actor on it, or readable work. */
+    public static Reach reachOf(Optional<Actors> actors) {
+        return actors.map(found -> found.userIds().isEmpty() ? Reach.NOT_LINKED : Reach.READABLE)
+                .orElse(Reach.NO_INSTANCE);
+    }
+
+    @Override
+    public Optional<ConversationUserCounts> fetchUserCounts(
             Long workspaceId, Long accountId, Instant twoWeeksAgo, Instant weekAgo, Instant now) {
         return actors(workspaceId, accountId)
                 .filter(actors -> !actors.userIds().isEmpty())
                 .map(actors -> queries.fetchUserCounts(
-                        workspaceId, actors.providerId(), actors.userIds(), twoWeeksAgo, weekAgo, now))
-                .orElseGet(() -> new ConversationUserCounts(0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L));
+                        workspaceId, actors.providerId(), actors.userIds(), twoWeeksAgo, weekAgo, now));
     }
 
     @Override

@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.evidence.capture.ContentSource;
 import de.tum.cit.aet.hephaestus.evidence.capture.ConversationContextPaths;
 import de.tum.cit.aet.hephaestus.evidence.capture.ConversationContextRequest;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ConversationWorkQuery.Reach;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.label.Label;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
@@ -72,20 +73,20 @@ public class RecentAuthoredWorkContentSource implements ContentSource {
         ObjectNode root = objectMapper.createObjectNode();
         root.putObject("account").put("displayName", account.displayName());
 
-        // A repository path names a repository only on one instance: no work without the connected one.
+        // A repository path names a repository only on one instance, and an account without a linked actor there
+        // has unknown work, not none: no lists then.
         Optional<ScmConversationWorkQuery.Actors> actors = work.actors(workspaceId, developerId);
-        if (actors.isEmpty()) {
+        Reach reach = ScmConversationWorkQuery.reachOf(actors);
+        if (reach != Reach.READABLE) {
             root.put("status", "UNAVAILABLE");
-            root.put("reason", "The workspace has no connected GitHub or GitLab instance.");
+            root.put("reason", reach.unknownReason());
+            return root;
         }
-        List<PullRequest> prs = actors.filter(found -> !found.userIds().isEmpty())
-                .map(found -> queryRepository.findRecentAuthoredPullRequests(
-                        workspaceId, found.providerId(), found.userIds(), PageRequest.of(0, MAX_PULL_REQUESTS)))
-                .orElse(List.of());
-        List<Issue> issues = actors.filter(found -> !found.userIds().isEmpty())
-                .map(found -> queryRepository.findRecentAuthoredIssues(
-                        workspaceId, found.providerId(), found.userIds(), PageRequest.of(0, MAX_ISSUES)))
-                .orElse(List.of());
+        ScmConversationWorkQuery.Actors found = actors.orElseThrow();
+        List<PullRequest> prs = queryRepository.findRecentAuthoredPullRequests(
+                workspaceId, found.providerId(), found.userIds(), PageRequest.of(0, MAX_PULL_REQUESTS));
+        List<Issue> issues = queryRepository.findRecentAuthoredIssues(
+                workspaceId, found.providerId(), found.userIds(), PageRequest.of(0, MAX_ISSUES));
 
         ArrayNode prArr = root.putArray("pullRequests");
         for (PullRequest pr : prs) {

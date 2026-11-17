@@ -42,6 +42,19 @@ class ActivityContentSourceTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldSayTheActivityIsUnknownAndListNothingWhenTheAccountIsNotLinked() {
+        when(work.actors(1L, 2L)).thenReturn(Optional.of(new ScmConversationWorkQuery.Actors(5L, List.of())));
+
+        JsonNode payload = source.buildPayload(1L, 2L);
+
+        assertThat(payload.path("status").asString()).isEqualTo("UNAVAILABLE");
+        assertThat(payload.path("reason").asString()).contains("no linked identity");
+        assertThat(payload.has("pullRequests")).isFalse();
+        assertThat(payload.has("reviewsGiven")).isFalse();
+        assertThat(payload.has("commits")).isFalse();
+    }
+
+    @Test
     void shouldDropWordsThenTheOldestRowsOfTheLongestListAndNameWhatItLeftOut() {
         when(work.actors(1L, 2L)).thenReturn(Optional.of(new ScmConversationWorkQuery.Actors(5L, List.of(200L))));
         Repository repository = new Repository();

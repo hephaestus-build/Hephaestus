@@ -6,7 +6,7 @@ import de.tum.cit.aet.hephaestus.evidence.capture.ContentSource;
 import de.tum.cit.aet.hephaestus.evidence.capture.ConversationContextPaths;
 import de.tum.cit.aet.hephaestus.evidence.capture.ConversationContextRequest;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConversationWorkQuery;
-import de.tum.cit.aet.hephaestus.workspace.WorkspaceActorSelector;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ConversationWorkQuery.Reach;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceSummaryQuery;
 import java.time.Duration;
 import java.time.Instant;
@@ -47,7 +47,6 @@ public class WorkspaceContentSource implements ContentSource {
     private final AccountSummaryQuery accounts;
     private final WorkspaceSummaryQuery workspaceSummaries;
     private final ConversationWorkQuery queryRepository;
-    private final WorkspaceActorSelector actorSelector;
     private final ObjectMapper objectMapper;
 
     @Override
@@ -87,23 +86,20 @@ public class WorkspaceContentSource implements ContentSource {
         workspaceNode.put("slug", workspace.slug());
         workspaceNode.put("displayName", workspace.displayName());
 
-        // A repository path names a repository only on one instance: no lists without the connected one.
-        boolean connected = actorSelector.connectedProviderId(workspaceId).isPresent();
-        if (!connected) {
+        // Work that Hephaestus cannot read is unknown, not none: no lists then.
+        Reach reach = queryRepository.reach(workspaceId, developerId);
+        if (reach != Reach.READABLE) {
             root.put("status", "UNAVAILABLE");
-            root.put("reason", "The workspace has no connected GitHub or GitLab instance.");
+            root.put("reason", reach.unknownReason());
+            return root;
         }
         // Each sub-context is independent and best-effort: a failing query degrades only its own
         // section to an empty array, never blanking the whole workspace context. The real cause is
         // logged here so an unavailable section does not hide the cause.
-        List<ConversationWorkQuery.RequestedReview> reviewPrs = connected
-                ? guardedQuery(
-                        "pendingReviewRequests",
-                        () -> queryRepository.findPendingReviewRequestPrs(workspaceId, developerId))
-                : List.of();
-        List<ConversationWorkQuery.AssignedIssue> assigned = connected
-                ? guardedQuery("assignedIssues", () -> queryRepository.findAssignedOpenIssues(workspaceId, developerId))
-                : List.of();
+        List<ConversationWorkQuery.RequestedReview> reviewPrs = guardedQuery(
+                "pendingReviewRequests", () -> queryRepository.findPendingReviewRequestPrs(workspaceId, developerId));
+        List<ConversationWorkQuery.AssignedIssue> assigned =
+                guardedQuery("assignedIssues", () -> queryRepository.findAssignedOpenIssues(workspaceId, developerId));
         guarded("assignedIssues", () -> addAssignedIssues(root, assigned), () -> root.putArray("assignedIssues"));
         guarded(
                 "pendingReviewRequests",

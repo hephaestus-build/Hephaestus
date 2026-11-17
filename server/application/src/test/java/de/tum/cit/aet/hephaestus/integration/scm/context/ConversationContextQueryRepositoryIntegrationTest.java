@@ -219,14 +219,16 @@ class ConversationContextQueryRepositoryIntegrationTest extends BaseIntegrationT
             assertThat(work.findPendingReviewRequestPrs(gitHub.scope().getId(), accountId))
                     .isEmpty();
             var now = Instant.now();
+            assertThat(work.reach(gitLab.scope().getId(), unlinkedId))
+                    .isEqualTo(ConversationWorkQuery.Reach.NOT_LINKED);
             assertThat(work.fetchUserCounts(
-                                    gitLab.scope().getId(),
-                                    unlinkedId,
-                                    now.minus(Duration.ofDays(14)),
-                                    now.minus(Duration.ofDays(7)),
-                                    now)
-                            .pendingReviewRequests())
-                    .isZero();
+                            gitLab.scope().getId(),
+                            unlinkedId,
+                            now.minus(Duration.ofDays(14)),
+                            now.minus(Duration.ofDays(7)),
+                            now))
+                    .as("an account without a linked actor has unknown counts, not zero ones")
+                    .isEmpty();
         }
 
         @Test
@@ -289,6 +291,7 @@ class ConversationContextQueryRepositoryIntegrationTest extends BaseIntegrationT
                                     now.minus(Duration.ofDays(14)),
                                     now.minus(Duration.ofDays(7)),
                                     now)
+                            .orElseThrow()
                             .pendingReviewRequests())
                     .as("the count agrees with the list")
                     .isEqualTo(listed.size());

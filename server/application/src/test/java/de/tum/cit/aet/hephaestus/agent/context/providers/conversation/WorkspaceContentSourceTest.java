@@ -3,15 +3,14 @@ package de.tum.cit.aet.hephaestus.agent.context.providers.conversation;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
-import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountSummaryQuery;
 import de.tum.cit.aet.hephaestus.evidence.capture.ConversationContextRequest;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConversationWorkQuery;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ConversationWorkQuery.Reach;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
-import de.tum.cit.aet.hephaestus.workspace.WorkspaceActorSelector;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceSummaryFixtures;
 import java.time.Duration;
@@ -40,9 +39,6 @@ class WorkspaceContentSourceTest extends BaseUnitTest {
     @Mock
     ConversationWorkQuery queryRepository;
 
-    @Mock
-    WorkspaceActorSelector actorSelector;
-
     @Spy
     ObjectMapper objectMapper = new ObjectMapper();
 
@@ -51,12 +47,8 @@ class WorkspaceContentSourceTest extends BaseUnitTest {
     @BeforeEach
     void connectedInstance() {
         provider = new WorkspaceContentSource(
-                accounts,
-                WorkspaceSummaryFixtures.summaries(workspaceRepository),
-                queryRepository,
-                actorSelector,
-                objectMapper);
-        lenient().when(actorSelector.connectedProviderId(1L)).thenReturn(Optional.of(5L));
+                accounts, WorkspaceSummaryFixtures.summaries(workspaceRepository), queryRepository, objectMapper);
+        lenient().when(queryRepository.reach(1L, 2L)).thenReturn(Reach.READABLE);
         lenient()
                 .when(accounts.findAllByIds(List.of(2L)))
                 .thenReturn(Map.of(2L, new AccountSummaryQuery.AccountSummary(2, "Octo", null)));
@@ -133,14 +125,27 @@ class WorkspaceContentSourceTest extends BaseUnitTest {
 
     @Test
     void shouldSayUnavailableAndReadNoListsWithoutAConnectedInstance() {
-        when(actorSelector.connectedProviderId(1L)).thenReturn(Optional.empty());
+        when(queryRepository.reach(1L, 2L)).thenReturn(Reach.NO_INSTANCE);
 
         JsonNode root = provider.buildPayload(1L, 2L);
 
         assertThat(root.get("status").asString()).isEqualTo("UNAVAILABLE");
-        assertThat(root.get("assignedIssues")).isEmpty();
-        assertThat(root.get("pendingReviewRequests")).isEmpty();
-        verifyNoInteractions(queryRepository);
+        assertThat(root.has("assignedIssues")).isFalse();
+        assertThat(root.has("pendingReviewRequests")).isFalse();
+        assertThat(root.has("focusSuggestions")).isFalse();
+    }
+
+    @Test
+    void shouldSayTheListsAreUnknownWhenTheAccountIsNotLinked() {
+        when(queryRepository.reach(1L, 2L)).thenReturn(Reach.NOT_LINKED);
+
+        JsonNode root = provider.buildPayload(1L, 2L);
+
+        assertThat(root.get("status").asString()).isEqualTo("UNAVAILABLE");
+        assertThat(root.get("reason").asString()).contains("no linked identity").contains("unknown, not none");
+        assertThat(root.has("assignedIssues")).isFalse();
+        assertThat(root.has("pendingReviewRequests")).isFalse();
+        assertThat(root.has("focusSuggestions")).isFalse();
     }
 
     @Test

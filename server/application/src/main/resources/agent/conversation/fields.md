@@ -3,6 +3,8 @@
 One section for each document. Read a whole section, for example
 `sed -n '/^## inputs\/context\/merge_readiness.json/,/^## inputs/p' FIELDS.md`.
 
+A document with `status: UNAVAILABLE` has no lists or counts: that work is unknown, not none. Say its `reason`.
+
 ## inputs/context/user.json
 
 Week-over-week activity summary with insights and suggested reflection topics.

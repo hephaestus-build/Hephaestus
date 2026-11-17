@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.integration.scm.context;
 import de.tum.cit.aet.hephaestus.evidence.capture.ContentSource;
 import de.tum.cit.aet.hephaestus.evidence.capture.ConversationContextPaths;
 import de.tum.cit.aet.hephaestus.evidence.capture.ConversationContextRequest;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ConversationWorkQuery.Reach;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.Commit;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment.IssueComment;
@@ -97,11 +98,13 @@ public class ActivityContentSource implements ContentSource {
                 "The developer's own actions, from Hephaestus's stored copy, newest first. People's "
                         + "reviews they gave are here; Hephaestus's automated practice reviews are not.");
 
-        // A repository path names a repository only on one instance: no activity without the connected one.
+        // A repository path names a repository only on one instance, and an account without a linked actor there
+        // has unknown activity, not none: no lists then.
         Optional<ScmConversationWorkQuery.Actors> actors = work.actors(workspaceId, developerId);
-        if (actors.isEmpty()) {
+        Reach reach = ScmConversationWorkQuery.reachOf(actors);
+        if (reach != Reach.READABLE) {
             root.put("status", "UNAVAILABLE");
-            root.put("reason", "The workspace has no connected GitHub or GitLab instance.");
+            root.put("reason", reach.unknownReason());
             return root;
         }
         long providerId = actors.get().providerId();
@@ -112,72 +115,69 @@ public class ActivityContentSource implements ContentSource {
         ArrayNode comments = root.putArray("comments");
         ArrayNode inline = root.putArray("inlineComments");
         ArrayNode commits = root.putArray("commits");
-        if (!userIds.isEmpty()) {
-            for (PullRequest pr : queryRepository.findAuthoredPullRequestsActiveSince(
-                    workspaceId, providerId, userIds, since, workPage)) {
-                ObjectNode node = workNode(pullRequests.addObject(), pr);
-                node.put("resource", MergeReadinessContentSource.resourceOf(pr.getId()));
-                node.put("isDraft", pr.isDraft());
-                ArrayNode actions = node.putArray("actions");
-                action(actions, "OPENED", pr.getCreatedAt(), since);
-                action(actions, "MERGED", pr.getMergedAt(), since);
-                if (!pr.isMerged()) {
-                    action(actions, "CLOSED", pr.getClosedAt(), since);
-                }
+        for (PullRequest pr : queryRepository.findAuthoredPullRequestsActiveSince(
+                workspaceId, providerId, userIds, since, workPage)) {
+            ObjectNode node = workNode(pullRequests.addObject(), pr);
+            node.put("resource", MergeReadinessContentSource.resourceOf(pr.getId()));
+            node.put("isDraft", pr.isDraft());
+            ArrayNode actions = node.putArray("actions");
+            action(actions, "OPENED", pr.getCreatedAt(), since);
+            action(actions, "MERGED", pr.getMergedAt(), since);
+            if (!pr.isMerged()) {
+                action(actions, "CLOSED", pr.getClosedAt(), since);
             }
-            for (Issue issue :
-                    queryRepository.findAuthoredIssuesActiveSince(workspaceId, providerId, userIds, since, workPage)) {
-                ObjectNode node = workNode(issues.addObject(), issue);
-                node.put("resource", IssueDetailSource.resourceOf(issue.getId()));
-                ArrayNode actions = node.putArray("actions");
-                action(actions, "OPENED", issue.getCreatedAt(), since);
-                action(actions, "CLOSED", issue.getClosedAt(), since);
-            }
-            for (PullRequestReview review :
-                    queryRepository.findReviewsGivenSince(workspaceId, providerId, userIds, since, rows)) {
-                ObjectNode node = reviews.addObject();
-                PullRequest reviewed = Objects.requireNonNull(review.getPullRequest());
-                ObjectNode on = workNode(node.putObject("pullRequest"), reviewed);
-                User author = reviewed.getAuthor();
-                on.put("author", author == null ? null : author.getLogin());
-                node.put("state", review.getState().name());
-                Instant submittedAt = review.getSubmittedAt();
-                node.put("submittedAt", submittedAt == null ? null : submittedAt.toString());
-                node.put("url", review.getHtmlUrl());
-                putWords(node, review.getBody());
-            }
-            for (IssueComment comment :
-                    queryRepository.findCommentsWrittenSince(workspaceId, providerId, userIds, since, rows)) {
-                ObjectNode node = comments.addObject();
-                Issue on = Objects.requireNonNull(comment.getIssue());
-                workNode(node.putObject("on"), on).put("kind", on instanceof PullRequest ? "PULL_REQUEST" : "ISSUE");
-                Instant createdAt = comment.getCreatedAt();
-                node.put("createdAt", createdAt == null ? null : createdAt.toString());
-                node.put("url", comment.getHtmlUrl());
-                putWords(node, comment.getBody());
-            }
-            for (PullRequestReviewComment comment :
-                    queryRepository.findInlineCommentsWrittenSince(workspaceId, providerId, userIds, since, rows)) {
-                ObjectNode node = inline.addObject();
-                workNode(node.putObject("pullRequest"), Objects.requireNonNull(comment.getPullRequest()));
-                node.put("path", comment.getPath());
-                Instant createdAt = comment.getCreatedAt();
-                node.put("createdAt", createdAt == null ? null : createdAt.toString());
-                node.put("url", comment.getHtmlUrl());
-                putWords(node, comment.getBody());
-            }
-            for (Commit commit :
-                    queryRepository.findCommitsAuthoredSince(workspaceId, providerId, userIds, since, rows)) {
-                ObjectNode node = commits.addObject();
-                node.put("repository", commit.getRepository().getNameWithOwner());
-                node.put(
-                        "sha",
-                        commit.getSha().substring(0, Math.min(7, commit.getSha().length())));
-                node.put("headline", commit.getMessage());
-                Instant authoredAt = commit.getAuthoredAt();
-                node.put("authoredAt", authoredAt == null ? null : authoredAt.toString());
-                node.put("url", commit.getHtmlUrl());
-            }
+        }
+        for (Issue issue :
+                queryRepository.findAuthoredIssuesActiveSince(workspaceId, providerId, userIds, since, workPage)) {
+            ObjectNode node = workNode(issues.addObject(), issue);
+            node.put("resource", IssueDetailSource.resourceOf(issue.getId()));
+            ArrayNode actions = node.putArray("actions");
+            action(actions, "OPENED", issue.getCreatedAt(), since);
+            action(actions, "CLOSED", issue.getClosedAt(), since);
+        }
+        for (PullRequestReview review :
+                queryRepository.findReviewsGivenSince(workspaceId, providerId, userIds, since, rows)) {
+            ObjectNode node = reviews.addObject();
+            PullRequest reviewed = Objects.requireNonNull(review.getPullRequest());
+            ObjectNode on = workNode(node.putObject("pullRequest"), reviewed);
+            User author = reviewed.getAuthor();
+            on.put("author", author == null ? null : author.getLogin());
+            node.put("state", review.getState().name());
+            Instant submittedAt = review.getSubmittedAt();
+            node.put("submittedAt", submittedAt == null ? null : submittedAt.toString());
+            node.put("url", review.getHtmlUrl());
+            putWords(node, review.getBody());
+        }
+        for (IssueComment comment :
+                queryRepository.findCommentsWrittenSince(workspaceId, providerId, userIds, since, rows)) {
+            ObjectNode node = comments.addObject();
+            Issue on = Objects.requireNonNull(comment.getIssue());
+            workNode(node.putObject("on"), on).put("kind", on instanceof PullRequest ? "PULL_REQUEST" : "ISSUE");
+            Instant createdAt = comment.getCreatedAt();
+            node.put("createdAt", createdAt == null ? null : createdAt.toString());
+            node.put("url", comment.getHtmlUrl());
+            putWords(node, comment.getBody());
+        }
+        for (PullRequestReviewComment comment :
+                queryRepository.findInlineCommentsWrittenSince(workspaceId, providerId, userIds, since, rows)) {
+            ObjectNode node = inline.addObject();
+            workNode(node.putObject("pullRequest"), Objects.requireNonNull(comment.getPullRequest()));
+            node.put("path", comment.getPath());
+            Instant createdAt = comment.getCreatedAt();
+            node.put("createdAt", createdAt == null ? null : createdAt.toString());
+            node.put("url", comment.getHtmlUrl());
+            putWords(node, comment.getBody());
+        }
+        for (Commit commit : queryRepository.findCommitsAuthoredSince(workspaceId, providerId, userIds, since, rows)) {
+            ObjectNode node = commits.addObject();
+            node.put("repository", commit.getRepository().getNameWithOwner());
+            node.put(
+                    "sha",
+                    commit.getSha().substring(0, Math.min(7, commit.getSha().length())));
+            node.put("headline", commit.getMessage());
+            Instant authoredAt = commit.getAuthoredAt();
+            node.put("authoredAt", authoredAt == null ? null : authoredAt.toString());
+            node.put("url", commit.getHtmlUrl());
         }
         ObjectNode limits = root.putObject("listLimits");
         limits.put("pullRequests", MAX_WORK).put("issues", MAX_WORK);

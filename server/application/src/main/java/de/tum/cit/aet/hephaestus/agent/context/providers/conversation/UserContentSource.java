@@ -6,7 +6,7 @@ import de.tum.cit.aet.hephaestus.evidence.capture.ContentSource;
 import de.tum.cit.aet.hephaestus.evidence.capture.ConversationContextRequest;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConversationUserCounts;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConversationWorkQuery;
-import de.tum.cit.aet.hephaestus.workspace.WorkspaceActorSelector;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ConversationWorkQuery.Reach;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -33,7 +33,6 @@ public class UserContentSource implements ContentSource {
 
     private final AccountSummaryQuery accounts;
     private final ConversationWorkQuery queryRepository;
-    private final WorkspaceActorSelector actorSelector;
     private final ObjectMapper objectMapper;
 
     @Override
@@ -71,15 +70,21 @@ public class UserContentSource implements ContentSource {
         Instant weekAgo = now.minus(7, ChronoUnit.DAYS);
         Instant twoWeeksAgo = now.minus(14, ChronoUnit.DAYS);
 
-        // A repository path names a repository only on one instance: no counts without the connected one.
-        if (actorSelector.connectedProviderId(workspaceId).isEmpty()) {
+        // Work that Hephaestus cannot read is unknown: the payload then has no counts, never zero ones.
+        Reach reach = queryRepository.reach(workspaceId, developerId);
+        ConversationUserCounts c = reach == Reach.READABLE
+                ? queryRepository
+                        .fetchUserCounts(workspaceId, developerId, twoWeeksAgo, weekAgo, now)
+                        .orElse(null)
+                : null;
+        if (c == null) {
             ObjectNode root = objectMapper.createObjectNode();
             root.putObject("user").put("name", account.displayName());
             root.put("status", "UNAVAILABLE");
-            root.put("reason", "The workspace has no connected GitHub or GitLab instance.");
+            // The link can go between the two reads; the counts are then unknown for the same reason.
+            root.put("reason", (reach == Reach.READABLE ? Reach.NOT_LINKED : reach).unknownReason());
             return root;
         }
-        ConversationUserCounts c = queryRepository.fetchUserCounts(workspaceId, developerId, twoWeeksAgo, weekAgo, now);
         long openPRs = c.openPRs();
         long mergedThisWeek = c.mergedThisWeek();
         long mergedLastWeek = c.mergedLastWeek();

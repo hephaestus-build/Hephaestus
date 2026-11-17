@@ -81,6 +81,19 @@ class RecentAuthoredWorkContentSourceTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldSayTheListIsUnknownWhenTheAccountIsNotLinked() {
+        when(work.actors(1L, 2L)).thenReturn(Optional.of(new ScmConversationWorkQuery.Actors(5L, List.of())));
+
+        JsonNode payload = source.buildPayload(1L, 2L);
+
+        assertThat(payload.path("status").asString()).isEqualTo("UNAVAILABLE");
+        assertThat(payload.path("reason").asString()).contains("no linked identity");
+        assertThat(payload.has("pullRequests")).isFalse();
+        assertThat(payload.has("issues")).isFalse();
+        verify(queryRepository, never()).findRecentAuthoredPullRequests(anyLong(), anyLong(), any(), any());
+    }
+
+    @Test
     void shouldSayTheListIsUnavailableWithoutAConnectedInstance() {
         when(work.actors(1L, 2L)).thenReturn(Optional.empty());
 

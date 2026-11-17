@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.evidence.capture.ContentSource;
 import de.tum.cit.aet.hephaestus.evidence.capture.ConversationContextPaths;
 import de.tum.cit.aet.hephaestus.evidence.capture.ConversationContextRequest;
 import de.tum.cit.aet.hephaestus.integration.core.framework.IntegrationManifestRegistry;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ConversationWorkQuery.Reach;
 import de.tum.cit.aet.hephaestus.integration.core.spi.DeliveredPullRequestCommentLookup;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.Commit;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitFileChange;
@@ -20,7 +21,6 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRe
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewcomment.PullRequestReviewComment;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewthread.PullRequestReviewThread;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
-import de.tum.cit.aet.hephaestus.workspace.WorkspaceActorSelector;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -102,7 +102,6 @@ public class MergeReadinessContentSource implements ContentSource {
 
     private static final int SCAN_PAGE = 50;
 
-    private final WorkspaceActorSelector actorSelector;
     private final ConversationContextQueryRepository queryRepository;
     private final ScmConversationWorkQuery work;
     private final PullRequestReviewRepository reviewRepository;
@@ -163,7 +162,7 @@ public class MergeReadinessContentSource implements ContentSource {
     }
 
     private ObjectNode inspectPayload(long workspaceId, long developerId, long pullRequestId) {
-        return build(workspaceId, (root, providerId) -> {
+        return build(workspaceId, developerId, (root, providerId) -> {
             // A list: two monitor rows with one path would make a single-result query throw.
             Optional<PullRequest> pr = queryRepository
                     .findAuthoredPullRequestOnInstance(
@@ -184,7 +183,7 @@ public class MergeReadinessContentSource implements ContentSource {
     }
 
     ObjectNode buildPayload(Long workspaceId, Long developerId) {
-        return build(workspaceId, (root, providerId) -> {
+        return build(workspaceId, developerId, (root, providerId) -> {
             List<PullRequest> open = queryRepository.findOpenAuthoredPullRequestsOnInstance(
                     workspaceId,
                     work.actorIds(workspaceId, developerId),
@@ -203,18 +202,20 @@ public class MergeReadinessContentSource implements ContentSource {
         });
     }
 
-    private ObjectNode build(Long workspaceId, BiConsumer<ObjectNode, Long> fill) {
+    private ObjectNode build(Long workspaceId, Long developerId, BiConsumer<ObjectNode, Long> fill) {
         ObjectNode root = objectMapper.createObjectNode();
         // When this was read from the stored copy; nothing stored proves the provider has not changed since.
         root.put("readAt", Instant.now().toString());
         root.put("providerFreshness", "UNKNOWN");
-        Optional<Long> providerId = actorSelector.connectedProviderId(workspaceId);
-        if (providerId.isEmpty()) {
+        // An account without a linked actor on the connected instance has unknown pull requests, not none.
+        Optional<ScmConversationWorkQuery.Actors> actors = work.actors(workspaceId, developerId);
+        Reach reach = ScmConversationWorkQuery.reachOf(actors);
+        if (reach != Reach.READABLE) {
             root.put("status", "UNAVAILABLE");
-            root.put("reason", "The workspace has no active GitHub or GitLab connection with synced work.");
+            root.put("reason", reach.unknownReason());
             return root;
         }
-        fill.accept(root, providerId.get());
+        fill.accept(root, actors.get().providerId());
         return fitted(root);
     }
 

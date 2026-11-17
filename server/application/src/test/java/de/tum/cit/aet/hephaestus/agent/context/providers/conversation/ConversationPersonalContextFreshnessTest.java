@@ -17,7 +17,6 @@ import de.tum.cit.aet.hephaestus.integration.scm.context.RecentAuthoredWorkConte
 import de.tum.cit.aet.hephaestus.integration.scm.context.ScmConversationWorkQuery;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
-import de.tum.cit.aet.hephaestus.workspace.WorkspaceActorSelector;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceSummaryFixtures;
 import java.time.Instant;
@@ -43,14 +42,13 @@ class ConversationPersonalContextFreshnessTest extends BaseUnitTest {
         var queries = mock(ConversationWorkQuery.class);
         var accounts = mock(AccountSummaryQuery.class);
         var mapper = new ObjectMapper();
-        var actorSelector = mock(WorkspaceActorSelector.class);
-        lenient().when(actorSelector.connectedProviderId(1L)).thenReturn(Optional.of(5L));
+        lenient().when(queries.reach(1L, 2L)).thenReturn(ConversationWorkQuery.Reach.READABLE);
         ContentSource source = switch (kind) {
             case USER -> {
                 when(queries.fetchUserCounts(
                                 eq(1L), eq(2L), any(Instant.class), any(Instant.class), any(Instant.class)))
-                        .thenReturn(new ConversationUserCounts(0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L));
-                yield new UserContentSource(accounts, queries, actorSelector, mapper);
+                        .thenReturn(Optional.of(new ConversationUserCounts(0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L)));
+                yield new UserContentSource(accounts, queries, mapper);
             }
             case WORKSPACE -> {
                 var workspaces = mock(WorkspaceRepository.class);
@@ -59,7 +57,7 @@ class ConversationPersonalContextFreshnessTest extends BaseUnitTest {
                 workspace.setWorkspaceSlug("context-freshness");
                 when(workspaces.findById(1L)).thenReturn(Optional.of(workspace));
                 yield new WorkspaceContentSource(
-                        accounts, WorkspaceSummaryFixtures.summaries(workspaces), queries, actorSelector, mapper);
+                        accounts, WorkspaceSummaryFixtures.summaries(workspaces), queries, mapper);
             }
             case AUTHORED_WORK ->
                 new RecentAuthoredWorkContentSource(
