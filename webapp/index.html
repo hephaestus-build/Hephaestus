@@ -38,6 +38,8 @@
     <script src="/env-config.js"></script>
     <!-- Applies the theme cookie before the first paint; the app's ThemeProvider takes over after. -->
     <script src="/theme-init.js"></script>
+    <!-- Reloads once, then says the page could not load, if a script the app needs to start fails. -->
+    <script src="/boot-recovery.js"></script>
     <link rel="manifest" href="/manifest.json" />
     <title>Hephaestus</title>
   </head>
