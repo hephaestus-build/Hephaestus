@@ -439,6 +439,21 @@ class ConfigAuditIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     @Test
     @WithAdminUser
+    void aFilterOnACurrentTypeAlsoFindsRowsStoredUnderItsEarlierName() {
+        Workspace workspace = setupWorkspace("audit-old-name");
+        patchPracticeReview(workspace, Map.of("cooldownMinutes", 45));
+        jdbcTemplate.update(
+                "UPDATE config_audit_event SET entity_type = 'AGENT_BINDING' WHERE workspace_id = ?",
+                workspace.getId());
+
+        assertFilterYields(workspace, uri -> uri.queryParam("entityType", "MODEL_ASSIGNMENT"), 1);
+        assertFilterYields(workspace, uri -> uri.queryParam("entityType", "AGENT_BINDING"), 1);
+        assertFilterYields(workspace, uri -> uri.queryParam("entityType", "AGENT_CONFIG"), 0);
+        assertFilterYields(workspace, uri -> uri.queryParam("entityType", "PRACTICE_REVIEW_SETTINGS"), 0);
+    }
+
+    @Test
+    @WithAdminUser
     void repeatingAFilterParameterWidensItRatherThanReplacingIt() {
         Workspace workspace = setupWorkspace("audit-multi");
         patchPracticeReview(workspace, Map.of("cooldownMinutes", 45));
