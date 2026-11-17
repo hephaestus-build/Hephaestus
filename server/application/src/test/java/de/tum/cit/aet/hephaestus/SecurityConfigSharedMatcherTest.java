@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import de.tum.cit.aet.hephaestus.config.CorsProperties;
+import de.tum.cit.aet.hephaestus.core.auth.AuthProperties;
 import de.tum.cit.aet.hephaestus.core.auth.clientsession.InstalledClientRegistry;
 import de.tum.cit.aet.hephaestus.core.auth.web.PublicActivityReadRequestMatcher;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
@@ -150,7 +151,7 @@ class SecurityConfigSharedMatcherTest extends BaseUnitTest {
 
     @Test
     void csrfCookieName_dropsHostPrefixOnlyWhenInsecure() {
-        assertThat(SecurityConfig.csrfCookieName(true)).isEqualTo("__Host-XSRF-TOKEN");
-        assertThat(SecurityConfig.csrfCookieName(false)).isEqualTo("XSRF-TOKEN");
+        assertThat(AuthProperties.csrfCookieName(true)).isEqualTo("__Host-XSRF-TOKEN");
+        assertThat(AuthProperties.csrfCookieName(false)).isEqualTo("XSRF-TOKEN");
     }
 }

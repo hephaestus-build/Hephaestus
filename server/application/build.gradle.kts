@@ -162,6 +162,11 @@ tasks.processResources {
     from(rootProject.file("../docs/contributor/practice-feedback-language.mdx")) { into("agent") }
     // The spec writes the enums that these operations return as open (ADR 0103 rule 3).
     from(rootProject.file("public-api-operations.json")) { into("openapi") }
+    // The built web app, which the server serves (ADR 0100). `vp run build:webapp` writes it; CI
+    // builds it once
+    // and restores it here before it packages the server. Without it, the server serves the API
+    // only.
+    from(rootProject.file("../webapp/dist")) { into("web-app") }
 }
 
 tasks.withType<JavaCompile>().configureEach {
