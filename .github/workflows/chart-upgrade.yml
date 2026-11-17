@@ -77,4 +77,4 @@ jobs:
           kubectl -n hephaestus-sandboxes get pods,jobs -o wide || true
           kubectl -n hephaestus-sandboxes get sandboxtemplates,sandboxwarmpools,sandboxclaims,sandboxes -o wide || true
           kubectl -n agent-sandbox-system logs deployment/agent-sandbox-controller --tail=200 || true
-          helm -n hephaestus history hephaestus || true
+          helm -n hephaestus history heph || true

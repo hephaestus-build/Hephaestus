@@ -353,13 +353,17 @@ Hibernate does not validate native queries, such as the claim queries of the rev
 Thus, the chart upgrade drill proves that the previous release claims a queued review on the new schema
 (`chart-upgrade.yml`, `scripts/chart-upgrade-drill.ts`).
 It runs nightly, and on a pull request that changes the drill.
+It does not gate a release.
 
-1. After the rolling upgrade, `helm rollback` returns the release to the revision of the previous release.
+1. After the rolling upgrade, `helm rollback` returns every role to the revision of the previous release.
    An operator does the same when the new release fails after its migration.
+   The migration Job of the previous release runs again and applies nothing.
 2. The drill waits until no server of the candidate remains.
 3. It queues one review from the candidate's `practice-native/result-parent.sql` fixture.
-   It writes the review job and its run as the candidate's enqueue path writes them.
-4. A sandbox of the previous release must claim the run within 10 minutes: the run's lease epoch rises.
+   It writes the run, the job and the job of the review item as the candidate's enqueue path writes them.
+   The job has no frozen model, so its config snapshot is empty.
+4. Within 10 minutes, a sandbox of the previous release must claim the run.
+   The lease epoch of the run rises, and the claim takes the job out of `QUEUED`.
    Otherwise the drill fails.
 5. The drill rolls forward to the candidate and checks it again.
 

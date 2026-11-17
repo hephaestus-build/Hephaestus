@@ -5,9 +5,9 @@
  * rolling upgrade. Both end with the candidate's readiness and authenticated-read checks. Entry-specific steps of a
  * migration note, such as the conversation-sandbox cutover of an older release, are not part of the drill.
  *
- * After a rolling upgrade, the drill returns the server to the previous release on the migrated schema, as an operator
+ * After a rolling upgrade, the drill returns every role to the previous release on the migrated schema, as an operator
  * does when the new release fails after its migration (docs/admin/runtime-roles.mdx § Rollouts and rollback). It
- * queues a review and fails unless the previous release claims its run. Then it rolls forward to the candidate.
+ * queues a review and fails unless the previous release claims it. Then it rolls forward to the candidate.
  */
 import { randomUUID } from "node:crypto";
 import { cp, mkdir, mkdtemp, readFile, readdir, rm, symlink } from "node:fs/promises";
@@ -18,7 +18,7 @@ import { parseArgs } from "node:util";
 
 import { parse } from "yaml";
 
-import { psql, RELEASE, revision } from "./kubernetes-cluster.ts";
+import { NAMESPACE, psql, RELEASE, revision, SANDBOXES } from "./kubernetes-cluster.ts";
 import { changedPostgresql } from "./lib/chart-postgresql.ts";
 import { asRecord, isRecord, parseJson } from "./lib/json.ts";
 import { stopEveryRoleEntries } from "./lib/migration-guide.ts";
@@ -26,8 +26,8 @@ import { latestReleaseOf } from "./lib/previous-release.ts";
 import { output, run } from "./lib/process.ts";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
-const NAMESPACE = "hephaestus";
-const SANDBOXES = "hephaestus-sandboxes";
+/** The review that `practice-native/result-parent.sql` seeds, with its practice and item. */
+const REVIEW = "00000000-0000-0000-0000-000000978011";
 
 const { values } = parseArgs({
 	options: {
@@ -246,7 +246,7 @@ try {
 	} else {
 		await previousReleaseClaims(previous, previousRevision);
 		console.log(`Rolling forward to ${commit}.`);
-		// The rollback took PostgreSQL back to the previous release's image, so the new chart changes it again.
+		// If the new chart changed PostgreSQL, the rollback changed it back, and the new chart changes it again.
 		await cluster(ROOT, firstApplyCommand, "--work", candidateWork, "--profile", profile);
 		await cluster(ROOT, "verify");
 	}
@@ -255,14 +255,13 @@ try {
 	await rm(checkout, { recursive: true, force: true });
 }
 
-/** The review that `practice-native/result-parent.sql` queues, with its practice and item. */
-const REVIEW = "00000000-0000-0000-0000-000000978011";
-
 /**
- * Returns the server to the Helm revision of the previous release, queues a review, and waits until a sandbox of the
- * previous release leases the review's run, which raises its lease epoch. A sandbox claims its own run when it pulls,
- * so only a cluster with sandboxes proves this claim (docs/contributor/database-migration.mdx § Previous release on the
- * new schema). Hibernate does not validate the claim's native queries, so only a claim proves them.
+ * Returns the release to the Helm revision of the previous release, queues a review, and waits until a sandbox of the
+ * previous release leases the review's run, which raises its lease epoch, and the claim takes the job out of the queue.
+ * A sandbox claims its own run when it pulls, so only a cluster with sandboxes proves this claim
+ * (docs/contributor/database-migration.mdx § Claim of a queued review). Hibernate does not validate the claim's native
+ * queries, so only a claim proves them. The rollback applies the whole previous revision: its migration Job runs again
+ * and applies nothing, and a changed PostgreSQL template restarts PostgreSQL.
  */
 async function previousReleaseClaims(release: string, previousRevision: number) {
 	console.log(
@@ -298,13 +297,13 @@ async function previousReleaseClaims(release: string, previousRevision: number) 
 			"wait",
 			"--for=delete",
 			...candidateServers,
-			"--timeout=40m",
+			"--timeout=10m",
 		]);
 	}
 
-	// The candidate's own fixture, and the job and run that its enqueue path writes for that review. The workspace binds
-	// no review model, so the previous release refuses the job once it claimed the run: the claim is what the drill
-	// checks, and the seeded upgrade binds a model through the previous release's API.
+	// The candidate's own fixture, and the run, the job and the item's job as its enqueue path writes them, but with no
+	// frozen model: the workspace binds none, so the config snapshot stays empty. The previous release then cancels the
+	// job after it claimed it. The seeded upgrade binds a model through the previous release's API.
 	const job = randomUUID();
 	const runId = randomUUID();
 	try {
@@ -336,7 +335,7 @@ async function previousReleaseClaims(release: string, previousRevision: number) 
 		asRecord(
 			parseJson(
 				await psql(
-					`SELECT json_build_object('epoch', r.lease_epoch, 'run', r.state, 'stop', r.stop_reason, 'job', j.status, 'error', j.error_message) FROM agent_run r JOIN review_job j ON j.run_id = r.id WHERE r.id = '${runId}'`,
+					`SELECT json_build_object('epoch', r.lease_epoch, 'run', r.state, 'stop', r.stop_reason, 'job', j.status, 'reason', j.cancellation_reason, 'error', j.error_message) FROM agent_run r JOIN review_job j ON j.run_id = r.id WHERE r.id = '${runId}'`,
 				),
 			),
 			"queued review",
@@ -344,7 +343,8 @@ async function previousReleaseClaims(release: string, previousRevision: number) 
 	const deadline = Date.now() + 10 * 60_000;
 	for (;;) {
 		const state = await read();
-		if (typeof state.epoch === "number" && state.epoch > 0) {
+		// A claim that cannot lock the queued job defers the run with a raised epoch, so the job must leave the queue too.
+		if (typeof state.epoch === "number" && state.epoch > 0 && state.job !== "QUEUED") {
 			console.log(
 				`${release} claimed the queued review on the migrated schema: ${JSON.stringify(state)}.`,
 			);
