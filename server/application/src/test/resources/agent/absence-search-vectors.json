@@ -1039,5 +1039,200 @@
 		"consulted": false,
 		"claimed": true,
 		"tied": false
+	},
+	{
+		"name": "a claim about a vocabulary is broader than a search of its words",
+		"patterns": [
+			"(?i)persisted|contract|auth|removal"
+		],
+		"subject": "persisted models, wire contracts, auth or removals",
+		"texts": [
+			"The checkout contains no persisted-model, wire-contract, mechanism, auth or removal vocabulary anywhere."
+		],
+		"claimed": true,
+		"consulted": true,
+		"tied": false
+	},
+	{
+		"name": "a claim about anything related to a subject is broader than a search for it",
+		"patterns": [
+			"(?i)auth"
+		],
+		"subject": "authentication",
+		"texts": [
+			"Nothing auth-related exists anywhere in the repository."
+		],
+		"claimed": true,
+		"consulted": true,
+		"tied": false
+	},
+	{
+		"name": "a claim about any kind of a subject is broader than a search for it",
+		"patterns": [
+			"(?i)cache"
+		],
+		"subject": "a cache",
+		"texts": [
+			"The repository has no cache of any kind."
+		],
+		"claimed": true,
+		"consulted": true,
+		"tied": false
+	},
+	{
+		"name": "a claim narrowed to the searched words is backed by them",
+		"patterns": [
+			"(?i)persisted|schema|auth"
+		],
+		"subject": "the words persisted, schema and auth",
+		"texts": [
+			"No file in the repository contains the words persisted, schema or auth."
+		],
+		"claimed": true,
+		"consulted": true,
+		"tied": true
+	},
+	{
+		"name": "each subject of a listed claim must be searched",
+		"patterns": [
+			"(?i)persisted|auth"
+		],
+		"subject": "the words persisted, schema and auth",
+		"texts": [
+			"No file in the repository contains the words persisted, schema or auth."
+		],
+		"claimed": true,
+		"consulted": true,
+		"tied": false
+	},
+	{
+		"name": "each subject of a list with a comma before its last item must be searched",
+		"patterns": [
+			"(?i)entity|controller"
+		],
+		"subject": "entities, controllers and caches",
+		"texts": [
+			"The repository has no Entity, Controller, and Cache classes."
+		],
+		"claimed": true,
+		"consulted": true,
+		"tied": false
+	},
+	{
+		"name": "a list with a comma before its last item is backed by a search for each subject",
+		"patterns": [
+			"(?i)entity|controller|cache"
+		],
+		"subject": "entities, controllers and caches",
+		"texts": [
+			"The repository has no Entity, Controller, and Cache classes."
+		],
+		"claimed": true,
+		"consulted": true,
+		"tied": true
+	},
+	{
+		"name": "an introductory phrase before the negation is no listed subject",
+		"patterns": [
+			"(?i)FooService"
+		],
+		"subject": "a reference to FooService",
+		"texts": [
+			"However, no other file references FooService."
+		],
+		"claimed": true,
+		"consulted": true,
+		"tied": true
+	},
+	{
+		"name": "a phrase that sets the scope before the negation is no listed subject",
+		"patterns": [
+			"(?i)TimeoutException"
+		],
+		"subject": "a handler for TimeoutException",
+		"texts": [
+			"Outside the change, nothing in the repository catches TimeoutException."
+		],
+		"claimed": true,
+		"consulted": true,
+		"tied": true
+	},
+	{
+		"name": "a relative clause before the negation is no listed subject",
+		"patterns": [
+			"(?i)ControllerAdvice"
+		],
+		"subject": "a ControllerAdvice",
+		"texts": [
+			"The repository, which uses Spring Boot, has no ControllerAdvice."
+		],
+		"claimed": true,
+		"consulted": true,
+		"tied": true
+	},
+	{
+		"name": "a claim about anything named a subject is as narrow as a search for that name",
+		"patterns": [
+			"(?i)RetryPolicy"
+		],
+		"subject": "a reference to RetryPolicy",
+		"texts": [
+			"No other file references anything named RetryPolicy."
+		],
+		"claimed": true,
+		"consulted": true,
+		"tied": true
+	},
+	{
+		"name": "a clause after a claim does not back it",
+		"patterns": [
+			"(?i)RetryTemplate"
+		],
+		"subject": "a retry policy",
+		"texts": [
+			"The repository has no other class or file for this, and RetryTemplate is only imported."
+		],
+		"claimed": true,
+		"consulted": true,
+		"tied": false
+	},
+	{
+		"name": "a sentence after a claim does not back it",
+		"patterns": [
+			"(?i)RetryTemplate"
+		],
+		"subject": "a retry policy",
+		"texts": [
+			"The repository has no other class or file for this. And RetryTemplate is only imported."
+		],
+		"claimed": true,
+		"consulted": true,
+		"tied": false
+	},
+	{
+		"name": "a clause about another subject does not back a claim",
+		"patterns": [
+			"(?i)BarService"
+		],
+		"subject": "FooService",
+		"texts": [
+			"In the repository, FooService has no code or files, and BarService is unused."
+		],
+		"claimed": true,
+		"consulted": true,
+		"tied": false
+	},
+	{
+		"name": "a clause after a list without a comma is no item of that list",
+		"patterns": [
+			"(?i)entity|controller"
+		],
+		"subject": "entities and controllers",
+		"texts": [
+			"The repository has no Entity or Controller classes, and FooService handles persistence directly."
+		],
+		"claimed": true,
+		"consulted": true,
+		"tied": true
 	}
 ]

@@ -1096,10 +1096,21 @@ void test("#50: a claim that the checkout lacks something goes back to the model
 	assert.equal(
 		unreadCheckoutClaim(
 			stored,
-			hostCoverage([{ status: "SEARCHED", path: ".", pattern: "ControllerAdvice", matches: 0 }]),
+			hostCoverage([
+				{ status: "SEARCHED", path: ".", pattern: "ControllerAdvice|ExceptionHandler", matches: 0 },
+			]),
 			ASK,
 		),
 		undefined,
+	);
+	// A claim may be no broader than its search: it names two annotations, so a search for one leaves it unsearched.
+	assert.equal(
+		unreadCheckoutClaim(
+			stored,
+			hostCoverage([{ status: "SEARCHED", path: ".", pattern: "ControllerAdvice", matches: 0 }]),
+			ASK,
+		)?.kind,
+		"untied",
 	);
 	// A search for something else leaves the claim unsearched, and the ask says what would count.
 	assert.match(
@@ -1132,9 +1143,27 @@ void test("a search for something else has its own ask, once", () => {
 	);
 });
 
+void test("a claim about a category asks for the words that no file contains, not for another search", () => {
+	const stored = notMet(
+		{
+			summary: "No significant decision is recorded",
+			explanation: "The checkout contains no persisted-model or auth vocabulary anywhere.",
+			basis: { explanation: "The diff adds a column." },
+		},
+		["scm.pull-request.diff", "scm.repository.tree"],
+	);
+	const asked = unreadCheckoutClaim(
+		stored,
+		hostCoverage([{ status: "SEARCHED", path: ".", pattern: "(?i)persisted|auth", matches: 0 }]),
+		ASK,
+	);
+	assert.equal(asked?.kind, "untied");
+	assert.match(asked.text, /says a whole category is absent.*say which words no file contains/u);
+});
+
 void test("a claim whose search found matches must say what they are, and a clean search need not", () => {
 	const stored = notMet(PR50_ERROR_HANDLING, ["scm.pull-request.diff", "scm.repository.tree"]);
-	const pattern = "(?i)ControllerAdvice|guard";
+	const pattern = "(?i)ControllerAdvice|ExceptionHandler|guard";
 	const found = hostCoverage([{ status: "SEARCHED", path: ".", pattern, matches: 3 }]);
 	const asked = unreadCheckoutClaim(stored, found, ASK);
 	assert.equal(asked?.kind, "hits");

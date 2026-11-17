@@ -26,6 +26,12 @@ import java.util.stream.Collectors;
  * {@code retry}. A match does not refute "no other file references X", so a search with matches can back a claim, but
  * the result must then say what the matches are. This stops a lazy or nonsense search, and it puts on the record what
  * a steered one ignored. It does not judge whether that account is true.
+ *
+ * <p>A claim may be no broader than its search. A claim about a category, such as "no persistence vocabulary" or
+ * "nothing auth-related", says that no form of it exists: annotations, framework types and configuration keys too. A
+ * search of literal words cannot show that, so no plain search backs such a claim. A claim that lists its subjects
+ * after its negation, as in "no schema, cache, or auth code", needs a searched word for each one. Admission withholds
+ * the rest as not searched; it never narrows the sentence.
  */
 final class AbsenceClaims {
 
@@ -80,6 +86,19 @@ final class AbsenceClaims {
     static final String CLAUSE_END =
             "(?<=[.;:])[ \\t\\r\\n\\u00A0]+|,[ \\t\\r\\n\\u00A0]+(?=(?:but|and|so|yet|while|though|"
                     + "although)[ \\t\\r\\n\\u00A0])|[ \\t\\r\\n\\u00A0]+[—–-][ \\t\\r\\n\\u00A0]+|[ \\t\\r\\n\\u00A0]*[()][ \\t\\r\\n\\u00A0]*";
+
+    /** Words that make a claim about a category of things rather than the words that the search held. */
+    static final String CATEGORY =
+            "\\b(?:vocabular(?:y|ies)|terminology|concepts?|constructs?|notions?|any (?:kind|sort|form) of|"
+                    + "of any (?:kind|sort|form)|(?:kinds?|sorts?) of)\\b|\\b[\\p{L}\\p{N}]+-related\\b";
+
+    /** Where a claim's negation starts its scope: a list before it names no absent subject. */
+    static final String NEGATION =
+            "\\b(?:no|none|neither|nothing|not|nowhere|never|lacks?|without|missing|absent)\\b|n['\\u2019]t\\b";
+
+    /** The items of a list of subjects inside one claim: "no A, B or C". */
+    static final String LIST_ITEM =
+            ",[ \\t\\r\\n\\u00A0]*(?:(?:and|or|nor)[ \\t\\r\\n\\u00A0]+)?|[ \\t\\r\\n\\u00A0]+(?:or|nor)[ \\t\\r\\n\\u00A0]+";
 
     static final String PLAIN_SEARCH =
             "(?:\\(\\?i\\))?(?:\\\\b)?[\\p{L}\\p{N}_-]+(?:\\\\b)?(?:\\|(?:\\\\b)?[\\p{L}\\p{N}_-]+(?:\\\\b)?)*";
@@ -219,6 +238,13 @@ final class AbsenceClaims {
             MARKERS.stream().map(AbsenceClaims::compile).toList();
     private static final Pattern DISCLAIMS = compile(DISCLAIMER);
     private static final Pattern CLAUSES = Pattern.compile(CLAUSE_END);
+    private static final Pattern CATEGORIES = compile(CATEGORY);
+    private static final Pattern LIST_ITEMS = compile(LIST_ITEM);
+    private static final Pattern NEGATIONS = compile(NEGATION);
+    /** A clause that only ends a list, as "and C" ends "no A, B, and C". */
+    private static final Pattern LIST_END = compile("^(?:and|or|nor)[ \\t\\r\\n\\u00A0]+");
+    /** A clause that a sentence end, not a comma, split off: no list goes on past it. */
+    private static final Pattern SENTENCE_END = Pattern.compile("[.;:]$");
 
     private AbsenceClaims() {}
 
@@ -249,7 +275,27 @@ final class AbsenceClaims {
 
     static boolean searchedFor(String subject, List<String> texts, List<String> patterns, boolean consulted) {
         var terms = terms(patterns);
-        return claims(subject, texts, consulted).stream().allMatch(claim -> named(terms, claim));
+        return claims(subject, texts, consulted).stream().allMatch(claim -> backs(terms, claim));
+    }
+
+    /** Whether a search backs one claim: it claims no category, and the search names each subject that it lists. */
+    private static boolean backs(List<Term> terms, String claim) {
+        if (CATEGORIES.matcher(claim).find()) return false;
+        var items = listItems(claim);
+        return items.size() < 2 ? named(terms, claim) : items.stream().allMatch(item -> named(terms, item));
+    }
+
+    /** The subjects that a claim lists after its negation, each with content words. */
+    private static List<String> listItems(String claim) {
+        return Arrays.stream(LIST_ITEMS.split(scope(claim)))
+                .filter(item -> !content(item).isEmpty())
+                .toList();
+    }
+
+    /** A claim from its negation on, or all of it without one. */
+    private static String scope(String claim) {
+        var negation = NEGATIONS.matcher(claim);
+        return negation.find() ? claim.substring(negation.start()) : claim;
     }
 
     /** Whether a search that found matches names any claim of the result: the result must then say what they are. */
@@ -265,11 +311,34 @@ final class AbsenceClaims {
     /** The text of each claim: a clause that names its own subject, or else what the result looked for. */
     private static List<String> claims(String subject, List<String> texts, boolean consulted) {
         var clauses = texts.stream()
-                .flatMap(text -> Arrays.stream(CLAUSES.split(text)))
-                .filter(AbsenceClaims::claimed)
+                .flatMap(text -> claimedClauses(text).stream())
                 .map(clause -> content(clause).isEmpty() ? subject : clause)
                 .toList();
         return clauses.isEmpty() && consulted ? List.of(subject) : clauses;
+    }
+
+    /**
+     * The clauses of a text that say something is absent. The clause split ends "no A, B, and C" before "and C", so
+     * the last subject of a claim's list is a claim of its own. It is added, never joined, so that it cannot back the
+     * claim before it.
+     */
+    private static List<String> claimedClauses(String text) {
+        var claims = new ArrayList<String>();
+        boolean listOpen = false;
+        for (var clause : CLAUSES.splitAsStream(text).toList()) {
+            var end = LIST_END.matcher(clause);
+            if (claimed(clause)) {
+                claims.add(clause);
+                listOpen = scope(clause).contains(",")
+                        && !SENTENCE_END.matcher(clause).find();
+                continue;
+            }
+            if (listOpen && end.find() && !content(clause.substring(end.end())).isEmpty()) {
+                claims.add(clause.substring(end.end()));
+            }
+            listOpen = false;
+        }
+        return claims;
     }
 
     private static List<Term> terms(List<String> patterns) {
