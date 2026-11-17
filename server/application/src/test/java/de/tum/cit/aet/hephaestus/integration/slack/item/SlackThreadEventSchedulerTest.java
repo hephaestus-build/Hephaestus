@@ -138,8 +138,8 @@ class SlackThreadEventSchedulerTest extends BaseUnitTest {
     @Test
     void aThreadWhoseConsentEndedRecordsNoEvent() {
         String last = (NOW.getEpochSecond() - 1200) + ".000000";
-        var candidate = new ThreadCandidate(
-                7L, 19L, "C1", "Channel", "1690000000.000000", last, null, List.of(55L, 56L));
+        var candidate =
+                new ThreadCandidate(7L, 19L, "C1", "Channel", "1690000000.000000", last, null, List.of(55L, 56L));
         when(candidates.settledCandidates(4)).thenReturn(List.of(candidate));
         when(candidates.liveTurnCount(7L, "C1", candidate.threadTs())).thenReturn(4L);
         when(candidates.liveTurnCountSince(7L, "C1", candidate.threadTs(), null))

@@ -6,8 +6,8 @@ import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import de.tum.cit.aet.hephaestus.evidence.capture.CaptureContribution;
 import de.tum.cit.aet.hephaestus.evidence.capture.CaptureRequest;
-import de.tum.cit.aet.hephaestus.integration.chat.item.ThreadProjection;
 import de.tum.cit.aet.hephaestus.integration.chat.item.ThreadEvents;
+import de.tum.cit.aet.hephaestus.integration.chat.item.ThreadProjection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.spi.AboutRole;
@@ -25,9 +25,9 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ItemVersion;
 import de.tum.cit.aet.hephaestus.integration.core.spi.RoleHolder;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SourceReadAudience;
 import de.tum.cit.aet.hephaestus.integration.slack.capture.ThreadCaptureSource;
-import de.tum.cit.aet.hephaestus.integration.slack.thread.SlackThreadProjector;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMessageRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackThreadRepository;
+import de.tum.cit.aet.hephaestus.integration.slack.thread.SlackThreadProjector;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
@@ -154,7 +154,8 @@ public class ThreadItemSource implements ItemSource, ItemSourceAccess {
         Long sourceId = item.sourceId();
         if (!supports(item) || sourceId == null) throw invisible();
         var stored = threads.findByWorkspaceIdAndId(item.workspaceId(), sourceId)
-                .orElseThrow(() -> new ItemCaptureException(ItemCaptureCode.ITEM_NOT_VISIBLE, "Thread is no longer stored"));
+                .orElseThrow(
+                        () -> new ItemCaptureException(ItemCaptureCode.ITEM_NOT_VISIBLE, "Thread is no longer stored"));
         // Erasing the person who wrote every message clears the thread's last message: its stored words are gone.
         if (stored.getLastTs() == null)
             throw new ItemCaptureException(ItemCaptureCode.ITEM_NOT_VISIBLE, "Thread has no stored messages left");
