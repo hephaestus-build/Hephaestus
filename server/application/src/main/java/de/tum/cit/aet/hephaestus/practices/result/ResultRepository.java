@@ -102,7 +102,6 @@ public interface ResultRepository extends JpaRepository<Result, UUID>, ResultQue
             @Param("reason") ResultEndReason reason,
             @Param("at") Instant at);
 
-    // evidence_version = 1 is Result.CAPTURED_EVIDENCE_VERSION: migrated history is never reused.
     @Query(value = """
         SELECT r.* FROM result r
         JOIN review_practice prior_method ON prior_method.review_id = r.review_id
@@ -115,8 +114,7 @@ public interface ResultRepository extends JpaRepository<Result, UUID>, ResultQue
           AND r.practice_version_id = :practiceVersionId
           AND ((prior_review.kind='ITEM' AND requested_review.kind='ITEM') OR r.item_version=:itemVersion)
           AND r.developer_id IS NOT DISTINCT FROM :developerId
-          AND r.evidence_version = 1 AND r.ended_at IS NULL
-          AND r.summary IS NOT NULL AND r.explanation IS NOT NULL AND r.evidence IS NOT NULL AND r.coverage IS NOT NULL
+          AND r.ended_at IS NULL AND\s""" + Result.CAPTURED_PROOF_SQL + """
           AND prior_method.method IS NOT NULL
           AND prior_method.method->>'modelDigest' = requested_method.method->>'modelDigest'
           AND prior_method.method->>'epoch' = requested_method.method->>'epoch'

@@ -191,7 +191,7 @@ public class ResultSourceAuthorization implements ResultProofAccess {
         Set<UUID> permitted = new HashSet<>();
         for (var result : owned) {
             var facts = Objects.requireNonNull(custody.get(result.id()));
-            boolean admitted = (history && result.migratedHistory())
+            boolean admitted = (history && ResultProofAccess.readsAsHistory(result, purpose))
                     ? historyAuthorized(result, facts, purpose, audience, lookups)
                     : authorized(result, facts, purpose, audience, lookups);
             if (admitted) permitted.add(result.id());
@@ -540,9 +540,9 @@ public class ResultSourceAuthorization implements ResultProofAccess {
                 .map(Result::facts)
                 .map(result -> {
                     var facts = custody(result, lookups);
-                    if (!result.migratedHistory())
-                        return authorized(result, facts, purpose, SourceReadAudience.PROCESSING, lookups);
-                    return historyAuthorized(result, facts, purpose, SourceReadAudience.PROCESSING, lookups);
+                    return ResultProofAccess.readsAsHistory(result, purpose)
+                            ? historyAuthorized(result, facts, purpose, SourceReadAudience.PROCESSING, lookups)
+                            : authorized(result, facts, purpose, SourceReadAudience.PROCESSING, lookups);
                 })
                 .orElse(false);
     }

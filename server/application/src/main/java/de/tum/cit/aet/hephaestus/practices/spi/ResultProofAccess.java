@@ -14,6 +14,11 @@ public interface ResultProofAccess {
                 || purpose == SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY;
     }
 
+    /** Whether {@code purpose} reads {@code result} under history rules instead of current custody. */
+    static boolean readsAsHistory(ResultFacts result, SourceUsePurpose purpose) {
+        return result.migratedHistory() && readsHistory(purpose);
+    }
+
     /**
      * The ids of the loaded {@code rows} whose retained history {@code purpose} may read, checked together. Human
      * access to retained history does not certify it for reuse or new delivery.

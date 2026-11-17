@@ -84,15 +84,14 @@ public class EvidenceDeliveryAuthorization implements EvidenceAuthorization {
                 .filter(result -> result.workspaceId() == workspaceId)
                 .filter(result -> !newDelivery || !result.migratedHistory())
                 .toList();
-        boolean readsHistory = ResultProofAccess.readsHistory(purpose);
         Set<UUID> permitted = new HashSet<>(access.permitsAllHistory(
                 workspaceId,
                 owned.stream()
-                        .filter(result -> readsHistory && result.migratedHistory())
+                        .filter(result -> ResultProofAccess.readsAsHistory(result, purpose))
                         .toList(),
                 purpose));
         var current = owned.stream()
-                .filter(result -> !readsHistory || !result.migratedHistory())
+                .filter(result -> !ResultProofAccess.readsAsHistory(result, purpose))
                 .toList();
         var live = access.permitsAll(workspaceId, current, purpose);
         var proven =

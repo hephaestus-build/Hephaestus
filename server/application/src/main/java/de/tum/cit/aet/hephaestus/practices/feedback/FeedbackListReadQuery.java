@@ -128,7 +128,7 @@ public class FeedbackListReadQuery {
                 body == null ? null : body.substring(0, Math.min(body.length(), PREVIEW_LENGTH)),
                 body != null && body.length() > PREVIEW_LENGTH,
                 privateDestination || (!allowed && (row.getBody() != null || copies.bodyPresent())),
-                selected.results().stream().anyMatch(Result::isMigratedHistory),
+                Result.includesEarlierReviews(selected.results()),
                 (int) selected.edges().stream()
                         .map(FeedbackBasisRepository.ReadRow::resultId)
                         .distinct()

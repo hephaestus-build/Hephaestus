@@ -20,13 +20,13 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Transactional(readOnly = true)
 public interface FeedbackQueryRepository extends Repository<Feedback, UUID> {
-    // evidenceVersion = 1 is Result.CAPTURED_EVIDENCE_VERSION: migrated history never supports a page.
     @Query("""
         SELECT r FROM Result r
         WHERE r.workspaceId = :workspaceId AND r.developerId = :developerId
           AND r.practiceId = :practiceId AND r.endedAt IS NULL
           AND r.outcome = de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome.NOT_MET
-          AND r.evidenceVersion = 1 AND r.recordedAt > :since
+          AND r.evidenceVersion =\s""" + Result.CAPTURED_EVIDENCE_VERSION + """
+          AND r.recordedAt > :since
           AND NOT EXISTS (SELECT m.id FROM ResultMark m WHERE m.resultId = r.id
               AND m.workspaceId = r.workspaceId AND m.kind = :incorrect AND m.removedAt IS NULL)
         ORDER BY r.recordedAt DESC, r.id DESC

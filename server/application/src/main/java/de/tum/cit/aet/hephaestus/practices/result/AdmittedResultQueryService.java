@@ -38,13 +38,7 @@ public class AdmittedResultQueryService implements AdmittedResultQuery {
                         .filter(r -> r.getReviewId().equals(reviewId)
                                 && r.getPracticeId() == i.getPracticeId()
                                 && r.getItemId() == i.getItemId()
-                                && !r.isMigratedHistory()
-                                && r.getEvidence() != null
-                                && r.getCoverage() != null
-                                && r.getPracticeVersionId() != null
-                                && r.getItemVersion() != null
-                                && r.getSummary() != null
-                                && r.getExplanation() != null))
+                                && r.isAdmissibleProof()))
                 .flatMap(Optional::stream)
                 .map(proof::snapshot)
                 .toList();

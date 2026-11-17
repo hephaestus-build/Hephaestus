@@ -159,12 +159,7 @@ public class ResultVisibilityPolicy {
     }
 
     private static boolean verifiable(ResultFacts result, @Nullable PracticeVersion pinned) {
-        return pinned != null
-                && !result.migratedHistory()
-                && result.summary() != null
-                && result.hasExplanation()
-                && result.hasEvidence()
-                && result.hasCoverage();
+        return pinned != null && result.carriesCapturedProof();
     }
 
     public Set<UUID> permitsAt(long workspaceId, Collection<ResultFacts> rows, SourceUsePurpose purpose, Instant at) {

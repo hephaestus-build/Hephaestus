@@ -65,9 +65,9 @@ public class ResultQueriesImpl implements ResultQueries {
                     + " latest.workspace_id=s.workspace_id AND latest.feedback_id=s.feedback_id ORDER BY latest.created_at"
                     + " DESC,latest.id::text DESC LIMIT 1))";
     private static final String CURRENTNESS = "CASE WHEN r.evidence_version=" + Result.MIGRATED_EVIDENCE_VERSION
-            + " THEN 'UNVERIFIABLE' WHEN r.ended_at IS NOT NULL THEN 'STALE' WHEN v.id IS NULL OR r.summary IS"
-            + " NULL OR r.explanation IS NULL OR r.evidence IS NULL OR r.coverage IS NULL THEN 'UNVERIFIABLE' WHEN"
-            + " v.review_digest=cv.review_digest THEN 'CURRENT' ELSE 'STALE' END";
+            + " THEN 'UNVERIFIABLE' WHEN r.ended_at IS NOT NULL THEN 'STALE' WHEN v.id IS NULL OR NOT ("
+            + Result.CAPTURED_PROOF_SQL
+            + ") THEN 'UNVERIFIABLE' WHEN v.review_digest=cv.review_digest THEN 'CURRENT' ELSE 'STALE' END";
 
     @Override
     public Page<Result> list(
