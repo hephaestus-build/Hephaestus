@@ -599,7 +599,7 @@ function runnerRoot(): string {
  */
 export async function runReviewJob(): Promise<void> {
 	try {
-		await review();
+		await runReview();
 	} catch (error) {
 		const end = { event: "review.fatal", error: errorKind(error) };
 		diagnose(end.event, { error: end.error });
@@ -614,7 +614,7 @@ export async function runReviewJob(): Promise<void> {
 	}
 }
 
-async function review(): Promise<void> {
+async function runReview(): Promise<void> {
 	const CWD = runnerRoot();
 	const ENVELOPE_MISMATCH_EXIT = 42;
 	const TASK_PATH = `${CWD}/task.json`;
