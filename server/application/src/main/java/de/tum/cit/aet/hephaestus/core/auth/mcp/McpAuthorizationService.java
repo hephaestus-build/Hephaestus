@@ -229,6 +229,18 @@ public class McpAuthorizationService implements McpClientGrants {
                 }));
     }
 
+    /**
+     * The browser session that approves: its token, its deadlines, and the passkey proof it carries, if any.
+     *
+     * @param passkeyCredential the credential that the session's passkey proof names
+     */
+    public record ApprovingSession(
+            UUID jti,
+            Instant sessionExpiresAt,
+            Instant authTime,
+            @Nullable Instant passkeyTime,
+            @Nullable String passkeyCredential) {}
+
     /** The answer to an approval. */
     public sealed interface Approval {
         /** The browser goes to the client with the code. */
@@ -250,18 +262,14 @@ public class McpAuthorizationService implements McpClientGrants {
      * Where the passkey policy asks for a passkey, the approving session must carry a fresh passkey proof. The grant
      * records when and with which credential, and its client session ends at {@link AdminPasskeyAccess#mcpPasskeyBound}
      * after that proof (decision 8).
-     *
-     * @param passkeyCredential the credential that the approving session's passkey proof names, if any
      */
     @Transactional
-    public Approval approve(
-            UUID id,
-            Long accountId,
-            UUID approvingJti,
-            Instant sessionExpiresAt,
-            Instant authTime,
-            @Nullable Instant passkeyTime,
-            @Nullable String passkeyCredential) {
+    public Approval approve(UUID id, Long accountId, ApprovingSession session) {
+        UUID approvingJti = session.jti();
+        Instant sessionExpiresAt = session.sessionExpiresAt();
+        Instant authTime = session.authTime();
+        Instant passkeyTime = session.passkeyTime();
+        String passkeyCredential = session.passkeyCredential();
         Instant now = clock.instant();
         if (!accounts.lockForIssuance(accountId)
                 || issuedJwts.findActive(approvingJti, now).isEmpty()) {

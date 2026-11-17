@@ -144,11 +144,12 @@ public class McpAuthorizationController {
         return switch (authorization.approve(
                 requestId,
                 accountId,
-                CurrentAccount.requireJti(),
-                sessionExpiresAt,
-                authTime,
-                CurrentAccount.passkeyTime(),
-                CurrentAccount.passkeyCredential())) {
+                new McpAuthorizationService.ApprovingSession(
+                        CurrentAccount.requireJti(),
+                        sessionExpiresAt,
+                        authTime,
+                        CurrentAccount.passkeyTime(),
+                        CurrentAccount.passkeyCredential()))) {
             case McpAuthorizationService.Approval.Approved approved ->
                 ResponseEntity.ok()
                         .cacheControl(CacheControl.noStore())

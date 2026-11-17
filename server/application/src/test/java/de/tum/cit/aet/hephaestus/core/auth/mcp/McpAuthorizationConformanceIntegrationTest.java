@@ -361,7 +361,10 @@ class McpAuthorizationConformanceIntegrationTest extends RealAuthIntegrationTest
 
         sessionRevocation.revokeAccount(accountId, IssuedJwt.RevokedReason.SIGN_OUT_EVERYWHERE, null, null);
         var answer = authorization.approve(
-                requestId, accountId, approvingJti, Instant.now().plusSeconds(3600), Instant.now(), null, null);
+                requestId,
+                accountId,
+                new McpAuthorizationService.ApprovingSession(
+                        approvingJti, Instant.now().plusSeconds(3600), Instant.now(), null, null));
 
         assertThat(answer).isInstanceOf(McpAuthorizationService.Approval.Gone.class);
         assertThat(jdbc.queryForObject(
