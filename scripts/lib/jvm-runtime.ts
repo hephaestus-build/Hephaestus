@@ -197,6 +197,9 @@ async function scanInto(scratch: string, options: JvmScan): Promise<JvmPackage[]
 		...syftImageArguments(options.reference, options.platform),
 		"--override-default-catalogers",
 		"java-jvm-cataloger",
+		// The shared configuration adds the file catalogers, which read every file; this scan needs none.
+		"--select-catalogers",
+		"-file",
 		"-o",
 		`syft-json=${sbom}`,
 	]);
