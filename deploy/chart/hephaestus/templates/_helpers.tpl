@@ -372,6 +372,9 @@ Probes read the management listener's health groups, the same groups that /livez
 on the application port. Only the management port is reachable for probes on every role.
 The kubelet runs no readiness probe until the startup probe passes, so short periods let a started
 server take traffic within seconds. The startup probe keeps the budget of .startupSeconds.
+The kubelet waits for each check to end before the next, so a check that times out stretches the
+period to its timeout. A timeout equal to the period keeps the budget for a server that accepts
+connections but does not answer.
 */}}
 {{- define "hephaestus.probes" -}}
 {{- $startupPeriod := 2 }}
@@ -380,7 +383,7 @@ startupProbe:
     path: /actuator/health/liveness
     port: management
   periodSeconds: {{ $startupPeriod }}
-  timeoutSeconds: 5
+  timeoutSeconds: {{ $startupPeriod }}
   failureThreshold: {{ div .startupSeconds $startupPeriod }}
 livenessProbe:
   httpGet:
