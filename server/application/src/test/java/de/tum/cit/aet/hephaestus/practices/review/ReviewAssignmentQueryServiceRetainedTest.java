@@ -15,7 +15,6 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRef;
-import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeVersionRepository;
 import de.tum.cit.aet.hephaestus.practices.review.model.Review;
 import de.tum.cit.aet.hephaestus.practices.review.model.ReviewItem;
@@ -59,7 +58,6 @@ class ReviewAssignmentQueryServiceRetainedTest extends BaseUnitTest {
             reviews,
             mock(ReviewPracticeRepository.class),
             items,
-            mock(PracticeRepository.class),
             mock(PracticeVersionRepository.class),
             itemQuery,
             json,

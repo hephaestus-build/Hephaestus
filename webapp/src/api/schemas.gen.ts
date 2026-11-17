@@ -1635,6 +1635,18 @@ export const CatalogPracticeUpdateSchema = {
 	required: ["definition", "groupSlug", "kind", "position"],
 } as const;
 
+export const ChangePracticeStateRequestSchema = {
+	type: "object",
+	description:
+		"The state to move a draft practice to. Only <code>ACTIVE</code> is a change a draft can make.",
+	properties: {
+		state: {
+			$ref: "#/components/schemas/PracticeState",
+		},
+	},
+	required: ["state"],
+} as const;
+
 export const CheckStateSchema = {
 	type: "string",
 	enum: ["SUCCESS", "FAILURE", "PENDING", "CANCELLED", "NONE", "NO_PIPELINE", "SKIPPED"],
@@ -8329,6 +8341,49 @@ export const PracticeDeliveryStatusSchema = {
 	enum: ["ACTIVE", "PAUSED"],
 } as const;
 
+export const PracticeDraftSchema = {
+	type: "object",
+	description:
+		"A practice folder saved to be tried (ADR 0118 decision 7): a new draft practice, a new version of a draft, or a\n version of a practice in use that is not current.",
+	properties: {
+		current: {
+			type: "boolean",
+			description:
+				"whether the version is the practice's current one. A version tried beside a practice in use is not",
+		},
+		groupSlug: {
+			type: "string",
+		},
+		kind: {
+			type: "string",
+		},
+		name: {
+			type: "string",
+		},
+		slug: {
+			type: "string",
+		},
+		state: {
+			$ref: "#/components/schemas/PracticeState",
+		},
+		versionId: {
+			type: "string",
+		},
+		versionNumber: {
+			type: "integer",
+			format: "int32",
+		},
+		warnings: {
+			type: "array",
+			description: "what the save changed in the folder, such as a group that the workspace lacks",
+			items: {
+				$ref: "#/components/schemas/PracticeFileProblem",
+			},
+		},
+	},
+	required: ["current", "kind", "name", "slug", "state", "versionId", "versionNumber", "warnings"],
+} as const;
+
 export const PracticeFileCheckSchema = {
 	type: "object",
 	description:
@@ -9449,6 +9504,11 @@ export const PracticeStandingResultSchema = {
 		},
 	},
 	required: ["deliveredFeedback", "item", "origin", "outcome", "resultId", "severity", "title"],
+} as const;
+
+export const PracticeStateSchema = {
+	type: "string",
+	enum: ["ACTIVE", "DRAFT"],
 } as const;
 
 export const PracticeTraceEntrySchema = {
@@ -16013,6 +16073,12 @@ export const StartTrialRequestSchema = {
 			type: "string",
 			pattern: "^[a-z0-9][a-z0-9-]{0,63}$",
 		},
+		practiceVersionId: {
+			type: "string",
+			description:
+				"The version to try, current or not; without it the trial tries the current version",
+			pattern: "^[1-9][0-9]*$",
+		},
 	},
 	required: ["practiceSlug"],
 } as const;
@@ -16517,6 +16583,11 @@ export const TrialSchema = {
 			type: "string",
 			format: "date-time",
 		},
+		currentVersion: {
+			type: "boolean",
+			description:
+				"whether the tried version is the practice's current one; a tried version beside it is not",
+		},
 		id: {
 			type: "string",
 			format: "uuid",
@@ -16539,6 +16610,9 @@ export const TrialSchema = {
 		practiceSlug: {
 			type: "string",
 		},
+		practiceState: {
+			$ref: "#/components/schemas/PracticeState",
+		},
 		practiceVersionId: {
 			type: "string",
 		},
@@ -16559,10 +16633,12 @@ export const TrialSchema = {
 	},
 	required: [
 		"createdAt",
+		"currentVersion",
 		"id",
 		"itemId",
 		"outcomeRemoved",
 		"practiceSlug",
+		"practiceState",
 		"practiceVersionId",
 		"practiceVersionNumber",
 		"status",

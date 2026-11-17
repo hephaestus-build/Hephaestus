@@ -4,8 +4,8 @@ import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemVersion;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinition;
-import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeVersionRepository;
+import de.tum.cit.aet.hephaestus.practices.model.PracticeVersion;
 import de.tum.cit.aet.hephaestus.practices.review.model.Review;
 import de.tum.cit.aet.hephaestus.practices.review.model.ReviewItem;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackMode;
@@ -42,7 +42,6 @@ public class ReviewAssignmentQueryService implements ReviewAssignmentQuery {
     private final ReviewRepository reviews;
     private final ReviewPracticeRepository assignments;
     private final ReviewItemRepository items;
-    private final PracticeRepository practices;
     private final PracticeVersionRepository versions;
     private final ProductItemQuery itemQuery;
     private final JsonMapper json;
@@ -77,7 +76,8 @@ public class ReviewAssignmentQueryService implements ReviewAssignmentQuery {
         var version = versions.findByIdAndWorkspaceId(pinned.getPracticeVersionId(), workspaceId)
                 .filter(v -> v.getWorkspaceId() == workspaceId
                         && v.getPractice().getId().equals(id.practiceId()));
-        var practice = practices.findByIdAndWorkspaceId(id.practiceId(), workspaceId);
+        // The pinned version's practice, loaded by its key: a trial's draft practice is hidden from every query.
+        var practice = version.map(PracticeVersion::getPractice);
         var ref = itemQuery.find(workspaceId, id.itemId());
         if (version.isEmpty() || practice.isEmpty() || ref.isEmpty()) return Optional.empty();
         if (!version.orElseThrow().getDefinition().has("about")) return Optional.empty();

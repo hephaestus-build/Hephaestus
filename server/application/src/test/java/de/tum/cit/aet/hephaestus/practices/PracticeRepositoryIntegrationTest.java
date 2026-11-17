@@ -96,10 +96,10 @@ class PracticeRepositoryIntegrationTest extends AbstractWorkspaceIntegrationTest
         assertThat(versionRows.findByIdAndWorkspaceId(
                         versionId, foreign.getWorkspace().getId()))
                 .isEmpty();
-        assertThat(versionRows.findByWorkspaceIdAndPracticeIdOrderByNumberAsc(workspaceId, ownId))
+        assertThat(versionRows.findByWorkspaceIdAndPracticeIdAndTriedFalseOrderByNumberAsc(workspaceId, ownId))
                 .extracting(version -> version.getId())
                 .containsExactly(versionId);
-        assertThat(versionRows.findByWorkspaceIdAndPracticeIdOrderByNumberAsc(workspaceId, foreignId))
+        assertThat(versionRows.findByWorkspaceIdAndPracticeIdAndTriedFalseOrderByNumberAsc(workspaceId, foreignId))
                 .isEmpty();
     }
 }

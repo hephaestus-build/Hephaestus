@@ -102,6 +102,14 @@ public class PracticeVersion {
         return Objects.requireNonNull(createdAt, "Persist the practice version before reading its creation time.");
     }
 
+    /**
+     * Whether this version was saved to be tried, beside the practice's current version. It never becomes current, and
+     * history views leave it out (ADR 0118 decision 7).
+     */
+    @ColumnDefault("false")
+    @Column(name = "tried", nullable = false, updatable = false)
+    private boolean tried;
+
     public String getReviewDigest() {
         return Objects.requireNonNull(
                 reviewDigest, "Persist the practice version before reading its generated digest.");
@@ -112,6 +120,12 @@ public class PracticeVersion {
     }
 
     public PracticeVersion(Practice practice, int number, JsonNode definition, @Nullable Long createdByAccountId) {
+        this(practice, number, definition, createdByAccountId, false);
+    }
+
+    public PracticeVersion(
+            Practice practice, int number, JsonNode definition, @Nullable Long createdByAccountId, boolean tried) {
+        this.tried = tried;
         this.practice = Objects.requireNonNull(practice);
         this.workspaceId = Objects.requireNonNull(practice.getWorkspace().getId());
         if (number < 1 || !definition.isObject()) {

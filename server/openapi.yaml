@@ -146,6 +146,9 @@ tags:
      4xx JSON.
   name: o-auth-callback
 - name: practice-catalog
+- description: "Draft practices and versions to try: workspace admins only (ADR 0118\
+    \ decisions 7 and 10)."
+  name: practice-draft
 - description: "A practice as a folder of files: download one, or check one before\
     \ it is committed (ADR 0118)."
   name: practice-file
@@ -7281,6 +7284,123 @@ paths:
       summary: Adopt a catalog practice
       tags:
       - Practice Catalog Adoption
+  /workspaces/{workspaceSlug}/practice-drafts:
+    get:
+      operationId: listPracticeDrafts
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PracticeDraft"
+          description: OK
+      summary: List the draft practices
+      tags:
+      - practice-draft
+  /workspaces/{workspaceSlug}/practice-drafts/{practiceSlug}:
+    delete:
+      operationId: deletePracticeDraft
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+      - in: path
+        name: practiceSlug
+        required: true
+        schema:
+          type: string
+      responses:
+        "204":
+          description: The draft practice is deleted
+      summary: Delete a draft practice and its trials
+      tags:
+      - practice-draft
+    put:
+      description: "A slug that the workspace lacks becomes a draft practice. A draft\
+        \ takes the folder as its next version. A practice in use keeps its current\
+        \ version, and the folder becomes a version beside it to try. Nobody is reviewed,\
+        \ and no model is called."
+      operationId: savePracticeDraft
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+      - in: path
+        name: practiceSlug
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PracticeFileCheckRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PracticeDraft"
+          description: OK
+      summary: Save a practice folder to try
+      tags:
+      - practice-draft
+  /workspaces/{workspaceSlug}/practice-drafts/{practiceSlug}/state:
+    patch:
+      description: The practice starts in feedback mode Off.
+      operationId: activatePracticeDraft
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+      - in: path
+        name: practiceSlug
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChangePracticeStateRequest"
+        required: true
+      responses:
+        "204":
+          description: The practice is in use
+      summary: Put a draft practice in use
+      tags:
+      - practice-draft
   /workspaces/{workspaceSlug}/practice-groups:
     get:
       operationId: listPracticeGroups
@@ -13230,6 +13350,15 @@ components:
       - groupSlug
       - kind
       - position
+    ChangePracticeStateRequest:
+      type: object
+      description: The state to move a draft practice to. Only <code>ACTIVE</code>
+        is a change a draft can make.
+      properties:
+        state:
+          $ref: "#/components/schemas/PracticeState"
+      required:
+      - state
     CheckState:
       type: string
       enum:
@@ -18927,6 +19056,46 @@ components:
       enum:
       - ACTIVE
       - PAUSED
+    PracticeDraft:
+      type: object
+      description: |-
+        A practice folder saved to be tried (ADR 0118 decision 7): a new draft practice, a new version of a draft, or a
+         version of a practice in use that is not current.
+      properties:
+        current:
+          type: boolean
+          description: whether the version is the practice's current one. A version
+            tried beside a practice in use is not
+        groupSlug:
+          type: string
+        kind:
+          type: string
+        name:
+          type: string
+        slug:
+          type: string
+        state:
+          $ref: "#/components/schemas/PracticeState"
+        versionId:
+          type: string
+        versionNumber:
+          type: integer
+          format: int32
+        warnings:
+          type: array
+          description: "what the save changed in the folder, such as a group that\
+            \ the workspace lacks"
+          items:
+            $ref: "#/components/schemas/PracticeFileProblem"
+      required:
+      - current
+      - kind
+      - name
+      - slug
+      - state
+      - versionId
+      - versionNumber
+      - warnings
     PracticeFileCheck:
       type: object
       description: "The result of checking a practice folder. Nothing was saved, and\
@@ -19808,6 +19977,11 @@ components:
       - resultId
       - severity
       - title
+    PracticeState:
+      type: string
+      enum:
+      - ACTIVE
+      - DRAFT
     PracticeTraceEntry:
       type: object
       properties:
@@ -25008,6 +25182,11 @@ components:
         practiceSlug:
           type: string
           pattern: "^[a-z0-9][a-z0-9-]{0,63}$"
+        practiceVersionId:
+          type: string
+          description: "The version to try, current or not; without it the trial tries\
+            \ the current version"
+          pattern: "^[1-9][0-9]*$"
       required:
       - practiceSlug
     StateBasis:
@@ -25448,6 +25627,10 @@ components:
         createdAt:
           type: string
           format: date-time
+        currentVersion:
+          type: boolean
+          description: whether the tried version is the practice's current one; a
+            tried version beside it is not
         id:
           type: string
           format: uuid
@@ -25464,6 +25647,8 @@ components:
             \ or by person erasure"
         practiceSlug:
           type: string
+        practiceState:
+          $ref: "#/components/schemas/PracticeState"
         practiceVersionId:
           type: string
         practiceVersionNumber:
@@ -25478,10 +25663,12 @@ components:
           description: "why the practice ended without an outcome, when it did"
       required:
       - createdAt
+      - currentVersion
       - id
       - itemId
       - outcomeRemoved
       - practiceSlug
+      - practiceState
       - practiceVersionId
       - practiceVersionNumber
       - status

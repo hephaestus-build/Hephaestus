@@ -181,7 +181,7 @@ Not enforced. Each other rule gets its check in the pull request that ships it, 
 - decision 1: the round trip over the bundled catalog;
 - decisions 2–5: a sync test that keeps the version on an invalid folder and adds Reviewed by Nobody on a removed one;
 - decision 6: a standing test that skips an observation sealed in Off;
-- decision 7: the architecture test of the state filter.
+- decision 7: `DraftPracticeFilterArchTest` fails on a native read of practices that names no state, and `PracticeDraftControllerIntegrationTest` fails when selection or the practice catalog sees a draft, or when a tried version becomes current or enters the history.
 
 Decisions 8 and 9 are enforced:
 

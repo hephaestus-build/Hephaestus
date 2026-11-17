@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.core.auth.dto.AccountRefDTO;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemRefDTO;
+import de.tum.cit.aet.hephaestus.practices.PracticeDrafts;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeVersionRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.dto.ReviewFeedbackCountsDTO;
@@ -61,6 +62,7 @@ public class ReviewSummaryQueryService {
     private final ReviewRepository reviews;
     private final ReviewPracticeRepository assignments;
     private final PracticeRepository practices;
+    private final PracticeDrafts drafts;
     private final PracticeVersionRepository versions;
     private final ProductReferenceQuery references;
     private final ReviewRuntimeQuery runtime;
@@ -198,7 +200,8 @@ public class ReviewSummaryQueryService {
                     .toList();
             practicesById = practiceIds.isEmpty()
                     ? Map.of()
-                    : practices.findByWorkspaceIdAndIdIn(ws, practiceIds).stream()
+                    // A trial's draft practice is hidden from every query; this admin read shows trials too.
+                    : drafts.withDrafts(() -> practices.findByWorkspaceIdAndIdIn(ws, practiceIds)).stream()
                             .collect(Collectors.toMap(Practice::getId, Function.identity()));
             var versionIds = assignmentsByReview.values().stream()
                     .flatMap(List::stream)

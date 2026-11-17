@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="20261117200242-1" author="hephaestus">
+        <comment>A draft practice exists to be tried: no event, schedule, scan or request selects it (ADR 0118 decision 7).</comment>
+        <addColumn tableName="practice">
+            <column defaultValue="ACTIVE" name="state" type="VARCHAR(8)">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+        <sql>ALTER TABLE practice ADD CONSTRAINT ck_practice_state CHECK (state IN ('ACTIVE','DRAFT'));</sql>
+        <rollback>
+            <sql>DELETE FROM review WHERE origin='TRIAL' AND id IN (SELECT q.review_id FROM review_practice q JOIN practice p ON p.id=q.practice_id AND p.workspace_id=q.workspace_id WHERE p.state='DRAFT');
+DELETE FROM practice WHERE state='DRAFT';
+ALTER TABLE practice DROP CONSTRAINT ck_practice_state;</sql>
+            <dropColumn tableName="practice" columnName="state"/>
+        </rollback>
+    </changeSet>
+    <changeSet id="20261117200242-2" author="hephaestus">
+        <comment>A version saved to be tried beside a practice in use never becomes current, and history views leave it out (ADR 0118 decision 7).</comment>
+        <addColumn tableName="practice_version">
+            <column defaultValueBoolean="false" name="tried" type="BOOLEAN">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+        <rollback>
+            <sql>DELETE FROM review WHERE origin='TRIAL' AND id IN (SELECT q.review_id FROM review_practice q JOIN practice_version v ON v.id=q.practice_version_id AND v.workspace_id=q.workspace_id WHERE v.tried);
+DELETE FROM practice_version WHERE tried;</sql>
+            <dropColumn tableName="practice_version" columnName="tried"/>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

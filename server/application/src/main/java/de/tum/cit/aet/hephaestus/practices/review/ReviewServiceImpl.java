@@ -19,6 +19,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.RoleHolder;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinition;
 import de.tum.cit.aet.hephaestus.practices.PracticeItemOptions;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
+import de.tum.cit.aet.hephaestus.practices.PracticeVersionRepository;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeVersion;
 import de.tum.cit.aet.hephaestus.practices.model.Result;
@@ -88,6 +89,7 @@ public class ReviewServiceImpl implements ReviewService {
     private final ReviewPracticeRepository assignments;
     private final ReviewItemRepository memberships;
     private final PracticeRepository practices;
+    private final PracticeVersionRepository practiceVersions;
     private final ReviewSnapshotQueryService snapshots;
     private final WorkspaceQueries workspaces;
     private final ProductItemQuery items;
@@ -259,7 +261,7 @@ public class ReviewServiceImpl implements ReviewService {
         var kinds = transactions.read(() -> readKinds(
                 pinned,
                 plan(request, workspace(request), ref, pinned, currentness).gated().stream()
-                        .map(Practice::getCurrentVersion)
+                        .map(practice -> version(request, practice))
                         .toList()));
         return new EarlyRead(currentness, kinds, items.fingerprints(pinned.item(), kinds, occasion(request)));
     }
@@ -336,6 +338,19 @@ public class ReviewServiceImpl implements ReviewService {
                             || request.practiceIds().contains(p.getId()))
                     .sorted(Comparator.comparing(Practice::getId))
                     .toList();
+        } else if (request.origin() == ReviewOrigin.TRIAL) {
+            // Loaded by its id, as a draft practice is loaded nowhere else; the trial tries the version it names.
+            var practice = practices
+                    .findById(request.practiceIds().getFirst())
+                    .orElseThrow(() -> new ReviewRequestRejected(
+                            ReviewRequestRejected.Reason.ITEM_INELIGIBLE, "Select a practice of this workspace."));
+            selected = switch (gate.trial(workspace, pinned, practice, version(request, practice))) {
+                case GateDecision.Skip skip ->
+                    throw new ReviewRequestRejected(
+                            ReviewRequestRejected.Reason.ITEM_INELIGIBLE, skip.reason(), skip.eventReason());
+                case GateDecision.Run run -> run.matchedPractices();
+            };
+            gated = selected;
         } else {
             boolean event = request.origin() == ReviewOrigin.EVENT;
             Set<Long> carried = event
@@ -368,13 +383,15 @@ public class ReviewServiceImpl implements ReviewService {
         var checksSource = checksOfItem == null ? null : checksOfItem.source();
         // Read once, and only when a selected practice needs the checks settled: the checks its capture will read.
         ItemChecks headChecks = checksOfItem != null
-                        && selected.stream().anyMatch(p -> needsChecks(definition(p), checksOfItem.source()))
+                        && selected.stream()
+                                .anyMatch(p -> needsChecks(definition(version(request, p)), checksOfItem.source()))
                 ? checksOfItem.checks(pinned, occasion)
                 : ItemChecks.SETTLED;
         // Read once for every practice: the review scope, the eligible members, the item's repository and its people.
         var itemCoverage = request.kind() == ReviewKind.ITEM ? itemCoverage(workspace, pinned) : null;
         var planned = selected.stream()
-                .map(p -> selection(p, request.kind(), pinned, itemCoverage, checksSource, headChecks))
+                .map(p -> selection(
+                        p, version(request, p), request.kind(), pinned, itemCoverage, checksSource, headChecks))
                 .toList();
         refuseWorkThatNoPracticeReviews(planned);
         // A trial with nothing to try would end at once; it is refused instead, with the reason it could not run.
@@ -554,8 +571,19 @@ public class ReviewServiceImpl implements ReviewService {
         return pending;
     }
 
-    private PracticeDefinition definition(Practice practice) {
-        return json.convertValue(practice.getCurrentVersion().getDefinition(), PracticeDefinition.class);
+    private PracticeDefinition definition(PracticeVersion version) {
+        return json.convertValue(version.getDefinition(), PracticeDefinition.class);
+    }
+
+    /** The version that the request measures: the current one, or for a trial the version it names. */
+    private PracticeVersion version(ReviewRequest request, Practice practice) {
+        var id = request.practiceVersionId();
+        if (id == null) return practice.getCurrentVersion();
+        return practiceVersions
+                .findByIdAndWorkspaceId(id, request.workspaceId())
+                .filter(version -> Objects.equals(version.getPractice().getId(), practice.getId()))
+                .orElseThrow(() -> new ReviewRequestRejected(
+                        ReviewRequestRejected.Reason.ITEM_INELIGIBLE, "Select a version of this practice."));
     }
 
     /** An optional read of the checks never waits: the practice judges without them, as it would with none. */
@@ -577,13 +605,13 @@ public class ReviewServiceImpl implements ReviewService {
 
     private SelectedPractice selection(
             Practice practice,
+            PracticeVersion version,
             ReviewKind kind,
             ItemSnapshot pinned,
             @Nullable ItemCoverage itemCoverage,
             @Nullable SourceKind checksSource,
             ItemChecks checks) {
-        var version = practice.getCurrentVersion();
-        var definition = json.convertValue(version.getDefinition(), PracticeDefinition.class);
+        var definition = definition(version);
         if (kind == ReviewKind.SCAN) return new SelectedPractice(practice, version, List.of(), null);
         var covered = Objects.requireNonNull(itemCoverage);
         var roles = definition.about() == null
@@ -849,6 +877,7 @@ public class ReviewServiceImpl implements ReviewService {
                                 || r.practiceIds().size() != 1
                                 || r.requestKey() != null
                                 || r.commentAnswer() != null))
+                || (r.origin() != ReviewOrigin.TRIAL && r.practiceVersionId() != null)
                 || ((r.origin() == ReviewOrigin.SCHEDULE || r.origin() == ReviewOrigin.BACKFILL)
                         && r.batchId() == null))
             throw new IllegalArgumentException("The review origin requires its recorded link.");

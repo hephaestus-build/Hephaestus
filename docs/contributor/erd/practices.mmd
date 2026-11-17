@@ -112,6 +112,7 @@ erDiagram
         JSONB catalog_base
         TIMESTAMPTZ created_at "NOT NULL"
         TIMESTAMPTZ updated_at
+        VARCHAR(8) state "NOT NULL"
     }
 
     PracticeGroup {
@@ -141,6 +142,7 @@ erDiagram
         VARCHAR(96) review_digest "NOT NULL"
         BIGINT created_by_account_id FK
         TIMESTAMPTZ created_at "NOT NULL"
+        BOOLEAN tried "NOT NULL"
     }
 
     Problem {

@@ -15,6 +15,14 @@ public record StartTrialRequestDTO(
         @Schema(type = "string", pattern = "^[1-9][0-9]*$") @Pattern(regexp = "^[1-9][0-9]*$") @Nullable
         String itemId,
 
+        @Schema(
+                type = "string",
+                pattern = "^[1-9][0-9]*$",
+                description = "The version to try, current or not; without it the trial tries the current version")
+        @Pattern(regexp = "^[1-9][0-9]*$")
+        @Nullable
+        String practiceVersionId,
+
         @Schema(description = "The address of a GitHub pull request or issue, or a GitLab merge request or issue")
         @Size(max = 2048)
         @Nullable

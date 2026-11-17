@@ -93,7 +93,7 @@ public class PracticePageFeedbackBasis {
                     if (pinnedIds.isEmpty()) return;
                     versions.findByWorkspaceIdAndIdIn(workspaceId, pinnedIds)
                             .forEach(version -> pinnedById.put(Objects.requireNonNull(version.getId()), version));
-                    versions.findByWorkspaceIdAndPracticeIdInOrderByNumberAsc(
+                    versions.findByWorkspaceIdAndPracticeIdInAndTriedFalseOrderByNumberAsc(
                                     workspaceId,
                                     evidence.stream().map(Result::getPracticeId).collect(Collectors.toSet()))
                             .forEach(version -> versionsByPractice

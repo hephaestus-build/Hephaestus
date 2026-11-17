@@ -3,8 +3,8 @@ package de.tum.cit.aet.hephaestus.practices.curated.adoption;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.practices.GroupDefinition;
+import de.tum.cit.aet.hephaestus.practices.PracticeDrafts;
 import de.tum.cit.aet.hephaestus.practices.PracticeGroupRepository;
-import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.catalog.CatalogService;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
@@ -18,7 +18,7 @@ import org.springframework.stereotype.Component;
 @ConditionalOnServerRole
 class CatalogAdoptionPlanAssembler {
     private final CatalogService catalog;
-    private final PracticeRepository practices;
+    private final PracticeDrafts drafts;
     private final PracticeGroupRepository groups;
 
     List<CatalogPracticeSummaryDTO> list(WorkspaceContext ctx) {
@@ -38,9 +38,7 @@ class CatalogAdoptionPlanAssembler {
                                     : catalog.group(group).effective().name(),
                             availability(
                                     offer.slug(),
-                                    practices
-                                            .findByWorkspaceIdAndSlug(ctx.id(), offer.slug())
-                                            .orElse(null)),
+                                    drafts.find(ctx.id(), offer.slug()).orElse(null)),
                             definition.reviewedBy());
                 })
                 .toList();
@@ -51,7 +49,8 @@ class CatalogAdoptionPlanAssembler {
                 .filter(entry -> entry.slug().equals(slug))
                 .findFirst()
                 .orElseThrow(() -> new EntityNotFoundException("Offered catalog practice", slug));
-        var existing = practices.findByWorkspaceIdAndSlug(ctx.id(), slug).orElse(null);
+        // A draft practice holds its slug too, so adopting the catalog practice would conflict with it.
+        var existing = drafts.find(ctx.id(), slug).orElse(null);
         String groupSlug = offer.effective().groupSlug();
         var group = groupSlug == null
                 ? null
@@ -107,8 +106,7 @@ class CatalogAdoptionPlanAssembler {
     private CatalogGroupPracticeAction action(WorkspaceContext ctx, String slug, CatalogAdoptionPlan plan) {
         if (plan.availability() == CatalogAdoptionAvailability.AVAILABLE) return CatalogGroupPracticeAction.ADD;
         if (plan.availability() == CatalogAdoptionAvailability.SLUG_CONFLICT) return CatalogGroupPracticeAction.BLOCKED;
-        Practice existing =
-                practices.findByWorkspaceIdAndSlug(ctx.id(), plan.slug()).orElseThrow();
+        Practice existing = drafts.find(ctx.id(), plan.slug()).orElseThrow();
         return existing.getGroup() == null
                 ? CatalogGroupPracticeAction.MOVE_TO_GROUP
                 : slug.equals(existing.getGroup().getSlug())

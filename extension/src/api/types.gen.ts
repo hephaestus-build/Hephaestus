@@ -709,6 +709,13 @@ export type CatalogPracticeUpdate = {
 	position: null | number;
 };
 
+/**
+ * The state to move a draft practice to. Only <code>ACTIVE</code> is a change a draft can make.
+ */
+export type ChangePracticeStateRequest = {
+	state: PracticeState;
+};
+
 export type CheckState =
 	| "SUCCESS"
 	| "FAILURE"
@@ -4313,6 +4320,28 @@ export type PracticeDefinitionOptions = {
 export type PracticeDeliveryStatus = "ACTIVE" | "PAUSED";
 
 /**
+ * A practice folder saved to be tried (ADR 0118 decision 7): a new draft practice, a new version of a draft, or a
+ * version of a practice in use that is not current.
+ */
+export type PracticeDraft = {
+	/**
+	 * whether the version is the practice's current one. A version tried beside a practice in use is not
+	 */
+	current: boolean;
+	groupSlug?: string;
+	kind: string;
+	name: string;
+	slug: string;
+	state: PracticeState;
+	versionId: string;
+	versionNumber: number;
+	/**
+	 * what the save changed in the folder, such as a group that the workspace lacks
+	 */
+	warnings: Array<PracticeFileProblem>;
+};
+
+/**
  * The result of checking a practice folder. Nothing was saved, and no model was called.
  */
 export type PracticeFileCheck = {
@@ -4692,6 +4721,8 @@ export type PracticeStandingResult = {
 	severity: Severity | null;
 	title: string;
 };
+
+export type PracticeState = "ACTIVE" | "DRAFT";
 
 export type PracticeTraceEntry = {
 	about: AboutRole | null;
@@ -6857,6 +6888,10 @@ export type StartTrialRequest = {
 	 */
 	itemUrl?: string;
 	practiceSlug: string;
+	/**
+	 * The version to try, current or not; without it the trial tries the current version
+	 */
+	practiceVersionId?: string;
 };
 
 export type StateBasis = Omit<ClaimBasis, "type"> & {
@@ -7182,6 +7217,10 @@ export type TrendSupport = {
 export type Trial = {
 	completedAt?: string;
 	createdAt: string;
+	/**
+	 * whether the tried version is the practice's current one; a tried version beside it is not
+	 */
+	currentVersion: boolean;
 	id: string;
 	itemId: string;
 	itemVersion?: string;
@@ -7194,6 +7233,7 @@ export type Trial = {
 	 */
 	outcomeRemoved: boolean;
 	practiceSlug: string;
+	practiceState: PracticeState;
 	practiceVersionId: string;
 	practiceVersionNumber: number;
 	status: ReviewStatus;
@@ -14679,6 +14719,97 @@ export type AdoptPracticeResponses = {
 };
 
 export type AdoptPracticeResponse = AdoptPracticeResponses[keyof AdoptPracticeResponses];
+
+export type ListPracticeDraftsData = {
+	body?: never;
+	path: {
+		/**
+		 * Workspace slug
+		 */
+		workspaceSlug: string;
+	};
+	query?: never;
+	url: "/workspaces/{workspaceSlug}/practice-drafts";
+};
+
+export type ListPracticeDraftsResponses = {
+	/**
+	 * OK
+	 */
+	200: Array<PracticeDraft>;
+};
+
+export type ListPracticeDraftsResponse =
+	ListPracticeDraftsResponses[keyof ListPracticeDraftsResponses];
+
+export type DeletePracticeDraftData = {
+	body?: never;
+	path: {
+		/**
+		 * Workspace slug
+		 */
+		workspaceSlug: string;
+		practiceSlug: string;
+	};
+	query?: never;
+	url: "/workspaces/{workspaceSlug}/practice-drafts/{practiceSlug}";
+};
+
+export type DeletePracticeDraftResponses = {
+	/**
+	 * The draft practice is deleted
+	 */
+	204: void;
+};
+
+export type DeletePracticeDraftResponse =
+	DeletePracticeDraftResponses[keyof DeletePracticeDraftResponses];
+
+export type SavePracticeDraftData = {
+	body: PracticeFileCheckRequest;
+	path: {
+		/**
+		 * Workspace slug
+		 */
+		workspaceSlug: string;
+		practiceSlug: string;
+	};
+	query?: never;
+	url: "/workspaces/{workspaceSlug}/practice-drafts/{practiceSlug}";
+};
+
+export type SavePracticeDraftResponses = {
+	/**
+	 * OK
+	 */
+	200: PracticeDraft;
+};
+
+export type SavePracticeDraftResponse =
+	SavePracticeDraftResponses[keyof SavePracticeDraftResponses];
+
+export type ActivatePracticeDraftData = {
+	body: ChangePracticeStateRequest;
+	path: {
+		/**
+		 * Workspace slug
+		 */
+		workspaceSlug: string;
+		practiceSlug: string;
+	};
+	query?: never;
+	url: "/workspaces/{workspaceSlug}/practice-drafts/{practiceSlug}/state";
+};
+
+export type ActivatePracticeDraftResponses = {
+	/**
+	 * The practice is in use
+	 */
+	204: void;
+};
+
+export type ActivatePracticeDraftResponse =
+	ActivatePracticeDraftResponses[keyof ActivatePracticeDraftResponses];
 
 export type ListPracticeGroupsData = {
 	body?: never;

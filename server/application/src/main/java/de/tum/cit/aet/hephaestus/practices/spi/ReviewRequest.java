@@ -16,6 +16,7 @@ import org.jspecify.annotations.Nullable;
  * @param commentAnswer for a request made by a comment on the work, where to answer it when no feedback does
  * @param scanRef for a scan, the branch the requester asks for; the scan is refused unless it is the default branch
  * @param expectedVersion for a scan, the version the requester expects; the scan is refused unless it pins that one
+ * @param practiceVersionId for a trial, the version it tries, which need not be current; null tries the current one
  */
 @Builder
 public record ReviewRequest(
@@ -35,7 +36,8 @@ public record ReviewRequest(
         Set<ItemEventName> occasions,
         @Nullable CommentAnswer commentAnswer,
         @Nullable String scanRef,
-        @Nullable String expectedVersion) {
+        @Nullable String expectedVersion,
+        @Nullable Long practiceVersionId) {
     /** The thread of a request comment, in the address form of the adapter of {@code kind}. */
     public record CommentAnswer(IntegrationKind kind, String address) {}
 

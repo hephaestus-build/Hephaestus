@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.practices;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
+import de.tum.cit.aet.hephaestus.practices.model.PracticeState;
 import jakarta.persistence.LockModeType;
 import java.util.Collection;
 import java.util.List;
@@ -50,7 +51,15 @@ public interface PracticeRepository extends JpaRepository<Practice, Long> {
 
     boolean existsByWorkspaceIdAndSlug(Long workspaceId, String slug);
 
+    @EntityGraph(attributePaths = {"group", "currentVersion"})
+    List<Practice> findByWorkspaceIdAndStateOrderBySlugAsc(Long workspaceId, PracticeState state);
+
+    /** Deletes the trials of a practice, so that a draft practice can go: trials are all that refer to a draft. */
     @Modifying
-    @Query("DELETE FROM Practice p WHERE p.workspace.id = :workspaceId")
-    void deleteAllByWorkspaceId(Long workspaceId);
+    @Query(
+            value = "DELETE FROM review WHERE workspace_id = :workspaceId AND origin = 'TRIAL' AND id IN ("
+                    + "SELECT review_id FROM review_practice WHERE workspace_id = :workspaceId"
+                    + " AND practice_id = :practiceId)",
+            nativeQuery = true)
+    void deleteTrialsOf(long workspaceId, long practiceId);
 }
