@@ -146,13 +146,16 @@ export const REVIEW_STOP_REASON_SENTENCES = {
 	PERSON_DATA_ERASED: "A person’s data was erased.",
 	STALE_ROLLOUT_REVISION: "Review settings changed while it waited.",
 	CANCELLED_BY_ADMIN: "A workspace admin cancelled it.",
-	REPLACED: "The work changed, so its next review measures what this one did not.",
+	REPLACED: "A newer review of the work measures what this one did not.",
 	LEGACY_FAILURE: "It was cancelled before Hephaestus recorded why.",
 	EXECUTION_INCOMPLETE: "The review did not record an observation for every selected practice.",
 	COMPOSITION_UNCONFIRMED:
 		"The observations are kept, but we could not confirm where the feedback went.",
 	PROVIDER_UNAVAILABLE: "The AI provider was unavailable or rate-limited for too long.",
 	EVIDENCE_TOO_LARGE: "The work’s evidence was larger than a review can hold.",
+	SOURCES_MOVED:
+		"Something its practices read changed before they started, so Hephaestus measures them again.",
+	NOT_RUN: "Hephaestus did not get to every practice, so it measures the rest again.",
 	RESULT_WITHHELD: "Its candidate observations were withheld.",
 	READINESS_REFUSED: "Something the review needs was not ready.",
 	SUSPECT_LISTING: "The file listing changed too much to trust, so files were not removed.",

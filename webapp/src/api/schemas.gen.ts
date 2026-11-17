@@ -14425,6 +14425,8 @@ export const ReviewStopReasonSchema = {
 		"COMPOSITION_UNCONFIRMED",
 		"PROVIDER_UNAVAILABLE",
 		"EVIDENCE_TOO_LARGE",
+		"SOURCES_MOVED",
+		"NOT_RUN",
 	],
 } as const;
 

@@ -32,6 +32,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ResultStore;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentSnapshot;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentStore;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewKind;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewWithholdings;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -191,8 +192,9 @@ public class ReviewOutputService {
                         owned.getWorkspaceId(),
                         assignment.id(),
                         owned.getId(),
-                        nonResult.reason(),
-                        "The runtime ended this practice without a result.");
+                        ReviewWithholdings.unmeasured(nonResult.reason()),
+                        "The runtime ended this practice without a result ("
+                                + nonResult.reason().name() + ").");
             }
             ObjectNode retained = (ObjectNode) capture.deepCopy();
             retained.set("manifest", mapper.valueToTree(retainedManifest));

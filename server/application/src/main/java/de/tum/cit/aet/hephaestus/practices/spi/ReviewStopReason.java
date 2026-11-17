@@ -40,5 +40,16 @@ public enum ReviewStopReason {
      * The work's captured evidence was larger than a review's sandbox can hold. It describes the evidence's size, never
      * the work.
      */
-    EVIDENCE_TOO_LARGE;
+    EVIDENCE_TOO_LARGE,
+    /**
+     * A source that the practice reads changed before it started, and no newer review of the item replaces this one.
+     * It is carried: the item's next readiness edge measures the practice again. {@link #REPLACED} names the case where
+     * a newer review exists.
+     */
+    SOURCES_MOVED,
+    /**
+     * The practice is owed and was never measured: the attempt ended before it started or finished, by its deadline, a
+     * watchdog or a lost sandbox. It says nothing about the work. It is carried, and the run keeps its own stop reason.
+     */
+    NOT_RUN;
 }

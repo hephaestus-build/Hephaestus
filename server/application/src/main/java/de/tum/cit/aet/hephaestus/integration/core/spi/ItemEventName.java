@@ -14,6 +14,14 @@ public record ItemEventName(String value) {
             throw new IllegalArgumentException("Invalid item event name");
     }
 
+    /**
+     * The follow-up occasion of a review that ended owing practices: Hephaestus records it, no provider does. It selects
+     * no practice itself, so its readiness edge measures only the carried ones.
+     */
+    public static ItemEventName carried(ItemKind kind) {
+        return new ItemEventName(kind.value() + ".carried");
+    }
+
     @JsonValue
     @Override
     public String value() {

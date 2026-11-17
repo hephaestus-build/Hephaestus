@@ -1,6 +1,10 @@
 package de.tum.cit.aet.hephaestus.practices.review;
 
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.integration.core.api.ItemEventService;
+import de.tum.cit.aet.hephaestus.integration.core.spi.FoundBy;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ItemEventInput;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ItemEventName;
 import de.tum.cit.aet.hephaestus.practices.review.model.Review;
 import de.tum.cit.aet.hephaestus.practices.review.report.ScanReportService;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewCompleted;
@@ -10,6 +14,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewOrigin;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewPracticeStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStopReason;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewWithholdings;
 import java.time.Instant;
 import java.util.HashSet;
 import java.util.List;
@@ -29,6 +34,9 @@ class ReviewClosure {
     private final ScanReportService reports;
     private final ReviewOutcomeMeters outcomes;
     private final ApplicationEventPublisher events;
+    private final ReviewRepository reviews;
+    private final ProductItemQuery items;
+    private final ItemEventService itemEvents;
 
     void close(Review review, ReviewStatus status, @Nullable ReviewStopReason reason, Instant at) {
         review.end(status, reason, at);
@@ -45,6 +53,44 @@ class ReviewClosure {
             events.publishEvent(new ReviewCompleted(id, workspace));
         if (review.getChecks().has(ReviewServiceImpl.COMMENT_ANSWER))
             events.publishEvent(new CommentRequestedReviewEnded(id, workspace));
+        followUp(review, at);
+    }
+
+    /**
+     * A review that ends owing practices asks for one follow-up occasion of its item at the same version: a moved source
+     * or a spent deadline is no provider event, so nothing else would measure them before the work changes. The
+     * occasion selects nothing itself, so its readiness edge measures only the carried practices. An occasion is unique
+     * per item, name and version, so a version gets one follow-up: a practice that does not fit again stays carried
+     * until a real event. A newer review, or a newer version with its own event, measures them anyway.
+     */
+    private void followUp(Review review, Instant at) {
+        var version = review.getItemVersion();
+        if (review.getKind() != ReviewKind.ITEM || version == null) return;
+        long workspace = review.getWorkspaceId();
+        boolean owes =
+                memberships
+                        .findByWorkspaceIdAndReviewIdOrderByPracticeIdAscItemIdAsc(workspace, review.getId())
+                        .stream()
+                        .anyMatch(member -> member.getState() == ReviewItemState.WITHHELD
+                                && ReviewWithholdings.FOLLOW_UP.contains(member.getReason()));
+        if (!owes
+                || reviews.existsNewerItemReview(workspace, review.getItemId(), review.getId(), review.getOrderedAt()))
+            return;
+        var item = items.find(workspace, review.getItemId()).orElse(null);
+        if (item == null
+                || !items.current(item)
+                        .map(current -> current.version().value().equals(version))
+                        .orElse(false)) return;
+        itemEvents.record(new ItemEventInput(
+                workspace,
+                item.itemId(),
+                ItemEventName.carried(item.kind()),
+                version,
+                null,
+                at,
+                FoundBy.SCHEDULE,
+                null,
+                null));
     }
 
     /**
@@ -54,7 +100,8 @@ class ReviewClosure {
      */
     private void closeMembers(Review review, Instant at) {
         long workspaceId = review.getWorkspaceId();
-        var reason = Objects.requireNonNullElse(review.getStopReason(), ReviewStopReason.EXECUTION_INCOMPLETE)
+        var reason = ReviewWithholdings.unmeasured(
+                        Objects.requireNonNullElse(review.getStopReason(), ReviewStopReason.EXECUTION_INCOMPLETE))
                 .name();
         var unmeasured = new HashSet<Long>();
         if (review.getKind() == ReviewKind.ITEM)

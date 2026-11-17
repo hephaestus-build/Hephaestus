@@ -20,8 +20,12 @@ public class PracticeItemOptions {
         return items.descriptorFor(kind).orElseThrow(() -> new InvalidInputException("Choose a supported item kind."));
     }
 
-    /** How an occasion of {@code name} reaches its readiness edge; a name the kind does not declare is immediate. */
+    /**
+     * How an occasion of {@code name} reaches its readiness edge; a name the kind does not declare is immediate. The
+     * follow-up of carried practices ({@link ItemEventName#carried}) joins the quiet window as a continuing occasion.
+     */
     public OccasionKind occasion(ItemKind kind, ItemEventName name) {
+        if (name.equals(ItemEventName.carried(kind))) return OccasionKind.CONTINUING;
         return require(kind).events().stream()
                 .filter(event -> event.name().equals(name))
                 .map(ItemEventDefinition::occasion)

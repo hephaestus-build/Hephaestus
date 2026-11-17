@@ -10,6 +10,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.job.RuntimeJobTestData;
@@ -28,6 +29,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ItemEventName;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemEventState;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRegistration;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ItemSnapshot;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemVersion;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ReviewRequestReason;
 import de.tum.cit.aet.hephaestus.practices.DefinitionTestFixtures;
@@ -907,7 +909,9 @@ class ResultAdmissionIntegrationTest extends AbstractResultAdmissionIntegrationT
                         ref.workspaceId(), id.reviewId(), id.practiceId(), id.itemId())
                 .orElseThrow();
         assertThat(stopped.getState()).isEqualTo(ReviewItemState.WITHHELD);
-        assertThat(stopped.getReason()).isEqualTo("REPLACED");
+        assertThat(stopped.getReason())
+                .as("no newer review of the item exists, so its own sources moved and it runs again")
+                .isEqualTo("SOURCES_MOVED");
         var unrelated = memberRows
                 .findByWorkspaceIdAndReviewIdAndPracticeIdAndItemId(
                         other.review().getWorkspaceId(),
@@ -1372,6 +1376,81 @@ class ResultAdmissionIntegrationTest extends AbstractResultAdmissionIntegrationT
         assertThat(review.getStopReason()).isEqualTo(ReviewStopReason.READINESS_REFUSED);
     }
 
+    @Test
+    void shouldCallAStalePracticeReplacedOnlyWhenANewerReviewOfTheItemExists() {
+        var pending = admissions.pending(scenario, Instant.now(), scenarioAccountId);
+        running(pending, 0);
+        var ref = productItems.require(
+                pending.review().getWorkspaceId(), scenario.item().getId());
+        var kind = new SourceKind("scm.pull-request.core");
+        var capture = pinnedPractices
+                .findByWorkspaceIdAndReviewIdAndPracticeId(
+                        pending.review().getWorkspaceId(),
+                        pending.review().getId(),
+                        scenario.practice().getId())
+                .orElseThrow();
+        var facts = json.createObjectNode();
+        facts.putObject("sourceFingerprints").put(kind.value(), "a".repeat(64));
+        capture.setCaptureDecision(facts);
+        pinnedPractices.saveAndFlush(capture);
+        doReturn(Map.of(kind, "b".repeat(64))).when(productItems).fingerprints(eq(ref), anySet(), any());
+        // A push ordered a newer review of the same work.
+        admissions.pending(scenario, pending.review().getOrderedAt().plusSeconds(60), scenarioAccountId);
+        var id = new ReviewAssignmentId(
+                pending.review().getId(), scenario.practice().getId(), ref.itemId());
+
+        assertThat(reviewFreshness.start(
+                        ref.workspaceId(),
+                        id,
+                        pending.jobId(),
+                        0,
+                        reviewFreshness.startCurrentness(ref.workspaceId(), id)))
+                .isFalse();
+
+        assertThat(memberRows
+                        .findByWorkspaceIdAndReviewIdAndPracticeIdAndItemId(
+                                ref.workspaceId(), id.reviewId(), id.practiceId(), id.itemId())
+                        .orElseThrow()
+                        .getReason())
+                .isEqualTo("REPLACED");
+    }
+
+    /**
+     * A review that ends owing practices asks for a follow-up of its item, as nothing else would measure them before
+     * the work changes. One per version: a practice that does not fit again stays carried until a real event.
+     */
+    @Test
+    void shouldAskOnceForAFollowUpOccasionOfTheSameVersionWhenReviewsEndOwingPractices() {
+        String version = "item-version-" + UUID.randomUUID();
+        var ref = productItems.require(
+                scenario.workspace().getId(), scenario.item().getId());
+        var current = mock(ItemSnapshot.class);
+        when(current.version()).thenReturn(new ItemVersion(version, null));
+        doReturn(Optional.of(current)).when(productItems).current(ref);
+        for (int review = 0; review < 2; review++) {
+            var pending = admissions.pending(scenario, Instant.now(), scenarioAccountId, version);
+            admissions.withheld(pending, ReviewStopReason.NOT_RUN.name());
+            admit(pending, ResultOutcome.MET);
+            settle(pending);
+            service.complete(
+                    scenario.workspace().getId(),
+                    pending.review().getId(),
+                    new ReviewCompletion(
+                            ReviewStatus.COMPLETE,
+                            null,
+                            Instant.now(),
+                            pending.review().getOrderedAt()));
+        }
+
+        assertThat(jdbcTemplate.queryForList(
+                        "SELECT item_version FROM item_event WHERE workspace_id=? AND item_id=? AND name=?",
+                        String.class,
+                        ref.workspaceId(),
+                        ref.itemId(),
+                        ItemEventName.carried(ref.kind()).value()))
+                .containsExactly(version);
+    }
+
     /**
      * A practice that Hephaestus withheld on purpose names why the review is Partial: the work changed
      * or the review settings changed for every such practice, or the review was not ready, also for a mix of reasons.
@@ -1381,6 +1460,10 @@ class ResultAdmissionIntegrationTest extends AbstractResultAdmissionIntegrationT
     @ParameterizedTest
     @CsvSource({
         "REPLACED, REPLACED",
+        "SOURCES_MOVED, SOURCES_MOVED",
+        "REPLACED;SOURCES_MOVED, SOURCES_MOVED",
+        "NOT_RUN, EXECUTION_INCOMPLETE",
+        "NOT_RUN;REPLACED, EXECUTION_INCOMPLETE",
         "CHECKS_PENDING, READINESS_REFUSED",
         "READINESS_REFUSED, READINESS_REFUSED",
         "REPLACED;CHECKS_PENDING, READINESS_REFUSED",

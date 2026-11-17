@@ -12,6 +12,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewFreshness;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewItemState;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewSnapshot;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewStopReason;
 import java.time.Clock;
 import java.util.Collection;
 import java.util.UUID;
@@ -100,15 +101,23 @@ public class ReviewFreshnessService implements ReviewFreshness {
             assignment.start();
             return true;
         }
-        var reason = state == Currentness.STALE ? "REPLACED" : "READINESS_REFUSED";
+        // REPLACED only when a newer review exists; otherwise this practice's own sources moved and it runs again.
+        var reason = state != Currentness.STALE
+                ? ReviewStopReason.READINESS_REFUSED
+                : reviews.existsNewerItemReview(workspaceId, review.getItemId(), review.getId(), review.getOrderedAt())
+                        ? ReviewStopReason.REPLACED
+                        : ReviewStopReason.SOURCES_MOVED;
         member.withhold(
-                reason,
-                state == Currentness.STALE
-                        ? "The sources changed before this practice started."
-                        : "The current sources could not be verified before this practice started: "
-                                + checked.unreadReason() + ".",
+                reason.name(),
+                switch (reason) {
+                    case REPLACED -> "A newer review of the work replaces this practice.";
+                    case SOURCES_MOVED -> "A source that this practice reads changed before it started.";
+                    default ->
+                        "The current sources could not be verified before this practice started: "
+                                + checked.unreadReason() + ".";
+                },
                 clock.instant());
-        assignment.withhold(reason);
+        assignment.withhold(reason.name());
         return false;
     }
 

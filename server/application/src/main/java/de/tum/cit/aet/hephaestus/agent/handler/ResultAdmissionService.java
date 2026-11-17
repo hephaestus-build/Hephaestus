@@ -36,6 +36,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentId;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStopReason;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewWithholdings;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewWriteGuard;
 import java.io.Serial;
 import java.time.Instant;
@@ -261,12 +262,9 @@ public class ResultAdmissionService {
                     var job = ownedJob(identity);
                     if (isAdmitted(job)) return false;
                     var currentness = staging.currentness(job);
+                    // A practice that no attempt measured is owed, whatever moved since: it runs again.
                     if (currentness != Currentness.CURRENT) {
-                        staging.failOpen(
-                                job,
-                                currentness == Currentness.STALE
-                                        ? ReviewStopReason.REPLACED
-                                        : ReviewStopReason.READINESS_REFUSED);
+                        staging.failOpen(job, ReviewStopReason.NOT_RUN);
                     } else if (!assignments.open(job).isEmpty()) return false;
                     seal(
                             identity,
@@ -295,7 +293,7 @@ public class ResultAdmissionService {
                     files.holdCopyAdmission();
                     var job = ownedJob(identity);
                     if (isAdmitted(job)) return job;
-                    staging.failOpen(job, reason);
+                    staging.failOpen(job, ReviewWithholdings.unmeasured(reason));
                     return seal(
                                     identity,
                                     new SealResultsRequestDTO(

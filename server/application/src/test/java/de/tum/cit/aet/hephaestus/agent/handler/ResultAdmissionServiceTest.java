@@ -661,14 +661,18 @@ class ResultAdmissionServiceTest extends BaseUnitTest {
         assertThat(ResultAdmissionService.isAdmitted(job)).isTrue();
     }
 
+    /**
+     * A retry whose capture moved seals the review with the practices no attempt measured as owed, never as replaced:
+     * no newer review measures them, so they are carried and run again.
+     */
     @Test
-    void shouldStopTheOpenPracticesAsReplacedAndSealWhenTheRetryFindsTheSourcesStale() {
-        assertRetryStopsOpenPractices(Currentness.STALE, ReviewStopReason.REPLACED);
+    void shouldStopTheOpenPracticesAsNotRunAndSealWhenTheRetryFindsTheSourcesStale() {
+        assertRetryStopsOpenPractices(Currentness.STALE, ReviewStopReason.NOT_RUN);
     }
 
     @Test
-    void shouldStopTheOpenPracticesAsReadinessRefusedAndSealWhenTheRetryCannotVerifyTheSources() {
-        assertRetryStopsOpenPractices(Currentness.UNVERIFIABLE, ReviewStopReason.READINESS_REFUSED);
+    void shouldStopTheOpenPracticesAsNotRunAndSealWhenTheRetryCannotVerifyTheSources() {
+        assertRetryStopsOpenPractices(Currentness.UNVERIFIABLE, ReviewStopReason.NOT_RUN);
     }
 
     private void assertRetryStopsOpenPractices(Currentness currentness, ReviewStopReason reason) {

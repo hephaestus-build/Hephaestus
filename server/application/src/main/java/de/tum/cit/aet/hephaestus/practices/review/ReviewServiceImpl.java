@@ -801,7 +801,8 @@ public class ReviewServiceImpl implements ReviewService {
     /**
      * Why a review whose run ended without a reason of its own left practices unmeasured. When Hephaestus withheld
      * each of them on purpose ({@link ReviewWithholdings#DELIBERATE}), the review was not ready, as selection records
-     * when it withholds every practice: {@code REPLACED} when the work changed for every one of them,
+     * when it withholds every practice: {@code REPLACED} when a newer review replaced every one of them,
+     * {@code SOURCES_MOVED} when the sources moved for every one of them and not every one was replaced,
      * {@code STALE_ROLLOUT_REVISION} when the review settings changed for every one of them, and
      * {@code READINESS_REFUSED} otherwise. A practice that the run left open, or one that a run or admission withheld
      * for a fault, is execution that did not finish. Measured practices count neither way.
@@ -825,6 +826,8 @@ public class ReviewServiceImpl implements ReviewService {
                         .allMatch(reason -> reason != null && ReviewWithholdings.DELIBERATE.contains(reason)))
             return ReviewStopReason.EXECUTION_INCOMPLETE;
         if (withheld.equals(Set.of(ReviewStopReason.REPLACED.name()))) return ReviewStopReason.REPLACED;
+        if (Set.of(ReviewStopReason.REPLACED.name(), ReviewStopReason.SOURCES_MOVED.name())
+                .containsAll(withheld)) return ReviewStopReason.SOURCES_MOVED;
         if (withheld.equals(Set.of(ReviewWithholdings.STALE_ROLLOUT_REVISION)))
             return ReviewStopReason.STALE_ROLLOUT_REVISION;
         return ReviewStopReason.READINESS_REFUSED;

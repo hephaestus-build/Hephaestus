@@ -215,3 +215,28 @@ Enforced by:
 
 **Revisit trigger:** the per-process file boundary in the sandbox ([ADR 0079](0079-one-agent-system.md)).
 When the host refuses undeclared reads for `bash` too, the residual risk is gone.
+
+## Update — 2026-11-17: `REPLACED` means a newer review, and owed practices run again
+
+Production showed reviews whose practices were all withheld as `REPLACED`, although no newer review of the item was ever ordered.
+A reason must say what happened, so the reasons split:
+
+- `REPLACED`: a newer review of the item exists.
+- `SOURCES_MOVED`: a source that the practice reads changed before it started, and no newer review exists.
+- `NOT_RUN`: no attempt measured the practice before the run ended, by its deadline, a watchdog or a lost sandbox. It says nothing about the work. The run keeps its own stop reason.
+
+All three are carried, so the next readiness edge selects the practice again.
+`NOT_RUN` is not withheld on purpose, so a review that owes it ends with `EXECUTION_INCOMPLETE`.
+
+A moved source or a spent deadline is no provider event, so nothing would measure such a practice before the work changes.
+A review can end with a `SOURCES_MOVED` or `NOT_RUN` practice and no newer review of its item.
+It then records one follow-up occasion of the item at the same version.
+It uses the occasion machinery: the occasion joins the quiet window, selects no practice itself, and its readiness edge measures only the carried practices.
+An occasion is unique per item, name and version, so a version gets one follow-up.
+A practice that does not fit again stays carried until a real event.
+
+Enforced by:
+
+- `ResultAdmissionIntegrationTest#shouldCallAStalePracticeReplacedOnlyWhenANewerReviewOfTheItemExists`
+- `ResultAdmissionIntegrationTest#shouldAskOnceForAFollowUpOccasionOfTheSameVersionWhenReviewsEndOwingPractices`
+- `ResultAdmissionServiceTest#shouldStopTheOpenPracticesAsNotRunAndSealWhenTheRetryFindsTheSourcesStale`
