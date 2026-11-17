@@ -1369,12 +1369,17 @@ void describe("ci-contract: merge-queue", () => {
 			needs = JSON.stringify(jobsOf({ ...green, ...results })),
 			summary?: string,
 			queueUpgrade = false,
+			queueServerImage = false,
 		) => {
 			const run = await runStep(
 				render(
 					evaluate,
 					{ ...green, ...results },
-					{ "release-candidate": String(onVersionBranch), "queue-upgrade": String(queueUpgrade) },
+					{
+						"release-candidate": String(onVersionBranch),
+						"queue-upgrade": String(queueUpgrade),
+						"queue-server-image": String(queueServerImage),
+					},
 				),
 				{
 					NEEDS: needs,
@@ -1397,6 +1402,13 @@ void describe("ci-contract: merge-queue", () => {
 			passes,
 		);
 		assert.deepEqual(await verdict({ "Database-upgrade": "skipped" }, false), passes);
+
+		// A merge group that changes the server image needs its startup check to have run and passed.
+		const imageCheck = async (result: string, queued: boolean) =>
+			verdict({ "Server-image": result }, false, undefined, undefined, false, queued);
+		assert.deepEqual(await imageCheck("skipped", true), fails);
+		assert.deepEqual(await imageCheck("success", true), passes);
+		assert.deepEqual(await imageCheck("skipped", false), passes);
 
 		// A job abandoned before it concluded is neither a failure nor a cancellation, and it is not a
 		// success or a skip either.
@@ -2376,6 +2388,8 @@ void test("a superseded PR cancels its native gate while live failures still get
 		// The feedback eval gate is newer than this recording. Its path filter selects no change of that
 		// run, so the job would have been skipped; the recording itself stays as it was captured.
 		"feedback-eval": { result: "skipped" },
+		// The server image startup check is newer too, and a pull request never runs it.
+		"Server-image": { result: "skipped" },
 	};
 	assert.equal(
 		"feedback-eval" in observed,
