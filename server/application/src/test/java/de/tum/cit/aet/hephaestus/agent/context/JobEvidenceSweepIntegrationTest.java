@@ -81,15 +81,14 @@ class JobEvidenceSweepIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    void shouldRemoveTheShellThatAnEarlierFailedSweepLeftWithoutAnEndedMarker() throws IOException {
-        // A sweep that failed part-way removed the checkout and left the rest of the folder, with no marker beside it.
+    void shouldRemoveTheShellThatAnEarlierFailedSweepLeft() throws IOException {
+        // A sweep that failed part-way removed the checkout and left the rest of the folder.
         var ended = job(ReviewJobStatus.FAILED);
         Path shell = folder(ended, ended.getRunId());
         Files.delete(shell.resolve("context/source.txt"));
         Files.delete(shell.resolve("context"));
         Files.createDirectories(shell.resolve(".archives"));
         Files.writeString(shell.resolve(".archives/inputs.tar"), "x".repeat(1024 * 1024));
-        assertThat(shell.resolveSibling(shell.getFileName() + ".ended")).doesNotExist();
 
         reconciler.reconcile();
 
