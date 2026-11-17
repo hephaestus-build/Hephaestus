@@ -188,6 +188,30 @@ class FeedbackCompositionContextServiceTest {
     }
 
     @Test
+    void shouldReportNothingNewWhenThePreviousCardAlreadyCoveredTheResult() {
+        // The card was prepared after the result was recorded, so support that starts where it left off is empty.
+        var previous = new PreviousPracticePageFeedback.Previous(UUID.randomUUID(), now.minusSeconds(30), null, false);
+        when(support.select(1, 7, 5, now))
+                .thenReturn(new PracticePageSupportReader.Selection(Optional.of(previous), List.of()));
+        var page = Objects.requireNonNull(
+                service.read(1, reviewId, List.of(current.getId())).practicePageSupport());
+        assertThat(page.practices().getFirst().decision()).isEqualTo(PracticePageDecision.RECENTLY_SURFACED);
+        assertThat(page.practices().getFirst().stopReason()).isEqualTo(FeedbackStopReason.NOTHING_NEW);
+    }
+
+    @Test
+    void shouldReportNoEvidenceWhenThePreviousCardPredatesTheResult() {
+        var previous = new PreviousPracticePageFeedback.Previous(
+                UUID.randomUUID(), now.minusSeconds(7200), now.minusSeconds(3600), false);
+        when(support.select(1, 7, 5, now))
+                .thenReturn(new PracticePageSupportReader.Selection(Optional.of(previous), List.of()));
+        var page = Objects.requireNonNull(
+                service.read(1, reviewId, List.of(current.getId())).practicePageSupport());
+        assertThat(page.practices().getFirst().decision()).isEqualTo(PracticePageDecision.NO_EVIDENCE);
+        assertThat(page.practices().getFirst().stopReason()).isEqualTo(FeedbackStopReason.NO_EVIDENCE);
+    }
+
+    @Test
     void shouldCopyNoPartialPatternWhenHistoryCustodyIsUnavailable() {
         authorizeHistory(current);
         var page = Objects.requireNonNull(

@@ -169,8 +169,15 @@ public class FeedbackCompositionContextService {
                 FeedbackDestination.PRACTICE_PAGE);
         if (!check.allowed())
             return new PageAdmission(PracticePageDecision.GATE_REFUSED, Objects.requireNonNull(check.reason()));
+        // Support starts where the previous card left off (when it was prepared, or closed), so a result recorded no
+        // later than that has no new support: that is nothing new, not missing evidence.
         if (support.isEmpty())
-            return new PageAdmission(PracticePageDecision.NO_EVIDENCE, FeedbackStopReason.NO_EVIDENCE);
+            return selection
+                            .previous()
+                            .filter(card -> !about.getRecordedAt().isAfter(card.nextEvidenceSince(Instant.EPOCH)))
+                            .isPresent()
+                    ? new PageAdmission(PracticePageDecision.RECENTLY_SURFACED, FeedbackStopReason.NOTHING_NEW)
+                    : new PageAdmission(PracticePageDecision.NO_EVIDENCE, FeedbackStopReason.NO_EVIDENCE);
         if (!pageRouter.supportsPattern(about, support))
             return new PageAdmission(PracticePageDecision.UNCORROBORATED, FeedbackStopReason.UNCORROBORATED);
         if (selection
