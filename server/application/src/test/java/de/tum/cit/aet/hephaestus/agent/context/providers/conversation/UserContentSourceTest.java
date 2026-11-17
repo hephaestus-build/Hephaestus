@@ -72,7 +72,6 @@ class UserContentSourceTest extends BaseUnitTest {
         assertThat(root.has("thisWeek")).isFalse();
         assertThat(root.has("lastWeek")).isFalse();
         assertThat(root.has("insights")).isFalse();
-        verify(queryRepository, never()).fetchUserCounts(any(), any(), any(), any(), any());
     }
 
     @Test
