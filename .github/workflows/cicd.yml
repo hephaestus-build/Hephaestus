@@ -777,7 +777,7 @@ jobs:
               - 'scripts/check-gradle-verification-metadata.ts'
             # What the feedback eval gate checks: the prompts and the writing guide they include, the
             # practice catalog and its scripts, the composer, and the gate with its fixed case set.
-            # feedback-eval-panel.yml composes the model panel when a person starts it.
+            # feedback-eval-panel.yml and feedback-eval-decision.yml compose when a person starts them.
             feedback-eval:
               - 'server/application/src/main/resources/agent/*.md'
               - 'server/application/src/main/resources/agent/conversation/**'
@@ -789,7 +789,10 @@ jobs:
               - '.github/workflows/feedback-eval-panel.yml'
               - 'docs/contributor/practice-feedback-language.mdx'
               - 'docs/contributor/composition-label-rubric.mdx'
+              - '.github/workflows/feedback-eval-decision.yml'
               - 'scripts/feedback-eval-gate.ts'
+              - 'scripts/feedback-eval-decision.ts'
+              - 'scripts/feedback-eval-configuration.ts'
               - 'scripts/feedback-eval/**'
               # G6 runs the practice-script corpus and its snapshots.
               - 'docker/agents/practice-scripts/**'

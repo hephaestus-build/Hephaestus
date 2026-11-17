@@ -1,0 +1,59 @@
+{
+	"suite": "composition-set",
+	"required": false,
+	"requiredWhen": "Both runs of composer noise plan 1 are clean. THEMIS accepted aa2 as clean (DN-84). aa3 is not judged yet.",
+	"noisePlan": {
+		"name": "composer noise plan 1",
+		"registeredAt": "2026-11-16T14:22:30Z",
+		"commit": "17c2b741c64925350a243c790807c0c186b18e20",
+		"ichnaea": "da4e52edae46dcb313ea717b1e100e8cdea86e7d",
+		"runs": [
+			{ "run": "aa2", "seed": "composer-noise-plan-1-aa2-85e19e8e42dc34d2", "clean": true },
+			{ "run": "aa3", "seed": "composer-noise-plan-1-aa3-f3c253e21d58d14e", "clean": null }
+		]
+	},
+	"measures": [
+		{
+			"id": "hephaestus/accepted",
+			"version": "2.1.0",
+			"digest": "sha256:7bf95a3df04f51e9fd289929fc2cc4531cc135349787c321c4fce7c49cff93fb"
+		},
+		{
+			"id": "hephaestus/mechanically-clean",
+			"version": "2.1.0",
+			"digest": "sha256:be94d95a6936a3706d4888803dc1a93cf1320a496e480d7fae122f441c352393"
+		},
+		{
+			"id": "hephaestus/raises-expected",
+			"version": "2.1.0",
+			"digest": "sha256:6916bdde65b30a0ffb17752b3c2b4cab48298389780a1cfaab8e6a5375a2b7f8"
+		},
+		{
+			"id": "hephaestus/withholds-expected",
+			"version": "2.1.0",
+			"digest": "sha256:2b9bf703b201dfdcd39ee5ea9babb76970b44d0078982d1d9a42ef15a848de33"
+		},
+		{
+			"id": "hephaestus/case-good",
+			"version": "2.1.0",
+			"digest": "sha256:3ad77c8c3824df883df438033f730efd9b083b0dd294d51680e9c394f3ca9f71"
+		}
+	],
+	"measureEvidence": {
+		"ruling": "THEMIS DN-84, conditions A and B",
+		"why": "Plan 1 judged its runs with the measures of its commit. Version 2.1.0 scores a refused draft without the shape of a review as no decision, where 2.0.0 stopped scoring the trial.",
+		"replay": "aa1 and aa2 were replayed, with no model call, through this suite's measures at 2.1.0 and the pinned Ichnaea build. Every measured value and every trial output equals the recorded one, and all five clean conditions hold for both runs.",
+		"runs": [
+			{
+				"run": "aa1",
+				"resultsSha256": "cfe844d0e0acfa1509edd28151e3cc3a8397959e70a65aea3902196b64c9055e",
+				"valuesEqual": "1730 of 1730"
+			},
+			{
+				"run": "aa2",
+				"resultsSha256": "99e4fd8a47506d18a11b56d387e01843881e357d451fa2e5cdd1f4ac5566023f",
+				"valuesEqual": "1730 of 1730"
+			}
+		]
+	}
+}

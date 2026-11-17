@@ -586,3 +586,24 @@ void test("catalog packages keep their batch, the React hold and one TypeScript 
 		"docker/agents/pi/package.json",
 	]);
 });
+
+void test("Renovate never moves the Ichnaea pin: only the pin step, after verify-build, does", async () => {
+	assert.ok(Array.isArray(config.packageRules));
+	const rules = config.packageRules.filter(isRecord);
+	// Renovate gives a github: specifier the repository as its package name and keeps the manifest key as its
+	// dependency name, so only matchDepNames reaches it.
+	const held = rules.find(
+		(rule) =>
+			Array.isArray(rule.matchDepNames) && rule.matchDepNames.includes("@hephaestus-build/ichnaea"),
+	);
+	assert.ok(held, "a rule must hold the Ichnaea pin");
+	assert.equal(held.enabled, false);
+	assert.match(String(held.description), /verify-build/u);
+	// The pin is a commit of the build branch, never a range or a branch name that moves by itself.
+	const manifest: unknown = parseJson(await readFile("package.json", "utf8"));
+	assert.ok(isRecord(manifest) && isRecord(manifest.devDependencies));
+	assert.match(
+		String(manifest.devDependencies["@hephaestus-build/ichnaea"]),
+		/^github:hephaestus-build\/ichnaea#[0-9a-f]{40}$/u,
+	);
+});

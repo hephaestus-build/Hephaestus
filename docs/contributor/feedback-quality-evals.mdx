@@ -176,7 +176,7 @@ The [provenance contract](./evaluation-provenance.mdx) owns the interpretation o
 ## Composition set
 
 The composition set measures the review on the work that the composer writes from admitted results.
-`scripts/feedback-eval/compositions.json` holds 60 synthetic pull request and merge request cases.
+`scripts/feedback-eval/compositions.json` holds 72 synthetic pull request and merge request cases.
 The cases use fictional repositories and people, and they hold no personal data.
 The [composition label rubric](./composition-label-rubric.mdx) owns the labels and the measures.
 
@@ -343,7 +343,7 @@ A person starts every run of the `CI / Feedback eval panel` workflow, and each r
 
 Nothing starts the panel on a path change or a schedule, and its result is never a required check.
 A pull request from a fork gets no run, because it has no secrets.
-One panel runs at a time, and none cancels another: a later run waits until the earlier one ends.
+One composer at a time calls the endpoint, in a panel or a [decision](#decision-on-the-composition-set). None cancels another: a later run waits until the earlier one ends.
 
 The panel runs only with the [CI model connection](./ci-cd.mdx#ci-model-connection), which also says what happens without it.
 
@@ -353,6 +353,130 @@ With the connection, the panel is skipped when the endpoint gives no composition
 An endpoint failure is never retried.
 A skip is not a pass: the panel job fails and names the reason.
 The run reports in its job summary, which the person who started it reads.
+
+## Decision on the composition set
+
+The decision compares a change to the composer with main's composer on all 72 cases of the composition set.
+[Ichnaea](https://github.com/hephaestus-build/ichnaea), our evaluation framework, makes the decision from the cases, the run files and the measures below.
+
+### What the decision claims
+
+Every verdict states its scope next to it: **on these 72 cases, beyond run-to-run noise**.
+The verdict is about these cases only. It is never a claim about new inputs.
+The cases are synthetic and public, and prompts are developed against them. A claim about new inputs needs a randomly drawn pool, which the composition set is not.
+
+### When the decision runs
+
+A person starts every run of the `CI / Feedback eval decision` workflow:
+
+- A manual run. It compares the dispatched ref with the base ref that it names, `main` by default.
+- A maintainer adds the `eval:decide` label to a pull request from this repository that changes a composer path of the workflow. The run decides the head at that moment. A later push starts nothing: to decide a newer head, remove the label and add it again.
+
+The panel's `eval:run` label starts no decision, so one label never pays for two runs.
+Nothing starts a decision on a push or a schedule.
+A pull request from a fork gets no run, because it has no secrets.
+A pull request from this repository that changes a composer path and has no decision shows a neutral "not evaluated" check, never a pass.
+
+A change to `scripts/feedback-eval/compositions.json` gets no decision.
+Each arm reads the cases from its own commit, so the arms would compose different cases under the same IDs.
+The run stops before the first model call, and the check says "not evaluated".
+Change the cases in a pull request of their own, as a new suite version with its own noise plan.
+
+The result is not a required check. It can become one only after the [noise plan](#noise-plan) is clean.
+The decision runs only with the [CI model connection](./ci-cd.mdx#ci-model-connection).
+
+### How the arms are composed
+
+- The base arm is main's composer at the merge base of the pull request. The candidate arm is the pull request's composer.
+- Each case runs 2 times per arm. The 29 cases with an expected withholding run 3 times per arm. That is 173 trials per arm and 346 for each run.
+- The head is the commit that the person asked about. The base is its merge base with `main`, or with the base ref of a manual run.
+- One job runs each replicate, and the replicates run one after another. They share the endpoint lock with the panel. Thus one composer at a time calls the endpoint, as in the noise plan. When two runs wait for the endpoint, the later one replaces the earlier one, which ends without a verdict.
+- In each replicate, the two arms compose case by case in turn, so both arms meet the same endpoint conditions. A seeded coin decides for each case and replicate which arm composes first. The second arm starts only after the first arm ends.
+- Each case is one `CompositionEvalLiveTest` invocation, with the panel's settings in `gate.json`. A case that sends more than 12 model calls stops the job. The worst case of a run is 4,152 model calls, which is the suite's budget.
+- Each arm reads `gate.json` from its own commit. It composes with those settings and records them in its configuration. A commit without `gate.json` stops the job before the first model call.
+- A case whose request fails at the endpoint (`PROVIDER`, `CAPACITY`), or that writes no result, runs again, and every attempt is kept. Such a case is missing, not failed, when it fails every attempt. A case that the composer got wrong never runs again.
+
+### Measures
+
+Each measure is a pass or a fail for one case and one trial.
+
+| Measure | Passes when | Cases | Margin |
+| --- | --- | --- | --- |
+| P1. Accepted | Main's check accepts the review without a failure. | 72 | 10 points |
+| P2. Mechanically clean | The review is accepted and carries no Q6 or Q9 code. | 72 | 5 points |
+| P3. Raises expected | Every settled expected raise is decided as a raise. | 56 | 10 points |
+| P4. Withholds expected | Every settled expected withholding is decided, and not as a raise. | 29 | 5 points |
+| Case good (secondary) | P1 to P4 all pass for the case. | 72 | none |
+
+The maintainer registered each margin, with its reason in `scripts/feedback-eval/ichnaea/suite.json`, before the first no-change run.
+A "settled" result is one whose decision does not wait for the practice owner (`unsettled` in the case).
+"Case good" is reported, never decided on.
+The live test records a refused draft as the model sent it. A refused draft that does not have the shape of a review counts as no decision.
+
+### Verdicts
+
+- **PASS**: each of P1 to P4 is non-inferior. Its one-sided 95 % lower bound for the difference (candidate minus base) lies above minus its margin. Ichnaea gives a non-inferior result only when its validated margin floor is set. Thus no run can pass yet.
+- **REGRESSION**: a measure is not non-inferior, and its drop is beyond run-to-run noise. The test is adjusted with Holm across the four measures. It does not depend on the margin floor. The job fails, and the check fails.
+- **INCONCLUSIVE**: a measure cannot be shown non-inferior and has not regressed. This is not a pass. The job reports and passes. Until the margin floor is set, a candidate whose measures did not regress gets this result, which is expected. The check and the job summary say so.
+- **INVALID**: the run cannot be decided. The job fails. Causes include:
+  - The arms ran different models or endpoints.
+  - A difference between the arms that the changed paths do not declare. A prompt path declares that prompt, and `gate.json` declares the two composer settings. Any other path declares only the code.
+  - Fewer than 90 % of a measure's planned trials have a value.
+  - The run passed its budget.
+- **Estimate-only**: the plan cannot support a verdict, for example because a margin is not above its zero-noise floor. The report gives estimates without a verdict, and the job passes.
+
+When the arms miss different numbers of trials, Ichnaea also counts each missing candidate trial as a failure. A verdict that this analysis changes becomes INCONCLUSIVE.
+Every report states the minimum detectable effect of each measure for that run, and whether the margin can be decided.
+
+### Noise plan
+
+A no-change run composes main's composer against itself. It shows how often the decision flags a change that does not exist, and which drop it can detect.
+The composer noise plan registers two no-change runs together, with fixed seeds, commit, cases, model and endpoint, before the first of them starts.
+The decision can become a required check only when both runs are clean: each completes its plan, gets a valid decision, and shows no REGRESSION.
+
+`scripts/feedback-eval/ichnaea/readiness.json` records whether the decision is ready to be a required check.
+It names the noise plan, its runs with their seeds and results, and the digest of each measure.
+Ichnaea keys noise evidence by the measure digest, which covers the measure's card but not its scorer.
+Thus a change to what a measure scores raises the card's version.
+The record then gets the new digests, with evidence that the noise runs still hold for them.
+A test keeps the record's digests equal to the measures'.
+
+An earlier no-change run, which no plan registered, gives the planning numbers:
+
+| Measure | Failed trials | Drop detected with 90 % power |
+| --- | --- | --- |
+| P1 to P3 | 0 | 6 to 8 points |
+| P4 | 54 of 174 | 20 points |
+
+- An unchanged composer gets a false REGRESSION on at most about 3.6 % of runs, below the 5 % level.
+- An unchanged composer is shown non-inferior on P4 in about 36 % of runs (π₀).
+- Every job summary states: `P4 detects with 90 % power only drops of 20 points or more; π₀ = 36 %`.
+- These numbers come from Ichnaea `da4e52e`, which decided the noise plan. The workflow decides with the pinned build, and every job summary names both.
+- More withhold cases make P4 more sensitive. They come as a new suite version, with a noise plan of its own. The cases, the margins and the trials do not change while the noise plan runs.
+
+### What the decision cannot see
+
+The wording quality of feedback, the developer's practice pages and conversations, and the practice review runtime are outside the decision.
+The [release feedback eval](#release-feedback-eval) labels the wording, and remains the quality bar for a release.
+
+### Records
+
+The job summary shows Ichnaea's report: each measure's rates, difference, bound and margin, the flips, the power statement and the limitations.
+The workflow keeps the compositions, the records and the report as artifacts. They hold the reviews and the model name, never the endpoint or the key.
+`scripts/feedback-eval/ichnaea/` holds the cases as Ichnaea records and the suite. `scripts/feedback-eval/ichnaea-*.ts` hold the measures, the importer, the configuration and the compose script.
+After a change to `compositions.json`, regenerate the records:
+
+```bash
+node scripts/feedback-eval/ichnaea-generate.ts
+node --test scripts/feedback-eval-ichnaea.test.ts
+```
+
+The test replays recorded compositions without a model.
+A candidate that raises every result is a REGRESSION on P4.
+The reference compositions against themselves are INCONCLUSIVE until the margin floor is set.
+`scripts/feedback-eval-decision.test.ts` holds the workflow's contract: who starts a run, the order of the replicates, and the colour of the check.
+
+Ichnaea installs from a commit of its `build` branch. [Dependencies](./dependencies.mdx#exceptions-to-the-bar) gives the rule and the step that moves the pin.
 
 ## Composition replay cases
 

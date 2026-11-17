@@ -2643,9 +2643,10 @@ void test("only a person starts the feedback eval panel: a manual run or the eva
 	// A person started the run, so it composes the whole panel.
 	const compose = String(namedStep(workflow, ["jobs", "panel"], "Compose the panel").get("run"));
 	assert.match(compose, /^node scripts\/feedback-eval-gate\.ts --model /u);
-	// One panel at a time, and none cancels another; a run for an unrelated label never enters the group.
+	// One composer at a time on the endpoint, panel or decision, and none cancels another; a run for an unrelated
+	// label never enters the group.
 	assert.equal(workflow.has("concurrency"), false);
-	assert.equal(workflow.getIn(["jobs", "panel", "concurrency", "group"]), "feedback-eval-panel");
+	assert.equal(workflow.getIn(["jobs", "panel", "concurrency", "group"]), "ci-model-endpoint");
 	assert.equal(workflow.getIn(["jobs", "panel", "concurrency", "cancel-in-progress"]), false);
 	// The provider check and the panel only: a run reports in its job summary, to the person who started it.
 	assert.deepEqual(

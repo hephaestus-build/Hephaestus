@@ -1,0 +1,368 @@
+{
+	"schema": "ichnaea.caseSet/1",
+	"id": "composition-set",
+	"description": "The 72 synthetic composition cases of the feedback eval.",
+	"digest": "sha256:83a8447d5bcee5bc33c0afa288a90aedcf9278279dcdffe078379b12c6f18fca",
+	"cases": [
+		{
+			"id": "gh-a-01-menu-view-does-its-own-networking",
+			"digest": "sha256:b8c8df10bec510996e3fe0d537b197fb4ff19c1b263baa9aec8ce0ab8cdd0724",
+			"pool": "development"
+		},
+		{
+			"id": "gh-a-02-save-drops-write-errors",
+			"digest": "sha256:e4747548bf829fe94909d5ba6801785ec2fb8971894731f909601b3af42aa6b0",
+			"pool": "development"
+		},
+		{
+			"id": "gh-a-03-star-button-without-label",
+			"digest": "sha256:414f78c6f0906107beedfda6a3e25d5d0dc8516c532da2c047c314687b1bc8da",
+			"pool": "development"
+		},
+		{
+			"id": "gh-a-04-force-unwrap-on-forecast-hours",
+			"digest": "sha256:626f85da4ebead34b938ac063ffa283d03e447a3442b2964d10ac4dd27d88601",
+			"pool": "development"
+		},
+		{
+			"id": "gh-a-05-workout-screen-description-lacks-reason",
+			"digest": "sha256:c71302154b5faec35cbec8dbef828c51f8197d53e423f292056d14d0c7dc5541",
+			"pool": "development"
+		},
+		{
+			"id": "gh-a-06-reminders-without-a-way-to-check",
+			"digest": "sha256:42af7580de44f21e56f752ca1e2f48b074216e1906a44f5f14a618be4d024316",
+			"pool": "development"
+		},
+		{
+			"id": "gh-a-07-closes-the-wrong-issue",
+			"digest": "sha256:f00d67cec7c578e4e37419c8938710415f29f74da2f188a810c4d8141b4846e3",
+			"pool": "development"
+		},
+		{
+			"id": "gh-a-08-timer-store-state-and-queue",
+			"digest": "sha256:36a360a65f4698604dd6e72fbd8619ab8696bb7ea6be6ce27c8e2e990b0b18b6",
+			"pool": "development"
+		},
+		{
+			"id": "gh-a-09-key-in-source-and-token-in-console",
+			"digest": "sha256:5d17602c27b973a9da4969183924360ebfcfec5204a3b336c7d70a883a60d3b1",
+			"pool": "development"
+		},
+		{
+			"id": "gh-a-10-score-card-colour-font-preview",
+			"digest": "sha256:1f14ea7b7ab6b1cacfbceac8d613c5d4cf5d16f0616ad6b2275bea5b624dda18",
+			"pool": "development"
+		},
+		{
+			"id": "gh-a-11-label-claim-contradicted-by-code",
+			"digest": "sha256:3a5ee12c72ae657c01c6433dc90fa0ab831c917189b4276a4f188de434c59b22",
+			"pool": "development"
+		},
+		{
+			"id": "gh-a-12-lone-fix-commit-and-defaults-in-view",
+			"digest": "sha256:927ef1ee529493d3d6b72c700f2789f896e38c65bcc80ec1d1826e4910b175a3",
+			"pool": "development"
+		},
+		{
+			"id": "gh-a-13-vague-commit-subjects-formative",
+			"digest": "sha256:fcfb12ab5808e1536b6dc1ef62f926cac7faa3ef465acd2ba8eb7d848a61bd7c",
+			"pool": "development"
+		},
+		{
+			"id": "gh-a-14-draft-nested-save-function",
+			"digest": "sha256:f41f05101e0bfb2e52760acd6100a72806868704505c12e34c30d32aa68b9719",
+			"pool": "development"
+		},
+		{
+			"id": "gh-a-15-draft-recipe-card-without-preview",
+			"digest": "sha256:28563cbe44bd62ca3a0417dd1c2e3c564c0230a8a8d0af03bcae09e7af0fa355",
+			"pool": "development"
+		},
+		{
+			"id": "gl-b-01-kotlin-ledger-failure-dropped",
+			"digest": "sha256:9ac4e8ff20625b80b4314ccf88c3d0b8157c8642ac7ea3969c52d712322409a5",
+			"pool": "development"
+		},
+		{
+			"id": "gl-b-02-python-print-in-uploader",
+			"digest": "sha256:e7241a60004e25c349c86eac78e5c50c2749966ad1f1caa6390cfe20f28396b5",
+			"pool": "development"
+		},
+		{
+			"id": "gl-b-03-ts-status-filter-sql-text",
+			"digest": "sha256:fdf2383339733005c55bf1c8104a9e043e53db52aba603c349dd4c4555e7e8fc",
+			"pool": "development"
+		},
+		{
+			"id": "gl-b-04-retry-settings-without-reason",
+			"digest": "sha256:56603d91cea4d1ab9d9d05f54061a19dd8f899767a46757fbc66c3c00bad8853",
+			"pool": "development"
+		},
+		{
+			"id": "gl-b-05-commit-subjects-wip-fix",
+			"digest": "sha256:7b655ccf4a6ddb75b251ba9d6da673775288ec0e1fc9d43ab6269cff23e34bb1",
+			"pool": "development"
+		},
+		{
+			"id": "gl-b-06-verify-steps-no-expected-result",
+			"digest": "sha256:e72354cc38d5c7a747d3284c709d1c58225b4bcdd959c80e417b7c93af0ebb04",
+			"pool": "development"
+		},
+		{
+			"id": "gl-b-07-kotlin-token-cache-swallow-and-no-test",
+			"digest": "sha256:5318e3ae5114388ba1b34d793e3cfe00fff3ce2ca8cf176644ce7d4896e27203",
+			"pool": "development"
+		},
+		{
+			"id": "gl-b-08-copied-export-loops-and-thin-description",
+			"digest": "sha256:c9ff5e182c7fed122da81997202f3c4fab3d79c47720c926b659a8675a5e2f70",
+			"pool": "development"
+		},
+		{
+			"id": "gl-b-09-committed-sandbox-key-and-oops-commit",
+			"digest": "sha256:85ab598d1cbfaf41298076f02c00812e4ac1f2568753bc5c3f0288878e590121",
+			"pool": "development"
+		},
+		{
+			"id": "gl-b-10-head-changed-point-unchanged",
+			"digest": "sha256:ef992ee80f49235054abafd76a7ee66c174f1e1f56c36177bb567b56bf60d448",
+			"pool": "development"
+		},
+		{
+			"id": "gl-b-11-same-head-print-said-test-new",
+			"digest": "sha256:ce4b5d03b66c4a4af33d807eb5a2253c8d9c78c462928b9fb5c0ae27a2fe9f8f",
+			"pool": "development"
+		},
+		{
+			"id": "gl-b-12-new-lookup-same-pattern",
+			"digest": "sha256:e2037061d7c53742c2c3cbbbbf52bec03f4c72173736b48859d4240f07c3ff6b",
+			"pool": "development"
+		},
+		{
+			"id": "gl-b-13-reviewer-already-asked-for-test",
+			"digest": "sha256:018de07f7b4685376e2b006590a13f7c1f892823f8ad2480397c1ffd5f240e91",
+			"pool": "development"
+		},
+		{
+			"id": "gl-b-14-reviewer-covered-one-of-two",
+			"digest": "sha256:b914cdb45d50357bba4ed71f2f350d401018a7683b9414c6a4531e4aaa3426d2",
+			"pool": "development"
+		},
+		{
+			"id": "gl-b-15-reviewer-asked-why-long-function-new",
+			"digest": "sha256:a9dbc8f7545b11ddf27bacb0bfca36ca9fb4e44614c96c4e7d754539dd4f8e37",
+			"pool": "development"
+		},
+		{
+			"id": "gh-c-01-session-cache-remaining-swallow",
+			"digest": "sha256:a8b3dd4d8b9513da586f9228cc7f3d875f1535386b2839054dc7851248d53bc6",
+			"pool": "development"
+		},
+		{
+			"id": "gh-c-02-retry-exhaustion-untested",
+			"digest": "sha256:5ffcee8515be208c10d37827bb7591a8042c0448515fc1d607fac8fdb31c120f",
+			"pool": "development"
+		},
+		{
+			"id": "gh-c-03-invoice-page-size-zero",
+			"digest": "sha256:91a8d429cf6bca9bba39e0bfed61c01f6dda2c551e4765b8394b327a6a07e7e0",
+			"pool": "development"
+		},
+		{
+			"id": "gh-c-04-scheduler-skip-without-reason",
+			"digest": "sha256:20e5d1aa9e00b605e8765bb3c9d609b8a099fc973d7013a5e1e0a0ebc452ecbd",
+			"pool": "development"
+		},
+		{
+			"id": "gh-c-05-registry-lookup-default",
+			"digest": "sha256:1d2d3af8f132162266cc167bd3c9a27d158d7ae1345414e8584ff1e3012b7720",
+			"pool": "development"
+		},
+		{
+			"id": "gh-c-06-order-search-sql",
+			"digest": "sha256:0581d347b4fb05dcfad82d790fa56cc126d0d7ba532b9150e67af49eb1787dda",
+			"pool": "development"
+		},
+		{
+			"id": "gh-c-07-webhook-retry-empty-result",
+			"digest": "sha256:d687ce162065874a80e3ddf40d51d329b3e89711f67b816eedebea8473e32ba3",
+			"pool": "development"
+		},
+		{
+			"id": "gh-c-08-run-summary-empty-list",
+			"digest": "sha256:19e210215669b5acbb815ae330d6fb6e107afbe6236f6e892ac07d5aecd84b4c",
+			"pool": "development"
+		},
+		{
+			"id": "gh-c-09-autosave-ignored-errors",
+			"digest": "sha256:78d9a66801500719973896054a5fa94a47472328f8678ff4786f6afbd54969c0",
+			"pool": "development"
+		},
+		{
+			"id": "gh-c-10-retry-settings-no-reason",
+			"digest": "sha256:db9a5b1feff8d414763bbb781576bc7c631be5f59f53126716812d8c5ccf9f5d",
+			"pool": "development"
+		},
+		{
+			"id": "gh-c-11-statement-import-test-files-not-captured",
+			"digest": "sha256:be5128030578159580d21674bea7ae4e8dcc5b45aa56849a1ae2271eaef7288d",
+			"pool": "development"
+		},
+		{
+			"id": "gh-c-12-inventory-per-page-zero",
+			"digest": "sha256:f7f911dbd696e54598ba7ce8ca72eefad8792e1fca74cd9693420613f46c5d17",
+			"pool": "development"
+		},
+		{
+			"id": "gh-c-13-committed-payments-key",
+			"digest": "sha256:832433e607b39a10587cc2ff8bd1f365aaea7e83d56ebdff5d748e5da4b58e48",
+			"pool": "development"
+		},
+		{
+			"id": "gh-c-14-hardcoded-admin-token",
+			"digest": "sha256:18f779b7d6ea140be477c62a8f4d159ef14c22e6d595c49792b6b19387b2abcc",
+			"pool": "development"
+		},
+		{
+			"id": "gh-c-15-health-ok-startup-log",
+			"digest": "sha256:ac416d811764e8d6b850394e01948c149f5c30cb955ce4445497a0febaf506cd",
+			"pool": "development"
+		},
+		{
+			"id": "mx-d-01-injection-in-description-ios",
+			"digest": "sha256:6395f1a61dd54baeebd6229d9cccebdebb031893f2a7224ff0bed42aded6f893",
+			"pool": "development"
+		},
+		{
+			"id": "mx-d-02-injection-in-code-comment-web",
+			"digest": "sha256:67db08f7680053efdd89da8e81ee4053f5c60c32d2fefce586e693a459f7e0a6",
+			"pool": "development"
+		},
+		{
+			"id": "mx-d-03-already-said-try-optional-ios",
+			"digest": "sha256:a300e8eb7a6a25359880f83dd7a0a41977a6efff20ccadac8592bb68752acd28",
+			"pool": "development"
+		},
+		{
+			"id": "mx-d-04-one-event-two-practices-shell-web",
+			"digest": "sha256:121ef19c48efbdd5388a3dec2193953e33bf55975c13ae5736273fab9958c01e",
+			"pool": "development"
+		},
+		{
+			"id": "mx-d-05-three-practices-draft-store-ios",
+			"digest": "sha256:fb6e742003a4327dd978c88d3d8edfcf240487b82cae5e6beb6cbaee9b0fa20e",
+			"pool": "development"
+		},
+		{
+			"id": "mx-d-06-icon-button-label-ios",
+			"digest": "sha256:2c5c58468c0cbedf247fb2b786b83be180e1f50fa815fb74aa23c288b2912de6",
+			"pool": "development"
+		},
+		{
+			"id": "mx-d-07-streaming-export-no-verify-web",
+			"digest": "sha256:fe5d848d0b0f52f0755fd3e298c3569f399b6105360ae3041e1206d8c1a3b69e",
+			"pool": "development"
+		},
+		{
+			"id": "mx-d-08-below-bar-restating-comment-ios",
+			"digest": "sha256:6a610b37ae2051a0906798e62bc206ad3111392d82f73d7171950a2c7c09068e",
+			"pool": "development"
+		},
+		{
+			"id": "mx-d-09-injection-in-reviewer-comment-kotlin",
+			"digest": "sha256:de38656fe169df39ec0398c4bad788150c8c659a9f7cb12e8c0fcb24f3a75b62",
+			"pool": "development"
+		},
+		{
+			"id": "mx-d-10-injection-praise-tests-kotlin",
+			"digest": "sha256:4cc9631e4ecbdeca255074fbef565bcf09be7c9cb92736631190ec976604567b",
+			"pool": "development"
+		},
+		{
+			"id": "mx-d-11-reviewer-already-asked-cors-web",
+			"digest": "sha256:bf8a9cae7996d9bef3da223534c8290abe157dff4ee46ce4eb1ccc4579a81533",
+			"pool": "development"
+		},
+		{
+			"id": "mx-d-12-three-practices-orders-kotlin",
+			"digest": "sha256:71b0c8205d58fb3998923b6bf30069f47e63953429f04a6bc8396603dbae3ef1",
+			"pool": "development"
+		},
+		{
+			"id": "mx-d-13-empty-geo-results-kotlin",
+			"digest": "sha256:3558ef1cc10568d8815470f0440aa4d0d641835289cecc4f495d44845a3b2b29",
+			"pool": "development"
+		},
+		{
+			"id": "mx-d-14-commit-subjects-ios",
+			"digest": "sha256:8a76547209091846a9b962efce08b31e8efaa41ad8272b615b80a856a07b99ac",
+			"pool": "development"
+		},
+		{
+			"id": "mx-d-15-all-withheld-restating-comment-kotlin",
+			"digest": "sha256:51fc1eb453a9ca76c9c994b9dbf288d8403e7b170561d46785c91175b511061b",
+			"pool": "development"
+		},
+		{
+			"id": "wh-e-01-commented-out-line-in-view-ios",
+			"digest": "sha256:dfed226689f9641fafb7613cb8804d0c6e1473ade85ee1166a7fecaa5a4005e2",
+			"pool": "development"
+		},
+		{
+			"id": "wh-e-02-swallowed-row-error-and-restating-comment-python",
+			"digest": "sha256:702d8ce2017b417a35c2861d6cef76a20299cc2bfc368510b06df918854fb3b9",
+			"pool": "development"
+		},
+		{
+			"id": "wh-e-03-two-repeated-lines-in-price-tag-web",
+			"digest": "sha256:3b2935d109eff2683b4809d415bd3e151cb1be82d7fbfe13658876cb4fd0cb28",
+			"pool": "development"
+		},
+		{
+			"id": "wh-e-04-println-said-on-same-head-kotlin",
+			"digest": "sha256:7025c51f2e5470e3f05e4f7c20ac80bc4dd64ca6a10cbccf6943352e491f8080",
+			"pool": "development"
+		},
+		{
+			"id": "wh-e-05-limit-said-swallow-new-web",
+			"digest": "sha256:9c27f3b09ef6bbb80542a6c67977917fa45e907743a74f251f1eed3cb7f487f0",
+			"pool": "development"
+		},
+		{
+			"id": "wh-e-06-force-unwrap-unchanged-new-head-ios",
+			"digest": "sha256:3444df57ed4ed5667fc2dc473015c81c123c4e53d1b97ae8fb0990993811e510",
+			"pool": "development"
+		},
+		{
+			"id": "wh-e-07-reviewer-asked-for-parser-test-python",
+			"digest": "sha256:5f34eb6fd70e9414973f33e228f7b8603f188878fc867d182a219a3d2f493bac",
+			"pool": "development"
+		},
+		{
+			"id": "wh-e-08-reviewer-covered-catch-description-new-java",
+			"digest": "sha256:71ed8290d49e32e1fee1acda3f0c679efbb4b69057ab84921dea96562bf7142f",
+			"pool": "development"
+		},
+		{
+			"id": "wh-e-09-two-trivial-points-all-withheld-kotlin",
+			"digest": "sha256:f3438e6beabcf2427d647ffc2498c8a105a8060af6a3bfd5b6e154c88127ec5a",
+			"pool": "development"
+		},
+		{
+			"id": "wh-e-10-verify-steps-said-on-same-head-web",
+			"digest": "sha256:eb87a4c0a8de3f787ff38ba9b892cfde3f4ef4684b04808c5f1b63a98cf4dc6e",
+			"pool": "development"
+		},
+		{
+			"id": "wh-e-11-one-of-two-checks-fixed-web",
+			"digest": "sha256:ce62b07ed06111c14c38bc61ca3299f83f173db891e356e897bea5da95a7f938",
+			"pool": "development"
+		},
+		{
+			"id": "wh-e-12-trust-all-certs-and-stale-todo-kotlin",
+			"digest": "sha256:9cddc40123345bddaffb50adbfa16e416a1290b8286c5e6c62868ccf50be9102",
+			"pool": "development"
+		}
+	]
+}
