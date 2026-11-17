@@ -51,7 +51,6 @@ export function judge(required: ReadonlySet<string>, pageText: string): Verdict 
  * docs. An entry that the docs no longer offer fails too, so the list only shrinks. Delete it at zero.
  */
 export const OFFERED_WITHOUT_CHART_VALUE: ReadonlySet<string> = new Set([
-	"AGENT_MAX_RETRIES",
 	"HEPHAESTUS_INTEGRATION_CONSUMER_DEAD_RETENTION",
 	"HEPHAESTUS_INTEGRATION_CONSUMER_REPLAY_WINDOW",
 	"HEPHAESTUS_LLM_EGRESS_ALLOW_LOOPBACK",

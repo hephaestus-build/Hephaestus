@@ -244,9 +244,9 @@ export function applicationSecret(): Record<string, string> {
 		HEPHAESTUS_SECURITY_ENCRYPTION_KEY: key,
 		HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY: key,
 		HEPHAESTUS_AUTH_STATE_COOKIE_KEY: randomBytes(32).toString("base64"),
-		HEPHAESTUS_CONVERSATION_LOOP_SECRET: randomBytes(32).toString("hex"),
 		WEBHOOK_SECRET: secretValue(32),
 		WEBHOOK_ROUTING_SECRET: secretValue(32),
+		HEPHAESTUS_INTEGRATION_OAUTH_STATE_SECRET: secretValue(32),
 	};
 }
 

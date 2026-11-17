@@ -29,6 +29,7 @@ const GENERATED = [
 	{ name: "HEPHAESTUS_SECURITY_ENCRYPTION_KEY", bytes: 16, newDatabaseOnly: true },
 	{ name: "HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY", bytes: 16, newDatabaseOnly: true },
 	{ name: "WEBHOOK_SECRET", bytes: 32, newDatabaseOnly: false },
+	{ name: "HEPHAESTUS_INTEGRATION_OAUTH_STATE_SECRET", bytes: 32, newDatabaseOnly: false },
 ] as const;
 type Generated = (typeof GENERATED)[number]["name"];
 

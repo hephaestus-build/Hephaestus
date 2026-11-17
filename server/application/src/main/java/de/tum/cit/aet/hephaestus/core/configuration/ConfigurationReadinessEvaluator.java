@@ -119,6 +119,19 @@ public final class ConfigurationReadinessEvaluator {
                 "webhooks");
         add(
                 facts,
+                "integration.oauth-state-secret",
+                "hephaestus.integration.oauth-state.secret",
+                roles(RuntimeRole.SERVER),
+                ConfigurationRequirement.REQUIRED,
+                server,
+                value -> validWebhookSecret(value)
+                        && !Objects.equals(value, property("hephaestus.webhook.secret"))
+                        && !Objects.equals(value, property("hephaestus.webhook.routing.secret")),
+                "An OAuth state secret is required to sign each integration connection in progress. "
+                        + "It must have at least 32 printable ASCII characters and differ from both webhook secrets.",
+                "integration-connections");
+        add(
+                facts,
                 "auth.state-cookie-key",
                 "hephaestus.auth.state-cookie-key",
                 roles(RuntimeRole.SERVER),

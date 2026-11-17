@@ -28,6 +28,7 @@ The requirement is `REQUIRED`, `RECOMMENDED`, or `OPTIONAL`.
 | `security.credential-encryption`, `security.value-encryption` | Required | [Credential encryption](#credential-encryption) |
 | `external.base-url`, `external.api-origin` | Required | [External URL](#external-url) |
 | `webhook.shared-secret`, `webhook.routing-secret` | Required | [Webhooks](#webhooks) |
+| `integration.oauth-state-secret` | Required | [Integration connections](#integration-connections) |
 | `auth.state-cookie-key`, `auth.login-provider` | Required | [Login](#login) |
 | `llm.proxy-egress` | Required with `sandbox.enabled` | [LLM proxy](#llm-proxy) |
 | `agent.image-contract` | Required with `sandbox.enabled` | [Agent image](#agent-image) |
@@ -77,6 +78,12 @@ It needs at least 32 printable, non-space ASCII characters. Never reuse another 
 `webhook.routing-secret` checks `WEBHOOK_ROUTING_SECRET`, also on a deployment without GitLab.
 GitLab group hooks and Outline subscriptions use it.
 It needs at least 32 printable, non-space ASCII characters, and must differ from `WEBHOOK_SECRET`.
+
+## Integration connections
+
+`integration.oauth-state-secret` checks `HEPHAESTUS_INTEGRATION_OAUTH_STATE_SECRET`.
+It signs the state of each integration connection in progress.
+It needs at least 32 printable, non-space ASCII characters, and must differ from `WEBHOOK_SECRET` and `WEBHOOK_ROUTING_SECRET`.
 
 ## Login
 

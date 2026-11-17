@@ -79,13 +79,14 @@ await describe("the settings file of a checkout", async () => {
 });
 
 await describe("the generated values of a checkout", async () => {
-	await test("a new checkout gets a password, both keys and a webhook secret, and keeps its other settings", async () => {
+	await test("a new checkout gets a password, both keys and its two secrets, and keeps its other settings", async () => {
 		await checkout(async (paths) => {
 			await writeFile(paths.envFile, "POSTGRES_PORT=15432");
 			assert.deepEqual(await ensureGeneratedValues({ ...paths, environment: {} }), [
 				"POSTGRES_PASSWORD",
 				...keyNames,
 				"WEBHOOK_SECRET",
+				"HEPHAESTUS_INTEGRATION_OAUTH_STATE_SECRET",
 			]);
 			const values = await readEnvFile(paths.envFile);
 			assert.match(values.POSTGRES_PASSWORD ?? "", /^[0-9a-f]{48}$/u);
@@ -97,6 +98,7 @@ await describe("the generated values of a checkout", async () => {
 				values.HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY,
 			);
 			assert.match(values.WEBHOOK_SECRET ?? "", /^[0-9a-f]{64}$/u);
+			assert.match(values.HEPHAESTUS_INTEGRATION_OAUTH_STATE_SECRET ?? "", /^[0-9a-f]{64}$/u);
 			assert.equal(values.POSTGRES_PORT, "15432");
 		});
 	});
@@ -149,6 +151,7 @@ await describe("the generated values of a checkout", async () => {
 				HEPHAESTUS_SECURITY_ENCRYPTION_KEY: "from-shell",
 				HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY: "from-shell",
 				WEBHOOK_SECRET: "from-shell",
+				HEPHAESTUS_INTEGRATION_OAUTH_STATE_SECRET: "from-shell",
 			};
 			assert.deepEqual(await ensureGeneratedValues({ ...paths, environment }), []);
 			await assert.rejects(readFile(paths.envFile, "utf8"));
@@ -182,7 +185,7 @@ await describe("the generated values of a checkout", async () => {
 		});
 	});
 
-	await test("existing data with its keys gets only the missing webhook secret", async () => {
+	await test("existing data with its keys gets only the missing secrets", async () => {
 		await checkout(async (paths) => {
 			await mkdir(paths.dataDirectory);
 			await writeFile(path.join(paths.dataDirectory, "PG_VERSION"), "18");
@@ -192,6 +195,7 @@ await describe("the generated values of a checkout", async () => {
 			);
 			assert.deepEqual(await ensureGeneratedValues({ ...paths, environment: {} }), [
 				"WEBHOOK_SECRET",
+				"HEPHAESTUS_INTEGRATION_OAUTH_STATE_SECRET",
 			]);
 			const values = await readEnvFile(paths.envFile);
 			assert.equal(values.POSTGRES_PASSWORD, "chosen");

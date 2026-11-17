@@ -174,6 +174,14 @@ const REQUIRED_SETTINGS: readonly RequiredSetting[] = [
 			"stores no server URL, to sync and to check out the merge request",
 	},
 	{
+		variable: "HEPHAESTUS_INTEGRATION_OAUTH_STATE_SECRET",
+		path: "hephaestus.integration.oauth-state.secret",
+		readBy: ["server"],
+		why:
+			"HmacOAuthStateService signs the state of each integration connection in progress with it, and " +
+			"a production server without it refuses to start",
+	},
+	{
 		variable: "WEBHOOK_ROUTING_SECRET",
 		path: "hephaestus.webhook.routing.secret",
 		readBy: ["server"],

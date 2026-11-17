@@ -325,11 +325,12 @@ fails every pod, so each role is owed the lock's digest. */}}
   value: {{ .Values.config.systemKey.rotationEnabled | quote }}
 {{- end -}}
 
-{{/* The server verifies webhook deliveries. */}}
+{{/* The server verifies webhook deliveries and signs the state of integration connections in progress. */}}
 {{- define "hephaestus.env.ingestion" -}}
 {{ include "hephaestus.secretEnv" (dict "root" . "env" "WEBHOOK_SECRET") }}
 {{ include "hephaestus.secretEnv" (dict "root" . "env" "WEBHOOK_ROUTING_SECRET") }}
 {{ include "hephaestus.secretEnv" (dict "root" . "env" "WEBHOOK_ROUTING_PREVIOUS_SECRET" "optional" true) }}
+{{ include "hephaestus.secretEnv" (dict "root" . "env" "HEPHAESTUS_INTEGRATION_OAUTH_STATE_SECRET") }}
 {{ include "hephaestus.secretEnv" (dict "root" . "env" "HEPHAESTUS_INTEGRATION_SLACK_SIGNING_SECRET" "optional" true) }}
 {{- end -}}
 

@@ -182,3 +182,9 @@ The update above already binds the callback to the browser that started it, and 
 The remaining input is the fallback of the state key to the webhook secret.
 
 The question is decided after the 1.0 release. Until then the decision above stays in force.
+
+## Update — 2026-11-16: the state key has its own secret
+
+The fallback of the state key to the webhook secret is removed.
+The state key is `HEPHAESTUS_INTEGRATION_OAUTH_STATE_SECRET`, and production refuses to start without it.
+This answers the remaining input of the open question above.

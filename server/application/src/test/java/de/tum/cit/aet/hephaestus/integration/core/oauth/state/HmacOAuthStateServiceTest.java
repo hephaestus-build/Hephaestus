@@ -6,7 +6,6 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import ch.qos.logback.classic.Level;
-import de.tum.cit.aet.hephaestus.core.webhook.WebhookProperties;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.oauth.state.OAuthStateService.StateBinding;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
@@ -40,19 +39,14 @@ class HmacOAuthStateServiceTest extends BaseUnitTest {
     private static final Instant NOW = Instant.parse("2026-11-11T12:00:00.123456789Z");
     private static final Clock CLOCK = Clock.fixed(NOW, ZoneOffset.UTC);
 
-    private static HmacOAuthStateService configuredService(
-            @Nullable String oauthSecret, @Nullable String webhookSecret, boolean production) {
+    private static HmacOAuthStateService configuredService(@Nullable String oauthSecret, boolean production) {
         OAuthStateProperties properties =
                 new OAuthStateProperties(oauthSecret, Duration.ofMinutes(10), Duration.ofDays(7));
-        WebhookProperties webhookProperties = mock(WebhookProperties.class);
         Environment environment = mock(Environment.class);
         if (oauthSecret == null || oauthSecret.isBlank()) {
-            when(webhookProperties.secret()).thenReturn(webhookSecret);
-            if (webhookSecret == null || webhookSecret.isBlank()) {
-                when(environment.matchesProfiles("prod")).thenReturn(production);
-            }
+            when(environment.matchesProfiles("prod")).thenReturn(production);
         }
-        return new HmacOAuthStateService(properties, webhookProperties, environment, null, CLOCK);
+        return new HmacOAuthStateService(properties, environment, null, CLOCK);
     }
 
     @ParameterizedTest
@@ -61,58 +55,39 @@ class HmacOAuthStateServiceTest extends BaseUnitTest {
         var environment = new MockEnvironment();
         environment.setActiveProfiles(profile);
         var properties = new OAuthStateProperties(null, Duration.ofMinutes(10), Duration.ofDays(7));
-        var webhook = mock(WebhookProperties.class);
         try (var logs = new LogCapture(HmacOAuthStateService.class)) {
-            var first = new HmacOAuthStateService(properties, webhook, environment, null, CLOCK);
-            var second = new HmacOAuthStateService(properties, webhook, environment, null, CLOCK);
+            var first = new HmacOAuthStateService(properties, environment, null, CLOCK);
+            var second = new HmacOAuthStateService(properties, environment, null, CLOCK);
             String state = first.issue(42L, IntegrationKind.GITHUB);
             assertThat(first.consume(state).workspaceId()).isEqualTo(42L);
             assertThatThrownBy(() -> second.consume(state)).isInstanceOf(IllegalArgumentException.class);
             assertThat(logs.messagesAtLeast(Level.WARN)).isEmpty();
         }
         environment.setActiveProfiles(profile, "prod");
-        assertThatThrownBy(() -> new HmacOAuthStateService(properties, webhook, environment, null, CLOCK))
+        assertThatThrownBy(() -> new HmacOAuthStateService(properties, environment, null, CLOCK))
                 .isInstanceOf(IllegalStateException.class);
     }
 
     @Test
-    void shouldPreferDedicatedSecretOverWebhookFallback() {
-        HmacOAuthStateService issuer = configuredService(SECRET, "different-webhook-secret-of-32b", false);
+    void shouldSignWithTheConfiguredSecret() {
+        HmacOAuthStateService issuer = configuredService(SECRET, true);
         HmacOAuthStateService verifier = HmacOAuthStateService.withoutNonceStore(SECRET, Duration.ofMinutes(10), CLOCK);
 
         assertThat(verifier.consume(issuer.issue(42L, IntegrationKind.GITHUB)).workspaceId())
                 .isEqualTo(42L);
     }
 
-    /**
-     * Without its own secret, the state key derives from the webhook secret: servers that share it agree, and it is not
-     * the secret.
-     */
-    @Test
-    void shouldDeriveItsOwnKeyFromTheWebhookSecret() {
-        HmacOAuthStateService issuer = configuredService(null, SECRET, false);
-        HmacOAuthStateService otherServer = configuredService(null, SECRET, false);
-
-        assertThat(otherServer
-                        .consume(issuer.issue(42L, IntegrationKind.GITHUB))
-                        .workspaceId())
-                .isEqualTo(42L);
-        assertThatThrownBy(() -> HmacOAuthStateService.withoutNonceStore(SECRET, Duration.ofMinutes(10), CLOCK)
-                        .consume(issuer.issue(42L, IntegrationKind.GITHUB)))
-                .isInstanceOf(IllegalArgumentException.class);
-    }
-
     @Test
     void shouldRejectMissingProductionSecret() {
-        assertThatThrownBy(() -> configuredService(null, null, true))
+        assertThatThrownBy(() -> configuredService(null, true))
                 .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("Production needs one of them for the OAuth state HMAC.");
+                .hasMessageContaining("Production needs it for the OAuth state HMAC.");
     }
 
     @Test
     void shouldGenerateIndependentEphemeralSecretsOutsideProduction() {
-        HmacOAuthStateService first = configuredService(null, null, false);
-        HmacOAuthStateService second = configuredService(null, null, false);
+        HmacOAuthStateService first = configuredService(null, false);
+        HmacOAuthStateService second = configuredService(null, false);
         String state = first.issue(42L, IntegrationKind.GITHUB);
 
         assertThatThrownBy(() -> second.consume(state))
