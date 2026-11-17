@@ -60,22 +60,22 @@ target "webapp" {
   output     = PUBLISH == "true" ? ["type=image,\"name=${repository("webapp")}\",push-by-digest=true,name-canonical=true,push=true"] : ["type=cacheonly"]
 }
 
-target "agent-pi" {
-  inherits   = ["image", "agent-pi-metadata"]
+target "agent" {
+  inherits   = ["image", "agent-metadata"]
   labels = {
     "org.opencontainers.image.title" = "Hephaestus Agent - Pi"
     "org.opencontainers.image.description" = "Sandboxed runtime that reviews work against engineering practices"
     "org.opencontainers.image.vendor" = "AET TUM"
     "org.opencontainers.image.licenses" = "MIT"
-    "hephaestus.component" = "agent-pi"
+    "hephaestus.component" = "agent"
   }
   context    = "docker/agents"
   # Tool protocol v1 has one source, beside the loop programs that the server stages.
   contexts   = { agent-runtime = "server/application/src/main/resources/agent" }
   dockerfile = "pi/Dockerfile"
-  cache-from = ["type=registry,ref=${repository("agent-pi")}:cache-main-${PLATFORM_PAIR}"]
-  cache-to   = WRITE_CACHE == "true" ? ["type=registry,ref=${repository("agent-pi")}:cache-main-${PLATFORM_PAIR},mode=max"] : []
-  output     = PUBLISH == "true" ? ["type=image,\"name=${repository("agent-pi")}\",push-by-digest=true,name-canonical=true,push=true"] : ["type=cacheonly"]
+  cache-from = ["type=registry,ref=${repository("agent")}:cache-main-${PLATFORM_PAIR}"]
+  cache-to   = WRITE_CACHE == "true" ? ["type=registry,ref=${repository("agent")}:cache-main-${PLATFORM_PAIR},mode=max"] : []
+  output     = PUBLISH == "true" ? ["type=image,\"name=${repository("agent")}\",push-by-digest=true,name-canonical=true,push=true"] : ["type=cacheonly"]
 }
 
 target "postgres" {

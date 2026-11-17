@@ -21,7 +21,7 @@ await test("an upstream image is pinned as the commit pins it, not looked up", a
 await test("a first-party image is taken from this commit's own build", async () => {
 	const seen: string[] = [];
 	const images = await resolveImages(
-		parseInventory({ images: ["application-server"], upstream: [] }),
+		parseInventory({ images: ["server"], upstream: [] }),
 		commit,
 		"hephaestus-build",
 		async (repository, at) => {
@@ -29,11 +29,8 @@ await test("a first-party image is taken from this commit's own build", async ()
 			return digest;
 		},
 	);
-	assert.deepEqual(seen, [`ghcr.io/hephaestus-build/application-server@${commit}`]);
-	assert.equal(
-		images.HEPHAESTUS_IMAGE_APPLICATION_SERVER,
-		`ghcr.io/hephaestus-build/application-server@${digest}`,
-	);
+	assert.deepEqual(seen, [`ghcr.io/hephaestus-build/server@${commit}`]);
+	assert.equal(images.HEPHAESTUS_IMAGE_SERVER, `ghcr.io/hephaestus-build/server@${digest}`);
 });
 
 await test("anything that is not a digest is refused rather than deployed", async () => {
@@ -51,6 +48,6 @@ await test("anything that is not a digest is refused rather than deployed", asyn
 });
 
 await test("the image environment key uses the canonical image name", () => {
-	assert.equal(environmentKey("application-server"), "HEPHAESTUS_IMAGE_APPLICATION_SERVER");
-	assert.equal(environmentKey("agent-pi"), "HEPHAESTUS_IMAGE_AGENT_PI");
+	assert.equal(environmentKey("server"), "HEPHAESTUS_IMAGE_SERVER");
+	assert.equal(environmentKey("agent"), "HEPHAESTUS_IMAGE_AGENT");
 });

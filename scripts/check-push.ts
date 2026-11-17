@@ -26,7 +26,7 @@ const instructionPath = /^(?:\.agents|\.claude)\/|(?:^|\/)(?:AGENTS|CLAUDE)\.md$
 
 // The CI path filters that select a tree's jobs, and the push scope that runs that tree's checks.
 const ciTrees = {
-	"application-server": "server",
+	server: "server",
 	docs: "docs",
 	extension: "extension",
 	webapp: "webapp",

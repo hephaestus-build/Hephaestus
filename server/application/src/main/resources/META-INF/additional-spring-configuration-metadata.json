@@ -347,11 +347,11 @@
       "name": "hephaestus.agent.image.reference",
       "values": [
         {
-          "value": "ghcr.io/hephaestus-build/agent-pi:${spring.application.version}",
+          "value": "ghcr.io/hephaestus-build/agent:${spring.application.version}",
           "description": "Follows this deployment's own image tag, so the pair always matches."
         },
         {
-          "value": "ghcr.io/hephaestus-build/agent-pi@sha256:0000000000000000000000000000000000000000000000000000000000000000",
+          "value": "ghcr.io/hephaestus-build/agent@sha256:0000000000000000000000000000000000000000000000000000000000000000",
           "description": "Production \u2014 digest-pinned. Imported by spring.config.import from the signed release asset."
         }
       ]

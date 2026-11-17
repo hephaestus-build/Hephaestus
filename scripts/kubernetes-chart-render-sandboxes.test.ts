@@ -132,8 +132,8 @@ await test("a server with sandboxes receives its runtime settings, its sandbox n
 		undefined,
 		"the ledger identity stays per process",
 	);
-	assert.equal(envValue(server, "HEPHAESTUS_AGENT_IMAGE_REFERENCE"), prepared.images["agent-pi"]);
-	assert.equal(get(container(server), "image"), prepared.images["application-server"]);
+	assert.equal(envValue(server, "HEPHAESTUS_AGENT_IMAGE_REFERENCE"), prepared.images.agent);
+	assert.equal(get(container(server), "image"), prepared.images.server);
 	assert.equal(env(server, "HEPHAESTUS_CONVERSATION_LOOP_SECRET"), undefined);
 	assert.equal(
 		env(server, "HEPHAESTUS_WORKER_CAPACITY_CONVERSATION_MAX"),

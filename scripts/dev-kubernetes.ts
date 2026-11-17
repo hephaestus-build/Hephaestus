@@ -266,7 +266,7 @@ export async function prepareHost(): Promise<NodeJS.ProcessEnv> {
 		file,
 	]);
 	const tag = `dev-${createHash("sha256").update(ROOT).digest("hex").slice(0, 12)}`;
-	const local = `localhost:5111/hephaestus-build/agent-pi:${tag}`;
+	const local = `localhost:5111/hephaestus-build/agent:${tag}`;
 	await run(
 		"docker",
 		[

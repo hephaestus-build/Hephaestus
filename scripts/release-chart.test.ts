@@ -30,9 +30,9 @@ const image = (name: string, character: string) =>
 const values: ChartValues = {
 	release: { version: release, commit: "c".repeat(40) },
 	images: {
-		"agent-pi": image("agent-pi", "1"),
+		agent: image("agent", "1"),
 		alertmanager: image("alertmanager", "6"),
-		"application-server": image("application-server", "2"),
+		server: image("server", "2"),
 		postgres: image("postgres", "4"),
 		"postgres-exporter": image("postgres-exporter", "9"),
 		"victoria-metrics": image("victoria-metrics", "7"),

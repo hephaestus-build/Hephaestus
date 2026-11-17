@@ -106,7 +106,7 @@ export async function memoryDrill(imagesFile: string, cluster = "hephaestus"): P
 	const context = await output("kubectl", ["config", "current-context"]);
 	assert.equal(context.trim(), `k3d-${cluster}`);
 	const resolved = await readFile(imagesFile, "utf8");
-	const image = parseResolvedImages(resolved).find((entry) => entry.image === "agent-pi");
+	const image = parseResolvedImages(resolved).find((entry) => entry.image === "agent");
 	assert.ok(image, "the drill needs this run's agent image");
 	let failure: Error | undefined;
 	// A high soft threshold exercises the real eviction manager while the host still has spare memory.

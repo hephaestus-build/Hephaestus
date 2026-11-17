@@ -10,7 +10,7 @@ export const REPO_ROOT = path.resolve(import.meta.dirname, "../..");
 export const CHART = "deploy/chart/hephaestus";
 export const topologyImage = (name: string): string =>
 	`ghcr.io/hephaestus-build/${name}@sha256:${"a".repeat(64)}`;
-export const applicationImage = topologyImage("application-server");
+export const applicationImage = topologyImage("server");
 
 /** Synthetic names and pins. These values never contact a registry, API server or Secret. */
 export function renderDeployTopology(root = REPO_ROOT, sandboxEnabled = true): string {

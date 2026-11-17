@@ -401,7 +401,7 @@ void test(
 						...process.env,
 						RUNNER_TEMP: directory,
 						PLATFORM_PAIR: "linux-arm64",
-						IMAGES: JSON.stringify(["application-server", "webapp"]),
+						IMAGES: JSON.stringify(["server", "webapp"]),
 						WEBAPP_DIGEST: `sha256:${artifact}`,
 						BUILDPACKS_DIGEST: `sha256:${buildpacks}`,
 						BUILDPACKS_OUTCOME: "success",
@@ -417,9 +417,9 @@ void test(
 			assert.deepEqual(
 				entries.toSorted((left, right) => left.localeCompare(right)),
 				[
-					"application-server",
-					path.join("application-server", "linux-arm64"),
-					path.join("application-server", "linux-arm64", buildpacks),
+					"server",
+					path.join("server", "linux-arm64"),
+					path.join("server", "linux-arm64", buildpacks),
 					"webapp",
 					path.join("webapp", "linux-arm64"),
 					path.join("webapp", "linux-arm64", artifact),
@@ -470,7 +470,7 @@ void test(
 						...process.env,
 						RUNNER_TEMP: directory,
 						PLATFORM_PAIR: "linux-arm64",
-						IMAGES: JSON.stringify(["application-server"]),
+						IMAGES: JSON.stringify(["server"]),
 						BUILDPACKS_DIGEST: "",
 						BUILDPACKS_OUTCOME: "failure",
 						BAKE_OUTCOME: "",
@@ -478,10 +478,7 @@ void test(
 				},
 			);
 			assert.notEqual(failed.status, 0);
-			assert.match(
-				failed.stdout,
-				/::notice::application-server has no digest: its build step failed/u,
-			);
+			assert.match(failed.stdout, /::notice::server has no digest: its build step failed/u);
 			assert.doesNotMatch(failed.stdout, /No digest produced/u);
 			// A failed bake still hands over the sibling images that it pushed, so each is scanned.
 			rmSync(path.join(directory, "digests"), { recursive: true, force: true });

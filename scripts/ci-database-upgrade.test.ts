@@ -27,11 +27,10 @@ void test("a merge group whose change reaches a migration runs the release's see
 		"server/application/src/main/resources/db/changelog/**",
 		"server/application/src/main/java/de/tum/cit/aet/hephaestus/core/database/BaselineSynchronization.java",
 	]);
-	// Each path also selects the application-server image, which the upgrade installs: a merge group
+	// Each path also selects the server image, which the upgrade installs: a merge group
 	// aliases nothing, so a path outside it would leave the upgrade without its candidate.
 	const serverImage =
-		pathFilters(readFileSync(".github/workflows/cicd.yml", "utf8"))["application-server-image"] ??
-		[];
+		pathFilters(readFileSync(".github/workflows/cicd.yml", "utf8"))["server-image"] ?? [];
 	for (const file of filter) {
 		assert.ok(
 			serverImage.some(

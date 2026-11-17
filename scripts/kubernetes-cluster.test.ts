@@ -53,7 +53,7 @@ import {
 
 const chart = fileURLToPath(new URL("../deploy/chart/hephaestus/", import.meta.url));
 const digest = (character: string) => `sha256:${character.repeat(64)}`;
-const resolved = ["webapp", "application-server", "agent-pi", "postgres"].map((image, index) => ({
+const resolved = ["webapp", "server", "agent", "postgres"].map((image, index) => ({
 	image,
 	repository: `ghcr.io/hephaestus-build/${image}`,
 	indexDigest: digest(String(index)),
@@ -77,9 +77,9 @@ const images = chartImagesFrom(resolved, upstream);
 
 await test("the chart's images come from the resolved first-party images and the upstream pins", () => {
 	assert.deepEqual(images, {
-		"agent-pi": `ghcr.io/hephaestus-build/agent-pi@${digest("2")}`,
+		agent: `ghcr.io/hephaestus-build/agent@${digest("2")}`,
 		alertmanager: `docker.io/prom/alertmanager@${digest("8")}`,
-		"application-server": `ghcr.io/hephaestus-build/application-server@${digest("1")}`,
+		server: `ghcr.io/hephaestus-build/server@${digest("1")}`,
 		postgres: `ghcr.io/hephaestus-build/postgres@${digest("3")}`,
 		"postgres-exporter": `docker.io/prometheuscommunity/postgres-exporter@${digest("7")}`,
 		"victoria-metrics": `docker.io/victoriametrics/victoria-metrics@${digest("f")}`,

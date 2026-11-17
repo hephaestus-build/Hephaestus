@@ -441,6 +441,6 @@ void it("signed evidence is required from the owned release boundary, including 
 
 void it("requires bundle metadata and scanner coverage when the signed manifest declares it", () => {
 	assert.doesNotThrow(() => validateImageBundleInventory({}, {}, "webapp", false));
-	assert.doesNotThrow(() => validateImageBundleInventory({}, {}, "agent-pi", true));
+	assert.doesNotThrow(() => validateImageBundleInventory({}, {}, "agent", true));
 	assert.throws(() => validateImageBundleInventory({}, {}, "webapp", true), /no bundled npm/u);
 });

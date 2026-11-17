@@ -75,12 +75,12 @@ await test("rendered chart consumers reject unlocked images and include the sand
 		deployedImageConsumers([
 			{
 				name: "server",
-				image: topologyImage("application-server"),
-				environment: new Map([["HEPHAESTUS_AGENT_IMAGE_REFERENCE", topologyImage("agent-pi")]]),
+				image: topologyImage("server"),
+				environment: new Map([["HEPHAESTUS_AGENT_IMAGE_REFERENCE", topologyImage("agent")]]),
 				mounts: [],
 			},
 		]),
-		["agent-pi", "application-server"],
+		["agent", "server"],
 	);
 });
 await test("every chart image needs a schema key, a consumer and release evidence", () => {

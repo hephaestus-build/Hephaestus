@@ -47,11 +47,11 @@ jobs:
       webapp: ${{ steps.filter.outputs.webapp }}
       webapp-image: ${{ steps.filter.outputs.webapp-image }}
       extension: ${{ steps.filter.outputs.extension }}
-      application-server: ${{ steps.filter.outputs.application-server }}
+      server: ${{ steps.filter.outputs.server }}
       # Whether the server suites run. The package job reads it too, because the suites run its classes.
-      server-tests: ${{ steps.opt_in.outputs.light != 'true' && (steps.filter.outputs.application-server == 'true' || steps.filter.outputs.test-config == 'true' || github.event_name == 'push' || github.event_name == 'workflow_dispatch') }}
+      server-tests: ${{ steps.opt_in.outputs.light != 'true' && (steps.filter.outputs.server == 'true' || steps.filter.outputs.test-config == 'true' || github.event_name == 'push' || github.event_name == 'workflow_dispatch') }}
       # Whether the diff changes the server suites' inputs, whatever the tier runs.
-      server-changed: ${{ steps.filter.outputs.application-server == 'true' || steps.filter.outputs.test-config == 'true' }}
+      server-changed: ${{ steps.filter.outputs.server == 'true' || steps.filter.outputs.test-config == 'true' }}
       migrations-changed: ${{ steps.filter.outputs.migrations }}
       # Only migrations and their release/schema notes changed. The queue and explicit full runs still
       # execute Unit and Architecture; generated-artifact drift stays on every selected server PR.
@@ -64,7 +64,7 @@ jobs:
       pull-request-base: ${{ steps.opt_in.outputs.base }}
       tooling: ${{ steps.filter.outputs.tooling }}
       windows: ${{ steps.filter.outputs.windows }}
-      application-server-image: ${{ steps.filter.outputs.application-server-image == 'true' || steps.filter.outputs.docker-config == 'true' || steps.filter.outputs.build-config == 'true' || steps.filter.outputs.image-scan == 'true' }}
+      server-image: ${{ steps.filter.outputs.server-image == 'true' || steps.filter.outputs.docker-config == 'true' || steps.filter.outputs.build-config == 'true' || steps.filter.outputs.image-scan == 'true' }}
       e2e: ${{ steps.filter.outputs.e2e }}
       extension-e2e: ${{ steps.filter.outputs.extension-e2e }}
       api-clients: ${{ steps.filter.outputs.api-clients }}
@@ -89,7 +89,7 @@ jobs:
       version: ${{ steps.version.outputs.version }}
       release-candidate: ${{ steps.release_candidate.outputs.release-candidate }}
       release-preflight: ${{ (github.event_name == 'workflow_dispatch' && inputs.release-preflight) || steps.release_candidate.outputs.release-candidate == 'true' }}
-      any-code: ${{ steps.filter.outputs.webapp == 'true' || steps.filter.outputs.extension == 'true' || steps.filter.outputs.application-server == 'true' || steps.filter.outputs.tooling == 'true' || steps.filter.outputs.agent-images == 'true' || steps.filter.outputs.postgres-image == 'true' }}
+      any-code: ${{ steps.filter.outputs.webapp == 'true' || steps.filter.outputs.extension == 'true' || steps.filter.outputs.server == 'true' || steps.filter.outputs.tooling == 'true' || steps.filter.outputs.agent-images == 'true' || steps.filter.outputs.postgres-image == 'true' }}
       # The platforms every image build in the run publishes. A pull request builds `linux/amd64`
       # alone, so a push to it does not pay for arm64. Every other event builds both, so the merge
       # group finds an arm64 failure once per merge, before main. The Version PR builds both too:
@@ -376,7 +376,7 @@ jobs:
               - 'package.json'
               - 'pnpm-lock.yaml'
               - 'pnpm-workspace.yaml'
-            application-server:
+            server:
               - 'tsconfig.agent-runtime.json'
               - 'scripts/compile-agent-runtime.ts'
               - 'server/**'
@@ -472,7 +472,7 @@ jobs:
               - '!.changeset/**'
               - '!**/AGENTS.md'
               - '!**/CLAUDE.md'
-            application-server-image:
+            server-image:
               - '.github/ci-tools/pack.json'
               - '.github/ci-tools/buildpack-*.json'
               - 'scripts/buildpack-dependencies.ts'
@@ -605,7 +605,7 @@ jobs:
             postgres-image:
               - 'docker/postgres/**'
             # What changes an upgrade from the last release: a migration and the baseline synchronization.
-            # Both are application-server sources, so the merge group builds the image that the seeded
+            # Both are server sources, so the merge group builds the image that the seeded
             # upgrade tests. A change to the test alone runs at the release and weekly.
             database-upgrade:
               - 'server/application/src/main/resources/db/changelog/**'
@@ -940,7 +940,7 @@ jobs:
         needs.detect-changes.outputs.release-images == 'true' ||
         (needs.detect-changes.outputs.publishable == 'true' && needs.detect-changes.outputs.images == 'true' && (
           needs.detect-changes.outputs.all-images == 'true' ||
-          needs.detect-changes.outputs.application-server-image == 'true' ||
+          needs.detect-changes.outputs.server-image == 'true' ||
           needs.detect-changes.outputs.kubernetes == 'true' ||
           needs.detect-changes.outputs.webapp-image == 'true' ||
           needs.detect-changes.outputs.agent-images == 'true' ||
@@ -1060,7 +1060,7 @@ jobs:
       should_skip: ${{ needs.detect-changes.outputs.should_skip }}
       webapp_changed: ${{ (needs.detect-changes.outputs.webapp == 'true' || needs.detect-changes.outputs.quality-config == 'true' || needs.detect-changes.outputs.unfiltered == 'true') && 'true' || 'false' }}
       extension_changed: ${{ (needs.detect-changes.outputs.extension == 'true' || needs.detect-changes.outputs.quality-config == 'true' || needs.detect-changes.outputs.unfiltered == 'true') && 'true' || 'false' }}
-      application_server_changed: ${{ (needs.detect-changes.outputs.application-server == 'true' || needs.detect-changes.outputs.quality-config == 'true' || needs.detect-changes.outputs.unfiltered == 'true') && 'true' || 'false' }}
+      application_server_changed: ${{ (needs.detect-changes.outputs.server == 'true' || needs.detect-changes.outputs.quality-config == 'true' || needs.detect-changes.outputs.unfiltered == 'true') && 'true' || 'false' }}
       tooling_changed: ${{ (needs.detect-changes.outputs.tooling == 'true' || needs.detect-changes.outputs.quality-config == 'true' || needs.detect-changes.outputs.unfiltered == 'true') && 'true' || 'false' }}
       windows_changed: ${{ needs.detect-changes.outputs.light-tier != 'true' && (needs.detect-changes.outputs.windows != 'false' || needs.detect-changes.outputs.queue-tier != 'false') && 'true' || 'false' }}
       client_generators_changed: ${{ (needs.detect-changes.outputs.client-generators == 'true' || needs.detect-changes.outputs.unfiltered == 'true') && 'true' || 'false' }}
@@ -1086,7 +1086,7 @@ jobs:
         needs.detect-changes.outputs.build-config == 'true' ||
         needs.detect-changes.outputs.test-config == 'true'
       ) && (
-        needs.detect-changes.outputs.kubernetes == 'true' || needs.detect-changes.outputs.server-tests == 'true' || (needs.detect-changes.outputs.queue-tier == 'true' && (needs.detect-changes.outputs.e2e == 'true' || needs.detect-changes.outputs.extension-e2e == 'true')) || needs.detect-changes.outputs.api-clients == 'true' || needs.detect-changes.outputs.postgres-image == 'true' || needs.detect-changes.outputs.build-config == 'true' || (needs.detect-changes.outputs.images == 'true' && (needs.detect-changes.outputs.application-server-image == 'true' || needs.detect-changes.outputs.kubernetes == 'true' || needs.detect-changes.outputs.all-images == 'true'))
+        needs.detect-changes.outputs.kubernetes == 'true' || needs.detect-changes.outputs.server-tests == 'true' || (needs.detect-changes.outputs.queue-tier == 'true' && (needs.detect-changes.outputs.e2e == 'true' || needs.detect-changes.outputs.extension-e2e == 'true')) || needs.detect-changes.outputs.api-clients == 'true' || needs.detect-changes.outputs.postgres-image == 'true' || needs.detect-changes.outputs.build-config == 'true' || (needs.detect-changes.outputs.images == 'true' && (needs.detect-changes.outputs.server-image == 'true' || needs.detect-changes.outputs.kubernetes == 'true' || needs.detect-changes.outputs.all-images == 'true'))
       )
     env:
       SERVER_BUILD_ARTIFACT: server-build-${{ github.run_id }}
@@ -1169,7 +1169,7 @@ jobs:
     with:
       should_skip: ${{ needs.detect-changes.outputs.should_skip }}
       postgres_base_sha: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.sha }}
-      contracts_changed: ${{ (github.event_name != 'push' || needs.detect-changes.outputs.version-bump == 'true') && (needs.detect-changes.outputs.application-server == 'true' || needs.detect-changes.outputs.api-clients == 'true' || needs.detect-changes.outputs.postgres-image == 'true' || needs.detect-changes.outputs.build-config == 'true' || needs.detect-changes.outputs.unfiltered == 'true') && 'true' || 'false' }}
+      contracts_changed: ${{ (github.event_name != 'push' || needs.detect-changes.outputs.version-bump == 'true') && (needs.detect-changes.outputs.server == 'true' || needs.detect-changes.outputs.api-clients == 'true' || needs.detect-changes.outputs.postgres-image == 'true' || needs.detect-changes.outputs.build-config == 'true' || needs.detect-changes.outputs.unfiltered == 'true') && 'true' || 'false' }}
       postgres_image_changed: ${{ (needs.detect-changes.outputs.postgres-image == 'true' || needs.detect-changes.outputs.unfiltered == 'true') && 'true' || 'false' }}
       queue_tier: ${{ needs.detect-changes.outputs.queue-tier }}
       migrations_changed: ${{ needs.detect-changes.outputs.migrations-changed }}
@@ -1216,7 +1216,7 @@ jobs:
       postgres_image_changed: ${{ (needs.detect-changes.outputs.postgres-image == 'true' || needs.detect-changes.outputs.unfiltered == 'true') && 'true' || 'false' }}
       queue_tier: ${{ needs.detect-changes.outputs.queue-tier }}
 
-  # Every image of the run: one build job per platform and one manifest job. The application-server
+  # Every image of the run: one build job per platform and one manifest job. The server
   # image is built from the package job's executable JAR, so the job waits for it.
   # The `ci:images` label and the Kubernetes cluster jobs need every image at the head tag; unchanged images
   # are aliased here. Other runs' image builds stay path-filtered.
@@ -1228,7 +1228,7 @@ jobs:
       !cancelled() && needs.detect-changes.result == 'success' && (needs.vulnerability-database.result == 'success' || needs.vulnerability-database.result == 'skipped') &&
       (needs.Security.result == 'success' || needs.Security.result == 'skipped') && (
         (needs.detect-changes.outputs.should_skip != 'true' && needs.detect-changes.outputs.draft != 'true' && needs.detect-changes.outputs.images == 'true' && (needs.detect-changes.outputs.unfiltered == 'true' || needs.detect-changes.outputs.head-images == 'true' || needs.detect-changes.outputs.any-code == 'true' || needs.detect-changes.outputs.ci-config == 'true')) ||
-        (needs.detect-changes.outputs.draft != 'true' && (needs.server-package.result == 'success' || (needs.server-package.result == 'skipped' && needs.detect-changes.outputs.queue-images-complete == 'true')) && needs.detect-changes.outputs.images == 'true' && (needs.detect-changes.outputs.application-server-image == 'true' || needs.detect-changes.outputs.kubernetes == 'true' || needs.detect-changes.outputs.all-images == 'true'))
+        (needs.detect-changes.outputs.draft != 'true' && (needs.server-package.result == 'success' || (needs.server-package.result == 'skipped' && needs.detect-changes.outputs.queue-images-complete == 'true')) && needs.detect-changes.outputs.images == 'true' && (needs.detect-changes.outputs.server-image == 'true' || needs.detect-changes.outputs.kubernetes == 'true' || needs.detect-changes.outputs.all-images == 'true'))
       )
     permissions:
       actions: write
@@ -1246,7 +1246,7 @@ jobs:
       reuse-images: ${{ needs.detect-changes.outputs.queue-images }}
       scan-images: ${{ needs.detect-changes.outputs.release-preflight != 'true' }}
       webapp_changed: ${{ (needs.detect-changes.outputs.webapp-image == 'true' || needs.detect-changes.outputs.docker-config == 'true' || needs.detect-changes.outputs.all-images == 'true') && 'true' || 'false' }}
-      application_server_changed: ${{ (needs.detect-changes.outputs.application-server-image == 'true' || needs.detect-changes.outputs.kubernetes == 'true' || needs.detect-changes.outputs.all-images == 'true') && 'true' || 'false' }}
+      application_server_changed: ${{ (needs.detect-changes.outputs.server-image == 'true' || needs.detect-changes.outputs.kubernetes == 'true' || needs.detect-changes.outputs.all-images == 'true') && 'true' || 'false' }}
       agent_images_changed: ${{ (needs.detect-changes.outputs.agent-images == 'true' || needs.detect-changes.outputs.docker-config == 'true' || needs.detect-changes.outputs.all-images == 'true') && 'true' || 'false' }}
       # A merge group aliases nothing, so the seeded upgrade needs this group's own PostgreSQL image.
       postgres_image_changed: ${{ (needs.detect-changes.outputs.postgres-image == 'true' || needs.detect-changes.outputs.docker-config == 'true' || needs.detect-changes.outputs.all-images == 'true' || needs.detect-changes.outputs.queue-upgrade == 'true') && 'true' || 'false' }}
@@ -1257,9 +1257,9 @@ jobs:
       # renovate: datasource=docker depName=paketobuildpacks/ubuntu-noble-run-tiny
       run-image: "paketobuildpacks/ubuntu-noble-run-tiny@sha256:dc90cbdbbff35916ff5a26409f29f0525cbc7fa76cc317adca856c4127ebf2ba"
 
-      application-server: ${{ ((needs.detect-changes.outputs.draft != 'true' && (needs.server-package.result == 'success' || (needs.server-package.result == 'skipped' && needs.detect-changes.outputs.queue-images-complete == 'true')) && needs.detect-changes.outputs.images == 'true' && (needs.detect-changes.outputs.application-server-image == 'true' || needs.detect-changes.outputs.kubernetes == 'true' || needs.detect-changes.outputs.all-images == 'true')) && 'true' || 'false') == 'true' }}
+      server: ${{ ((needs.detect-changes.outputs.draft != 'true' && (needs.server-package.result == 'success' || (needs.server-package.result == 'skipped' && needs.detect-changes.outputs.queue-images-complete == 'true')) && needs.detect-changes.outputs.images == 'true' && (needs.detect-changes.outputs.server-image == 'true' || needs.detect-changes.outputs.kubernetes == 'true' || needs.detect-changes.outputs.all-images == 'true')) && 'true' || 'false') == 'true' }}
       webapp: ${{ ((needs.detect-changes.outputs.should_skip != 'true' && needs.detect-changes.outputs.draft != 'true' && needs.detect-changes.outputs.images == 'true' && (needs.detect-changes.outputs.unfiltered == 'true' || needs.detect-changes.outputs.head-images == 'true' || needs.detect-changes.outputs.any-code == 'true' || needs.detect-changes.outputs.ci-config == 'true' || needs.detect-changes.outputs.kubernetes == 'true')) && 'true' || 'false') == 'true' && needs.detect-changes.outputs.should_skip != 'true' && ((needs.detect-changes.outputs.webapp-image == 'true' || needs.detect-changes.outputs.docker-config == 'true' || needs.detect-changes.outputs.all-images == 'true') && 'true' || 'false') == 'true' }}
-      agent-pi: ${{ ((needs.detect-changes.outputs.should_skip != 'true' && needs.detect-changes.outputs.draft != 'true' && needs.detect-changes.outputs.images == 'true' && (needs.detect-changes.outputs.unfiltered == 'true' || needs.detect-changes.outputs.head-images == 'true' || needs.detect-changes.outputs.any-code == 'true' || needs.detect-changes.outputs.ci-config == 'true' || needs.detect-changes.outputs.kubernetes == 'true')) && 'true' || 'false') == 'true' && needs.detect-changes.outputs.should_skip != 'true' && ((needs.detect-changes.outputs.agent-images == 'true' || needs.detect-changes.outputs.docker-config == 'true' || needs.detect-changes.outputs.all-images == 'true') && 'true' || 'false') == 'true' }}
+      agent: ${{ ((needs.detect-changes.outputs.should_skip != 'true' && needs.detect-changes.outputs.draft != 'true' && needs.detect-changes.outputs.images == 'true' && (needs.detect-changes.outputs.unfiltered == 'true' || needs.detect-changes.outputs.head-images == 'true' || needs.detect-changes.outputs.any-code == 'true' || needs.detect-changes.outputs.ci-config == 'true' || needs.detect-changes.outputs.kubernetes == 'true')) && 'true' || 'false') == 'true' && needs.detect-changes.outputs.should_skip != 'true' && ((needs.detect-changes.outputs.agent-images == 'true' || needs.detect-changes.outputs.docker-config == 'true' || needs.detect-changes.outputs.all-images == 'true') && 'true' || 'false') == 'true' }}
       postgres: ${{ ((needs.detect-changes.outputs.should_skip != 'true' && needs.detect-changes.outputs.draft != 'true' && needs.detect-changes.outputs.images == 'true' && (needs.detect-changes.outputs.unfiltered == 'true' || needs.detect-changes.outputs.head-images == 'true' || needs.detect-changes.outputs.any-code == 'true' || needs.detect-changes.outputs.ci-config == 'true' || needs.detect-changes.outputs.kubernetes == 'true')) && 'true' || 'false') == 'true' && needs.detect-changes.outputs.should_skip != 'true' && ((needs.detect-changes.outputs.postgres-image == 'true' || needs.detect-changes.outputs.docker-config == 'true' || needs.detect-changes.outputs.all-images == 'true' || needs.detect-changes.outputs.queue-upgrade == 'true') && 'true' || 'false') == 'true' }}
 
   # The chart on real clusters with this run's images, when the chart or the sandbox runtime changed.
@@ -1274,7 +1274,7 @@ jobs:
     name: "Kubernetes"
     needs: [detect-changes, Docker]
     if: >-
-      !cancelled() && needs.Docker.result == 'success' && needs.Docker.outputs.application-server-digest != '' &&
+      !cancelled() && needs.Docker.result == 'success' && needs.Docker.outputs.server-digest != '' &&
       needs.detect-changes.outputs.should_skip != 'true' &&
       needs.detect-changes.outputs.publishable == 'true' &&
       (github.event_name == 'push' && needs.detect-changes.outputs.queue-run == '' ||
@@ -1383,8 +1383,8 @@ jobs:
 
       - name: Qualify sandbox boundaries on this ref's image
         env:
-          IMAGE: ghcr.io/hephaestus-build/agent-pi@${{ steps.release-evidence.outputs.agent-pi-digest }}
-          APPLICATION_IMAGE: ghcr.io/hephaestus-build/application-server@${{ steps.release-evidence.outputs.application-server-digest }}
+          IMAGE: ghcr.io/hephaestus-build/agent@${{ steps.release-evidence.outputs.agent-digest }}
+          APPLICATION_IMAGE: ghcr.io/hephaestus-build/server@${{ steps.release-evidence.outputs.server-digest }}
         run: |
           set -euo pipefail
           docker pull "$IMAGE"

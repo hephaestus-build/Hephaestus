@@ -234,7 +234,7 @@ void describe("ci-contract: server", () => {
 				full: "false",
 				images: "false",
 				light,
-				filter: { "application-server": "true", migrations: "true", "non-migration": "false" },
+				filter: { server: "true", migrations: "true", "non-migration": "false" },
 				pullRequest: { draft, head: { repo: { full_name: fork ? "fork/repo" : "owner/repo" } } },
 			};
 			const declared = caller.getIn(["jobs", "detect-changes", "outputs"]);
@@ -391,7 +391,7 @@ void describe("ci-contract: server", () => {
 		const workflow = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
 		const filter = step(workflow, ["jobs", "detect-changes"], "dorny/paths-filter");
 		const filters = asRecord(parseDocument(String(filter.get("filters"))).toJSON(), "CI filters");
-		for (const gate of ["application-server-image", "e2e", "extension-e2e", "pmd-canary"]) {
+		for (const gate of ["server-image", "e2e", "extension-e2e", "pmd-canary"]) {
 			const paths = asArray(filters[gate], gate);
 			for (const input of [
 				"server/application/gradle.lockfile",
@@ -681,7 +681,7 @@ void describe("ci-contract: server", () => {
 				new RegExp(`needs\\.detect-changes\\.outputs\\.${escapeRegExp(filter)} == 'true'`, "u"),
 			);
 		}
-		// The application-server image is built from this run's packaged JAR, never recompiled.
+		// The server image is built from this run's packaged JAR, never recompiled.
 		const image = job(orchestrator, "Docker");
 		assert.match(
 			image,
@@ -748,7 +748,7 @@ void describe("ci-contract: server", () => {
 		for (const pattern of ["docs/**", ".vscode/settings.json", "**/AGENTS.md", "**/CLAUDE.md"]) {
 			assert.match(tooling, new RegExp(`- '${escapeRegExp(pattern)}'`, "u"));
 		}
-		assert.doesNotMatch(pathFilter(detection, "application-server"), /- 'docs\/\*\*'/u);
+		assert.doesNotMatch(pathFilter(detection, "server"), /- 'docs\/\*\*'/u);
 		assert.match(pathFilter(detection, "postgres-image"), /- 'docker\/postgres\/\*\*'/u);
 		assert.match(pathFilter(detection, "webapp-image"), /- 'patches\/\*\*'/u);
 		assert.match(pathFilter(detection, "webapp-image"), /- 'docker\/agents\/pi\/patches\/\*\*'/u);

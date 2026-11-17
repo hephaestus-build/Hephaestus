@@ -29,7 +29,7 @@ await test("release publication requires the seeded upgrade gate", () => {
 	assert.match(upgrade, /INPUT_PREVIOUS_VERSION: \$\{\{ inputs\.previous-version \}\}/u);
 	assert.match(
 		release,
-		/candidate-application-image: .*@\$\{\{ needs\.tag-images\.outputs\.application-server-digest \}\}/u,
+		/candidate-application-image: .*@\$\{\{ needs\.tag-images\.outputs\.server-digest \}\}/u,
 	);
 	assert.match(
 		release,
@@ -325,7 +325,7 @@ await test("release evidence waits for the digest-bound sandbox checks", () => {
 	);
 	assert.match(
 		String(at(qualificationStep, ["env", "IMAGE"], "qualification image")),
-		/steps\.retag\.outputs\.agent-pi-digest/u,
+		/steps\.retag\.outputs\.agent-digest/u,
 	);
 	const sandboxStep = steps[sandbox];
 	assert.ok(sandboxStep);

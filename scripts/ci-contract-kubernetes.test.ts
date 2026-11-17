@@ -38,7 +38,7 @@ void describe("ci-contract: kubernetes", () => {
 		assert.equal(workflow.getIn(["jobs", "Supported-host-smoke"]), undefined);
 		const cluster = job(source, "Kubernetes");
 		assert.match(cluster, /needs\.Docker\.result == 'success'/u);
-		assert.match(cluster, /needs\.Docker\.outputs\.application-server-digest != ''/u);
+		assert.match(cluster, /needs\.Docker\.outputs\.server-digest != ''/u);
 		assert.doesNotMatch(cluster, /needs\.server-package/u);
 		assert.match(cluster, /outputs\.kubernetes == 'true'/u);
 		assert.match(
@@ -59,7 +59,7 @@ void describe("ci-contract: kubernetes", () => {
 						result: "success",
 						outputs: { should_skip: "false", publishable: "true", kubernetes: "true" },
 					},
-					Docker: { result: "success", outputs: { "application-server-digest": digest } },
+					Docker: { result: "success", outputs: { "server-digest": digest } },
 				}),
 				digest !== "",
 				"a partial image result without the application image cannot start a cluster",
@@ -427,7 +427,7 @@ void test("an explicit eviction dispatch selects Kubernetes without a Kubernetes
 	};
 	completions.Docker = {
 		result: "success",
-		outputs: { "application-server-digest": "sha256:published" },
+		outputs: { "server-digest": "sha256:published" },
 	};
 	for (const eviction of [false, true]) {
 		assert.equal(

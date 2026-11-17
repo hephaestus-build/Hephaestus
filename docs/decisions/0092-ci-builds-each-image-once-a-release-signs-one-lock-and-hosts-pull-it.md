@@ -55,7 +55,7 @@ This ADR states how a release is built, signed and delivered at 1.0 as rules.
 8. **The verifiers of earlier releases decide.** Before publication, the verifiers of the nearest published release and the latest stable release check the draft. A planned break needs a reviewed entry in `security/accepted-verifier-breaks.json`.
    Enforced by: `scripts/check-previous-verifier.test.ts`.
 9. **The agent image is a lock digest, never a channel tag.** Every runtime role refuses an agent image reference that is untagged or names a channel tag (`latest`, `stable`, `edge`, `main` or a version series). The chart sets `require-digest`, so the server also refuses a reference without a digest. The release refuses an agent image whose runtime-contract label differs from the server constant.
-   Enforced by: `AgentImageReferenceGuardTest`, `AgentImagePinGuardTest`, `AgentImageContractSyncTest`, and the "Verify Node-only agent-pi sandbox" step of `release.yml`.
+   Enforced by: `AgentImageReferenceGuardTest`, `AgentImagePinGuardTest`, `AgentImageContractSyncTest`, and the "Verify Node-only agent sandbox" step of `release.yml`.
 
 10. **Hosts pull. Nothing connects to a host.** Publication deploys nothing. Each environment has one channel file on the `deploy-state` branch, and **Release / Promote** signs it. The host verifies the signature before it parses the channel.
     Enforced by: `scripts/reconcile-deployment.test.ts` ("an unsigned channel or incomplete commit lock never reaches Helm").

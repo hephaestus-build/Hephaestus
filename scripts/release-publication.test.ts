@@ -41,9 +41,9 @@ const defaultChart = chart;
  * no alias, so webapp stays the one first-party image that this suite promotes.
  */
 const upstream = [
-	"agent-pi",
+	"agent",
 	"alertmanager",
-	"application-server",
+	"server",
 	"postgres",
 	"postgres-exporter",
 	"victoria-metrics",

@@ -263,8 +263,8 @@ container names this version, commit and environment.
 {{/* What the verified release lock says this container runs, reported under `release` in /actuator/info. */}}
 {{- define "hephaestus.env.release" -}}
 {{ include "hephaestus.env.releaseIdentity" . }}
-- name: HEPHAESTUS_IMAGE_APPLICATION_SERVER
-  value: {{ include "hephaestus.image" (dict "root" . "name" "application-server") | quote }}
+- name: HEPHAESTUS_IMAGE_SERVER
+  value: {{ include "hephaestus.image" (dict "root" . "name" "server") | quote }}
 - name: TRACING_SAMPLING_PROBABILITY
   value: {{ .Values.config.tracing.samplingProbability | quote }}
 - name: TRACING_OTLP_ENABLED
@@ -301,7 +301,7 @@ fails every pod, so each role is owed the lock's digest. */}}
 - name: HEPHAESTUS_AGENT_IMAGE_REQUIRE_DIGEST
   value: "true"
 - name: HEPHAESTUS_AGENT_IMAGE_REFERENCE
-  value: {{ include "hephaestus.image" (dict "root" . "name" "agent-pi") | quote }}
+  value: {{ include "hephaestus.image" (dict "root" . "name" "agent") | quote }}
 {{- /* Outline and Slack switches. */}}
 - name: HEPHAESTUS_INTEGRATION_OUTLINE_ENABLED
   value: {{ .Values.config.outline.enabled | quote }}

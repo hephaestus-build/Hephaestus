@@ -58,7 +58,7 @@ import { percentile } from "./lib/statistics.ts";
 const { values: options } = parseArgs({
 	options: {
 		stage: { type: "string" },
-		image: { type: "string", default: "hephaestus-footprint/agent-pi:bench" },
+		image: { type: "string", default: "hephaestus-footprint/agent:bench" },
 		reviews: { type: "string", default: "1" },
 		memory: { type: "string" },
 		cpus: { type: "string" },

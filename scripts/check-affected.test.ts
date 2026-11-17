@@ -302,7 +302,7 @@ await test("selects the server and its image for the feedback writing guide that
 		"the server packages the guide",
 	);
 	assert.deepEqual(scopesFor([FEEDBACK_WRITING_GUIDE]), ["docs", "server"]);
-	for (const filter of ["application-server", "application-server-image"]) {
+	for (const filter of ["server", "server-image"]) {
 		const globs = await filterGlobs(filter);
 		assert.ok(
 			globs.some((glob) => asPattern(glob).test(FEEDBACK_WRITING_GUIDE)),

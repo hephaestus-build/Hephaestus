@@ -179,7 +179,7 @@ jobs:
         if: always()
         run: |
           set -euo pipefail
-          NEEDLE="agent-pi:$(printf 'lat\x65st')"
+          NEEDLE="agent:$(printf 'lat\x65st')"
           if grep -rEnI "$NEEDLE" \
                 --exclude-dir=node_modules --exclude-dir=target --exclude-dir=.git \
                 . \

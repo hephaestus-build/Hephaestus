@@ -1,9 +1,10 @@
-import { spawnSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { appendFileSync } from "node:fs";
 import process from "node:process";
 
 import { currentReleaseIdentity, releaseIdentityFor } from "./lib/release-identities.ts";
 
+import { parseInventory } from "./commit-image-lock.ts";
 import { isSet, requiredEnv } from "./lib/env.ts";
 import { BASELINE_RELEASE, latestReleaseOf, upgradeFromOf } from "./lib/previous-release.ts";
 import { CAPTURE_LIMIT_BYTES } from "./lib/process.ts";
@@ -14,7 +15,7 @@ import { parseVersion } from "./lib/release-version.ts";
 // GHCR packages do not transfer between organizations — so its
 // repository is resolved per version from security/release-identities.json.
 const currentNamespace = currentReleaseIdentity().namespace;
-const applicationRepository = `${currentNamespace}/application-server`;
+const applicationRepository = `${currentNamespace}/server`;
 const postgresRepository = `${currentNamespace}/postgres`;
 
 function command(executable: string, args: string[]): string {
@@ -54,6 +55,25 @@ function immutable(reference: string, repository: string): string {
 	return `${repository}@${parsed.digest}`;
 }
 
+/**
+ * The 1.0 names of two images, and the names under which every release before them published them. A
+ * release keeps its published packages, so the upgrade pulls each one under the name that its own tagged
+ * inventory lists.
+ */
+const formerNames = { server: "application-server", agent: "agent-pi" } as const;
+
+function releasedName(version: string, image: keyof typeof formerNames): string {
+	const inventory = parseInventory(
+		JSON.parse(
+			execFileSync("git", ["show", `v${version}:security/release-images.json`], {
+				encoding: "utf8",
+				maxBuffer: CAPTURE_LIMIT_BYTES,
+			}),
+		),
+	);
+	return inventory.images.includes(image) ? image : formerNames[image];
+}
+
 function previousApplicationReference(version: string): {
 	reference: string;
 	repository: string;
@@ -61,12 +81,12 @@ function previousApplicationReference(version: string): {
 	agentRepository: string;
 } {
 	const { namespace } = releaseIdentityFor(version);
-	const repository = `${namespace}/application-server`;
+	const repository = `${namespace}/${releasedName(version, "server")}`;
 	return {
 		reference: `${repository}:${version}`,
 		repository,
 		version,
-		agentRepository: `${namespace}/agent-pi`,
+		agentRepository: `${namespace}/${releasedName(version, "agent")}`,
 	};
 }
 

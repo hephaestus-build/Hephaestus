@@ -44,9 +44,7 @@ void test("image provenance can persist storage records through every reusable-w
 				.filter((step) => String(step.name).startsWith("Attest the "));
 			assert.deepEqual(
 				attestations.map((step) => step.name),
-				["application-server", "webapp", "agent-pi", "postgres"].map(
-					(name) => `Attest the ${name} image`,
-				),
+				["server", "webapp", "agent", "postgres"].map((name) => `Attest the ${name} image`),
 			);
 			for (const attestation of attestations) {
 				assert.match(String(attestation.uses), /^actions\/attest@[a-f0-9]{40}$/u);
@@ -486,7 +484,7 @@ void test("canonical tags are withheld until verification for both image builder
 	// Each bake target names no tag and pushes by digest only when the run publishes.
 	const bake = await readFile("docker/docker-bake.hcl", "utf8");
 	assert.doesNotMatch(bake, /\btags\s*=/u);
-	for (const target of ["webapp", "agent-pi", "postgres"]) {
+	for (const target of ["webapp", "agent", "postgres"]) {
 		assert.ok(
 			bake.includes(
 				`output     = PUBLISH == "true" ? ["type=image,\\"name=\${repository("${target}")}\\",push-by-digest=true,name-canonical=true,push=true"] : ["type=cacheonly"]`,
@@ -900,7 +898,7 @@ void test("a reused image skips only building, merging and attesting", async () 
 	assert.equal(workflow.hasIn(["jobs", "reuse"]), false);
 	assert.equal(workflow.hasIn(["jobs", "build", "needs"]), false);
 	const buildCondition = String(workflow.getIn(["jobs", "build", "if"]));
-	for (const name of ["application-server", "webapp", "agent-pi", "postgres"]) {
+	for (const name of ["server", "webapp", "agent", "postgres"]) {
 		assert.ok(
 			buildCondition.includes(
 				`(inputs.${name} && !contains(fromJSON(inputs.reuse-images), '${name}'))`,
@@ -916,7 +914,7 @@ void test("a reused image skips only building, merging and attesting", async () 
 	assert.deepEqual(dependencies.toJSON(), ["build", "build-arm64"]);
 	assert.equal(
 		workflow.getIn(["jobs", "merge", "if"]),
-		`\${{ (inputs.application-server || inputs.webapp || inputs.agent-pi || inputs.postgres) && inputs.publish && !cancelled() && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') }}`,
+		`\${{ (inputs.server || inputs.webapp || inputs.agent || inputs.postgres) && inputs.publish && !cancelled() && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') }}`,
 	);
 	// The queue run already scanned the image it built, in the build this skips, and its verdict
 	// gated the merge.
@@ -943,7 +941,7 @@ void test("a reused image skips only building, merging and attesting", async () 
 	for (const skipped of ["Download digests", "Create manifests and push"]) {
 		assert.equal(conditions[skipped], "steps.prep.outputs.built != '[]'", skipped);
 	}
-	for (const name of ["application-server", "webapp", "agent-pi", "postgres"]) {
+	for (const name of ["server", "webapp", "agent", "postgres"]) {
 		assert.equal(
 			conditions[`Attest the ${name} image`],
 			`contains(fromJSON(steps.prep.outputs.built), '${name}')`,

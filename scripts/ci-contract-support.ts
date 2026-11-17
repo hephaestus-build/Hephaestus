@@ -895,7 +895,7 @@ export function simulateRun(
 			result = name === "Security" ? security : "success";
 		}
 		const digest = name === "Docker" && result === "success" ? "sha256:image" : "";
-		completions[name] = { result, outputs: { "application-server-digest": digest } };
+		completions[name] = { result, outputs: { "server-digest": digest } };
 	}
 	return Object.fromEntries(
 		Object.entries(completions).map(([name, completion]) => [name, completion.result] as const),

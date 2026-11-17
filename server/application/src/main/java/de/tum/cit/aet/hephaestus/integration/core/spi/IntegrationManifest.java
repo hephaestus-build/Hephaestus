@@ -7,7 +7,7 @@ import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 
 /**
- * Per-kind capability declaration validated at application-server startup: every declared {@link Capability}
+ * Per-kind capability declaration validated at server startup: every declared {@link Capability}
  * must have a matching SPI bean for the same {@link IntegrationKind}, or {@code IntegrationFrameworkBootstrap}
  * fails fast.
  *

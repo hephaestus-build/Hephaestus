@@ -533,8 +533,8 @@ Qualification must pass before the release is published.
 Run the same qualification on a local Linux Docker host:
 
 ```bash
-node scripts/sandbox-security.ts --image <agent-pi-reference> \
-  --application-image <application-server-reference>
+node scripts/sandbox-security.ts --image <agent-reference> \
+  --application-image <server-reference>
 ```
 
 Use image digests from the same candidate release for both references.
@@ -570,7 +570,7 @@ The [labelling guide](./label-feedback-quality.mdx) gives the independent human 
 ### Live review runner image
 
 The live review suites use the prebuilt agent image, with its SDK and practice toolkit.
-Set `HEPHAESTUS_LIVE_AGENT_IMAGE` to the image to test. Otherwise, prepare `hephaestus/agent-pi:live` first.
+Set `HEPHAESTUS_LIVE_AGENT_IMAGE` to the image to test. Otherwise, prepare `hephaestus/agent:live` first.
 The harness never pulls it or installs dependencies during a run.
 
 The runner executes in one non-root container with a read-only root, its owned fixture workspace, and temporary storage.
