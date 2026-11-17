@@ -96,12 +96,13 @@ class WebAppIntegrationTest extends RealAuthIntegrationTest {
 
     @Test
     void shouldAnswerNotFoundWhenAPathUnderAServerRootNamesNothing() throws Exception {
-        for (String path :
-                new String[] {"/assets/missing.js", "/legal/_disclaimer/missing.md", "/.well-known/missing"}) {
+        for (String path : new String[] {"/assets/missing.js", "/legal/_disclaimer/missing.md"}) {
             mvc().perform(get(path))
                     .andExpect(status().isNotFound())
                     .andExpect(header().string("Content-Type", not(startsWith("text/html"))));
         }
+        // The server's own roots are not the web app: an unknown path there is not public and is never the page.
+        mvc().perform(get("/.well-known/missing")).andExpect(status().isUnauthorized());
     }
 
     @Test

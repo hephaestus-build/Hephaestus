@@ -64,7 +64,8 @@ class CookieAuthenticationIntegrationTest extends RealAuthIntegrationTest {
         var response = webTestClient
                 .post()
                 .uri("/user/exports")
-                .header(HttpHeaders.HOST, "workspace.hephaestus.build")
+                // A host that is not the apex. A workspace host never reaches the API: the host rules refuse it there.
+                .header(HttpHeaders.HOST, "server.cluster.internal")
                 .headers(headers -> headers.setBearerAuth(issued.token()))
                 .exchange()
                 .expectStatus()
