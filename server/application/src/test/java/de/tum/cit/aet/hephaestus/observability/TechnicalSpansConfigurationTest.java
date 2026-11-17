@@ -40,27 +40,28 @@ import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 
 /** An exported span names a route by its template and an error by its type, never by what a person typed. */
-class TechnicalSpansTest extends BaseUnitTest {
+class TechnicalSpansConfigurationTest extends BaseUnitTest {
 
     private final List<SpanData> exported = new CopyOnWriteArrayList<>();
     private final SdkTracerProvider provider = SdkTracerProvider.builder()
-            .addSpanProcessor(SimpleSpanProcessor.create(new TechnicalSpans.TechnicalSpanExporter(new SpanExporter() {
-                @Override
-                public CompletableResultCode export(Collection<SpanData> spans) {
-                    exported.addAll(spans);
-                    return CompletableResultCode.ofSuccess();
-                }
+            .addSpanProcessor(SimpleSpanProcessor.create(
+                    new TechnicalSpansConfiguration.TechnicalSpanExporter(new SpanExporter() {
+                        @Override
+                        public CompletableResultCode export(Collection<SpanData> spans) {
+                            exported.addAll(spans);
+                            return CompletableResultCode.ofSuccess();
+                        }
 
-                @Override
-                public CompletableResultCode flush() {
-                    return CompletableResultCode.ofSuccess();
-                }
+                        @Override
+                        public CompletableResultCode flush() {
+                            return CompletableResultCode.ofSuccess();
+                        }
 
-                @Override
-                public CompletableResultCode shutdown() {
-                    return CompletableResultCode.ofSuccess();
-                }
-            })))
+                        @Override
+                        public CompletableResultCode shutdown() {
+                            return CompletableResultCode.ofSuccess();
+                        }
+                    })))
             .build();
     private final io.opentelemetry.api.trace.Tracer otelTracer = provider.get("test");
     private final OtelCurrentTraceContext current = new OtelCurrentTraceContext();
@@ -115,6 +116,25 @@ class TechnicalSpansTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldCutTheQueryOfAProviderCallThatPassesItsWholeAddressAsItsTemplate() {
+        var request = new MockClientHttpRequest(
+                HttpMethod.GET,
+                URI.create("https://gitlab.example/api/v4/projects/42/repository/commits?ref_name=octocat/wip"));
+        var context = new ClientRequestObservationContext(request);
+        context.setUriTemplate("https://gitlab.example/api/v4/projects/42/repository/commits?ref_name=octocat/wip");
+
+        ClientHttpObservationDocumentation.HTTP_CLIENT_EXCHANGES
+                .observation(null, new DefaultClientRequestObservationConvention(), () -> context, registry)
+                .start()
+                .stop();
+
+        var span = exported.getFirst();
+        assertThat(span.getAttributes().asMap().values())
+                .noneMatch(value -> value.toString().contains("octocat"));
+        assertThat(span.getAttributes().asMap()).containsValue("/api/v4/projects/42/repository/commits");
+    }
+
+    @Test
     void shouldExportAnErrorByItsTypeWithoutItsMessageOrStack() {
         var request = new MockHttpServletRequest("GET", "/api/workspaces/octocat");
         var context = new ServerRequestObservationContext(request, new MockHttpServletResponse());
@@ -130,7 +150,7 @@ class TechnicalSpansTest extends BaseUnitTest {
         assertThat(span.getStatus().getStatusCode()).isEqualTo(StatusCode.ERROR);
         assertThat(span.getStatus().getDescription()).doesNotContain("octocat");
         assertThat(span.getEvents()).isNotEmpty().allSatisfy(event -> {
-            assertThat(event.getAttributes().get(TechnicalSpans.EXCEPTION_TYPE))
+            assertThat(event.getAttributes().get(TechnicalSpansConfiguration.EXCEPTION_TYPE))
                     .isEqualTo(IllegalStateException.class.getName());
             assertThat(event.getAttributes().asMap().values())
                     .noneMatch(value -> value.toString().contains("octocat"));
@@ -140,10 +160,10 @@ class TechnicalSpansTest extends BaseUnitTest {
     @Test
     void shouldWrapTheExporterThatTheApplicationDefines() {
         new ApplicationContextRunner()
-                .withUserConfiguration(TechnicalSpans.class)
+                .withUserConfiguration(TechnicalSpansConfiguration.class)
                 .withBean(SpanExporter.class, () -> mock(SpanExporter.class))
                 .run(context -> assertThat(context.getBean(SpanExporter.class))
-                        .isInstanceOf(TechnicalSpans.TechnicalSpanExporter.class));
+                        .isInstanceOf(TechnicalSpansConfiguration.TechnicalSpanExporter.class));
     }
 
     /** As Spring Boot wires them: the application's filters first, then the tracing handlers. */
@@ -151,7 +171,7 @@ class TechnicalSpansTest extends BaseUnitTest {
         var observations = ObservationRegistry.create();
         observations
                 .observationConfig()
-                .observationFilter(new TechnicalSpans().routeTemplateSpans())
+                .observationFilter(new TechnicalSpansConfiguration().routeTemplateSpans())
                 .observationHandler(new PropagatingReceiverTracingObservationHandler<>(tracer, propagator))
                 .observationHandler(new PropagatingSenderTracingObservationHandler<>(tracer, propagator));
         return observations;

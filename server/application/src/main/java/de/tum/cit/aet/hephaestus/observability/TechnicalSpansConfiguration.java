@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.observability;
 
+import io.micrometer.common.KeyValue;
 import io.micrometer.observation.ObservationFilter;
 import io.opentelemetry.api.common.AttributeKey;
 import io.opentelemetry.api.common.Attributes;
@@ -29,18 +30,34 @@ import org.springframework.http.server.observation.ServerHttpObservationDocument
  * exporter leaves them out of the exception event and of the error status; the server's log keeps them.
  */
 @Configuration
-public class TechnicalSpans {
+public class TechnicalSpansConfiguration {
 
-    // Server and client observations name the key alike, in Spring MVC, RestClient and WebClient.
-    private static final String ADDRESS =
-            ServerHttpObservationDocumentation.HighCardinalityKeyNames.HTTP_URL.asString();
+    // Server and client observations name the key alike, in Spring MVC, RestClient and WebClient. The url.* keys are
+    // the names of Spring's OpenTelemetry conventions, should the application switch to them.
+    private static final List<String> ADDRESSES = List.of(
+            ServerHttpObservationDocumentation.HighCardinalityKeyNames.HTTP_URL.asString(),
+            "url.full",
+            "url.path",
+            "url.query");
+
+    // A client call that passes its whole address as the template carries the query in its route too.
+    private static final String ROUTE = "uri";
 
     // The OpenTelemetry semantic convention's name; the semconv artifact is not on the classpath.
     static final AttributeKey<String> EXCEPTION_TYPE = AttributeKey.stringKey("exception.type");
+    private static final String EXCEPTION = "exception";
 
     @Bean
     ObservationFilter routeTemplateSpans() {
-        return context -> context.removeHighCardinalityKeyValue(ADDRESS);
+        return context -> {
+            ADDRESSES.forEach(context::removeHighCardinalityKeyValue);
+            var route = context.getLowCardinalityKeyValue(ROUTE);
+            if (route != null && route.getValue().indexOf('?') >= 0) {
+                context.addLowCardinalityKeyValue(KeyValue.of(
+                        ROUTE, route.getValue().substring(0, route.getValue().indexOf('?'))));
+            }
+            return context;
+        };
     }
 
     @Bean
@@ -90,9 +107,12 @@ public class TechnicalSpans {
         }
 
         private static EventData typeOnly(EventData event) {
+            if (!EXCEPTION.equals(event.getName())) return event;
             var type = event.getAttributes().get(EXCEPTION_TYPE);
-            if (type == null) return event;
-            return EventData.create(event.getEpochNanos(), event.getName(), Attributes.of(EXCEPTION_TYPE, type));
+            return EventData.create(
+                    event.getEpochNanos(),
+                    event.getName(),
+                    type == null ? Attributes.empty() : Attributes.of(EXCEPTION_TYPE, type));
         }
     }
 }
