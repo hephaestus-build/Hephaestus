@@ -10,4 +10,9 @@
             <column name="passkey_verified_at" type="TIMESTAMP(6) WITH TIME ZONE"/>
         </addColumn>
     </changeSet>
+    <changeSet id="1794937339053-3" author="hephaestus">
+        <addColumn tableName="mcp_client_grant">
+            <column name="last_used_at" type="TIMESTAMP(6) WITH TIME ZONE"/>
+        </addColumn>
+    </changeSet>
 </databaseChangeLog>

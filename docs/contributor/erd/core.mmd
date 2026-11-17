@@ -234,6 +234,7 @@ erDiagram
         BIGINT workspace_id FK "NOT NULL"
         VARCHAR(2048) passkey_credential_id
         TIMESTAMPTZ passkey_verified_at
+        TIMESTAMPTZ last_used_at
     }
 
     PasskeyChallenge {
