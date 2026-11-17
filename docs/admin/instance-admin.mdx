@@ -207,9 +207,9 @@ That is a GitHub App installation, a GitLab group webhook or project webhook, a 
 If Hephaestus cannot be sure that a removal finished, it blocks the old resource, so that a new connection cannot use it.
 Workspace admins see the blocks on their integration page, and only instance admins can release them.
 
-A workspace removal erases the GitLab access token before the removal runs.
-Thus, each GitLab webhook of the workspace stays at GitLab, and its removal waits for authorization.
-Delete those webhooks in GitLab ([GitLab without group webhooks](./connect-gitlab#gitlab-without-group-webhooks) names the place), then release their blocks.
+A workspace removal sends these removals before it erases the credentials, and waits up to 30 seconds for them.
+A removal that is not complete by then keeps its block. Its credential is gone, so its removal waits for authorization.
+A removal from a GitHub uninstall waits for authorization in the same way.
 
 1. Check at the provider that the old resource is gone and its removal is complete.
    A timeout, a `202` answer, or a missing resource alone does not prove it. GitHub answers `202` when it accepts an uninstall.

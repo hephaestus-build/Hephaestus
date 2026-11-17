@@ -80,6 +80,17 @@ public class ProviderTeardown {
         }
     }
 
+    /**
+     * Sends a disconnected connection's provider removals now, one after another, until {@code deadline}. A removal
+     * that the deadline or the provider stops stays recorded with its outcome, as after any disconnect.
+     */
+    public void tearDownNow(long workspaceId, long connectionId, Instant deadline) {
+        for (var repair : repairs.forConnection(workspaceId, connectionId)) {
+            if (!clock.instant().isBefore(deadline)) return;
+            dispatcher.dispatch(repair.getId());
+        }
+    }
+
     @Transactional(propagation = Propagation.MANDATORY)
     public void tearDownForErasure(Connection pending) {
         repairs.coordinate(pending);
