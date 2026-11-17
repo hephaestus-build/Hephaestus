@@ -51,8 +51,15 @@ Instance admin access without a membership does not count.
 4. Read the consent page. It shows the host that publishes the client's metadata, the name that the client gives itself, the workspace, and what the client may read and change.
 5. Select **Allow** to approve, or **Deny** to refuse. If you signed in more than 5 minutes ago, Hephaestus asks you to confirm access first and then returns you to the same request.
 
-The client then calls the endpoint until its session ends.
-It signs in again after the absolute session deadline that also applies to the web app.
+The client keeps its access until an admin disconnects it, or until it goes unused for **90 days**.
+Each time the client renews its sign-in, the 90 days start again, so a client that you use daily never asks again.
+After 90 days without use, the access lapses, and the client asks you to approve it again.
+The access does not end when your web session ends.
+
+This lifetime is the risk that Hephaestus accepts.
+If someone steals the client's tokens, they can act until an admin disconnects the client or it goes unused for 90 days, only with the scopes that you approved, and only in this workspace.
+The client and the thief cannot both keep the access: each renewal replaces the client's refresh token, and when a replaced token comes back, Hephaestus ends the client's access at once and records why.
+Every change is in the audit history under your account and names the client, and an admin can disconnect the client at any time.
 
 ### Connect in a workspace that requires a passkey
 
@@ -63,16 +70,8 @@ If the [admin passkey policy](./passkeys.mdx) requires a passkey for your admin 
    If your account has no passkey yet, select **Add a passkey** and add one in your settings. Adding a passkey ends your other sessions and pending client requests, so start the client's sign-in again afterwards.
 3. Hephaestus approves the client only after it accepts your passkey.
 
-A client that you approve with a passkey keeps its access until an admin disconnects it, or until it goes unused for **90 days**.
-Each time the client renews its sign-in, the 90 days start again, so a client that you use daily never asks again.
-After 90 days without use, the access lapses, and the client asks you to approve it again with your passkey.
+The client's access lasts as long as any other client's: until an admin disconnects it, or until it goes unused for 90 days.
 The grant records when you confirmed and which passkey you used.
-**Workspace settings → Connected MCP clients** shows when each client was last used and, for a client confirmed with a passkey, until when its access lasts if it stays unused.
-
-This lifetime is the risk that the policy accepts.
-If someone steals the client's tokens, they can act until an admin disconnects the client or it goes unused for 90 days, only with the scopes that you approved, and only in this workspace.
-The client and the thief cannot both keep the access: each renewal replaces the client's refresh token, and when a replaced token comes back, Hephaestus ends the client's access at once and records why.
-Every change is in the audit history under your account and names the client, and an admin can disconnect the client at any time.
 
 A client that you approved before the workspace turned on the passkey policy has no passkey confirmation.
 The policy refuses each of its calls, and the client must be approved again.
@@ -104,10 +103,11 @@ Each change that a client makes is recorded under your account, as a change in t
 
 Each of these ends a client's access at once:
 
-- A workspace admin disconnects it in **Workspace settings → Connected MCP clients**.
+- A workspace admin disconnects it in **Workspace settings → Connected MCP clients**. The list shows when each client was last used, until when it keeps its access if it stays unused, and whether a passkey confirmed it.
 - The person who approved it ends the session in their session list.
 - **Sign out everywhere** ends every client session of the account.
 - Suspending or deleting the account ends them all.
+- A refresh token that comes back after the client renewed it ends that client's access, and the audit log records why.
 
 A demotion or removal from the workspace takes effect on the client's next call.
 

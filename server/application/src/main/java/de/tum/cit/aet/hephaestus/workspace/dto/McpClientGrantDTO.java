@@ -26,8 +26,8 @@ public record McpClientGrantDTO(
 
         @Schema(
                 requiredMode = Schema.RequiredMode.REQUIRED,
-                description = "A passkey confirmed the approval, so the client keeps its access until it is revoked"
-                        + " or goes unused until expiresAt")
+                description = "The approving admin confirmed with a passkey, as the workspace's admin passkey policy"
+                        + " asked")
         boolean passkeyBacked,
 
         @Schema(description = "When the client last signed in, refreshed or called, to within an hour") @Nullable
@@ -35,8 +35,8 @@ public record McpClientGrantDTO(
 
         @NonNull
         @Schema(
-                description = "When the client's access ends: for a passkey-backed client, 90 days after it was last"
-                        + " used; otherwise the end of the web session that approved it")
+                description = "When the client's access lapses unless the client renews it first: 90 days after its"
+                        + " last renewal, so each use moves it")
         Instant expiresAt) {
     public McpClientGrantDTO {
         scopes = List.copyOf(scopes);

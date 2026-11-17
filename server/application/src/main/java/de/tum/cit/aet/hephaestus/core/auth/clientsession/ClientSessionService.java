@@ -302,9 +302,7 @@ public class ClientSessionService {
                 return Optional.empty();
             }
             grant.markUsed(now);
-            if (grant.isPasskeyBacked()) {
-                session.extendTo(now.plus(McpClientGrant.IDLE_LAPSE));
-            }
+            session.extendTo(now.plus(McpClientGrant.IDLE_LAPSE));
         }
         ClientTokens tokens = issue(session, grant, request);
         authEventLogger

@@ -230,13 +230,12 @@ public class McpAuthorizationService implements McpClientGrants {
     }
 
     /**
-     * The browser session that approves: its token, its deadlines, and the passkey proof it carries, if any.
+     * The browser session that approves: its token, its sign-in time, and the passkey proof it carries, if any.
      *
      * @param passkeyCredential the credential that the session's passkey proof names
      */
     public record ApprovingSession(
             UUID jti,
-            Instant sessionExpiresAt,
             Instant authTime,
             @Nullable Instant passkeyTime,
             @Nullable String passkeyCredential) {}
@@ -260,13 +259,12 @@ public class McpAuthorizationService implements McpClientGrants {
      * Approves a pending request. It holds the account's issuance lock and checks that the approving token
      * is still active, so an approval that races "sign out everywhere" writes no code (ADR 0110 decision 9).
      * Where the passkey policy asks for a passkey, the approving session must carry a fresh passkey proof. The grant
-     * records when and with which credential. Its client session does not end with the approving web session: it lasts
-     * {@link McpClientGrant#IDLE_LAPSE}, and each refresh moves that deadline (decision 8).
+     * records when and with which credential. Any grant's client session lasts {@link McpClientGrant#IDLE_LAPSE}, and each
+     * refresh moves that deadline (decision 8).
      */
     @Transactional
     public Approval approve(UUID id, Long accountId, ApprovingSession session) {
         UUID approvingJti = session.jti();
-        Instant sessionExpiresAt = session.sessionExpiresAt();
         Instant authTime = session.authTime();
         Instant passkeyTime = session.passkeyTime();
         String passkeyCredential = session.passkeyCredential();
@@ -287,13 +285,13 @@ public class McpAuthorizationService implements McpClientGrants {
         if (decision.refusal() != null) {
             return new Approval.NotAllowed(decision.refusal());
         }
-        Instant clientSessionExpiresAt = sessionExpiresAt;
-        if (decision.passkeyRequired()) {
-            if (passkeyTime == null || passkeyCredential == null || !passkeys.freshPasskeyProof()) {
-                return new Approval.PasskeyRequired();
-            }
-            clientSessionExpiresAt = now.plus(McpClientGrant.IDLE_LAPSE);
+        if (decision.passkeyRequired()
+                && (passkeyTime == null || passkeyCredential == null || !passkeys.freshPasskeyProof())) {
+            return new Approval.PasskeyRequired();
         }
+        // The grant does not end with the web session that approved it: it lapses after IDLE_LAPSE without a
+        // refresh, and each refresh moves that deadline (decision 8, update of 2026-11-17).
+        Instant clientSessionExpiresAt = now.plus(McpClientGrant.IDLE_LAPSE);
         InstalledClient client = new InstalledClient(
                 InstalledClientKind.MCP_CLIENT,
                 grant.getClientId(),

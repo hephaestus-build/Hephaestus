@@ -158,9 +158,11 @@ records the decision; `core.auth.mcp` implements the authorization server, and `
 - **A passkey confirms consent where the policy asks for one.** In a workspace where the admin passkey policy
   requires a passkey of the account, the consent page runs the passkey step-up first. The browser token then
   carries `passkey_time` and `passkey_credential`, and the approval requires that proof within the step-up window.
-  The grant records the time and the credential id. Its client session lasts 90 days and each refresh moves that
-  deadline, so the grant lives until it is revoked, its refresh secret is reused, or it goes unused for 90 days.
-  Each call under that grant satisfies the workspace admin requirement while it lives. A grant's proof never satisfies the
+  The grant records the time and the credential id, and each call under it satisfies the workspace admin
+  requirement while it lives.
+- **A grant lapses only when unused.** Every MCP client session lasts 90 days, and each refresh moves that
+  deadline, so a grant lives until it is revoked, its refresh secret is reused, or it goes unused for 90 days. It
+  does not end with the web session that approved it. A grant's proof never satisfies the
   instance-admin requirement or a pending passkey recovery.
 - **Token shape.** An MCP token's `aud` is the workspace endpoint alone, it carries `scope` and no `roles`, and the
   MCP chain decodes it with the revocation-aware decoder and the MCP audience rule. The REST API refuses it, and

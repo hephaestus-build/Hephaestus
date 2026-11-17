@@ -134,11 +134,9 @@ public class McpAuthorizationController {
     @Operation(summary = "Approve an MCP client for a workspace", operationId = "approveMcpConsentRequest")
     public ResponseEntity<McpConsentRedirectDTO> approve(@PathVariable UUID requestId) {
         Long accountId = browserAccount();
-        Instant sessionExpiresAt = CurrentAccount.sessionExpiresAt();
         Instant authTime = CurrentAccount.authTime();
-        if (sessionExpiresAt == null || authTime == null) {
-            // The client's session inherits this sign-in's deadline and auth_time; without them it would
-            // outlive the browser session that approved it.
+        if (authTime == null) {
+            // The client's session records the sign-in that approved it.
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Sign in again to approve the client.");
         }
         return switch (authorization.approve(
@@ -146,7 +144,6 @@ public class McpAuthorizationController {
                 accountId,
                 new McpAuthorizationService.ApprovingSession(
                         CurrentAccount.requireJti(),
-                        sessionExpiresAt,
                         authTime,
                         CurrentAccount.passkeyTime(),
                         CurrentAccount.passkeyCredential()))) {

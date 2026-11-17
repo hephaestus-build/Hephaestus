@@ -28,6 +28,7 @@ type Story = StoryObj<typeof meta>;
 export const Connected: Story = {
 	play: async ({ canvas, args, userEvent }) => {
 		await expect(canvas.getByText("Reads the practice configuration")).toBeVisible();
+		await expect(canvas.getByText(/Last used .*Lapses if unused until/u)).toBeVisible();
 		await userEvent.click(canvas.getByRole("button", { name: "Disconnect claude.ai" }));
 		await expect(args.onRevoke).toHaveBeenCalledWith(grant.id);
 	},
@@ -41,7 +42,7 @@ export const MayChange: Story = {
 	},
 };
 
-/** A passkey confirmed the approval: the client keeps its access until it goes unused, and the list says until when. */
+/** In a workspace that requires an admin passkey, the list says that a passkey confirmed the approval. */
 export const ConfirmedWithPasskey: Story = {
 	args: {
 		grants: [
@@ -56,8 +57,7 @@ export const ConfirmedWithPasskey: Story = {
 		],
 	},
 	play: async ({ canvas }) => {
-		await expect(canvas.getByText(/Lapses if unused until/u)).toBeVisible();
-		await expect(canvas.getByText(/Last used/u)).toBeVisible();
+		await expect(canvas.getByText(/Confirmed with a passkey/u)).toBeVisible();
 	},
 };
 

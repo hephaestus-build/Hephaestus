@@ -15,11 +15,11 @@ export interface McpClientGrantView {
 	approvedBy: string;
 	scopes: string[];
 	approvedAt?: Date;
-	/** A passkey confirmed the approval, so the client keeps its access until revoked or unused until `expiresAt`. */
+	/** The approving admin confirmed with a passkey, as the workspace's admin passkey policy asked. */
 	passkeyBacked: boolean;
 	/** When the client last signed in, refreshed or called, to within an hour. */
 	lastUsedAt?: Date;
-	/** When the access ends: if a passkey confirmed it, unless the client is used before then. */
+	/** When the access lapses unless the client is used before then; each use moves it. */
 	expiresAt: Date;
 }
 
@@ -104,9 +104,8 @@ export function WorkspaceMcpClientGrantsSection({
 										{grant.lastUsedAt === undefined
 											? "Not used yet."
 											: `Last used ${formatDateTime(grant.lastUsedAt)}.`}{" "}
-										{grant.passkeyBacked
-											? `Confirmed with a passkey. Lapses if unused until ${formatDate(grant.expiresAt)}.`
-											: `Its access ends ${formatDateTime(grant.expiresAt)}.`}
+										Lapses if unused until {formatDate(grant.expiresAt)}.
+										{grant.passkeyBacked && " Confirmed with a passkey."}
 									</p>
 								</ItemContent>
 								<ItemActions>

@@ -9,9 +9,8 @@ import org.jspecify.annotations.Nullable;
 public interface McpClientGrants {
 
     /**
-     * One active grant. {@code clientName} is the client's self-declared name: plain text. {@code expiresAt} is when
-     * its client session ends: for a passkey-backed grant, {@code IDLE_LAPSE} after its last refresh, so each use moves
-     * it; otherwise the deadline of the web session that approved it.
+     * One active grant. {@code clientName} is the client's self-declared name: plain text. {@code expiresAt} is when its
+     * client session lapses: {@code IDLE_LAPSE} after its last refresh, so each use moves it.
      */
     record Grant(
             UUID id,

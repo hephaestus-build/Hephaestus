@@ -36,8 +36,8 @@ public class McpClientGrant {
     static final int URL_LENGTH = 2048;
 
     /**
-     * A passkey-backed grant lasts until it is revoked or goes unused this long (ADR 0110 decision 8). Each refresh
-     * moves its client session's deadline this far ahead, so a client in daily use never asks again.
+     * A grant lasts until it is revoked or goes unused this long (ADR 0110 decision 8). Each refresh moves its client
+     * session's deadline this far ahead, so a client in daily use never asks again.
      */
     public static final Duration IDLE_LAPSE = Duration.ofDays(90);
 
@@ -176,11 +176,6 @@ public class McpClientGrant {
 
     public void markUsed(Instant now) {
         this.lastUsedAt = now;
-    }
-
-    /** Whether a passkey confirmed the approval, so the grant lasts until revoked or idle for {@link #IDLE_LAPSE}. */
-    public boolean isPasskeyBacked() {
-        return passkeyVerifiedAt != null;
     }
 
     void revoke(Instant now) {

@@ -183,6 +183,9 @@ function Request({
 				It can never read source code, observations, feedback, conversations or secrets.
 			</p>
 			<p className="text-sm text-muted-foreground">
+				It keeps this access until an admin disconnects it, or until it goes unused for 90 days.
+			</p>
+			<p className="text-sm text-muted-foreground">
 				After you answer, your browser goes to{" "}
 				<span className="font-medium">{request.redirectHost}</span>.
 			</p>
@@ -238,9 +241,7 @@ function PasskeyStep({ passkey, pending }: { passkey: McpConsentPasskey; pending
 				<AlertDescription>
 					{passkey.status === "add"
 						? "Add a passkey in your settings first. Then start the client’s sign-in again and confirm with it."
-						: "Admin changes here need your passkey, so confirm with it to allow this client."}{" "}
-					The client keeps its access until an admin disconnects it, or until it goes unused for 90
-					days.
+						: "Admin changes here need your passkey, so confirm with it to allow this client."}
 				</AlertDescription>
 			</Alert>
 			{passkey.status === "unsupported" && (

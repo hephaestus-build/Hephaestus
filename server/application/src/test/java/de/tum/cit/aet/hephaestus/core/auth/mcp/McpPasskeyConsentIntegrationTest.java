@@ -216,6 +216,42 @@ class McpPasskeyConsentIntegrationTest extends RealAuthIntegrationTest {
                 .isEqualTo("invalid_grant");
     }
 
+    /** One lifetime rule for every grant: one approved without a passkey also outlives its web session and lapses. */
+    @Test
+    void shouldGiveAGrantWithoutPasskeyTheSameLifetime() {
+        workspace.setAdminPasskeyRequired(false);
+        workspaceRepository.save(workspace);
+        Instant now = Instant.now().truncatedTo(ChronoUnit.SECONDS);
+        String shortSession = jwtIssuer
+                .issue(
+                        accountId,
+                        TokenConstraints.browserSession(now.plus(Duration.ofMinutes(20)), now, null, null),
+                        null)
+                .value();
+        Instant before = Instant.now();
+        McpAuthorizationFlow.Tokens tokens = connect(shortSession);
+        Instant after = Instant.now();
+        UUID grant = grantOf(tokens);
+
+        assertThat(grantColumn(grant, "passkey_verified_at")).isNull();
+        assertThat(sessionDeadline(grant))
+                .isBetween(
+                        before.plus(IDLE_LAPSE).minusSeconds(1),
+                        after.plus(IDLE_LAPSE).plusSeconds(1));
+        structured(call(tokens.accessToken(), GET_REVIEW_SETTINGS));
+
+        jdbc.update(
+                "UPDATE client_session SET session_expires_at = ? WHERE id = (SELECT client_session_id FROM"
+                        + " mcp_client_grant WHERE id = ?)",
+                Timestamp.from(Instant.now().minusSeconds(60)),
+                grant);
+        cleanupJob.cleanup();
+
+        assertThat(grantColumn(grant, "status")).isEqualTo("EXPIRED");
+        assertThat(flow.tokenError(flow.token(flow.refreshForm(tokens.refreshToken()))))
+                .isEqualTo("invalid_grant");
+    }
+
     /** A refresh secret presented twice means two holders: the whole grant ends, and the record says why. */
     @Test
     void shouldRevokeTheGrantAndRecordWhyWhenARefreshSecretIsReused() {
