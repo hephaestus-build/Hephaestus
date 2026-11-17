@@ -308,13 +308,14 @@ jobs:
               - '.github/playwright-image.json'
               # The fixture tests compare the webapp's catalog fixtures with these server resources,
               # the practice guidance stories render the bundled guidance, the SVG sanitizer test
-              # compares its allowlist with the server's, and the card copy test reads the internal
-              # feedback terms.
+              # compares its allowlist with the server's, the card copy test reads the internal
+              # feedback terms, and the code editor check serves the editor under the server's policy.
               - 'server/application/src/main/resources/practices/default-catalog.json'
               - 'server/application/src/test/resources/agent/internal-feedback-terms.json'
               - 'server/application/src/main/resources/practices/guidance/**'
               - 'server/application/src/main/java/de/tum/cit/aet/hephaestus/practices/PracticeGuidanceRules.java'
               - 'server/application/src/main/resources/contracts/source-use/**'
+              - 'server/application/src/main/resources/security/content-security-policy.txt'
               - 'package.json'
               - 'pnpm-lock.yaml'
               - 'pnpm-workspace.yaml'

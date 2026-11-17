@@ -1,7 +1,13 @@
 package de.tum.cit.aet.hephaestus.core.security;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceSubdomainProperties;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.UncheckedIOException;
 import java.net.URI;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
 import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -45,6 +51,12 @@ public final class SecurityHeaders {
     }
 
     /**
+     * The directives of every deployment, one per line. The web app's code editor check
+     * ({@code webapp/check-code-editor-runtime.ts}) serves the editor under the same file, so the policy has one home.
+     */
+    private static final String POLICY_DIRECTIVES = "/security/content-security-policy.txt";
+
+    /**
      * The policy names no partner host, because each directive says what this origin may do:
      *
      * <ul>
@@ -60,19 +72,31 @@ public final class SecurityHeaders {
      * </ul>
      */
     static String contentSecurityPolicy(boolean https, @Nullable String apexOrigin) {
-        return "default-src 'self'; "
-                + "base-uri 'self'; "
-                + "object-src 'none'; "
-                + "frame-ancestors 'none'; "
-                + "form-action 'self'; "
-                + "script-src 'self'; "
-                + "style-src 'self' 'unsafe-inline'; "
-                + "img-src 'self' data: blob: https:; "
-                + "font-src 'self' data:; "
-                + "connect-src 'self'" + (apexOrigin == null ? "" : " " + apexOrigin) + "; "
-                + "worker-src 'self' blob:; "
-                + "manifest-src 'self'"
-                + (https ? "; upgrade-insecure-requests" : "");
+        var directives = new ArrayList<String>();
+        for (String directive : policyDirectives()) {
+            directives.add(
+                    apexOrigin != null && directive.startsWith("connect-src ")
+                            ? directive + " " + apexOrigin
+                            : directive);
+        }
+        if (https) {
+            directives.add("upgrade-insecure-requests");
+        }
+        return String.join("; ", directives);
+    }
+
+    private static List<String> policyDirectives() {
+        try (InputStream in = SecurityHeaders.class.getResourceAsStream(POLICY_DIRECTIVES)) {
+            if (in == null) {
+                throw new IllegalStateException("The content security policy " + POLICY_DIRECTIVES + " is missing");
+            }
+            return new String(in.readAllBytes(), StandardCharsets.UTF_8)
+                    .lines()
+                    .filter(line -> !line.isBlank())
+                    .toList();
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
     }
 
     /** Applies the full header set to the given {@link HttpSecurity}. */

@@ -12,15 +12,20 @@ import { appSourcePlugins } from "./vite.shared.ts";
 
 const fixtureRoot = fileURLToPath(new URL("tools/code-editor-runtime", import.meta.url));
 const sourceRoot = fileURLToPath(new URL("src", import.meta.url));
-const headers = await readFile(new URL("docker/security-headers.conf", import.meta.url), "utf8");
-// nginx fills the API origin at runtime; this check serves the app from one origin.
-const policy = /Content-Security-Policy "(?<policy>[^"]+)"/u
-	.exec(headers)
-	?.groups?.policy?.replace(" $hephaestus_api_origin", "");
-assert.ok(
-	policy !== undefined && policy.length > 0,
-	"The shipped content security policy is missing",
+// The server sends this policy (`SecurityHeaders`). This check serves the app from one origin over HTTP, so neither the
+// workspace apex nor `upgrade-insecure-requests` applies.
+const directives = await readFile(
+	new URL(
+		"../server/application/src/main/resources/security/content-security-policy.txt",
+		import.meta.url,
+	),
+	"utf8",
 );
+const policy = directives
+	.split("\n")
+	.filter((directive) => directive.trim() !== "")
+	.join("; ");
+assert.match(policy, /script-src 'self';/u, "The shipped content security policy is missing");
 const output = await mkdtemp(path.join(tmpdir(), "hephaestus-editor-check-"));
 try {
 	await build({
