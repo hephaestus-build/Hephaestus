@@ -216,7 +216,8 @@ Before you push another local ref, run the full gate on that exact commit.
 Server integration and database tests, full-application E2E, live-service tests, image builds,
 mutation analysis, and release security are outside `verify`.
 See [CI/CD](./ci-cd.mdx).
-Run affected server integration tests separately with `vp run test:server:integration`.
+Run the server integration tier separately with `vp run test:server:integration`.
+It runs the shards one after another, as CI does ([CI/CD § Integration shards](./ci-cd.mdx#integration-shards)).
 
 ### Application and Storybook bundles
 
