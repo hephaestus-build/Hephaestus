@@ -376,11 +376,13 @@ void describe("ci-contract: images", () => {
 			const directory = await mkdtemp(path.join(tmpdir(), "buildpacks-"));
 			await writeFile(path.join(directory, "hephaestus-application-1.0.0.jar"), "");
 			const calls = path.join(directory, "calls");
+			// The summary fails a build whose log names no Liberica JRE of the .java-version line.
+			const javaLine = (await readFile(".java-version", "utf8")).trim();
 			for (const tool of ["pack", "docker"]) {
 				const stub = path.join(directory, tool);
 				await writeFile(
 					stub,
-					`#!/bin/sh\necho "${tool} $*" >> "${calls}"\n[ "$1" = image ] && echo sha256:stub\nexit 0\n`,
+					`#!/bin/sh\necho "${tool} $*" >> "${calls}"\n[ "$1" = image ] && echo sha256:stub\n[ "$1" = build ] && echo "BellSoft Liberica JRE ${javaLine}.0.5: Contributing to layer"\nexit 0\n`,
 				);
 				await chmod(stub, 0o755);
 			}
