@@ -131,23 +131,22 @@ describe("the definition an edit submits", () => {
 });
 
 describe("Reviewed by", () => {
-	it("says what a save with Nobody clears, and clears it", async () => {
+	it("keeps the read sources, script and scan with Nobody, so choosing Hephaestus again restores them", async () => {
 		const onSubmit = vi.fn<Submit>();
-		await renderEditForm(
-			onSubmit,
-			practiceValueOf({ script: "export default 1;", scan: mockScan }),
-		);
+		const value = practiceValueOf({ script: "export default 1;", scan: mockScan });
+		await renderEditForm(onSubmit, value);
 		fireEvent.click(screen.getByRole("radio", { name: /^Nobody/u }));
 		screen.getByText(
-			"Saving with Nobody clears the read sources, the practice script and the scan settings. Choose Hephaestus again before you save to keep them.",
+			"Hephaestus keeps the read sources, the practice script and the scan settings unused while it does not review this practice. Choose Hephaestus again to use them.",
 		);
 		fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
 		await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
-		expect(submitted(onSubmit).definition).toMatchObject({
-			reviewedBy: { by: "NOBODY", humanReason: null, limits: [] },
-			reads: { sources: [] },
-			script: null,
-			scan: null,
+		const saved = submitted(onSubmit).definition;
+		expect(saved).toMatchObject({
+			reviewedBy: { by: "NOBODY", humanReason: null },
+			reads: value.definition.reads,
+			script: "export default 1;",
+			scan: mockScan,
 		});
 	});
 

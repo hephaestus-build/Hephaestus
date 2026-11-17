@@ -17,7 +17,7 @@ const hephaestus: ReviewedByDraft = {
 
 const meta = {
 	component: PracticeReviewedByEditor,
-	args: { value: hephaestus, cleared: [], onChange: fn() },
+	args: { value: hephaestus, kept: [], onChange: fn() },
 	parameters: { layout: "padded" },
 	tags: ["autodocs"],
 	render: (args) => (
@@ -75,15 +75,15 @@ export const Nobody: Story = {
 	},
 };
 
-export const SwitchingSaysWhatIsCleared: Story = {
+export const SwitchingSaysWhatIsKept: Story = {
 	args: {
 		value: { ...hephaestus, by: "NOBODY" },
-		cleared: ["the read sources", "the practice script"],
+		kept: ["the read sources", "the practice script"],
 	},
 	play: async ({ canvas }) => {
 		await expect(
 			canvas.getByText(
-				"Saving with Nobody clears the read sources and the practice script. Choose Hephaestus again before you save to keep them.",
+				"Hephaestus keeps the read sources and the practice script unused while it does not review this practice. Choose Hephaestus again to use them.",
 			),
 		).toBeVisible();
 	},

@@ -31,11 +31,10 @@ export interface PracticeReviewedByEditorProps {
 	value: ReviewedByDraft;
 	onChange: (value: ReviewedByDraft) => void;
 	/**
-	 * What saving with the current choice removes from the definition, as phrases such as "the
-	 * practice script". Each stays in the draft until the save, so choosing Hephaestus again restores
-	 * it; the editor only has to say what will go.
+	 * What the practice keeps, unused, while people or nobody review it, as phrases such as "the
+	 * practice script". Choosing Hephaestus again uses each of them.
 	 */
-	cleared: readonly string[];
+	kept: readonly string[];
 	error?: string;
 	errorFocusId?: string;
 	disabled?: boolean;
@@ -52,7 +51,7 @@ function joinPhrases(phrases: readonly string[]): string {
 export function PracticeReviewedByEditor({
 	value,
 	onChange,
-	cleared,
+	kept,
 	error,
 	errorFocusId,
 	disabled = false,
@@ -111,10 +110,10 @@ export function PracticeReviewedByEditor({
 				))}
 			</RadioGroup>
 
-			{cleared.length > 0 && (
+			{kept.length > 0 && (
 				<p className="text-sm text-muted-foreground">
-					Saving with {REVIEWED_BY_LABELS[value.by]} clears {joinPhrases(cleared)}. Choose
-					Hephaestus again before you save to keep them.
+					Hephaestus keeps {joinPhrases(kept)} unused while it does not review this practice. Choose
+					Hephaestus again to use them.
 				</p>
 			)}
 

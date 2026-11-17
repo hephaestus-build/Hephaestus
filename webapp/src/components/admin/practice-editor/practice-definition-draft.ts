@@ -39,6 +39,7 @@ import {
 	type ReviewedByDraft,
 	reviewedByDraftOf,
 	reviewedByOf,
+	REVIEWED_BY_FIELD_ID,
 	type ReviewedByProblem,
 	reviewedByProblem,
 } from "./reviewed-by";
@@ -147,8 +148,8 @@ export function draftOf(value: PracticeDefinitionValue): PracticeDefinitionDraft
 	};
 }
 
-/** Draft fields survive reviewer changes; saving decides which fields to keep. */
-export function clearedBySave(draft: PracticeDefinitionDraft): string[] {
+/** What the practice keeps, unused, while people or nobody review it. Choosing Hephaestus again uses it. */
+export function keptUnused(draft: PracticeDefinitionDraft): string[] {
 	if (draft.reviewedBy.by === "HEPHAESTUS") {
 		return [];
 	}
@@ -165,23 +166,25 @@ function textOrNull(text: string): string | null {
 	return hasText(trimmed) ? trimmed : null;
 }
 
-/** Only Hephaestus reviews retain reads, scripts, and scans; a blank script selects the built-in review. */
+/**
+ * Every reviewer keeps the reads, script, scan and limits, so a reviewer change can be undone; only Hephaestus uses
+ * them. A blank script selects the built-in review.
+ */
 export function definitionOfDraft(
 	draft: PracticeDefinitionDraft,
 	itemType: PracticeItemTypeOption | undefined,
 	sourceContract: string,
 ): PracticeDefinitionSubmission {
-	const automated = draft.reviewedBy.by === "HEPHAESTUS";
 	const definition: PracticeDefinitionInput = {
 		name: draft.name.trim(),
 		reviewOn: normalizeReviewOn(draft.settings.reviewOn),
 		appliesWhen: parseAppliesWhen(draft.appliesWhen, itemType).value,
 		about: draft.about,
-		reads: { contract: sourceContract, sources: automated ? draft.settings.reads : [] },
+		reads: { contract: sourceContract, sources: draft.settings.reads },
 		reviewedBy: reviewedByOf(draft.reviewedBy),
 		criteria: draft.criteria.trim(),
-		script: automated ? textOrNull(draft.script) : null,
-		scan: automated ? draft.scan : null,
+		script: textOrNull(draft.script),
+		scan: draft.scan,
 		lineNotes: draft.lineNotes,
 		guidance: {
 			whyItMatters: textOrNull(draft.whyItMatters),
@@ -319,12 +322,17 @@ export function draftErrors(
 			fieldId: FIELD_IDS.otherwise,
 			message: appliesWhen.otherwiseError,
 		},
-		automated &&
-			draft.script.length > MAX_SCRIPT_LENGTH && {
-				fieldId: FIELD_IDS.script,
-				message: "Shorten the practice script to at most 100,000 characters.",
-				reveal: reveals.revealScript,
-			},
+		draft.script.length > MAX_SCRIPT_LENGTH &&
+			(automated
+				? {
+						fieldId: FIELD_IDS.script,
+						message: "Shorten the practice script to at most 100,000 characters.",
+						reveal: reveals.revealScript,
+					}
+				: {
+						fieldId: REVIEWED_BY_FIELD_ID,
+						message: "The kept practice script is too long. Choose Hephaestus to shorten it.",
+					}),
 		mode === "create" &&
 			!(
 				draft.slug.length <= CreatePracticeRequestSchema.properties.slug.maxLength &&

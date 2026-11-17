@@ -48,7 +48,7 @@ import { hasText } from "@/lib/text";
 import { generateSlug, itemKindHint } from "./constants";
 import {
 	blankDraft,
-	clearedBySave,
+	keptUnused,
 	definitionOfDraft,
 	draftErrors,
 	draftOf,
@@ -426,7 +426,7 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 						<PracticeReviewedByEditor
 							value={draft.reviewedBy}
 							onChange={(reviewedBy) => update({ reviewedBy })}
-							cleared={clearedBySave(draft)}
+							kept={keptUnused(draft)}
 							error={shown?.reviewedBy?.message}
 							errorFocusId={shown?.reviewedBy?.focusId}
 							disabled={formDisabled}
