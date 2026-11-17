@@ -1,5 +1,40 @@
 # Changelog
 
+## 1.0.0-rc.11
+
+### Minor Changes
+
+- The new `HephaestusMetaspaceNearLimit` alert warns when a server's Metaspace stays above 80 % of its maximum for 10 minutes, so you can act before a slow growth stops the server with `OutOfMemoryError: Metaspace`. The heap and container memory alerts do not see Metaspace. A server that runs out of Metaspace soon after each start fires `HephaestusServerRestarting` instead, and its runbook row now points to this alert. No operator action is needed: a Prometheus that already loads the chart's rule file picks it up.
+- Erasure recovery after a database restore now also erases the old words of Slack messages that their authors edited or deleted in Slack after the recovery point. Before, a restore brought those words back. A deleted message is deleted again. An edited message has no words until the next history read of its channel stores the words that Slack shows then.
+
+  **Operators:** A recovery manifest now uses version 4 and lists `slackMessageChanges` beside the other erasures; a manifest of version 3 or earlier stops startup. After each Slack edit or deletion, the server logs a `slack.message_changed` event with the IDs to list. See [Reapply erasures after a restore](https://docs.hephaestus.build/admin/erasure-recovery).
+
+- The server image is now `ghcr.io/hephaestus-build/server`, and the review sandbox image is now `ghcr.io/hephaestus-build/agent`. The chart values `images.application-server` and `images.agent-pi` are now `images.server` and `images.agent`. Earlier releases keep their published images under the old names, so a rollback to them still works. The old packages get no new tags: `application-server:latest` and `agent-pi:latest` stay on 0.95.1, the last stable release under the old names.
+
+  **Operators:** Before you upgrade, rename `images.application-server` and `images.agent-pi` in your own values. Also update every registry mirror, pull-through cache or allowlist that names `application-server` or `agent-pi`. A server outside the chart reads its own image from `HEPHAESTUS_IMAGE_SERVER`, not `HEPHAESTUS_IMAGE_APPLICATION_SERVER`.
+
+### Patch Changes
+
+- Fewer practice results are withheld when a review searched the repository but described the search in other words. A review now names the word it searched for in what it looked for. When it does not, it is told which searches it ran and which field to fix. Results that claim an absence without a matching search stay withheld.
+- Work that only bots wrote or reviewed no longer shows up as a partial review that "was not ready". Hephaestus starts no review for it, and the event says "Hephaestus does not review work by bots." Work by a person outside the workspace's review scope is handled the same way, with that reason. If someone asks for a review of such work, the answer gives the reason at once. Backfills and scheduled reviews count this work as skipped.
+- The feedback form opens as a panel in the bottom-right corner and no longer blurs or blocks the page, so you can look at and use the page you are reporting on. Minimize it or press Escape to set your draft aside in the corner, and pick it up again later.
+- When the files a page needs fail to load, for example because your network changed, the page now reloads once. If that does not help, it says that the page could not load and offers a reload, instead of staying blank.
+- Automatic pull request reviews no longer withhold their practices when someone pushes to another branch, adds a tag, or when a bot comments on the pull request. A practice now counts as outdated only when a source it reads changes: the pull request's commits, its record, or a source the practice declares, such as the discussion. Results recorded before this release keep their fingerprints: a push to another branch or a new tag no longer ends them, and they still count as outdated when any source they recorded changes, as before.
+
+  **Operators:** This upgrade must be stopped: scale the server to zero, migrate, then start it. See [Stop every role before practices stay current on their own sources](https://docs.hephaestus.build/admin/upgrade#stopped-schema-upgrades).
+
+- A product feedback report in **Drafting** now says when the AI model started to draft it and about when it goes on without a draft. If the model is busy with other work, the report says that the draft waits for it. If no draft is ready by that time, the report goes on as you wrote it and stays private. Before, **Drafting** showed no time, so a slow draft looked stuck. A drafted public report now shows **Public soon** and the time it becomes a public issue, unless you keep it private or edit it. Admins see the same drafting times in the product feedback console.
+- Work that release candidate 8 or an earlier one withheld as not ready is reviewed again the next time it changes. The upgrade rewrites the stored reason automatically.
+- Erasure recovery after a database restore now also erases again each Slack channel that an admin revoked or that Slack deleted after the recovery point. Before, a restore brought back its messages and threads. A version 4 recovery manifest also lists these channels as `slackChannelErasures`, and the server logs a `slack.channel_erased` event with the IDs to list. See [Reapply erasures after a restore](https://docs.hephaestus.build/admin/erasure-recovery).
+- When a review's attempts keep failing because the review sandbox stops on an unexpected error, the job now says whether it stopped while it prepared the workspace or while it ran the review, and the kind of error, instead of only that the attempts ran out.
+- The model usage of a practice review now records which practice made each call. A review that runs out of time also keeps a record of what each unfinished practice was waiting for, even when its sandbox is stopped. Both make a slow or stopped review easier to diagnose.
+- A practice that you set to **Reviewed by Nobody** or **People** now keeps its read sources, practice script, scan settings and review limits, unused. Choose **Hephaestus** again and the practice reviews as it did before. Until now, saving with another reviewer removed them, and switching back did not bring them back.
+- The server loads its startup cache again when the chart's flight recording runs. It becomes ready about 4 seconds sooner, and it uses about 140 MiB less memory for class metadata.
+- The server turns off the Java runtime's AVX-512 Base64 decoder, which the reported remote code execution flaw CVE-2026-114938 affects. It stays off until the image ships a fixed Java 25 build.
+- The server reserves more memory for class metadata on Java 25, so a long run under review load stays well below the limit. At the default 3 GiB memory limit, the Java heap is about 34 MiB smaller.
+- In a conversation, Hephaestus no longer tells a developer whose account has no linked Slack identity in the workspace's Slack that they took part in no Slack conversations. Their Slack conversations now read as unknown, with the reason, instead of as none.
+- Exported traces carry technical data only. A span names a request or a provider call by its route template, never by an address that can name a person, and names an error by its type, without its message.
+
 ## 1.0.0-rc.10
 
 ### Minor Changes

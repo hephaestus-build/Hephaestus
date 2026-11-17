@@ -52,6 +52,55 @@ Entries exist only for releases that need operator action. Everything else is in
 
 ### Next release
 
+### v1.0.0-rc.11
+
+#### 🔴 Stop every role before practices stay current on their own sources
+
+- **When:** in the window
+- **Action:** Do a [stopped schema upgrade](https://docs.hephaestus.build/admin/upgrade#stopped-schema-upgrades): scale the server to zero, run the migration, then start the upgraded server.
+
+The migration rewrites the stored tree fingerprint of each recorded pull request review to the new format, which is its commit pair.
+A server of the old release and one of the new release judge these fingerprints in different formats.
+If both run at the same time, either can read a result as changed work and end it, although the work did not change.
+
+**Operators:** Stop every runtime role before the migration, and start only the upgraded server afterward.
+To roll back, stop every role and restore the verified backup from before the migration before you start the previous version.
+
+#### 🔴 Write erasure recovery manifests as version 4
+
+- **When:** before the window
+- **Action:** Add the erased Slack channels, and the Slack messages that their authors edited or deleted in Slack, to each erasure recovery manifest, as [Reapply erasures after a restore](https://docs.hephaestus.build/admin/erasure-recovery) describes.
+
+Erasure recovery now erases again each erased Slack channel, and the old words of Slack messages that their authors edited or deleted in Slack after the recovery point.
+A recovery manifest uses version 4 and lists `slackChannelErasures` and `slackMessageChanges` beside the other erasures. A manifest of version 3 or earlier stops startup.
+
+Convert any version 3 manifest that you prepared. A server before this release logs no Slack edit or deletion, so a restore to a backup from before the upgrade cannot list them.
+
+**Operators:** Keep the `slack.channel_erased` and `slack.message_changed` log events for as long as your oldest backup. They carry the IDs that the manifest lists, as [Erasure events](https://docs.hephaestus.build/admin/log-records#erasure-events) describes.
+
+#### 🔴 Pull the server and agent images under their new names
+
+- **When:** before the window
+- **Action:** Where your values, registry mirror or allowlist name `application-server` or `agent-pi`, use `server` and `agent`.
+
+The release publishes the server image as `ghcr.io/hephaestus-build/server` and the review sandbox image as `ghcr.io/hephaestus-build/agent`.
+The signed lock, the chart's default values and the release evidence use the new names.
+Earlier releases keep their images under the old names, so a rollback to one of them still pulls.
+The old packages get no new tags. A reference to `application-server:latest` or `agent-pi:latest` stays on 0.95.1, the last stable release under the old names.
+
+A deployment that takes the image digests from the signed chart needs no change.
+The chart refuses the old keys, so rename an image override in your own values before the upgrade.
+A host with reconciler tooling from 1.0.0-rc.5 or later needs no new tooling: it reads the image names from the signed lock or the target chart.
+
+| Where | Before | After |
+| --- | --- | --- |
+| Chart value | `images.application-server` | `images.server` |
+| Chart value | `images.agent-pi` | `images.agent` |
+| Image | `ghcr.io/hephaestus-build/application-server` | `ghcr.io/hephaestus-build/server` |
+| Image | `ghcr.io/hephaestus-build/agent-pi` | `ghcr.io/hephaestus-build/agent` |
+| Server environment outside the chart | `HEPHAESTUS_IMAGE_APPLICATION_SERVER` | `HEPHAESTUS_IMAGE_SERVER` |
+| Release evidence files | `application-server-linux-<arch>.*` | `server-linux-<arch>.*` |
+
 ### v1.0.0-rc.10
 
 #### 🔴 Turn off the OpenAPI description on a production server
