@@ -1,7 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.job;
 
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService.AdmissionIdentity;
-import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -46,7 +45,6 @@ public class AttemptServerErrors {
     }
 
     /** Best effort: the answer to the sandbox stays the server's error whether or not this records it. */
-    @WorkspaceAgnostic("The attempt credential supplies the workspace; every write is fenced on it")
     public void record(AdmissionIdentity identity, Request request, RuntimeException failure) {
         var kind =
                 PreparationFailure.of(PreparationFailure.Stage.INPUTS, failure).kind();
