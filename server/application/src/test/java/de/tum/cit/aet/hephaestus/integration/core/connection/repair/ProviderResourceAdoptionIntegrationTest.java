@@ -15,10 +15,14 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionFixtures;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService.TransitionRequest;
 import de.tum.cit.aet.hephaestus.integration.core.connection.CredentialBundleConverter;
 import de.tum.cit.aet.hephaestus.integration.core.connection.CredentialReader;
+import de.tum.cit.aet.hephaestus.integration.core.connection.IntegrationAttentionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.api.ConnectionAdminService;
 import de.tum.cit.aet.hephaestus.integration.core.events.ConnectionCredentialsReplacedEvent;
+import de.tum.cit.aet.hephaestus.integration.core.events.IntegrationAttentionChangedEvent.Problem;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.CredentialBundle;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
@@ -43,6 +47,7 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.HeldTransaction;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import de.tum.cit.aet.hephaestus.workspace.WorkspaceSettingsService;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
@@ -99,6 +104,15 @@ class ProviderResourceAdoptionIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private ConnectionRepository connections;
+
+    @Autowired
+    private ConnectionService connectionService;
+
+    @Autowired
+    private IntegrationAttentionService attention;
+
+    @Autowired
+    private WorkspaceSettingsService workspaceSettings;
 
     @Autowired
     private WorkspaceRepository workspaces;
@@ -522,6 +536,70 @@ class ProviderResourceAdoptionIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void shouldKeepTheGroupHookAdoptableWhenAnAdminReplacesARefusedGitLabToken() {
+        Wire provider = new Wire(IntegrationKind.GITLAB);
+        Context context = context(provider.adapter);
+        Connection owner = owner(provider, false, false, IntegrationState.ACTIVE);
+        long workspace = owner.getWorkspace().getId();
+        attention.observeCredential(IntegrationKind.GITLAB, workspace, provider.oldRemoteKey(), true);
+        assertThat(current(owner).getAttentionProblem()).isEqualTo(Problem.CREDENTIAL_REVOKED);
+
+        workspaceSettings.updateToken(workspace, "fresh-" + UUID.randomUUID());
+
+        Connection replaced = current(owner);
+        assertThat(replaced.getState()).isEqualTo(IntegrationState.ACTIVE);
+        assertThat(replaced.getAttentionProblem()).isNull();
+        assertThat(((ConnectionConfig.GitLabConfig) replaced.getConfig()).gitlabWebhookId())
+                .isEqualTo(provider.oldId);
+        assertThat(references.findByWorkspaceIdAndConnection_Id(workspace, owner.getId()))
+                .isEmpty();
+        assertThat(context.repairs().resources(ProviderResourceRepairs.ref(replaced), replaced.getConfig(), null))
+                .isNotEmpty()
+                .allSatisfy(hook ->
+                        assertThat(rows.findByIdentityHash(hook.identity())).isEmpty());
+        context.transactions()
+                .executeWithoutResult(status -> context.repairs()
+                        .requireAdoptableChange(
+                                current(owner), current(owner).getConfig(), new BearerToken("next", null)));
+    }
+
+    @Test
+    void shouldCaptureNoUntrackedRemovalWhenASuspendedOutlineConnectionReconnects() {
+        Wire provider = new Wire(IntegrationKind.OUTLINE);
+        Connection owner = owner(provider, false, false, IntegrationState.ACTIVE);
+        long workspace = owner.getWorkspace().getId();
+        connectionService.transition(
+                current(owner),
+                TransitionRequest.byAccount(
+                        IntegrationState.SUSPENDED,
+                        "SUSPEND",
+                        "ADMIN",
+                        null,
+                        "suspend-" + UUID.randomUUID(),
+                        "suspended before the credential was refused"));
+        List<UUID> captured = references.findByWorkspaceIdAndConnection_Id(workspace, owner.getId()).stream()
+                .map(reference -> reference.getRepair().getId())
+                .toList();
+        created.addAll(captured);
+        assertThat(current(owner).providerRepairWasCaptured()).isTrue();
+
+        Connection reconnected = connectionAdmin.createInlineConnection(
+                workspace,
+                IntegrationKind.OUTLINE,
+                owner.getInstanceKey(),
+                new BearerToken("restored-" + UUID.randomUUID(), null),
+                Map.of("server_url", provider.origin()),
+                null);
+
+        List<UUID> after = references.findByWorkspaceIdAndConnection_Id(workspace, owner.getId()).stream()
+                .map(reference -> reference.getRepair().getId())
+                .toList();
+        created.addAll(after);
+        assertThat(reconnected.getState()).isEqualTo(IntegrationState.ACTIVE);
+        assertThat(captured).containsAll(after);
+    }
+
+    @Test
     void shouldWakeRemovalEvenWhileRegistrationDiscoveryKeepsFailing() {
         Wire provider = new Wire(IntegrationKind.OUTLINE);
         provider.terminal = true;
@@ -563,6 +641,13 @@ class ProviderResourceAdoptionIntegrationTest extends BaseIntegrationTest {
         assertThat(rows.existsById(id)).isFalse();
         assertThat(rows.findById(registration).orElseThrow().getState())
                 .isEqualTo(ProviderResourceRepair.State.CHECKING);
+    }
+
+    private Connection current(Connection connection) {
+        return connections
+                .findByIdAndWorkspaceId(
+                        connection.getId(), connection.getWorkspace().getId())
+                .orElseThrow();
     }
 
     private List<UUID> request(Context context, Connection owner) {
