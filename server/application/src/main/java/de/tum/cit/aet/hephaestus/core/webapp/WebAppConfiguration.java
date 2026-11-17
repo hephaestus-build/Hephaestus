@@ -17,6 +17,7 @@ import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 import org.springframework.web.servlet.function.RequestPredicate;
+import org.springframework.web.servlet.function.RequestPredicates;
 import org.springframework.web.servlet.function.RouterFunction;
 import org.springframework.web.servlet.function.RouterFunctions;
 import org.springframework.web.servlet.function.ServerRequest;
@@ -60,10 +61,8 @@ class WebAppConfiguration implements WebMvcConfigurer {
 
     @Bean
     RouterFunction<ServerResponse> webAppIndexRoute(WebAppIndex index) {
-        RequestPredicate clientRoute =
-                request -> (request.method() == HttpMethod.GET || request.method() == HttpMethod.HEAD)
-                        && index.html().isPresent()
-                        && isClientRoute(path(request), index);
+        RequestPredicate clientRoute = RequestPredicates.method(HttpMethod.GET, HttpMethod.HEAD)
+                .and(request -> index.html().isPresent() && isClientRoute(path(request), index));
         return RouterFunctions.route(
                 clientRoute,
                 request -> ServerResponse.ok()

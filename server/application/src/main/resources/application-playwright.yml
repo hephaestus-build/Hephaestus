@@ -7,3 +7,5 @@ hephaestus:
   features:
     flags:
       gitlab: false
+  # The packaged server serves the web app itself, so the web app's origin is the server's (ADR 0100).
+  host-url: ${APPLICATION_HOST_URL:http://localhost:${SERVER_PORT:8080}}
