@@ -1,7 +1,7 @@
-import { act, cleanup, screen, waitFor, within } from "@testing-library/react";
+import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
-import { beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it, onTestFinished } from "vitest";
 
 import { adminListUsersInfiniteQueryKey } from "@/api/@tanstack/react-query.gen";
 import type { AdminAccountView, InstanceSettings } from "@/api/types.gen";
@@ -407,59 +407,62 @@ describe("instance users list lifecycle", () => {
 			continuation,
 			unexpectedContinuation,
 		);
-
-		try {
-			const { router } = renderRouteAtWithRouter("/admin/users");
-			await screen.findByText("lifecycle-0@example.com", {}, ROUTE_RENDER_WAIT);
-			const user = userEvent.setup();
-			const search = screen.getByRole("searchbox", { name: "Search users" });
-			await user.type(search, "match");
-			await waitFor(() => expect(reads).toStrictEqual([0, 1]));
-			expect(router.state.location.search.q).toBe("match");
-			screen.getByText("Showing 1 of 25 loaded users");
-			expect(screen.queryByText("No users found")).toBeNull();
-
-			await act(async () => {
-				continuation.resolve(
-					HttpResponse.json(
-						{ status: 503, detail: "Account search continuation unavailable." },
-						{ status: 503 },
-					),
-				);
-			});
-			await waitFor(() =>
-				expect(
-					[
-						reads.length > 2,
-						screen.queryByText("We could not load users") !== null,
-						screen.queryByRole("button", { name: /retry/iu }) !== null,
-					].some(Boolean),
-				).toBe(true),
-			);
-			expect.soft(screen.queryByText("lifecycle-0@example.com")).not.toBeNull();
-			expect.soft(screen.queryByText("Showing 1 of 25 loaded users")).not.toBeNull();
-			expect.soft(screen.queryByText("No users found")).toBeNull();
-			expect(reads, "A failed continuation must wait for deliberate retry").toStrictEqual([0, 1]);
-			const retry = within(screen.getByRole("main")).getByRole("button", {
-				name: "Retry",
-			});
-			allowRetry();
-			await user.click(retry);
-			await screen.findByText("lifecycle-grace@example.com");
-			expect(reads).toStrictEqual([0, 1, 1]);
-			screen.getByText("Showing 2 of 26 loaded users");
-			expect(router.state.location.search.q).toBe("match");
-			expect(screen.queryByRole("button", { name: "Load more" })).toBeNull();
-			await searched(router, async () => user.clear(search), undefined);
-			screen.getByText("Showing 26 users");
-			await searched(router, async () => user.type(search, "no-such-account"), "no-such-account");
-			screen.getByText("No users found");
-			expect(reads).toStrictEqual([0, 1, 1]);
-		} finally {
-			cleanup();
+		// Releases the held reads after Testing Library's cleanup unmounts the page. A `finally` block
+		// runs in a body that outlives its timeout, and its cleanup would unmount the next test's page.
+		onTestFinished(() => {
 			continuation.resolve(HttpResponse.json(accountPage([])));
 			unexpectedContinuation.resolve(HttpResponse.json(accountPage([])));
-		}
+		});
+
+		const { router } = renderRouteAtWithRouter("/admin/users");
+		await screen.findByText("lifecycle-0@example.com", {}, ROUTE_RENDER_WAIT);
+		const user = userEvent.setup();
+		const search = screen.getByRole("searchbox", { name: "Search users" });
+		// Each edit of the search navigates and renders the page again. A paste enters a term in one
+		// edit, where typing it would repeat that work for each character.
+		await user.click(search);
+		await user.paste("match");
+		await waitFor(() => expect(reads).toStrictEqual([0, 1]));
+		expect(router.state.location.search.q).toBe("match");
+		screen.getByText("Showing 1 of 25 loaded users");
+		expect(screen.queryByText("No users found")).toBeNull();
+
+		await act(async () => {
+			continuation.resolve(
+				HttpResponse.json(
+					{ status: 503, detail: "Account search continuation unavailable." },
+					{ status: 503 },
+				),
+			);
+		});
+		await waitFor(() =>
+			expect(
+				[
+					reads.length > 2,
+					screen.queryByText("We could not load users") !== null,
+					screen.queryByRole("button", { name: /retry/iu }) !== null,
+				].some(Boolean),
+			).toBe(true),
+		);
+		expect.soft(screen.queryByText("lifecycle-0@example.com")).not.toBeNull();
+		expect.soft(screen.queryByText("Showing 1 of 25 loaded users")).not.toBeNull();
+		expect.soft(screen.queryByText("No users found")).toBeNull();
+		expect(reads, "A failed continuation must wait for deliberate retry").toStrictEqual([0, 1]);
+		const retry = within(screen.getByRole("main")).getByRole("button", {
+			name: "Retry",
+		});
+		allowRetry();
+		await user.click(retry);
+		await screen.findByText("lifecycle-grace@example.com");
+		expect(reads).toStrictEqual([0, 1, 1]);
+		screen.getByText("Showing 2 of 26 loaded users");
+		expect(router.state.location.search.q).toBe("match");
+		expect(screen.queryByRole("button", { name: "Load more" })).toBeNull();
+		await searched(router, async () => user.clear(search), undefined);
+		screen.getByText("Showing 26 users");
+		await searched(router, async () => user.paste("no-such-account"), "no-such-account");
+		screen.getByText("No users found");
+		expect(reads).toStrictEqual([0, 1, 1]);
 	});
 
 	it("discards refused account data and pending action intent until a new authorized read succeeds", async () => {
