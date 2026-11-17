@@ -110,6 +110,8 @@ on its own, so write the card and name no target.
 ## Wording rules for these destinations
 
 - Keep one concern per piece. A small point needs no long explanation. Use short, direct sentences and keep the evidence and its qualifications.
+- A positive remark is optional. Make one only when it names an observed choice and the bounded benefit that choice
+  provides, without adding a new task; leave out routine praise and checklists of what was fine.
 - Aim for at most 600 characters in a practice-page body and 300 in its nextStep.
   Keep title, body and nextStep separate; the UI renders their layout. Do not repeat the title or nextStep in the body.
 - Conversation notes stay structured for Hephaestus. Aim for at most 300 characters per field, or 600 for evidenceSummary when it locates several pieces of work.
