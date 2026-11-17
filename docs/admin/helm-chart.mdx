@@ -35,13 +35,12 @@ Conversation turn leases and person erasure compare times that different hosts w
 
 | Component | Kind | What it runs |
 | --- | --- | --- |
-| `server` | Deployment, 2 replicas by default | The server: the API, the provider webhook receiver, sync, delivery, and with `sandbox.enabled` the sandboxes and their gateway. `server.stopped: true` stops it and keeps `server.replicas`, which also sizes PostgreSQL's connections. |
+| `server` | Deployment, 2 replicas by default | The server: the web app, the API, the provider webhook receiver, sync, delivery, and with `sandbox.enabled` the sandboxes and their gateway. `server.stopped: true` stops it and keeps `server.replicas`, which also sizes PostgreSQL's connections. |
 | `migration` | Job, one for each Helm revision | The server image in its migrate run mode. It applies the database migrations of the release and exits. |
-| `webapp` | Deployment | The SPA, from the non-root webapp image. |
 | `postgresql` | StatefulSet, with `postgresql.bundled` | The release PostgreSQL image, with `pg_partman` and pgBackRest. |
 | `postgresql-backup` | CronJobs, with `postgresql.backup.enabled` | Full and differential pgBackRest backups ([Back up the database](./backup-restore#back-up-the-database)). |
 | `postgresql-exporter` | Deployment, with `postgresql.metrics.enabled` | The PostgreSQL metrics exporter ([Database metrics](./monitoring#turn-on-database-metrics)). |
-| `route` | HTTPRoute | `/`, `/api` and `/webhooks` ([Gateway routes](#gateway-routes)). |
+| `route` | HTTPRoute | Every path to the server ([Gateway routes](#gateway-routes)). |
 | `agent-image` | DaemonSet, with `sandbox.enabled` | Keeps the agent image on each sandbox node ([The agent image on the sandbox nodes](./sandboxes#the-agent-image-on-the-sandbox-nodes)). |
 | Sandbox templates | SandboxTemplates, SandboxWarmPools, quotas and policies, with `sandbox.enabled` | The sandbox namespace objects ([Sandboxes](./sandboxes)). |
 | `agent-sandbox-controller` | Deployment, with `sandbox.controller.enabled` | The agent-sandbox controller in the release namespace, for a [managed cluster](./managed-cluster). |
@@ -108,8 +107,6 @@ These facts complete the view:
 - The egress policies allow the Kubernetes API only at `networkPolicy.kubernetesApi.cidr` and `.port`: the endpoint after address translation, not the Service port.
 - The nodes that run sandboxes need the agent image before the first claim.
 
-The view shows one decided change that the chart does not have yet: the server serves the SPA ([ADR 0100](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0100-the-server-serves-the-web-app.md)).
-Until that change lands, the `webapp` Deployment serves the SPA with nginx.
 Sync-status hints use PostgreSQL notifications.
 
 The sandbox namespace enforces the restricted Pod Security Standard. The runtime class decides the rest of the isolation ([Sandbox prerequisites](./sandboxes#sandbox-prerequisites)):
@@ -171,7 +168,7 @@ upgrade slots = floor((budget - resident requests - draining servers and rollout
 auto turns    = min(steady CPU slots, steady memory slots, upgrade CPU slots, upgrade memory slots)
 ```
 
-- Resident requests are the requests of the server, the webapp, PostgreSQL with its backup sidecar, and the controller.
+- Resident requests are the requests of the server, PostgreSQL with its backup sidecar, and the controller.
   The monitoring workloads and one image-hold Pod also count. So does the largest init container of each Pod.
 - The review requests are the reviews at once times the review template request, with the RuntimeClass overhead. The reviews at once are `sandbox.reviewMemory` divided by one review's memory request and overhead.
 - Each turn needs one conversation template Pod, with its RuntimeClass overhead.
@@ -212,7 +209,7 @@ These values set server settings ([Configuration reference](./configuration-refe
 | `config.sync.timeframeDays` | `SYNC_TIMEFRAME_DAYS` | `7` |
 | `config.sync.syncCron` | `SYNC_CRON`, a Spring cron expression with six fields | `0 0 * * * *` |
 | `config.sync.cooldownMinutes` | `SYNC_COOLDOWN_MINUTES` | `60` |
-| `webapp.securityContact` | `SECURITY_CONTACT` of the webapp. With a value, `/.well-known/security.txt` names it. | Empty: no file |
+| `server.securityContact` | `SECURITY_CONTACT` of the server. With a value, `/.well-known/security.txt` names it. | Empty: no file |
 
 `config.auth.bootstrapAdmins`, `config.auth.browserExtensionIds`, `config.auth.passkeys.allowedOrigins`, and `config.outline.allowedOrigins` take arrays of strings.
 Use `[]` for an empty list.
@@ -250,9 +247,8 @@ Each integration takes its settings from your values file and its secrets from t
 
 | Request path | Backend | Path change |
 | --- | --- | --- |
-| `/webhooks` and below | `server` | None |
-| `/api` and below | `server` | None |
-| All other paths | `webapp` | None. The webapp serves the SPA for an unknown path. |
+| `/api` and below | `server`, with no request deadline for the conversation stream | None |
+| All other paths | `server` | None. The server serves the web app for an unknown path that is not under one of its own roots. |
 
 The server serves each path as it receives it, so no rule changes a path.
 
@@ -280,7 +276,7 @@ The chart then opens only these paths:
 
 | From | To | Port |
 | --- | --- | --- |
-| `networkPolicy.gateway` pods | `server`, `webapp` | 8080 |
+| `networkPolicy.gateway` pods | `server` | 8080 |
 | `server` | PostgreSQL | 5432, or the external port |
 | `server` | `networkPolicy.externalEgress` | 443 |
 | `server`, if `config.email.host` is set | `networkPolicy.externalEgress` | `config.email.port` |
@@ -315,7 +311,7 @@ Network policy controls which pods can connect. It does not encrypt traffic.
 The connections to PostgreSQL use TLS ([PostgreSQL TLS Secret](./kubernetes#postgresql-tls-secret)).
 These internal channels send plain text:
 
-- The connections from the Gateway data plane to the server and the webapp, after TLS ends at the Gateway.
+- The connections from the Gateway data plane to the server, after TLS ends at the Gateway.
 - The connections from sandboxes to the sandbox gateway of the server.
 
 On a cluster with several nodes, these channels cross the node network.
@@ -361,9 +357,6 @@ Each pod meets the Kubernetes Restricted Pod Security Standard:
 - All capabilities dropped and a read-only root filesystem.
 - No host path, host network, or container runtime socket.
 - No service account token, except on the server with `sandbox.enabled`, the agent-sandbox controller, and the VictoriaMetrics Pod of the monitoring stack. The server's Role reaches only the sandbox namespace.
-
-The webapp runs as user and group 101 and listens on port 8080.
-Its only writable path is a 16 MiB volume at `/tmp/hephaestus-webapp`.
 
 The bundled PostgreSQL runs as the image user 999 and owns its volume through `fsGroup`.
 The volume is at `/var/lib/postgresql` ([ADR 0038](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0038-postgresql-18-release-baseline.md)).

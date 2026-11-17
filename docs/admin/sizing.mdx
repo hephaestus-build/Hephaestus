@@ -34,7 +34,7 @@ The sandbox quotas hold these requests at full load, with any RuntimeClass overh
 | One host | 4 Pods: 440m CPU, 2240 MiB memory | 9 Pods: 990m CPU, 3888 MiB memory |
 | `cluster.yaml` | 12 Pods: 1200m CPU, 6144 MiB memory | 8 Pods: 800m CPU, 3072 MiB memory |
 
-Add the webapp (50m CPU, 64 MiB) and the agent image DaemonSet (1m CPU and 16 MiB on each sandbox node).
+Add the agent image DaemonSet (1m CPU and 16 MiB on each sandbox node).
 With `cluster.yaml`, also add the agent-sandbox controller (10m CPU, 64 MiB).
 During an install or an upgrade, the migration Job requests 250m CPU and 1536 MiB more.
 Check the rendered requests against the allocatable resources of your nodes before you install.

@@ -238,12 +238,11 @@ A port in your shell overrides the file.
 
 #### The webapp's settings
 
-The web app reads its server URL and its own URL from a runtime environment script.
-In production, the container entrypoint writes that script.
-`vp run dev:webapp` serves it itself, with the URLs of this worktree.
+In production, the server writes a config record into `index.html`, and the web app reads its URLs and settings from it ([ADR 0100](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0100-the-server-serves-the-web-app.md)).
+`vp run dev:webapp` serves the page without a record, so the app uses its own origin.
 The app calls the API under `/api` of its own origin, as in production.
 The Vite dev server sends `/api` to the `SERVER_PORT` of this worktree.
-Do not edit the committed stub `webapp/public/env-config.js`.
+To run the page that ships, build it with `vp run build:webapp` before you start the server: the server then serves it on `SERVER_PORT`.
 
 The app has no Vite-level environment variables: the config sets no `envPrefix`, and nothing in `src/` reads `import.meta.env` beyond `DEV`.
 A `webapp/.env` file has no effect.
@@ -465,14 +464,14 @@ In the cluster, follow the logs of a role with the `kubectl` command that `dev:k
    An older cluster with a non-loopback API binding requires `vp run dev:kubernetes:reset`.
    Port 443 must be free. The check stops the command when a program holds it.
    It also creates a local registry, which the nodes use as a mirror of `ghcr.io`.
-2. It builds the server, webapp, agent and PostgreSQL images, and pushes them to that registry.
+2. It builds the web app, the server image that serves it, and the agent and PostgreSQL images, and pushes them to that registry.
 3. It creates the qualification namespaces, a Secret with generated values, and the certificates.
    It keeps them in `~/.hephaestus/kubernetes-cluster`, shared by the worktrees.
    Each worktree generates its private host-server kubeconfig at `.context/kubernetes-host/<namespace>/kubeconfig.json`.
 4. It turns on the Gateway provider of the Traefik that k3s ships, and creates the Gateway `cluster`.
 5. It installs the chart with the dev profile and sandboxes on.
    It runs the sandbox isolation gate against the installed templates.
-6. It sends a request to the webapp and the API through the Gateway.
+6. It sends a request to the web app and the API through the Gateway.
    Then it prints the URL, `https://hephaestus.localhost`, and how to sign in.
 
 The local CA `ca.crt` in the `kubernetes-cluster` work folder signed the certificate.
