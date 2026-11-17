@@ -108,9 +108,8 @@ final class ConversationToolResultCopyPersonDataStore extends JdbcPersonDataStor
     }
 
     private Set<UUID> frozenSandboxes(PersonDataSelection.RowKey row) {
-        String frozen = row.columns().get("sandbox_ids");
-        // A persisted request from before the sandbox cutover has only its workspace key.
-        return frozen == null ? Set.of() : Objects.requireNonNull(mapper.readValue(frozen, SANDBOX_IDS));
+        return Objects.requireNonNull(
+                mapper.readValue(Objects.requireNonNull(row.columns().get("sandbox_ids")), SANDBOX_IDS));
     }
 
     /** Counts workspaces, matching the preview. */

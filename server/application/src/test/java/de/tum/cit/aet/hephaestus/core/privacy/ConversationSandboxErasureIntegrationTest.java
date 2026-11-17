@@ -37,6 +37,8 @@ import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationContext;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -211,6 +213,50 @@ class ConversationSandboxErasureIntegrationTest extends AbstractWorkspaceIntegra
                         original.id(),
                         newer.id()))
                 .isZero();
+    }
+
+    /** A stored workspace key without its frozen sandboxes is invalid: the erasure stops instead of skipping a copy. */
+    @ParameterizedTest
+    @ValueSource(
+            strings = {
+                "selections_json::jsonb #- '{%s,rows,0,columns,sandbox_ids}'",
+                "jsonb_set(selections_json::jsonb, '{%s,rows,0,columns,sandbox_ids}', 'null')"
+            })
+    void shouldStopTheErasureWhenAStoredWorkspaceKeyLacksItsSandboxes(String withoutSandboxes) {
+        String slug = "sandboxless-copy-" + System.nanoTime();
+        var person = persistUser(slug);
+        var workspace = createWorkspace(slug, "Copy", "sandboxless-copy-org", AccountType.ORG, person);
+        long personId = accountId(person);
+        var administrator = new Account("Sandboxless erasure administrator");
+        administrator.setAppRole(Account.AppRole.APP_ADMIN);
+        long administratorId = Objects.requireNonNull(
+                accountRepository.saveAndFlush(administrator).getId());
+        var claims = new PhysicalClaims(root);
+        var owner = SandboxOwnerFixtures.owner(
+                beans,
+                new AttemptTokenIssuer(AttemptKeyFixtures.keyring(AttemptSigningKey.generate())),
+                beans.getBean(AgentRuns.class),
+                claims);
+        var copy = owner.ensure(workspace.getId(), "conversation:" + UUID.randomUUID(), AgentSandboxKind.CONVERSATION);
+        Path copiedPerson = claims.copy(copy.claimName());
+        var online = service(SandboxOwnerFixtures.revocations(beans, owner));
+        var request = Objects.requireNonNull(
+                        transactions.execute(status -> online.preview(administratorId, personId, List.of())))
+                .request();
+        transactions.executeWithoutResult(status -> online.requestErasure(request.getId(), administratorId, true));
+        jdbc.update(
+                "UPDATE person_data_request SET selections_json=(%s)::text WHERE id=?"
+                        .formatted(withoutSandboxes.formatted(ConversationEntryRepository.COPIES_PERSON_DATA_STORE)),
+                request.getId());
+
+        online.run(request.getId());
+
+        assertThat(jdbc.queryForMap("SELECT state,failure_code FROM person_data_request WHERE id=?", request.getId()))
+                .containsEntry("state", "FAILED")
+                .containsEntry("failure_code", "STORE_ERASURE_FAILED");
+        assertNoAcknowledgement(request.getId());
+        assertSandbox(copy, "REQUESTED");
+        assertThat(copiedPerson).exists();
     }
 
     private void assertSandbox(AgentSandboxes.LiveSandbox sandbox, String state) {
