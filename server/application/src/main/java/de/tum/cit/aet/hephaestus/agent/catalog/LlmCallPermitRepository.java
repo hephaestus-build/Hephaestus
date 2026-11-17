@@ -124,10 +124,11 @@ public interface LlmCallPermitRepository extends JpaRepository<LlmCallPermit, UU
      * call that is not interactive rises one band for each {@code :agingSeconds} that it waits, but never into the
      * interactive band, as the agent run claim does. Product feedback is a background call and ages like the others, so
      * review calls that keep arriving cannot starve a draft. A draft beyond the product feedback room is no candidate,
-     * so it never holds back the calls behind it. A round can grant several calls, so each call counts the calls ahead of it in its own workspace and
-     * source as granted: apart from ties, the order is the one that one grant at a time would give. A tie goes to the
-     * workspace whose last grant in the call's band was the oldest before the round, and then to the source whose last
-     * grant was; a grant earlier in the same round does not move that time. The rows are locked in id order, as
+     * so it never holds back the calls behind it. A round can grant several calls, so each call counts the calls ahead
+     * of it in its own workspace and source as granted: apart from ties, the order is the one that one grant at a time
+     * would give. A tie goes to the workspace whose last grant in the call's band was the oldest before the round, and
+     * then to the source whose last grant was; a grant earlier in the same round does not move that time. The rows are
+     * locked in id order, as
      * {@link #renew} locks them, so a round and a renewal cannot deadlock. Each group is
      * read once: this runs under the pool row lock, and a wide review can leave hundreds of requests waiting.
      *
