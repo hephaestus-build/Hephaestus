@@ -86,6 +86,25 @@ void test("a failed nightly drill leg refuses release admission", async () => {
 	assert.equal(result.refusal?.includes(name), true);
 });
 
+void test("a failed chart upgrade refuses release admission", async () => {
+	const name = "Chart upgrade / Upgrade the chart from the latest release";
+	const passed = await nightlyRefusal(
+		repository,
+		api([run(9, "success")], { 9: [...passingLegs, { name, conclusion: "success" }] }),
+		now,
+	);
+	assert.equal(passed.refusal, undefined);
+	const failed = await nightlyRefusal(
+		repository,
+		api([run(10, "failure")], { 10: [...passingLegs, { name, conclusion: "failure" }] }),
+		now,
+	);
+	assert.match(
+		failed.refusal ?? "",
+		/failed: Chart upgrade \/ Upgrade the chart from the latest release\./u,
+	);
+});
+
 void test("a stale run, a run with no cluster leg and no run at all refuse the release", async () => {
 	const stale = await nightlyRefusal(
 		repository,

@@ -917,7 +917,7 @@ Use `ci:full` to reproduce the queue legs on a PR, including the separate roll j
 
 The nightly run adds arm64 and eviction. A failed nightly eviction fails the Kubernetes stage.
 Its existing `Report a failure` job opens or updates the issue "The nightly Kubernetes run failed" and links the run.
-The release evidence preflight also requires that the newest nightly run on `main` passed its cluster legs within 48 hours (`scripts/check-nightly-kubernetes.ts`).
+The release evidence preflight also requires that the newest nightly run on `main` passed its cluster legs and the chart upgrade within 48 hours (`scripts/check-nightly-kubernetes.ts`).
 
 The nightly run also upgrades the chart of the latest published release to the newest main build (`chart-upgrade.yml`, `scripts/chart-upgrade-drill.ts`).
 The previous release installs with its own chart, images and scripts.
