@@ -29,6 +29,24 @@ value = "60"
 name = "BP_JVM_CDS_ENABLED"
 value = "true"
 
+# The AOT cache that the training run writes loads only when each launch resolves the same modules
+# (JEP 483). The chart's flight recording adds the module jdk.jfr (JDK-8375469). So the training run
+# and every launch process, the migrate run mode included, add jdk.jfr too. A launch without it, or
+# with another module or agent, rejects the cache and loads every class into Metaspace.
+# The buildpack starts the training run with this variable as its whole environment, so it also names
+# the training profile.
+[[io.buildpacks.build.env]]
+name = "TRAINING_RUN_JAVA_TOOL_OPTIONS"
+value = "--add-modules=jdk.jfr -Dspring.profiles.active=cds-training"
+
+[[io.buildpacks.build.env]]
+name = "BPE_APPEND_JAVA_TOOL_OPTIONS"
+value = "--add-modules=jdk.jfr"
+
+[[io.buildpacks.build.env]]
+name = "BPE_DELIM_JAVA_TOOL_OPTIONS"
+value = " "
+
 [[io.buildpacks.build.env]]
 name = "BP_HEALTH_CHECKER_ENABLED"
 value = "true"
@@ -41,9 +59,3 @@ value = "true"
 [[io.buildpacks.build.env]]
 name = "BPE_DEFAULT_BPL_JVM_LOADED_CLASS_COUNT"
 value = "55000"
-
-# The CDS training run boots under application-cds-training.yml; the runtime SPRING_PROFILES_ACTIVE
-# overrides this buildpack default.
-[[io.buildpacks.build.env]]
-name = "SPRING_PROFILES_ACTIVE"
-value = "cds-training"

@@ -90,3 +90,10 @@ Hosts roll back with the [upgrade rollback procedure](https://docs.hephaestus.bu
 - [JDK-6968351](https://bugs.openjdk.org/browse/JDK-6968351) and release note [JDK-8331847](https://bugs.openjdk.org/browse/JDK-8331847): the `HttpServer` header change in JDK 23.
 - [Gradle compatibility matrix](https://docs.gradle.org/current/userguide/compatibility.html): Gradle 9.1 and later run on and compile for Java 25.
 - [JDK-8367675](https://bugs.openjdk.org/browse/JDK-8367675): the TLS SHA-1 change in Java 21.0.10, so it is not part of this move.
+
+## Update — 2026-11-17: rule 8, the AOT cache
+
+On Java 25, the buildpack already builds an AOT cache, not a CDS archive. Rule 8's "CDS stays as ADR 0067 decides" now holds only for the switch `BP_JVM_CDS_ENABLED`.
+The training run and every launch need the same JVM options.
+The [update of ADR 0067](0067-the-server-image-builds-with-buildpacks-and-cds.md#update--2026-11-17-the-image-ships-an-aot-cache-that-every-run-mode-loads) records the module set that they share, and the CI job that confirms it.
+Compact object headers stay a separate change with its own measurement. That change sets the flag in `server/application/project.toml`, for the training run and every launch.

@@ -135,3 +135,35 @@ CDS on and AOT off are not enforced. Review of `server/application/project.toml`
 - [OpenJDK JEP 483 — Ahead-of-Time Class Loading & Linking](https://openjdk.org/jeps/483)
 - [paketo-buildpacks/spring-boot](https://github.com/paketo-buildpacks/spring-boot)
 - [paketo-buildpacks/spring-boot#571 — BP_JVM_CDS_ENABLED deprecation track](https://github.com/paketo-buildpacks/spring-boot/issues/571)
+
+## Update — 2026-11-17: the image ships an AOT cache that every run mode loads
+
+On Java 25, the spring-boot buildpack 5.40 treats `BP_JVM_CDS_ENABLED` as `BP_JVM_AOTCACHE_ENABLED`.
+Its training run writes an AOT cache, `/workspace/application.aot` ([JEP 483](https://openjdk.org/jeps/483), [JEP 514](https://openjdk.org/jeps/514)), not `application.jsa`.
+The launcher adds `-XX:AOTCache=application.aot`, not `-XX:SharedArchiveFile`.
+§ What the build does describes the CDS archive of Java 21.
+
+The cache loads only if the training run and the production run resolve the same modules.
+Since #4580, the chart starts the server with `-XX:StartFlightRecording`, which adds the module `jdk.jfr` ([JDK-8375469](https://bugs.openjdk.org/browse/JDK-8375469)).
+The training run did not add it. Thus, the JVM rejected the cache at each start and loaded every class into Metaspace.
+On staging, Metaspace use then exceeded the memory calculator's cap, and the server crash-looped.
+
+The small profile at 4 CPUs measured the effect of a cache that loads. Metaspace use was 65 MiB instead of 205 MiB. The server was ready in 16.2 s instead of 20.4 s.
+
+The decision now has these rules:
+
+1. The image owns the JVM options that the cache depends on. `server/application/project.toml` gives the training run and every launch process the same module set, `--add-modules=jdk.jfr`. The `migrate` run mode is one of these processes.
+2. The chart may add system properties, heap-independent tuning and recording settings. It adds no module, agent or object-layout option.
+3. A CI job starts the packaged image with the chart's rendered options and `-XX:AOTMode=on`. A rejected cache fails the merge group.
+4. Production keeps `-XX:AOTMode=auto`. A rejected cache makes the server slower, not dead. `BPL_JVM_LOADED_CLASS_COUNT` sizes Metaspace for a run without the cache, and `HephaestusMetaspaceNearLimit` fires at 80 % of the cap.
+5. The training run stays `onRefresh`. A cache trained on a workload needs a database in the build and its own decision.
+
+Consequences:
+
+- Good: the server starts about 21 % sooner and uses about 68 % less Metaspace, as measured. A rejected cache fails CI and is no longer a silent regression.
+- Bad: a run of the image without `jdk.jfr` cannot use the cache. A local experiment must keep the module set.
+- Bad: the buildpack starts the training run with `TRAINING_RUN_JAVA_TOOL_OPTIONS` as its whole environment. Thus, that variable also names the `cds-training` profile.
+
+The job **Server image startup** (`scripts/server-image-startup.ts`) confirms rules 3 and 4.
+`scripts/ci-contract-images.test.ts` fails when the training run and the launch append name different modules.
+Revisit this update when JDK-8375469 ships in the JDK line of `.java-version`, or when [JEP 516](https://openjdk.org/jeps/516) matters for a move to ZGC.

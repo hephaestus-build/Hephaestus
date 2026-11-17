@@ -19,6 +19,7 @@ import {
 	step,
 	workflowSources,
 } from "./ci-contract-support.ts";
+import { addedModules, buildEnvironment } from "./lib/buildpack-descriptor.ts";
 import { ciToolPin } from "./lib/ci-tool-catalog.ts";
 import { asArray, asRecord, asString } from "./lib/json.ts";
 
@@ -625,5 +626,37 @@ void test("the App Server image build reads every buildpack dependency from a pi
 	assert.ok(
 		script.includes('--volume "$BUILDPACK_DEPENDENCIES/files:$BUILDPACK_DEPENDENCIES/files:ro"'),
 		"the files mount at the host path that the binding names",
+	);
+});
+
+void test("the AOT cache's training run and every launch of the server image add the same modules", async () => {
+	const environment = buildEnvironment(await readFile("server/application/project.toml", "utf8"));
+	const training = addedModules(environment.get("TRAINING_RUN_JAVA_TOOL_OPTIONS") ?? "");
+	// The chart's flight recording adds jdk.jfr, and the cache loads only with the training run's modules.
+	assert.ok(training.includes("jdk.jfr"), "the training run adds jdk.jfr");
+	assert.deepEqual(addedModules(environment.get("BPE_APPEND_JAVA_TOOL_OPTIONS") ?? ""), training);
+	assert.equal(environment.get("BPE_DELIM_JAVA_TOOL_OPTIONS"), " ");
+	// The buildpack starts the training run with only TRAINING_RUN_JAVA_TOOL_OPTIONS as its environment.
+	assert.match(
+		environment.get("TRAINING_RUN_JAVA_TOOL_OPTIONS") ?? "",
+		/(?:^|\s)-Dspring\.profiles\.active=cds-training(?:\s|$)/u,
+	);
+});
+
+void test("a descriptor's build environment is each table's name and value", () => {
+	const environment = buildEnvironment(
+		'[[io.buildpacks.build.env]]\nname = "A"\nvalue = "--add-modules=jdk.jfr,jdk.net x"\n\n[[io.buildpacks.build.env]]\nname = "B"\nvalue = " "\n',
+	);
+	assert.deepEqual(
+		[...environment],
+		[
+			["A", "--add-modules=jdk.jfr,jdk.net x"],
+			["B", " "],
+		],
+	);
+	assert.deepEqual(addedModules(environment.get("A") ?? ""), ["jdk.jfr", "jdk.net"]);
+	assert.throws(
+		() => buildEnvironment('[[io.buildpacks.build.env]]\nname = "A"\n'),
+		/no name or value/u,
 	);
 });
