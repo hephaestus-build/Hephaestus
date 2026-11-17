@@ -1,13 +1,14 @@
 #### 🔴 Add the OAuth state secret and remove two retired settings
 
 - **When:** before the window
-- **Action:** Run `hephaestus-keys.sh` from the target release, or add `HEPHAESTUS_INTEGRATION_OAUTH_STATE_SECRET` to the release Secret. Replace `AGENT_MAX_RETRIES` and `HEPHAESTUS_MENTOR_CONVERSATION_RETENTION` with their new names.
+- **Action:** Before the upgrade, add `HEPHAESTUS_INTEGRATION_OAUTH_STATE_SECRET` to the release Secret: run `hephaestus-keys.sh` from the target release, or set it to the output of `openssl rand -hex 32`. Replace `AGENT_MAX_RETRIES` and `HEPHAESTUS_MENTOR_CONVERSATION_RETENTION` with their new names.
 
 The server signs the state of each integration connection in progress with `HEPHAESTUS_INTEGRATION_OAUTH_STATE_SECRET`.
 It no longer derives that key from `WEBHOOK_SECRET`.
-A server in production refuses to start without the new key, and configuration readiness reports it.
+The chart reads it as a required key of the release Secret, so a server pod without it does not start.
+Outside the chart, a production server without it refuses to start.
+Configuration readiness reports a missing key.
 `hephaestus-keys.sh` adds the key to the release Secret and keeps every other value.
-Outside the chart, set it to the output of `openssl rand -hex 32`.
 A connection that an admin started before the upgrade fails. The admin connects again.
 
 The server no longer reads `AGENT_MAX_RETRIES`. Set `HEPHAESTUS_AGENT_CAPACITY_REVIEW_RETRIES` if you changed the count.
