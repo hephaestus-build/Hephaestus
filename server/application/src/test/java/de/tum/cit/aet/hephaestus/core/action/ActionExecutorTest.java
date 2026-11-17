@@ -229,17 +229,20 @@ class ActionExecutorTest extends BaseUnitTest {
 
     /** Spring pauses an inactive test context through the lifecycle and resumes it: the executor claims again. */
     @Test
-    void shouldClaimAgainWhenStartedAfterAStop() {
+    void shouldClaimAgainWhenStartedAfterAStop() throws Exception {
         var executor = executor(attempt -> new ActionResult.Done(null));
-        when(store.claim(anyInt(), any(), any())).thenReturn(List.of());
+        when(store.claim(anyInt(), any(), any())).thenReturn(List.of(claim(ActionKind.FILE_ISSUE)));
 
         executor.stop();
         assertThat(executor.startDue()).isEmpty();
         verify(store, never()).claim(anyInt(), any(), any());
         executor.start();
-        executor.startDue();
+        var resumed = executor.startDue();
 
-        verify(store).claim(eq(ActionExecutor.SLOTS), any(), any());
+        assertThat(resumed)
+                .singleElement()
+                .satisfies(
+                        attempt -> assertThat(attempt.get(5, TimeUnit.SECONDS)).isEqualTo(new ActionResult.Done(null)));
     }
 
     @Test
