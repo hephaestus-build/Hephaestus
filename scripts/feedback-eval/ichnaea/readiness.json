@@ -1,16 +1,49 @@
 {
 	"suite": "composition-set",
-	"ready": false,
-	"readyWhen": "Both runs of composer noise plan 1 are clean. THEMIS accepted aa2 as clean (DN-84). aa3 is not judged yet.",
+	"ready": true,
+	"ruling": "THEMIS DN-87: plan 1 is complete, with outcome CLEAN (aa2 and aa3).",
 	"meaning": "Ready means that the verdict of a manual or labelled run can be trusted. Evaluations are manual-first, so the decision is never a required check.",
+	"scope": {
+		"design": "72 cases × 2 trials, and the 29 withhold cases × 3",
+		"baseModel": "Qwen/Qwen3.8-27B",
+		"endpointSha256": "f161dc5fa949cb398c5bb06ec90b202960eaef2153cb490067093bea085acb82",
+		"concurrency": 1,
+		"measures": "the digests below, linked to the noise runs by the DN-84 replay",
+		"arms": "interleaved, in coin order"
+	},
+	"staleWhen": [
+		"The base model, the endpoint or the trial design changes: that needs a new noise plan.",
+		"The measures change: a replay of the noise runs with every value equal carries readiness over (DN-85). Anything else needs a new noise plan.",
+		"A decision runs outside the scope."
+	],
+	"card": {
+		"ready": "Ready: a clean noise plan of 2 runs. It rules out only gross false-alarm rates.",
+		"noiseRecord": "Noise record: 0 flagged of 2 runs (one-sided 95 % upper bound on the flag rate 0.78, adjusted Clopper–Pearson, DN-83).",
+		"simulatedFalseRegression": "Simulated false-REGRESSION rate, approximate: 0.46 %, at most 3.50 % with the per-case Jeffreys bound.",
+		"p4": "P4 (withholds expected): this decision would show a drop of about 20 points 9 times in 10. Smaller drops can go unseen, so INCONCLUSIVE here is not evidence of no drop."
+	},
 	"noisePlan": {
 		"name": "composer noise plan 1",
 		"registeredAt": "2026-11-16T14:22:30Z",
 		"commit": "17c2b741c64925350a243c790807c0c186b18e20",
 		"ichnaea": "da4e52edae46dcb313ea717b1e100e8cdea86e7d",
 		"runs": [
-			{ "run": "aa2", "seed": "composer-noise-plan-1-aa2-85e19e8e42dc34d2", "clean": true },
-			{ "run": "aa3", "seed": "composer-noise-plan-1-aa3-f3c253e21d58d14e", "clean": null }
+			{
+				"run": "aa2",
+				"seed": "composer-noise-plan-1-aa2-85e19e8e42dc34d2",
+				"clean": true,
+				"ruling": "DN-84"
+			},
+			{
+				"run": "aa3",
+				"seed": "composer-noise-plan-1-aa3-f3c253e21d58d14e",
+				"clean": true,
+				"ruling": "DN-87"
+			}
+		],
+		"outcome": "CLEAN",
+		"deviations": [
+			"aa3 started at 08:34Z instead of from 11:00Z, because QUAL's window was cancelled; endpoint load condition held"
 		]
 	},
 	"measures": [

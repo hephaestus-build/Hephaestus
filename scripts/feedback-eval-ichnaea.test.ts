@@ -15,7 +15,7 @@ import {
 	ichnaeaBuild,
 	jobSummary,
 	NOISE_PLAN_ICHNAEA,
-	SENSITIVITY,
+	READINESS_CARD,
 	readVerdict,
 	verdictOutput,
 } from "./feedback-eval-decision.ts";
@@ -276,7 +276,7 @@ void test("with registered margins, a candidate that raises every result is a RE
 	const { codes, summary, lines, verdict } = await replay(raiseEverything);
 	assert.deepEqual(codes, [0, 1, 0], lines.join("\n"));
 	// What the suite can detect stays on every summary, the blocking ones included.
-	assert.ok((summary ?? "").startsWith(`${SENSITIVITY}\n\n`), summary ?? "");
+	assert.ok((summary ?? "").startsWith(`${READINESS_CARD}\n\n`), summary ?? "");
 	assert.match(summary ?? "", /\*\*REGRESSION\*\* on these 72 cases/u);
 	assert.match(summary ?? "", /hephaestus\/withholds-expected/u);
 	// The blocking exit status does not hide the verdict: the check run reads the verdict, and names the measures.
@@ -297,7 +297,7 @@ void test("with registered margins, an unchanged candidate is INCONCLUSIVE until
 	assert.equal(verdict.expected, true);
 	assert.ok(
 		(summary ?? "").startsWith(
-			`**Expected result.** INCONCLUSIVE: ${EXPECTED_CAUSES.floorNotSet}\n\n${SENSITIVITY}\n\n`,
+			`**Expected result.** INCONCLUSIVE: ${EXPECTED_CAUSES.floorNotSet}\n\n${READINESS_CARD}\n\n`,
 		),
 		summary ?? "",
 	);
@@ -631,7 +631,9 @@ void test("every summary names the pinned Ichnaea build and the version that dec
 	assert.match(source, /^[0-9a-f]{40}$/u);
 	const summary = jobSummary("report", null, { build, source });
 	assert.ok(
-		summary.startsWith(`${SENSITIVITY}\n\n**Decided with** Ichnaea build \`${build.slice(0, 8)}\``),
+		summary.startsWith(
+			`${READINESS_CARD}\n\n**Decided with** Ichnaea build \`${build.slice(0, 8)}\``,
+		),
 		summary,
 	);
 	assert.match(summary, new RegExp(`source \`${source.slice(0, 8)}\``, "u"));
@@ -662,4 +664,31 @@ void test("the readiness record names the digest of every measure that the suite
 		decided.map((id) => id.replace(/^hephaestus\//u, "")).toSorted(),
 	);
 	assert.deepEqual(readiness.measures, current);
+});
+
+void test("a ready record covers the trial design the suite still has, and every summary carries its card", () => {
+	const readiness = parseJson(readFileSync(path.join(here, "readiness.json"), "utf8"));
+	assert.ok(isRecord(readiness) && isRecord(readiness.scope) && isRecord(readiness.card));
+	assert.ok(isRecord(readiness.noisePlan) && Array.isArray(readiness.noisePlan.runs));
+	if (readiness.ready === true) {
+		// Ready rests on a complete plan whose every run is clean (DN-52), never on a part of one.
+		assert.equal(readiness.noisePlan.outcome, "CLEAN");
+		assert.ok(
+			readiness.noisePlan.runs.every((run: unknown) => isRecord(run) && run.clean === true),
+		);
+	}
+	// A change to the trial design makes the record stale: it needs a new noise plan, so this fails until it has one.
+	const [first, second, third, fourth] = [0, 1, 2, 3].map((k) => casesInReplicate(k).length);
+	assert.equal(first, second);
+	assert.equal(fourth, 0);
+	assert.equal(
+		readiness.scope.design,
+		`${String(first)} cases × 2 trials, and the ${String(third)} withhold cases × 3`,
+	);
+	assert.equal(readiness.scope.concurrency, 1);
+	const summary = jobSummary("report", null, { build: "0".repeat(40), source: "1".repeat(40) });
+	for (const key of ["ready", "noiseRecord", "simulatedFalseRegression", "p4"]) {
+		const line = readiness.card[key];
+		assert.ok(typeof line === "string" && summary.includes(line), key);
+	}
 });

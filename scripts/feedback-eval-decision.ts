@@ -141,13 +141,25 @@ export function readVerdict(store: string, run: string): DecisionVerdict | null 
 }
 
 /**
- * What a decision on this suite can detect, from the noise study of the first no-change run. It stays on every summary
- * until the suite has more withhold cases: docs/contributor/feedback-quality-evals.mdx § Noise plan.
+ * What a decision on this suite can claim, in the card's words. scripts/feedback-eval/ichnaea/readiness.json holds them,
+ * with the scope they cover (docs/contributor/feedback-quality-evals.mdx § Noise plan).
  */
-export const SENSITIVITY =
-	"**What this decision can detect.** P4 detects with 90 % power only drops of 20 points or more; π₀ = 36 %.";
+function readinessCard(): string {
+	const readiness = readJsonFileSync(path.join(here, "readiness.json"));
+	const card = isRecord(readiness) ? readiness.card : undefined;
+	const line = (key: string): string => {
+		const text = isRecord(card) ? card[key] : undefined;
+		if (typeof text !== "string") {
+			throw new Error(`ichnaea/readiness.json has no card line ${key}`);
+		}
+		return text;
+	};
+	return `**Readiness.** ${line("ready")} ${line("noiseRecord")} ${line("simulatedFalseRegression")}\n\n**What this decision can detect.** ${line("p4")}`;
+}
 
-/** The Ichnaea version that decided the composer noise plan, whose numbers SENSITIVITY states. */
+export const READINESS_CARD = readinessCard();
+
+/** The Ichnaea version that decided the composer noise plan, whose numbers READINESS_CARD states. */
 export const NOISE_PLAN_ICHNAEA = "da4e52e";
 
 /**
@@ -187,8 +199,8 @@ export function jobSummary(
 		verdict?.expected === true
 			? `**Expected result.** ${verdict.verdict === "ESTIMATE-ONLY" ? "Estimate-only" : verdict.verdict}: ${verdict.reason}\n\n`
 			: "";
-	const decidedWith = `**Decided with** Ichnaea build \`${ichnaea.build.slice(0, 8)}\` (source \`${ichnaea.source.slice(0, 8)}\`). The noise plan behind the line above was decided with Ichnaea \`${NOISE_PLAN_ICHNAEA}\`.`;
-	return `${expected}${SENSITIVITY}\n\n${decidedWith}\n\n${report}`;
+	const decidedWith = `**Decided with** Ichnaea build \`${ichnaea.build.slice(0, 8)}\` (source \`${ichnaea.source.slice(0, 8)}\`). The noise plan behind the lines above was decided with Ichnaea \`${NOISE_PLAN_ICHNAEA}\`.`;
+	return `${expected}${READINESS_CARD}\n\n${decidedWith}\n\n${report}`;
 }
 
 /** The step output that the `report` job maps to the check run: one `name=value` line each. */

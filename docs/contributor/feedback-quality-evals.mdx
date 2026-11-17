@@ -432,28 +432,29 @@ Every report states the minimum detectable effect of each measure for that run, 
 
 A no-change run composes main's composer against itself. It shows how often the decision flags a change that does not exist, and which drop it can detect.
 The composer noise plan registers two no-change runs together, with fixed seeds, commit, cases, model and endpoint, before the first of them starts.
-The decision is ready only when both runs are clean: each completes its plan, gets a valid decision, and shows no REGRESSION.
+A run is clean when it completes its plan, gets a valid decision, and shows no REGRESSION.
 
-`scripts/feedback-eval/ichnaea/readiness.json` records whether the decision is ready. It never makes the decision a required check.
-It names the noise plan, its runs with their seeds and results, and the digest of each measure.
+Noise plan 1 is complete, and both of its runs are clean. Thus the decision is **ready**: the verdict of a run that a person starts can be trusted within its scope.
+Ready never makes the decision a required check.
+
+`scripts/feedback-eval/ichnaea/readiness.json` is the readiness record. It holds these facts:
+
+- The noise plan, its runs with their seeds and results, and its deviations.
+- The scope of ready: trial design, base model, endpoint, concurrency, measure digests and arm order.
+- When the record goes stale. A new noise plan restores ready. After a change to the measures only, a replay with equal values also restores it.
+- The card lines on every job summary. They say what ready rules out, and what P4 can detect.
+
+A test fails when the suite's trial design or a measure digest no longer matches the record.
 
 Ichnaea keys noise evidence by the measure digest, which covers the measure's card but not its scorer.
 Thus a change to what a measure scores raises the card's version.
-The record then gets the new digests, with evidence that the noise runs still hold for them.
-A test keeps the record's digests equal to the measures'.
+The record then gets the new digests, with a replay of the noise runs as evidence that every value is equal.
 
-An earlier no-change run, which no plan registered, gives the planning numbers:
+P4 limits what the decision can see. About a third of its cases never vary between runs, and the variance between cases dominates.
+More withhold cases make P4 more sensitive, not more trials. They change the trial design and the measure digests, so they come as a new suite version with a noise plan of its own.
+That is a cost decision for the composer's owner, and it does not affect ready.
 
-| Measure | Failed trials | Drop detected with 90 % power |
-| --- | --- | --- |
-| P1 to P3 | 0 | 6 to 8 points |
-| P4 | 54 of 174 | 20 points |
-
-- An unchanged composer gets a false REGRESSION on at most about 3.6 % of runs, below the 5 % level.
-- An unchanged composer is shown non-inferior on P4 in about 36 % of runs (π₀).
-- Every job summary states: `P4 detects with 90 % power only drops of 20 points or more; π₀ = 36 %`.
-- These numbers come from Ichnaea `da4e52e`, which decided the noise plan. The workflow decides with the pinned build, and every job summary names both.
-- More withhold cases make P4 more sensitive. They come as a new suite version, with a noise plan of its own. The cases, the margins and the trials do not change while the noise plan runs.
+Decisions at one trial per case are outside the scope. They need their own noise plan.
 
 ### What the decision cannot see
 
