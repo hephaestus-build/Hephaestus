@@ -32,10 +32,10 @@ import de.tum.cit.aet.hephaestus.practices.result.Freshness;
 import de.tum.cit.aet.hephaestus.practices.result.PracticeGroupStandingService;
 import de.tum.cit.aet.hephaestus.practices.result.PracticeStandingService;
 import de.tum.cit.aet.hephaestus.practices.result.ResultRepository;
+import de.tum.cit.aet.hephaestus.practices.result.ResultTestFixtures;
 import de.tum.cit.aet.hephaestus.practices.result.ResultView;
 import de.tum.cit.aet.hephaestus.practices.result.ResultViewQuery;
 import de.tum.cit.aet.hephaestus.practices.result.ResultVisibilityPolicy;
-import de.tum.cit.aet.hephaestus.practices.result.SourceFreshness;
 import de.tum.cit.aet.hephaestus.practices.result.StandingScale;
 import de.tum.cit.aet.hephaestus.practices.result.trend.PracticeTrendService;
 import de.tum.cit.aet.hephaestus.practices.result.trend.TrendProperties;
@@ -312,7 +312,7 @@ class PracticesAcrossWorkspaceServiceTest {
                 practice.getCurrentVersion(),
                 base.review(),
                 base.item(),
-                SourceFreshness.fixed(Freshness.current(null)),
+                ResultTestFixtures.fixedFreshness(Freshness.current(null)),
                 sealedFeedbackMode));
     }
 

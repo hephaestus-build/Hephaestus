@@ -181,16 +181,18 @@ class PracticeProfileReadCostIntegrationTest extends BaseIntegrationTest {
 
     /**
      * Reading whether a result's sources are current reads the work behind it from the mirror. A standing quotes at
-     * most a few results per practice, so its reads of the work stay the same however many results its look-back has.
+     * most five problems and three strengths of a practice, so it reads the work behind those, not behind every result
+     * of its look-back. Each piece of work here holds one result, so a read of every result would ask about all 24.
      */
     @Test
     void shouldReadTheWorkBehindOnlyTheResultsAStandingCouldQuote() {
-        seed(2 * works.size());
-        var few = workReads();
-        seed(4 * works.size());
-        var many = workReads();
+        works = IntStream.range(0, 24).mapToObj(index -> onNewWork()).toList();
+        seed(works.size());
 
-        assertThat(many).isEqualTo(few);
+        // The overview reads two snapshots; each quotes at most eight results of the one practice.
+        assertThat(workReads())
+                .allSatisfy(
+                        (read, asked) -> assertThat(asked).as(read).isPositive().isLessThanOrEqualTo(16));
     }
 
     @Test

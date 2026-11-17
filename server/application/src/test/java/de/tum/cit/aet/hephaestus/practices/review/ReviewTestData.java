@@ -8,8 +8,8 @@ import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeVersion;
 import de.tum.cit.aet.hephaestus.practices.model.Result;
 import de.tum.cit.aet.hephaestus.practices.result.Freshness;
+import de.tum.cit.aet.hephaestus.practices.result.ResultTestFixtures;
 import de.tum.cit.aet.hephaestus.practices.result.ResultView;
-import de.tum.cit.aet.hephaestus.practices.result.SourceFreshness;
 import de.tum.cit.aet.hephaestus.practices.review.model.Review;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewKind;
@@ -87,6 +87,12 @@ public final class ReviewTestData {
                 null,
                 null);
         return new ResultView(
-                result.facts(), practice, version, review, item, SourceFreshness.fixed(Freshness.current(null)), null);
+                result.facts(),
+                practice,
+                version,
+                review,
+                item,
+                ResultTestFixtures.fixedFreshness(Freshness.current(null)),
+                null);
     }
 }

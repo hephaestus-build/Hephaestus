@@ -150,7 +150,7 @@ class DeveloperPracticeStandingsAdapterTest {
                 view.version(),
                 review.build(),
                 view.item(),
-                SourceFreshness.fixed(Freshness.current(null)),
+                ResultTestFixtures.fixedFreshness(Freshness.current(null)),
                 view.sealedFeedbackMode());
     }
 

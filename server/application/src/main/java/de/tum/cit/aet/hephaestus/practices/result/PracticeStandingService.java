@@ -500,6 +500,9 @@ public class PracticeStandingService {
         SourceFreshness.prefetch(reviewedBySlug.values().stream()
                 .flatMap(evidence -> evidence.quoteCandidates(readable.quotable()))
                 .toList());
+        SourceFreshness.prefetch(reviewedBySlug.values().stream()
+                .flatMap(evidence -> evidence.quoteReserve(readable.quotable()))
+                .toList());
 
         List<StandingSnapshot.PracticeStandingSnapshot> standings = new ArrayList<>();
         for (Practice practice : eligibility.practices()) {
@@ -651,12 +654,29 @@ public class PracticeStandingService {
         /** The first problems and strengths that a standing could quote, before their sources are checked. */
         Stream<ResultView> quoteCandidates(Set<UUID> quotable) {
             return Stream.concat(
-                    problems.stream()
-                            .filter(view -> quotable.contains(view.result().id()))
-                            .limit(MAX_FEEDBACK_PER_PRACTICE),
-                    strengths.stream()
-                            .filter(view -> quotable.contains(view.result().id()))
-                            .limit(MAX_STRENGTHS_PER_PRACTICE));
+                    quotable(problems, quotable).limit(MAX_FEEDBACK_PER_PRACTICE),
+                    quotable(strengths, quotable).limit(MAX_STRENGTHS_PER_PRACTICE));
+        }
+
+        /**
+         * The rest of a list whose first candidates did not all read current, so the next ones are read in a second
+         * batch rather than one at a time. Asked only after {@link #quoteCandidates} was read.
+         */
+        Stream<ResultView> quoteReserve(Set<UUID> quotable) {
+            return Stream.concat(
+                    reserve(quotable(problems, quotable).toList(), MAX_FEEDBACK_PER_PRACTICE),
+                    reserve(quotable(strengths, quotable).toList(), MAX_STRENGTHS_PER_PRACTICE));
+        }
+
+        private static Stream<ResultView> quotable(List<ResultView> views, Set<UUID> quotable) {
+            return views.stream().filter(view -> quotable.contains(view.result().id()));
+        }
+
+        private static Stream<ResultView> reserve(List<ResultView> candidates, int cap) {
+            var first = candidates.subList(0, Math.min(cap, candidates.size()));
+            return first.stream().allMatch(ResultView::hasCurrentSources)
+                    ? Stream.empty()
+                    : candidates.subList(first.size(), candidates.size()).stream();
         }
 
         static PracticeEvidence classify(List<ResultView> group) {

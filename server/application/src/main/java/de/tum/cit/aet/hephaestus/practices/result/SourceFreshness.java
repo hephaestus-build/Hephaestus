@@ -3,7 +3,6 @@ package de.tum.cit.aet.hephaestus.practices.result;
 import de.tum.cit.aet.hephaestus.practices.model.ResultFacts;
 import java.util.Collection;
 import java.util.HashMap;
-import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -15,6 +14,8 @@ import java.util.stream.Collectors;
  * The source freshness of one read's views, computed only for the views that a caller asks about. A freshness read
  * reads every result's sources, so a page that quotes a few results must not read the sources of every result in its
  * look-back. A caller that will ask about several views prefetches them, so their sources are read in one batch.
+ *
+ * <p>It lives for one read on one thread. Its memo is a plain map, so it must never become a shared cache.
  */
 public final class SourceFreshness {
 
@@ -25,22 +26,11 @@ public final class SourceFreshness {
         this.read = read;
     }
 
-    /** A freshness that is already known, for a view that was not read from the database. */
-    public static SourceFreshness fixed(Freshness freshness) {
-        return new SourceFreshness(rows -> {
-            var all = new HashMap<UUID, Freshness>();
-            rows.forEach(row -> all.put(row.id(), freshness));
-            return all;
-        });
-    }
-
     /** Reads, in one batch for each read that produced them, the freshness of the views that are not yet known. */
     public static void prefetch(Collection<ResultView> views) {
         views.stream()
                 .collect(Collectors.groupingBy(
-                        ResultView::freshness,
-                        IdentityHashMap::new,
-                        Collectors.mapping(ResultView::result, Collectors.toList())))
+                        ResultView::freshness, Collectors.mapping(ResultView::result, Collectors.toList())))
                 .forEach(SourceFreshness::prefetchRows);
     }
 
