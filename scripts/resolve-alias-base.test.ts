@@ -68,3 +68,39 @@ await test("a pull request does not alias from a default-branch commit whose run
 	);
 	assert.deepEqual(checked, [main]);
 });
+
+const published = async () => true;
+// The base predates a rename: it published `application-server` and `agent-pi`, not `server` and `agent`.
+const renamed = async () => ["application-server", "agent-pi", "postgres"];
+
+await test("a base that published no image under a name this checkout builds leaves every image to build", async () => {
+	const base = { compare: async () => "identical", baseOf: never("the base chain") };
+	assert.equal(
+		await resolveAliasBase(main, "main", { ...base, published, inventory: renamed }, [
+			"server",
+			"agent",
+			"postgres",
+		]),
+		undefined,
+	);
+	// An image added after the base is missing there too.
+	assert.equal(
+		await resolveAliasBase(
+			main,
+			"main",
+			{ ...base, published, inventory: async () => ["server", "postgres"] },
+			["server", "agent", "postgres"],
+		),
+		undefined,
+	);
+	// The same names alias as before; an image the checkout dropped does not matter.
+	assert.equal(
+		await resolveAliasBase(
+			main,
+			"main",
+			{ ...base, published, inventory: async () => ["webapp", "server", "agent", "postgres"] },
+			["server", "agent", "postgres"],
+		),
+		main,
+	);
+});

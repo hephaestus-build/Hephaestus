@@ -52,6 +52,7 @@ import {
 	writesActions,
 	hasWorkflowTrigger,
 } from "./ci-contract-support.ts";
+import { parseInventory } from "./commit-image-lock.ts";
 import { isSet } from "./lib/env.ts";
 import { environmentForGitFixture } from "./lib/git-environment.ts";
 import { committedShards } from "./lib/integration-durations.ts";
@@ -1109,6 +1110,33 @@ void describe("ci-contract: merge-queue", () => {
 				compare: async (base) => (base === published ? "ahead" : "diverged"),
 				baseOf: async () => published,
 			}),
+			published,
+		);
+
+		// A base from before an image was renamed or added published nothing under that name, so the
+		// tagging job would fail on it. The resolver leaves such a run every image to build instead.
+		const { images } = parseInventory(
+			JSON.parse(await readFile("security/release-images.json", "utf8")),
+		);
+		const base = {
+			compare: async () => "identical",
+			baseOf: async () => undefined,
+			published: async () => true,
+		};
+		for (const missing of images) {
+			assert.equal(
+				await resolveAliasBase(
+					published,
+					"main",
+					{ ...base, inventory: async () => images.filter((image) => image !== missing) },
+					images,
+				),
+				undefined,
+				`a base without ${missing} aliases nothing`,
+			);
+		}
+		assert.equal(
+			await resolveAliasBase(published, "main", { ...base, inventory: async () => images }, images),
 			published,
 		);
 
