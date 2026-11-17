@@ -69,11 +69,14 @@ A rule that main does not satisfy yet says "1.0 target".
 15. **A restore reapplies person erasures before work resumes.** Off-host pgBackRest backups are optional and off by default. Erased data stays in a backup until that backup expires. After a restore, the `erasure-recovery` profile reapplies each later person erasure from a private manifest. It does this before schedulers and consumers start.
     Enforced by: `PersonDataRecoveryIntegrationTest#shouldReapplyAnErasureLostByARestoreBeforeProcessingStarts`, `PersonDataRecoveryStartupIntegrationTest#shouldBindTheRecoveryProfileAndCompleteBeforeSchedulersAndConsumersStart`.
 16. **An erasure survives a backup restore.** The `erasure-recovery` profile reapplies the erasures after the recovery point. It reapplies disconnects, workspace purges, erased Outline collections and deleted conversation messages.
+    An edit or a deletion of a Slack message in Slack erases its old words.
+    The profile erases them again.
+    Not yet reapplied: a Slack channel that an admin revoked or that Slack deleted. It has no log event yet.
     It also reapplies person erasures, also of accounts that their owners deleted.
     The operator redoes repository removals, including the removal of a stopped GitLab project's kept work, before egress opens.
-    The operator lists them in a version 3 manifest outside the database. The profile runs with background work off and refuses to start beside it, so the purge needs no quiescence guard.
+    The operator lists them in a version 4 manifest outside the database. The profile runs with background work off and refuses to start beside it, so the purge needs no quiescence guard.
     [Reapply erasures after a restore](../admin/erasure-recovery.mdx) owns the procedure.
-    Enforced by: `ErasureRecoveryRestoreIntegrationTest#shouldPurgeAgainAWorkspaceThatARestoreBroughtBack`, `ErasureRecoveryRestoreIntegrationTest#shouldDisconnectAgainAConnectionThatARestoreBroughtBack`, `ErasureRecoveryRestoreIntegrationTest#shouldDeleteAgainAMessageThatARestoreBroughtBack`, `ErasureRecoveryRestoreIntegrationTest#shouldEraseAgainAnOutlineCollectionThatARestoreBroughtBack`, `PersonDataRecoveryIntegrationTest#shouldRefuseToRecoverBesideBackgroundWork`.
+    Enforced by: `ErasureRecoveryRestoreIntegrationTest#shouldPurgeAgainAWorkspaceThatARestoreBroughtBack`, `ErasureRecoveryRestoreIntegrationTest#shouldDisconnectAgainAConnectionThatARestoreBroughtBack`, `ErasureRecoveryRestoreIntegrationTest#shouldDeleteAgainAMessageThatARestoreBroughtBack`, `ErasureRecoveryRestoreIntegrationTest#shouldEraseAgainAnOutlineCollectionThatARestoreBroughtBack`, `ErasureRecoveryRestoreIntegrationTest#shouldEraseAgainTheOldWordsOfSlackMessagesThatTheirAuthorsChangedAfterTheRestorePoint`, `PersonDataRecoveryIntegrationTest#shouldRefuseToRecoverBesideBackgroundWork`.
 
 ## What changed, and why
 

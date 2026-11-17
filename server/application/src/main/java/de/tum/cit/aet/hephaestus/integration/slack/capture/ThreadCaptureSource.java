@@ -116,6 +116,15 @@ public class ThreadCaptureSource {
                         Map.of(),
                         Map.of(SOURCE, new SourceCaptureState.Unavailable(SourceAbsenceReason.NOT_FOUND)));
             }
+            case WORDS_ERASED -> {
+                return contribution(
+                        Map.of(),
+                        Map.of(),
+                        Map.of(),
+                        Map.of(),
+                        Map.of(),
+                        Map.of(SOURCE, new SourceCaptureState.Unavailable(SourceAbsenceReason.WORDS_ERASED)));
+            }
             case READABLE -> {}
         }
         var payload = projection.threadPayload(row.getWorkspaceId(), row.getSlackChannelId(), row.getSlackThreadTs());
@@ -124,15 +133,24 @@ public class ThreadCaptureSource {
         if (lastTs == null || !ThreadEvents.version(record, lastTs).equals(pinned.version())) {
             throw new ItemCaptureException(ItemCaptureCode.VERSION_UNAVAILABLE, "Thread version changed");
         }
-        if (projection.threadReadability(row.getWorkspaceId(), row.getSlackChannelId(), row.getSlackThreadTs())
-                != ThreadProjection.ThreadReadability.READABLE)
+        var settled =
+                projection.threadReadability(row.getWorkspaceId(), row.getSlackChannelId(), row.getSlackThreadTs());
+        if (settled != ThreadProjection.ThreadReadability.READABLE)
             return contribution(
                     Map.of(),
                     Map.of(),
                     Map.of(),
                     Map.of(),
                     Map.of(),
-                    Map.of(SOURCE, new SourceCaptureState.Redacted(SourceAbsenceReason.CONSENT_NOT_ACTIVE)));
+                    Map.of(
+                            SOURCE,
+                            switch (settled) {
+                                case WORDS_ERASED ->
+                                    new SourceCaptureState.Unavailable(SourceAbsenceReason.WORDS_ERASED);
+                                case NOT_FOUND -> new SourceCaptureState.Unavailable(SourceAbsenceReason.NOT_FOUND);
+                                case CONSENT_NOT_ACTIVE, READABLE ->
+                                    new SourceCaptureState.Redacted(SourceAbsenceReason.CONSENT_NOT_ACTIVE);
+                            }));
         Instant effectiveAt = projection.sourceEffectiveAt(lastTs);
         var files = new LinkedHashMap<String, byte[]>();
         var texts = new ArrayList<CitableText>();

@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.slack.events;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
@@ -10,6 +11,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import de.tum.cit.aet.hephaestus.integration.core.consumer.ProviderEventStore;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMessageRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannelRepository;
@@ -23,6 +27,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
+import org.slf4j.LoggerFactory;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -106,6 +111,44 @@ class SlackIngestServiceTest extends BaseUnitTest {
                 messageRepository,
                 threadRepository,
                 identityResolver);
+    }
+
+    @Test
+    void shouldLogTheIdsOfAnEditThatReplacedStoredWordsAndNothingForAStaleEdit() {
+        var appender = new ListAppender<ILoggingEvent>();
+        appender.start();
+        Logger logger = (Logger) LoggerFactory.getLogger(SlackIngestService.class);
+        logger.addAppender(appender);
+        try {
+            when(messageRepository.findIdOf(7L, "C1", "100.1")).thenReturn(Optional.of(42L));
+            when(messageRepository.applyEdit(eq(7L), eq("C1"), eq("100.1"), eq("New words"), any()))
+                    .thenReturn(1, 0);
+
+            service.refreshEdit(7L, "C1", "100.1", "New words", "200.1");
+            service.refreshEdit(7L, "C1", "100.1", "New words", "200.1");
+
+            var changes = appender.list.stream()
+                    .filter(event -> event.getKeyValuePairs() != null
+                            && event.getKeyValuePairs().stream()
+                                    .anyMatch(pair -> "event.name".equals(pair.key)
+                                            && "slack.message_changed".equals(pair.value)))
+                    .toList();
+            assertThat(changes).as("only the edit that replaced words").hasSize(1);
+            assertThat(changes.getFirst().getKeyValuePairs())
+                    .anySatisfy(pair -> {
+                        assertThat(pair.key).isEqualTo("slack.message.id");
+                        assertThat(pair.value).isEqualTo(42L);
+                    })
+                    .anySatisfy(pair -> {
+                        assertThat(pair.key).isEqualTo("slack.message.change");
+                        assertThat(pair.value).isEqualTo("EDITED");
+                    });
+            assertThat(changes.getFirst().getFormattedMessage()
+                            + changes.getFirst().getKeyValuePairs())
+                    .doesNotContain("New words");
+        } finally {
+            logger.detachAppender(appender);
+        }
     }
 
     @Test

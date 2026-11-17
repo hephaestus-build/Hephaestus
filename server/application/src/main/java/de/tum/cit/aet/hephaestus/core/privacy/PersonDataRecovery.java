@@ -6,6 +6,7 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.RestoredCollectionErasures;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.RestoredDisconnects;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.RestoredMessageDeletions;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.RestoredSlackMessageChanges;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.RestoredWorkspacePurges;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnBackgroundWork;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
@@ -29,7 +30,8 @@ import tools.jackson.databind.ObjectMapper;
 
 /**
  * Reapplies the erasures that a database restore undid, from the operator-held manifest: disconnects, then workspace
- * purges, then erased documentation collections and deleted conversation messages, then people. It runs only in a
+ * purges, then erased documentation collections, deleted conversation messages and Slack messages changed in Slack,
+ * then people. It runs only in a
  * server with background work off, so no scheduled task, claimer or inbox subscriber writes while it skips the purge's
  * quiescence guards; the {@code erasure-recovery} profile turns background work off, and startup stops if anything
  * turns it on again.
@@ -61,6 +63,7 @@ final class PersonDataRecovery implements SmartLifecycle {
     private final RestoredDisconnects disconnects;
     private final RestoredMessageDeletions messages;
     private final RestoredCollectionErasures collections;
+    private final RestoredSlackMessageChanges slackMessages;
     private final String manifestPath;
     private boolean running;
 
@@ -74,6 +77,7 @@ final class PersonDataRecovery implements SmartLifecycle {
             RestoredDisconnects disconnects,
             RestoredMessageDeletions messages,
             RestoredCollectionErasures collections,
+            RestoredSlackMessageChanges slackMessages,
             PersonDataRecoveryProperties properties) {
         this.service = service;
         this.resolver = resolver;
@@ -84,12 +88,13 @@ final class PersonDataRecovery implements SmartLifecycle {
         this.disconnects = disconnects;
         this.messages = messages;
         this.collections = collections;
+        this.slackMessages = slackMessages;
         this.manifestPath = properties.recoveryManifest();
     }
 
     /**
-     * Version 3 adds the erased collections and the deleted messages, as version 2 added the purges and disconnects: an
-     * earlier manifest cannot say that there were none.
+     * Version 4 adds the Slack messages that their authors edited or deleted in Slack, as version 3 added the erased
+     * collections and the deleted messages: an earlier manifest cannot say that there were none.
      */
     record Manifest(
             int version,
@@ -100,7 +105,8 @@ final class PersonDataRecovery implements SmartLifecycle {
             List<WorkspacePurge> workspacePurges,
             List<Disconnect> disconnects,
             List<CollectionErasure> collectionErasures,
-            List<MessageDeletion> messageDeletions) {}
+            List<MessageDeletion> messageDeletions,
+            List<SlackMessageChange> slackMessageChanges) {}
 
     record WorkspacePurge(long workspaceId) {}
 
@@ -111,6 +117,14 @@ final class PersonDataRecovery implements SmartLifecycle {
 
     /** A conversation message that its developer deleted. */
     record MessageDeletion(long workspaceId, UUID entryId) {}
+
+    /** A stored Slack message that its author edited or deleted in Slack. */
+    record SlackMessageChange(long workspaceId, long messageId, Change change) {
+        enum Change {
+            EDITED,
+            DELETED
+        }
+    }
 
     record Person(@Nullable Long accountId, List<NativeIdentity> identities, boolean externalCopiesRemoved) {}
 
@@ -141,7 +155,7 @@ final class PersonDataRecovery implements SmartLifecycle {
                     .with(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
                     .readValue(Files.readAllBytes(path));
             reason = FailureReason.MANIFEST_VERSION;
-            if (manifest.version() != 3) throw new IllegalStateException();
+            if (manifest.version() != 4) throw new IllegalStateException();
             reason = FailureReason.MANIFEST_INVALID;
             Objects.requireNonNull(manifest.restorePoint());
             Objects.requireNonNull(manifest.people());
@@ -149,11 +163,13 @@ final class PersonDataRecovery implements SmartLifecycle {
             Objects.requireNonNull(manifest.disconnects());
             Objects.requireNonNull(manifest.collectionErasures());
             Objects.requireNonNull(manifest.messageDeletions());
+            Objects.requireNonNull(manifest.slackMessageChanges());
             boolean none = manifest.people().isEmpty()
                     && manifest.workspacePurges().isEmpty()
                     && manifest.disconnects().isEmpty()
                     && manifest.collectionErasures().isEmpty()
-                    && manifest.messageDeletions().isEmpty();
+                    && manifest.messageDeletions().isEmpty()
+                    && manifest.slackMessageChanges().isEmpty();
             if (manifest.restorePoint().isAfter(Instant.now())
                     || manifest.noLaterErasures() != none
                     || manifest.workspacePurges().stream().anyMatch(purge -> purge.workspaceId() <= 0)
@@ -165,7 +181,11 @@ final class PersonDataRecovery implements SmartLifecycle {
                                     || collection.collectionId() == null
                                     || collection.collectionId().isBlank())
                     || manifest.messageDeletions().stream()
-                            .anyMatch(message -> message.workspaceId() <= 0 || message.entryId() == null)) {
+                            .anyMatch(message -> message.workspaceId() <= 0 || message.entryId() == null)
+                    || manifest.slackMessageChanges().stream()
+                            .anyMatch(message -> message.workspaceId() <= 0
+                                    || message.messageId() <= 0
+                                    || message.change() == null)) {
                 throw new IllegalStateException();
             }
             // Validate every native identity before the first erasure changes a store.
@@ -194,6 +214,11 @@ final class PersonDataRecovery implements SmartLifecycle {
                 collections.eraseAgain(collection.workspaceId(), collection.connectionId(), collection.collectionId());
             for (MessageDeletion message : manifest.messageDeletions())
                 messages.deleteAgain(message.workspaceId(), message.entryId());
+            for (SlackMessageChange message : manifest.slackMessageChanges())
+                slackMessages.eraseAgain(
+                        message.workspaceId(),
+                        message.messageId(),
+                        message.change() == SlackMessageChange.Change.DELETED);
             if (!manifest.people().isEmpty()) {
                 for (int index = 0; index < manifest.people().size(); index++) {
                     reapplyErasure(

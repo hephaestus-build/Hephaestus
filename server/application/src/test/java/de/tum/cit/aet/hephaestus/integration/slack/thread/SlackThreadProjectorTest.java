@@ -9,6 +9,7 @@ import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyRecorder;
+import de.tum.cit.aet.hephaestus.integration.chat.item.ThreadProjection;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMessageRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackThreadMessageRow;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackThreadRepository;
@@ -65,6 +66,22 @@ class SlackThreadProjectorTest extends BaseUnitTest {
                 .get(0);
 
         assertThat(conversation.path("messages")).isEmpty();
+        assertThat(conversation.path("truncated").asBoolean()).isTrue();
+    }
+
+    @Test
+    void shouldWithholdAThreadWithATurnWhoseWordsARestoreErasedUntilItsWordsAreStoredAgain() {
+        threads(thread("C1", "1760000000.000100"));
+        when(messageRepository.countWordlessTurns(WORKSPACE, "C1", "1760000000.000100"))
+                .thenReturn(1L);
+
+        assertThat(projector.threadReadability(WORKSPACE, "C1", "1760000000.000100"))
+                .isEqualTo(ThreadProjection.ThreadReadability.WORDS_ERASED);
+        JsonNode conversation = projector
+                .buildPayload(WORKSPACE, DEVELOPER)
+                .path("conversations")
+                .get(0);
+        assertThat(conversation.path("messages")).as("never an empty reply").isEmpty();
         assertThat(conversation.path("truncated").asBoolean()).isTrue();
     }
 

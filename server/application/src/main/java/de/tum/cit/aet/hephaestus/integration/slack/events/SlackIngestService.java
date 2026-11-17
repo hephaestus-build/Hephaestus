@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.slack.events;
 
+import de.tum.cit.aet.hephaestus.core.TransactionCallbacks;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.consumer.DeliveryInbox;
 import de.tum.cit.aet.hephaestus.integration.core.consumer.ProviderEventStore;
@@ -213,7 +214,23 @@ public class SlackIngestService {
         }
         if (DeliveryInbox.claim("slack.message.delete")) {
             messageRepository.tombstone(workspaceId, teamId, channelId, deletedTs, Instant.now());
+            logChange(workspaceId, channelId, deletedTs, "DELETED");
         }
+    }
+
+    /**
+     * An erasure recovery manifest lists each edit and deletion after its recovery point, by the stored row: a restore
+     * brings back the old words. Logged only after commit, by ids alone.
+     */
+    private void logChange(long workspaceId, String channelId, String ts, String change) {
+        messageRepository
+                .findIdOf(workspaceId, channelId, ts)
+                .ifPresent(id -> TransactionCallbacks.afterCommit(() -> log.atInfo()
+                        .addKeyValue("event.name", "slack.message_changed")
+                        .addKeyValue("workspace.id", workspaceId)
+                        .addKeyValue("slack.message.id", id)
+                        .addKeyValue("slack.message.change", change)
+                        .log("A Slack message was changed in Slack")));
     }
 
     /** One edit of a message: the message's own fields as edited, and {@code editedTs}, Slack's time of the edit. */
@@ -258,8 +275,10 @@ public class SlackIngestService {
         boolean absent = Boolean.TRUE.equals(transactionTemplate.execute(status -> {
             boolean present =
                     messageRepository.existsByWorkspaceIdAndSlackChannelIdAndSlackTs(workspaceId, channelId, ts);
-            if (present && DeliveryInbox.claim(step)) {
-                messageRepository.applyEdit(workspaceId, channelId, ts, text, editedAt);
+            if (present
+                    && DeliveryInbox.claim(step)
+                    && messageRepository.applyEdit(workspaceId, channelId, ts, text, editedAt) > 0) {
+                logChange(workspaceId, channelId, ts, "EDITED");
             }
             return !present;
         }));
@@ -272,7 +291,10 @@ public class SlackIngestService {
         // Stamp edited_at (insertIfAbsent does not): a row born from message_changed genuinely is an edited message,
         // so the projector's `edited` flag reads true. Idempotent second write on the now-present row.
         transactionTemplate.executeWithoutResult(status -> {
-            if (DeliveryInbox.claim(step)) messageRepository.applyEdit(workspaceId, channelId, ts, text, editedAt);
+            // A base insert that won the race stored the old words, which this edit replaces.
+            if (DeliveryInbox.claim(step)
+                    && messageRepository.applyEdit(workspaceId, channelId, ts, text, editedAt) > 0)
+                logChange(workspaceId, channelId, ts, "EDITED");
         });
     }
 
@@ -283,8 +305,11 @@ public class SlackIngestService {
     @Transactional
     public void refreshEdit(long workspaceId, String channelId, String ts, String text, @Nullable String editedTs) {
         Instant editedAt = instantOf(editedTs);
-        if (conversationIngestEnabled && editedAt != null && DeliveryInbox.claim("slack.message.refresh")) {
-            messageRepository.applyEdit(workspaceId, channelId, ts, text, editedAt);
+        if (conversationIngestEnabled
+                && editedAt != null
+                && DeliveryInbox.claim("slack.message.refresh")
+                && messageRepository.applyEdit(workspaceId, channelId, ts, text, editedAt) > 0) {
+            logChange(workspaceId, channelId, ts, "EDITED");
         }
     }
 
