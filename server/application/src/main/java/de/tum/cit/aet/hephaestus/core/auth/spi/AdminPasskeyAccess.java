@@ -10,9 +10,20 @@ public interface AdminPasskeyAccess {
 
     void requireWorkspaceAdmin(boolean workspaceRequired, boolean elevated, boolean sensitive);
 
-    /**
-     * Whether the policy would require a passkey proof of this account for admin work in a workspace. An
-     * MCP client cannot hold such a proof, so its consent is refused where this holds (ADR 0110 decision 8).
-     */
-    boolean workspaceAdminNeedsProof(long accountId, boolean workspaceRequired);
+    /** What the policy asks before this account lets an MCP client do admin work in a workspace (ADR 0110 decision 8). */
+    enum McpConsentProof {
+        /** The policy asks no passkey of this account here. */
+        NONE,
+        /** The account confirms with a passkey on the consent page; the grant then holds that proof for its bound. */
+        PASSKEY,
+        /** The account's passkey recovery is pending, so it cannot delegate admin work. */
+        REFUSED_RECOVERY_PENDING,
+        /** The instance requires a passkey of its instance admins, and that proof is never delegated. */
+        REFUSED_INSTANCE_ADMIN,
+    }
+
+    McpConsentProof mcpConsentProof(long accountId, boolean workspaceRequired);
+
+    /** Whether the current browser request carries a passkey proof within the step-up window. */
+    boolean freshPasskeyProof();
 }

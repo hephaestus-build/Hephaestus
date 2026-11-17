@@ -1,5 +1,5 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useLocation, useRouter } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 
 import {
@@ -10,12 +10,15 @@ import {
 import {
 	type McpAuthorizationError,
 	McpConsentPage,
+	type McpConsentPasskey,
 	type McpConsentState,
 } from "@/components/auth/McpConsentPage";
 import environment from "@/environment";
 import { useConfirmAccess } from "@/hooks/use-confirm-access";
+import { usePasskeySettings } from "@/hooks/use-passkey-settings";
 import { pageTitle } from "@/lib/page-title";
 import { problemDetailOf, problemStatusOf, stepUpChallengeOf } from "@/lib/problem-detail";
+import { PASSKEY_CHALLENGE_PATH } from "@/runtime/auth/passkey-challenge";
 
 const AUTHORIZATION_ERRORS: readonly McpAuthorizationError[] = [
 	"INVALID_CLIENT",
@@ -82,6 +85,20 @@ function McpAuthorizeRoute() {
 		...approveMcpConsentRequestMutation(),
 		onSuccess: (answer) => leave(answer.redirectUri),
 	});
+	// Where the workspace's admin passkey policy asks for a passkey, Allow is the passkey step-up that
+	// every admin change uses, and the approval follows once the server accepted it. The grant then
+	// holds that confirmation for one hour.
+	const router = useRouter();
+	const location = useLocation();
+	const passkeys = usePasskeySettings({
+		signInReturnTo: location.href,
+		onVerified: () => {
+			if (request !== undefined) {
+				approve.mutate({ path: { requestId: request } });
+			}
+		},
+	});
+	const needsPasskey = consent.data?.passkeyRequired === true && consent.data.refusal === undefined;
 	const refuse = useMutation({
 		...refuseMcpConsentRequestMutation(),
 		onSuccess: (answer) => leave(answer.redirectUri),
@@ -94,7 +111,11 @@ function McpAuthorizeRoute() {
 	let state: McpConsentState;
 	if (error !== undefined) {
 		state = { status: "invalid", reason: error };
-	} else if (request === undefined || consent.isPending) {
+	} else if (
+		request === undefined ||
+		consent.isPending ||
+		(needsPasskey && passkeys.section.loading)
+	) {
 		state = { status: "loading" };
 	} else if (consent.isError) {
 		state =
@@ -122,17 +143,39 @@ function McpAuthorizeRoute() {
 	} else {
 		const path = { requestId: request };
 		// A successful answer stays pending while the browser leaves for the client.
-		let pending: "approve" | "refuse" | undefined;
-		if (approve.isPending || approve.isSuccess) {
+		let pending: "passkey" | "approve" | "refuse" | undefined;
+		if (passkeys.section.pending && passkeys.section.pendingAction === "verify") {
+			pending = "passkey";
+		} else if (approve.isPending || approve.isSuccess) {
 			pending = "approve";
 		} else if (refuse.isPending || refuse.isSuccess) {
 			pending = "refuse";
 		}
+		let passkey: McpConsentPasskey | undefined;
+		if (needsPasskey) {
+			if (!passkeys.section.supported) {
+				passkey = { status: "unsupported" };
+			} else if (passkeys.section.status?.credentials.length === 0) {
+				passkey = {
+					status: "add",
+					// The challenge page adds a passkey, confirms with it, and returns to this request.
+					onAdd: () => {
+						void router.navigate({
+							to: PASSKEY_CHALLENGE_PATH,
+							search: { returnTo: location.href },
+						});
+					},
+				};
+			} else {
+				passkey = { status: "confirm", error: passkeys.section.error };
+			}
+		}
 		state = {
 			status: "ready",
 			request: consent.data,
+			passkey,
 			pending,
-			onApprove: () => approve.mutate({ path }),
+			onApprove: needsPasskey ? passkeys.section.onVerify : () => approve.mutate({ path }),
 			onRefuse: () => refuse.mutate({ path }),
 		};
 	}

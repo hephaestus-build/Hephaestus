@@ -51,6 +51,7 @@ public class PasskeySessionService {
     public void rotate(
             Long accountId,
             @Nullable Instant passkeyTime,
+            @Nullable String passkeyCredential,
             HttpServletRequest request,
             HttpServletResponse response,
             boolean all) {
@@ -69,7 +70,8 @@ public class PasskeySessionService {
                 response,
                 issuer.issue(
                         accountId,
-                        new TokenConstraints(ceiling, CurrentAccount.authTime(), null, passkeyTime),
+                        TokenConstraints.browserSession(
+                                ceiling, CurrentAccount.authTime(), passkeyTime, passkeyCredential),
                         request));
     }
 

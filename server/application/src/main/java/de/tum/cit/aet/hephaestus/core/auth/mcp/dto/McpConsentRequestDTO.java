@@ -26,13 +26,20 @@ public record McpConsentRequestDTO(
         @NonNull List<String> scopes,
 
         @Schema(description = "Why this account cannot approve the request; absent when it can") @Nullable
-        McpConsentRefusal refusal) {
+        McpConsentRefusal refusal,
+
+        @Schema(
+                requiredMode = Schema.RequiredMode.REQUIRED,
+                description = "The account confirms with a passkey before it approves; the grant then ends one hour"
+                        + " after that confirmation")
+        boolean passkeyRequired) {
     public McpConsentRequestDTO {
         scopes = List.copyOf(scopes);
     }
 
     public enum McpConsentRefusal {
         NOT_ADMIN,
-        PASSKEY_REQUIRED,
+        PASSKEY_RECOVERY_PENDING,
+        INSTANCE_ADMIN_PASSKEY_REQUIRED,
     }
 }

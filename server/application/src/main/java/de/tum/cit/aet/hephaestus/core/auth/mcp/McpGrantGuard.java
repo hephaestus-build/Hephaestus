@@ -72,7 +72,10 @@ public class McpGrantGuard implements HandlerFilterFunction<ServerResponse, Serv
         request.attributes()
                 .put(
                         McpCallGrant.ATTRIBUTE,
-                        new McpCallGrant(grant.get().getId(), grant.get().grants(McpScope.WRITE)));
+                        new McpCallGrant(
+                                grant.get().getId(),
+                                grant.get().grants(McpScope.WRITE),
+                                grant.get().passkeyBackedUntil()));
         return next.handle(request);
     }
 

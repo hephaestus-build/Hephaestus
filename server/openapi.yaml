@@ -17391,6 +17391,11 @@ components:
         id:
           type: string
           format: uuid
+        passkeyBackedUntil:
+          type: string
+          format: date-time
+          description: The approval was confirmed with a passkey; the grant ends at
+            this time
         scopes:
           type: array
           items:
@@ -17428,6 +17433,10 @@ components:
         loopbackRedirect:
           type: boolean
           description: The code goes to this machine only
+        passkeyRequired:
+          type: boolean
+          description: The account confirms with a passkey before it approves; the
+            grant then ends one hour after that confirmation
         redirectHost:
           type: string
         refusal:
@@ -17447,6 +17456,7 @@ components:
       - clientName
       - id
       - loopbackRedirect
+      - passkeyRequired
       - redirectHost
       - scopes
       - workspaceName
@@ -17455,7 +17465,8 @@ components:
       type: string
       enum:
       - NOT_ADMIN
-      - PASSKEY_REQUIRED
+      - PASSKEY_RECOVERY_PENDING
+      - INSTANCE_ADMIN_PASSKEY_REQUIRED
     MemberReviewReadiness:
       type: object
       description: "Whether and how the workspace reviews one member's work, from\

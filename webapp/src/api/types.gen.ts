@@ -3401,6 +3401,10 @@ export type McpClientGrant = {
 	 */
 	clientName: string;
 	id: string;
+	/**
+	 * The approval was confirmed with a passkey; the grant ends at this time
+	 */
+	passkeyBackedUntil?: Date;
 	scopes: Array<string>;
 };
 
@@ -3428,6 +3432,10 @@ export type McpConsentRequest = {
 	 * The code goes to this machine only
 	 */
 	loopbackRedirect: boolean;
+	/**
+	 * The account confirms with a passkey before it approves; the grant then ends one hour after that confirmation
+	 */
+	passkeyRequired: boolean;
 	redirectHost: string;
 	/**
 	 * Why this account cannot approve the request; absent when it can
@@ -3438,7 +3446,10 @@ export type McpConsentRequest = {
 	workspaceSlug: string;
 };
 
-export type McpConsentRequestMcpConsentRefusal = "NOT_ADMIN" | "PASSKEY_REQUIRED";
+export type McpConsentRequestMcpConsentRefusal =
+	| "NOT_ADMIN"
+	| "PASSKEY_RECOVERY_PENDING"
+	| "INSTANCE_ADMIN_PASSKEY_REQUIRED";
 
 /**
  * Whether and how the workspace reviews one member's work, from the rules that start and admit a review.

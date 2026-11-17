@@ -1,6 +1,6 @@
 import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { HttpResponse, http } from "msw";
-import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 
 import { problemType } from "@/lib/problem-detail";
 import { server } from "@/mocks/server";
@@ -38,7 +38,7 @@ function captureNavigation(): string[] {
 	return assigned;
 }
 
-function serveRequest() {
+function serveRequest(passkeyRequired = false) {
 	server.use(
 		http.get(`*/mcp/oauth/requests/${REQUEST_ID}`, () =>
 			HttpResponse.json({
@@ -50,8 +50,83 @@ function serveRequest() {
 				workspaceSlug: "acme",
 				workspaceName: "Acme",
 				scopes: ["practices:read"],
+				passkeyRequired,
 			}),
 		),
+	);
+}
+
+class BrowserCredential {
+	readonly id = "Y3JlZGVudGlhbA";
+	static parseRequestOptionsFromJSON(options: unknown) {
+		return options;
+	}
+	toJSON() {
+		return { id: this.id, type: "public-key", response: {} };
+	}
+}
+
+/** The browser's passkey prompt, answered by the account. */
+function stubPasskeyPrompt() {
+	const get = vi.fn(async () => new BrowserCredential());
+	const publicKeyCredential = Object.getOwnPropertyDescriptor(globalThis, "PublicKeyCredential");
+	const credentials = Object.getOwnPropertyDescriptor(navigator, "credentials");
+	Object.defineProperty(globalThis, "PublicKeyCredential", {
+		configurable: true,
+		value: Object.assign(BrowserCredential, {
+			parseCreationOptionsFromJSON: (options: unknown) => options,
+		}),
+	});
+	Object.defineProperty(navigator, "credentials", { configurable: true, value: { get } });
+	onTestFinished(() => {
+		if (publicKeyCredential === undefined) {
+			Reflect.deleteProperty(globalThis, "PublicKeyCredential");
+		} else {
+			Object.defineProperty(globalThis, "PublicKeyCredential", publicKeyCredential);
+		}
+		if (credentials === undefined) {
+			Reflect.deleteProperty(navigator, "credentials");
+		} else {
+			Object.defineProperty(navigator, "credentials", credentials);
+		}
+	});
+	return get;
+}
+
+/** The account has one passkey; records the requests in the order the server received them. */
+function servePasskeyStepUp(received: string[]) {
+	server.use(
+		http.get("*/user/passkeys", () =>
+			HttpResponse.json({
+				assuranceEnforced: true,
+				protectionEnabled: false,
+				recoveryRequired: false,
+				instanceAdminRequired: false,
+				workspaceAdminRequired: false,
+				verified: false,
+				credentials: [{ id: "one", label: "Laptop" }],
+			}),
+		),
+		http.post("*/user/passkeys/verification-options", () => {
+			received.push("verification-options");
+			return HttpResponse.json({
+				challengeId: "ab265a5b-b502-4a23-b20b-c77e304a58c5",
+				optionsJson: JSON.stringify({
+					challenge: "Y2hhbGxlbmdl",
+					rpId: "localhost",
+					allowCredentials: [{ id: "Y3JlZGVudGlhbA", type: "public-key" }],
+					userVerification: "required",
+				}),
+			});
+		}),
+		http.post("*/user/passkeys/verification", () => {
+			received.push("verification");
+			return new HttpResponse(null, { status: 204 });
+		}),
+		http.put(`*/mcp/oauth/requests/${REQUEST_ID}/approval`, () => {
+			received.push("approval");
+			return HttpResponse.json({ redirectUri: CLIENT_CALLBACK });
+		}),
 	);
 }
 
@@ -113,6 +188,47 @@ describe("the MCP consent route", () => {
 		fireEvent.click(allow);
 
 		await screen.findByText("This client cannot connect", undefined, ROUTE_RENDER_WAIT);
+		expect(assigned).toStrictEqual([]);
+	});
+
+	it("confirms with a passkey before it approves where the workspace requires one", async () => {
+		serveRequest(true);
+		const received: string[] = [];
+		servePasskeyStepUp(received);
+		const prompt = stubPasskeyPrompt();
+		renderRouteAt(`/mcp/authorize?request=${REQUEST_ID}`);
+		const allow = await screen.findByRole(
+			"button",
+			{ name: "Confirm with passkey and allow" },
+			ROUTE_RENDER_WAIT,
+		);
+		const assigned = captureNavigation();
+
+		fireEvent.click(allow);
+
+		await waitFor(() => expect(assigned).toStrictEqual([CLIENT_CALLBACK]));
+		expect(prompt).toHaveBeenCalledOnce();
+		expect(received).toStrictEqual(["verification-options", "verification", "approval"]);
+	});
+
+	it("approves nothing when the passkey prompt is closed", async () => {
+		serveRequest(true);
+		const received: string[] = [];
+		servePasskeyStepUp(received);
+		const prompt = stubPasskeyPrompt();
+		prompt.mockRejectedValueOnce(new DOMException("closed", "NotAllowedError"));
+		renderRouteAt(`/mcp/authorize?request=${REQUEST_ID}`);
+		const allow = await screen.findByRole(
+			"button",
+			{ name: "Confirm with passkey and allow" },
+			ROUTE_RENDER_WAIT,
+		);
+		const assigned = captureNavigation();
+
+		fireEvent.click(allow);
+
+		await screen.findByText("Your passkey did not confirm", undefined, ROUTE_RENDER_WAIT);
+		expect(received).toStrictEqual(["verification-options"]);
 		expect(assigned).toStrictEqual([]);
 	});
 });

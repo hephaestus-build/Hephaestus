@@ -1589,6 +1589,9 @@ const mcpClientGrantSchemaResponseTransformer = (data: any) => {
 	if (data.approvedAt) {
 		data.approvedAt = new Date(data.approvedAt);
 	}
+	if (data.passkeyBackedUntil) {
+		data.passkeyBackedUntil = new Date(data.passkeyBackedUntil);
+	}
 	return data;
 };
 

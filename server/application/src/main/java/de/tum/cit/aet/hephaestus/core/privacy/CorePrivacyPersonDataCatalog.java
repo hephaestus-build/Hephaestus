@@ -156,7 +156,7 @@ public class CorePrivacyPersonDataCatalog implements PersonDataCatalog {
                         "mcp_client_grant",
                         "t.account_id = :account",
                         "id,workspace_id,account_id,client_id,client_name,redirect_uri,resource,scopes,status,created_at,"
-                                + "approved_at,ended_at",
+                                + "approved_at,ended_at,passkey_verified_at,passkey_credential_id",
                         "id",
                         "",
                         910),

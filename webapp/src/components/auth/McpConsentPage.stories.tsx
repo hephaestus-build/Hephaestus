@@ -10,6 +10,13 @@ const request = {
 	loopbackRedirect: true,
 	workspaceName: "Practice Lab",
 	scopes: ["practices:read"],
+	passkeyRequired: false,
+};
+
+const passkeyRequest = {
+	...request,
+	scopes: ["practices:read", "practices:write"],
+	passkeyRequired: true,
 };
 
 const meta = {
@@ -62,11 +69,147 @@ export const NotAdmin: Story = {
 	},
 };
 
-export const PasskeyRequired: Story = {
+/** Passkey recovery is pending, so the account cannot lend its passkey to a client. */
+export const RecoveryPending: Story = {
 	args: {
 		state: {
 			status: "ready",
-			request: { ...request, refusal: "PASSKEY_REQUIRED" },
+			request: { ...request, refusal: "PASSKEY_RECOVERY_PENDING" },
+			onApprove: fn(),
+			onRefuse: fn(),
+		},
+	},
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText(/recovery is not finished/u)).toBeVisible();
+		await expect(canvas.getByRole("button", { name: "Allow" })).toBeDisabled();
+	},
+};
+
+/** The instance requires a passkey from its instance admins, and that proof is never lent to a client. */
+export const InstanceAdmin: Story = {
+	args: {
+		state: {
+			status: "ready",
+			request: { ...request, refusal: "INSTANCE_ADMIN_PASSKEY_REQUIRED" },
+			onApprove: fn(),
+			onRefuse: fn(),
+		},
+	},
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText(/never lent to a client/u)).toBeVisible();
+		await expect(canvas.getByRole("button", { name: "Allow" })).toBeDisabled();
+	},
+};
+
+/** The workspace requires an admin passkey: Allow runs the passkey confirmation first. */
+export const NeedsPasskey: Story = {
+	args: {
+		state: {
+			status: "ready",
+			request: passkeyRequest,
+			passkey: { status: "confirm" },
+			onApprove: fn(),
+			onRefuse: fn(),
+		},
+	},
+	play: async ({ canvas, args, userEvent }) => {
+		await expect(canvas.getByText("This workspace requires a passkey")).toBeVisible();
+		await expect(canvas.getByText(/ends one hour after you confirm/u)).toBeVisible();
+		await userEvent.click(canvas.getByRole("button", { name: "Confirm with passkey and allow" }));
+		if (args.state.status === "ready") {
+			await expect(args.state.onApprove).toHaveBeenCalledOnce();
+		}
+	},
+};
+
+/** The browser's passkey prompt is open. */
+export const PasskeyInProgress: Story = {
+	args: {
+		state: {
+			status: "ready",
+			request: passkeyRequest,
+			passkey: { status: "confirm" },
+			pending: "passkey",
+			onApprove: fn(),
+			onRefuse: fn(),
+		},
+	},
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText("Waiting for your passkey…")).toBeVisible();
+		await expect(canvas.getByRole("button", { name: "Deny" })).toBeDisabled();
+	},
+};
+
+/** The prompt was closed or the server refused the passkey; Allow tries again. */
+export const PasskeyFailed: Story = {
+	args: {
+		state: {
+			status: "ready",
+			request: passkeyRequest,
+			passkey: {
+				status: "confirm",
+				error: "The passkey check did not finish. Try again when you’re ready.",
+			},
+			onApprove: fn(),
+			onRefuse: fn(),
+		},
+	},
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText("Your passkey did not confirm")).toBeVisible();
+		await expect(
+			canvas.getByRole("button", { name: "Confirm with passkey and allow" }),
+		).toBeEnabled();
+	},
+};
+
+/** The account has no passkey yet, so it adds one before it can allow. */
+export const NeedsAPasskeyAdded: Story = {
+	args: {
+		state: {
+			status: "ready",
+			request: passkeyRequest,
+			passkey: { status: "add", onAdd: fn() },
+			onApprove: fn(),
+			onRefuse: fn(),
+		},
+	},
+	play: async ({ canvas, args, userEvent }) => {
+		await expect(
+			canvas.getByRole("button", { name: "Confirm with passkey and allow" }),
+		).toBeDisabled();
+		await userEvent.click(canvas.getByRole("button", { name: "Add a passkey" }));
+		if (args.state.status === "ready" && args.state.passkey?.status === "add") {
+			await expect(args.state.passkey.onAdd).toHaveBeenCalledOnce();
+		}
+	},
+};
+
+export const PasskeyUnsupported: Story = {
+	args: {
+		state: {
+			status: "ready",
+			request: passkeyRequest,
+			passkey: { status: "unsupported" },
+			onApprove: fn(),
+			onRefuse: fn(),
+		},
+	},
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText("This browser cannot use passkeys")).toBeVisible();
+		await expect(
+			canvas.getByRole("button", { name: "Confirm with passkey and allow" }),
+		).toBeDisabled();
+	},
+};
+
+/** The passkey confirmed and the server allowed the client; the browser leaves for it. */
+export const AllowedWithPasskey: Story = {
+	args: {
+		state: {
+			status: "ready",
+			request: passkeyRequest,
+			passkey: { status: "confirm" },
+			pending: "approve",
 			onApprove: fn(),
 			onRefuse: fn(),
 		},

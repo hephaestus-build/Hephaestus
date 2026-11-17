@@ -39,6 +39,7 @@ export function useWorkspaceMcpClientGrants({
 			approvedBy: accountName(grant.approvedBy),
 			scopes: grant.scopes,
 			approvedAt: grant.approvedAt,
+			passkeyBackedUntil: grant.passkeyBackedUntil,
 		})),
 		loading: grants.isPending,
 		loadError: grants.isError ? grants.error : undefined,

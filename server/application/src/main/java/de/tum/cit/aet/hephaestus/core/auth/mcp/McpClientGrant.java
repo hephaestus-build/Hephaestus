@@ -7,6 +7,7 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.Table;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.Getter;
@@ -33,6 +34,13 @@ public class McpClientGrant {
 
     /** The client's resource URIs are URLs, and URLs on the web are capped near this length in practice. */
     static final int URL_LENGTH = 2048;
+
+    /**
+     * How long a passkey proof given at consent stands for the grant (ADR 0110 decision 8). The client session ends at
+     * this bound, so the client approves again, with a passkey, to go on. One hour covers a configuration session with
+     * an MCP client; a shorter bound would interrupt that work for a new approval.
+     */
+    public static final Duration PASSKEY_BOUND = Duration.ofHours(1);
 
     public enum Status {
         /** Waiting for the account to approve or refuse it on the consent page. */
@@ -104,6 +112,14 @@ public class McpClientGrant {
     @Column(name = "ended_at")
     private @Nullable Instant endedAt;
 
+    /** When the approving account confirmed with a passkey on the consent page; null when the policy asked for none. */
+    @Column(name = "passkey_verified_at")
+    private @Nullable Instant passkeyVerifiedAt;
+
+    /** The passkey credential that confirmed the approval. The assertion itself is never stored. */
+    @Column(name = "passkey_credential_id", length = 2048)
+    private @Nullable String passkeyCredentialId;
+
     McpClientGrant(
             UUID id,
             Long workspaceId,
@@ -133,6 +149,17 @@ public class McpClientGrant {
     void approve(Instant now) {
         this.status = Status.APPROVED;
         this.approvedAt = now;
+    }
+
+    void approveWithPasskey(Instant now, Instant verifiedAt, String credentialId) {
+        approve(now);
+        this.passkeyVerifiedAt = verifiedAt;
+        this.passkeyCredentialId = credentialId;
+    }
+
+    /** Until when the passkey proof given at consent stands for this grant's calls; null when it holds none. */
+    public @Nullable Instant passkeyBackedUntil() {
+        return passkeyVerifiedAt == null ? null : passkeyVerifiedAt.plus(PASSKEY_BOUND);
     }
 
     void refuse(Instant now) {

@@ -4,7 +4,7 @@ import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { Button } from "@/components/ui/button";
 import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from "@/components/ui/item";
 import { Skeleton } from "@/components/ui/skeleton";
-import { formatDate } from "@/lib/dates";
+import { formatDate, formatDateTime } from "@/lib/dates";
 
 /** One connected MCP client, as the workspace's admins see it. */
 export interface McpClientGrantView {
@@ -15,6 +15,8 @@ export interface McpClientGrantView {
 	approvedBy: string;
 	scopes: string[];
 	approvedAt?: Date;
+	/** The approval was confirmed with a passkey, and the client's access ends at this time. */
+	passkeyBackedUntil?: Date;
 }
 
 export interface WorkspaceMcpClientGrantsSectionProps {
@@ -92,6 +94,8 @@ export function WorkspaceMcpClientGrantsSection({
 									<ItemDescription>
 										Calls itself {grant.clientName}. Allowed by {grant.approvedBy}
 										{grant.approvedAt === undefined ? "" : ` on ${formatDate(grant.approvedAt)}`}.
+										{grant.passkeyBackedUntil !== undefined &&
+											` Confirmed with a passkey. Its access ends ${formatDateTime(grant.passkeyBackedUntil)}.`}
 									</ItemDescription>
 								</ItemContent>
 								<ItemActions>

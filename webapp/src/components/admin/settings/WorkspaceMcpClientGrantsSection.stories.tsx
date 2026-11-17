@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn } from "storybook/test";
 
-import { daysBefore } from "@/stories/story-clock";
+import { daysBefore, minutesAfter, minutesBefore } from "@/stories/story-clock";
 
 import { WorkspaceMcpClientGrantsSection } from "./WorkspaceMcpClientGrantsSection";
 
@@ -35,6 +35,23 @@ export const MayChange: Story = {
 	args: { grants: [{ ...grant, scopes: ["practices:read", "practices:write"] }] },
 	play: async ({ canvas }) => {
 		await expect(canvas.getByText("Reads and changes the practice configuration")).toBeVisible();
+	},
+};
+
+/** Approved in a workspace that requires an admin passkey: the list says when its access ends. */
+export const ConfirmedWithPasskey: Story = {
+	args: {
+		grants: [
+			{
+				...grant,
+				scopes: ["practices:read", "practices:write"],
+				approvedAt: minutesBefore(15),
+				passkeyBackedUntil: minutesAfter(45),
+			},
+		],
+	},
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText(/Confirmed with a passkey. Its access ends/u)).toBeVisible();
 	},
 };
 

@@ -160,7 +160,7 @@ public class PasskeyService implements AccountErasureContributor {
         }
         account.setPasskeyRecoveryRequired(false);
         accounts.save(account);
-        sessionLifecycle.rotate(accountId, clock.instant(), request, response, false);
+        sessionLifecycle.rotate(accountId, clock.instant(), row.getId(), request, response, false);
         securityEvents.verified(accountId);
     }
 
@@ -170,7 +170,8 @@ public class PasskeyService implements AccountErasureContributor {
         assurance.requireFresh();
         account.setPasskeyProtectionEnabled(enabled);
         accounts.save(account);
-        sessionLifecycle.rotate(accountId, CurrentAccount.passkeyTime(), request, response, true);
+        sessionLifecycle.rotate(
+                accountId, CurrentAccount.passkeyTime(), CurrentAccount.passkeyCredential(), request, response, true);
         securityEvents.changed(account, enabled ? "protection_enabled" : "protection_disabled");
     }
 
@@ -198,7 +199,7 @@ public class PasskeyService implements AccountErasureContributor {
             recoveryCodes.deleteByAccountId(accountId);
             challenges.deleteByAccountId(accountId);
         }
-        sessionLifecycle.rotate(accountId, null, request, response, true);
+        sessionLifecycle.rotate(accountId, null, null, request, response, true);
         securityEvents.changed(account, last ? "last_removed" : "removed");
     }
 
@@ -230,7 +231,7 @@ public class PasskeyService implements AccountErasureContributor {
         credentials.deleteByAccountId(accountId);
         recoveryCodes.deleteByAccountId(accountId);
         challenges.deleteByAccountId(accountId);
-        sessionLifecycle.rotate(accountId, null, request, response, true);
+        sessionLifecycle.rotate(accountId, null, null, request, response, true);
         securityEvents.changed(account, "recovery_started");
     }
 

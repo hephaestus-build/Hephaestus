@@ -193,6 +193,9 @@ public class HephaestusJwtIssuer {
         }
         if (constraints.passkeyTime() != null) {
             claims.claim("passkey_time", constraints.passkeyTime().getEpochSecond());
+            if (constraints.passkeyCredential() != null) {
+                claims.claim("passkey_credential", constraints.passkeyCredential());
+            }
         }
         if (constraints.sessionId() != null) {
             claims.claim("sid", constraints.sessionId().toString());

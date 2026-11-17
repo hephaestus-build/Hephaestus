@@ -8,14 +8,18 @@ import org.jspecify.annotations.Nullable;
 /** The MCP client grants of a workspace, as its admins list and revoke them (ADR 0110 decision 17). */
 public interface McpClientGrants {
 
-    /** One active grant. {@code clientName} is the client's self-declared name: plain text. */
+    /**
+     * One active grant. {@code clientName} is the client's self-declared name: plain text. {@code passkeyBackedUntil}
+     * is when the passkey proof given at consent stops standing for it, or null when it holds none.
+     */
     record Grant(
             UUID id,
             String clientHost,
             String clientName,
             Long accountId,
             List<String> scopes,
-            @Nullable Instant approvedAt) {
+            @Nullable Instant approvedAt,
+            @Nullable Instant passkeyBackedUntil) {
         public Grant {
             scopes = List.copyOf(scopes);
         }

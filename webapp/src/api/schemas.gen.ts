@@ -6544,6 +6544,11 @@ export const McpClientGrantSchema = {
 			type: "string",
 			format: "uuid",
 		},
+		passkeyBackedUntil: {
+			type: "string",
+			format: "date-time",
+			description: "The approval was confirmed with a passkey; the grant ends at this time",
+		},
 		scopes: {
 			type: "array",
 			items: {
@@ -6585,6 +6590,11 @@ export const McpConsentRequestSchema = {
 			type: "boolean",
 			description: "The code goes to this machine only",
 		},
+		passkeyRequired: {
+			type: "boolean",
+			description:
+				"The account confirms with a passkey before it approves; the grant then ends one hour after that confirmation",
+		},
 		redirectHost: {
 			type: "string",
 		},
@@ -6610,6 +6620,7 @@ export const McpConsentRequestSchema = {
 		"clientName",
 		"id",
 		"loopbackRedirect",
+		"passkeyRequired",
 		"redirectHost",
 		"scopes",
 		"workspaceName",
@@ -6619,7 +6630,7 @@ export const McpConsentRequestSchema = {
 
 export const McpConsentRequestMcpConsentRefusalSchema = {
 	type: "string",
-	enum: ["NOT_ADMIN", "PASSKEY_REQUIRED"],
+	enum: ["NOT_ADMIN", "PASSKEY_RECOVERY_PENDING", "INSTANCE_ADMIN_PASSKEY_REQUIRED"],
 } as const;
 
 export const MemberReviewReadinessSchema = {

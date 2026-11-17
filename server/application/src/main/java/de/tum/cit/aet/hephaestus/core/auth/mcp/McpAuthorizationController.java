@@ -122,7 +122,8 @@ public class McpAuthorizationController {
                                 found.refusal() == null
                                         ? null
                                         : McpConsentRequestDTO.McpConsentRefusal.valueOf(
-                                                found.refusal().name()))))
+                                                found.refusal().name()),
+                                found.passkeyRequired())))
                 .orElseThrow(McpAuthorizationController::gone);
     }
 
@@ -141,7 +142,13 @@ public class McpAuthorizationController {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Sign in again to approve the client.");
         }
         return switch (authorization.approve(
-                requestId, accountId, CurrentAccount.requireJti(), sessionExpiresAt, authTime)) {
+                requestId,
+                accountId,
+                CurrentAccount.requireJti(),
+                sessionExpiresAt,
+                authTime,
+                CurrentAccount.passkeyTime(),
+                CurrentAccount.passkeyCredential())) {
             case McpAuthorizationService.Approval.Approved approved ->
                 ResponseEntity.ok()
                         .cacheControl(CacheControl.noStore())
@@ -151,6 +158,9 @@ public class McpAuthorizationController {
                         HttpStatus.CONFLICT,
                         "This account cannot approve the client: "
                                 + notAllowed.refusal().name());
+            case McpAuthorizationService.Approval.PasskeyRequired ignored ->
+                throw new ResponseStatusException(
+                        HttpStatus.CONFLICT, "Confirm with your passkey, then approve the client.");
             case McpAuthorizationService.Approval.Gone ignored -> throw gone();
         };
     }

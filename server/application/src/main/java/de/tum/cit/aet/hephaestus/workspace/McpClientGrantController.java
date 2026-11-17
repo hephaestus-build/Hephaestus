@@ -53,7 +53,8 @@ public class McpClientGrantController {
                         grant.clientName(),
                         Objects.requireNonNull(approvers.get(grant.accountId())),
                         grant.scopes(),
-                        grant.approvedAt()))
+                        grant.approvedAt(),
+                        grant.passkeyBackedUntil()))
                 .toList();
     }
 

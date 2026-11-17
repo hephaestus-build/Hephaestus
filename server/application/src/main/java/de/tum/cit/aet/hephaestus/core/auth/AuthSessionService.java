@@ -134,8 +134,8 @@ public class AuthSessionService {
                 clearCookie(response);
                 return false;
             }
-            TokenConstraints constraints =
-                    new TokenConstraints(sessionExpiresAt, context.authTime(), null, context.passkeyTime());
+            TokenConstraints constraints = TokenConstraints.browserSession(
+                    sessionExpiresAt, context.authTime(), context.passkeyTime(), context.passkeyCredential());
             IssuedJwt unused =
                     issuedJwtRepository.findUnusedSuccessor(accountId, jti).orElse(null);
             Instant firstRefreshAt = issuedJwtRepository

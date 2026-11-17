@@ -232,6 +232,8 @@ erDiagram
         VARCHAR(512) state
         VARCHAR(16) status "NOT NULL"
         BIGINT workspace_id FK "NOT NULL"
+        VARCHAR(2048) passkey_credential_id
+        TIMESTAMPTZ passkey_verified_at
     }
 
     PasskeyChallenge {

@@ -54,6 +54,27 @@ Instance admin access without a membership does not count.
 The client then calls the endpoint until its session ends.
 It signs in again after the absolute session deadline that also applies to the web app.
 
+### Connect in a workspace that requires a passkey
+
+If the [admin passkey policy](./passkeys.mdx) requires a passkey for your admin changes in the workspace, you confirm with your passkey on the consent page:
+
+1. Select **Confirm with passkey and allow**.
+2. Confirm with your passkey when the browser asks.
+   If your account has no passkey yet, select **Add a passkey** first. Hephaestus returns you to the same request after you add it.
+3. Hephaestus approves the client only after it accepts your passkey.
+
+A client that you approve with a passkey keeps its access for **one hour** after your passkey confirmation.
+Then its session ends, and the client asks you to approve it again with your passkey.
+The grant records when you confirmed and which passkey you used.
+**Workspace settings → Connected MCP clients** shows the time at which the access of such a client ends.
+
+The one-hour limit is the risk that the policy accepts.
+If someone steals the client's tokens, they can act for at most the rest of that hour, only with the scopes that you approved, and only in this workspace.
+Every change is in the audit history under your account and names the client, and an admin can revoke the client at any time.
+
+A client that you approved before the workspace turned on the passkey policy has no passkey confirmation.
+The policy refuses each of its calls, and the client must be approved again.
+
 ### What the client may do
 
 | Scope | The client may |
@@ -71,7 +92,9 @@ Each change that a client makes is recorded under your account, as a change in t
 | The page says | Why |
 |---|---|
 | You are not an admin of this workspace | Only an admin or owner can approve a client. |
-| This workspace requires a passkey for admin changes | An MCP client cannot hold a passkey proof. Use the web app for this workspace. |
+| Your passkey recovery is not finished | Your account is in passkey recovery. Finish recovery in your passkey settings, then connect the client again. |
+| This instance requires a passkey from its instance admins | The instance requires a passkey for instance admins, and an instance admin's passkey confirmation is never lent to a client. Connect the client with an account that is not an instance admin. |
+| Your passkey did not confirm | The browser prompt closed, timed out, or the passkey was refused. Select **Confirm with passkey and allow** again. |
 | This request has expired | A consent request waits 10 minutes. Start the client's sign-in again. |
 | This client cannot connect | The client's metadata document could not be read, or it lists a redirect that is not HTTPS or a loopback address. |
 
