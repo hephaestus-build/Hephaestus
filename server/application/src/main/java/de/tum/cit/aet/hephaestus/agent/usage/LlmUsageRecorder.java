@@ -209,18 +209,12 @@ public class LlmUsageRecorder {
     /** Records the first failure independently of late usage or repricing, then measures the call. */
     @Transactional(propagation = Propagation.MANDATORY)
     public boolean complete(
-            UUID callId,
-            @Nullable Long workspaceId,
-            @Nullable CallUsage usage,
-            @Nullable ModelCallFailure failure) {
+            UUID callId, @Nullable Long workspaceId, @Nullable CallUsage usage, @Nullable ModelCallFailure failure) {
         return completeCall(callId, workspaceId, usage, failure);
     }
 
     private boolean completeCall(
-            UUID callId,
-            @Nullable Long workspaceId,
-            @Nullable CallUsage usage,
-            @Nullable ModelCallFailure failure) {
+            UUID callId, @Nullable Long workspaceId, @Nullable CallUsage usage, @Nullable ModelCallFailure failure) {
         LlmUsageEvent row = usageRepository.lockCall(callId, workspaceId).orElse(null);
         if (row == null) return false;
         if (failure != null) {

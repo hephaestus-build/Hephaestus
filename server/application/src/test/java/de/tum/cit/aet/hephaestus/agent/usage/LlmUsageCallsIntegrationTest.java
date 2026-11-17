@@ -98,10 +98,7 @@ class LlmUsageCallsIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 .isEqualTo(last);
 
         transactions.executeWithoutResult(tx -> recorder.complete(
-                newer,
-                lease.workspaceId(),
-                LlmUsageRecorder.CallUsage.NONE,
-                new ModelCallFailure("later", 503)));
+                newer, lease.workspaceId(), LlmUsageRecorder.CallUsage.NONE, new ModelCallFailure("later", 503)));
         assertThat(failedAt(newer))
                 .as("a repeated completion cannot move a call's failure")
                 .isEqualTo(firstTime);
@@ -111,8 +108,8 @@ class LlmUsageCallsIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 .isEqualTo(last);
 
         UUID anotherEpoch = open(lease, lease.epoch() + 1, PRICED);
-        transactions.executeWithoutResult(tx -> recorder.complete(
-                anotherEpoch, lease.workspaceId(), null, new ModelCallFailure("other_epoch", 500)));
+        transactions.executeWithoutResult(tx ->
+                recorder.complete(anotherEpoch, lease.workspaceId(), null, new ModelCallFailure("other_epoch", 500)));
         assertThat(recorder.latestFailure(lease.workspaceId(), lease.runId(), lease.epoch()))
                 .isEqualTo(last);
         assertThat(recorder.latestFailure(lease.workspaceId(), UUID.randomUUID(), lease.epoch()))
@@ -160,10 +157,7 @@ class LlmUsageCallsIntegrationTest extends AbstractWorkspaceIntegrationTest {
         transactions.executeWithoutResult(tx -> recorder.complete(call, lease.workspaceId(), null, failure));
         Instant failed = failedAt(call);
         transactions.executeWithoutResult(tx -> recorder.complete(
-                call,
-                lease.workspaceId(),
-                LlmUsageRecorder.CallUsage.NONE,
-                new ModelCallFailure("later", 503)));
+                call, lease.workspaceId(), LlmUsageRecorder.CallUsage.NONE, new ModelCallFailure("later", 503)));
 
         assertThat(row(call)).containsAllEntriesOf(measured);
         assertThat(failure(call)).isEqualTo(failure);

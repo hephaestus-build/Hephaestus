@@ -1,8 +1,8 @@
 package de.tum.cit.aet.hephaestus.agent.proxy;
 
 import de.tum.cit.aet.hephaestus.agent.practice.PracticeRunnerProfile;
-import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
 import de.tum.cit.aet.hephaestus.agent.usage.ModelCallFailure;
+import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import java.util.HashMap;
 import java.util.Map;
@@ -27,7 +27,8 @@ public class ProxyCallsInFlight {
         /** Keeps the first failure until this call writes its durable completion. */
         void failed(ModelCallFailure failure);
 
-        @Nullable ModelCallFailure failure();
+        @Nullable
+        ModelCallFailure failure();
 
         boolean isOverCap();
 

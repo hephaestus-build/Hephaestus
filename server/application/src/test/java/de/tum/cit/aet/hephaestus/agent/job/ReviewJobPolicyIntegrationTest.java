@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.agent.job;
 
-import de.tum.cit.aet.hephaestus.agent.usage.ModelCallFailure;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -70,6 +69,7 @@ import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetDecision;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetService;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageEventRepository;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRecorder;
+import de.tum.cit.aet.hephaestus.agent.usage.ModelCallFailure;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AiChoice;
 import de.tum.cit.aet.hephaestus.core.lock.ClusterLock;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonProcessingSuppression;
@@ -623,9 +623,7 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
 
     /** Ends the composing claim handed on for a provider failure, after its newest failed call was {@code latestFailure}. */
     private boolean handOn(
-            ReviewJobClaimService.ClaimResult claim,
-            ModelCallFailure latestFailure,
-            SimpleMeterRegistry metrics) {
+            ReviewJobClaimService.ClaimResult claim, ModelCallFailure latestFailure, SimpleMeterRegistry metrics) {
         return handOn(claim, latestFailure, metrics, true);
     }
 
@@ -837,8 +835,7 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
     }
 
     /** @param latestFailure the newest failed model call of the attempt's claim, as the proxy recorded it */
-    private ReviewAttemptResults results(
-            SimpleMeterRegistry metrics, @Nullable ModelCallFailure latestFailure) {
+    private ReviewAttemptResults results(SimpleMeterRegistry metrics, @Nullable ModelCallFailure latestFailure) {
         return results(metrics, latestFailure, mock(DefaultReviewExecutionHandler.class));
     }
 

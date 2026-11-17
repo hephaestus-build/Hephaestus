@@ -55,6 +55,7 @@ class FilingService {
      * hand-overs can come closer together; the hourly limit is the instance-wide bound.
      */
     static final Duration SPACING = Duration.ofSeconds(10);
+
     static final int HOURLY_LIMIT = 30;
     static final int PUBLIC_PER_ACCOUNT_DAILY = 5;
     /** Attempts of one hand-over before the report stops and waits in Needs action. */

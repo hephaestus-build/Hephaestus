@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.agent.proxy;
 
-import de.tum.cit.aet.hephaestus.agent.usage.ModelCallFailure;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmConnectionHealth;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
@@ -8,6 +7,7 @@ import de.tum.cit.aet.hephaestus.agent.config.ModelAssignmentLimits;
 import de.tum.cit.aet.hephaestus.agent.proxy.ProxyRequestBody.PreparedBody;
 import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRecorder;
+import de.tum.cit.aet.hephaestus.agent.usage.ModelCallFailure;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
 import de.tum.cit.aet.hephaestus.core.proxy.ProxyStreamingUtils;
@@ -636,8 +636,8 @@ class LlmProxyService {
                 }
                 // An anonymous class has no simple name.
                 String failure = e.getClass().getSimpleName();
-                call.failed(new ModelCallFailure(
-                        failure.isEmpty() ? e.getClass().getName() : failure, null));
+                call.failed(
+                        new ModelCallFailure(failure.isEmpty() ? e.getClass().getName() : failure, null));
                 if (e instanceof WebClientRequestException) {
                     // A read timeout before the head reaches the provider and hears nothing back: it stalled.
                     if (!routing.conversationTurn() && ProxyStreamingUtils.readTimedOut(e))
