@@ -100,18 +100,21 @@ public class AuthSecurityConfig {
     private final RestTemplateBuilder restTemplates;
     private final WebClient.Builder webClients;
     private final ScmServerEndpointPolicy scmEndpoints;
+    private final SecurityHeaders securityHeaders;
 
     public AuthSecurityConfig(
             LoginProviderRepository loginProviderRepository,
             RestClient.Builder restClients,
             RestTemplateBuilder restTemplates,
             WebClient.Builder webClients,
-            ScmServerEndpointPolicy scmEndpoints) {
+            ScmServerEndpointPolicy scmEndpoints,
+            SecurityHeaders securityHeaders) {
         this.loginProviderRepository = loginProviderRepository;
         this.restClients = restClients;
         this.restTemplates = restTemplates;
         this.webClients = webClients;
         this.scmEndpoints = scmEndpoints;
+        this.securityHeaders = securityHeaders;
     }
 
     @Bean
@@ -253,7 +256,7 @@ public class AuthSecurityConfig {
                 });
 
         // Same header set as the resource-server chain — this chain serves /auth/error to the SPA.
-        SecurityHeaders.apply(http);
+        securityHeaders.apply(http);
         // Rate-limit GET /oauth2/authorization/* (keyed by client IP). The filter no-ops on the
         // other paths this chain matches.
         http.addFilterBefore(authRateLimitFilter, AuthorizationFilter.class);
@@ -309,7 +312,7 @@ public class AuthSecurityConfig {
                 .sessionManagement(sessions -> sessions.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(requests -> requests.anyRequest().permitAll());
-        SecurityHeaders.apply(http);
+        securityHeaders.apply(http);
         return http.build();
     }
 
@@ -341,7 +344,7 @@ public class AuthSecurityConfig {
                         .authenticationEntryPoint(challenges)
                         .jwt(jwt -> jwt.decoder(decoder).jwtAuthenticationConverter(authenticationConverter)))
                 .authorizeHttpRequests(requests -> requests.anyRequest().authenticated());
-        SecurityHeaders.apply(http);
+        securityHeaders.apply(http);
         // The mcp-call limit keys by the token's account, so it runs after bearer authentication.
         http.addFilterBefore(authRateLimitFilter, AuthorizationFilter.class);
         return http.build();

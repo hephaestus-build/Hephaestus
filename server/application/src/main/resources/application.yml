@@ -146,6 +146,11 @@ spring:
         problemdetails:
             enabled: true
 
+    # core.webapp.WebAppConfiguration maps the web app's files itself (ADR 0100).
+    web:
+        resources:
+            add-mappings: false
+
     # Disable Mustache template location check as we don't use Mustache templates
     mustache:
         check-template-location: false
@@ -500,6 +505,13 @@ hephaestus:
 
     webapp:
         url: ${HEPHAESTUS_WEBAPP_URL:${hephaestus.host-url}}
+
+    # The web app that this server serves (core.webapp.WebAppProperties, ADR 0100). The build packages it under
+    # classpath:/web-app/; a server without it serves the API only.
+    web-app:
+        location: classpath:/web-app/
+        security-contact: ${SECURITY_CONTACT:}
+        legal-overrides: ${LEGAL_OVERRIDES_DIRECTORY:}
 
     # The workspace MCP endpoint (core.mcp.McpProperties, ADR 0110). Off until an operator turns it on.
     mcp:

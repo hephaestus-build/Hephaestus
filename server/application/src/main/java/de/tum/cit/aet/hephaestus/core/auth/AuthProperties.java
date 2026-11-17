@@ -99,6 +99,16 @@ public record AuthProperties(
 
     public static final String DEFAULT_COOKIE_NAME = "__Host-HEPHAESTUS_AT";
 
+    /** CSRF cookie name: {@code __Host-}-prefixed in production; the prefix is dropped for local http E2E. */
+    public static String csrfCookieName(boolean cookieSecure) {
+        return cookieSecure ? "__Host-XSRF-TOKEN" : "XSRF-TOKEN";
+    }
+
+    /** The CSRF cookie name of this deployment, which the web app echoes in its {@code X-XSRF-TOKEN} header. */
+    public String csrfCookieName() {
+        return csrfCookieName(cookieSecure);
+    }
+
     /**
      * Initial provider settings. GitLab uses {@code baseUrl}; GitHub uses github.com. Scopes are
      * derived by {@code LoginProviderService}, not configurable here, to preserve provider constraints.
