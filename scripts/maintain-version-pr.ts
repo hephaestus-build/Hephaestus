@@ -9,7 +9,7 @@ import path from "node:path";
 import { commitInput, createCommit, stageChanges } from "./commit-via-api.ts";
 import { requiredEnv } from "./lib/env.ts";
 import { retryTransient } from "./lib/github.ts";
-import { asArray, asRecord, asString, parseJson } from "./lib/json.ts";
+import { asArray, asRecord, asString, at, parseJson } from "./lib/json.ts";
 import { output, run, succeeds } from "./lib/process.ts";
 
 export const VERSION_BRANCH = "changeset-release/main";
@@ -46,6 +46,8 @@ export interface MaintenanceState {
 	readonly tipVersion: string;
 	/** The main commit that the open Version PR versions, if one is open. */
 	readonly versionedBase: string | undefined;
+	/** The open Version PR waits in the merge queue, where GitHub refuses any update of its branch. */
+	readonly queued: boolean;
 	/** The base is an ancestor of `versionedBase`, so versioning it would drop changesets. */
 	readonly baseIsBehind: boolean;
 	readonly pendingChangesets: boolean;
@@ -59,6 +61,9 @@ export function skipReason(state: MaintenanceState): string | undefined {
 	}
 	if (state.versionedBase === state.base) {
 		return `the Version PR already versions ${state.base}`;
+	}
+	if (state.queued) {
+		return `the Version PR is in the merge queue, so the changesets after ${state.versionedBase ?? "its base"} go into the next Version PR`;
 	}
 	if (state.baseIsBehind) {
 		return `the Version PR versions a newer validated commit than ${state.base}`;
@@ -187,6 +192,32 @@ async function openPullRequest(repository: string): Promise<string> {
 	return listed.trim();
 }
 
+async function inMergeQueue(repository: string, number: string): Promise<boolean> {
+	const [owner, name] = repository.split("/");
+	const response = parseJson(
+		await gh([
+			"graphql",
+			"-f",
+			"query=query($owner: String!, $name: String!, $number: Int!) { repository(owner: $owner, name: $name) { pullRequest(number: $number) { isInMergeQueue } } }",
+			"-f",
+			`owner=${owner ?? ""}`,
+			"-f",
+			`name=${name ?? ""}`,
+			"-F",
+			`number=${number}`,
+		]),
+	);
+	const queued = at(
+		response,
+		["data", "repository", "pullRequest", "isInMergeQueue"],
+		"merge queue state",
+	);
+	if (typeof queued !== "boolean") {
+		throw new Error("GitHub did not return the Version PR's merge queue state");
+	}
+	return queued;
+}
+
 async function maintain(): Promise<void> {
 	const repository = requiredEnv(process.env, "GITHUB_REPOSITORY");
 	const token = requiredEnv(process.env, "GH_TOKEN");
@@ -212,6 +243,7 @@ async function maintain(): Promise<void> {
 		baseVersion: await packageVersion(base),
 		tipVersion,
 		versionedBase,
+		queued: existing !== "" && (await inMergeQueue(repository, existing)),
 		baseIsBehind:
 			versionedBase !== undefined &&
 			(await succeeds("git", ["merge-base", "--is-ancestor", base, versionedBase])),

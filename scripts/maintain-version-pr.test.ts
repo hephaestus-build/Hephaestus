@@ -50,10 +50,16 @@ void test("maintenance versions a validated base only while its changesets are s
 		baseVersion: "1.0.0-rc.0",
 		tipVersion: "1.0.0-rc.0",
 		versionedBase: "a".repeat(40),
+		queued: false,
 		baseIsBehind: false,
 		pendingChangesets: true,
 	};
 	assert.equal(skipReason(state), undefined);
+	// GitHub refuses to update a queued branch, so the newer changesets wait for the next Version PR.
+	assert.match(
+		skipReason({ ...state, queued: true }) ?? "",
+		/in the merge queue.*next Version PR/u,
+	);
 	assert.equal(skipReason({ ...state, versionedBase: undefined }), undefined);
 	// Main's tip released after the base: the base's changesets went out with that release.
 	assert.match(skipReason({ ...state, tipVersion: "1.0.0-rc.1" }) ?? "", /released 1\.0\.0-rc\.1/u);
