@@ -316,6 +316,7 @@ Repository and file scans keep their frozen source contract.
 
 Git freshness is the pull request's own commit pair.
 A pull request's checkout holds the reviewed commit, the review base and their history, and no branch or tag.
+A copy that another server builds again holds the reviewed commit's history only.
 Its tree fingerprint is therefore the two commits, and the server computes it from the stored version with no fetch.
 A push to another branch, or a new tag, changes nothing that a practice can read, so it ends no result.
 
