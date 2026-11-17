@@ -367,7 +367,7 @@ public class ReviewServiceImpl implements ReviewService {
         var planned = selected.stream()
                 .map(p -> selection(p, request.kind(), pinned, itemCoverage, checksSource, headChecks))
                 .toList();
-        requireAPracticeThatCanRun(planned);
+        refuseWorkThatNoPracticeReviews(planned);
         var developers = new ArrayList<@Nullable Long>();
         for (var plan : planned) {
             if (plan.reason() == null)
@@ -594,24 +594,25 @@ public class ReviewServiceImpl implements ReviewService {
     }
 
     /**
-     * Selection that withholds every practice for one reason that no later event lifts starts no review: the event or
-     * the request is refused with that reason, so the work does not read as not ready. Withholdings that a later edge
-     * lifts, such as pending checks, still record a review, whose withheld practices that edge carries.
+     * Selection that leaves no practice to run and none to carry to a later edge starts no review. When a bot holds the
+     * role or the work is out of scope, the event or the request is refused with that reason, so the work does not read
+     * as not ready. Withholdings that a later edge lifts, such as pending checks, still record a review, whose withheld
+     * practices that edge carries.
      */
-    private static void requireAPracticeThatCanRun(List<SelectedPractice> planned) {
-        var reasons = planned.stream().map(SelectedPractice::reason).distinct().toList();
-        if (reasons.size() != 1) return;
-        var refusal = switch (reasons.getFirst()) {
-            case ReviewWithholdings.BOT_AUTHOR -> ReviewRequestReason.BOT_AUTHOR;
-            case ReviewWithholdings.BOT_REVIEWER -> ReviewRequestReason.BOT_REVIEWER;
-            case ReviewWithholdings.OUTSIDE_REVIEW_SCOPE -> ReviewRequestReason.OUT_OF_REVIEW_SCOPE;
-            case null, default -> null;
-        };
-        if (refusal == null) return;
+    private static void refuseWorkThatNoPracticeReviews(List<SelectedPractice> planned) {
+        var reasons = new HashSet<@Nullable String>();
+        planned.forEach(plan -> reasons.add(plan.reason()));
+        if (reasons.contains(null) || reasons.stream().anyMatch(ReviewWithholdings.CARRIED::contains)) return;
+        ReviewRequestReason refusal;
+        if (reasons.contains(ReviewWithholdings.BOT_REVIEWER)) refusal = ReviewRequestReason.BOT_REVIEWER;
+        else if (reasons.contains(ReviewWithholdings.BOT_AUTHOR)) refusal = ReviewRequestReason.BOT_AUTHOR;
+        else if (reasons.contains(ReviewWithholdings.OUTSIDE_REVIEW_SCOPE))
+            refusal = ReviewRequestReason.OUT_OF_REVIEW_SCOPE;
+        else return;
         throw new ReviewRequestRejected(
                 ReviewRequestRejected.Reason.ITEM_INELIGIBLE,
                 refusal == ReviewRequestReason.OUT_OF_REVIEW_SCOPE
-                        ? "This work is outside the workspace’s review scope."
+                        ? "This work or this person is outside the workspace’s review scope."
                         : "Hephaestus does not review work by bots.",
                 refusal);
     }

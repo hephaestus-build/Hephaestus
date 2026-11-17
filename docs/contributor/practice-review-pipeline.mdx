@@ -196,9 +196,9 @@ On purpose means a selection reason (role, bot or scope), a readiness reason, a 
 `ReviewWithholdings` holds that set.
 The review ends with `REPLACED` when the work changed for every withheld practice, and with `STALE_ROLLOUT_REVISION` when the review settings changed for every one.
 Otherwise it ends with `READINESS_REFUSED`, which selection also records when it withholds every practice.
-When selection withholds every practice for one bot reason or for `OUTSIDE_REVIEW_SCOPE`, no review starts.
-The event is withheld with that reason (`BOT_AUTHOR`, `BOT_REVIEWER` or `OUT_OF_REVIEW_SCOPE`), and a request is refused with it.
-No later event lifts these reasons, so the work never reads as not ready.
+When selection withholds every practice and carries none, and a bot holds a role or the work is out of scope, no review starts.
+The event is withheld with `BOT_REVIEWER`, `BOT_AUTHOR` or `OUT_OF_REVIEW_SCOPE`, in that order, and a request is refused with it.
+A later event selects again. It does not carry these practices.
 
 A practice that the run left open, or one that a run or admission withheld for a fault, gives `EXECUTION_INCOMPLETE`, which points to the runtime.
 Measured practices do not change the reason.

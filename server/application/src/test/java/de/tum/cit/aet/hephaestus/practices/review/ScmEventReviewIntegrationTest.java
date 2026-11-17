@@ -141,6 +141,7 @@ import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import de.tum.cit.aet.hephaestus.workspace.settings.ReviewScopeMode;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
@@ -449,6 +450,81 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
                 .expectBody()
                 .jsonPath("$.practices[0].reason")
                 .isEqualTo("ROLE_UNAVAILABLE");
+    }
+
+    @ParameterizedTest
+    @EnumSource(
+            value = IdentityProviderType.class,
+            names = {"GITHUB", "GITLAB"})
+    void shouldStartNoReviewWhenABotWroteTheWorkAndNoOneHoldsTheOtherRole(IdentityProviderType provider) {
+        var prepared = prepare(provider, false);
+        practiceAbout(prepared, "about-its-assignee", AboutRole.ASSIGNEE);
+        roleHolderBecomes(prepared, User.Type.BOT);
+
+        publish(prepared);
+
+        var event = event(prepared);
+        assertThat(event.getState()).isEqualTo(ItemEventState.WITHHELD);
+        assertThat(event.getReason()).isEqualTo(ReviewRequestReason.BOT_AUTHOR);
+        assertThat(jdbc.queryForObject(
+                        "SELECT count(*) FROM review WHERE workspace_id=?",
+                        Long.class,
+                        prepared.item().workspaceId()))
+                .isZero();
+    }
+
+    @ParameterizedTest
+    @EnumSource(
+            value = IdentityProviderType.class,
+            names = {"GITHUB", "GITLAB"})
+    void shouldStartNoReviewOfWorkByAPersonOutsideTheReviewScope(IdentityProviderType provider) {
+        var prepared = prepare(provider, false);
+        long workspace = prepared.item().workspaceId();
+        var narrowed = workspaces.findById(workspace).orElseThrow();
+        narrowed.getReviewSettings().setReviewScopePeople(ReviewScopeMode.SELECTED);
+        workspaces.saveAndFlush(narrowed);
+
+        publish(prepared);
+        var event = event(prepared);
+        assertThat(event.getState()).isEqualTo(ItemEventState.WITHHELD);
+        assertThat(event.getReason()).isEqualTo(ReviewRequestReason.OUT_OF_REVIEW_SCOPE);
+        var refusal = catchThrowableOfType(
+                ReviewRequestRejected.class,
+                () -> service.request(request(prepared)
+                        .origin(ReviewOrigin.REQUEST)
+                        .requestedById(memberAccount(workspace))
+                        .build()));
+
+        assertThat(refusal.eventReason()).isEqualTo(ReviewRequestReason.OUT_OF_REVIEW_SCOPE);
+        assertThat(refusal.getBody().getDetail())
+                .isEqualTo("This work or this person is outside the workspace’s review scope.");
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM review WHERE workspace_id=?", Long.class, workspace))
+                .isZero();
+    }
+
+    private void practiceAbout(Prepared prepared, String slug, AboutRole role) {
+        long workspace = prepared.item().workspaceId();
+        var original = DefinitionTestFixtures.definition(
+                ScmItemEvents.PULL_REQUEST, "Name who holds the role", "Explain the role.", null);
+        versions.create(new PracticeVersionService.NewPractice(
+                workspace,
+                slug,
+                ScmItemEvents.PULL_REQUEST,
+                new PracticeDefinition(
+                        original.name(),
+                        new ReviewOn(List.of(ScmItemEvents.PULL_REQUEST_OPENED), Map.of()),
+                        original.appliesWhen(),
+                        role,
+                        original.reads(),
+                        original.reviewedBy(),
+                        original.criteria(),
+                        original.script(),
+                        original.scan(),
+                        original.lineNotes(),
+                        original.guidance()),
+                null,
+                0,
+                memberAccount(workspace)));
     }
 
     private void roleHolderBecomes(Prepared prepared, User.Type type) {
