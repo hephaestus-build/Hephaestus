@@ -56,40 +56,20 @@ const DEPLOYMENT_NAMES: Record<string, string> = {
 	unknown: "Unknown",
 	production: "Production",
 	staging: "Staging",
-	preview: "Preview",
 	local: "Local",
 };
 const deploymentEnvironment =
 	env("DEPLOYMENT_ENVIRONMENT") || (import.meta.env.DEV ? "local" : "unknown");
 
-/**
- * Which pull request this preview is of. Every preview shares the name "Preview", so without this
- * the header pill cannot say which one you are looking at.
- *
- * A preview's host is `pr<id>.<domain>` or `pr-<id>.<domain>`, and the client URL is the one place
- * the runtime config already carries that host. Read only on a preview, so no other deployment can
- * be given a pull request by a host that happens to be named this way.
- */
-const previewPullRequest = ((): number | undefined => {
-	if (deploymentEnvironment !== "preview") {
-		return undefined;
-	}
-	try {
-		const [label] = new URL(env("APPLICATION_CLIENT_URL")).hostname.split(".");
-		const number = /^pr-?(?<number>\d+)$/u.exec(label ?? "")?.groups?.number;
-		return number === undefined ? undefined : Number.parseInt(number, 10);
-	} catch {
-		return undefined;
-	}
-})();
-
 const environment = {
 	version: env("APPLICATION_VERSION").replace(/^v/u, "") || "DEV",
 	deployment: {
 		environment: deploymentEnvironment,
-		name: DEPLOYMENT_NAMES[deploymentEnvironment] ?? "Local",
+		// An operator can name a deployment anything, such as `dev`: the header shows that name, never a wrong one.
+		name:
+			DEPLOYMENT_NAMES[deploymentEnvironment] ??
+			deploymentEnvironment.charAt(0).toUpperCase() + deploymentEnvironment.slice(1),
 		isProduction: deploymentEnvironment === "production",
-		pullRequest: previewPullRequest,
 	},
 	workspaceSubdomains: {
 		enabled: env("HEPHAESTUS_WORKSPACE_SUBDOMAINS_ENABLED") === "true",

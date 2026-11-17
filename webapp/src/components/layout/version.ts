@@ -1,31 +1,16 @@
 const REPO_URL = "https://github.com/hephaestus-build/Hephaestus";
 const SEMVER = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/u;
 
-export type EnvironmentTone = "staging" | "preview" | "local";
+export type EnvironmentTone = "staging" | "local";
 
 export type HeaderBadge =
 	| { kind: "release"; label: string; href: string; tooltip: string; ariaLabel: string }
-	| {
-			kind: "environment";
-			label: string;
-			tone: EnvironmentTone;
-			tooltip: string;
-			/**
-			 * Present only on a preview, whose pull request the pill both names and links to. The
-			 * link takes its accessible name from that visible label, so it carries no `aria-label`
-			 * of its own: a name that does not contain the visible text is one a speech-input user
-			 * cannot say (WCAG 2.5.3).
-			 */
-			href?: string;
-	  };
+	| { kind: "environment"; label: string; tone: EnvironmentTone; tooltip: string };
 
 function toneFor(environmentName: string): EnvironmentTone {
 	const name = environmentName.toLowerCase();
 	if (name === "staging") {
 		return "staging";
-	}
-	if (name === "preview") {
-		return "preview";
 	}
 	return "local";
 }
@@ -38,7 +23,6 @@ export function resolveHeaderBadge(
 	version: string,
 	environmentName: string,
 	isProduction: boolean,
-	pullRequest?: number,
 ): HeaderBadge {
 	if (isProduction && SEMVER.test(version)) {
 		return {
@@ -52,15 +36,6 @@ export function resolveHeaderBadge(
 	const tone = toneFor(environmentName);
 	// The environment name stays in the label rather than being left to the dot's colour, which is
 	// the one part of this pill a colour-blind reader cannot use.
-	if (pullRequest !== undefined) {
-		return {
-			kind: "environment",
-			label: `${environmentName} · PR #${pullRequest}`,
-			tone,
-			tooltip: `${environmentName} of pull request #${pullRequest}`,
-			href: `${REPO_URL}/pull/${pullRequest}`,
-		};
-	}
 	return {
 		kind: "environment",
 		label: environmentName,
