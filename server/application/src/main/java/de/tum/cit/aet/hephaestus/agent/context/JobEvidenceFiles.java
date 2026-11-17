@@ -830,7 +830,7 @@ public class JobEvidenceFiles implements SandboxResultListener {
     }
 
     /**
-     * Removes the folder, with its staging remainder and marker, if no attempt reads it: under the runtime's shared
+     * Removes the folder, with its staging remainder, if no attempt reads it: under the runtime's shared
      * lease, one removal at a time with admission, or under an exclusive lease of its own. Each claim names a new folder
      * (its attempt counts the run's leases), so a folder that no attempt reads never becomes read; the decision is
      * still made from the job as it is recorded under the lease. The folder of a job with an erased copy is erasure's
@@ -1197,9 +1197,6 @@ public class JobEvidenceFiles implements SandboxResultListener {
                             traces.add(path);
                         } else if (name.startsWith(".") && name.contains(".preparing-")) {
                             roots.add(path.resolveSibling(name.substring(1, name.indexOf(".preparing-"))));
-                        } else if (name.endsWith(".ended")) {
-                            // A marker that an earlier release left beside its folder.
-                            roots.add(path.resolveSibling(name.substring(0, name.lastIndexOf('.'))));
                         } else if (Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS)) {
                             roots.add(path);
                         }
@@ -1391,12 +1388,9 @@ public class JobEvidenceFiles implements SandboxResultListener {
                         Objects.requireNonNull(jobDirectory.getFileName()).toString()));
     }
 
-    /** Whether anything of the attempt remains: its folder, its ended marker or a staging folder. */
+    /** Whether anything of the attempt remains: its folder or a staging folder. */
     private static boolean present(Path root) throws IOException {
-        if (Files.exists(root, LinkOption.NOFOLLOW_LINKS)
-                || Files.exists(root.resolveSibling(root.getFileName() + ".ended"), LinkOption.NOFOLLOW_LINKS)) {
-            return true;
-        }
+        if (Files.exists(root, LinkOption.NOFOLLOW_LINKS)) return true;
         try (var siblings = Files.list(root.getParent())) {
             return siblings.anyMatch(
                     path -> path.getFileName().toString().startsWith("." + root.getFileName() + ".preparing-"));
@@ -1427,7 +1421,6 @@ public class JobEvidenceFiles implements SandboxResultListener {
                             path -> path.getFileName().toString().startsWith("." + root.getFileName() + ".preparing-"))
                     .toList()) delete(staging);
         }
-        Files.deleteIfExists(root.resolveSibling(root.getFileName() + ".ended"));
     }
 
     private Path sourceFile(ReviewJob job, String filePath) throws IOException {

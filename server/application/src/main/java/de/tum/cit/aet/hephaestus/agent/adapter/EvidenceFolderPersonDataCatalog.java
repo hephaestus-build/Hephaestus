@@ -1206,8 +1206,8 @@ public class EvidenceFolderPersonDataCatalog implements PersonEvidenceErasure, W
     }
 
     /**
-     * Deletes each entry of the job's folder whose attempt has no live copy: attempt folders, their staging folders,
-     * end markers and transcripts. An entry that names no attempt goes too. The emptied job folder goes last.
+     * Deletes each entry of the job's folder whose attempt has no live copy: attempt folders, their staging folders
+     * and transcripts. An entry that names no attempt goes too. The emptied job folder goes last.
      *
      * @return whether anything was deleted
      */
