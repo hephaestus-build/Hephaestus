@@ -48,7 +48,7 @@ public final class ResultTestFixtures {
                 view.version(),
                 view.review(),
                 view.item(),
-                view.sourceFreshness(),
+                view.freshness(),
                 view.sealedFeedbackMode());
     }
 

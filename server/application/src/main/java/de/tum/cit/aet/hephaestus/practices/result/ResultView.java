@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeVersion;
 import de.tum.cit.aet.hephaestus.practices.model.ResultFacts;
 import de.tum.cit.aet.hephaestus.practices.review.model.Review;
+import de.tum.cit.aet.hephaestus.practices.spi.Currentness;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackMode;
 import java.util.Objects;
 import org.jspecify.annotations.Nullable;
@@ -15,8 +16,18 @@ public record ResultView(
         @Nullable PracticeVersion version,
         Review review,
         ItemRefDTO item,
-        Freshness sourceFreshness,
+        SourceFreshness freshness,
         @Nullable FeedbackMode sealedFeedbackMode) {
+
+    /** Whether the work still reads as it did when the result was captured. Read on first use, not with the view. */
+    public Freshness sourceFreshness() {
+        return freshness.of(result);
+    }
+
+    /** Whether the work still reads as the capture read it, which a quote of the result needs. */
+    public boolean hasCurrentSources() {
+        return sourceFreshness().currentness() == Currentness.CURRENT;
+    }
 
     public ResultView {
         long workspaceId = result.workspaceId();

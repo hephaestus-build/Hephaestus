@@ -2,6 +2,8 @@ package de.tum.cit.aet.hephaestus.practices.profile;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.clearInvocations;
+import static org.mockito.Mockito.mockingDetails;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.core.auth.domain.Identity;
@@ -177,6 +179,20 @@ class PracticeProfileReadCostIntegrationTest extends BaseIntegrationTest {
         assertThat(many).isEqualTo(few);
     }
 
+    /**
+     * Reading whether a result's sources are current reads the work behind it from the mirror. A standing quotes at
+     * most a few results per practice, so its reads of the work stay the same however many results its look-back has.
+     */
+    @Test
+    void shouldReadTheWorkBehindOnlyTheResultsAStandingCouldQuote() {
+        seed(2 * works.size());
+        var few = workReads();
+        seed(4 * works.size());
+        var many = workReads();
+
+        assertThat(many).isEqualTo(few);
+    }
+
     @Test
     void shouldReadTheDevelopersResultHistoryOnceForTheOverview() {
         seed(2 * works.size());
@@ -295,6 +311,31 @@ class PracticeProfileReadCostIntegrationTest extends BaseIntegrationTest {
             jdbc.update("UPDATE feedback SET state='DELIVERED',delivered_at=created_at WHERE id=?", piece);
         }
         return costs;
+    }
+
+    /** How many times each standing read asks the mirror for the current fingerprints of a piece of work. */
+    private Map<String, Long> workReads() {
+        var context = WorkspaceContext.fromWorkspace(scenario.workspace(), Set.of(), null);
+        var shown = groups.findByWorkspaceIdAndShownToDevelopersTrueOrderByPositionAscNameAsc(
+                scenario.workspace().getId());
+        Map<String, Runnable> reads = new LinkedHashMap<>();
+        reads.put("overview", () -> overview.getOverview(context));
+        reads.put("standings", () -> standings.getStandings(scenario.workspace().getId()));
+        reads.put(
+                "group standings",
+                () -> groupStandings.getGroupStandings(scenario.workspace().getId(), shown));
+        Map<String, Long> counts = new LinkedHashMap<>();
+        reads.forEach((name, read) -> {
+            clearInvocations(sourceFingerprints);
+            read.run();
+            counts.put(
+                    name,
+                    mockingDetails(sourceFingerprints).getInvocations().stream()
+                            .filter(invocation ->
+                                    invocation.getMethod().getName().equals("fingerprints"))
+                            .count());
+        });
+        return counts;
     }
 
     private <T> long cost(Supplier<T> read, Consumer<T> check) {

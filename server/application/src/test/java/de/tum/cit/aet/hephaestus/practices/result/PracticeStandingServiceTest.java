@@ -81,7 +81,7 @@ class PracticeStandingServiceTest {
                         : List.of(data.getFirst().practice()));
         when(results.forDevelopersSince(eq(1L), anyCollection(), any(Instant.class), anyBoolean()))
                 .thenAnswer(i -> data.stream().map(ResultView::result).toList());
-        when(views.views(eq(1L), anyCollection())).thenAnswer(i -> {
+        when(views.standingViews(eq(1L), anyCollection())).thenAnswer(i -> {
             Collection<ResultFacts> rows = i.getArgument(1);
             var ids = rows.stream().map(ResultFacts::id).toList();
             return data.stream().filter(v -> ids.contains(v.result().id())).toList();
@@ -181,7 +181,7 @@ class PracticeStandingServiceTest {
                         latest.version(),
                         latest.review(),
                         prior.item(),
-                        Freshness.current(null),
+                        SourceFreshness.fixed(Freshness.current(null)),
                         latest.sealedFeedbackMode()));
         assertThat(card().toWorkOn()).isEmpty();
         assertThat(card().strengths()).hasSize(1);
@@ -420,7 +420,7 @@ class PracticeStandingServiceTest {
                         null,
                         view.review(),
                         view.item(),
-                        Freshness.current(null),
+                        SourceFreshness.fixed(Freshness.current(null)),
                         view.sealedFeedbackMode()));
 
         assertThat(card().basis()).isEqualTo(StandingBasis.EARLIER_REVIEWS_CRITERIA_UNKNOWN);
@@ -552,13 +552,7 @@ class PracticeStandingServiceTest {
 
     private static ResultView sealedIn(ResultView view, FeedbackMode mode) {
         return new ResultView(
-                view.result(),
-                view.practice(),
-                view.version(),
-                view.review(),
-                view.item(),
-                view.sourceFreshness(),
-                mode);
+                view.result(), view.practice(), view.version(), view.review(), view.item(), view.freshness(), mode);
     }
 
     // A result the cutover carried over from the earlier model: kept as recorded, without current proof.
@@ -572,7 +566,7 @@ class PracticeStandingServiceTest {
                         view.version(),
                         view.review(),
                         view.item(),
-                        Freshness.current(null),
+                        SourceFreshness.fixed(Freshness.current(null)),
                         view.sealedFeedbackMode()));
     }
 
