@@ -97,3 +97,10 @@ On Java 25, the buildpack already builds an AOT cache, not a CDS archive. Rule 8
 The training run and every launch need the same JVM options.
 The [update of ADR 0067](0067-the-server-image-builds-with-buildpacks-and-cds.md#update--2026-11-17-the-image-ships-an-aot-cache-that-every-run-mode-loads) records the module set that they share, and the CI job that confirms it.
 Compact object headers stay a separate change with its own measurement. That change sets the flag in `server/application/project.toml`, for the training run and every launch.
+
+## Update — 2026-11-17: rule 9, the scheduler ceiling
+
+The chart no longer sets `jdk.virtualThreadScheduler.maxPoolSize`.
+On Nuvemzinha, the Java 25 server image held 1,500 slow webhook requests open, so 1,500 virtual threads waited in socket reads.
+With the chart's ceiling of 4,352 and without it, the server ran on 4 carrier threads, and a request beside the load answered in 3 to 17 ms.
+Thus, a gateway socket wait needs no carrier. The JVM's default ceiling of 256 still bounds the carriers that it adds for blocking file I/O.

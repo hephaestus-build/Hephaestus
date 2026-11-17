@@ -236,7 +236,7 @@ At the maximum, the server stops with `OutOfMemoryError: Metaspace`.
 `HephaestusMetaspaceNearLimit` warns when Metaspace grows slowly toward the maximum ([Alert rules](./alert-rules)).
 
 A file operation that blocks holds its carrier thread, so the scheduler adds a carrier.
-Its ceiling is the gateway connections plus 256.
+The JVM adds at most 256 such carriers.
 A socket call that blocks does not pin its carrier.
 `jvm_threads_live_threads` shows the count. If it comes near `server.jvm.threadCount`, raise the value.
 
