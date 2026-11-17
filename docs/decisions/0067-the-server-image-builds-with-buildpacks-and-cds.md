@@ -3,6 +3,7 @@
 **Status:** Accepted
 **Date:** 2026-05-19
 **Authors:** Felix T.J. Dietrich
+**Amended by:** [ADR 0119](0119-a-workload-trained-aot-cache-needs-a-build-design-before-the-server-image-ships-it.md)
 
 This decision was first recorded as a contributor page. It moved here unchanged, so that every decision lives in `docs/decisions/`.
 
@@ -156,7 +157,7 @@ The decision now has these rules:
 2. The chart may add system properties, heap-independent tuning and recording settings. It adds no module, agent or object-layout option.
 3. A CI job starts the packaged image with the chart's rendered options and `-XX:AOTMode=on`. A rejected cache fails the merge group.
 4. Production keeps `-XX:AOTMode=auto`. A rejected cache makes the server slower, not dead. `BPL_JVM_LOADED_CLASS_COUNT` sizes Metaspace for a run without the cache, and `HephaestusMetaspaceNearLimit` fires at 80 % of the cap.
-5. The training run stays `onRefresh`. A cache trained on a workload needs a database in the build and its own decision.
+5. The training run stays at context refresh: [ADR 0119](0119-a-workload-trained-aot-cache-needs-a-build-design-before-the-server-image-ships-it.md).
 
 Consequences:
 
