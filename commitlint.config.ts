@@ -1,4 +1,6 @@
-// Keep this module dependency-free: PR validation imports it without a workspace install.
+// Keep this module dependency-free: PR validation imports it without a workspace install. Its one
+// import is a local file that `pull-request-policy.yml` checks out beside it.
+import { RETIRED_NAME_MESSAGE, RETIRED_NAME_PATTERN } from "./scripts/lib/retired-name.ts";
 
 // Allowed commit types. Types categorize history for readers only — versioning
 // and changelog entries come from changesets (.changeset/*.md), not commit types.
@@ -115,6 +117,10 @@ const helpfulErrorsPlugin = {
 			!BREAKING_MARKER.test(parsed.header ?? ""),
 			"drop the ! marker and describe the breaking change in a changeset",
 		],
+		"retired-name-absent": (parsed: ParsedCommit): RuleOutcome => [
+			!RETIRED_NAME_PATTERN.test(parsed.header ?? ""),
+			RETIRED_NAME_MESSAGE,
+		],
 	},
 };
 
@@ -127,6 +133,8 @@ export const pullRequestTitlePolicy = {
 	headerPattern: String.raw`^(\w+)(?:\(([\w-]+)\))?: (.+)$`,
 	subjectPattern: SUBJECT_SHAPE.source,
 	breakingMarkerPattern: BREAKING_MARKER.source,
+	retiredNamePattern: RETIRED_NAME_PATTERN.source,
+	retiredNameMessage: RETIRED_NAME_MESSAGE,
 	helpUrl: HELP_URL,
 };
 
@@ -139,6 +147,7 @@ const configuration = {
 		"scope-enum-helpful": [2, "always"],
 		"subject-shape": [2, "always"],
 		"breaking-marker-absent": [2, "always"],
+		"retired-name-absent": [2, "always"],
 		"type-enum": [0],
 		"scope-enum": [0],
 		"scope-empty": [0],

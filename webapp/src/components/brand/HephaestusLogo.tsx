@@ -13,7 +13,6 @@ export function HephaestusLogoMark({ className }: { className?: string }) {
 export function HephaestusWordmark({ className }: { className?: string }) {
 	return (
 		<span className={className}>
-			{/* oxlint-disable-next-line hephaestus/ui-text-voice -- The styled prefix is part of the complete Hephaestus wordmark. */}
 			<span className="text-brand-accent">Heph</span>aestus
 		</span>
 	);

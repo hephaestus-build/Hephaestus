@@ -6,6 +6,7 @@ import path from "node:path";
 import { describe, it } from "node:test";
 
 import { environmentForGitFixture } from "./lib/git-environment.ts";
+import { RETIRED_NAME } from "./lib/retired-name.ts";
 
 import { check, findings } from "./check-no-legacy.ts";
 
@@ -261,4 +262,40 @@ await it("only the renamed-slug redirect of the workspace filter is a current fl
 		).some((finding) => finding.rule === "path-alias"),
 	);
 	assert.ok(findings(server, redirect).some((finding) => finding.rule === "path-alias"));
+});
+
+const retired = (file: string, source: string) =>
+	findings(file, source).filter((finding) => finding.rule === "retired-name");
+await describe("the retired short name", async () => {
+	const prompt = "server/application/src/main/resources/agent/conversation/system.md";
+	for (const [file, source] of [
+		[".changeset/answer.md", `${RETIRED_NAME} reads the thread.`],
+		["docs/user/ask.mdx", `Ask ${RETIRED_NAME} about a review.`],
+		["webapp/src/components/Panel.tsx", `<p>${RETIRED_NAME}'s answer</p>`],
+		[server, `throw new IllegalStateException("${RETIRED_NAME} turn is running");`],
+		["webapp/src/components/Panel.test.tsx", `it("${RETIRED_NAME} answers", () => {});`],
+		[prompt, `- Use the name ${RETIRED_NAME} for yourself.`],
+	] satisfies [string, string][]) {
+		await it(`refuses it in ${file}`, () => assert.equal(retired(file, source).length, 1));
+	}
+	for (const [file, source] of [
+		["docs/user/ask.mdx", "Ask Hephaestus about a review."],
+		["scripts/tools.ts", 'const host = "heph-coord"; // heph_* stays a Slack identifier.'],
+		["docs/contributor/words.mdx", `\`${RETIRED_NAME}\` is retired as a name.`],
+		["webapp/src/Logo.tsx", `<span className="accent">${RETIRED_NAME}</span>aestus`],
+		["CHANGELOG.md", `- ${RETIRED_NAME} reads the thread.`],
+		["MIGRATION.md", `${RETIRED_NAME} keeps its history.`],
+		[".changeset/pre/answer.md", `${RETIRED_NAME} reads the thread.`],
+		["docs/decisions/0057-one-conversation.md", `${RETIRED_NAME} answered.`],
+	] satisfies [string, string][]) {
+		await it(`permits ${source} in ${file}`, () => assert.deepEqual(retired(file, source), []));
+	}
+	await it("permits only the prompt line that tells the model the old name means it", () => {
+		const original = readFileSync(path.join(import.meta.dirname, "../", prompt), "utf8");
+		const line = original.split("\n").find((text) => text.includes(`"${RETIRED_NAME}"`)) ?? "";
+		assert.notEqual(line, "");
+		assert.deepEqual(retired(prompt, original), []);
+		assert.equal(retired(prompt, `${original}\n${line}\n`).length, 2);
+		assert.equal(retired("docs/user/ask.mdx", line).length, 1);
+	});
 });

@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 
 import { environmentWithoutGitRepository } from "./lib/git-environment.ts";
+import { RETIRED_NAME, RETIRED_NAME_MESSAGE, RETIRED_NAME_PATTERN } from "./lib/retired-name.ts";
 
 export interface Finding {
 	rule: string;
@@ -15,6 +16,63 @@ const fixtures =
 	/(?:^|\/)(?:test|tests|testing|fixtures|snapshots|corpus|generated-clients)(?:\/|$)|\.(?:test|spec|stories)\.[^.]+$|(?:routeTree|types|sdk)\.gen\./u;
 const ownSource =
 	/^(?:server\/application\/src\/main\/|webapp\/src\/|extension\/src\/|scripts\/|docker\/agents\/|docs\/)/u;
+
+/** Released text and decision records keep the words of their time. */
+const keepsItsWords =
+	/^(?:CHANGELOG\.md|MIGRATION\.md)$|^\.changeset\/pre\/|(?:^|\/)docs\/decisions\//u;
+
+/** A finding that stays: its rule, its file, its exact line, and how often that line occurs there. */
+const allowed: readonly (Omit<Finding, "line"> & { count: number; reason: string })[] = [
+	{
+		rule: "retired-name",
+		file: "server/application/src/main/resources/agent/conversation/system.md",
+		text: `- Never call yourself ${RETIRED_NAME}, mentor, assistant or agent. Earlier "${RETIRED_NAME}" means you; use Hephaestus.`,
+		count: 1,
+		reason: "The prompt tells the model that the old name means it.",
+	},
+];
+
+/**
+ * The retired short name as a word, in any file the check reads, tests included: product text,
+ * comments, test names, docs and changesets (docs/contributor/practice-feedback-language.mdx).
+ */
+function retiredNames(file: string, source: string): Finding[] {
+	if (keepsItsWords.test(file)) {
+		return [];
+	}
+	// A Markdown code span mentions the name, as the vocabulary's list of retired words does.
+	const text = /\.mdx?$/u.test(file)
+		? source.replaceAll(/`[^`\n]+`/gu, (span) => " ".repeat(span.length))
+		: source;
+	const result: Finding[] = [];
+	for (const match of text.matchAll(new RegExp(RETIRED_NAME_PATTERN.source, "gu"))) {
+		// The wordmark styles the first letters of Hephaestus: `<span …>Heph</span>aestus`.
+		if (source.startsWith("</span>aestus", match.index + RETIRED_NAME.length)) {
+			continue;
+		}
+		const start = source.lastIndexOf("\n", match.index - 1) + 1;
+		const end = source.indexOf("\n", match.index);
+		const finding = {
+			rule: "retired-name",
+			file,
+			line: source.slice(0, match.index).split("\n").length,
+			text: source.slice(start, end === -1 ? undefined : end).trim(),
+		};
+		if (
+			result.at(-1)?.line !== finding.line &&
+			!allowed.some(
+				(entry) =>
+					entry.rule === finding.rule &&
+					entry.file === file &&
+					entry.text === finding.text &&
+					source.split(entry.text).length - 1 === entry.count,
+			)
+		) {
+			result.push(finding);
+		}
+	}
+	return result;
+}
 
 function redirectOnlyRoute(
 	file: string,
@@ -138,10 +196,10 @@ function javaRedirects(
 
 /** Find obsolete paths, not authentication, current landing pages, the renamed-slug redirect or provider schema directives. */
 export function findings(file: string, source: string, files: readonly string[] = []): Finding[] {
+	const result: Finding[] = retiredNames(file, source);
 	if (fixtures.test(file) || /^(?:webapp|extension)\/src\/api\//u.test(file)) {
-		return [];
+		return result;
 	}
-	const result: Finding[] = [];
 	const add = (rule: string, offset: number) => {
 		const start = source.lastIndexOf("\n", offset - 1) + 1;
 		const end = source.indexOf("\n", offset);
@@ -285,6 +343,9 @@ if (import.meta.main) {
 	const errors = check(root);
 	if (errors.length > 0) {
 		console.error(errors.join("\n"));
+		if (errors.some((error) => error.includes(": retired-name: "))) {
+			console.error(`retired-name: ${RETIRED_NAME_MESSAGE}`);
+		}
 		process.exitCode = 1;
 	} else {
 		console.log("No legacy paths.");

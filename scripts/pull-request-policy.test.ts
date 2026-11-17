@@ -5,6 +5,7 @@ import { describe, it } from "node:test";
 import { parse as parseYaml } from "yaml";
 
 import { asRecord, asString } from "./lib/json.ts";
+import { RETIRED_NAME } from "./lib/retired-name.ts";
 import {
 	parseRecord,
 	resolvePullRequest,
@@ -27,6 +28,8 @@ const titlePolicy = {
 	headerPattern: asString(exported.headerPattern, "headerPattern"),
 	subjectPattern: asString(exported.subjectPattern, "subjectPattern"),
 	breakingMarkerPattern: asString(exported.breakingMarkerPattern, "breakingMarkerPattern"),
+	retiredNamePattern: asString(exported.retiredNamePattern, "retiredNamePattern"),
+	retiredNameMessage: asString(exported.retiredNameMessage, "retiredNameMessage"),
 } satisfies TitlePolicy;
 
 const problem = (title: string) => titleProblem(title, titlePolicy);
@@ -137,6 +140,16 @@ void describe("pull request policy", () => {
 		assert.match(problem("a list that jumps"), /form `type\(scope\): description`/u);
 		assert.match(problem("fix: one\ntwo"), /single line/u);
 		assert.match(problem(`fix: ${"x".repeat(100)}`), /the limit is 100/u);
+	});
+
+	void it("refuses the retired short name as a word and names the words to use", () => {
+		assert.match(
+			problem(`feat(conversation): ${RETIRED_NAME} reads the thread`),
+			/Ask Hephaestus/u,
+		);
+		assert.match(problem(`fix: the answer from ${RETIRED_NAME}'s turn`), /retired/u);
+		assert.equal(problem("feat(conversation): Hephaestus reads the thread"), "");
+		assert.equal(problem("fix(scripts): the heph-tools sandbox stops"), "");
 	});
 
 	void describe("its workflows", () => {

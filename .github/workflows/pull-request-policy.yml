@@ -106,6 +106,7 @@ jobs:
             scripts/review-policy.ts
             scripts/lib/json.ts
             scripts/lib/model-attribution.ts
+            scripts/lib/retired-name.ts
           sparse-checkout-cone-mode: false
 
       # The same title policy that the commit-msg hook enforces, read from the default branch.
