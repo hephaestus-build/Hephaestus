@@ -86,8 +86,14 @@ function slotMatches({ provider, layout }: Pick<SlotCase, "provider" | "layout">
 export async function checkProviderSlots(cases: readonly SlotCase[] = SLOT_CASES) {
 	const script = await providerSlotBundle();
 	const browser = await chromium.launch();
-	const results: { url: string; layout: string; status: "passed" | "failed"; detail?: string }[] =
-		[];
+	// A page that did not load says nothing about the adapter: the provider was unavailable. Only a
+	// loaded page whose report slot does not match fails the check.
+	const results: {
+		url: string;
+		layout: string;
+		status: "passed" | "failed" | "unavailable";
+		detail?: string;
+	}[] = [];
 	try {
 		const context = await browser.newContext();
 		await context.addInitScript({
@@ -96,12 +102,22 @@ export async function checkProviderSlots(cases: readonly SlotCase[] = SLOT_CASES
 		for (const entry of cases) {
 			const page = await context.newPage();
 			try {
-				const response = await page.goto(entry.url, {
-					waitUntil: "domcontentloaded",
-					timeout: 30_000,
-				});
-				if (response?.ok() !== true) {
-					throw new Error(`Page unavailable: HTTP ${response?.status() ?? "no response"}`);
+				const loaded = await page
+					.goto(entry.url, { waitUntil: "domcontentloaded", timeout: 30_000 })
+					.then(
+						(response) =>
+							response?.ok() === true ? undefined : `HTTP ${response?.status() ?? "no response"}`,
+						(error: unknown) => (error instanceof Error ? error.message : String(error)),
+					);
+				if (loaded !== undefined) {
+					results.push({
+						url: entry.url,
+						layout: entry.layout,
+						status: "unavailable",
+						detail: loaded,
+					});
+					console.log(`::warning::${entry.layout}: the provider page did not load (${loaded})`);
+					continue;
 				}
 				await page.waitForFunction(slotMatches, entry, { timeout: 30_000 });
 				results.push({ url: entry.url, layout: entry.layout, status: "passed" });
