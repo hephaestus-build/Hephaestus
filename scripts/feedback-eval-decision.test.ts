@@ -5,12 +5,9 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 
-import { minimatch } from "minimatch";
-
 import {
 	expandExpressions,
 	parseDocument,
-	pullRequestPaths,
 	runScript,
 	runStep,
 	runnerStepsOnly,
@@ -41,10 +38,12 @@ function context(
 	};
 }
 
-void test("only a person starts a decision: a manual run or adding eval:decide, never a push or a schedule", async () => {
+void test("only a person starts a decision: a manual run or adding eval:decide, never a push, a path change or a schedule", async () => {
 	const workflow = parseDocument(await readFile(WORKFLOW, "utf8"));
 	const triggers = asRecord(asRecord(workflow.toJS(), "decision workflow").on, "triggers");
 	assert.deepEqual(Object.keys(triggers).toSorted(), ["pull_request", "workflow_dispatch"]);
+	// Evaluations are manual-first: no pull request event but the label runs a job, and no path filters one.
+	assert.deepEqual(asRecord(triggers.pull_request, "pull_request"), { types: ["labeled"] });
 	const calls = (
 		job: string,
 		event: string,
@@ -65,13 +64,6 @@ void test("only a person starts a decision: a manual run or adding eval:decide, 
 	// A fork gets no secrets, so it never calls a model, labelled or not.
 	assert.equal(
 		calls("provider", "pull_request", "labeled", "eval:decide", "someone/hephaestus"),
-		false,
-	);
-	// A push or an opened pull request that no run covers shows the neutral check instead, never a pass.
-	assert.equal(calls("not-evaluated", "pull_request", "synchronize"), true);
-	assert.equal(calls("not-evaluated", "pull_request", "labeled", "eval:decide"), false);
-	assert.equal(
-		calls("not-evaluated", "pull_request", "synchronize", undefined, "someone/hephaestus"),
 		false,
 	);
 });
@@ -115,8 +107,7 @@ void test("the replicates compose one after another, so one composer calls the e
 	);
 });
 
-void test("every decision path is a feedback eval path, so the deterministic gate checks the same change", async () => {
-	const decision = await pullRequestPaths(WORKFLOW);
+void test("the decision's own files are feedback eval paths, so the deterministic gate checks a change to them", async () => {
 	// The filter's entries, up to the first line that is neither an entry nor a comment: it is the last filter.
 	const source = await readFile(".github/workflows/cicd.yml", "utf8");
 	const filter: string[] = [];
@@ -131,13 +122,12 @@ void test("every decision path is a feedback eval path, so the deterministic gat
 			break;
 		}
 	}
-	assert.ok(filter.includes(WORKFLOW) && filter.includes("scripts/feedback-eval-decision.ts"));
-	for (const file of decision) {
-		const probe = file.endsWith("/**") ? `${file.slice(0, -3)}/Example.java` : file;
-		assert.ok(
-			filter.some((glob) => minimatch(probe, glob)),
-			`${file} starts a decision but no feedback-eval path covers it`,
-		);
+	for (const file of [
+		WORKFLOW,
+		"scripts/feedback-eval-decision.ts",
+		"scripts/feedback-eval-configuration.ts",
+	]) {
+		assert.ok(filter.includes(file), `no feedback-eval path covers ${file}`);
 	}
 });
 

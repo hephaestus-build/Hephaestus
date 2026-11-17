@@ -1,7 +1,8 @@
 {
 	"suite": "composition-set",
-	"required": false,
-	"requiredWhen": "Both runs of composer noise plan 1 are clean. THEMIS accepted aa2 as clean (DN-84). aa3 is not judged yet.",
+	"ready": false,
+	"readyWhen": "Both runs of composer noise plan 1 are clean. THEMIS accepted aa2 as clean (DN-84). aa3 is not judged yet.",
+	"meaning": "Ready means that the verdict of a manual or labelled run can be trusted. Evaluations are manual-first, so the decision is never a required check.",
 	"noisePlan": {
 		"name": "composer noise plan 1",
 		"registeredAt": "2026-11-16T14:22:30Z",

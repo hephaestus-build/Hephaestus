@@ -370,19 +370,19 @@ The cases are synthetic and public, and prompts are developed against them. A cl
 A person starts every run of the `CI / Feedback eval decision` workflow:
 
 - A manual run. It compares the dispatched ref with the base ref that it names, `main` by default.
-- A maintainer adds the `eval:decide` label to a pull request from this repository that changes a composer path of the workflow. The run decides the head at that moment. A later push starts nothing: to decide a newer head, remove the label and add it again.
+- A maintainer adds the `eval:decide` label to a pull request from this repository. The run decides the head at that moment. A later push starts nothing: to decide a newer head, remove the label and add it again.
 
 The panel's `eval:run` label starts no decision, so one label never pays for two runs.
-Nothing starts a decision on a push or a schedule.
+Nothing starts a decision on a push, a path change or a schedule.
 A pull request from a fork gets no run, because it has no secrets.
-A pull request from this repository that changes a composer path and has no decision shows a neutral "not evaluated" check, never a pass.
 
 A change to `scripts/feedback-eval/compositions.json` gets no decision.
 Each arm reads the cases from its own commit, so the arms would compose different cases under the same IDs.
-The run stops before the first model call, and the check says "not evaluated".
+The run stops before the first model call, and its check says "not evaluated".
 Change the cases in a pull request of their own, as a new suite version with its own noise plan.
 
-The result is not a required check. It can become one only after the [noise plan](#noise-plan) is clean.
+Evaluations are manual-first, so the result is never a required check.
+When the [noise plan](#noise-plan) is clean, the decision is ready: the verdict of a run can be trusted.
 The decision runs only with the [CI model connection](./ci-cd.mdx#ci-model-connection).
 
 ### How the arms are composed
@@ -432,10 +432,11 @@ Every report states the minimum detectable effect of each measure for that run, 
 
 A no-change run composes main's composer against itself. It shows how often the decision flags a change that does not exist, and which drop it can detect.
 The composer noise plan registers two no-change runs together, with fixed seeds, commit, cases, model and endpoint, before the first of them starts.
-The decision can become a required check only when both runs are clean: each completes its plan, gets a valid decision, and shows no REGRESSION.
+The decision is ready only when both runs are clean: each completes its plan, gets a valid decision, and shows no REGRESSION.
 
-`scripts/feedback-eval/ichnaea/readiness.json` records whether the decision is ready to be a required check.
+`scripts/feedback-eval/ichnaea/readiness.json` records whether the decision is ready. It never makes the decision a required check.
 It names the noise plan, its runs with their seeds and results, and the digest of each measure.
+
 Ichnaea keys noise evidence by the measure digest, which covers the measure's card but not its scorer.
 Thus a change to what a measure scores raises the card's version.
 The record then gets the new digests, with evidence that the noise runs still hold for them.
