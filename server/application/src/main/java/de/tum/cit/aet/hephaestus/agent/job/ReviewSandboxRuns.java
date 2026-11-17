@@ -243,18 +243,16 @@ public class ReviewSandboxRuns implements SandboxRunKind {
     }
 
     /**
-     * Its result already ended the attempt, or handed it on; a run that sent none hands its attempt on, and spends a
-     * retry, as a lost sandbox does.
-     */
-    /**
      * The review kind reports a crash of its review programs as the end's cause. The attempt keeps it, as no sandbox log
-     * reaches the server, before the end hands the attempt on.
+     * reaches the server, before the end hands the attempt on. The write shares the end's transaction: it is fenced on
+     * the attempt's run, so it changes nothing that the end would not.
      */
     @Override
     public boolean end(SandboxRun run, Outcome outcome, @Nullable String cause) {
+        Optional<ReviewJob> found = job(run);
         String failure = RunnerEnd.programFailure(cause);
         if (failure != null)
-            job(run).ifPresent(job -> {
+            found.ifPresent(job -> {
                 var attempt = identity(run, job);
                 jobs.recordProgramFailure(
                         attempt.jobId(),
@@ -267,12 +265,19 @@ public class ReviewSandboxRuns implements SandboxRunKind {
                                 .put("failure", failure)
                                 .toString());
             });
-        return end(run, outcome);
+        return endAttempt(run, found);
     }
 
+    /**
+     * Its result already ended the attempt, or handed it on; a run that sent none hands its attempt on, and spends a
+     * retry, as a lost sandbox does.
+     */
     @Override
     public boolean end(SandboxRun run, Outcome outcome) {
-        Optional<ReviewJob> job = job(run);
+        return endAttempt(run, job(run));
+    }
+
+    private boolean endAttempt(SandboxRun run, Optional<ReviewJob> job) {
         if (job.isEmpty()) return true;
         var logScope = new ReviewJobLogScope(job.get(), run.fence());
         try {

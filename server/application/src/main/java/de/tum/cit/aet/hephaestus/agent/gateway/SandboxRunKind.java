@@ -56,8 +56,9 @@ public interface SandboxRunKind {
     boolean end(SandboxRun run, Outcome outcome);
 
     /**
-     * {@link #end(SandboxRun, Outcome)} with the cause that the server answered the loop when it closed the attempt, or
-     * {@code null}. Only a kind whose server decides a hand-on cause reads it.
+     * {@link #end(SandboxRun, Outcome)} with the sandbox's cause, or {@code null}: for a composition, the cause that the
+     * server answered the loop when it closed the attempt; for a review, the crash of a review program. Only a kind that
+     * reads its cause overrides this.
      */
     default boolean end(SandboxRun run, Outcome outcome, @Nullable String cause) {
         return end(run, outcome);

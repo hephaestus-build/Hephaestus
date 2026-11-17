@@ -1,34 +1,36 @@
 import { readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import path from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 
 import { errorKind } from "./pi-diagnostics.ts";
+import { PROGRAM_FAILURE } from "./sandbox-paths.ts";
 
 /**
- * Where a review program that crashes records why, for the review kind to report with the run's end: the server keeps
- * no sandbox log. One line, `<program>:<error kind>`, of closed codes only.
+ * A review program's crash, for the review kind to report with the run's end: the server keeps no sandbox log. One
+ * line, `<program>:<error kind>`, of closed codes only.
  */
-const PROGRAM_FAILURE = path.join(tmpdir(), "hephaestus-program-failure");
 const PROGRAM_FAILURE_LINE = /^(?:init|run):[A-Za-z][A-Za-z.\-_]{0,63}$/u;
 
-export function recordProgramFailure(program: "init" | "run", error: unknown): void {
+export function recordProgramFailure(
+	program: "init" | "run",
+	error: unknown,
+	file: string = PROGRAM_FAILURE,
+): void {
 	try {
-		writeFileSync(PROGRAM_FAILURE, `${program}:${errorKind(error)}`);
+		writeFileSync(file, `${program}:${errorKind(error)}`);
 	} catch {
 		// The exit code alone still ends the run.
 	}
 }
 
 /** The failure a review program recorded since the last call, if any; it is gone afterwards. */
-export function takeProgramFailure(): string | undefined {
+export function takeProgramFailure(file: string = PROGRAM_FAILURE): string | undefined {
 	let line: string;
 	try {
-		line = readFileSync(PROGRAM_FAILURE, "utf8").trim();
+		line = readFileSync(file, "utf8").trim();
 	} catch {
 		return undefined;
 	}
-	rmSync(PROGRAM_FAILURE, { force: true });
+	rmSync(file, { force: true });
 	return PROGRAM_FAILURE_LINE.test(line) ? line : undefined;
 }
 

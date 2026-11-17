@@ -113,7 +113,8 @@ class AttemptServerErrorsIntegrationTest extends BaseIntegrationTest {
                 .isOne();
 
         ReviewJob stored = jobs.findById(job.getId()).orElseThrow();
-        assertThat(RunnerEnd.describeProgramFailure(stored.getCapture())).contains("(TypeError)");
+        assertThat(RunnerEnd.describeProgramFailure(stored.getCapture(), job.getAttempt()))
+                .contains("(TypeError)");
     }
 
     private ReviewJob runningJob() {

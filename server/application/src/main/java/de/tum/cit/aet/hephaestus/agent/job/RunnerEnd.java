@@ -82,15 +82,19 @@ final class RunnerEnd {
         return parts.matches() && ERRORS.contains(parts.group(2)) ? cause : null;
     }
 
-    /** Why the attempts ended, for a job whose retries ran out; null when no review program recorded a crash. */
-    static @Nullable String describeProgramFailure(@Nullable JsonNode capture) {
-        JsonNode recorded =
-                capture == null ? null : capture.path("programFailure").get("failure");
+    /**
+     * Why the attempts ended, for a job whose retries ran out; null when the review programs of {@code lastAttempt} did
+     * not record a crash. An attempt that never reached its review programs keeps an earlier attempt's record.
+     */
+    static @Nullable String describeProgramFailure(@Nullable JsonNode capture, int lastAttempt) {
+        JsonNode record = capture == null ? null : capture.get("programFailure");
+        if (record == null || record.path("attempt").asInt(-1) != lastAttempt) return null;
+        JsonNode recorded = record.get("failure");
         String failure = programFailure(recorded != null && recorded.isString() ? recorded.asString() : null);
         if (failure == null) return null;
         var parts = PROGRAM_FAILURE.matcher(failure);
         if (!parts.matches()) return null;
-        String step = parts.group(1).equals("init") ? "prepared the attempt's workspace" : "started the review";
+        String step = parts.group(1).equals("init") ? "prepared the attempt's workspace" : "ran the review";
         return "The last attempt's review sandbox stopped on an unexpected error (" + parts.group(2) + ") while it "
                 + step + ".";
     }
