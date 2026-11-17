@@ -161,17 +161,14 @@ jobs:
           WAIT_SECONDS: "900"
         run: |
           set -euo pipefail
-          # Observe the public webapp version; host metrics report stack readiness separately.
+          # Observe the public web app's version in the instance metadata, which every release publishes;
+          # host metrics report stack readiness separately.
           deadline=$(( SECONDS + WAIT_SECONDS ))
           running=""
           while [ "$SECONDS" -lt "$deadline" ]; do
-            config=$(curl -fsS --max-time 20 "https://${HOSTNAME}/" |
-              grep -oE '/env-config\.[a-f0-9]{8}\.js' | head -1 || true)
-            if [ -n "$config" ]; then
-              running=$(curl -fsS --max-time 20 "https://${HOSTNAME}${config}" |
-                sed -nE 's/.*APPLICATION_VERSION: "([^"]*)".*/\1/p' | head -1 || true)
-              [ "$running" = "$EXPECTED" ] && { echo "Public webapp reports $running (other services not checked)"; exit 0; }
-            fi
+            running=$(curl -fsS --max-time 20 "https://${HOSTNAME}/.well-known/hephaestus.json" |
+              jq -r '.version // empty' || true)
+            [ "$running" = "$EXPECTED" ] && { echo "Public webapp reports $running (other services not checked)"; exit 0; }
             sleep 20
           done
           # The host reports nothing to GitHub, so a host that did not move can mean any of these.

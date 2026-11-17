@@ -240,7 +240,6 @@ jobs:
     env:
       EXTENSION_PACKAGE: extension-package/hephaestus-chrome-extension-${{ needs.release.outputs.version }}.zip
     outputs:
-      webapp-digest: ${{ steps.retag.outputs.webapp-digest }}
       agent-digest: ${{ steps.retag.outputs.agent-digest }}
       server-digest: ${{ steps.retag.outputs.server-digest }}
       postgres-digest: ${{ steps.retag.outputs.postgres-digest }}
@@ -623,7 +622,6 @@ jobs:
       commit: ${{ needs.release.outputs.sha }}
       image-digests: >-
         {"server":"${{ needs.tag-images.outputs.server-digest }}",
-        "webapp":"${{ needs.tag-images.outputs.webapp-digest }}",
         "agent":"${{ needs.tag-images.outputs.agent-digest }}",
         "postgres":"${{ needs.tag-images.outputs.postgres-digest }}"}
       ref: ${{ needs.release.outputs.sha }}

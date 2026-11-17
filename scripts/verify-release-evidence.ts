@@ -6,6 +6,8 @@ import { isDeepStrictEqual } from "node:util";
 import {
 	assertBundledNpmInventory,
 	assertBundledNpmScan,
+	SERVER_WEB_APP_BUNDLE,
+	WEBAPP_IMAGE_BUNDLE,
 	componentEvidence,
 	validateReleaseSbom,
 } from "./check-release-sbom.ts";
@@ -26,7 +28,8 @@ import {
 	releaseOwner,
 	releaseRepository,
 } from "./lib/release-identities.ts";
-import { requiresSbomInventory } from "./lib/release-sbom-contract.ts";
+import { sbomInventoryVersion } from "./lib/release-sbom-contract.ts";
+import { WEB_APP_IMAGE, WEB_APP_STEM } from "./lib/web-app-scan.ts";
 import { assertOwnedCoverage } from "./owned-code-sbom.ts";
 import { scanOwnedSource } from "./owned-source-sbom.ts";
 import { isRelease } from "./release-image-lock.ts";
@@ -63,13 +66,25 @@ export function validateImageBundleInventory(
 	syft: unknown,
 	trivy: unknown,
 	image: string,
-	required: boolean,
+	version: number,
 ): void {
-	if (image === "webapp" && required) {
-		assertBundledNpmInventory(syft);
-		assertBundledNpmScan(syft, trivy);
+	if (image === "webapp" && version === 1) {
+		assertBundledNpmInventory(syft, WEBAPP_IMAGE_BUNDLE);
+		assertBundledNpmScan(syft, trivy, WEBAPP_IMAGE_BUNDLE);
 	}
 }
+
+/**
+ * From `bundledNpmSbom: 2`, the server subject carries the web app's own inventory and scan, which no image scan sees
+ * (ADR 0100). They must name the packages that every build bundles.
+ */
+export function validateWebAppInventory(syft: unknown, trivy: unknown): void {
+	assertBundledNpmInventory(syft, SERVER_WEB_APP_BUNDLE);
+	assertBundledNpmScan(syft, trivy, SERVER_WEB_APP_BUNDLE);
+}
+
+/** The web app documents of a server subject, by the file kind that the checksums cover. */
+const WEB_APP_KINDS = ["syft", "spdx", "cdx", "trivy"] as const;
 
 type VerificationMode = "verify" | "verify-signatures" | "write-validation" | "verify-capture";
 
@@ -413,13 +428,10 @@ export function verifyReleaseEvidence(
 		mode === "write-validation" || mode === "verify-capture"
 			? undefined
 			: verifyEvidenceChecksums(directory, release);
-	const bundleInventoryRequired = requiresSbomInventory(
-		manifestValue,
-		"bundledNpmSbom",
-		covered === undefined,
-	);
+	const bundledNpm = sbomInventoryVersion(manifestValue, "bundledNpmSbom", covered === undefined);
+	const carriesWebApp = (subject: Subject) => bundledNpm === 2 && subject.image === WEB_APP_IMAGE;
 
-	if (requiresSbomInventory(manifestValue, "sourceSbom", covered === undefined)) {
+	if (sbomInventoryVersion(manifestValue, "sourceSbom", covered === undefined) >= 1) {
 		requireChecksumCoverage(
 			covered,
 			SOURCE_SBOM_FORMATS.map(([, file]) => file),
@@ -453,9 +465,14 @@ export function verifyReleaseEvidence(
 	requireChecksumCoverage(covered, [
 		...manifest.subjects.flatMap((subject) => {
 			const stem = `${subject.image}-${subject.platform.replace("/", "-")}`;
-			return ["syft", "spdx", "cdx", "license", "trivy", "sbom-validation", "policy"].map(
-				(kind) => `${stem}.${kind}.json`,
-			);
+			return [
+				...["syft", "spdx", "cdx", "license", "trivy", "sbom-validation", "policy"].map(
+					(kind) => `${stem}.${kind}.json`,
+				),
+				...(carriesWebApp(subject)
+					? WEB_APP_KINDS.map((kind) => `${stem}.${WEB_APP_STEM}.${kind}.json`)
+					: []),
+			];
 		}),
 		...componentAdvisories(policy, undefined, historical).map(advisoryFile),
 	]);
@@ -465,7 +482,13 @@ export function verifyReleaseEvidence(
 		const prefix = path.join(directory, `${subject.image}-${suffix}`);
 		const syft = readJsonFileSync(`${prefix}.syft.json`);
 		const trivy = readJsonFileSync(`${prefix}.trivy.json`);
-		validateImageBundleInventory(syft, trivy, subject.image, bundleInventoryRequired);
+		validateImageBundleInventory(syft, trivy, subject.image, bundledNpm);
+		const webAppTrivy = carriesWebApp(subject)
+			? readJsonFileSync(`${prefix}.${WEB_APP_STEM}.trivy.json`)
+			: undefined;
+		if (webAppTrivy !== undefined) {
+			validateWebAppInventory(readJsonFileSync(`${prefix}.${WEB_APP_STEM}.syft.json`), webAppTrivy);
+		}
 		const sbom = validateReleaseSbom(
 			syft,
 			readJsonFileSync(`${prefix}.spdx.json`),
@@ -497,15 +520,32 @@ export function verifyReleaseEvidence(
 					: undefined,
 			},
 		);
+		// The web app's findings are the server image's findings: the same image and digest, judged by the same
+		// policy. No component exception applies to them, so they need no component evidence.
+		const webApp =
+			webAppTrivy === undefined
+				? undefined
+				: evaluate(
+						subject.image,
+						webAppTrivy,
+						policy,
+						evaluatedAt,
+						{ digest: subject.digest, platform: subject.platform, reference },
+						{ historical, advisories: new Map(), evidence: undefined },
+					);
+		const failed = [result, ...(webApp === undefined ? [] : [webApp])].some(
+			(outcome) => outcome.errors.length > 0 || outcome.rejected.length > 0,
+		);
 		const policyResult = {
 			image: subject.image,
 			platform: subject.platform,
 			digest: subject.digest,
-			status: result.errors.length === 0 && result.rejected.length === 0 ? "pass" : "fail",
+			status: failed ? "fail" : "pass",
 			...result,
+			...(webApp === undefined ? {} : { webApp }),
 		};
 		persistOrVerify(`${prefix}.policy.json`, policyResult, mode === "write-validation");
-		if (result.errors.length > 0 || result.rejected.length > 0) {
+		if (failed) {
 			throw new Error(`${subject.image} does not satisfy vulnerability policy`);
 		}
 		const index = readJsonFromCommand("docker", [
