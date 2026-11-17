@@ -10,11 +10,10 @@ const [image = "", platform = "", digest = "", repository = "", stem = ""] = pro
 if ([image, platform, digest, repository, stem].includes("")) {
 	throw new Error("usage: scan-web-app <image> <platform> <digest> <repository> <stem>");
 }
-if (
-	!(await scanWebApp({ image, repository }, digest, platform, stem, {
-		annotate: true,
-		required: true,
-	}))
-) {
+const passed = await scanWebApp({ image, repository }, digest, platform, stem, {
+	annotate: true,
+	required: true,
+});
+if (passed !== true) {
 	process.exitCode = 1;
 }

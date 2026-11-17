@@ -3,11 +3,8 @@ import { chmod, mkdtemp, readdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, test } from "node:test";
-import { parse as parseJsonc } from "jsonc-parser";
-import { isMap, isScalar, isSeq } from "yaml";
+import { isMap, isSeq } from "yaml";
 import {
-	buildStageCopySources,
-	filesReadByConfig,
 	job,
 	namedStep,
 	parseDocument,
@@ -21,7 +18,7 @@ import {
 } from "./ci-contract-support.ts";
 import { addedModules, buildEnvironment } from "./lib/buildpack-descriptor.ts";
 import { ciToolPin } from "./lib/ci-tool-catalog.ts";
-import { asArray, asRecord, asString } from "./lib/json.ts";
+import { asArray, asRecord } from "./lib/json.ts";
 
 void describe("ci-contract: images", () => {
 	void test("every Dockerfile build refreshes OS packages through its exported runtime", async () => {

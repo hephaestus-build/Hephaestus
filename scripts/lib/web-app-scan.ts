@@ -8,6 +8,7 @@ import { existsSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
 
+import { asRecord, isRecord } from "./json.ts";
 import { output, run } from "./process.ts";
 
 /** The image that carries the web app. */
@@ -49,7 +50,8 @@ export async function extractWebApp(
 	await mkdir(scratch, { recursive: true });
 	const jar = path.join(scratch, "runner.jar");
 	// `create` pulls the platform's image and runs nothing.
-	const container = (await output("docker", ["create", "--platform", platform, reference])).trim();
+	const created = await output("docker", ["create", "--platform", platform, reference]);
+	const container = created.trim();
 	try {
 		await run("docker", ["cp", `${container}:${RUNNER_JAR}`, jar]);
 	} finally {
@@ -84,4 +86,25 @@ export function webAppTrivyArguments(
 	flags: readonly string[],
 ): string[] {
 	return ["rootfs", ...flags, "--format", "json", "--output", report, directory];
+}
+
+/**
+ * A scan of the web app that does not list the packages every build bundles has not read the bundle. It fails rather
+ * than passing with fewer packages.
+ */
+export function assertKnownPackagesScanned(report: unknown): void {
+	const results: unknown = asRecord(report, "Trivy report").Results;
+	const scanned = new Set<unknown>();
+	for (const result of Array.isArray(results) ? (results as unknown[]) : []) {
+		if (isRecord(result) && result.Type === "node-pkg" && Array.isArray(result.Packages)) {
+			for (const item of result.Packages as unknown[]) {
+				scanned.add(isRecord(item) ? item.Name : undefined);
+			}
+		}
+	}
+	for (const name of KNOWN_BUNDLED_PACKAGES) {
+		if (!scanned.has(name)) {
+			throw new Error(`the scan of the web app lists no bundled ${name}`);
+		}
+	}
 }

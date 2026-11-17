@@ -10,13 +10,14 @@
  * platform-digest resolver through `resolve-image-scan-subject.ts`.
  */
 import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { asRecord, isRecord } from "./json.ts";
 import { output, run } from "./process.ts";
 import {
+	assertKnownPackagesScanned,
 	extractWebApp,
 	RUNNER_JAR,
 	WEB_APP_IMAGE,
@@ -60,6 +61,8 @@ export interface ScanOptions {
 	readonly platform?: string;
 	/** Collect every subject even when one scan is unavailable. Existing callers remain fail-fast. */
 	readonly continueOnError?: boolean;
+	/** The server image must carry the web app, as every image built since the web app moved into it does. */
+	readonly requireWebApp?: boolean;
 }
 
 /**
@@ -149,6 +152,7 @@ async function scan(
 	directory: string,
 	platform: string,
 	annotate: boolean,
+	requireWebApp: boolean,
 ): Promise<ScanOutcome> {
 	const digest = subject.digest ?? (await resolvePlatformDigest(subject.reference, platform));
 	if (
@@ -192,7 +196,7 @@ async function scan(
 		subject.image === WEB_APP_IMAGE
 			? await scanWebApp(subject, digest, platform, path.join(directory, stem), {
 					annotate,
-					required: false,
+					required: requireWebApp,
 				})
 			: true;
 	return { image: subject.image, passed: imagePassed && webAppPassed !== false, platform };
@@ -223,9 +227,15 @@ export async function scanWebApp(
 		const report = path.resolve(`${stem}.${WEB_APP_STEM}.json`);
 		await run(
 			"trivy",
-			webAppTrivyArguments(webApp, report, ["--skip-db-update", "--scanners", "vuln"]),
+			webAppTrivyArguments(webApp, report, [
+				"--skip-db-update",
+				"--scanners",
+				"vuln",
+				"--list-all-pkgs",
+			]),
 			{ cwd: scratch },
 		);
+		assertKnownPackagesScanned(JSON.parse(await readFile(report, "utf8")));
 		const result = `${stem}.${WEB_APP_STEM}.policy.json`;
 		await rm(result, { force: true });
 		const passed = await evaluatorPassed(
@@ -263,7 +273,15 @@ export async function scanAll(
 	const outcomes: ScanOutcome[] = [];
 	for (const subject of subjects) {
 		try {
-			outcomes.push(await scan(subject, directory, platform, options.annotate ?? false));
+			outcomes.push(
+				await scan(
+					subject,
+					directory,
+					platform,
+					options.annotate ?? false,
+					options.requireWebApp ?? false,
+				),
+			);
 		} catch (error) {
 			if (options.continueOnError !== true) {
 				throw error;

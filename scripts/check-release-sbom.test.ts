@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
 	assertBundledNpmInventory,
+	assertDirectoryFormatsCover,
 	assertBundledNpmScan,
 	SERVER_WEB_APP_BUNDLE,
 	WEBAPP_IMAGE_BUNDLE,
@@ -507,5 +508,41 @@ await test("the server's web app inventory fails when a package every build bund
 	assert.throws(
 		() => assertBundledNpmInventory(scan, SERVER_WEB_APP_BUNDLE),
 		/no bundled npm package manifests/u,
+	);
+});
+
+/** A Syft inventory of a directory scan and its renderings, as `syft dir:` writes them. */
+const purlOf = (identity: string) => `pkg:npm/${identity}`;
+const directoryInventory = {
+	artifacts: [{ name: "react", version: "19.2.0", purl: purlOf("react@19.2.0") }],
+};
+const spdxOf = (purls: readonly string[]) => ({
+	spdxVersion: "SPDX-2.3",
+	dataLicense: "CC0-1.0",
+	documentNamespace: "https://example.invalid/web-app",
+	packages: purls.map((locator) => ({
+		name: "react",
+		versionInfo: "19.2.0",
+		externalRefs: [{ referenceType: "purl", referenceLocator: locator }],
+	})),
+});
+const cycloneDxOf = (purls: readonly string[]) => ({
+	bomFormat: "CycloneDX",
+	specVersion: "1.7",
+	components: purls.map((purl) => ({ name: "react", version: "19.2.0", purl })),
+});
+
+await test("a directory scan's standard renderings must list every package that Syft found", () => {
+	const purls = [purlOf("react@19.2.0")];
+	assert.doesNotThrow(() =>
+		assertDirectoryFormatsCover(directoryInventory, spdxOf(purls), cycloneDxOf(purls)),
+	);
+	assert.throws(
+		() => assertDirectoryFormatsCover(directoryInventory, spdxOf([]), cycloneDxOf(purls)),
+		/SPDX output omitted react@19.2.0/u,
+	);
+	assert.throws(
+		() => assertDirectoryFormatsCover(directoryInventory, spdxOf(purls), cycloneDxOf([])),
+		/CycloneDX output omitted react@19.2.0/u,
 	);
 });

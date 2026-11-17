@@ -54,7 +54,7 @@ if (import.meta.main) {
 	const subjects = planSubjects(await readJsonFile("security/release-images.json"), registry, tag);
 	const outcomes: ScanOutcome[] = [];
 	for (const platform of PLATFORMS) {
-		outcomes.push(...(await scanAll(subjects, directory, { platform })));
+		outcomes.push(...(await scanAll(subjects, directory, { platform, requireWebApp: true })));
 	}
 	await writeFile(
 		path.join(directory, "scan.json"),

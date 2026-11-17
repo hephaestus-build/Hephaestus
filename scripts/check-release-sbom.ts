@@ -71,12 +71,14 @@ interface PackageInventory {
 	keys: Set<string>;
 }
 
-function spdxInventory(
-	spdxInput: unknown,
-	repository: string,
-	version: string,
-	type: "container" | "file",
-): PackageInventory {
+/** The image or source that a standard rendering must describe. A directory scan has none. */
+interface SbomBinding {
+	repository: string;
+	version: string;
+	type: "container" | "file";
+}
+
+function spdxInventory(spdxInput: unknown, binding: SbomBinding | undefined): PackageInventory {
 	const spdx = object(spdxInput, "SPDX SBOM");
 	if (spdx.spdxVersion !== "SPDX-2.3" || spdx.dataLicense !== "CC0-1.0") {
 		throw new Error("invalid SPDX document metadata");
@@ -87,7 +89,7 @@ function spdxInventory(
 	const containers: JsonObject[] = [];
 	for (const [index, value] of array(spdx.packages, "SPDX packages").entries()) {
 		const item = object(value, `SPDX package ${index}`);
-		if (item.primaryPackagePurpose === type.toUpperCase()) {
+		if (binding !== undefined && item.primaryPackagePurpose === binding.type.toUpperCase()) {
 			containers.push(item);
 		}
 		if (typeof item.name === "string" && typeof item.versionInfo === "string") {
@@ -103,6 +105,10 @@ function spdxInventory(
 
 	// Package parity alone would accept an SPDX rendering of a different source or image that
 	// installs the same packages, so bind each document to the subject as well.
+	if (binding === undefined) {
+		return { purls, keys };
+	}
+	const { repository, version, type } = binding;
 	const [container, ...extraContainers] = containers;
 	if (container === undefined || extraContainers.length > 0) {
 		throw new Error(`SPDX document must describe exactly one ${type}`);
@@ -118,25 +124,26 @@ function spdxInventory(
 
 function cycloneDxInventory(
 	cycloneDxInput: unknown,
-	repository: string,
-	version: string,
-	type: "container" | "file",
+	binding: SbomBinding | undefined,
 ): PackageInventory {
 	const cycloneDx = object(cycloneDxInput, "CycloneDX SBOM");
 	if (cycloneDx.bomFormat !== "CycloneDX") {
 		throw new Error("invalid CycloneDX format");
 	}
 	text(cycloneDx.specVersion, "CycloneDX spec version");
-	const subject = object(
-		object(cycloneDx.metadata, "CycloneDX metadata").component,
-		"CycloneDX metadata component",
-	);
-	if (
-		subject.type !== type ||
-		canonicalRepository(text(subject.name, "CycloneDX component name")) !== repository ||
-		subject.version !== version
-	) {
-		throw new Error(`CycloneDX document is not bound to ${imageReference(repository, version)}`);
+	if (binding !== undefined) {
+		const { repository, version, type } = binding;
+		const subject = object(
+			object(cycloneDx.metadata, "CycloneDX metadata").component,
+			"CycloneDX metadata component",
+		);
+		if (
+			subject.type !== type ||
+			canonicalRepository(text(subject.name, "CycloneDX component name")) !== repository ||
+			subject.version !== version
+		) {
+			throw new Error(`CycloneDX document is not bound to ${imageReference(repository, version)}`);
+		}
 	}
 	const purls = new Set<string>();
 	const keys = new Set<string>();
@@ -261,8 +268,26 @@ export function assertSbomFormatsCover(
 	const artifacts = array(object(syftInput, "Syft inventory").artifacts, "Syft artifacts");
 	assertDerivedInventoriesCover(
 		artifacts,
-		spdxInventory(spdxInput, repository, version, type),
-		cycloneDxInventory(cycloneDxInput, repository, version, type),
+		spdxInventory(spdxInput, { repository, version, type }),
+		cycloneDxInventory(cycloneDxInput, { repository, version, type }),
+	);
+}
+
+/**
+ * The standard renderings of a directory scan, such as the web app taken from the server image's jar, against its
+ * native inventory. The scan names a scratch path, not an image: the caller binds it to the image digest it came from
+ * (`lib/web-app-scan.ts`).
+ */
+export function assertDirectoryFormatsCover(
+	syftInput: unknown,
+	spdxInput: unknown,
+	cycloneDxInput: unknown,
+): void {
+	const artifacts = array(object(syftInput, "Syft inventory").artifacts, "Syft artifacts");
+	assertDerivedInventoriesCover(
+		artifacts,
+		spdxInventory(spdxInput, undefined),
+		cycloneDxInventory(cycloneDxInput, undefined),
 	);
 }
 
