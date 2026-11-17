@@ -320,7 +320,7 @@ A genuine false positive gets a line-level suppression with its reason, never a 
 
 ## Retired paths
 
-`vp run gate:no-legacy` checks source deprecations, configuration aliases, path redirects and docs redirect stubs.
+`vp run gate:no-legacy` checks source deprecations, configuration aliases, path redirects, docs redirect stubs and the retired short name of Hephaestus.
 `vp run check`, `vp run check:affected` and the pre-push hook run it.
 It has no baseline: remove the old path, together with its callers, tests and docs.
 Provider schemas and provider payload mixins follow their upstream contracts.

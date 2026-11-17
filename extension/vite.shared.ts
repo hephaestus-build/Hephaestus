@@ -8,7 +8,7 @@ import type { PluginOption } from "vite";
 export const extensionAliases: Record<string, string> = {
 	"@/components": path.resolve(import.meta.dirname, "../webapp/src/components"),
 	"@/lib": path.resolve(import.meta.dirname, "../webapp/src/lib"),
-	// The canonical Heph mark (`docs/contributor/brand-assets.mdx`), bundled rather than copied.
+	// The canonical Hephaestus mark (`docs/contributor/brand-assets.mdx`), bundled rather than copied.
 	"@/brand": path.resolve(import.meta.dirname, "../webapp/brand"),
 	"@/api": path.resolve(import.meta.dirname, "src/api"),
 	"~": path.resolve(import.meta.dirname, "src"),

@@ -105,6 +105,8 @@ export interface TitlePolicy {
 	readonly headerPattern: string;
 	readonly subjectPattern: string;
 	readonly breakingMarkerPattern: string;
+	readonly retiredNamePattern: string;
+	readonly retiredNameMessage: string;
 }
 
 /** Why `title` breaks the title policy, or an empty string when it does not. */
@@ -117,6 +119,9 @@ export const titleProblem = (title: string, policy: TitlePolicy): string => {
 	}
 	if (new RegExp(policy.breakingMarkerPattern, "u").test(title)) {
 		return "A breaking change is carried by a changeset, so the title takes no ! marker.";
+	}
+	if (new RegExp(policy.retiredNamePattern, "u").test(title)) {
+		return policy.retiredNameMessage;
 	}
 	const header = new RegExp(policy.headerPattern, "u").exec(title);
 	if (header === null) {
