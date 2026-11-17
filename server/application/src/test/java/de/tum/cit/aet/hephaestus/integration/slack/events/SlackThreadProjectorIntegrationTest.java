@@ -172,6 +172,29 @@ class SlackThreadProjectorIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void shouldWithholdAThreadWhoseTurnARestoreLeftWithoutWordsUntilItsWordsAreStoredAgain() {
+        long ws = newWorkspace();
+        seedChannel(ws, "C1", "ACTIVE");
+        seedThread(ws, "C1", "300.0", "300.5", "{100}");
+        seedMessage(ws, "C1", "300.0", null, "root");
+        seedMessage(ws, "C1", "300.5", "300.0", "Words before the edit");
+        long edited = Objects.requireNonNull(jdbc.queryForObject(
+                "SELECT id FROM slack_message WHERE workspace_id = ? AND slack_ts = '300.5'", Long.class, ws));
+        assertThat(messageRepository.eraseEditedText(ws, edited)).isEqualTo(1);
+
+        assertThat(projector.threadReadability(ws, "C1", "300.0"))
+                .isEqualTo(ThreadProjection.ThreadReadability.WORDS_ERASED);
+        assertThat(projector.threadPayload(ws, "C1", "300.0").get("messages"))
+                .as("never an empty reply under its author's name")
+                .isEmpty();
+
+        // The next history read stores Slack's words, and the thread reads again.
+        messageRepository.applyEdit(ws, "C1", "300.5", "Words after the edit", Instant.now());
+        assertThat(projector.threadReadability(ws, "C1", "300.0"))
+                .isEqualTo(ThreadProjection.ThreadReadability.READABLE);
+    }
+
+    @Test
     @DisplayName("participant firewall: a non-participant never sees the thread; a participant does")
     void participantFirewall() {
         long ws = newWorkspace();
