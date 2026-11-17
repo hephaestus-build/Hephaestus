@@ -158,6 +158,9 @@ void test("an image whose JRE is not of the .java-version line fails the build",
 	// A builder with a layer cache reuses the JRE layer and says so instead.
 	const reused = `[builder]   BellSoft Liberica JRE ${javaLine}.0.5: Reusing cached layer\n`;
 	assert.equal(summarize(reused).status, 0);
+	// libpak reloads a layer whose metadata was restored without its contents.
+	const reloaded = `[builder]   BellSoft Liberica JRE ${javaLine}.0.5: Reloading cached layer\n`;
+	assert.equal(summarize(reloaded).status, 0);
 	const other = String(Number(javaLine) - 4);
 	const fallback = summarize(jre(other));
 	assert.equal(fallback.status, 1);

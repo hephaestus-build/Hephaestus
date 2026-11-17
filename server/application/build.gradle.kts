@@ -492,9 +492,8 @@ for ((taskName, tag) in testTiers.filterKeys { it != "test" }) {
                                 }
                         }
                     throw GradleException(
-                        "${pinned.size} park(s) of 20 ms or more pinned a virtual thread to its carrier. Load a " +
-                            "blocking cache entry outside the cache's lock (CacheLoads), and do not block in a " +
-                            "native call or a class initializer.\n\n$parks"
+                        "${pinned.size} park(s) of 20 ms or more pinned a virtual thread to its carrier. Do not " +
+                            "block in a native call or a class initializer.\n\n$parks"
                     )
                 }
             }

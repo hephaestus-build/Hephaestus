@@ -359,7 +359,7 @@ The gate fails when one of these conditions occurs:
   Such a skip does not fail the gate.
 
 - **Where it runs.** `Quality → Client generators` runs it when the spec, the public operations, the templates, the script or the generator pin change.
-  It needs Docker and JDK 21, and it takes minutes, so `check` does not run it.
+  It needs Docker and the JDK of `.java-version`, and it takes minutes, so `check` does not run it.
 - **Add a decode test.** Add the fixture to `scripts/client-generators/fixtures/`.
   Then add a test to each template that decodes it with the `decodeFixture` function.
   For example, a fixture with an unknown value of an open enum proves rule 3.

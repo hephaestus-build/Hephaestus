@@ -19,7 +19,7 @@ const failure = /^(?:\[\w+\]\s+)?(?:ERROR: |unable to )/u;
 // The JVM buildpack takes the image's Java line from the JAR manifest. Nothing else would notice if it took another
 // line, so the image must name the JRE of the tested one.
 const contributedJre =
-	/BellSoft Liberica JRE (?<major>\d+)\.\S*: (?:Contributing to|Reusing cached) layer/u;
+	/BellSoft Liberica JRE (?<major>\d+)\.\S*: (?:Contributing to|(?:Reusing|Reloading) cached) layer/u;
 const javaLine = readFileSync(new URL("../.java-version", import.meta.url), "utf8").trim();
 
 const output = process.argv[2];
