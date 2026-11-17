@@ -24,7 +24,7 @@ import org.junit.jupiter.api.Test;
 @Tag("database")
 class ReadinessRefusedSpellingMigrationTest {
     private static final TestDatabase DATABASE = PostgreSQLTestContainer.createDatabase("readiness_refused_spelling");
-    private static final String CHANGELOG = "db/changelog/next/20261117102524-legacy-readiness-refused-spelling.xml";
+    private static final String CHANGELOG = "db/changelog/next/20261117155800-legacy-readiness-refused-spelling.xml";
 
     @Test
     void shouldRewriteOnlyTheLowerCaseCaptureRefusalWhenTheChangelogRunsAgain() throws Exception {
