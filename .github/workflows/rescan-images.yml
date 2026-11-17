@@ -150,6 +150,101 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: node scripts/report-vulnerability-drift.ts reports --release-failure
 
+  deployed:
+    name: Rescan what the hosts run
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      issues: write
+      packages: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # The signed channels, as a host reads them. scan-deployed-images.ts verifies each signature first.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: deploy-state
+          path: deploy-state
+          persist-credentials: false
+      - uses: ./.github/actions/setup-toolchain
+        with:
+          install: "none"
+      - uses: ./.github/actions/setup-release-security-tools
+        with:
+          install-syft: "true"
+      - name: Log in to Container Registry
+        uses: ./.github/actions/ghcr-login
+        with:
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      # A running host is judged against a database at most one day old.
+      - uses: ./.github/actions/download-trivy-db
+        with:
+          max-age-hours: "24"
+          metadata-path: reports/deployed/trivy-db.json
+      - name: Rescan the images that a commit channel names
+        id: channels
+        env:
+          TRIVY_USERNAME: ${{ github.actor }}
+          TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/scan-deployed-images.ts deploy-state reports/deployed
+      - name: Rescan the release that a release channel names
+        if: ${{ !cancelled() && steps.channels.outcome == 'success' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPOSITORY: ${{ github.repository }}
+          STAGING_RELEASE: ${{ steps.channels.outputs.staging-release }}
+          PRODUCTION_RELEASE: ${{ steps.channels.outputs.production-release }}
+          TRIVY_USERNAME: ${{ github.actor }}
+          TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+          SYFT_REGISTRY_AUTH_AUTHORITY: ghcr.io
+          SYFT_REGISTRY_AUTH_USERNAME: ${{ github.actor }}
+          SYFT_REGISTRY_AUTH_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          status=0
+          for tag in $(printf '%s\n' "$STAGING_RELEASE" "$PRODUCTION_RELEASE" | sed '/^$/d' | sort -u); do
+            mkdir -p "release-evidence/$tag"
+            gh release download "$tag" --repo "$REPOSITORY" --dir "release-evidence/$tag"
+            # A policy refusal goes to the exposure issue below; this step keeps the run red for it too.
+            node scripts/rescan-release-images.ts "release-evidence/$tag" "reports/deployed/$tag" "$tag" || status=1
+          done
+          exit "$status"
+      - name: Route KEV, critical and refused findings to the exposure issue
+        if: ${{ !cancelled() && steps.channels.outcome != 'skipped' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DEPLOYED_TARGETS: the images that the signed staging and production channels name
+        run: node scripts/report-deployed-exposure.ts reports/deployed
+      - name: Upload the deployed rescan reports
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: deployed-rescan-${{ github.run_id }}
+          path: reports/deployed
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Report a failed deployed rescan
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPOSITORY: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          title="The rescan of the deployed images failed"
+          number=$(gh issue list -R "$REPOSITORY" --state open --limit 500 --json number,title,author |
+            jq -r --arg title "$title" \
+              '[.[] | select(.title == $title and .author.login == "app/github-actions")][0].number // empty')
+          if [ -n "$number" ]; then
+            gh issue comment "$number" -R "$REPOSITORY" --body "@hephaestus-build/maintainer: the deployed rescan failed again: $RUN_URL"
+          else
+            gh issue create -R "$REPOSITORY" --title "$title" \
+              --body "@hephaestus-build/maintainer: the rescan of what staging and production run failed or found a policy refusal: $RUN_URL. A refusal is also listed in the exposure issue. Close this issue when a run passes."
+          fi
+
   dependencies-and-platform:
     name: Rescan dependency and platform pins
     # Branch analyses can annotate pull requests. Keep these findings on the default branch.
