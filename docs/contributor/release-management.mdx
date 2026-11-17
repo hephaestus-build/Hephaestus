@@ -613,6 +613,19 @@ Record the decision with the release evidence. Do not change a check or label to
 
 ### Promote the qualified candidate
 
+Promote the final candidate only when it has all of this evidence:
+
+- Every test tier passed in strict mode on its source commit.
+- The cutover rehearsal passed on it. Follow [Upgrade to 1.0](/admin/upgrade-to-1-0) word for word.
+- The drills passed on it, including the [isolated restore drill](/admin/backup-restore#isolated-restore-drill).
+- It ran in production for its promotion watch. At the end of the watch:
+  - Every [service level objective](/admin/observability#service-level-objectives) is met.
+  - The event inbox has no dead letters.
+  - Wasted model spend is below 5 %.
+
+The candidate does not wait for a number of days in production.
+Strict-mode test evidence replaces a calendar soak.
+
 Freeze `main` at the last qualified candidate's source commit.
 Do not exit prerelease mode or merge a stable Version PR before promotion.
 If `main` advances, publish and qualify another candidate.
