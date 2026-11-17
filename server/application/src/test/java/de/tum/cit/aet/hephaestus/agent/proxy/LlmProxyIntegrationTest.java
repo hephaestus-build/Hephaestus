@@ -1384,7 +1384,7 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
             long assigned = job.getInput().assignments().getFirst().practiceId();
             var named = List.of(
                     Long.toString(assigned), Long.toString(assigned + 998), "abc", "0", "-1", "99999999999999999999");
-            named.forEach(unused -> upstream.enqueue(json("{\"choices\":[]}")));
+            named.forEach(_ -> upstream.enqueue(json("{\"choices\":[]}")));
 
             for (String practice : named)
                 assertThat(callChat(proxyService(), job, practiceHeader(practice)))
