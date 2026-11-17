@@ -89,6 +89,21 @@ class ThreadCaptureSourceTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldCaptureNoBytesAndNameTheErasureWhenARestoreErasedATurnsWords() {
+        when(projection.threadReadability(7L, "C1", THREAD_TS))
+                .thenReturn(ThreadProjection.ThreadReadability.WORDS_ERASED);
+        var request = new CaptureRequest(
+                UUID.randomUUID(), UUID.randomUUID(), 1, Set.of(ThreadCaptureSource.SOURCE), "3.0.0", 3);
+        var captured = captureSource().capture(snapshot(new ItemVersion("frozen", null)), request);
+        assertThat(captured.files()).isEmpty();
+        assertThat(captured.citableTexts()).isEmpty();
+        assertThat(captured.stateOverrides())
+                .containsEntry(
+                        ThreadCaptureSource.SOURCE,
+                        new SourceCaptureState.Unavailable(SourceAbsenceReason.WORDS_ERASED));
+    }
+
+    @Test
     void shouldGiveEachBundledChatPracticeTheWholeThreadItReads() {
         String question =
                 "How do I run the migrations locally? I tried ./gradlew update and it stops at a missing driver.";
