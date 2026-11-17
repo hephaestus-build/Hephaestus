@@ -8,7 +8,7 @@ import { setTimeout as sleep } from "node:timers/promises";
 
 import type { FileEntry } from "@earendil-works/pi-coding-agent";
 
-import { present } from "./gateway-capabilities.ts";
+import { present, recordProgramFailure } from "./gateway-capabilities.ts";
 import { parseProxyClaim } from "./pi-provider.ts";
 
 // The server follows SIGTERM with SIGKILL after its stop timeout; the child gets this much of it and
@@ -736,6 +736,7 @@ if (import.meta.main) {
 		await main();
 	} catch (error) {
 		console.error(error);
+		recordProgramFailure("run", error);
 		process.exitCode = 1;
 	}
 }

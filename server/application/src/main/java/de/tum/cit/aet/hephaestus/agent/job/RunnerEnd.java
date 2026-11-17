@@ -7,6 +7,7 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -66,6 +67,47 @@ final class RunnerEnd {
                     ? "The review sandbox stopped on an unexpected error."
                     : "The review sandbox stopped on an unexpected error (" + error + ").";
         return null;
+    }
+
+    /** A review program's crash as the review kind reports it with the run's end. */
+    private static final Pattern PROGRAM_FAILURE = Pattern.compile("(init|run):(.+)");
+
+    /**
+     * The review kind's cause for a crash record that was not a small regular file. The sandbox shares the record's
+     * path with model-driven code, so the kind never reads such a record.
+     */
+    static final String UNREADABLE_PROGRAM_FAILURE = "record:unreadable";
+
+    /**
+     * The crash of the program that prepares the workspace ({@code init}) or starts the runner ({@code run}), as
+     * {@code <program>:<error kind>}, or {@link #UNREADABLE_PROGRAM_FAILURE}; null for any other cause, or an error
+     * kind outside the runner's vocabulary.
+     */
+    static @Nullable String programFailure(@Nullable String cause) {
+        if (cause == null) return null;
+        if (cause.equals(UNREADABLE_PROGRAM_FAILURE)) return cause;
+        var parts = PROGRAM_FAILURE.matcher(cause);
+        return parts.matches() && ERRORS.contains(parts.group(2)) ? cause : null;
+    }
+
+    /**
+     * Why the attempts ended, for a job whose retries ran out; null when the review programs of the attempt that spent
+     * the last retry did not record a crash. The record names the retries spent before its attempt ({@code spent}), not
+     * the lease epoch: a claim that waits raises the epoch, but runs no attempt and spends no retry.
+     */
+    static @Nullable String describeProgramFailure(@Nullable JsonNode capture, int spentBeforeLastAttempt) {
+        JsonNode record = capture == null ? null : capture.get("programFailure");
+        if (record == null || record.path("spent").asInt(-1) != spentBeforeLastAttempt) return null;
+        JsonNode recorded = record.get("failure");
+        String failure = programFailure(recorded != null && recorded.isString() ? recorded.asString() : null);
+        if (failure == null) return null;
+        if (failure.equals(UNREADABLE_PROGRAM_FAILURE))
+            return "The last attempt's review sandbox left a crash record that could not be read.";
+        var parts = PROGRAM_FAILURE.matcher(failure);
+        if (!parts.matches()) return null;
+        String step = parts.group(1).equals("init") ? "prepared the attempt's workspace" : "ran the review";
+        return "The last attempt's review sandbox stopped on an unexpected error (" + parts.group(2) + ") while it "
+                + step + ".";
     }
 
     private static @Nullable String known(@Nullable Object value, Set<String> vocabulary) {

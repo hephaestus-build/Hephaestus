@@ -105,7 +105,8 @@ public class AgentRunController {
 
     /**
      * @param outcome {@code completed}, {@code handed_on} or {@code unisolated}
-     * @param cause the hand-on cause that the server answered the loop's close, or {@code null}
+     * @param cause the hand-on cause that the server answered a composition loop's close, or the crash of a review
+     *     program; {@code null} for none
      */
     public record End(@NotBlank String outcome, @Nullable String cause) {}
 }

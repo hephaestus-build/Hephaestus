@@ -8,3 +8,9 @@
  */
 export const WORKSPACE = "/workspace/work";
 export const AGENT_DIR = "/workspace/.pi";
+
+/**
+ * Where a review program that crashes records why, for the review kind to send with the run's end. A fixed path on the
+ * sandbox's /tmp volume: the programs run with their own TMPDIR, the kind with none.
+ */
+export const PROGRAM_FAILURE = "/tmp/hephaestus-program-failure";

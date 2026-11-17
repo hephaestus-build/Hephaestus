@@ -53,6 +53,15 @@ public class ReviewRunKind implements AgentRunHandler {
     static final String RETRIES_EXHAUSTED =
             "The review's attempts ended without a result more often than its retry limit allows.";
 
+    /**
+     * {@link #RETRIES_EXHAUSTED} for a queued job, with the crash of its last attempt's review programs when they
+     * recorded one. The attempt that ended last spent the last retry.
+     */
+    static String retriesExhausted(ReviewJob job) {
+        String why = RunnerEnd.describeProgramFailure(job.getCapture(), job.spentAttempts() - 1);
+        return why == null ? RETRIES_EXHAUSTED : RETRIES_EXHAUSTED + " " + why;
+    }
+
     private static final Logger log = LoggerFactory.getLogger(ReviewRunKind.class);
 
     private final ReviewJobRepository jobs;
@@ -176,7 +185,7 @@ public class ReviewRunKind implements AgentRunHandler {
         boolean queued = job.getStatus() == ReviewJobStatus.QUEUED;
         if (queued && !ResultAdmissionService.isAdmitted(job)) {
             jobs.transitionStatus(
-                    job.getId(), ReviewJobStatus.FAILED, now, RETRIES_EXHAUSTED, Set.of(ReviewJobStatus.QUEUED));
+                    job.getId(), ReviewJobStatus.FAILED, now, retriesExhausted(job), Set.of(ReviewJobStatus.QUEUED));
             return;
         }
         if (!queued && (job.getStatus() != ReviewJobStatus.RUNNING || job.getAttempt() != attempt(lastEpoch))) return;

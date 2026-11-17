@@ -47,6 +47,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
@@ -242,12 +243,46 @@ public class ReviewSandboxRuns implements SandboxRunKind {
     }
 
     /**
+     * The review kind reports a crash of its review programs as the end's cause. The attempt keeps it, as no sandbox log
+     * reaches the server, before the end hands the attempt on. The write shares the end's transaction: it is fenced on
+     * the attempt's run, so it changes nothing that the end would not.
+     */
+    @Override
+    public boolean end(SandboxRun run, Outcome outcome, @Nullable String cause) {
+        Optional<ReviewJob> found = job(run);
+        String failure = RunnerEnd.programFailure(cause);
+        if (failure != null)
+            found.ifPresent(job -> {
+                var attempt = identity(run, job);
+                // The order of every writer of a review and its job (ReviewRunKind#requeue): the copy fence, the
+                // parent, then the job. The requeue below takes them again in this transaction.
+                evidenceFiles.holdCopyAdmission();
+                jobs.lockParentOfJob(job.getId());
+                jobs.recordProgramFailure(
+                        attempt.jobId(),
+                        attempt.workspaceId(),
+                        attempt.attempt(),
+                        attempt.runId(),
+                        objectMapper
+                                .createObjectNode()
+                                .put("attempt", attempt.attempt())
+                                .put("spent", job.spentAttempts())
+                                .put("failure", failure)
+                                .toString());
+            });
+        return endAttempt(run, found);
+    }
+
+    /**
      * Its result already ended the attempt, or handed it on; a run that sent none hands its attempt on, and spends a
      * retry, as a lost sandbox does.
      */
     @Override
     public boolean end(SandboxRun run, Outcome outcome) {
-        Optional<ReviewJob> job = job(run);
+        return endAttempt(run, job(run));
+    }
+
+    private boolean endAttempt(SandboxRun run, Optional<ReviewJob> job) {
         if (job.isEmpty()) return true;
         var logScope = new ReviewJobLogScope(job.get(), run.fence());
         try {

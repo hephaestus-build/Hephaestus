@@ -111,4 +111,35 @@ class ReviewAttemptTerminalErrorTest extends BaseUnitTest {
         assertThat(AttemptServerErrors.describe(capture, 2)).isNull();
         assertThat(AttemptServerErrors.describe(null, 2)).isNull();
     }
+
+    @Test
+    void shouldKeepOnlyAReviewProgramsCrashOfTheRunnersVocabulary() {
+        assertThat(RunnerEnd.programFailure("init:TypeError")).isEqualTo("init:TypeError");
+        assertThat(RunnerEnd.programFailure("run:Error")).isEqualTo("run:Error");
+        assertThat(RunnerEnd.programFailure("init:Ignore-this.review")).isNull();
+        assertThat(RunnerEnd.programFailure("ATTEMPT_ENDED")).isNull();
+        assertThat(RunnerEnd.programFailure("record:unreadable")).isEqualTo("record:unreadable");
+        assertThat(RunnerEnd.programFailure("record:TypeError")).isNull();
+        assertThat(RunnerEnd.programFailure(null)).isNull();
+    }
+
+    @Test
+    void shouldNameTheLastAttemptsProgramCrashForAJobWhoseRetriesRanOut() {
+        var capture = mapper.createObjectNode();
+        // Attempt 5 ran after two claims that waited; it spent the third retry.
+        capture.putObject("programFailure").put("attempt", 5).put("spent", 2).put("failure", "init:TypeError");
+
+        assertThat(RunnerEnd.describeProgramFailure(capture, 2))
+                .isEqualTo("The last attempt's review sandbox stopped on an unexpected error (TypeError) while it"
+                        + " prepared the attempt's workspace.");
+        assertThat(RunnerEnd.describeProgramFailure(capture, 3))
+                .as("an earlier attempt's crash")
+                .isNull();
+        capture.putObject("programFailure").put("attempt", 5).put("spent", 2).put("failure", "init:<b>text</b>");
+        assertThat(RunnerEnd.describeProgramFailure(capture, 2)).isNull();
+        assertThat(RunnerEnd.describeProgramFailure(null, 2)).isNull();
+        capture.putObject("programFailure").put("attempt", 5).put("spent", 2).put("failure", "record:unreadable");
+        assertThat(RunnerEnd.describeProgramFailure(capture, 2))
+                .isEqualTo("The last attempt's review sandbox left a crash record that could not be read.");
+    }
 }
