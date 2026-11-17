@@ -42,7 +42,7 @@ export async function resolveAliasBase(
 	base: string,
 	defaultBranch: string,
 	chain: BaseChain,
-	images: readonly string[] = [],
+	images: readonly string[],
 ): Promise<string | undefined> {
 	let commit: string | undefined = base;
 	for (let layer = 0; commit !== undefined && layer < LAYER_LIMIT; layer += 1) {
@@ -74,7 +74,6 @@ if (import.meta.main) {
 	const repository = requiredEnv(process.env, "GITHUB_REPOSITORY");
 	// Only a pull request aliases images; a merge group reads the base for its diff alone.
 	const aliases = process.env.ALIAS_IMAGES === "true";
-	const { images } = parseInventory(await readJsonFile("security/release-images.json"));
 	const commit = await resolveAliasBase(
 		requiredEnv(process.env, "BASE_SHA"),
 		requiredEnv(process.env, "DEFAULT_BRANCH"),
@@ -111,22 +110,16 @@ if (import.meta.main) {
 						return asArray(runs.workflow_runs, "workflow runs").length > 0;
 					}
 				: undefined,
-			// The run of a commit publishes the images that its own inventory names.
+			// The run of a commit publishes the images that its own inventory names. The checkout has the
+			// full history, so the commit's own file answers without a request.
 			inventory: aliases
 				? async (head): Promise<readonly string[]> =>
 						parseInventory(
-							parseJson(
-								await output("gh", [
-									"api",
-									"-H",
-									"Accept: application/vnd.github.raw+json",
-									`repos/${repository}/contents/security/release-images.json?ref=${head}`,
-								]),
-							),
+							parseJson(await output("git", ["show", `${head}:security/release-images.json`])),
 						).images
 				: undefined,
 		},
-		images,
+		aliases ? parseInventory(await readJsonFile("security/release-images.json")).images : [],
 	);
 	await appendFile(requiredEnv(process.env, "GITHUB_OUTPUT"), `commit=${commit ?? ""}\n`);
 }

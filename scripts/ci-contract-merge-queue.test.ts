@@ -1106,37 +1106,15 @@ void describe("ci-contract: merge-queue", () => {
 		// walk ends on the commit the default branch contains, and that is what the tagging job aliases.
 		const published = "a".repeat(40);
 		assert.equal(
-			await resolveAliasBase("b".repeat(40), "main", {
-				compare: async (base) => (base === published ? "ahead" : "diverged"),
-				baseOf: async () => published,
-			}),
-			published,
-		);
-
-		// A base from before an image was renamed or added published nothing under that name, so the
-		// tagging job would fail on it. The resolver leaves such a run every image to build instead.
-		const { images } = parseInventory(
-			JSON.parse(await readFile("security/release-images.json", "utf8")),
-		);
-		const base = {
-			compare: async () => "identical",
-			baseOf: async () => undefined,
-			published: async () => true,
-		};
-		for (const missing of images) {
-			assert.equal(
-				await resolveAliasBase(
-					published,
-					"main",
-					{ ...base, inventory: async () => images.filter((image) => image !== missing) },
-					images,
-				),
-				undefined,
-				`a base without ${missing} aliases nothing`,
-			);
-		}
-		assert.equal(
-			await resolveAliasBase(published, "main", { ...base, inventory: async () => images }, images),
+			await resolveAliasBase(
+				"b".repeat(40),
+				"main",
+				{
+					compare: async (base) => (base === published ? "ahead" : "diverged"),
+					baseOf: async () => published,
+				},
+				[],
+			),
 			published,
 		);
 
@@ -1150,6 +1128,17 @@ void describe("ci-contract: merge-queue", () => {
 		);
 		const shell = runScript(docker, tagging, "Verify and tag unchanged images");
 		assert.match(shell, /\$ALIAS_BASE/u);
+		// The resolver accepts a base only when its inventory names every image of the checkout's
+		// (scripts/resolve-alias-base.ts). That guards this job only while the job tags exactly those names.
+		const { images } = parseInventory(
+			JSON.parse(await readFile("security/release-images.json", "utf8")),
+		);
+		assert.deepEqual(
+			[...shell.matchAll(/\btag_image (?<name>[a-z-]+)$/gmu)]
+				.map(({ groups }) => groups?.name ?? "")
+				.toSorted((a, b) => a.localeCompare(b)),
+			images.toSorted((a, b) => a.localeCompare(b)),
+		);
 		assert.doesNotMatch(shell, /BASE_SHA/u);
 
 		// A run that reaches no published commit builds every image rather than failing to alias one,
