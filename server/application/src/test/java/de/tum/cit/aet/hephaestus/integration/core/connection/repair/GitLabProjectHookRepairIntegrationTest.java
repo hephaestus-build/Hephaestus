@@ -1,13 +1,12 @@
 package de.tum.cit.aet.hephaestus.integration.core.connection.repair;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import de.tum.cit.aet.hephaestus.core.auth.AuthPropertiesFixture;
-import de.tum.cit.aet.hephaestus.core.web.PublicApiUrls;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionFixtures;
@@ -29,7 +28,6 @@ import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
-import java.net.URI;
 import java.time.Clock;
 import java.util.ArrayList;
 import java.util.List;
@@ -42,6 +40,8 @@ import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.aop.framework.ProxyFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.support.StaticListableBeanFactory;
@@ -56,8 +56,6 @@ import org.springframework.transaction.support.TransactionTemplate;
  * coordination, with GitLab's project hook API faked in memory.
  */
 class GitLabProjectHookRepairIntegrationTest extends BaseIntegrationTest {
-    private static final PublicApiUrls URLS =
-            new PublicApiUrls(AuthPropertiesFixture.withIssuer(URI.create("https://receiver.example.test")));
     private static final String ORIGIN = "https://gitlab.example.test";
     private static final String MARKER = "marker";
     private static final String URL =
@@ -113,7 +111,7 @@ class GitLabProjectHookRepairIntegrationTest extends BaseIntegrationTest {
         var clients = new StaticListableBeanFactory();
         clients.addBean("client", client);
         var adapters = new StaticListableBeanFactory();
-        adapters.addBean("gitlab", new GitLabResourceAdapter(clients.getBeanProvider(GitLabWebhookClient.class), URLS));
+        adapters.addBean("gitlab", new GitLabResourceAdapter(clients.getBeanProvider(GitLabWebhookClient.class)));
 
         ProviderResourceRepairs coordination = new ProviderResourceRepairs(
                 rows,
@@ -177,6 +175,36 @@ class GitLabProjectHookRepairIntegrationTest extends BaseIntegrationTest {
                         .toList()));
         found.forEach(repair -> created.add(repair.id()));
         return found;
+    }
+
+    /** A group hook as a 1.0 release candidate stored it: its id, and the ownership in the given JSON shape. */
+    private Connection releaseCandidateGroupHook(String config) {
+        Connection owner = Objects.requireNonNull(transactions.execute(status -> {
+            var workspace = workspaces.save(WorkspaceTestFixtures.activeWorkspace(
+                    "group-hook-" + UUID.randomUUID().toString().substring(0, 8)));
+            Connection connection = new Connection(
+                    workspace,
+                    IntegrationKind.GITLAB,
+                    Long.toString(groupId),
+                    new ConnectionConfig.GitLabConfig(ORIGIN, groupId, 77L, Set.of(), null));
+            connection.setCredentials(new BearerToken("group-hook-token", null), converter);
+            ConnectionFixtures.reachState(connection, IntegrationState.ACTIVE);
+            return connections.saveAndFlush(connection);
+        }));
+        transactions.executeWithoutResult(status -> Objects.requireNonNull(entities)
+                .createNativeQuery(
+                        "UPDATE connection SET config = " + config + " WHERE id = :id AND workspace_id = :workspaceId")
+                .setParameter("id", owner.getId())
+                .setParameter("workspaceId", owner.getWorkspace().getId())
+                .executeUpdate());
+        return owner;
+    }
+
+    private @Nullable Long versionOf(Connection owner) {
+        return connections
+                .findByIdAndWorkspaceId(owner.getId(), owner.getWorkspace().getId())
+                .orElseThrow()
+                .getVersion();
     }
 
     private ConnectionConfig.GitLabConfig configOf(Connection owner) {
@@ -273,5 +301,71 @@ class GitLabProjectHookRepairIntegrationTest extends BaseIntegrationTest {
                 .singleElement()
                 .satisfies(repair -> assertThat(repair.resource()).isEqualTo(projectHook(8L, 51L)));
         assertThat(configOf(owner).projectHooks()).containsExactly(new ConnectionConfig.GitLabProjectHook(7L, 40L));
+    }
+
+    @ParameterizedTest
+    @ValueSource(
+            strings = {
+                "config - 'webhookOwnershipHash' - 'webhookOwnershipMarker'",
+                "jsonb_set(jsonb_set(config, '{webhookOwnershipHash}', 'null'), '{webhookOwnershipMarker}', 'null')"
+            })
+    void shouldRecordTheOwnershipOfAReleaseCandidateGroupHookOnce(String config) {
+        Connection owner = releaseCandidateGroupHook(config);
+        assertThat(configOf(owner).gitlabWebhookId()).isEqualTo(77L);
+        assertThat(configOf(owner).webhookOwnershipHash()).isNull();
+        Long version = versionOf(owner);
+
+        boolean recorded = repairs.recordOwnership(
+                owner.getWorkspace().getId(),
+                owner.getId(),
+                version,
+                stored -> ((ConnectionConfig.GitLabConfig) stored).withWebhookOwnership(77L, HASH, null));
+
+        assertThat(recorded).isTrue();
+        assertThat(configOf(owner).gitlabWebhookId()).isEqualTo(77L);
+        assertThat(configOf(owner).webhookOwnershipHash()).isEqualTo(HASH);
+        assertThat(repairsOf(owner)).isEmpty();
+        // A reconcile that read the connection before the first one recorded it records nothing.
+        assertThat(repairs.recordOwnership(
+                        owner.getWorkspace().getId(),
+                        owner.getId(),
+                        version,
+                        stored -> ((ConnectionConfig.GitLabConfig) stored).withWebhookOwnership(77L, "other", null)))
+                .isFalse();
+        assertThat(configOf(owner).webhookOwnershipHash()).isEqualTo(HASH);
+    }
+
+    @Test
+    void shouldNotRecordOwnershipForAConnectionThatIsNoLongerActive() {
+        Connection owner = releaseCandidateGroupHook("config - 'webhookOwnershipHash'");
+        transactions.executeWithoutResult(status -> {
+            Connection stored = connections
+                    .findByIdAndWorkspaceId(owner.getId(), owner.getWorkspace().getId())
+                    .orElseThrow();
+            ConnectionFixtures.reachState(stored, IntegrationState.SUSPENDED);
+            connections.saveAndFlush(stored);
+        });
+
+        assertThat(repairs.recordOwnership(
+                        owner.getWorkspace().getId(),
+                        owner.getId(),
+                        versionOf(owner),
+                        stored -> ((ConnectionConfig.GitLabConfig) stored).withWebhookOwnership(77L, HASH, null)))
+                .isFalse();
+        assertThat(configOf(owner).webhookOwnershipHash()).isNull();
+    }
+
+    @Test
+    void shouldRefuseToReplaceTheHookWhileRecordingItsOwnership() {
+        Connection owner = releaseCandidateGroupHook("config - 'webhookOwnershipHash'");
+
+        assertThatThrownBy(() -> repairs.recordOwnership(
+                        owner.getWorkspace().getId(),
+                        owner.getId(),
+                        versionOf(owner),
+                        stored -> ((ConnectionConfig.GitLabConfig) stored).withWebhookOwnership(78L, HASH, null)))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThat(configOf(owner).gitlabWebhookId()).isEqualTo(77L);
+        assertThat(configOf(owner).webhookOwnershipHash()).isNull();
     }
 }

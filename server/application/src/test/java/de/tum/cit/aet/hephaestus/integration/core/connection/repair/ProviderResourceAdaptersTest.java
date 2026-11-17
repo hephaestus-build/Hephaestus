@@ -105,7 +105,7 @@ class ProviderResourceAdaptersTest {
         GitLabWebhookClient client = mock(GitLabWebhookClient.class);
         var beans = new StaticListableBeanFactory();
         beans.addBean("client", client);
-        var adapter = new GitLabResourceAdapter(beans.getBeanProvider(GitLabWebhookClient.class), URLS);
+        var adapter = new GitLabResourceAdapter(beans.getBeanProvider(GitLabWebhookClient.class));
         String oldUrl = "https://receiver.example.test/api/hooks/old?hephaestus_resource=old-marker";
         Resource target = new Resource(
                 IntegrationKind.GITLAB,
@@ -130,7 +130,7 @@ class ProviderResourceAdaptersTest {
         GitLabWebhookClient client = mock(GitLabWebhookClient.class);
         var beans = new StaticListableBeanFactory();
         beans.addBean("client", client);
-        var adapter = new GitLabResourceAdapter(beans.getBeanProvider(GitLabWebhookClient.class), URLS);
+        var adapter = new GitLabResourceAdapter(beans.getBeanProvider(GitLabWebhookClient.class));
         String url = "https://receiver.example.test/webhooks/gitlab/connections/5/k/r?hephaestus_resource=m";
         String hash = ProviderResourceAdapter.fingerprint(url);
         var config = new ConnectionConfig.GitLabConfig("https://gitlab.example.test", 99L, null, Set.of(), null)
@@ -166,7 +166,7 @@ class ProviderResourceAdaptersTest {
         GitLabWebhookClient client = mock(GitLabWebhookClient.class);
         var beans = new StaticListableBeanFactory();
         beans.addBean("client", client);
-        var adapter = new GitLabResourceAdapter(beans.getBeanProvider(GitLabWebhookClient.class), URLS);
+        var adapter = new GitLabResourceAdapter(beans.getBeanProvider(GitLabWebhookClient.class));
         Resource target = new Resource(
                 IntegrationKind.GITLAB,
                 "https://gitlab.example.test",
@@ -196,7 +196,7 @@ class ProviderResourceAdaptersTest {
         GitLabWebhookClient client = mock(GitLabWebhookClient.class);
         var beans = new StaticListableBeanFactory();
         beans.addBean("client", client);
-        var adapter = new GitLabResourceAdapter(beans.getBeanProvider(GitLabWebhookClient.class), URLS);
+        var adapter = new GitLabResourceAdapter(beans.getBeanProvider(GitLabWebhookClient.class));
         Map<Long, String> upstream = new ConcurrentHashMap<>(
                 Map.of(42L, "https://receiver.example.test/old", 43L, "https://receiver.example.test/fresh"));
         List<Long> accepted = new ArrayList<>();

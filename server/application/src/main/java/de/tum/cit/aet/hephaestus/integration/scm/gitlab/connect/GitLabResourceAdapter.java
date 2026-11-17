@@ -2,7 +2,6 @@ package de.tum.cit.aet.hephaestus.integration.scm.gitlab.connect;
 
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.security.ScmOrigin;
-import de.tum.cit.aet.hephaestus.core.web.PublicApiUrls;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.CredentialBundle;
@@ -11,7 +10,6 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ProviderResourceAdapter;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabWebhookClient;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabWebhookClient.WebhookInfo;
-import de.tum.cit.aet.hephaestus.integration.scm.gitlab.webhook.GitLabConnectionWebhookController;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.BooleanSupplier;
@@ -24,11 +22,9 @@ import org.springframework.web.reactive.function.client.WebClientResponseExcepti
 @ConditionalOnServerRole
 public class GitLabResourceAdapter implements ProviderResourceAdapter {
     private final ObjectProvider<GitLabWebhookClient> clients;
-    private final PublicApiUrls urls;
 
-    public GitLabResourceAdapter(ObjectProvider<GitLabWebhookClient> clients, PublicApiUrls urls) {
+    public GitLabResourceAdapter(ObjectProvider<GitLabWebhookClient> clients) {
         this.clients = clients;
-        this.urls = urls;
     }
 
     @Override
@@ -52,21 +48,13 @@ public class GitLabResourceAdapter implements ProviderResourceAdapter {
                             gitlab.webhookOwnershipHash()))
                     .toList();
         }
-        String ownership = gitlab.webhookOwnershipHash();
-        if (ownership == null && ref.connectionId() != null) {
-            ownership = "legacy:"
-                    + ProviderResourceAdapter.fingerprint(urls.originUri(
-                                    GitLabConnectionWebhookController.PATH_PREFIX + "{connectionId}/",
-                                    ref.connectionId())
-                            .toString());
-        }
         return List.of(new Resource(
                 kind(),
                 origin,
                 ResourceType.GROUP_HOOK,
                 gitlab.gitlabGroupId().toString(),
                 gitlab.gitlabWebhookId().toString(),
-                ownership));
+                gitlab.webhookOwnershipHash()));
     }
 
     /** The parent of a project hook: the group whose credential removes it, then the project that holds it. */
@@ -110,7 +98,9 @@ public class GitLabResourceAdapter implements ProviderResourceAdapter {
                 .findFirst();
         if (target.isEmpty()) return Removal.VERIFIED_ABSENT;
         if (resource.ownershipHash() == null) return Removal.NEEDS_AUTHORIZATION;
-        if (!owns(resource.ownershipHash(), target.get().url())) return Removal.DIFFERENT_OWNER;
+        boolean owned = resource.ownershipHash()
+                .equals(ProviderResourceAdapter.fingerprint(target.get().url()));
+        if (!owned) return Removal.DIFFERENT_OWNER;
         if (!beforeDispatch.getAsBoolean()) return Removal.CANCELLED;
         boolean completed = project.isPresent()
                 ? client.deregisterProjectWebhookWithCredentials(
@@ -147,15 +137,5 @@ public class GitLabResourceAdapter implements ProviderResourceAdapter {
                         Long.toString(hook.id()),
                         registration.ownershipHash()))
                 .toList();
-    }
-
-    static boolean owns(String expected, String url) {
-        if (!expected.startsWith("legacy:")) return expected.equals(ProviderResourceAdapter.fingerprint(url));
-        // A legacy route has exactly two signed suffix segments and no generation marker. Never match a replacement.
-        if (url.contains("?")) return false;
-        int last = url.lastIndexOf('/');
-        int previous = last < 0 ? -1 : url.lastIndexOf('/', last - 1);
-        return previous >= 0
-                && expected.substring(7).equals(ProviderResourceAdapter.fingerprint(url.substring(0, previous + 1)));
     }
 }

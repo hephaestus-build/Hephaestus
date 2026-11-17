@@ -240,15 +240,45 @@ public class GitLabWebhookService {
                 return result;
             }
 
+            // A group hook registered by a 1.0 release candidate records no ownership. It posts to this connection's
+            // route under a key this server accepts, so the URL that GitLab reports is its ownership. Remove this
+            // with the rc-to-1.0 cutover code (#4559).
+            String ownership = config.webhookOwnershipHash();
+            Long version = connection.get().getVersion();
+            if (stored.isPresent()
+                    && ownership == null
+                    && connection.get().getConfig() instanceof GitLabConfig read
+                    && Objects.equals(read.gitlabWebhookId(), storedWebhookId)
+                    && read.webhookOwnershipHash() == null
+                    && !stored.get().url().contains("?")
+                    && ownKeyId(stored.get().url(), connectionId)
+                            .filter(routeCredential::isAccepted)
+                            .isPresent()) {
+                long hookId = stored.get().id();
+                String recorded =
+                        ProviderResourceAdapter.fingerprint(stored.get().url());
+                if (!repairs.recordOwnership(scopeId, connectionId, version, cfg -> {
+                    if (!(cfg instanceof GitLabConfig gitlab))
+                        throw new IllegalStateException("Expected GitLab config");
+                    // Only the hook that was read, and only while it has no ownership.
+                    if (!Objects.equals(gitlab.gitlabWebhookId(), hookId) || gitlab.webhookOwnershipHash() != null) {
+                        return gitlab;
+                    }
+                    return gitlab.withWebhookOwnership(hookId, recorded, gitlab.webhookOwnershipMarker());
+                })) {
+                    return WebhookSetupResult.skipped(WebhookSetupResult.Reason.SUPERSEDED);
+                }
+                ownership = recorded;
+                log.info("Recorded the ownership of a webhook: workspaceId={}, webhookId={}", scopeId, hookId);
+            }
+
             // Step 2: The stored hook is this route's own hook: nothing to do. A hook of this connection under a key
             // this server does not know was recorded by a server that is already on a newer key: leave it to that one.
             if (stored.isPresent()
                     && !stored.get().isDisabled()
                     && (webhookUrl.equals(stored.get().url())
-                            || (stored.get().url().startsWith(webhookUrl + "?")
-                                    && ProviderResourceAdapter.fingerprint(
-                                                    stored.get().url())
-                                            .equals(config.webhookOwnershipHash())))) {
+                            || stored.get().url().startsWith(webhookUrl + "?"))
+                    && ProviderResourceAdapter.fingerprint(stored.get().url()).equals(ownership)) {
                 log.debug(
                         "Webhook already registered: workspaceId={}, webhookId={}",
                         scopeId,
@@ -611,9 +641,11 @@ public class GitLabWebhookService {
      * method verifies that registered webhooks still exist and re-registers them
      * if they were deleted or disabled externally.
      * <p>
-     * Runs every 6 hours. Non-fatal: errors are logged but don't affect other operations.
+     * Runs two minutes after start, so a hook from a 1.0 release candidate records its ownership before an admin
+     * can disconnect its workspace, and then every 6 hours. Non-fatal: errors are logged but don't affect other
+     * operations.
      */
-    @Scheduled(cron = "0 0 */6 * * *")
+    @Scheduled(initialDelayString = "PT2M", fixedDelayString = "PT6H")
     @SchedulerLock(name = "gitlab-webhook-health", lockAtMostFor = "PT30M", lockAtLeastFor = "PT5M")
     public void checkWebhookHealth() {
         var client = webhookClientProvider.getIfAvailable();
@@ -625,7 +657,8 @@ public class GitLabWebhookService {
                 Workspace workspace,
                 long connectionId,
                 Long groupId,
-                @Nullable Long webhookId) {}
+                @Nullable Long webhookId,
+                @Nullable String ownershipHash) {}
 
         List<GitLabHealthCandidate> gitLabWorkspaces = workspaceLookup.active().stream()
                 .map(ws -> {
@@ -641,7 +674,8 @@ public class GitLabWebhookService {
                                     && cfg.webhooksRefusedAt() == null)) {
                         return null;
                     }
-                    return new GitLabHealthCandidate(ws, connectionId, cfg.gitlabGroupId(), cfg.gitlabWebhookId());
+                    return new GitLabHealthCandidate(
+                            ws, connectionId, cfg.gitlabGroupId(), cfg.gitlabWebhookId(), cfg.webhookOwnershipHash());
                 })
                 .filter(Objects::nonNull)
                 .toList();
@@ -676,8 +710,20 @@ public class GitLabWebhookService {
                 boolean disabled = existing.isPresent() && existing.get().isDisabled();
                 boolean own = existing.isPresent()
                         && existing.get().url().startsWith(connectionWebhookUrl(candidate.connectionId()));
-                if (own && !disabled) {
+                if (own && !disabled && candidate.ownershipHash() != null) {
                     continue; // this connection's hook exists and is still delivering — nothing to do
+                }
+
+                if (own && !disabled) {
+                    // A hook from a 1.0 release candidate: registerWebhook records its ownership and keeps it.
+                    WebhookSetupResult result = registerWebhook(workspace);
+                    if (!result.registered()) {
+                        log.warn(
+                                "Could not record webhook ownership: workspaceId={}, reason={}",
+                                workspace.getId(),
+                                result.reason());
+                    }
+                    continue;
                 }
 
                 if (!missing && !own) {

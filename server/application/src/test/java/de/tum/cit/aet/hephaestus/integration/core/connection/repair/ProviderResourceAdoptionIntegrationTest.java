@@ -813,7 +813,7 @@ class ProviderResourceAdoptionIntegrationTest extends BaseIntegrationTest {
                     });
             var factory = new StaticListableBeanFactory();
             factory.addBean("client", client);
-            return new GitLabResourceAdapter(factory.getBeanProvider(GitLabWebhookClient.class), URLS);
+            return new GitLabResourceAdapter(factory.getBeanProvider(GitLabWebhookClient.class));
         }
 
         private ProviderResourceAdapter outline() {

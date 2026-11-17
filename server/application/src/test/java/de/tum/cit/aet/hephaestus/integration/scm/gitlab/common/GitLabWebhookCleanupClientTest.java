@@ -4,14 +4,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 
-import de.tum.cit.aet.hephaestus.core.auth.AuthPropertiesFixture;
-import de.tum.cit.aet.hephaestus.core.web.PublicApiUrls;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ProviderResourceAdapter;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.connect.GitLabResourceAdapter;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
-import java.net.URI;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -70,9 +67,7 @@ class GitLabWebhookCleanupClientTest extends BaseUnitTest {
     private GitLabResourceAdapter adapter() {
         var beans = new StaticListableBeanFactory();
         beans.addBean("client", client());
-        return new GitLabResourceAdapter(
-                beans.getBeanProvider(GitLabWebhookClient.class),
-                new PublicApiUrls(AuthPropertiesFixture.withIssuer(URI.create("https://app.example"))));
+        return new GitLabResourceAdapter(beans.getBeanProvider(GitLabWebhookClient.class));
     }
 
     private static ProviderResourceAdapter.Resource target() {
