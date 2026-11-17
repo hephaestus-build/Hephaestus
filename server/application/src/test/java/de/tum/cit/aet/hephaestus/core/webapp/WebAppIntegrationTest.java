@@ -13,6 +13,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import de.tum.cit.aet.hephaestus.testconfig.RealAuthIntegrationTest;
 import jakarta.servlet.Filter;
+import java.util.Objects;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
@@ -21,6 +22,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
+import org.springframework.web.filter.OncePerRequestFilter;
 
 /**
  * The server serves the built web app (ADR 0100): the page with its config record for every client route, the files
@@ -38,16 +40,14 @@ class WebAppIntegrationTest extends RealAuthIntegrationTest {
     @Autowired
     private WebApplicationContext application;
 
+    /** MockMvc runs only the filters it is given: the host rules, then Spring Security. */
+    @Autowired
+    private FilterRegistrationBean<OncePerRequestFilter> workspaceHostGuardFilter;
+
     private MockMvc mvc() {
-        var builder = MockMvcBuilders.webAppContextSetup(application);
-        for (var registration :
-                application.getBeansOfType(FilterRegistrationBean.class).values()) {
-            if (registration.getFilter() != null
-                    && registration.getUrlPatterns().isEmpty()) {
-                builder.addFilter(registration.getFilter());
-            }
-        }
-        return builder.addFilter(application.getBean("springSecurityFilterChain", Filter.class))
+        return MockMvcBuilders.webAppContextSetup(application)
+                .addFilter(Objects.requireNonNull(workspaceHostGuardFilter.getFilter()))
+                .addFilter(application.getBean("springSecurityFilterChain", Filter.class))
                 .build();
     }
 

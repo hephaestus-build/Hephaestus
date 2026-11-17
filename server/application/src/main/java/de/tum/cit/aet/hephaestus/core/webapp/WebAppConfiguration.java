@@ -61,7 +61,8 @@ class WebAppConfiguration implements WebMvcConfigurer {
 
     @Bean
     RouterFunction<ServerResponse> webAppIndexRoute(WebAppIndex index) {
-        RequestPredicate clientRoute = RequestPredicates.method(HttpMethod.GET, HttpMethod.HEAD)
+        RequestPredicate clientRoute = RequestPredicates.method(HttpMethod.GET)
+                .or(RequestPredicates.method(HttpMethod.HEAD))
                 .and(request -> index.html().isPresent() && isClientRoute(path(request), index));
         return RouterFunctions.route(
                 clientRoute,

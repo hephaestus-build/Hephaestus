@@ -6,6 +6,7 @@ import de.tum.cit.aet.hephaestus.config.CorsProperties;
 import de.tum.cit.aet.hephaestus.core.WorkspaceSubdomainProperties;
 import de.tum.cit.aet.hephaestus.core.auth.AuthProperties;
 import de.tum.cit.aet.hephaestus.core.auth.clientsession.InstalledClientRegistry;
+import de.tum.cit.aet.hephaestus.core.security.SecurityHeaders;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceOriginPolicy;
 import java.net.URI;
@@ -36,7 +37,9 @@ class WorkspaceSubdomainCorsTest extends BaseUnitTest {
                 new MockEnvironment(),
                 false,
                 true,
-                AuthProperties.DEFAULT_COOKIE_NAME);
+                AuthProperties.DEFAULT_COOKIE_NAME,
+                new SecurityHeaders(
+                        URI.create("https://hephaestus.build"), new WorkspaceSubdomainProperties(false, "")));
         return security.corsConfigurationSource();
     }
 

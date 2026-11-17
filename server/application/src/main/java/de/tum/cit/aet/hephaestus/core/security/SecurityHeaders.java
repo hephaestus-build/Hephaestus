@@ -1,8 +1,9 @@
 package de.tum.cit.aet.hephaestus.core.security;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceSubdomainProperties;
-import de.tum.cit.aet.hephaestus.core.auth.AuthProperties;
+import java.net.URI;
 import org.jspecify.annotations.Nullable;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.web.header.writers.CrossOriginOpenerPolicyHeaderWriter.CrossOriginOpenerPolicy;
 import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter.ReferrerPolicy;
@@ -36,9 +37,10 @@ public final class SecurityHeaders {
 
     private final String contentSecurityPolicy;
 
-    public SecurityHeaders(AuthProperties auth, WorkspaceSubdomainProperties workspaceSubdomains) {
+    public SecurityHeaders(
+            @Value("${hephaestus.auth.issuer}") URI issuer, WorkspaceSubdomainProperties workspaceSubdomains) {
         this.contentSecurityPolicy = contentSecurityPolicy(
-                "https".equals(auth.issuer().getScheme()),
+                "https".equals(issuer.getScheme()),
                 workspaceSubdomains.enabled() ? "https://" + workspaceSubdomains.baseDomain() : null);
     }
 
