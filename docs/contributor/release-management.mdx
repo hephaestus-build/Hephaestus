@@ -57,9 +57,13 @@ sequenceDiagram
 
    Every CI/CD run on that branch includes the **release evidence preflight** below, regardless of its start event.
    `CI Status Gate` fails unless the same run's preflight succeeds.
-   The preflight also requires a passing nightly Kubernetes run on `main` ([Two verification tiers](./ci-cd.mdx#two-verification-tiers)).
    More than one run can report the gate for a Version PR head, and either satisfies the ruleset.
    Thus, a green gate proves preflight success only if no run can pass without it.
+
+   The preflight also requires a passing nightly Kubernetes run on `main` ([Two verification tiers](./ci-cd.mdx#two-verification-tiers)).
+   That run includes the chart upgrade drill.
+   It proves that the previous release claims a review queued on the new schema ([Claim of a queued review](./database-migration.mdx#claim-of-a-queued-review)).
+   From 1.0.0 on, the rolling upgrade depends on that claim, so a failed drill blocks the release.
 
    Every run on that branch publishes the whole release image set on both architectures.
    An ordinary pull request builds only changed `linux/amd64` candidates and aliases the rest from `main`.

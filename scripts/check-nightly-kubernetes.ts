@@ -13,11 +13,13 @@ type Api = (path: string) => Promise<unknown>;
 export const maxAgeHours = 48;
 
 /** The nightly jobs that qualify the cluster; the sandbox footprint benchmark is not one.
- * Keep Chart for runs still inside the admission window from before lint joined its consumer. */
+ * Keep Chart for runs still inside the admission window from before lint joined its consumer.
+ * The chart upgrade proves the rolling-upgrade rule: the previous release claims a review queued on the new schema. */
 function isClusterJob(name: string): boolean {
 	return (
 		name === "Newest main build" ||
 		name === "Kubernetes / Chart" ||
+		name.startsWith("Chart upgrade / ") ||
 		/^Kubernetes(?: \(.*\))? \/ (?:k3s |kind )/u.test(name)
 	);
 }

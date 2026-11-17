@@ -353,7 +353,7 @@ Hibernate does not validate native queries, such as the claim queries of the rev
 Thus, the chart upgrade drill proves that the previous release claims a queued review on the new schema
 (`chart-upgrade.yml`, `scripts/chart-upgrade-drill.ts`).
 It runs nightly, and on a pull request that changes the drill, its workflow or `scripts/kubernetes-cluster.ts`.
-It does not gate a release.
+A failed nightly run of the drill blocks a release ([Release management](./release-management.mdx)).
 
 1. After the rolling upgrade, `helm rollback` returns every role to the revision of the previous release.
    An operator does the same when the new release fails after its migration.
