@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.core.metrics.CoreMetrics;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
+import de.tum.cit.aet.hephaestus.testconfig.HttpInTransactionCheck;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.io.IOException;
@@ -61,6 +62,9 @@ class HttpRequestsInTransactionsIntegrationTest extends BaseIntegrationTest {
 
         assertThat(count(blocking)).isEqualTo(1);
         assertThat(count(reactive)).isEqualTo(1);
+        // These requests start in a transaction on purpose: the check records both, and this test is not failed for
+        // them.
+        assertThat(HttpInTransactionCheck.reset()).hasSize(2);
     }
 
     @Test

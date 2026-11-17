@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -16,12 +18,16 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.testconfig.TestSystemSecrets;
 import de.tum.cit.aet.hephaestus.workspace.spi.LlmConnectionPlatform;
 import java.util.Optional;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
+import org.springframework.transaction.TransactionStatus;
+import org.springframework.transaction.support.TransactionCallback;
+import org.springframework.transaction.support.TransactionTemplate;
 
 class LlmConnectionServiceTest extends BaseUnitTest {
 
@@ -40,8 +46,19 @@ class LlmConnectionServiceTest extends BaseUnitTest {
     @Spy
     private SystemSecrets secrets = TestSystemSecrets.systemSecrets("0123456789abcdef0123456789abcdef");
 
+    @Mock
+    private TransactionTemplate transactions;
+
     @InjectMocks
     private LlmConnectionService connectionService;
+
+    @BeforeEach
+    void runTransactionsInline() {
+        lenient()
+                .when(transactions.execute(any()))
+                .thenAnswer(call ->
+                        call.<TransactionCallback<?>>getArgument(0).doInTransaction(mock(TransactionStatus.class)));
+    }
 
     private CreateLlmConnectionRequestDTO createRequest() {
         return new CreateLlmConnectionRequestDTO(
@@ -85,8 +102,7 @@ class LlmConnectionServiceTest extends BaseUnitTest {
         }
 
         @Test
-        void doesNotCreateAConnectionWhoseBaseUrlTheEgressPolicyRejects() {
-            when(connectionRepository.findBySlug("openai-prod")).thenReturn(Optional.empty());
+        void shouldRefuseABaseUrlTheEgressPolicyRejectsBeforeATransactionOpens() {
             doThrow(new IllegalArgumentException("Provider host must be a public HTTPS URL"))
                     .when(egressPolicy)
                     .validate("https://api.openai.com");
@@ -95,8 +111,7 @@ class LlmConnectionServiceTest extends BaseUnitTest {
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("public HTTPS URL");
 
-            verify(connectionRepository, never()).save(any());
-            verifyNoInteractions(llmConnectionAudit);
+            verifyNoInteractions(transactions, connectionRepository, llmConnectionAudit);
         }
 
         @Test

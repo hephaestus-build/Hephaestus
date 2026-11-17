@@ -7,11 +7,13 @@ import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.security.SystemSecretOwner;
 import de.tum.cit.aet.hephaestus.core.security.SystemSecrets;
 import java.util.List;
+import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.StringUtils;
 
 /**
@@ -31,20 +33,25 @@ public class LlmConnectionService implements SystemSecretOwner {
     private final EgressPolicy egressPolicy;
     private final LlmConnectionAudit llmConnectionAudit;
     private final SystemSecrets secrets;
+    private final TransactionTemplate transactions;
 
     @Transactional(readOnly = true)
     public List<LlmConnection> list() {
         return connectionRepository.findAll();
     }
 
-    @Transactional
+    /** Resolves the host before the transaction opens, so a slow DNS answer never holds a pooled connection. */
     public LlmConnection create(CreateLlmConnectionRequestDTO request) {
+        egressPolicy.validate(request.baseUrl());
+        return Objects.requireNonNull(transactions.execute(status -> insert(request)));
+    }
+
+    private LlmConnection insert(CreateLlmConnectionRequestDTO request) {
         String slug = connectionSlug(request.slug(), request.displayName());
         if (StringUtils.hasText(request.slug())
                 && connectionRepository.findBySlug(slug).isPresent()) {
             throw new LlmConnectionSlugConflictException(slug);
         }
-        egressPolicy.validate(request.baseUrl());
 
         LlmConnection connection = new LlmConnection();
         connection.setSlug(slug);

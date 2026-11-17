@@ -25,8 +25,9 @@ class HephaestusJwtIssuerIpSanitizeTest extends BaseUnitTest {
 
     @Test
     void hostname_isRejectedWithoutDnsLookup() {
-        // Contains letters beyond hex → fails the pre-check → never reaches getByName (no DNS).
+        // Only an IP literal is parsed, so a name never reaches DNS.
         assertThat(HephaestusJwtIssuer.sanitizeIp("evil.example.com")).isNull();
+        assertThat(HephaestusJwtIssuer.sanitizeIp("cafe")).isNull();
     }
 
     @Test

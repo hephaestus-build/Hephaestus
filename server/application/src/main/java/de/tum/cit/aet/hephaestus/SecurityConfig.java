@@ -6,6 +6,7 @@ import de.tum.cit.aet.hephaestus.core.auth.clientsession.InstalledClientRegistry
 import de.tum.cit.aet.hephaestus.core.auth.ratelimit.AuthRateLimitFilter;
 import de.tum.cit.aet.hephaestus.core.auth.web.PublicActivityReadRequestMatcher;
 import de.tum.cit.aet.hephaestus.core.exception.ProblemType;
+import de.tum.cit.aet.hephaestus.core.security.HostAddresses;
 import de.tum.cit.aet.hephaestus.core.security.SecurityHeaders;
 import de.tum.cit.aet.hephaestus.core.security.SecurityUtils;
 import de.tum.cit.aet.hephaestus.core.security.StaleAuthCookieFilter;
@@ -20,7 +21,6 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.net.InetAddress;
-import java.net.UnknownHostException;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
@@ -196,11 +196,7 @@ public class SecurityConfig {
 
     /** The address the request arrived on: always a literal, so parsing it does no name lookup. */
     private static @Nullable InetAddress localAddress(HttpServletRequest request) {
-        try {
-            return InetAddress.getByName(request.getLocalAddr());
-        } catch (UnknownHostException e) {
-            return null;
-        }
+        return HostAddresses.literal(request.getLocalAddr()).orElse(null);
     }
 
     /**

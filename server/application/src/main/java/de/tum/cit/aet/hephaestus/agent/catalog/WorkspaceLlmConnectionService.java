@@ -20,6 +20,7 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.StringUtils;
 
 /**
@@ -38,6 +39,7 @@ public class WorkspaceLlmConnectionService implements SystemSecretOwner {
     private final LlmModelLimitDiscovery limitDiscovery;
     private final ConfigAuditPort configAudit;
     private final SystemSecrets secrets;
+    private final TransactionTemplate transactions;
 
     @PersistenceContext
     private @Nullable EntityManager entityManager;
@@ -53,10 +55,16 @@ public class WorkspaceLlmConnectionService implements SystemSecretOwner {
                 .orElseThrow(() -> new EntityNotFoundException("WorkspaceLlmConnection", id));
     }
 
-    @Transactional
+    /** Resolves the host before the transaction opens, so a slow DNS answer never holds a pooled connection. */
     public WorkspaceLlmConnection create(
             WorkspaceContext workspaceContext, CreateWorkspaceLlmConnectionRequestDTO request) {
         requireByoEnabled();
+        egressPolicy.validate(request.baseUrl());
+        return Objects.requireNonNull(transactions.execute(status -> insert(workspaceContext, request)));
+    }
+
+    private WorkspaceLlmConnection insert(
+            WorkspaceContext workspaceContext, CreateWorkspaceLlmConnectionRequestDTO request) {
         Long workspaceId = workspaceContext.id();
         String slug = connectionSlug(workspaceId, request.slug(), request.displayName());
         if (StringUtils.hasText(request.slug())
@@ -65,7 +73,6 @@ public class WorkspaceLlmConnectionService implements SystemSecretOwner {
                         .isPresent()) {
             throw new LlmConnectionSlugConflictException(slug);
         }
-        egressPolicy.validate(request.baseUrl());
 
         if (workspaceSummaries.findById(workspaceId).isEmpty())
             throw new EntityNotFoundException("Workspace", workspaceContext.slug());

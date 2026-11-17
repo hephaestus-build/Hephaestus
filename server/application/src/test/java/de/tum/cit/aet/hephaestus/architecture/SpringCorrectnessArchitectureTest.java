@@ -6,6 +6,7 @@ import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 import static de.tum.cit.aet.hephaestus.architecture.ArchitectureTestConstants.BASE_PACKAGE;
 
 import com.tngtech.archunit.base.DescribedPredicate;
+import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.core.domain.JavaField;
 import com.tngtech.archunit.core.domain.JavaMethod;
 import com.tngtech.archunit.core.domain.JavaModifier;
@@ -15,10 +16,13 @@ import com.tngtech.archunit.lang.ArchCondition;
 import com.tngtech.archunit.lang.ArchRule;
 import com.tngtech.archunit.lang.ConditionEvents;
 import com.tngtech.archunit.lang.SimpleConditionEvent;
+import de.tum.cit.aet.hephaestus.core.security.HostAddresses;
+import de.tum.cit.aet.hephaestus.integration.core.egress.OutboundEgressGateway;
 import de.tum.cit.aet.hephaestus.integration.core.handler.IntegrationMessageHandler;
 import de.tum.cit.aet.hephaestus.integration.core.handler.ProviderEvent;
 import jakarta.annotation.PostConstruct;
 import jakarta.validation.Valid;
+import java.net.InetAddress;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -63,6 +67,59 @@ class SpringCorrectnessArchitectureTest extends HephaestusArchitectureTest {
                                 !raw,
                                 method.getFullName()
                                         + " must own capture and erasure independently of the dispatch thread"));
+                    }
+                })
+                .check(classes);
+    }
+
+    @Test
+    void shouldTurnTextIntoAnAddressOnlyThroughHostAddresses() {
+        noClasses()
+                .that()
+                .doNotHaveFullyQualifiedName(HostAddresses.class.getName())
+                .should()
+                .callMethod(InetAddress.class, "getByName", String.class)
+                .orShould()
+                .callMethod(InetAddress.class, "getAllByName", String.class)
+                .because("getByName asks DNS unless the text is an IP literal, and a DNS answer inside a transaction"
+                        + " holds a pooled connection; HostAddresses parses literals and keeps lookups in one place")
+                .check(classes);
+    }
+
+    @Test
+    void shouldCallAProviderFromAListenerOnlyOutsideATransaction() {
+        methods()
+                .that()
+                .areAnnotatedWith(ApplicationModuleListener.class)
+                .and()
+                .areDeclaredInClassesThat(
+                        new DescribedPredicate<JavaClass>(
+                                "call an outbound egress gateway directly (a call through another bean is not seen)") {
+                            @Override
+                            public boolean test(JavaClass owner) {
+                                // Only our own types: every gateway is a subclass of Object, so a call to equals would
+                                // otherwise count as a call to a gateway.
+                                return owner.getMethodCallsFromSelf().stream()
+                                        .map(call -> call.getTargetOwner())
+                                        .filter(target ->
+                                                target.getPackageName().startsWith(BASE_PACKAGE))
+                                        .anyMatch(target -> target.isAnnotatedWith(OutboundEgressGateway.class)
+                                                || target.getAllSubclasses().stream()
+                                                        .anyMatch(type ->
+                                                                type.isAnnotatedWith(OutboundEgressGateway.class)));
+                            }
+                        })
+                .should(new ArchCondition<JavaMethod>("not join a transaction") {
+                    @Override
+                    public void check(JavaMethod method, ConditionEvents events) {
+                        boolean outside = method.getAnnotationOfType(ApplicationModuleListener.class)
+                                        .propagation()
+                                == Propagation.NOT_SUPPORTED;
+                        events.add(new SimpleConditionEvent(
+                                method,
+                                outside,
+                                method.getFullName()
+                                        + " calls a provider, so it declares propagation = NOT_SUPPORTED"));
                     }
                 })
                 .check(classes);

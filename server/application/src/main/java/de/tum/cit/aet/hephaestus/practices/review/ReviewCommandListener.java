@@ -95,7 +95,8 @@ public class ReviewCommandListener {
      * A review that a comment requested answers that comment when it measured nothing, because then it sends no
      * feedback. One that measured something answers with its feedback.
      */
-    @ApplicationModuleListener
+    // Not joined: the answer is a provider call, and it must not hold a database connection.
+    @ApplicationModuleListener(propagation = Propagation.NOT_SUPPORTED)
     public void on(CommentRequestedReviewEnded ended) {
         var review = reviews.findByIdAndWorkspaceId(ended.reviewId(), ended.workspaceId())
                 .orElse(null);
