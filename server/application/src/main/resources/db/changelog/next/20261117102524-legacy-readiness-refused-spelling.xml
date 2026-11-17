@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1794911124041-1" author="hephaestus">
+        <preConditions onFail="HALT">
+            <columnExists tableName="review_practice" columnName="reason"/>
+            <columnExists tableName="review_item" columnName="reason"/>
+        </preConditions>
+        <comment>Releases up to 1.0.0-rc.8 stored a capture refusal as readiness_refused on the practice of a review and on its memberships. Later releases store READINESS_REFUSED, and nothing writes the old spelling again. These rows get the one spelling.</comment>
+        <sql><![CDATA[
+UPDATE review_practice SET reason = 'READINESS_REFUSED' WHERE reason = 'readiness_refused';
+UPDATE review_item SET reason = 'READINESS_REFUSED' WHERE reason = 'readiness_refused';
+        ]]></sql>
+        <rollback><stop>Restore the verified pre-upgrade database backup to get the old spelling back. Releases from 1.0.0-rc.9 on read READINESS_REFUSED, so a downgrade to one of them needs no rollback.</stop></rollback>
+    </changeSet>
+</databaseChangeLog>

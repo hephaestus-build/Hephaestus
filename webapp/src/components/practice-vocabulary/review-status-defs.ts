@@ -210,8 +210,6 @@ const CANDIDATE_REFUSAL_SENTENCE =
 const REVIEW_WITHHELD_REASON_SENTENCES: Readonly<Record<string, string>> = {
 	...REVIEW_STOP_REASON_SENTENCES,
 	...Object.fromEntries(CANDIDATE_REFUSALS.map((code) => [code, CANDIDATE_REFUSAL_SENTENCE])),
-	// Releases up to 1.0.0-rc.8 stored a capture refusal in lower case. Newer ones store READINESS_REFUSED.
-	readiness_refused: "Evidence that this practice requires could not be captured.",
 	BOT_AUTHOR: BOT_REVIEW_REFUSAL_SENTENCE,
 	BOT_REVIEWER: BOT_REVIEW_REFUSAL_SENTENCE,
 	ROLE_UNAVAILABLE: "No eligible person holds the role that this practice is about on this work.",
