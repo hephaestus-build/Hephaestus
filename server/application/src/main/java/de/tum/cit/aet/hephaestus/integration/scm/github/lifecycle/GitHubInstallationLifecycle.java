@@ -310,8 +310,9 @@ public class GitHubInstallationLifecycle {
     }
 
     /**
-     * Vendor-side uninstall ({@code installation.deleted}) — runs the SAME purge an admin-initiated
-     * workspace deletion runs, via {@link WorkspaceLifecycleService#purgeWorkspace(String)}.
+     * Vendor-side uninstall ({@code installation.deleted}) — runs the purge an admin-initiated workspace
+     * deletion runs, via {@link WorkspaceLifecycleService#purgeWorkspace(String)}, inside the consumer's transaction:
+     * the removals at Slack and Outline then wait for authorization under Provider removals.
      *
      * <p><b>Why not a status write.</b> {@code PURGED} is a terminal, slug-burning state that the
      * rest of the system reads as "this workspace's data is gone". Setting it without running the

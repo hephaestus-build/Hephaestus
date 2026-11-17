@@ -281,6 +281,11 @@ A suspended workspace can be deleted too.
    If you have not signed in recently, Hephaestus then asks you to sign in again.
    If a sync or a review still runs, Hephaestus refuses the deletion. Wait for it to end, and try again.
 
+Hephaestus also removes what it installed at each provider: the GitHub App installation, the GitLab webhooks and the Outline webhook subscription.
+It removes the Slack bot token too, if no other Hephaestus workspace uses the same Slack workspace.
+If a provider does not confirm a removal, an instance admin sees it under **Provider removals**.
+If Hephaestus then refuses the deletion, the integrations stay disconnected. Delete the workspace again.
+
 These survive the deletion:
 
 - Comments and messages that Hephaestus posted on GitHub, GitLab, or Slack.
@@ -288,9 +293,6 @@ These survive the deletion:
 - The Slack app installation.
 - Security, audit, and accounting records.
 - The short name. No new workspace can use it.
-
-For a GitHub App workspace, the app stays installed on GitHub.
-Uninstall it in the GitHub settings of the organization or account if you no longer need it.
 
 ## Troubleshooting
 

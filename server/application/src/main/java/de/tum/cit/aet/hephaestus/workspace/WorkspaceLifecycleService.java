@@ -11,15 +11,19 @@ import de.tum.cit.aet.hephaestus.observability.StructuredLogKeys;
 import de.tum.cit.aet.hephaestus.workspace.audit.WorkspaceAuditSnapshots;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.exception.WorkspaceLifecycleViolationException;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceProviderRemoval;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspacePurgeContributor;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspacePurgeGuard;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceResumeGuard;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Objects;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @Service
 public class WorkspaceLifecycleService {
@@ -40,6 +44,11 @@ public class WorkspaceLifecycleService {
     private final List<WorkspacePurgeContributor> purgeContributors;
     private final List<WorkspaceResumeGuard> resumeGuards;
 
+    /** Empty in a role without provider removal. */
+    private final List<WorkspaceProviderRemoval> providerRemovals;
+
+    private final TransactionTemplate transactions;
+
     public WorkspaceLifecycleService(
             WorkspaceRepository workspaceRepository,
             MembershipRepository workspaceMembershipRepository,
@@ -47,6 +56,8 @@ public class WorkspaceLifecycleService {
             List<WorkspacePurgeGuard> purgeGuards,
             List<WorkspacePurgeContributor> purgeContributors,
             List<WorkspaceResumeGuard> resumeGuards,
+            List<WorkspaceProviderRemoval> providerRemovals,
+            PlatformTransactionManager transactionManager,
             ConfigAuditPort configAudit) {
         this.configAudit = configAudit;
         this.workspaceRepository = workspaceRepository;
@@ -55,6 +66,8 @@ public class WorkspaceLifecycleService {
         this.purgeGuards = purgeGuards;
         this.purgeContributors = purgeContributors;
         this.resumeGuards = resumeGuards;
+        this.providerRemovals = providerRemovals;
+        this.transactions = new TransactionTemplate(transactionManager);
     }
 
     /**
@@ -200,9 +213,24 @@ public class WorkspaceLifecycleService {
         return purged;
     }
 
-    @Transactional
+    /**
+     * The owner's workspace removal. Provider calls cannot run inside the purge's transaction, and the purge erases the
+     * credentials they need, so the connections disconnect and send their provider removals first, each in its own
+     * transaction. A purge from inside a caller's transaction ({@link #purgeWorkspace(String)}) leaves each removal
+     * recorded for authorization instead.
+     */
     public Workspace purgeWorkspace(WorkspaceContext workspaceContext) {
-        return purgeWorkspaceInTransaction(requireSlug(workspaceContext));
+        String slug = requireSlug(workspaceContext);
+        Long pending = transactions.execute(status -> {
+            Workspace workspace = workspaceRepository
+                    .findByWorkspaceSlug(slug)
+                    .orElseThrow(() -> new EntityNotFoundException("Workspace", slug));
+            if (workspace.getStatus() == WorkspaceStatus.PURGED) return null;
+            purgeGuards.forEach(guard -> guard.verifyQuiescent(workspace.getId()));
+            return workspace.getId();
+        });
+        if (pending != null) providerRemovals.forEach(removal -> removal.removeBeforePurge(pending));
+        return Objects.requireNonNull(transactions.execute(status -> purgeWorkspaceInTransaction(slug)));
     }
 
     /**
