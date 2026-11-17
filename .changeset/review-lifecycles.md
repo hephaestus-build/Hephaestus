@@ -1,5 +1,4 @@
 ---
-"hephaestus": patch
 ---
 
-A practice that Hephaestus withheld from a review keeps the reason it was withheld for when the review closes. Before, the review's own stop reason could replace it.
+Refactor with no user-facing effect: review jobs and practice assignments change state only through named transitions, and an architecture test keeps it that way.
