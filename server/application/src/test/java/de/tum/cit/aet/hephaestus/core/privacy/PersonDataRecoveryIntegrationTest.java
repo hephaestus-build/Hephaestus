@@ -243,11 +243,12 @@ class PersonDataRecoveryIntegrationTest extends BaseIntegrationTest {
             }
         }
         Path manifest = manifest(mapper.writeValueAsString(new PersonDataRecovery.Manifest(
-                3,
+                4,
                 Instant.parse("2026-01-01T00:00:00Z"),
                 false,
                 administratorId,
                 List.of(new PersonDataRecovery.Person(null, identities, false)),
+                List.of(),
                 List.of(),
                 List.of(),
                 List.of(),
