@@ -269,9 +269,13 @@ A pool grants the waiting calls in this order:
 1. The band. Each waiting interactive call gets its grant before a batch call, and each batch call before a background call.
 2. The workspace with the fewest granted calls in the pool.
 3. In that workspace, the review attempt with the fewest granted calls.
-4. The oldest call.
+4. In that attempt, the call of its oldest practice session.
+5. The oldest call.
 
 Thus, a wide review cannot hold more than its share while another review waits. It uses free capacity while none waits.
+When its share is smaller than its sessions, it finishes its practices one after another instead of all of them at once.
+A practice session's place comes from the attempt's assignments, in the order the runner starts them: practices whose feedback reaches someone come before practices in feedback mode Off.
+The gateway takes that place from the practice that the session names, and only for a practice of the attempt.
 A review's composition does not wait behind the measurements of a wider review.
 If two workspaces have the same number of granted calls, the workspace whose last grant in that band is older goes first.
 Every physical call joins this queue, including composition.
