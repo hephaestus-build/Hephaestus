@@ -16,7 +16,6 @@ const APEX_PATHS = [
 	"/auth",
 	"/imprint",
 	"/privacy",
-	"/terms",
 	"/unsubscribe",
 	"/settings",
 	// The passkey challenge: one origin for every WebAuthn ceremony.

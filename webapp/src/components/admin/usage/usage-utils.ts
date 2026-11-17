@@ -12,12 +12,9 @@ export type LlmJobType = LlmUsageByJobType["jobType"];
 
 export const JOB_TYPE_LABELS: Record<LlmJobType, string> = {
 	PRACTICE_REVIEW: "Practice review",
-	PULL_REQUEST_REVIEW: "Pull request review",
-	ISSUE_REVIEW: "Issue review",
-	CONVERSATION_REVIEW: "Conversation review",
-	DOCUMENT_REVIEW: "Document review",
 	CONVERSATION_TURN: "Conversation answer",
 	MODEL_CAPABILITY_PROBE: "Model tool-choice test",
+	REPORT_DRAFT: "Product feedback draft",
 };
 
 export interface PurseSpend {

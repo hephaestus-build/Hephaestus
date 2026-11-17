@@ -102,6 +102,7 @@ export const NotEnabled: Story = {
 export const Connected: Story = {
 	args: {
 		connected: true,
+		connectionState: "ACTIVE",
 		connectionLabel: "Acme Wiki",
 		tokenStatus: healthyToken,
 	},
@@ -121,6 +122,7 @@ export const Connected: Story = {
 export const TokenNeverExpires: Story = {
 	args: {
 		connected: true,
+		connectionState: "ACTIVE",
 		connectionLabel: "Acme Wiki",
 		tokenStatus: { accepted: true, name: "Hephaestus mirror", last4: "9f2c" },
 	},
@@ -137,6 +139,7 @@ export const TokenNeverExpires: Story = {
 export const TokenExpiringSoon: Story = {
 	args: {
 		connected: true,
+		connectionState: "ACTIVE",
 		connectionLabel: "Acme Wiki",
 		tokenStatus: { ...healthyToken, expiresAt: daysAfter(5) },
 	},
@@ -152,6 +155,7 @@ export const TokenExpiringSoon: Story = {
 export const TokenRejected: Story = {
 	args: {
 		connected: true,
+		connectionState: "ACTIVE",
 		connectionLabel: "Acme Wiki",
 		tokenStatus: { accepted: false },
 	},
@@ -166,6 +170,7 @@ export const TokenRejected: Story = {
 export const ReplaceKey: Story = {
 	args: {
 		connected: true,
+		connectionState: "ACTIVE",
 		connectionLabel: "Acme Wiki",
 		tokenStatus: healthyToken,
 	},
@@ -183,6 +188,7 @@ export const ReplaceKey: Story = {
 export const ReplacingKey: Story = {
 	args: {
 		connected: true,
+		connectionState: "ACTIVE",
 		connectionLabel: "Acme Wiki",
 		tokenStatus: healthyToken,
 		isReplacingToken: true,
@@ -200,6 +206,7 @@ export const ReplacingKey: Story = {
 export const ReplaceKeyRefused: Story = {
 	args: {
 		connected: true,
+		connectionState: "ACTIVE",
 		connectionLabel: "Acme Wiki",
 		tokenStatus: healthyToken,
 		replaceTokenError: "This key belongs to another Outline team. Use a key of the connected team.",
@@ -217,6 +224,7 @@ export const ReplaceKeyRefused: Story = {
 export const TokenMetadataUnavailable: Story = {
 	args: {
 		connected: true,
+		connectionState: "ACTIVE",
 		connectionLabel: "Acme Wiki",
 		tokenStatus: { accepted: true },
 	},
@@ -232,6 +240,7 @@ export const TokenMetadataUnavailable: Story = {
 export const ConnectedDisconnectDialog: Story = {
 	args: {
 		connected: true,
+		connectionState: "ACTIVE",
 		connectionLabel: "Acme Wiki",
 		tokenStatus: healthyToken,
 	},
@@ -276,18 +285,5 @@ export const ConnectedButPending: Story = {
 	},
 	play: async ({ canvas }) => {
 		canvas.getByText(/outline finishing setup · acme wiki/iu);
-	},
-};
-
-/** ACTIVE keeps the green check and names the linked instance — the steady state stays quiet. */
-export const ConnectedActiveState: Story = {
-	args: {
-		connected: true,
-		connectionState: "ACTIVE",
-		connectionLabel: "Acme Wiki",
-		tokenStatus: healthyToken,
-	},
-	play: async ({ canvas }) => {
-		canvas.getByText(/outline connected · acme wiki/iu);
 	},
 };

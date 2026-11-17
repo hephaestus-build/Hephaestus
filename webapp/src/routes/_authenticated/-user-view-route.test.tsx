@@ -85,10 +85,7 @@ async function submitReason() {
 }
 
 describe("view as user entry", () => {
-	beforeAll(
-		async () => loadRouteCode("/admin/workspaces/engineering/users"),
-		ROUTE_RENDER_WAIT.timeout,
-	);
+	beforeAll(async () => loadRouteCode("/w/engineering/view-as"), ROUTE_RENDER_WAIT.timeout);
 	let assigned: string[] = [];
 	beforeEach(() => {
 		assigned = captureNavigation();
@@ -114,7 +111,7 @@ describe("view as user entry", () => {
 				return HttpResponse.json(sam);
 			}),
 		);
-		renderRouteAt("/admin/workspaces/engineering/users");
+		renderRouteAt("/w/engineering/view-as");
 		await expect(
 			screen.findAllByRole("button", { name: /^View as user/u }, ROUTE_RENDER_WAIT),
 		).resolves.toHaveLength(1);
@@ -143,14 +140,14 @@ describe("view as user entry", () => {
 				HttpResponse.json(noLogin),
 			),
 		);
-		renderRouteAt("/admin/workspaces/engineering/users");
+		renderRouteAt("/w/engineering/view-as");
 		await submitReason();
 		await waitFor(() => expect(assigned).toStrictEqual(["/w/engineering"]));
 		expect(getUserViewSession()?.providerLogin).toBeNull();
 	});
 
 	it("does not take a provider login for an account id", async () => {
-		renderRouteAt("/admin/workspaces/engineering/users?account=never-signed-in");
+		renderRouteAt("/w/engineering/view-as?account=never-signed-in");
 		await screen.findByRole("button", { name: "View as user: Sam" }, ROUTE_RENDER_WAIT);
 		expect(screen.queryByRole("dialog")).toBeNull();
 	});
@@ -164,7 +161,7 @@ describe("view as user entry", () => {
 				),
 			),
 		);
-		renderRouteAt("/admin/workspaces/engineering/users");
+		renderRouteAt("/w/engineering/view-as");
 		await submitReason();
 		await screen.findByText("User view audit is unavailable");
 		expect(getUserViewSession()).toBeUndefined();
@@ -180,7 +177,7 @@ describe("view as user entry", () => {
 				),
 			),
 		);
-		renderRouteAt("/admin/workspaces/engineering/users");
+		renderRouteAt("/w/engineering/view-as");
 		await submitReason();
 		await screen.findByRole("dialog", { name: "Confirm access" });
 		expect(screen.queryByRole("dialog", { name: "View as Sam" })).toBeNull();
@@ -198,12 +195,12 @@ describe("view as user entry", () => {
 				return HttpResponse.json(sam);
 			}),
 		);
-		const { queryClient, router } = renderRouteAtWithRouter("/admin/workspaces/engineering/users");
+		const { queryClient, router } = renderRouteAtWithRouter("/w/engineering/view-as");
 		await submitReason();
 		await started.promise;
 		await act(async () => {
 			await router.navigate({
-				to: "/admin/workspaces/$workspaceSlug/users",
+				to: "/w/$workspaceSlug/view-as",
 				params: { workspaceSlug: "engineering" },
 				search: { page: 0 },
 			});
@@ -215,7 +212,7 @@ describe("view as user entry", () => {
 		);
 		await act(async () => {
 			await router.navigate({
-				to: "/admin/workspaces/$workspaceSlug/users",
+				to: "/w/$workspaceSlug/view-as",
 				params: { workspaceSlug: "engineering" },
 				search: { page: 0, account: "11" },
 			});

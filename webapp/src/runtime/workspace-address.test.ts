@@ -42,7 +42,6 @@ describe("workspace URL rewrites", () => {
 		"/auth/callback",
 		"/imprint",
 		"/privacy",
-		"/terms",
 		"/unsubscribe",
 		"/settings",
 		"/verify-passkey?returnTo=%2Fw%2Facme%2Fadmin",

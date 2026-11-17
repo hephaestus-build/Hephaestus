@@ -94,8 +94,7 @@ export function OutlineConnectCard({
 }: OutlineConnectCardProps) {
 	const [serverUrl, setServerUrl] = useState("");
 	const [token, setToken] = useState("");
-	// An absent state predates the catalog's state field; treat it as active rather than invent a fault.
-	const isConnectionActive = connectionState == null || connectionState === "ACTIVE";
+	const isConnectionActive = connectionState === "ACTIVE";
 	const [disconnectOpen, setDisconnectOpen] = useState(false);
 
 	const serverUrlInvalid = serverUrl.length > 0 && !HTTPS_URL.test(serverUrl.trim());

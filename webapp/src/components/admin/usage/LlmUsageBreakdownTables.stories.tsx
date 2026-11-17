@@ -6,7 +6,7 @@ import type { LlmUsageByDay, LlmUsageByJobType, WorkspaceLlmUsageReport } from "
 import { LlmUsageByDayTable, LlmUsageByJobTypeTable } from "./LlmUsageBreakdownTables";
 
 const pullRequestReviewRow: LlmUsageByJobType = {
-	jobType: "PULL_REQUEST_REVIEW",
+	jobType: "PRACTICE_REVIEW",
 	events: 128,
 	inputTokens: 4_210_000,
 	outputTokens: 318_000,
@@ -180,7 +180,7 @@ export const SubCentAveragePerRun: Story = {
 				pullRequestReviewRow,
 				{
 					...pullRequestReviewRow,
-					jobType: "DOCUMENT_REVIEW",
+					jobType: "REPORT_DRAFT",
 					events: 40,
 					totalCalls: 40,
 					instanceTotalCostUsd: 0.02,
@@ -190,7 +190,7 @@ export const SubCentAveragePerRun: Story = {
 	},
 	play: async ({ canvas }) => {
 		const table = within(await canvas.findByRole("table", { name: "AI spend by use" }));
-		const averages = [/^Pull request review/u, /^Document review/u, /^Total/u].map((name) =>
+		const averages = [/^Practice review/u, /^Product feedback draft/u, /^Total/u].map((name) =>
 			within(table.getByRole("row", { name }))
 				.getAllByRole("cell")
 				.map((cell) => cell.textContent)

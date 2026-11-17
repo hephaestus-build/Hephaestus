@@ -138,7 +138,7 @@ function detailReportFor(row: AdminWorkspaceLlmUsage): WorkspaceLlmUsageReport {
 		unpricedEventCount: 0,
 		byJobType: [
 			{
-				jobType: "PULL_REQUEST_REVIEW",
+				jobType: "PRACTICE_REVIEW",
 				...figures,
 				inputTokens: events * 4000,
 				outputTokens: events * 600,
@@ -384,7 +384,7 @@ export const ExpandedNearCap: Story = {
 	play: async ({ canvas }) => {
 		const panel = within(await expandedPanelFor(canvas, nearingItsOwnProviderCap.displayName));
 		const runTypes = within(panel.getByRole("table", { name: "AI spend by use" }));
-		const row = runTypes.getByRole("row", { name: /^Pull request review/u });
+		const row = runTypes.getByRole("row", { name: /^Practice review/u });
 		await expect(within(row).getByText("$13.48")).toBeVisible();
 		await expect(within(row).getByText("$21.40")).toBeVisible();
 		await expect(within(row).getByText("74")).toBeVisible();
