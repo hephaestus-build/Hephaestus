@@ -1,4 +1,4 @@
-import type { ConsoleMessage, Page } from "@playwright/test";
+import type { ConsoleMessage, Frame, Page } from "@playwright/test";
 
 import { MAX_FRAME_HEIGHT } from "~/shared/frame-messages";
 import { required } from "~/testing/required";
@@ -221,8 +221,9 @@ async function showTab(page: Page, tab: "overview" | "changes"): Promise<void> {
 	}, tab);
 }
 
-async function settled(page: Page): Promise<void> {
-	await page.evaluate(async () => {
+/** Two animation frames: the layout before them has been painted and composited. */
+async function settled(target: Page | Frame): Promise<void> {
+	await target.evaluate(async () => {
 		const done = Promise.withResolvers<undefined>();
 		requestAnimationFrame(() => {
 			requestAnimationFrame(() => done.resolve(undefined));
@@ -555,6 +556,10 @@ test.describe("scrolling across the report", () => {
 			root.append(content);
 		}, MAX_FRAME_HEIGHT);
 		await expect.poll(async () => frame.evaluate(() => window.innerHeight)).toBe(MAX_FRAME_HEIGHT);
+		// Chromium routes a wheel by the last composited frame, not the DOM. Until the grown report is composited
+		// in both documents, the wheel scrolls the provider page instead of the report.
+		await settled(frame);
+		await settled(page);
 		const box = required(await reportHost(page).boundingBox(), "report bounds");
 		await page.mouse.move(box.x + box.width / 2, box.y + 100);
 		await page.mouse.wheel(0, 300);
