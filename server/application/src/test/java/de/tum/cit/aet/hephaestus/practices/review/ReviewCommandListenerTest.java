@@ -92,6 +92,19 @@ class ReviewCommandListenerTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldAnswerThatHephaestusDoesNotReviewWorkByBots() {
+        when(requests.requestByComment(anyLong(), anyLong(), any(), any(), any()))
+                .thenThrow(new ReviewRequestRejected(
+                        ReviewRequestRejected.Reason.ITEM_INELIGIBLE,
+                        "Hephaestus does not review work by bots.",
+                        ReviewRequestReason.BOT_REVIEWER));
+
+        listener.on(command(ADDRESS));
+
+        verify(sink).reply(11L, 22L, ADDRESS, "Hephaestus did not start a review: it does not review work by bots.");
+    }
+
+    @Test
     void shouldNameAPullRequestAndAGitHubAccountWhenTheCommandCameFromGitHub() {
         var gitHub = mock(ScmCommentReplySink.class);
         when(gitHub.kind()).thenReturn(IntegrationKind.GITHUB);
