@@ -263,7 +263,15 @@ Use [If migration fails](./upgrade#if-migration-fails).
    Do phase 1 of [Stopped schema upgrades](./upgrade#stopped-schema-upgrades) with the source release: `server.replicas` is 0.
    On a host on 1.0.0-rc.5 or earlier, also set `worker.replicas` and `webhook.replicas` to 0.
    Wait until every role Pod is gone.
-   In the sandbox namespace, foreground-delete the claims with `hephaestus.build/sandbox-id` and the Jobs with `app.kubernetes.io/part-of=hephaestus`.
+   Then delete the sandbox claims and Jobs in the sandbox namespace, `sandbox.namespace` of your values.
+   The chart's example is `hephaestus-sandboxes`:
+
+   ```bash
+   kubectl --namespace hephaestus-sandboxes delete sandboxclaims.extensions.agents.x-k8s.io --selector=hephaestus.build/sandbox-id --cascade=foreground --wait=true --timeout=5m
+   kubectl --namespace hephaestus-sandboxes delete jobs --selector=app.kubernetes.io/part-of=hephaestus --cascade=foreground --wait=true --timeout=5m
+   kubectl --namespace hephaestus-sandboxes wait --for=delete pods --all --timeout=5m
+   ```
+
    Wait until every sandbox Pod is gone.
    The first reaper pass of the target servers takes back each ready sandbox whose claim you deleted.
 6. Back up the database.
@@ -315,6 +323,26 @@ The entry *Stop every role before moving review leases to agent runs* gives the 
 No server receives provider deliveries during the window.
 [Reception during a restart](./runtime-roles#reception-during-a-restart) says how each provider delivers them again.
 Keep the window short.
+
+### With pull-based deployment
+
+On a one-host installation that [pull-based deployment](./pull-based-deployment) updates, the reconciler does the migration and the start.
+[Stopped major upgrades](./pull-based-deployment#stopped-major-upgrades) gives its rules.
+Do the steps above in this order:
+
+1. Do steps 1 to 8.
+   In step 2, also save `/var/lib/hephaestus/applied.json` as `/var/lib/hephaestus/applied-before-cutover.json`, and record the Helm revision of phase 1.
+   In step 5, stop the source release with `server.stopped=true`, or with `server.replicas=0` on a source chart without `server.stopped`.
+   Keep the real server count in `/etc/hephaestus/chart.yaml`.
+   In step 7, use `--platform-only` from the target bundle.
+2. Do not do steps 9, 11, 13 and 14.
+   Instead, make the channel name the target release, and only then start the timer again.
+   The reconciler checks that the source is stopped, applies the target chart, runs the migration and starts the servers.
+   It also advances its own tooling.
+3. Wait for the reconciler's log line `Applied <target> to Helm release <release>`.
+   Save the log of the migration Job, and require its `Complete` condition and no `ERROR` line.
+   If the reconciler stops on a failed migration, go to [Roll back](#roll-back).
+4. Do steps 10, 12, 15 and 16.
 
 ## Roll back
 
