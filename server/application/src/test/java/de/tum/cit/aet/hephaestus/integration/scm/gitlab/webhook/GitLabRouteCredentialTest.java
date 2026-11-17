@@ -166,7 +166,8 @@ class GitLabRouteCredentialTest {
         // non-ASCII path takes several bytes once encoded.
         assertThatThrownBy(() -> credential.issue(
                         new GitLabRouteCredential.Route(7L, 3L, "https://gitlab.lrz.de", 42L, "中".repeat(512))))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("too long");
     }
 
     @Test
