@@ -591,20 +591,6 @@ public class ConnectionService {
     }
 
     /**
-     * Disconnects ahead of a workspace removal: erases local data like {@link #disconnectForErasure}, but keeps the
-     * credential for {@link ProviderTeardown}, which removes the provider footprint before the purge releases it. Like
-     * every authoritative caller, it does not wait for a sync job: the purge's quiescence guards ran first.
-     */
-    @Transactional
-    public Connection disconnectForRemoval(Connection connection, TransitionRequest req, Runnable erase) {
-        if (req.next() != IntegrationState.UNINSTALLED) {
-            throw new IllegalArgumentException("Disconnect must transition to UNINSTALLED");
-        }
-        return applyTransition(
-                connection, req, locked -> erase.run(), /* fenceOnActiveSyncJob */ false, /* retainForTeardown */ true);
-    }
-
-    /**
      * {@code retainForTeardown} keeps an UNINSTALLED connection's credential and provider ids for
      * {@link ProviderTeardown}, which removes them at the provider and then here; otherwise they go now.
      */
