@@ -72,8 +72,10 @@ class LifecycleSetterArchTest extends HephaestusArchitectureTest {
         var unmodeled = classes.stream()
                 .filter(type -> type.isAnnotatedWith(Entity.class))
                 .flatMap(type -> type.getAllFields().stream())
-                .filter(field -> field.getName().equals("status") || field.getName().equals("state"))
-                .filter(field -> field.getRawType().isEnum() && !field.getRawType().isAssignableTo(Lifecycle.class))
+                .filter(field ->
+                        field.getName().equals("status") || field.getName().equals("state"))
+                .filter(field ->
+                        field.getRawType().isEnum() && !field.getRawType().isAssignableTo(Lifecycle.class))
                 .map(field -> field.getOwner().getSimpleName() + "." + field.getName())
                 .filter(name -> !MIRRORED.contains(name))
                 .collect(Collectors.toSet());

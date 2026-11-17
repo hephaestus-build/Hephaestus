@@ -213,8 +213,7 @@ public class ReviewScanStoreService implements ReviewScanStore {
         practice.setItemsListed(
                 Math.toIntExact(items.countByWorkspaceIdAndReviewIdAndPracticeId(workspaceId, reviewId, practiceId)));
         practice.setListingComplete(complete);
-        if (complete && Integer.valueOf(0).equals(practice.getItemsListed()))
-            practice.finish();
+        if (complete && Integer.valueOf(0).equals(practice.getItemsListed())) practice.finish();
     }
 
     @Override
