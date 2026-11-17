@@ -1,6 +1,6 @@
 # ADR 0111: The docs site is a static Fumadocs build on Astro
 
-**Status:** Proposed
+**Status:** Accepted
 **Date:** 2026-11-15
 **Authors:** Felix T.J. Dietrich
 **Relates to:** [0040](0040-vite-plus-is-the-command-surface.md), [0053](0053-workspace-addresses-are-a-presentation-origin.md)
