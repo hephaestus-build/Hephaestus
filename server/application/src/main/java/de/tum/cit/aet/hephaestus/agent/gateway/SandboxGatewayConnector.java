@@ -13,8 +13,7 @@ import org.springframework.boot.tomcat.servlet.TomcatServletWebServerFactory;
  * <p>Boot's connector customizers do not reach an additional connector, so this one states its own settings. A model
  * call holds its request thread until its stream ends, so a platform pool would bound the calls of all attempts on
  * this server. Virtual threads leave {@code maxConnections} and the gateway's body budget as the bounds. A blocking
- * socket read or write unmounts its virtual thread (JEP 491), so the gateway needs no carrier per connection; the
- * chart's {@code jdk.virtualThreadScheduler.maxPoolSize} stays until the change that ADR 0109 rule 9 names.
+ * socket read or write unmounts its virtual thread (JEP 491), so the gateway needs no carrier per connection.
  */
 public final class SandboxGatewayConnector {
 

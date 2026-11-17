@@ -107,16 +107,8 @@ spec:
             # The image's AOT cache loads only with the module set that the image gives every launch, so these options
             # add no module, agent or object-layout option (ADR 0067, update of 2026-11-17).
             {{- $recording := "-XX:FlightRecorderOptions=repository=/tmp/jfr -XX:StartFlightRecording=settings=default,disk=true,maxage=6h,maxsize=256m,dumponexit=true,filename=/tmp/jfr/exit-%t.jfr" }}
-            {{- if $sandbox.enabled }}
-            # A ceiling on the carriers that the scheduler adds for blocking file I/O, not the usual count:
-            # docs/admin/sizing.mdx § Memory headroom. A gateway socket wait no longer pins (JEP 491), and
-            # ADR 0109 rule 9 removes the setting in a separate change.
-            - name: JAVA_TOOL_OPTIONS
-              value: -XX:MaxDirectMemorySize=128M -Djdk.virtualThreadScheduler.maxPoolSize={{ add (int $sandbox.gateway.maxConnections) 256 }} {{ $recording }}
-            {{- else }}
             - name: JAVA_TOOL_OPTIONS
               value: -XX:MaxDirectMemorySize=128M {{ $recording }}
-            {{- end }}
             # The buildpack's memory calculator sizes the heap from these and the limit: values.yaml § server.jvm.
             - name: BPL_JVM_HEAD_ROOM
               value: {{ .Values.server.jvm.headRoomPercent | quote }}
