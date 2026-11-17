@@ -2,10 +2,8 @@
 name: storybook-components
 description: >
   Component API and Storybook conventions for the Hephaestus webapp. Use when writing or
-  changing a component under `webapp/src/components/**`, writing or reviewing a `*.stories.tsx`,
-  designing a component's props, or grading a webapp diff in review. Covers props/state shape,
-  Base UI `render=` slots, the vocabulary registries, story titles, args and Controls,
-  play-function assertions, and the accessibility posture. Ships a grading rubric.
+  changing a component under `webapp/src/components/**` or its `*.stories.tsx`, or when
+  grading a webapp diff in review.
 metadata:
   source: internal
   version: "1.0.0"

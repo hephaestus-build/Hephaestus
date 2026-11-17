@@ -47,7 +47,7 @@ Logging: [guide](../docs/contributor/structured-logging.mdx).
 
 ## Boundaries
 
-**Always** — run the unit baseline and every affected tier before committing · tag every test (`@Tag("unit")`,
+**Always** — prove the change as root `AGENTS.md` § Verifying says · tag every test (`@Tag("unit")`,
 `@Tag("integration")`, `@Tag("live")`) · declare a new endpoint's permission explicitly.
 
 **Ask first** — schema changes · security configuration · a new Gradle dependency
