@@ -119,10 +119,10 @@ void describe("ci-contract: merge-queue", () => {
 				`${event} with ci:full ${label}`,
 			);
 			// A duplicate is skipped only without the opt-in, so a re-run after the label runs the tier.
-			// A read that succeeds also reports the preview label, here absent.
-			const preview = full === undefined ? undefined : "false";
+			// A read that succeeds also reports the `ci:images` label, here absent.
+			const images = full === undefined ? undefined : "false";
 			assert.equal(
-				evaluateTierOutput(skip, event, { full, preview }),
+				evaluateTierOutput(skip, event, { full, images }),
 				skipped,
 				`duplicate skip, ${event} ${label}`,
 			);
@@ -190,14 +190,14 @@ void describe("ci-contract: merge-queue", () => {
 		assert.equal(
 			evaluateTierOutput(skip, "pull_request", {
 				full: "false",
-				preview: "false",
+				images: "false",
 				attempt: 2,
 			}),
 			"false",
 		);
-		// A labelled preview repeats a tree whose earlier run may have published no image.
+		// A pull request with the `ci:images` label repeats a tree whose earlier run may have published no image.
 		assert.equal(
-			evaluateTierOutput(skip, "pull_request", { full: "false", preview: "true" }),
+			evaluateTierOutput(skip, "pull_request", { full: "false", images: "true" }),
 			"false",
 		);
 		// Changing CI, browser specs or migrations does not promote every suite on a PR.
@@ -281,8 +281,8 @@ void describe("ci-contract: merge-queue", () => {
 			evaluateTierOutput(decision, "pull_request", { full: "true", pullRequest: draft }),
 			"true",
 		);
-		// The preview label is an explicit opt-in, and a release candidate always builds its evidence.
-		const labelled = { full: "false", preview: "true", pullRequest: draft };
+		// The `ci:images` label is an explicit opt-in, and a release candidate always builds its evidence.
+		const labelled = { full: "false", images: "true", pullRequest: draft };
 		assert.equal(evaluateTierOutput(outputs("draft"), "pull_request", labelled), "false");
 		assert.equal(evaluateTierOutput(outputs("head-images"), "pull_request", labelled), "true");
 		assert.equal(
@@ -292,43 +292,43 @@ void describe("ci-contract: merge-queue", () => {
 			}),
 			"false",
 		);
-		// A pull request builds images only for its preview, the Kubernetes jobs or release evidence;
+		// A pull request builds images only for the `ci:images` label, the Kubernetes jobs or release evidence;
 		// the merge group builds every other changed image. An unreadable label builds them, except on
 		// a draft. A fork builds none.
 		const ready = { head: { repo: { full_name: "owner/repo" } } };
 		const fork = { head: { repo: { full_name: "fork/repo" } } };
 		for (const [event, run, images, head] of [
-			["pull_request", { preview: "false", pullRequest: ready }, "false", "false"],
-			["pull_request", { preview: "true", pullRequest: ready }, "true", "true"],
+			["pull_request", { images: "false", pullRequest: ready }, "false", "false"],
+			["pull_request", { images: "true", pullRequest: ready }, "true", "true"],
 			["pull_request", { pullRequest: ready }, "true", "true"],
 			["pull_request", { pullRequest: draft }, "false", "false"],
 			[
 				"pull_request",
-				{ preview: "false", pullRequest: ready, filter: { kubernetes: "true" } },
+				{ images: "false", pullRequest: ready, filter: { kubernetes: "true" } },
 				"true",
 				"true",
 			],
 			[
 				"pull_request",
-				{ preview: "false", pullRequest: draft, filter: { kubernetes: "true" } },
+				{ images: "false", pullRequest: draft, filter: { kubernetes: "true" } },
 				"false",
 				"false",
 			],
 			[
 				"pull_request",
-				{ preview: "false", pullRequest: ready, releaseCandidate: "true" },
+				{ images: "false", pullRequest: ready, releaseCandidate: "true" },
 				"true",
 				"false",
 			],
 			[
 				"pull_request",
-				{ preview: "false", pullRequest: draft, releaseCandidate: "true" },
+				{ images: "false", pullRequest: draft, releaseCandidate: "true" },
 				"true",
 				"false",
 			],
 			[
 				"pull_request",
-				{ preview: "true", pullRequest: fork, filter: { kubernetes: "true" } },
+				{ images: "true", pullRequest: fork, filter: { kubernetes: "true" } },
 				"false",
 				"false",
 			],

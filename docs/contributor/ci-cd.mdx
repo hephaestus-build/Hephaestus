@@ -381,7 +381,7 @@ the pull request. Each required context is bound to the GitHub Actions integrati
 accepting a same-named external status.
 
 A merge group is a diff, so it selects its jobs from the paths it touches —
-[Path filters](#path-filters). It has no `preview` label, so `Build` and `Images` are filtered there too.
+[Path filters](#path-filters). It has no `ci:images` label, so `Build` and `Images` are filtered there too.
 `any-code` is the union of source filters and reaches `docs/**` through the tooling filter.
 Thus, a documentation-only group starts `Quality`, `Security`, `Build`, and `Images`, even when their internal jobs skip.
 
@@ -678,10 +678,9 @@ Without all three, that step names the missing settings in a notice and in its s
 Today the [feedback eval panel](./feedback-quality-evals.mdx#model-panel) is the only such workflow.
 One panel run sends at most 240 model calls.
 
-## The `preview` label
+## The `ci:images` label [#the-preview-label]
 
 The label builds images only.
-There is no deployed preview until previews move to the staging cluster.
 
 On a same-repository pull request, the label makes CI build, scan and publish every image at the head commit.
 Without it, CI builds a pull request's images only for the Kubernetes cluster jobs or release evidence.
@@ -894,7 +893,7 @@ The table lists eligible jobs. Path filters and event guards still select which 
 
 | Tier | Eligible jobs |
 | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Fast (pull request and queue) | Changes, Quality, Unit, Architecture ([migration exception](#migration-checks-on-prs)), `review`, packaging, generated-artifact drift, [images](#the-preview-label), Security, Release notes, Workflow lint |
+| Fast (pull request and queue) | Changes, Quality, Unit, Architecture ([migration exception](#migration-checks-on-prs)), `review`, packaging, generated-artifact drift, [images](./ci-cd.mdx#the-preview-label), Security, Release notes, Workflow lint |
 | Queue (merge group, push, dispatch) | Numbered integration shards, Webapp and Extension browser suites, Database migrations, PostgreSQL drills ([migration exception](#migration-checks-on-prs)) |
 
 [Path filters](#path-filters) and the main-push rules still select within each tier.
@@ -965,17 +964,17 @@ When both tiers ran on each pull request, a merged change paid for the queue tie
 The queue tier is most of a run's runner time, and GitHub's runner concurrency limit is shared by the queue and every pull request.
 
 A queue-tier failure removes the entry from the queue, and the failure comment links the run.
-So does an image build or scan failure, because a pull request builds images only for the `preview` label, Kubernetes qualification or release evidence.
+So does an image build or scan failure, because a pull request builds images only for the `ci:images` label, Kubernetes qualification or release evidence.
 Fix the failure and queue the pull request again.
 
 A draft pull request keeps its selected tier.
-Without `preview` or release evidence, it builds no image and gets no cluster qualification or image scan.
-The [image selection rules](#the-preview-label) apply to drafts too.
+Without `ci:images` or release evidence, it builds no image and gets no cluster qualification or image scan.
+The [image selection rules](./ci-cd.mdx#the-preview-label) apply to drafts too.
 
 `ci:full` selects the queue tier on a draft too.
 `CI Status Gate` still reports, so required checks resolve on a draft.
 Marking the pull request ready for review (`ready_for_review`) starts an ordinary pull-request run,
-with the images that such a run builds ([The `preview` label](#the-preview-label)). That run is never skipped as a duplicate of the draft's run.
+with the images that such a run builds ([The `ci:images` label](./ci-cd.mdx#the-preview-label)). That run is never skipped as a duplicate of the draft's run.
 
 A re-run replays the event of its run, including the draft state.
 Re-run the ready run to use its ready state.
@@ -1100,7 +1099,7 @@ They skip API, schema, database, and browser jobs inside `Build`.
 
 Release-version pushes repeat those checks. Main still packages and publishes images.
 
-A same-repository pull request with the `preview` label, or with Kubernetes qualification, also runs `Build` and `Images` regardless of paths.
+A same-repository pull request with the `ci:images` label, or with Kubernetes qualification, also runs `Build` and `Images` regardless of paths.
 The label and the cluster tests need every image at the head SHA. No other event reads the label.
 Any other pull request builds no image. The merge group builds every changed image before it lands.
 
@@ -1314,7 +1313,7 @@ Right after a merge, that run is still building, so the pull request builds ever
   It covers every event and every change of up to three representative files.
   It also covers a push that reuses part of its merge group's images.
   It covers a dispatch for the release preflight.
-  It covers a fork, a draft with and without its `preview` label, and a skipped run.
+  It covers a fork, a draft with and without its `ci:images` label, and a skipped run.
   It also covers a failed package and a failed image build.
   A job that installs every image must run where its event needs it.
   It must not run while some image is not built, reused or aliased.

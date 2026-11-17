@@ -137,7 +137,7 @@ The label workflow uses `pull_request_target` with only `GITHUB_TOKEN`, and it c
 
 ### What changes from ADR 0035
 
-- **Drafts.** A draft no longer keeps a preview. The daily workflow removes its label, because a draft holds one of three slots. When the mechanism ships, [CI/CD § The `preview` label](../contributor/ci-cd.mdx#the-preview-label) gets this draft rule.
+- **Drafts.** A draft no longer keeps a preview. The daily workflow removes its label, because a draft holds one of three slots. When the mechanism ships, [CI/CD § The `ci:images` label](../contributor/ci-cd.mdx#the-preview-label) gets this draft rule.
 - **Rechecks.** The author-association check and the label and head rechecks before a deploy go. Flux reads the list of labelled pull requests at each poll. A pull request that loses the label leaves the list, and the next poll removes its preview.
 - **Image verification.** The build attestation check goes. Flux pulls the commit tag, and nothing verifies the attestation before the pull. A check in the cluster needs an admission controller, such as the Sigstore policy controller. That is one more component.
 - **The publish window.** ADR 0035 kept the previous preview live until CI published the new images. Flux upgrades at once and retries until the images exist. Thus, a preview can be unavailable while CI publishes.
@@ -176,8 +176,9 @@ Fetched 2026-10-25.
 ## Update — 2026-11-11: deprecated, because no deployed preview exists
 
 No pull request preview is deployed, and nothing deploys one.
-The `preview` label still builds every image at the pull request's head tag, but no workflow deploys those images ([CI/CD § The `preview` label](../contributor/ci-cd.mdx#the-preview-label)).
+The `preview` label still builds every image at the pull request's head tag, but no workflow deploys those images ([CI/CD § The `ci:images` label](../contributor/ci-cd.mdx#the-preview-label)).
 The chart profile `profiles/preview.yaml` has no caller, and it still sizes NATS and the webhook role.
+The label is now `ci:images`. [CI/CD § The `ci:images` label](../contributor/ci-cd.mdx#the-preview-label) owns its behavior.
 
 The maintainers decided to delete promises that nothing keeps. Thus this decision no longer applies, and no ADR replaces it.
 The label path, the profile and their docs are handed to removal.

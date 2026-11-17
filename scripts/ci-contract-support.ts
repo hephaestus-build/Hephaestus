@@ -310,7 +310,7 @@ export function versionBranch(config: unknown): string {
 export interface TierRun {
 	/** The live `ci:full` read; undefined is a read that failed and wrote no output. */
 	readonly full?: string;
-	readonly preview?: string;
+	readonly images?: string;
 	readonly filter?: Readonly<Record<string, string>>;
 	readonly pullRequest?: Readonly<Record<string, unknown>>;
 	readonly action?: string;
@@ -327,7 +327,7 @@ export function evaluateTierOutput(source: string, event: string, run: TierRun =
 	const parsed = new Parser(new Lexer(body).lex().tokens, ["github", "steps"], []).parse();
 	const optIn = {
 		...(run.full === undefined ? {} : { full: run.full }),
-		...(run.preview === undefined ? {} : { preview: run.preview }),
+		...(run.images === undefined ? {} : { images: run.images }),
 		...(run.light === undefined ? {} : { light: run.light }),
 	};
 	const context: unknown = JSON.parse(

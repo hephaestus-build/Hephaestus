@@ -295,8 +295,9 @@ This decision keeps its label policy. ADR 0059 § What stays from ADR 0035 owns 
 ## Update — 2026-11-11: deprecated, because no deployed preview exists
 
 No pull request preview is deployed, and nothing deploys one.
-The `preview` label still builds every image at the pull request's head tag, but no workflow deploys those images ([CI/CD § The `preview` label](../contributor/ci-cd.mdx#the-preview-label)).
+The `preview` label still builds every image at the pull request's head tag, but no workflow deploys those images ([CI/CD § The `ci:images` label](../contributor/ci-cd.mdx#the-preview-label)).
 The chart profile `profiles/preview.yaml` has no caller, and it still sizes NATS and the webhook role.
+The label is now `ci:images`. [CI/CD § The `ci:images` label](../contributor/ci-cd.mdx#the-preview-label) owns its behavior.
 
 The maintainers decided to delete promises that nothing keeps. Thus this decision no longer applies, and no ADR replaces it.
 The label path, the profile and their docs are handed to removal.
