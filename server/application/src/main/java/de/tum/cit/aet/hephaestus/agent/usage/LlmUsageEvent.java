@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.agent.usage;
 
-import de.tum.cit.aet.hephaestus.conversation.ConversationTurn;
 import de.tum.cit.aet.hephaestus.integration.core.spi.UsagePricingState;
 import de.tum.cit.aet.hephaestus.practices.spi.ModelKind;
 import jakarta.persistence.Column;
@@ -112,7 +111,7 @@ public class LlmUsageEvent {
     /** The first failure of the call; no request, response, or provider message is retained. */
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "call_failure", columnDefinition = "jsonb", updatable = false)
-    private ConversationTurn.@Nullable FailedCall callFailure;
+    private @Nullable ModelCallFailure callFailure;
 
     /** Database time when the failure was recorded, independent of when the call opened. */
     @Nullable

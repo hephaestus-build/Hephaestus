@@ -1,7 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.usage;
 
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
-import de.tum.cit.aet.hephaestus.conversation.ConversationTurn;
 import de.tum.cit.aet.hephaestus.core.TimeOrderedIds;
 import de.tum.cit.aet.hephaestus.core.TransactionCallbacks;
 import de.tum.cit.aet.hephaestus.integration.core.spi.UsagePricingState;
@@ -210,18 +209,12 @@ public class LlmUsageRecorder {
     /** Records the first failure independently of late usage or repricing, then measures the call. */
     @Transactional(propagation = Propagation.MANDATORY)
     public boolean complete(
-            UUID callId,
-            @Nullable Long workspaceId,
-            @Nullable CallUsage usage,
-            ConversationTurn.@Nullable FailedCall failure) {
+            UUID callId, @Nullable Long workspaceId, @Nullable CallUsage usage, @Nullable ModelCallFailure failure) {
         return completeCall(callId, workspaceId, usage, failure);
     }
 
     private boolean completeCall(
-            UUID callId,
-            @Nullable Long workspaceId,
-            @Nullable CallUsage usage,
-            ConversationTurn.@Nullable FailedCall failure) {
+            UUID callId, @Nullable Long workspaceId, @Nullable CallUsage usage, @Nullable ModelCallFailure failure) {
         LlmUsageEvent row = usageRepository.lockCall(callId, workspaceId).orElse(null);
         if (row == null) return false;
         if (failure != null) {
@@ -308,7 +301,7 @@ public class LlmUsageRecorder {
 
     /** Reads the failed call on any replica, scoped to the exact run claim that ends. */
     @Transactional(readOnly = true)
-    public ConversationTurn.@Nullable FailedCall latestFailure(long workspaceId, UUID runId, int epoch) {
+    public @Nullable ModelCallFailure latestFailure(long workspaceId, UUID runId, int epoch) {
         return usageRepository.latestFailure(workspaceId, runId, epoch).orElse(null);
     }
 

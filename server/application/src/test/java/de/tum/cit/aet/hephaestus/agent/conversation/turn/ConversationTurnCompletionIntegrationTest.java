@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.agent.conversation.ConversationLlmConfig;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunReaper;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRecorder;
+import de.tum.cit.aet.hephaestus.agent.usage.ModelCallFailure;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
 import de.tum.cit.aet.hephaestus.conversation.Conversation;
 import de.tum.cit.aet.hephaestus.conversation.ConversationLedgerEvents;
@@ -531,7 +532,7 @@ class ConversationTurnCompletionIntegrationTest extends AbstractWorkspaceIntegra
                         List.of(),
                         "Hephaestus could not finish this reply.",
                         "its Hephaestus host reported ERROR: provider_unavailable",
-                        new ConversationTurn.FailedCall("upstream_status", 503),
+                        new ModelCallFailure("upstream_status", 503),
                         null));
 
         ConversationTurn row = turnRepository.findById(turn.getId()).orElseThrow();
@@ -560,7 +561,7 @@ class ConversationTurnCompletionIntegrationTest extends AbstractWorkspaceIntegra
                         List.of(),
                         "Hephaestus could not finish this reply.",
                         "c".repeat(300),
-                        new ConversationTurn.FailedCall("k".repeat(100), null),
+                        new ModelCallFailure("k".repeat(100), null),
                         null));
 
         ConversationTurn row = turnRepository.findById(turn.getId()).orElseThrow();
@@ -583,7 +584,7 @@ class ConversationTurnCompletionIntegrationTest extends AbstractWorkspaceIntegra
                         List.of(),
                         null,
                         null,
-                        new ConversationTurn.FailedCall("upstream_idle", 200),
+                        new ModelCallFailure("upstream_idle", 200),
                         null));
 
         ConversationTurn row = turnRepository.findById(turn.getId()).orElseThrow();

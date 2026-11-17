@@ -291,7 +291,7 @@ public class ConversationTurnService {
                 contextErased ? ConversationTurn.Status.FAILED : outcome,
                 contextErased ? LEASE_EXPIRED : ending.error(),
                 endedAt);
-        if (contextErased) turn.recordFailure(ConversationTurn.CONTEXT_CHANGED_CAUSE, null);
+        if (contextErased) turn.recordFailure(ConversationTurn.CONTEXT_CHANGED_CAUSE, null, null);
         turns.flush();
         runs.ended(workspaceId, runId, epoch, turn.getStatus());
         changed(turn, true);
@@ -321,12 +321,13 @@ public class ConversationTurnService {
      * the cause outlives the worker's log. A turn in any other state records nothing.
      *
      * @param cause why it failed, in closed kinds only, never a host's, a provider's or an exception's text
-     * @param lastFailedCall the attempt's last model call that failed; {@code null} when none did
+     * @param callKind the kind of the attempt's last model call that failed; {@code null} when none did
+     * @param callStatus the status the provider answered that call with; {@code null} when it answered none
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public void recordFailure(
-            ConversationTurn ended, @Nullable String cause, ConversationTurn.@Nullable FailedCall lastFailedCall) {
-        ended.recordFailure(cause, lastFailedCall);
+            ConversationTurn ended, @Nullable String cause, @Nullable String callKind, @Nullable Integer callStatus) {
+        ended.recordFailure(cause, callKind, callStatus);
     }
 
     /**
@@ -401,7 +402,7 @@ public class ConversationTurnService {
         if (locked.getStatus() != ConversationTurn.Status.QUEUED)
             throw new IllegalStateException("Only a queued turn waits to start");
         locked.end(ConversationTurn.Status.FAILED, error, clock.instant());
-        locked.recordFailure(ConversationTurn.START_WAIT_EXPIRED_CAUSE, null);
+        locked.recordFailure(ConversationTurn.START_WAIT_EXPIRED_CAUSE, null, null);
         changed(locked, true);
     }
 
@@ -463,7 +464,7 @@ public class ConversationTurnService {
             turn.requeue(now);
         } else {
             turn.end(ConversationTurn.Status.FAILED, reply, now);
-            turn.recordFailure(cause, null);
+            turn.recordFailure(cause, null, null);
         }
         changed(turn, true);
         return new LostAttempt(turn, attempt, admission, startedAt, lostAt);

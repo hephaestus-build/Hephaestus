@@ -7,9 +7,9 @@ import de.tum.cit.aet.hephaestus.agent.config.ModelAssignmentLimits;
 import de.tum.cit.aet.hephaestus.agent.proxy.ProxyRequestBody.PreparedBody;
 import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRecorder;
+import de.tum.cit.aet.hephaestus.agent.usage.ModelCallFailure;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
-import de.tum.cit.aet.hephaestus.conversation.ConversationTurn;
 import de.tum.cit.aet.hephaestus.core.proxy.ProxyStreamingUtils;
 import de.tum.cit.aet.hephaestus.core.proxy.ProxyStreamingUtils.StreamOutcome;
 import de.tum.cit.aet.hephaestus.core.proxy.ProxyStreamingUtils.UpstreamResult;
@@ -249,7 +249,7 @@ class LlmProxyService {
                 // calling shows as a run of them. A retry of a failed call is its own line, and a failed call a
                 // warning.
                 if (routing.attempt().sourceType() == UsageSourceType.CONVERSATION_TURN) {
-                    ConversationTurn.FailedCall failure = inFlight.failure();
+                    ModelCallFailure failure = inFlight.failure();
                     LoggingEventBuilder line = log.atLevel(failure == null ? Level.INFO : Level.WARN)
                             .addKeyValue("event.name", "conversation.turn.model_call")
                             .addKeyValue("turn.id", routing.attempt().sourceId())
@@ -280,7 +280,7 @@ class LlmProxyService {
                 : result.getStatusCode().value();
         if (status >= 400 && call.failure() == null) {
             String refused = result == null ? null : result.getHeaders().getFirst(REFUSAL_HEADER);
-            call.failed(new ConversationTurn.FailedCall(
+            call.failed(new ModelCallFailure(
                     refused == null ? GATEWAY_ERROR : "refused_" + refused.toLowerCase(Locale.ROOT), status));
         }
         return status;
@@ -417,7 +417,7 @@ class LlmProxyService {
             classifyFailure(answer, response, call);
             return answer;
         } catch (RuntimeException failure) {
-            call.failed(new ConversationTurn.FailedCall(GATEWAY_ERROR, null));
+            call.failed(new ModelCallFailure(GATEWAY_ERROR, null));
             throw failure;
         } finally {
             // Before the scan lease: the attempt's next scan call reads this call's spend.
@@ -524,7 +524,7 @@ class LlmProxyService {
             LlmConnectionHealth.Permit permit = health.acquire(routing.connectionScope(), routing.connectionId());
             if (permit == null) {
                 accounting.recordError(routing.apiProtocol());
-                call.failed(new ConversationTurn.FailedCall(UPSTREAM_PAUSED, null));
+                call.failed(new ModelCallFailure(UPSTREAM_PAUSED, null));
                 return errors.providerError(
                         HttpStatus.SERVICE_UNAVAILABLE,
                         UPSTREAM_PAUSED,
@@ -638,13 +638,13 @@ class LlmProxyService {
                             FIRST_BYTE_STALLED.formatted(bounds.firstByte().toSeconds());
                     if (!routing.conversationTurn())
                         log.warn("LLM upstream stalled for principal {}: {}", routing.principalDescription(), stall);
-                    call.failed(new ConversationTurn.FailedCall(UPSTREAM_STALLED, null));
+                    call.failed(new ModelCallFailure(UPSTREAM_STALLED, null));
                     return errors.providerError(HttpStatus.GATEWAY_TIMEOUT, UPSTREAM_STALLED, stall);
                 }
                 // An anonymous class has no simple name.
                 String failure = e.getClass().getSimpleName();
-                call.failed(new ConversationTurn.FailedCall(
-                        failure.isEmpty() ? e.getClass().getName() : failure, null));
+                call.failed(
+                        new ModelCallFailure(failure.isEmpty() ? e.getClass().getName() : failure, null));
                 if (e instanceof WebClientRequestException) {
                     // A read timeout before the head reaches the provider and hears nothing back: it stalled.
                     if (!routing.conversationTurn() && ProxyStreamingUtils.readTimedOut(e))
@@ -714,7 +714,7 @@ class LlmProxyService {
             }
             // Report revocation in the stream; buffered responses still settle health and usage below.
             if (poolPermit.isRevoked() && upstream.streamOutcome() != null && response != null) {
-                call.failed(new ConversationTurn.FailedCall(UPSTREAM_PAUSED, null));
+                call.failed(new ModelCallFailure(UPSTREAM_PAUSED, null));
                 errors.writeErrorFrame(response, protocol, UPSTREAM_PAUSED, "The model capacity lease ended.");
             }
             if (attempt.sourceType() == UsageSourceType.PROBE) {
@@ -737,7 +737,7 @@ class LlmProxyService {
                         routing, attempt, row, span, upstream.status(), outcome, tap, call, poolPermit, protocol);
             boolean served = upstream.status() >= 200 && upstream.status() < 300;
             if (!served) {
-                call.failed(new ConversationTurn.FailedCall(UPSTREAM_STATUS, upstream.status()));
+                call.failed(new ModelCallFailure(UPSTREAM_STATUS, upstream.status()));
                 logUnserved(routing, upstream.status());
                 accounting.recordError(routing.apiProtocol());
             }
@@ -776,7 +776,7 @@ class LlmProxyService {
             LlmApiProtocol protocol) {
         boolean served = status >= 200 && status < 300;
         if (!served) {
-            call.failed(new ConversationTurn.FailedCall(UPSTREAM_STATUS, status));
+            call.failed(new ModelCallFailure(UPSTREAM_STATUS, status));
             logUnserved(routing, status);
         }
         span.tag("hephaestus.stream.outcome", outcome.name());
@@ -790,7 +790,7 @@ class LlmProxyService {
                             "LLM stream for principal {} ended with outcome={}",
                             routing.principalDescription(),
                             outcome);
-                call.failed(new ConversationTurn.FailedCall(outcome.name().toLowerCase(Locale.ROOT), status));
+                call.failed(new ModelCallFailure(outcome.name().toLowerCase(Locale.ROOT), status));
             }
         }
         if (served) {

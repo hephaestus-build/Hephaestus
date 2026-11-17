@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.agent.usage;
 
-import de.tum.cit.aet.hephaestus.conversation.ConversationTurn;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import jakarta.persistence.LockModeType;
 import java.math.BigDecimal;
@@ -165,7 +164,7 @@ public interface LlmUsageEventRepository extends JpaRepository<LlmUsageEvent, UU
           AND e.call_failure IS NOT NULL
         ORDER BY e.failed_at DESC, e.id DESC LIMIT 1
         """)
-    Optional<ConversationTurn.FailedCall> latestFailure(
+    Optional<ModelCallFailure> latestFailure(
             @Param("workspaceId") long workspaceId, @Param("runId") UUID runId, @Param("epoch") int epoch);
 
     /**

@@ -15,9 +15,9 @@ import de.tum.cit.aet.hephaestus.agent.usage.LlmPriceSnapshot;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRecorder;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRecorder.CallUsage;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRecorder.OpenCall;
+import de.tum.cit.aet.hephaestus.agent.usage.ModelCallFailure;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
-import de.tum.cit.aet.hephaestus.conversation.ConversationTurn;
 import de.tum.cit.aet.hephaestus.conversation.spi.ConversationTurnAccess;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import de.tum.cit.aet.hephaestus.practices.spi.ModelKind;
@@ -298,8 +298,7 @@ class ProxyCallLedger {
      *
      * @param usage {@code null} when the provider reported no usage or the call ended without an answer
      */
-    void complete(
-            ProxyRouting routing, UUID call, @Nullable CallUsage usage, ConversationTurn.@Nullable FailedCall failure) {
+    void complete(ProxyRouting routing, UUID call, @Nullable CallUsage usage, @Nullable ModelCallFailure failure) {
         Long workspaceId = routing.workspaceId();
         try {
             ownTransaction.executeWithoutResult(status -> {

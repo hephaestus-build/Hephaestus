@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.agent.conversation.sandbox.TurnAttempt;
 import de.tum.cit.aet.hephaestus.agent.conversation.weeklydigest.DigestAdmission;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageEventRepository;
+import de.tum.cit.aet.hephaestus.agent.usage.ModelCallFailure;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
 import de.tum.cit.aet.hephaestus.conversation.ConversationLedgerEvents;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurn;
@@ -108,7 +109,7 @@ public class ConversationTurnCompletion {
             List<JsonNode> entries,
             @Nullable String error,
             @Nullable String cause,
-            ConversationTurn.@Nullable FailedCall lastFailedCall,
+            @Nullable ModelCallFailure lastFailedCall,
             @Nullable JsonNode lastPartial) {}
 
     /**
@@ -161,10 +162,14 @@ public class ConversationTurnCompletion {
                 .log("Conversation turn ended"));
         if (turn.getStatus() == ConversationTurn.Status.FAILED) {
             String failureCause = ending.cause() == null ? turn.getFailureCause() : ending.cause();
-            turns.recordFailure(turn, failureCause, ending.lastFailedCall());
+            ModelCallFailure lastFailedCall = ending.lastFailedCall();
+            turns.recordFailure(
+                    turn,
+                    failureCause,
+                    lastFailedCall == null ? null : lastFailedCall.kind(),
+                    lastFailedCall == null ? null : lastFailedCall.status());
             // After commit: a rolled-back end is repeated by its host and would log the failure twice.
             String cause = failureCause == null ? turn.getError() : failureCause;
-            ConversationTurn.FailedCall lastFailedCall = ending.lastFailedCall();
             TransactionCallbacks.afterCommit(() -> log.warn(
                     "conversation turn {} attempt {} failed: {}; last failed model call: {}",
                     turnId,

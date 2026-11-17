@@ -44,10 +44,18 @@ import org.springframework.transaction.support.TransactionTemplate;
 @WorkspaceAgnostic("Instance-level product feedback; it belongs to no workspace")
 class FilingService {
     private static final Logger log = LoggerFactory.getLogger(FilingService.class);
-    /** Serializes filing across server replicas, so the pace holds for the whole instance. */
+    /**
+     * Lets one replica claim or hand over at a time, so the hourly limit, which counts the database, holds for the whole
+     * instance.
+     */
     private static final long PACE_LOCK = 0x5046_4649_4c49_4e47L;
 
+    /**
+     * The least time between two hand-overs of one replica. Each replica keeps its own, so with several replicas
+     * hand-overs can come closer together; the hourly limit is the instance-wide bound.
+     */
     static final Duration SPACING = Duration.ofSeconds(10);
+
     static final int HOURLY_LIMIT = 30;
     static final int PUBLIC_PER_ACCOUNT_DAILY = 5;
     /** Attempts of one hand-over before the report stops and waits in Needs action. */
