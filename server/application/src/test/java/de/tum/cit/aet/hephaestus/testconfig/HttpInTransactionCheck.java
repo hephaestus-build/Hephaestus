@@ -59,14 +59,15 @@ public class HttpInTransactionCheck implements ObservationHandler<RequestReplySe
                 .collect(Collectors.joining(System.lineSeparator()));
     }
 
-    public static void reset() {
+    /** Clears the recorded requests and returns them. */
+    public static List<String> reset() {
+        List<String> found = List.copyOf(VIOLATIONS);
         VIOLATIONS.clear();
+        return found;
     }
 
     public static void assertNoViolations() {
-        List<String> found = List.copyOf(VIOLATIONS);
-        VIOLATIONS.clear();
-        assertThat(found)
+        assertThat(reset())
                 .as("outbound HTTP requests that started inside a database transaction")
                 .isEmpty();
     }
