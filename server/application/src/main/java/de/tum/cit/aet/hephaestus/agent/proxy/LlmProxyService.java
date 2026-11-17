@@ -93,6 +93,8 @@ class LlmProxyService {
 
     /** Names which of the proxy's own rules refused a call, so an in-process caller need not read the refusal's words. */
     static final String REFUSAL_HEADER = "Hephaestus-Proxy-Refusal";
+    /** Names the practice whose review session makes the call (pi-provider.ts). */
+    static final String PRACTICE_HEADER = "X-Agent-Practice";
 
     /** The provider sent no byte for the idle bound of the call. */
     static final String UPSTREAM_STALLED = "upstream_stalled";
@@ -286,6 +288,13 @@ class LlmProxyService {
         return status;
     }
 
+    /** The practice that a review sandbox names for its call; null when the header is absent or no positive id. */
+    static @Nullable Long practice(HttpHeaders headers) {
+        String named = headers.getFirst(PRACTICE_HEADER);
+        if (named == null || !named.matches("[1-9][0-9]{0,17}")) return null;
+        return Long.parseLong(named);
+    }
+
     /**
      * The ledger row of one proxied call ({@link ProxyCallLedger}). It opens before the call's first upstream request
      * and ends once: with the usage of a served answer, with nothing for a provider's error answer, which the provider
@@ -295,6 +304,7 @@ class LlmProxyService {
         private final ProxyRouting routing;
         private final ProxyCallLedger.Bound bound;
         private final ProxyCallsInFlight.Call inFlight;
+        private final @Nullable Long practiceId;
         private @Nullable UUID id;
         private LlmUsageRecorder.@Nullable CallUsage unmeasured;
         private boolean ended;
@@ -303,15 +313,21 @@ class LlmProxyService {
          * @param inputBytes the bytes of the call's request, which bound its input tokens
          * @param outputTokens the output tokens that bound the call; {@code null} when nothing bounds them
          */
-        CallRow(ProxyRouting routing, long inputBytes, @Nullable Long outputTokens, ProxyCallsInFlight.Call inFlight) {
+        CallRow(
+                ProxyRouting routing,
+                long inputBytes,
+                @Nullable Long outputTokens,
+                ProxyCallsInFlight.Call inFlight,
+                @Nullable Long practiceId) {
             this.routing = routing;
+            this.practiceId = practiceId;
             this.bound = new ProxyCallLedger.Bound(inputBytes, outputTokens);
             this.inFlight = inFlight;
         }
 
         /** An upstream request leaves now; the first one opens the row. */
         void sending(String upstreamModel) {
-            if (id == null) id = accounting.calls().open(routing, bound, upstreamModel);
+            if (id == null) id = accounting.calls().open(routing, bound, upstreamModel, practiceId);
             unmeasured = null;
         }
 
@@ -396,7 +412,7 @@ class LlmProxyService {
             } catch (JacksonException unreadable) {
                 return ResponseEntity.badRequest().body("Request body must be valid JSON");
             }
-            row = new CallRow(routing, body.length, outputBound, call);
+            row = new CallRow(routing, body.length, outputBound, call, practice(incomingHeaders));
             if (workTimeOver(routing)) return refusal(HttpStatus.FORBIDDEN, ProxyRefusal.WORK_TIME, WORK_TIME_OVER);
             // A provider's limit should slow a call, not fail it. It must still be heard: past this, or when the
             // provider

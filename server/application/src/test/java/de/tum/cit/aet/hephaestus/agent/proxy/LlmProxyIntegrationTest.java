@@ -1376,6 +1376,32 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
         }
     }
 
+    @Test
+    void shouldRecordThePracticeThatTheSandboxNamesOnlyWhenTheJobMeasuresIt() throws Exception {
+        try (MockWebServer upstream = new MockWebServer()) {
+            upstream.start();
+            upstream.enqueue(json("{\"choices\":[]}"));
+            upstream.enqueue(json("{\"choices\":[]}"));
+            ReviewJob job = reviewJob(upstream.url("/v1").toString());
+            long assigned = job.getInput().assignments().getFirst().practiceId();
+
+            assertThat(callChat(proxyService(), job, practiceHeader(Long.toString(assigned))))
+                    .isEqualTo(200);
+            assertThat(callChat(proxyService(), job, practiceHeader(Long.toString(assigned + 998))))
+                    .isEqualTo(200);
+
+            assertThat(jdbc.queryForList(
+                            "SELECT practice_id FROM llm_usage_event WHERE source_id = ?", Long.class, job.getId()))
+                    .containsExactlyInAnyOrder(assigned, null);
+        }
+    }
+
+    private static HttpHeaders practiceHeader(String practiceId) {
+        var headers = new HttpHeaders();
+        headers.add("X-Agent-Practice", practiceId);
+        return headers;
+    }
+
     private static final Pattern CAPTURE_COLUMN = Pattern.compile("\\bcapture\\b");
 
     /** A client's default of 16,384 output tokens on a model whose limit is lower: the composer's case. */
@@ -1442,7 +1468,19 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 "{\"model\":\"any\",\"stream\":true,\"messages\":[{\"role\":\"user\",\"content\":\"Review.\"}]}");
     }
 
+    private int callChat(LlmProxyService service, ReviewJob job, HttpHeaders headers) throws Exception {
+        return callChat(
+                service,
+                job,
+                "{\"model\":\"any\",\"stream\":true,\"messages\":[{\"role\":\"user\",\"content\":\"Review.\"}]}",
+                headers);
+    }
+
     private int callChat(LlmProxyService service, ReviewJob job, String json) throws Exception {
+        return callChat(service, job, json, new HttpHeaders());
+    }
+
+    private int callChat(LlmProxyService service, ReviewJob job, String json, HttpHeaders headers) throws Exception {
         var request = new MockHttpServletRequest("POST", "/internal/llm/chat/completions");
         request.setRemoteAddr("127.0.0.1");
         request.addHeader("Authorization", "Bearer " + tokenFor(job));
@@ -1450,9 +1488,7 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
         byte[] body = json.getBytes(StandardCharsets.UTF_8);
         AtomicReference<@Nullable ResponseEntity<?>> served = new AtomicReference<>();
         filter.doFilter(
-                request,
-                response,
-                (filtered, ignored) -> served.set(service.proxy(request, response, new HttpHeaders(), body)));
+                request, response, (filtered, ignored) -> served.set(service.proxy(request, response, headers, body)));
         var answer = served.get();
         return answer == null ? response.getStatus() : answer.getStatusCode().value();
     }

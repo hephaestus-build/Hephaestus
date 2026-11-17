@@ -3,6 +3,8 @@ import { mkdtempSync, realpathSync, readFileSync, rmSync, writeFileSync } from "
 import { tmpdir } from "node:os";
 import nodePath from "node:path";
 import { test } from "node:test";
+// oxlint-disable-next-line no-restricted-imports -- polls the runner's record while the run is still going
+import { setTimeout as sleep } from "node:timers/promises";
 
 import { executionReportSchema } from "../../../../../../docker/agents/practice-scripts/lib/core/contract.ts";
 import {
@@ -337,6 +339,43 @@ void test("a session stop failure preserves completed siblings for admission and
 			["a-finished"],
 		);
 		assert.ok(!capturedLines(cwd, "prompts").some((row) => field(row, "slug") === "b-queued"));
+	} finally {
+		rmSync(cwd, { recursive: true, force: true });
+	}
+});
+
+void test("a running review keeps its open sessions on record, so a run that is stopped still names them", async () => {
+	const cwd = realpathSync(mkdtempSync(nodePath.join(tmpdir(), "pi-open-sessions-")));
+	try {
+		stagePractices(
+			cwd,
+			["a-finished", "y-waiting"].map((slug) => ({ slug })),
+		);
+		const exit = runRunner(cwd, { "y-waiting": "hang" }, { AGENT_BUDGET_MS: "6500" });
+		let waiting: unknown;
+		const until = Date.now() + 6000;
+		while (waiting === undefined && Date.now() < until) {
+			await sleep(100);
+			let open: unknown;
+			try {
+				open = field(readJsonFile(cwd, "out/runner-debug.json"), "open");
+			} catch {
+				// Not written yet, or read mid-write.
+				continue;
+			}
+			if (Array.isArray(open)) {
+				waiting = open.find(
+					(session: unknown) =>
+						field(session, "practice") === "y-waiting" && field(session, "phase") === "turn",
+				);
+			}
+		}
+
+		assert.ok(waiting !== undefined, "the waiting session was never on record while it waited");
+		assert.equal(typeof field(waiting, "quietMs"), "number");
+		const ended = await exit;
+		assert.equal(ended.status, 78);
+		assert.deepEqual(field(readJsonFile(cwd, "out/runner-debug.json"), "open"), []);
 	} finally {
 		rmSync(cwd, { recursive: true, force: true });
 	}

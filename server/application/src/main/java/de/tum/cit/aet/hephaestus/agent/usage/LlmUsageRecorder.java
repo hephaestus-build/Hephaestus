@@ -49,7 +49,7 @@ public class LlmUsageRecorder {
      * @param workspaceId the workspace, or null for instance report drafts and instance model probes
      * @param leaseEpoch the claim of the run that makes the call, or null for instance work
      * @param sourceAttempt the job attempt or the turn attempt of the claim
-     * @param practiceId the practice whose script makes the call; {@code null} for every other call
+     * @param practiceId the practice whose review session makes the call; {@code null} for every other call
      * @param model the upstream model id that the call's configuration froze; {@code null} when none is readable
      * @param costBoundUsd the most that the call can cost at {@code price} ({@link LlmPriceSnapshot#upperBound});
      *     {@code null} when no bound is known

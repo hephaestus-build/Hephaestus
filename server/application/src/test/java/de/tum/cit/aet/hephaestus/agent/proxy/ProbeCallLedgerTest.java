@@ -87,7 +87,7 @@ class ProbeCallLedgerTest extends BaseUnitTest {
         when(recorder.recoveryDeadline(LlmModelProbeGateway.CALL_TIMEOUT)).thenReturn(databaseDeadline);
         UUID call = UUID.randomUUID();
         when(recorder.open(any())).thenReturn(call);
-        assertThat(ledger.open(route(), new ProxyCallLedger.Bound(80, 64L), "upstream-model"))
+        assertThat(ledger.open(route(), new ProxyCallLedger.Bound(80, 64L), "upstream-model", null))
                 .isEqualTo(call);
         var opened = ArgumentCaptor.forClass(LlmUsageRecorder.OpenCall.class);
         verify(recorder).open(opened.capture());
@@ -102,7 +102,7 @@ class ProbeCallLedgerTest extends BaseUnitTest {
 
     @Test
     void shouldRefuseBeforeOpeningTheCallWhenTheModelChangedAfterItsCredentialWasRead() {
-        assertThatThrownBy(() -> ledger.open(route(), new ProxyCallLedger.Bound(80, 64L), "old-model"))
+        assertThatThrownBy(() -> ledger.open(route(), new ProxyCallLedger.Bound(80, 64L), "old-model", null))
                 .isInstanceOf(LlmModelUnavailableException.class);
         verifyNoInteractions(recorder, runs, drafts);
     }

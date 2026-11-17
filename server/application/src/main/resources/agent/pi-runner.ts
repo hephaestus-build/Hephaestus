@@ -78,6 +78,7 @@ import {
 	loadProviderConfig,
 	reasoningSetting,
 	parseProxyClaim,
+	practiceHeaderExtension,
 	registerHephaestusProvider,
 	submissionExtension,
 } from "./pi-provider.ts";
@@ -221,6 +222,19 @@ interface AttemptDebug {
 	stopReasons: Record<string, number>;
 	usage: UsageReport;
 	resultFilePresent: boolean;
+}
+
+/** A session that has not ended, as the runner last saw it: phase, waits and ages in milliseconds, no content. */
+interface OpenSession {
+	practice: string | null;
+	phase: "starting" | "turn";
+	turn?: string;
+	turnMs?: number;
+	calls?: number;
+	/** How long its model call has waited for the first byte; absent while no call waits. */
+	modelWaitMs?: number;
+	/** Since its last sign of life. */
+	quietMs: number;
 }
 
 export interface TurnTrace {
@@ -520,6 +534,8 @@ export interface ReviewSessionState {
 	currentTurnSlugs: readonly string[];
 	/** A measuring session may submit only its assigned practice. */
 	activePractice: string | null;
+	/** The practice that this session was opened for, before its turn names it. */
+	plannedPractice: string | null;
 	openingInContext: boolean;
 	sessionGuards: { cutOff: number; recordingCalls: number; stored: number };
 	answeredRefusals: Set<string>;
@@ -542,6 +558,7 @@ function newSessionState(): ReviewSessionState {
 		activeReview: null,
 		currentTurnSlugs: [],
 		activePractice: null,
+		plannedPractice: null,
 		openingInContext: false,
 		sessionGuards: { cutOff: 0, recordingCalls: 0, stored: 0 },
 		answeredRefusals: new Set(),
@@ -718,6 +735,13 @@ async function runReview(): Promise<void> {
 
 	setTimeout(() => {
 		diagnose("watchdog.exited", { after_ms: AGENT_BUDGET_MS + 30_000 });
+		// What each open session waited on when the budget ran out: the only record of a run that never ended a turn.
+		try {
+			runnerDebug.end = { event: "watchdog.exited" };
+			persistRunnerDebug();
+		} catch {
+			/* best-effort — already exiting */
+		}
 		// First, because finalizing removes from out/ whatever the session left there — which would
 		// include the marker written next.
 		finalizeOutputQuietly();
@@ -800,6 +824,11 @@ async function runReview(): Promise<void> {
 		practiceSources: Record<string, RequiredSourceTrace[]>;
 		/** The diagnostic the runner ended on, so the server can name why without the sandbox log: closed codes only. */
 		end?: { event: string; reason?: string; error?: string };
+		/**
+		 * The sessions still open when the file was last written, and what each waits on. Written as they change, so a
+		 * runner that the watchdog stops still names its stuck calls.
+		 */
+		open?: OpenSession[];
 	} = {
 		practiceSources: {},
 		attempts: [],
@@ -924,13 +953,33 @@ async function runReview(): Promise<void> {
 	function persistUsage() {
 		writeFileSync(USAGE_PATH, JSON.stringify(usageTotals, null, 2));
 	}
+	function openSessions(now = Date.now()): OpenSession[] {
+		// A serial review runs its turns in the root session, which no parallel session joins.
+		const open = rootSessionState.currentTurn === null ? [] : [rootSessionState];
+		return [...open, ...activeScopes].map((scope) => {
+			const turn = scope.currentTurn;
+			const waiting = scope.modelWait.waitingSince();
+			return {
+				practice: scope.activePractice ?? scope.plannedPractice,
+				phase: turn === null ? "starting" : "turn",
+				...(turn === null
+					? {}
+					: { turn: turn.label, turnMs: now - turn.durationMs, calls: turn.calls }),
+				...(waiting === null ? {} : { modelWaitMs: now - waiting }),
+				quietMs: now - scope.lastEventAt,
+			};
+		});
+	}
 	function persistRunnerDebug() {
 		const turns = runnerDebug.turns.toSorted((a, b) =>
 			a.practiceSlug !== undefined && b.practiceSlug !== undefined
 				? compareSlugs(a.practiceSlug, b.practiceSlug)
 				: 0,
 		);
-		writeFileSync(RUNNER_DEBUG_PATH, JSON.stringify({ ...runnerDebug, turns }, null, 2));
+		writeFileSync(
+			RUNNER_DEBUG_PATH,
+			JSON.stringify({ ...runnerDebug, turns, open: openSessions() }, null, 2),
+		);
 	}
 	function persistReviewState() {
 		writeFileSync(REVIEW_STATE_PATH, JSON.stringify(admissionRequest(), null, 2));
@@ -2158,6 +2207,7 @@ async function runReview(): Promise<void> {
 			stoppedBy: null,
 		};
 		state.turnDemand = demand;
+		persistRunnerDebug();
 		return state.currentTurn;
 	}
 
@@ -2408,7 +2458,10 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 				sessionScopes.run(scope, () => {
 					if (event.type === "turn_start" || event.type === "auto_retry_start") {
 						measurementReply.asked = true;
-						scope.servedTurn ??= scope.modelWait.call();
+						if (scope.servedTurn === null) {
+							scope.servedTurn = scope.modelWait.call();
+							persistRunnerDebug();
+						}
 					}
 					// Responses can start the SDK message at headers, so content is the first sign of service.
 					if (
@@ -2416,8 +2469,11 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 						event.type === "agent_end" ||
 						(event.type === "message_end" && event.message.role === "assistant")
 					) {
-						scope.servedTurn?.();
-						scope.servedTurn = null;
+						if (scope.servedTurn !== null) {
+							scope.servedTurn();
+							scope.servedTurn = null;
+							persistRunnerDebug();
+						}
 						scope.modelWait.started();
 					}
 					chargeWork(event);
@@ -2605,6 +2661,10 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 					? []
 					: briefOf(practice).cacheBoundaries.map((end) => prompt.length + 2 + end),
 			);
+			const practiceId =
+				practice === null
+					? undefined
+					: practiceIndex.find((entry) => entry.slug === practice)?.practiceId;
 			// Extension bindings belong to the native session that uses them.
 			const resourceLoader = new DefaultResourceLoader({
 				cwd: CWD,
@@ -2623,6 +2683,7 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 						providerConfig ?? {},
 						() => scope.activeReview?.requireSubmission === true,
 					),
+					...(practiceId === undefined ? [] : [practiceHeaderExtension(practiceId)]),
 				],
 			});
 			await resourceLoader.reload();
@@ -2914,6 +2975,7 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 						break;
 					}
 					const scope = newSessionState();
+					scope.plannedPractice = work.slug;
 					pace.begin(scope.modelWait);
 					sessionsAtOnce = Math.max(sessionsAtOnce, pace.sessions);
 					activeScopes.add(scope);

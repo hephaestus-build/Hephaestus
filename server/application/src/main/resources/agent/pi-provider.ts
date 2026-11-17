@@ -44,6 +44,18 @@ export interface ProviderConfig {
 	maxOutputTokens?: number;
 }
 
+/** The header that names the practice whose session makes a model call; the gateway checks it against the run. */
+export const PRACTICE_HEADER = "X-Agent-Practice";
+
+/** Names the session's practice on each of its model calls, so the gateway can attribute the call's usage. */
+export function practiceHeaderExtension(practiceId: string): ExtensionFactory {
+	return (pi) => {
+		pi.on("before_provider_headers", ({ headers }) => {
+			headers[PRACTICE_HEADER] = practiceId;
+		});
+	};
+}
+
 /** Require the recording tool only after exploration has ended or a submission needs correction. */
 export function submissionExtension(
 	config: ProviderConfig,

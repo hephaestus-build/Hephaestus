@@ -118,10 +118,12 @@ class ProxyCallLedger {
      * bound fits under its purse's cap ({@link ProxyBudgetGate#refusesHold}). The budget gate of this replica sees the
      * bound at once.
      *
+     * @param practiceId the practice that the review sandbox names for the call; the row keeps it only when the call's
+     *     job measures that practice
      * @throws ClaimLost when the claim no longer holds its run
      * @throws BudgetHeld when the call's bound does not fit under its purse's cap
      */
-    UUID open(ProxyRouting routing, Bound bound, String upstreamModel) {
+    UUID open(ProxyRouting routing, Bound bound, String upstreamModel, @Nullable Long practiceId) {
         var attempt = routing.attempt();
         if (attempt.sourceType() == UsageSourceType.PRODUCT_FEEDBACK_DRAFT) {
             return Objects.requireNonNull(ownTransaction.execute(status -> {
@@ -159,7 +161,7 @@ class ProxyCallLedger {
                 runs.requireCurrent(new AgentRunFence(runId, workspaceId, attempt.epoch()));
                 OpenCall open = attempt.sourceType() == UsageSourceType.CONVERSATION_TURN
                         ? turnCall(attempt, workspaceId, runId, bound)
-                        : reviewCall(attempt, workspaceId, runId, bound);
+                        : reviewCall(attempt, workspaceId, runId, bound, practiceId);
                 // The bound that the row stores is the one held against the cap.
                 if (budgetGate.refusesHold(routing, open.costBoundUsd())) throw new BudgetHeld();
                 return recorder.open(open);
@@ -246,7 +248,8 @@ class ProxyCallLedger {
                 costBound(charge.price(), bound));
     }
 
-    private OpenCall reviewCall(ProxyRouting.BilledAttempt attempt, long workspaceId, UUID runId, Bound bound) {
+    private OpenCall reviewCall(
+            ProxyRouting.BilledAttempt attempt, long workspaceId, UUID runId, Bound bound, @Nullable Long practiceId) {
         var job = jobs.findCall(attempt.sourceId(), workspaceId)
                 .filter(found -> found.runId().equals(runId))
                 .orElseThrow(() -> new ClaimLost(new IllegalStateException("The call's job moved to another run")));
@@ -262,7 +265,12 @@ class ProxyCallLedger {
                 attempt.number(),
                 job.reviewId(),
                 ModelKind.CHAT,
-                null,
+                // The sandbox names the practice, so only a practice of the job's own assignments is kept.
+                practiceId != null
+                                && job.input().assignments().stream()
+                                        .anyMatch(assigned -> assigned.practiceId() == practiceId)
+                        ? practiceId
+                        : null,
                 charge.model(),
                 charge.price(),
                 costBound(charge.price(), bound));
