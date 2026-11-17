@@ -373,7 +373,7 @@ class ProviderResourceRepairDeletionIntegrationTest extends AbstractWorkspaceInt
     }
 
     @Test
-    void shouldRetainAnUntrackedPreCutoverRemovalEvenAfterVerifiedAbsence() {
+    void shouldRetainAnUntrackedRemovalEvenAfterVerifiedAbsence() {
         UUID id = pending(true);
         Resource target = rows.findById(id).orElseThrow().resource();
         assertThat(rows.findById(id).orElseThrow().getRemovalAttempts()).isEqualTo(1);

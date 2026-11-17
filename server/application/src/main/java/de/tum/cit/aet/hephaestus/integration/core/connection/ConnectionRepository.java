@@ -150,8 +150,8 @@ public interface ConnectionRepository extends JpaRepository<Connection, Long> {
 
     record WorkspaceConfigRow(Long workspaceId, IntegrationKind kind, ConnectionConfig config) {}
 
-    /** Disconnected connections whose provider teardown was requested before {@code cutoff}, across workspaces. */
-    @WorkspaceAgnostic("Unresolved pre-cutover removals prohibit adoption until their durable identity is captured")
+    /** Connections in {@code state} whose provider teardown is still pending, across workspaces. */
+    @WorkspaceAgnostic("Uncaptured removals prohibit adoption until their durable identity is captured")
     List<Connection> findByStateAndProviderTeardownRequestedAtNotNull(IntegrationState state);
 
     /** Oldest request first, so the most overdue credential is erased first. */

@@ -113,7 +113,8 @@ public class ProviderResourceRepairs {
             @Nullable UUID exchangeAttempt) {
         List<Resource> targets = adoptionIdentities(resources(ref, config, credential));
         lockIdentities(targets);
-        boolean pendingBeforeCutover = Stream.concat(
+        // A removal that its connection requested before its resources were captured has no repair row yet.
+        boolean uncapturedRemoval = Stream.concat(
                         connections
                                 .findByStateAndProviderTeardownRequestedAtNotNull(IntegrationState.UNINSTALLED)
                                 .stream(),
@@ -134,7 +135,7 @@ public class ProviderResourceRepairs {
                         slack.botUserId() == null ? "*" : slack.botUserId(),
                         slack.botTokenFingerprint() == null ? "" : slack.botTokenFingerprint(),
                         exchangeAttempt);
-        if (pendingBeforeCutover
+        if (uncapturedRemoval
                 || pendingExchange
                 || targets.stream()
                         .anyMatch(resource ->

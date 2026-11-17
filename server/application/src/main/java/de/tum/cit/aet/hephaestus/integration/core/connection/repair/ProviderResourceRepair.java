@@ -112,7 +112,10 @@ public class ProviderResourceRepair {
                         : now;
     }
 
-    /** A pre-cutover call could already have reached the provider without a durable dispatch permit. */
+    /**
+     * A removal that the connection requested before its resources were captured: an earlier call could already have
+     * reached the provider without a durable dispatch permit.
+     */
     public static ProviderResourceRepair untrackedRemoval(Resource resource, Instant now) {
         var repair = new ProviderResourceRepair(resource, now);
         repair.removalAttempts = 1;
