@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, screen, waitFor, within } from "storybook/test";
 
+import { ProductFeedbackDialog } from "@/components/product-feedback/ProductFeedbackDialog";
 import { expectSettledVisible } from "@/stories/overlay";
 import { expectNoOverflowingElement, expectWithinViewport } from "@/stories/reflow";
 import { Stateful } from "@/stories/stateful";
@@ -163,6 +164,45 @@ export const FirstVisit: Story = {
 			"Get started opened in the corner. 1 of 3 steps are done.",
 		);
 	},
+};
+
+/**
+ * A feedback draft waits in the corner above the pill. The card opens above that button, so the
+ * button that brings the draft back stays reachable while the list is open.
+ */
+export const BesideAFeedbackDraft: Story = {
+	args: { open: true, opening: "self" },
+	render: (args) => (
+		<div className="min-h-screen bg-background p-8">
+			<GetStarted {...args} />
+			<ProductFeedbackDialog
+				view="minimized"
+				onViewChange={fn()}
+				sharing={{ status: "off" }}
+				isSubmitting={false}
+				onSubmit={fn(async () => true)}
+				reportsLink={null}
+			/>
+		</div>
+	),
+	play: async () => {
+		const opened = await card();
+		await expectSettledVisible(opened.getByText("Set up"));
+		const draft = screen.getByRole("button", { name: "Feedback draft" });
+		const button = draft.getBoundingClientRect();
+		const under = document.elementFromPoint(
+			button.x + button.width / 2,
+			button.y + button.height / 2,
+		);
+		await expect(under === draft || draft.contains(under)).toBe(true);
+		const panel = screen.getByRole("dialog", { name: "Get started" }).getBoundingClientRect();
+		await expect(panel.bottom).toBeLessThanOrEqual(button.top);
+	},
+};
+
+export const BesideAFeedbackDraftNarrow: Story = {
+	...BesideAFeedbackDraft,
+	parameters: { viewport: { defaultViewport: "reflow" }, chromatic: { viewports: [320] } },
 };
 
 /** A choice and an account still to do. The review waits for them, so it has no way on of its own. */

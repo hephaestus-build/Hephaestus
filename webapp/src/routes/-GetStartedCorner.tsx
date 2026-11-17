@@ -186,6 +186,11 @@ export default function GetStartedCornerContainer({
 			open={open}
 			opening={opening}
 			onOpenChange={(next, dismissed) => {
+				// A reader who opens the card before it ever opened by itself has seen it, so it does not open
+				// by itself on a later page, and it stays in the corner when the last setup step completes.
+				if (next && record === undefined) {
+					writeGetStartedRecord(accountId, workspaceSlug, "open");
+				}
 				// Every step is done and the reader closed the card: the list leaves the corner for good.
 				if (!next && dismissed && done) {
 					focusPage();

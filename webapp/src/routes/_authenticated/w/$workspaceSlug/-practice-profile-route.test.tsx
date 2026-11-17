@@ -2042,6 +2042,17 @@ describe("Get started", () => {
 		expect(localStorage.getItem(GET_STARTED_RECORD)).toBeNull();
 	});
 
+	it("records the card as seen when the reader opens it before it opened by itself", async () => {
+		server.use(dayOneOverview(READY_REVIEW_READINESS));
+		renderRouteAtWithRouter(
+			`${PAGE}?detail=${encodeURIComponent(JSON.stringify(["practice-groups:all"]))}`,
+		);
+		await screen.findByRole("table", { name: "All practice groups" }, ROUTE_RENDER_WAIT);
+		expect(localStorage.getItem(GET_STARTED_RECORD)).toBeNull();
+		await openGetStarted("0 of 1");
+		expect(localStorage.getItem(GET_STARTED_RECORD)).toBe("open");
+	});
+
 	it.each([
 		{ blocker: "NO_AI", reason: "Hephaestus does not review your work here" },
 		{ blocker: "REVIEWS_OFF", reason: "Practice reviews are off here" },

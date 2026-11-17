@@ -140,7 +140,9 @@ export function GetStarted({ state, open, onOpenChange, opening, onHide }: GetSt
 				initialFocus={opening === "self" ? false : () => firstOpenStep(popup.current) ?? true}
 				// A fade, never a zoom or a slide: the card appears where the reader looks.
 				motion="fade"
-				className="max-h-[calc(100dvh-8rem)] w-[min(26rem,calc(100vw-2rem))] overflow-y-auto"
+				// A tucked-away feedback draft waits above the pill. The card opens above that button, so the
+				// button that brings the draft back stays reachable.
+				className="max-h-[calc(100dvh-8rem)] w-[min(26rem,calc(100vw-2rem))] overflow-y-auto [body:has([data-feedback-draft])_&]:max-h-[calc(100dvh-11.5rem)] [body:has([data-feedback-draft])_&]:-translate-y-14"
 			>
 				<div className="flex items-start justify-between gap-2">
 					<div className="flex min-w-0 flex-col gap-0.5">
