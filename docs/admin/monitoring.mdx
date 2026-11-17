@@ -486,6 +486,10 @@ The chart ships no collector and no trace store. To send traces to your own Open
 
 3. Upgrade the release. Then find a request's trace in your trace store by the `X-Request-Id` that the server returned.
 
+A span names a request by its route template, such as `/api/workspaces/{workspaceSlug}/practice-profile/overview`, never by its address or query.
+A provider call is named by its template too, without its query.
+A span records an error by its exception type. The message and the stack trace stay in the server log.
+
 The chart sets the variables above on the server from `config.tracing.otlpEnabled`, `config.tracing.otlpEndpoint` and `config.tracing.samplingProbability`.
 By default, the chart's network policy admits no collector inside the cluster.
 Set `networkPolicy.traceCollector` to the namespace and pod labels of that collector ([Network policy](./helm-chart.mdx#network-policy)).
