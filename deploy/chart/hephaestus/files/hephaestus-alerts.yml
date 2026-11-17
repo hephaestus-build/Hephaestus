@@ -622,6 +622,19 @@ groups:
         annotations:
           summary: More than 5 % of the {{ $labels.runtime_role }} role's database connections took longer than 50 ms to get
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+      # Metaspace has its own maximum, below the heap and container limits that the other memory alerts read.
+      # docs/admin/alert-rules.mdx gives why the rule drops a maximum of 0 or less.
+      - alert: HephaestusMetaspaceNearLimit
+        expr: >-
+          jvm_memory_used_bytes{job="hephaestus",area="nonheap",id="Metaspace"}
+          / (jvm_memory_max_bytes{job="hephaestus",area="nonheap",id="Metaspace"} > 0)
+          > 0.8
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: A server's Metaspace stayed above 80 % of its maximum for 10 minutes
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusBrowserFaultsRising
         expr: sum by (kind) (increase(browser_faults_total{job="hephaestus"}[1h])) >= 20
         labels:
