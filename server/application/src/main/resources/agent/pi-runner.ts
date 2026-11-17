@@ -1,6 +1,14 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+	existsSync,
+	mkdirSync,
+	readdirSync,
+	readFileSync,
+	renameSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs";
 import { createRequire } from "node:module";
 import nodePath from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
@@ -735,7 +743,8 @@ async function runReview(): Promise<void> {
 
 	setTimeout(() => {
 		diagnose("watchdog.exited", { after_ms: AGENT_BUDGET_MS + 30_000 });
-		// What each open session waited on when the budget ran out: the only record of a run that never ended a turn.
+		// What each open session waited on when the budget ran out, written before the output is finalized in case that
+		// fails.
 		try {
 			runnerDebug.end = { event: "watchdog.exited" };
 			persistRunnerDebug();
@@ -976,10 +985,13 @@ async function runReview(): Promise<void> {
 				? compareSlugs(a.practiceSlug, b.practiceSlug)
 				: 0,
 		);
+		// Rewritten while sessions run, and a stopped sandbox uploads what is there: a whole file or the last one.
+		const temporaryPath = `${RUNNER_DEBUG_PATH}.tmp`;
 		writeFileSync(
-			RUNNER_DEBUG_PATH,
+			temporaryPath,
 			JSON.stringify({ ...runnerDebug, turns, open: openSessions() }, null, 2),
 		);
+		renameSync(temporaryPath, RUNNER_DEBUG_PATH);
 	}
 	function persistReviewState() {
 		writeFileSync(REVIEW_STATE_PATH, JSON.stringify(admissionRequest(), null, 2));

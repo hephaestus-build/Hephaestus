@@ -496,6 +496,9 @@ The holder of a review run puts the same three fields in its thread-scoped log c
 ## Model calls
 
 Each model call of a run has one row in `llm_usage_event`. The row names the run and the epoch of the claim that made the call.
+A review session names its practice on each call with the `X-Agent-Practice` header.
+The sandbox is not trusted, so the gateway keeps that id in `practice_id` only when the call's job measures that practice.
+Any other value leaves `practice_id` empty.
 
 The row keeps the first call failure in `call_failure`, with only its kind and optional HTTP status.
 `failed_at` uses the database clock when that failure is recorded.
@@ -587,6 +590,9 @@ Examples are a cut download, a signal, and a report that does not arrive.
 
 The server does not collect the runner's log, so the job's error carries the reason of a failed attempt.
 For exits 1 and 2, the runner records its last diagnostic as `end` in `runner-debug.json`, with codes of `pi-diagnostics.json` only.
+The same file lists the sessions that are still open as `open`: the practice, the turn, how long a model call has waited for its first byte, and the time since the last event.
+The runner writes the file whenever a turn opens and whenever a model call starts or is served, and once more before its watchdog exits.
+It replaces the file in one step, so a stopped sandbox uploads a whole file.
 The server shows only codes of that vocabulary.
 For exit 77, the server keeps its own error on the attempt: the request that failed, and the cause by type.
 When the runner reports no evaluated practice and the usage ledger holds no model call of the attempt, the error says so.

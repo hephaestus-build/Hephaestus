@@ -1380,19 +1380,19 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
     void shouldRecordThePracticeThatTheSandboxNamesOnlyWhenTheJobMeasuresIt() throws Exception {
         try (MockWebServer upstream = new MockWebServer()) {
             upstream.start();
-            upstream.enqueue(json("{\"choices\":[]}"));
-            upstream.enqueue(json("{\"choices\":[]}"));
             ReviewJob job = reviewJob(upstream.url("/v1").toString());
             long assigned = job.getInput().assignments().getFirst().practiceId();
+            var named = List.of(
+                    Long.toString(assigned), Long.toString(assigned + 998), "abc", "0", "-1", "99999999999999999999");
+            named.forEach(unused -> upstream.enqueue(json("{\"choices\":[]}")));
 
-            assertThat(callChat(proxyService(), job, practiceHeader(Long.toString(assigned))))
-                    .isEqualTo(200);
-            assertThat(callChat(proxyService(), job, practiceHeader(Long.toString(assigned + 998))))
-                    .isEqualTo(200);
+            for (String practice : named)
+                assertThat(callChat(proxyService(), job, practiceHeader(practice)))
+                        .isEqualTo(200);
 
             assertThat(jdbc.queryForList(
                             "SELECT practice_id FROM llm_usage_event WHERE source_id = ?", Long.class, job.getId()))
-                    .containsExactlyInAnyOrder(assigned, null);
+                    .containsExactlyInAnyOrder(assigned, null, null, null, null, null);
         }
     }
 

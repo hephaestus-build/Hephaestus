@@ -344,34 +344,47 @@ void test("a session stop failure preserves completed siblings for admission and
 	}
 });
 
-void test("a running review keeps its open sessions on record, so a run that is stopped still names them", async () => {
+void test("while a session waits for its model, the runner's record names it and how long it has waited", async () => {
 	const cwd = realpathSync(mkdtempSync(nodePath.join(tmpdir(), "pi-open-sessions-")));
 	try {
 		stagePractices(
 			cwd,
 			["a-finished", "y-waiting"].map((slug) => ({ slug })),
 		);
-		const exit = runRunner(cwd, { "y-waiting": "hang" }, { AGENT_BUDGET_MS: "6500" });
+		const run = { ended: false };
+		const exit = (async () => {
+			try {
+				return await runRunner(
+					cwd,
+					{ "y-waiting": "hang" },
+					{ AGENT_BUDGET_MS: "6500", PI_HOST_COLD_LEADER: "y-waiting" },
+				);
+			} finally {
+				run.ended = true;
+			}
+		})();
 		let waiting: unknown;
-		const until = Date.now() + 6000;
-		while (waiting === undefined && Date.now() < until) {
+		while (waiting === undefined && !run.ended) {
 			await sleep(100);
 			let open: unknown;
 			try {
 				open = field(readJsonFile(cwd, "out/runner-debug.json"), "open");
 			} catch {
-				// Not written yet, or read mid-write.
+				// Not written yet.
 				continue;
 			}
 			if (Array.isArray(open)) {
 				waiting = open.find(
 					(session: unknown) =>
-						field(session, "practice") === "y-waiting" && field(session, "phase") === "turn",
+						field(session, "practice") === "y-waiting" &&
+						field(session, "phase") === "turn" &&
+						typeof field(session, "modelWaitMs") === "number",
 				);
 			}
 		}
 
 		assert.ok(waiting !== undefined, "the waiting session was never on record while it waited");
+		assert.equal(typeof field(waiting, "turn"), "string");
 		assert.equal(typeof field(waiting, "quietMs"), "number");
 		const ended = await exit;
 		assert.equal(ended.status, 78);
