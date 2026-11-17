@@ -238,10 +238,17 @@ public class ResultAdmissionService {
             owned.setAdmissionAttempt(identity.attempt());
             staging.retainSealBasis(identity, owned, digest, staged);
             jobs.saveAndFlush(owned);
-            // Only staged candidates reach the seal, so an admitted result is one an earlier attempt staged. A
-            // candidate
-            // can survive the copy check and still be withheld by the seal, for example for its processing policy.
-            return new Sealed(owned, !receipt.resultIds().isEmpty());
+            // The receipt also holds the Does-not-apply results that capture recorded, so it cannot say alone whether a
+            // staged result was taken. The seal withholds a staged candidate by its practice and item, for example for
+            // its processing policy, and admits every other one.
+            var withheld = receipt.withheldItems().stream()
+                    .map(value -> List.of(value.practiceId(), value.itemId()))
+                    .collect(Collectors.toSet());
+            boolean tookStaged = staged.stream().anyMatch(value -> {
+                var candidate = value.candidate();
+                return candidate != null && !withheld.contains(List.of(candidate.practiceId(), candidate.itemId()));
+            });
+            return new Sealed(owned, tookStaged);
         }));
     }
 
