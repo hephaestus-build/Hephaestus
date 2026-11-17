@@ -302,8 +302,8 @@ async function previousReleaseClaims(release: string, previousRevision: number) 
 	}
 
 	// The candidate's own fixture, and the run, the job and the item's job as its enqueue path writes them, but with no
-	// frozen model: the workspace binds none, so the config snapshot stays empty. The previous release then cancels the
-	// job after it claimed it. The seeded upgrade binds a model through the previous release's API.
+	// frozen model: the workspace binds none, so the config snapshot stays empty. No provider holds the reviewed work, so
+	// the previous release ends the job after it claimed it. The seeded upgrade binds a model through its API.
 	const job = randomUUID();
 	const runId = randomUUID();
 	try {
