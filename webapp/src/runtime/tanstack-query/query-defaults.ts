@@ -21,7 +21,8 @@ export function sessionRetriesQueries(): boolean {
  * The client's retry policy. A refusal settles at its first answer, so a cached read that is refused
  * and then retried into an outage cannot end as a recoverable failure that keeps the refused answer.
  * An imperative read (`queryClient.query`) passes `retry: false`: TanStack retries one only when the
- * client has a retry default, and a guard, loader or action decides at once what a failure means.
+ * client has a retry default, and a guard, loader or action decides at once what a failure means. A
+ * loader's `prefetchPageRead` keeps the retries: it decides nothing, and the page shows its own failure.
  */
 export function retryQuery(failureCount: number, error: unknown): boolean {
 	return (

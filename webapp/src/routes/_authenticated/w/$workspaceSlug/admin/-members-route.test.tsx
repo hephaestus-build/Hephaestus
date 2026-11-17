@@ -1,5 +1,4 @@
-import { QueryClient } from "@tanstack/react-query";
-import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { beforeAll, describe, expect, it } from "vitest";
@@ -21,6 +20,7 @@ import {
 	renderRouteAt,
 	renderRouteAtWithRouter,
 	loadRouteCode,
+	testQueryClient,
 } from "@/test/router-harness";
 
 beforeAll(
@@ -745,9 +745,7 @@ it("renders the verified nonmember target's members without adding that target t
 	// The app's freshness: the page reuses the rows its loader read instead of reading them again.
 	const { router } = renderRouteAtWithRouter(
 		"/w/tutors/admin/members",
-		new QueryClient({
-			defaultOptions: { queries: { retry: false, staleTime: QUERY_STALE_TIME_MS } },
-		}),
+		testQueryClient({ staleTime: QUERY_STALE_TIME_MS }),
 	);
 	await screen.findByText("Sam Unclaimed", { selector: "div" }, ROUTE_RENDER_WAIT);
 	expect(router.state.location.pathname).toBe("/w/tutors/admin/members");
@@ -755,6 +753,49 @@ it("renders the verified nonmember target's members without adding that target t
 	expect(requests).toHaveLength(1);
 	expect(requests[0]).toMatch(/\/workspaces\/tutors\/members$/u);
 	expect(screen.queryByText("Ada Lovelace", { selector: "div" })).toBeNull();
+});
+
+it("reads the rows of the address a link points at, and opens on them", async () => {
+	const requests: Record<string, string>[] = [];
+	mockMembersRoute();
+	server.use(
+		http.get("*/workspaces/:workspaceSlug/members", ({ request }) => {
+			const params = Object.fromEntries(new URL(request.url).searchParams);
+			requests.push(params);
+			return HttpResponse.json(membershipPage([SAM], 1, 21, 20));
+		}),
+	);
+	// The app's freshness: the page reuses the rows that the hover read instead of reading them again.
+	const { router } = renderRouteAtWithRouter(
+		"/w/acme/admin/settings",
+		testQueryClient({ staleTime: QUERY_STALE_TIME_MS }),
+	);
+	await waitFor(() => expect(router.state.status).toBe("idle"), ROUTE_RENDER_WAIT);
+	requests.length = 0;
+	const search = { q: "  sam ", sort: "username", desc: true, page: 1, size: 20 } as const;
+
+	// What hover intent on a link to the page does.
+	await act(async () => {
+		await router.preloadRoute({
+			to: "/w/$workspaceSlug/admin/members",
+			params: { workspaceSlug: "acme" },
+			search,
+		});
+	});
+	await waitFor(() =>
+		expect(requests).toStrictEqual([{ q: "sam", page: "1", size: "20", sort: "username,desc" }]),
+	);
+
+	await act(async () => {
+		await router.navigate({
+			to: "/w/$workspaceSlug/admin/members",
+			params: { workspaceSlug: "acme" },
+			search,
+		});
+	});
+	await screen.findByText("Sam Unclaimed", { selector: "div" }, ROUTE_RENDER_WAIT);
+	expect(screen.queryByText("Ada Lovelace", { selector: "div" })).toBeNull();
+	expect(requests).toHaveLength(1);
 });
 
 function mockOwnerRoute(members: Wire<WorkspaceMembership>[] = [ADA, SAM]) {

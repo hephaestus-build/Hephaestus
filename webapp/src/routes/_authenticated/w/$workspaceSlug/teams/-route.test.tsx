@@ -7,11 +7,17 @@ import { getAllTeamsQueryKey } from "@/api/@tanstack/react-query.gen";
 import type { TeamInfo } from "@/api/types.gen";
 import { ownMembership, workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
+import { QUERY_STALE_TIME_MS } from "@/runtime/tanstack-query/query-defaults";
 import { deferred } from "@/test/async";
 import { ObserverStub } from "@/test/observers";
-import { loadRouteCode, ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
+import {
+	loadRouteCode,
+	ROUTE_RENDER_WAIT,
+	renderRouteAtWithRouter,
+	testQueryClient,
+} from "@/test/router-harness";
 
-beforeAll(async () => loadRouteCode("/w/acme/teams"), ROUTE_RENDER_WAIT.timeout);
+beforeAll(async () => loadRouteCode("/w/acme/teams", "/w/globex/teams"), ROUTE_RENDER_WAIT.timeout);
 
 const FAILED = "We could not load teams";
 const NONE = /No teams yet/u;
@@ -225,4 +231,38 @@ describe("the teams page", () => {
 		await screen.findByRole("heading", { level: 2, name: "Platform" });
 		expect(screen.queryByText(FAILED)).toBeNull();
 	});
+});
+
+it("reads its teams when a link to it is pointed at, and opens on them", async () => {
+	member();
+	const reads: string[] = [];
+	server.use(
+		http.get("*/workspaces/globex/teams", () => {
+			reads.push("globex");
+			return HttpResponse.json([]);
+		}),
+		http.get("*/workspaces/acme/teams", () => {
+			reads.push("acme");
+			return HttpResponse.json([team(1, "Frontend", "Jane Doe")]);
+		}),
+	);
+	// The app's freshness: the page reuses the teams that the hover read instead of reading them again.
+	const { router } = renderRouteAtWithRouter(
+		"/w/globex/teams",
+		testQueryClient({ staleTime: QUERY_STALE_TIME_MS }),
+	);
+	await screen.findByText(NONE, undefined, ROUTE_RENDER_WAIT);
+	await waitFor(() => expect(router.state.status).toBe("idle"), ROUTE_RENDER_WAIT);
+
+	// What hover intent on a link to the page does.
+	await act(async () => {
+		await router.preloadRoute({ to: "/w/$workspaceSlug/teams", params: { workspaceSlug: "acme" } });
+	});
+	await waitFor(() => expect(reads).toStrictEqual(["globex", "acme"]));
+
+	await act(async () => {
+		await router.navigate({ to: "/w/$workspaceSlug/teams", params: { workspaceSlug: "acme" } });
+	});
+	await screen.findByRole("heading", { level: 2, name: "Frontend" }, ROUTE_RENDER_WAIT);
+	expect(reads).toStrictEqual(["globex", "acme"]);
 });
