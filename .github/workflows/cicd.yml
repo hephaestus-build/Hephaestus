@@ -293,7 +293,7 @@ jobs:
               - 'docs/images/readme/**'
               # The shared brand exporter also owns the extension's generated icons.
               - 'extension/public/icon/**'
-              - 'docs/static/img/brand/chrome-extension-promo-440x280.png'
+              - 'docs/public/img/brand/chrome-extension-promo-440x280.png'
               - '.oxlintrc.json'
               - 'oxlint.react.jsonc'
               - 'oxlint.app.jsonc'

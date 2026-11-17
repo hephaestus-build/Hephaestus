@@ -3,7 +3,7 @@
  * page. The prerender fails on a link to a page that does not exist; this also checks anchors, Markdown twins and
  * static files, on the HTML that ships.
  *
- * `docs/package.json` runs it after the build, on the output in `docs/build`.
+ * `docs/package.json` runs it after the build, on the output in `docs/dist`.
  */
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
@@ -75,7 +75,7 @@ function htmlFiles(directory: string, prefix = ""): string[] {
 }
 
 if (import.meta.main) {
-	const buildDirectory = path.join(repositoryRoot, "docs", "build");
+	const buildDirectory = path.join(repositoryRoot, "docs", "dist");
 	const unbuilt = missingBuild(buildDirectory);
 	if (unbuilt !== undefined) {
 		console.error(unbuilt);

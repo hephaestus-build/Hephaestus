@@ -78,7 +78,7 @@ This table adds only what the annotation cannot tell you.
 | Failure | What it actually means |
 |---|---|
 | `routeTree.gen.ts is stale` | A Vite build writes it. `vp run build:webapp`, then commit the file. |
-| `Brand assets are stale` | `Quality / Webapp stories` runs `export:assets` after `test:storybook`. Thus, the job fails after a clean pass line. Run `vp run --filter webapp export:assets`. Commit `webapp/brand`, `webapp/public`, `docs/images/readme` and `docs/static/img`. |
+| `Brand assets are stale` | `Quality / Webapp stories` runs `export:assets` after `test:storybook`. Thus, the job fails after a clean pass line. Run `vp run --filter webapp export:assets`. Commit `webapp/brand`, `webapp/public`, `docs/images/readme` and `docs/public/img`. |
 | `Build / Generated API` | OpenAPI out of sync → `vp run generate:api`. Schema drift → `vp run db:draft-changelog`. ERD outdated → `vp run db:generate-erd-docs`. |
 | `Changelog immutability guard` (Security → `Dependencies, secrets, and policy`) | A changelog that reached `main` was edited, renamed or deleted, or the baseline include changed, or a new timestamped file sorts before existing history. Fix forward with a new changeset. Never edit the released file. |
 | `Verify changesets` | The PR touches shipped code with no `.changeset/*.md`. `/land-pr` step 7 has the rules. |

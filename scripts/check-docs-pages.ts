@@ -8,8 +8,6 @@ const repositoryRoot = path.resolve(import.meta.dirname, "..");
 
 const GUIDES = ["user", "admin", "contributor"] as const;
 export type Guide = (typeof GUIDES)[number];
-const DOCUSAURUS_KEYS = ["id", "slug", "sidebar_label", "sidebar_position"] as const;
-
 const PAGE_TYPES: Record<Guide, readonly string[]> = {
 	user: ["overview", "tutorial", "feature", "reference"],
 	admin: ["overview", "tutorial", "how-to", "reference", "explanation", "troubleshooting"],
@@ -45,7 +43,7 @@ const REPOSITORY_TOOLING =
 // An inline link, a reference definition or an HTML anchor whose target is in the contributor guide.
 const CONTRIBUTOR_LINK = /(?:\]\(|\]:\s+|href=["'])(?:[^)\s"']*\/)?contributor\//u;
 
-const SCREENSHOTS = "docs/static/img/user";
+const SCREENSHOTS = "docs/public/img/user";
 const COLOR_SCHEMES = ["light", "dark"];
 // GitLab's alt text limit; a longer description belongs in the text around the image.
 const MAX_ALT = 155;
@@ -199,15 +197,6 @@ export function checkPage(file: string, guide: Guide, source: string): string[] 
 			line: 1,
 			message: `page_type "${pageType}" is not a ${guide} guide type: ${PAGE_TYPES[guide].join(", ")}.`,
 		});
-	}
-	// The site shows the title as the heading and reads no other key of the old site.
-	for (const key of DOCUSAURUS_KEYS) {
-		if (field(frontMatter, key) !== undefined) {
-			problems.push({
-				line: 1,
-				message: `Remove the ${key}. The site does not read it: the file name is the URL, and meta.json is the sidebar.`,
-			});
-		}
 	}
 	for (const { number, text } of body) {
 		if (/^#\s/u.test(text)) {

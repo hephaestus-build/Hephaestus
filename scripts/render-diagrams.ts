@@ -1,6 +1,6 @@
 /**
  * Renders every system diagram source `docs/diagrams/<name>.hyl` with the pinned HyLiMo CLI to
- * `docs/static/img/diagrams/<name>.light.svg` and `<name>.dark.svg`.
+ * `docs/public/img/diagrams/<name>.light.svg` and `<name>.dark.svg`.
  *
  * Each source holds the line `// @shared-style`. This script replaces it with `docs/diagrams/style.hyl`,
  * with the fills of the color scheme, so every diagram has the same fonts, colors and legend classes.
@@ -20,9 +20,9 @@ import { roboto } from "@hylimo/fonts";
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 const SOURCES = path.join(REPO_ROOT, "docs/diagrams");
-const OUTPUT = path.join(REPO_ROOT, "docs/static/img/diagrams");
+const OUTPUT = path.join(REPO_ROOT, "docs/public/img/diagrams");
 /** HyLiMo draws its text in Roboto. The site loads the same faces for Mermaid, so every diagram has one font. */
-const FONTS = path.join(REPO_ROOT, "docs/static/fonts");
+const FONTS = path.join(REPO_ROOT, "docs/public/fonts");
 const face = (dataUrl: string) => Buffer.from(dataUrl.slice(dataUrl.indexOf(",") + 1), "base64");
 /** Each face, and the SIL Open Font License text that must travel with it. */
 const FONT_FILES = {

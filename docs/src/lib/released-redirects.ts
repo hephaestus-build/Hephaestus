@@ -16,7 +16,7 @@ export const RELEASED_REDIRECTS = {
 	"/admin/practice-review": "/user/practice-reviews",
 	"/admin/practice-scans": "/user/scans",
 	"/admin/writing-practices": "/user/practices",
-	// Released redirect pages of the old site; released files still link to them.
+	// Redirect pages that rc.8 published; released files still link to them.
 	"/admin/install": "/admin/kubernetes",
 	"/user/ai-mentor": "/user/ask-hephaestus",
 	"/contributor/practice-catalogue": "/contributor/practice-catalog",

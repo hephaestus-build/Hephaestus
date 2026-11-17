@@ -153,7 +153,7 @@ class PracticeGuidanceRulesTest extends BaseUnitTest {
                     "practice-visual-template-sequence.svg"
                 })
         void shouldAcceptTheStarterTemplatesThatTheAdminDocsOffer(String file) throws IOException {
-            String template = Files.readString(Path.of("../../docs/static", file));
+            String template = Files.readString(Path.of("../../docs/public", file));
             assertThatCode(() -> PracticeGuidanceRules.validate(new PracticeVisual(template, "Starter")))
                     .doesNotThrowAnyException();
         }

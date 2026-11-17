@@ -23,7 +23,7 @@ or touching other assets:
 vp run --filter webapp export:assets --only extension
 ```
 
-Do not edit generated files under `webapp/public/`, `extension/public/icon/`, `docs/images/readme/`, or `docs/static/img/`.
+Do not edit generated files under `webapp/public/`, `extension/public/icon/`, `docs/images/readme/`, or `docs/public/img/`.
 CI regenerates all of these outputs and fails when the committed result differs.
 
 The exporter renders every output into a temporary directory.
@@ -60,11 +60,11 @@ favicons, and maskable icons keep their platform-appropriate spacing.
 | Installed web app                                         | 192px, 512px, and maskable PNGs from `webapp/public/manifest.json`    |
 | Chrome extension toolbar and management                   | `extension/public/icon/16.png`, `32.png`, and `48.png`                |
 | Chrome extension installation and Web Store               | `extension/public/icon/128.png`                                       |
-| Chrome Web Store promotional image                        | `docs/static/img/brand/chrome-extension-promo-440x280.png`            |
+| Chrome Web Store promotional image                        | `docs/public/img/brand/chrome-extension-promo-440x280.png`            |
 | Link preview                                              | `hephaestus-social-card.png`                                          |
-| Slack app                                                 | `docs/static/img/brand/slack-app-icon-512.png`                        |
-| GitHub App, GitHub OAuth App, and other external profiles | `docs/static/img/brand/external-app-icon-1024.png`                    |
-| GitHub repository social preview                          | `docs/static/img/brand/github-repository-social-preview-1280x640.png` |
+| Slack app                                                 | `docs/public/img/brand/slack-app-icon-512.png`                        |
+| GitHub App, GitHub OAuth App, and other external profiles | `docs/public/img/brand/external-app-icon-1024.png`                    |
+| GitHub repository social preview                          | `docs/public/img/brand/github-repository-social-preview-1280x640.png` |
 
 The static mark remains signal blue (`#315FDC`) in both color modes. UI wordmarks use the
 mode-aware `brand-accent` token from `webapp/src/styles/theme-tokens.css`.

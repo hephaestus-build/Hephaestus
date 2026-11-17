@@ -70,7 +70,7 @@ The dev server serves them too.
 
 ## Search
 
-[Pagefind](https://pagefind.app/) indexes the built pages after the build (`pagefind --site build`).
+[Pagefind](https://pagefind.app/) indexes the built pages after the build (`pagefind --site dist`).
 The browser loads only the parts of the index that a query needs, and no hosted service runs.
 The index exists only in a build, not in `docs:dev`.
 

@@ -264,13 +264,13 @@ for (const { slug, visual, guide } of bundledPractices) {
 }
 
 // The admin docs offer these starters, so they show the same grammar as the bundled pictures.
-const STARTERS = fileURLToPath(new URL("../docs/static/", import.meta.url));
+const STARTERS = fileURLToPath(new URL("../docs/public/", import.meta.url));
 const starters = readdirSync(STARTERS).filter((name) =>
 	/^practice-visual-template.*\.svg$/u.test(name),
 );
 
 await test("the starter templates follow the style guide", () => {
-	assert.ok(starters.length > 0, "docs/static/ has starter templates");
+	assert.ok(starters.length > 0, "docs/public/ has starter templates");
 	for (const starter of starters) {
 		const svg = readFileSync(path.join(STARTERS, starter), "utf8");
 		assertPicture(starter, svg, 320);

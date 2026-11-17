@@ -90,7 +90,7 @@ const markdownScope = asStringArray(markdownlintConfig.globs, "docs/.markdownlin
 	.map((glob) => path.posix.normalize(`docs/${glob}`));
 const docsLintInputs = [
 	"docs/**",
-	"!docs/build/**",
+	"!docs/dist/**",
 	"!docs/.astro/**",
 	"!docs/node_modules/**",
 	...markdownScope,
@@ -427,8 +427,8 @@ export default defineConfig({
 			// The HyLiMo CLI runs in a child process, so the inputs are named.
 			"gate:system-diagrams": cachedOn("node scripts/render-diagrams.ts --check", [
 				"docs/diagrams/**",
-				"docs/static/img/diagrams/**",
-				"docs/static/fonts/**",
+				"docs/public/img/diagrams/**",
+				"docs/public/fonts/**",
 				"scripts/render-diagrams.ts",
 				"pnpm-lock.yaml",
 			]),

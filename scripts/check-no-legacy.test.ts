@@ -62,7 +62,10 @@ await describe("route, server and docs redirects", async () => {
 		["docs/previous.mdx", "---\nredirect_to: /current\n---"],
 		["docs/previous.mdx", '<meta http-equiv="refresh" content="0; url=/current" />'],
 		["docs/src/pages/previous.tsx", '<Redirect to="/current" />'],
-		["docs/docusaurus.config.ts", '"@docusaurus/plugin-client-redirects", { redirects: [] }'],
+		[
+			"docs/src/lib/other-redirects.ts",
+			'export const config = { redirects: { "/old": "/current" } };',
+		],
 	] satisfies [string, string][]) {
 		await it(`rejects ${source}`, () => assert.ok(findings(file, source).length > 0));
 	}
@@ -100,9 +103,9 @@ await it("scans tracked and untracked source through the real git boundary", () 
 			"/** @deprecated */\nexport const previous = true;",
 		);
 		assert.ok(check(root).some((error) => error.includes("source-deprecation")));
-		mkdirSync(path.join(root, "docs/static/previous"), { recursive: true });
+		mkdirSync(path.join(root, "docs/public/previous"), { recursive: true });
 		writeFileSync(
-			path.join(root, "docs/static/previous/index.html"),
+			path.join(root, "docs/public/previous/index.html"),
 			'<meta http-equiv="refresh" content="0; url=/current">',
 		);
 		assert.ok(check(root).some((error) => error.includes("docs-redirect")));
@@ -197,13 +200,11 @@ await it("a changed canonical workspace source or destination is refused", () =>
 	}
 });
 
-await it("refuses a re-added redirect plugin or config in each supported docs form", () => {
+await it("refuses a redirect outside the one redirect map in each docs form", () => {
 	for (const [file, source] of [
-		["docs/package.json", '{"dependencies":{"@docusaurus/plugin-client-redirects":"3.10.2"}}'],
-		["docs/docusaurus.config.ts", 'plugins: ["@docusaurus/plugin-client-redirects"]'],
-		["docs/docusaurus.config.ts", 'const config = {redirects: [{from: "/old", to: "/current"}]};'],
-		["docs/docusaurus.config.ts", 'const config = {createRedirects(path) {return ["/old"];}};'],
-		["docs/docusaurus.config.ts", 'const config = {createRedirects: (path) => ["/old"]};'],
+		["docs/src/lib/redirects.ts", 'export const config = { redirects: { "/old": "/current" } };'],
+		["docs/src/pages/old.astro", '<meta http-equiv="refresh" content="0;url=/current">'],
+		["docs/src/components/old.tsx", 'useEffect(() => location.replace("/current"));'],
 		["docs/redirects.json", '{"redirects":[{"from":"/old","to":"/current"}]}'],
 	] satisfies [string, string][]) {
 		const found = findings(file, source);

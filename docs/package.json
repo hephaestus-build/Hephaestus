@@ -5,7 +5,7 @@
 	"type": "module",
 	"scripts": {
 		"dev": "node ../scripts/docs-astro.ts dev --port 3000",
-		"build": "node ../scripts/docs-astro.ts build && pagefind --site build && node ../scripts/check-docs-links.ts && node ../scripts/check-docs-addresses.ts && node ../scripts/check-doc-targets.ts",
+		"build": "node ../scripts/docs-astro.ts build && pagefind --site dist && node ../scripts/check-docs-links.ts && node ../scripts/check-docs-addresses.ts && node ../scripts/check-doc-targets.ts",
 		"check": "node ../scripts/docs-astro.ts check",
 		"serve": "node ../scripts/docs-astro.ts preview"
 	},

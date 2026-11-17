@@ -161,13 +161,10 @@ export default defineConfig({
 			`${base.replace(/\/$/u, "")}${to}`,
 		]),
 	),
-	outDir: "./build",
 	// The site ships its images as committed. Without a transform, the build needs no `sharp`, which pnpm leaves out.
 	image: { service: passthroughImageService() },
-	// Directives carry the callouts and `::include`. Quotes stay as the author typed them, as the old site showed them.
+	// Directives carry the callouts and `::include`. Quotes stay as the author typed them.
 	markdown: { processor: satteri({ features: { directive: true, smartPunctuation: false } }) },
-	// The user-guide screenshots, the system diagrams and the practice visual templates keep their URLs.
-	publicDir: "./static",
 	integrations: [
 		fumadocs({
 			components: "./src/components/mdx-island.tsx",

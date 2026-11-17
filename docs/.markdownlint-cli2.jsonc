@@ -25,7 +25,7 @@
 	// `admin/_configuration-reference/` by `vp run generate:configuration-reference`. CI checks both for drift.
 	"ignores": [
 		"node_modules",
-		"build",
+		"dist",
 		"venv",
 		".venv",
 		"contributor/erd",

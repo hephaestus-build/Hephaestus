@@ -1,6 +1,6 @@
 /**
  * A released address is a contract with readers: a page path or a heading anchor that a published release lists or
- * links to keeps working. This checks two sources against the built site in `docs/build`:
+ * links to keeps working. This checks two sources against the built site in `docs/dist`:
  * - `docs/released-paths.txt`, the page paths of each released sitemap and the anchors that released files cite;
  * - every `https://docs.hephaestus.build/…` URL in a tracked file, such as MIGRATION.md, the alert rules, the chart
  *   notes and the web app's links.
@@ -106,7 +106,7 @@ export function linkedAddresses(
 
 if (process.argv[1] === import.meta.filename) {
 	const root = path.resolve(import.meta.dirname, "..");
-	const build = path.join(root, "docs", "build");
+	const build = path.join(root, "docs", "dist");
 	const read = (file: string): string | undefined => {
 		const full = path.join(build, file);
 		return existsSync(full) ? readFileSync(full, "utf8") : undefined;

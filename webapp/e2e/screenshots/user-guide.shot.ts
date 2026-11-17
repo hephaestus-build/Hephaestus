@@ -16,7 +16,7 @@ import { BASE_URL } from "./server.ts";
 import { asReturningTourReader } from "./tour-offer.ts";
 import { handlers, NOW, WORKSPACE } from "./workspace.ts";
 
-const OUTPUT = path.resolve(import.meta.dirname, "../../../docs/static/img/user");
+const OUTPUT = path.resolve(import.meta.dirname, "../../../docs/public/img/user");
 const API = "http://api.test";
 // Narrow enough that the text stays readable when the docs column scales the image down.
 const VIEWPORT = { width: 1024, height: 640 };

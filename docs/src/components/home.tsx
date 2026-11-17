@@ -22,7 +22,7 @@ function OpenSearch() {
 	return null;
 }
 
-/** `/search` was the search page of the old site, and links to it keep working: it opens the search dialog. */
+/** `/search` is a released address (docs/released-paths.txt). It opens the search dialog. */
 export function SearchHome({ children, ...props }: ProviderProps) {
 	return (
 		<Provider {...props}>

@@ -59,19 +59,9 @@ await describe("checkPage", async () => {
 		);
 	});
 
-	await test("rejects an id, because the file name is the URL", () => {
-		assert.deepEqual(
-			check(page("id: activity\ntitle: A\ndescription: B.\npage_type: feature", "Text.")),
-			[
-				"page.md:1: Remove the id. The site does not read it: the file name is the URL, and meta.json is the sidebar.",
-			],
-		);
-	});
-
-	await test("rejects a sidebar label and a # heading in every guide", () => {
-		assert.deepEqual(check(page("title: A\nsidebar_label: B", "# A\n\nText."), "contributor"), [
-			"page.md:1: Remove the sidebar_label. The site does not read it: the file name is the URL, and meta.json is the sidebar.",
-			"page.md:6: Remove the # heading. The front matter title is the page heading.",
+	await test("rejects a # heading in every guide", () => {
+		assert.deepEqual(check(page("title: A", "# A\n\nText."), "contributor"), [
+			"page.md:5: Remove the # heading. The front matter title is the page heading.",
 		]);
 	});
 
@@ -158,11 +148,11 @@ const shot = (attributes: string) => `Text.\n\n<Screenshot\n  ${attributes}\n/>`
 
 await describe("screenshotProblems", async () => {
 	const sizes = new Map([
-		["docs/static/img/user/activity/table.light.webp", 80_000],
-		["docs/static/img/user/activity/table.dark.webp", 80_000],
-		["docs/static/img/user/activity/large.light.webp", 80_000],
-		["docs/static/img/user/activity/large.dark.webp", 200_000],
-		["docs/static/img/user/activity/half.light.webp", 80_000],
+		["docs/public/img/user/activity/table.light.webp", 80_000],
+		["docs/public/img/user/activity/table.dark.webp", 80_000],
+		["docs/public/img/user/activity/large.light.webp", 80_000],
+		["docs/public/img/user/activity/large.dark.webp", 200_000],
+		["docs/public/img/user/activity/half.light.webp", 80_000],
 	]);
 	const sizeOf = (image: string) => sizes.get(image);
 
@@ -177,7 +167,7 @@ await describe("screenshotProblems", async () => {
 		assert.deepEqual(
 			screenshotProblems("page.md", shot('src="activity/half"\n  alt="A"'), sizeOf),
 			[
-				"page.md:3: docs/static/img/user/activity/half.dark.webp does not exist. Run vp run generate:docs-screenshots.",
+				"page.md:3: docs/public/img/user/activity/half.dark.webp does not exist. Run vp run generate:docs-screenshots.",
 			],
 		);
 	});
@@ -186,7 +176,7 @@ await describe("screenshotProblems", async () => {
 		assert.deepEqual(
 			screenshotProblems("page.md", shot('src="activity/large"\n  alt="A"'), sizeOf),
 			[
-				"page.md:3: docs/static/img/user/activity/large.dark.webp is 200000 bytes, over the 150000-byte budget.",
+				"page.md:3: docs/public/img/user/activity/large.dark.webp is 200000 bytes, over the 150000-byte budget.",
 			],
 		);
 	});
