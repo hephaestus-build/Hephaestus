@@ -2,7 +2,6 @@ package de.tum.cit.aet.hephaestus.core.audit.spi;
 
 import java.time.Instant;
 import java.util.List;
-import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -28,11 +27,8 @@ public record ConfigAuditFilter(
             return null;
         }
         return entityTypes.stream()
-                .flatMap(value -> switch (value) {
-                    case PRACTICE_GROUP -> Stream.of("PRACTICE_GROUP", "PRACTICE_AREA");
-                    case CATALOG_GROUP -> Stream.of("CATALOG_GROUP", "CATALOG_PRACTICE_AREA");
-                    default -> Stream.of(value.name());
-                })
+                .flatMap(value -> value.storedSpellings().stream())
+                .distinct()
                 .toArray(String[]::new);
     }
 

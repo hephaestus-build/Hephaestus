@@ -439,6 +439,25 @@ class ConfigAuditIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     @Test
     @WithAdminUser
+    void aFilterOnACurrentTypeAlsoFindsRowsStoredUnderItsEarlierName() {
+        Workspace workspace = setupWorkspace("audit-old-name");
+        patchPracticeReview(workspace, Map.of("cooldownMinutes", 45));
+        Long renamed = Objects.requireNonNull(jdbcTemplate.queryForObject(
+                "SELECT id FROM config_audit_event WHERE workspace_id = ? AND entity_type = 'PRACTICE_REVIEW_SETTINGS'",
+                Long.class,
+                workspace.getId()));
+        jdbcTemplate.update("UPDATE config_audit_event SET entity_type = 'AGENT_BINDING' WHERE id = ?", renamed);
+        // A row of an unrelated type in the same workspace, which no filter below may return.
+        createConnection(workspace, "primary");
+
+        assertFilterReturns(workspace, uri -> uri.queryParam("entityType", "MODEL_ASSIGNMENT"), renamed);
+        assertFilterReturns(workspace, uri -> uri.queryParam("entityType", "AGENT_BINDING"), renamed);
+        assertFilterReturns(workspace, uri -> uri.queryParam("entityType", "AGENT_CONFIG"));
+        assertFilterReturns(workspace, uri -> uri.queryParam("entityType", "PRACTICE_REVIEW_SETTINGS"));
+    }
+
+    @Test
+    @WithAdminUser
     void repeatingAFilterParameterWidensItRatherThanReplacingIt() {
         Workspace workspace = setupWorkspace("audit-multi");
         patchPracticeReview(workspace, Map.of("cooldownMinutes", 45));
@@ -562,6 +581,22 @@ class ConfigAuditIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 .expectBody()
                 .jsonPath("$.total")
                 .isEqualTo(expected);
+    }
+
+    private void assertFilterReturns(Workspace workspace, UnaryOperator<UriBuilder> query, Long... ids) {
+        webTestClient
+                .get()
+                .uri(uri ->
+                        query.apply(uri.path("/workspaces/{slug}/config-audit")).build(workspace.getWorkspaceSlug()))
+                .headers(TestAuthUtils.withCurrentUser())
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.content[*].id")
+                .<List<Number>>value(found -> assertThat(
+                                found.stream().map(Number::longValue).toList())
+                        .containsExactlyInAnyOrder(ids));
     }
 
     private void assertFilterYields(Workspace workspace, UnaryOperator<UriBuilder> query, int expected) {

@@ -1,5 +1,7 @@
 package de.tum.cit.aet.hephaestus.core.audit.spi;
 
+import java.util.List;
+
 /** Enum values must match the database CHECK; retained append-only audit rows still require removed resource kinds. */
 public enum ConfigAuditEntityType {
     PROVIDER_RESOURCE_RELEASE,
@@ -63,5 +65,23 @@ public enum ConfigAuditEntityType {
 
     WORKSPACE_LLM_CONNECTION,
     /** A model on a workspace's own BYO connection, including its inline price and enablement. */
-    WORKSPACE_LLM_MODEL,
+    WORKSPACE_LLM_MODEL;
+
+    /**
+     * Every spelling a row of this type can be stored under: its own name, then the earlier names. The
+     * trail is append-only, so rows keep the spelling they were written under; a filter on this type
+     * must match them all. {@code PRACTICE_AREA} and {@code CATALOG_PRACTICE_AREA} are not constants
+     * because nothing writes them any more.
+     */
+    public List<String> storedSpellings() {
+        return switch (this) {
+            case MODEL_ASSIGNMENT -> List.of(name(), "AGENT_BINDING", "AGENT_CONFIG", "AI_CONFIG_BINDING");
+            case PRACTICE_USAGE -> List.of(name(), "PRACTICE_ACTIVE");
+            case WORKSPACE_INSTANCE_LLM_BUDGET -> List.of(name(), "WORKSPACE_LLM_BUDGET");
+            case WORKSPACE_OWN_PROVIDER_LLM_BUDGET -> List.of(name(), "WORKSPACE_BYO_LLM_BUDGET");
+            case PRACTICE_GROUP -> List.of(name(), "PRACTICE_AREA");
+            case CATALOG_GROUP -> List.of(name(), "CATALOG_PRACTICE_AREA");
+            default -> List.of(name());
+        };
+    }
 }
