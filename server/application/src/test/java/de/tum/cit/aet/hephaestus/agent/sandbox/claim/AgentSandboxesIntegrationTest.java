@@ -14,6 +14,7 @@ import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenVerifier;
 import de.tum.cit.aet.hephaestus.agent.attempt.SandboxJwt;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunBand;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunHold;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunLease;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunStopReason;
@@ -376,6 +377,40 @@ class AgentSandboxesIntegrationTest extends BaseIntegrationTest {
         assertThat(repository.findById(kept.id())).isPresent();
         assertThat(claims.created).containsKey(claimName(kept)).doesNotContainKey(claimName(idle));
         assertThat(repository.findById(idle.id())).isEmpty();
+    }
+
+    @Test
+    void shouldTakeBackAHeldReviewsSandboxAtTheNextTickAndStartANewOneWhenTheHoldLifts() {
+        String held = "review:" + UUID.randomUUID();
+        String waiting = "review:" + UUID.randomUUID();
+        var heldRun = Objects.requireNonNull(transactions.execute(
+                status -> runs.enqueue(workspace, AgentRunKind.REVIEW, AgentRunBand.BATCH, held, null)));
+        queueRun(waiting);
+        var heldSandbox = ensure(held, AgentSandboxKind.REVIEW);
+        var waitingSandbox = ensure(waiting, AgentSandboxKind.REVIEW);
+        sandboxes.authenticate(token(heldSandbox));
+        sandboxes.authenticate(token(waitingSandbox));
+        // The claim found the workspace's budget spent and held the run for an hour.
+        transactions.executeWithoutResult(
+                status -> assertThat(runs.hold(heldRun, AgentRunHold.BUDGET, Duration.ofHours(1)))
+                        .isTrue());
+
+        reaper(Duration.ofHours(1)).reap();
+
+        assertThat(repository.findLive(workspace, held))
+                .as("a held review frees its sandbox within one tick, before any idle limit")
+                .isEmpty();
+        assertThat(meters.counter(AgentMetrics.AGENT_SANDBOX_REAPED, "reason", "held")
+                        .count())
+                .isOne();
+        assertThat(repository.findLive(workspace, waiting))
+                .as("a review that is due keeps its sandbox")
+                .isPresent();
+
+        transactions.executeWithoutResult(status -> runs.releaseHolds(workspace, AgentRunHold.BUDGET));
+        var fresh = ensure(held, AgentSandboxKind.REVIEW);
+
+        assertThat(fresh.id()).isNotEqualTo(heldSandbox.id());
     }
 
     @Test

@@ -32,7 +32,8 @@ import org.springframework.validation.annotation.Validated;
  * @param sandboxStart how long a sandbox may take from its claim to its first call to the gateway. A sandbox that
  *     takes longer is deleted, and its subject's next need requests a new one.
  * @param sandboxIdle how long a review sandbox stays after its subject has no queued or leased run. It
- *     covers the step from one run of a subject to its next, such as a review's measuring to its composing.
+ *     covers the step from one run of a subject to its next, such as a review's measuring to its composing. A review
+ *     sandbox whose subject's runs are all held, as by a spent budget, goes at once.
  * @param conversationSandboxIdle how long a conversation's sandbox stays warm after its last call to the gateway while
  *     its conversation has no queued or leased run. The next turn after it starts a cold sandbox.
  * @param modelOutageWindow how long after its submission a review keeps waiting for a model provider that answers none

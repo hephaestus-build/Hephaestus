@@ -35,9 +35,22 @@ interface AgentSandboxRepository extends JpaRepository<AgentSandbox, UUID> {
         Instant getShutdownAt();
     }
 
+    /**
+     * The subject of sandbox {@code x} has a held run, and no other run that is open and not held. A held run waits
+     * for its cause to be lifted, not for this sandbox.
+     */
+    String HELD = """
+            SELECT 1 FROM agent_run h
+             WHERE h.workspace_id = x.workspace_id AND h.concurrency_key = x.subject_key
+               AND h.state = 'QUEUED' AND h.hold_reason IS NOT NULL
+               AND NOT EXISTS (SELECT 1 FROM agent_run o
+                                WHERE o.workspace_id = x.workspace_id AND o.concurrency_key = x.subject_key
+                                  AND o.state <> 'ENDED' AND (o.state <> 'QUEUED' OR o.hold_reason IS NULL))
+            """;
+
     /** A sandbox that the reaper took back, and why. */
     interface RetiredRow extends SandboxRow {
-        /** {@code expired}, {@code start_limit} or {@code idle}. */
+        /** {@code expired}, {@code start_limit}, {@code held} or {@code idle}. */
         String getReason();
     }
 
@@ -196,7 +209,9 @@ interface AgentSandboxRepository extends JpaRepository<AgentSandbox, UUID> {
     /**
      * The reaper's one rule. A live sandbox is taken back when its shutdown time passed, when it did not call the
      * gateway within the start limit, or when its subject has no queued or leased run and it leased no run for its
-     * kind's idle limit. A sandbox that another replica takes back at the same moment is skipped.
+     * kind's idle limit. A review sandbox is taken back at once when every open run of its subject is held: a hold
+     * lasts until its cause is lifted, and the run gets a new sandbox when it is due again. A sandbox that another
+     * replica takes back at the same moment is skipped.
      */
     @WorkspaceAgnostic("The reaper takes back sandboxes of every workspace; each row carries its workspace")
     @Query(value = """
@@ -206,6 +221,8 @@ interface AgentSandboxRepository extends JpaRepository<AgentSandbox, UUID> {
                           WHEN x.state = 'REQUESTED'
                                AND x.created_at <= clock_timestamp() - make_interval(secs => :startSeconds)
                             THEN 'start_limit'
+                          WHEN x.kind <> 'CONVERSATION' AND EXISTS (""" + HELD + """
+                          ) THEN 'held'
                           ELSE 'idle' END AS reason
                 FROM agent_sandbox x
                WHERE x.state IN ('REQUESTED', 'READY')
@@ -216,7 +233,9 @@ interface AgentSandboxRepository extends JpaRepository<AgentSandbox, UUID> {
                               CASE WHEN x.kind = 'CONVERSATION' THEN :conversationIdleSeconds ELSE :idleSeconds END)
                           AND NOT EXISTS (SELECT 1 FROM agent_run r
                                            WHERE r.workspace_id = x.workspace_id
-                                             AND r.concurrency_key = x.subject_key AND r.state <> 'ENDED')))
+                                             AND r.concurrency_key = x.subject_key AND r.state <> 'ENDED'))
+                      OR (x.kind <> 'CONVERSATION' AND EXISTS (""" + HELD + """
+                          )))
                LIMIT :batch FOR UPDATE OF x SKIP LOCKED)
             UPDATE agent_sandbox s SET state = 'DELETING' FROM picked WHERE s.id = picked.id
             RETURNING s.id, s.workspace_id AS "workspaceId", s.subject_key AS "subjectKey", s.kind,
