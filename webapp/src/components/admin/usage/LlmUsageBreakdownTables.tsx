@@ -29,7 +29,7 @@ import {
 	FIRST_COLUMN,
 	formatTokens,
 	formatUsageDay,
-	JOB_TYPE_LABELS,
+	jobTypeLabel,
 	type PurseSpend,
 	spendOf,
 	TOTAL_CELL,
@@ -220,7 +220,7 @@ export function LlmUsageByJobTypeTable({ report, purses }: LlmUsageByJobTypeTabl
 					{rowFigures.map((row) => (
 						<TableRow key={row.jobType} variant="static">
 							<TableCell className={cn(FIRST_COLUMN, "font-medium")}>
-								{JOB_TYPE_LABELS[row.jobType]}
+								{jobTypeLabel(row.jobType)}
 							</TableCell>
 							<PurseCells purses={purses} figures={row} digits={digits} />
 							<TableCell numeric className="text-right">

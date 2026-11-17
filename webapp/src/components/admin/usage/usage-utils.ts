@@ -10,12 +10,17 @@ import { formatNumber } from "@/lib/numbers";
 
 export type LlmJobType = LlmUsageByJobType["jobType"];
 
-export const JOB_TYPE_LABELS: Record<LlmJobType, string> = {
+const JOB_TYPE_LABELS: Record<LlmJobType, string> = {
 	PRACTICE_REVIEW: "Practice review",
 	CONVERSATION_TURN: "Conversation answer",
 	MODEL_CAPABILITY_PROBE: "Model tool-choice test",
 	REPORT_DRAFT: "Product feedback draft",
 };
+
+/** The label of a stored job type. Earlier months can hold job types that no current call writes, so they keep their stored name. */
+export function jobTypeLabel(jobType: LlmJobType): string {
+	return JOB_TYPE_LABELS[jobType] ?? jobType;
+}
 
 export interface PurseSpend {
 	instanceTotalCostUsd: number;
