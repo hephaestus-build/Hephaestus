@@ -13,10 +13,18 @@ import {
 	formatMonthLabel,
 	formatUsageDay,
 	isCurrentMonthUtc,
+	jobTypeLabel,
 	projectBudget,
 	purseCap,
 	pursesOf,
 } from "./usage-utils";
+
+describe("jobTypeLabel", () => {
+	it("names a job type that no current call writes by its stored value", () => {
+		expect(jobTypeLabel("PRACTICE_REVIEW")).toBe("Practice review");
+		expect(jobTypeLabel("PULL_REQUEST_REVIEW")).toBe("PULL_REQUEST_REVIEW");
+	});
+});
 
 afterEach(() => {
 	vi.useRealTimers();

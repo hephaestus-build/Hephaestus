@@ -40,7 +40,7 @@ const report: WorkspaceLlmUsageReport = {
 	],
 	byJobType: [
 		{
-			jobType: "PULL_REQUEST_REVIEW",
+			jobType: "PRACTICE_REVIEW",
 			instanceTotalCostUsd: 4.5,
 			ownProviderTotalCostUsd: 1.5,
 			unpricedEventCount: 1,
@@ -119,7 +119,7 @@ describe("usage breakdown totals", () => {
 		const table = screen.getByRole("table", { name: "AI spend by use" });
 		within(table).getByRole("columnheader", { name: "Cache reads" });
 		within(table).getByRole("columnheader", { name: "Cache writes" });
-		const cells = cellTexts(within(table).getByRole("row", { name: /Pull request review/u }));
+		const cells = cellTexts(within(table).getByRole("row", { name: /Practice review/u }));
 		expect(cells[8]).toBe("600");
 		expect(cells[9]).toBe("50");
 	});
@@ -189,7 +189,7 @@ describe("usage breakdown columns", () => {
 		};
 		render(<LlmUsageByJobTypeTable report={free} purses={BOTH} />);
 
-		const row = screen.getByRole("row", { name: /^Pull request review/u });
+		const row = screen.getByRole("row", { name: /^Practice review/u });
 		expect(cellTexts(row).slice(1, 5)).toStrictEqual(["$4.50", "$0.45", "$0.00", "$0.00"]);
 	});
 
@@ -227,7 +227,7 @@ describe("usage breakdown columns", () => {
 		};
 		render(<LlmUsageByJobTypeTable report={unpriced} purses={BOTH} />);
 
-		const row = screen.getByRole("row", { name: /^Pull request review/u });
+		const row = screen.getByRole("row", { name: /^Practice review/u });
 		expect(cellTexts(row).slice(3, 5)).toStrictEqual(["$0.00", "—"]);
 	});
 });

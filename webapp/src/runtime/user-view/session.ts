@@ -4,7 +4,7 @@ import { personLevel } from "@/components/activity/activity-search";
 import { detailSearch } from "@/components/layout/detail-drawer/detail-stack";
 import { stringifySearch } from "@/lib/router-search";
 import { apiBasePath } from "@/runtime/api-base-path";
-import { workspaceAddressConfig, publicHref } from "@/runtime/workspace-address";
+import { publicHref } from "@/runtime/workspace-address";
 
 export const USER_VIEW_STORAGE_KEY = "hephaestus.user-view";
 
@@ -52,13 +52,9 @@ export function startUserView(session: UserViewSession): void {
 export function exitUserView(): void {
 	const workspaceSlug = getUserViewSession()?.workspaceSlug;
 	clearUserView();
-	let path = "/admin/workspaces";
-	if (workspaceSlug !== undefined) {
-		path = workspaceAddressConfig.enabled
-			? `/w/${workspaceSlug}/view-as`
-			: `/admin/workspaces/${workspaceSlug}/users`;
-	}
-	window.location.assign(publicHref(path));
+	window.location.assign(
+		publicHref(workspaceSlug === undefined ? "/admin/workspaces" : `/w/${workspaceSlug}/view-as`),
+	);
 }
 
 export function clearUserView(): void {

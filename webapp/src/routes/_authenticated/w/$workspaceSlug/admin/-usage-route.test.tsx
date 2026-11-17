@@ -116,7 +116,7 @@ describe("workspace AI usage route, the report", () => {
 				...REPORT,
 				byJobType: [
 					{
-						jobType: "PULL_REQUEST_REVIEW",
+						jobType: "PRACTICE_REVIEW",
 						instanceTotalCostUsd: 0,
 						ownProviderTotalCostUsd: 1.5,
 						unpricedEventCount: 0,
@@ -133,7 +133,7 @@ describe("workspace AI usage route, the report", () => {
 		);
 		renderRouteAt("/w/acme/admin/usage?month=2026-07");
 
-		const use = await screen.findByText("Pull request review", undefined, ROUTE_RENDER_WAIT);
+		const use = await screen.findByText("Practice review", undefined, ROUTE_RENDER_WAIT);
 		expect(requestedMonths).toContain("2026-07");
 		expect(use.closest("table")?.querySelector("caption")?.textContent).toBe("AI spend by use");
 	});

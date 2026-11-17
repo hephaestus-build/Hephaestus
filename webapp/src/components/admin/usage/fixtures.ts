@@ -32,7 +32,7 @@ export function usageReport(month: string = STORY_MONTH): WorkspaceLlmUsageRepor
 		unpricedEventCount: 0,
 		byJobType: [
 			{
-				jobType: "PULL_REQUEST_REVIEW",
+				jobType: "PRACTICE_REVIEW",
 				instanceTotalCostUsd: 8.2,
 				ownProviderTotalCostUsd: 0,
 				unpricedEventCount: 0,
@@ -56,7 +56,7 @@ export function usageReport(month: string = STORY_MONTH): WorkspaceLlmUsageRepor
 				events: 64,
 			},
 			{
-				jobType: "ISSUE_REVIEW",
+				jobType: "REPORT_DRAFT",
 				instanceTotalCostUsd: 1.44,
 				ownProviderTotalCostUsd: 0,
 				unpricedEventCount: 0,
@@ -103,11 +103,11 @@ export function usageReport(month: string = STORY_MONTH): WorkspaceLlmUsageRepor
 
 const OWN_PROVIDER_COST_BY_JOB_TYPE: Partial<Record<LlmUsageByJobType["jobType"], number>> = {
 	CONVERSATION_TURN: 1.92,
-	ISSUE_REVIEW: 0.48,
+	REPORT_DRAFT: 0.48,
 };
 const OWN_PROVIDER_COST_BY_DAY_INDEX: Partial<Record<number, number>> = { 1: 0.48, 3: 1.92 };
 
-/** The same workspace with a $10 cap on a provider of its own, which Hephaestus and issue reviews ran on. */
+/** The same workspace with a $10 cap on a provider of its own, which conversation answers and report drafts ran on. */
 export function withOwnProvider(report: WorkspaceLlmUsageReport): WorkspaceLlmUsageReport {
 	return {
 		...report,

@@ -96,7 +96,7 @@ function AdminWorkspacesPage() {
 				hasSearch={term.length > 0}
 				onViewAsUser={(workspace) => {
 					void navigate({
-						to: "/admin/workspaces/$workspaceSlug/users",
+						to: "/w/$workspaceSlug/view-as",
 						params: { workspaceSlug: workspace.workspaceSlug },
 						search: {},
 					});

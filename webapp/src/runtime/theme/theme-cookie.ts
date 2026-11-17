@@ -48,8 +48,9 @@ export function themeCookieDomain({
 }
 
 /**
- * The cookies to write for a choice. A host-only twin from before workspace addresses were on would
- * be listed first and win every read, so writing the shared cookie expires it.
+ * The cookies to write for a choice. An operator can turn on workspace subdomains for a running deployment
+ * (docs/admin/workspace-subdomains.mdx). A host-only twin written before that would be listed first and win
+ * every read, so writing the shared cookie expires it.
  */
 export function themeCookies(theme: Theme, scope: CookieScope): string[] {
 	const domain = themeCookieDomain(scope);
