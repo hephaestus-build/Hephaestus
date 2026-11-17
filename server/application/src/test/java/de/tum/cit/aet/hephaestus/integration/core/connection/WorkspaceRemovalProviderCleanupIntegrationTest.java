@@ -24,6 +24,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -144,7 +145,7 @@ class WorkspaceRemovalProviderCleanupIntegrationTest extends AbstractWorkspaceIn
         }));
     }
 
-    private List<String> openRemovals(Connection connection) {
+    private List<@Nullable String> openRemovals(Connection connection) {
         return jdbc.queryForList(
                 "SELECT r.state FROM provider_resource_repair r JOIN connection_provider_repair c ON c.repair_id = r.id"
                         + " WHERE c.workspace_id = ? AND c.connection_id = ?",
