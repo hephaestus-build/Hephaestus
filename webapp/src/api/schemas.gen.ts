@@ -14379,6 +14379,7 @@ export const ReviewStopReasonSchema = {
 		"NO_SANDBOX_ROOM",
 		"COMPOSITION_UNCONFIRMED",
 		"PROVIDER_UNAVAILABLE",
+		"EVIDENCE_TOO_LARGE",
 	],
 } as const;
 
