@@ -167,9 +167,9 @@ public abstract class AbstractFeedbackIntegrationTest extends AbstractWorkspaceI
     }
 
     private Result result(ResultOutcome outcome, @Nullable String dimension, @Nullable String value) {
-        doReturn(CURRENT_SOURCES)
+        doReturn(new ProductItemQuery.FingerprintRead(CURRENT_SOURCES, null))
                 .when(productItems)
-                .fingerprints(
+                .read(
                         eq(new ItemRef(workspace.getId(), itemId, new ItemKind("scm.pull_request"), 42L, null, null)),
                         any(),
                         any());

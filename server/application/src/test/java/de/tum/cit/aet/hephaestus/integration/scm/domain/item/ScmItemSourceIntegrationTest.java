@@ -1671,6 +1671,11 @@ class ScmItemSourceIntegrationTest extends BaseIntegrationTest {
         assertThat(removed.label()).isEqualTo(named.label());
         assertThat(removed.url()).isNull();
         assertThat(removed.removedAt()).isNotNull();
+        // A practice start then names why it cannot read the removed work's sources.
+        assertThat(productItems
+                        .read(item, Set.of(LinkedWorkItemContentSource.KIND), null)
+                        .unreadReason())
+                .isEqualTo("ITEM_REMOVED");
 
         long unavailableId = Objects.requireNonNull(jdbc.queryForObject(
                 "INSERT INTO item(workspace_id,kind,source_id,parent_id,created_at)"

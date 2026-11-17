@@ -796,7 +796,9 @@ class ResultAdmissionIntegrationTest extends AbstractResultAdmissionIntegrationT
         facts.putObject("sourceFingerprints").put(kind.value(), "a".repeat(64));
         capture.setCaptureDecision(facts);
         pinnedPractices.saveAndFlush(capture);
-        doReturn(Map.of(kind, "a".repeat(64))).when(productItems).fingerprints(eq(ref), anySet(), any());
+        doReturn(new ProductItemQuery.FingerprintRead(Map.of(kind, "a".repeat(64)), null))
+                .when(productItems)
+                .read(eq(ref), anySet(), any());
         var id = new ReviewAssignmentId(
                 pending.review().getId(), scenario.practice().getId(), ref.itemId());
         assertThat(reviewFreshness.start(
@@ -806,7 +808,9 @@ class ResultAdmissionIntegrationTest extends AbstractResultAdmissionIntegrationT
                         0,
                         reviewFreshness.startCurrentness(ref.workspaceId(), id)))
                 .isTrue();
-        doReturn(Map.of(kind, "b".repeat(64))).when(productItems).fingerprints(eq(ref), anySet(), any());
+        doReturn(new ProductItemQuery.FingerprintRead(Map.of(kind, "b".repeat(64)), null))
+                .when(productItems)
+                .read(eq(ref), anySet(), any());
         var other = admissions.pending(data.scenario(), Instant.now(), null);
 
         assertThat(reviewFreshness.start(
@@ -850,7 +854,10 @@ class ResultAdmissionIntegrationTest extends AbstractResultAdmissionIntegrationT
         facts.putObject("sourceFingerprints").put("scm.pull-request.core", "a".repeat(64));
         capture.setCaptureDecision(facts);
         pinnedPractices.saveAndFlush(capture);
-        doReturn(Map.of()).when(productItems).fingerprints(eq(ref), anySet(), any());
+        // The read failed as an expired occasion record does: the start must say so.
+        doReturn(new ProductItemQuery.FingerprintRead(Map.of(), "OCCASION_EVIDENCE_UNAVAILABLE"))
+                .when(productItems)
+                .read(eq(ref), anySet(), any());
         var id = new ReviewAssignmentId(
                 pending.review().getId(), scenario.practice().getId(), ref.itemId());
 
@@ -867,6 +874,11 @@ class ResultAdmissionIntegrationTest extends AbstractResultAdmissionIntegrationT
                 .orElseThrow();
         assertThat(stopped.getState()).isEqualTo(ReviewItemState.WITHHELD);
         assertThat(stopped.getReason()).isEqualTo("READINESS_REFUSED");
+        assertThat(Objects.requireNonNull(stopped.getDetail())
+                        .path("withholdingMessage")
+                        .asString())
+                .as("an unverifiable start always names why")
+                .contains("OCCASION_EVIDENCE_UNAVAILABLE");
         assertThat(results.findByWorkspaceIdAndReviewIdOrderByRecordedAtAscIdAsc(ref.workspaceId(), id.reviewId()))
                 .isEmpty();
     }
@@ -941,9 +953,10 @@ class ResultAdmissionIntegrationTest extends AbstractResultAdmissionIntegrationT
         var current = data.result(scenario, ResultOutcome.NOT_MET, at.minusSeconds(30));
         captureFingerprint(current, "a".repeat(64));
         var source = productItems.require(input.workspaceId(), input.itemId());
-        doReturn(Map.of(new SourceKind("scm.pull-request.core"), "b".repeat(64)))
+        doReturn(new ProductItemQuery.FingerprintRead(
+                        Map.of(new SourceKind("scm.pull-request.core"), "b".repeat(64)), null))
                 .when(productItems)
-                .fingerprints(eq(source), anySet(), any());
+                .read(eq(source), anySet(), any());
         var other = data.scenario();
         var untouched = data.result(other, ResultOutcome.MET, at.minusSeconds(30));
         var changed = new ItemEventInput(

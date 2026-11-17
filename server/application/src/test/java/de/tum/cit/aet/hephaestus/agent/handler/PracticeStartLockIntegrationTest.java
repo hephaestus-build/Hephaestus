@@ -13,6 +13,7 @@ import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.run.RunLockProbe;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.practices.review.AbstractResultAdmissionIntegrationTest;
+import de.tum.cit.aet.hephaestus.practices.review.ProductItemQuery;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewAdmissionData;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewIntegrationData;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewPracticeRepository;
@@ -104,10 +105,10 @@ class PracticeStartLockIntegrationTest extends AbstractResultAdmissionIntegratio
         // The sources' check reads the item's record; the source sync before it does not.
         doAnswer(call -> {
                     probe.hold();
-                    return Map.of(kind, "a".repeat(64));
+                    return new ProductItemQuery.FingerprintRead(Map.of(kind, "a".repeat(64)), null);
                 })
                 .when(productItems)
-                .fingerprints(eq(ref), anySet(), any());
+                .read(eq(ref), anySet(), any());
 
         var started = probe.during(() -> admission.start(
                 new ResultAdmissionService.AdmissionIdentity(pending.jobId(), workspaceId, 0, runId),

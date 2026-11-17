@@ -84,7 +84,9 @@ class ReviewClosureIntegrationTest extends AbstractResultAdmissionIntegrationTes
                 "{\"sourceFingerprints\":{\"scm.pull-request.core\":\"" + "a".repeat(64) + "\"}}",
                 workspace,
                 review.getId());
-        doReturn(Map.of(source, "b".repeat(64))).when(productItems).fingerprints(ref, Set.of(source), null);
+        doReturn(new ProductItemQuery.FingerprintRead(Map.of(source, "b".repeat(64)), null))
+                .when(productItems)
+                .read(ref, Set.of(source), null);
         jdbc.update(
                 "INSERT INTO item_event (id,workspace_id,item_id,name,item_version,occurred_at,found_by,state,decided_at)"
                         + " VALUES (?,?,?,'scm.pull_request.synchronized','new-head',?,'WEBHOOK','RECORDED',?)",

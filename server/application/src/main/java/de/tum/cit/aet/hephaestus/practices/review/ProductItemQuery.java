@@ -130,29 +130,45 @@ public class ProductItemQuery {
      * @param occasion the occasion that the capture being compared read: {@link ReviewSnapshot#occasion()}
      */
     public Map<SourceKind, String> fingerprints(ItemRef item, Set<SourceKind> kinds, @Nullable UUID occasion) {
-        if (kinds.isEmpty()) return Map.of();
+        return read(item, kinds, occasion).fingerprints();
+    }
+
+    /**
+     * The current fingerprints of the item's sources, with why none could be read.
+     *
+     * @param unreadReason the capture code of the read that failed, {@code NO_CURRENT_WORK} for work that its source no
+     *     longer shows, {@code NO_UNIQUE_SOURCE} for an item with no unambiguous source; null when the read ran
+     */
+    public record FingerprintRead(
+            Map<SourceKind, String> fingerprints, @Nullable String unreadReason) {}
+
+    public FingerprintRead read(ItemRef item, Set<SourceKind> kinds, @Nullable UUID occasion) {
+        if (kinds.isEmpty()) return new FingerprintRead(Map.of(), null);
         var matching =
                 sources.stream().filter(candidate -> candidate.supports(item)).toList();
-        if (matching.size() != 1) return Map.of();
+        var readers = fingerprintReaders.stream()
+                .filter(reader -> reader.supports(item))
+                .toList();
+        if (matching.size() != 1 || readers.size() > 1) return new FingerprintRead(Map.of(), "NO_UNIQUE_SOURCE");
         try {
-            var readers = fingerprintReaders.stream()
-                    .filter(reader -> reader.supports(item))
-                    .toList();
-            if (readers.size() > 1) return Map.of();
-            if (!readers.isEmpty()) return readers.getFirst().fingerprints(item, kinds, occasion, mapper);
+            if (!readers.isEmpty())
+                return new FingerprintRead(readers.getFirst().fingerprints(item, kinds, occasion, mapper), null);
             var source = matching.getFirst();
             var current = source.current(item);
             return current.isEmpty()
-                    ? Map.of()
+                    ? new FingerprintRead(Map.of(), "NO_CURRENT_WORK")
                     // A source without its own reader captures only rows that this server stores.
-                    : ItemSource.recordFingerprints(source::capture, current.orElseThrow(), kinds, occasion, mapper);
+                    : new FingerprintRead(
+                            ItemSource.recordFingerprints(
+                                    source::capture, current.orElseThrow(), kinds, occasion, mapper),
+                            null);
         } catch (ItemCaptureException unavailable) {
-            // Every source then reads as unverifiable. Page reads of expired occasions pass here too, so not INFO.
-            log.debug(
+            // Every source then reads as unverifiable, so the code is the only answer to why. It holds no content.
+            log.info(
                     "Current source fingerprints unreadable: itemId={}, captureCode={}",
                     item.itemId(),
                     unavailable.code());
-            return Map.of();
+            return new FingerprintRead(Map.of(), unavailable.code().name());
         }
     }
 

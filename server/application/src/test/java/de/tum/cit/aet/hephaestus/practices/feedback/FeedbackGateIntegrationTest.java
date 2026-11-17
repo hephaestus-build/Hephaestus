@@ -16,6 +16,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ItemSnapshot;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemVersion;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.item.ScmItemService;
 import de.tum.cit.aet.hephaestus.practices.model.Result;
+import de.tum.cit.aet.hephaestus.practices.review.ProductItemQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.EvidenceAuthorization;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCheck;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCheckStage;
@@ -162,7 +163,9 @@ class FeedbackGateIntegrationTest extends AbstractFeedbackIntegrationTest {
                 workspace.getId(),
                 reviewId,
                 unavailable.getPracticeId());
-        doReturn(Map.of()).when(productItems).fingerprints(eq(supportedItem), eq(Set.of(CORE, comments)), any());
+        doReturn(new ProductItemQuery.FingerprintRead(Map.of(), null))
+                .when(productItems)
+                .read(eq(supportedItem), eq(Set.of(CORE, comments)), any());
         when(authorization.permitsForNewDelivery(
                         eq(workspace.getId()), any(), eq(SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY)))
                 .thenAnswer(invocation -> invocation.<Collection<Result>>getArgument(1).stream()
@@ -186,7 +189,9 @@ class FeedbackGateIntegrationTest extends AbstractFeedbackIntegrationTest {
     void shouldWithholdUnavailableCurrentProofWithoutClaimingTheWorkChanged() {
         var result = resultWithStateFilter("state", "open");
         supportOnWorkFeedback(result);
-        doReturn(Map.of()).when(productItems).fingerprints(eq(supportedItem), any(), any());
+        doReturn(new ProductItemQuery.FingerprintRead(Map.of(), null))
+                .when(productItems)
+                .read(eq(supportedItem), any(), any());
         var check = check();
         assertThat(check.allowed()).isFalse();
         assertThat(check.reason()).isEqualTo(FeedbackStopReason.UNCORROBORATED);
@@ -202,9 +207,13 @@ class FeedbackGateIntegrationTest extends AbstractFeedbackIntegrationTest {
     void shouldRefuseChangedWorkAndClosedWorkAgainstThePersistedStateFilter() {
         supportOnWorkFeedback();
         when(source.current(supportedItem)).thenReturn(Optional.of(snapshot(supportedItem, "open", "v2")));
-        doReturn(Map.of(CORE, "b".repeat(64))).when(productItems).fingerprints(eq(supportedItem), any(), any());
+        doReturn(new ProductItemQuery.FingerprintRead(Map.of(CORE, "b".repeat(64)), null))
+                .when(productItems)
+                .read(eq(supportedItem), any(), any());
         assertThat(check().reason()).isEqualTo(FeedbackStopReason.REVIEWED_VERSION_CHANGED);
-        doReturn(CURRENT_SOURCES).when(productItems).fingerprints(eq(supportedItem), any(), any());
+        doReturn(new ProductItemQuery.FingerprintRead(CURRENT_SOURCES, null))
+                .when(productItems)
+                .read(eq(supportedItem), any(), any());
         when(source.current(supportedItem)).thenReturn(Optional.of(snapshot(supportedItem, "closed", "v1")));
         var check = check();
         assertThat(check.reason()).isEqualTo(FeedbackStopReason.ITEM_STATE_INELIGIBLE);

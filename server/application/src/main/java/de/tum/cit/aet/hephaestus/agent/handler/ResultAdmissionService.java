@@ -135,7 +135,7 @@ public class ResultAdmissionService {
                     request.practiceSlug(),
                     unreachable.getClass().getName());
         }
-        Currentness checked = assignments.startCurrentness(claimed, request.practiceSlug());
+        var checked = assignments.startCurrentness(claimed, request.practiceSlug());
         return Objects.requireNonNull(transactions.execute(status -> {
             var job = ownedJob(identity);
             if (isAdmitted(job)) throw new AdmissionConflictException();

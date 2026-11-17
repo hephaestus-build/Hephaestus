@@ -275,10 +275,11 @@ class ReviewRequestPinIntegrationTest extends AbstractResultAdmissionIntegration
                     reading.countDown();
                     assertThat(release.await(30, TimeUnit.SECONDS)).isTrue();
                     Set<SourceKind> kinds = call.getArgument(1);
-                    return kinds.stream().collect(Collectors.toMap(kind -> kind, kind -> "read"));
+                    return new ProductItemQuery.FingerprintRead(
+                            kinds.stream().collect(Collectors.toMap(kind -> kind, kind -> "read")), null);
                 })
                 .when(productItems)
-                .fingerprints(eq(review.ref()), any(), isNull());
+                .read(eq(review.ref()), any(), isNull());
         var executor = Executors.newSingleThreadExecutor();
         try {
             var requested = executor.submit(() -> service.request(review.request()));
@@ -373,10 +374,11 @@ class ReviewRequestPinIntegrationTest extends AbstractResultAdmissionIntegration
         doAnswer(call -> {
                     transactionAtRead.add(TransactionSynchronizationManager.isActualTransactionActive());
                     Set<SourceKind> kinds = call.getArgument(1);
-                    return kinds.stream().collect(Collectors.toMap(kind -> kind, kind -> "read"));
+                    return new ProductItemQuery.FingerprintRead(
+                            kinds.stream().collect(Collectors.toMap(kind -> kind, kind -> "read")), null);
                 })
                 .when(productItems)
-                .fingerprints(eq(ref), any(), isNull());
+                .read(eq(ref), any(), isNull());
         return transactionAtRead;
     }
 

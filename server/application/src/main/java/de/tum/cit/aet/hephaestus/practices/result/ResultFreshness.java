@@ -149,7 +149,7 @@ public class ResultFreshness implements FreshnessRead {
             var kinds = group.getKey().kinds();
             var current = item == null || kinds.isEmpty()
                     ? Map.<SourceKind, String>of()
-                    : items.fingerprints(item, kinds, group.getKey().occasion());
+                    : items.read(item, kinds, group.getKey().occasion()).fingerprints();
             for (var result : group.getValue()) {
                 var readAt = capturedAt.get(result.id());
                 states.put(
@@ -245,15 +245,23 @@ public class ResultFreshness implements FreshnessRead {
      *
      * @param changed the sources whose current fingerprint differs from the captured one
      * @param unread the captured sources that cannot be fingerprinted now
+     * @param unreadReason why the check is unverifiable: {@code RECORD_MISSING} for a capture that recorded no
+     *     fingerprint, the code of the read that failed, or {@code SOURCE_UNREAD} for sources that read nothing now;
+     *     null otherwise
      */
-    public record Check(Currentness currentness, Set<String> changed, Set<String> unread) {}
+    public record Check(
+            Currentness currentness,
+            Set<String> changed,
+            Set<String> unread,
+            @Nullable String unreadReason) {}
 
     public Check check(long workspaceId, long itemId, @Nullable UUID occasion, @Nullable JsonNode facts) {
         var captured = fingerprints(facts);
         var item = items.find(workspaceId, itemId);
-        if (item.isEmpty()) return new Check(Currentness.STALE, Set.of(), Set.of());
-        if (captured.isEmpty()) return new Check(Currentness.UNVERIFIABLE, Set.of(), Set.of());
-        var current = items.fingerprints(item.orElseThrow(), captured.keySet(), occasion);
+        if (item.isEmpty()) return new Check(Currentness.STALE, Set.of(), Set.of(), null);
+        if (captured.isEmpty()) return new Check(Currentness.UNVERIFIABLE, Set.of(), Set.of(), "RECORD_MISSING");
+        var read = items.read(item.orElseThrow(), captured.keySet(), occasion);
+        var current = read.fingerprints();
         var changed = new TreeSet<String>();
         var unread = new TreeSet<String>();
         captured.forEach((kind, fingerprint) -> {
@@ -261,7 +269,11 @@ public class ResultFreshness implements FreshnessRead {
             if (now == null) unread.add(kind.value());
             else if (!now.equals(fingerprint)) changed.add(kind.value());
         });
-        return new Check(compare(captured, current), Set.copyOf(changed), Set.copyOf(unread));
+        var currentness = compare(captured, current);
+        String unreadReason = currentness != Currentness.UNVERIFIABLE
+                ? null
+                : Objects.requireNonNullElse(read.unreadReason(), "SOURCE_UNREAD");
+        return new Check(currentness, Set.copyOf(changed), Set.copyOf(unread), unreadReason);
     }
 
     private static Map<SourceKind, String> fingerprints(@Nullable JsonNode facts) {
