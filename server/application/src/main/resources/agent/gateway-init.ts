@@ -6,7 +6,12 @@ import path from "node:path";
 import { pipeline } from "node:stream/promises";
 import { setTimeout as sleep } from "node:timers/promises";
 
-import { discoverCapabilities, present, fetchGatewayInput } from "./gateway-capabilities.ts";
+import {
+	discoverCapabilities,
+	present,
+	fetchGatewayInput,
+	recordProgramFailure,
+} from "./gateway-capabilities.ts";
 import { upload } from "./gateway-run.ts";
 import { parseProxyClaim } from "./pi-provider.ts";
 
@@ -279,6 +284,7 @@ if (import.meta.main) {
 	} catch (error) {
 		// Also a cause no attempt meets again whose report did not arrive: the server then retries the attempt.
 		console.error(error);
+		recordProgramFailure("init", error);
 		process.exitCode = 1;
 	}
 }

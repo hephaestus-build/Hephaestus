@@ -12,6 +12,7 @@ import path from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 
 import type { KindRunner, RunContext, RunOutcome } from "./driver.ts";
+import { takeProgramFailure } from "./gateway-capabilities.ts";
 
 /** Where the image keeps the review programs and the Pi SDK. */
 const SDK = "/opt/pi-sdk";
@@ -199,12 +200,14 @@ export const measureReview: KindRunner = async (run): Promise<RunOutcome> => {
 	if (!existsSync(SDK_LINK)) {
 		symlinkSync(`${SDK}/node_modules`, SDK_LINK);
 	}
+	takeProgramFailure();
 	const prepared = await runToEnd("node", [`${SDK}/gateway-init.js`], env, signal);
 	if (prepared === EXIT_WORKSPACE_UNPREPARED) {
 		return { leaseLost: false, outcome: "completed" };
 	}
 	if (prepared !== 0) {
-		throw new Error("the workspace could not be prepared");
+		// The server keeps why with the attempt, as no sandbox log reaches it.
+		return { leaseLost: false, outcome: "handed_on", cause: takeProgramFailure() };
 	}
 	const exit = await runToEnd("node", [`${SDK}/gateway-run.js`, ...context.command], env, signal);
 	if (signal.aborted) {
@@ -213,5 +216,5 @@ export const measureReview: KindRunner = async (run): Promise<RunOutcome> => {
 	// The run program uploads whatever the runner wrote. The server admits it against its own evidence.
 	return exit === EXIT_UPLOAD_FAILED
 		? { leaseLost: false, outcome: "handed_on" }
-		: { leaseLost: false, outcome: "completed" };
+		: { leaseLost: false, outcome: "completed", cause: takeProgramFailure() };
 };

@@ -616,6 +616,22 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
             @Param("runId") UUID runId,
             @Param("diagnosis") String diagnosis);
 
+    /** A review program's crash in a running attempt's sandbox; the error of a job whose retries run out names it. */
+    @Modifying(flushAutomatically = true)
+    @Query(
+            value = "UPDATE review_job SET capture = jsonb_set(COALESCE(capture, '{}'::jsonb), '{programFailure}',"
+                    + " CAST(:diagnosis AS jsonb)) WHERE id = :id AND workspace_id = :workspaceId AND status ="
+                    + " 'RUNNING' AND run_id = :runId AND (SELECT " + ReviewRunKind.ATTEMPT_OF_RUN
+                    + " FROM agent_run r WHERE r.id = run_id)"
+                    + " = :attempt",
+            nativeQuery = true)
+    int recordProgramFailure(
+            @Param("id") UUID id,
+            @Param("workspaceId") long workspaceId,
+            @Param("attempt") int attempt,
+            @Param("runId") UUID runId,
+            @Param("diagnosis") String diagnosis);
+
     /** The server's own error while it answered a running attempt's results; the attempt's terminal error names it. */
     @Modifying(flushAutomatically = true)
     @Query(

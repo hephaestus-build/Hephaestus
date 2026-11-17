@@ -7,6 +7,7 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -66,6 +67,32 @@ final class RunnerEnd {
                     ? "The review sandbox stopped on an unexpected error."
                     : "The review sandbox stopped on an unexpected error (" + error + ").";
         return null;
+    }
+
+    /** A review program's crash as the review kind reports it with the run's end. */
+    private static final Pattern PROGRAM_FAILURE = Pattern.compile("(init|run):(.+)");
+
+    /**
+     * The crash of the program that prepares the workspace ({@code init}) or starts the runner ({@code run}), as
+     * {@code <program>:<error kind>}; null for any other cause, or an error kind outside the runner's vocabulary.
+     */
+    static @Nullable String programFailure(@Nullable String cause) {
+        if (cause == null) return null;
+        var parts = PROGRAM_FAILURE.matcher(cause);
+        return parts.matches() && ERRORS.contains(parts.group(2)) ? cause : null;
+    }
+
+    /** Why the attempts ended, for a job whose retries ran out; null when no review program recorded a crash. */
+    static @Nullable String describeProgramFailure(@Nullable JsonNode capture) {
+        JsonNode recorded =
+                capture == null ? null : capture.path("programFailure").get("failure");
+        String failure = programFailure(recorded != null && recorded.isString() ? recorded.asString() : null);
+        if (failure == null) return null;
+        var parts = PROGRAM_FAILURE.matcher(failure);
+        if (!parts.matches()) return null;
+        String step = parts.group(1).equals("init") ? "prepared the attempt's workspace" : "started the review";
+        return "The last attempt's review sandbox stopped on an unexpected error (" + parts.group(2) + ") while it "
+                + step + ".";
     }
 
     private static @Nullable String known(@Nullable Object value, Set<String> vocabulary) {

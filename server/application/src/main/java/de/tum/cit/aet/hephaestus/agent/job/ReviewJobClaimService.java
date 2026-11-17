@@ -241,7 +241,11 @@ public class ReviewJobClaimService {
                 // Its results stay. Settlement closes the review as partial: nothing confirms each destination.
                 job.setOutput(
                         objectMapper.createObjectNode().put("outcome", RefusalOutcome.COMPOSITION_UNCONFIRMED.name()));
-            else job.setErrorMessage(ReviewRunKind.RETRIES_EXHAUSTED);
+            else {
+                String why = RunnerEnd.describeProgramFailure(job.getCapture());
+                job.setErrorMessage(
+                        why == null ? ReviewRunKind.RETRIES_EXHAUSTED : ReviewRunKind.RETRIES_EXHAUSTED + " " + why);
+            }
             jobRepository.save(job);
             return new TerminalClaim(job, ReviewJobStatus.FAILED);
         }

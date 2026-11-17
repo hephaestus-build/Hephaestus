@@ -95,6 +95,27 @@ class AttemptServerErrorsIntegrationTest extends BaseIntegrationTest {
                 .isFalse();
     }
 
+    @Test
+    void shouldKeepAReviewProgramsCrashOnTheRunningAttemptOnly() {
+        ReviewJob job = runningJob();
+        UUID run = Objects.requireNonNull(job.getRunId());
+
+        assertThat(jobs.recordProgramFailure(
+                        job.getId(), job.getWorkspaceId(), job.getAttempt() + 1, run, "{\"failure\":\"init:Error\"}"))
+                .as("another attempt writes nothing")
+                .isZero();
+        assertThat(jobs.recordProgramFailure(
+                        job.getId(),
+                        job.getWorkspaceId(),
+                        job.getAttempt(),
+                        run,
+                        "{\"attempt\":" + job.getAttempt() + ",\"failure\":\"init:TypeError\"}"))
+                .isOne();
+
+        ReviewJob stored = jobs.findById(job.getId()).orElseThrow();
+        assertThat(RunnerEnd.describeProgramFailure(stored.getCapture())).contains("(TypeError)");
+    }
+
     private ReviewJob runningJob() {
         String name = "server-error-" + UUID.randomUUID().toString().substring(0, 8);
         var workspace = workspaces.saveAndFlush(WorkspaceTestFixtures.activeWorkspace(name));

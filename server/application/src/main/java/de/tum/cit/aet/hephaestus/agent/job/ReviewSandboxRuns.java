@@ -47,6 +47,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
@@ -245,6 +246,30 @@ public class ReviewSandboxRuns implements SandboxRunKind {
      * Its result already ended the attempt, or handed it on; a run that sent none hands its attempt on, and spends a
      * retry, as a lost sandbox does.
      */
+    /**
+     * The review kind reports a crash of its review programs as the end's cause. The attempt keeps it, as no sandbox log
+     * reaches the server, before the end hands the attempt on.
+     */
+    @Override
+    public boolean end(SandboxRun run, Outcome outcome, @Nullable String cause) {
+        String failure = RunnerEnd.programFailure(cause);
+        if (failure != null)
+            job(run).ifPresent(job -> {
+                var attempt = identity(run, job);
+                jobs.recordProgramFailure(
+                        attempt.jobId(),
+                        attempt.workspaceId(),
+                        attempt.attempt(),
+                        attempt.runId(),
+                        objectMapper
+                                .createObjectNode()
+                                .put("attempt", attempt.attempt())
+                                .put("failure", failure)
+                                .toString());
+            });
+        return end(run, outcome);
+    }
+
     @Override
     public boolean end(SandboxRun run, Outcome outcome) {
         Optional<ReviewJob> job = job(run);

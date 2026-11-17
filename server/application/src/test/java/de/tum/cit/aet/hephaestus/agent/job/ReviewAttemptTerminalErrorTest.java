@@ -111,4 +111,26 @@ class ReviewAttemptTerminalErrorTest extends BaseUnitTest {
         assertThat(AttemptServerErrors.describe(capture, 2)).isNull();
         assertThat(AttemptServerErrors.describe(null, 2)).isNull();
     }
+
+    @Test
+    void shouldKeepOnlyAReviewProgramsCrashOfTheRunnersVocabulary() {
+        assertThat(RunnerEnd.programFailure("init:TypeError")).isEqualTo("init:TypeError");
+        assertThat(RunnerEnd.programFailure("run:Error")).isEqualTo("run:Error");
+        assertThat(RunnerEnd.programFailure("init:Ignore-this.review")).isNull();
+        assertThat(RunnerEnd.programFailure("ATTEMPT_ENDED")).isNull();
+        assertThat(RunnerEnd.programFailure(null)).isNull();
+    }
+
+    @Test
+    void shouldNameTheLastAttemptsProgramCrashForAJobWhoseRetriesRanOut() {
+        var capture = mapper.createObjectNode();
+        capture.putObject("programFailure").put("attempt", 3).put("failure", "init:TypeError");
+
+        assertThat(RunnerEnd.describeProgramFailure(capture))
+                .isEqualTo("The last attempt's review sandbox stopped on an unexpected error (TypeError) while it"
+                        + " prepared the attempt's workspace.");
+        capture.putObject("programFailure").put("attempt", 3).put("failure", "init:<b>text</b>");
+        assertThat(RunnerEnd.describeProgramFailure(capture)).isNull();
+        assertThat(RunnerEnd.describeProgramFailure(null)).isNull();
+    }
 }

@@ -577,6 +577,9 @@ For exits 1 and 2, the runner records its last diagnostic as `end` in `runner-de
 The server shows only codes of that vocabulary.
 For exit 77, the server keeps its own error on the attempt: the request that failed, and the cause by type.
 When the runner reports no evaluated practice and the usage ledger holds no model call of the attempt, the error says so.
+A review program that crashes, the workspace initializer or the run program, records its error kind in the sandbox.
+The review kind sends it with the run's end, and the attempt keeps it.
+When the retries run out, the job's error names the last attempt's crash.
 
 A lost server must never exit 1.
 Every call that a sandbox program makes to the gateway waits out a refused connection until its work ends (`untilGatewayTakes` in `agent/gateway-connection.ts`).
