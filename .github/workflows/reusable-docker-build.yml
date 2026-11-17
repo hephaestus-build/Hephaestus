@@ -411,7 +411,7 @@ jobs:
         if: ${{ !cancelled() && steps.prep.outcome == 'success' && inputs.publish && inputs.scan-images }}
         run: node scripts/prepare-image-scan-runner.ts
 
-      # Trivy and Syft pull through the job's registry login, so the package-writing token is not
+      # Trivy, Syft and Grype pull through the job's registry login, so the package-writing token is not
       # also handed to them as environment variables. A scan or policy failure of one image does not
       # stop the scans of the others; a subject that cannot be resolved stops the step at once.
       - name: Enforce the release vulnerability policy
@@ -444,6 +444,8 @@ jobs:
             repository="$REGISTRY/hephaestus-build/$name"
             if ! { trivy image --skip-db-update --scanners vuln --format json \
                      --output "reports/$stem.json" "$repository@$digest" &&
+                   node scripts/scan-jvm-runtime.ts "$image" "$SCAN_PLATFORM" "$repository@$digest" \
+                     "reports/$stem.json" --pinned &&
                    node scripts/check-release-vulnerabilities.ts "$image" "$SCAN_PLATFORM" "$digest" \
                      "$repository" "reports/$stem.json" security/vulnerability-policy.json \
                      "reports/$stem.policy.json"; }; then

@@ -80,6 +80,17 @@ printf '%s' '{"Results":[]}' > "$8"
 `,
 		{ mode: 0o755 },
 	);
+	// Every subject carries the server's JVM, so the runtime scan runs and matches nothing.
+	await writeFile(
+		path.join(bin, "syft"),
+		`#!/bin/sh
+for argument; do case "$argument" in syft-json=*) printf '%s' '${JSON.stringify({ artifacts: [{ name: "openjdk", version: "25.0.5.0.3+5-LTS", foundBy: "java-jvm-cataloger", locations: [{ path: "/jre/release" }], cpes: [{ cpe: "cpe:2.3:a:oracle:openjdk:25.0.5.0.3:*:*:*:*:*:*:*" }] }] })}' > "\${argument#syft-json=}";; esac; done
+`,
+		{ mode: 0o755 },
+	);
+	await writeFile(path.join(bin, "grype"), `#!/bin/sh\nprintf '{"matches":[]}'\n`, {
+		mode: 0o755,
+	});
 	await writeFile(
 		path.join(bin, "node"),
 		`#!/bin/sh

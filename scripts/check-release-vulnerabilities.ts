@@ -8,11 +8,11 @@ import {
 	componentEvidence,
 	imagePath,
 	SYFT_COMPONENT_CATALOGERS,
-	syftImageArguments,
 } from "./check-release-sbom.ts";
 import { isSet } from "./lib/env.ts";
 import { asString, isRecord as record, readJsonFileSync } from "./lib/json.ts";
 import { run } from "./lib/process.ts";
+import { syftImageArguments } from "./lib/syft.ts";
 
 interface Finding {
 	FixedVersion?: string;

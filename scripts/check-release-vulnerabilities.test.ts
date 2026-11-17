@@ -1043,3 +1043,43 @@ await test("each jar inventory of the policy names a test that exists", async ()
 		assert.match(source, new RegExp(`@Test\\s+void ${method}\\(`, "u"), entry.enforcedBy);
 	}
 });
+
+const openjdk = (id: string, severity: string, fixedVersion?: string) => ({
+	VulnerabilityID: id,
+	PkgName: "openjdk",
+	InstalledVersion: "25.0.5.0.3+5-LTS",
+	...(fixedVersion === undefined ? {} : { FixedVersion: fixedVersion }),
+	Severity: severity,
+});
+
+void test("a JVM finding blocks under the same rule as any other finding", () => {
+	const evaluation = evaluate(
+		"server",
+		{
+			SchemaVersion: 2,
+			ArtifactName: "ghcr.io/hephaestus-build/server@sha256:".padEnd(103, "0"),
+			Results: [
+				{
+					Target: "layers/paketo-buildpacks_bellsoft-liberica/jre/release",
+					Class: "lang-pkgs",
+					Type: "jvm",
+					Vulnerabilities: [
+						openjdk("CVE-2026-1", "CRITICAL"),
+						openjdk("CVE-2026-2", "HIGH", "25.0.5.1"),
+					],
+				},
+			],
+		},
+		{
+			schemaVersion: 3,
+			componentInventories: [],
+			goAdvisories: [],
+			jarInventories: [],
+			exceptions: [],
+		},
+	);
+	// The fixed HIGH blocks; the unfixed CRITICAL is recorded, as for every other component.
+	assert.deepEqual(evaluation.rejected, ["server|CVE-2026-2|openjdk|25.0.5.0.3+5-LTS"]);
+	assert.equal(evaluation.highCritical.length, 2);
+	assert.deepEqual(evaluation.errors, []);
+});

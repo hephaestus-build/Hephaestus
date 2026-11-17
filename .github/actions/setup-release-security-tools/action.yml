@@ -5,7 +5,7 @@ inputs:
     description: Restore and save GitHub Actions cache archives; disable in signing jobs
     default: "true"
   install-syft:
-    description: Install Syft; Cosign and Trivy are always installed
+    description: Install Syft and Grype, and download the Grype database; Cosign and Trivy are always installed
     default: "true"
 runs:
   using: composite
@@ -41,6 +41,11 @@ runs:
       with:
         cache: ${{ inputs.cache }}
         tool: syft
+    - uses: ./.github/actions/setup-ci-tool
+      if: inputs.install-syft == 'true'
+      with:
+        cache: ${{ inputs.cache }}
+        tool: grype
     - uses: ./.github/actions/setup-ci-tool
       with:
         cache: ${{ inputs.cache }}

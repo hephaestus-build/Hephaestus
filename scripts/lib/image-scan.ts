@@ -14,6 +14,7 @@ import { mkdir, rm } from "node:fs/promises";
 import path from "node:path";
 
 import { asRecord, isRecord } from "./json.ts";
+import { scanJvmRuntime } from "./jvm-runtime.ts";
 import { output, run } from "./process.ts";
 
 /** The platform a caller gets when it names none. Callers that must match the release evidence
@@ -162,6 +163,14 @@ async function scan(
 		report,
 		`${subject.repository}@${digest}`,
 	]);
+	// Trivy does not see a JRE that a tarball installed; this appends the runtime's findings.
+	await scanJvmRuntime({
+		image: subject.image,
+		platform,
+		reference: `${subject.repository}@${digest}`,
+		report,
+		pinned: false,
+	});
 	const result = path.join(directory, `${stem}.policy.json`);
 	await rm(result, { force: true });
 	const evaluator = [

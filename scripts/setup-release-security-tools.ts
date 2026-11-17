@@ -1,6 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { appendFile, chmod, mkdir, mkdtemp, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { setTimeout as sleep } from "node:timers/promises";
 
 import { ciToolPin } from "./lib/ci-tool-catalog.ts";
 import { resolveCiTool } from "./lib/ci-tool-resolver.ts";
@@ -59,17 +60,39 @@ export async function installReleaseSecurityTools(): Promise<void> {
 		await appendFile(githubPath, `${bin}\n`);
 		return;
 	}
-	for (const tool of ["syft", "trivy"] as const) {
-		if (tool === "syft" && process.env.INSTALL_SYFT === "false") {
+	// Grype matches the Java runtime that Syft catalogs (scan-jvm-runtime.ts), so it comes with Syft.
+	for (const tool of ["syft", "grype", "trivy"] as const) {
+		if (tool !== "trivy" && process.env.INSTALL_SYFT === "false") {
 			continue;
 		}
 		// The resolver verifies the archive against its pinned SHA-256.
 		const pin = await ciToolPin(tool);
 		await save(tool, pin.name);
 		run("tar", ["-xzf", path.join(directory, pin.name), "-C", bin, tool]);
-		run(path.join(bin, tool), [tool === "syft" ? "version" : "--version"]);
+		run(path.join(bin, tool), [tool === "trivy" ? "--version" : "version"]);
+	}
+	if (process.env.INSTALL_SYFT === "true") {
+		await updateGrypeDatabase(path.join(bin, "grype"));
 	}
 	await appendFile(githubPath, `${bin}\n`);
+}
+
+/** One download per job, so concurrent scans never write the database at once. */
+async function updateGrypeDatabase(grype: string): Promise<void> {
+	for (let attempt = 1; ; attempt += 1) {
+		try {
+			execFileSync(grype, ["db", "update"], {
+				env: { ...process.env, GRYPE_CHECK_FOR_APP_UPDATE: "false" },
+				stdio: "inherit",
+			});
+			return;
+		} catch (error) {
+			if (attempt === 3) {
+				throw error;
+			}
+			await sleep(attempt * 10_000);
+		}
+	}
 }
 
 if (import.meta.main) {

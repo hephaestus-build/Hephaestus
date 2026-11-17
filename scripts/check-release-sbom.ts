@@ -1,5 +1,3 @@
-import path from "node:path";
-
 import { isSet } from "./lib/env.ts";
 
 type JsonObject = Record<string, unknown>;
@@ -265,9 +263,6 @@ export function assertSbomFormatsCover(
 	);
 }
 
-/** Shared Syft configuration for file metadata and SHA-256 digests. */
-export const SYFT_CONFIG = path.join(import.meta.dirname, "..", "security", "syft.yaml");
-
 const BUNDLE_PACKAGES = "/usr/share/nginx/html/.vite/packages/";
 
 function bundledNpmManifests(syft: JsonObject): string[] {
@@ -337,25 +332,6 @@ export function assertBundledNpmScan(syftInput: unknown, trivyInput: unknown): v
 			throw new Error(`Trivy omitted bundled npm package ${identity} at ${file}`);
 		}
 	}
-}
-
-/**
- * Syft reading one platform manifest from its registry. A daemon pull would re-serialize an OCI manifest
- * as Docker schema 2 and record a locally computed digest; `--platform` makes Syft fail loudly if the
- * reference is not this platform's.
- */
-export function syftImageArguments(reference: string, platform: string): string[] {
-	return [
-		"--from",
-		"registry",
-		reference,
-		"--platform",
-		platform,
-		"--scope",
-		"squashed",
-		"--config",
-		SYFT_CONFIG,
-	];
 }
 
 /** Only what component identity reads: Go binaries, and every file's metadata and SHA-256. */

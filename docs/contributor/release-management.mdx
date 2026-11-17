@@ -400,6 +400,7 @@ The third structural entry is unconditional.
 The verifier always requires a release version, and preflight supplies the ref's version.
 
 Preflight runs Syft and Trivy over every image on both architectures, plus the image builds it consumes.
+Trivy does not see a JRE, so a Grype scan of the image's JVM adds its findings to the Trivy report ([Java runtime](./vulnerability-remediation.mdx#java-runtime)).
 On the Version PR branch, it consumes the whole set on both architectures.
 An ordinary pull request builds only changed images on `linux/amd64`.
 Thus, preflight runs only when its result affects a decision:
