@@ -10,12 +10,17 @@
  * A pull request aliases only from a default-branch commit whose own run has published its images.
  * Right after a merge, the default branch's newest commit is still being built, so the run builds
  * every image itself instead of aliasing images that do not exist yet.
+ *
+ * The commit must also have published an image under each name that this checkout builds. A base
+ * from before an image was renamed or added published none under the new name, so the run builds
+ * every image itself rather than fail to alias it.
  */
 import { appendFile } from "node:fs/promises";
 
+import { parseInventory } from "./commit-image-lock.ts";
 import { requiredEnv } from "./lib/env.ts";
 import { compareStatus } from "./lib/github.ts";
-import { asArray, asRecord, asString, parseJson } from "./lib/json.ts";
+import { asArray, asRecord, asString, parseJson, readJsonFile } from "./lib/json.ts";
 import { output } from "./lib/process.ts";
 
 export interface BaseChain {
@@ -25,25 +30,44 @@ export interface BaseChain {
 	baseOf: (commit: string) => Promise<string | undefined>;
 	/** Whether the default branch's run of `commit` published its images; absent when aliasing nothing. */
 	published?: (commit: string) => Promise<boolean>;
+	/** The first-party images that `commit`'s own inventory names: the ones its run published. */
+	inventory?: (commit: string) => Promise<readonly string[]>;
 }
 
 /** A stack deeper than this, or a chain of bases that loops, is given up on rather than followed. */
 const LAYER_LIMIT = 10;
 
+/** `images` are the first-party images that this checkout builds, by the names its inventory gives them. */
 export async function resolveAliasBase(
 	base: string,
 	defaultBranch: string,
 	chain: BaseChain,
+	images: readonly string[],
 ): Promise<string | undefined> {
 	let commit: string | undefined = base;
 	for (let layer = 0; commit !== undefined && layer < LAYER_LIMIT; layer += 1) {
 		const status = await chain.compare(commit, defaultBranch);
 		if (status === "identical" || status === "ahead") {
-			return chain.published === undefined || (await chain.published(commit)) ? commit : undefined;
+			return (await aliasable(commit, chain, images)) ? commit : undefined;
 		}
 		commit = await chain.baseOf(commit);
 	}
 	return undefined;
+}
+
+async function aliasable(
+	commit: string,
+	chain: BaseChain,
+	images: readonly string[],
+): Promise<boolean> {
+	if (chain.published !== undefined && !(await chain.published(commit))) {
+		return false;
+	}
+	if (chain.inventory === undefined) {
+		return true;
+	}
+	const published = await chain.inventory(commit);
+	return images.every((image) => published.includes(image));
 }
 
 if (import.meta.main) {
@@ -86,7 +110,16 @@ if (import.meta.main) {
 						return asArray(runs.workflow_runs, "workflow runs").length > 0;
 					}
 				: undefined,
+			// The run of a commit publishes the images that its own inventory names. The checkout has the
+			// full history, so the commit's own file answers without a request.
+			inventory: aliases
+				? async (head): Promise<readonly string[]> =>
+						parseInventory(
+							parseJson(await output("git", ["show", `${head}:security/release-images.json`])),
+						).images
+				: undefined,
 		},
+		aliases ? parseInventory(await readJsonFile("security/release-images.json")).images : [],
 	);
 	await appendFile(requiredEnv(process.env, "GITHUB_OUTPUT"), `commit=${commit ?? ""}\n`);
 }

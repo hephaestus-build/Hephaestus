@@ -20,27 +20,35 @@ const chain = (
 
 await test("a pull request based on the default branch aliases from its own base", async () => {
 	assert.equal(
-		await resolveAliasBase(main, "main", {
-			compare: async () => "identical",
-			baseOf: never("the base chain"),
-		}),
+		await resolveAliasBase(
+			main,
+			"main",
+			{
+				compare: async () => "identical",
+				baseOf: never("the base chain"),
+			},
+			[],
+		),
 		main,
 	);
 });
 
 await test("a layer of a stack aliases from the nearest commit the default branch contains", async () => {
-	assert.equal(await resolveAliasBase(sha("c"), "main", chain(layers, [main])), main);
-	assert.equal(await resolveAliasBase(sha("b"), "main", chain(layers, [main])), main);
+	assert.equal(await resolveAliasBase(sha("c"), "main", chain(layers, [main]), []), main);
+	assert.equal(await resolveAliasBase(sha("b"), "main", chain(layers, [main]), []), main);
 });
 
 await test("a layer stops at the first published base, not at the default branch", async () => {
-	assert.equal(await resolveAliasBase(sha("c"), "main", chain(layers, [sha("b"), main])), sha("b"));
+	assert.equal(
+		await resolveAliasBase(sha("c"), "main", chain(layers, [sha("b"), main]), []),
+		sha("b"),
+	);
 });
 
 await test("a chain that reaches nothing published leaves the run every image to build", async () => {
-	assert.equal(await resolveAliasBase(sha("c"), "main", chain(layers, [])), undefined);
+	assert.equal(await resolveAliasBase(sha("c"), "main", chain(layers, []), []), undefined);
 	assert.equal(
-		await resolveAliasBase(sha("c"), "main", chain({ [sha("c")]: sha("c") }, [])),
+		await resolveAliasBase(sha("c"), "main", chain({ [sha("c")]: sha("c") }, []), []),
 		undefined,
 	);
 });
@@ -49,11 +57,11 @@ await test("a pull request does not alias from a default-branch commit whose run
 	const pending = { compare: async () => "identical", baseOf: never("the base chain") };
 	// Right after a merge the newest commit is still being built: build every image instead.
 	assert.equal(
-		await resolveAliasBase(main, "main", { ...pending, published: async () => false }),
+		await resolveAliasBase(main, "main", { ...pending, published: async () => false }, []),
 		undefined,
 	);
 	assert.equal(
-		await resolveAliasBase(main, "main", { ...pending, published: async () => true }),
+		await resolveAliasBase(main, "main", { ...pending, published: async () => true }, []),
 		main,
 	);
 	// A layer of a stack checks the commit it lands on.
@@ -63,8 +71,44 @@ await test("a pull request does not alias from a default-branch commit whose run
 		return false;
 	};
 	assert.equal(
-		await resolveAliasBase(sha("c"), "main", { ...chain(layers, [main]), published }),
+		await resolveAliasBase(sha("c"), "main", { ...chain(layers, [main]), published }, []),
 		undefined,
 	);
 	assert.deepEqual(checked, [main]);
+});
+
+const published = async () => true;
+// The base predates a rename: it published `application-server` and `agent-pi`, not `server` and `agent`.
+const renamed = async () => ["application-server", "agent-pi", "postgres"];
+
+await test("a base that published no image under a name this checkout builds leaves every image to build", async () => {
+	const base = { compare: async () => "identical", baseOf: never("the base chain") };
+	assert.equal(
+		await resolveAliasBase(main, "main", { ...base, published, inventory: renamed }, [
+			"server",
+			"agent",
+			"postgres",
+		]),
+		undefined,
+	);
+	// An image added after the base is missing there too.
+	assert.equal(
+		await resolveAliasBase(
+			main,
+			"main",
+			{ ...base, published, inventory: async () => ["server", "postgres"] },
+			["server", "agent", "postgres"],
+		),
+		undefined,
+	);
+	// The same names alias as before; an image the checkout dropped does not matter.
+	assert.equal(
+		await resolveAliasBase(
+			main,
+			"main",
+			{ ...base, published, inventory: async () => ["webapp", "server", "agent", "postgres"] },
+			["server", "agent", "postgres"],
+		),
+		main,
+	);
 });

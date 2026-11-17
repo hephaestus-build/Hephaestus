@@ -1280,6 +1280,8 @@ If no such default-branch commit exists, the run builds every image itself. `det
 
 A pull request aliases only from a commit whose `CI/CD` push run has succeeded, because that run publishes the images under the commit's tag.
 Right after a merge, that run is still building, so the pull request builds every image itself.
+The commit's own image inventory must also name every image that the pull request builds.
+A commit from before an image was renamed or added published nothing under that name, so the pull request builds every image itself.
 
 ## Parallelism and concurrency
 
