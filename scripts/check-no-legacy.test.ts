@@ -275,14 +275,14 @@ await describe("the retired short name", async () => {
 		[server, `throw new IllegalStateException("${RETIRED_NAME} turn is running");`],
 		["webapp/src/components/Panel.test.tsx", `it("${RETIRED_NAME} answers", () => {});`],
 		[prompt, `- Use the name ${RETIRED_NAME} for yourself.`],
+		["docs/contributor/words.mdx", `\`${RETIRED_NAME}\` is retired as a name.`],
+		["webapp/src/Logo.tsx", `<span className="accent">${RETIRED_NAME}</span>aestus`],
 	] satisfies [string, string][]) {
 		await it(`refuses it in ${file}`, () => assert.equal(retired(file, source).length, 1));
 	}
 	for (const [file, source] of [
 		["docs/user/ask.mdx", "Ask Hephaestus about a review."],
 		["scripts/tools.ts", 'const host = "heph-coord"; // heph_* stays a Slack identifier.'],
-		["docs/contributor/words.mdx", `\`${RETIRED_NAME}\` is retired as a name.`],
-		["webapp/src/Logo.tsx", `<span className="accent">${RETIRED_NAME}</span>aestus`],
 		["CHANGELOG.md", `- ${RETIRED_NAME} reads the thread.`],
 		["MIGRATION.md", `${RETIRED_NAME} keeps its history.`],
 		[".changeset/pre/answer.md", `${RETIRED_NAME} reads the thread.`],
@@ -297,5 +297,16 @@ await describe("the retired short name", async () => {
 		assert.deepEqual(retired(prompt, original), []);
 		assert.equal(retired(prompt, `${original}\n${line}\n`).length, 2);
 		assert.equal(retired("docs/user/ask.mdx", line).length, 1);
+	});
+	await it("permits the vocabulary page and the wordmark only as they are, line by line", () => {
+		for (const file of [
+			"docs/contributor/practice-feedback-language.mdx",
+			"webapp/src/components/brand/HephaestusLogo.tsx",
+			"webapp/scripts/export-assets.ts",
+		]) {
+			const original = readFileSync(path.join(import.meta.dirname, "../", file), "utf8");
+			assert.deepEqual(retired(file, original), [], file);
+			assert.equal(retired(file, `${original}\n${RETIRED_NAME} answers.\n`).length, 1, file);
+		}
 	});
 });

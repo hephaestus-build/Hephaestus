@@ -30,6 +30,51 @@ const allowed: readonly (Omit<Finding, "line"> & { count: number; reason: string
 		count: 1,
 		reason: "The prompt tells the model that the old name means it.",
 	},
+	{
+		rule: "retired-name",
+		file: "docs/contributor/practice-feedback-language.mdx",
+		text: `\`${RETIRED_NAME}\` is retired as a name.`,
+		count: 1,
+		reason: "The vocabulary names the retired word to forbid it.",
+	},
+	{
+		rule: "retired-name",
+		file: "docs/contributor/practice-feedback-language.mdx",
+		text: `| **Ask Hephaestus** | The product area where a developer talks with Hephaestus: its menu item, page and panel. | \`${RETIRED_NAME}\`, Mentor, Conversations (as the area), chat, AI assistant |`,
+		count: 1,
+		reason: "The vocabulary names the retired word to forbid it.",
+	},
+	{
+		rule: "retired-name",
+		file: "docs/contributor/practice-feedback-language.mdx",
+		text: `| **Hephaestus** | The application. It also answers in a developer's conversation. | agent, AI mentor, \`${RETIRED_NAME}\`, mentor, assistant |`,
+		count: 1,
+		reason: "The vocabulary names the retired word to forbid it.",
+	},
+	{
+		rule: "retired-name",
+		file: "webapp/src/components/brand/HephaestusLogo.tsx",
+		text: `<span className="text-brand-accent">${RETIRED_NAME}</span>aestus`,
+		count: 1,
+		reason:
+			"The wordmark styles the first letters of the name: a visual split, not the retired word.",
+	},
+	{
+		rule: "retired-name",
+		file: "webapp/scripts/export-assets.ts",
+		text: `\`<style>\${FONT_FACE}html,body{margin:0;width:100%;height:100%;font-family:Inter,sans-serif;background:transparent;color:\${dark ? "#F8FAFC" : "#17191F"}}main{height:100%;display:flex;align-items:center;gap:56px}.mark{width:256px;height:256px}.name{font-size:144px;font-weight:650;letter-spacing:-4px}.heph{color:\${dark ? DARK_ACCENT : SIGNAL_BLUE}}</style><main><div class="mark">\${markSvg}</div><div class="name"><span class="heph">${RETIRED_NAME}</span>aestus</div></main>\`,`,
+		count: 1,
+		reason:
+			"The exported wordmark styles the first letters of the name: a visual split, not the retired word.",
+	},
+	{
+		rule: "retired-name",
+		file: "webapp/scripts/export-assets.ts",
+		text: `\`<style>\${FONT_FACE}*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;font-family:Inter,sans-serif;background:#fbfcff;color:#17191f}.card{position:relative;isolation:isolate;height:100%;padding:58px 68px;overflow:hidden;background-image:radial-gradient(#315fdc18 1.2px,transparent 1.2px);background-size:22px 22px}.card::before{content:"";position:absolute;z-index:-1;width:520px;height:520px;right:-170px;bottom:-290px;border-radius:50%;background:#315fdc;opacity:.13;filter:blur(72px)}.brand{display:flex;align-items:center;gap:16px}.mark{width:64px;height:64px;flex:none;filter:drop-shadow(0 10px 18px rgb(49 95 220/.18))}.name{font-size:38px;font-weight:720;letter-spacing:-1.5px}.heph{color:\${SIGNAL_BLUE}}.layout{display:grid;grid-template-columns:minmax(0,1fr) 350px;align-items:center;gap:64px;height:430px}.eyebrow{display:inline-flex;border:1px solid #b9cbff;border-radius:999px;padding:8px 14px;font-size:16px;font-weight:600;color:#315fdc;background:#f3f6ff}.headline{margin:20px 0 18px;font-size:58px;font-weight:760;letter-spacing:-3px;line-height:1.02}.cards{display:grid;gap:24px}.feedback{border:1px solid #cad7ff;border-radius:18px;padding:20px 22px;background:#fff;box-shadow:0 18px 44px rgb(32 46 80/.12)}.feedback:first-child{transform:rotate(-2deg)}.feedback:last-child{transform:rotate(2deg)}.practice{font-size:14px;font-weight:650;color:#315fdc}.finding{margin-top:12px;font-size:20px;font-weight:700;line-height:1.25}.detail{margin-top:7px;font-size:15px;line-height:1.35;color:#697386}</style><main class="card"><div class="brand"><div class="mark">\${markSvg}</div><div class="name"><span class="heph">${RETIRED_NAME}</span>aestus</div></div><div class="layout"><section><div class="eyebrow">Open-source practice feedback for software teams</div><h1 class="headline">Learn from the work<br>you’re already doing</h1></section><aside class="cards"><div class="feedback"><div class="practice">Define a checkable outcome</div><div class="finding">No acceptance criteria.</div><div class="detail">Which outcome tells everyone the work is done?</div></div><div class="feedback"><div class="practice">Leave specific, actionable review comments</div><div class="finding">Name the doubt.</div><div class="detail">Say what evidence would settle it.</div></div></aside></div></main>\`,`,
+		count: 1,
+		reason:
+			"The exported wordmark styles the first letters of the name: a visual split, not the retired word.",
+	},
 ];
 
 /**
@@ -40,16 +85,8 @@ function retiredNames(file: string, source: string): Finding[] {
 	if (keepsItsWords.test(file)) {
 		return [];
 	}
-	// A Markdown code span mentions the name, as the vocabulary's list of retired words does.
-	const text = /\.mdx?$/u.test(file)
-		? source.replaceAll(/`[^`\n]+`/gu, (span) => " ".repeat(span.length))
-		: source;
 	const result: Finding[] = [];
-	for (const match of text.matchAll(new RegExp(RETIRED_NAME_PATTERN.source, "gu"))) {
-		// The wordmark styles the first letters of Hephaestus: `<span …>Heph</span>aestus`.
-		if (source.startsWith("</span>aestus", match.index + RETIRED_NAME.length)) {
-			continue;
-		}
+	for (const match of source.matchAll(new RegExp(RETIRED_NAME_PATTERN.source, "gu"))) {
 		const start = source.lastIndexOf("\n", match.index - 1) + 1;
 		const end = source.indexOf("\n", match.index);
 		const finding = {
