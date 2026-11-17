@@ -14,6 +14,7 @@ on:
   pull_request:
     paths:
       - scripts/chart-upgrade-drill.ts
+      - scripts/kubernetes-cluster.ts
       - .github/workflows/chart-upgrade.yml
   workflow_dispatch:
     inputs:
@@ -77,4 +78,4 @@ jobs:
           kubectl -n hephaestus-sandboxes get pods,jobs -o wide || true
           kubectl -n hephaestus-sandboxes get sandboxtemplates,sandboxwarmpools,sandboxclaims,sandboxes -o wide || true
           kubectl -n agent-sandbox-system logs deployment/agent-sandbox-controller --tail=200 || true
-          helm -n hephaestus history hephaestus || true
+          helm -n hephaestus history heph || true

@@ -1204,7 +1204,7 @@ const BUCKET = "hephaestus-backups";
 const S3_IMAGE =
 	"docker.io/rclone/rclone:1.75.2@sha256:2687085f718d3c628f7fdfb77c52a1d344332aed543110bb88088f2c70d43eb5";
 
-async function psql(sql: string, signal?: AbortSignal): Promise<string> {
+export async function psql(sql: string, signal?: AbortSignal): Promise<string> {
 	return kubectl(
 		[
 			"-n",
@@ -1264,7 +1264,7 @@ async function waitForJob(job: string, timeout = "15m"): Promise<void> {
 }
 
 /** The release's current Helm revision, which names the Jobs of that revision. */
-async function revision(): Promise<number> {
+export async function revision(): Promise<number> {
 	const history = parseJson(
 		await output("helm", ["-n", NAMESPACE, "history", RELEASE, "--max", "1", "-o", "json"]),
 	);
@@ -1791,7 +1791,10 @@ export function forwardedPort(text: string): number | undefined {
 }
 
 /** A local port to `port` of the Pod, until `stop`. */
-async function portForward(pod: string, port: number): Promise<{ port: number; stop: () => void }> {
+export async function portForward(
+	pod: string,
+	port: number,
+): Promise<{ port: number; stop: () => void }> {
 	const child = spawn(
 		"kubectl",
 		["-n", NAMESPACE, "port-forward", "--address", "127.0.0.1", `pod/${pod}`, `:${port}`],
