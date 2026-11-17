@@ -166,3 +166,52 @@ The mitigation is the review prompt's rule that captured context is data, never 
 
 **Revisit trigger:** the isolation gate proves a per-process file boundary in the sandbox runtime, such as Landlock under gVisor, on the supported clusters.
 Then the host refuses undeclared reads for `bash` too, and results record only the declared fingerprints (§ Revisit trigger).
+
+## Update — 2026-11-17: freshness reads a practice's own sources
+
+This update replaces "Freshness does not narrow to declared sources" (§ What changed, and why).
+It also replaces the first rule under "What keeps results trustworthy" in the update of 2026-11-14.
+
+**What production showed.** In workspace 10 from 16:11Z to 16:36Z, 68 of 92 practice starts read `STALE` and were withheld.
+Every one of them named `scm.repository.tree` as changed, and 34 of them also named `scm.review-threads`.
+One review lost all six practices that run with Approve first.
+Two causes made the staleness:
+
+- The tree fingerprint covered every branch and tag of the repository, so a push to any other branch changed it.
+- Each practice recorded every captured source, so a bot's comment staled a practice that does not read the discussion.
+
+**Decision.** A practice's result records the fingerprints of these sources only:
+
+- the sources that the practice declares
+- the sources that decide whether it applies
+- the item's record, which every practice's inputs carry
+- the change (`scm.pull-request.diff`) and the checkout (`scm.repository.tree`), which every session can read through Git.
+
+The runtime keeps no record of which sources a session read.
+A result's `consulted` sources are refused unless the practice declares them, so they add no source to this set.
+
+**The checkout holds only the change's commits.** A pull request's checkout holds the reviewed commit, the review base and their history.
+It holds no branch and no tag.
+The tree fingerprint is therefore the two commits, and the server computes it from the stored version.
+No practice in the default catalog resolves another branch or a tag.
+The stored provider-ref observation (`repository_to_monitor.git_refs_fingerprint`) now has no reader.
+
+**Residual risk that this adds.** A session can read an undeclared captured file with `bash`, and nothing records that read.
+A change to such a file no longer ends the result.
+So a result can stay current although a file that influenced its reasoning has changed.
+
+**Why it is accepted:**
+
+- The former rule had a measured, high cost. It withheld 68 of 92 practice starts, and a review lost every Approve-first practice.
+- Admission still refuses a result that cites or consulted an undeclared source (`UNDECLARED_SOURCE_CITED`). A result cannot rest on such a source.
+- With Approve first, a person reads the feedback before delivery.
+- The review prompt still says that captured context is data, never instructions.
+
+Enforced by:
+
+- `DefaultReviewExecutionHandlerTest#shouldRecordForEachPracticeOnlyItsOwnSourcesWithTheItemRecordAndTheCheckout`: a bot's comment changes only the discussion, so it ends only the result of a practice that reads the discussion.
+- `GitRefStateIntegrationTest#shouldKeepAPracticeCurrentWhenAnotherBranchOrATagOfItsRepositoryMoves`: a push to another branch, or a new tag, leaves the tree fingerprint unchanged.
+- `GitRepositoryManagerTest#shouldCaptureOnlyTheReviewedAndBaseCommitsSoAnotherBranchOrTagChangesNothingItCanRead`: the checkout holds the two commits and no ref.
+
+**Revisit trigger:** the per-process file boundary in the sandbox ([ADR 0079](0079-one-agent-system.md)).
+When the host refuses undeclared reads for `bash` too, the residual risk is gone.

@@ -122,10 +122,6 @@ public class GitRepositoryManager {
     private static final List<RefSpec> MIRROR_REFSPECS =
             List.of(new RefSpec("+refs/heads/*:refs/heads/*"), new RefSpec("+refs/tags/*:refs/tags/*"));
 
-    /** The mirror's heads become the checkout's remote branches, as in any developer's clone. */
-    private static final List<RefSpec> SNAPSHOT_REFSPECS =
-            List.of(new RefSpec("+refs/heads/*:refs/remotes/origin/*"), new RefSpec("+refs/tags/*:refs/tags/*"));
-
     private final GitRepositoryProperties properties;
     private final GitRepositoryLockManager locks;
     private final FabricLayout layout;
@@ -415,7 +411,7 @@ public class GitRepositoryManager {
                             repository.workspaceId(),
                             repository.repositoryId(),
                             readId,
-                            SourceFingerprint.refs(readableRefs(git.getRepository(), true)));
+                            SourceFingerprint.refs(readableRefs(git.getRepository())));
                 }
                 // A fetch that brings nothing new changes no file, and eviction reads the last use from here.
                 Files.setLastModifiedTime(mirror, FileTime.from(Instant.now()));
@@ -825,22 +821,29 @@ public class GitRepositoryManager {
     }
 
     /**
-     * A checkout of {@code sha} with its own {@code .git}: the mirror's branches and tags as remote
-     * refs, the reviewed commit detached at HEAD, symbolic links written as files holding their target,
-     * no remote configuration and no credential. Measured before anything is written; a repository over
-     * the bound is refused whole. The caller closes the snapshot to delete the directory.
+     * A checkout of the reviewed {@code sha} with its own {@code .git}: that commit detached at HEAD, and the objects
+     * of {@code base} and of both histories. It holds no branch and no tag: the review reads its change, never the
+     * rest of the repository, so its {@linkplain #treeIdentity tree identity} is the two commits alone, and a push to
+     * another branch changes nothing that it can read. Symbolic links are written as files holding their target. It
+     * has no remote configuration and no credential. Measured before anything is written; a repository over the bound
+     * is refused whole. The caller closes the snapshot to delete the directory.
      */
-    public GitTreeSnapshot readTreeSnapshot(RepositoryKey repository, String sha) {
+    public GitTreeSnapshot readTreeSnapshot(RepositoryKey repository, String sha, String base) {
         requireEnabled();
-        if (!ObjectId.isId(sha)) throw new GitOperationException("Invalid commit", new IOException(sha));
-        return snapshot(repository, sha, List.of(), "Cannot prepare Git snapshot");
+        for (String id : List.of(sha, base))
+            if (!ObjectId.isId(id)) throw new GitOperationException("Invalid commit", new IOException(id));
+        return snapshot(
+                repository,
+                sha,
+                List.copyOf(new LinkedHashSet<>(List.of(sha, base))),
+                true,
+                "Cannot prepare Git snapshot");
     }
 
     /**
      * The checkout {@link #readTreeSnapshot} made of {@code sha}, again: measured, bounded and limited the same way,
-     * but holding only the named original commits and their history from the local mirror's own objects. No remote
-     * is contacted and no branch, tag or other current ref is copied, so no captured-refs record is written; the
-     * caller restores the original one. A commit the mirror no longer holds refuses the snapshot rather than being
+     * holding the named original commits and their history from the local mirror's own objects. No remote is
+     * contacted, and no captured-refs record is written: the caller restores the original one. A commit the mirror no longer holds refuses the snapshot rather than being
      * replaced. The caller closes the snapshot to delete it.
      */
     public GitTreeSnapshot readOriginalSnapshot(RepositoryKey repository, String sha, Collection<String> commits) {
@@ -851,18 +854,19 @@ public class GitRepositoryManager {
         for (String id : wanted) {
             if (!ObjectId.isId(id)) throw new GitOperationException("Invalid commit", new IOException(id));
         }
-        return snapshot(repository, sha, List.copyOf(wanted), "Cannot restore the original Git snapshot");
+        return snapshot(repository, sha, List.copyOf(wanted), false, "Cannot restore the original Git snapshot");
     }
 
-    /** {@code originals} empty: the mirror's current refs, as a capture takes them; else only those commits. */
-    private GitTreeSnapshot snapshot(RepositoryKey repository, String sha, List<String> originals, String failure) {
+    /** Only {@code commits} and their history; {@code captured} writes the captured-refs record of a new capture. */
+    private GitTreeSnapshot snapshot(
+            RepositoryKey repository, String sha, List<String> commits, boolean captured, String failure) {
         var admission = layout.spool().capture(repository.workspaceId(), copyFence::capture);
         try (admission) {
             return locks.withReadLock(repository, () -> {
                 Path staging = null;
                 try {
                     staging = layout.spool().directory(repository.workspaceId()).path();
-                    return writeSnapshot(repository, sha, originals, staging);
+                    return writeSnapshot(repository, sha, commits, captured, staging);
                 } catch (GitOperationException e) {
                     if (staging != null) deleteTreeQuietly(staging);
                     throw e;
@@ -875,15 +879,16 @@ public class GitRepositoryManager {
     }
 
     /** The caller owns the destination and holds the mirror read lock. */
-    private GitTreeSnapshot writeSnapshot(RepositoryKey repository, String sha, List<String> originals, Path staging)
+    private GitTreeSnapshot writeSnapshot(
+            RepositoryKey repository, String sha, List<String> commits, boolean captured, Path staging)
             throws GitAPIException, IOException {
         Path mirror = mirror(repository);
         try (Git source = Git.open(mirror.toFile())) {
             Repository repo = source.getRepository();
             RevCommit commit;
             try (RevWalk walk = new RevWalk(repo)) {
-                // A missing original commit fails here, before any source content is written.
-                for (String id : originals) walk.parseCommit(ObjectId.fromString(id));
+                // A missing commit fails here, before any source content is written.
+                for (String id : commits) walk.parseCommit(ObjectId.fromString(id));
                 commit = walk.parseCommit(ObjectId.fromString(sha));
             }
             Set<String> limitations = new TreeSet<>();
@@ -923,39 +928,23 @@ public class GitRepositoryManager {
                 // A disposable checkout must not have background writers when it is removed.
                 config.setBoolean("fetch", null, "autoGC", false);
                 config.save();
-                if (originals.isEmpty()) {
-                    git.fetch()
-                            .setRemote(mirror.toUri().toString())
-                            .setTransportConfigCallback(
-                                    transports.callback(mirror.toUri().toString()))
-                            .setRefSpecs(SNAPSHOT_REFSPECS)
-                            .setTagOpt(TagOpt.NO_TAGS)
-                            .call();
-                }
-                if (!originals.isEmpty()
-                        || !git.getRepository().getObjectDatabase().has(commit)) {
-                    // Pinned by id only: the reviewed commit on no ref here, or each
-                    // original commit.
-                    git.fetch()
-                            .setRemote(mirror.toUri().toString())
-                            .setTransportConfigCallback(
-                                    transports.callback(mirror.toUri().toString()))
-                            .setRefSpecs((originals.isEmpty() ? List.of(sha) : originals)
-                                    .stream()
-                                            .map(id -> new RefSpec(id + ":" + REVIEW_REFS + id))
-                                            .toList())
-                            .setTagOpt(TagOpt.NO_TAGS)
-                            .call();
-                }
-                for (String id : originals) {
+                // Fetched by id only: the checkout holds these commits and their history, and no branch or tag.
+                git.fetch()
+                        .setRemote(mirror.toUri().toString())
+                        .setTransportConfigCallback(
+                                transports.callback(mirror.toUri().toString()))
+                        .setRefSpecs(commits.stream()
+                                .map(id -> new RefSpec(id + ":" + REVIEW_REFS + id))
+                                .toList())
+                        .setTagOpt(TagOpt.NO_TAGS)
+                        .call();
+                for (String id : commits) {
                     if (!git.getRepository().getObjectDatabase().has(ObjectId.fromString(id))) {
-                        throw new GitOperationException("Original commit is not available", new IOException(id));
+                        throw new GitOperationException("A commit is not available", new IOException(id));
                     }
                 }
                 git.checkout().setName(sha).call();
-                // Private pins retain objects in the mirror. The checkout exposes provider refs and detached
-                // HEAD
-                // only.
+                // The pins only fetched the objects. The checkout exposes the detached HEAD and no ref.
                 for (var ref : git.getRepository().getRefDatabase().getRefsByPrefix(REVIEW_REFS)) {
                     var removal = git.getRepository().updateRef(ref.getName());
                     removal.setForceUpdate(true);
@@ -963,7 +952,7 @@ public class GitRepositoryManager {
                         throw new GitOperationException("Could not remove a private checkout ref", new IOException());
                 }
                 for (String path : excluded) Files.deleteIfExists(staging.resolve(path));
-                if (originals.isEmpty()) writeCapturedRefs(git.getRepository());
+                if (captured) writeCapturedRefs(git.getRepository());
             }
             return new GitTreeSnapshot(
                     staging, sha, commit.getTree().getName(), bytes, files, limitations.isEmpty(), limitations);
@@ -999,7 +988,7 @@ public class GitRepositoryManager {
                         // Cache construction belongs to the mirror, including an interrupted staging directory.
                         // It must not acquire a second capture session inside an admitting transaction.
                         var snapshot = paths == null
-                                ? writeSnapshot(repository, commit, List.of(commit), staging)
+                                ? writeSnapshot(repository, commit, List.of(commit), false, staging)
                                 : writeScanSnapshot(repository, commit, Set.copyOf(paths), staging);
                         if (!snapshot.treeSha().equals(tree)) throw new TreeMismatchException();
                         Files.move(staging, entry, StandardCopyOption.ATOMIC_MOVE);
@@ -1042,29 +1031,22 @@ public class GitRepositoryManager {
         }
     }
 
-    /** The identity of the captured checkout includes all its readable refs, including annotated tag objects. */
-    public static String treeIdentity(GitTreeSnapshot snapshot) {
-        try (Git git = Git.open(snapshot.stagingDir().toFile())) {
-            return treeIdentity(snapshot.commitSha(), readableRefs(git.getRepository(), false));
-        } catch (IOException failure) {
-            throw new GitOperationException("Could not read captured Git refs", failure);
-        }
+    /**
+     * The identity of a pull request's captured checkout ({@link #readTreeSnapshot}): its two commits, which address
+     * everything it holds. The server computes the same value from the pull request's version, with no checkout.
+     */
+    public static String treeIdentity(String head, String base) {
+        return head + ":" + base;
     }
 
-    private static String treeIdentity(String head, Map<String, String> refs) {
-        return head + ":" + SourceFingerprint.refs(refs);
-    }
-
-    private static Map<String, String> readableRefs(Repository repo, boolean mirror) throws IOException {
+    /** The mirror's branches, as remote branches, and its tags: what a complete fetch observed of the provider. */
+    private static Map<String, String> readableRefs(Repository repo) throws IOException {
         var refs = new TreeMap<String, String>();
         for (var ref : repo.getRefDatabase().getRefsByPrefix(Constants.R_REFS)) {
             String name = ref.getName();
-            if (mirror) {
-                if (name.startsWith(Constants.R_HEADS))
-                    name = Constants.R_REMOTES + "origin/" + name.substring(Constants.R_HEADS.length());
-                else if (!name.startsWith(Constants.R_TAGS)) continue;
-            }
-            if (name.startsWith(REVIEW_REFS)) continue;
+            if (name.startsWith(Constants.R_HEADS))
+                name = Constants.R_REMOTES + "origin/" + name.substring(Constants.R_HEADS.length());
+            else if (!name.startsWith(Constants.R_TAGS)) continue;
             var id = ref.getObjectId();
             if (id != null) refs.put(name, id.name());
         }

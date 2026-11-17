@@ -166,9 +166,6 @@ class ScmItemFetchIntegrationTest extends BaseIntegrationTest {
     private ScmItemTransactions itemTransactions;
 
     @Autowired
-    private RepositoryRefState refs;
-
-    @Autowired
     private PlatformTransactionManager transactions;
 
     private final GitRepositoryManager git = mock(GitRepositoryManager.class);
@@ -241,7 +238,7 @@ class ScmItemFetchIntegrationTest extends BaseIntegrationTest {
                 capture,
                 itemTransactions,
                 Clock.systemUTC());
-        return new Pipeline(service, new ScmSourceFingerprints(service, items, refs, capture, itemTransactions));
+        return new Pipeline(service, new ScmSourceFingerprints(service, capture, itemTransactions));
     }
 
     @Test

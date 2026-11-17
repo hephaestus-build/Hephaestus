@@ -283,8 +283,10 @@ It does not use the old occasion time as a freshness cutoff.
 A verified result for a superseded version remains in history and does not replace a matching current claim.
 An unavailable or hidden source does not establish a work change or item removal.
 
-Each capture decision retains the fingerprints of every source the session could read.
-Selection, practice start, admission, delivery, and result presentation compare them with the current source records.
+Each capture decision retains the fingerprints of the sources that decide its practice's result.
+These are the sources that the practice declares, the sources that decide whether it applies, the item's record, the change and the checkout.
+A change to another captured source, such as a bot's comment for a practice that does not read the discussion, ends no result.
+Selection, practice start, admission, delivery, and result presentation compare these fingerprints with the current source records.
 Record comparisons use the capture renderer and omit the observation basis.
 
 Each comparison reads a source as the capture read it.
@@ -299,7 +301,7 @@ Git source fingerprints follow [ADR 0069](https://github.com/hephaestus-build/He
 A freshness read never fetches from a provider: an SCM record source reads the synced mirror as it is.
 Commits are content-addressed, so the answer is exact when the mirror has the reviewed commits.
 A missing fingerprint or an unavailable current source makes the result unverifiable with the reason `WORK_UNREADABLE`, never current.
-A missing mirror makes only the sources that read it unreadable. The diff fingerprint comes from the stored commit pair.
+A missing mirror makes only the sources that read it unreadable. The diff and tree fingerprints come from the stored commit pair.
 
 The mirror does not have the commits when the bounded cache evicted it, or when another server captured the result.
 Practice start, the publish of a feedback package and the feedback send therefore sync the mirror with no transaction before their read.
@@ -316,16 +318,11 @@ An assignee added after the work opened changes no version, so it changes no sou
 Submitted reviews use the same source comparison and retain normal claim ordering.
 Repository and file scans keep their frozen source contract.
 
-Git freshness describes the last complete provider-ref observation, not a live provider read.
-A received branch or tag event invalidates that observation until a complete fetch records it again.
-The next capture fetch can restore it. Until then, practice start records `READINESS_REFUSED` and delivery records `UNCORROBORATED`.
-These reasons appear in the review and feedback traces.
-
-A fetch that is still running keeps the last complete observation.
-Thus, practices of other reviews of the repository can start and verify their tree meanwhile.
-
-[GitHub](https://docs.github.com/en/webhooks/webhook-events-and-payloads#push) and [GitLab](https://docs.gitlab.com/user/project/integrations/webhook_events/#push-events) can omit bulk ref events.
-An omitted event is detected only by a later fetch, as with other source changes that have not synced.
+Git freshness is the pull request's own commit pair.
+A pull request's checkout holds the reviewed commit, the review base and their history, and no branch or tag.
+A copy that another server builds again holds the reviewed commit's history only.
+Its tree fingerprint is therefore the two commits, and the server computes it from the stored version with no fetch.
+A push to another branch, or a new tag, changes nothing that a practice can read, so it ends no result.
 
 The [sync lifecycle](./sync-lifecycle.mdx) owns adapter lifecycle details.
 The [operations guide](/admin/practice-review-operations) owns queue timing and deployment controls.
@@ -562,8 +559,8 @@ Every session can also read the change and the checkout through Git.
 
 Thus, a session that uses only these tools reads and cites only its declared sources.
 `bash` and code in the session can still read every captured file. So these tools keep a session on its sources, but they are not a boundary.
-Freshness therefore records every captured source, and admission refuses an undeclared citation.
-[ADR 0086](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0086-a-practice-review-stages-seals-then-composes-and-each-stage-records-why-it-stops.md#update--2026-11-14-bash-reads-undeclared-sources-and-this-is-accepted) accepts this gap and names its residual risk.
+Admission refuses an undeclared citation. Freshness records only the sources that decide the practice's result.
+[ADR 0086](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0086-a-practice-review-stages-seals-then-composes-and-each-stage-records-why-it-stops.md#update--2026-11-17-freshness-reads-a-practices-own-sources) accepts this gap and names its residual risk.
 
 An omitted source requires continuous reads from line 1 through EOF.
 A failed read or an unread range of a required or cited source prevents complete coverage.

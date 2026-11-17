@@ -690,7 +690,7 @@ class ResultHistoryIntegrationTest extends BaseIntegrationTest {
     @EnumSource(
             value = IdentityProviderType.class,
             names = {"GITHUB", "GITLAB"})
-    void shouldCompareStoredProviderRefsWithoutUsingTheRenderingRolesMirror(IdentityProviderType provider) {
+    void shouldKeepAResultCurrentWhileOtherBranchesAndTagsOfItsRepositoryMove(IdentityProviderType provider) {
         var ref = lookup.work(scenario.workspace(), provider, true);
         var pull = issues.findById(Objects.requireNonNull(ref.sourceId())).orElseThrow();
         var repository = repositoryRows
@@ -698,8 +698,11 @@ class ResultHistoryIntegrationTest extends BaseIntegrationTest {
                         Objects.requireNonNull(pull.getRepository()).getId())
                 .orElseThrow();
         var key = new RepositoryKey(ref.workspaceId(), repository.getId());
-        var firstRead = gitRefs.begin(key.workspaceId(), key.repositoryId());
-        gitRefs.record(key.workspaceId(), key.repositoryId(), firstRead, "a".repeat(64));
+        gitRefs.record(
+                key.workspaceId(),
+                key.repositoryId(),
+                gitRefs.begin(key.workspaceId(), key.repositoryId()),
+                "a".repeat(64));
         var work = new ReviewIntegrationData.Scenario(
                 scenario.workspace(),
                 scenario.account(),
@@ -711,32 +714,24 @@ class ResultHistoryIntegrationTest extends BaseIntegrationTest {
                         .getFirst()))
                 .isEqualTo(Currentness.CURRENT);
 
+        // A branch or tag event of the repository, then a fetch that observes other refs: the pull request is the same.
         gitRefs.invalidate(
                 repository.getNativeId(),
                 Objects.requireNonNull(repository.getProvider().getId()));
-        gitRefs.record(key.workspaceId(), key.repositoryId(), firstRead, "a".repeat(64));
-        assertThat(gitRefs.current(key.workspaceId(), key.repositoryId())).isEmpty();
         assertThat(presentation.currentness(resultViews
                         .views(ref.workspaceId(), facts(List.of(recorded)))
                         .getFirst()))
-                .isEqualTo(Currentness.UNVERIFIABLE);
+                .isEqualTo(Currentness.CURRENT);
+        gitRefs.record(
+                key.workspaceId(),
+                key.repositoryId(),
+                gitRefs.begin(key.workspaceId(), key.repositoryId()),
+                "b".repeat(64));
+        assertThat(presentation.currentness(resultViews
+                        .views(ref.workspaceId(), facts(List.of(recorded)))
+                        .getFirst()))
+                .isEqualTo(Currentness.CURRENT);
         assertThat(read.findById(recorded.getId()).orElseThrow().getEndedAt()).isNull();
-
-        var nextRead = gitRefs.begin(key.workspaceId(), key.repositoryId());
-        gitRefs.record(key.workspaceId(), key.repositoryId(), nextRead, "b".repeat(64));
-        gitRefs.record(key.workspaceId(), key.repositoryId(), firstRead, "a".repeat(64));
-        assertThat(gitRefs.current(key.workspaceId(), key.repositoryId())).contains("b".repeat(64));
-        assertThat(presentation.currentness(resultViews
-                        .views(ref.workspaceId(), facts(List.of(recorded)))
-                        .getFirst()))
-                .isEqualTo(Currentness.STALE);
-        var other = data.scenario();
-        var foreign = new RepositoryKey(other.workspace().getId(), key.repositoryId());
-        gitRefs.record(foreign.workspaceId(), foreign.repositoryId(), nextRead, "c".repeat(64));
-        assertThat(gitRefs.current(foreign.workspaceId(), foreign.repositoryId()))
-                .isEmpty();
-        assertThat(gitRefs.current(key.workspaceId(), key.repositoryId())).contains("b".repeat(64));
-        assertThat(read.findById(recorded.getId()).orElseThrow().getOutcome()).isEqualTo(ResultOutcome.NOT_MET);
     }
 
     @ParameterizedTest

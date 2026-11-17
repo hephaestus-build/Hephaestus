@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1794935638910-1" author="hephaestus">
+        <comment>A pull request's checkout fingerprint is now its commit pair alone (SourceFingerprint.git of head:base). Each recorded capture of a pull request or pull request review gets that fingerprint from the version its review pinned, so a result recorded before the change is not read as changed work. A pull request capture without a commit pair loses its tree key instead.</comment>
+        <sql splitStatements="false"><![CDATA[
+UPDATE review_practice rp
+   SET capture_decision = jsonb_set(
+           rp.capture_decision,
+           '{sourceFingerprints,scm.repository.tree}',
+           to_jsonb(encode(sha256(
+               convert_to('2', 'UTF8') || '\x00'::bytea || convert_to('scm.repository.tree', 'UTF8') || '\x00'::bytea
+               || convert_to(split_part(r.item_version, ':', 4) || ':' || split_part(r.item_version, ':', 3), 'UTF8')),
+               'hex')))
+  FROM review r
+ WHERE r.id = rp.review_id AND r.workspace_id = rp.workspace_id
+   AND rp.capture_decision -> 'sourceFingerprints' ->> 'scm.repository.tree' IS NOT NULL
+   AND split_part(r.item_version, ':', 1) IN ('scm.pull_request', 'scm.pull_request_review')
+   AND split_part(r.item_version, ':', 2) = 'v1'
+   AND split_part(r.item_version, ':', 3) ~ '^[0-9a-f]{40}([0-9a-f]{24})?$'
+   AND split_part(r.item_version, ':', 4) ~ '^[0-9a-f]{40}([0-9a-f]{24})?$';
+-- A pull request capture whose version names no commit pair cannot get the new fingerprint. Its diff and record
+-- fingerprints still bind its commits, so the tree key goes rather than read as a change.
+UPDATE review_practice rp
+   SET capture_decision = rp.capture_decision #- '{sourceFingerprints,scm.repository.tree}'
+  FROM review r
+ WHERE r.id = rp.review_id AND r.workspace_id = rp.workspace_id
+   AND rp.capture_decision -> 'sourceFingerprints' ->> 'scm.repository.tree' IS NOT NULL
+   AND split_part(r.item_version, ':', 1) IN ('scm.pull_request', 'scm.pull_request_review')
+   AND NOT (split_part(r.item_version, ':', 2) = 'v1'
+        AND split_part(r.item_version, ':', 3) ~ '^[0-9a-f]{40}([0-9a-f]{24})?$'
+        AND split_part(r.item_version, ':', 4) ~ '^[0-9a-f]{40}([0-9a-f]{24})?$');
+        ]]></sql>
+        <rollback>
+            <!-- The former fingerprint digested every ref of the repository, which no stored row keeps. -->
+            <empty/>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

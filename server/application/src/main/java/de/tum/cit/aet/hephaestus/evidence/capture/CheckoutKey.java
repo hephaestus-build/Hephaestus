@@ -7,7 +7,8 @@ import org.jspecify.annotations.Nullable;
 /**
  * What any server needs to build a captured checkout again: the repository, the commit and the tree it checked out.
  * The commit and the tree are the checkout's identity; the checkout digest that the capture records is the second
- * check. A rebuild holds the commit's history only: the branches and tags that the capture saw stay a recorded file.
+ * check. A rebuild holds the commit's history only, without the review base that the capture also holds. Its recorded
+ * files come from the capture.
  *
  * @param review the review whose provider ref reaches a commit that no branch holds, such as a fork's head
  * @param paths the files of a scan's partial checkout, which has no {@code .git}; null for the whole tree

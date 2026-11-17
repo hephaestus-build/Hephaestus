@@ -21,6 +21,8 @@ import de.tum.cit.aet.hephaestus.evidence.AutomatedReviewReadinessReport;
 import de.tum.cit.aet.hephaestus.evidence.ClasspathSourceCatalogRegistry;
 import de.tum.cit.aet.hephaestus.evidence.SourceCaptureState;
 import de.tum.cit.aet.hephaestus.evidence.SourceCompleteness;
+import de.tum.cit.aet.hephaestus.evidence.SourceFingerprint;
+import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.evidence.SourceReadinessCheck;
 import de.tum.cit.aet.hephaestus.evidence.SourceReadinessReason;
 import de.tum.cit.aet.hephaestus.evidence.capture.CaptureRequest;
@@ -123,9 +125,10 @@ public class DefaultReviewExecutionHandler {
         }
         // Every practice's inputs carry the item's record, so a capture reads its source even when no open practice
         // declares it, as on a retry whose remaining practices read only the code.
-        required.add(items.descriptorFor(item.kind())
+        var recordSource = items.descriptorFor(item.kind())
                 .orElseThrow(() -> new IllegalStateException("The captured item kind has no descriptor"))
-                .recordSource());
+                .recordSource();
+        required.add(recordSource);
         var grantedContext = new LinkedHashMap<ReviewAssignmentId, List<String>>();
         if (review.kind() == ReviewKind.SCAN) {
             var composers = scanVersions.stream()
@@ -207,7 +210,12 @@ public class DefaultReviewExecutionHandler {
                             assignment.practice().practiceId(),
                             decision.ready() ? ReviewPracticeStatus.READY : ReviewPracticeStatus.WITHHELD,
                             decision.ready() ? null : ReviewStopReason.READINESS_REFUSED.name(),
-                            captureFacts(decision, checks.get(decision.practiceSlug()), sourceFingerprints)));
+                            captureFacts(
+                                    decision,
+                                    checks.get(decision.practiceSlug()),
+                                    freshnessFingerprints(
+                                            sourceFingerprints,
+                                            freshnessSources(assignment, review.kind(), item, recordSource)))));
                 }
                 var reused = capture.capture(
                         job.getWorkspaceId(), review.id(), job.getId(), job.getAttempt(), captureDecisions);
@@ -344,6 +352,33 @@ public class DefaultReviewExecutionHandler {
             String itemKind,
             List<ItemEventName> unofferedEvents,
             @Nullable AboutRole unofferedAbout) {}
+
+    /**
+     * The sources that decide whether a practice's result stays current (ADR 0086, update of 2026-11-17): the sources it
+     * declares, the sources that decide whether it applies, the item's record that every practice's inputs carry, and
+     * the change and the checkout, which every session reads. A source that the practice does not declare can change
+     * without ending its result, as a bot's comment does for a practice that does not read the discussion.
+     */
+    private Set<SourceKind> freshnessSources(
+            ReviewAssignmentSnapshot assignment, ReviewKind kind, ItemRef item, SourceKind recordSource) {
+        var definition = assignment.practice().definition();
+        var reads = kind == ReviewKind.SCAN
+                ? Objects.requireNonNull(definition.scan()).reads()
+                : definition.reads();
+        var sources = new HashSet<SourceKind>();
+        sources.add(recordSource);
+        reads.sources().forEach(read -> sources.add(read.source()));
+        if (kind == ReviewKind.ITEM && definition.appliesWhen() != null)
+            sources.addAll(applicability.sources(item.kind(), Objects.requireNonNull(definition.appliesWhen())));
+        return sources;
+    }
+
+    private static Map<String, String> freshnessFingerprints(Map<String, String> captured, Set<SourceKind> sources) {
+        return captured.entrySet().stream()
+                .filter(entry -> SourceFingerprint.contentAddressed(new SourceKind(entry.getKey()))
+                        || sources.contains(new SourceKind(entry.getKey())))
+                .collect(Collectors.toUnmodifiableMap(Map.Entry::getKey, Map.Entry::getValue));
+    }
 
     private JsonNode captureFacts(
             AutomatedReviewReadinessDecision decision,

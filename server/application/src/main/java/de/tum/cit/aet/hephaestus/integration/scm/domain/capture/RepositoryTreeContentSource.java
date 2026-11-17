@@ -72,7 +72,8 @@ public class RepositoryTreeContentSource {
         List<CitableText> citable;
         String identity;
         try {
-            identity = GitRepositoryManager.treeIdentity(snapshot);
+            identity = GitRepositoryManager.treeIdentity(
+                    snapshot.commitSha(), Objects.requireNonNull(request.work().base()));
             citable = ScmCitableTexts.tree(snapshot.stagingDir(), snapshot.commitSha());
         } catch (RuntimeException failure) {
             snapshot.close();
@@ -152,6 +153,11 @@ public class RepositoryTreeContentSource {
             throw new ItemCaptureException(
                     ItemCaptureCode.CAPTURE_FAILED, "Pull request job has no commit_sha: jobId=" + request.jobId());
         }
+        String base = metadata.base();
+        if (base == null || base.isBlank()) {
+            throw new ItemCaptureException(
+                    ItemCaptureCode.CAPTURE_FAILED, "Pull request job has no base commit: jobId=" + request.jobId());
+        }
         long repositoryId = metadata.repositoryId();
         if (!gitRepositoryManager.isRepositoryCloned(new RepositoryKey(request.workspaceId(), repositoryId))) {
             throw new ItemCaptureException(
@@ -160,7 +166,7 @@ public class RepositoryTreeContentSource {
         }
         try {
             return gitRepositoryManager.readTreeSnapshot(
-                    new RepositoryKey(request.workspaceId(), repositoryId), commitSha);
+                    new RepositoryKey(request.workspaceId(), repositoryId), commitSha, base);
         } catch (GitRepositoryManager.GitOperationException e) {
             throw new ItemCaptureException(
                     ItemCaptureCode.CAPTURE_FAILED, "Could not capture repository tree at " + commitSha, e);
