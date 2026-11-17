@@ -168,3 +168,10 @@ Consequences:
 The job **Server image startup** (`scripts/server-image-startup.ts`) confirms rules 3 and 4.
 `scripts/ci-contract-images.test.ts` fails when the training run and the launch append name different modules.
 Revisit this update when JDK-8375469 ships in the JDK line of `.java-version`, or when [JEP 516](https://openjdk.org/jeps/516) matters for a move to ZGC.
+
+## Update — 2026-11-17: compact object headers
+
+The image also uses compact object headers ([JEP 519](https://openjdk.org/jeps/519)).
+The cache records the object-header layout of its training run, so rule 1 of the update above now covers that layout too.
+`server/application/project.toml` sets `-XX:+UseCompactObjectHeaders` for the training run and for every launch, beside `--add-modules=jdk.jfr`.
+`scripts/ci-contract-images.test.ts` fails when the two settings differ.

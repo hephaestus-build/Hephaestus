@@ -30,9 +30,10 @@ name = "BP_JVM_CDS_ENABLED"
 value = "true"
 
 # The AOT cache that the training run writes loads only when each launch resolves the same modules
-# (JEP 483). The chart's flight recording adds the module jdk.jfr (JDK-8375469). So the training run
-# and every launch process, the migrate run mode included, add jdk.jfr too. A launch without it, or
-# with another module or agent, rejects the cache and loads every class into Metaspace.
+# and uses the same object-header layout (JEP 483, JEP 519). The chart's flight recording adds the
+# module jdk.jfr (JDK-8375469). So the training run and every launch process, the migrate run mode
+# included, add jdk.jfr and use compact object headers. A launch without them, or with another module,
+# agent or object layout, rejects the cache and loads every class into Metaspace.
 # The buildpack starts the training run with this variable as its whole environment, so it also names
 # the training profile.
 # -XX:-UseBASE64Intrinsics turns off the JVM's AVX-512 Base64 decoder, which the reported pre-auth flaw
@@ -41,11 +42,11 @@ value = "true"
 # both runs keep the same options.
 [[io.buildpacks.build.env]]
 name = "TRAINING_RUN_JAVA_TOOL_OPTIONS"
-value = "--add-modules=jdk.jfr -XX:-UseBASE64Intrinsics -Dspring.profiles.active=cds-training"
+value = "--add-modules=jdk.jfr -XX:+UseCompactObjectHeaders -XX:-UseBASE64Intrinsics -Dspring.profiles.active=cds-training"
 
 [[io.buildpacks.build.env]]
 name = "BPE_APPEND_JAVA_TOOL_OPTIONS"
-value = "--add-modules=jdk.jfr -XX:-UseBASE64Intrinsics"
+value = "--add-modules=jdk.jfr -XX:+UseCompactObjectHeaders -XX:-UseBASE64Intrinsics"
 
 [[io.buildpacks.build.env]]
 name = "BPE_DELIM_JAVA_TOOL_OPTIONS"
