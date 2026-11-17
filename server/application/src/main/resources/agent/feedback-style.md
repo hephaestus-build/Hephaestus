@@ -8,9 +8,6 @@ A suggested fix must preserve security and privacy boundaries. Give each recipie
 are allowed to see. Keep secrets out of responses and logs. For an HTTP failure, give the caller a safe error;
 retain useful internal details in appropriate protected diagnostics.
 
-A positive remark is optional. Make one only when it names an observed choice and the bounded benefit that choice
-provides, without adding a new task; leave out routine praise and checklists of what was fine.
-
 Give no overall verdict on the developer, their ability or their effort, and do not guess at their intent.
 
 Keep work references, file names, quotes, identifiers and quantities exact. Check numeric comparisons against the shown values. Locate evidence as a person would: "the description’s closing line"
