@@ -3,6 +3,8 @@ import type { BaseLayoutProps, LinkItemType } from "fumadocs-ui/layouts/shared";
 import { BASE, PRODUCT_URL, REPO_URL } from "@/lib/site";
 import { versions } from "@/lib/version";
 
+import markUrl from "@brand/hephaestus-mark.svg?url";
+
 const base = BASE;
 
 const GUIDE_LINKS = [
@@ -18,23 +20,12 @@ const GUIDE_LINKS = [
 export function baseOptions({ guides = true }: { guides?: boolean } = {}): BaseLayoutProps {
 	return {
 		nav: {
+			// The web app's lockup: the mark and the one-colour wordmark, in the font and color of the page.
 			title: (
-				<>
-					<img
-						className="h-7 w-auto dark:hidden"
-						src={`${base}img/brand/hephaestus-lockup-light.png`}
-						alt="Hephaestus"
-						width={155}
-						height={32}
-					/>
-					<img
-						className="hidden h-7 w-auto dark:block"
-						src={`${base}img/brand/hephaestus-lockup-dark.png`}
-						alt="Hephaestus"
-						width={155}
-						height={32}
-					/>
-				</>
+				<span className="inline-flex items-center gap-2 font-semibold tracking-tight">
+					<img className="size-7" src={markUrl} alt="" width={28} height={28} />
+					Hephaestus
+				</span>
 			),
 			url: base,
 		},

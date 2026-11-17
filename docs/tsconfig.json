@@ -8,6 +8,11 @@
 		"noUncheckedIndexedAccess": true,
 		"noImplicitReturns": true,
 		"noFallthroughCasesInSwitch": true,
-		"paths": { "@/*": ["./src/*"], "@images/*": ["./images/*"], "@webapp/*": ["../webapp/src/*"] }
+		"paths": {
+			"@/*": ["./src/*"],
+			"@images/*": ["./images/*"],
+			"@webapp/*": ["../webapp/src/*"],
+			"@brand/*": ["../webapp/brand/*"]
+		}
 	}
 }
