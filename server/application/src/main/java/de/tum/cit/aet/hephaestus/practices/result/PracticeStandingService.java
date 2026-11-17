@@ -156,7 +156,7 @@ public class PracticeStandingService {
         List<ResultFacts> rows = results.forDevelopersSince(workspaceId, List.of(developerId), since, false);
         return new History(
                 since,
-                resultViewQuery.standingViews(workspaceId, rows),
+                resultViewQuery.viewsOnDemand(workspaceId, rows),
                 visibilityPolicy.permitsHistory(workspaceId, rows, purpose));
     }
 
@@ -262,7 +262,7 @@ public class PracticeStandingService {
         // Ended rows load too: the live run a requested review replaced still stands, and verdictless rows
         // distinguish NO_OPPORTUNITY from NOT_OBSERVED.
         return resultViewQuery
-                .standingViews(workspaceId, results.forDevelopersSince(workspaceId, developerIds, since, false))
+                .viewsOnDemand(workspaceId, results.forDevelopersSince(workspaceId, developerIds, since, false))
                 .stream()
                 .filter(view -> !view.result().recordedAt().isAfter(until))
                 .toList();

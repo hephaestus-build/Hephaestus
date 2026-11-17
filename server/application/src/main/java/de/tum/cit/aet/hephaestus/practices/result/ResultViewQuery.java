@@ -49,10 +49,10 @@ public class ResultViewQuery {
     }
 
     /**
-     * Views for a standing, which reads whether a result's sources are current only for the results it quotes. Their
-     * freshness is read on first use, so a look-back of many results does not read the work behind each one.
+     * Views whose freshness is read on first use, for a read that asks about few of them or none: a standing asks only
+     * about the results it quotes. A look-back of many results then does not read the work behind each one.
      */
-    public List<ResultView> standingViews(long workspaceId, Collection<ResultFacts> results) {
+    public List<ResultView> viewsOnDemand(long workspaceId, Collection<ResultFacts> results) {
         return views(workspaceId, results, true);
     }
 

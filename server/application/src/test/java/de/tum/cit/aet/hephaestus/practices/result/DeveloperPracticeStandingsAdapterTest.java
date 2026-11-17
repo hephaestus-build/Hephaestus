@@ -68,7 +68,7 @@ class DeveloperPracticeStandingsAdapterTest {
                 .thenAnswer(i -> List.of(data.getFirst().practice()));
         when(results.forDevelopersSince(eq(1L), anyCollection(), any(Instant.class), anyBoolean()))
                 .thenAnswer(i -> data.stream().map(ResultView::result).toList());
-        when(views.standingViews(eq(1L), anyCollection())).thenAnswer(i -> {
+        when(views.viewsOnDemand(eq(1L), anyCollection())).thenAnswer(i -> {
             Collection<ResultFacts> rows = i.getArgument(1);
             var ids = rows.stream().map(ResultFacts::id).toList();
             return data.stream().filter(v -> ids.contains(v.result().id())).toList();

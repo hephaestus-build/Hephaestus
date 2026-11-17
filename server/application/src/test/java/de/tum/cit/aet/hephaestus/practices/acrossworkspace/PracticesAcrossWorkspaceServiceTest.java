@@ -153,7 +153,7 @@ class PracticesAcrossWorkspaceServiceTest {
                                     && !r.recordedAt().isBefore(since))
                             .toList();
                 });
-        when(views.standingViews(eq(1L), anyCollection())).thenAnswer(i -> {
+        when(views.viewsOnDemand(eq(1L), anyCollection())).thenAnswer(i -> {
             Collection<ResultFacts> rows = i.getArgument(1);
             var ids = rows.stream().map(ResultFacts::id).toList();
             return data.stream().filter(v -> ids.contains(v.result().id())).toList();
