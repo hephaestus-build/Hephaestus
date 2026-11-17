@@ -102,5 +102,9 @@ Compact object headers stay a separate change with its own measurement. That cha
 
 The chart no longer sets `jdk.virtualThreadScheduler.maxPoolSize`.
 On Nuvemzinha, the Java 25 server image held 1,500 slow webhook requests open, so 1,500 virtual threads waited in socket reads.
-With the chart's ceiling of 4,352 and without it, the server ran on 4 carrier threads, and a request beside the load answered in 3 to 17 ms.
-Thus, a gateway socket wait needs no carrier. The JVM's default ceiling of 256 still bounds the carriers that it adds for blocking file I/O.
+With the chart's ceiling of 4,352, the server ran on 4 carrier threads, and a request beside the load answered in 3 to 100 ms.
+Without the ceiling, the server also ran on 4 carrier threads, and the request answered in 3 to 17 ms. Each arm ran once.
+A gateway socket wait needs no carrier.
+On JDK 25, an ordinary file read or write holds its carrier and adds no carrier.
+A synchronous, direct or `force` file operation makes the scheduler add a carrier.
+The JVM's default ceiling allows 256 carriers in total, or one for each CPU if the CPUs are more.
