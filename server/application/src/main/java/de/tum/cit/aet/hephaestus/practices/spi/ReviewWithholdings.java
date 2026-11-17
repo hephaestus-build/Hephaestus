@@ -36,13 +36,6 @@ public final class ReviewWithholdings {
     public static final String ITEM_CAPABILITY_UNSUPPORTED = "item_capability_unsupported";
 
     /**
-     * The capture refusal as releases up to 1.0.0-rc.8 stored it; newer ones store {@code READINESS_REFUSED}. It stays
-     * deliberate for reviews that were in flight during the upgrade. It is not carried: the next readiness edge does
-     * not select again the practices that those releases withheld.
-     */
-    public static final String LEGACY_READINESS_REFUSED = "readiness_refused";
-
-    /**
      * Reasons of a practice that was never measured and is still owed: it waits for the item's checks, a newer
      * occasion replaced its review, or it was not ready. Not ready covers sources that could not be verified at
      * practice start or seal, too little captured evidence and a spent workspace budget; none of them says that the
@@ -67,8 +60,7 @@ public final class ReviewWithholdings {
                             WORKSPACE_INACTIVE,
                             STALE_ROLLOUT_REVISION,
                             SOURCE_CONTRACT_UNSUPPORTED,
-                            ITEM_CAPABILITY_UNSUPPORTED,
-                            LEGACY_READINESS_REFUSED))
+                            ITEM_CAPABILITY_UNSUPPORTED))
             .toList());
 
     private ReviewWithholdings() {}
