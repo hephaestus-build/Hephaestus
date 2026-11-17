@@ -60,6 +60,14 @@ public class LlmCallPermit {
     @Column(name = "attempt", nullable = false)
     private int attempt;
 
+    /**
+     * Where the call's practice session stands in its job's start order: the job's calls are granted oldest session
+     * first, so a review finishes its practices one after another instead of all of them at once. Null for a call of no
+     * practice session.
+     */
+    @Column(name = "session_rank")
+    private @Nullable Integer sessionRank;
+
     @ColumnDefault("'WAITING'")
     @Enumerated(EnumType.STRING)
     @Column(name = "state", nullable = false, length = 16)

@@ -116,7 +116,7 @@ class LlmCallBacklogIntegrationTest extends BaseIntegrationTest {
     private UUID enqueue(long pool, AgentRunBand band, @Nullable Long workspace) {
         UUID id = UUID.randomUUID();
         transactions.executeWithoutResult(status -> rows.enqueue(
-                new LlmCallPermitRepository.Request(id, pool, "backlog", band, workspace, UUID.randomUUID(), 0)));
+                new LlmCallPermitRepository.Request(id, pool, "backlog", band, workspace, UUID.randomUUID(), 0, null)));
         return id;
     }
 }

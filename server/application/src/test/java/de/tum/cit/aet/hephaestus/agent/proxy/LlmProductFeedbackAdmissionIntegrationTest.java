@@ -226,7 +226,7 @@ class LlmProductFeedbackAdmissionIntegrationTest extends BaseIntegrationTest {
         assertThat(first.acquire(
                         pool,
                         AgentRunBand.BACKGROUND,
-                        new LlmCallPermits.Caller(null, UUID.randomUUID(), 0, null),
+                        new LlmCallPermits.Caller(null, UUID.randomUUID(), 0, null, null),
                         ended::get,
                         Instant.now().plusMillis(25)))
                 .isNull();
@@ -257,7 +257,7 @@ class LlmProductFeedbackAdmissionIntegrationTest extends BaseIntegrationTest {
         var permit = Objects.requireNonNull(worker.acquire(
                 pool,
                 kind,
-                new LlmCallPermits.Caller(workspace, UUID.randomUUID(), 0, null),
+                new LlmCallPermits.Caller(workspace, UUID.randomUUID(), 0, null, null),
                 ended::get,
                 Instant.now().plusSeconds(30)));
         granted.add(permit);

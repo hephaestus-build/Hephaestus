@@ -219,8 +219,9 @@ class LlmCallPermitsIntegrationTest extends BaseIntegrationTest {
     void shouldGrantACompositionBeforeOlderCallsOfAWideReviewWhenBothWaitInOneWorkspace() {
         long pool = pool(3);
         UUID wide = UUID.randomUUID();
-        var measuring = admit(workerA, pool, AgentRunBand.BATCH, new LlmCallPermits.Caller(1L, wide, 0, null));
-        var alsoMeasuring = admit(workerA, pool, AgentRunBand.BATCH, new LlmCallPermits.Caller(1L, wide, 0, null));
+        var measuring = admit(workerA, pool, AgentRunBand.BATCH, new LlmCallPermits.Caller(1L, wide, 0, null, null));
+        var alsoMeasuring =
+                admit(workerA, pool, AgentRunBand.BATCH, new LlmCallPermits.Caller(1L, wide, 0, null, null));
         UUID measurement = waitingCall(pool, AgentRunBand.BATCH, 1, wide, Duration.ofMinutes(1));
         UUID composition = waitingCall(pool, AgentRunBand.BATCH, 1, UUID.randomUUID(), Duration.ZERO);
 
@@ -623,7 +624,7 @@ class LlmCallPermitsIntegrationTest extends BaseIntegrationTest {
     @Test
     void shouldLeaveNoWaitingRequestWhenABusyPoolDefersADraft() {
         long pool = pool(1);
-        var draft = new LlmCallPermits.Caller(null, UUID.randomUUID(), 1, null);
+        var draft = new LlmCallPermits.Caller(null, UUID.randomUUID(), 1, null, null);
         try (var active = Objects.requireNonNull(
                 workerA.acquire(pool, AgentRunBand.INTERACTIVE, caller(1), () -> false, laterThanAnyTest()))) {
             assertThat(active.isRevoked()).isFalse();
@@ -677,7 +678,7 @@ class LlmCallPermitsIntegrationTest extends BaseIntegrationTest {
         var active = admit(workerA, pool, AgentRunBand.BATCH, 1);
         UUID remote = UUID.randomUUID();
         transactions.executeWithoutResult(status -> rows.enqueue(new LlmCallPermitRepository.Request(
-                remote, pool, "remote-" + UUID.randomUUID(), AgentRunBand.BATCH, 2L, UUID.randomUUID(), 0)));
+                remote, pool, "remote-" + UUID.randomUUID(), AgentRunBand.BATCH, 2L, UUID.randomUUID(), 0, null)));
 
         active.close();
 
@@ -693,9 +694,9 @@ class LlmCallPermitsIntegrationTest extends BaseIntegrationTest {
         UUID review = UUID.randomUUID();
         transactions.executeWithoutResult(status -> {
             rows.enqueue(new LlmCallPermitRepository.Request(
-                    feedback, pool, "feedback", AgentRunBand.BACKGROUND, null, UUID.randomUUID(), 0));
+                    feedback, pool, "feedback", AgentRunBand.BACKGROUND, null, UUID.randomUUID(), 0, null));
             rows.enqueue(new LlmCallPermitRepository.Request(
-                    review, pool, "review", AgentRunBand.BACKGROUND, 2L, UUID.randomUUID(), 0));
+                    review, pool, "review", AgentRunBand.BACKGROUND, 2L, UUID.randomUUID(), 0, null));
         });
 
         active.close();
@@ -927,7 +928,7 @@ class LlmCallPermitsIntegrationTest extends BaseIntegrationTest {
     }
 
     private static LlmCallPermits.Caller caller(long workspace) {
-        return new LlmCallPermits.Caller(workspace, UUID.randomUUID(), 0, null);
+        return new LlmCallPermits.Caller(workspace, UUID.randomUUID(), 0, null, null);
     }
 
     private static LlmCallPermits.Permit admit(LlmCallPermits worker, long pool, AgentRunBand kind, long workspace) {
@@ -943,7 +944,7 @@ class LlmCallPermitsIntegrationTest extends BaseIntegrationTest {
     private UUID waitingCall(long pool, AgentRunBand band, long workspace, UUID source, Duration waited) {
         UUID id = UUID.randomUUID();
         transactions.executeWithoutResult(status -> rows.enqueue(
-                new LlmCallPermitRepository.Request(id, pool, "remote-" + id, band, workspace, source, 0)));
+                new LlmCallPermitRepository.Request(id, pool, "remote-" + id, band, workspace, source, 0, null)));
         jdbc.update(
                 "UPDATE llm_call_permit SET acquired_at=clock_timestamp()-make_interval(secs => ?) WHERE id=?",
                 waited.toSeconds(),

@@ -80,7 +80,7 @@ public interface LlmCallPoolRepository extends JpaRepository<LlmCallPool, Long> 
     /** Extends the pool's cooldown to at least {@code millis} from now; a later cooldown stays. */
     @Modifying
     @Query(
-            value = "UPDATE llm_call_pool SET no_call_before = GREATEST(no_call_before,"
+            value = "UPDATE llm_call_pool SET updated_at = clock_timestamp(), no_call_before = GREATEST(no_call_before,"
                     + " clock_timestamp() + make_interval(secs => :millis / 1000.0)) WHERE id = :id",
             nativeQuery = true)
     int coolDown(@Param("id") long id, @Param("millis") long millis);
@@ -88,7 +88,9 @@ public interface LlmCallPoolRepository extends JpaRepository<LlmCallPool, Long> 
     /** Writes what the provider taught; the caller holds the pool row lock. */
     @Modifying
     @Query(
-            value = "UPDATE llm_call_pool SET learned_limit = :limit, limit_credit = :credit WHERE id = :id",
+            value =
+                    "UPDATE llm_call_pool SET updated_at = clock_timestamp(), learned_limit = :limit, limit_credit = :credit"
+                            + " WHERE id = :id",
             nativeQuery = true)
     int learned(@Param("id") long id, @Param("limit") int limit, @Param("credit") int credit);
 
@@ -96,7 +98,7 @@ public interface LlmCallPoolRepository extends JpaRepository<LlmCallPool, Long> 
     @Modifying
     @Query(
             value =
-                    "UPDATE llm_call_pool SET learned_limit = :limit, limit_credit = 0,"
+                    "UPDATE llm_call_pool SET updated_at = clock_timestamp(), learned_limit = :limit, limit_credit = 0,"
                             + " window_first_token_ms = NULL, window_samples = 0, throttled_at = clock_timestamp() WHERE id = :id",
             nativeQuery = true)
     int throttled(@Param("id") long id, @Param("limit") int limit);
@@ -104,7 +106,8 @@ public interface LlmCallPoolRepository extends JpaRepository<LlmCallPool, Long> 
     /** Writes what first tokens taught; the caller holds the pool row lock. */
     @Modifying
     @Query(
-            value = "UPDATE llm_call_pool SET baseline_first_token_ms = :baseline, window_first_token_ms = :window,"
+            value = "UPDATE llm_call_pool SET updated_at = clock_timestamp(), baseline_first_token_ms = :baseline,"
+                    + " window_first_token_ms = :window,"
                     + " window_samples = :samples WHERE id = :id",
             nativeQuery = true)
     int firstTokens(

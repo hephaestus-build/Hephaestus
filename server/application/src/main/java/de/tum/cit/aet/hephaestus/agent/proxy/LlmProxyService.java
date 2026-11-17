@@ -296,6 +296,8 @@ class LlmProxyService {
         private final ProxyCallLedger.Bound bound;
         private final ProxyCallsInFlight.Call inFlight;
         private final @Nullable Long practiceId;
+        private @Nullable Integer sessionRank;
+        private boolean ranked;
         private @Nullable UUID id;
         private LlmUsageRecorder.@Nullable CallUsage unmeasured;
         private boolean ended;
@@ -314,6 +316,16 @@ class LlmProxyService {
             this.practiceId = practiceId;
             this.bound = new ProxyCallLedger.Bound(inputBytes, outputTokens);
             this.inFlight = inFlight;
+        }
+
+        /** Where the call's practice session stands in its job's start order, read once per call. */
+        @Nullable
+        Integer sessionRank() {
+            if (!ranked) {
+                sessionRank = accounting.calls().sessionRank(routing, practiceId);
+                ranked = true;
+            }
+            return sessionRank;
         }
 
         /** An upstream request leaves now; the first one opens the row. */
@@ -498,7 +510,8 @@ class LlmProxyService {
                 routing.sourceId(),
                 attempt.number(),
                 new LlmModelResolver.ConnectionRef(
-                        routing.connectionScope(), routing.connectionId(), routing.modelId(), routing.workspaceId()));
+                        routing.connectionScope(), routing.connectionId(), routing.modelId(), routing.workspaceId()),
+                row.sessionRank());
         BooleanSupplier attemptEnded = () -> !routingService.ownsAttempt(routing);
         LlmCallPermits.Permit poolPermit = attempt.sourceType() == UsageSourceType.PRODUCT_FEEDBACK_DRAFT
                 ? callPermits.tryAcquireBackground(

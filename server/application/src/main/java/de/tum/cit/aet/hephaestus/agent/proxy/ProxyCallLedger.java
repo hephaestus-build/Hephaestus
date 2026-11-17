@@ -25,6 +25,7 @@ import de.tum.cit.aet.hephaestus.productfeedback.drafting.ProductFeedbackDraftCa
 import io.micrometer.core.instrument.MeterRegistry;
 import java.io.Serial;
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.regex.Pattern;
@@ -200,6 +201,23 @@ class ProxyCallLedger {
         String named = headers.getFirst(PRACTICE_HEADER);
         if (named == null || !PRACTICE_ID.matcher(named).matches()) return null;
         return Long.parseLong(named);
+    }
+
+    /**
+     * Where the practice that a review sandbox names for its call stands in its job's start order, which is the order of
+     * the job's assignments. Null for any other call, and for a practice that the job does not measure.
+     */
+    @Nullable
+    Integer sessionRank(ProxyRouting routing, @Nullable Long practiceId) {
+        Long workspaceId = routing.workspaceId();
+        if (practiceId == null || workspaceId == null || routing.attempt().sourceType() != UsageSourceType.REVIEW_JOB)
+            return null;
+        var assigned = jobs.findCall(routing.attempt().sourceId(), workspaceId)
+                .map(job -> job.input().assignments())
+                .orElse(List.of());
+        for (int rank = 0; rank < assigned.size(); rank++)
+            if (assigned.get(rank).practiceId() == practiceId) return rank;
+        return null;
     }
 
     private UUID probeCall(ProxyRouting routing, Bound bound, String upstreamModel) {
