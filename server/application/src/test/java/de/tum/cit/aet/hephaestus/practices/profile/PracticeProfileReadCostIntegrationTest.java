@@ -189,10 +189,13 @@ class PracticeProfileReadCostIntegrationTest extends BaseIntegrationTest {
         works = IntStream.range(0, 24).mapToObj(index -> onNewWork()).toList();
         seed(works.size());
 
-        // The overview reads two snapshots; each quotes at most eight results of the one practice.
-        assertThat(workReads())
-                .allSatisfy(
-                        (read, asked) -> assertThat(asked).as(read).isPositive().isLessThanOrEqualTo(16));
+        var asked = workReads();
+        // A standing quotes at most eight results of the one practice.
+        assertThat(asked.get("standings")).isPositive().isLessThanOrEqualTo(8);
+        assertThat(asked.get("group standings")).isPositive().isLessThanOrEqualTo(8);
+        // The overview also asks whether later work resolved each piece of feedback, which needs current proof of
+        // every later result of its practice, once for each edge of the window: at most twice per piece of work.
+        assertThat(asked.get("overview")).isPositive().isLessThanOrEqualTo(2L * works.size());
     }
 
     @Test
