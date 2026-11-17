@@ -29,7 +29,7 @@ import {
 	releaseRepository,
 } from "./lib/release-identities.ts";
 import { sbomInventoryVersion } from "./lib/release-sbom-contract.ts";
-import { WEB_APP_IMAGE, WEB_APP_STEM } from "./lib/web-app-scan.ts";
+import { webAppArtifact, WEB_APP_IMAGE, WEB_APP_STEM } from "./lib/web-app-scan.ts";
 import { assertOwnedCoverage } from "./owned-code-sbom.ts";
 import { scanOwnedSource } from "./owned-source-sbom.ts";
 import { isRelease } from "./release-image-lock.ts";
@@ -530,7 +530,11 @@ export function verifyReleaseEvidence(
 						webAppTrivy,
 						policy,
 						evaluatedAt,
-						{ digest: subject.digest, platform: subject.platform, reference },
+						{
+							digest: subject.digest,
+							platform: subject.platform,
+							reference: webAppArtifact(reference),
+						},
 						{ historical, advisories: new Map(), evidence: undefined },
 					);
 		const failed = [result, ...(webApp === undefined ? [] : [webApp])].some(

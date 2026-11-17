@@ -761,6 +761,7 @@ jobs:
               - 'scripts/lib/process.ts'
               - 'scripts/lib/jvm-runtime.ts'
               - 'scripts/lib/syft.ts'
+              - 'scripts/lib/web-app-scan.ts'
               # The platform images that the one-host installer ships, and the scan that judges them.
               - 'scripts/scan-platform-images.ts'
               - 'scripts/lib/gvisor-pin.ts'

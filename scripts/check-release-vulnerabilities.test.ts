@@ -14,6 +14,7 @@ import {
 } from "./check-release-vulnerabilities.ts";
 
 import { isRecord } from "./lib/json.ts";
+import { webAppArtifact } from "./lib/web-app-scan.ts";
 
 const finding = {
 	FixedVersion: "2",
@@ -244,6 +245,27 @@ await test("rejects expired and malformed exceptions", () => {
 		).errors.join("\n"),
 		/Trivy report is for/u,
 	);
+});
+
+await test("a web app report names the image that it came from, never a scratch directory", () => {
+	const webApp = { ...subject, reference: webAppArtifact(subject.reference) };
+	assert.deepEqual(
+		evaluate("server", { ...report, ArtifactName: webApp.reference }, policy, new Date(), webApp)
+			.errors,
+		[],
+	);
+	for (const artifact of [subject.reference, "/tmp/web-app-x/web-app"]) {
+		assert.match(
+			evaluate(
+				"server",
+				{ ...report, ArtifactName: artifact },
+				policy,
+				new Date(),
+				webApp,
+			).errors.join("\n"),
+			/Trivy report is for/u,
+		);
+	}
 });
 
 await test("holds a not_affected exception to one of CISA's five justifications", () => {

@@ -98,7 +98,7 @@ await test("a release package refuses a later quoted images key, which Helm woul
 	t.after(async () => rm(directory, { recursive: true, force: true }));
 	const source = path.join(directory, "hephaestus");
 	await cp(chart, source, { recursive: true });
-	const other = { ...prepared.images, webapp: `ghcr.io/other/webapp@${digest("d")}` };
+	const other = { ...prepared.images, agent: `ghcr.io/other/agent@${digest("d")}` };
 	await appendFile(path.join(source, "values.yaml"), `"images": ${JSON.stringify(other)}\n`);
 	await assert.rejects(
 		packageReleaseChart(prepared.release.version, source, prepared, directory),
@@ -435,7 +435,6 @@ await test("every role that runs git writes the JGit configuration to an emptyDi
 await test("a followed commit reports the commit as its version, as the promotion verifies", () => {
 	const commit = "c".repeat(40);
 	const resources = rendered([...layersFor("small"), { release: { version: commit, commit } }]);
-	assert.equal(envValue(workload(resources, "webapp"), "APPLICATION_VERSION"), commit);
 	assert.equal(envValue(workload(resources, "server"), "APP_VERSION"), commit);
 });
 
@@ -558,8 +557,8 @@ await test("values that the chart does not accept fail the render", () => {
 	const cases: [string, Layer[], RegExp][] = [
 		[
 			"an image tag",
-			[...layersFor("small"), { images: { webapp: "ghcr.io/hephaestus-build/webapp:latest" } }],
-			/images[./]webapp/u,
+			[...layersFor("small"), { images: { agent: "ghcr.io/hephaestus-build/agent:latest" } }],
+			/images[./]agent/u,
 		],
 		["values without the prepared lock file", withoutPrepared, /images|release/u],
 		[
@@ -569,7 +568,7 @@ await test("values that the chart does not accept fail the render", () => {
 		],
 		[
 			"a pod spec hatch",
-			[...layersFor("small"), { webapp: { podSpec: { hostNetwork: true } } }],
+			[...layersFor("small"), { server: { podSpec: { hostNetwork: true } } }],
 			/podSpec/u,
 		],
 		[
@@ -1076,7 +1075,6 @@ for (const name of profiles) {
 			...(name === "cluster" ? ["agent-sandbox-controller"] : []),
 			...(bundled(name) ? ["postgresql"] : []),
 			"server",
-			"webapp",
 		]);
 		for (const [component, image] of Object.entries(imageOf)) {
 			if (!components.includes(component)) {

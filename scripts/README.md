@@ -41,7 +41,6 @@ The retained shell files run where shell is already part of the runtime:
 - `.vite-hooks/commit-msg` and `.vite-hooks/pre-push` are the Git hooks, and `.vite-hooks/run` starts them with the worktree's own `vp`.
 - `deploy/platform/k3s-install.sh` installs an operator deployment before the repository toolchain is available; its test
   orchestration is typed TypeScript under `scripts/`.
-- `webapp/docker/entrypoint.sh` prepares assets in the final nginx image, which does not contain Node.
 - `deploy/platform/hephaestus-keys.sh` and `k3s-wait-condition.sh` run on the operator's host beside the installer.
 - `deploy/chart/hephaestus/files/database-roles.sh` and `database-monitor.sh` run in the PostgreSQL image, from the migration Job and the PostgreSQL monitor Job.
 - `docker/postgres/size-from-memory.sh` and `gosu-setpriv.sh` run in the PostgreSQL image as its entrypoint and its `gosu`.

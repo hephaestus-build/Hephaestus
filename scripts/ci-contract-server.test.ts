@@ -775,8 +775,8 @@ void describe("ci-contract: server", () => {
 		}
 		assert.doesNotMatch(pathFilter(detection, "server"), /- 'docs\/\*\*'/u);
 		assert.match(pathFilter(detection, "postgres-image"), /- 'docker\/postgres\/\*\*'/u);
-		assert.match(pathFilter(detection, "webapp-image"), /- 'patches\/\*\*'/u);
-		assert.match(pathFilter(detection, "webapp-image"), /- 'docker\/agents\/pi\/patches\/\*\*'/u);
+		assert.match(pathFilter(detection, "server-image"), /- 'patches\/\*\*'/u);
+		assert.match(pathFilter(detection, "server-image"), /- 'docker\/agents\/pi\/patches\/\*\*'/u);
 	});
 
 	void test("generates verified Gradle snapshots without giving pull request code write access", async () => {

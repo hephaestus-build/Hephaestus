@@ -1,7 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import { fileURLToPath } from "node:url";
 import { isDeepStrictEqual } from "node:util";
 import {
 	componentOf,
@@ -29,69 +27,64 @@ import {
 } from "./kubernetes-chart-render-support.ts";
 import { isRecord } from "./lib/json.ts";
 
-await test("the webapp runs the non-root image with one writable subtree on 8080", () => {
-	const resources = rendered(layersFor("small"));
-	const webapp = workload(resources, "webapp");
-	const spec = podSpec(webapp);
-	assert.equal(get(spec, "securityContext", "runAsUser"), 101);
-	assert.equal(get(spec, "securityContext", "runAsGroup"), 101);
-	assert.equal(get(spec, "securityContext", "fsGroup"), 101);
-	assert.equal(get(spec, "initContainers"), undefined);
-	const entry = container(webapp);
-	assert.equal(get(entry, "command"), undefined);
-	assert.equal(get(entry, "args"), undefined);
-	assert.deepEqual(get(entry, "ports"), [{ name: "http", containerPort: 8080 }]);
-	assert.deepEqual(get(entry, "volumeMounts"), [
-		{ name: "runtime", mountPath: "/tmp/hephaestus-webapp" },
-	]);
-	assert.deepEqual(get(spec, "volumes"), [{ name: "runtime", emptyDir: { sizeLimit: "16Mi" } }]);
-	for (const probe of ["startupProbe", "livenessProbe", "readinessProbe"]) {
-		assert.deepEqual(get(entry, probe, "httpGet"), { path: "/", port: "http" }, probe);
+await test("the server serves the web app, so the chart runs no web app workload", () => {
+	for (const layers of [
+		layersFor("small"),
+		[...layersFor("small"), { workspaceSubdomains: { enabled: true } }],
+	]) {
+		assert.deepEqual(
+			rendered(layers)
+				.filter((resource) => componentOf(resource) === "webapp")
+				.map(nameOf),
+			[],
+		);
 	}
-	const service = resources.find(
-		(resource) => kindOf(resource) === "Service" && componentOf(resource) === "webapp",
-	);
-	assert.deepEqual(get(service, "spec", "ports"), [
-		{ name: "http", port: 8080, targetPort: "http" },
-	]);
 });
 
-await test("the webapp takes its security contact from one URI value", () => {
+await test("the server takes the security contact from one URI value", () => {
 	const contact = "mailto:security@example.invalid";
-	const webapp = workload(
-		rendered([...layersFor("small"), { webapp: { securityContact: contact } }]),
-		"webapp",
+	const server = workload(
+		rendered([...layersFor("small"), { server: { securityContact: contact } }]),
+		"server",
 	);
-	assert.equal(envValue(webapp, "SECURITY_CONTACT"), contact);
-	assert.equal(envValue(workload(rendered(layersFor("small")), "webapp"), "SECURITY_CONTACT"), "");
+	assert.equal(envValue(server, "SECURITY_CONTACT"), contact);
+	assert.equal(envValue(workload(rendered(layersFor("small")), "server"), "SECURITY_CONTACT"), "");
 	for (const refused of ["mailto:a b@example.invalid", "javascript:alert(1)"]) {
 		assert.match(
-			render([...layersFor("small"), { webapp: { securityContact: refused } }]).stderr,
+			render([...layersFor("small"), { server: { securityContact: refused } }]).stderr,
 			/securityContact/u,
 			refused,
 		);
 	}
 });
 
-await test("the webapp serves the operator's legal pages from a ConfigMap, read-only", () => {
-	const webapp = workload(
-		rendered([...layersFor("small"), { webapp: { legalOverrides: "site-legal" } }]),
-		"webapp",
+await test("the server serves the operator's legal pages from a ConfigMap, read-only", () => {
+	const legal = { name: "legal-overrides", mountPath: "/etc/hephaestus/legal", readOnly: true };
+	const plain = workload(rendered(layersFor("small")), "server");
+	assert.equal(env(plain, "LEGAL_OVERRIDES_DIRECTORY"), undefined);
+	assert.ok(
+		!list(get(container(plain), "volumeMounts")).some((mount) => isDeepStrictEqual(mount, legal)),
 	);
-	assert.deepEqual(get(container(webapp), "volumeMounts"), [
-		{ name: "runtime", mountPath: "/tmp/hephaestus-webapp" },
-		{
-			name: "legal-overrides",
-			mountPath: "/usr/share/nginx/html/legal-overrides",
-			readOnly: true,
-		},
-	]);
-	assert.deepEqual(get(podSpec(webapp), "volumes", 1), {
-		name: "legal-overrides",
-		configMap: { name: "site-legal" },
-	});
+	assert.ok(
+		!list(get(podSpec(plain), "volumes")).some((volume) => get(volume, "name") === legal.name),
+	);
+	const server = workload(
+		rendered([...layersFor("small"), { server: { legalOverrides: "site-legal" } }]),
+		"server",
+	);
+	assert.equal(envValue(server, "LEGAL_OVERRIDES_DIRECTORY"), legal.mountPath);
+	assert.deepEqual(
+		list(get(container(server), "volumeMounts")).filter(
+			(mount) => get(mount, "name") === legal.name,
+		),
+		[legal],
+	);
+	assert.deepEqual(
+		list(get(podSpec(server), "volumes")).filter((volume) => get(volume, "name") === legal.name),
+		[{ name: legal.name, configMap: { name: "site-legal" } }],
+	);
 	assert.match(
-		render([...layersFor("small"), { webapp: { legalOverrides: "../etc" } }]).stderr,
+		render([...layersFor("small"), { server: { legalOverrides: "../etc" } }]).stderr,
 		/legalOverrides/u,
 	);
 });
@@ -100,7 +93,7 @@ const filters = (candidate: unknown) => list(get(candidate, "filters"));
 
 const backends = (candidate: unknown) => get(candidate, "backendRefs");
 
-await test("the route attaches to the platform Gateway and rewrites no path", () => {
+await test("the route attaches to the platform Gateway and sends every path to the server whole", () => {
 	const resources = rendered(layersFor("small"));
 	const routes = resources.filter((resource) => kindOf(resource) === "HTTPRoute");
 	assert.equal(routes.length, 1);
@@ -117,22 +110,13 @@ await test("the route attaches to the platform Gateway and rewrites no path", ()
 		assert.equal(found.length, 1, `${type} ${value}`);
 		return found[0];
 	};
-	assert.equal(rules.length, 3);
-	assert.deepEqual(backends(rule("PathPrefix", "/webhooks")), [
-		{ name: "heph-server", port: 8080 },
-	]);
+	// The provider webhooks and the web app fall under the root rule.
+	assert.equal(rules.length, 2);
 	assert.deepEqual(backends(rule("PathPrefix", "/api")), [{ name: "heph-server", port: 8080 }]);
-	assert.deepEqual(backends(rule("PathPrefix", "/")), [{ name: "heph-webapp", port: 8080 }]);
+	assert.deepEqual(backends(rule("PathPrefix", "/")), [{ name: "heph-server", port: 8080 }]);
 	for (const candidate of rules) {
-		const types = new Set(filters(candidate).map((filter) => get(filter, "type")));
-		// The server sends its own HSTS. Only the web app's rule adds it, because nginx sends none.
-		assert.equal(
-			types.has("ResponseHeaderModifier"),
-			candidate === rule("PathPrefix", "/"),
-			"HSTS only on the web app's rule",
-		);
-		// The server serves the paths it receives, so no rule rewrites one.
-		assert.ok(!types.has("URLRewrite"), "no rule rewrites a path");
+		// The server serves the paths it receives and sends its own headers, HSTS included.
+		assert.deepEqual(filters(candidate), [], "no rule has a filter");
 		// Only /api asks the controller to disable both deadlines, for the Hephaestus live stream.
 		assert.deepEqual(
 			get(candidate, "timeouts"),
@@ -143,28 +127,6 @@ await test("the route attaches to the platform Gateway and rewrites no path", ()
 		);
 		assert.equal(get(candidate, "retry"), undefined, "no rule retries");
 	}
-	const hsts = filters(rule("PathPrefix", "/")).find(
-		(filter) => get(filter, "type") === "ResponseHeaderModifier",
-	);
-	assert.deepEqual(get(hsts, "responseHeaderModifier", "set"), [
-		{ name: "Strict-Transport-Security", value: "max-age=2592000; includeSubDomains" },
-	]);
-	// The web app's HSTS is the server's policy, so one host keeps one policy.
-	const securityHeaders = readFileSync(
-		fileURLToPath(
-			new URL(
-				"../server/application/src/main/java/de/tum/cit/aet/hephaestus/core/security/SecurityHeaders.java",
-				import.meta.url,
-			),
-		),
-		"utf8",
-	);
-	assert.equal(
-		/HSTS_MAX_AGE_SECONDS = (?<seconds>[\d_]+);/u
-			.exec(securityHeaders)
-			?.groups?.seconds?.replaceAll("_", ""),
-		"2592000",
-	);
 	// The Services the route names exist and listen on the same port.
 	for (const backend of rules.flatMap((candidate) => list(backends(candidate)))) {
 		const service = resources.find(
@@ -216,22 +178,22 @@ for (const name of ["small", "external"] as const) {
 			namespaceSelector: { matchLabels: { "kubernetes.io/metadata.name": "gateway-system" } },
 			podSelector: { matchLabels: gatewayPods },
 		};
-		for (const [component, port] of [
-			["server", "http"],
-			["webapp", "http"],
-		] as const) {
-			const ingress = list(get(policy(component), "spec", "ingress"));
-			// The server's sandbox gateway admits the sandboxes and the loop, on its own port.
-			const gatewayRules = component === "server" && runsReviews(name) ? 1 : 0;
-			assert.equal(ingress.length, 1 + gatewayRules, `${component}: no scraper is configured`);
-			// Only the Gateway reaches the application port.
-			assert.deepEqual(get(ingress[0], "from"), [gatewayPeer], component);
-			assert.deepEqual(get(ingress[0], "ports"), [{ port, protocol: "TCP" }], component);
-			for (const rule of ingress.slice(1)) {
-				// No rule of the sandbox gateway names the Gateway, so no public route reaches port 8081.
-				assert.deepEqual(get(rule, "ports"), [{ port: 8081, protocol: "TCP" }], component);
-				assert.ok(!isDeepStrictEqual(get(rule, "from"), [gatewayPeer]), component);
-			}
+		assert.equal(
+			policies.some((candidate) => nameOf(candidate) === "heph-webapp"),
+			false,
+			"no web app workload",
+		);
+		const ingress = list(get(policy("server"), "spec", "ingress"));
+		// The server's sandbox gateway admits the sandboxes and the loop, on its own port.
+		const gatewayRules = runsReviews(name) ? 1 : 0;
+		assert.equal(ingress.length, 1 + gatewayRules, "no scraper is configured");
+		// Only the Gateway reaches the application port.
+		assert.deepEqual(get(ingress[0], "from"), [gatewayPeer]);
+		assert.deepEqual(get(ingress[0], "ports"), [{ port: "http", protocol: "TCP" }]);
+		for (const rule of ingress.slice(1)) {
+			// No rule of the sandbox gateway names the Gateway, so no public route reaches port 8081.
+			assert.deepEqual(get(rule, "ports"), [{ port: 8081, protocol: "TCP" }]);
+			assert.ok(!isDeepStrictEqual(get(rule, "from"), [gatewayPeer]));
 		}
 		if (runsReviews(name)) {
 			const [, sandboxes] = list(get(policy("server"), "spec", "ingress"));
@@ -289,16 +251,13 @@ await test("Slack callbacks use the canonical API origin in either workspace-hos
 	}
 });
 
-await test("one value turns browser fault reports on for the server and for the browser", () => {
+await test("one value turns browser fault reports on for the server, which serves the browser", () => {
 	for (const browserFaultReports of [false, true]) {
 		const resources = rendered([...layersFor("small"), { config: { browserFaultReports } }]);
-		for (const component of ["server", "webapp"]) {
-			assert.equal(
-				envValue(workload(resources, component), "BROWSER_FAULT_REPORTS"),
-				String(browserFaultReports),
-				component,
-			);
-		}
+		assert.equal(
+			envValue(workload(resources, "server"), "BROWSER_FAULT_REPORTS"),
+			String(browserFaultReports),
+		);
 	}
 });
 
@@ -311,39 +270,22 @@ await test("one value turns the workspace MCP endpoint on for the server, off by
 	assert.equal(envValue(workload(resources, "server"), "HEPHAESTUS_MCP_ENABLED"), "true");
 });
 
-/** The route rules for the OAuth discovery paths on the host root. */
-const discovery = (resources: Resource[]) =>
-	list(
-		get(
-			resources.find((resource) => kindOf(resource) === "HTTPRoute"),
-			"spec",
-			"rules",
-		),
-	).filter((rule) =>
-		list(get(rule, "matches")).some((match) =>
-			String(get(match, "path", "value")).startsWith("/.well-known/oauth-"),
-		),
-	);
+const routeOf = (resources: Resource[]) =>
+	resources.find((resource) => kindOf(resource) === "HTTPRoute");
 
 await test("with MCP on, OAuth discovery on the host root reaches the server without a rewrite", () => {
-	assert.deepEqual(discovery(rendered(layersFor("small"))), []);
-	const [rule, ...others] = discovery(
-		rendered([...layersFor("small"), { config: { mcpEnabled: true } }]),
+	const off = routeOf(rendered(layersFor("small")));
+	const on = routeOf(rendered([...layersFor("small"), { config: { mcpEnabled: true } }]));
+	// The root rule already sends /.well-known to the server, so MCP adds no rule of its own.
+	assert.deepEqual(get(on, "spec"), get(off, "spec"));
+	const root = list(get(on, "spec", "rules")).find((rule) =>
+		list(get(rule, "matches")).some((match) => get(match, "path", "value") === "/"),
 	);
-	assert.deepEqual(others, []);
-	assert.deepEqual(
-		list(get(rule, "matches")).map((match) => get(match, "path")),
-		[
-			{ type: "Exact", value: "/.well-known/oauth-authorization-server" },
-			{ type: "PathPrefix", value: "/.well-known/oauth-protected-resource/" },
-		],
-	);
-	assert.deepEqual(get(rule, "backendRefs"), [{ name: "heph-server", port: 8080 }]);
-	// The server's MCP discovery chain sends its own HSTS, so the route adds no header.
-	assert.deepEqual(list(get(rule, "filters")), []);
+	assert.deepEqual(get(root, "backendRefs"), [{ name: "heph-server", port: 8080 }]);
+	assert.deepEqual(filters(root), []);
 });
 
-await test("workspace hosts reach only the SPA and share the apex origin settings", () => {
+await test("workspace hosts reach the server and share the apex origin settings", () => {
 	const layers = [profile("small"), prepared, operator, reviews];
 	const off = rendered(layers);
 	assert.equal(off.filter((resource) => kindOf(resource) === "HTTPRoute").length, 1);
@@ -353,44 +295,21 @@ await test("workspace hosts reach only the SPA and share the apex origin setting
 		(resource) => get(resource, "spec", "hostnames", 0) === "*.hephaestus.example.com",
 	);
 	assert.ok(tenant);
-	// The tenant route serves only the SPA, and nginx sends no HSTS, so the route adds the server's policy.
+	// The server refuses the API and sign-in on a workspace host and sends its own HSTS there.
 	for (const rule of list(get(tenant, "spec", "rules"))) {
-		assert.deepEqual(
-			list(get(rule, "filters")).map((filter) => get(filter, "responseHeaderModifier", "set")),
-			[[{ name: "Strict-Transport-Security", value: "max-age=2592000; includeSubDomains" }]],
-		);
+		assert.deepEqual(filters(rule), []);
+		assert.deepEqual(backends(rule), [{ name: "heph-server", port: 8080 }]);
 	}
-	assert.deepEqual(
-		list(get(tenant, "spec", "rules"))
-			.flatMap((rule) => list(get(rule, "backendRefs")))
-			.map((backend) => get(backend, "name")),
-		["heph-webapp"],
+	const server = workload(resources, "server");
+	assert.equal(envValue(server, "HEPHAESTUS_WORKSPACE_SUBDOMAINS_ENABLED"), "true");
+	assert.equal(
+		envValue(server, "HEPHAESTUS_WORKSPACE_SUBDOMAINS_BASE_DOMAIN"),
+		"hephaestus.example.com",
 	);
-	for (const component of ["server", "webapp"]) {
-		const deployment = resources.find(
-			(resource) => kindOf(resource) === "Deployment" && componentOf(resource) === component,
-		);
-		const variables = list(get(podSpec(deployment), "containers", 0, "env"));
-		assert.equal(
-			get(
-				variables.find((entry) => get(entry, "name") === "HEPHAESTUS_WORKSPACE_SUBDOMAINS_ENABLED"),
-				"value",
-			),
-			"true",
-		);
-		assert.equal(
-			get(
-				variables.find(
-					(entry) => get(entry, "name") === "HEPHAESTUS_WORKSPACE_SUBDOMAINS_BASE_DOMAIN",
-				),
-				"value",
-			),
-			"hephaestus.example.com",
-		);
-	}
 });
 
-await test("tenant hostname validation checks double hyphens only in the workspace label", () => {
+await test("an apex host with a double hyphen still serves its workspace hosts", () => {
+	// Only a workspace label may not hold a double hyphen, so the chart accepts such an apex host.
 	for (const host of ["hephaestus.example.com", "heph--prod.example.org"]) {
 		const resources = rendered([
 			profile("small"),
@@ -399,21 +318,16 @@ await test("tenant hostname validation checks double hyphens only in the workspa
 			reviews,
 			{ host, workspaceSubdomains: { enabled: true } },
 		]);
-		const routing = resources.find(
-			(resource) =>
-				kindOf(resource) === "ConfigMap" &&
-				componentOf(resource) === "webapp" &&
-				typeof get(resource, "data", "maps.conf") === "string",
+		assert.ok(
+			resources.some(
+				(resource) =>
+					kindOf(resource) === "HTTPRoute" && get(resource, "spec", "hostnames", 0) === `*.${host}`,
+			),
+			host,
 		);
-		const maps = get(routing, "data", "maps.conf");
-		assert.equal(typeof maps, "string");
-		const pattern = /"~(?<pattern>[^"\n]+)" 1;/u.exec(String(maps))?.groups?.pattern;
-		assert.ok(pattern !== undefined);
-		const accepts = new RegExp(pattern, "u");
-		assert.ok(accepts.test(`team-one.${host}`));
-		assert.ok(accepts.test(`abc.${host}`));
-		for (const slug of ["team--one", "api", "ab", "-team", "team-", "a".repeat(52)]) {
-			assert.equal(accepts.test(`${slug}.${host}`), false, slug);
-		}
+		assert.equal(
+			envValue(workload(resources, "server"), "HEPHAESTUS_WORKSPACE_SUBDOMAINS_BASE_DOMAIN"),
+			host,
+		);
 	}
 });

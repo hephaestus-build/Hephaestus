@@ -190,24 +190,29 @@ async function captureWebApp(
 	subject: Subject,
 	reference: string,
 	stem: string,
-	scan: (tool: string, args: string[]) => Promise<void>,
+	scan: (tool: string, args: string[], cwd?: string) => Promise<void>,
 ): Promise<void> {
 	const directory = await mkdtemp(path.join(tmpdir(), "web-app-"));
+	// The scans run in the scratch directory, so the reports name the image the web app came from.
+	const web = path.resolve(`${stem}.${WEB_APP_STEM}`);
 	try {
 		const webApp = await extractWebApp(reference, subject.platform, directory);
 		if (webApp === undefined) {
 			throw new Error(`${reference} carries no web app in ${RUNNER_JAR}`);
 		}
-		const web = `${stem}.${WEB_APP_STEM}`;
-		await scan("syft", [
-			...webAppSyftArguments(webApp, SYFT_CONFIG),
-			"-o",
-			`syft-json=${web}.syft.json`,
-			"-o",
-			`spdx-json=${web}.spdx.json`,
-			"-o",
-			`cyclonedx-json=${web}.cdx.json`,
-		]);
+		await scan(
+			"syft",
+			[
+				...webAppSyftArguments(webApp, SYFT_CONFIG),
+				"-o",
+				`syft-json=${web}.syft.json`,
+				"-o",
+				`spdx-json=${web}.spdx.json`,
+				"-o",
+				`cyclonedx-json=${web}.cdx.json`,
+			],
+			directory,
+		);
 		const inventory = await readJsonFile(`${web}.syft.json`);
 		assertBundledNpmInventory(inventory, SERVER_WEB_APP_BUNDLE);
 		await scan(
@@ -221,6 +226,7 @@ async function captureWebApp(
 				"vuln,license",
 				"--list-all-pkgs",
 			]),
+			directory,
 		);
 		assertBundledNpmScan(inventory, await readJsonFile(`${web}.trivy.json`), SERVER_WEB_APP_BUNDLE);
 	} finally {
@@ -246,8 +252,8 @@ export async function captureSubject(subject: Subject, directory: string): Promi
 			);
 		}
 	};
-	const scan = async (tool: string, args: string[]): Promise<void> =>
-		timed(tool, async () => run(tool, args));
+	const scan = async (tool: string, args: string[], cwd?: string): Promise<void> =>
+		timed(tool, async () => run(tool, args, { cwd }));
 	try {
 		// Every default package cataloguer, plus the file digests component-bound exceptions read.
 		await scan("syft", [

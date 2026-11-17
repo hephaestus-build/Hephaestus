@@ -255,6 +255,16 @@ const INTENTIONALLY_MISSING_PATHS = [
 		value: "out/feedback.json",
 		reason: "a path inside the staged agent workspace, not the repository checkout",
 	},
+	{
+		document: "docs/contributor/release-management.mdx",
+		value: ".vite/packages",
+		reason: "a directory of the web app's build output, which the build writes and git ignores",
+	},
+	{
+		document: "docs/contributor/release-management.mdx",
+		value: "/.well-known/hephaestus.json",
+		reason: "an HTTP path that the server answers, not a file in the checkout",
+	},
 ] satisfies readonly ClaimException[];
 
 const PACKAGE_NAME = /^(?:@[a-z0-9][a-z0-9._-]*\/[a-z0-9][a-z0-9._-]*|[a-z0-9][a-z0-9._-]*)$/u;

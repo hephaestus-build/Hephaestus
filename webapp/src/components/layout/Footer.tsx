@@ -1,26 +1,22 @@
-import { ClockIcon, GitBranchIcon, GitCommitIcon } from "@primer/octicons-react";
+import { GitCommitIcon } from "@primer/octicons-react";
 import { Link } from "@tanstack/react-router";
 
 import { cn } from "cn";
 import { OutboundMark } from "@/components/common/outbound-link";
-import { RelativeTime } from "@/components/common/RelativeTime";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { hasText } from "@/lib/text";
 
 export interface FooterProps {
 	className?: string;
 	isProduction?: boolean;
+	/** The source commit of the release, which a deployment other than production shows. */
 	buildInfo?: {
-		branch?: string;
 		commit?: string;
-		deployedAt?: string;
 	};
 }
 
 export default function Footer({ className, isProduction, buildInfo }: FooterProps) {
-	const showBuildInfo =
-		isProduction !== true &&
-		(hasText(buildInfo?.branch) || hasText(buildInfo?.commit) || hasText(buildInfo?.deployedAt));
+	const showBuildInfo = isProduction !== true && hasText(buildInfo?.commit);
 
 	return (
 		<footer className={cn("border-t border-sidebar-border bg-sidebar py-2", className)}>
@@ -92,27 +88,6 @@ export default function Footer({ className, isProduction, buildInfo }: FooterPro
 
 					{showBuildInfo && (
 						<div className="hidden items-center gap-2 border-l border-sidebar-border pl-4 font-mono text-xs text-muted-foreground xl:flex">
-							{hasText(buildInfo.branch) && (
-								<Tooltip>
-									<TooltipTrigger
-										render={
-											<a
-												href={`https://github.com/hephaestus-build/Hephaestus/tree/${buildInfo.branch}`}
-												target="_blank"
-												rel="noopener noreferrer"
-												aria-label={`View branch ${buildInfo.branch} (opens in a new tab)`}
-												className="flex items-center gap-1 transition-colors hover:text-foreground"
-											/>
-										}
-									>
-										<GitBranchIcon size={12} />
-										<span className="max-w-20 truncate">{buildInfo.branch}</span>
-										<OutboundMark />
-									</TooltipTrigger>
-									<TooltipContent>{buildInfo.branch}</TooltipContent>
-								</Tooltip>
-							)}
-
 							{hasText(buildInfo.commit) && (
 								<Tooltip>
 									<TooltipTrigger
@@ -132,13 +107,6 @@ export default function Footer({ className, isProduction, buildInfo }: FooterPro
 									</TooltipTrigger>
 									<TooltipContent>{buildInfo.commit}</TooltipContent>
 								</Tooltip>
-							)}
-
-							{hasText(buildInfo.deployedAt) && (
-								<span className="flex items-center gap-1">
-									<ClockIcon size={12} aria-hidden />
-									<RelativeTime value={buildInfo.deployedAt} />
-								</span>
 							)}
 						</div>
 					)}
