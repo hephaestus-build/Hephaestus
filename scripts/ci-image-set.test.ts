@@ -157,7 +157,7 @@ interface Case {
 	paths: string[];
 	filters: Record<string, string>;
 	aliasBase: string;
-	preview: string;
+	images: string;
 	releaseCandidate: string;
 	/** On a push, the images that the merge group's run published, as a JSON list. */
 	queueImages: string;
@@ -165,13 +165,13 @@ interface Case {
 	/** A dispatch's `release-preflight` input. */
 	preflight: string;
 	/** A run that builds no image, a draft that builds because of its label, or a failed image build. */
-	skip: "" | "fork" | "draft" | "draft-preview" | "should-skip" | "package-fails" | "docker-fails";
+	skip: "" | "fork" | "draft" | "draft-images" | "should-skip" | "package-fails" | "docker-fails";
 }
 
 interface Settings {
 	event: string;
 	aliasBase: string[];
-	preview: string[];
+	images: string[];
 	releaseCandidate: string[];
 	queue: { queueImages: string; versionBump: string }[];
 	preflight: string[];
@@ -179,25 +179,25 @@ interface Settings {
 	skips: { skip: Case["skip"]; releaseCandidate?: string; preflight?: string }[];
 }
 
-// Only a pull request has a `preview` label. A push resolves no alias base; it reuses what its merge
+// Only a pull request has an `ci:images` label. A push resolves no alias base; it reuses what its merge
 // group published, all of it or a part. A release candidate is the Version PR's branch or a merge
 // group that bumps the version; it builds every image itself, so its alias base does not matter, and
 // its diff holds the version files. A dispatch may ask for the release preflight. A fork publishes
-// nothing, a draft builds only with its `preview` label, a skipped run builds nothing, and a failed
+// nothing, a draft builds only with its `ci:images` label, a skipped run builds nothing, and a failed
 // build stops every job that needs it.
 const NO_QUEUE = { queueImages: "[]", versionBump: "false" };
 const SETTINGS: Settings[] = [
 	{
 		event: "pull_request",
 		aliasBase: ["", "0123abc"],
-		preview: ["", "true", "false"],
+		images: ["", "true", "false"],
 		releaseCandidate: ["false", "true"],
 		queue: [NO_QUEUE],
 		preflight: ["false"],
 		skips: [
 			{ skip: "fork" },
 			{ skip: "draft" },
-			{ skip: "draft-preview" },
+			{ skip: "draft-images" },
 			{ skip: "should-skip" },
 			{ skip: "package-fails" },
 			{ skip: "docker-fails" },
@@ -207,7 +207,7 @@ const SETTINGS: Settings[] = [
 	{
 		event: "merge_group",
 		aliasBase: ["", "0123abc"],
-		preview: [""],
+		images: [""],
 		releaseCandidate: ["false", "true"],
 		queue: [NO_QUEUE],
 		preflight: ["false"],
@@ -220,7 +220,7 @@ const SETTINGS: Settings[] = [
 	{
 		event: "push",
 		aliasBase: [""],
-		preview: [""],
+		images: [""],
 		releaseCandidate: ["false"],
 		queue: [
 			NO_QUEUE,
@@ -235,7 +235,7 @@ const SETTINGS: Settings[] = [
 	{
 		event: "workflow_dispatch",
 		aliasBase: [""],
-		preview: [""],
+		images: [""],
 		releaseCandidate: ["false"],
 		queue: [NO_QUEUE],
 		preflight: ["false", "true"],
@@ -249,15 +249,15 @@ function* cases(): Generator<Case> {
 		const withVersion = [...new Set([...paths, ...VERSION_FILES])];
 		return { paths: withVersion, filters: filterOutputs(withVersion) };
 	});
-	for (const { event, aliasBase, preview, releaseCandidate, queue, preflight, skips } of SETTINGS) {
+	for (const { event, aliasBase, images, releaseCandidate, queue, preflight, skips } of SETTINGS) {
 		const settings: Omit<Case, "event" | "paths" | "filters">[] = releaseCandidate.flatMap(
 			(candidate) =>
 				(candidate === "true" ? [""] : aliasBase).flatMap((base) =>
-					preview.flatMap((label) =>
+					images.flatMap((label) =>
 						queue.flatMap((reuse) =>
 							preflight.map((evidence) => ({
 								aliasBase: base,
-								preview: label,
+								images: label,
 								releaseCandidate: candidate,
 								...reuse,
 								preflight: evidence,
@@ -274,7 +274,7 @@ function* cases(): Generator<Case> {
 		} of skips) {
 			settings.push({
 				aliasBase: candidate === "true" ? "" : (aliasBase.at(-1) ?? ""),
-				preview: { "should-skip": "false", "draft-preview": "true" }[skip as string] ?? "",
+				images: { "should-skip": "false", "draft-images": "true" }[skip as string] ?? "",
 				releaseCandidate: candidate,
 				...NO_QUEUE,
 				preflight: evidence,
@@ -340,7 +340,7 @@ function run(entry: Case) {
 			pull_request:
 				entry.event === "pull_request"
 					? {
-							draft: entry.skip === "draft" || entry.skip === "draft-preview",
+							draft: entry.skip === "draft" || entry.skip === "draft-images",
 							head: {
 								sha: "head",
 								repo: {
@@ -355,7 +355,7 @@ function run(entry: Case) {
 	const steps = {
 		filter: { outputs: entry.filters },
 		alias_base: { outputs: { commit: entry.aliasBase } },
-		opt_in: { outputs: { preview: entry.preview, full: "false" } },
+		opt_in: { outputs: { images: entry.images, full: "false" } },
 		queue_run: {
 			outputs: {
 				complete: String(entry.queueImages === ALL_IMAGES),
@@ -499,7 +499,7 @@ function run(entry: Case) {
 }
 
 function describeCase(entry: Case): string {
-	return `${entry.event} changing [${entry.paths.join(", ")}], alias base '${entry.aliasBase}', preview '${entry.preview}', release candidate '${entry.releaseCandidate}', queue images ${entry.queueImages}, version bump '${entry.versionBump}', preflight '${entry.preflight}', skip '${entry.skip}'`;
+	return `${entry.event} changing [${entry.paths.join(", ")}], alias base '${entry.aliasBase}', images '${entry.images}', release candidate '${entry.releaseCandidate}', queue images ${entry.queueImages}, version bump '${entry.versionBump}', preflight '${entry.preflight}', skip '${entry.skip}'`;
 }
 
 void test("the step ids this model sets are the workflow's", () => {
@@ -586,7 +586,7 @@ void test("a docs-only eviction dispatch still has every image and its packaged 
 		paths,
 		filters: filterOutputs(paths),
 		aliasBase: "",
-		preview: "",
+		images: "",
 		releaseCandidate: "false",
 		queueImages: "[]",
 		versionBump: "false",

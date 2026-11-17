@@ -232,7 +232,7 @@ void describe("ci-contract: server", () => {
 		] as const) {
 			const run = {
 				full: "false",
-				preview: "false",
+				images: "false",
 				light,
 				filter: { "application-server": "true", migrations: "true", "non-migration": "false" },
 				pullRequest: { draft, head: { repo: { full_name: fork ? "fork/repo" : "owner/repo" } } },

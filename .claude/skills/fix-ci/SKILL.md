@@ -30,8 +30,8 @@ To reproduce it on the pull request, add the `ci:full` label
 ([Two verification tiers](../../../docs/contributor/ci-cd.mdx#two-verification-tiers)).
 
 An image build or scan failure also first shows there.
-A pull request builds images only for the `preview` label, Kubernetes jobs or release evidence.
-To reproduce it on the pull request, add the `preview` label.
+A pull request builds images only for the `ci:images` label, Kubernetes jobs or release evidence.
+To reproduce it on the pull request, add the `ci:images` label.
 If you fix only 2 of 5 failures, you waste a push cycle and a full CI run.
 
 ## 1. Wait for the run to finish

@@ -82,7 +82,7 @@ target "postgres" {
   inherits   = ["image", "postgres-metadata"]
   labels = {
     "org.opencontainers.image.title" = "Hephaestus Postgres"
-    "org.opencontainers.image.description" = "PostgreSQL + pg_partman for all environments (dev/preview/prod)"
+    "org.opencontainers.image.description" = "PostgreSQL + pg_partman for all environments (dev, staging and production)"
     "org.opencontainers.image.vendor" = "AET TUM"
     "org.opencontainers.image.licenses" = "MIT"
     "hephaestus.component" = "postgres"

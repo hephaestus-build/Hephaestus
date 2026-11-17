@@ -126,27 +126,27 @@ jobs:
       # run in the queue tier only. ci-cd.mdx § Full integration status.
       full-integration: ${{ github.event_name != 'pull_request' || (steps.opt_in.outputs.light != 'true' && steps.opt_in.outputs.full != 'false') }}
       # A draft runs the fast tier and builds no image: no cluster jobs, no image scan, unless it
-      # carries `preview`. A release candidate always builds its evidence. Marking it
+      # carries `ci:images`. A release candidate always builds its evidence. Marking it
       # ready starts the ordinary run. ci-cd.mdx § Two verification tiers.
-      draft: ${{ github.event_name == 'pull_request' && github.event.pull_request.draft == true && steps.opt_in.outputs.preview != 'true' && steps.release_candidate.outputs.release-candidate != 'true' }}
+      draft: ${{ github.event_name == 'pull_request' && github.event.pull_request.draft == true && steps.opt_in.outputs.images != 'true' && steps.release_candidate.outputs.release-candidate != 'true' }}
       publishable: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
-      # A same-repository pull request needs every image at its head tag for the `preview` label, the
-      # Kubernetes cluster jobs. An unreadable `preview` label counts as present,
+      # A same-repository pull request needs every image at its head tag for the `ci:images` label, the
+      # Kubernetes cluster jobs. An unreadable `ci:images` label counts as present,
       # except on a draft.
-      head-images: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && steps.opt_in.outputs.light != 'true' && (steps.opt_in.outputs.preview == 'true' || (github.event.pull_request.draft != true && (steps.opt_in.outputs.preview != 'false' || steps.filter.outputs.kubernetes == 'true'))) }}
+      head-images: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && steps.opt_in.outputs.light != 'true' && (steps.opt_in.outputs.images == 'true' || (github.event.pull_request.draft != true && (steps.opt_in.outputs.images != 'false' || steps.filter.outputs.kubernetes == 'true'))) }}
       # Whether this run builds images at all: every event except a pull request, unless that pull
       # request is a release candidate or needs head images. The merge group builds every other
-      # changed image before it lands. ci-cd.mdx § The `preview` label.
-      images: ${{ github.event_name != 'pull_request' || steps.release_candidate.outputs.release-candidate == 'true' || (github.event.pull_request.head.repo.full_name == github.repository && steps.opt_in.outputs.light != 'true' && (steps.opt_in.outputs.preview == 'true' || (github.event.pull_request.draft != true && (steps.opt_in.outputs.preview != 'false' || steps.filter.outputs.kubernetes == 'true')))) }}
+      # changed image before it lands. ci-cd.mdx § The `ci:images` label.
+      images: ${{ github.event_name != 'pull_request' || steps.release_candidate.outputs.release-candidate == 'true' || (github.event.pull_request.head.repo.full_name == github.repository && steps.opt_in.outputs.light != 'true' && (steps.opt_in.outputs.images == 'true' || (github.event.pull_request.draft != true && (steps.opt_in.outputs.images != 'false' || steps.filter.outputs.kubernetes == 'true')))) }}
       # A skipped duplicate would skip the image builds the release evidence preflight needs, and
       # the gate refuses to pass the Version PR without one.
       # A re-run after `ci:full` was added repeats a tree whose fast tier already passed, so only a
       # run without the opt-in may be skipped as a duplicate.
       # A pull request marked ready repeats the draft's tree but builds what the draft skipped.
-      # A run with the `preview` label repeats a tree whose earlier run may have built no image.
+      # A run with the `ci:images` label repeats a tree whose earlier run may have built no image.
       # A re-run was asked for, by a person or after a retarget, so it is never a duplicate: its tree's
       # earlier run may have run only the light tier.
-      should_skip: ${{ github.run_attempt == 1 && steps.skip_check.outputs.should_skip == 'true' && steps.release_candidate.outputs.release-candidate != 'true' && steps.opt_in.outputs.full == 'false' && steps.opt_in.outputs.preview == 'false' && github.event.action != 'ready_for_review' }}
+      should_skip: ${{ github.run_attempt == 1 && steps.skip_check.outputs.should_skip == 'true' && steps.release_candidate.outputs.release-candidate != 'true' && steps.opt_in.outputs.full == 'false' && steps.opt_in.outputs.images == 'false' && github.event.action != 'ready_for_review' }}
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -221,7 +221,7 @@ jobs:
           pull_request=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER")
           full=$(jq -r '[.labels[].name] | any(. == "ci:full")' <<< "$pull_request")
           echo "full=$full" >> "$GITHUB_OUTPUT"
-          echo "preview=$(jq -r '[.labels[].name] | any(. == "preview")' <<< "$pull_request")" >> "$GITHUB_OUTPUT"
+          echo "images=$(jq -r '[.labels[].name] | any(. == "ci:images")' <<< "$pull_request")" >> "$GITHUB_OUTPUT"
           base=$(jq -er .base.ref <<< "$pull_request")
           echo "base=$base" >> "$GITHUB_OUTPUT"
           light=false
@@ -1220,7 +1220,7 @@ jobs:
 
   # Every image of the run: one build job per platform and one manifest job. The application-server
   # image is built from the package job's executable JAR, so the job waits for it.
-  # The `preview` label and the Kubernetes cluster jobs need every image at the head tag; unchanged images
+  # The `ci:images` label and the Kubernetes cluster jobs need every image at the head tag; unchanged images
   # are aliased here. Other runs' image builds stay path-filtered.
   Docker:
     name: Images
@@ -1676,7 +1676,7 @@ jobs:
             failed, so this pull request left the queue. Inspect the run before re-queueing it.
             A pull request runs only the fast tier, so an integration, database, drill or browser
             failure first shows here; add the `ci:full` label to reproduce it on the pull request.
-            An image build or scan failure also first shows here; add the `preview` label to build
+            An image build or scan failure also first shows here; add the `ci:images` label to build
             the images on the pull request.
 
   # These caller callbacks also cover failures before a worker or its nested callback can run.

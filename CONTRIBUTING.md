@@ -134,10 +134,8 @@ If you work from a fork, use one PR or coordinate with a maintainer.
 
 ### The `preview` Label
 
-The label builds images only.
-There is no deployed preview until previews move to the staging cluster.
-To build and scan every image of a same-repository pull request, add the `preview` label.
-[The `preview` label](https://docs.hephaestus.build/contributor/ci-cd#the-preview-label).
+To build and scan every image of a same-repository pull request, add the `ci:images` label.
+[The `ci:images` label](https://docs.hephaestus.build/contributor/ci-cd#the-preview-label).
 
 ## Pull Request Title Guidelines
 
