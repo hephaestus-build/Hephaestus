@@ -7,7 +7,7 @@ import java.util.stream.Stream;
 /**
  * The membership reasons for which Hephaestus withholds a practice on purpose, by a policy decision, not a failure.
  * Selection writes the role, bot, scope and checks reasons. Capture writes the readiness and fit reasons. Practice
- * start writes {@code REPLACED} when a newer review of the item exists, {@code SOURCES_MOVED} when the practice's own
+ * start writes {@code REPLACED} when a newer review of the item measures the practice, {@code SOURCES_MOVED} when its own
  * sources moved and none does, and {@code READINESS_REFUSED} when they cannot be verified. A replaced review writes
  * {@code REPLACED}. An attempt that ended writes {@code NOT_RUN} for each practice it never measured. Staging
  * and admission write {@code ROLE_UNAVAILABLE} when the developer is no longer eligible, {@code WORKSPACE_INACTIVE}

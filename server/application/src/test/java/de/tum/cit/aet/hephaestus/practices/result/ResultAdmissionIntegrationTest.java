@@ -1415,6 +1415,48 @@ class ResultAdmissionIntegrationTest extends AbstractResultAdmissionIntegrationT
                 .isEqualTo("REPLACED");
     }
 
+    @Test
+    void shouldCallAStalePracticeSourcesMovedWhenTheNewerReviewWasCancelled() {
+        var pending = admissions.pending(scenario, Instant.now(), scenarioAccountId);
+        running(pending, 0);
+        var ref = productItems.require(
+                pending.review().getWorkspaceId(), scenario.item().getId());
+        var kind = new SourceKind("scm.pull-request.core");
+        var capture = pinnedPractices
+                .findByWorkspaceIdAndReviewIdAndPracticeId(
+                        pending.review().getWorkspaceId(),
+                        pending.review().getId(),
+                        scenario.practice().getId())
+                .orElseThrow();
+        var facts = json.createObjectNode();
+        facts.putObject("sourceFingerprints").put(kind.value(), "a".repeat(64));
+        capture.setCaptureDecision(facts);
+        pinnedPractices.saveAndFlush(capture);
+        doReturn(Map.of(kind, "b".repeat(64))).when(productItems).fingerprints(eq(ref), anySet(), any());
+        // A newer review of the same work was ordered, then cancelled: it measures nothing.
+        var newer = admissions.pending(scenario, pending.review().getOrderedAt().plusSeconds(60), scenarioAccountId);
+        jdbcTemplate.update(
+                "UPDATE review SET status='CANCELLED', stop_reason='CANCELLED', completed_at=now() WHERE id=?",
+                newer.review().getId());
+        var id = new ReviewAssignmentId(
+                pending.review().getId(), scenario.practice().getId(), ref.itemId());
+
+        assertThat(reviewFreshness.start(
+                        ref.workspaceId(),
+                        id,
+                        pending.jobId(),
+                        0,
+                        reviewFreshness.startCurrentness(ref.workspaceId(), id)))
+                .isFalse();
+
+        assertThat(memberRows
+                        .findByWorkspaceIdAndReviewIdAndPracticeIdAndItemId(
+                                ref.workspaceId(), id.reviewId(), id.practiceId(), id.itemId())
+                        .orElseThrow()
+                        .getReason())
+                .isEqualTo("SOURCES_MOVED");
+    }
+
     /**
      * An event review that ends owing practices asks for a follow-up of its item, as nothing else would measure them
      * before the work changes. The follow-up reads the review's own retained record, as a pull request's occasion must,
@@ -1440,6 +1482,28 @@ class ResultAdmissionIntegrationTest extends AbstractResultAdmissionIntegrationT
                 null,
                 "{\"retained\":\"the occasion's own record\"}",
                 null));
+        String carried = ItemEventName.carried(scenario.item().getKind()).value();
+        // A person's requested review has no occasion of its own: what it owes waits for the next event.
+        var requested = admissions.pending(scenario, Instant.now(), scenarioAccountId, version);
+        admissions.withheld(requested, ReviewStopReason.NOT_RUN.name());
+        admit(requested, ResultOutcome.MET);
+        settle(requested);
+        service.complete(
+                workspace,
+                requested.review().getId(),
+                new ReviewCompletion(
+                        ReviewStatus.COMPLETE,
+                        null,
+                        Instant.now(),
+                        requested.review().getOrderedAt()));
+        assertThat(jdbcTemplate.queryForObject(
+                        "SELECT count(*) FROM item_event WHERE workspace_id=? AND item_id=? AND name=?",
+                        Long.class,
+                        workspace,
+                        item,
+                        carried))
+                .isZero();
+
         for (int review = 0; review < 2; review++) {
             var pending = admissions.pending(scenario, Instant.now(), scenarioAccountId, version);
             jdbcTemplate.update(
@@ -1464,7 +1528,7 @@ class ResultAdmissionIntegrationTest extends AbstractResultAdmissionIntegrationT
                 UUID.class,
                 workspace,
                 item,
-                ItemEventName.carried(scenario.item().getKind()).value(),
+                carried,
                 version);
         assertThat(followUps).as("a version gets one follow-up").hasSize(1);
         assertThat(itemEvents.evidence(workspace, item, followUps.getFirst()).record())

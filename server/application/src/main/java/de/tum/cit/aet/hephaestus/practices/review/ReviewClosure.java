@@ -37,6 +37,7 @@ class ReviewClosure {
     private final ApplicationEventPublisher events;
     private final ProductItemQuery items;
     private final ItemEventService itemEvents;
+    private final ReviewRepository reviews;
     private final Clock clock;
 
     void close(Review review, ReviewStatus status, @Nullable ReviewStopReason reason, Instant at) {
@@ -63,7 +64,7 @@ class ReviewClosure {
      * occasion selects nothing itself, so its readiness edge measures only the carried practices, and it reads its
      * review's own occasion, under that occasion's expiry. An occasion is unique per item, name and version, so a
      * version gets one follow-up: a practice that does not fit again stays carried until a real event. A review with
-     * no occasion of its own, a cancelled one, or one whose work moved on asks for none.
+     * no occasion of its own, a cancelled one, one whose work moved on, or one that a newer review follows asks for none.
      */
     private void followUp(Review review) {
         var version = review.getItemVersion();
@@ -80,7 +81,9 @@ class ReviewClosure {
                         .stream()
                         .anyMatch(member -> member.getState() == ReviewItemState.WITHHELD
                                 && ReviewWithholdings.FOLLOW_UP.contains(member.getReason()));
+        // A newer review of the item carries what this one owes at its own edge, under its own occasion's roles.
         if (!owes
+                || reviews.existsNewerItemReview(workspace, review.getItemId(), review.getId(), review.getOrderedAt())
                 || !(items.currentWorkVersion(workspace, review.getItemId())
                         instanceof ProductItemQuery.CurrentWorkVersion.Known(String current))
                 || !current.equals(version)) return;

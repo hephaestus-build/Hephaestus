@@ -24,6 +24,13 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface ReviewRepository extends JpaRepository<Review, UUID>, ReviewQueries, ScanMembershipQueries {
+    /** Whether a later review of the item was ordered and not cancelled: it carries what this one still owes. */
+    @Query(value = """
+        SELECT EXISTS(SELECT 1 FROM review r WHERE r.workspace_id=:workspaceId AND r.item_id=:itemId AND r.kind='ITEM'
+          AND r.id<>:reviewId AND r.ordered_at>:orderedAt AND r.status<>'CANCELLED')
+        """, nativeQuery = true)
+    boolean existsNewerItemReview(long workspaceId, long itemId, UUID reviewId, Instant orderedAt);
+
     /**
      * Whether a later review of the item, ordered and not cancelled, also measures the practice: it replaces this
      * review's measurement of it.
