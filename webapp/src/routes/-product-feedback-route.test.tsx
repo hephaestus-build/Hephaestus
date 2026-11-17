@@ -100,6 +100,33 @@ describe("product feedback sent from a workspace page", () => {
 		await screen.findByText("Report sent");
 	});
 
+	it("leaves the page usable while the form is open, and Escape tucks the draft into the corner", async () => {
+		const user = userEvent.setup();
+		renderRouteAt("/w/acme/activity");
+		await user.click(
+			await screen.findByRole(
+				"button",
+				{ name: "Send feedback about Hephaestus" },
+				ROUTE_RENDER_WAIT,
+			),
+		);
+		await user.type(
+			await screen.findByRole("textbox", { name: "Your feedback" }),
+			"The chart overlaps.",
+		);
+		await user.click(screen.getByRole("button", { name: /^Account/u }));
+		await screen.findByRole("menuitem", { name: "Your reports" });
+		await user.keyboard("{Escape}");
+		await user.click(screen.getByRole("textbox", { name: "Your feedback" }));
+		await user.keyboard("{Escape}");
+		await waitFor(() =>
+			expect(screen.queryByRole("textbox", { name: "Your feedback" })).toBeNull(),
+		);
+		await user.click(screen.getByRole("button", { name: "Feedback draft" }));
+		const draft = await screen.findByRole("textbox", { name: "Your feedback" });
+		expect(draft).toHaveProperty("value", "The chart overlaps.");
+	});
+
 	it("opens the form from anywhere with the shortcut", async () => {
 		const user = userEvent.setup();
 		renderRouteAt("/w/acme/activity");

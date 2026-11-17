@@ -9,8 +9,8 @@ import { ProductFeedbackDialog } from "./ProductFeedbackDialog";
 const meta = {
 	component: ProductFeedbackDialog,
 	args: {
-		open: true,
-		onOpenChange: fn(),
+		view: "open",
+		onViewChange: fn(),
 		reportsLink: <a href="/product-feedback">Your reports</a>,
 		pagePath: "/w/$workspaceSlug/practice-profile",
 		sharing: { status: "off" },
@@ -23,6 +23,37 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {};
+
+/**
+ * The panel is not modal: the page behind it keeps working and is not blurred, so the person can
+ * look at what they report on. Escape tucks the panel into the corner; the draft stays.
+ */
+export const EscapeMinimizes: Story = {
+	play: async ({ args }) => {
+		const dialog = within(await screen.findByRole("dialog", { name: "Send feedback" }));
+		await userEvent.click(dialog.getByRole("textbox", { name: "Your feedback" }));
+		await userEvent.keyboard("{Escape}");
+		await expect(args.onViewChange).toHaveBeenLastCalledWith("minimized");
+	},
+};
+
+export const Minimized: Story = {
+	args: { view: "minimized" },
+	play: async ({ args, canvas }) => {
+		await expect(screen.queryByRole("dialog")).toBeNull();
+		await userEvent.click(canvas.getByRole("button", { name: "Send feedback" }));
+		await expect(args.onViewChange).toHaveBeenLastCalledWith("open");
+	},
+};
+
+/** Close hides the panel and the corner bar; the header button or the shortcut opens the kept draft. */
+export const Closes: Story = {
+	play: async ({ args }) => {
+		const dialog = within(await screen.findByRole("dialog", { name: "Send feedback" }));
+		await userEvent.click(dialog.getByRole("button", { name: "Close" }));
+		await expect(args.onViewChange).toHaveBeenLastCalledWith("closed");
+	},
+};
 
 export const SendsFeedbackWithoutContext: Story = {
 	play: async () => {

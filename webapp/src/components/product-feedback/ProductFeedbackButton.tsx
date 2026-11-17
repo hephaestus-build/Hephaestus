@@ -7,10 +7,12 @@ import { FEEDBACK_SHORTCUT_ARIA, FEEDBACK_SHORTCUT_LABEL } from "@/lib/keyboard-
 
 export interface ProductFeedbackButtonProps {
 	onSendFeedback: () => void;
+	/** The person points at or focuses the button: a moment to load the composer before the press. */
+	onPrepare?: () => void;
 }
 
 /** The same action opens the composer at every viewport width. */
-export function ProductFeedbackButton({ onSendFeedback }: ProductFeedbackButtonProps) {
+export function ProductFeedbackButton({ onSendFeedback, onPrepare }: ProductFeedbackButtonProps) {
 	return (
 		<Tooltip>
 			<TooltipTrigger
@@ -21,6 +23,8 @@ export function ProductFeedbackButton({ onSendFeedback }: ProductFeedbackButtonP
 						aria-label="Send feedback about Hephaestus"
 						aria-keyshortcuts={FEEDBACK_SHORTCUT_ARIA}
 						onClick={onSendFeedback}
+						onPointerEnter={onPrepare}
+						onFocus={onPrepare}
 					/>
 				}
 			>

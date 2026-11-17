@@ -38,6 +38,7 @@ import { SkipToContent } from "@/components/layout/SkipToContent";
 import { StandardPageSurface } from "@/components/layout/StandardPageSurface";
 import { getStartedSetupOpen, reviewFromOverview } from "@/components/onboarding/get-started-open";
 import { ProductFeedbackButton } from "@/components/product-feedback/ProductFeedbackButton";
+import type { ProductFeedbackComposerView } from "@/components/product-feedback/ProductFeedbackDialog";
 import { Kbd } from "@/components/ui/kbd";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { Toaster } from "@/components/ui/sonner";
@@ -67,8 +68,16 @@ import { isConversationPanelExcludedRoute } from "./-conversation-panel-route";
 import { showConversationUnavailable } from "./-conversation-unavailable";
 
 const GlobalConversationPanel = lazy(async () => import("./-GlobalConversationPanel"));
-/** The feedback dialog loads when someone first opens it; only the menu loads with every page. */
-const ProductFeedbackComposer = lazy(async () => import("./-ProductFeedbackComposer"));
+/**
+ * The feedback composer loads when someone points at or focuses its button, or presses the shortcut;
+ * only the button loads with every page. One import serves the early load and the open, so the first
+ * open does not wait, and a failed load fails the open the same way.
+ */
+const importProductFeedbackComposer = async () => import("./-ProductFeedbackComposer");
+let productFeedbackComposerImport: ReturnType<typeof importProductFeedbackComposer> | undefined;
+const loadProductFeedbackComposer = async () =>
+	(productFeedbackComposerImport ??= importProductFeedbackComposer());
+const ProductFeedbackComposer = lazy(loadProductFeedbackComposer);
 
 interface MyRouterContext {
 	queryClient: QueryClient;
@@ -225,18 +234,18 @@ function showFeedbackUnavailable() {
 
 function ProductFeedbackControls({ workspaceSlug }: { workspaceSlug?: string }) {
 	const route = useMatches({ select: (matches) => routeOf(matches.at(-1)?.fullPath) });
-	const [feedbackOpen, setFeedbackOpen] = useState(false);
-	// Mounted from the first open on, so a closed dialog keeps its state as before.
+	const [feedbackView, setFeedbackView] = useState<ProductFeedbackComposerView>("closed");
+	// Mounted from the first open on, so a closed composer keeps its draft.
 	const [composerLoaded, setComposerLoaded] = useState(false);
 	const openComposer = () => {
-		setFeedbackOpen(true);
+		setFeedbackView("open");
 		setComposerLoaded(true);
 	};
 	useEffect(() => {
 		const onKeyDown = (event: KeyboardEvent) => {
 			if (isFeedbackShortcut(event)) {
 				event.preventDefault();
-				setFeedbackOpen(true);
+				setFeedbackView("open");
 				setComposerLoaded(true);
 			}
 		};
@@ -245,20 +254,26 @@ function ProductFeedbackControls({ workspaceSlug }: { workspaceSlug?: string }) 
 	}, []);
 	return (
 		<>
-			<ProductFeedbackButton onSendFeedback={openComposer} />
+			<ProductFeedbackButton
+				onSendFeedback={openComposer}
+				onPrepare={() => {
+					// The open reports a failed load, through the boundary below.
+					loadProductFeedbackComposer().catch(() => undefined);
+				}}
+			/>
 			{composerLoaded && (
 				<CatchBoundary
 					getResetKey={() => 0}
 					onCatch={() => {
-						setFeedbackOpen(false);
+						setFeedbackView("closed");
 						showFeedbackUnavailable();
 					}}
 					errorComponent={FeedbackComposerUnavailable}
 				>
 					<Suspense fallback={null}>
 						<ProductFeedbackComposer
-							open={feedbackOpen}
-							onOpenChange={setFeedbackOpen}
+							view={feedbackView}
+							onViewChange={setFeedbackView}
 							route={route}
 							workspaceSlug={workspaceSlug}
 						/>
