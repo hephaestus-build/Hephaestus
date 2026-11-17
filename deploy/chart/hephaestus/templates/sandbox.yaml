@@ -11,11 +11,7 @@ The server's own Deployment, Service account and policy are in server.yaml and n
 {{- $name := include "hephaestus.name" (dict "root" . "component" "server") }}
 {{- $port := include "hephaestus.gatewayPort" . | int }}
 {{- $sandboxes := include "hephaestus.sandboxNamespace" (dict "root" .) }}
-{{- $api := .Values.networkPolicy.kubernetesApi }}
-{{- $_ := required "networkPolicy.kubernetesApi.cidr is required: state the API endpoint that the network plugin sees" $api.cidr }}
-{{- if eq (int $api.port) 0 }}
-{{- fail "networkPolicy.kubernetesApi.port is required: state the API endpoint port that the network plugin sees" }}
-{{- end }}
+{{- include "hephaestus.kubernetesApiCheck" . }}
 {{- /* values.schema.json owns each value's shape; the server refuses the same values at start. */}}
 {{- if .Values.sandbox.quota.enabled }}
 {{- /*

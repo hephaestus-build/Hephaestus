@@ -11,12 +11,6 @@ priorityClasses:
   roles: hephaestus-roles
   conversations: hephaestus-conversations
   reviews: hephaestus-reviews
-# A staging bench measured a server peak of 2325 MiB: 91 % of the default 2560Mi.
-# The JVM sizes its heap from the limit, so the request equals it.
-server:
-  resources:
-    requests: { cpu: 500m, memory: 3072Mi }
-    limits: { cpu: "4", memory: 3072Mi }
 sandbox:
   enabled: true
   # Twelve reviews of 512 MiB at once, across the sandbox nodes.
