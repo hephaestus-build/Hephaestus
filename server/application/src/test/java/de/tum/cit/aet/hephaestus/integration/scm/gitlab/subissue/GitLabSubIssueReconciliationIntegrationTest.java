@@ -534,8 +534,8 @@ class GitLabSubIssueReconciliationIntegrationTest extends BaseIntegrationTest {
 
     private SyncResult sync() {
         // The schedulers sync with no transaction open, so the GraphQL calls hold no database connection.
-        var storedRepository = Objects.requireNonNull(
-                transactions.execute(status -> repositories.findById(repository.getId()).orElseThrow()));
+        var storedRepository = Objects.requireNonNull(transactions.execute(
+                status -> repositories.findById(repository.getId()).orElseThrow()));
         var result = service.syncSubIssuesForRepository(scopeId, storedRepository);
         assertThat(answers).as("every supplied page must be consumed").isEmpty();
         return Objects.requireNonNull(result);

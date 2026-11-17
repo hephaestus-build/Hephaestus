@@ -1,11 +1,11 @@
 package de.tum.cit.aet.hephaestus.agent.sandbox.claim;
 
-import de.tum.cit.aet.hephaestus.core.security.HostAddresses;
 import de.tum.cit.aet.hephaestus.agent.AgentCapacityProperties;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenIssuer;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnBackgroundWork;
+import de.tum.cit.aet.hephaestus.core.security.HostAddresses;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.net.UnknownHostException;
 import java.time.Duration;

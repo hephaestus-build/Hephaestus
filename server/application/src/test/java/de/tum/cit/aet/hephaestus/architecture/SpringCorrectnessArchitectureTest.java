@@ -17,9 +17,9 @@ import com.tngtech.archunit.lang.ArchRule;
 import com.tngtech.archunit.lang.ConditionEvents;
 import com.tngtech.archunit.lang.SimpleConditionEvent;
 import de.tum.cit.aet.hephaestus.core.security.HostAddresses;
+import de.tum.cit.aet.hephaestus.integration.core.egress.OutboundEgressGateway;
 import de.tum.cit.aet.hephaestus.integration.core.handler.IntegrationMessageHandler;
 import de.tum.cit.aet.hephaestus.integration.core.handler.ProviderEvent;
-import de.tum.cit.aet.hephaestus.integration.core.egress.OutboundEgressGateway;
 import jakarta.annotation.PostConstruct;
 import jakarta.validation.Valid;
 import java.net.InetAddress;
@@ -92,20 +92,23 @@ class SpringCorrectnessArchitectureTest extends HephaestusArchitectureTest {
                 .that()
                 .areAnnotatedWith(ApplicationModuleListener.class)
                 .and()
-                .areDeclaredInClassesThat(new DescribedPredicate<JavaClass>(
-                        "call an outbound egress gateway directly (a call through another bean is not seen)") {
-                    @Override
-                    public boolean test(JavaClass owner) {
-                        // Only our own types: every gateway is a subclass of Object, so a call to equals would
-                        // otherwise count as a call to a gateway.
-                        return owner.getMethodCallsFromSelf().stream()
-                                .map(call -> call.getTargetOwner())
-                                .filter(target -> target.getPackageName().startsWith(BASE_PACKAGE))
-                                .anyMatch(target -> target.isAnnotatedWith(OutboundEgressGateway.class)
-                                        || target.getAllSubclasses().stream()
-                                                .anyMatch(type -> type.isAnnotatedWith(OutboundEgressGateway.class)));
-                    }
-                })
+                .areDeclaredInClassesThat(
+                        new DescribedPredicate<JavaClass>(
+                                "call an outbound egress gateway directly (a call through another bean is not seen)") {
+                            @Override
+                            public boolean test(JavaClass owner) {
+                                // Only our own types: every gateway is a subclass of Object, so a call to equals would
+                                // otherwise count as a call to a gateway.
+                                return owner.getMethodCallsFromSelf().stream()
+                                        .map(call -> call.getTargetOwner())
+                                        .filter(target ->
+                                                target.getPackageName().startsWith(BASE_PACKAGE))
+                                        .anyMatch(target -> target.isAnnotatedWith(OutboundEgressGateway.class)
+                                                || target.getAllSubclasses().stream()
+                                                        .anyMatch(type ->
+                                                                type.isAnnotatedWith(OutboundEgressGateway.class)));
+                            }
+                        })
                 .should(new ArchCondition<JavaMethod>("not join a transaction") {
                     @Override
                     public void check(JavaMethod method, ConditionEvents events) {

@@ -1,20 +1,17 @@
 package de.tum.cit.aet.hephaestus.agent.catalog;
 
-import static org.mockito.Mockito.mock;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import org.springframework.transaction.TransactionStatus;
-import org.springframework.transaction.support.TransactionCallback;
-import org.springframework.transaction.support.TransactionTemplate;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditAction;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditEntityType;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditEntry;
@@ -41,6 +38,9 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.transaction.TransactionStatus;
+import org.springframework.transaction.support.TransactionCallback;
+import org.springframework.transaction.support.TransactionTemplate;
 
 class WorkspaceLlmConnectionServiceTest extends BaseUnitTest {
 
@@ -95,7 +95,8 @@ class WorkspaceLlmConnectionServiceTest extends BaseUnitTest {
                 transactions);
         lenient()
                 .when(transactions.execute(any()))
-                .thenAnswer(call -> call.<TransactionCallback<?>>getArgument(0).doInTransaction(mock(TransactionStatus.class)));
+                .thenAnswer(call ->
+                        call.<TransactionCallback<?>>getArgument(0).doInTransaction(mock(TransactionStatus.class)));
         ReflectionTestUtils.setField(connectionService, "entityManager", entityManager);
         lenient().when(entityManager.getReference(Workspace.class, 1L)).thenReturn(workspace);
         workspaceContext =

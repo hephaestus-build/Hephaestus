@@ -1,8 +1,8 @@
 package de.tum.cit.aet.hephaestus.agent.catalog;
 
-import de.tum.cit.aet.hephaestus.core.security.HostAddresses;
 import de.tum.cit.aet.hephaestus.agent.LlmProperties;
 import de.tum.cit.aet.hephaestus.core.SsrfGuardedResolverGroup;
+import de.tum.cit.aet.hephaestus.core.security.HostAddresses;
 import de.tum.cit.aet.hephaestus.core.security.PrivateAddressGuard;
 import de.tum.cit.aet.hephaestus.core.security.PrivateHostAllowlist;
 import io.netty.resolver.AddressResolverGroup;

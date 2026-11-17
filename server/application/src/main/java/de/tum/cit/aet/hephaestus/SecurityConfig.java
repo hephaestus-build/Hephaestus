@@ -1,12 +1,12 @@
 package de.tum.cit.aet.hephaestus;
 
-import de.tum.cit.aet.hephaestus.core.security.HostAddresses;
 import de.tum.cit.aet.hephaestus.config.CorsProperties;
 import de.tum.cit.aet.hephaestus.core.auth.AuthProperties;
 import de.tum.cit.aet.hephaestus.core.auth.clientsession.InstalledClientRegistry;
 import de.tum.cit.aet.hephaestus.core.auth.ratelimit.AuthRateLimitFilter;
 import de.tum.cit.aet.hephaestus.core.auth.web.PublicActivityReadRequestMatcher;
 import de.tum.cit.aet.hephaestus.core.exception.ProblemType;
+import de.tum.cit.aet.hephaestus.core.security.HostAddresses;
 import de.tum.cit.aet.hephaestus.core.security.SecurityHeaders;
 import de.tum.cit.aet.hephaestus.core.security.SecurityUtils;
 import de.tum.cit.aet.hephaestus.core.security.StaleAuthCookieFilter;
