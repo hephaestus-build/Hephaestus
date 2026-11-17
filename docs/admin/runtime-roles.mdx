@@ -27,11 +27,7 @@ Use it to find the start of each server in a log store.
 While no server is ready, providers cannot deliver webhooks.
 The chart keeps a ready server during a schema-compatible update ([What the chart runs](./helm-chart#what-the-chart-runs)).
 A stopped upgrade, or the loss of all server replicas, stops reception.
-After reception resumes:
-
-- GitHub redelivers the deliveries that failed.
-- Slack retries a failed event.
-- The routine sync repairs the lifecycle facts of GitLab and Outline.
+[Which providers deliver again](./webhook-ingestion-operations#which-providers-deliver-again) says how each provider recovers.
 
 ## Reviews and conversation turns
 

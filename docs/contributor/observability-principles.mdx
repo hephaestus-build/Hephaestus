@@ -63,7 +63,7 @@ The operator's tools collect all of it.
 
 ## The project's own instances
 
-The project's test instance does not yet run the chart's [monitoring stack](/admin/monitoring#run-the-monitoring-stack).
+The project's test instance does not run the chart's [monitoring stack](/admin/monitoring#run-the-monitoring-stack).
 Its vmalert loads a copy of the rule file by hand: the ConfigMap `hephaestus-alert-rules` in the namespace `observability`.
 That copy does not follow the release, so replace it from the commit that the instance runs when the rules change.
 The instance runs kube-state-metrics and node-exporter in that namespace, which allows host paths, with a ClusterRole for the kubelet scrape.

@@ -14,12 +14,6 @@ Then follow [Verify the release chart](./kubernetes#verify-the-release-chart).
 That procedure authenticates the chart and checks its release version. It reads the lock only to find the chart digest.
 The installed reconciler verifies the lock signature itself before it applies the chart that the lock names.
 
-:::note[Chart-only release]
-These instructions describe the chart-only release.
-For a 0.95.x deployment, use that release's versioned instructions and signed assets.
-The [0.x upgrade path](/admin/upgrade-to-1-0) requires 0.95.1 and its installed reconciler tooling before the cutover.
-:::
-
 ## Release assets
 
 The release builds one joint lock from its verified evidence and chart.

@@ -175,10 +175,10 @@ Runtime configuration such as `application.yml` uses `server`, and a Dockerfile 
 
 - `fix(activity): keep the time range when switching workspaces`
 - `feat(teams): show sub-teams under their parent`
-- `feat(mentor): reply to a Heph answer in a thread`
+- `feat(conversation): reply to an answer in a thread`
 - `feat(server): add an open-work endpoint`
 - `docs: update installation instructions`
-- `refactor(mentor): improve code analysis performance`
+- `refactor(conversation): speed up the answer to a question`
 - `fix(deps): update vulnerable dependency`
 - `fix(security): patch authentication bypass`
 - `fix(db): add missing index for performance`

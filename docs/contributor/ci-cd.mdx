@@ -7,12 +7,6 @@ Hephaestus uses trunk-based delivery through GitHub's merge queue. Pull requests
 feedback, merge groups validate projected `main`, and pushes to `main` produce release images.
 Staging follows successful builds of `main` under the [automatic promotion policy](../admin/pull-based-deployment). Production runs a release only after an approved promotion.
 
-:::note[Chart-only release]
-These instructions describe the chart-only release.
-For a 0.95.x deployment, use that release's versioned instructions and signed assets.
-The [0.x upgrade path](/admin/upgrade-to-1-0) requires 0.95.1 and its installed reconciler tooling before the cutover.
-:::
-
 ## Architecture overview
 
 ```mermaid
@@ -269,8 +263,7 @@ oasdiff does not compare operation IDs or tags. The policy does not promise them
 
 #### Accept a deliberate break
 
-Before 1.0, a release can break the API deliberately.
-From 1.0, a break needs a major release.
+A break of the API needs a major release.
 When the base is `v1.0.0` or later, the gate fails on an entry that accepts a break, unless the change heads for a major release.
 
 Before the Version PR, a pending changeset with `"hephaestus": major` marks the major release.
@@ -288,8 +281,7 @@ To accept a break:
    Above it, write a `#` comment with the reason and the pull request.
 2. Write a changeset that tells API clients what changed.
    See [Writing changesets](./release-management.mdx#writing-changesets).
-   - Before 1.0, use `minor`.
-   - From 1.0, use `major`.
+   - Pick the bump by the [changeset README](https://github.com/hephaestus-build/Hephaestus/blob/main/.changeset/README.md).
      The break must obey the [version numbers](/admin/compatibility-policy#version-numbers) and the [deprecation policy](/admin/compatibility-policy#deprecation-policy) of the compatibility policy.
 
 The diff of each new file shows its accepted break in review.
@@ -1879,8 +1871,6 @@ The comment links point to the Storybook of the branch's latest Chromatic build.
 Each run replaces the comment, so its links match the build it lists.
 The **Preview / Storybook** status links to the Chromatic build of its own commit, because a later build moves the branch's Storybook.
 
-The previews no longer use Surge. Its free account refused uploads at our push rate, and the tool printed account details in public logs.
-Documentation has no pull-request preview until an organization-owned host exists.
 The required docs build still runs in the tooling leg, and `vp run docs:dev` serves the docs locally.
 `cd-docs.yml` also builds a pull request's docs at `/next/`, whose link check catches a link that leaves the base path.
 
