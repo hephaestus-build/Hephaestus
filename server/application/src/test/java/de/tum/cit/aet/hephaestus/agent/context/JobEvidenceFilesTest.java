@@ -527,7 +527,7 @@ class JobEvidenceFilesTest extends BaseUnitTest {
                 new SimpleMeterRegistry());
         manager.ensureRepository(key, source.toUri().toString(), null);
         Path staging;
-        try (var snapshot = manager.readTreeSnapshot(key, sha)) {
+        try (var snapshot = manager.readTreeSnapshot(key, sha, sha)) {
             staging = snapshot.stagingDir();
             Files.setLastModifiedTime(staging, FileTime.from(clock.instant()));
             cleaner.cleanEndedAttempts();

@@ -199,7 +199,7 @@ class ReviewPublishedPreparationTest extends BaseUnitTest {
 
     private PreparedJobInputs capture() {
         captures.incrementAndGet();
-        var snapshot = git.readTreeSnapshot(KEY, head);
+        var snapshot = git.readTreeSnapshot(KEY, head, head);
         var evidence = new JobFolderIndexBuilder(
                         new ClasspathSourceCatalogRegistry(mapper, Clock.systemUTC()), mapper, Clock.systemUTC())
                 .build(

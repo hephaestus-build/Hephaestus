@@ -99,7 +99,7 @@ class GitRepositoryManagerTest extends BaseUnitTest {
             git.branchCreate().setName("other-work").setStartPoint(head).call();
             prepare();
             String tree;
-            try (var captured = manager.readTreeSnapshot(KEY, head)) {
+            try (var captured = manager.readTreeSnapshot(KEY, head, head)) {
                 tree = captured.treeSha();
             }
 
@@ -367,7 +367,7 @@ class GitRepositoryManagerTest extends BaseUnitTest {
             git.tag().setName("v1").setSigned(false).call();
             prepare();
             Path staging;
-            try (var snapshot = manager.readTreeSnapshot(KEY, sha)) {
+            try (var snapshot = manager.readTreeSnapshot(KEY, sha, sha)) {
                 staging = snapshot.stagingDir();
                 assertThat(staging).startsWith(fabric);
                 assertThat(staging)
@@ -382,8 +382,8 @@ class GitRepositoryManagerTest extends BaseUnitTest {
                 assertThat(Files.readString(staging.resolve(".git/HEAD")).strip())
                         .isEqualTo(sha);
                 assertThat(Files.readString(staging.resolve(".git/hephaestus-captured-refs")))
-                        .contains("commit " + sha + " refs/remotes/origin/main")
-                        .contains("commit " + sha + " refs/tags/v1");
+                        .as("the checkout exposes no branch or tag, so it records none")
+                        .isEmpty();
                 assertThat(Files.mismatch(source.resolve("large.txt"), staging.resolve("large.txt")))
                         .isEqualTo(-1);
                 assertThat(Files.mismatch(source.resolve("image.bin"), staging.resolve("image.bin")))
@@ -401,35 +401,60 @@ class GitRepositoryManagerTest extends BaseUnitTest {
         }
     }
 
+    /**
+     * A pull request checkout holds its two commits and nothing of the rest of the repository, so a push to another
+     * branch or a new tag changes nothing that a practice can read in it, and its tree identity stays the pair.
+     */
     @Test
-    void shouldKeepCaptureAndCurrentRefFingerprintsEqualUntilAReadableRefChanges() throws Exception {
+    void shouldCaptureOnlyTheReviewedAndBaseCommitsSoAnotherBranchOrTagChangesNothingItCanRead() throws Exception {
         try (Git git = repository()) {
-            String head = Objects.requireNonNull(git.getRepository().resolve(Constants.HEAD))
+            String base = Objects.requireNonNull(git.getRepository().resolve(Constants.HEAD))
                     .name();
+            git.checkout().setCreateBranch(true).setName("topic").call();
+            Files.writeString(source.resolve("change.txt"), "The reviewed change.\n");
+            String head = commit(git, "The reviewed change");
+            git.checkout().setName("main").call();
+            Files.writeString(source.resolve("main.txt"), "Main moved on.\n");
+            String mainTip = commit(git, "Main moves on");
             prepare();
-            try (var snapshot = manager.readTreeSnapshot(KEY, head)) {
-                var captured = GitRepositoryManager.treeIdentity(snapshot);
-                try (var unchanged = manager.readTreeSnapshot(KEY, head)) {
-                    assertThat(GitRepositoryManager.treeIdentity(unchanged)).isEqualTo(captured);
-                }
-                prepare();
-                try (var unchanged = manager.readTreeSnapshot(KEY, head)) {
-                    assertThat(GitRepositoryManager.treeIdentity(unchanged)).isEqualTo(captured);
-                }
-                git.branchCreate().setName("other-work").setStartPoint(head).call();
-                prepare();
-                assertThat(manager.resolveBranchHead(KEY, "main")).isEqualTo(head);
-
-                assertThat(GitRepositoryManager.treeIdentity(snapshot)).isEqualTo(captured);
-                try (var next = manager.readTreeSnapshot(KEY, head)) {
-                    assertThat(GitRepositoryManager.treeIdentity(next)).isNotEqualTo(captured);
-                }
+            try (var captured = manager.readTreeSnapshot(KEY, head, base);
+                    var checkout = Git.open(captured.stagingDir().toFile())) {
+                var repository = checkout.getRepository();
+                assertThat(repository.getRefDatabase().getRefs())
+                        .as("no branch or tag of the repository")
+                        .extracting(Ref::getName)
+                        .containsExactly(Constants.HEAD);
+                assertThat(Objects.requireNonNull(repository.resolve(Constants.HEAD))
+                                .name())
+                        .isEqualTo(head);
+                assertThat(repository.getObjectDatabase().has(ObjectId.fromString(base)))
+                        .as("the base, for the change")
+                        .isTrue();
+                assertThat(repository.getObjectDatabase().has(ObjectId.fromString(mainTip)))
+                        .as("not the rest of the repository")
+                        .isFalse();
+                assertThat(Files.readString(
+                                captured.stagingDir().resolve(".git/" + GitRepositoryManager.CAPTURED_REFS)))
+                        .isEmpty();
             }
+
+            git.checkout().setCreateBranch(true).setName("unrelated-work").call();
+            Files.writeString(source.resolve("unrelated.txt"), "Another developer's work.\n");
+            commit(git, "Unrelated work");
+            git.tag().setName("v1").setMessage("A release").setSigned(false).call();
+            prepare();
+            try (var again = manager.readTreeSnapshot(KEY, head, base);
+                    var checkout = Git.open(again.stagingDir().toFile())) {
+                assertThat(checkout.getRepository().getRefDatabase().getRefs())
+                        .extracting(Ref::getName)
+                        .containsExactly(Constants.HEAD);
+            }
+            assertThat(GitRepositoryManager.treeIdentity(head, base)).isEqualTo(head + ":" + base);
         }
     }
 
     @Test
-    void shouldExportTheSameProviderRefsFromMirrorsWithDifferentPrivatePins() throws Exception {
+    void shouldExportNoRefOfTheMirrorWhateverItsPrivatePins() throws Exception {
         try (Git git = repository()) {
             String main = Objects.requireNonNull(git.getRepository().resolve(Constants.HEAD))
                     .name();
@@ -450,53 +475,22 @@ class GitRepositoryManagerTest extends BaseUnitTest {
                     GitTransportFixtures.copyFence(),
                     new SimpleMeterRegistry());
             other.ensureRepository(KEY, source.toUri().toString(), null);
-            try (var first = manager.readTreeSnapshot(KEY, main);
-                    var second = other.readTreeSnapshot(KEY, main);
-                    var exported = Git.open(first.stagingDir().toFile())) {
-                assertThat(GitRepositoryManager.treeIdentity(first))
-                        .isEqualTo(GitRepositoryManager.treeIdentity(second));
-                assertThat(exported.getRepository().getRefDatabase().getRefsByPrefix(GitRepositoryManager.REVIEW_REFS))
-                        .isEmpty();
+            try (var first = manager.readTreeSnapshot(KEY, main, main);
+                    var second = other.readTreeSnapshot(KEY, main, main);
+                    var exported = Git.open(first.stagingDir().toFile());
+                    var otherExport = Git.open(second.stagingDir().toFile())) {
+                assertThat(exported.getRepository().getRefDatabase().getRefs())
+                        .extracting(Ref::getName)
+                        .containsExactly(Constants.HEAD);
+                assertThat(otherExport.getRepository().getRefDatabase().getRefs())
+                        .extracting(Ref::getName)
+                        .containsExactly(Constants.HEAD);
             }
-            try (var retainedCapture = manager.readTreeSnapshot(KEY, retained);
+            try (var retainedCapture = manager.readTreeSnapshot(KEY, retained, retained);
                     var exported = Git.open(retainedCapture.stagingDir().toFile())) {
                 assertThat(exported.getRepository().resolve(Constants.HEAD)).isEqualTo(ObjectId.fromString(retained));
                 assertThat(exported.getRepository().getRefDatabase().getRefsByPrefix(GitRepositoryManager.REVIEW_REFS))
                         .isEmpty();
-            }
-        }
-    }
-
-    @Test
-    void shouldFingerprintAnAnnotatedTagsObjectRatherThanOnlyItsPeeledCommit() throws Exception {
-        try (Git git = repository()) {
-            String head = Objects.requireNonNull(git.getRepository().resolve(Constants.HEAD))
-                    .name();
-            git.tag()
-                    .setName("v1")
-                    .setMessage("Initial release note")
-                    .setSigned(false)
-                    .call();
-            prepare();
-            try (var snapshot = manager.readTreeSnapshot(KEY, head)) {
-                var captured = GitRepositoryManager.treeIdentity(snapshot);
-                String marker =
-                        Files.readString(snapshot.stagingDir().resolve(".git/" + GitRepositoryManager.CAPTURED_REFS));
-                git.tagDelete().setTags("v1").call();
-                git.tag()
-                        .setName("v1")
-                        .setMessage("Revised release note")
-                        .setSigned(false)
-                        .call();
-                prepare();
-                assertThat(manager.resolveBranchHead(KEY, "main")).isEqualTo(head);
-
-                try (var next = manager.readTreeSnapshot(KEY, head)) {
-                    assertThat(Files.readString(
-                                    next.stagingDir().resolve(".git/" + GitRepositoryManager.CAPTURED_REFS)))
-                            .isEqualTo(marker);
-                    assertThat(GitRepositoryManager.treeIdentity(next)).isNotEqualTo(captured);
-                }
             }
         }
     }
@@ -512,7 +506,7 @@ class GitRepositoryManagerTest extends BaseUnitTest {
             git.checkout().setName("main").call();
             git.branchDelete().setBranchNames("feature").setForce(true).call();
             prepare();
-            try (var snapshot = manager.readTreeSnapshot(KEY, head)) {
+            try (var snapshot = manager.readTreeSnapshot(KEY, head, head)) {
                 assertThat(snapshot.stagingDir().resolve("feature.txt")).isRegularFile();
                 assertThat(snapshot.stagingDir().resolve(".git/refs/remotes/origin/feature"))
                         .doesNotExist();
@@ -527,7 +521,7 @@ class GitRepositoryManagerTest extends BaseUnitTest {
             Files.createSymbolicLink(source.resolve("link"), Path.of("../../secret"));
             String sha = commit(git, "Add link");
             prepare();
-            try (var snapshot = manager.readTreeSnapshot(KEY, sha)) {
+            try (var snapshot = manager.readTreeSnapshot(KEY, sha, sha)) {
                 assertThat(snapshot.stagingDir().resolve("link")).isRegularFile();
                 assertThat(Files.isSymbolicLink(snapshot.stagingDir().resolve("link")))
                         .isFalse();
@@ -566,13 +560,13 @@ class GitRepositoryManagerTest extends BaseUnitTest {
             update.setNewObjectId(withSubmodule);
             update.forceUpdate();
             prepare();
-            try (var snapshot = manager.readTreeSnapshot(KEY, sha)) {
+            try (var snapshot = manager.readTreeSnapshot(KEY, sha, sha)) {
                 assertThat(snapshot.limitations()).containsExactly(GitRepositoryManager.TREE_LIMITATION_UNSAFE_PATH);
                 assertThat(snapshot.complete()).isFalse();
                 assertThat(snapshot.stagingDir().resolve("back\\slash.txt")).doesNotExist();
                 assertThat(snapshot.stagingDir().resolve("README.md")).isRegularFile();
             }
-            try (var snapshot = manager.readTreeSnapshot(KEY, withSubmodule.name())) {
+            try (var snapshot = manager.readTreeSnapshot(KEY, withSubmodule.name(), withSubmodule.name())) {
                 assertThat(snapshot.limitations()).containsExactly(GitRepositoryManager.TREE_LIMITATION_SUBMODULE);
                 assertThat(snapshot.stagingDir().resolve("README.md")).isRegularFile();
             }
@@ -588,7 +582,7 @@ class GitRepositoryManagerTest extends BaseUnitTest {
             String commit = commit(git, "Paths with a newline");
             prepare();
             String tree;
-            try (var snapshot = manager.readTreeSnapshot(KEY, commit)) {
+            try (var snapshot = manager.readTreeSnapshot(KEY, commit, commit)) {
                 tree = snapshot.treeSha();
             }
             Path single = temporary.resolve("single");
@@ -609,7 +603,7 @@ class GitRepositoryManagerTest extends BaseUnitTest {
             Files.writeString(source.resolve("back\\slash.txt"), "windows\n");
             String original = commit(git, "Reviewed change");
             prepare();
-            GitRepositoryManager.GitTreeSnapshot captured = manager.readTreeSnapshot(KEY, original);
+            GitRepositoryManager.GitTreeSnapshot captured = manager.readTreeSnapshot(KEY, original, original);
             captured.close();
             String later = commit(git, "Pushed after the review");
             git.tag().setName("later").setSigned(false).call();
@@ -699,7 +693,7 @@ class GitRepositoryManagerTest extends BaseUnitTest {
                     GC.setExecutor(deferredGc);
                     snapshot = original
                             ? manager.readOriginalSnapshot(KEY, sha, List.of(base, sha))
-                            : manager.readTreeSnapshot(KEY, sha);
+                            : manager.readTreeSnapshot(KEY, sha, sha);
                     Path staging = snapshot.stagingDir();
                     assertThat(snapshot.commitSha()).isEqualTo(sha);
                     assertThat(snapshot.treeSha()).isEqualTo(treeSha);
@@ -711,7 +705,8 @@ class GitRepositoryManagerTest extends BaseUnitTest {
                         assertThat(checkout.getRepository().getObjectDatabase().has(ObjectId.fromString(base)))
                                 .isTrue();
                         assertThat(checkout.getRepository().getObjectDatabase().has(ObjectId.fromString(later)))
-                                .isEqualTo(!original);
+                                .as("no commit of the rest of the repository")
+                                .isFalse();
                     }
                     assertThat(Files.readAllBytes(source.resolve(".git/config")))
                             .isEqualTo(sourceConfigBefore);
@@ -753,7 +748,7 @@ class GitRepositoryManagerTest extends BaseUnitTest {
             String sha = commit(git, "Second");
             prepare();
             var guarded = manager(true, 63);
-            assertThatThrownBy(() -> guarded.readTreeSnapshot(KEY, sha))
+            assertThatThrownBy(() -> guarded.readTreeSnapshot(KEY, sha, sha))
                     .isInstanceOf(GitRepositoryManager.GitOperationException.class)
                     .hasMessage("Repository snapshot exceeds hephaestus.git.max-snapshot-bytes");
             assertThat(stagingDirectories()).isEmpty();

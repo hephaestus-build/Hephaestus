@@ -441,7 +441,7 @@ class EvidenceAcrossServersIntegrationTest extends BaseIntegrationTest {
             Future<GitRepositoryManager.GitTreeSnapshot> copy;
             var erasure = fence.erase();
             try (erasure) {
-                copy = executor.submit(() -> manager.readTreeSnapshot(key, head));
+                copy = executor.submit(() -> manager.readTreeSnapshot(key, head, head));
                 assertThat(requested.await(30, TimeUnit.SECONDS)).isTrue();
                 // A blocked database admission must not prevent a mirror writer from completing.
                 assertThat(executor.submit(() -> locks.withWriteLock(key, () -> true))
@@ -840,7 +840,7 @@ class EvidenceAcrossServersIntegrationTest extends BaseIntegrationTest {
 
         PreparedJobInputs capture(ReviewJob job, Map<String, Path> filesOnDisk) {
             files.beginPersonCapture(job);
-            try (var snapshot = git.readTreeSnapshot(key, head)) {
+            try (var snapshot = git.readTreeSnapshot(key, head, head)) {
                 var directory = new EvidenceDirectory(
                         "repos/reviewed/",
                         snapshot.stagingDir(),

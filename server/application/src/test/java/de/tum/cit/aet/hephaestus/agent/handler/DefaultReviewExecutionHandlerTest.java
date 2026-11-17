@@ -551,28 +551,30 @@ class DefaultReviewExecutionHandlerTest extends BaseUnitTest {
     }
 
     /**
-     * ADR 0086 § Update 2026-11-14 accepts that `bash` reads every captured file. That stays sound only while each
-     * practice's result records the fingerprint of every captured source, also of sources it does not declare.
+     * ADR 0086 § Update 2026-11-17: a result depends on the sources its practice declares, the item's record that every
+     * practice's inputs carry, and the change and the checkout. A source it does not declare can change without ending
+     * it.
      */
     @Test
-    void shouldRecordEveryCapturedSourceFingerprintForEachPracticeWhateverItDeclares() {
+    void shouldRecordForEachPracticeOnlyItsOwnSourcesWithTheItemRecordAndTheCheckout() {
         var job = RuntimeReviewTestData.job();
         var original = RuntimeReviewTestData.assignment(5L, null);
         var core = new SourceKind("scm.pull-request.core");
         var tree = new SourceKind("scm.repository.tree");
+        var threads = new SourceKind("scm.review-threads");
         var readsCore = practice(
                 original,
                 PULL_REQUEST,
                 original.practice().practiceId(),
                 original.practiceSlug(),
                 new PracticeReads("3.0.0", List.of(new PracticeReadSource(core, ReadNeed.REQUIRED))));
-        var readsTree = practice(
+        var readsThreads = practice(
                 original,
                 PULL_REQUEST,
                 41L,
-                "repository-practice",
-                new PracticeReads("3.0.0", List.of(new PracticeReadSource(tree, ReadNeed.REQUIRED))));
-        when(assignments.load(job)).thenReturn(List.of(readsCore, readsTree));
+                "discussion-practice",
+                new PracticeReads("3.0.0", List.of(new PracticeReadSource(threads, ReadNeed.REQUIRED))));
+        when(assignments.load(job)).thenReturn(List.of(readsCore, readsThreads));
         when(assignments.review(job)).thenReturn(RuntimeReviewTestData.review(ReviewKind.ITEM, readsCore));
         when(source.supports(readsCore.item())).thenReturn(true);
         var snapshot = mock(ItemSnapshot.class);
@@ -600,6 +602,14 @@ class DefaultReviewExecutionHandlerTest extends BaseUnitTest {
                                         SourceCompleteness.COMPLETE,
                                         new SourceCaptureFacts(NOW, null, null, "head")),
                                 EvidenceSnapshotFixtures.citation(tree),
+                                List.of()),
+                        new SourceCapture(
+                                threads,
+                                new SourceCaptureState.Available(
+                                        SourceContentState.EMPTY,
+                                        SourceCompleteness.COMPLETE,
+                                        new SourceCaptureFacts(NOW, null, null, null)),
+                                EvidenceSnapshotFixtures.citation(threads),
                                 List.of())),
                 List.of(),
                 List.of(),
@@ -615,13 +625,27 @@ class DefaultReviewExecutionHandlerTest extends BaseUnitTest {
         ArgumentCaptor<List<ReviewCaptureDecision>> decisions = ArgumentCaptor.captor();
         verify(members)
                 .capture(eq(1L), eq(job.getReviewId()), eq(job.getId()), eq(job.getAttempt()), decisions.capture());
-        assertThat(decisions.getValue()).hasSize(2).allSatisfy(decision -> {
-            assertThat(decision.status()).isEqualTo(ReviewPracticeStatus.READY);
-            assertThat(decision.facts()
-                            .path(ReviewCaptureDecision.SOURCE_FINGERPRINTS)
-                            .propertyNames())
-                    .containsExactlyInAnyOrder(core.value(), tree.value());
-        });
+        assertThat(decisions.getValue())
+                .hasSize(2)
+                .allSatisfy(decision -> assertThat(decision.status()).isEqualTo(ReviewPracticeStatus.READY));
+        // A bot's comment changes the discussion: it ends the result of the practice that reads the discussion, and
+        // never the result of a practice that does not.
+        assertThat(fingerprinted(decisions.getValue(), readsCore))
+                .containsExactlyInAnyOrder(core.value(), tree.value());
+        assertThat(fingerprinted(decisions.getValue(), readsThreads))
+                .as("its own source, the item's record, and the checkout that every session reads")
+                .containsExactlyInAnyOrder(threads.value(), core.value(), tree.value());
+    }
+
+    private static List<String> fingerprinted(
+            List<ReviewCaptureDecision> decisions, ReviewAssignmentSnapshot practice) {
+        return List.copyOf(decisions.stream()
+                .filter(decision -> decision.practiceId() == practice.practice().practiceId())
+                .findFirst()
+                .orElseThrow()
+                .facts()
+                .path(ReviewCaptureDecision.SOURCE_FINGERPRINTS)
+                .propertyNames());
     }
 
     /**

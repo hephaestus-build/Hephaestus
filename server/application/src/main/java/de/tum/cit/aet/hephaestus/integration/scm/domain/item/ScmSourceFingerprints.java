@@ -11,14 +11,13 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ItemFingerprintReader;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemSnapshot;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemSource;
-import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryRefState;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.capture.PullRequestContentSource;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.capture.RepositoryTreeContentSource;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.capture.ScmCapturePreparation;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -28,7 +27,7 @@ import org.springframework.stereotype.Component;
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * Git freshness reads the shared source observation; record freshness uses the capture renderer on the synced mirror.
+ * Git freshness is the pull request's own commits; record freshness uses the capture renderer on the synced mirror.
  * Neither fetches from the provider.
  */
 @Component
@@ -36,8 +35,6 @@ import tools.jackson.databind.ObjectMapper;
 @RequiredArgsConstructor
 public class ScmSourceFingerprints implements ItemFingerprintReader {
     private final ScmItemService source;
-    private final ScmItemAccess items;
-    private final RepositoryRefState refs;
     private final ScmWorkCapture capture;
     private final ScmItemTransactions transactions;
 
@@ -71,12 +68,9 @@ public class ScmSourceFingerprints implements ItemFingerprintReader {
             var pair = version.orElseThrow();
             if (kind.equals(PullRequestContentSource.DIFF))
                 fingerprints.put(kind, SourceFingerprint.git(kind, pair.base() + ":" + pair.head()));
-            else if (kind.equals(RepositoryTreeContentSource.KIND)) {
-                var repository = items.parent(item, ScmItemEvents.REPOSITORY);
-                refs.current(item.workspaceId(), Objects.requireNonNull(repository.sourceId()))
-                        .ifPresent(value ->
-                                fingerprints.put(kind, SourceFingerprint.git(kind, pair.head() + ":" + value)));
-            }
+            else if (kind.equals(RepositoryTreeContentSource.KIND))
+                fingerprints.put(
+                        kind, SourceFingerprint.git(kind, GitRepositoryManager.treeIdentity(pair.head(), pair.base())));
         }
         if (!records.isEmpty()) {
             var held = occasion == null ? null : held(item, snapshot, occasion);

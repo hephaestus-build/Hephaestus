@@ -21,12 +21,13 @@ import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.CancellationException;
 import org.eclipse.jgit.api.Git;
+import org.eclipse.jgit.lib.Constants;
 import org.eclipse.jgit.lib.PersonIdent;
+import org.eclipse.jgit.lib.Ref;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -153,7 +154,7 @@ class GitRefStateIntegrationTest extends BaseIntegrationTest {
     @EnumSource(
             value = IdentityProviderType.class,
             names = {"GITHUB", "GITLAB"})
-    void shouldCompareTheCapturedCheckoutWithStoredFactsFromAnotherHost(IdentityProviderType provider)
+    void shouldKeepAPracticeCurrentWhenAnotherBranchOrATagOfItsRepositoryMoves(IdentityProviderType provider)
             throws Exception {
         var scope = scope(provider);
         var upstreamPath = root.resolve("upstream");
@@ -163,60 +164,63 @@ class GitRefStateIntegrationTest extends BaseIntegrationTest {
                 .call()) {
             Files.writeString(upstreamPath.resolve("README.md"), "Repository evidence.\n");
             upstream.add().addFilepattern(".").call();
-            String head = upstream.commit()
-                    .setMessage("Initial source")
-                    .setAuthor("Synthetic author", "author@example.test")
-                    .setCommitter("Synthetic author", "author@example.test")
-                    .setSign(false)
-                    .call()
-                    .name();
-            upstream.tag()
-                    .setName("v1")
-                    .setMessage("First tag")
-                    .setTagger(new PersonIdent("Synthetic author", "author@example.test"))
-                    .setSigned(false)
-                    .call();
+            String base = commit(upstream, "Initial source");
+            upstream.checkout().setCreateBranch(true).setName("topic").call();
+            Files.writeString(upstreamPath.resolve("change.txt"), "The reviewed change.\n");
+            upstream.add().addFilepattern(".").call();
+            String head = commit(upstream, "The reviewed change");
             var worker = manager("worker");
             worker.ensureRepository(scope.key(), upstreamPath.toUri().toString(), null);
             var kind = RepositoryTreeContentSource.KIND;
             jdbc.update(
-                    "UPDATE issue SET head_ref_oid=? WHERE id=?",
+                    "UPDATE issue SET head_ref_oid=?, base_ref_oid=? WHERE id=?",
                     head,
+                    base,
                     scope.item().sourceId());
-            try (var capture = worker.readTreeSnapshot(scope.key(), head)) {
-                String capturedIdentity = GitRepositoryManager.treeIdentity(capture);
-                String captured = SourceFingerprint.git(kind, capturedIdentity);
-                assertThat(refs.current(scope.key().workspaceId(), scope.key().repositoryId()))
-                        .contains(SourceFingerprint.refs(Map.of(
-                                "refs/remotes/origin/main",
-                                head,
-                                "refs/tags/v1",
-                                Objects.requireNonNull(upstream.getRepository().resolve("refs/tags/v1"))
-                                        .name())));
+            try (var capture = worker.readTreeSnapshot(scope.key(), head, base)) {
+                String captured = SourceFingerprint.git(kind, GitRepositoryManager.treeIdentity(head, base));
                 var otherHost = manager("other-host");
                 assertThat(otherHost.isRepositoryCloned(scope.key())).isFalse();
-                assertThat(items.fingerprints(scope.item(), Set.of(kind), null)).containsEntry(kind, captured);
-                otherHost.ensureRepository(scope.key(), upstreamPath.toUri().toString(), null);
-                assertThat(items.fingerprints(scope.item(), Set.of(kind), null)).containsEntry(kind, captured);
-                upstream.tagDelete().setTags("v1").call();
+                assertThat(items.fingerprints(scope.item(), Set.of(kind), null))
+                        .as("the server reads what the capture read, from the pull request's commits alone")
+                        .containsEntry(kind, captured);
+
+                // Another developer pushes to another branch, and a release tag moves, while the practice waits.
+                upstream.checkout()
+                        .setCreateBranch(true)
+                        .setName("unrelated-work")
+                        .call();
+                Files.writeString(upstreamPath.resolve("unrelated.txt"), "Another developer's work.\n");
+                upstream.add().addFilepattern(".").call();
+                commit(upstream, "Unrelated work");
                 upstream.tag()
                         .setName("v1")
-                        .setMessage("Revised tag")
+                        .setMessage("A release")
                         .setTagger(new PersonIdent("Synthetic author", "author@example.test"))
                         .setSigned(false)
                         .call();
                 otherHost.ensureRepository(scope.key(), upstreamPath.toUri().toString(), null);
-                assertThat(items.fingerprints(scope.item(), Set.of(kind), null).get(kind))
-                        .isNotEqualTo(captured);
-                assertThat(GitRepositoryManager.treeIdentity(capture))
-                        .isEqualTo(capturedIdentity)
-                        .isNotEqualTo(head + ":"
-                                + refs.current(
-                                                scope.key().workspaceId(),
-                                                scope.key().repositoryId())
-                                        .orElseThrow());
+
+                assertThat(items.fingerprints(scope.item(), Set.of(kind), null))
+                        .as("nothing the practice can read changed")
+                        .containsEntry(kind, captured);
+                try (var checkout = Git.open(capture.stagingDir().toFile())) {
+                    assertThat(checkout.getRepository().getRefDatabase().getRefs())
+                            .extracting(Ref::getName)
+                            .containsExactly(Constants.HEAD);
+                }
             }
         }
+    }
+
+    private static String commit(Git git, String message) throws Exception {
+        return git.commit()
+                .setMessage(message)
+                .setAuthor("Synthetic author", "author@example.test")
+                .setCommitter("Synthetic author", "author@example.test")
+                .setSign(false)
+                .call()
+                .name();
     }
 
     private GitRepositoryManager manager(String role) {

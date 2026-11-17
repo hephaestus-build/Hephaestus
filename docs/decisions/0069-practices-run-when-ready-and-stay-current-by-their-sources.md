@@ -258,6 +258,10 @@ A newly readable source therefore makes that request measure again.
 - The server computes the current fingerprints from synced rows, with no sandbox. Each source-change domain event of the item reconciles its results.
 - **The safe direction must hold:** an equal fingerprint means equal captured bytes. A fingerprint that changes while the bytes stay equal only runs a practice again.
 
+> **Update — 2026-11-17:** a result now records only the sources that decide it: its declared sources, its applicability sources, the item's record, `diff` and `tree`.
+> A pull request's checkout holds the reviewed commit and the review base, with no branch or tag, so `tree` is the two commits.
+> [ADR 0086 § Update — 2026-11-17](0086-a-practice-review-stages-seals-then-composes-and-each-stage-records-why-it-stops.md#update--2026-11-17-freshness-reads-a-practices-own-sources) owns this rule and its residual risk.
+
 One predicate, `ResultFreshness.current(result, item)`, decides currentness at selection, claim, practice start, seal, egress and render.
 `ResultCurrentness` ends results by it, with the end reason `WORK_CHANGED`.
 The changed kinds are derivable from the fingerprints, so they need no column.

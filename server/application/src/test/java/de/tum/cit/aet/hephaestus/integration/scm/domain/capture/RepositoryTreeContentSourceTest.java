@@ -59,6 +59,9 @@ class RepositoryTreeContentSourceTest extends BaseUnitTest {
                 gitRepositoryManager, preparer, Mockito.mock(PersonDataCopyRecorder.class));
     }
 
+    /** The base that the capture fixtures give a pull request. */
+    private static final String BASE = "b".repeat(40);
+
     @TempDir
     Path root;
 
@@ -71,7 +74,7 @@ class RepositoryTreeContentSourceTest extends BaseUnitTest {
         when(gitRepositoryManager.isRepositoryCloned(new RepositoryKey(99L, 17L)))
                 .thenReturn(true);
         when(gitRepositoryManager.readTreeSnapshot(
-                        new RepositoryKey(99L, 17L), "0123456789012345678901234567890123456789"))
+                        new RepositoryKey(99L, 17L), "0123456789012345678901234567890123456789", BASE))
                 .thenReturn(new GitRepositoryManager.GitTreeSnapshot(
                         stagingDir,
                         "0123456789012345678901234567890123456789",
@@ -98,7 +101,10 @@ class RepositoryTreeContentSourceTest extends BaseUnitTest {
                                 1,
                                 null)));
         verify(gitRepositoryManager)
-                .readTreeSnapshot(new RepositoryKey(99L, 17L), "0123456789012345678901234567890123456789");
+                .readTreeSnapshot(new RepositoryKey(99L, 17L), "0123456789012345678901234567890123456789", BASE);
+        assertThat(contribution.immutableIdentities())
+                .as("the pull request's two commits, never the repository's other refs")
+                .containsEntry(RepositoryTreeContentSource.KIND, "0123456789012345678901234567890123456789:" + BASE);
     }
 
     @Test
@@ -109,7 +115,7 @@ class RepositoryTreeContentSourceTest extends BaseUnitTest {
         when(gitRepositoryManager.isRepositoryCloned(new RepositoryKey(99L, 17L)))
                 .thenReturn(true);
         when(gitRepositoryManager.readTreeSnapshot(
-                        new RepositoryKey(99L, 17L), "0123456789012345678901234567890123456789"))
+                        new RepositoryKey(99L, 17L), "0123456789012345678901234567890123456789", BASE))
                 .thenReturn(new GitRepositoryManager.GitTreeSnapshot(
                         stagingDir,
                         "0123456789012345678901234567890123456789",
@@ -151,7 +157,7 @@ class RepositoryTreeContentSourceTest extends BaseUnitTest {
         when(gitRepositoryManager.isRepositoryCloned(new RepositoryKey(99L, 17L)))
                 .thenReturn(true);
         when(gitRepositoryManager.readTreeSnapshot(
-                        new RepositoryKey(99L, 17L), "0123456789012345678901234567890123456789"))
+                        new RepositoryKey(99L, 17L), "0123456789012345678901234567890123456789", BASE))
                 .thenThrow(new GitRepositoryManager.GitOperationException("unreadable commit", new IOException()));
 
         assertThatThrownBy(() -> source.capture(job, Set.of(RepositoryTreeContentSource.KIND)))

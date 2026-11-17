@@ -173,10 +173,11 @@ Thus, a default deployment reviews pull requests, issues, and conversations with
 Privacy class does not gate collection — it records what treatment a source needs.
 
 Changing a source's meaning, selection scope, limit, mapping, identity policy, required capture quality, dependency, or normalization requires a new contract version.
-Contract `1.2.0` introduced a checkout with Git history reachable from the reviewed commit, plus mirrored branches and tags.
+Contract `1.2.0` introduced a checkout with Git history reachable from the reviewed commit.
+A pull request's checkout holds the reviewed commit, the review base and their history, and no branch or tag, so its captured-refs witness is empty.
 The source's governance and retention policies apply.
 The reviewed commit and tree identify the checkout.
-The folder index also digests the `repos/reviewed/.git/HEAD` and captured-refs witnesses, which pin the exported refs — those can change between two captures of the same commit.
+The folder index also digests the `repos/reviewed/.git/HEAD` and captured-refs witnesses.
 
 ## Capture state
 
