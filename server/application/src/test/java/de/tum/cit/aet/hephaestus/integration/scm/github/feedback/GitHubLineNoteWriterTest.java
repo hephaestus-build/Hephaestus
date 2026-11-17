@@ -49,7 +49,6 @@ class GitHubLineNoteWriterTest extends BaseUnitTest {
     private final List<String> writes = new ArrayList<>();
     private final List<Map<String, Object>> reviews = new ArrayList<>();
     private final List<Map<String, Object>> threads = new ArrayList<>();
-    private final List<Map<String, Object>> issueComments = new ArrayList<>();
     private boolean loseSubmit;
     private int failThread;
     private int createdThreads;
@@ -244,17 +243,14 @@ class GitHubLineNoteWriterTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldLeaveCopiesUnknownNotAbsentWhenAnEarlierReleasePostedThemApart() {
-        // v1.0.0-rc.1 posted the summary and a file note as comments, and the line note in a review without a body.
+    void shouldLeaveNotesUnknownNotAbsentWhenASubmittedReviewCarriesThemWithoutThePackageMarker() {
         writer.postPackage(TARGET, publication(), (ids, done) -> true);
         reviews.getFirst().put("body", "");
-        threads.removeIf(thread -> "FILE".equals(thread.get("subjectType")));
-        issueComments.add(Map.of("body", "Review summary.\n\n" + MARKER));
-        issueComments.add(Map.of("body", "File note.\n\n<!-- hephaestus-feedback-copy:file -->"));
         assertThat(writer.findPosted(TARGET, publication()))
-                .hasSize(3)
-                .noneMatch(CopyReceipt::acknowledged)
-                .allMatch(receipt -> Boolean.TRUE.equals(receipt.writeMayHaveStarted()));
+                .allMatch(receipt -> !receipt.acknowledged() && Boolean.TRUE.equals(receipt.writeMayHaveStarted()))
+                .extracting(CopyReceipt::copyId)
+                .containsExactlyInAnyOrderElementsOf(
+                        publication().notes().stream().map(LineNote::copyId).toList());
     }
 
     @Test
@@ -348,10 +344,6 @@ class GitHubLineNoteWriterTest extends BaseUnitTest {
                         "repository.pullRequest.reviews",
                         Map.of("nodes", reviews, "pageInfo", Map.of("hasNextPage", false)));
             }
-            case "GetPullRequestCommentsNewest" ->
-                fields.put(
-                        "repository.pullRequest.comments",
-                        Map.of("nodes", issueComments, "pageInfo", Map.of("hasPreviousPage", false)));
             case "GetPullRequestReviewThreads" ->
                 fields.put(
                         "repository.pullRequest.reviewThreads",

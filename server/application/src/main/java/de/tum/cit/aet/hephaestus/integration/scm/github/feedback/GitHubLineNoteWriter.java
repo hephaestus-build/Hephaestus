@@ -188,13 +188,11 @@ public class GitHubLineNoteWriter implements LineNoteWriter {
             if (review.submitted() != null)
                 return receipts(
                         publication, review.submitted(), indexCopies(workspace, pr, publication.notes(), commit));
-            // No submitted review holds the package. A copy is absent only if no comment anywhere carries its marker:
-            // an earlier release posted the summary as a comment and the notes in a review of their own. A marker
-            // that is there but did not match leaves the copy unknown, never absent. The threads of submitted reviews
-            // are their comments; a pending review is a private draft that the next attempt adopts.
+            // No submitted review holds the package. A copy is absent only if no submitted review carries its marker.
+            // A marker that is there but did not match leaves the copy unknown, never absent. The threads of submitted
+            // reviews are their comments; a pending review is a private draft that the next attempt adopts.
             if (!review.complete()) return null;
-            var seen = new HashSet<>(review.seen());
-            seen.addAll(commentMarkers(workspace, pr, markers(publication)));
+            var seen = review.seen();
             var unknown = new ArrayList<CopyReceipt>();
             var summary = publication.summary();
             if (summary != null && seen.contains(summary.writeMarker()))
@@ -334,39 +332,6 @@ public class GitHubLineNoteWriter implements LineNoteWriter {
         return Boolean.FALSE.equals(pageInfo.get("hasNextPage"));
     }
 
-    // The pull request's own comments: where an earlier release posted the summary and the notes about whole files.
-    private Set<String> commentMarkers(long workspace, PrCoordinates pr, Set<String> watched) {
-        var seen = new HashSet<String>();
-        String before = null;
-        for (int page = 0; page < MAX_THREAD_PAGES; page++) {
-            var variables = new HashMap<String, Object>();
-            variables.put("owner", pr.owner());
-            variables.put("name", pr.name());
-            variables.put("number", pr.number());
-            variables.put("last", THREADS_PAGE_SIZE);
-            if (before != null) variables.put("before", before);
-            Map<String, Object> connection = execute(workspace, "GetPullRequestCommentsNewest", variables)
-                    .field("repository.pullRequest.comments")
-                    .getValue();
-            if (connection == null
-                    || !(connection.get("nodes") instanceof List<?> nodes)
-                    || !(connection.get("pageInfo") instanceof Map<?, ?> info))
-                throw new FeedbackDeliveryException("GitHub pull request comments were not read completely");
-            for (var node : nodes) {
-                if (!(node instanceof Map<?, ?> comment) || !(comment.get("body") instanceof String body))
-                    throw new FeedbackDeliveryException("A GitHub pull request comment was not read completely");
-                watched.stream().filter(body::contains).forEach(seen::add);
-            }
-            if (Boolean.FALSE.equals(info.get("hasPreviousPage"))) return seen;
-            if (!Boolean.TRUE.equals(info.get("hasPreviousPage"))
-                    || !(info.get("startCursor") instanceof String next)
-                    || next.isBlank()
-                    || next.equals(before)) break;
-            before = next;
-        }
-        throw new FeedbackDeliveryException("GitHub pull request comment pagination did not reach its end");
-    }
-
     /** The marker that the package's review carries: its summary's, or its first note's when it has no summary. */
     private static String packageMarker(OnWorkPackage publication) {
         var summary = publication.summary();
@@ -377,12 +342,6 @@ public class GitHubLineNoteWriter implements LineNoteWriter {
 
     private static Set<String> noteMarkers(OnWorkPackage publication) {
         return publication.notes().stream().map(LineNote::writeMarker).collect(Collectors.toSet());
-    }
-
-    private static Set<String> markers(OnWorkPackage publication) {
-        var markers = new HashSet<>(noteMarkers(publication));
-        markers.add(packageMarker(publication));
-        return markers;
     }
 
     // Partial pagination cannot prove absence; retain mismatched copies as conflicts.
