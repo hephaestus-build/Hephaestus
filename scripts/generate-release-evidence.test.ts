@@ -151,7 +151,8 @@ case "$1" in create) printf '%s\\n' container ;; cp) : > "$3" ;; esac
 		await writeFile(
 			path.join(directory, "unzip"),
 			`#!/bin/sh
-mkdir -p "$5"
+# As unzip does, create only the last directory of the destination.
+mkdir "$5" 2>/dev/null || [ -d "$5" ] || { echo "checkdir: cannot create extraction directory: $5" >&2; exit 3; }
 [ "$NO_WEB_APP" = true ] || { mkdir -p "$5/web-app"; : > "$5/web-app/index.html"; }
 `,
 			{ mode: 0o755 },

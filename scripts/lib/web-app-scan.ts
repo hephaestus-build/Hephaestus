@@ -57,7 +57,11 @@ export async function extractWebApp(
 	} finally {
 		await run("docker", ["rm", container], { stdout: "ignore" });
 	}
-	await run("unzip", ["-q", "-o", jar, "-d", path.join(scratch, reference)]);
+	// The destination is the image reference, as `ghcr.io/<owner>/server@sha256:<digest>`, and unzip creates only its
+	// last directory.
+	const destination = path.join(scratch, reference);
+	await mkdir(destination, { recursive: true });
+	await run("unzip", ["-q", "-o", jar, "-d", destination]);
 	const artifact = webAppArtifact(reference);
 	return existsSync(path.join(scratch, artifact, "index.html")) ? artifact : undefined;
 }

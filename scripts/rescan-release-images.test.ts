@@ -100,7 +100,8 @@ fi
 	await writeFile(
 		path.join(bin, "unzip"),
 		`#!/bin/sh
-mkdir -p "$5"
+# As unzip does, create only the last directory of the destination.
+mkdir "$5" 2>/dev/null || [ -d "$5" ] || { echo "checkdir: cannot create extraction directory: $5" >&2; exit 3; }
 if [ "$WEB_APP" = 'true' ]; then mkdir -p "$5/web-app"; : > "$5/web-app/index.html"; fi
 `,
 		{ mode: 0o755 },
