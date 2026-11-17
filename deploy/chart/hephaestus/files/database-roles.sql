@@ -7,7 +7,7 @@
 --   psql -f database-quiet.sql -f database-roles.sql
 --
 -- hephaestus_owner owns the database, the schema objects and runs the migration. hephaestus_app reads and writes
--- the rows of the server and the worker, and owns nothing. Neither is a superuser, creates roles, replicates or has
+-- the rows of the server, and owns nothing. Neither is a superuser, creates roles, replicates or has
 -- BYPASSRLS. As the owner of its tables, hephaestus_owner is still not held to their policies unless a table forces
 -- them. The administrator may be a superuser, or a role with CREATEROLE and CREATEDB, as a managed PostgreSQL service
 -- gives. Each statement is idempotent, and the verifiers are set each time, so a changed password takes effect with

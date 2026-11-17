@@ -94,7 +94,7 @@ export async function ensureGeneratedValues({
 	const missingKeys = missing.filter(({ name }) => name.startsWith("HEPHAESTUS_SECURITY_"));
 	if (existingData && missingKeys.length > 0) {
 		throw new Error(
-			`The local database has data but no ${missingKeys.map(({ name }) => name).join(" or ")}. Set the key that sealed its values in server/.env, or run \`vp run dev:reset\` to start again with a new database. A database that \`vp run dev:server:e2e\` filled used the former default key of the e2e profile, so reset it.`,
+			`The local database has data but no ${missingKeys.map(({ name }) => name).join(" or ")}. Set the key that sealed its values in server/.env, or run \`vp run dev:reset\` to start again with a new database.`,
 		);
 	}
 	const written = missing.filter(({ newDatabaseOnly }) => !(existingData && newDatabaseOnly));

@@ -87,7 +87,7 @@ async function measure(
 			limitsMs: 30_000,
 			podsMs: 15_000,
 		},
-		limitComponents: ["server", "worker", "postgresql", "webhook"],
+		limitComponents: ["server", "postgresql"],
 	});
 	if (reviews > 0 && fixture !== null && cluster.target === "staging") {
 		try {
@@ -310,7 +310,7 @@ function judgeJvm(
 		(labels) => labels.area === "heap",
 	);
 	const gc = metricSeries(data.prometheus, "jvm_gc_pause_seconds_count");
-	const jvm = [...of(data, "server"), ...of(data, "worker")].map(([name, pod]) => {
+	const jvm = of(data, "server").map(([name, pod]) => {
 		const usage = data.usage[name];
 		const short = name.split("/")[1] ?? name;
 		const gcSeries = gc[short];
@@ -339,7 +339,7 @@ function judgeJvm(
 	evidence.check({
 		id: id("B8a"),
 		title:
-			"server/worker: anon + kernel peak ≤ 90 % of the limit; limit ≤ 2 × that peak; heap, GC and CPU p95",
+			"server: anon + kernel peak ≤ 90 % of the limit; limit ≤ 2 × that peak; heap, GC and CPU p95",
 		status: decide(
 			[
 				[jvm.length === 0 || overNinety.length > 0, "fail"],
@@ -382,25 +382,24 @@ function judgePostgres(evidence: Evidence, data: Reduced, id: (name: string) => 
 	});
 }
 
-/** B8d: webhook (JVM, ≤ 90 % of the limit), the controller and the image pre-pull DaemonSet (≤ request). */
+/** B8d: the controller and the image pre-pull DaemonSet (≤ request). */
 function judgeSmall(evidence: Evidence, data: Reduced, id: (name: string) => string): void {
 	const small = [
-		...of(data, "webhook").map(([name, pod]) => ({ name, rule: "jvm" as const, pod })),
-		...of(data, "agent-image").map(([name, pod]) => ({ name, rule: "request" as const, pod })),
+		...of(data, "agent-image").map(([name, pod]) => ({ name, pod })),
 		...Object.entries(data.pods)
 			.filter(([name]) => name.startsWith(`${CONTROLLER}/`))
-			.map(([name, pod]) => ({ name, rule: "request" as const, pod })),
+			.map(([name, pod]) => ({ name, pod })),
 	].map((entry) => {
 		const unread = data.usage[entry.name] === undefined;
 		const peak = data.usage[entry.name]?.peakCurrent ?? 0;
-		const bound = entry.rule === "jvm" ? 0.9 * entry.pod.limitMemory : entry.pod.requestMemory;
+		const bound = entry.pod.requestMemory;
 		return { ...entry, peak, bound, unread, ok: bound > 0 && peak <= bound };
 	});
 	const smallUnread = small.filter((entry) => entry.unread);
 	const smallFailed = small.length === 0 || small.some((entry) => !entry.unread && !entry.ok);
 	evidence.check({
 		id: id("B8d"),
-		title: "webhook ≤ 90 % of its limit; controller and pre-pull Pods ≤ their request",
+		title: "controller and pre-pull Pods ≤ their request",
 		status: decide(
 			[
 				[smallFailed, "fail"],

@@ -432,3 +432,16 @@ await test("a change that the CI cluster jobs exercise gets the cluster reminder
 		/no kubernetes/u,
 	);
 });
+
+await test("every file that a CI path filter names exists", () => {
+	const named = [
+		...readFileSync(new URL("../.github/workflows/cicd.yml", import.meta.url), "utf8").matchAll(
+			/^\s+- '(?<file>[^'*!{[]+)'\s*$/gmu,
+		),
+	].map((match) => match.groups?.file ?? "");
+	assert.ok(named.length > 0);
+	assert.deepEqual(
+		named.filter((file) => !existsSync(new URL(`../${file}`, import.meta.url))),
+		[],
+	);
+});

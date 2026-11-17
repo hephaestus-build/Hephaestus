@@ -20,7 +20,6 @@ const SCOPES = [
 	// Where the code lives.
 	"webapp",
 	"extension",
-	// Also the worker that runs the Heph host, and the webhook receiver.
 	"server",
 	"docs",
 
