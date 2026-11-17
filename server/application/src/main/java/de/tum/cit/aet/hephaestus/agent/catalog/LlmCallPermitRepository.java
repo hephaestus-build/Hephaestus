@@ -78,14 +78,14 @@ public interface LlmCallPermitRepository extends JpaRepository<LlmCallPermit, UU
      */
     @Query(value = """
             WITH expired AS (
-              UPDATE llm_call_permit SET state='CLOSED',closed_at=renewed_at+make_interval(secs => :staleSeconds),lapsed=TRUE
+              UPDATE llm_call_permit SET state='CLOSED',closed_at=clock_timestamp(),lapsed=TRUE
               WHERE pool_id=:poolId AND state='ACTIVE'
                 AND renewed_at < clock_timestamp()-make_interval(secs => :staleSeconds)
               RETURNING id
             )
             , deleted AS (
               DELETE FROM llm_call_permit WHERE pool_id=:poolId AND
-                ((state='CLOSED' AND closed_at < clock_timestamp()-interval '1 minute') OR
+                ((state='CLOSED' AND closed_at < clock_timestamp()-CASE WHEN lapsed THEN interval '3 minutes' ELSE interval '1 minute' END) OR
                  (state='WAITING' AND renewed_at < clock_timestamp()-make_interval(secs => :staleSeconds)))
             )
             SELECT count(*) FROM expired
@@ -252,17 +252,17 @@ public interface LlmCallPermitRepository extends JpaRepository<LlmCallPermit, UU
             @Param("staleSeconds") long staleSeconds);
 
     /**
-     * The slots that lapsed permits still hold, as a fraction that the caller rounds down: lapsed permits return their
-     * slots evenly over the minute after their leases ran out, the minute a closed call keeps its rate debit, so one
-     * lapsed permit returns at once and a crash's many return one after another. A server that dies mid-call lapses all its permits at once;
-     * granting them all again in one round would send the provider a burst of calls beside the cut ones it may still be
-     * answering.
+     * The slots that lapsed permits still hold, as a fraction that the caller rounds down. A lapsed permit returns its
+     * slot evenly over the three minutes after a server reclaimed it ({@link #prune}), so one lapsed permit returns at
+     * once and a crash's many return one after another. A server that dies mid-call lapses all its permits at once, and
+     * the provider can answer their cut calls for minutes: granting all their slots again in one round would add a
+     * burst beside them.
      */
     @Query(value = """
-                    SELECT COALESCE(sum(1 - EXTRACT(EPOCH FROM (clock_timestamp() - closed_at)) / 60), 0)
+                    SELECT COALESCE(sum(1 - EXTRACT(EPOCH FROM (clock_timestamp() - closed_at)) / 180), 0)
                       FROM llm_call_permit
                      WHERE pool_id = :poolId AND state = 'CLOSED' AND lapsed
-                       AND closed_at > clock_timestamp() - interval '1 minute'
+                       AND closed_at > clock_timestamp() - interval '3 minutes'
                     """, nativeQuery = true)
     double lapsedHold(@Param("poolId") long poolId);
 

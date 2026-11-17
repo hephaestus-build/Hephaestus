@@ -569,38 +569,38 @@ class LlmCallPoolLearningIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    void shouldGiveTheSlotsOfAServerThatDiedMidCallBackOverAMinuteAndKeepTheReserve() {
+    void shouldGiveTheSlotsOfAServerThatDiedMidCallBackOverThreeMinutesFromTheirReclaim() {
         long pool = ownPool();
         // A server holds the six background calls that a limit of eight allows, then dies: its grants stop renewing.
         for (int i = 0; i < 6; i++) admit(workerA, pool, AgentRunBand.BATCH, 1);
-        // Their leases ran out 25 seconds ago, so 6 × (1 − 25/60) = 3.5 slots are still held, and 3 rounded down.
+        // Their leases ran out 40 seconds before any server reclaims them, as when the replacement starts late.
         jdbc.update(
                 "UPDATE llm_call_permit SET renewed_at = clock_timestamp() - make_interval(secs => ?)"
                         + " WHERE pool_id = ? AND state = 'ACTIVE'",
-                LlmCallPermitsTestFixtures.PROPERTIES.permitLease().toSeconds() + 25,
+                LlmCallPermitsTestFixtures.PROPERTIES.permitLease().toSeconds() + 40,
                 pool);
 
-        // The replacement server gets half the slots back now, not all six in one round.
+        // The first round reclaims them, and they still hold 6 × (1 − t/180) slots: 5 for the first 30 seconds. So the
+        // replacement gets one of the six background slots back now, not all six in one round.
         List<LlmCallPermits.Permit> calls = new ArrayList<>();
         for (int i = 0; i < 6; i++) {
             var call = briefly(workerB, pool, AgentRunBand.BATCH, 1);
             if (call != null) calls.add(call);
         }
-        assertThat(calls).hasSize(3);
+        assertThat(calls).hasSize(1);
         assertThat(Objects.requireNonNull(jdbc.queryForObject(
                         "SELECT count(*) FROM llm_call_permit WHERE pool_id = ? AND lapsed", Long.class, pool)))
                 .isEqualTo(6);
-        // A conversation's reserve does not wait for the lapsed slots.
+        // A conversation does not wait for the lapsed slots.
         assertThat(probe(workerB, pool, AgentRunBand.INTERACTIVE, 2, Duration.ofMillis(200)))
                 .isNotNull();
 
-        // A minute after the lapse, every slot is back, and the server's death cut no limit.
+        // Three minutes after the reclaim, every slot is back.
         jdbc.update(
-                "UPDATE llm_call_permit SET closed_at = closed_at - interval '36 seconds' WHERE pool_id = ? AND lapsed",
+                "UPDATE llm_call_permit SET closed_at = closed_at - interval '181 seconds' WHERE pool_id = ? AND lapsed",
                 pool);
-        for (int i = 0; i < 3; i++) calls.add(Objects.requireNonNull(briefly(workerB, pool, AgentRunBand.BATCH, 1)));
+        for (int i = 0; i < 5; i++) calls.add(Objects.requireNonNull(briefly(workerB, pool, AgentRunBand.BATCH, 1)));
         assertThat(rows.countNotInteractive(pool)).isEqualTo(6);
-        assertThat(limit(pool)).isEqualTo(8);
 
         calls.forEach(LlmCallPermits.Permit::close);
     }

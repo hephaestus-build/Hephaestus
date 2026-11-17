@@ -75,7 +75,8 @@ public class LlmCallPermit {
 
     /**
      * Whether the lease ran out before the server released the permit, as when the server died mid-call. Its call may
-     * still run at the provider, so the slot comes back over the next minute ({@link LlmCallPermitRepository#lapsedHold}).
+     * still run at the provider, so the slot comes back over the three minutes after a server reclaims it
+     * ({@link LlmCallPermitRepository#lapsedHold}).
      */
     @ColumnDefault("false")
     @Column(name = "lapsed", nullable = false)

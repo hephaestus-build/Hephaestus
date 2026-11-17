@@ -406,9 +406,9 @@ public class LlmCallPermits {
     private LlmCallPermitRepository.Room room(long poolId, LlmCallPoolRepository.Admission pool) {
         int limit = limit(pool);
         int reserve = LlmCallLimit.reserve(limit);
-        long held = (long) Math.floor(rows.lapsedHold(poolId));
-        long active = rows.countActive(poolId) + held;
-        long notInteractive = rows.countNotInteractive(poolId) + held;
+        long lapsedSlots = (long) Math.floor(rows.lapsedHold(poolId));
+        long active = rows.countActive(poolId) + lapsedSlots;
+        long notInteractive = rows.countNotInteractive(poolId) + lapsedSlots;
         var used = rows.rates(poolId);
         long bound = tokenBound(pool);
         Integer perMinute = pool.getRequestsPerMinute();
