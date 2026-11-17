@@ -204,7 +204,7 @@ function Request({
 			{refusal === undefined && passkey !== undefined && (
 				<PasskeyStep passkey={passkey} pending={pending === "passkey"} />
 			)}
-			<div className="flex gap-2">
+			<div className="flex flex-wrap gap-2">
 				{passkey?.status === "add" && (
 					<Button onClick={passkey.onAdd} disabled={pending !== undefined}>
 						Add a passkey
@@ -239,7 +239,7 @@ function PasskeyStep({ passkey, pending }: { passkey: McpConsentPasskey; pending
 					{passkey.status === "add"
 						? "Add a passkey in your settings first. Then start the client’s sign-in again and confirm with it."
 						: "Admin changes here need your passkey, so confirm with it to allow this client."}{" "}
-					The client’s access ends one hour after you confirm. Then it asks you again.
+					The client’s access ends at most one hour after you confirm. Then it asks you again.
 				</AlertDescription>
 			</Alert>
 			{passkey.status === "unsupported" && (

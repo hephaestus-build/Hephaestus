@@ -225,6 +225,38 @@ class McpPasskeyConsentIntegrationTest extends RealAuthIntegrationTest {
                 .expectBody(Void.class);
     }
 
+    /** The console reports the access end that approval enforced, not a later one. */
+    @Test
+    void shouldReportTheSessionDeadlineWhenTheApprovingSessionEndsBeforeTheBound() {
+        Instant now = Instant.now().truncatedTo(ChronoUnit.SECONDS);
+        Instant sessionEnd = now.plus(Duration.ofMinutes(20));
+        String shortSession = jwtIssuer
+                .issue(accountId, TokenConstraints.browserSession(sessionEnd, now, now, CREDENTIAL), null)
+                .value();
+        UUID grant = grantOf(connect(shortSession));
+
+        String listed = webTestClient
+                .get()
+                .uri("/workspaces/{slug}/mcp-grants", workspace.getWorkspaceSlug())
+                .header(HttpHeaders.COOKIE, cookieName + "=" + passkeyCookie(Instant.now()))
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody(String.class)
+                .returnResult()
+                .getResponseBody();
+        JsonNode row = null;
+        for (JsonNode candidate : JSON.readTree(Objects.requireNonNull(listed))) {
+            if (candidate.path("id").asString().equals(grant.toString())) {
+                row = candidate;
+            }
+        }
+        assertThat(row).isNotNull();
+        assertThat(Instant.parse(
+                        Objects.requireNonNull(row).path("passkeyBackedUntil").asString()))
+                .isEqualTo(sessionEnd);
+    }
+
     @Test
     void shouldRefuseConsentWhileThePasskeyRecoveryIsPending() {
         var account = accountRepository.findById(accountId).orElseThrow();

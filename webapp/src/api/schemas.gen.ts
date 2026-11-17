@@ -6594,7 +6594,7 @@ export const McpConsentRequestSchema = {
 		passkeyRequired: {
 			type: "boolean",
 			description:
-				"The account confirms with a passkey before it approves; the grant then ends one hour after that confirmation",
+				"The account confirms with a passkey before it approves; the client's access then lasts at most one hour after that confirmation, less if the admin proof window or the approving session ends sooner",
 		},
 		redirectHost: {
 			type: "string",

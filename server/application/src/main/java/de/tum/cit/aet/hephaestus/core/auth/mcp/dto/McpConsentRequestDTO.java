@@ -30,8 +30,9 @@ public record McpConsentRequestDTO(
 
         @Schema(
                 requiredMode = Schema.RequiredMode.REQUIRED,
-                description = "The account confirms with a passkey before it approves; the grant then ends one hour"
-                        + " after that confirmation")
+                description = "The account confirms with a passkey before it approves; the client's access then"
+                        + " lasts at most one hour after that confirmation, less if the admin proof window or the"
+                        + " approving session ends sooner")
         boolean passkeyRequired) {
     public McpConsentRequestDTO {
         scopes = List.copyOf(scopes);

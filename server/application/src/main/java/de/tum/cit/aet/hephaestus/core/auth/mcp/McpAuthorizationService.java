@@ -433,17 +433,15 @@ public class McpAuthorizationService implements McpClientGrants {
     public List<Grant> activeGrants(Long workspaceId) {
         return grants.findActiveByWorkspace(workspaceId).stream()
                 .map(grant -> new Grant(
-                        grant.getId(),
-                        URI.create(grant.getClientId()).getHost(),
-                        grant.getClientName(),
-                        grant.getAccountId(),
-                        McpScope.parse(grant.getScopes()).stream()
+                        grant.id(),
+                        URI.create(grant.clientId()).getHost(),
+                        grant.clientName(),
+                        grant.accountId(),
+                        McpScope.parse(grant.scopes()).stream()
                                 .map(McpScope::value)
                                 .toList(),
-                        grant.getApprovedAt(),
-                        grant.getPasskeyVerifiedAt() == null
-                                ? null
-                                : grant.getPasskeyVerifiedAt().plus(passkeys.mcpPasskeyBound())))
+                        grant.approvedAt(),
+                        passkeyBackedUntil(grant)))
                 .toList();
     }
 
@@ -457,6 +455,20 @@ public class McpAuthorizationService implements McpClientGrants {
         grants.findById(grantId)
                 .ifPresent(grant -> audit(AuthEvent.EventType.MCP_CLIENT_REVOKED, grant, actingAccountId));
         return true;
+    }
+
+    /**
+     * When a passkey-backed grant's access ends: the earlier of its passkey bound and its client session's deadline,
+     * which approval may have set earlier still. Null for a grant without passkey backing.
+     */
+    private @Nullable Instant passkeyBackedUntil(McpClientGrantRepository.ActiveGrant grant) {
+        Instant verifiedAt = grant.passkeyVerifiedAt();
+        if (verifiedAt == null) {
+            return null;
+        }
+        Instant bound = verifiedAt.plus(passkeys.mcpPasskeyBound());
+        Instant session = grant.sessionExpiresAt();
+        return session != null && session.isBefore(bound) ? session : bound;
     }
 
     private boolean isOpenFor(McpClientGrant grant, Long accountId) {

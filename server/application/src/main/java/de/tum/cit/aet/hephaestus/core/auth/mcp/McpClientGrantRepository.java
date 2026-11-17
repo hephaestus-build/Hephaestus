@@ -6,6 +6,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
@@ -28,12 +29,26 @@ public interface McpClientGrantRepository extends JpaRepository<McpClientGrant, 
     @WorkspaceAgnostic("A token names its session, and the grant behind it decides the workspace")
     Optional<McpClientGrant> findActiveBySession(@Param("sessionId") UUID sessionId);
 
+    /** An active grant as the workspace console lists it, with the deadline of the client session it holds. */
+    record ActiveGrant(
+            UUID id,
+            String clientId,
+            String clientName,
+            Long accountId,
+            String scopes,
+            @Nullable Instant approvedAt,
+            @Nullable Instant passkeyVerifiedAt,
+            @Nullable Instant sessionExpiresAt) {}
+
     @Query("""
-        SELECT g FROM McpClientGrant g
+        SELECT new de.tum.cit.aet.hephaestus.core.auth.mcp.McpClientGrantRepository$ActiveGrant(
+               g.id, g.clientId, g.clientName, g.accountId, g.scopes, g.approvedAt, g.passkeyVerifiedAt,
+               s.sessionExpiresAt)
+          FROM McpClientGrant g LEFT JOIN ClientSession s ON s.id = g.clientSessionId
          WHERE g.workspaceId = :workspaceId AND g.status = 'ACTIVE'
          ORDER BY g.approvedAt DESC
         """)
-    List<McpClientGrant> findActiveByWorkspace(@Param("workspaceId") Long workspaceId);
+    List<ActiveGrant> findActiveByWorkspace(@Param("workspaceId") Long workspaceId);
 
     @Query("SELECT g FROM McpClientGrant g WHERE g.workspaceId = :workspaceId AND g.id = :id")
     Optional<McpClientGrant> findInWorkspace(@Param("workspaceId") Long workspaceId, @Param("id") UUID id);

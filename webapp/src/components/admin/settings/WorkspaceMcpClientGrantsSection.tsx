@@ -97,9 +97,15 @@ export function WorkspaceMcpClientGrantsSection({
 									<ItemDescription>
 										Calls itself {grant.clientName}. Allowed by {grant.approvedBy}
 										{grant.approvedAt === undefined ? "" : ` on ${formatDate(grant.approvedAt)}`}.
-										{grant.passkeyBackedUntil !== undefined &&
-											` Confirmed with a passkey. Its access ${grant.passkeyBackedUntil.getTime() > now ? "ends" : "ended"} ${formatDateTime(grant.passkeyBackedUntil)}.`}
 									</ItemDescription>
+									{/* Outside the clamped description, so a long name never hides when the access ends. */}
+									{grant.passkeyBackedUntil !== undefined && (
+										<p className="text-sm text-muted-foreground">
+											Confirmed with a passkey. Its access{" "}
+											{grant.passkeyBackedUntil.getTime() > now ? "ends" : "ended"}{" "}
+											{formatDateTime(grant.passkeyBackedUntil)}.
+										</p>
+									)}
 								</ItemContent>
 								<ItemActions>
 									<Button

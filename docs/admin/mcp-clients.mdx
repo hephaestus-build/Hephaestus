@@ -63,8 +63,9 @@ If the [admin passkey policy](./passkeys.mdx) requires a passkey for your admin 
    If your account has no passkey yet, select **Add a passkey** and add one in your settings. Adding a passkey ends your other sessions and pending client requests, so start the client's sign-in again afterwards.
 3. Hephaestus approves the client only after it accepts your passkey.
 
-A client that you approve with a passkey keeps its access for **one hour** after your passkey confirmation.
+A client that you approve with a passkey keeps its access for **at most one hour** after your passkey confirmation.
 If `hephaestus.auth.passkeys.admin-max-age` is shorter than one hour, that shorter time applies instead.
+The access also ends when the web session that you approved from ends, if that comes first.
 Then its session ends, and the client asks you to approve it again with your passkey.
 The grant records when you confirmed and which passkey you used.
 **Workspace settings → Connected MCP clients** shows the time at which the access of such a client ends, or ended.
