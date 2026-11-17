@@ -63,6 +63,10 @@ hephaestus:
     # The workspace MCP endpoint is on in the shared test context, so its tests reuse the cached context.
     mcp:
         enabled: true
+    # The web app fixture in src/test/resources/web-app shadows a built web app on the classpath, so every test
+    # serves the same page. The contact lets the shared context publish security.txt.
+    web-app:
+        security-contact: mailto:security@hephaestus.build
     # Tests run background work by calling it, so no scheduler or claimer races them (ConditionalOnBackgroundWork).
     background-work:
         enabled: false

@@ -157,7 +157,7 @@ await it("a route redirect cannot hide behind an import name or expression body"
 });
 
 const hostGuard =
-	"server/application/src/main/java/de/tum/cit/aet/hephaestus/workspace/WorkspaceHostGuard.java";
+	"server/application/src/main/java/de/tum/cit/aet/hephaestus/workspace/WorkspaceHostGuardConfiguration.java";
 await it("a second permanent redirect in the workspace host guard cannot use its exemption", () => {
 	const original = readFileSync(path.join(import.meta.dirname, "../", hostGuard), "utf8");
 	assert.deepEqual(findings(hostGuard, original), []);
