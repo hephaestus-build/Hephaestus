@@ -4,7 +4,7 @@ This document helps you upgrade between versions of Hephaestus. For what a versi
 (public contract, upgrade guarantee, support statement), see the
 [Compatibility Policy](https://docs.hephaestus.build/admin/compatibility-policy).
 
-> ⚠️ **Pre-1.0 Notice**: We are in active development. Minor versions (0.x.0) may contain breaking changes. Always test in staging before production.
+> ⚠️ **Pre-1.0 notice**: Until 1.0.0, each release candidate (`1.0.0-rc.N`) can contain breaking changes. Read its entry below, and test each upgrade in staging before production. The [Compatibility Policy](https://docs.hephaestus.build/admin/compatibility-policy) says what each release promises.
 
 ## Quick Reference
 
@@ -18,7 +18,7 @@ This document helps you upgrade between versions of Hephaestus. For what a versi
 
 For the running version, follow the
 [runtime identity handoff](https://docs.hephaestus.build/admin/release-image-lock#runtime-identity-handoff).
-It explains how to check each runtime role against the signed release lock.
+It explains how to check the running images against the signed release lock.
 The administration overview shows the server's identity.
 
 ```bash
@@ -32,22 +32,11 @@ header, linked to its release notes.
 
 ---
 
-## Pre-1.0 Development (Current)
+## Before 1.0.0
 
-During pre-1.0, we follow [Semantic Versioning 0.x conventions](https://semver.org/#spec-item-4):
-
-> Major version zero (0.y.z) is for initial development. Anything MAY change at any time.
-
-### What This Means
-
-| Version Bump | May Contain |
-|--------------|-------------|
-| `0.x.0` → `0.y.0` | Breaking changes |
-| `0.x.y` → `0.x.z` | Bug and security fixes |
-
-### Upgrade Checklist
-
-Before upgrading to any new `0.x.0` version:
+Release candidates of 1.0.0 can contain breaking changes.
+An entry marked 🔴 needs operator action and says whether every role must stop first.
+Before you upgrade to any release:
 
 1. ✅ Read the [release notes](https://github.com/hephaestus-build/Hephaestus/releases)
 2. ✅ Check this migration guide for breaking changes
@@ -62,6 +51,43 @@ Entries exist only for releases that need operator action. Everything else is in
 [release notes](https://github.com/hephaestus-build/Hephaestus/releases).
 
 ### Next release
+
+### v1.0.0-rc.10
+
+#### 🔴 Turn off the OpenAPI description on a production server
+
+- **When:** before the window
+- **Action:** On a production server, remove `SPRINGDOC_API_DOCS_ENABLED` if it is not `false`.
+
+A production server now refuses to start unless `SPRINGDOC_API_DOCS_ENABLED` is `false`. Configuration readiness reports the fact `api.description`.
+
+The setting is off by default, and the chart does not set it. Swagger UI needs the OpenAPI description, so it is off with it. The [OpenAPI specification](https://github.com/hephaestus-build/Hephaestus/blob/main/server/openapi.yaml) in the repository describes the API.
+
+This change has no schema change, so old and new servers can run together.
+
+#### 🔴 Add the OAuth state secret and remove two retired settings
+
+- **When:** before the window
+- **Action:** Before the upgrade, add `HEPHAESTUS_INTEGRATION_OAUTH_STATE_SECRET` to the release Secret: run `hephaestus-keys.sh` from the target release, or set it to the output of `openssl rand -hex 32`. Replace `AGENT_MAX_RETRIES` and `HEPHAESTUS_MENTOR_CONVERSATION_RETENTION` with their new names.
+
+The server signs the state of each integration connection in progress with `HEPHAESTUS_INTEGRATION_OAUTH_STATE_SECRET`.
+It no longer derives that key from `WEBHOOK_SECRET`.
+The chart reads it as a required key of the release Secret, so a server pod without it does not start.
+Outside the chart, a production server without it refuses to start.
+Configuration readiness reports a missing key.
+`hephaestus-keys.sh` adds the key to the release Secret and keeps every other value.
+A connection that an admin started before the upgrade fails. The admin connects again.
+
+The server no longer reads `AGENT_MAX_RETRIES`. Set `HEPHAESTUS_AGENT_CAPACITY_REVIEW_RETRIES` if you changed the count.
+
+**If you still set `HEPHAESTUS_MENTOR_CONVERSATION_RETENTION` (`hephaestus.mentor.conversation-retention`), move its window to `HEPHAESTUS_FEEDBACK_RETENTION` before the upgrade.**
+The server no longer checks for the old setting at startup.
+Without the move, it erases conversations irreversibly at the default retention of feedback.
+
+| Where | Before | After |
+| --- | --- | --- |
+| Secret | `WEBHOOK_SECRET` also signed the state of integration connections | `HEPHAESTUS_INTEGRATION_OAUTH_STATE_SECRET` |
+| Server settings | `hephaestus.mentor.conversation-retention`, `HEPHAESTUS_MENTOR_CONVERSATION_RETENTION` | `hephaestus.feedback-retention`, `HEPHAESTUS_FEEDBACK_RETENTION` |
 
 ### v1.0.0-rc.9
 
@@ -4477,16 +4503,6 @@ HEPHAESTUS_MENTOR_AGENT_PULL_POLICY=IF_NOT_PRESENT
 | Database cutover | Follow the target release's migration entry | Complete any required procedure before starting the new runtime roles |
 | Environment variables | Check release notes | New config may be required |
 | Helm chart | Check the chart values of the target release | Values may be added or renamed |
-
----
-
-## Stability Roadmap
-
-### v1.0.0 (Future)
-
-The [Compatibility Policy](https://docs.hephaestus.build/admin/compatibility-policy) applies now,
-including its pre-1.0 exception. Its stable compatibility and upgrade guarantees begin at v1.0.0.
-Before then, minor releases can contain breaking changes.
 
 ---
 
