@@ -14,9 +14,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 /**
- * The live stream of the developer's Hephaestus conversation. Hidden from the OpenAPI spec because a stream has no response
- * schema there; its events carry {@code Conversation}, {@code ConversationTurn} and {@code ConversationEntry}, which the
- * spec documents through the conversation routes. See {@link ConversationLiveHub}.
+ * The live stream of the developer's Hephaestus conversation. Hidden from the OpenAPI spec: its events carry
+ * {@code Conversation}, {@code ConversationTurn} and {@code ConversationEntry}, which the spec documents through the
+ * conversation routes. See {@link ConversationLiveHub}.
  */
 @ConditionalOnServerRole
 @WorkspaceScopedController
