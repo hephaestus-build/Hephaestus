@@ -10,7 +10,6 @@ import {
 	getAllTeamsOptions,
 	getOwnMembershipQueryKey,
 	getUsersWithTeamsQueryKey,
-	listMembershipsOptions,
 	listMembershipsQueryKey,
 	removeMemberMutation,
 	setMemberHiddenMutation,
@@ -44,59 +43,36 @@ import { keepSameSubject } from "@/runtime/tanstack-query/keep-same-subject";
 import { prefetchPageRead } from "@/runtime/tanstack-query/prefetch-page-read";
 import { useQueryReadRefusal } from "@/runtime/tanstack-query/use-query-read-refusal";
 
-const membersSearchSchema = z.object({
-	q: z.coerce.string().max(200).optional().catch(undefined),
-	team: z.coerce.string().optional().catch(undefined),
-	sort: z.enum(["name", "username"]).optional().catch(undefined),
-	desc: z
-		.union([z.boolean(), z.enum(["true", "false"]).transform((value) => value === "true")])
-		.optional()
-		.catch(undefined),
-	page: z.coerce.number().int().min(0).optional().catch(undefined),
-	size: z.coerce
-		.number()
-		.refine((value) => [10, 20, 30, 40, 50].includes(value))
-		.optional()
-		.catch(undefined),
-});
-
-/** The table's view from the address: a value the address leaves out is its default. */
-function viewOf(search: z.infer<typeof membersSearchSchema>): WorkspaceMembersTableView {
-	return {
-		q: search.q ?? "",
-		team: search.team ?? "all",
-		sort: search.sort ?? "name",
-		desc: search.desc ?? false,
-		page: search.page ?? 0,
-		size: search.size ?? 10,
-	};
-}
-
-/** The page's member read, shared by its loader and its component so both hit one cache entry. */
-function membersRead(workspaceSlug: string, view: WorkspaceMembersTableView) {
-	return listMembershipsOptions({
-		path: { workspaceSlug },
-		query: {
-			q: hasText(view.q.trim()) ? view.q.trim() : undefined,
-			team: view.team === "all" ? undefined : view.team,
-			page: view.page,
-			size: view.size,
-			sort: [`${view.sort},${view.desc ? "desc" : "asc"}`],
-		},
-	});
-}
+import { membersRead, viewOf } from "./-members-read";
 
 export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/admin/members")({
 	head: workspaceAdminHead("Members"),
 	codeSplitGroupings: [["loader"], ["component"], ["errorComponent"], ["notFoundComponent"]],
-	validateSearch: membersSearchSchema,
+	validateSearch: z.object({
+		q: z.coerce.string().max(200).optional().catch(undefined),
+		team: z.coerce.string().optional().catch(undefined),
+		sort: z.enum(["name", "username"]).optional().catch(undefined),
+		desc: z
+			.union([z.boolean(), z.enum(["true", "false"]).transform((value) => value === "true")])
+			.optional()
+			.catch(undefined),
+		page: z.coerce.number().int().min(0).optional().catch(undefined),
+		size: z.coerce
+			.number()
+			.refine((value) => [10, 20, 30, 40, 50].includes(value))
+			.optional()
+			.catch(undefined),
+	}),
+	// The loader reads the validated search from here: parsing the address in the split loader would
+	// pull the search schema out of the entry chunk into a chunk of its own.
+	beforeLoad: ({ search }) => ({ membersSearch: search }),
 	// No loader deps: a search, sort or page change is a search change on this page, which reads the
 	// new rows itself and keeps the current ones on screen meanwhile.
-	loader: ({ context, params, location }) => {
+	loader: ({ context, params }) => {
 		if (!context.workspace && !context.administrationWorkspace) {
 			return;
 		}
-		const view = viewOf(membersSearchSchema.parse(location.search));
+		const view = viewOf(context.membersSearch);
 		prefetchPageRead(context.queryClient, membersRead(params.workspaceSlug, view));
 		prefetchPageRead(
 			context.queryClient,

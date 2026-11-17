@@ -2,10 +2,6 @@ import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Navigate, stripSearchParams } from "@tanstack/react-router";
 import { z } from "zod";
 
-import {
-	getPracticeWorkspaceOverviewOptions,
-	getPracticeWorkspaceTilesOptions,
-} from "@/api/@tanstack/react-query.gen";
 import type {
 	PracticesAcrossWorkspace,
 	PracticesAcrossWorkspaceTiles,
@@ -28,7 +24,6 @@ import {
 import { usePracticeFocusSwitch } from "@/components/practice-focus/use-practice-focus-switch";
 import {
 	ACROSS_THE_WORKSPACE,
-	ACROSS_WORKSPACE_STALE_MS,
 	DEFAULT_WINDOW,
 	WINDOW_VALUES,
 } from "@/components/practices-across-the-workspace/across-workspace-copy";
@@ -42,6 +37,8 @@ import { pageHead } from "@/lib/page-title";
 import { keepSameSubject } from "@/runtime/tanstack-query/keep-same-subject";
 import { prefetchPageRead } from "@/runtime/tanstack-query/prefetch-page-read";
 
+import { overviewRead, tilesRead } from "./-practices-across-the-workspace-reads";
+
 /** The reader's own group and practice levels live in their Practice profile, which this level links to. */
 const LEVEL_KINDS = ["practice-group"] as const;
 
@@ -53,16 +50,6 @@ const searchSchema = z
 	})
 	.extend(detailStackSchema(LEVEL_KINDS).shape);
 
-/** The page's two reads, shared by its loader and its component so both hit one cache entry each. */
-const overviewRead = (workspaceSlug: string) => ({
-	...getPracticeWorkspaceOverviewOptions({ path: { workspaceSlug } }),
-	staleTime: ACROSS_WORKSPACE_STALE_MS,
-});
-const tilesRead = (workspaceSlug: string, window: (typeof WINDOW_VALUES)[number]) => ({
-	...getPracticeWorkspaceTilesOptions({ path: { workspaceSlug }, query: { window } }),
-	staleTime: ACROSS_WORKSPACE_STALE_MS,
-});
-
 export const Route = createFileRoute(
 	"/_authenticated/w/$workspaceSlug/practices-across-the-workspace",
 )({
@@ -73,15 +60,17 @@ export const Route = createFileRoute(
 	search: {
 		middlewares: [stripSearchParams({ window: DEFAULT_WINDOW })],
 	},
+	// The loader reads the validated window from here: parsing the address in the split loader would
+	// pull the search schema and the page's copy out of the entry chunk into chunks of their own.
+	beforeLoad: ({ search }) => ({ figuresWindow: search.window }),
 	// No loader deps: a window change is a search change on this page, which reads the other window
 	// itself and shows the current figures marked stale meanwhile.
-	loader: ({ context, params, location }) => {
+	loader: ({ context, params }) => {
 		if (context.workspace?.practicesEnabled !== true) {
 			return;
 		}
-		const { window } = searchSchema.pick({ window: true }).parse(location.search);
 		prefetchPageRead(context.queryClient, overviewRead(params.workspaceSlug));
-		prefetchPageRead(context.queryClient, tilesRead(params.workspaceSlug, window));
+		prefetchPageRead(context.queryClient, tilesRead(params.workspaceSlug, context.figuresWindow));
 	},
 });
 
