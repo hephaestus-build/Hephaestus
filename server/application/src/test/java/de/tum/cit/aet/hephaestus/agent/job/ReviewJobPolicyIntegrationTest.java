@@ -921,7 +921,7 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
         runningReview.setConfigSnapshot(job.getConfigSnapshot());
         runningReview.setStartedAt(Instant.now());
         runningReview = jobs.saveAndFlush(RuntimeJobTestData.persistParent(jdbc, runningReview));
-        var busyCaller = new LlmCallPermits.Caller(busyWorkspace.getId(), runningReview.getId(), 0, null);
+        var busyCaller = new LlmCallPermits.Caller(busyWorkspace.getId(), runningReview.getId(), 0, null, null);
         long poolId = pool.getId();
         var busy = Objects.requireNonNull(capacity.acquire(
                 poolId,
