@@ -2374,6 +2374,43 @@ export const zCatalogOrigin = z.object({
 
 export const zPracticeDeliveryStatus = z.enum(["ACTIVE", "PAUSED"]);
 
+/**
+ * The files of one practice folder, by path relative to the folder
+ */
+export const zPracticeFileCheckRequest = z.object({
+	files: z.record(z.string(), z.string()),
+});
+
+/**
+ * One reason why a practice folder cannot become a practice
+ */
+export const zPracticeFileProblem = z.object({
+	code: z.string().optional(),
+	column: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	file: z.string().optional(),
+	line: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	message: z.string().optional(),
+});
+
+/**
+ * The result of checking a practice folder. Nothing was saved, and no model was called.
+ */
+export const zPracticeFileCheck = z.object({
+	groupSlug: z.string().optional(),
+	kind: z.string().optional(),
+	name: z.string().optional(),
+	problems: z.array(zPracticeFileProblem).optional(),
+	valid: z.boolean(),
+});
+
 export const zPracticeGroup = z.object({
 	catalogOrigin: zCatalogOrigin,
 	color: z.string().nullable(),

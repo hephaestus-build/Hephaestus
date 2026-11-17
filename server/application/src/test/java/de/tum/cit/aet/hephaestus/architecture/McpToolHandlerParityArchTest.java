@@ -90,6 +90,8 @@ class McpToolHandlerParityArchTest extends HephaestusArchitectureTest {
     /**
      * A tool that stands for a mutation carries the same audit decision as its handler and needs {@code practices:write};
      * a tool that stands for a read carries neither (ADR 0110 decision 16, the {@code AuditByDefaultArchTest} rule for tools).
+     * A POST handler that only takes a body and saves nothing is a read when its tool says so with {@code savesNothing};
+     * the handler is then {@code @AuditExempt}, and the tool repeats that annotation.
      */
     @Test
     void everyWriteToolCarriesTheAuditDecisionOfTheHandlerItStandsFor() throws Exception {
@@ -107,9 +109,17 @@ class McpToolHandlerParityArchTest extends HephaestusArchitectureTest {
                     .findFirst()
                     .orElseThrow();
             Method call = type.getMethod("call", Map.class);
-            boolean mutation = handler.isAnnotationPresent(Audited.class)
-                    || handler.isAnnotationPresent(AuditExempt.class)
-                    || MUTATIONS.stream().anyMatch(mapping -> AnnotatedElementUtils.hasAnnotation(handler, mapping));
+            if (target.savesNothing()
+                    && (handler.isAnnotationPresent(Audited.class)
+                            || !handler.isAnnotationPresent(AuditExempt.class))) {
+                problems.add(type.getSimpleName() + " says that its handler saves nothing, but the handler is not"
+                        + " @AuditExempt");
+            }
+            boolean mutation = !target.savesNothing()
+                    && (handler.isAnnotationPresent(Audited.class)
+                            || handler.isAnnotationPresent(AuditExempt.class)
+                            || MUTATIONS.stream()
+                                    .anyMatch(mapping -> AnnotatedElementUtils.hasAnnotation(handler, mapping)));
             boolean writes = Arrays.stream(type.getDeclaredMethods())
                     .anyMatch(method -> method.getName().equals("writes"));
             if (mutation != writes) {

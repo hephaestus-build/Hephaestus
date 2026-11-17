@@ -127,6 +127,7 @@ const meta = {
 		onReorderGroups: fn(),
 		onSetGroupVisual: fn(),
 		onDeletePractice: fn(),
+		onDownloadPractice: fn(),
 		onMovePractice: fn(),
 	},
 	decorators: [
@@ -407,6 +408,19 @@ export const MoveToUnassigned: Story = {
 		);
 		await userEvent.click(await screen.findByRole("menuitemradio", { name: "Unassigned" }));
 		await expect(args.onMovePractice).toHaveBeenCalledWith(mockPracticeLongText.slug, null, 1);
+	},
+};
+
+export const DownloadAsFiles: Story = {
+	parameters: { chromatic: { disableSnapshot: true } },
+	play: async ({ args, canvas, userEvent }) => {
+		await userEvent.click(
+			canvas.getByRole("button", { name: `More actions for ${nameOf(mockPracticeLongText)}` }),
+		);
+		await userEvent.click(await screen.findByRole("menuitem", { name: "Download as files" }));
+		await expect(args.onDownloadPractice).toHaveBeenCalledWith(
+			expect.objectContaining({ slug: mockPracticeLongText.slug }),
+		);
 	},
 };
 

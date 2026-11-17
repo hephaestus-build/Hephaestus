@@ -3,11 +3,20 @@ import { HttpResponse, http } from "msw";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { CatalogGroupAdoptionPreview } from "@/api/types.gen";
+import { definitionOf } from "@/components/admin/practice-editor/fixtures";
 import type { Wire } from "@/lib/dates";
+import { saveBlobFile } from "@/lib/download";
 import { server } from "@/mocks/server";
 import { loadRouteCode, ROUTE_RENDER_WAIT, renderRouteAt } from "@/test/router-harness";
 
-import { practiceSetupHandlers, wireGroup } from "./-practice-server";
+import {
+	practiceSetupHandlers,
+	practicesHandlers,
+	wireGroup,
+	wirePractice,
+} from "./-practice-server";
+
+vi.mock("@/lib/download", () => ({ saveBlobFile: vi.fn() }));
 
 beforeAll(async () => loadRouteCode("/w/acme/admin/practices"), ROUTE_RENDER_WAIT.timeout);
 
@@ -158,4 +167,60 @@ describe("resetting a group to the catalog", () => {
 			expect(seenIfMatch).toHaveBeenCalledExactlyOnceWith('"group-reset-basis"');
 		},
 	);
+});
+
+describe("downloading a practice as files", () => {
+	const practice = wirePractice({
+		slug: "explain-the-change",
+		definition: definitionOf({ name: "Explain the change", criteria: "Our criteria" }),
+	});
+
+	it("saves the ZIP archive that the server returns under the practice's slug", async () => {
+		const requested = vi.fn<(slug: string) => void>();
+		server.use(
+			...practicesHandlers([practice]),
+			http.get("*/workspaces/:workspaceSlug/practices/:practiceSlug/files", ({ params }) => {
+				requested(String(params.practiceSlug));
+				return new HttpResponse(new Blob(["zip"]), {
+					headers: { "Content-Type": "application/zip" },
+				});
+			}),
+		);
+
+		renderRouteAt("/w/acme/admin/practices");
+		fireEvent.click(
+			await screen.findByRole(
+				"button",
+				{ name: "More actions for Explain the change" },
+				ROUTE_RENDER_WAIT,
+			),
+		);
+		fireEvent.click(await screen.findByRole("menuitem", { name: "Download as files" }));
+
+		await waitFor(() =>
+			expect(saveBlobFile).toHaveBeenCalledWith(expect.any(Blob), "explain-the-change.zip"),
+		);
+		expect(requested).toHaveBeenCalledWith("explain-the-change");
+	});
+
+	it("says that nothing changed when the download fails", async () => {
+		server.use(
+			...practicesHandlers([practice]),
+			http.get("*/workspaces/:workspaceSlug/practices/:practiceSlug/files", () =>
+				HttpResponse.json({ title: "Server error", status: 500 }, { status: 500 }),
+			),
+		);
+
+		renderRouteAt("/w/acme/admin/practices");
+		fireEvent.click(
+			await screen.findByRole(
+				"button",
+				{ name: "More actions for Explain the change" },
+				ROUTE_RENDER_WAIT,
+			),
+		);
+		fireEvent.click(await screen.findByRole("menuitem", { name: "Download as files" }));
+
+		await screen.findByText("We could not download the practice. Nothing was changed. Try again.");
+	});
 });

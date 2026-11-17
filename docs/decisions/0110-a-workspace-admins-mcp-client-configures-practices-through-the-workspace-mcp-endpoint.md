@@ -141,6 +141,8 @@ Every tool runs under the workspace of its endpoint and maps to one existing ser
 | `preview_catalog_practice` | `CatalogAdoptionController.preview` | the catalog definition that adoption would copy, and the `previewEtag` that adoption names |
 | `preview_catalog_group` | `CatalogAdoptionController.previewGroup` | each practice of the catalog group with its availability, the action for each, and the `previewEtag` |
 | `preview_practice_reset` | `PracticeReleaseController.get` | the catalog definition that a reset restores, and the `resetEtag` that the reset names |
+| `export_practice` | `PracticeFileController.download` | the practice's current version as the files of its folder ([practice files](/user/practice-files)) |
+| `check_practice_files` | `PracticeFileController.check` | for a folder that the client sends, whether it is valid, its name, kind and group, and each problem's file, line, column, code and message. It saves nothing and calls no model |
 | `get_review_settings` | `PracticeReviewSettingsController.get` | review scope (modes, repository ids and branches, account ids), delivery status, default feedback mode, cooldown, deliver to merged, scope counts, `etag` |
 | `list_repositories` | `ItemController.list` for repository items | repository item id, provider, `owner/name` built from the structured fields, removed at |
 | `list_members` | `MembershipController.listMembers` | account id, provider login, role, review selected |
@@ -207,7 +209,7 @@ The consent page shows the client's self-declared name as plain text below the h
 
 ### Audit, limits and signals
 
-16\. **Every write is audited by the service that makes it.** Configuration writes record their `config_audit_event` row in the same transaction, with the account as the actor, as over HTTP. The row gains `mcp_client_grant_id` (nullable, `sfk_`), so the config history can name the client through the retained grant; the history view shows it from the review-tools pull request on. `request_review` records the requester on the review row, as over HTTP. Every cancel path records who cancelled the review, over HTTP and MCP alike; the review-tools pull request adds the recorded actor where a path lacks it. `McpToolHandlerParityArchTest` carries the audit-by-default rule for tool methods: a tool for a mutation has its handler's audit annotation.
+16\. **Every write is audited by the service that makes it.** Configuration writes record their `config_audit_event` row in the same transaction, with the account as the actor, as over HTTP. The row gains `mcp_client_grant_id` (nullable, `sfk_`), so the config history can name the client through the retained grant; the history view shows it from the review-tools pull request on. `request_review` records the requester on the review row, as over HTTP. Every cancel path records who cancelled the review, over HTTP and MCP alike; the review-tools pull request adds the recorded actor where a path lacks it. `McpToolHandlerParityArchTest` carries the audit-by-default rule for tool methods: a tool for a mutation has its handler's audit annotation. A POST handler that only takes a body and saves nothing, such as `PracticeFileController.check`, is `@AuditExempt`; its tool declares `savesNothing` on `@McpToolFor`, is a read tool, and repeats that annotation.
 
 17\. **Workspace admins see and revoke the grants of their workspace.** The workspace console lists each active grant (client host and name, account, scopes, approved at) and revokes it. An account also ends its own MCP sessions from its session list.
 

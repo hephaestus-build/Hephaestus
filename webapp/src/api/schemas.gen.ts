@@ -8258,6 +8258,102 @@ export const PracticeDeliveryStatusSchema = {
 	enum: ["ACTIVE", "PAUSED"],
 } as const;
 
+export const PracticeFileCheckSchema = {
+	type: "object",
+	description:
+		"The result of checking a practice folder. Nothing was saved, and no model was called.",
+	properties: {
+		groupSlug: {
+			type: "string",
+			description: "The group slug that the folder names, when the folder is valid and names one",
+		},
+		kind: {
+			type: "string",
+			description: "The item kind that the practice reviews, when the folder is valid",
+		},
+		name: {
+			type: "string",
+			description: "The practice name, when the folder is valid",
+		},
+		problems: {
+			type: "array",
+			description: "Why the folder cannot become a practice. Empty when it is valid",
+			items: {
+				$ref: "#/components/schemas/PracticeFileProblem",
+			},
+		},
+		valid: {
+			type: "boolean",
+			description: "Whether the folder is a valid practice",
+		},
+	},
+	required: ["valid"],
+} as const;
+
+export const PracticeFileCheckRequestSchema = {
+	type: "object",
+	description: "The files of one practice folder, by path relative to the folder",
+	properties: {
+		files: {
+			type: "object",
+			additionalProperties: {
+				type: "string",
+			},
+			description:
+				"File contents by path, such as practice.md, guide.md, visual.svg, script.ts and figures/<name>.svg",
+		},
+	},
+	required: ["files"],
+} as const;
+
+export const PracticeFileProblemSchema = {
+	type: "object",
+	description: "One reason why a practice folder cannot become a practice",
+	properties: {
+		code: {
+			type: "string",
+			description: "Extensible enum: a client must accept other values.",
+			examples: [
+				"PRACTICE_MISSING",
+				"UNKNOWN_FILE",
+				"FILE_TOO_LARGE",
+				"FOLDER_TOO_LARGE",
+				"SLUG_INVALID",
+				"FRONT_MATTER_MISSING",
+				"FRONT_MATTER_INVALID",
+				"YAML_INVALID",
+				"KEY_MISSING",
+				"UNKNOWN_KEY",
+				"FORMAT_UNSUPPORTED",
+				"FIELD_INVALID",
+				"VISUAL_MISSING",
+				"VISUAL_ALT_MISSING",
+				"FILE_INVALID",
+				"FIGURE_UNUSED",
+				"DEFINITION_INVALID",
+			],
+		},
+		column: {
+			type: "integer",
+			format: "int32",
+			description: "The column, counting from 1, when the problem has one",
+		},
+		file: {
+			type: "string",
+			description: "The file, relative to the practice folder, such as practice.md",
+		},
+		line: {
+			type: "integer",
+			format: "int32",
+			description: "The line, counting from 1, when the problem has one",
+		},
+		message: {
+			type: "string",
+			description: "What to change, in plain words",
+		},
+	},
+} as const;
+
 export const PracticeGroupSchema = {
 	type: "object",
 	properties: {

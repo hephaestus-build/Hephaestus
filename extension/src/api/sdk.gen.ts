@@ -165,6 +165,8 @@ import type {
 	CallbackPostResponses,
 	CancelReviewData,
 	CancelReviewResponses,
+	CheckPracticeFilesData,
+	CheckPracticeFilesResponses,
 	CheckResearchRemovalsData,
 	CheckResearchRemovalsResponses,
 	ClaimGitHubInstallationData,
@@ -229,6 +231,8 @@ import type {
 	DismissMemberOnboardingResponses,
 	DownloadDataExportData,
 	DownloadDataExportResponses,
+	DownloadPracticeFilesData,
+	DownloadPracticeFilesResponses,
 	EditMyProductFeedbackDraftData,
 	EditMyProductFeedbackDraftResponses,
 	ExchangeClientSignInData,
@@ -5516,6 +5520,36 @@ export const setPracticeFeedbackMode = <ThrowOnError extends boolean = false>(
 			"Content-Type": "application/json",
 			...options.headers,
 		},
+	});
+
+/**
+ * Check a practice folder without saving it
+ *
+ * Parses and validates the files as the practice named in the path. Calls no model.
+ */
+export const checkPracticeFiles = <ThrowOnError extends boolean = false>(
+	options: Options<CheckPracticeFilesData, ThrowOnError>,
+): RequestResult<CheckPracticeFilesResponses, unknown, ThrowOnError> =>
+	(options.client ?? client).post<CheckPracticeFilesResponses, unknown, ThrowOnError>({
+		security: [{ scheme: "bearer", type: "http" }],
+		url: "/workspaces/{workspaceSlug}/practices/{practiceSlug}/file-check",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+/**
+ * Download a practice as a folder of files
+ */
+export const downloadPracticeFiles = <ThrowOnError extends boolean = false>(
+	options: Options<DownloadPracticeFilesData, ThrowOnError>,
+): RequestResult<DownloadPracticeFilesResponses, unknown, ThrowOnError> =>
+	(options.client ?? client).get<DownloadPracticeFilesResponses, unknown, ThrowOnError>({
+		security: [{ scheme: "bearer", type: "http" }],
+		url: "/workspaces/{workspaceSlug}/practices/{practiceSlug}/files",
+		...options,
 	});
 
 export const movePractice = <ThrowOnError extends boolean = false>(
