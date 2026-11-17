@@ -229,9 +229,11 @@ Measure the server's total memory use before you lower its memory limit or its h
 The calculator sets the Metaspace maximum from the number of classes that the JVM loads, `BPL_JVM_LOADED_CLASS_COUNT`.
 The image sets this count, and the start log line `Calculated JVM Memory Configuration` shows it as `Loaded Class Count`.
 A higher memory limit does not raise the Metaspace maximum.
-If the JVM refuses the image's class data archive, it loads each class into Metaspace.
+
+Classes that the JVM reads from the image's AOT cache, `application.aot`, do not use Metaspace.
+If the JVM refuses the AOT cache, it loads each class into Metaspace, and the start log shows why.
 At the maximum, the server stops with `OutOfMemoryError: Metaspace`.
-`HephaestusMetaspaceNearLimit` fires before that point ([Alert rules](./alert-rules)).
+`HephaestusMetaspaceNearLimit` warns when Metaspace grows slowly toward the maximum ([Alert rules](./alert-rules)).
 
 A file operation that blocks holds its carrier thread, so the scheduler adds a carrier.
 Its ceiling is the gateway connections plus 256.

@@ -622,8 +622,8 @@ groups:
         annotations:
           summary: More than 5 % of the {{ $labels.runtime_role }} role's database connections took longer than 50 ms to get
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
-      # At its Metaspace maximum the JVM stops with OutOfMemoryError: Metaspace, below the heap and container limits
-      # that the other memory alerts read. A JVM with no maximum reports -1, so the rule skips it.
+      # Metaspace has its own maximum, below the heap and container limits that the other memory alerts read.
+      # docs/admin/alert-rules.mdx gives why the rule drops a maximum of 0 or less.
       - alert: HephaestusMetaspaceNearLimit
         expr: >-
           jvm_memory_used_bytes{job="hephaestus",area="nonheap",id="Metaspace"}
