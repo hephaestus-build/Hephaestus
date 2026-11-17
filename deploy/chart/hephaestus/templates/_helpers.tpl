@@ -357,10 +357,6 @@ fails every pod, so each role is owed the lock's digest. */}}
 {{- end -}}
 
 {{/*
-Probes read the management listener's health groups, the same groups that /livez and /readyz serve
-on the application port. Only the management port is reachable for probes on every role.
-*/}}
-{{/*
 A pause before the container stops, so that the Gateway and the Service stop sending it requests
 first. The kubelet runs it; the image needs no shell.
 */}}
@@ -371,14 +367,21 @@ lifecycle:
       seconds: 5
 {{- end -}}
 
+{{/*
+Probes read the management listener's health groups, the same groups that /livez and /readyz serve
+on the application port. Only the management port is reachable for probes on every role.
+The kubelet runs no readiness probe until the startup probe passes, so short periods let a started
+server take traffic within seconds. The startup probe keeps the budget of .startupSeconds.
+*/}}
 {{- define "hephaestus.probes" -}}
+{{- $startupPeriod := 2 }}
 startupProbe:
   httpGet:
     path: /actuator/health/liveness
     port: management
-  periodSeconds: 10
+  periodSeconds: {{ $startupPeriod }}
   timeoutSeconds: 5
-  failureThreshold: {{ .startupFailures }}
+  failureThreshold: {{ div .startupSeconds $startupPeriod }}
 livenessProbe:
   httpGet:
     path: /actuator/health/liveness
@@ -390,7 +393,7 @@ readinessProbe:
   httpGet:
     path: /actuator/health/readiness
     port: management
-  periodSeconds: 10
+  periodSeconds: 5
   timeoutSeconds: 5
   failureThreshold: 3
 {{- end -}}
