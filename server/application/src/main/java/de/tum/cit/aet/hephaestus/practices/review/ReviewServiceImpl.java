@@ -367,6 +367,7 @@ public class ReviewServiceImpl implements ReviewService {
         var planned = selected.stream()
                 .map(p -> selection(p, request.kind(), pinned, itemCoverage, checksSource, headChecks))
                 .toList();
+        requireAPracticeThatCanRun(planned);
         var developers = new ArrayList<@Nullable Long>();
         for (var plan : planned) {
             if (plan.reason() == null)
@@ -590,6 +591,29 @@ public class ReviewServiceImpl implements ReviewService {
             reason = ReviewWithholdings.OUTSIDE_REVIEW_SCOPE;
         if (reason == null) reason = readiness(definition, checksSource, checks);
         return new SelectedPractice(practice, version, roles, reason);
+    }
+
+    /**
+     * Selection that withholds every practice for one reason that no later event lifts starts no review: the event or
+     * the request is refused with that reason, so the work does not read as not ready. Withholdings that a later edge
+     * lifts, such as pending checks, still record a review, whose withheld practices that edge carries.
+     */
+    private static void requireAPracticeThatCanRun(List<SelectedPractice> planned) {
+        var reasons = planned.stream().map(SelectedPractice::reason).distinct().toList();
+        if (reasons.size() != 1) return;
+        var refusal = switch (reasons.getFirst()) {
+            case ReviewWithholdings.BOT_AUTHOR -> ReviewRequestReason.BOT_AUTHOR;
+            case ReviewWithholdings.BOT_REVIEWER -> ReviewRequestReason.BOT_REVIEWER;
+            case ReviewWithholdings.OUTSIDE_REVIEW_SCOPE -> ReviewRequestReason.OUT_OF_REVIEW_SCOPE;
+            case null, default -> null;
+        };
+        if (refusal == null) return;
+        throw new ReviewRequestRejected(
+                ReviewRequestRejected.Reason.ITEM_INELIGIBLE,
+                refusal == ReviewRequestReason.OUT_OF_REVIEW_SCOPE
+                        ? "This work is outside the workspace’s review scope."
+                        : "Hephaestus does not review work by bots.",
+                refusal);
     }
 
     private static String missingRoleReason(AboutRole role, ItemSnapshot item) {

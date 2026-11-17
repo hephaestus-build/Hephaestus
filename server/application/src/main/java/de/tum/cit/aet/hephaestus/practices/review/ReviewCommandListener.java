@@ -155,6 +155,8 @@ public class ReviewCommandListener {
             case CONCURRENT_DUPLICATE -> "a review of this " + work(kind) + " is already running.";
             case MEMBER_AI_DECLINED -> "your account does not take part in AI practice reviews in this workspace.";
             case WORKSPACE_INACTIVE -> "the workspace is not active.";
+            case BOT_AUTHOR, BOT_REVIEWER -> "it does not review work by bots.";
+            case OUT_OF_REVIEW_SCOPE -> "this " + work(kind) + " is outside the workspace’s review scope.";
             case PRACTICES_DISABLED -> "practice review is turned off for this workspace.";
             case GATE_WITHHELD -> "requested reviews are turned off for this workspace.";
             default -> "it could not be started.";

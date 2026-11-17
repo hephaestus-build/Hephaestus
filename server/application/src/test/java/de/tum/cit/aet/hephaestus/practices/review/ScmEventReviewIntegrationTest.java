@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.catchThrowable;
+import static org.assertj.core.api.Assertions.catchThrowableOfType;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -386,45 +387,53 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
 
     @ParameterizedTest
     @CsvSource({
-        "GITHUB,false,BOT,BOT_AUTHOR", "GITLAB,false,BOT,BOT_AUTHOR",
-        "GITHUB,true,BOT,BOT_REVIEWER", "GITLAB,true,BOT,BOT_REVIEWER",
-        "GITHUB,false,ORGANIZATION,ROLE_UNAVAILABLE", "GITLAB,false,ORGANIZATION,ROLE_UNAVAILABLE",
-        "GITHUB,true,ORGANIZATION,ROLE_UNAVAILABLE", "GITLAB,true,ORGANIZATION,ROLE_UNAVAILABLE"
+        "GITHUB,false,BOT_AUTHOR", "GITLAB,false,BOT_AUTHOR",
+        "GITHUB,true,BOT_REVIEWER", "GITLAB,true,BOT_REVIEWER"
     })
-    void shouldNameAKnownBotAuthorWithoutCallingOtherIdentitiesBots(
-            IdentityProviderType provider, boolean submittedReview, User.Type type, String reason) {
+    void shouldStartNoReviewOfWorkByAConfirmedBot(
+            IdentityProviderType provider, boolean submittedReview, ReviewRequestReason reason) {
         var prepared = prepare(provider, submittedReview);
-        var identity = source.pin(prepared.item(), prepared.version())
-                .roles()
-                .getFirst()
-                .identity();
-        var author = users.findByNativeIdAndProviderId(Long.parseLong(identity.subject()), identity.providerId())
-                .orElseThrow();
-        author.setType(type);
-        users.saveAndFlush(author);
+        roleHolderBecomes(prepared, User.Type.BOT);
         long workspace = prepared.item().workspaceId();
-        var id = service.request(ReviewRequest.builder()
-                .workspaceId(workspace)
-                .itemId(prepared.item().itemId())
-                .kind(ReviewKind.ITEM)
-                .version(prepared.version())
+
+        publish(prepared);
+        var event = event(prepared);
+        assertThat(event.getState()).isEqualTo(ItemEventState.WITHHELD);
+        assertThat(event.getReason()).isEqualTo(reason);
+        var refusal = catchThrowableOfType(
+                ReviewRequestRejected.class,
+                () -> service.request(request(prepared)
+                        .origin(ReviewOrigin.REQUEST)
+                        .requestedById(memberAccount(workspace))
+                        .build()));
+
+        assertThat(refusal.reason()).isEqualTo(ReviewRequestRejected.Reason.ITEM_INELIGIBLE);
+        assertThat(refusal.eventReason()).isEqualTo(reason);
+        assertThat(refusal.getBody().getDetail()).isEqualTo("Hephaestus does not review work by bots.");
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM review WHERE workspace_id=?", Long.class, workspace))
+                .isZero();
+    }
+
+    @ParameterizedTest
+    @CsvSource({"GITHUB,false", "GITLAB,false", "GITHUB,true", "GITLAB,true"})
+    void shouldRecordAnUnavailableRoleWithoutCallingAnOrganizationABot(
+            IdentityProviderType provider, boolean submittedReview) {
+        var prepared = prepare(provider, submittedReview);
+        roleHolderBecomes(prepared, User.Type.ORGANIZATION);
+        long workspace = prepared.item().workspaceId();
+        var id = service.request(request(prepared)
                 .origin(ReviewOrigin.REQUEST)
                 .requestedById(memberAccount(workspace))
-                .practiceIds(List.of())
                 .build());
 
         assertThat(reviews.findById(id).orElseThrow()).satisfies(review -> {
             assertThat(review.getStatus()).isEqualTo(ReviewStatus.PARTIAL);
             assertThat(review.getStopReason()).isEqualTo(ReviewStopReason.READINESS_REFUSED);
         });
-        assertThat(jdbc.queryForObject("SELECT reason FROM review_practice WHERE review_id=?", String.class, id))
-                .isEqualTo(reason);
         assertThat(jdbc.queryForObject(
                         "SELECT state||':'||reason FROM review_item WHERE review_id=?", String.class, id))
-                .isEqualTo("WITHHELD:" + reason);
+                .isEqualTo("WITHHELD:ROLE_UNAVAILABLE");
         assertThat(jdbc.queryForObject("SELECT count(*) FROM review_job WHERE review_id=?", Long.class, id))
-                .isZero();
-        assertThat(jdbc.queryForObject("SELECT count(*) FROM result WHERE workspace_id=?", Long.class, workspace))
                 .isZero();
         when(runtime.usage(workspace, id))
                 .thenReturn(new ReviewUsageSnapshot(BigDecimal.ZERO, true, 0, 0, 0, List.of()));
@@ -439,7 +448,18 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
                 .isOk()
                 .expectBody()
                 .jsonPath("$.practices[0].reason")
-                .isEqualTo(reason);
+                .isEqualTo("ROLE_UNAVAILABLE");
+    }
+
+    private void roleHolderBecomes(Prepared prepared, User.Type type) {
+        var identity = source.pin(prepared.item(), prepared.version())
+                .roles()
+                .getFirst()
+                .identity();
+        var holder = users.findByNativeIdAndProviderId(Long.parseLong(identity.subject()), identity.providerId())
+                .orElseThrow();
+        holder.setType(type);
+        users.saveAndFlush(holder);
     }
 
     @ParameterizedTest
