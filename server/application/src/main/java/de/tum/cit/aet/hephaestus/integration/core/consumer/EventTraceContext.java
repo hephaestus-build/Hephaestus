@@ -62,7 +62,7 @@ public class EventTraceContext {
                 .kind(Span.Kind.CONSUMER)
                 .tag("messaging.system", "postgresql")
                 .tag("messaging.operation.type", "process")
-                .tag("messaging.destination.name", event.subject())
+                .tag("messaging.destination.name", destination(event.subject()))
                 .start();
         try (Tracer.SpanInScope ignored = tracer.withSpan(span)) {
             handler.run();
@@ -72,5 +72,14 @@ public class EventTraceContext {
         } finally {
             span.end();
         }
+    }
+
+    /**
+     * The provider and the event, such as {@code github.pull_request}. The subject also names the repository and its
+     * owner, which can be a person, and a span stays technical.
+     */
+    static String destination(String subject) {
+        int event = subject.lastIndexOf('.');
+        return IntegrationPoisonHandler.kindTag(subject) + (event < 0 ? "" : subject.substring(event));
     }
 }

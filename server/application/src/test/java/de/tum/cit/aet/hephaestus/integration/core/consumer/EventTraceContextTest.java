@@ -17,6 +17,7 @@ import io.micrometer.tracing.otel.bridge.OtelCurrentTraceContext;
 import io.micrometer.tracing.otel.bridge.OtelPropagator;
 import io.micrometer.tracing.otel.bridge.OtelTracer;
 import io.micrometer.tracing.propagation.Propagator;
+import io.opentelemetry.api.common.AttributeKey;
 import io.opentelemetry.api.trace.SpanKind;
 import io.opentelemetry.api.trace.propagation.W3CTraceContextPropagator;
 import io.opentelemetry.context.propagation.ContextPropagators;
@@ -121,6 +122,17 @@ class EventTraceContextTest extends BaseUnitTest {
             assertThat(span.getParentSpanContext().isValid()).isFalse();
         });
         assertThat(finished.get(0).getTraceId()).isNotEqualTo(finished.get(1).getTraceId());
+    }
+
+    @Test
+    void shouldNameTheProviderAndTheEventButNotTheRepositoryOrItsOwner() {
+        traceContext.process(
+                new ProviderEvent("github.octocat.hello~world.pull_request", Map.of(), new byte[0], Instant.now()),
+                () -> {});
+
+        assertThat(only(SpanKind.CONSUMER).getAttributes().asMap())
+                .containsEntry(AttributeKey.stringKey("messaging.destination.name"), "github.pull_request")
+                .allSatisfy((key, value) -> assertThat(value.toString()).doesNotContain("octocat"));
     }
 
     @Test
