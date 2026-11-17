@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
@@ -26,11 +27,11 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import org.jspecify.annotations.Nullable;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -42,7 +43,8 @@ class WorkspaceRemovalProviderCleanupIntegrationTest extends AbstractWorkspaceIn
             "https://receiver.example.test/webhooks/gitlab/connections/1/key/route?hephaestus_resource=" + MARKER;
     private static final String HASH = ProviderResourceAdapter.fingerprint(URL);
 
-    @MockitoBean
+    /** The shared test double of the base context: no new context for this class. */
+    @Autowired
     private GitLabWebhookClient gitLabWebhookClient;
 
     @Autowired
@@ -65,6 +67,11 @@ class WorkspaceRemovalProviderCleanupIntegrationTest extends AbstractWorkspaceIn
 
     /** GitLab's hooks by project, each a map from hook id to URL. */
     private final Map<Long, Map<Long, String>> gitlab = new ConcurrentHashMap<>();
+
+    @AfterEach
+    void forgetGitLab() {
+        reset(gitLabWebhookClient);
+    }
 
     @BeforeEach
     void fakeGitLab() {
