@@ -276,8 +276,9 @@ jobs:
     needs: [provider, commits, compose, decide]
     if: >-
       !cancelled() &&
-      github.event_name == 'pull_request' && github.event.action == 'labeled' && github.event.label.name == 'eval:decide' &&
-      github.event.pull_request.head.repo.full_name == github.repository
+      (github.event_name == 'workflow_dispatch' ||
+        (github.event_name == 'pull_request' && github.event.action == 'labeled' && github.event.label.name == 'eval:decide' &&
+          github.event.pull_request.head.repo.full_name == github.repository))
     runs-on: ubuntu-slim
     timeout-minutes: 15
     permissions:
@@ -287,7 +288,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          # A manual run posts on the head it decided, so a pull request with that head shows it too.
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || needs.commits.outputs.head }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           CONFIGURED: ${{ needs.provider.outputs.configured }}
           CASES: ${{ needs.commits.outputs.cases }}
@@ -334,7 +336,24 @@ jobs:
                 esac
               fi ;;
           esac
+          if [ -z "$HEAD_SHA" ]; then
+            echo "No head was resolved, so no check is posted: $title" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          # Every decision run of this commit stays visible, not only the latest: a person can run a head again, and a
+          # rerun must never hide an earlier REGRESSION. Each line is one earlier run's check title and its run.
+          earlier="$(gh api --method GET "repos/$REPOSITORY/commits/$HEAD_SHA/check-runs" --paginate \
+            -f "check_name=$CHECK_NAME" -f per_page=100 \
+            --jq '.check_runs | sort_by(.started_at)[] | "- \(.output.title // "no title"): \(.details_url // .html_url)"')"
+          summary="$detail See $RUN_URL."
+          if [ -n "$earlier" ]; then
+            summary="$summary"$'\n\n'"Earlier decision runs of this commit, oldest first:"$'\n'"$earlier"
+            if [ "$VERDICT" != REGRESSION ] && printf '%s\n' "$earlier" | grep -q '^- Decision REGRESSION'; then
+              title="An earlier run of this commit gave REGRESSION. This run: $title"
+            fi
+          fi
+          echo "$summary" >> "$GITHUB_STEP_SUMMARY"
           gh api --silent --method POST "repos/$REPOSITORY/check-runs" \
             -f "name=$CHECK_NAME" -f "head_sha=$HEAD_SHA" -f status=completed -f "conclusion=$conclusion" \
             -f "details_url=$RUN_URL" \
-            -f "output[title]=${title:0:250}" -f "output[summary]=$detail See $RUN_URL."
+            -f "output[title]=${title:0:250}" -f "output[summary]=$summary"

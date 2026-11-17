@@ -176,6 +176,7 @@ void test(
 				REPOSITORY: "hephaestus/hephaestus",
 				HEAD_SHA: "0".repeat(40),
 				RUN_URL: "https://example.invalid/run",
+				GITHUB_STEP_SUMMARY: path.join(directory, "summary"),
 				CONFIGURED: "true",
 				CASES: "same",
 				RESULTS: "success success success",
@@ -212,6 +213,88 @@ void test(
 		});
 		assert.equal(cases.conclusion, "neutral");
 		assert.match(cases.title ?? "", /edits the composition cases/u);
+	},
+);
+
+void test(
+	"every decision run of a head stays listed with its verdict, so a rerun never hides an earlier REGRESSION",
+	runnerStepsOnly,
+	async () => {
+		const workflow = parseDocument(await readFile(WORKFLOW, "utf8"));
+		const shell = runScript(
+			workflow,
+			["jobs", "report"],
+			"Post the result under the same check name",
+		);
+		const directory = await mkdtemp(path.join(tmpdir(), "decision-runs-"));
+		const posted = path.join(directory, "posted");
+		// GitHub as far as the step reads it: a POST adds a check run to the commit, and a GET lists the commit's
+		// runs in the form of the step's --jq, oldest first.
+		await writeFile(
+			path.join(directory, "gh"),
+			[
+				"#!/bin/sh",
+				'case "$*" in',
+				`  *"--method GET"*) if [ -f "${posted}" ]; then sed 's/^/- /' "${posted}"; fi; exit 0 ;;`,
+				"esac",
+				'for arg in "$@"; do',
+				'  case "$arg" in',
+				`    "output[title]="*) title="\${arg#output\\[title\\]=}" ;;`,
+				`    "details_url="*) url="\${arg#details_url=}" ;;`,
+				`    "output[summary]="*) summary="\${arg#output\\[summary\\]=}" ;;`,
+				"  esac",
+				"done",
+				`printf '%s: %s\\n' "$title" "$url" >> "${posted}"`,
+				`printf '%s' "$title" > "${path.join(directory, "title")}"`,
+				`printf '%s' "$summary" > "${path.join(directory, "summary-posted")}"`,
+				"",
+			].join("\n"),
+		);
+		await chmod(path.join(directory, "gh"), 0o755);
+		const decide = async (run: number, environment: Record<string, string>) => {
+			const step = await runStep(shell, {
+				PATH: `${directory}${path.delimiter}${process.env.PATH ?? ""}`,
+				REPOSITORY: "hephaestus/hephaestus",
+				HEAD_SHA: "1".repeat(40),
+				RUN_URL: `https://example.invalid/run/${String(run)}`,
+				GITHUB_STEP_SUMMARY: path.join(directory, "summary"),
+				CONFIGURED: "true",
+				CASES: "same",
+				RESULTS: "success success success",
+				...environment,
+			});
+			assert.equal(step.failed, false, step.diagnosis);
+			return {
+				title: await readFile(path.join(directory, "title"), "utf8"),
+				summary: await readFile(path.join(directory, "summary-posted"), "utf8"),
+			};
+		};
+		const first = await decide(1, {
+			VERDICT: "REGRESSION",
+			REGRESSED: "hephaestus/withholds-expected",
+		});
+		assert.doesNotMatch(first.summary, /Earlier decision runs/u);
+		// The same head, run again, gives no regression: the earlier REGRESSION stays in its title and its list.
+		const second = await decide(2, { VERDICT: "INCONCLUSIVE", REASON: "a cause" });
+		assert.match(
+			second.title,
+			/^An earlier run of this commit gave REGRESSION\. This run: Decision INCONCLUSIVE/u,
+		);
+		assert.ok(
+			second.summary.includes(
+				"- Decision REGRESSION on hephaestus/withholds-expected: https://example.invalid/run/1",
+			),
+			second.summary,
+		);
+		const third = await decide(3, { VERDICT: "INCONCLUSIVE", REASON: "a cause" });
+		const listed = third.summary.split("\n").filter((line) => line.startsWith("- "));
+		assert.equal(listed.length, 2, third.summary);
+		assert.match(listed[0] ?? "", /run\/1$/u);
+		assert.match(listed[1] ?? "", /run\/2$/u);
+		assert.match(third.title, /^An earlier run of this commit gave REGRESSION/u);
+		// Every run of the head is a check run of its own, so all three appear.
+		const runs = await readFile(posted, "utf8");
+		assert.equal(runs.trim().split("\n").length, 3);
 	},
 );
 

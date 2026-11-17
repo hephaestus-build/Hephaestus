@@ -376,6 +376,11 @@ The panel's `eval:run` label starts no decision, so one label never pays for two
 Nothing starts a decision on a push, a path change or a schedule.
 A pull request from a fork gets no run, because it has no secrets.
 
+A person can run a head again, so no run hides another.
+Every decision run posts its own check run on the head that it decided, a manual run included.
+Its summary lists every earlier run of that head with its verdict, oldest first.
+When an earlier run gave REGRESSION, a later run's title says so first.
+
 A change to `scripts/feedback-eval/compositions.json` gets no decision.
 Each arm reads the cases from its own commit, so the arms would compose different cases under the same IDs.
 The run stops before the first model call, and its check says "not evaluated".
