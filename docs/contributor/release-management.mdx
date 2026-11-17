@@ -337,8 +337,10 @@ Thus, the server subject has a second scan of the same image digest (`scripts/li
 
 The image build gate (`scripts/scan-web-app.ts`) and the daily scans of `main` and the supported release run the same scan.
 
-Capture fails if the web app has no bundle manifests, if it lacks a package that every build bundles, or if Syft or Trivy omits an identity.
+Capture fails if the web app has no bundle manifests or lacks a package that every build bundles.
+It also fails if Syft or Trivy omits an identity.
 Thus, a scan that stops seeing the bundle fails instead of passing with fewer packages.
+
 New captures declare `bundledNpmSbom: 2` in the signed manifest.
 Verification requires the web app documents of each server subject when that declaration is present.
 Releases that declare `bundledNpmSbom: 1` evidenced the bundle in the `webapp` image, at `/usr/share/nginx/html/.vite/packages/`.

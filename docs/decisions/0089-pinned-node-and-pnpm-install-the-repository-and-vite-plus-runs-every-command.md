@@ -42,7 +42,7 @@ This ADR states the toolchain at 1.0 as rules. [Local verification](../contribut
 5. **CI verifies every locked entry.** CI installs with `--frozen-lockfile --ignore-scripts --no-trust-lockfile` and the trust policy `no-downgrade`. A local install trusts the lockfile and checks only new resolutions.
    Enforced by: `gate:toolchain`.
 6. **An image build installs with pnpm, not `vp`.** It uses a digest-pinned pnpm image and installs from the frozen lockfile without lifecycle scripts.
-   Enforced by: `gate:toolchain` (the install lines of `docker/agents/pi/Dockerfile`; the web app builds in CI with `vp`, ADR 0100). Review catches a `vp` call.
+   Enforced by: `gate:toolchain` (the install lines of `docker/agents/pi/Dockerfile`). The web app builds in CI with `vp` (ADR 0100). Review catches a `vp` call.
 7. **`vp` is the only command surface.** `vite.config.ts` holds every command. The root `package.json` keeps only `prepare`. No tracked file outside the image builds, vendored examples and the history runs `pnpm run`, `pnpm exec` or `pnpm --filter`.
    Enforced by: `gate:toolchain`.
 8. **The task graph relies only on proven facts.** `gate:runner-contract` proves them against the pinned Vite+. The catalog pins each tool that Vite+ bundles at its bundled version. `vp run sync:toolchain-pins` writes them.

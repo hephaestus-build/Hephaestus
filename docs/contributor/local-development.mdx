@@ -464,7 +464,8 @@ In the cluster, follow the logs of a role with the `kubectl` command that `dev:k
    An older cluster with a non-loopback API binding requires `vp run dev:kubernetes:reset`.
    Port 443 must be free. The check stops the command when a program holds it.
    It also creates a local registry, which the nodes use as a mirror of `ghcr.io`.
-2. It builds the web app, the server image that serves it, and the agent and PostgreSQL images, and pushes them to that registry.
+2. It builds the web app and the images of the server, the agent and PostgreSQL.
+   It pushes the images to that registry.
 3. It creates the qualification namespaces, a Secret with generated values, and the certificates.
    It keeps them in `~/.hephaestus/kubernetes-cluster`, shared by the worktrees.
    Each worktree generates its private host-server kubeconfig at `.context/kubernetes-host/<namespace>/kubeconfig.json`.
