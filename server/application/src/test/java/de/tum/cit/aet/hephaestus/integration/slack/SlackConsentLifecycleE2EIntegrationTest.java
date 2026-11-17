@@ -41,6 +41,7 @@ import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackParticipantConsen
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackThreadRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackTs;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackChannelConsentGate;
+import de.tum.cit.aet.hephaestus.integration.slack.events.SlackChannelErasure;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackConversationService;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackIngestService;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackParticipantConsentGate;
@@ -244,8 +245,12 @@ class SlackConsentLifecycleE2EIntegrationTest extends BaseIntegrationTest {
                 messageRepository,
                 threadRepository,
                 roster,
-                conversationFeedbackErasure,
-                mock(ProviderEventStore.class),
+                new SlackChannelErasure(
+                        mock(ProviderEventStore.class),
+                        threadRepository,
+                        monitoredChannelRepository,
+                        conversationFeedbackErasure,
+                        messageRepository),
                 /* conversationIngestEnabled */ true,
                 new TransactionTemplate(transactionManager));
         consentService = new SlackChannelConsentService(

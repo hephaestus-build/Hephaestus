@@ -18,6 +18,7 @@ import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMessageRepository
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannelRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackThreadRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackChannelConsentGate;
+import de.tum.cit.aet.hephaestus.integration.slack.events.SlackChannelErasure;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackIngestService;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackParticipantConsentGate;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackWorkspaceResolver;
@@ -86,8 +87,12 @@ class SlackChannelMessageHandlerTest extends BaseUnitTest {
                 messageRepository,
                 threadRepository,
                 identityResolver,
-                conversationFeedbackErasure,
-                mock(ProviderEventStore.class),
+                new SlackChannelErasure(
+                        mock(ProviderEventStore.class),
+                        threadRepository,
+                        monitoredChannelRepository,
+                        conversationFeedbackErasure,
+                        messageRepository),
                 true, // conversation-ingest capability on
                 new TransactionTemplate(mock(PlatformTransactionManager.class)));
         EventPayloadDeserializer deserializer =
@@ -115,8 +120,12 @@ class SlackChannelMessageHandlerTest extends BaseUnitTest {
                 messageRepository,
                 threadRepository,
                 identityResolver,
-                conversationFeedbackErasure,
-                mock(ProviderEventStore.class),
+                new SlackChannelErasure(
+                        mock(ProviderEventStore.class),
+                        threadRepository,
+                        monitoredChannelRepository,
+                        conversationFeedbackErasure,
+                        messageRepository),
                 false, // conversation-ingest capability OFF
                 new TransactionTemplate(mock(PlatformTransactionManager.class)));
         EventPayloadDeserializer deserializer =

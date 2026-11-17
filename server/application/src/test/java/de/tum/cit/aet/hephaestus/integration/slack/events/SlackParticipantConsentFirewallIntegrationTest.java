@@ -156,8 +156,12 @@ class SlackParticipantConsentFirewallIntegrationTest extends BaseIntegrationTest
                 messages,
                 threadRepository,
                 identityResolver,
-                conversationFeedbackErasure,
-                eventStore,
+                new SlackChannelErasure(
+                        eventStore,
+                        threadRepository,
+                        monitoredChannelRepository,
+                        conversationFeedbackErasure,
+                        messages),
                 /* conversationIngestEnabled */ true,
                 new TransactionTemplate(transactionManager));
     }

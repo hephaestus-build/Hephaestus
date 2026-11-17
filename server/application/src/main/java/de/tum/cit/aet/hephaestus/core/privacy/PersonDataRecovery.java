@@ -6,6 +6,7 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.RestoredCollectionErasures;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.RestoredDisconnects;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.RestoredMessageDeletions;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.RestoredSlackChannelErasures;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.RestoredSlackMessageChanges;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.RestoredWorkspacePurges;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnBackgroundWork;
@@ -30,11 +31,10 @@ import tools.jackson.databind.ObjectMapper;
 
 /**
  * Reapplies the erasures that a database restore undid, from the operator-held manifest: disconnects, then workspace
- * purges, then erased documentation collections, deleted conversation messages and Slack messages changed in Slack,
- * then people. It runs only in a
- * server with background work off, so no scheduled task, claimer or inbox subscriber writes while it skips the purge's
- * quiescence guards; the {@code erasure-recovery} profile turns background work off, and startup stops if anything
- * turns it on again.
+ * purges, then erased documentation collections, deleted conversation messages, erased Slack channels and Slack
+ * messages changed in Slack, then people. It runs only in a server with background work off, so no scheduled task,
+ * claimer or inbox subscriber writes while it skips the purge's quiescence guards; the {@code erasure-recovery} profile
+ * turns background work off, and startup stops if anything turns it on again.
  */
 @Component
 @Profile("erasure-recovery")
@@ -64,6 +64,7 @@ final class PersonDataRecovery implements SmartLifecycle {
     private final RestoredMessageDeletions messages;
     private final RestoredCollectionErasures collections;
     private final RestoredSlackMessageChanges slackMessages;
+    private final RestoredSlackChannelErasures slackChannels;
     private final String manifestPath;
     private boolean running;
 
@@ -78,6 +79,7 @@ final class PersonDataRecovery implements SmartLifecycle {
             RestoredMessageDeletions messages,
             RestoredCollectionErasures collections,
             RestoredSlackMessageChanges slackMessages,
+            RestoredSlackChannelErasures slackChannels,
             PersonDataRecoveryProperties properties) {
         this.service = service;
         this.resolver = resolver;
@@ -89,12 +91,14 @@ final class PersonDataRecovery implements SmartLifecycle {
         this.messages = messages;
         this.collections = collections;
         this.slackMessages = slackMessages;
+        this.slackChannels = slackChannels;
         this.manifestPath = properties.recoveryManifest();
     }
 
     /**
-     * Version 4 adds the Slack messages that their authors edited or deleted in Slack, as version 3 added the erased
-     * collections and the deleted messages: an earlier manifest cannot say that there were none.
+     * Version 4 adds the erased Slack channels and the Slack messages that their authors edited or deleted in Slack, as
+     * version 3 added the erased collections and the deleted messages: an earlier manifest cannot say that there were
+     * none.
      */
     record Manifest(
             int version,
@@ -106,7 +110,8 @@ final class PersonDataRecovery implements SmartLifecycle {
             List<Disconnect> disconnects,
             List<CollectionErasure> collectionErasures,
             List<MessageDeletion> messageDeletions,
-            List<SlackMessageChange> slackMessageChanges) {}
+            List<SlackMessageChange> slackMessageChanges,
+            List<SlackChannelErasure> slackChannelErasures) {}
 
     record WorkspacePurge(long workspaceId) {}
 
@@ -117,6 +122,9 @@ final class PersonDataRecovery implements SmartLifecycle {
 
     /** A conversation message that its developer deleted. */
     record MessageDeletion(long workspaceId, UUID entryId) {}
+
+    /** A Slack channel that an admin revoked or that Slack deleted. */
+    record SlackChannelErasure(long workspaceId, String channelId) {}
 
     /** A stored Slack message that its author edited or deleted in Slack. */
     record SlackMessageChange(long workspaceId, long messageId, Change change) {
@@ -164,12 +172,14 @@ final class PersonDataRecovery implements SmartLifecycle {
             Objects.requireNonNull(manifest.collectionErasures());
             Objects.requireNonNull(manifest.messageDeletions());
             Objects.requireNonNull(manifest.slackMessageChanges());
+            Objects.requireNonNull(manifest.slackChannelErasures());
             boolean none = manifest.people().isEmpty()
                     && manifest.workspacePurges().isEmpty()
                     && manifest.disconnects().isEmpty()
                     && manifest.collectionErasures().isEmpty()
                     && manifest.messageDeletions().isEmpty()
-                    && manifest.slackMessageChanges().isEmpty();
+                    && manifest.slackMessageChanges().isEmpty()
+                    && manifest.slackChannelErasures().isEmpty();
             if (manifest.restorePoint().isAfter(Instant.now())
                     || manifest.noLaterErasures() != none
                     || manifest.workspacePurges().stream().anyMatch(purge -> purge.workspaceId() <= 0)
@@ -182,6 +192,10 @@ final class PersonDataRecovery implements SmartLifecycle {
                                     || collection.collectionId().isBlank())
                     || manifest.messageDeletions().stream()
                             .anyMatch(message -> message.workspaceId() <= 0 || message.entryId() == null)
+                    || manifest.slackChannelErasures().stream()
+                            .anyMatch(channel -> channel.workspaceId() <= 0
+                                    || channel.channelId() == null
+                                    || channel.channelId().isBlank())
                     || manifest.slackMessageChanges().stream()
                             .anyMatch(message -> message.workspaceId() <= 0
                                     || message.messageId() <= 0
@@ -214,6 +228,8 @@ final class PersonDataRecovery implements SmartLifecycle {
                 collections.eraseAgain(collection.workspaceId(), collection.connectionId(), collection.collectionId());
             for (MessageDeletion message : manifest.messageDeletions())
                 messages.deleteAgain(message.workspaceId(), message.entryId());
+            for (SlackChannelErasure channel : manifest.slackChannelErasures())
+                slackChannels.eraseAgain(channel.workspaceId(), channel.channelId());
             for (SlackMessageChange message : manifest.slackMessageChanges())
                 slackMessages.eraseAgain(
                         message.workspaceId(),

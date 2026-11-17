@@ -80,8 +80,12 @@ class SlackIngestServiceTest extends BaseUnitTest {
                 messageRepository,
                 threadRepository,
                 identityResolver,
-                conversationFeedbackErasure,
-                mock(ProviderEventStore.class),
+                new SlackChannelErasure(
+                        mock(ProviderEventStore.class),
+                        threadRepository,
+                        monitoredChannelRepository,
+                        conversationFeedbackErasure,
+                        messageRepository),
                 conversationIngestEnabled,
                 new TransactionTemplate(mock(PlatformTransactionManager.class)));
     }
@@ -309,7 +313,22 @@ class SlackIngestServiceTest extends BaseUnitTest {
         // The channel's thread ids are collected first (the derived practice rows are keyed by slack_thread.id).
         when(threadRepository.findIdsByWorkspaceIdAndSlackChannelId(7L, "C1")).thenReturn(List.of(11L, 22L));
 
-        service.eraseChannel(7L, "C1");
+        var appender = new ListAppender<ILoggingEvent>();
+        appender.start();
+        Logger logger = (Logger) LoggerFactory.getLogger(SlackChannelErasure.class);
+        logger.addAppender(appender);
+        try {
+            service.eraseChannel(7L, "C1");
+        } finally {
+            logger.detachAppender(appender);
+        }
+
+        // The erasure is logged by its ids alone, for an erasure recovery manifest to list.
+        assertThat(appender.list)
+                .singleElement()
+                .satisfies(event -> assertThat(event.getKeyValuePairs())
+                        .extracting(pair -> pair.key + "=" + pair.value)
+                        .containsExactly("event.name=slack.channel_erased", "workspace.id=7", "slack.channel.id=C1"));
 
         // Consent flip stops future ingestion + drops threads out of the ACTIVE-consent projectors…
         verify(monitoredChannelRepository).revokeConsent(7L, "C1");

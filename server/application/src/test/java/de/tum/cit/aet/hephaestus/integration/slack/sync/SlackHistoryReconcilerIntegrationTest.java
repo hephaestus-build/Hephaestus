@@ -19,6 +19,7 @@ import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackParticipantConsen
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackThreadRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackTs;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackChannelConsentGate;
+import de.tum.cit.aet.hephaestus.integration.slack.events.SlackChannelErasure;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackIngestService;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackParticipantConsentGate;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackWorkspaceResolver;
@@ -112,8 +113,7 @@ class SlackHistoryReconcilerIntegrationTest extends BaseIntegrationTest {
                 messages,
                 threads,
                 mock(SlackRosterIdentityResolver.class),
-                feedbackErasure,
-                mock(ProviderEventStore.class),
+                new SlackChannelErasure(mock(ProviderEventStore.class), threads, channels, feedbackErasure, messages),
                 true,
                 new TransactionTemplate(transactionManager));
         var properties = new SlackSyncProperties("0 0 4 * * *", 10, 15, Duration.ZERO, true, 5, true, 10);

@@ -71,12 +71,12 @@ A rule that main does not satisfy yet says "1.0 target".
 16. **An erasure survives a backup restore.** The `erasure-recovery` profile reapplies the erasures after the recovery point. It reapplies disconnects, workspace purges, erased Outline collections and deleted conversation messages.
     An edit or a deletion of a Slack message in Slack erases its old words.
     The profile erases them again.
-    Not yet reapplied: a Slack channel that an admin revoked or that Slack deleted. It has no log event yet.
+    It also erases again each Slack channel that an admin revoked or that Slack deleted.
     It also reapplies person erasures, also of accounts that their owners deleted.
     The operator redoes repository removals, including the removal of a stopped GitLab project's kept work, before egress opens.
     The operator lists them in a version 4 manifest outside the database. The profile runs with background work off and refuses to start beside it, so the purge needs no quiescence guard.
     [Reapply erasures after a restore](../admin/erasure-recovery.mdx) owns the procedure.
-    Enforced by: `ErasureRecoveryRestoreIntegrationTest#shouldPurgeAgainAWorkspaceThatARestoreBroughtBack`, `ErasureRecoveryRestoreIntegrationTest#shouldDisconnectAgainAConnectionThatARestoreBroughtBack`, `ErasureRecoveryRestoreIntegrationTest#shouldDeleteAgainAMessageThatARestoreBroughtBack`, `ErasureRecoveryRestoreIntegrationTest#shouldEraseAgainAnOutlineCollectionThatARestoreBroughtBack`, `ErasureRecoveryRestoreIntegrationTest#shouldEraseAgainTheOldWordsOfSlackMessagesThatTheirAuthorsChangedAfterTheRestorePoint`, `PersonDataRecoveryIntegrationTest#shouldRefuseToRecoverBesideBackgroundWork`.
+    Enforced by: `ErasureRecoveryRestoreIntegrationTest#shouldPurgeAgainAWorkspaceThatARestoreBroughtBack`, `ErasureRecoveryRestoreIntegrationTest#shouldDisconnectAgainAConnectionThatARestoreBroughtBack`, `ErasureRecoveryRestoreIntegrationTest#shouldDeleteAgainAMessageThatARestoreBroughtBack`, `ErasureRecoveryRestoreIntegrationTest#shouldEraseAgainAnOutlineCollectionThatARestoreBroughtBack`, `ErasureRecoveryRestoreIntegrationTest#shouldEraseAgainTheOldWordsOfSlackMessagesThatTheirAuthorsChangedAfterTheRestorePoint`, `ErasureRecoveryRestoreIntegrationTest#shouldEraseAgainASlackChannelThatARestoreBroughtBack`, `PersonDataRecoveryIntegrationTest#shouldRefuseToRecoverBesideBackgroundWork`.
 
 ## What changed, and why
 

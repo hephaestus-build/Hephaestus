@@ -3,15 +3,12 @@ package de.tum.cit.aet.hephaestus.integration.slack.events;
 import de.tum.cit.aet.hephaestus.core.TransactionCallbacks;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.consumer.DeliveryInbox;
-import de.tum.cit.aet.hephaestus.integration.core.consumer.ProviderEventStore;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMessageRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannelRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackThreadRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackTs;
 import de.tum.cit.aet.hephaestus.integration.slack.identity.SlackRosterIdentityResolver;
-import de.tum.cit.aet.hephaestus.practices.spi.ConversationFeedbackErasure;
 import java.time.Instant;
-import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import org.jspecify.annotations.Nullable;
@@ -38,8 +35,7 @@ public class SlackIngestService {
     private final SlackMessageRepository messageRepository;
     private final SlackThreadRepository threadRepository;
     private final SlackRosterIdentityResolver identityResolver;
-    private final ConversationFeedbackErasure conversationFeedbackErasure;
-    private final ProviderEventStore providerEvents;
+    private final SlackChannelErasure channelErasure;
 
     /**
      * Fleet-wide capability flag, available by default, bound from
@@ -59,8 +55,7 @@ public class SlackIngestService {
             SlackMessageRepository messageRepository,
             SlackThreadRepository threadRepository,
             SlackRosterIdentityResolver identityResolver,
-            ConversationFeedbackErasure conversationFeedbackErasure,
-            ProviderEventStore providerEvents,
+            SlackChannelErasure channelErasure,
             @Value("${hephaestus.integration.slack.conversation-ingest.enabled:true}")
                     boolean conversationIngestEnabled,
             TransactionTemplate transactionTemplate) {
@@ -71,8 +66,7 @@ public class SlackIngestService {
         this.messageRepository = messageRepository;
         this.threadRepository = threadRepository;
         this.identityResolver = identityResolver;
-        this.conversationFeedbackErasure = conversationFeedbackErasure;
-        this.providerEvents = providerEvents;
+        this.channelErasure = channelErasure;
         this.conversationIngestEnabled = conversationIngestEnabled;
         this.transactionTemplate = transactionTemplate;
     }
@@ -319,23 +313,12 @@ public class SlackIngestService {
     }
 
     /**
-     * Channel erasure: flip the channel to {@code REVOKED} so ingestion stops immediately, and promptly delete the
-     * channel's ingested content — its {@code slack_message} rows, its {@code slack_thread} aggregates (which
-     * hold the {@code participant_account_ids} personal data) and its stored provider events — rather than waiting for the 180-day retention sweep,
-     * which covers messages only. Transactional and idempotent (an unknown or already-erased channel deletes 0 rows).
-     *
-     * <p>Derived CONVERSATION feedback is hard-deleted too (GDPR Art. 17 for the derived copies, not inert-by-gate):
-     * The port resolves chat.thread items by their workspace and source id before removing product rows.
-     * Results for other item kinds and workspaces remain intact.
+     * Channel erasure, from an admin's revoke or Slack's {@code channel_deleted}: {@link SlackChannelErasure} revokes
+     * consent and deletes the channel's content now, rather than waiting for the retention sweep.
      */
     @Transactional
     public void eraseChannel(long workspaceId, String channelId) {
         if (!DeliveryInbox.claim("slack.channel.erase")) return;
-        providerEvents.deleteResource(workspaceId, "slack", channelId);
-        List<Long> threadIds = threadRepository.findIdsByWorkspaceIdAndSlackChannelId(workspaceId, channelId);
-        monitoredChannelRepository.revokeConsent(workspaceId, channelId);
-        conversationFeedbackErasure.eraseForThreads(workspaceId, threadIds);
-        messageRepository.deleteByWorkspaceIdAndSlackChannelId(workspaceId, channelId);
-        threadRepository.deleteByWorkspaceIdAndSlackChannelId(workspaceId, channelId);
+        channelErasure.erase(workspaceId, channelId);
     }
 }
