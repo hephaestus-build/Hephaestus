@@ -17,18 +17,17 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceFolderLease;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.config.FrozenModel;
 import de.tum.cit.aet.hephaestus.agent.context.AttemptFolderBusyException;
-import de.tum.cit.aet.hephaestus.agent.context.InsufficientEvidenceException;
 import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.ReviewAttemptCustody;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxRun;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxRunKind;
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
+import de.tum.cit.aet.hephaestus.agent.handler.spi.JobPreparationException;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedJobInputs;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunFence;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
@@ -183,7 +182,7 @@ class ReviewSandboxRunsTest extends BaseUnitTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
-    void shouldReleaseRefusedInputsWhenTheirCheckpointCannotAdmitThem(boolean unreadable) throws Exception {
+    void shouldEndNothingWhenAFailedPreparationsCheckpointIsUnreadableOrLost(boolean unreadable) {
         var mapper = new JsonMapper();
         var job = new ReviewJob();
         job.setId(UUID.randomUUID());
@@ -237,37 +236,24 @@ class ReviewSandboxRunsTest extends BaseUnitTest {
         var sandbox = new AgentSandboxes.LiveSandbox(
                 UUID.randomUUID(), 7, ReviewRunKind.subject(job.getReviewId()), AgentSandboxKind.REVIEW);
         var run = new SandboxRun(sandbox, fence, AgentRunKind.REVIEW, 0);
-        Path copiedPerson = Files.writeString(root.resolve("person.json"), "captured personal evidence");
-        var lease = EvidenceFolderLease.tryAcquire(root, 7, job.getId()).orElseThrow();
-        try (lease) {
-            lease.shareWithRemovals();
-            var inputs = new PreparedJobInputs(
-                    Map.of("context/person.json", copiedPerson), List.of(), List.of(lease), null, null);
-            when(preparation.prepare(any(), any(), any(), any(), any())).thenAnswer(invocation -> {
-                if (!unreadable) job.setStatus(ReviewJobStatus.CANCELLED);
-                throw new InsufficientEvidenceException("No practice is ready", inputs);
-            });
-            if (unreadable) {
-                when(preparation.published(job.getId(), fence))
-                        .thenThrow(new DataAccessResourceFailureException("The outcome cannot be read"));
-                assertThatThrownBy(() -> runtime.context(run))
-                        .isInstanceOfSatisfying(ErrorResponseException.class, busy -> {
-                            assertThat(busy.getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
-                            assertThat(busy.getHeaders().getFirst("Retry-After"))
-                                    .isEqualTo("1");
-                        });
-            } else {
-                when(preparation.published(job.getId(), fence)).thenReturn(Optional.empty());
-                assertThatThrownBy(() -> runtime.context(run)).isInstanceOf(StaleRunException.class);
-            }
-            assertThat(job.getStatus()).isEqualTo(unreadable ? ReviewJobStatus.RUNNING : ReviewJobStatus.CANCELLED);
-            verifyNoInteractions(terminal, results, reviewRuns, transactions, runs, workspaces);
-            var erasure = EvidenceFolderLease.tryAcquire(root, 7, job.getId()).orElseThrow();
-            try (erasure) {
-                Files.delete(copiedPerson);
-                assertThat(copiedPerson).doesNotExist();
-            }
+        when(preparation.prepare(any(), any(), any(), any(), any())).thenAnswer(invocation -> {
+            if (!unreadable) job.setStatus(ReviewJobStatus.CANCELLED);
+            throw new JobPreparationException("The review inputs could not be captured");
+        });
+        if (unreadable) {
+            when(preparation.published(job.getId(), fence))
+                    .thenThrow(new DataAccessResourceFailureException("The outcome cannot be read"));
+            assertThatThrownBy(() -> runtime.context(run))
+                    .isInstanceOfSatisfying(ErrorResponseException.class, busy -> {
+                        assertThat(busy.getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
+                        assertThat(busy.getHeaders().getFirst("Retry-After")).isEqualTo("1");
+                    });
+        } else {
+            when(preparation.published(job.getId(), fence)).thenReturn(Optional.empty());
+            assertThatThrownBy(() -> runtime.context(run)).isInstanceOf(StaleRunException.class);
         }
+        assertThat(job.getStatus()).isEqualTo(unreadable ? ReviewJobStatus.RUNNING : ReviewJobStatus.CANCELLED);
+        verifyNoInteractions(terminal, results, reviewRuns, transactions, runs, workspaces);
     }
 
     @Test

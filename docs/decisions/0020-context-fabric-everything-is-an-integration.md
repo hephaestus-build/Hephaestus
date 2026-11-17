@@ -302,8 +302,8 @@ including the industry triangulation that produced this shape — the reasoning 
 A practice revision declares required and optional source kinds. The runtime records a full source
 manifest and a per-automated-review readiness report. If required evidence is unavailable, stale,
 incomplete, redacted or denied, that practice is marked **not ready** with typed evidence reasons. If
-no practice remains ready, the job completes with `INSUFFICIENT_EVIDENCE` **without starting the
-agent** — it never manufactures a semantic `NOT_APPLICABLE` result. This is the substantive
+no practice remains ready, the job completes **without starting the agent**, and each practice stays
+withheld with its readiness reason — it never manufactures a semantic `NOT_APPLICABLE` result. This is the substantive
 consequence of the ADR's original complaint that "an empty result is ambiguous": empty, missing,
 stale, partial, redacted, failed and ablated inputs are now distinguishable from one another.
 

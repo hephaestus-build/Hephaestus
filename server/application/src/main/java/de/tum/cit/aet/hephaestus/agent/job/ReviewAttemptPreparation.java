@@ -2,7 +2,6 @@ package de.tum.cit.aet.hephaestus.agent.job;
 
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenIssuer;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
-import de.tum.cit.aet.hephaestus.agent.context.InsufficientEvidenceException;
 import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.handler.DefaultReviewExecutionHandler;
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
@@ -104,8 +103,8 @@ public class ReviewAttemptPreparation {
 
     /**
      * @param spec null when nothing is left to measure, and the attempt sealed without its sandbox
-     * @param sealedStaged whether that seal took results that an earlier attempt staged, whose feedback is then
-     *     composed; read before the seal, which ends their staging
+     * @param sealedStaged whether that seal admitted a result that an earlier attempt staged, whose feedback is then
+     *     composed
      */
     record PreparedSandbox(@Nullable SandboxSpec spec, PreparedJobInputs stagedInputs, boolean sealedStaged) {}
 
@@ -121,8 +120,7 @@ public class ReviewAttemptPreparation {
         // If an earlier attempt ended every practice and then failed or was lost, this one has nothing left to capture.
         // Staging kept the inputs that a staged result's composition reads.
         if (handler.endedEveryPractice(owned(jobId, fence))) {
-            boolean staged = handler.hasStaged(owned(jobId, fence));
-            completeWithoutExecution(owned(jobId, fence));
+            boolean staged = completeWithoutExecution(owned(jobId, fence));
             return new PreparedSandbox(null, new PreparedJobInputs(Map.of(), List.of(), List.of(), null, null), staged);
         }
         var capture = jobTelemetry.stage(ReviewStageTelemetry.Stage.CAPTURE);
@@ -138,10 +136,6 @@ public class ReviewAttemptPreparation {
                             CheckoutUnverifiedException.Reason.UNAVAILABLE,
                             "The published review inputs are no longer held");
             };
-        } catch (InsufficientEvidenceException refused) {
-            // The capture ran and found too little evidence; the attempt ends with that, not with a fault.
-            capture.end(ReviewStageTelemetry.Outcome.OK);
-            throw refused;
         } catch (RuntimeException failed) {
             capture.end(ReviewStageTelemetry.Outcome.FAILED);
             throw failed;
@@ -157,8 +151,7 @@ public class ReviewAttemptPreparation {
             if (report == null || report.decisions().stream().noneMatch(report::runs)) {
                 stage.set(PreparationFailure.Stage.PROVENANCE);
                 persistPreparedEvidence(jobId, fence, job.getWorkspaceId(), job.getAttempt(), preparedInputs);
-                boolean staged = handler.hasStaged(owned(jobId, fence));
-                completeWithoutExecution(owned(jobId, fence));
+                boolean staged = completeWithoutExecution(owned(jobId, fence));
                 return new PreparedSandbox(null, preparedInputs, staged);
             }
             stage.set(PreparationFailure.Stage.CREDENTIAL);
@@ -229,10 +222,14 @@ public class ReviewAttemptPreparation {
         }
     }
 
-    /** Input publication is decided before completion; a failure here is an ordinary preparation stop. */
-    private void completeWithoutExecution(ReviewJob job) {
+    /**
+     * Input publication is decided before completion; a failure here is an ordinary preparation stop.
+     *
+     * @return whether the seal admitted a result that an earlier attempt staged
+     */
+    private boolean completeWithoutExecution(ReviewJob job) {
         try {
-            handler.completeWithoutExecution(job);
+            return handler.completeWithoutExecution(job);
         } catch (RuntimeException failure) {
             throw new JobPreparationException("Could not complete the prepared review inputs", failure);
         }

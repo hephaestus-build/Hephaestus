@@ -35,16 +35,15 @@ import de.tum.cit.aet.hephaestus.agent.config.MemberAiRoutingAdapter;
 import de.tum.cit.aet.hephaestus.agent.config.ModelPurpose;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceModelAssignment;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceModelAssignmentRepository;
-import de.tum.cit.aet.hephaestus.agent.context.InsufficientEvidenceException;
 import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.ReviewAttemptCustody;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxRun;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxRunKind;
+import de.tum.cit.aet.hephaestus.agent.gateway.WorkspaceBudgetExceededException;
 import de.tum.cit.aet.hephaestus.agent.handler.DefaultReviewExecutionHandler;
 import de.tum.cit.aet.hephaestus.agent.handler.RuntimeReviewTestData;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobPreparationException;
-import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedJobInputs;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.ReviewSourceNotReadyException;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.practice.PracticePiAdapter;
@@ -665,11 +664,10 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    void shouldRefuseAnAttemptWhoseEvidenceIsTooLittleAndEndItsRun() {
+    void shouldRefuseAnAttemptWhoseWorkspaceExceedsItsBudgetAndEndItsRun() {
         var job = queued(binding(DataHandlingTier.IN_HOUSE));
         var fence = claimLeased(job).orElseThrow().fence();
-        var failure = new InsufficientEvidenceException(
-                "too little evidence", new PreparedJobInputs(Map.of(), List.of(), List.of(), null, null));
+        var failure = new WorkspaceBudgetExceededException(2048, 1024);
 
         results(new SimpleMeterRegistry())
                 .unprepared(
@@ -680,8 +678,9 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
 
         var refused = jobs.findById(job.getId()).orElseThrow();
         assertThat(refused.getStatus()).isEqualTo(ReviewJobStatus.FAILED);
-        assertThat(Objects.requireNonNull(refused.getOutput()).path("outcome").asString())
-                .isEqualTo(RefusalOutcome.INSUFFICIENT_EVIDENCE.name());
+        var output = Objects.requireNonNull(refused.getOutput());
+        assertThat(output.path("outcome").asString()).isEqualTo(RefusalOutcome.WORKSPACE_REFUSED.name());
+        assertThat(output.path("reasonCode").asString()).isEqualTo("WORKSPACE_BUDGET_EXCEEDED");
         assertThat(refused.getCapture() == null
                         || refused.getCapture().path("preparationFailure").isMissingNode())
                 .isTrue();
