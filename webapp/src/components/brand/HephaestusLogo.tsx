@@ -11,11 +11,7 @@ export function HephaestusLogoMark({ className }: { className?: string }) {
 }
 
 export function HephaestusWordmark({ className }: { className?: string }) {
-	return (
-		<span className={className}>
-			<span className="text-brand-accent">Heph</span>aestus
-		</span>
-	);
+	return <span className={className}>Hephaestus</span>;
 }
 
 interface HephaestusLogoProps {

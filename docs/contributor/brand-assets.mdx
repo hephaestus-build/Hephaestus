@@ -55,7 +55,8 @@ favicons, and maskable icons keep their platform-appropriate spacing.
 | --------------------------------------------------------- | --------------------------------------------------------------------- |
 | In-app product lockup                                     | `HephaestusLogo` or `HephaestusLogoMark`                                        |
 | Ask Hephaestus                                            | `HephaestusMark`                                                      |
-| README and documentation navbar                           | Light/dark lockup PNGs                                                |
+| README                                                    | Light/dark lockup PNGs                                                |
+| Documentation navbar and footer                           | `webapp/brand/hephaestus-mark.svg` and the wordmark as text           |
 | Browser tab                                               | `favicon.png`                                                         |
 | Installed web app                                         | 192px, 512px, and maskable PNGs from `webapp/public/manifest.json`    |
 | Chrome extension toolbar and management                   | `extension/public/icon/16.png`, `32.png`, and `48.png`                |
@@ -66,13 +67,18 @@ favicons, and maskable icons keep their platform-appropriate spacing.
 | GitHub App, GitHub OAuth App, and other external profiles | `docs/public/img/brand/external-app-icon-1024.png`                    |
 | GitHub repository social preview                          | `docs/public/img/brand/github-repository-social-preview-1280x640.png` |
 
-The static mark remains signal blue (`#315FDC`) in both color modes. UI wordmarks use the
-mode-aware `brand-accent` token from `webapp/src/styles/theme-tokens.css`.
+Hephaestus has one brand blue, `#315FDC`.
+The static mark uses it in both color modes, and the `--brand` token in `webapp/src/styles/theme-tokens.css` holds it.
+In light mode, the `--highlight` accent is the brand blue.
+In dark mode, the accent is a lighter step of it, because the brand blue gives text only 3.6:1 on the dark ground.
+
+The wordmark has one color: the text color of its surface.
+No part of the name takes the accent.
 Prose always spells the product name “Hephaestus.”
 Unlabeled React marks are decorative. Informative uses need a concise accessible name.
 
 The README uses [GitHub's theme-aware images](https://github.blog/changelog/2021-11-24-specify-theme-context-for-images-in-markdown/).
-The documentation navbar shows the light lockup in the light theme and the dark lockup in the dark theme.
+The documentation navbar and footer show the mark beside the wordmark, set as text in the page font, as the web app does.
 The installed-app exports follow the manifest [icon-purpose contract](https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps/Manifest/Reference/icons)
 and [maskable safe zone](https://web.dev/articles/maskable-icon).
 

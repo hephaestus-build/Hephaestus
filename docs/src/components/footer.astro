@@ -1,6 +1,8 @@
 ---
 import { BASE, PRODUCT_URL, REPO_URL } from "@/lib/site";
 
+import markUrl from "@brand/hephaestus-mark.svg?url";
+
 const base = BASE;
 const columns = [
 	{
@@ -34,6 +36,13 @@ const columns = [
 ---
 
 <footer class="border-fd-border bg-fd-card text-fd-muted-foreground border-t px-4 py-10 text-sm">
+	<div class="mx-auto mb-8 max-w-(--fd-layout-width)">
+		<p class="text-fd-foreground inline-flex items-center gap-2 font-semibold tracking-tight">
+			<img class="size-6" src={markUrl} alt="" width="24" height="24" />
+			Hephaestus
+		</p>
+		<p class="mt-2">Learn from the work you’re already doing.</p>
+	</div>
 	<div class="mx-auto grid max-w-(--fd-layout-width) gap-8 sm:grid-cols-3">
 		{
 			columns.map((column) => (

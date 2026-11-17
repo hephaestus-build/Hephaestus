@@ -53,9 +53,9 @@
 	--code: oklch(0.98 0.002 286.3);
 	--code-header: oklch(0.955 0.003 286.3);
 
-	--brand: oklch(0.546 0.245 262.881);
-	--brand-accent: oklch(0.546 0.245 262.881);
-	--highlight: oklch(0.546 0.245 262.881);
+	/* The one brand blue: the Hephaestus mark's #315FDC, in both color modes. */
+	--brand: oklch(0.53 0.198 264.9);
+	--highlight: var(--brand);
 	--highlight-foreground: oklch(0.97 0.014 254.604);
 }
 
@@ -106,8 +106,8 @@
 	--code: oklch(0.16 0.004 286);
 	--code-header: oklch(0.21 0.004 286);
 
-	--brand: oklch(0.546 0.245 262.881);
-	--brand-accent: oklch(0.707 0.165 254.624);
+	--brand: oklch(0.53 0.198 264.9);
+	/* The brand blue is too dark for text on a dark ground (3.6:1), so the accent takes a lighter step of it. */
 	--highlight: oklch(0.707 0.165 254.624);
 	--highlight-foreground: oklch(0.21 0.006 285.885);
 }
@@ -129,7 +129,6 @@
 	--color-accent: var(--accent);
 	--color-accent-foreground: var(--accent-foreground);
 	--color-brand: var(--brand);
-	--color-brand-accent: var(--brand-accent);
 	--color-destructive: var(--destructive);
 	--color-destructive-foreground: var(--destructive-foreground);
 	--color-success: var(--success);
