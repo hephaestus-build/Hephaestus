@@ -5,6 +5,7 @@ import jakarta.persistence.QueryHint;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Stream;
 import org.hibernate.jpa.HibernateHints;
 import org.jspecify.annotations.Nullable;
@@ -208,6 +209,31 @@ public interface SlackMessageRepository extends JpaRepository<SlackMessage, Long
             @Param("authorSlackUserId") @Nullable String authorSlackUserId,
             @Param("authorAccountId") @Nullable Long authorAccountId,
             @Param("text") @Nullable String text);
+
+    /** The stored row of a Slack message, for the log of an edit or a deletion that erasure recovery reapplies. */
+    @Query(
+            "SELECT m.id FROM SlackMessage m WHERE m.workspaceId = :workspaceId AND m.slackChannelId = :slackChannelId AND m.slackTs = :slackTs")
+    Optional<Long> findIdOf(
+            @Param("workspaceId") long workspaceId,
+            @Param("slackChannelId") String slackChannelId,
+            @Param("slackTs") String slackTs);
+
+    /** Erasure recovery: tombstones again a restored message that its author deleted in Slack. */
+    @Modifying
+    @Transactional
+    @Query(
+            "UPDATE SlackMessage m SET m.text = NULL, m.deletedAt = :now WHERE m.workspaceId = :workspaceId AND m.id = :id AND m.deletedAt IS NULL")
+    int tombstoneAgain(@Param("workspaceId") long workspaceId, @Param("id") long id, @Param("now") Instant now);
+
+    /**
+     * Erasure recovery: erases the restored words of a message that its author edited in Slack. Without an edit time,
+     * the next history read of its channel stores the words that Slack shows then ({@link #applyEdit}).
+     */
+    @Modifying
+    @Transactional
+    @Query(
+            "UPDATE SlackMessage m SET m.text = NULL, m.editedAt = NULL WHERE m.workspaceId = :workspaceId AND m.id = :id AND m.deletedAt IS NULL AND m.text IS NOT NULL")
+    int eraseEditedText(@Param("workspaceId") long workspaceId, @Param("id") long id);
 
     /**
      * Slack {@code message_deleted} tombstone (GDPR Art. 17), durable against out-of-order delivery: UPSERT a

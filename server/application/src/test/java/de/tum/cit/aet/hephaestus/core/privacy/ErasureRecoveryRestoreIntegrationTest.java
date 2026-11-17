@@ -10,6 +10,7 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentityResolver;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.RestoredCollectionErasures;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.RestoredDisconnects;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.RestoredMessageDeletions;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.RestoredSlackMessageChanges;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.RestoredWorkspacePurges;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnBackgroundWork;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
@@ -176,7 +177,7 @@ class ErasureRecoveryRestoreIntegrationTest extends AbstractWorkspaceIntegration
         assertThat(monitors.findByWorkspaceId(workspace.getId())).hasSize(1);
 
         String manifest = """
-                {"version":3,"collectionErasures":[],"messageDeletions":[],"restorePoint":"2026-01-01T00:00:00Z","noLaterErasures":false,"people":[],
+                {"version":4,"slackMessageChanges":[],"collectionErasures":[],"messageDeletions":[],"restorePoint":"2026-01-01T00:00:00Z","noLaterErasures":false,"people":[],
                  "workspacePurges":[],"disconnects":[{"workspaceId":%d,"connectionId":%d}]}
                 """.formatted(workspace.getId(), connection.getId());
         recover(manifest);
@@ -220,7 +221,7 @@ class ErasureRecoveryRestoreIntegrationTest extends AbstractWorkspaceIntegration
                 null));
 
         String manifest = """
-                {"version":3,"collectionErasures":[],"messageDeletions":[],"restorePoint":"2026-01-01T00:00:00Z","noLaterErasures":false,"people":[],
+                {"version":4,"slackMessageChanges":[],"collectionErasures":[],"messageDeletions":[],"restorePoint":"2026-01-01T00:00:00Z","noLaterErasures":false,"people":[],
                  "workspacePurges":[{"workspaceId":%d}],"disconnects":[]}
                 """.formatted(workspace.getId());
         recover(manifest);
@@ -255,7 +256,7 @@ class ErasureRecoveryRestoreIntegrationTest extends AbstractWorkspaceIntegration
         assertThat(words(message)).as("the restore brought the words back").contains("Words to take back");
 
         String manifest = """
-                {"version":3,"restorePoint":"2026-01-01T00:00:00Z","noLaterErasures":false,"people":[],
+                {"version":4,"slackMessageChanges":[],"restorePoint":"2026-01-01T00:00:00Z","noLaterErasures":false,"people":[],
                  "workspacePurges":[],"disconnects":[],"collectionErasures":[],
                  "messageDeletions":[{"workspaceId":%d,"entryId":"%s"}]}
                 """.formatted(workspace.getId(), message);
@@ -268,6 +269,64 @@ class ErasureRecoveryRestoreIntegrationTest extends AbstractWorkspaceIntegration
         recover(manifest);
         assertThat(entries.find(workspace.getId(), message).orElseThrow().isRedacted())
                 .isTrue();
+    }
+
+    @Test
+    void shouldEraseAgainTheOldWordsOfSlackMessagesThatTheirAuthorsChangedAfterTheRestorePoint() throws Exception {
+        long edited = slackMessage("1700000001.000100", "Words before the edit");
+        long deleted = slackMessage("1700000002.000200", "Words before the delete");
+        var backup = Backup.of(jdbc, workspace.getId());
+        // The authors' changes in Slack: an edit replaces the words, a delete tombstones the message.
+        jdbc.update(
+                "UPDATE slack_message SET text = 'Words after the edit', edited_at = now() WHERE workspace_id = ? AND id = ?",
+                workspace.getId(),
+                edited);
+        jdbc.update(
+                "UPDATE slack_message SET text = NULL, deleted_at = now() WHERE workspace_id = ? AND id = ?",
+                workspace.getId(),
+                deleted);
+
+        backup.restore();
+        assertThat(slackText(edited)).as("the restore brought the words back").isEqualTo("Words before the edit");
+        assertThat(slackText(deleted)).isEqualTo("Words before the delete");
+
+        String manifest = """
+                {"version":4,"restorePoint":"2026-01-01T00:00:00Z","noLaterErasures":false,"people":[],
+                 "workspacePurges":[],"disconnects":[],"collectionErasures":[],"messageDeletions":[],
+                 "slackMessageChanges":[{"workspaceId":%d,"messageId":%d,"change":"EDITED"},
+                                        {"workspaceId":%d,"messageId":%d,"change":"DELETED"}]}
+                """.formatted(workspace.getId(), edited, workspace.getId(), deleted);
+        recover(manifest);
+
+        assertThat(slackText(edited)).isNull();
+        assertThat(jdbc.queryForObject(
+                        "SELECT edited_at IS NULL AND deleted_at IS NULL FROM slack_message WHERE id = ?",
+                        Boolean.class,
+                        edited))
+                .as("the edited message stays, and the next history read stores Slack's words")
+                .isTrue();
+        assertThat(slackText(deleted)).isNull();
+        assertThat(jdbc.queryForObject(
+                        "SELECT deleted_at IS NOT NULL FROM slack_message WHERE id = ?", Boolean.class, deleted))
+                .isTrue();
+        // The same manifest is safe after a restart.
+        recover(manifest);
+        assertThat(slackText(edited)).isNull();
+        assertThat(slackText(deleted)).isNull();
+    }
+
+    private long slackMessage(String ts, String text) {
+        return Objects.requireNonNull(jdbc.queryForObject(
+                "INSERT INTO slack_message (workspace_id, slack_team_id, slack_channel_id, slack_ts, text, ingested_at)"
+                        + " VALUES (?, 'T-restore', 'C-restore', ?, ?, now()) RETURNING id",
+                Long.class,
+                workspace.getId(),
+                ts,
+                text));
+    }
+
+    private @Nullable String slackText(long messageId) {
+        return jdbc.queryForObject("SELECT text FROM slack_message WHERE id = ?", String.class, messageId);
     }
 
     @Test
@@ -301,7 +360,7 @@ class ErasureRecoveryRestoreIntegrationTest extends AbstractWorkspaceIntegration
                 .isOne();
 
         String manifest = """
-                {"version":3,"restorePoint":"2026-01-01T00:00:00Z","noLaterErasures":false,"people":[],
+                {"version":4,"slackMessageChanges":[],"restorePoint":"2026-01-01T00:00:00Z","noLaterErasures":false,"people":[],
                  "workspacePurges":[],"disconnects":[],"messageDeletions":[],
                  "collectionErasures":[{"workspaceId":%d,"connectionId":%d,"collectionId":"%s"}]}
                 """.formatted(workspace.getId(), outlineId, collectionId);
@@ -376,6 +435,7 @@ class ErasureRecoveryRestoreIntegrationTest extends AbstractWorkspaceIntegration
                             beans.getBean(RestoredDisconnects.class),
                             beans.getBean(RestoredMessageDeletions.class),
                             beans.getBean(RestoredCollectionErasures.class),
+                            beans.getBean(RestoredSlackMessageChanges.class),
                             new PersonDataRecoveryProperties(manifest.toString())));
             context.refresh();
             assertThat(context.getBean(PersonDataRecovery.class).isRunning()).isTrue();
