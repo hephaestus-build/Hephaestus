@@ -234,11 +234,11 @@ function PasskeyStep({ passkey, pending }: { passkey: McpConsentPasskey; pending
 	return (
 		<div className="space-y-2">
 			<Alert>
-				<AlertTitle>This workspace requires a passkey</AlertTitle>
+				<AlertTitle>A passkey is required here</AlertTitle>
 				<AlertDescription>
 					{passkey.status === "add"
-						? "Add a passkey to your account first. Then confirm with it to allow this client."
-						: "Confirm with your passkey to allow this client."}{" "}
+						? "Add a passkey in your settings first. Then start the client’s sign-in again and confirm with it."
+						: "Admin changes here need your passkey, so confirm with it to allow this client."}{" "}
 					The client’s access ends one hour after you confirm. Then it asks you again.
 				</AlertDescription>
 			</Alert>

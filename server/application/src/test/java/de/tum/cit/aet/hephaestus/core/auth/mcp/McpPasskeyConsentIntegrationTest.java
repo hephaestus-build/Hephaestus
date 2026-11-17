@@ -43,6 +43,9 @@ class McpPasskeyConsentIntegrationTest extends RealAuthIntegrationTest {
 
     private static final JsonMapper JSON = JsonMapper.builder().build();
     private static final String CREDENTIAL = "credential-of-the-approving-passkey";
+    /** The bound with the default admin proof window of 6 hours. */
+    private static final Duration PASSKEY_BOUND = Duration.ofHours(1);
+
     private static final String GET_REVIEW_SETTINGS = """
             {"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "get_review_settings", "arguments": {}}}
             """;
@@ -108,6 +111,12 @@ class McpPasskeyConsentIntegrationTest extends RealAuthIntegrationTest {
                 .expectStatus()
                 .isEqualTo(409)
                 .expectBody(Void.class);
+        // A fresh proof that names no credential, as a session from before the credential claim carries.
+        Instant now = Instant.now();
+        String unnamed = jwtIssuer
+                .issue(accountId, TokenConstraints.browserSession(now.plus(Duration.ofHours(8)), now, now, null), null)
+                .value();
+        flow.approval(unnamed, requestId).expectStatus().isEqualTo(409).expectBody(Void.class);
 
         assertThat(grantColumn(requestId, "status")).isEqualTo("PENDING");
         assertThat(grantColumn(requestId, "passkey_credential_id")).isNull();
@@ -129,7 +138,7 @@ class McpPasskeyConsentIntegrationTest extends RealAuthIntegrationTest {
                                 + " ON g.client_session_id = s.id WHERE g.id = ?",
                         Timestamp.class,
                         grant))
-                .isEqualTo(Timestamp.from(proof.plus(McpClientGrant.PASSKEY_BOUND)));
+                .isEqualTo(Timestamp.from(proof.plus(PASSKEY_BOUND)));
 
         JsonNode settings = structured(call(tokens.accessToken(), GET_REVIEW_SETTINGS));
         structured(call(
@@ -159,7 +168,7 @@ class McpPasskeyConsentIntegrationTest extends RealAuthIntegrationTest {
 
         jdbc.update(
                 "UPDATE mcp_client_grant SET passkey_verified_at = ? WHERE id = ?",
-                Timestamp.from(Instant.now().minus(McpClientGrant.PASSKEY_BOUND).minusSeconds(1)),
+                Timestamp.from(Instant.now().minus(PASSKEY_BOUND).minusSeconds(1)),
                 grantOf(tokens));
 
         JsonNode refused = call(tokens.accessToken(), GET_REVIEW_SETTINGS);

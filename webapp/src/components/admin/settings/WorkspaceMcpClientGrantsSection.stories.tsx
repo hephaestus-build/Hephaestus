@@ -55,6 +55,16 @@ export const ConfirmedWithPasskey: Story = {
 	},
 };
 
+/** The hour after the passkey confirmation has passed; the client must be approved again. */
+export const PasskeyAccessEnded: Story = {
+	args: {
+		grants: [{ ...grant, approvedAt: minutesBefore(90), passkeyBackedUntil: minutesBefore(30) }],
+	},
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText(/Its access ended/u)).toBeVisible();
+	},
+};
+
 export const Empty: Story = {
 	args: { grants: [] },
 	play: async ({ canvas }) => {

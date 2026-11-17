@@ -43,10 +43,14 @@ class PasskeyAssurancePolicyTest {
     }
 
     private PasskeyAssurancePolicy policy(boolean instance, boolean workspace, boolean enforced) {
+        return policy(instance, workspace, enforced, Duration.ofHours(6));
+    }
+
+    private PasskeyAssurancePolicy policy(boolean instance, boolean workspace, boolean enforced, Duration adminMaxAge) {
         account.setId(42L);
         when(accounts.findById(42L)).thenReturn(Optional.of(account));
         return new PasskeyAssurancePolicy(
-                new PasskeyProperties(instance, workspace, "example.com", List.of(), Duration.ofHours(6)),
+                new PasskeyProperties(instance, workspace, "example.com", List.of(), adminMaxAge),
                 accounts,
                 enforced ? AuthPropertiesFixture.defaults() : AuthPropertiesFixture.withoutAssurance(),
                 Clock.fixed(NOW, ZoneOffset.UTC),
@@ -295,7 +299,7 @@ class PasskeyAssurancePolicyTest {
     @Test
     void shouldAcceptAnMcpCallWhoseGrantHoldsAPasskeyProofWithinItsBound() {
         SecurityContextHolder.getContext().setAuthentication(mcpClient());
-        onMcpCall(new McpCallGrant(UUID.randomUUID(), true, NOW.plusSeconds(60)));
+        onMcpCall(new McpCallGrant(UUID.randomUUID(), true, NOW.minus(Duration.ofMinutes(59))));
 
         policy(false, false).requireWorkspaceAdmin(true, false, true);
         policy(false, false).requireWorkspaceAdmin(true, false, false);
@@ -304,10 +308,38 @@ class PasskeyAssurancePolicyTest {
     @Test
     void shouldRefuseAnMcpCallWhenItsGrantsPasskeyBoundHasPassed() {
         SecurityContextHolder.getContext().setAuthentication(mcpClient());
-        onMcpCall(new McpCallGrant(UUID.randomUUID(), true, NOW));
+        onMcpCall(new McpCallGrant(UUID.randomUUID(), true, NOW.minus(Duration.ofHours(1))));
 
         assertThatThrownBy(() -> policy(false, false).requireWorkspaceAdmin(true, false, true))
                 .isInstanceOf(PasskeyRequiredException.class);
+    }
+
+    /** An operator who shortens the admin proof window shortens the grant's bound with it. */
+    @Test
+    void shouldBoundAGrantsPasskeyProofByAShorterAdminWindow() {
+        SecurityContextHolder.getContext().setAuthentication(mcpClient());
+        onMcpCall(new McpCallGrant(UUID.randomUUID(), true, NOW.minus(Duration.ofMinutes(20))));
+        PasskeyAssurancePolicy shortWindow = policy(false, false, true, Duration.ofMinutes(15));
+
+        assertThat(shortWindow.mcpPasskeyBound()).isEqualTo(Duration.ofMinutes(15));
+        assertThat(policy(false, false).mcpPasskeyBound()).isEqualTo(Duration.ofHours(1));
+        assertThatThrownBy(() -> shortWindow.requireWorkspaceAdmin(true, false, false))
+                .isInstanceOf(PasskeyRequiredException.class);
+    }
+
+    /** Only an MCP client's token lets a grant's proof count; any other token proves nothing through it. */
+    @Test
+    void shouldIgnoreAGrantsPasskeyProofForATokenWithoutASession() {
+        SecurityContextHolder.getContext()
+                .setAuthentication(new JwtAuthenticationToken(Jwt.withTokenValue("browser")
+                        .header("alg", "ES256")
+                        .subject("42")
+                        .build()));
+        onMcpCall(new McpCallGrant(UUID.randomUUID(), true, NOW));
+
+        assertThatThrownBy(() -> policy(false, false).requireWorkspaceAdmin(true, false, false))
+                .isInstanceOf(PasskeyRequiredException.class);
+        assertThatThrownBy(() -> policy(false, false).requireFresh()).isInstanceOf(PasskeyRequiredException.class);
     }
 
     @Test
@@ -322,7 +354,7 @@ class PasskeyAssurancePolicyTest {
     @Test
     void shouldNeverLetAGrantsPasskeyProofStandForAnInstanceAdminOrARecovery() {
         SecurityContextHolder.getContext().setAuthentication(mcpClient());
-        onMcpCall(new McpCallGrant(UUID.randomUUID(), true, NOW.plusSeconds(60)));
+        onMcpCall(new McpCallGrant(UUID.randomUUID(), true, NOW));
         PasskeyAssurancePolicy instance = policy(true, false);
         account.setAppRole(Account.AppRole.APP_ADMIN);
         assertThatThrownBy(() -> instance.requireWorkspaceAdmin(true, false, false))

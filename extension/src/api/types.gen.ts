@@ -3402,7 +3402,7 @@ export type McpClientGrant = {
 	clientName: string;
 	id: string;
 	/**
-	 * The approval was confirmed with a passkey; the grant ends at this time
+	 * The approval was confirmed with a passkey, and the client's access ends at this time
 	 */
 	passkeyBackedUntil?: string;
 	scopes: Array<string>;

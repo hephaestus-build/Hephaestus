@@ -25,6 +25,13 @@ import org.springframework.web.server.ResponseStatusException;
 @Service
 @ConditionalOnServerRole
 public class PasskeyAssurancePolicy implements AdminPasskeyAccess {
+    /**
+     * How long a passkey proof given at MCP consent stands for the grant's calls, unless the admin proof window is
+     * shorter (ADR 0110 decision 8). One hour covers a configuration session with an MCP client; a shorter bound would
+     * interrupt that work for a new approval.
+     */
+    static final Duration MCP_PASSKEY_BOUND = Duration.ofHours(1);
+
     private final PasskeySecurityEvents events;
     private final PasskeyProperties properties;
     private final AccountRepository accounts;
@@ -73,6 +80,12 @@ public class PasskeyAssurancePolicy implements AdminPasskeyAccess {
                 && isFresh(SecurityContextHolder.getContext().getAuthentication());
     }
 
+    @Override
+    public Duration mcpPasskeyBound() {
+        Duration admin = properties.adminMaxAge();
+        return admin.compareTo(MCP_PASSKEY_BOUND) < 0 ? admin : MCP_PASSKEY_BOUND;
+    }
+
     private boolean needsProof(Account account, boolean instanceAdmin, boolean workspace, boolean workspaceRequired) {
         return account.isPasskeyProtectionEnabled()
                 || account.isPasskeyRecoveryRequired()
@@ -96,8 +109,8 @@ public class PasskeyAssurancePolicy implements AdminPasskeyAccess {
         }
         Instant now = clock.instant();
         return McpCallGrant.current()
-                .map(McpCallGrant::passkeyBackedUntil)
-                .filter(now::isBefore)
+                .map(McpCallGrant::passkeyVerifiedAt)
+                .filter(verifiedAt -> now.isBefore(verifiedAt.plus(mcpPasskeyBound())))
                 .isPresent();
     }
 

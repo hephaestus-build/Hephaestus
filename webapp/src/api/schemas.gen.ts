@@ -6547,7 +6547,8 @@ export const McpClientGrantSchema = {
 		passkeyBackedUntil: {
 			type: "string",
 			format: "date-time",
-			description: "The approval was confirmed with a passkey; the grant ends at this time",
+			description:
+				"The approval was confirmed with a passkey, and the client's access ends at this time",
 		},
 		scopes: {
 			type: "array",

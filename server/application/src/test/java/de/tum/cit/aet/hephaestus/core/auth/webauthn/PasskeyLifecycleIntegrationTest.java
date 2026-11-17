@@ -356,7 +356,8 @@ class PasskeyLifecycleIntegrationTest extends RealAuthIntegrationTest {
     private String token(Account account, @Nullable Instant proof) {
         return issuer.issue(
                         Objects.requireNonNull(account.getId()),
-                        new TokenConstraints(Instant.now().plus(Duration.ofHours(1)), Instant.now(), null, proof),
+                        TokenConstraints.browserSession(
+                                Instant.now().plus(Duration.ofHours(1)), Instant.now(), proof, "credential-of-proof"),
                         null)
                 .value();
     }
@@ -589,6 +590,7 @@ class PasskeyLifecycleIntegrationTest extends RealAuthIntegrationTest {
                 .getValue();
         var after = decoder.decode(refreshed);
         assertThat(after.<Long>getClaim("passkey_time")).isEqualTo(before.<Long>getClaim("passkey_time"));
+        assertThat(after.getClaimAsString("passkey_credential")).isEqualTo("credential-of-proof");
         assertThat(after.<Long>getClaim("session_exp")).isEqualTo(before.<Long>getClaim("session_exp"));
         client.get()
                 .uri("/user")
@@ -686,6 +688,10 @@ class PasskeyLifecycleIntegrationTest extends RealAuthIntegrationTest {
                 .isOk()
                 .expectBody(Void.class);
         assertThat(decoder.decode(verifiedToken).<Long>getClaim("passkey_time")).isPositive();
+        // The proof names the credential whose assertion the server checked, so an MCP approval records that one.
+        assertThat(decoder.decode(verifiedToken).getClaimAsString("passkey_credential"))
+                .isEqualTo(jdbc.queryForObject(
+                        "SELECT id FROM passkey_credential WHERE account_id = ?", String.class, account.getId()));
         assertThat(auditCount(account, "PASSKEY_CHANGED", "SUCCESS", null)).isEqualTo(1);
         assertThat(auditCount(account, "PASSKEY_VERIFIED", "SUCCESS", null)).isEqualTo(1);
         client.get()
@@ -762,6 +768,7 @@ class PasskeyLifecycleIntegrationTest extends RealAuthIntegrationTest {
         // The replacement session keeps the original sign-in and deadline, and no longer holds a passkey factor.
         var replacement = decoder.decode(removed);
         assertThat(replacement.hasClaim("passkey_time")).isFalse();
+        assertThat(replacement.hasClaim("passkey_credential")).isFalse();
         assertThat(replacement.<Long>getClaim("auth_time")).isEqualTo(signIn.<Long>getClaim("auth_time"));
         assertThat(replacement.<Long>getClaim("session_exp")).isEqualTo(signIn.<Long>getClaim("session_exp"));
         client.get()

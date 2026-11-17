@@ -1,6 +1,7 @@
 import { useId } from "react";
 
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
+import { useNow } from "@/components/common/use-now";
 import { Button } from "@/components/ui/button";
 import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from "@/components/ui/item";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -43,6 +44,8 @@ export function WorkspaceMcpClientGrantsSection({
 	onRevoke,
 }: WorkspaceMcpClientGrantsSectionProps) {
 	const id = useId();
+	// A passkey-confirmed access that already ended reads as ended, not as one that ends.
+	const now = useNow();
 	return (
 		<section aria-labelledby={`${id}-heading`}>
 			<h2 id={`${id}-heading`} className="text-lg font-semibold">
@@ -95,7 +98,7 @@ export function WorkspaceMcpClientGrantsSection({
 										Calls itself {grant.clientName}. Allowed by {grant.approvedBy}
 										{grant.approvedAt === undefined ? "" : ` on ${formatDate(grant.approvedAt)}`}.
 										{grant.passkeyBackedUntil !== undefined &&
-											` Confirmed with a passkey. Its access ends ${formatDateTime(grant.passkeyBackedUntil)}.`}
+											` Confirmed with a passkey. Its access ${grant.passkeyBackedUntil.getTime() > now ? "ends" : "ended"} ${formatDateTime(grant.passkeyBackedUntil)}.`}
 									</ItemDescription>
 								</ItemContent>
 								<ItemActions>

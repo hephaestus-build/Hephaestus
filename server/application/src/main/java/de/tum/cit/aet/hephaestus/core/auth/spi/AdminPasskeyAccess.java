@@ -1,5 +1,7 @@
 package de.tum.cit.aet.hephaestus.core.auth.spi;
 
+import java.time.Duration;
+
 /** Requires assurance after workspace role authorization, before an admin capability is used. */
 public interface AdminPasskeyAccess {
     boolean assuranceEnforced();
@@ -26,4 +28,10 @@ public interface AdminPasskeyAccess {
 
     /** Whether the current browser request carries a passkey proof within the step-up window. */
     boolean freshPasskeyProof();
+
+    /**
+     * How long a passkey proof given at MCP consent stands for the grant's calls: one hour, or the admin proof window if
+     * the operator set a shorter one. The client session ends at this bound.
+     */
+    Duration mcpPasskeyBound();
 }

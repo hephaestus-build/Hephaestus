@@ -158,7 +158,7 @@ records the decision; `core.auth.mcp` implements the authorization server, and `
 - **A passkey confirms consent where the policy asks for one.** In a workspace where the admin passkey policy
   requires a passkey of the account, the consent page runs the passkey step-up first. The browser token then
   carries `passkey_time` and `passkey_credential`, and the approval requires that proof within the step-up window.
-  The grant records the time and the credential id, and its client session ends one hour after the proof. Each
+  The grant records the time and the credential id, and its client session ends one hour after the proof, or earlier under a shorter admin proof window. Each
   call under that grant satisfies the workspace admin requirement until then. A grant's proof never satisfies the
   instance-admin requirement or a pending passkey recovery.
 - **Token shape.** An MCP token's `aud` is the workspace endpoint alone, it carries `scope` and no `roles`, and the

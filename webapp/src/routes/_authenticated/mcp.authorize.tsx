@@ -18,7 +18,6 @@ import { useConfirmAccess } from "@/hooks/use-confirm-access";
 import { usePasskeySettings } from "@/hooks/use-passkey-settings";
 import { pageTitle } from "@/lib/page-title";
 import { problemDetailOf, problemStatusOf, stepUpChallengeOf } from "@/lib/problem-detail";
-import { PASSKEY_CHALLENGE_PATH } from "@/runtime/auth/passkey-challenge";
 
 const AUTHORIZATION_ERRORS: readonly McpAuthorizationError[] = [
 	"INVALID_CLIENT",
@@ -158,12 +157,10 @@ function McpAuthorizeRoute() {
 			} else if (passkeys.section.status?.credentials.length === 0) {
 				passkey = {
 					status: "add",
-					// The challenge page adds a passkey, confirms with it, and returns to this request.
+					// Adding a passkey ends the account's other sessions and pending client requests, this one
+					// too, so the client's sign-in starts again afterwards.
 					onAdd: () => {
-						void router.navigate({
-							to: PASSKEY_CHALLENGE_PATH,
-							search: { returnTo: location.href },
-						});
+						void router.navigate({ to: "/settings", hash: "passkeys" });
 					},
 				};
 			} else {

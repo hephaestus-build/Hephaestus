@@ -113,7 +113,7 @@ export const NeedsPasskey: Story = {
 		},
 	},
 	play: async ({ canvas, args, userEvent }) => {
-		await expect(canvas.getByText("This workspace requires a passkey")).toBeVisible();
+		await expect(canvas.getByText("A passkey is required here")).toBeVisible();
 		await expect(canvas.getByText(/ends one hour after you confirm/u)).toBeVisible();
 		await userEvent.click(canvas.getByRole("button", { name: "Confirm with passkey and allow" }));
 		if (args.state.status === "ready") {

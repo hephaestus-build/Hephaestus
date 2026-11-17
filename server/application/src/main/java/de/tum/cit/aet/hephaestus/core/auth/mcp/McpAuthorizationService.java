@@ -248,7 +248,7 @@ public class McpAuthorizationService implements McpClientGrants {
      * Approves a pending request. It holds the account's issuance lock and checks that the approving token
      * is still active, so an approval that races "sign out everywhere" writes no code (ADR 0110 decision 9).
      * Where the passkey policy asks for a passkey, the approving session must carry a fresh passkey proof. The grant
-     * records when and with which credential, and its client session ends at {@link McpClientGrant#PASSKEY_BOUND}
+     * records when and with which credential, and its client session ends at {@link AdminPasskeyAccess#mcpPasskeyBound}
      * after that proof (decision 8).
      *
      * @param passkeyCredential the credential that the approving session's passkey proof names, if any
@@ -284,7 +284,7 @@ public class McpAuthorizationService implements McpClientGrants {
             if (passkeyTime == null || passkeyCredential == null || !passkeys.freshPasskeyProof()) {
                 return new Approval.PasskeyRequired();
             }
-            Instant bound = passkeyTime.plus(McpClientGrant.PASSKEY_BOUND);
+            Instant bound = passkeyTime.plus(passkeys.mcpPasskeyBound());
             if (bound.isBefore(clientSessionExpiresAt)) {
                 clientSessionExpiresAt = bound;
             }
@@ -433,7 +433,9 @@ public class McpAuthorizationService implements McpClientGrants {
                                 .map(McpScope::value)
                                 .toList(),
                         grant.getApprovedAt(),
-                        grant.passkeyBackedUntil()))
+                        grant.getPasskeyVerifiedAt() == null
+                                ? null
+                                : grant.getPasskeyVerifiedAt().plus(passkeys.mcpPasskeyBound())))
                 .toList();
     }
 

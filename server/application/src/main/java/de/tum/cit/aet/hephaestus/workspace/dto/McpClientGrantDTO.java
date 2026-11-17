@@ -24,7 +24,8 @@ public record McpClientGrantDTO(
         @NonNull List<String> scopes,
         @Nullable Instant approvedAt,
 
-        @Schema(description = "The approval was confirmed with a passkey; the grant ends at this time") @Nullable
+        @Schema(description = "The approval was confirmed with a passkey, and the client's access ends at this time")
+        @Nullable
         Instant passkeyBackedUntil) {
     public McpClientGrantDTO {
         scopes = List.copyOf(scopes);
