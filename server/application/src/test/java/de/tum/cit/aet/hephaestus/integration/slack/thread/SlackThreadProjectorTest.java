@@ -6,17 +6,27 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.core.auth.spi.AccountIdentityQuery;
+import de.tum.cit.aet.hephaestus.core.auth.spi.GitProviderRegistry;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyRecorder;
 import de.tum.cit.aet.hephaestus.integration.chat.item.ThreadProjection;
+import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMessageRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackThreadMessageRow;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackThreadRepository;
+import de.tum.cit.aet.hephaestus.integration.slack.events.SlackParticipantConsentGate;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.IntStream;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
@@ -44,7 +54,28 @@ class SlackThreadProjectorTest extends BaseUnitTest {
 
     @BeforeEach
     void setUp() {
-        projector = new SlackThreadProjector(threadRepository, messageRepository, new ObjectMapper(), personCopies);
+        projector = new SlackThreadProjector(
+                threadRepository,
+                messageRepository,
+                new ObjectMapper(),
+                personCopies,
+                connections,
+                identities,
+                providers,
+                participantConsent);
+        // Every developer has a Slack identity in the workspace's one Slack team unless a test says otherwise.
+        Connection slack = mock(Connection.class);
+        lenient().when(slack.getInstanceKey()).thenReturn("T1");
+        lenient()
+                .when(connections.findActiveConnections(anyLong(), eq(IntegrationKind.SLACK)))
+                .thenReturn(List.of(slack));
+        lenient().when(providers.findProviderId("SLACK", "https://slack.com")).thenReturn(Optional.of(3L));
+        lenient()
+                .when(participantConsent.ingestionAllowed(anyLong(), anyString()))
+                .thenReturn(true);
+        lenient()
+                .when(identities.activeLinksForAccount(anyLong()))
+                .thenReturn(List.of(new AccountIdentityQuery.IdentityView(1L, 3L, "U1", "T1")));
         // Every thread is readable unless a test says otherwise: all its live turns pass the consent gate.
         lenient()
                 .when(messageRepository.countLiveTurns(anyLong(), anyString(), anyString()))
@@ -52,6 +83,69 @@ class SlackThreadProjectorTest extends BaseUnitTest {
         lenient()
                 .when(messageRepository.countReadableTurns(anyLong(), anyString(), anyString()))
                 .thenReturn(1L);
+    }
+
+    @Mock
+    private ConnectionService connections;
+
+    @Mock
+    private AccountIdentityQuery identities;
+
+    @Mock
+    private GitProviderRegistry providers;
+
+    @Mock
+    private SlackParticipantConsentGate participantConsent;
+
+    @Test
+    void shouldSayTheConversationsAreUnknownWhenTheDeveloperOptedOutOfSlackIngestion() {
+        when(participantConsent.ingestionAllowed(WORKSPACE, "U1")).thenReturn(false);
+
+        JsonNode payload = projector.buildPayload(WORKSPACE, DEVELOPER);
+
+        assertThat(payload.path("status").asString()).isEqualTo("UNAVAILABLE");
+        assertThat(payload.path("reason").asString()).contains("opted out").contains("unknown, not none");
+        assertThat(payload.has("conversations")).isFalse();
+    }
+
+    @Test
+    void shouldSayTheConversationsAreUnknownWhenTheAccountHasNoSlackIdentity() {
+        when(identities.activeLinksForAccount(DEVELOPER))
+                .thenReturn(List.of(new AccountIdentityQuery.IdentityView(1L, 3L, "U1", "T-other")));
+
+        JsonNode payload = projector.buildPayload(WORKSPACE, DEVELOPER);
+
+        assertThat(payload.path("status").asString()).isEqualTo("UNAVAILABLE");
+        assertThat(payload.path("reason").asString())
+                .contains("no linked identity")
+                .contains("unknown, not none");
+        assertThat(payload.has("conversations")).isFalse();
+        assertThat(payload.has("totalThreads")).isFalse();
+    }
+
+    @Test
+    void shouldSayTheConversationsAreUnknownAndRegisterNoProviderWhenNoSlackProviderExists() {
+        when(providers.findProviderId("SLACK", "https://slack.com")).thenReturn(Optional.empty());
+
+        JsonNode payload = projector.buildPayload(WORKSPACE, DEVELOPER);
+
+        assertThat(payload.path("status").asString()).isEqualTo("UNAVAILABLE");
+        assertThat(payload.path("reason").asString())
+                .contains("no linked identity")
+                .contains("unknown, not none");
+        // The capture reads in a read-only transaction: it must not create the provider row.
+        verify(providers, never()).resolveProviderId(anyString(), anyString());
+    }
+
+    @Test
+    void shouldSayTheConversationsAreUnavailableWithoutAConnectedSlack() {
+        when(connections.findActiveConnections(WORKSPACE, IntegrationKind.SLACK))
+                .thenReturn(List.of());
+
+        JsonNode payload = projector.buildPayload(WORKSPACE, DEVELOPER);
+
+        assertThat(payload.path("status").asString()).isEqualTo("UNAVAILABLE");
+        assertThat(payload.has("conversations")).isFalse();
     }
 
     @Test

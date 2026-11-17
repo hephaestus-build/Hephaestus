@@ -11,6 +11,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.core.auth.spi.AccountIdentityQuery;
 import de.tum.cit.aet.hephaestus.core.auth.spi.GitProviderRegistry;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyRecorder;
 import de.tum.cit.aet.hephaestus.evidence.CitationSide;
@@ -37,6 +38,7 @@ import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMessageRepository
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackThread;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackThreadMessageRow;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackThreadRepository;
+import de.tum.cit.aet.hephaestus.integration.slack.events.SlackParticipantConsentGate;
 import de.tum.cit.aet.hephaestus.integration.slack.thread.SlackThreadProjector;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
@@ -69,7 +71,15 @@ class ThreadItemSourceTest extends BaseUnitTest {
 
     @BeforeEach
     void setUp() {
-        var projector = new SlackThreadProjector(threads, messages, mapper, mock(PersonDataCopyRecorder.class));
+        var projector = new SlackThreadProjector(
+                threads,
+                messages,
+                mapper,
+                mock(PersonDataCopyRecorder.class),
+                mock(ConnectionService.class),
+                mock(AccountIdentityQuery.class),
+                mock(GitProviderRegistry.class),
+                mock(SlackParticipantConsentGate.class));
         source = new ThreadItemSource(
                 threads,
                 messages,
