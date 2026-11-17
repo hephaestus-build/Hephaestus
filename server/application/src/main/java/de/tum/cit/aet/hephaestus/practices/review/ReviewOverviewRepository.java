@@ -13,7 +13,8 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.Repository;
 
 public interface ReviewOverviewRepository extends Repository<Review, UUID> {
-    @Query("SELECT min(r.createdAt) FROM Review r WHERE r.workspaceId=:ws")
+    @Query(
+            "SELECT min(r.createdAt) FROM Review r WHERE r.workspaceId=:ws AND r.origin <> de.tum.cit.aet.hephaestus.practices.spi.ReviewOrigin.TRIAL")
     Optional<Instant> first(long ws);
 
     @Query(value = """
@@ -46,13 +47,15 @@ public interface ReviewOverviewRepository extends Repository<Review, UUID> {
 
     @Query(
             value = "SELECT q.status AS status,count(*) AS count FROM review q"
-                    + " WHERE q.workspace_id=:ws AND q.created_at>=:from AND q.created_at<:to GROUP BY 1",
+                    + " WHERE q.workspace_id=:ws AND q.origin<>'TRIAL' AND q.created_at>=:from AND q.created_at<:to"
+                    + " GROUP BY 1",
             nativeQuery = true)
     List<StatusCount> statuses(long ws, Instant from, Instant to);
 
     @Query(value = """
         WITH dates AS (
-          SELECT 'REVIEW' AS kind,created_at AS at FROM review WHERE workspace_id=:ws AND created_at>=:from AND created_at<:to
+          SELECT 'REVIEW' AS kind,created_at AS at FROM review WHERE workspace_id=:ws AND origin<>'TRIAL'
+            AND created_at>=:from AND created_at<:to
           UNION ALL SELECT 'RESULT',recorded_at FROM result WHERE workspace_id=:ws AND recorded_at>=:from AND recorded_at<:to
           UNION ALL SELECT 'FEEDBACK',created_at FROM feedback WHERE workspace_id=:ws AND created_at>=:from AND created_at<:to)
         SELECT width_bucket(CAST(extract(epoch FROM at) AS float8), CAST(:starts AS float8[])) AS bucket,

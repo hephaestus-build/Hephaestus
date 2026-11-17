@@ -12,7 +12,7 @@ import org.springframework.data.repository.Repository;
 
 public interface ReviewTimingRepository extends Repository<Review, UUID> {
     @Query(value = """
-        SELECT id,created_at AS createdAt FROM review WHERE workspace_id=:workspaceId
+        SELECT id,created_at AS createdAt FROM review WHERE workspace_id=:workspaceId AND origin<>'TRIAL'
           AND created_at>=:from AND created_at<:to AND (CAST(:afterTime AS timestamptz) IS NULL
             OR (created_at,id::text)>(CAST(:afterTime AS timestamptz),CAST(:afterId AS text)))
         ORDER BY created_at,id::text

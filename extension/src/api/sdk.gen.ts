@@ -376,6 +376,8 @@ import type {
 	GetPracticeResponses,
 	GetPracticeReviewSettingsData,
 	GetPracticeReviewSettingsResponses,
+	GetPracticeTrialData,
+	GetPracticeTrialResponses,
 	GetPracticeWorkspaceOverviewData,
 	GetPracticeWorkspaceOverviewResponses,
 	GetPracticeWorkspaceTilesData,
@@ -698,6 +700,8 @@ import type {
 	SetPracticeFeedbackModeResponses,
 	SetReviewScheduleEnabledData,
 	SetReviewScheduleEnabledResponses,
+	StartPracticeTrialData,
+	StartPracticeTrialResponses,
 	StartScanData,
 	StartScanResponses,
 	SubmitConversationTurnData,
@@ -4585,6 +4589,36 @@ export const getOwnReview = <ThrowOnError extends boolean = false>(
 	(options.client ?? client).get<GetOwnReviewResponses, unknown, ThrowOnError>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practice-profile/reviews/{reviewId}",
+		...options,
+	});
+
+/**
+ * Try a practice on one item
+ *
+ * Runs the practice on the item as a review does, but records no observation and sends no feedback. The trial counts against the workspace's AI budget.
+ */
+export const startPracticeTrial = <ThrowOnError extends boolean = false>(
+	options: Options<StartPracticeTrialData, ThrowOnError>,
+): RequestResult<StartPracticeTrialResponses, unknown, ThrowOnError> =>
+	(options.client ?? client).post<StartPracticeTrialResponses, unknown, ThrowOnError>({
+		security: [{ scheme: "bearer", type: "http" }],
+		url: "/workspaces/{workspaceSlug}/practice-trials",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+/**
+ * Read a trial and what it found
+ */
+export const getPracticeTrial = <ThrowOnError extends boolean = false>(
+	options: Options<GetPracticeTrialData, ThrowOnError>,
+): RequestResult<GetPracticeTrialResponses, unknown, ThrowOnError> =>
+	(options.client ?? client).get<GetPracticeTrialResponses, unknown, ThrowOnError>({
+		security: [{ scheme: "bearer", type: "http" }],
+		url: "/workspaces/{workspaceSlug}/practice-trials/{trialId}",
 		...options,
 	});
 

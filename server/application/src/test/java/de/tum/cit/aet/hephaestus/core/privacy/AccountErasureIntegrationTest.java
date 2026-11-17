@@ -1259,6 +1259,33 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
                     contributor.export(
                             Objects.requireNonNull(otherSelection.get(contributor.store())), otherPrimaryScope));
         allStores.seedRoleChangeNotifications(subject.account(), Objects.requireNonNull(otherAccount.getId()));
+        // A trial that read the person's work: a copy of one of their reviews, ended with its membership tried.
+        UUID source = jdbc.queryForObject("""
+                        SELECT r.id FROM review r WHERE r.kind='ITEM' AND EXISTS (SELECT 1 FROM result x
+                         WHERE (x.review_id, x.workspace_id) = (r.id, r.workspace_id) AND x.developer_id = ?)
+                         ORDER BY r.id LIMIT 1
+                        """, UUID.class, targetAccount.getId());
+        UUID trial = UUID.randomUUID();
+        assertThat(jdbc.update("""
+                        INSERT INTO review SELECT (jsonb_populate_record(NULL::review, to_jsonb(r)
+                          || jsonb_build_object('id', ?::text, 'origin', 'TRIAL', 'event_id', NULL, 'batch_id', NULL,
+                                                'request_key', NULL, 'request_digest', NULL, 'requested_by_id', NULL, 'status', 'COMPLETE',
+                                                'stop_reason', NULL, 'report', '{"schemaVersion":1,"candidates":[]}'::jsonb))).*
+                          FROM review r WHERE r.id = ?
+                        """, trial.toString(), source)).isOne();
+        assertThat(jdbc.update("""
+                        INSERT INTO review_practice SELECT (jsonb_populate_record(NULL::review_practice, to_jsonb(p)
+                          || jsonb_build_object('review_id', ?::text))).*
+                          FROM review_practice p WHERE p.review_id = ?
+                        """, trial.toString(), source)).isPositive();
+        assertThat(jdbc.update("""
+                        INSERT INTO review_item SELECT (jsonb_populate_record(NULL::review_item, to_jsonb(m)
+                          || jsonb_build_object('review_id', ?::text, 'state', 'TRIED', 'result_id', NULL, 'job_id', NULL,
+                                                'staged_payload', NULL, 'staged_attempt', NULL,
+                                                'detail', jsonb_build_object('developerId', ?::bigint)))).*
+                          FROM review_item m WHERE m.review_id = ?
+                        """, trial.toString(), targetAccount.getId(), source))
+                .isPositive();
         // The composer transcript of one of the person's jobs: a digest, as a run keeps it after its claim ended.
         assertThat(jdbc.update("""
                         INSERT INTO composer_transcript_part (id, workspace_id, run_id, lease_epoch, kind, digest)

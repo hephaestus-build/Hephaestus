@@ -99,6 +99,11 @@ public class ReviewItem {
         this.resultId = resultId;
     }
 
+    /** Admission kept this trial membership's candidate in the trial's report, and wrote no result. */
+    public void tried() {
+        moveTo(ReviewItemState.TRIED);
+    }
+
     /** An earlier result of the same frozen item and practice answers this membership. */
     public void reuse(UUID resultId) {
         moveTo(ReviewItemState.REUSED);

@@ -89,7 +89,8 @@ class ReviewRequestPolicyTest {
         when(coverage.eligibleAccountIds(1)).thenReturn(Set.of(3L));
         assertThat(policy.refusal(WorkspacePortFixtures.reviewWorkspace(workspace), 2, 3))
                 .isEmpty();
-        when(reviews.existsByWorkspaceIdAndItemIdAndStatusIn(1, 2, List.of(ReviewStatus.QUEUED, ReviewStatus.RUNNING)))
+        when(reviews.existsByWorkspaceIdAndItemIdAndStatusInAndOriginNot(
+                        1, 2, List.of(ReviewStatus.QUEUED, ReviewStatus.RUNNING), ReviewOrigin.TRIAL))
                 .thenReturn(true);
         assertThat(policy.refusal(WorkspacePortFixtures.reviewWorkspace(workspace), 2, 3))
                 .contains(ReviewRequestReason.CONCURRENT_DUPLICATE);

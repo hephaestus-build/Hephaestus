@@ -16,7 +16,11 @@ class ReviewOriginTest extends BaseUnitTest {
     void scheduleAndBackfillAreOriginsRatherThanSyntheticEvents() {
         assertThat(ReviewOrigin.values())
                 .containsExactly(
-                        ReviewOrigin.EVENT, ReviewOrigin.REQUEST, ReviewOrigin.SCHEDULE, ReviewOrigin.BACKFILL);
+                        ReviewOrigin.EVENT,
+                        ReviewOrigin.REQUEST,
+                        ReviewOrigin.SCHEDULE,
+                        ReviewOrigin.BACKFILL,
+                        ReviewOrigin.TRIAL);
         var request = new ReviewRequest(
                 1,
                 3,

@@ -48,6 +48,30 @@ class ReviewOutcomeMeters {
                 for (ReviewStopReason reason : ReviewStopReason.values()) ended(kind, status, reason);
             }
         }
+        for (ReviewStatus status : ReviewStatus.values()) if (status.isTerminal()) trialEnded(status);
+    }
+
+    /** Counts a trial's end apart from production reviews (ADR 0118 decision 9). */
+    void trialEnded(Review review) {
+        Counter ended = trialEnded(review.getStatus());
+        afterCommit(() -> {
+            log.atInfo()
+                    .addKeyValue("event.name", "practice_trial.ended")
+                    .addKeyValue(StructuredLogKeys.WORKSPACE_ID, review.getWorkspaceId())
+                    .addKeyValue("review.id", review.getId())
+                    .addKeyValue("review.status", label(review.getStatus().name()))
+                    .addKeyValue(
+                            "review.reason",
+                            review.getStopReason() == null
+                                    ? "none"
+                                    : label(review.getStopReason().name()))
+                    .log("Trial ended");
+            ended.increment();
+        });
+    }
+
+    private Counter trialEnded(ReviewStatus status) {
+        return registry.counter(PracticeMetrics.TRIAL_ENDED, "status", label(status.name()));
     }
 
     /** Call in the transaction that gives the review its terminal status, after its items are final. */

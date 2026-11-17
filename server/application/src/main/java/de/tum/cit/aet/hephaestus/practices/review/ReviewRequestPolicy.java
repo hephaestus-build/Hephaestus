@@ -44,8 +44,9 @@ public class ReviewRequestPolicy {
                 && reviews.existsByWorkspaceIdAndItemIdAndOriginAndCreatedAtGreaterThanEqual(
                         workspaceId, itemId, ReviewOrigin.REQUEST, now.minus(Duration.ofMinutes(cooldown))))
             return Optional.of(ReviewRequestReason.REQUEST_COOLDOWN_ACTIVE);
-        if (reviews.existsByWorkspaceIdAndItemIdAndStatusIn(
-                workspaceId, itemId, List.of(ReviewStatus.QUEUED, ReviewStatus.RUNNING)))
+        // A trial on the same work holds nothing that the developer's own request would.
+        if (reviews.existsByWorkspaceIdAndItemIdAndStatusInAndOriginNot(
+                workspaceId, itemId, List.of(ReviewStatus.QUEUED, ReviewStatus.RUNNING), ReviewOrigin.TRIAL))
             return Optional.of(ReviewRequestReason.CONCURRENT_DUPLICATE);
         return Optional.empty();
     }

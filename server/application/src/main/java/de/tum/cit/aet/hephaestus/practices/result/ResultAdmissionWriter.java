@@ -5,16 +5,20 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.CandidateRefusal;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewInvocationFence;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewItemRepository;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewPracticeRepository;
+import de.tum.cit.aet.hephaestus.practices.review.model.ReviewItem;
 import de.tum.cit.aet.hephaestus.practices.review.model.ReviewPractice;
+import de.tum.cit.aet.hephaestus.practices.review.report.TrialReport;
 import de.tum.cit.aet.hephaestus.practices.spi.AdmissionReceipt;
 import de.tum.cit.aet.hephaestus.practices.spi.CitationVerificationStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackMode;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackModeQuery;
+import de.tum.cit.aet.hephaestus.practices.spi.HistoryCustody;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultCandidate;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentId;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewItemState;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewOrigin;
 import de.tum.cit.aet.hephaestus.practices.spi.WithheldItem;
 import java.time.Clock;
 import java.util.ArrayList;
@@ -100,6 +104,18 @@ public class ResultAdmissionWriter {
                 admitted.add(prior.getId());
                 continue;
             }
+            if (member.getState() == ReviewItemState.TRIED) {
+                if (member.getDetail() == null
+                        || member.getDetail().path("admissionAttempt").asInt(-1) != attempt)
+                    throw conflict("Another attempt admitted this assignment.");
+                var kept = review.getReport() == null
+                        ? List.<ResultCandidate>of()
+                        : json.treeToValue(review.getReport(), TrialReport.class)
+                                .candidates();
+                if (kept.stream().noneMatch(prior -> json.valueToTree(prior).equals(json.valueToTree(c))))
+                    throw conflict("The admitted body cannot change.");
+                continue;
+            }
             if (member.getState() == ReviewItemState.WITHHELD) {
                 withheld.add(new WithheldItem(c.practiceId(), c.itemId(), Objects.requireNonNull(member.getReason())));
                 continue;
@@ -115,6 +131,16 @@ public class ResultAdmissionWriter {
             }
             var at = clock.instant();
             if (review.getAdmittedAt() == null) review.setAdmittedAt(at);
+            if (review.getOrigin() == ReviewOrigin.TRIAL) {
+                var report = review.getReport() == null
+                        ? TrialReport.empty()
+                        : json.treeToValue(review.getReport(), TrialReport.class);
+                review.setReport(json.valueToTree(report.with(c)));
+                member.tried();
+                member.setAttemptedAt(at);
+                member.setDetail(admissionDetail(member, attempt, copyAuthority));
+                continue;
+            }
             var result = claims.write(ws, review, c, at);
             // A scan admits its files one by one: the first admission fixes the mode for the review's practice.
             var reviewPractice = Objects.requireNonNull(practiceById.get(c.practiceId()));
@@ -122,15 +148,19 @@ public class ResultAdmissionWriter {
                 reviewPractice.setSealedFeedbackMode(modes.getOrDefault(c.practiceId(), FeedbackMode.OFF));
             member.judge(result.getId());
             member.setAttemptedAt(at);
-            ObjectNode detail = member.getDetail() == null
-                    ? json.createObjectNode()
-                    : (ObjectNode) member.getDetail().deepCopy();
-            detail.put("admissionAttempt", attempt);
-            detail.set("custody", json.valueToTree(copyAuthority));
-            member.setDetail(detail);
+            member.setDetail(admissionDetail(member, attempt, copyAuthority));
             admitted.add(result.getId());
         }
         return new AdmissionReceipt(admitted, withheld);
+    }
+
+    private ObjectNode admissionDetail(ReviewItem member, int attempt, HistoryCustody copyAuthority) {
+        ObjectNode detail = member.getDetail() == null
+                ? json.createObjectNode()
+                : (ObjectNode) member.getDetail().deepCopy();
+        detail.put("admissionAttempt", attempt);
+        detail.set("custody", json.valueToTree(copyAuthority));
+        return detail;
     }
 
     static @Nullable CandidateRefusal refusal(ResultCandidate c) {

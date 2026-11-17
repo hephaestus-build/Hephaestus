@@ -114,7 +114,7 @@ However, standing still counts observations of practices in feedback mode Off.
 9\. **A trial spends from the same purse, under the same caps, and is reported apart.**
 
 - A trial that an admin starts runs in the batch band, as Request review does.
-- The trials of a workspace share a number of run subjects that an instance property sets, so only that many run at once.
+- The trials of a workspace share a number of run subjects that an instance property sets, so only that many run at once. The update of 2026-11-17 changes this.
 - Production metrics, standing and coverage exclude trials.
 
 10\. **Only workspace admins can try a practice.**
@@ -181,9 +181,27 @@ Not enforced. Each other rule gets its check in the pull request that ships it, 
 - decision 1: the round trip over the bundled catalog;
 - decisions 2–5: a sync test that keeps the version on an invalid folder and adds Reviewed by Nobody on a removed one;
 - decision 6: a standing test that skips an observation sealed in Off;
-- decisions 7–9: the refusal of a trial result, the three constraints, and the architecture test of the state filter.
+- decision 7: the architecture test of the state filter.
+
+Decisions 8 and 9 are enforced:
+
+- `ResultAdmissionIntegrationTest#shouldRefuseInTheDatabaseAResultForATrial` fails when the database admits a result for a trial.
+- `ResultAdmissionIntegrationTest#shouldKeepATrialCandidateInItsReportAndWriteNoResult` fails when a trial writes a result, feedback, a feedback copy or an outbox action, or publishes `ReviewCompleted`.
+- `ReviewRequestPinIntegrationTest#shouldRecordATrialOfOnePracticeForItsRequesterAndRefuseASecondWhileItRuns` fails when a second trial runs at once, or when a trial blocks a requested review of the same work.
+- `PracticeTrialControllerIntegrationTest` fails when a member who is no admin starts a trial, when the developer's practice page shows a running trial, or when retention keeps a report past its period.
 
 Until then, a reviewer rejects a diff that writes a result for a trial, selects a draft practice, or counts an observation sealed in Off.
+
+## Update — 2026-11-17: how many trials run, and what retention removes
+
+The pull request that ships trials changes two bullets.
+
+- **Decision 9: at most `hephaestus.practices.trials.max-active` trials of a workspace are queued or running at once** (default 1). Another trial is refused until one ends.
+  A shared run subject cannot bound them: a subject also keys the sandbox, so trials of different work would share one.
+- **Decision 8: retention and erasure clear a trial's report.** They do not delete the trial.
+  The report is what cites someone's work.
+  The trial's row stays, as every review's row does, and job retention removes its jobs and runs.
+- A practice script sees a trial as origin `REQUEST`, so a script never behaves differently on trial.
 
 ## Revisit trigger
 

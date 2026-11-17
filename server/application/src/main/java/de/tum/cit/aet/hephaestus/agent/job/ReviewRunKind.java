@@ -101,7 +101,7 @@ public class ReviewRunKind implements AgentRunHandler {
     public static AgentRunBand band(ReviewOrigin origin) {
         return switch (origin) {
             case SCHEDULE, BACKFILL -> AgentRunBand.BACKGROUND;
-            case EVENT, REQUEST -> AgentRunBand.BATCH;
+            case EVENT, REQUEST, TRIAL -> AgentRunBand.BATCH;
         };
     }
 
@@ -124,6 +124,11 @@ public class ReviewRunKind implements AgentRunHandler {
      */
     public static final String ATTEMPT_OF_RUN =
             "(CASE WHEN r.state = 'QUEUED' THEN r.lease_epoch ELSE r.lease_epoch - 1 END)";
+
+    /** Whether an admitted attempt goes on to the run that composes its feedback: a trial never composes (ADR 0118). */
+    public boolean composes(ReviewJob job) {
+        return assignments.review(job).origin() != ReviewOrigin.TRIAL;
+    }
 
     /** The subject of a review's runs: one review runs one attempt at a time. */
     public static String subject(UUID reviewId) {

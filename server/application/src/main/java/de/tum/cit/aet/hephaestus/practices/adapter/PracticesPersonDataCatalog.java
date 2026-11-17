@@ -37,6 +37,7 @@ import tools.jackson.databind.ObjectMapper;
     "result_mark_created_actor",
     "result_mark_removed_actor",
     "feedback_decision_actor",
+    "trial",
     "review",
     "review_batch",
     "review_schedule"
@@ -97,6 +98,23 @@ public class PracticesPersonDataCatalog implements PersonDataCatalog, PersonConv
                                 "id,workspace_id",
                                 "created_by_account_id=NULL",
                                 400),
+                        // A trial that read the person's work, or evidence derived from their copies, loses its
+                        // report: the report cites that work (ADR 0118). Its memberships go with the review_item store.
+                        new JdbcPersonDataStore(
+                                jdbc,
+                                mapper,
+                                "trial",
+                                "review",
+                                "t.origin='TRIAL' AND t.report IS NOT NULL AND EXISTS(SELECT 1 FROM review_item m WHERE"
+                                        + " m.workspace_id=t.workspace_id AND m.review_id=t.id"
+                                        + " AND (m.detail->>'developerId'=CAST(:account AS text)"
+                                        + " OR m.job_id=ANY(:derivedJobs) OR EXISTS(SELECT 1 FROM"
+                                        + " jsonb_array_elements_text(COALESCE(m.detail->'custody'->'sourceJobIds','[]'::jsonb))"
+                                        + " source(value) WHERE source.value::uuid=ANY(:derivedJobs))))",
+                                "id,workspace_id,status,created_at,completed_at,report",
+                                "id,workspace_id",
+                                "report=NULL",
+                                -181),
                         new JdbcPersonDataStore(
                                 jdbc,
                                 mapper,

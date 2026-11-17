@@ -44,7 +44,11 @@ class LifecycleContractTest extends HephaestusArchitectureTest {
                 new Contract<>(
                         ReviewItemState.class,
                         Set.of(ReviewItemState.LISTED, ReviewItemState.WITHHELD),
-                        Set.of(ReviewItemState.JUDGED, ReviewItemState.REUSED, ReviewItemState.WITHHELD)),
+                        Set.of(
+                                ReviewItemState.JUDGED,
+                                ReviewItemState.REUSED,
+                                ReviewItemState.WITHHELD,
+                                ReviewItemState.TRIED)),
                 new Contract<>(
                         ReviewBatchStatus.class,
                         Set.of(ReviewBatchStatus.AWAITING_CONFIRMATION, ReviewBatchStatus.RUNNING),

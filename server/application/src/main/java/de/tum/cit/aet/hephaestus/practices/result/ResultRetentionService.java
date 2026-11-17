@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.FeedbackRetentionProperties;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackCopyCleanupCustody;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
+import de.tum.cit.aet.hephaestus.practices.review.PracticeTrialProperties;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewRepository;
 import de.tum.cit.aet.hephaestus.practices.review.report.ScanReportService;
 import java.time.Clock;
@@ -26,7 +27,8 @@ import org.springframework.transaction.support.TransactionTemplate;
  * the window that conversations use too: feedback counted from its delivery or, when it was never delivered, its
  * creation, then the raw proof of the scans that ended before, then every result that no remaining feedback cites and
  * no running review reads, counted from when it was recorded. A result therefore stays as long as the latest delivery
- * that cites it.
+ * that cites it. It also clears the report of each trial once
+ * {@link PracticeTrialProperties#retention()} has passed since the trial ended.
  */
 @Slf4j
 @Service
@@ -42,6 +44,7 @@ public class ResultRetentionService {
     private final FeedbackCopyCleanupCustody custody;
     private final ScanReportService reports;
     private final FeedbackRetentionProperties retention;
+    private final PracticeTrialProperties trials;
     private final PlatformTransactionManager transactions;
     private final Clock clock;
 
@@ -50,11 +53,15 @@ public class ResultRetentionService {
     @WorkspaceAgnostic("Enumerates workspaces before each workspace's scoped retention transactions")
     public void purge() {
         var cutoff = clock.instant().minus(retention.feedbackRetention());
+        var trialCutoff = clock.instant().minus(trials.retention());
         var workspaces = new TreeSet<>(feedback.workspacesWithExpiredFeedback(cutoff));
-        workspaces.addAll(reviews.workspacesWithExpiredProof(cutoff));
+        workspaces.addAll(reviews.workspacesWithExpiredProof(cutoff, trialCutoff));
         for (var workspace : workspaces) {
             try {
                 purgeWorkspace(workspace, cutoff);
+                // A trial's report cites someone's work for a shorter period (ADR 0118 decision 8).
+                new TransactionTemplate(transactions)
+                        .executeWithoutResult(status -> reviews.clearExpiredTrialReports(workspace, trialCutoff));
             } catch (RuntimeException e) {
                 // One workspace's failure leaves the others' erasure due; the next run retries it.
                 log.warn("result.retention: purge failed for workspaceId={}: {}", workspace, e.toString());

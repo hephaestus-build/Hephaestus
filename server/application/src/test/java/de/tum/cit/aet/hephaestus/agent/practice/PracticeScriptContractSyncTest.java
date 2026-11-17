@@ -45,9 +45,12 @@ class PracticeScriptContractSyncTest extends BaseUnitTest {
         assertThat(values(source, "SEVERITIES"))
                 .containsExactlyElementsOf(
                         Arrays.stream(Severity.values()).map(Enum::name).toList());
+        // A script sees a trial as the requested review that it runs as, so the script contract has no TRIAL.
         assertThat(values(source, "ORIGINS"))
-                .containsExactlyElementsOf(
-                        Arrays.stream(ReviewOrigin.values()).map(Enum::name).toList());
+                .containsExactlyElementsOf(Arrays.stream(ReviewOrigin.values())
+                        .filter(origin -> origin != ReviewOrigin.TRIAL)
+                        .map(Enum::name)
+                        .toList());
         assertThat(values(source, "ABOUT_ROLES"))
                 .containsExactlyElementsOf(
                         Arrays.stream(AboutRole.values()).map(Enum::name).toList());

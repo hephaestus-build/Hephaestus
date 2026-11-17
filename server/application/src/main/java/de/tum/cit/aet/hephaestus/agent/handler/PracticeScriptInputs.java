@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.handler;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentSnapshot;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewKind;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewOrigin;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewSnapshot;
 import java.time.Instant;
 import java.util.Map;
@@ -61,7 +62,8 @@ public final class PracticeScriptInputs {
             scope.put("baseVersion", assignment.version().baseVersion());
         root.putObject("review")
                 .put("id", review.id().toString())
-                .put("origin", review.origin().name())
+                // A trial runs as a requested review, so a script never behaves differently on trial.
+                .put("origin", (review.origin() == ReviewOrigin.TRIAL ? ReviewOrigin.REQUEST : review.origin()).name())
                 .put("startedAt", startedAt.toString());
         root.set("previous", previous == null ? mapper.nullNode() : previous.deepCopy());
         return Map.of(

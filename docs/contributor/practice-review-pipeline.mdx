@@ -1011,6 +1011,29 @@ Withdrawal changes a private card's visibility, not its results.
 Restore is the reverse action.
 A developer's disagreement does not mark a result automatically.
 
+## Trials
+
+A trial is an item review with origin `TRIAL`, one practice and one item. `PracticeTrialService` requests it for a workspace admin.
+It passes the checks of a requested review, except the checks for delivery.
+A trial whose practice the plan would withhold is refused with that reason, and nothing is recorded.
+
+At most `hephaestus.practices.trials.max-active` trials of one workspace are queued or running.
+A trial keeps one run subject for each review, because the subject also keys the sandbox: two trials never share a sandbox.
+A trial holds nothing of the work's own reviews. An event or a request on the same work runs beside it, and the next event review ignores the trial's memberships.
+A practice script sees a trial as origin `REQUEST`, so the script runs as it would in production.
+
+Capture, the runner and admission run unchanged.
+Admission keeps an accepted candidate in the review's `report` (`TrialReport`) and ends the membership `TRIED`.
+It writes no result, so no feedback, standing, practice page or conversation can read a trial.
+`guard_result_insert` refuses a result for a trial review.
+A trial retains no composition inputs, is never handed on to a composition run and publishes no `ReviewCompleted`.
+The developer's practice page never shows a trial.
+
+`ReviewOutcomeMeters`, the timing window and the overview counts leave trials out. `practice.trial.ended` counts them.
+`ResultRetentionService` clears a trial's report `hephaestus.practices.trials.retention` after it ends.
+Person erasure clears the report of each trial that read the person's work or evidence copied from it.
+The review row stays, as every review's does, and job retention removes the trial's jobs and runs.
+
 ## Scans
 
 A scan pins the monitored default branch and complete inventory before practice filters.

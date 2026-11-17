@@ -234,6 +234,36 @@ class ReviewRequestPinIntegrationTest extends AbstractResultAdmissionIntegration
     }
 
     @Test
+    void shouldRecordATrialOfOnePracticeForItsRequesterAndRefuseASecondWhileItRuns() {
+        var review = itemReview();
+        recordFingerprintReads(review.ref());
+        var trial = ReviewRequest.builder()
+                .workspaceId(review.workspace())
+                .itemId(review.ref().itemId())
+                .kind(ReviewKind.ITEM)
+                .origin(ReviewOrigin.TRIAL)
+                .requestedById(review.request().requestedById())
+                .practiceIds(List.of(review.practice().getId()))
+                .build();
+
+        var id = service.request(trial);
+
+        var row = reviews.findById(id).orElseThrow();
+        assertThat(row.getOrigin()).isEqualTo(ReviewOrigin.TRIAL);
+        assertThat(row.getRequestedById()).isEqualTo(review.request().requestedById());
+        assertThat(assignments.findByWorkspaceIdAndReviewIdOrderByPracticeIdAsc(review.workspace(), id))
+                .singleElement()
+                .satisfies(assignment -> assertThat(assignment.getPracticeId())
+                        .isEqualTo(review.practice().getId()));
+        assertThatThrownBy(() -> service.request(trial))
+                .isInstanceOfSatisfying(
+                        ReviewRequestRejected.class,
+                        refusal -> assertThat(refusal.reason()).isEqualTo(ReviewRequestRejected.Reason.TRIAL_ACTIVE));
+        // A trial holds nothing of the work's own reviews: a requested review of the same work still runs.
+        assertThat(service.request(review.request())).isNotEqualTo(id);
+    }
+
+    @Test
     void shouldReadTheQueuedSourcesWithNoTransactionWhenAnItemReviewIsRequested() {
         var review = itemReview();
         var transactionAtRead = recordFingerprintReads(review.ref());
