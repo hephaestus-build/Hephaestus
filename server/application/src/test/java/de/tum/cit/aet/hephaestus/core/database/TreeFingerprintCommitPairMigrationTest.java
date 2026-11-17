@@ -28,7 +28,7 @@ import tools.jackson.databind.json.JsonMapper;
  */
 @Tag("database")
 class TreeFingerprintCommitPairMigrationTest {
-    private static final String CHANGELOG = "20261117171358-fix-tree-fingerprint-is-the-commit-pair.xml";
+    private static final String CHANGELOG = "20261117195444-fix-tree-fingerprint-is-the-commit-pair.xml";
     private static final long WORKSPACE = 997301;
     private static final long ITEM = 997302;
     private static final long PRACTICE = WORKSPACE + 200;
