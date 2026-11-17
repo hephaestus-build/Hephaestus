@@ -213,8 +213,13 @@ export const measureReview: KindRunner = async (run): Promise<RunOutcome> => {
 	if (signal.aborted) {
 		return { leaseLost: true };
 	}
-	// The run program uploads whatever the runner wrote. The server admits it against its own evidence.
-	return exit === EXIT_UPLOAD_FAILED
-		? { leaseLost: false, outcome: "handed_on" }
-		: { leaseLost: false, outcome: "completed", cause: takeProgramFailure() };
+	// The run program uploads whatever the runner wrote. The server admits it against its own evidence. Only a run
+	// program that exited on a crash sends a crash record: the runner shares /tmp and could leave one behind.
+	const crash = takeProgramFailure();
+	if (exit === EXIT_UPLOAD_FAILED) {
+		return { leaseLost: false, outcome: "handed_on" };
+	}
+	return exit === 0
+		? { leaseLost: false, outcome: "completed" }
+		: { leaseLost: false, outcome: "completed", cause: crash };
 };

@@ -242,7 +242,7 @@ public class ReviewJobClaimService {
                 job.setOutput(
                         objectMapper.createObjectNode().put("outcome", RefusalOutcome.COMPOSITION_UNCONFIRMED.name()));
             else {
-                // The run waits for its next attempt, so the attempt that ended last is the one before it.
+                // The run is leased for the attempt it claims now, so the attempt that ended last is the one before it.
                 String why = RunnerEnd.describeProgramFailure(job.getCapture(), job.getAttempt() - 1);
                 job.setErrorMessage(
                         why == null ? ReviewRunKind.RETRIES_EXHAUSTED : ReviewRunKind.RETRIES_EXHAUSTED + " " + why);
