@@ -59,6 +59,7 @@ export const Held: Story = {
 	args: { state: { status: "ready", reports: [heldReport] } },
 	play: async ({ canvas, args }) => {
 		await expect(canvas.getByText("Public soon")).toBeVisible();
+		await expect(canvas.getByText("Can become public")).toBeVisible();
 		await expect(
 			canvas.getByText(
 				/becomes a public issue at about \d{1,2}:\d{2} [ap]m \(in about 4 minutes\) unless you keep it private or edit it/u,
@@ -78,6 +79,7 @@ export const Drafting: Story = {
 	args: { state: { status: "ready", reports: [draftingReport] } },
 	play: async ({ canvas, args }) => {
 		await expect(canvas.getByText("Drafting")).toBeVisible();
+		await expect(canvas.getByText("Can become public")).toBeVisible();
 		await expect(canvas.getByText(/An AI model is drafting the issue\. Started/u)).toBeVisible();
 		await expect(canvas.getByText(/If the draft is not ready by about/u)).toHaveTextContent(
 			/your report goes on as written and does not become public\.$/u,
@@ -98,6 +100,7 @@ export const WaitingForModel: Story = {
 	args: { state: { status: "ready", reports: [waitingForModelReport] } },
 	play: async ({ canvas }) => {
 		await expect(canvas.getByText("Drafting")).toBeVisible();
+		await expect(canvas.getByText("Private")).toBeVisible();
 		await expect(
 			canvas.getByText(
 				/The AI model is busy with other work, so the draft waits for it\. Started/u,
@@ -124,10 +127,12 @@ export const Filing: Story = {
 export const PublicIssue: Story = {
 	args: { state: { status: "ready", reports: [publicIssue, closedPublicIssue] } },
 	play: async ({ canvas, args }) => {
-		await expect(canvas.getByRole("link", { name: /Public issue #1234/u })).toHaveAttribute(
+		await expect(canvas.getByRole("link", { name: /public issue #1234/u })).toHaveAttribute(
 			"href",
 			publicIssue.issueUrl,
 		);
+		await expect(canvas.getAllByText("Public")).toHaveLength(2);
+		await expect(canvas.getAllByText(/Filed as/u, { selector: "p" })).toHaveLength(2);
 		await expect(canvas.getByText(/Closed as done/u)).toBeVisible();
 		const [first] = canvas.getAllByRole("button", { name: "Make private" });
 		await expect(first).toHaveAccessibleDescription(publicIssue.message);
@@ -158,15 +163,49 @@ export const MakingPrivate: Story = {
 	},
 };
 
-/** A private issue says why in words, and Allow public lets the maintainers publish it. */
+/**
+ * A private issue says why in words, and Allow public lets the maintainers publish it. The page
+ * explains the switch once, above the reports, with the way to the default.
+ */
 export const PrivateIssue: Story = {
 	args: { state: { status: "ready", reports: [privateIssue, securityReport] } },
 	play: async ({ canvas, args }) => {
+		await expect(canvas.getAllByText("Private")).toHaveLength(2);
+		await expect(canvas.getAllByText(/Filed as a private issue/u)).toHaveLength(2);
 		await expect(canvas.getByText("It is not marked public, so it stays private.")).toBeVisible();
+		await expect(canvas.getByRole("link", { name: "your settings" })).toHaveAttribute(
+			"href",
+			"/settings#product-feedback",
+		);
+		await expect(canvas.getByRole("switch", { name: "Allow public" })).toHaveAccessibleDescription(
+			`The maintainers can then publish it as a public issue. ${privateIssue.message}`,
+		);
 		// A check kept the second one private, so it has no Allow public.
 		await expect(canvas.getAllByRole("switch", { name: "Allow public" })).toHaveLength(1);
 		await userEvent.click(canvas.getByRole("switch", { name: "Allow public" }));
 		await expect(args.onAllowPublicChange).toHaveBeenCalledWith(privateIssue, true);
+	},
+};
+
+/** Allowed public: the switch is on, and turning it off is the way back. */
+export const PublicAllowed: Story = {
+	args: {
+		state: { status: "ready", reports: [{ ...privateIssue, allowPublic: true }] },
+	},
+	play: async ({ canvas, args }) => {
+		const allow = canvas.getByRole("switch", { name: "Allow public" });
+		await expect(allow).toBeChecked();
+		// It stays private until the maintainers publish it, and the reason recorded at filing no longer holds.
+		await expect(canvas.getByText("Private")).toBeVisible();
+		await expect(
+			canvas.getByText("It stays private unless a maintainer publishes it."),
+		).toBeVisible();
+		await expect(canvas.queryByText(/not marked public/u)).not.toBeInTheDocument();
+		await userEvent.click(allow);
+		await expect(args.onAllowPublicChange).toHaveBeenCalledWith(
+			{ ...privateIssue, allowPublic: true },
+			false,
+		);
 	},
 };
 
@@ -182,6 +221,7 @@ export const NotOnGitHub: Story = {
 		// Neither row has a change left to offer: the admins hold both.
 		await expect(canvas.queryByRole("button", { name: /private|Edit/u })).toBeNull();
 		await expect(canvas.queryByRole("switch")).toBeNull();
+		await expect(canvas.queryByRole("link", { name: "your settings" })).toBeNull();
 	},
 };
 

@@ -1,3 +1,4 @@
+import { Link } from "@tanstack/react-router";
 import { MessageSquarePlus } from "lucide-react";
 import { useId, useState } from "react";
 import { definitionFor } from "@/components/common/status-def";
@@ -6,9 +7,7 @@ import type { EditProductFeedbackDraft, MyProductFeedback } from "@/api/types.ge
 import { FEEDBACK_KIND_DEFS } from "@/components/admin/product-feedback/feedback-kind-defs";
 import { InlineLink } from "@/components/common/InlineLink";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
-import { RelativeTime } from "@/components/common/RelativeTime";
 import { StatusBadge } from "@/components/common/StatusBadge";
-import { useNow } from "@/components/common/use-now";
 import {
 	AlertDialog,
 	AlertDialogAction,
@@ -32,16 +31,15 @@ import {
 import { Field, FieldContent, FieldDescription, FieldLabel } from "@/components/ui/field";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
-import { formatTime } from "@/lib/dates";
 import { hasText } from "@/lib/text";
 
 import { DraftingProgress } from "./DraftingProgress";
 import { FiledIssue } from "./FiledIssue";
 import { ProductFeedbackDraftForm } from "./ProductFeedbackDraftForm";
-import { REPORT_STATE_DEFS } from "./report-state-defs";
+import { PublicHoldNotice } from "./PublicHoldNotice";
+import { REPORT_STATE_DEFS, REPORT_VISIBILITY_DEFS, reportVisibility } from "./report-state-defs";
+import { ReportStatusLine } from "./ReportStatusLine";
 import {
-	closedAs,
-	holdCountdown,
 	type ProductFeedbackAction,
 	reasonSentence,
 	removedLine,
@@ -117,13 +115,29 @@ export function MyProductFeedbackList({ state, pending, ...actions }: MyProductF
 		);
 	}
 	return (
-		<ul className="flex flex-col gap-3">
-			{state.reports.map((report) => (
-				<li key={report.id}>
-					<MyProductFeedbackRow report={report} pending={pending[report.id]} {...actions} />
-				</li>
-			))}
-		</ul>
+		<div className="flex flex-col gap-4">
+			{state.reports.some((report) => report.canAllowPublic) && (
+				<p className="max-w-prose text-sm text-muted-foreground">
+					Allow public on a private report lets the Hephaestus maintainers publish it as a public
+					issue. {SHARING_COPY.detail} Turning it on also makes public your default for new reports.
+					Turning it off changes only that report. Change your default in{" "}
+					<InlineLink
+						render={<Link to="/settings" hash="product-feedback" />}
+						className="underline"
+					>
+						your settings
+					</InlineLink>
+					.
+				</p>
+			)}
+			<ul className="flex flex-col gap-3">
+				{state.reports.map((report) => (
+					<li key={report.id}>
+						<MyProductFeedbackRow report={report} pending={pending[report.id]} {...actions} />
+					</li>
+				))}
+			</ul>
+		</div>
 	);
 }
 
@@ -141,9 +155,9 @@ function MyProductFeedbackRow({
 	onAllowPublicChange,
 }: RowProps) {
 	const id = useId();
-	const now = useNow();
 	const [editing, setEditing] = useState(false);
 	const kind = definitionFor(FEEDBACK_KIND_DEFS, report.kind);
+	const visibility = definitionFor(REPORT_VISIBILITY_DEFS, reportVisibility(report));
 	const busy = pending !== undefined;
 	const draft =
 		report.canEdit && hasText(report.draftTitle)
@@ -155,25 +169,13 @@ function MyProductFeedbackRow({
 			<CardHeader className="flex flex-wrap items-center gap-x-3 gap-y-1">
 				{report.kind !== "FEEDBACK" && <StatusBadge def={kind} />}
 				<StatusBadge def={definitionFor(REPORT_STATE_DEFS, report.state)} />
-				<RelativeTime value={report.createdAt} className="text-sm text-muted-foreground" />
+				<StatusBadge def={visibility} />
+				<ReportStatusLine report={report} />
 			</CardHeader>
 			<CardContent className="flex flex-col gap-2">
 				<p id={`${id}-message`} className="break-words whitespace-pre-wrap">
 					{report.message}
 				</p>
-				{hasText(report.issueUrl) && (
-					<p>
-						<InlineLink href={report.issueUrl} external className="underline">
-							{issueLabel(report)}
-						</InlineLink>
-						{hasText(report.issueClosedAs) && (
-							<span className="text-muted-foreground">
-								{" "}
-								· Closed as {closedAs(report.issueClosedAs)}
-							</span>
-						)}
-					</p>
-				)}
 				{where !== undefined && <p className="text-muted-foreground">{where}</p>}
 				{hasText(report.issueTitle) && hasText(report.issueText) && (
 					<FiledIssue title={report.issueTitle} text={report.issueText} />
@@ -187,27 +189,37 @@ function MyProductFeedbackRow({
 						reader="reporter"
 					/>
 				)}
-				{report.state === "DRAFTING" &&
-					report.canKeepPrivate &&
-					report.filedAfter !== undefined && (
-						<p className="text-muted-foreground">
-							{report.filedAfter.getTime() > now
-								? `Once drafted, it can become a public issue at about ${formatTime(report.filedAfter)} unless you keep it private.`
-								: "Once drafted, it can become a public issue right away unless you keep it private."}
-						</p>
-					)}
-				{report.state === "HELD" && report.filedAfter !== undefined && (
-					<p className="text-muted-foreground">
-						It becomes a public issue at about {formatTime(report.filedAfter)} (
-						{holdCountdown(report.filedAfter, now)}) unless you keep it private or edit it. A last
-						check can still keep it private.
-					</p>
-				)}
+				<PublicHoldNotice
+					state={report.state}
+					filedAfter={report.filedAfter}
+					wantsPublic={report.canKeepPrivate}
+					reader="reporter"
+				/>
 				{hasText(report.reason) && (
-					<p className="text-muted-foreground">{reasonSentence(report.reason)}</p>
+					<p className="text-muted-foreground">
+						{reasonSentence(report.reason, report.allowPublic)}
+					</p>
 				)}
 				{hasText(report.removed) && (
 					<p className="text-muted-foreground">{removedLine(report.removed)}</p>
+				)}
+				{report.canAllowPublic && (
+					<Field orientation="horizontal" className="w-auto">
+						<Switch
+							id={`${id}-allow-public`}
+							size="sm"
+							checked={report.allowPublic}
+							readOnly={busy}
+							aria-describedby={`${id}-allow-public-detail ${id}-message`}
+							onCheckedChange={(next) => onAllowPublicChange(report, next)}
+						/>
+						<FieldContent>
+							<FieldLabel htmlFor={`${id}-allow-public`}>Allow public</FieldLabel>
+							<FieldDescription id={`${id}-allow-public-detail`}>
+								The maintainers can then publish it as a public issue.
+							</FieldDescription>
+						</FieldContent>
+					</Field>
 				)}
 				{editing && draft !== undefined && (
 					<ProductFeedbackDraftForm
@@ -219,104 +231,71 @@ function MyProductFeedbackRow({
 					/>
 				)}
 			</CardContent>
-			{!editing &&
-				(report.canKeepPrivate ||
-					draft !== undefined ||
-					report.canMakePrivate ||
-					report.canAllowPublic) && (
-					<CardFooter className="flex flex-wrap items-center gap-2">
-						{report.canKeepPrivate && (
-							<Button
-								pending={pending === "keep-private"}
-								type="button"
-								variant="outline"
-								size="sm"
-								disabled={busy}
-								aria-describedby={`${id}-message`}
-								onClick={() => onKeepPrivate(report)}
-							>
-								{pending === "keep-private" ? "Keeping private…" : "Keep private"}
-							</Button>
-						)}
-						{draft !== undefined && (
-							<Button
-								type="button"
-								variant="outline"
-								size="sm"
-								disabled={busy}
-								aria-describedby={`${id}-message`}
-								onClick={() => setEditing(true)}
-							>
-								Edit
-							</Button>
-						)}
-						{report.canMakePrivate && (
-							<AlertDialog>
-								<AlertDialogTrigger
-									render={
-										<Button
-											pending={pending === "make-private"}
-											type="button"
-											variant="outline"
-											size="sm"
-											disabled={busy}
-											aria-describedby={`${id}-message`}
-										>
-											{pending === "make-private" ? "Making private…" : "Make private"}
-										</Button>
-									}
-								/>
-								<AlertDialogContent>
-									<AlertDialogHeader>
-										<AlertDialogTitle>Make this issue private?</AlertDialogTitle>
-										<AlertDialogDescription>{SHARING_COPY.makePrivate}</AlertDialogDescription>
-									</AlertDialogHeader>
-									<AlertDialogFooter>
-										<AlertDialogCancel>Cancel</AlertDialogCancel>
-										<AlertDialogAction onClick={() => onMakePrivate(report)}>
-											Make private
-										</AlertDialogAction>
-									</AlertDialogFooter>
-								</AlertDialogContent>
-							</AlertDialog>
-						)}
-						{report.canAllowPublic && (
-							<Field orientation="horizontal" className="w-auto">
-								<Switch
-									id={`${id}-allow-public`}
-									checked={report.allowPublic}
-									readOnly={busy}
-									aria-describedby={`${id}-allow-public-detail ${id}-message`}
-									onCheckedChange={(next) => onAllowPublicChange(report, next)}
-								/>
-								<FieldContent>
-									<FieldLabel htmlFor={`${id}-allow-public`}>Allow public</FieldLabel>
-									<FieldDescription id={`${id}-allow-public-detail`}>
-										The maintainers can then publish it as a public issue. Turning this on also
-										makes public your default for new reports. Turning it off changes only this
-										report. Change the default in your user settings.
-									</FieldDescription>
-								</FieldContent>
-							</Field>
-						)}
-					</CardFooter>
-				)}
+			{!editing && (report.canKeepPrivate || draft !== undefined || report.canMakePrivate) && (
+				<CardFooter className="flex flex-wrap items-center gap-2">
+					{report.canKeepPrivate && (
+						<Button
+							pending={pending === "keep-private"}
+							type="button"
+							variant="outline"
+							size="sm"
+							disabled={busy}
+							aria-describedby={`${id}-message`}
+							onClick={() => onKeepPrivate(report)}
+						>
+							{pending === "keep-private" ? "Keeping private…" : "Keep private"}
+						</Button>
+					)}
+					{draft !== undefined && (
+						<Button
+							type="button"
+							variant="outline"
+							size="sm"
+							disabled={busy}
+							aria-describedby={`${id}-message`}
+							onClick={() => setEditing(true)}
+						>
+							Edit
+						</Button>
+					)}
+					{report.canMakePrivate && (
+						<AlertDialog>
+							<AlertDialogTrigger
+								render={
+									<Button
+										pending={pending === "make-private"}
+										type="button"
+										variant="outline"
+										size="sm"
+										disabled={busy}
+										aria-describedby={`${id}-message`}
+									>
+										{pending === "make-private" ? "Making private…" : "Make private"}
+									</Button>
+								}
+							/>
+							<AlertDialogContent>
+								<AlertDialogHeader>
+									<AlertDialogTitle>Make this issue private?</AlertDialogTitle>
+									<AlertDialogDescription>{SHARING_COPY.makePrivate}</AlertDialogDescription>
+								</AlertDialogHeader>
+								<AlertDialogFooter>
+									<AlertDialogCancel>Cancel</AlertDialogCancel>
+									<AlertDialogAction onClick={() => onMakePrivate(report)}>
+										Make private
+									</AlertDialogAction>
+								</AlertDialogFooter>
+							</AlertDialogContent>
+						</AlertDialog>
+					)}
+				</CardFooter>
+			)}
 		</Card>
 	);
 }
 
-function issueLabel(report: MyProductFeedback): string {
-	const kind = report.route === "PUBLIC" ? "Public" : "Private";
-	return report.issueNumber === undefined
-		? `${kind} issue on GitHub`
-		: `${kind} issue #${report.issueNumber}`;
-}
-
-/** Where a report is when it has no issue to link: only what its state already shows. */
+/** Where a report is that is not on GitHub: only what its state already shows. */
 function issueLine(report: MyProductFeedback): string | undefined {
-	if (report.state === "FILED" && !hasText(report.issueUrl)) {
-		return "The Hephaestus maintainers have it as a private GitHub issue.";
-	}
 	if (report.state === "SAVED_FOR_ADMINS") {
 		return "Your report is saved on this instance for its admins. They can move it to GitHub as a private issue.";
 	}

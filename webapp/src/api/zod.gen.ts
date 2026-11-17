@@ -2691,12 +2691,16 @@ export const zProductFeedbackKind = z.enum(["IDEA", "BUG", "FEEDBACK"]);
 
 export const zFeedbackItem = z.object({
 	account: zFeedbackAccountRef.optional(),
+	allowPublic: z.boolean(),
 	appVersion: z.string().optional(),
 	canFile: z.boolean(),
 	canTriage: z.boolean(),
 	createdAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
 	draftDeadline: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
+	draftDescription: z.string().optional(),
+	draftTitle: z.string().optional(),
 	draftingSince: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
+	filedAfter: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
 	id: z.uuid(),
 	issueClosedAs: z.string().optional(),
 	issueNumber: z.int().optional(),

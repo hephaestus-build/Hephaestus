@@ -486,6 +486,9 @@ const feedbackItemSchemaResponseTransformer = (data: any) => {
 	if (data.draftingSince) {
 		data.draftingSince = new Date(data.draftingSince);
 	}
+	if (data.filedAfter) {
+		data.filedAfter = new Date(data.filedAfter);
+	}
 	if (data.resolvedAt) {
 		data.resolvedAt = new Date(data.resolvedAt);
 	}

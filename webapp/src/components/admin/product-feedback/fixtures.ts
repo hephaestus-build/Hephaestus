@@ -18,6 +18,7 @@ export const bugReport = {
 	canFile: false,
 	savedBeforeDisclosure: false,
 	waitingForModel: false,
+	allowPublic: false,
 } satisfies FeedbackItem;
 
 export const idea = {
@@ -34,6 +35,7 @@ export const idea = {
 	canFile: false,
 	savedBeforeDisclosure: false,
 	waitingForModel: false,
+	allowPublic: false,
 } satisfies FeedbackItem;
 
 export const praise = {
@@ -49,6 +51,7 @@ export const praise = {
 	canFile: false,
 	savedBeforeDisclosure: false,
 	waitingForModel: false,
+	allowPublic: false,
 } satisfies FeedbackItem;
 
 /** Sent by an account that has since been erased. */
@@ -66,6 +69,7 @@ export const orphanedFeedback = {
 	canFile: false,
 	savedBeforeDisclosure: false,
 	waitingForModel: false,
+	allowPublic: false,
 } satisfies FeedbackItem;
 
 export const resolvedBugReport = {
@@ -87,6 +91,7 @@ export const resolvedBugReport = {
 	canFile: false,
 	savedBeforeDisclosure: false,
 	waitingForModel: false,
+	allowPublic: false,
 } satisfies FeedbackItem;
 
 export const draftingFeedback = {
@@ -95,8 +100,36 @@ export const draftingFeedback = {
 	state: "DRAFTING",
 	route: "PUBLIC",
 	canTriage: false,
+	allowPublic: true,
+	filedAfter: minutesAfter(3),
 	draftingSince: minutesBefore(2),
 	draftDeadline: minutesAfter(10),
+} satisfies FeedbackItem;
+
+/** A private report whose draft waits for the model, which is busy with other work. */
+export const waitingForModelFeedback = {
+	...praise,
+	id: "f1f1f1f1-0000-0000-0000-000000000009",
+	state: "DRAFTING",
+	route: "PRIVATE",
+	canTriage: false,
+	draftingSince: minutesBefore(4),
+	draftDeadline: minutesAfter(8),
+	waitingForModel: true,
+} satisfies FeedbackItem;
+
+/** A public report in its hold: drafted, and the reporter can still keep it private or edit it. */
+export const heldFeedback = {
+	...bugReport,
+	id: "f1f1f1f1-0000-0000-0000-000000000010",
+	state: "HELD",
+	route: "PUBLIC",
+	canTriage: false,
+	allowPublic: true,
+	filedAfter: minutesAfter(4),
+	draftTitle: "Practice page scrolls to the top when the filter changes",
+	draftDescription:
+		"On a practice page, changing the team filter resets the scroll position to the top of the page.",
 } satisfies FeedbackItem;
 
 export const filedPublicFeedback = {
@@ -105,6 +138,7 @@ export const filedPublicFeedback = {
 	state: "FILED",
 	route: "PUBLIC",
 	canTriage: false,
+	allowPublic: true,
 	issueUrl: "https://github.com/acme/hephaestus/issues/412",
 	issueNumber: 412,
 	issueTitle: "Practice page jumps to the top when the filter changes",
@@ -122,6 +156,28 @@ export const filedPrivateFeedback = {
 	issueNumber: 18,
 	issueTitle: "Report about session handling",
 	issueText: "## Problem\n\nA session stayed valid after sign-out.",
+} satisfies FeedbackItem;
+
+export const closedPublicFeedback = {
+	...filedPublicFeedback,
+	id: "f1f1f1f1-0000-0000-0000-000000000011",
+	createdAt: daysBefore(9),
+	issueUrl: "https://github.com/acme/hephaestus/issues/398",
+	issueNumber: 398,
+	issueClosedAs: "completed",
+} satisfies FeedbackItem;
+
+/** Filed private because its reporter opted out; since then the reporter allows a public issue. */
+export const privateAllowedFeedback = {
+	...idea,
+	id: "f1f1f1f1-0000-0000-0000-000000000012",
+	state: "FILED",
+	route: "PRIVATE",
+	canTriage: false,
+	reason: "opted out",
+	allowPublic: true,
+	issueUrl: "https://github.com/acme/hephaestus-private/issues/21",
+	issueNumber: 21,
 } satisfies FeedbackItem;
 
 export const openFeedback: FeedbackItem[] = [bugReport, idea, praise, orphanedFeedback];

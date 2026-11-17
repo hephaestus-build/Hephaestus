@@ -54,15 +54,57 @@ describe("your reports route", () => {
 		renderRouteAt("/product-feedback");
 		const user = userEvent.setup();
 
-		await screen.findByRole("link", { name: /Public issue #1234/u }, ROUTE_RENDER_WAIT);
+		await screen.findByRole("link", { name: /public issue #1234/u }, ROUTE_RENDER_WAIT);
+		expect(screen.getByText("Public")).not.toBeNull();
 		await user.click(screen.getByRole("button", { name: "Make private" }));
 		const dialog = within(await screen.findByRole("alertdialog"));
 		expect(madePrivate).toStrictEqual([]);
 		await user.click(dialog.getByRole("button", { name: "Make private" }));
 
 		await waitFor(() => expect(madePrivate).toStrictEqual([publicIssue.id]));
-		await screen.findByText("The Hephaestus maintainers have it as a private GitHub issue.");
-		expect(screen.queryByRole("link", { name: /Public issue #1234/u })).toBeNull();
+		await screen.findByText(/Filed as a private issue$/u);
+		expect(screen.queryByRole("link", { name: /public issue #1234/u })).toBeNull();
+		expect(screen.getByText("Private")).not.toBeNull();
+		expect(screen.queryByText("Public")).toBeNull();
+	});
+
+	it("sends Allow public for a private issue and shows the switch as the server saved it", async () => {
+		const privateIssue = {
+			...publicIssue,
+			route: "PRIVATE",
+			reason: "opted out",
+			issueUrl: undefined,
+			issueNumber: undefined,
+			allowPublic: false,
+			canMakePrivate: false,
+			canAllowPublic: true,
+		} satisfies Wire<MyProductFeedback>;
+		const sent: unknown[] = [];
+		let listed: Wire<MyProductFeedback> = privateIssue;
+		server.use(
+			http.get("*/product-feedback/mine", () => HttpResponse.json([listed])),
+			http.put("*/product-feedback/:feedbackId/allow-public", async ({ request }) => {
+				sent.push(await request.json());
+				listed = { ...privateIssue, allowPublic: true };
+				return HttpResponse.json(listed);
+			}),
+		);
+		renderRouteAt("/product-feedback");
+		const user = userEvent.setup();
+
+		const allow = await screen.findByRole("switch", { name: "Allow public" }, ROUTE_RENDER_WAIT);
+		expect(allow.getAttribute("aria-checked")).toBe("false");
+		await user.click(allow);
+
+		await waitFor(() => expect(sent).toStrictEqual([{ allowPublic: true }]));
+		await waitFor(() =>
+			expect(
+				screen.getByRole("switch", { name: "Allow public" }).getAttribute("aria-checked"),
+			).toBe("true"),
+		);
+		// It stays private until the maintainers publish it.
+		expect(screen.getByText("Private")).not.toBeNull();
+		expect(screen.getByText("It stays private unless a maintainer publishes it.")).not.toBeNull();
 	});
 
 	// A report that moved on must never keep showing Drafting: the list reads again until it settles.
@@ -94,7 +136,7 @@ describe("your reports route", () => {
 			listed = publicIssue;
 			await act(async () => vi.advanceTimersByTimeAsync(10_000));
 
-			await screen.findByRole("link", { name: /Public issue #1234/u });
+			await screen.findByRole("link", { name: /public issue #1234/u });
 			expect(screen.queryByText("Drafting")).toBeNull();
 			expect(reads).toBe(initialReads + 1);
 			await act(async () => vi.advanceTimersByTimeAsync(30_000));

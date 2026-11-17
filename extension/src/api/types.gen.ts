@@ -2109,12 +2109,16 @@ export type FeedbackFilter = "OPEN" | "IN_FLIGHT" | "ON_GITHUB" | "RESOLVED" | "
 
 export type FeedbackItem = {
 	account?: FeedbackAccountRef;
+	allowPublic: boolean;
 	appVersion?: string;
 	canFile: boolean;
 	canTriage: boolean;
 	createdAt: string;
 	draftDeadline?: string;
+	draftDescription?: string;
+	draftTitle?: string;
 	draftingSince?: string;
+	filedAfter?: string;
 	id: string;
 	issueClosedAs?: string;
 	issueNumber?: number;

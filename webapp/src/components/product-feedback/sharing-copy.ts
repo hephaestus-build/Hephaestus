@@ -32,7 +32,14 @@ const REASON_SENTENCES: Record<string, string> = {
 		"GitHub refused it, so it is saved for the admins of this instance, who can try again.",
 };
 
-export function reasonSentence(reason: string): string {
+/**
+ * @param allowPublic the reporter allows a public issue now. The reason "opted out" was recorded when
+ *     the report was routed, so a later Allow public makes its sentence untrue.
+ */
+export function reasonSentence(reason: string, allowPublic = false): string {
+	if (reason === "opted out" && allowPublic) {
+		return "It stays private unless a maintainer publishes it.";
+	}
 	return REASON_SENTENCES[reason] ?? `It stays private: ${reason}.`;
 }
 

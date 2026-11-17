@@ -12,8 +12,12 @@ import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Membership;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
+import java.sql.Timestamp;
+import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalTime;
 import java.time.ZoneOffset;
+import java.time.temporal.ChronoUnit;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
@@ -50,6 +54,9 @@ class FeedbackControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
 
     @Autowired
     private JdbcTemplate jdbc;
+
+    @Autowired
+    private RoutingService routing;
 
     /** A member account signed in the way production does: a numeric JWT subject wired to a workspace member. */
     private record Member(long accountId, Account.AppRole role, Workspace workspace) {
@@ -99,7 +106,13 @@ class FeedbackControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                 .jsonPath("$.content[?(@.id == '" + stored.getId() + "')].account.displayName")
                 .isEqualTo("Member feedback-triage")
                 .jsonPath("$.content[?(@.id == '" + stored.getId() + "')].workspace.slug")
-                .isEqualTo("feedback-triage");
+                .isEqualTo("feedback-triage")
+                .jsonPath("$.content[?(@.id == '" + stored.getId() + "')].allowPublic")
+                .isEqualTo(false)
+                .jsonPath("$.content[?(@.id == '" + stored.getId() + "')].filedAfter")
+                .doesNotExist()
+                .jsonPath("$.content[?(@.id == '" + stored.getId() + "')].draftTitle")
+                .doesNotExist();
         webTestClient
                 .patch()
                 .uri("/admin/product-feedback/" + stored.getId())
@@ -123,6 +136,50 @@ class FeedbackControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                 .isEmpty();
         assertThat(feedback.findById(stored.getId()).orElseThrow().getResolvedByAccountId())
                 .isEqualTo(member.accountId());
+    }
+
+    @Test
+    void shouldShowAdministratorsWhatTheReporterSeesOfAHeldReport() {
+        Member member = member("feedback-held");
+        send(member, "Let me pin a practice to the top of my page.")
+                .expectStatus()
+                .isOk()
+                .expectBody(Void.class);
+        UUID id = feedback.findAllByAccountId(member.accountId()).getFirst().getId();
+        Draft draft = Fallback.of(ProductFeedback.Kind.IDEA, "Let me pin a practice to the top of my page.");
+        Instant filedAfter = Instant.now().plus(Duration.ofHours(1)).truncatedTo(ChronoUnit.SECONDS);
+        jdbc.update(
+                "UPDATE product_feedback_filing SET state = 'HELD', route = 'PUBLIC', reason = 'NONE',"
+                        + " allow_public = true, draft = ?, drafted_at = now(), filed_after = ? WHERE feedback_id = ?",
+                routing.write(draft),
+                Timestamp.from(filedAfter),
+                id);
+
+        String row = "$.content[?(@.id == '" + id + "')]";
+        webTestClient
+                .get()
+                .uri("/admin/product-feedback?status=IN_FLIGHT")
+                .headers(member.headers())
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath(row + ".state")
+                .isEqualTo("HELD")
+                .jsonPath(row + ".route")
+                .isEqualTo("PUBLIC")
+                .jsonPath(row + ".allowPublic")
+                .isEqualTo(true)
+                .jsonPath(row + ".filedAfter")
+                .isEqualTo(filedAfter.toString())
+                .jsonPath(row + ".draftTitle")
+                .isEqualTo(draft.title())
+                .jsonPath(row + ".draftDescription")
+                .isEqualTo(draft.problem())
+                .jsonPath(row + ".draftingSince")
+                .doesNotExist()
+                .jsonPath(row + ".waitingForModel")
+                .isEqualTo(false);
     }
 
     @Test

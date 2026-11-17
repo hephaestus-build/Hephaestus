@@ -8,12 +8,16 @@ import { expectSettledVisible } from "@/stories/overlay";
 import { AdminFeedbackList } from "./AdminFeedbackList";
 import {
 	bugReport,
+	closedPublicFeedback,
 	draftingFeedback,
 	filedPrivateFeedback,
 	filedPublicFeedback,
+	heldFeedback,
 	openFeedback,
+	privateAllowedFeedback,
 	resolvedBugReport,
 	resolvedFeedback,
+	waitingForModelFeedback,
 } from "./fixtures";
 
 const meta = {
@@ -53,17 +57,63 @@ export const Open: Story = {
 	},
 };
 
-/** Hephaestus is still working, so an admin has nothing to press. */
+/**
+ * Hephaestus is still working, so an admin has nothing to press. The card says what the reporter
+ * sees: that the report can become public, and when.
+ */
 export const OnItsWay: Story = {
 	args: { state: ready([draftingFeedback], "IN_FLIGHT") },
 	play: async ({ canvas }) => {
 		await expect(canvas.getByText("Drafting")).toBeVisible();
+		await expect(canvas.getByText("Can become public")).toBeVisible();
 		await expect(canvas.getByText(/An AI model is drafting the issue\. Started/u)).toBeVisible();
 		await expect(canvas.getByText(/If the draft is not ready by about/u)).toHaveTextContent(
 			/, the report goes on as written and does not become public\.$/u,
 		);
+		await expect(
+			canvas.getByText(
+				/^Once drafted, it can become a public issue at about \d{1,2}:\d{2} [ap]m unless the reporter keeps it private\.$/u,
+			),
+		).toBeVisible();
 		await expect(canvas.queryByRole("button", { name: "Mark resolved" })).not.toBeInTheDocument();
 		await expect(canvas.queryByRole("button", { name: "File on GitHub" })).not.toBeInTheDocument();
+	},
+};
+
+/** The model is busy with other work: the card says so, and a private report names no public time. */
+export const WaitingForModel: Story = {
+	args: { state: ready([waitingForModelFeedback], "IN_FLIGHT") },
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText("Private")).toBeVisible();
+		await expect(
+			canvas.getByText(
+				/The AI model is busy with other work, so the draft waits for it\. Started/u,
+			),
+		).toBeVisible();
+		await expect(canvas.queryByText(/becomes? a public issue/u)).not.toBeInTheDocument();
+	},
+};
+
+/**
+ * A held report shows when it becomes public and the model's draft: the title in view, the text
+ * on request.
+ */
+export const Held: Story = {
+	args: { state: ready([heldFeedback], "IN_FLIGHT") },
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText("Public soon")).toBeVisible();
+		await expect(canvas.getByText("Can become public")).toBeVisible();
+		await expect(
+			canvas.getByText(
+				/becomes a public issue at about \d{1,2}:\d{2} [ap]m \(in about 4 minutes\) unless the reporter keeps it private or edits it/u,
+			),
+		).toBeVisible();
+		await expect(canvas.getByText(heldFeedback.draftTitle)).toBeVisible();
+		await expect(canvas.queryByText(heldFeedback.draftDescription)).not.toBeInTheDocument();
+		await userEvent.click(
+			canvas.getByRole("button", { name: `The drafted text: ${heldFeedback.draftTitle}` }),
+		);
+		await expectSettledVisible(await canvas.findByText(heldFeedback.draftDescription));
 	},
 };
 
@@ -78,8 +128,10 @@ export const NothingOnItsWay: Story = {
 export const OnGitHub: Story = {
 	args: { state: ready([filedPublicFeedback, filedPrivateFeedback], "ON_GITHUB") },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("link", { name: /Public issue #412/u })).toBeVisible();
-		await expect(canvas.getByRole("link", { name: /Private issue #18/u })).toBeVisible();
+		await expect(canvas.getByRole("link", { name: /public issue #412/u })).toBeVisible();
+		await expect(canvas.getByRole("link", { name: /private issue #18/u })).toBeVisible();
+		await expect(canvas.getByText("Public")).toBeVisible();
+		await expect(canvas.getByText("Private")).toBeVisible();
 		await expect(
 			canvas.getByText("It may be about a security problem, so it stays private."),
 		).toBeVisible();
@@ -91,6 +143,32 @@ export const OnGitHub: Story = {
 		await expect(
 			canvas.getByRole("button", { name: "The issue as filed: Report about session handling" }),
 		).toBeVisible();
+	},
+};
+
+/** A closed issue says how it was closed, in the reporter's words. */
+export const Closed: Story = {
+	args: { state: ready([closedPublicFeedback], "RESOLVED") },
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText(/Filed as/u)).toHaveTextContent(
+			/Filed as public issue #398 \(opens in a new tab\) · Closed as done$/u,
+		);
+	},
+};
+
+/**
+ * A private issue whose reporter allowed a public one after it was filed: the reason recorded then
+ * no longer holds, so the card says what does.
+ */
+export const PrivateAllowedPublic: Story = {
+	args: { state: ready([privateAllowedFeedback], "ON_GITHUB") },
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText("Private")).toBeVisible();
+		await expect(canvas.getByText("The reporter allows a public issue.")).toBeVisible();
+		await expect(
+			canvas.getByText("It stays private unless a maintainer publishes it."),
+		).toBeVisible();
+		await expect(canvas.queryByText(/not marked public/u)).not.toBeInTheDocument();
 	},
 };
 
@@ -181,8 +259,8 @@ export const Error: Story = {
 	args: { state: { status: "error", error: new TypeError("Failed to fetch"), onRetry: fn() } },
 };
 
-/** Full report text and the issue copy wrap on a narrow screen. */
+/** Full report text, the browser string and the issue copy wrap on a narrow screen. */
 export const Reflow: Story = {
-	args: { state: ready([filedPrivateFeedback], "ON_GITHUB") },
+	args: { state: ready([heldFeedback, filedPrivateFeedback], "ALL") },
 	parameters: { viewport: { defaultViewport: "reflow" }, chromatic: { viewports: [320] } },
 };

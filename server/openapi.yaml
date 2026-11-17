@@ -15407,6 +15407,8 @@ components:
       properties:
         account:
           $ref: "#/components/schemas/FeedbackAccountRef"
+        allowPublic:
+          type: boolean
         appVersion:
           type: string
         canFile:
@@ -15419,7 +15421,14 @@ components:
         draftDeadline:
           type: string
           format: date-time
+        draftDescription:
+          type: string
+        draftTitle:
+          type: string
         draftingSince:
+          type: string
+          format: date-time
+        filedAfter:
           type: string
           format: date-time
         id:
@@ -15462,6 +15471,7 @@ components:
         workspace:
           $ref: "#/components/schemas/FeedbackWorkspaceRef"
       required:
+      - allowPublic
       - canFile
       - canTriage
       - createdAt
