@@ -262,6 +262,8 @@ A call that ends while it waits gets a capacity refusal. Hephaestus records this
 Product feedback is a background call, and it waits in its endpoint pool like any other background call.
 It waits until its call deadline, and it ages like other background calls, so review calls that keep arriving cannot starve it.
 At most one drafting call can be active in each pool, and it cannot use the interactive reserve.
+Another draft does not wait for it: it stops waiting at once, and the outbox tries it again 30 seconds later without spending an attempt.
+Thus, waiting drafts never hold the outbox slots that other actions need.
 A later call does not revoke an active draft: it can wait for that draft's transport to close.
 
 A pool grants the waiting calls in this order:

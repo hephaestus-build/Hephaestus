@@ -218,6 +218,10 @@ public class LlmCallPermits {
         if (TransactionSynchronizationManager.isActualTransactionActive())
             throw new IllegalStateException("Model calls must acquire capacity outside a database transaction");
         if (ended.getAsBoolean() || expired(deadline)) return null;
+        // A pool runs one draft at a time. Another draft does not wait for it: the wait would hold its outbox slot,
+        // so it returns at once, and the outbox defers it without spending an attempt.
+        boolean draft = caller.workspaceId() == null;
+        if (draft && draftInFlight(poolId)) return null;
         UUID id = UUID.randomUUID();
         String poolSlug = Objects.requireNonNull(transactions.execute(status -> {
             var admission = pools.lockAdmission(poolId)
@@ -261,6 +265,8 @@ public class LlmCallPermits {
                     return result;
                 }
                 if (Thread.currentThread().isInterrupted()) return null;
+                // Its own grant counts as a draft in flight before this waiter sees it, so only a waiting draft yields.
+                if (draft && draftInFlight(poolId) && stillWaiting(id)) return null;
             }
             return null;
         } finally {
@@ -316,6 +322,16 @@ public class LlmCallPermits {
     private boolean samePool(long poolId, Caller caller) {
         var model = caller.model();
         return model == null || poolFor(model) == poolId;
+    }
+
+    private boolean draftInFlight(long poolId) {
+        return rows.countActiveProductFeedback(poolId) > 0;
+    }
+
+    private boolean stillWaiting(UUID request) {
+        return rows.findById(request)
+                .filter(row -> row.getState() == LlmCallPermitState.WAITING)
+                .isPresent();
     }
 
     /** Whether a review's call waits for the pool: a point-in-time observation that creates no request or grant. */

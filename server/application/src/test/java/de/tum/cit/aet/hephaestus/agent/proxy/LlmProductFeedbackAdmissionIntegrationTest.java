@@ -21,6 +21,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.stream.Stream;
 import org.awaitility.Awaitility;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
@@ -137,23 +138,16 @@ class LlmProductFeedbackAdmissionIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    void shouldLimitFeedbackToOneCallWhenWorkersShareAPool() throws Exception {
+    void shouldRefuseASecondDraftAtOnceWhileOneIsInFlight() {
         long pool = pool(3);
         var feedback = admit(first, pool, AgentRunBand.BACKGROUND, null);
-        var another = submit(second, pool, AgentRunBand.BACKGROUND, null);
-        awaitWaiting(pool, null);
 
+        assertThat(tryAdmit(second, pool, AgentRunBand.BACKGROUND, null)).isNull();
+        assertThat(waitingDrafts(pool)).isZero();
         var review = admit(second, pool, AgentRunBand.BATCH, 2L);
-        assertThat(another.isDone()).isFalse();
-        assertThat(feedback.isRevoked()).isFalse();
-        assertThat(jdbc.queryForObject(
-                        "SELECT workspace_id FROM llm_call_permit WHERE pool_id=? AND state='ACTIVE' AND workspace_id IS NULL",
-                        Long.class,
-                        pool))
-                .isNull();
-        feedback.close();
-        assertThat(another.get(10, TimeUnit.SECONDS).isRevoked()).isFalse();
         assertThat(review.isRevoked()).isFalse();
+        feedback.close();
+        assertThat(tryAdmit(second, pool, AgentRunBand.BACKGROUND, null)).isNotNull();
     }
 
     @Test
@@ -180,37 +174,42 @@ class LlmProductFeedbackAdmissionIntegrationTest extends BaseIntegrationTest {
         var start = new CyclicBarrier(2);
         var a = calls.submit(() -> {
             start.await(10, TimeUnit.SECONDS);
-            return admit(first, pool, AgentRunBand.BACKGROUND, null);
+            return tryAdmit(first, pool, AgentRunBand.BACKGROUND, null);
         });
-        requests.add(a);
         var b = calls.submit(() -> {
             start.await(10, TimeUnit.SECONDS);
-            return admit(second, pool, AgentRunBand.BACKGROUND, null);
-        });
-        requests.add(b);
-        Awaitility.await().atMost(Duration.ofSeconds(5)).untilAsserted(() -> {
-            assertThat(jdbc.queryForObject(
-                            "SELECT count(*) FROM llm_call_permit WHERE pool_id=? AND state='ACTIVE' AND workspace_id IS NULL",
-                            Long.class,
-                            pool))
-                    .isEqualTo(1L);
-            assertThat(jdbc.queryForObject(
-                            "SELECT count(*) FROM llm_call_permit WHERE pool_id=? AND state='WAITING' AND workspace_id IS NULL",
-                            Long.class,
-                            pool))
-                    .isEqualTo(1L);
-            assertThat(a.isDone() ^ b.isDone()).isTrue();
+            return tryAdmit(second, pool, AgentRunBand.BACKGROUND, null);
         });
 
-        var winner = a.isDone() ? a.get(10, TimeUnit.SECONDS) : b.get(10, TimeUnit.SECONDS);
-        winner.close();
-        a.get(10, TimeUnit.SECONDS);
-        b.get(10, TimeUnit.SECONDS);
-        assertThat(jdbc.queryForObject(
-                        "SELECT count(*) FROM llm_call_permit WHERE pool_id=? AND state='ACTIVE' AND workspace_id IS NULL",
-                        Long.class,
-                        pool))
-                .isEqualTo(1L);
+        var granted = Stream.of(a.get(10, TimeUnit.SECONDS), b.get(10, TimeUnit.SECONDS))
+                .filter(Objects::nonNull)
+                .toList();
+
+        assertThat(granted).hasSize(1);
+        assertThat(waitingDrafts(pool)).isZero();
+    }
+
+    /**
+     * Twenty drafts that arrive at once on a busy pool all wait until one gets the grant; the others then give up
+     * within a poll, so their callers, outbox slots in production, are free again for the other kinds of action.
+     */
+    @Test
+    void shouldReleaseTheOtherDraftsWhenOneOfTwentyIsGranted() throws Exception {
+        long pool = pool(1);
+        var occupied = admit(first, pool, AgentRunBand.BATCH, 1L);
+        var drafts = new ArrayList<Future<LlmCallPermits.@Nullable Permit>>();
+        for (int n = 0; n < 20; n++) {
+            LlmCallPermits worker = n % 2 == 0 ? first : second;
+            drafts.add(calls.submit(() -> tryAdmit(worker, pool, AgentRunBand.BACKGROUND, null)));
+        }
+        Awaitility.await().atMost(Duration.ofSeconds(5)).until(() -> waitingDrafts(pool) == 20);
+
+        occupied.close();
+
+        var ended = new ArrayList<LlmCallPermits.@Nullable Permit>();
+        for (var draft : drafts) ended.add(draft.get(10, TimeUnit.SECONDS));
+        assertThat(ended).filteredOn(Objects::nonNull).hasSize(1);
+        assertThat(waitingDrafts(pool)).isZero();
     }
 
     @Test
@@ -282,6 +281,26 @@ class LlmProductFeedbackAdmissionIntegrationTest extends BaseIntegrationTest {
                 Instant.now().plusSeconds(30)));
         granted.add(permit);
         return permit;
+    }
+
+    /** Like {@link #admit}, but a draft may be refused: empty when no grant came. */
+    private LlmCallPermits.@Nullable Permit tryAdmit(
+            LlmCallPermits worker, long pool, AgentRunBand kind, @Nullable Long workspace) {
+        var permit = worker.acquire(
+                pool,
+                kind,
+                new LlmCallPermits.Caller(workspace, UUID.randomUUID(), 0, null),
+                ended::get,
+                Instant.now().plusSeconds(30));
+        if (permit != null) granted.add(permit);
+        return permit;
+    }
+
+    private long waitingDrafts(long pool) {
+        return Objects.requireNonNull(jdbc.queryForObject(
+                "SELECT count(*) FROM llm_call_permit WHERE pool_id=? AND state='WAITING' AND workspace_id IS NULL",
+                Long.class,
+                pool));
     }
 
     /** Product feedback is the only call without a workspace. */
