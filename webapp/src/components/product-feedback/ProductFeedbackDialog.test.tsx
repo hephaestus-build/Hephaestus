@@ -59,6 +59,8 @@ describe("product feedback dialog", () => {
 				/>
 			</>,
 		);
+		// Base UI moves focus into the panel a frame after it opens; a press before that would race it.
+		await waitFor(() => expect(document.activeElement).toBe(message()));
 		await user.click(screen.getByRole("button", { name: "Page action" }));
 		expect(onPageAction).toHaveBeenCalledOnce();
 		await user.keyboard("{Escape}");
