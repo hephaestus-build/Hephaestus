@@ -315,12 +315,12 @@ await test("the chart ships no image, tag or release identity of its own", () =>
 	assert.deepEqual(images.required, [...chartImages]);
 	assert.equal(images.additionalProperties, false);
 	for (const reference of [
-		"ghcr.io/hephaestus-build/agent:latest",
-		"ghcr.io/hephaestus-build/agent:1.2.3",
-		`registry.example.com/agent@${digest("1")}`,
-		"ghcr.io/hephaestus-build/agent@sha256:short",
+		"ghcr.io/hephaestus-build/server:latest",
+		"ghcr.io/hephaestus-build/server:1.2.3",
+		`registry.example.com/server@${digest("1")}`,
+		"ghcr.io/hephaestus-build/server@sha256:short",
 	]) {
-		const values = install(prepared, operator, { images: { agent: reference } });
+		const values = install(prepared, operator, { images: { server: reference } });
 		assert.equal(validate(values), false, reference);
 	}
 });
