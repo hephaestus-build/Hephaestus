@@ -18,10 +18,6 @@ import { CAPTURE_LIMIT_BYTES } from "./lib/process.ts";
 
 const directory = `${CHANGELOG_DIRECTORY}/`;
 const master = "server/application/src/main/resources/db/master.xml";
-const legacyBaseline = "./changelog/0000000000000_baseline_v0_77_4.xml";
-const baseline = "./changelog/1.0.0/baseline.xml";
-/** The release whose schema the 1.0 baseline holds. */
-const baselineRelease = "v1.0.0-rc.1";
 export interface ChangelogSnapshot {
 	blobs: ReadonlyMap<string, string>;
 	master: string;
@@ -112,73 +108,7 @@ function includes(xml: string, requireAutomatic = false): string[] {
 	});
 }
 
-const includedFile = (include: string): unknown =>
-	asArray(JSON.parse(include), "include")
-		.map((entry) => asArray(entry, "include attribute"))
-		.find(([name]) => name === "@_file")?.[1];
-
-/** Whether the base is the 0.x chain and the head includes the 1.0 baseline in its place. */
-function replacesLegacyChain(
-	oldIncludes: readonly string[],
-	newIncludes: readonly string[],
-): boolean {
-	return (
-		oldIncludes.map(includedFile).includes(legacyBaseline) &&
-		newIncludes.length === 1 &&
-		newIncludes[0] ===
-			JSON.stringify([
-				["@_file", baseline],
-				["@_relativeToChangelogFile", "true"],
-			])
-	);
-}
-
-/**
- * The one exception to "a released migration never changes": the 1.0 baseline replaces the chain that built the schema
- * of its release. Deleted are exactly that release's files, as it shipped them. Every later file stays byte for byte,
- * so `next/` may keep growing. Added are files beside the baseline only. The rule needs the 0.x baseline in the base,
- * so it expires when the replacement merges. docs/contributor/database-migration.mdx § The 1.0 baseline owns the rule.
- */
-function replacementErrors(
-	before: ChangelogSnapshot,
-	after: ChangelogSnapshot,
-	release: ChangelogSnapshot,
-): string[] {
-	const errors: string[] = [];
-	const replaced = new Set(release.blobs.keys());
-	for (const [path, blob] of release.blobs) {
-		if (!path.startsWith(directory)) {
-			continue;
-		}
-		if (before.blobs.get(path) !== blob) {
-			errors.push(`The 1.0 baseline must replace ${path} as ${baselineRelease} shipped it.`);
-		}
-		if (after.blobs.has(path)) {
-			errors.push(`The 1.0 baseline must delete ${path}, which ${baselineRelease} holds.`);
-		}
-	}
-	for (const [path, blob] of before.blobs) {
-		if (path.startsWith(directory) && !replaced.has(path) && after.blobs.get(path) !== blob) {
-			errors.push(`Released migration changed: ${path}`);
-		}
-	}
-	for (const path of after.blobs.keys()) {
-		if (
-			path.startsWith(directory) &&
-			!before.blobs.has(path) &&
-			!path.startsWith(`${directory}1.0.0/`)
-		) {
-			errors.push(`The 1.0 baseline may add files only beside itself: ${path}`);
-		}
-	}
-	return errors;
-}
-
-export function violations(
-	before: ChangelogSnapshot,
-	after: ChangelogSnapshot,
-	release: () => ChangelogSnapshot = () => snapshot(baselineRelease),
-): string[] {
+export function violations(before: ChangelogSnapshot, after: ChangelogSnapshot): string[] {
 	const errors: string[] = [];
 	let oldIncludes: string[];
 	let newIncludes: string[];
@@ -187,9 +117,6 @@ export function violations(
 		newIncludes = includes(after.master, true);
 	} catch (error) {
 		return [`Invalid changelog: ${error instanceof Error ? error.message : String(error)}`];
-	}
-	if (replacesLegacyChain(oldIncludes, newIncludes)) {
-		return replacementErrors(before, after, release());
 	}
 	for (const [path, blob] of before.blobs) {
 		if (path.startsWith(directory) && after.blobs.get(path) !== blob) {

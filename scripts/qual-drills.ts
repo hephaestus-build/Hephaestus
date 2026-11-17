@@ -71,17 +71,6 @@ function minutes(fallback: number): number {
 	return values.minutes === undefined ? fallback : Math.max(1, Number(values.minutes));
 }
 
-/** The component whose Pods serve the sandbox gateway (port 8081). */
-async function gatewayComponent(): Promise<string> {
-	for (const component of ["worker", "server"]) {
-		const pods = await cluster.componentPods(component);
-		if (pods.some((pod) => pod.ports.some((entry) => entry.port === 8081))) {
-			return component;
-		}
-	}
-	return "server";
-}
-
 async function deploymentOf(
 	component: string,
 ): Promise<{ name: string; desired: number; ready: number; available: number } | null> {
@@ -233,7 +222,7 @@ function idle(evidence: Evidence, drill: string, leased: RunRow[]): boolean {
 // D1 -------------------------------------------------------------------------------------------------
 
 async function d1(evidence: Evidence, notes: string[]): Promise<void> {
-	const component = values.victim === undefined ? await gatewayComponent() : "";
+	const component = values.victim === undefined ? "server" : "";
 	const pods = component === "" ? [] : await cluster.componentPods(component);
 	const victim = values.victim ?? pods[0]?.name;
 	if (victim === undefined) {
@@ -1119,7 +1108,7 @@ async function apply(manifest: unknown): Promise<void> {
 
 async function d5(evidence: Evidence, notes: string[]): Promise<void> {
 	const found = await Promise.all(
-		["server", "worker"].map(async (component) => ({
+		["server"].map(async (component) => ({
 			component,
 			deployment: await deploymentOf(component),
 		})),
@@ -1148,7 +1137,7 @@ async function d5(evidence: Evidence, notes: string[]): Promise<void> {
 			]);
 		}
 		notes.push(
-			"Injection: `kubectl rollout restart` of the server and the worker (the same rolling replacement as `helm upgrade` with a new image, without changing the image).",
+			"Injection: `kubectl rollout restart` of the server (the same rolling replacement as `helm upgrade` with a new image, without changing the image).",
 		);
 	} else {
 		notes.push(

@@ -13,7 +13,7 @@ on:
   workflow_call:
     inputs:
       tag:
-        description: The release tag, for example v0.95.0
+        description: The release tag, for example v1.0.0
         type: string
         required: true
       sha:
@@ -23,7 +23,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: The release tag, for example v0.95.0. A draft release works too.
+        description: The release tag, for example v1.0.0. A draft release works too.
         type: string
         required: true
       sha:

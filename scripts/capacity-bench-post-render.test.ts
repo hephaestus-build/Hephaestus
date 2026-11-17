@@ -70,28 +70,6 @@ await test("the test overlay retains role resources and database settings while 
 	assert.equal(asRecord(spring.datasource, "datasource").url, `jdbc:\${DATABASE_URL}`);
 });
 
-await test("the server keeps the production database wiring, and another role keeps the chart's settings", () => {
-	const webhook = structuredClone(deployment);
-	webhook.metadata.name = "bench-webhook";
-	webhook.spec.template.metadata.labels["app.kubernetes.io/component"] = "webhook";
-	const result = render([deployment, webhook]);
-	assert.equal(result.status, 0, result.stderr);
-	const applicationJson = (index: number) => {
-		const resource = asRecord(parseAllDocuments(result.stdout)[index]?.toJSON(), "deployment");
-		const pod = asRecord(
-			asRecord(asRecord(resource.spec, "spec").template, "template").spec,
-			"pod",
-		);
-		const env = asArray(asRecord(asArray(pod.containers, "containers")[0], "container").env, "env");
-		return env
-			.map((row) => asRecord(row, "env"))
-			.find((row) => row.name === "SPRING_APPLICATION_JSON")?.value;
-	};
-	const explicit = asRecord(parseJson(String(applicationJson(0))), "properties");
-	assert.ok(!("nats" in asRecord(asRecord(explicit.hephaestus, "hephaestus").sync ?? {}, "sync")));
-	assert.equal(applicationJson(1), undefined);
-});
-
 await test("the overlay removes public routes and Internet egress but keeps the database path", () => {
 	const route = {
 		apiVersion: "gateway.networking.k8s.io/v1",

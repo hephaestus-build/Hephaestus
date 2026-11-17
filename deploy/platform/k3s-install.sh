@@ -4,7 +4,7 @@
 # Run it as a user with sudo rights, from the folder where you unpacked the verified
 # hephaestus-k3s-X.Y.Z.tar.gz bundle of one release:
 #
-#   sh k3s-install.sh --version 0.95.0 --host hephaestus.example.com --email ops@example.com
+#   sh k3s-install.sh --version 1.0.0 --host hephaestus.example.com --email ops@example.com
 #
 # It checks the host first, then installs the pinned k3s and the platform, keeps the release Secret,
 # verifies the release chart and installs it. A second run with the same release changes nothing
@@ -230,7 +230,7 @@ fi
 if [ "$VERIFY" = false ]; then
 	LABEL='[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?'
 	if [ "$RELEASE" = true ]; then
-		matches "$VERSION" '(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-rc\.(0|[1-9][0-9]*))?' || die "--version takes a release such as 0.95.0 or 1.0.0-rc.1"
+		matches "$VERSION" '(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-rc\.(0|[1-9][0-9]*))?' || die "--version takes a release such as 1.1.0 or 1.0.0-rc.1"
 	else
 		[ "$PLATFORM_ONLY" = false ] || [ "$CHECK" = false ] || die "--platform-only and --check-platform exclude each other"
 		[ -z "$VERSION$LOCK$GITHUB_CLIENT_ID$BOOTSTRAP_ADMINS" ] ||

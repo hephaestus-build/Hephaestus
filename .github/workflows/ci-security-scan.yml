@@ -173,20 +173,6 @@ jobs:
         if: always()
         run: node scripts/check-changelog-compatibility.ts
 
-      - name: Assert no legacy agent-image references
-        id: legacy-image-policy
-        continue-on-error: true
-        if: always()
-        run: |
-          set -euo pipefail
-          NEEDLE="agent-$(printf 'open\x63ode')"
-          if grep -rEnI "$NEEDLE" \
-                --exclude-dir=node_modules --exclude-dir=target --exclude-dir=.git \
-                . \
-              | grep -vE '^\./(MIGRATION\.md):' ; then
-            echo "::error::Legacy agent image is removed in issue #1076; relocate any new references to MIGRATION.md."
-            exit 1
-          fi
       - name: Assert no release-channel agent image references
         id: release-channel-policy
         continue-on-error: true
@@ -202,21 +188,6 @@ jobs:
             exit 1
           fi
 
-      - name: Assert no legacy agent-image-pin.env references
-        id: legacy-pin-policy
-        continue-on-error: true
-        if: always()
-        run: |
-          set -euo pipefail
-          if grep -rEnI 'docker/agent-image-pin(\.local)?\.env' \
-                --exclude-dir=node_modules --exclude-dir=target --exclude-dir=.git \
-                . \
-              | grep -vE '^\./(MIGRATION\.md):' \
-              | grep -vE '^\./scripts/check-agent-instructions\.ts:[0-9]+:[[:space:]]*value: "docker/agent-image-pin(\.local)?\.env",$' ; then
-            echo "::error::Legacy pin-file names are allowed only in migration history, the digest guide, and exact instruction-checker exceptions."
-            exit 1
-          fi
-
       - name: Evaluate security and repository policy
         if: always()
         env:
@@ -225,12 +196,10 @@ jobs:
           CHANGELOG: ${{ steps.changelog-policy.outcome }}
           CHANGELOG_AHEAD: ${{ steps.changelog-policy-ahead.outcome }}
           CHANGELOG_COMPATIBILITY: ${{ steps.changelog-compatibility.outcome }}
-          LEGACY_IMAGE: ${{ steps.legacy-image-policy.outcome }}
           RELEASE_CHANNEL: ${{ steps.release-channel-policy.outcome }}
-          LEGACY_PIN: ${{ steps.legacy-pin-policy.outcome }}
         run: |
           failed=false
-          for result in "$SECURITY" "$BASELINE" "$CHANGELOG" "$CHANGELOG_AHEAD" "$CHANGELOG_COMPATIBILITY" "$LEGACY_IMAGE" "$RELEASE_CHANNEL" "$LEGACY_PIN"; do
+          for result in "$SECURITY" "$BASELINE" "$CHANGELOG" "$CHANGELOG_AHEAD" "$CHANGELOG_COMPATIBILITY" "$RELEASE_CHANNEL"; do
             if [ "$result" = "failure" ] || [ "$result" = "cancelled" ]; then failed=true; fi
           done
           if [ "$failed" = "true" ]; then

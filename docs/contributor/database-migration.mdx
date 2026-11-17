@@ -292,7 +292,6 @@ The 1.0 cutover dropped every earlier pending contraction, so the table is empty
    Thus, a group behind another also judges the migrations of the groups ahead.
    A second run against the group ahead keeps this group's migrations after that group's.
    No file under `db/changelog/` can change after it reaches the base branch.
-   [The one replacement](#what-the-replacement-was-allowed-to-do) was the only exception.
    New migration files must have a valid UTC timestamp and sort after that branch’s existing migrations.
    The `<include>` of the baseline and the final `includeAll` cannot change.
    New explicit includes also fail the check.
@@ -387,17 +386,6 @@ The synchronization also admits an extension that an operator added, such as `pg
 The pins come from databases that the published 1.0.0-rc.1 image built.
 `SchemaFingerprintDatabaseTest` requires that the baseline builds exactly those lines.
 The baseline's rows are not in the fingerprint, because administrators change them. `LiquibaseBaselineIntegrationTest` checks them on a fresh install.
-
-### What the replacement was allowed to do
-
-`scripts/check-changelog-immutability.ts` admitted the replacement once. It admitted a change only when all of these were true:
-
-1. The base's `master.xml` included the v0.77.4 baseline. This is false after the replacement, so the exemption cannot run again.
-2. The head's `master.xml` has exactly one `include`, the baseline, then the one `includeAll`.
-3. The change deletes exactly the files of tag `v1.0.0-rc.1` under `db/changelog/`, and each one in the base is identical to the tag.
-4. Every other file in the base stays in the head with an identical blob. A file from `next/` that is later than the tag cannot change, move or disappear.
-5. The change adds files only under `db/changelog/1.0.0/`.
-6. The guard fails if it cannot read the tag.
 
 From 1.0.0 on, a released change set never changes, and `master.xml` never changes.
 A future baseline needs a major release, an automated synchronization like this one, and a decision record.
