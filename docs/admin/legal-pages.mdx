@@ -56,9 +56,8 @@ For each transfer outside the EU or EEA, document the Chapter V safeguard for th
      legalOverrides: hephaestus-legal-overrides
    ```
 
-The chart mounts the ConfigMap read-only into the server Pods and sets `LEGAL_OVERRIDES_DIRECTORY` to that directory.
+The chart mounts the ConfigMap read-only into the server Pods.
 The server Pods wait until the ConfigMap exists.
-A server outside the chart reads the same two files from the directory that `LEGAL_OVERRIDES_DIRECTORY` names.
 
 The server reads the files on each page load.
 Kubernetes updates a mounted ConfigMap within about a minute, so a later edit needs no redeploy.

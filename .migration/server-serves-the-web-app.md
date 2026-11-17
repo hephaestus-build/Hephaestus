@@ -9,7 +9,6 @@ The chart refuses a values file that still names one of them, so change your val
 
 The route sends every path to the server, and the server sends the security headers, HSTS included.
 The public addresses stay the same: the sign-in callbacks, `/api/**`, `/.well-known/hephaestus.json`, `/.well-known/security.txt` and the legal pages.
-A server outside the chart reads the security contact from `SECURITY_CONTACT` and the legal-page directory from `LEGAL_OVERRIDES_DIRECTORY`.
 
 The route moves every path to the server when the upgrade starts, but a server of the previous release does not serve the web app.
 Until the rollout replaces the last old server, some page loads fail; the API is not affected.
