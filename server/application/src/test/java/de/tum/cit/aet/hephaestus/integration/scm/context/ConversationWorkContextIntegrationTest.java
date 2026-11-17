@@ -533,7 +533,7 @@ class ConversationWorkContextIntegrationTest extends AbstractWorkspaceIntegratio
 
         assertThat(payloads).allSatisfy(payload -> {
             assertThat(payload.path("status").asString()).isEqualTo("UNAVAILABLE");
-            assertThat(payload.path("reason").asString()).contains("not linked");
+            assertThat(payload.path("reason").asString()).contains("no linked identity");
         });
         assertThat(payloads.getFirst().has("thisWeek"))
                 .as("unknown counts are absent, never zero")

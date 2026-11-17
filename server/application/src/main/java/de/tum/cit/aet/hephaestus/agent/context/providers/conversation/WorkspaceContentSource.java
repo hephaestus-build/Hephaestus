@@ -86,24 +86,20 @@ public class WorkspaceContentSource implements ContentSource {
         workspaceNode.put("slug", workspace.slug());
         workspaceNode.put("displayName", workspace.displayName());
 
-        // Work that Hephaestus cannot read is unknown: empty lists then say so, never that there is no work.
+        // Work that Hephaestus cannot read is unknown, not none: no lists then.
         Reach reach = queryRepository.reach(workspaceId, developerId);
-        boolean readable = reach == Reach.READABLE;
-        if (!readable) {
+        if (reach != Reach.READABLE) {
             root.put("status", "UNAVAILABLE");
             root.put("reason", reach.unknownReason());
+            return root;
         }
         // Each sub-context is independent and best-effort: a failing query degrades only its own
         // section to an empty array, never blanking the whole workspace context. The real cause is
         // logged here so an unavailable section does not hide the cause.
-        List<ConversationWorkQuery.RequestedReview> reviewPrs = readable
-                ? guardedQuery(
-                        "pendingReviewRequests",
-                        () -> queryRepository.findPendingReviewRequestPrs(workspaceId, developerId))
-                : List.of();
-        List<ConversationWorkQuery.AssignedIssue> assigned = readable
-                ? guardedQuery("assignedIssues", () -> queryRepository.findAssignedOpenIssues(workspaceId, developerId))
-                : List.of();
+        List<ConversationWorkQuery.RequestedReview> reviewPrs = guardedQuery(
+                "pendingReviewRequests", () -> queryRepository.findPendingReviewRequestPrs(workspaceId, developerId));
+        List<ConversationWorkQuery.AssignedIssue> assigned =
+                guardedQuery("assignedIssues", () -> queryRepository.findAssignedOpenIssues(workspaceId, developerId));
         guarded("assignedIssues", () -> addAssignedIssues(root, assigned), () -> root.putArray("assignedIssues"));
         guarded(
                 "pendingReviewRequests",

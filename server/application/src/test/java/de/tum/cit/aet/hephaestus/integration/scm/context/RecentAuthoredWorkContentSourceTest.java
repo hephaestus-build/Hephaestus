@@ -87,8 +87,9 @@ class RecentAuthoredWorkContentSourceTest extends BaseUnitTest {
         JsonNode payload = source.buildPayload(1L, 2L);
 
         assertThat(payload.path("status").asString()).isEqualTo("UNAVAILABLE");
-        assertThat(payload.path("reason").asString()).contains("not linked");
-        assertThat(payload.path("pullRequests")).isEmpty();
+        assertThat(payload.path("reason").asString()).contains("no linked identity");
+        assertThat(payload.has("pullRequests")).isFalse();
+        assertThat(payload.has("issues")).isFalse();
         verify(queryRepository, never()).findRecentAuthoredPullRequests(anyLong(), anyLong(), any(), any());
     }
 

@@ -14,7 +14,7 @@ public interface ConversationWorkQuery {
     /** Whether the account's work in the workspace can be read; unread work is unknown, never none. */
     enum Reach {
         READABLE,
-        /** The workspace connects no GitHub or GitLab instance. */
+        /** The workspace connects no GitHub or GitLab instance, or nothing from it is recorded yet. */
         NO_INSTANCE,
         /** The account has no linked identity on the workspace's connected instance. */
         NOT_LINKED;
@@ -22,10 +22,10 @@ public interface ConversationWorkQuery {
         /** Why the account's work is unknown, in the words a conversation reads. */
         public String unknownReason() {
             return switch (this) {
-                case NO_INSTANCE -> "The workspace has no connected GitHub or GitLab instance.";
+                case NO_INSTANCE -> "The workspace has no connected GitHub or GitLab instance with synced work yet.";
                 case NOT_LINKED ->
-                    "Your account is not linked to the workspace's GitHub or GitLab instance, so your work there is"
-                            + " unknown, not none.";
+                    "This developer's account has no linked identity on the workspace's GitHub or GitLab instance, so"
+                            + " their work there is unknown, not none.";
                 case READABLE -> throw new IllegalStateException("Readable work is not unknown");
             };
         }

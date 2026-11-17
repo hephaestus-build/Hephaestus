@@ -48,7 +48,7 @@ class ActivityContentSourceTest extends BaseUnitTest {
         JsonNode payload = source.buildPayload(1L, 2L);
 
         assertThat(payload.path("status").asString()).isEqualTo("UNAVAILABLE");
-        assertThat(payload.path("reason").asString()).contains("not linked");
+        assertThat(payload.path("reason").asString()).contains("no linked identity");
         assertThat(payload.has("pullRequests")).isFalse();
         assertThat(payload.has("reviewsGiven")).isFalse();
         assertThat(payload.has("commits")).isFalse();

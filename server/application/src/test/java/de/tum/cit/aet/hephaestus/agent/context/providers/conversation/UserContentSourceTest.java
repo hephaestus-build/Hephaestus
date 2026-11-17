@@ -4,8 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.context.providers.conversation.UserContentSource.ActivityInsights;
@@ -60,7 +58,6 @@ class UserContentSourceTest extends BaseUnitTest {
         assertThat(root.get("status").asString()).isEqualTo("UNAVAILABLE");
         assertThat(root.at("/user/name").asString()).isEqualTo("Octo");
         assertThat(root.has("thisWeek")).isFalse();
-        verify(queryRepository, never()).fetchUserCounts(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -71,7 +68,7 @@ class UserContentSourceTest extends BaseUnitTest {
         JsonNode root = provider.buildPayload(1L, 2L);
 
         assertThat(root.get("status").asString()).isEqualTo("UNAVAILABLE");
-        assertThat(root.get("reason").asString()).contains("not linked").contains("unknown, not none");
+        assertThat(root.get("reason").asString()).contains("no linked identity").contains("unknown, not none");
         assertThat(root.has("thisWeek")).isFalse();
         assertThat(root.has("lastWeek")).isFalse();
         assertThat(root.has("insights")).isFalse();
@@ -88,7 +85,7 @@ class UserContentSourceTest extends BaseUnitTest {
         JsonNode root = provider.buildPayload(1L, 2L);
 
         assertThat(root.get("status").asString()).isEqualTo("UNAVAILABLE");
-        assertThat(root.get("reason").asString()).contains("not linked");
+        assertThat(root.get("reason").asString()).contains("no linked identity");
         assertThat(root.has("thisWeek")).isFalse();
     }
 

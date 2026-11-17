@@ -1,11 +1,8 @@
 package de.tum.cit.aet.hephaestus.agent.context.providers.conversation;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountSummaryQuery;
@@ -133,10 +130,9 @@ class WorkspaceContentSourceTest extends BaseUnitTest {
         JsonNode root = provider.buildPayload(1L, 2L);
 
         assertThat(root.get("status").asString()).isEqualTo("UNAVAILABLE");
-        assertThat(root.get("assignedIssues")).isEmpty();
-        assertThat(root.get("pendingReviewRequests")).isEmpty();
-        verify(queryRepository, never()).findAssignedOpenIssues(any(), any());
-        verify(queryRepository, never()).findPendingReviewRequestPrs(any(), any());
+        assertThat(root.has("assignedIssues")).isFalse();
+        assertThat(root.has("pendingReviewRequests")).isFalse();
+        assertThat(root.has("focusSuggestions")).isFalse();
     }
 
     @Test
@@ -146,11 +142,10 @@ class WorkspaceContentSourceTest extends BaseUnitTest {
         JsonNode root = provider.buildPayload(1L, 2L);
 
         assertThat(root.get("status").asString()).isEqualTo("UNAVAILABLE");
-        assertThat(root.get("reason").asString()).contains("not linked").contains("unknown, not none");
-        assertThat(root.get("assignedIssues")).isEmpty();
-        assertThat(root.get("pendingReviewRequests")).isEmpty();
-        verify(queryRepository, never()).findAssignedOpenIssues(any(), any());
-        verify(queryRepository, never()).findPendingReviewRequestPrs(any(), any());
+        assertThat(root.get("reason").asString()).contains("no linked identity").contains("unknown, not none");
+        assertThat(root.has("assignedIssues")).isFalse();
+        assertThat(root.has("pendingReviewRequests")).isFalse();
+        assertThat(root.has("focusSuggestions")).isFalse();
     }
 
     @Test

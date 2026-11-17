@@ -74,21 +74,19 @@ public class RecentAuthoredWorkContentSource implements ContentSource {
         root.putObject("account").put("displayName", account.displayName());
 
         // A repository path names a repository only on one instance, and an account without a linked actor there
-        // has unknown work, not none: empty lists then carry the reason.
+        // has unknown work, not none: no lists then.
         Optional<ScmConversationWorkQuery.Actors> actors = work.actors(workspaceId, developerId);
         Reach reach = ScmConversationWorkQuery.reachOf(actors);
         if (reach != Reach.READABLE) {
             root.put("status", "UNAVAILABLE");
             root.put("reason", reach.unknownReason());
+            return root;
         }
-        List<PullRequest> prs = actors.filter(found -> !found.userIds().isEmpty())
-                .map(found -> queryRepository.findRecentAuthoredPullRequests(
-                        workspaceId, found.providerId(), found.userIds(), PageRequest.of(0, MAX_PULL_REQUESTS)))
-                .orElse(List.of());
-        List<Issue> issues = actors.filter(found -> !found.userIds().isEmpty())
-                .map(found -> queryRepository.findRecentAuthoredIssues(
-                        workspaceId, found.providerId(), found.userIds(), PageRequest.of(0, MAX_ISSUES)))
-                .orElse(List.of());
+        ScmConversationWorkQuery.Actors found = actors.orElseThrow();
+        List<PullRequest> prs = queryRepository.findRecentAuthoredPullRequests(
+                workspaceId, found.providerId(), found.userIds(), PageRequest.of(0, MAX_PULL_REQUESTS));
+        List<Issue> issues = queryRepository.findRecentAuthoredIssues(
+                workspaceId, found.providerId(), found.userIds(), PageRequest.of(0, MAX_ISSUES));
 
         ArrayNode prArr = root.putArray("pullRequests");
         for (PullRequest pr : prs) {
