@@ -6544,7 +6544,7 @@ export const McpClientGrantSchema = {
 			type: "string",
 			format: "date-time",
 			description:
-				"When the client's access ends: for a passkey-backed client, 90 days after it was last used; otherwise the end of the web session that approved it",
+				"When the client's access lapses unless the client renews it first: 90 days after its last renewal, so each use moves it",
 		},
 		id: {
 			type: "string",
@@ -6558,7 +6558,7 @@ export const McpClientGrantSchema = {
 		passkeyBacked: {
 			type: "boolean",
 			description:
-				"A passkey confirmed the approval, so the client keeps its access until it is revoked or goes unused until expiresAt",
+				"The approving admin confirmed with a passkey, as the workspace's admin passkey policy asked",
 		},
 		scopes: {
 			type: "array",
