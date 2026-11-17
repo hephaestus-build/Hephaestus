@@ -9,6 +9,7 @@ import { ModelLinkHostsContext } from "@/components/common/model-links";
 import { RemovableToken } from "@/components/common/RemovableToken";
 import { ConversationPanel } from "@/components/conversation/ConversationPanel";
 import type { ThreadFocus } from "@/components/conversation/ConversationTimeline";
+import { HeaderButtonSlot } from "@/components/layout/Header";
 import { useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";
 import { useConversationUnread } from "@/hooks/use-conversation";
 import { useConversationLive } from "@/hooks/use-conversation-live";
@@ -26,8 +27,8 @@ import { MainConversation, ThreadConversation } from "./-ConversationView";
 
 /**
  * Keyed on the workspace so the panel never shows another workspace's conversation, and gated on
- * the member's AI choice there: whenever Hephaestus cannot answer them, the launcher hides rather than
- * letting a send fail.
+ * the member's AI choice there: whenever Hephaestus cannot answer them, the header button hides
+ * rather than letting a send fail.
  */
 const NO_HOSTS: readonly string[] = [];
 
@@ -43,6 +44,10 @@ export default function GlobalConversationPanel() {
 	});
 	// Each Retry renders the panel again; one that fails after a retry offers a page load instead.
 	const [retries, setRetries] = useState(0);
+	// While the answer is not in, the button's place in the header is kept, so nothing moves when it comes.
+	if (hasText(workspaceSlug) && (isLoading || (isAuthenticated && preference.isPending))) {
+		return <HeaderButtonSlot />;
+	}
 	if (
 		!hasText(workspaceSlug) ||
 		isLoading ||
@@ -73,7 +78,7 @@ export default function GlobalConversationPanel() {
 	);
 }
 
-/** The toast from `onCatch` says what happened; the launcher's place stays empty. */
+/** The toast from `onCatch` says what happened; the header button's place stays empty. */
 function ConversationPanelFailed() {
 	return null;
 }
@@ -111,7 +116,7 @@ function WorkspaceConversationPanel({ workspaceSlug }: { workspaceSlug: string }
 		dismissConversationUnavailable();
 	}, []);
 	const navigate = useNavigate();
-	// The stream runs while the launcher shows, so an answer that lands with the panel closed marks it.
+	// The stream runs while the header button shows, so an answer that lands with the panel closed marks it.
 	const livePaused = useConversationLive(workspaceSlug, true);
 	const unread = useConversationUnread(workspaceSlug);
 	const [thread, setThread] = useState<PanelThread>();

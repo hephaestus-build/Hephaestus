@@ -162,8 +162,9 @@ export function ProductFeedbackDialog({
 	return (
 		<>
 			{view === "minimized" && (
-				// Beside the corner launcher, not over it: a tucked-away draft must not hide another control.
-				<div className="fixed right-24 bottom-6 z-50">
+				// Above the corner's Get started pill, not over it: a tucked-away draft must not hide another
+				// control. The open panel may cover the pill, because the reader is writing in it.
+				<div className="fixed right-4 bottom-20 z-50">
 					<Button
 						ref={draftButton}
 						variant="outline"

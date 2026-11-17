@@ -1,7 +1,6 @@
 import { ArrowLeftIcon, SquareArrowOutUpRight, X } from "lucide-react";
 import { type ReactNode, useEffect, useRef } from "react";
 
-import { cn } from "cn";
 import { HephaestusMark } from "@/components/brand/HephaestusMark";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -20,8 +19,6 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 export interface ConversationPanelProps {
 	/** The conversation, or the thread pushed over it. */
 	children: ReactNode;
-	/** For the launcher's container. */
-	className?: string;
 	/** Opens what the panel shows on the conversation page, the open thread included. */
 	onOpenInConversation: () => void;
 	/** A message arrived that the developer has not seen, such as an answer that landed while the panel was closed. */
@@ -38,14 +35,14 @@ export interface ConversationPanelProps {
 }
 
 /**
- * Hephaestus's launcher and its panel: the developer's one conversation with Hephaestus, on any page. A
- * `Drawer` rather than a `Popover`: the panel holds a conversation, so it is a dialog, and scroll
- * lock, focus and every dismissal come with it. A thread opens as a view pushed over the
- * conversation, because a side panel has no room for a second column.
+ * The header's Ask Hephaestus button and its panel: the developer's one conversation with Hephaestus,
+ * on any page. The button sits in the header, so the bottom-right corner stays free for the page and
+ * for Get started. A `Drawer` rather than a `Popover`: the panel holds a conversation, so it is a
+ * dialog, and scroll lock, focus and every dismissal come with it. A thread opens as a view pushed
+ * over the conversation, because a side panel has no room for a second column.
  */
 export function ConversationPanel({
 	children,
-	className,
 	onOpenInConversation,
 	thread,
 	unread = false,
@@ -59,6 +56,7 @@ export function ConversationPanel({
 			titleRef.current?.focus();
 		}
 	}, [focusTitle]);
+	const name = unread ? "Ask Hephaestus, new answer" : "Ask Hephaestus";
 	return (
 		<Drawer
 			swipeDirection="right"
@@ -74,30 +72,21 @@ export function ConversationPanel({
 				onOpenChange?.(next);
 			}}
 		>
-			<div className={cn("fixed right-6 bottom-6 z-50", className)}>
-				<Tooltip>
-					<TooltipTrigger
-						render={
-							<DrawerTrigger
-								render={
-									<Button
-										shape="pill"
-										size="icon"
-										className="relative size-16 shadow-lg transition-all duration-200 hover:shadow-xl motion-safe:active:scale-95"
-										aria-label={unread ? "Ask Hephaestus, new answer" : "Ask Hephaestus"}
-									/>
-								}
-							>
-								<HephaestusMark size={56} pad={8} />
-								{unread && (
-									<span className="absolute top-1 right-1 size-3.5 rounded-full bg-highlight ring-2 ring-background" />
-								)}
-							</DrawerTrigger>
-						}
-					/>
-					<TooltipContent>Ask Hephaestus</TooltipContent>
-				</Tooltip>
-			</div>
+			<Tooltip>
+				<TooltipTrigger
+					render={
+						<DrawerTrigger
+							render={<Button variant="ghost" size="icon" className="relative" aria-label={name} />}
+						>
+							<HephaestusMark size={24} pad={1} />
+							{unread && (
+								<span className="absolute top-0.5 right-0.5 size-2.5 rounded-full bg-highlight ring-2 ring-background" />
+							)}
+						</DrawerTrigger>
+					}
+				/>
+				<TooltipContent>{name}</TooltipContent>
+			</Tooltip>
 			<DrawerContent size="panel">
 				<DrawerHeader className="flex-row items-center justify-between gap-3 px-4 py-2">
 					<div className="flex min-w-0 items-center gap-2">

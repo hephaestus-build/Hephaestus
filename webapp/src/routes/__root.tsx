@@ -22,6 +22,7 @@ import {
 	lazy,
 	type ReactNode,
 	Suspense,
+	use,
 	useEffect,
 	useRef,
 	useState,
@@ -31,20 +32,24 @@ import {
 import {
 	getIntegrationCatalogOptions,
 	getMemberOnboardingOptions,
-	getOwnPracticeProfileOverviewOptions,
 } from "@/api/@tanstack/react-query.gen";
-import type { PracticeProfileOverview, WorkspaceOnboarding } from "@/api/types.gen";
 import { UserViewBanner } from "@/components/admin/users/UserViewBanner";
 import { ConfirmAccessDialog } from "@/components/auth/ConfirmAccessDialog";
 import { LoginDialog } from "@/components/auth/LoginDialog";
 import { PageError } from "@/components/common/PageError";
 import Footer from "@/components/layout/Footer";
-import Header from "@/components/layout/Header";
+import Header, { HeaderButtonSlot } from "@/components/layout/Header";
 import { RouteAnnouncer } from "@/components/layout/RouteAnnouncer";
 import { AppSidebar, type SidebarContext } from "@/components/layout/sidebar/AppSidebar";
 import { SkipToContent } from "@/components/layout/SkipToContent";
 import { StandardPageSurface } from "@/components/layout/StandardPageSurface";
-import { getStartedSetupOpen, reviewFromOverview } from "@/components/onboarding/get-started-open";
+import {
+	type GetStartedCorner,
+	GetStartedCornerContext,
+	type GetStartedOpening,
+	useGetStartedRecord,
+	writeGetStartedRecord,
+} from "@/components/onboarding/get-started-record";
 import { ProductFeedbackButton } from "@/components/product-feedback/ProductFeedbackButton";
 import type { ProductFeedbackComposerView } from "@/components/product-feedback/ProductFeedbackDialog";
 import { Kbd } from "@/components/ui/kbd";
@@ -52,6 +57,7 @@ import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/s
 import { Toaster } from "@/components/ui/sonner";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import environment from "@/environment";
+import { useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";
 import { useConfirmAccess } from "@/hooks/use-confirm-access";
 import { useFeedbackAwaitingApproval } from "@/hooks/use-feedback-awaiting-approval";
 import { useLoginNavigation } from "@/hooks/use-login-navigation";
@@ -76,6 +82,8 @@ import { isConversationPanelExcludedRoute } from "./-conversation-panel-route";
 import { showConversationUnavailable } from "./-conversation-unavailable";
 
 const GlobalConversationPanel = lazy(async () => import("./-GlobalConversationPanel"));
+/** Get started loads only for a member whose list can show; a member who hid or finished it never downloads it. */
+const GetStartedCornerContainer = lazy(async () => import("./-GetStartedCorner"));
 /**
  * The feedback composer loads when someone points at or focuses its button, or presses the shortcut;
  * only the button loads with every page. One import serves the early load and the open, so the first
@@ -111,9 +119,6 @@ function RootLayout() {
 			return "standard";
 		},
 	});
-	const { isAuthenticated, isLoading, userView } = useAuth();
-	const showConversationPanel =
-		!userView && !isLoading && isAuthenticated && !isConversationPanelExcludedRoute(pathname);
 
 	if (surface === "auth") {
 		return (
@@ -128,69 +133,90 @@ function RootLayout() {
 		);
 	}
 
+	return <AppLayout surface={surface} pathname={pathname} />;
+}
+
+/** The app around a page: sidebar, header, footer, and the Get started corner. Sign-in pages have none of it. */
+function AppLayout({
+	surface,
+	pathname,
+}: {
+	surface: "standard" | "bleed" | "fullscreen";
+	pathname: string;
+}) {
+	const { userView } = useAuth();
+	const corner = useGetStartedCornerState(pathname);
+
 	return (
 		<>
 			<HeadContent />
 			<SkipToContent />
 			<ProviderColors />
-			<WorkProviderScope>
-				<SidebarProvider>
-					<AppSidebarContainer />
-					<SidebarInset
-						className={cn(
-							"mr-[var(--right-sidebar-width,0)] min-w-0",
-							// A full-screen page scrolls inside itself: its own scroller follows new messages and
-							// brings a linked one into view, which it cannot do while the page grows past the window.
-							surface === "fullscreen" && "h-svh",
-						)}
-					>
-						<HeaderContainer />
-						{userView && (
-							<UserViewBanner
-								name={userView.name}
-								workspace={userView.workspaceName}
-								unclaimed={userView.unclaimed}
-								onExit={exitUserView}
-							/>
-						)}
-						<main id="main-content" tabIndex={-1} className="flex min-h-0 flex-1 flex-col">
-							{surface === "standard" ? (
-								<StandardPageSurface className="flex-1">
-									<Outlet />
-								</StandardPageSurface>
-							) : (
-								<div
-									className={
-										surface === "fullscreen" ? "flex min-h-0 min-w-0 flex-1 flex-col" : "flex-1"
-									}
-								>
-									<Outlet />
-								</div>
+			<GetStartedCornerContext value={corner.control}>
+				<WorkProviderScope>
+					<SidebarProvider>
+						<AppSidebarContainer />
+						<SidebarInset
+							className={cn(
+								"mr-[var(--right-sidebar-width,0)] min-w-0",
+								// A full-screen page scrolls inside itself: its own scroller follows new messages and
+								// brings a linked one into view, which it cannot do while the page grows past the window.
+								surface === "fullscreen" && "h-svh",
 							)}
-						</main>
-						{surface !== "fullscreen" && (
-							<Footer
-								buildInfo={environment.buildInfo}
-								isProduction={environment.deployment.isProduction}
-							/>
-						)}
-					</SidebarInset>
-				</SidebarProvider>
-			</WorkProviderScope>
+						>
+							<HeaderContainer />
+							{userView && (
+								<UserViewBanner
+									name={userView.name}
+									workspace={userView.workspaceName}
+									unclaimed={userView.unclaimed}
+									onExit={exitUserView}
+								/>
+							)}
+							<main id="main-content" tabIndex={-1} className="flex min-h-0 flex-1 flex-col">
+								{surface === "standard" ? (
+									<StandardPageSurface className="flex-1">
+										<Outlet />
+									</StandardPageSurface>
+								) : (
+									<div
+										className={
+											surface === "fullscreen" ? "flex min-h-0 min-w-0 flex-1 flex-col" : "flex-1"
+										}
+									>
+										<Outlet />
+									</div>
+								)}
+							</main>
+							{surface !== "fullscreen" && (
+								<Footer
+									buildInfo={environment.buildInfo}
+									isProduction={environment.deployment.isProduction}
+								/>
+							)}
+							{/* Room for the Get started pill under the page's last row and the footer. */}
+							{corner.shown && <div aria-hidden className="h-20 shrink-0" />}
+						</SidebarInset>
+					</SidebarProvider>
+					{corner.mount !== undefined && (
+						// Optional guidance: a chunk that does not load leaves the corner empty and says nothing.
+						<CatchBoundary
+							getResetKey={() => corner.mount?.workspaceSlug ?? ""}
+							errorComponent={GetStartedCornerUnavailable}
+						>
+							<Suspense fallback={null}>
+								<GetStartedCornerContainer
+									key={`${corner.mount.accountId}:${corner.mount.workspaceSlug}`}
+									{...corner.mount}
+								/>
+							</Suspense>
+						</CatchBoundary>
+					)}
+				</WorkProviderScope>
+			</GetStartedCornerContext>
 			<Toaster />
 			<PublicLoginOverlay />
 			{userView && <UserViewConfirmAccess />}
-			{showConversationPanel && (
-				<CatchBoundary
-					getResetKey={() => 0}
-					onCatch={() => showConversationUnavailable({ again: false })}
-					errorComponent={ConversationPanelUnavailable}
-				>
-					<Suspense fallback={null}>
-						<GlobalConversationPanel />
-					</Suspense>
-				</CatchBoundary>
-			)}
 			{!userView && <FeatureFlagDevTools />}
 		</>
 	);
@@ -203,6 +229,92 @@ function RootLayout() {
  */
 function ConversationPanelUnavailable() {
 	return null;
+}
+
+function GetStartedCornerUnavailable() {
+	return null;
+}
+
+/** The bottom room that the pill needs: its height, its offset from the edge, and a gap. */
+const CORNER_ROOM = "5rem";
+
+/**
+ * Whether the reader's Get started list can show in the bottom-right corner, and the card's state.
+ * Only for the signed-in member's own workspace pages where Ask Hephaestus showed before: never in
+ * a user view, which reads someone else's work, never for someone who is not a member, and not on
+ * the conversation, admin, settings or legal pages. A list that the reader hid or finished loads
+ * nothing; the account menu shows it again.
+ */
+function useGetStartedCornerState(pathname: string) {
+	const { isAuthenticated, isLoading, userView, getUserId } = useAuth();
+	const { workspaceSlug } = useActiveWorkspaceSlug();
+	const { role } = useWorkspaceAccess();
+	const accountId = getUserId();
+	const record = useGetStartedRecord(accountId, workspaceSlug);
+	const [card, setCard] = useState<{ open: boolean; opening: GetStartedOpening }>({
+		open: false,
+		opening: "reader",
+	});
+	const [shown, setShown] = useState(false);
+	// A new page closes the card, as it closes the Ask Hephaestus panel: a step that leads to a page
+	// opens that page in front.
+	const [cardPath, setCardPath] = useState(pathname);
+	if (pathname !== cardPath) {
+		setCardPath(pathname);
+		setCard((current) => ({ ...current, open: false }));
+	}
+	const available =
+		!userView &&
+		!isLoading &&
+		isAuthenticated &&
+		accountId !== undefined &&
+		workspaceSlug !== undefined &&
+		role !== undefined &&
+		pathname.startsWith(`/w/${workspaceSlug}`) &&
+		!isConversationPanelExcludedRoute(pathname);
+	const mounted = available && record !== "hidden" && record !== "finished";
+	const visible = mounted && shown;
+	// Focus never lands under the pill: the browser keeps this room free when it scrolls an element
+	// into view (WCAG 2.4.11).
+	useEffect(() => {
+		if (!visible) {
+			return;
+		}
+		const root = document.documentElement;
+		root.style.scrollPaddingBottom = CORNER_ROOM;
+		return () => {
+			root.style.scrollPaddingBottom = "";
+		};
+	}, [visible]);
+	const control: GetStartedCorner | undefined = available
+		? {
+				show: () => {
+					writeGetStartedRecord(accountId, workspaceSlug, "open");
+					setCard({ open: true, opening: "reader" });
+				},
+				// Only while the corner is there: a hidden or finished list has no card to open.
+				reopen: () => {
+					if (mounted) {
+						setCard({ open: true, opening: "self" });
+					}
+				},
+			}
+		: undefined;
+	return {
+		control,
+		shown: visible,
+		mount: mounted
+			? {
+					accountId,
+					workspaceSlug,
+					open: card.open,
+					opening: card.opening,
+					onOpenChange: (open: boolean, opening: GetStartedOpening = "reader") =>
+						setCard({ open, opening }),
+					onShownChange: setShown,
+				}
+			: undefined,
+	};
 }
 
 /** The announcer sits above the layout, whose auth and app branches each remount what they hold. */
@@ -323,29 +435,6 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 	notFoundComponent: NotFound,
 });
 
-/**
- * Whether the sidebar points at the reader's Get started list: practices are on, so the Practice
- * profile holds it, and a setup step is open there. Nothing without the member's own onboarding read,
- * which a user view never makes.
- */
-function getStartedPointer({
-	onboarding,
-	overview,
-	practicesEnabled,
-}: {
-	onboarding: WorkspaceOnboarding | undefined;
-	overview: PracticeProfileOverview | undefined;
-	practicesEnabled: boolean;
-}): boolean {
-	if (onboarding === undefined || !practicesEnabled) {
-		return false;
-	}
-	return getStartedSetupOpen({
-		onboarding,
-		review: overview === undefined ? undefined : reviewFromOverview(overview),
-	});
-}
-
 function NotFound() {
 	return <PageError cause="not-found" />;
 }
@@ -364,6 +453,10 @@ function HeaderContainer() {
 		getUserId,
 	} = useAuth();
 	const { chromeWorkspaceSlug, selfLogin, userName: workspaceUserName } = useWorkspaceAccess();
+	const { pathname } = useLocation();
+	const getStartedCorner = use(GetStartedCornerContext);
+	const showConversationPanel =
+		!userView && !isLoading && isAuthenticated && !isConversationPanelExcludedRoute(pathname);
 
 	// The account menu signs the administrator out, so during a user view it names them.
 	const effectiveUsername = userView ? userProfile?.username : selfLogin;
@@ -391,6 +484,20 @@ function HeaderContainer() {
 					/>
 				) : null
 			}
+			conversation={
+				showConversationPanel && (
+					<CatchBoundary
+						getResetKey={() => 0}
+						onCatch={() => showConversationUnavailable({ again: false })}
+						errorComponent={ConversationPanelUnavailable}
+					>
+						<Suspense fallback={<HeaderButtonSlot />}>
+							<GlobalConversationPanel />
+						</Suspense>
+					</CatchBoundary>
+				)
+			}
+			onShowGetStarted={getStartedCorner?.show}
 			onLogin={openLogin}
 			onRetrySession={retrySession}
 			onLogout={() => {
@@ -567,23 +674,6 @@ function AppSidebarContainer() {
 		(Boolean(userView) ||
 			(onboarding.data !== undefined && !isConversationOutOfReach(onboarding.data)));
 
-	// The overview as the Practice profile last read it: the sidebar never asks for it itself, so a
-	// page without the list makes no read for it. Until the profile has read it, only the setup counts.
-	// A first review that lands while the reader is elsewhere clears the row once the profile reads
-	// the overview again; a poll on every page for one sidebar row would cost more than it is worth.
-	const overview = useQuery({
-		...getOwnPracticeProfileOverviewOptions({
-			path: { workspaceSlug: chromeWorkspaceSlug ?? "" },
-		}),
-		enabled: false,
-	});
-	const getStarted = getStartedPointer({
-		// A user view reads someone else's page: the viewer's own next steps have no place there.
-		onboarding: userView ? undefined : onboarding.data,
-		overview: overview.data,
-		practicesEnabled: chromeWorkspace?.practicesEnabled === true,
-	});
-
 	// Read only where the sidebar says "No workspace".
 	const workspaceCreation = useWorkspaceCreation({
 		enabled: isAuthenticated && !workspaceAccess.isLoading && workspaces.length === 0,
@@ -611,7 +701,6 @@ function AppSidebarContainer() {
 			isAppAdmin={isAppAdmin}
 			waitingReports={waitingReports}
 			showConversation={showConversation}
-			getStarted={getStarted}
 			readOnly={Boolean(userView)}
 			integrationKinds={integrationKinds}
 			awaitingApproval={awaitingApproval}

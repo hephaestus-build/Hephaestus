@@ -47,7 +47,7 @@ import {
 	useSpot,
 	type Viewport,
 } from "./tour-spotlight";
-import { rememberTourOffered, TOUR_START_SELECTOR } from "./tour-start";
+import { TOUR_START_SELECTOR } from "./tour-start";
 import { EXAMPLE_CAPTION, TourExampleLayer } from "./TourExampleLayer";
 import styles from "./tour.module.css";
 
@@ -56,8 +56,11 @@ export interface PracticeProfileTourProps extends TourFacts {
 	accountId: string | undefined;
 	/** The chapter an offer on the page asked for; without it the tour opens on its menu. */
 	startChapter?: TourChapterId;
-	/** The page opened the tour on a first visit: the menu says what the tour is, and Close reads "Not now". */
-	firstVisit?: boolean;
+	/**
+	 * A step of Get started asked for this one chapter: its last step ends the tour, so the list opens
+	 * again with the chapter marked, instead of the tour running on into the next chapter.
+	 */
+	oneChapter?: boolean;
 	onClose: () => void;
 }
 
@@ -69,9 +72,6 @@ const MENU_WORDS: Record<PageStatus, string> = {
 	loading: "Your Practice profile is still loading. The tour goes on when it is ready.",
 	error: "The tour shows your own Practice profile, and that page could not load.",
 };
-
-const FIRST_VISIT_WORDS =
-	"This tour shows how your work becomes feedback, and how to read this page. Choose a chapter, or close the tour: “Take the tour” brings it back at any time.";
 
 type View = { kind: "menu" } | { kind: "step"; chapter: TourChapterId; step: string };
 
@@ -115,9 +115,9 @@ function useFocusStaysInGuide(primary: RefObject<HTMLButtonElement | null>) {
 }
 
 /**
- * Where focus goes when the tour closes: back to what started it. A first visit's tour was started
- * by no control, and Safari leaves focus on the body after a click; focus then goes to where the tour
- * starts again, so the reader sees where the tour lives.
+ * Where focus goes when the tour closes: back to what started it. A step of Get started on another
+ * page is gone by then, and Safari leaves focus on the body after a click; focus then goes to where
+ * the tour starts again, so the reader sees where the tour lives.
  */
 function returnFocusTo(opener: Element | null): HTMLElement | null {
 	if (opener instanceof HTMLElement && opener !== document.body && opener.isConnected) {
@@ -157,19 +157,13 @@ function primaryLabel(onLastStep: boolean, nextChapter: TourChapter | undefined)
 export function PracticeProfileTour({
 	accountId,
 	startChapter,
-	firstVisit = false,
+	oneChapter = false,
 	onClose,
 	...facts
 }: PracticeProfileTourProps) {
 	const [example] = useState(() => exampleProfile(new Date(), facts.provider));
 	const chapters = tourChapters(facts, example);
 	const tour = useTourProgress(accountId);
-	// The first visit's offer counts once the tour is on screen: a tour that failed to load offered nothing.
-	useEffect(() => {
-		if (firstVisit) {
-			rememberTourOffered(accountId);
-		}
-	}, [firstVisit, accountId]);
 	const still = useStill();
 	const [view, setView] = useState<View>(() => {
 		const chapter = chapters.find((each) => each.id === startChapter);
@@ -196,7 +190,9 @@ export function PracticeProfileTour({
 		padding: step?.padding ?? 10,
 		still,
 	});
-	const nextChapter = chapter && chapters.at(chapters.indexOf(chapter) + 1);
+	const nextChapter = oneChapter
+		? undefined
+		: chapter && chapters.at(chapters.indexOf(chapter) + 1);
 	const onLastStep = chapter !== undefined && stepIndex === chapter.steps.length - 1;
 
 	const show = (chapterId: TourChapterId, stepId: string) => {
@@ -270,10 +266,7 @@ export function PracticeProfileTour({
 
 	const settling = spot.status === "settling";
 	const lit = spot.status === "found" ? spot.box : null;
-	const menuWords =
-		firstVisit && facts.page.state.status === "ready"
-			? FIRST_VISIT_WORDS
-			: MENU_WORDS[facts.page.state.status];
+	const menuWords = MENU_WORDS[facts.page.state.status];
 
 	return (
 		<>
@@ -297,9 +290,7 @@ export function PracticeProfileTour({
 						data-tour-guide=""
 						data-spot={spot.status}
 						initialFocus={primary}
-						finalFocus={() =>
-							closedByLink.current ? false : returnFocusTo(firstVisit ? null : opener)
-						}
+						finalFocus={() => (closedByLink.current ? false : returnFocusTo(opener))}
 						onKeyDown={onKeyDown}
 						onClickCapture={onClickCapture}
 						className="pointer-events-none fixed inset-0 z-[1000] focus-visible:outline-hidden"
@@ -396,7 +387,7 @@ export function PracticeProfileTour({
 							) : (
 								<footer className="flex border-t px-4 py-3">
 									<Dialog.Close render={<Button variant="ghost" size="sm" className="ml-auto" />}>
-										{firstVisit ? "Not now" : "Close"}
+										Close
 									</Dialog.Close>
 								</footer>
 							)}

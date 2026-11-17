@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react";
 import { expect, fn, screen, userEvent, within } from "storybook/test";
 
+import { ConversationPanel } from "@/components/conversation/ConversationPanel";
 import { ProductFeedbackButton } from "@/components/product-feedback/ProductFeedbackButton";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { expectSettledVisible } from "@/stories/overlay";
@@ -15,7 +16,11 @@ const meta = {
 		viewport: { defaultViewport: "desktop" },
 	},
 	tags: ["autodocs"],
-	argTypes: { feedbackDialog: { control: false }, sidebarTrigger: { control: false } },
+	argTypes: {
+		feedbackDialog: { control: false },
+		conversation: { control: false },
+		sidebarTrigger: { control: false },
+	},
 	args: {
 		version: "1.0.0",
 		environmentName: "Production",
@@ -25,6 +30,11 @@ const meta = {
 		workspaceSlug: "demo-workspace",
 		sidebarTrigger: <SidebarTrigger />,
 		feedbackDialog: <ProductFeedbackButton onSendFeedback={fn()} />,
+		conversation: (
+			<ConversationPanel onOpenInConversation={fn()}>
+				<p className="p-4">Your conversation</p>
+			</ConversationPanel>
+		),
 		onLogin: fn(),
 		onLogout: fn(),
 		onRetrySession: fn(),
@@ -145,6 +155,31 @@ export const AccountMenu: Story = {
 	},
 };
 
+/**
+ * Get started, after the reader hid it or finished it: the account menu shows it in the corner again.
+ * It is the first account task, so a reader who hid the list finds it where the toast said.
+ */
+export const GetStartedInMenu: Story = {
+	args: {
+		session: "signed-in",
+		onShowGetStarted: fn(),
+	},
+	play: async ({ args, canvas }) => {
+		await userEvent.click(canvas.getByRole("button", { name: /^Account/u }));
+		const menu = within(await screen.findByRole("menu"));
+		const getStarted = menu.getByRole("menuitem", { name: "Get started" });
+		await expectSettledVisible(getStarted);
+		await expect(menu.getAllByRole("menuitem").map((item) => item.textContent)).toEqual([
+			"Get started",
+			"User settings",
+			"Your reports",
+			"Sign out",
+		]);
+		await userEvent.click(getStarted);
+		await expect(args.onShowGetStarted).toHaveBeenCalledOnce();
+	},
+};
+
 /** During a user view the menu holds only what acts on the signed-in administrator. */
 export const ReadOnly: Story = {
 	args: {
@@ -174,6 +209,7 @@ export const Mobile: Story = {
 		// between the logo and the controls: a row that fits exactly here overflows there.
 		const logo = canvas.getByRole("link", { name: "Hephaestus home" });
 		const feedback = canvas.getByRole("button", { name: "Send feedback about Hephaestus" });
+		await expect(canvas.getByRole("button", { name: "Ask Hephaestus" })).toBeVisible();
 		await expect(
 			feedback.getBoundingClientRect().left - logo.getBoundingClientRect().right,
 		).toBeGreaterThanOrEqual(40);

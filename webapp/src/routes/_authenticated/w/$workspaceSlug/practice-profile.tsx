@@ -6,33 +6,20 @@ import {
 	Navigate,
 	retainSearchParams,
 	stripSearchParams,
+	useNavigate,
 } from "@tanstack/react-router";
 import { CompassIcon } from "lucide-react";
-import { lazy, type ReactNode, Suspense, useState, useTransition } from "react";
+import { lazy, type ReactNode, Suspense, use, useState, useTransition } from "react";
 
-import {
-	getOwnResultOptions,
-	getMemberOnboardingOptions,
-	getPublicActivityOnboardingOptions,
-} from "@/api/@tanstack/react-query.gen";
-import type { GroupRef, ResultDetail, ResultList, WorkspaceOnboarding } from "@/api/types.gen";
+import { getOwnResultOptions } from "@/api/@tanstack/react-query.gen";
+import type { GroupRef, ResultDetail, ResultList } from "@/api/types.gen";
 import { InlineLink } from "@/components/common/InlineLink";
-import {
-	combinePanelStates,
-	type LoadState,
-	queryLoadState,
-} from "@/components/common/panel-state";
+import { combinePanelStates, queryLoadState } from "@/components/common/panel-state";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { parseDetailStack } from "@/components/layout/detail-drawer/detail-stack";
 import { DetailStackLink } from "@/components/layout/detail-drawer/DetailStackLink";
 import { useDetailStack } from "@/components/layout/detail-drawer/use-detail-stack";
-import { useSectionOpen } from "@/components/layout/section-folds";
-import {
-	getStartedFoldKey,
-	type GetStartedReview,
-	getStartedSaysFirstRun,
-	reviewFromOverview,
-} from "@/components/onboarding/get-started-open";
+import { GetStartedCornerContext } from "@/components/onboarding/get-started-record";
 import { isFocusSwitchStep } from "@/components/practice-focus/practice-focus";
 import { ProfileFocusFooter } from "@/components/practice-focus/profile-focus-footer";
 import { usePracticeFocusSwitch } from "@/components/practice-focus/use-practice-focus-switch";
@@ -66,7 +53,6 @@ import {
 	PracticeProfilePage,
 	type PracticeProfilePageProps,
 } from "@/components/practice-profile/PracticeProfilePage";
-import { firstRunContent } from "@/components/practice-profile/ProfileFirstRun";
 import { ReviewRequestedNotice } from "@/components/practice-trace/ReviewRequestedNotice";
 import { ROW_LINK_CLASS, RowLinkArrow } from "@/components/practice-vocabulary/PracticeTable";
 import {
@@ -74,11 +60,9 @@ import {
 	ReviewResultDetails,
 } from "@/components/profile/ReviewResultRow";
 import type { TourChapterId } from "@/components/tour/tour-chapters";
-import { useTourProgress } from "@/components/tour/tour-progress";
-import { TOUR_START_PROPS, tourOffered } from "@/components/tour/tour-start";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { TOUR_START_PROPS } from "@/components/tour/tour-start";
+import { Button } from "@/components/ui/button";
 import { useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";
-import { useGetStartedMounted } from "@/hooks/use-get-started-mounted";
 import { REVIEW_PAGE_SIZE, usePracticeGroupDetail } from "@/hooks/use-practice-group-detail";
 import { usePracticePageFeedback } from "@/hooks/use-practice-page-feedback";
 import { usePracticeProfileOverview } from "@/hooks/use-practice-profile-overview";
@@ -91,6 +75,8 @@ import { hasText } from "@/lib/text";
 import { toast } from "@/lib/toast";
 import { useWorkProvider } from "@/lib/work-provider-context";
 import { useAuth } from "@/runtime/auth/AuthContext";
+
+import { firstRunLinks } from "./-first-run-links";
 
 /** The tour and its example load when someone starts it, so the page and the entry carry none of it. */
 const loadTour = async () => import("@/components/tour/PracticeProfileTour");
@@ -149,112 +135,12 @@ function TourOffer({
 }
 
 /**
- * Whether this browser still owes the reader the first visit's offer of the tour, read once the
- * account is known, since the page can render before it arrives; and the call that settles it.
+ * The tour as it shows: a chapter or the menu, and whether a step of Get started asked for it. Only
+ * that one closes into the list again.
  */
-function useFirstVisitOffer(accountId: string | undefined) {
-	const [due, setDue] = useState<boolean>();
-	if (due === undefined && accountId !== undefined) {
-		setDue(!tourOffered(accountId));
-	}
-	return [due === true, () => setDue(false)] as const;
-}
-
-const GetStartedSection = lazy(async () => {
-	const { GetStartedSection: component } =
-		await import("@/components/onboarding/GetStartedSection");
-	return { default: component };
-});
-
-/**
- * Get started on the reader's own Practice profile: their setup from the member onboarding read, their
- * first review from the overview the page already polls, and the tour chapters they finished here.
- * The list loads only once a setup step is open, and then stays, so the step that closes it is still
- * announced. A list that cannot load shows nothing, because it is optional guidance, and the page says
- * its first-run words itself.
- */
-function practiceProfileGetStarted({
-	mounted,
-	failed,
-	onFail,
-	workspaceSlug,
-	workspaceName,
-	memberOnboarding,
-	review,
-	overviewState,
-	pageProps,
-	provider,
-	finished,
-	fold,
-	onStartChapter,
-}: {
-	mounted: boolean;
-	/** The list's code could not load, so the page says everything itself. */
-	failed: boolean;
-	onFail: () => void;
-	workspaceSlug: string;
-	workspaceName: string;
-	memberOnboarding: UseQueryResult<WorkspaceOnboarding>;
-	review: GetStartedReview | undefined;
-	overviewState: LoadState;
-	pageProps: Pick<PracticeProfilePageProps, "firstRun">;
-	provider: ReturnType<typeof useWorkProvider>;
-	finished: readonly string[];
-	fold: { open: boolean; onOpenChange: (open: boolean) => void };
-	onStartChapter: (chapter: TourChapterId) => void;
-}): PracticeProfilePageProps["getStarted"] {
-	if (!mounted) {
-		return undefined;
-	}
-	const inputs = {
-		workspaceName,
-		onboarding: { state: queryLoadState(memberOnboarding), data: memberOnboarding.data },
-		review: {
-			state: overviewState,
-			facts: review,
-			content:
-				pageProps.firstRun === undefined
-					? undefined
-					: firstRunContent({ ...pageProps.firstRun, reviewed: false }, provider),
-		},
-		finished,
-		links: {
-			setup: (
-				<Link
-					to="/w/$workspaceSlug/onboarding"
-					params={{ workspaceSlug }}
-					search={{ returnTo: `/w/${workspaceSlug}/practice-profile` }}
-				/>
-			),
-			startChapter: (chapter: TourChapterId) => (
-				<button
-					type="button"
-					onClick={() => onStartChapter(chapter)}
-					onPointerEnter={preloadTour}
-					onFocus={preloadTour}
-				/>
-			),
-			conversation: <Link to="/w/$workspaceSlug/conversation" params={{ workspaceSlug }} />,
-		},
-	};
-	return {
-		// Only a list with an open first-review step can stand in for the page's words. A failed list,
-		// a hidden one, and one with no such step leave them to the page. While the list's code still
-		// downloads, neither shows: the words would only jump into the list a moment later.
-		saysFirstRun:
-			!failed &&
-			fold.open &&
-			inputs.onboarding.state.status === "ready" &&
-			overviewState.status === "ready" &&
-			getStartedSaysFirstRun(memberOnboarding.data, review),
-		list: (
-			<CatchBoundary getResetKey={() => "get-started"} onCatch={onFail} errorComponent={() => null}>
-				<Suspense fallback={null}>
-					<GetStartedSection inputs={inputs} fold={fold} />
-				</Suspense>
-			</CatchBoundary>
-		),
-	};
+interface OpenTour {
+	startChapter?: TourChapterId;
+	fromGetStarted?: true;
 }
 
 function PracticeProfile() {
@@ -263,29 +149,17 @@ function PracticeProfile() {
 	const readOnly = auth.userView !== undefined;
 	// The tour's records in this browser belong to this account, never to whoever used it before.
 	const accountId = auth.getUserId();
-	const [tour, setTour] = useState<{ startChapter?: TourChapterId; firstVisit?: true } | null>(
-		null,
-	);
-	const [offerDue, offerMade] = useFirstVisitOffer(accountId);
-	// The tour's record for this account, which the tour and Get started's learn steps share.
-	const tourProgress = useTourProgress(accountId);
+	const [tour, setTour] = useState<OpenTour | null>(null);
+	// The chapter that the address asked for and that has opened, so the same address never opens it twice.
+	const [askedTour, setAskedTour] = useState<TourChapterId>();
+	const getStartedCorner = use(GetStartedCornerContext);
+	const navigate = useNavigate();
 	const [tourLoading, startTourTransition] = useTransition();
 	const workProvider = useWorkProvider();
 	// From the reader's own membership: an admin read here would ask an admin for a passkey step-up.
 	const { isAdmin } = useWorkspaceAccess();
 	const { workspaceSlug } = Route.useParams();
 	const search = Route.useSearch();
-	// The reader's choice to hide Get started, kept here: while the list is hidden, the page shows the
-	// first-run state again, so the reason a review cannot run never disappears with it.
-	const [getStartedOpen, setGetStartedOpen] = useSectionOpen(
-		getStartedFoldKey(accountId, workspaceSlug),
-	);
-	const [getStartedFailed, setGetStartedFailed] = useState(false);
-	// The workspace layout holds this read already; Get started takes the reader's setup from it.
-	const memberOnboarding = useQuery({
-		...getMemberOnboardingOptions({ path: { workspaceSlug } }),
-		enabled: !readOnly,
-	});
 
 	const detailStack = parseDetailStack(search.detail, PRACTICE_PROFILE_LEVEL_KINDS);
 	const stackControls = useDetailStack({
@@ -307,23 +181,10 @@ function PracticeProfile() {
 		...standings
 	} = usePracticeStandings(workspaceSlug);
 	const { overview, ...overviewQuery } = usePracticeProfileOverview(workspaceSlug);
-	const reviewFacts = reviewFromOverview(overview);
-	const getStartedMounted = useGetStartedMounted({
-		userView: readOnly,
-		onboarding: memberOnboarding.data,
-		review: reviewFacts,
-	});
 	const workspace = useActiveWorkspaceSlug().workspaces.find(
 		(each) => each.workspaceSlug === workspaceSlug,
 	);
 	const workspaceName = workspace?.displayName ?? workspaceSlug;
-	// The workspace layout asks a member of a workspace that publishes its activity whether to appear
-	// there; this is the same read. The tour's offer waits until that question is answered.
-	const publicActivityAsked = workspace?.publishesPublicActivity === true && !readOnly;
-	const publicActivity = useQuery({
-		...getPublicActivityOnboardingOptions({ path: { slug: workspaceSlug } }),
-		enabled: publicActivityAsked,
-	});
 	// The cards: read here, which is also what delivers the unread ones — so the read waits for a
 	// definite "this workspace reviews practices", or it would mark feedback delivered for a reader
 	// the answer below is about to send away.
@@ -380,21 +241,21 @@ function PracticeProfile() {
 		feedback.state,
 	]);
 
-	// The first visit offers the tour once, on its menu, when the page has loaded. Not for a reader who
-	// came to act on something: a link that opens a level or a card goes straight to it. Not over the
-	// question about public activity, which comes first. Never in a user view, which reads someone
-	// else's page. Once it opens, the tour holds its own state, so a later change here cannot close it.
+	// A step of Get started asked for a chapter: it opens once the page has loaded, because the tour
+	// speaks from the reader's real data. Never in a user view, which reads someone else's page. Once
+	// it opens, the tour holds its own state, so a later change here cannot close it.
+	if (search.tour === undefined && askedTour !== undefined) {
+		setAskedTour(undefined);
+	}
 	if (
-		offerDue &&
+		search.tour !== undefined &&
+		search.tour !== askedTour &&
 		tour === null &&
 		!readOnly &&
-		page.status === "ready" &&
-		detailStack.length === 0 &&
-		search.feedbackCard === undefined &&
-		(!publicActivityAsked || publicActivity.data?.seen === true)
+		page.status === "ready"
 	) {
-		offerMade();
-		setTour({ firstVisit: true });
+		setAskedTour(search.tour);
+		setTour({ startChapter: search.tour, fromGetStarted: true });
 	}
 	// Only a definite "off" redirects: the surface exists only where practices review the work, and
 	// sending someone away before the answer arrives would bounce them out of a workspace that does.
@@ -452,83 +313,40 @@ function PracticeProfile() {
 						workspaceName,
 						readiness: overview.reviewReadiness,
 						activeReview: overview.activeReview ?? undefined,
-						requestReviewLink: readOnly ? undefined : (
-							<Link
-								to="/w/$workspaceSlug/activity"
-								params={{ workspaceSlug }}
-								className={buttonVariants({ variant: "outline", size: "sm" })}
-							>
-								Request a review on Activity
-							</Link>
-						),
-						aiChoiceLink: readOnly
-							? undefined
-							: (label) => (
-									<Link
-										to="/w/$workspaceSlug/onboarding"
-										params={{ workspaceSlug }}
-										search={{ returnTo: `/w/${workspaceSlug}/practice-profile` }}
-										className={buttonVariants({ variant: "outline", size: "sm" })}
-									>
-										{label}
-									</Link>
-								),
-						adminLinks: isAdmin
-							? {
-									setupSummary: (label) => (
-										<InlineLink
-											render={
-												<Link to="/w/$workspaceSlug/admin/settings" params={{ workspaceSlug }} />
-											}
-										>
-											{label}
-										</InlineLink>
-									),
-									reviewScope: (label) => (
-										<InlineLink
-											render={
-												<Link
-													to="/w/$workspaceSlug/admin/practices/review"
-													params={{ workspaceSlug }}
-													search={{ section: "automated-review" }}
-												/>
-											}
-										>
-											{label}
-										</InlineLink>
-									),
-								}
-							: undefined,
+						...firstRunLinks({
+							workspaceSlug,
+							readOnly,
+							isAdmin,
+							returnTo: `/w/${workspaceSlug}/practice-profile`,
+						}),
 					},
 		state: page,
 	} satisfies PracticeProfilePageProps;
 
 	const startTour = (chapter?: TourChapterId) => {
-		offerMade();
 		startTourTransition(() => setTour({ startChapter: chapter }));
 	};
-	const closeTour = () => setTour(null);
-	const getStarted = practiceProfileGetStarted({
-		mounted: getStartedMounted,
-		failed: getStartedFailed,
-		onFail: () => setGetStartedFailed(true),
-		workspaceSlug,
-		workspaceName,
-		memberOnboarding,
-		review: reviewFacts,
-		overviewState: overviewQuery.state,
-		pageProps,
-		provider: workProvider,
-		finished: tourProgress.progress.done,
-		fold: { open: getStartedOpen, onOpenChange: setGetStartedOpen },
-		onStartChapter: startTour,
-	});
+	const closeTour = () => {
+		setTour(null);
+		// The address no longer asks for the tour, so a reload or a shared link opens the page alone.
+		if (search.tour !== undefined) {
+			void navigate({
+				to: ".",
+				search: (previous) => ({ ...previous, tour: undefined }),
+				replace: true,
+				resetScroll: false,
+			});
+		}
+		// The end of a chapter that Get started started opens the list again, with that step marked.
+		if (tour?.fromGetStarted === true) {
+			getStartedCorner?.reopen();
+		}
+	};
 
 	return (
 		<>
 			<PracticeProfilePage
 				{...pageProps}
-				getStarted={getStarted}
 				firstRun={
 					pageProps.firstRun && {
 						...pageProps.firstRun,
@@ -585,7 +403,7 @@ function PracticeProfile() {
 							page={pageProps}
 							practicesByGroup={practicesByGroup}
 							startChapter={tour.startChapter}
-							firstVisit={tour.firstVisit}
+							oneChapter={tour.fromGetStarted}
 							onClose={closeTour}
 						/>
 					)}

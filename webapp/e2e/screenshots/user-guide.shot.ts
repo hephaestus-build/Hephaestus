@@ -12,8 +12,8 @@ import { getResponse } from "msw";
 import type { WorkspaceMembership } from "@/api/types.gen";
 import { THEME_COOKIE } from "@/runtime/theme/theme-cookie";
 
+import { asReturningReader } from "./first-visit.ts";
 import { BASE_URL } from "./server.ts";
-import { asReturningTourReader } from "./tour-offer.ts";
 import { handlers, NOW, WORKSPACE } from "./workspace.ts";
 
 const OUTPUT = path.resolve(import.meta.dirname, "../../../docs/public/img/user");
@@ -73,8 +73,8 @@ async function open(
 	});
 	// The reader's theme choice, which the app reads before the first paint.
 	await context.addCookies([{ name: THEME_COOKIE, value: colorScheme, url: BASE_URL }]);
-	// A returning reader, to whom the practice profile has already offered its tour, so the image shows the page.
-	await asReturningTourReader(context);
+	// A returning reader, who finished Get started, so no pill or card covers the image.
+	await asReturningReader(context);
 	// Nothing outside the app and its fixture API: no avatar or other picture of a real person.
 	await context.route(
 		(url) => url.origin !== new URL(BASE_URL).origin && url.origin !== API,
@@ -112,11 +112,7 @@ async function open(
 /** Playwright writes PNG or JPEG only; Chromium's own capture encodes WebP. */
 async function captureWebp(page: Page): Promise<Buffer> {
 	// A focused field blinks its caret, so two captures of the same screen would differ.
-	// The floating Hephaestus button sits over the content that the image is about.
-	await page.addStyleTag({
-		content: `* { caret-color: transparent !important; }
-			div:has(> button[aria-label^="Ask Hephaestus"]) { display: none !important; }`,
-	});
+	await page.addStyleTag({ content: "* { caret-color: transparent !important; }" });
 	const session = await page.context().newCDPSession(page);
 	const { data } = await session.send("Page.captureScreenshot", {
 		format: "webp",

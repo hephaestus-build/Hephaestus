@@ -42,7 +42,7 @@ function mockConversationPanel(preference: WorkspaceOnboarding) {
 	return conversations;
 }
 
-it("withholds the floating composer for No AI and after a failed preference refetch", async () => {
+it("withholds the Ask Hephaestus button for No AI and after a failed preference refetch", async () => {
 	const user = userEvent.setup();
 	const preference: WorkspaceOnboarding = {
 		...workspaceOnboarding(),
@@ -89,7 +89,7 @@ function conversationReady(): WorkspaceOnboarding {
 	};
 }
 
-it("withholds the floating composer where no conversation model is ready for any choice", async () => {
+it("withholds the Ask Hephaestus button where no conversation model is ready for any choice", async () => {
 	mockConversationPanel({
 		...workspaceOnboarding(),
 		aiChoice: "CLOUD",
@@ -161,7 +161,7 @@ it("leaves an unsent draft behind in its own workspace", async () => {
 	expect(acme.submissions).toStrictEqual([]);
 });
 
-it("keeps setup free of the floating composer even when AI is available", async () => {
+it("keeps setup free of the Ask Hephaestus button even when AI is available", async () => {
 	mockConversationPanel({
 		...workspaceOnboarding(),
 		needsSetup: true,
@@ -206,7 +206,7 @@ it("shares the conversation with the conversation page and sends the page it was
 	await user.click(screen.getByRole("button", { name: "Open full page" }));
 	await waitFor(() => expect(router.state.location.pathname).toBe("/w/acme/conversation"));
 	await screen.findByText("Who is on my team?");
-	// The page is the conversation, so the launcher stays away from it.
+	// The page is the conversation, so the header button stays away from it.
 	expect(screen.queryByRole("button", { name: "Ask Hephaestus" })).toBeNull();
 });
 
@@ -262,7 +262,7 @@ it("goes back from a thread to the conversation on Escape, and closes the panel 
 	screen.getByRole("button", { name: "Ask Hephaestus" });
 });
 
-/** The live stream the closed panel's launcher keeps open, after its first snapshot. */
+/** The live stream the closed panel's header button keeps open, after its first snapshot. */
 async function openStream(fake: ConversationFake): Promise<FakeEventSource> {
 	await screen.findByRole("button", { name: "Ask Hephaestus" }, ROUTE_RENDER_WAIT);
 	const stream = await waitFor(() => {
@@ -328,7 +328,17 @@ it("keeps Hephaestus's answer streaming when the Hephaestus page opens mid-turn,
 	expect(acme.submissions.map(({ text }) => text)).toStrictEqual(["How did my week go?"]);
 });
 
-it("marks the launcher when an answer lands while the panel is closed, and clears it when the panel opens", async () => {
+it("opens the panel from the Ask Hephaestus button in the header", async () => {
+	const user = userEvent.setup();
+	mockConversationPanel(conversationReady());
+	renderRouteAtWithRouter("/w/acme/teams");
+	const button = await screen.findByRole("button", { name: "Ask Hephaestus" }, ROUTE_RENDER_WAIT);
+	expect(button.closest("header")).not.toBeNull();
+	await user.click(button);
+	await screen.findByRole("dialog", { name: /^Ask Hephaestus/u });
+});
+
+it("marks the header button when an answer lands while the panel is closed, and clears it when the panel opens", async () => {
 	const user = userEvent.setup();
 	const { acme } = mockConversationPanel(conversationReady());
 	const question = acme.add({ kind: "USER", text: "How did my week go?" });
@@ -359,7 +369,7 @@ it("marks the launcher when an answer lands while the panel is closed, and clear
 	expect(screen.queryByRole("button", { name: /new answer/u })).toBeNull();
 });
 
-it("leaves the launcher unmarked for a question the developer asked in Slack", async () => {
+it("leaves the header button unmarked for a question the developer asked in Slack", async () => {
 	const { acme } = mockConversationPanel(conversationReady());
 	renderRouteAtWithRouter("/w/acme/teams");
 	const stream = await openStream(acme);
@@ -371,7 +381,7 @@ it("leaves the launcher unmarked for a question the developer asked in Slack", a
 	screen.getByRole("button", { name: "Ask Hephaestus" });
 });
 
-it("marks the launcher when Hephaestus answers in a thread", async () => {
+it("marks the header button when Hephaestus answers in a thread", async () => {
 	const { acme } = mockConversationPanel(conversationReady());
 	const parent = acme.add({ kind: "USER", text: "How did my week go?" });
 	renderRouteAtWithRouter("/w/acme/teams");
@@ -387,7 +397,7 @@ it("marks the launcher when Hephaestus answers in a thread", async () => {
 	await screen.findByRole("button", { name: "Ask Hephaestus, new answer" });
 });
 
-it("marks the launcher on reconnect for a whole Slack turn that ran while the stream was down, and opening clears it", async () => {
+it("marks the header button on reconnect for a whole Slack turn that ran while the stream was down, and opening clears it", async () => {
 	const user = userEvent.setup();
 	const { acme } = mockConversationPanel(conversationReady());
 	acme.lastReadAt = acme.add({ kind: "ANSWER", text: "An answer read long ago." }).createdAt;
@@ -408,7 +418,7 @@ it("marks the launcher on reconnect for a whole Slack turn that ran while the st
 	await screen.findByRole("button", { name: "Ask Hephaestus" });
 });
 
-it("marks the launcher on reconnect for the first answer ever, written while the stream was down", async () => {
+it("marks the header button on reconnect for the first answer ever, written while the stream was down", async () => {
 	const { acme } = mockConversationPanel(conversationReady());
 	renderRouteAtWithRouter("/w/acme/teams");
 	// The first snapshot names no answer: nothing has been answered yet.
@@ -423,7 +433,7 @@ it("marks the launcher on reconnect for the first answer ever, written while the
 	await screen.findByRole("button", { name: "Ask Hephaestus, new answer" });
 });
 
-it("leaves the launcher unmarked on reconnect when the only new answer was deleted", async () => {
+it("leaves the header button unmarked on reconnect when the only new answer was deleted", async () => {
 	const { acme } = mockConversationPanel(conversationReady());
 	acme.lastReadAt = acme.add({ kind: "ANSWER", text: "An answer read long ago." }).createdAt;
 	renderRouteAtWithRouter("/w/acme/teams");
@@ -604,7 +614,7 @@ it.each([
 		close: async (user: ReturnType<typeof userEvent.setup>) => {
 			// Close, not Escape: Escape in a thread goes back to the conversation first.
 			await user.click(screen.getByRole("button", { name: "Close Ask Hephaestus" }));
-			// Closing hands focus back to the launcher, and nothing in the closing panel takes it.
+			// Closing hands focus back to the header button, and nothing in the closing panel takes it.
 			await waitFor(() =>
 				expect(document.activeElement).toBe(screen.getByRole("button", { name: "Ask Hephaestus" })),
 			);

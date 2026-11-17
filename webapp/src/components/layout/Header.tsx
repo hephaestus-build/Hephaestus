@@ -1,6 +1,6 @@
 import { TagIcon } from "@primer/octicons-react";
 import { Link } from "@tanstack/react-router";
-import { History, LogOut, UserRoundCog } from "lucide-react";
+import { History, ListChecks, LogOut, UserRoundCog } from "lucide-react";
 
 import { cn } from "cn";
 import { HephaestusLogo } from "@/components/brand/HephaestusLogo";
@@ -42,10 +42,25 @@ export interface HeaderProps {
 	workspaceSlug?: string;
 	readOnly?: boolean;
 	feedbackDialog?: React.ReactNode;
+	/** The Ask Hephaestus button and its panel, where Hephaestus can answer the reader on this page. */
+	conversation?: React.ReactNode;
+	/**
+	 * Shows the reader's Get started list in the corner again, after they hid it or finished it.
+	 * Absent where the list cannot show, such as in a user view or on an admin page.
+	 */
+	onShowGetStarted?: () => void;
 	onLogin: () => void;
 	onLogout: () => void;
 	/** Reads the session again when the server could not answer. */
 	onRetrySession: () => void;
+}
+
+/**
+ * The place of a header button that loads after the page, such as Ask Hephaestus: kept while it
+ * loads, so the controls beside it do not move when it arrives.
+ */
+export function HeaderButtonSlot() {
+	return <span aria-hidden className="size-8 shrink-0" />;
 }
 
 export default function Header({
@@ -59,6 +74,8 @@ export default function Header({
 	workspaceSlug,
 	readOnly = false,
 	feedbackDialog,
+	conversation,
+	onShowGetStarted,
 	avatarUrl,
 	onLogin,
 	onLogout,
@@ -67,12 +84,13 @@ export default function Header({
 	const initials = getInitials(name, username);
 	const hasWorkspace = Boolean(workspaceSlug);
 	const badge = resolveHeaderBadge(version, environmentName, isProduction);
+	// Below 400px the mark alone stands for the home link, so the controls on the right keep their room.
 	const logo = (
 		<span className="inline-flex">
 			<HephaestusLogo
 				className="gap-1 sm:gap-2"
 				markClassName="size-8"
-				wordmarkClassName="text-base sm:text-xl"
+				wordmarkClassName="text-base max-[400px]:sr-only sm:text-xl"
 			/>
 		</span>
 	);
@@ -134,6 +152,7 @@ export default function Header({
 			</div>
 			<div className="flex gap-1 px-2 sm:gap-2 sm:px-4">
 				{isAuthenticated ? feedbackDialog : null}
+				{isAuthenticated ? conversation : null}
 				<ModeToggle />
 				<div className="flex items-center gap-1 sm:gap-2">
 					{isAuthenticated ? (
@@ -164,6 +183,12 @@ export default function Header({
 									{!readOnly && (
 										<>
 											<DropdownMenuGroup>
+												{onShowGetStarted !== undefined && (
+													<DropdownMenuItem onClick={onShowGetStarted}>
+														<ListChecks aria-hidden />
+														<span>Get started</span>
+													</DropdownMenuItem>
+												)}
 												<DropdownMenuItem
 													render={
 														<Link

@@ -66,7 +66,7 @@ it("offers Retry, then a page load once Retry did not help, and goes when Hephae
 	// The page under it still works.
 	screen.getByRole("heading", { name: "Teams" });
 
-	// Retry renders the panel again: the launcher is back and the message goes.
+	// Retry renders the panel again: the header button is back and the message goes.
 	await user.click(within(first).getByRole("button", { name: "Retry" }));
 	await screen.findByRole("button", { name: "Ask Hephaestus" });
 	await waitFor(() => expect(screen.queryByText("We could not open Ask Hephaestus.")).toBeNull());

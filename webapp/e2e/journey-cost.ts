@@ -14,7 +14,7 @@ import { expect, type Page } from "@playwright/test";
 import { getResponse } from "msw";
 import type { WorkspaceMembership } from "@/api/types.gen";
 
-import { asReturningTourReader } from "./screenshots/tour-offer.ts";
+import { asReturningReader } from "./screenshots/first-visit.ts";
 import { handlers, NOW, WORKSPACE } from "./screenshots/workspace.ts";
 import { E2E_BASE_URL } from "./urls.ts";
 
@@ -84,8 +84,8 @@ export async function openJourney(page: Page, role: WorkspaceMembership["role"])
 			timings.push({ start: startTime, end: startTime + responseEnd });
 		}
 	});
-	// A returning reader, to whom the practice profile has already offered its tour.
-	await asReturningTourReader(context);
+	// A returning reader, who finished Get started, so no pill or card moves the page.
+	await asReturningReader(context);
 	await context.addInitScript(() => {
 		window.journeyShifts = [];
 		// oxlint-disable-next-line unicorn/consistent-function-scoping -- `addInitScript` sends this function's source to the page, so its helpers must be inside it.

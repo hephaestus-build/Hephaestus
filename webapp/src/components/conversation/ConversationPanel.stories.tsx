@@ -77,13 +77,16 @@ const meta = {
 	parameters: { layout: "fullscreen" },
 	tags: ["autodocs"],
 	args: { onOpenInConversation: fn(), children: conversation },
+	// The button sits in the app header, before the theme toggle.
 	render: (args) => (
 		<div className="relative h-screen w-full bg-background">
+			<header className="flex h-16 items-center justify-end gap-2 px-4">
+				<ConversationPanel {...args} />
+			</header>
 			<main className="p-8">
 				<h1 className="text-2xl font-bold">Practice profile</h1>
 				<p className="mt-2 text-muted-foreground">Review recent activity and team progress.</p>
 			</main>
-			<ConversationPanel {...args} />
 		</div>
 	),
 } satisfies Meta<typeof ConversationPanel>;
@@ -91,28 +94,40 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
+/** The header button: the mark at icon size, named and tooltipped Ask Hephaestus. */
 export const Default: Story = {
-	play: async ({ canvas }) => {
-		const launcher = canvas.getByRole("button", { name: "Ask Hephaestus" });
-		const mark = launcher.querySelector("svg");
+	play: async ({ canvas, userEvent }) => {
+		const button = canvas.getByRole("button", { name: "Ask Hephaestus" });
+		const mark = button.querySelector("svg");
 		await expect(mark).not.toBeNull();
-		await expect(mark?.getBoundingClientRect().width).toBe(56);
+		await expect(mark?.getBoundingClientRect().width).toBe(24);
+		await userEvent.hover(button);
+		const tooltip = await screen.findByText("Ask Hephaestus", {
+			selector: "[data-slot=tooltip-content]",
+		});
+		await expectSettledVisible(tooltip);
 	},
 };
 
-/** An answer landed while the panel was closed: a dot on the launcher, which also says so by name. */
+/** An answer landed while the panel was closed: a dot on the button, which also says so by name and tooltip. */
 export const Unread: Story = {
 	args: { unread: true },
-	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("button", { name: "Ask Hephaestus, new answer" })).toBeVisible();
+	play: async ({ canvas, userEvent }) => {
+		const button = canvas.getByRole("button", { name: "Ask Hephaestus, new answer" });
+		await expect(button).toBeVisible();
+		await userEvent.hover(button);
+		const tooltip = await screen.findByText("Ask Hephaestus, new answer", {
+			selector: "[data-slot=tooltip-content]",
+		});
+		await expectSettledVisible(tooltip);
 	},
 };
 
 /** The same conversation as the Hephaestus page; Open full page takes it there. */
 export const Open: Story = {
 	play: async ({ args, canvas, userEvent }) => {
-		const launcher = canvas.getByRole("button", { name: "Ask Hephaestus" });
-		await userEvent.click(launcher);
+		const button = canvas.getByRole("button", { name: "Ask Hephaestus" });
+		await userEvent.click(button);
 		const panel = await screen.findByRole("dialog", { name: /Hephaestus/u });
 		await expectSettledVisible(panel);
 		await expect(getComputedStyle(document.body).overflow).toBe("hidden");
@@ -120,7 +135,7 @@ export const Open: Story = {
 		await expect(args.onOpenInConversation).toHaveBeenCalledOnce();
 		await userEvent.keyboard("{Escape}");
 		await expectDismissed();
-		await expect(launcher).toHaveFocus();
+		await expect(button).toHaveFocus();
 	},
 };
 
@@ -190,8 +205,8 @@ export const EscapeInThread: Story = {
 	args: { children: threadTimeline() },
 	render: (args) => <OpensThread {...args} />,
 	play: async ({ canvas, userEvent }) => {
-		const launcher = canvas.getByRole("button", { name: "Ask Hephaestus" });
-		await userEvent.click(launcher);
+		const button = canvas.getByRole("button", { name: "Ask Hephaestus" });
+		await userEvent.click(button);
 		await userEvent.click(await screen.findByRole("button", { name: "1 reply" }));
 		await expectSettledVisible(await screen.findByRole("dialog", { name: "Thread" }));
 		await userEvent.keyboard("{Escape}");
@@ -199,6 +214,6 @@ export const EscapeInThread: Story = {
 		await expect(screen.getByRole("dialog", { name: /^Ask Hephaestus/u })).toBeVisible();
 		await userEvent.keyboard("{Escape}");
 		await expectDismissed();
-		await expect(launcher).toHaveFocus();
+		await expect(button).toHaveFocus();
 	},
 };

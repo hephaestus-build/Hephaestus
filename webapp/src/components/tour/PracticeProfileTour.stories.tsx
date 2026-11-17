@@ -139,13 +139,23 @@ export const Menu: Story = {
 	},
 };
 
-/** The page's first-visit offer: what the tour is, where it comes back from, and a plain way out. */
-export const FirstVisit: Story = {
-	args: { firstVisit: true },
+/**
+ * One chapter, as a step of Get started asks for it: its last step ends the tour, so the list opens
+ * again with the chapter marked, instead of the tour running on into the next chapter.
+ */
+export const OneChapter: Story = {
+	args: { startChapter: "how-it-works", oneChapter: true },
 	play: async ({ args }) => {
 		const dialog = await screen.findByRole("dialog", { name: "Guided tour" });
-		await expect(dialog).toHaveAccessibleDescription(/“Take the tour” brings it back/u);
-		await userEvent.click(within(dialog).getByRole("button", { name: "Not now" }));
+		for (let step = 0; step < 30; step += 1) {
+			const next = within(dialog).queryByRole("button", { name: "Next" });
+			if (next === null) {
+				break;
+			}
+			await userEvent.click(next);
+		}
+		await expect(within(dialog).queryByRole("button", { name: /^Next chapter/u })).toBeNull();
+		await userEvent.click(within(dialog).getByRole("button", { name: "Done" }));
 		await expect(args.onClose).toHaveBeenCalled();
 	},
 };
