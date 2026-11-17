@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { readJsonFileSync } from "./json.ts";
+import { readJsonFileSync } from "./lib/json.ts";
 import {
 	assertRuntimeInventory,
 	isPinnedBuild,
@@ -9,7 +9,7 @@ import {
 	jvmPackages,
 	jvmResult,
 	withJvmResults,
-} from "./jvm-runtime.ts";
+} from "./lib/jvm-runtime.ts";
 
 // Syft 1.57.1's record of the server image's JRE, from `server@sha256:dfdd7274…` on 2026-11-17.
 const jvmArtifact = {
