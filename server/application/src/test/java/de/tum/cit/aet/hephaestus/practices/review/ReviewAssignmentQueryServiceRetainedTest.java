@@ -19,6 +19,7 @@ import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeVersionRepository;
 import de.tum.cit.aet.hephaestus.practices.review.model.Review;
 import de.tum.cit.aet.hephaestus.practices.review.model.ReviewItem;
+import de.tum.cit.aet.hephaestus.practices.spi.FeedbackModeQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentId;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewItemState;
@@ -61,7 +62,8 @@ class ReviewAssignmentQueryServiceRetainedTest extends BaseUnitTest {
             mock(PracticeRepository.class),
             mock(PracticeVersionRepository.class),
             itemQuery,
-            json);
+            json,
+            mock(FeedbackModeQuery.class));
 
     private void itemReview() {
         when(reviews.findByWorkspaceIdAndIdIn(eq(WORKSPACE), anyCollection()))

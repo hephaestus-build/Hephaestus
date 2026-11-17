@@ -316,6 +316,12 @@ class LlmProxyService {
             this.inFlight = inFlight;
         }
 
+        /** Where the call's practice session stands in its job's start order; read only once the call may run. */
+        @Nullable
+        Integer sessionRank() {
+            return accounting.calls().sessionRank(routing, practiceId);
+        }
+
         /** An upstream request leaves now; the first one opens the row. */
         void sending(String upstreamModel) {
             if (id == null) id = accounting.calls().open(routing, bound, upstreamModel, practiceId);
@@ -498,7 +504,8 @@ class LlmProxyService {
                 routing.sourceId(),
                 attempt.number(),
                 new LlmModelResolver.ConnectionRef(
-                        routing.connectionScope(), routing.connectionId(), routing.modelId(), routing.workspaceId()));
+                        routing.connectionScope(), routing.connectionId(), routing.modelId(), routing.workspaceId()),
+                row.sessionRank());
         BooleanSupplier attemptEnded = () -> !routingService.ownsAttempt(routing);
         LlmCallPermits.Permit poolPermit = attempt.sourceType() == UsageSourceType.PRODUCT_FEEDBACK_DRAFT
                 ? callPermits.tryAcquireBackground(

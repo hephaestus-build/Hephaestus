@@ -33,6 +33,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ReviewRequestReason;
 import de.tum.cit.aet.hephaestus.practices.DefinitionTestFixtures;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinition;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
+import de.tum.cit.aet.hephaestus.practices.PracticeVersionService;
 import de.tum.cit.aet.hephaestus.practices.model.Result;
 import de.tum.cit.aet.hephaestus.practices.review.AbstractResultAdmissionIntegrationTest;
 import de.tum.cit.aet.hephaestus.practices.review.ProductItemQuery;
@@ -185,6 +186,9 @@ class ResultAdmissionIntegrationTest extends AbstractResultAdmissionIntegrationT
 
     @Autowired
     ReviewAssignmentQuery executable;
+
+    @Autowired
+    PracticeVersionService practiceVersions;
 
     ReviewIntegrationData.Scenario scenario;
 
@@ -459,6 +463,30 @@ class ResultAdmissionIntegrationTest extends AbstractResultAdmissionIntegrationT
         service.complete(workspaceId, reviewId, completion);
         assertThat(reviews.findById(reviewId).orElseThrow().getStatus()).isEqualTo(ReviewStatus.CANCELLED);
         assertThat(reviews.findById(reviewId).orElseThrow().getCompletedAt()).isEqualTo(completion.completedAt());
+    }
+
+    @Test
+    void shouldListPracticesWhoseFeedbackReachesSomeoneBeforeThoseInFeedbackModeOff() {
+        var pending = admissions.pending(scenario, Instant.now(), scenarioAccountId);
+        var delivering = practiceVersions.create(new PracticeVersionService.NewPractice(
+                scenario.workspace().getId(),
+                "delivers-" + UUID.randomUUID().toString().substring(0, 8),
+                scenario.item().getKind(),
+                DefinitionTestFixtures.definition(),
+                null,
+                0,
+                scenarioAccountId));
+        admissions.assigned(pending, practices.findById(delivering.getId()).orElseThrow());
+        var quiet = practices.findById(scenario.practice().getId()).orElseThrow();
+        quiet.setFeedbackMode(FeedbackMode.OFF);
+        practices.saveAndFlush(quiet);
+
+        assertThat(executable.executable(
+                        scenario.workspace().getId(),
+                        pending.review().getId(),
+                        scenario.item().getId()))
+                .extracting(ReviewAssignmentId::practiceId)
+                .containsExactly(delivering.getId(), scenario.practice().getId());
     }
 
     @Test

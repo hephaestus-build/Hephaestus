@@ -37,7 +37,8 @@ public interface LlmCallPermitRepository extends JpaRepository<LlmCallPermit, UU
             AgentRunBand band,
             @Nullable Long workspaceId,
             UUID sourceId,
-            int attempt) {}
+            int attempt,
+            @Nullable Integer sessionRank) {}
 
     /** Product feedback is the only call without a workspace. */
     @Query(
@@ -49,9 +50,11 @@ public interface LlmCallPermitRepository extends JpaRepository<LlmCallPermit, UU
     @Modifying
     @Query(value = """
                     INSERT INTO llm_call_permit
-                      (id,pool_id,worker_id,band,workspace_id,source_id,attempt,state,acquired_at,renewed_at,requests,tokens)
+                      (id,pool_id,worker_id,band,workspace_id,source_id,attempt,session_rank,state,acquired_at,renewed_at,
+                       requests,tokens)
                     VALUES (:#{#request.id()},:#{#request.poolId()},:#{#request.workerId()},:#{#request.band().name()},
-                      :#{#request.workspaceId()},:#{#request.sourceId()},:#{#request.attempt()},'WAITING',clock_timestamp(),clock_timestamp(),0,0)
+                      :#{#request.workspaceId()},:#{#request.sourceId()},:#{#request.attempt()},:#{#request.sessionRank()},
+                      'WAITING',clock_timestamp(),clock_timestamp(),0,0)
                     """, nativeQuery = true)
     void enqueue(@Param("request") Request request);
 
@@ -116,9 +119,10 @@ public interface LlmCallPermitRepository extends JpaRepository<LlmCallPermit, UU
      * the room. No call after a call that does not fit gets a grant, so no call passes one ahead of it.
      *
      * <p>The grant order is the band, then the workspace with the fewest granted calls in the pool, then the source with
-     * the fewest granted calls, then age. A call that is not interactive rises one band for each {@code :agingSeconds}
-     * that it waits, but never into the interactive band, as the agent run claim does. Product feedback comes after all
-     * other calls. A round can grant several calls, so each call counts the calls ahead of it in its own workspace and
+     * the fewest granted calls, then age. Inside one source, the calls of its oldest practice session go first, so a
+     * review with more sessions than grants finishes its practices oldest first instead of all of them at its deadline. A
+     * call that is not interactive rises one band for each {@code :agingSeconds} that it waits, but never into the
+     * interactive band, as the agent run claim does. Product feedback comes after all other calls. A round can grant several calls, so each call counts the calls ahead of it in its own workspace and
      * source as granted: apart from ties, the order is the one that one grant at a time would give. A tie goes to the
      * workspace whose last grant in the call's band was the oldest before the round, and then to the source whose last
      * grant was; a grant earlier in the same round does not move that time. The rows are locked in id order, as
@@ -140,7 +144,7 @@ public interface LlmCallPermitRepository extends JpaRepository<LlmCallPermit, UU
               SELECT source_id,count(*) FILTER (WHERE state='ACTIVE') AS active,max(granted_at) AS last
               FROM granted GROUP BY source_id
             ), waiting AS (
-              SELECT id,workspace_id,source_id,band,acquired_at,workspace_id IS NULL AS feedback,
+              SELECT id,workspace_id,source_id,band,session_rank,acquired_at,workspace_id IS NULL AS feedback,
                 CASE WHEN band='INTERACTIVE' THEN 0
                      ELSE GREATEST(1,(CASE band WHEN 'BATCH' THEN 1 ELSE 2 END)
                           - FLOOR(EXTRACT(EPOCH FROM (clock_timestamp()-acquired_at)) / :agingSeconds))
@@ -148,7 +152,7 @@ public interface LlmCallPermitRepository extends JpaRepository<LlmCallPermit, UU
               FROM llm_call_permit WHERE pool_id=:poolId AND state='WAITING'
             ), by_source AS (
               SELECT w.*,s.last AS source_last,COALESCE(s.active,0) + row_number() OVER (PARTITION BY w.source_id
-                  ORDER BY w.feedback,w.effective_band,w.acquired_at,w.id) AS source_turn
+                  ORDER BY w.feedback,w.effective_band,w.session_rank NULLS LAST,w.acquired_at,w.id) AS source_turn
               FROM waiting w LEFT JOIN sources s ON s.source_id=w.source_id
             ), turns AS (
               SELECT b.*,r.last AS workspace_last,COALESCE(ws.active,0) + row_number() OVER (PARTITION BY b.workspace_id

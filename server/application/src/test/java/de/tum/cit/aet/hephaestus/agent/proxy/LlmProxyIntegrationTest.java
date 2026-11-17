@@ -43,6 +43,7 @@ import de.tum.cit.aet.hephaestus.agent.config.WorkspaceModelAssignment;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceModelAssignmentRepository;
 import de.tum.cit.aet.hephaestus.agent.conversation.weeklydigest.DigestAdmission;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
+import de.tum.cit.aet.hephaestus.agent.job.ReviewJobInput;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewMemberAiPolicy;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewRunKind;
@@ -60,6 +61,7 @@ import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageEventRepository;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRecorder;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRepricingSweeper;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
+import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
 import de.tum.cit.aet.hephaestus.conversation.spi.ConversationTurnAccess;
 import de.tum.cit.aet.hephaestus.core.action.ActionExecutor;
 import de.tum.cit.aet.hephaestus.core.action.ActionKind;
@@ -75,6 +77,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.UsagePricingState;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.practices.DefinitionTestFixtures;
 import de.tum.cit.aet.hephaestus.practices.PracticeVersionService;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentId;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewSnapshotQuery;
 import de.tum.cit.aet.hephaestus.productfeedback.drafting.ProductFeedbackDraftCalls;
@@ -1396,6 +1399,43 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
         }
     }
 
+    @Test
+    void shouldRankACallsPracticeByItsPlaceInItsJobsStartOrder() {
+        ReviewJob job = reviewJob("http://127.0.0.1:9/v1");
+        UUID review = job.getReviewId();
+        job.setInput(new ReviewJobInput(
+                1, List.of(new ReviewAssignmentId(review, 7, 1), new ReviewAssignmentId(review, 3, 1))));
+        jobRepository.saveAndFlush(job);
+        var ledger = new ProxyCallLedger(
+                modelAdmission,
+                draftCalls,
+                usageRecorder,
+                agentRuns,
+                jobRepository,
+                turnAccess,
+                new ProxyBudgetGate(mock(LlmBudgetService.class)),
+                objectMapper,
+                meterRegistry,
+                transactionManager);
+        var routing = new ProxyRouting(
+                "job",
+                "openai-completions",
+                "http://127.0.0.1:9/v1",
+                null,
+                null,
+                null,
+                job.getWorkspaceId(),
+                new ProxyRouting.BilledAttempt(
+                        UsageSourceType.REVIEW_JOB, job.getId(), job.getAttempt(), null, job.getWorkspaceId()),
+                Instant.now().plusSeconds(60),
+                null);
+
+        assertThat(ledger.sessionRank(routing, 7L)).isZero();
+        assertThat(ledger.sessionRank(routing, 3L)).isEqualTo(1);
+        assertThat(ledger.sessionRank(routing, 5L)).isNull();
+        assertThat(ledger.sessionRank(routing, null)).isNull();
+    }
+
     private static HttpHeaders practiceHeader(String practiceId) {
         var headers = new HttpHeaders();
         headers.add("X-Agent-Practice", practiceId);
@@ -1550,6 +1590,32 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 }
             }
             assertThat(upstream.getRequestCount()).isBetween(capUsd, capUsd + attempts);
+        }
+    }
+
+    @Test
+    void shouldQueueACallAtThePlaceOfThePracticeItsSessionNames() throws Exception {
+        try (MockWebServer upstream = new MockWebServer()) {
+            upstream.start();
+            upstream.enqueue(json("{\"choices\":[]}"));
+            ReviewJob job = reviewJob(upstream.url("/v1").toString());
+            UUID review = job.getReviewId();
+            job.setInput(new ReviewJobInput(
+                    1, List.of(new ReviewAssignmentId(review, 7, 1), new ReviewAssignmentId(review, 3, 1))));
+            jobRepository.saveAndFlush(job);
+            var capacity = mock(LlmCallPermits.class);
+            var permit = mock(LlmCallPermits.Permit.class);
+            when(permit.revoked()).thenReturn(Mono.never());
+            var queued = new AtomicReference<LlmCallPermits.@Nullable Caller>();
+            when(capacity.acquire(anyLong(), any(), any(), any(), any())).thenAnswer(wait -> {
+                queued.set(wait.getArgument(2));
+                return permit;
+            });
+
+            assertThat(callChat(proxyService(WebClient.create(), capOf("100"), capacity), job, practiceHeader("3")))
+                    .isEqualTo(200);
+
+            assertThat(Objects.requireNonNull(queued.get()).sessionRank()).isEqualTo(1);
         }
     }
 

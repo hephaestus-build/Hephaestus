@@ -122,7 +122,7 @@ class LlmCallPoolLearningIntegrationTest extends BaseIntegrationTest {
             try (var permit = Objects.requireNonNull(worker.acquire(
                     pool,
                     AgentRunBand.BATCH,
-                    new LlmCallPermits.Caller(workspace, source, 0, null),
+                    new LlmCallPermits.Caller(workspace, source, 0, null, null),
                     () -> false,
                     Instant.now().plusSeconds(120)))) {
                 if (provider.call()) {
@@ -269,7 +269,7 @@ class LlmCallPoolLearningIntegrationTest extends BaseIntegrationTest {
                         try (var permit = Objects.requireNonNull(worker.acquire(
                                 pool,
                                 AgentRunBand.BATCH,
-                                new LlmCallPermits.Caller(1L, source, 0, null),
+                                new LlmCallPermits.Caller(1L, source, 0, null, null),
                                 () -> false,
                                 Instant.now().plusSeconds(120)))) {
                             long sent = System.nanoTime();
@@ -899,7 +899,11 @@ class LlmCallPoolLearningIntegrationTest extends BaseIntegrationTest {
     private static LlmCallPermits.Permit admit(
             LlmCallPermits worker, long pool, AgentRunBand kind, long workspace, UUID source) {
         return Objects.requireNonNull(worker.acquire(
-                pool, kind, new LlmCallPermits.Caller(workspace, source, 0, null), () -> false, laterThanAnyTest()));
+                pool,
+                kind,
+                new LlmCallPermits.Caller(workspace, source, 0, null, null),
+                () -> false,
+                laterThanAnyTest()));
     }
 
     private Instant noCallBefore(long pool) {
@@ -911,7 +915,7 @@ class LlmCallPoolLearningIntegrationTest extends BaseIntegrationTest {
         return worker.acquire(
                 pool,
                 kind,
-                new LlmCallPermits.Caller(workspace, source, 0, null),
+                new LlmCallPermits.Caller(workspace, source, 0, null, null),
                 ended::get,
                 Instant.now().plusSeconds(60));
     }
@@ -922,7 +926,7 @@ class LlmCallPoolLearningIntegrationTest extends BaseIntegrationTest {
         return worker.acquire(
                 pool,
                 kind,
-                new LlmCallPermits.Caller(workspace, UUID.randomUUID(), 0, null),
+                new LlmCallPermits.Caller(workspace, UUID.randomUUID(), 0, null, null),
                 () -> false,
                 Instant.now().plusMillis(300));
     }
@@ -932,7 +936,7 @@ class LlmCallPoolLearningIntegrationTest extends BaseIntegrationTest {
         var permit = worker.acquire(
                 pool,
                 kind,
-                new LlmCallPermits.Caller(workspace, UUID.randomUUID(), 0, null),
+                new LlmCallPermits.Caller(workspace, UUID.randomUUID(), 0, null, null),
                 () -> false,
                 Instant.now().plus(wait));
         if (permit != null) permit.close();

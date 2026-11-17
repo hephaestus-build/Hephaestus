@@ -506,8 +506,11 @@ The brief shows them in one order: the change, the core text, linked work, the d
 It ends with the practice's own index of those sources.
 Practices that declare the same sources get the same opening, so a prompt cache can share it.
 
-The server orders item-review practices without a current result first, then by the oldest last verdict.
+The server orders item-review practices whose feedback reaches someone first, ahead of practices in feedback mode Off.
+Within each group, practices without a current result come first, then the oldest last verdict.
 The runner preserves that order among practices ready to start.
+The model pool grants the calls of a review's earlier practice sessions first ([Call pools](./agent-runs#call-pools)).
+
 Each declared-source set starts one leader at once.
 Its followers wait for the leader's first streamed response, at most 20 seconds or until the leader ends.
 A different set can start while those followers wait.

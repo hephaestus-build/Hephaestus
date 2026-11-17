@@ -8,6 +8,8 @@ import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeVersionRepository;
 import de.tum.cit.aet.hephaestus.practices.review.model.Review;
 import de.tum.cit.aet.hephaestus.practices.review.model.ReviewItem;
+import de.tum.cit.aet.hephaestus.practices.spi.FeedbackMode;
+import de.tum.cit.aet.hephaestus.practices.spi.FeedbackModeQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.PinnedPractice;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentId;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentQuery;
@@ -44,10 +46,16 @@ public class ReviewAssignmentQueryService implements ReviewAssignmentQuery {
     private final PracticeVersionRepository versions;
     private final ProductItemQuery itemQuery;
     private final JsonMapper json;
+    private final FeedbackModeQuery feedbackModes;
 
     @Override
     public List<ReviewAssignmentId> executable(long workspaceId, UUID reviewId, long itemId) {
-        return items.executablePracticeIds(workspaceId, reviewId, itemId).stream()
+        var practiceIds = items.executablePracticeIds(workspaceId, reviewId, itemId);
+        var modes = feedbackModes.effectiveModes(workspaceId, practiceIds);
+        // The run starts its practices in this order and the model pool grants its oldest session first, so practices
+        // whose feedback reaches someone finish before those in feedback mode Off.
+        return practiceIds.stream()
+                .sorted(Comparator.comparing(practiceId -> modes.get(practiceId) == FeedbackMode.OFF))
                 .map(practiceId -> new ReviewAssignmentId(reviewId, practiceId, itemId))
                 .filter(id -> find(workspaceId, id).isPresent())
                 .toList();

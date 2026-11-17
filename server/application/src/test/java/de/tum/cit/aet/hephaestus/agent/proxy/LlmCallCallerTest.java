@@ -30,7 +30,7 @@ class LlmCallCallerTest extends BaseUnitTest {
     @ParameterizedTest
     @EnumSource(value = AgentRunBand.class, names = "BACKGROUND", mode = EnumSource.Mode.EXCLUDE)
     void shouldRejectACallWithoutAWorkspaceWhenItIsNotInTheBackgroundBand(AgentRunBand band) {
-        var caller = new LlmCallPermits.Caller(null, UUID.randomUUID(), 0, null);
+        var caller = new LlmCallPermits.Caller(null, UUID.randomUUID(), 0, null, null);
         assertThatThrownBy(() -> permits.acquire(1, band, caller, () -> false, null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("A call without a workspace is product feedback, in the background band");

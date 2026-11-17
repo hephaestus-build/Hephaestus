@@ -136,9 +136,18 @@ public class LlmCallPermits {
         this.meters = new LlmPoolMeters(registry);
     }
 
-    /** The exact attempt fence, including its tenant, for a pending call. */
+    /**
+     * The exact attempt fence, including its tenant, for a pending call.
+     *
+     * @param sessionRank where the call's practice session stands in its job's start order; null for a call of no
+     *     practice session
+     */
     public record Caller(
-            @Nullable Long workspaceId, UUID sourceId, int attempt, LlmModelResolver.@Nullable ConnectionRef model) {}
+            @Nullable Long workspaceId,
+            UUID sourceId,
+            int attempt,
+            LlmModelResolver.@Nullable ConnectionRef model,
+            @Nullable Integer sessionRank) {}
 
     // Artifact profiles expose controllers without a migrated database or agent jobs.
     @EventListener(
@@ -231,7 +240,14 @@ public class LlmCallPermits {
             if (!samePool(poolId, caller))
                 throw new IllegalStateException("The configured model call pool changed before admission");
             rows.enqueue(new LlmCallPermitRepository.Request(
-                    id, poolId, ownerId, band, caller.workspaceId(), caller.sourceId(), caller.attempt()));
+                    id,
+                    poolId,
+                    ownerId,
+                    band,
+                    caller.workspaceId(),
+                    caller.sourceId(),
+                    caller.attempt(),
+                    caller.sessionRank()));
             return admission.getSlug();
         }));
         Waiter waiter = new Waiter(poolId, poolSlug, band, deadline);

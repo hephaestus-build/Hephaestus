@@ -21,10 +21,12 @@ import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
 import de.tum.cit.aet.hephaestus.conversation.spi.ConversationTurnAccess;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import de.tum.cit.aet.hephaestus.practices.spi.ModelKind;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentId;
 import de.tum.cit.aet.hephaestus.productfeedback.drafting.ProductFeedbackDraftCalls;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.io.Serial;
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.regex.Pattern;
@@ -202,6 +204,28 @@ class ProxyCallLedger {
         return Long.parseLong(named);
     }
 
+    /**
+     * Where the practice that a review sandbox names for its call stands in its job's start order, which is the order of
+     * the job's assignments. Null for any other call, and for a practice that the job does not measure.
+     */
+    @Nullable
+    Integer sessionRank(ProxyRouting routing, @Nullable Long practiceId) {
+        Long workspaceId = routing.workspaceId();
+        if (practiceId == null || workspaceId == null || routing.attempt().sourceType() != UsageSourceType.REVIEW_JOB)
+            return null;
+        return jobs.findCall(routing.attempt().sourceId(), workspaceId)
+                .map(job -> rankIn(job.input().assignments(), practiceId))
+                .orElse(null);
+    }
+
+    /** The practice's place in a job's assignments; null for a practice that the job does not measure. */
+    private static @Nullable Integer rankIn(List<ReviewAssignmentId> assigned, @Nullable Long practiceId) {
+        if (practiceId == null) return null;
+        for (int rank = 0; rank < assigned.size(); rank++)
+            if (assigned.get(rank).practiceId() == practiceId) return rank;
+        return null;
+    }
+
     private UUID probeCall(ProxyRouting routing, Bound bound, String upstreamModel) {
         UUID call = Objects.requireNonNull(ownTransaction.execute(status -> {
             var attempt = routing.attempt();
@@ -281,11 +305,7 @@ class ProxyCallLedger {
                 job.reviewId(),
                 ModelKind.CHAT,
                 // The sandbox names the practice, so only a practice of the job's own assignments is kept.
-                practiceId != null
-                                && job.input().assignments().stream()
-                                        .anyMatch(assigned -> assigned.practiceId() == practiceId)
-                        ? practiceId
-                        : null,
+                rankIn(job.input().assignments(), practiceId) == null ? null : practiceId,
                 charge.model(),
                 charge.price(),
                 costBound(charge.price(), bound));
