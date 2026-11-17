@@ -1553,8 +1553,9 @@ class ResultAdmissionIntegrationTest extends AbstractResultAdmissionIntegrationT
         assertThat(followUps(version)).hasSize(1);
     }
 
+    /** A newer review that selected the owed practice but has not measured it can still withhold it. */
     @Test
-    void shouldLeaveTheFollowUpToANewerReviewThatMeasuresEveryOwedPractice() {
+    void shouldStillAskForAFollowUpWhileANewerReviewHasOnlySelectedTheOwedPractice() {
         String version = "item-version-" + UUID.randomUUID();
         UUID occasion = occasionAt(version);
         var owing = eventReviewOwing(version, occasion);
@@ -1583,6 +1584,50 @@ class ResultAdmissionIntegrationTest extends AbstractResultAdmissionIntegrationT
 
         close(owing);
 
+        assertThat(followUps(version)).hasSize(1);
+    }
+
+    @Test
+    void shouldLeaveTheFollowUpToANewerReviewThatAlreadyMeasuredEveryOwedPractice() {
+        String version = "item-version-" + UUID.randomUUID();
+        UUID occasion = occasionAt(version);
+        // The event review never ran its own practice.
+        var owing = admissions.pending(scenario, Instant.now(), scenarioAccountId, version);
+        long workspace = scenario.workspace().getId();
+        jdbcTemplate.update(
+                "UPDATE review SET origin='EVENT', requested_by_id=NULL, event_id=? WHERE id=?",
+                occasion,
+                owing.review().getId());
+        jdbcTemplate.update(
+                "UPDATE review_practice SET status='WITHHELD', reason='NOT_RUN' WHERE workspace_id=? AND review_id=?",
+                workspace,
+                owing.review().getId());
+        jdbcTemplate.update(
+                "UPDATE review_item SET state='WITHHELD', reason='NOT_RUN', job_id=NULL"
+                        + " WHERE workspace_id=? AND review_id=?",
+                workspace,
+                owing.review().getId());
+        // A comment at the same version ordered a newer review, which judged that practice.
+        var newer =
+                admissions.pending(scenario, owing.review().getOrderedAt().plusSeconds(60), scenarioAccountId, version);
+        admit(newer, ResultOutcome.MET);
+
+        settle(owing);
+        service.complete(
+                workspace,
+                owing.review().getId(),
+                new ReviewCompletion(
+                        ReviewStatus.COMPLETE,
+                        null,
+                        Instant.now(),
+                        owing.review().getOrderedAt()));
+
+        assertThat(jdbcTemplate.queryForObject(
+                        "SELECT count(*) FROM review_item WHERE workspace_id=? AND review_id=? AND state='JUDGED'",
+                        Integer.class,
+                        workspace,
+                        newer.review().getId()))
+                .isOne();
         assertThat(followUps(version)).isEmpty();
     }
 

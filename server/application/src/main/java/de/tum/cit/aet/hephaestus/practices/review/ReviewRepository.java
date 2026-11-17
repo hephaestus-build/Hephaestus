@@ -36,6 +36,19 @@ public interface ReviewRepository extends JpaRepository<Review, UUID>, ReviewQue
     boolean existsNewerReviewOfPractice(
             long workspaceId, long itemId, long practiceId, UUID reviewId, Instant orderedAt);
 
+    /**
+     * Whether a later review of the item, not cancelled, already judged or reused the practice. A later review that
+     * only selected it can still withhold it or never run it.
+     */
+    @Query(value = """
+        SELECT EXISTS(SELECT 1 FROM review r JOIN review_item m ON m.review_id=r.id AND m.workspace_id=r.workspace_id
+          WHERE r.workspace_id=:workspaceId AND r.item_id=:itemId AND r.kind='ITEM' AND r.id<>:reviewId
+            AND r.ordered_at>:orderedAt AND r.status<>'CANCELLED' AND m.practice_id=:practiceId
+            AND m.item_id=r.item_id AND m.state IN ('JUDGED','REUSED'))
+        """, nativeQuery = true)
+    boolean existsNewerMeasurementOfPractice(
+            long workspaceId, long itemId, long practiceId, UUID reviewId, Instant orderedAt);
+
     /** The result counts of item reviews, per review and practice: the results each review recorded. */
     @Query(value = """
         SELECT r.review_id AS reviewId,r.practice_id AS practiceId,
