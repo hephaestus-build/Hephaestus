@@ -27,9 +27,11 @@ import java.io.Serial;
 import java.math.BigDecimal;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
@@ -185,6 +187,19 @@ class ProxyCallLedger {
                     turnId,
                     failed.getClass().getSimpleName());
         }
+    }
+
+    /** Names the practice whose review session makes the call (pi-provider.ts). */
+    static final String PRACTICE_HEADER = "X-Agent-Practice";
+
+    /** A positive decimal id that a long holds. */
+    private static final Pattern PRACTICE_ID = Pattern.compile("[1-9][0-9]{0,17}");
+
+    /** The practice that a review sandbox names for its call; null when the header is absent or no positive id. */
+    static @Nullable Long namedPractice(HttpHeaders headers) {
+        String named = headers.getFirst(PRACTICE_HEADER);
+        if (named == null || !PRACTICE_ID.matcher(named).matches()) return null;
+        return Long.parseLong(named);
     }
 
     private UUID probeCall(ProxyRouting routing, Bound bound, String upstreamModel) {

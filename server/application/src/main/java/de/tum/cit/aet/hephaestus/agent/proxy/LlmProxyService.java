@@ -32,7 +32,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.function.UnaryOperator;
-import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -94,10 +93,6 @@ class LlmProxyService {
 
     /** Names which of the proxy's own rules refused a call, so an in-process caller need not read the refusal's words. */
     static final String REFUSAL_HEADER = "Hephaestus-Proxy-Refusal";
-    /** Names the practice whose review session makes the call (pi-provider.ts). */
-    static final String PRACTICE_HEADER = "X-Agent-Practice";
-    /** A positive decimal id that a long holds. */
-    private static final Pattern PRACTICE_ID = Pattern.compile("[1-9][0-9]{0,17}");
 
     /** The provider sent no byte for the idle bound of the call. */
     static final String UPSTREAM_STALLED = "upstream_stalled";
@@ -291,13 +286,6 @@ class LlmProxyService {
         return status;
     }
 
-    /** The practice that a review sandbox names for its call; null when the header is absent or no positive id. */
-    static @Nullable Long practice(HttpHeaders headers) {
-        String named = headers.getFirst(PRACTICE_HEADER);
-        if (named == null || !PRACTICE_ID.matcher(named).matches()) return null;
-        return Long.parseLong(named);
-    }
-
     /**
      * The ledger row of one proxied call ({@link ProxyCallLedger}). It opens before the call's first upstream request
      * and ends once: with the usage of a served answer, with nothing for a provider's error answer, which the provider
@@ -415,7 +403,7 @@ class LlmProxyService {
             } catch (JacksonException unreadable) {
                 return ResponseEntity.badRequest().body("Request body must be valid JSON");
             }
-            row = new CallRow(routing, body.length, outputBound, call, practice(incomingHeaders));
+            row = new CallRow(routing, body.length, outputBound, call, ProxyCallLedger.namedPractice(incomingHeaders));
             if (workTimeOver(routing)) return refusal(HttpStatus.FORBIDDEN, ProxyRefusal.WORK_TIME, WORK_TIME_OVER);
             // A provider's limit should slow a call, not fail it. It must still be heard: past this, or when the
             // provider
