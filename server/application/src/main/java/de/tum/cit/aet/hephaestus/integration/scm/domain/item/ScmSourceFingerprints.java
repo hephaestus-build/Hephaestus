@@ -53,9 +53,8 @@ public class ScmSourceFingerprints implements ItemFingerprintReader {
         if (!item.kind().equals(ScmItemEvents.PULL_REQUEST)
                 && !item.kind().equals(ScmItemEvents.ISSUE)
                 && !item.kind().equals(ScmItemEvents.PULL_REQUEST_REVIEW)) return Map.of();
-        var current = source.current(item);
-        if (current.isEmpty()) return Map.of();
-        var snapshot = current.orElseThrow();
+        // Not current(): a removed or hidden item keeps its capture code, which the freshness read then names.
+        var snapshot = source.pin(item, null);
         var fingerprints = new HashMap<SourceKind, String>();
         var records = new HashSet<SourceKind>();
         for (var kind : kinds) {

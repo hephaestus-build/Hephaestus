@@ -44,6 +44,7 @@ import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
 import de.tum.cit.aet.hephaestus.core.tenancy.TenancyViolations;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.practices.review.AbstractResultAdmissionIntegrationTest;
+import de.tum.cit.aet.hephaestus.practices.review.ProductItemQuery;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewAdmissionData;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewIntegrationData;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewPracticeRepository;
@@ -391,7 +392,9 @@ class AttemptCredentialWorkspaceIntegrationTest extends AbstractResultAdmissionI
     private void sourcesNow(Attempt attempt, String fingerprint) {
         var item = productItems.require(
                 attempt.workspaceId(), attempt.pending().scenario().item().getId());
-        doReturn(Map.of(SOURCE, fingerprint)).when(productItems).fingerprints(eq(item), anySet(), any());
+        doReturn(new ProductItemQuery.FingerprintRead(Map.of(SOURCE, fingerprint), null))
+                .when(productItems)
+                .read(eq(item), anySet(), any());
     }
 
     /** A leased {@code review_compose} run of the subject in the workspace. */

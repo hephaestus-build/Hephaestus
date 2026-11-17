@@ -2,7 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.job;
 
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobPreparationException;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
-import de.tum.cit.aet.hephaestus.practices.spi.Currentness;
+import de.tum.cit.aet.hephaestus.practices.spi.PracticeStartCheck;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentSnapshot;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentStore;
@@ -72,12 +72,12 @@ public class ReviewJobAssignments {
     }
 
     /** {@link ReviewFreshness#startCurrentness} for the practice that {@link #start} starts; it holds no lock. */
-    public Currentness startCurrentness(ReviewJob job, String practiceSlug) {
+    public PracticeStartCheck startCurrentness(ReviewJob job, String practiceSlug) {
         return freshness.startCurrentness(
                 job.getWorkspaceId(), assigned(job, practiceSlug).id());
     }
 
-    public boolean start(ReviewJob job, String practiceSlug, Currentness checked) {
+    public boolean start(ReviewJob job, String practiceSlug, PracticeStartCheck checked) {
         return freshness.start(
                 job.getWorkspaceId(), assigned(job, practiceSlug).id(), job.getId(), job.getAttempt(), checked);
     }

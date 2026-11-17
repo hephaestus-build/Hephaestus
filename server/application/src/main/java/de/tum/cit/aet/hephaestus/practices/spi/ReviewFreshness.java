@@ -13,10 +13,12 @@ public interface ReviewFreshness {
      * no review, job or run lock (docs/contributor/agent-runs.mdx § Locks and slow work). A source that changes after it
      * is caught when the review's results are admitted, as any change after a start is.
      */
-    Currentness startCurrentness(long workspaceId, ReviewAssignmentId assignment);
+    PracticeStartCheck startCurrentness(long workspaceId, ReviewAssignmentId assignment);
 
-    /** Starts the practice if {@code checked} is current, and withholds it otherwise; the claim decides first. */
-    boolean start(long workspaceId, ReviewAssignmentId assignment, UUID jobId, int attempt, Currentness checked);
+    /**
+     * Starts the practice if {@code checked} is current, and withholds it otherwise, naming why; the claim decides first.
+     */
+    boolean start(long workspaceId, ReviewAssignmentId assignment, UUID jobId, int attempt, PracticeStartCheck checked);
 
     /**
      * Brings this server's copy of what {@link #startCurrentness} reads up to date with the provider. It may call the

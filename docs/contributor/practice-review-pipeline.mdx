@@ -311,6 +311,12 @@ A capture whose fetch failed records no linked-work fingerprint, so a later read
 A missing capture record makes the result unverifiable with `RECORD_MISSING` ([Currentness](./practice-review-glossary.mdx#currentness)).
 Neither reason establishes a change to the work.
 The practice-start gateway records `REPLACED` for changed sources and `READINESS_REFUSED` for sources it cannot verify.
+
+A start that cannot verify its sources always names why, on its `Practice start` log line as `unreadReason` and in the withheld membership's message.
+The reason is the capture code of the read that failed, such as `OCCASION_EVIDENCE_UNAVAILABLE`.
+It is `RECORD_MISSING` for a capture that recorded no fingerprint, and `SOURCE_UNREAD` for sources that read nothing although the read ran.
+It is `NO_CURRENT_WORK` for work that its source no longer shows, and `NO_UNIQUE_SOURCE` for an item that no single source reads.
+
 A submitted review ends only results whose source fingerprints changed.
 An event review's practice start reads its sources again under the occasion's own record and roles.
 An assignee added after the work opened changes no version, so it changes no source.

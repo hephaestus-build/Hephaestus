@@ -53,6 +53,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.FeedbackRepairStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackState;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackStore;
 import de.tum.cit.aet.hephaestus.practices.spi.PracticeStagingStore;
+import de.tum.cit.aet.hephaestus.practices.spi.PracticeStartCheck;
 import de.tum.cit.aet.hephaestus.practices.spi.PreparedFeedback;
 import de.tum.cit.aet.hephaestus.practices.spi.PreparedPackage;
 import de.tum.cit.aet.hephaestus.practices.spi.PreparedReviewQuery;
@@ -174,8 +175,9 @@ class ResultAdmissionServiceTest extends BaseUnitTest {
 
     @Test
     void shouldSyncAndCheckThePracticeSourcesWithNoLockBeforeTheLockedStart() {
-        when(assignments.startCurrentness(job, "review-ready-work")).thenReturn(Currentness.CURRENT);
-        when(assignments.start(job, "review-ready-work", Currentness.CURRENT)).thenReturn(true);
+        when(assignments.startCurrentness(job, "review-ready-work")).thenReturn(PracticeStartCheck.current());
+        when(assignments.start(job, "review-ready-work", PracticeStartCheck.current()))
+                .thenReturn(true);
 
         var started = service.start(identity(), new PracticeStartRequestDTO("review-ready-work"));
 
@@ -184,7 +186,7 @@ class ResultAdmissionServiceTest extends BaseUnitTest {
         order.verify(assignments).syncSources(job, "review-ready-work");
         order.verify(assignments).startCurrentness(job, "review-ready-work");
         order.verify(manager).getTransaction(any());
-        order.verify(assignments).start(job, "review-ready-work", Currentness.CURRENT);
+        order.verify(assignments).start(job, "review-ready-work", PracticeStartCheck.current());
     }
 
     @Test
@@ -203,14 +205,14 @@ class ResultAdmissionServiceTest extends BaseUnitTest {
         doThrow(new IllegalStateException("The provider cannot be reached"))
                 .when(assignments)
                 .syncSources(job, "review-ready-work");
-        when(assignments.startCurrentness(job, "review-ready-work")).thenReturn(Currentness.UNVERIFIABLE);
-        when(assignments.start(job, "review-ready-work", Currentness.UNVERIFIABLE))
-                .thenReturn(false);
+        var unverifiable = new PracticeStartCheck(Currentness.UNVERIFIABLE, "OCCASION_EVIDENCE_UNAVAILABLE");
+        when(assignments.startCurrentness(job, "review-ready-work")).thenReturn(unverifiable);
+        when(assignments.start(job, "review-ready-work", unverifiable)).thenReturn(false);
 
         var started = service.start(identity(), new PracticeStartRequestDTO("review-ready-work"));
 
         assertThat(started.current()).isFalse();
-        verify(assignments).start(job, "review-ready-work", Currentness.UNVERIFIABLE);
+        verify(assignments).start(job, "review-ready-work", unverifiable);
     }
 
     @Test

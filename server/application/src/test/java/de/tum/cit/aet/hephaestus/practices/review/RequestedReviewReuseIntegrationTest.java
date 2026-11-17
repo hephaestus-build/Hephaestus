@@ -119,7 +119,9 @@ class RequestedReviewReuseIntegrationTest extends BaseIntegrationTest {
         databaseTestUtils.cleanDatabase();
         when(authorization.permits(anyLong(), any(), any())).thenReturn(true);
         scenario = data.scenario();
-        doReturn(Map.of(CORE, SAME)).when(productItems).fingerprints(any(), any(), any());
+        doReturn(new ProductItemQuery.FingerprintRead(Map.of(CORE, SAME), null))
+                .when(productItems)
+                .read(any(), any(), any());
         var recordedAt = Instant.now().minusSeconds(120);
         earlier = data.result(
                 scenario,
@@ -250,7 +252,9 @@ class RequestedReviewReuseIntegrationTest extends BaseIntegrationTest {
     @Test
     void shouldMeasureAgainWhenASourceChangedAtTheSameVersion() {
         var pending = requested(ReviewOrigin.REQUEST);
-        doReturn(Map.of(CORE, "b".repeat(64))).when(productItems).fingerprints(any(), any(), any());
+        doReturn(new ProductItemQuery.FingerprintRead(Map.of(CORE, "b".repeat(64)), null))
+                .when(productItems)
+                .read(any(), any(), any());
         assertMeasures(pending, capture(pending, "b".repeat(64)));
     }
 
@@ -262,9 +266,9 @@ class RequestedReviewReuseIntegrationTest extends BaseIntegrationTest {
                         ReviewCaptureDecision.SOURCE_FINGERPRINTS,
                         Map.of(CORE.value(), SAME, COMMENTS.value(), "b".repeat(64)))),
                 earlier.getReviewId());
-        doReturn(Map.of(CORE, SAME, COMMENTS, "c".repeat(64)))
+        doReturn(new ProductItemQuery.FingerprintRead(Map.of(CORE, SAME, COMMENTS, "c".repeat(64)), null))
                 .when(productItems)
-                .fingerprints(any(), any(), any());
+                .read(any(), any(), any());
         var pending = requested(ReviewOrigin.REQUEST);
         assertMeasures(pending, capture(pending, SAME));
         assertThat(jdbc.queryForObject(
@@ -277,7 +281,9 @@ class RequestedReviewReuseIntegrationTest extends BaseIntegrationTest {
 
     @Test
     void shouldMeasureAgainWhenCurrentProofIsUnavailable() {
-        doReturn(Map.of()).when(productItems).fingerprints(any(), any(), any());
+        doReturn(new ProductItemQuery.FingerprintRead(Map.of(), null))
+                .when(productItems)
+                .read(any(), any(), any());
         var pending = requested(ReviewOrigin.REQUEST);
         assertMeasures(pending, capture(pending, SAME));
     }

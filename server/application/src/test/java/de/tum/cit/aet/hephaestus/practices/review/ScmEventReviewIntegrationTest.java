@@ -882,7 +882,7 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
                             return canonical;
                         })
                         .when(productItems)
-                        .fingerprints(eq(item), any(), any());
+                        .read(eq(item), any(), any());
             }
             Future<?> sourceWrite;
             Future<AdmissionReceipt> admitted;
@@ -2140,7 +2140,7 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
                     return call.callRealMethod();
                 })
                 .when(productItems)
-                .fingerprints(argThat(ref -> ref != null && ref.itemId() == item.itemId()), any(), any());
+                .read(argThat(ref -> ref != null && ref.itemId() == item.itemId()), any(), any());
         doAnswer(call -> {
                     fetches.add(fetch(item.workspaceId()));
                     return call.callRealMethod();
@@ -2171,7 +2171,7 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
                     return call.callRealMethod();
                 })
                 .when(productItems)
-                .fingerprints(argThat(ref -> ref != null && ref.itemId() == item.itemId()), any(), any());
+                .read(argThat(ref -> ref != null && ref.itemId() == item.itemId()), any(), any());
         return read;
     }
 

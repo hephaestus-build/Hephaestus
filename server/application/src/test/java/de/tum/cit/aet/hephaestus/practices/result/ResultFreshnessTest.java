@@ -25,6 +25,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.UnverifiableReason;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.Tag;
@@ -44,12 +45,44 @@ class ResultFreshnessTest {
     private final ResultFreshness freshness = new ResultFreshness(practices, items);
     private final ItemRef item = new ItemRef(1, 7, new ItemKind("scm.pull_request"), 70L, null, null);
 
+    /** An unverifiable check always names why: the capture code of the read that failed, or what was missing. */
+    @Test
+    void shouldNameWhyAPracticeStartCannotVerifyItsSources() {
+        var core = new SourceKind("scm.pull-request.core");
+        var facts = JsonMapper.builder().build().createObjectNode();
+        facts.putObject("sourceFingerprints").put(core.value(), FINGERPRINT).put(LINKED.value(), FINGERPRINT);
+        when(items.find(1, 7)).thenReturn(Optional.of(item));
+        when(items.read(eq(item), eq(Set.of(core, LINKED)), any()))
+                .thenReturn(new ProductItemQuery.FingerprintRead(Map.of(), "OCCASION_EVIDENCE_UNAVAILABLE"));
+
+        var failed = freshness.check(1, 7, null, facts);
+        assertThat(failed.currentness()).isEqualTo(Currentness.UNVERIFIABLE);
+        assertThat(failed.unread()).containsExactlyInAnyOrder(core.value(), LINKED.value());
+        assertThat(failed.unreadReason()).isEqualTo("OCCASION_EVIDENCE_UNAVAILABLE");
+
+        when(items.read(eq(item), eq(Set.of(core, LINKED)), any()))
+                .thenReturn(new ProductItemQuery.FingerprintRead(Map.of(core, FINGERPRINT), null));
+        assertThat(freshness.check(1, 7, null, facts).unreadReason())
+                .as("one source read nothing while the read ran")
+                .isEqualTo("SOURCE_UNREAD");
+
+        assertThat(freshness
+                        .check(1, 7, null, JsonMapper.builder().build().createObjectNode())
+                        .unreadReason())
+                .isEqualTo("RECORD_MISSING");
+
+        when(items.read(eq(item), eq(Set.of(core, LINKED)), any()))
+                .thenReturn(new ProductItemQuery.FingerprintRead(Map.of(core, FINGERPRINT, LINKED, FINGERPRINT), null));
+        assertThat(freshness.check(1, 7, null, facts).unreadReason()).isNull();
+    }
+
     @Test
     void shouldBeUnverifiableWithItsCaptureTimeWhenTheCurrentWorkCannotBeReadUntilItCanBeReadAgain() {
         var result = result();
         captured(result, decision(CAPTURED_AT, Map.of(LINKED.value(), FINGERPRINT)));
         when(items.findAll(eq(1L), any())).thenReturn(Map.of(7L, item));
-        when(items.fingerprints(eq(item), eq(Set.of(LINKED)), any())).thenReturn(Map.of());
+        when(items.read(eq(item), eq(Set.of(LINKED)), any()))
+                .thenReturn(new ProductItemQuery.FingerprintRead(Map.of(), null));
 
         assertThat(freshness.freshness(1, facts(List.of(result)), Map.of(7L, item)))
                 .containsEntry(
@@ -57,7 +90,8 @@ class ResultFreshnessTest {
                         new Freshness(Currentness.UNVERIFIABLE, UnverifiableReason.WORK_UNREADABLE, CAPTURED_AT));
         assertThat(freshness.states(1, List.of(result))).containsEntry(result.getId(), Currentness.UNVERIFIABLE);
 
-        when(items.fingerprints(eq(item), eq(Set.of(LINKED)), any())).thenReturn(Map.of(LINKED, FINGERPRINT));
+        when(items.read(eq(item), eq(Set.of(LINKED)), any()))
+                .thenReturn(new ProductItemQuery.FingerprintRead(Map.of(LINKED, FINGERPRINT), null));
 
         assertThat(freshness.freshness(1, facts(List.of(result)), Map.of(7L, item)))
                 .containsEntry(result.getId(), Freshness.current(CAPTURED_AT));
@@ -76,7 +110,8 @@ class ResultFreshnessTest {
     void shouldKeepTheCaptureTimeOfAResultWhoseWorkChanged() {
         var result = result();
         captured(result, decision(CAPTURED_AT, Map.of(LINKED.value(), FINGERPRINT)));
-        when(items.fingerprints(eq(item), eq(Set.of(LINKED)), any())).thenReturn(Map.of(LINKED, "b".repeat(64)));
+        when(items.read(eq(item), eq(Set.of(LINKED)), any()))
+                .thenReturn(new ProductItemQuery.FingerprintRead(Map.of(LINKED, "b".repeat(64)), null));
 
         assertThat(freshness.freshness(1, facts(List.of(result)), Map.of(7L, item)))
                 .containsEntry(result.getId(), Freshness.stale(CAPTURED_AT));
@@ -94,7 +129,8 @@ class ResultFreshnessTest {
                         List.of()));
         facts.putObject("sourceFingerprints").put(LINKED.value(), FINGERPRINT);
         captured(result, facts);
-        when(items.fingerprints(eq(item), eq(Set.of(LINKED)), any())).thenReturn(Map.of());
+        when(items.read(eq(item), eq(Set.of(LINKED)), any()))
+                .thenReturn(new ProductItemQuery.FingerprintRead(Map.of(), null));
 
         assertThat(freshness
                         .freshness(1, facts(List.of(result)), Map.of(7L, item))

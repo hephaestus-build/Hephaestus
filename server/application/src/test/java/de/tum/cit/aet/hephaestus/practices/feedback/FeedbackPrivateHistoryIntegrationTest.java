@@ -198,9 +198,10 @@ class FeedbackPrivateHistoryIntegrationTest extends BaseIntegrationTest {
                 .thenAnswer(call -> Optional.of(ItemFixtures.snapshot(call.getArgument(0), Map.of())
                         .version(new ItemVersion(ITEM_VERSION, null))
                         .build()));
-        doReturn(Map.of(new SourceKind("scm.pull-request.core"), "a".repeat(64)))
+        doReturn(new ProductItemQuery.FingerprintRead(
+                        Map.of(new SourceKind("scm.pull-request.core"), "a".repeat(64)), null))
                 .when(productItems)
-                .fingerprints(any(), any(), any());
+                .read(any(), any(), any());
         scenario = data.scenario();
         jdbc.update(
                 "UPDATE practice SET feedback_mode='AUTOMATIC' WHERE workspace_id=? AND id=?",
