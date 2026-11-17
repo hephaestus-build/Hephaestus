@@ -6,22 +6,33 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
+import jakarta.annotation.PreDestroy;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.slf4j.spi.LoggingEventBuilder;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.SmartLifecycle;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.ObjectMapper;
@@ -30,11 +41,15 @@ import tools.jackson.databind.ObjectMapper;
  * Carries out the outbox on every server replica, without a leader: replicas share the rows through
  * {@code SKIP LOCKED} claims and leases on the database clock. A crashed replica's lease expires, and another replica
  * takes the action again, or ends it {@link ActionState#UNCERTAIN} when its kind cannot read back.
+ *
+ * <p>Each replica runs up to {@link #SLOTS} attempts at once, and each run claims only into free slots, so one slow
+ * attempt never holds back the others. Spring's graceful shutdown waits for the attempts in flight
+ * ({@link SmartLifecycle}).
  */
 @Component
 @ConditionalOnServerRole
 @WorkspaceAgnostic("The executor runs every workspace's actions; each adapter scopes its own provider call")
-public class ActionExecutor {
+public class ActionExecutor implements SmartLifecycle {
     private static final Logger log = LoggerFactory.getLogger(ActionExecutor.class);
 
     /** Longer than any provider call an adapter makes, with {@link #WRITE_MARGIN} to spare. */
@@ -60,8 +75,30 @@ public class ActionExecutor {
     private final Map<ActionKind, ActionAdapter> adapters = new EnumMap<>(ActionKind.class);
     private final MeterRegistry meters;
     private final ActionAdmission admission;
+    private final Duration lease;
 
+    /** One permit per attempt in flight; an attempt returns it when it ends or its lease runs out. */
+    private final Semaphore slots = new Semaphore(SLOTS);
+
+    private final ExecutorService attempts = Executors.newVirtualThreadPerTaskExecutor();
+    /** The attempts in flight, each under its own key: a lost lease can run the same action twice at once. */
+    private final Map<UUID, CompletableFuture<ActionResult>> inFlight = new ConcurrentHashMap<>();
+
+    private volatile boolean running = true;
+
+    @Autowired
     public ActionExecutor(ActionStore store, ObjectMapper mapper, List<ActionAdapter> adapters, MeterRegistry meters) {
+        this(store, mapper, adapters, meters, LEASE);
+    }
+
+    /** @param lease how long a claim holds its action, and so the longest an attempt holds its slot */
+    ActionExecutor(
+            ActionStore store,
+            ObjectMapper mapper,
+            List<ActionAdapter> adapters,
+            MeterRegistry meters,
+            Duration lease) {
+        this.lease = lease;
         this.store = store;
         this.mapper = mapper;
         this.meters = meters;
@@ -79,12 +116,15 @@ public class ActionExecutor {
         recordFailures("settle");
     }
 
-    /**
-     * Ends what can no longer run, then carries out up to {@link #SLOTS} due actions at once. The next run starts a
-     * second after this one ends.
-     */
+    /** Ends what can no longer run, then starts due actions in the free slots. The next run starts a second later. */
     @Scheduled(fixedDelayString = "PT1S", initialDelayString = "PT10S")
     public void runDue() {
+        startDue();
+    }
+
+    /** {@link #runDue}, returning the attempts it started. */
+    List<CompletableFuture<ActionResult>> startDue() {
+        if (!running) return List.of();
         for (UUID id : store.findStale(SLOTS * 4, admission)) {
             try {
                 store.endStale(id, admission, this::ended).ifPresent(this::recordEnd);
@@ -100,28 +140,124 @@ public class ActionExecutor {
             }
         }
         store.deleteEnded(RETENTION);
-        var claims = store.claim(SLOTS, LEASE, admission);
-        if (!claims.isEmpty()) runBatch(claims, LEASE);
+        int free = slots.drainPermits();
+        if (free == 0) return List.of();
+        List<ActionStore.Claim> claims;
+        try {
+            claims = store.claim(free, lease, admission);
+        } catch (RuntimeException failed) {
+            slots.release(free);
+            throw failed;
+        }
+        // Each claim keeps one of the permits taken; a claim that does not start returns its own.
+        slots.release(free - claims.size());
+        var started = new ArrayList<CompletableFuture<ActionResult>>();
+        try {
+            for (ActionStore.Claim claim : claims) started.add(launch(claim));
+        } finally {
+            slots.release(claims.size() - started.size());
+        }
+        return started;
     }
 
     /**
-     * Runs the claims and waits for them at most {@code wait}. A provider that holds a call open past the lease cannot
-     * stall this replica's executor: the attempt keeps running, the reaper ends its action, and its late result names
-     * a lease that has moved on, so it records nothing.
+     * Runs a claim on its own thread. Its slot is free again when the attempt ends or its lease runs out, whichever
+     * comes first: a provider that holds a call open past the lease keeps its thread but not its slot, because the
+     * reaper ends its action and its late result names a lease that has moved on, so it records nothing.
      */
-    void runBatch(List<ActionStore.Claim> claims, Duration wait) {
-        ExecutorService batch = Executors.newVirtualThreadPerTaskExecutor();
-        for (ActionStore.Claim claim : claims) batch.execute(() -> run(claim));
-        batch.shutdown();
+    private CompletableFuture<ActionResult> launch(ActionStore.Claim claim) {
+        CompletableFuture<ActionResult> attempt;
         try {
-            if (!batch.awaitTermination(wait.toMillis(), TimeUnit.MILLISECONDS))
-                log.atWarn()
-                        .addKeyValue("event.name", "action.batch.outlived")
-                        .addKeyValue("action.claims", claims.size())
-                        .log("Outbox attempts outlived their lease and keep running");
-        } catch (InterruptedException interrupted) {
-            Thread.currentThread().interrupt();
+            attempt = CompletableFuture.supplyAsync(() -> run(claim), attempts)
+                    .orTimeout(lease.toMillis(), TimeUnit.MILLISECONDS);
+        } catch (RejectedExecutionException stopping) {
+            // The replica stops: the lease runs out, and another replica takes the action again.
+            slots.release();
+            return CompletableFuture.failedFuture(stopping);
         }
+        UUID key = UUID.randomUUID();
+        inFlight.put(key, attempt);
+        return attempt.whenComplete((result, failure) -> {
+            slots.release();
+            inFlight.remove(key);
+            if (failure instanceof TimeoutException)
+                event(log.atWarn(), "action.attempt.outlived", claim.id(), claim.workspaceId(), claim.kind())
+                        .log("Outbox attempt outlived its lease and keeps running");
+            else if (failure != null)
+                // The class only, as for an adapter's failure; the lease recovers the action.
+                event(log.atWarn(), "action.attempt.failed", claim.id(), claim.workspaceId(), claim.kind())
+                        .addKeyValue("action.attempt", claim.attempts())
+                        .addKeyValue(
+                                "error.type",
+                                (failure instanceof CompletionException wrapped && wrapped.getCause() != null
+                                                ? wrapped.getCause()
+                                                : failure)
+                                        .getClass()
+                                        .getName())
+                        .log("Action attempt failed");
+        });
+    }
+
+    /**
+     * Waits for the attempts in flight to end, at most {@code timeout}.
+     *
+     * @return whether none is left
+     */
+    public boolean awaitIdle(Duration timeout) {
+        long end = System.nanoTime() + timeout.toNanos();
+        while (!inFlight.isEmpty()) {
+            long left = end - System.nanoTime();
+            if (left <= 0) return false;
+            try {
+                CompletableFuture.allOf(inFlight.values().toArray(new CompletableFuture<?>[0]))
+                        .get(left, TimeUnit.NANOSECONDS);
+            } catch (TimeoutException late) {
+                return false;
+            } catch (ExecutionException failed) {
+                // Each attempt records its own failure; waiting goes on for the others.
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** Claims again after a {@link #stop}: a test context that Spring paused and resumed, for example. */
+    @Override
+    public void start() {
+        running = true;
+    }
+
+    /** Claims nothing more and waits for the attempts in flight. */
+    @Override
+    public void stop() {
+        running = false;
+        awaitIdle(lease);
+    }
+
+    /**
+     * Spring waits for the callback at most one shutdown phase ({@code spring.lifecycle.timeout-per-shutdown-phase});
+     * an attempt cut after that is recovered by its lease.
+     */
+    @Override
+    public void stop(Runnable callback) {
+        running = false;
+        Thread.ofVirtual().start(() -> {
+            awaitIdle(lease);
+            callback.run();
+        });
+    }
+
+    /** The attempt threads end with the bean, after the lifecycle stopped claiming. */
+    @PreDestroy
+    void close() {
+        attempts.shutdown();
+    }
+
+    @Override
+    public boolean isRunning() {
+        return running;
     }
 
     /**

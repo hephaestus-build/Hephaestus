@@ -35,15 +35,21 @@ public class TestAsyncConfiguration implements AsyncConfigurer {
 
     private final AsyncTaskExecutor syncExecutor = new TaskExecutorAdapter(new SyncTaskExecutor());
 
-    /** Manual outbox drains join scheduled calls without treating a readback lease as a running Java call. */
+    /**
+     * Manual outbox drains join scheduled calls without treating a readback lease as a running Java call. A run starts
+     * its attempts on their own threads, so a test's run also waits for them to end.
+     */
     @Bean
     public Advisor actionExecutorTestBarrier() {
         var calls = new NameMatchMethodPointcut();
         calls.setMappedName("runDue");
         calls.setClassFilter(ActionExecutor.class::isAssignableFrom);
         return new DefaultPointcutAdvisor(calls, (MethodInterceptor) invocation -> {
-            synchronized (Objects.requireNonNull(invocation.getThis())) {
-                return invocation.proceed();
+            var executor = (ActionExecutor) Objects.requireNonNull(invocation.getThis());
+            synchronized (executor) {
+                Object result = invocation.proceed();
+                executor.awaitIdle(ActionExecutor.LEASE);
+                return result;
             }
         });
     }

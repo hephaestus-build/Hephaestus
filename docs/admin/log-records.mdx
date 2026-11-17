@@ -216,10 +216,10 @@ These are fields, not metric labels.
 | `agent.run.requeued` | The reaper takes back an expired lease, and the run has retries left | `run.id`, `run.epoch`, `subject.key`, `workspace.id`, `run.kind` |
 | `agent.run.ended` | The reaper ends a run: its lease expired at its retry limit, or it passed its deadline | The same, and `run.stop_reason` |
 | `agent.run.reaper.failed` | The reaper cannot take back one run. It tries the run again on the next pass | The same, and `error.type` |
-| `action.attempt.failed` | An outbox adapter threw | `action.id`, `action.kind`, `action.attempt`, `error.type`, and `workspace.id` when the action has a workspace |
+| `action.attempt.failed` | An outbox attempt threw | `action.id`, `action.kind`, `action.attempt`, `error.type`, and `workspace.id` when the action has a workspace |
 | `action.result.late` | An attempt ended after another claim took its action, or after an erasure deleted it. Its result changes nothing | `action.id`, `action.kind`, `action.attempt`, and `workspace.id` when the action has a workspace |
 | `action.ended.uncertain` | An action ended `UNCERTAIN`: its write may have reached the provider, and nothing confirms it | `action.id`, `action.kind`, `action.reason`, and `workspace.id` when the action has a workspace |
-| `action.batch.outlived` | Outbox attempts of one replica ran longer than their lease. They keep running, and their late results change nothing | `action.claims` |
+| `action.attempt.outlived` | An outbox attempt ran longer than its lease. It keeps running without a slot, and its late result changes nothing | `action.id`, `action.kind`, and `workspace.id` when the action has a workspace |
 
 If `agent.review.preparation_restarted` repeats for one review, check server restarts, deploys and capture-stage failures.
 The old snapshot stays immutable.
