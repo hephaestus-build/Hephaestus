@@ -35,4 +35,31 @@ public record ResultFacts(
         boolean hasExplanation,
         boolean hasEvidence,
         boolean hasCoverage,
-        @Nullable List<String> sourceKinds) {}
+        @Nullable List<String> sourceKinds) {
+
+    /** Whether the result was captured under the current contract and kept every part of its proof. */
+    public boolean carriesCapturedProof() {
+        return capturedProof(migratedHistory, summary, hasExplanation, hasEvidence, hasCoverage);
+    }
+
+    /** Whether the result can be admitted as proof: captured proof that names the practice and item versions it judged. */
+    public boolean isAdmissibleProof() {
+        return admissibleProof(carriesCapturedProof(), practiceVersionId, itemVersion);
+    }
+
+    /** The rule of {@link #carriesCapturedProof()}, which {@link Result} applies to its own fields. */
+    static boolean capturedProof(
+            boolean migratedHistory,
+            @Nullable String summary,
+            boolean hasExplanation,
+            boolean hasEvidence,
+            boolean hasCoverage) {
+        return !migratedHistory && summary != null && hasExplanation && hasEvidence && hasCoverage;
+    }
+
+    /** The rule of {@link #isAdmissibleProof()}, which {@link Result} applies to its own fields. */
+    static boolean admissibleProof(
+            boolean capturedProof, @Nullable Long practiceVersionId, @Nullable String itemVersion) {
+        return capturedProof && practiceVersionId != null && itemVersion != null;
+    }
+}

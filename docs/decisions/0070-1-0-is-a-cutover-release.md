@@ -128,6 +128,9 @@ The owning layer of each item records the detail.
 | F-17 | Approve the 0.95.0 cut-point edit at the head of `master.xml` (FU-2), as for v0.77.4 | Approve. |
 | F-18 | `HEPHAESTUS_WORKER_CAPACITY_*` names (AR-14): rename in 1.0 with PR 6's persona decision | One name, "Heph turns", in the Heph loop layer. |
 
+Since 2026-11-17, `Result` names the F-1 rules for a version-0 row: captured proof, admissible proof, the earlier-reviews label, and the SQL form of captured proof.
+`ResultProofAccess.readsAsHistory` decides which purposes read a version-0 row as history.
+
 ## Consequences
 
 - One upgrade outage for every installation, bounded by the drain and the migration.

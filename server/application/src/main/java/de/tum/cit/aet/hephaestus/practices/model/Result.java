@@ -13,6 +13,7 @@ import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
@@ -202,9 +203,26 @@ public class Result {
     @Column(name = "evidence_version", nullable = false)
     private short evidenceVersion = CAPTURED_EVIDENCE_VERSION;
 
+    /** {@link ResultFacts#carriesCapturedProof()} in SQL, for a query that names the result table {@code r}. */
+    public static final String CAPTURED_PROOF_SQL = "(r.evidence_version=" + CAPTURED_EVIDENCE_VERSION
+            + " AND r.summary IS NOT NULL AND r.explanation IS NOT NULL AND r.evidence IS NOT NULL"
+            + " AND r.coverage IS NOT NULL)";
+
     /** True for migrated history, which stays read-only. */
     public boolean isMigratedHistory() {
         return evidenceVersion == MIGRATED_EVIDENCE_VERSION;
+    }
+
+    /** {@link ResultFacts#isAdmissibleProof()} of this record, without reading its source kinds. */
+    public boolean isAdmissibleProof() {
+        boolean captured = ResultFacts.capturedProof(
+                isMigratedHistory(), summary, explanation != null, evidence != null, coverage != null);
+        return ResultFacts.admissibleProof(captured, practiceVersionId, itemVersion);
+    }
+
+    /** Whether feedback that rests on {@code basis} carries the earlier-reviews label: some of it is migrated history. */
+    public static boolean includesEarlierReviews(Collection<Result> basis) {
+        return basis.stream().anyMatch(Result::isMigratedHistory);
     }
 
     @Column(name = "recorded_at", nullable = false)

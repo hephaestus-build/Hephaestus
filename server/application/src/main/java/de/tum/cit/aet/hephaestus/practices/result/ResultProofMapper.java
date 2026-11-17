@@ -14,6 +14,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ResultExample;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -46,13 +47,7 @@ public class ResultProofMapper {
     }
 
     private AdmittedResultSnapshot snapshot(Result result, List<Problem> storedChildren) {
-        if (result.isMigratedHistory()
-                || result.getPracticeVersionId() == null
-                || result.getItemVersion() == null
-                || result.getSummary() == null
-                || result.getExplanation() == null
-                || result.getEvidence() == null
-                || result.getCoverage() == null)
+        if (!result.isAdmissibleProof())
             throw new IllegalArgumentException("Archived or redacted proof cannot be admitted.");
         var coverage = ResultCoverage.stored(json, result.getCoverage());
         if (coverage == null) throw new IllegalArgumentException("Proof without measured coverage cannot be admitted.");
@@ -80,13 +75,13 @@ public class ResultProofMapper {
                 result.getId(),
                 new ResultCandidate(
                         result.getPracticeId(),
-                        result.getPracticeVersionId(),
+                        Objects.requireNonNull(result.getPracticeVersionId()),
                         result.getItemId(),
-                        result.getItemVersion(),
+                        Objects.requireNonNull(result.getItemVersion()),
                         result.getDeveloperId(),
                         result.getOutcome(),
-                        result.getSummary(),
-                        result.getExplanation(),
+                        Objects.requireNonNull(result.getSummary()),
+                        Objects.requireNonNull(result.getExplanation()),
                         json.convertValue(result.getEvidence(), ResultEvidence.class),
                         result.getExample() == null
                                 ? null

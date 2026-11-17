@@ -9,5 +9,10 @@ package de.tum.cit.aet.hephaestus.practices.spi;
 public enum StandingBasis {
     CURRENT_REVIEWS,
     EARLIER_REVIEWS,
-    EARLIER_REVIEWS_CRITERIA_UNKNOWN
+    EARLIER_REVIEWS_CRITERIA_UNKNOWN;
+
+    /** Whether the standing rests on earlier reviews and carries their label. */
+    public boolean isEarlierReviews() {
+        return this != CURRENT_REVIEWS;
+    }
 }

@@ -211,8 +211,9 @@ public class PracticesAcrossWorkspaceService {
         boolean includesEarlierReviews() {
             return withAStanding.stream()
                     .anyMatch(developer -> groupStandings.getOrDefault(developer, Map.of()).values().stream()
-                            .anyMatch(group -> group.basis() == StandingBasis.EARLIER_REVIEWS
-                                    || group.basis() == StandingBasis.EARLIER_REVIEWS_CRITERIA_UNKNOWN));
+                            .map(PracticeGroupStandingDTO::basis)
+                            .filter(Objects::nonNull)
+                            .anyMatch(StandingBasis::isEarlierReviews));
         }
     }
 
