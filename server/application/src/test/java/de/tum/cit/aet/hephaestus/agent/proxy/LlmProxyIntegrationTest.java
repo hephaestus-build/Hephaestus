@@ -1594,6 +1594,32 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
     }
 
     @Test
+    void shouldQueueACallAtThePlaceOfThePracticeItsSessionNames() throws Exception {
+        try (MockWebServer upstream = new MockWebServer()) {
+            upstream.start();
+            upstream.enqueue(json("{\"choices\":[]}"));
+            ReviewJob job = reviewJob(upstream.url("/v1").toString());
+            UUID review = job.getReviewId();
+            job.setInput(new ReviewJobInput(
+                    1, List.of(new ReviewAssignmentId(review, 7, 1), new ReviewAssignmentId(review, 3, 1))));
+            jobRepository.saveAndFlush(job);
+            var capacity = mock(LlmCallPermits.class);
+            var permit = mock(LlmCallPermits.Permit.class);
+            when(permit.revoked()).thenReturn(Mono.never());
+            var queued = new AtomicReference<LlmCallPermits.@Nullable Caller>();
+            when(capacity.acquire(anyLong(), any(), any(), any(), any())).thenAnswer(wait -> {
+                queued.set(wait.getArgument(2));
+                return permit;
+            });
+
+            assertThat(callChat(proxyService(WebClient.create(), capOf("100"), capacity), job, practiceHeader("3")))
+                    .isEqualTo(200);
+
+            assertThat(Objects.requireNonNull(queued.get()).sessionRank()).isEqualTo(1);
+        }
+    }
+
+    @Test
     void shouldRefuseACallThatTheCapOvertookWhileItWaitedForCapacity() throws Exception {
         try (MockWebServer upstream = new MockWebServer()) {
             upstream.setDispatcher(alwaysOneDollar());

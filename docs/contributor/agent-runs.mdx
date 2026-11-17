@@ -273,8 +273,8 @@ A pool grants the waiting calls in this order:
 5. The oldest call.
 
 Thus, a wide review cannot hold more than its share while another review waits. It uses free capacity while none waits.
-When its share is smaller than its sessions, it finishes its practices one after another instead of all of them at once.
-A practice session's place comes from the attempt's assignments, in the order the runner starts them: practices whose feedback reaches someone come before practices in feedback mode Off.
+When its share is smaller than its sessions, its oldest sessions go first, so its practices finish in turn instead of all at the deadline.
+A session's place is its practice's place in the attempt's assignments, which the runner starts in [the server's order](./practice-review-pipeline#admit-results).
 The gateway takes that place from the practice that the session names, and only for a practice of the attempt.
 A review's composition does not wait behind the measurements of a wider review.
 If two workspaces have the same number of granted calls, the workspace whose last grant in that band is older goes first.

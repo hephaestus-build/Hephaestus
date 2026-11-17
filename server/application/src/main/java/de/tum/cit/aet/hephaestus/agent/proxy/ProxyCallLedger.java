@@ -21,6 +21,7 @@ import de.tum.cit.aet.hephaestus.conversation.ConversationTurn;
 import de.tum.cit.aet.hephaestus.conversation.spi.ConversationTurnAccess;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import de.tum.cit.aet.hephaestus.practices.spi.ModelKind;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentId;
 import de.tum.cit.aet.hephaestus.productfeedback.drafting.ProductFeedbackDraftCalls;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.io.Serial;
@@ -212,9 +213,14 @@ class ProxyCallLedger {
         Long workspaceId = routing.workspaceId();
         if (practiceId == null || workspaceId == null || routing.attempt().sourceType() != UsageSourceType.REVIEW_JOB)
             return null;
-        var assigned = jobs.findCall(routing.attempt().sourceId(), workspaceId)
-                .map(job -> job.input().assignments())
-                .orElse(List.of());
+        return jobs.findCall(routing.attempt().sourceId(), workspaceId)
+                .map(job -> rankIn(job.input().assignments(), practiceId))
+                .orElse(null);
+    }
+
+    /** The practice's place in a job's assignments; null for a practice that the job does not measure. */
+    private static @Nullable Integer rankIn(List<ReviewAssignmentId> assigned, @Nullable Long practiceId) {
+        if (practiceId == null) return null;
         for (int rank = 0; rank < assigned.size(); rank++)
             if (assigned.get(rank).practiceId() == practiceId) return rank;
         return null;
@@ -299,11 +305,7 @@ class ProxyCallLedger {
                 job.reviewId(),
                 ModelKind.CHAT,
                 // The sandbox names the practice, so only a practice of the job's own assignments is kept.
-                practiceId != null
-                                && job.input().assignments().stream()
-                                        .anyMatch(assigned -> assigned.practiceId() == practiceId)
-                        ? practiceId
-                        : null,
+                rankIn(job.input().assignments(), practiceId) == null ? null : practiceId,
                 charge.model(),
                 charge.price(),
                 costBound(charge.price(), bound));

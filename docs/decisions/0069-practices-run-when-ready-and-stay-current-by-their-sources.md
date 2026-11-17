@@ -994,3 +994,11 @@ A fetch that has begun says nothing new about the provider's refs.
 So a starting fetch now only claims the read.
 The last complete observation stays readable until the fetch records a new one or a ref event withdraws it.
 A ref event still invalidates the record, and a fetch that began before the event cannot restore it.
+
+## Update — 2026-11-17: the queue order puts delivering practices first
+
+The server's queue order now starts with practices whose feedback reaches someone, ahead of practices in feedback mode Off.
+Within each group, the order stays: no current result first, then the oldest last verdict.
+The model pool also grants a review's calls in that order.
+Thus, a review whose share of the pool is smaller than its sessions finishes its practices oldest first.
+[Practice review pipeline](../contributor/practice-review-pipeline.mdx) owns the order, and [Agent runs](../contributor/agent-runs.mdx#call-pools) the grant order.

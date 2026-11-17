@@ -120,8 +120,8 @@ public interface LlmCallPermitRepository extends JpaRepository<LlmCallPermit, UU
      *
      * <p>The grant order is the band, then the workspace with the fewest granted calls in the pool, then the source with
      * the fewest granted calls, then age. Inside one source, the calls of its oldest practice session go first, so a
-     * review with more sessions than grants finishes them one after another instead of starving all of them. A call that is not interactive rises one band for each {@code :agingSeconds}
-     * that it waits, but never into the interactive band, as the agent run claim does. Product feedback comes after all
+     * review with more sessions than grants finishes its practices oldest first instead of all of them at its deadline. A
+     * call that is not interactive rises one band for each {@code :agingSeconds} that it waits, but never into the interactive band, as the agent run claim does. Product feedback comes after all
      * other calls. A round can grant several calls, so each call counts the calls ahead of it in its own workspace and
      * source as granted: apart from ties, the order is the one that one grant at a time would give. A tie goes to the
      * workspace whose last grant in the call's band was the oldest before the round, and then to the source whose last

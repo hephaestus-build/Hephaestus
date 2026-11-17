@@ -247,6 +247,20 @@ class LlmCallPermitsIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void shouldGrantACallOfAPracticeSessionBeforeAnOlderCallOfNoSessionInTheSameJob() {
+        long pool = pool(2);
+        UUID job = UUID.randomUUID();
+        var measuring = admit(workerA, pool, AgentRunBand.BATCH, new LlmCallPermits.Caller(1L, job, 0, null, 0));
+        UUID unranked = waitingCall(pool, AgentRunBand.BATCH, 1, job, null, Duration.ofMinutes(2));
+        UUID ranked = waitingCall(pool, AgentRunBand.BATCH, 1, job, 3, Duration.ZERO);
+
+        measuring.close();
+
+        assertThat(state(ranked)).isEqualTo("ACTIVE");
+        assertThat(state(unranked)).isEqualTo("WAITING");
+    }
+
+    @Test
     void shouldKeepTheTurnsOfJobsWhateverTheRankOfTheirSessions() {
         long pool = pool(2);
         UUID job = UUID.randomUUID();
