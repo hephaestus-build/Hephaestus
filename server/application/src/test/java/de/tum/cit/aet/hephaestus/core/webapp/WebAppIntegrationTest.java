@@ -17,7 +17,6 @@ import java.util.Objects;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
-import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -27,14 +26,9 @@ import org.springframework.web.filter.OncePerRequestFilter;
 /**
  * The server serves the built web app (ADR 0100): the page with its config record for every client route, the files
  * with their cache rules, the legal pages, the two discovery documents, and the host rules of workspace subdomains.
- * The base class turns workspace subdomains on under {@code hephaestus.build}.
+ * The base class turns workspace subdomains on under {@code hephaestus.build}, and the test profile serves the fixture in
+ * {@code src/test/resources/web-app}.
  */
-@TestPropertySource(
-        properties = {
-            "hephaestus.web-app.location=classpath:/web-app-fixture/",
-            "hephaestus.web-app.security-contact=mailto:security@hephaestus.build",
-            "spring.application.version=1.2.3"
-        })
 class WebAppIntegrationTest extends RealAuthIntegrationTest {
 
     @Autowired
@@ -71,7 +65,7 @@ class WebAppIntegrationTest extends RealAuthIntegrationTest {
                             .string(allOf(
                                     containsString("<script type=\"application/json\" id=\"hephaestus-config\">"),
                                     containsString("\"serverUrl\":\"https://hephaestus.build/api\""),
-                                    containsString("\"version\":\"1.2.3\""),
+                                    containsString("\"version\":\"0.0.0-development\""),
                                     containsString(
                                             "\"workspaceSubdomains\":{\"enabled\":true,\"baseDomain\":\"hephaestus.build\"}"),
                                     containsString("\"xsrfCookieName\":\"__Host-XSRF-TOKEN\""))));
@@ -129,7 +123,7 @@ class WebAppIntegrationTest extends RealAuthIntegrationTest {
                 .andExpect(jsonPath("$.apexOrigin").value("https://hephaestus.build"))
                 .andExpect(jsonPath("$.baseDomain").value("hephaestus.build"))
                 .andExpect(jsonPath("$.workspaceSubdomainsEnabled").value(true))
-                .andExpect(jsonPath("$.version").value("1.2.3"));
+                .andExpect(jsonPath("$.version").value("0.0.0-development"));
     }
 
     @Test

@@ -175,7 +175,7 @@ function workspaceHostRedirect(file: string, source: string, statement: string):
 	const redirect = "response.setStatus(HttpServletResponse.SC_PERMANENT_REDIRECT);";
 	return (
 		file ===
-			"server/application/src/main/java/de/tum/cit/aet/hephaestus/workspace/WorkspaceHostGuard.java" &&
+			"server/application/src/main/java/de/tum/cit/aet/hephaestus/workspace/WorkspaceHostGuardConfiguration.java" &&
 		statement === redirect &&
 		source.split(redirect).length === 2 &&
 		source.includes('Pattern.compile("/w/([^/]+)(/.*)?")') &&

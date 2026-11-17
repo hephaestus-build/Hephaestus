@@ -31,7 +31,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 @Configuration(proxyBeanMethods = false)
 @ConditionalOnServerRole
 @ConditionalOnBooleanProperty("hephaestus.workspace.subdomains.enabled")
-class WorkspaceHostGuard {
+class WorkspaceHostGuardConfiguration {
 
     private static final Pattern APEX_ONLY =
             Pattern.compile("/(?:api|auth|oauth|oauth2|login|consent|webhooks|actuator)(?:/.*)?");
