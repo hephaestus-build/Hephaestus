@@ -116,6 +116,15 @@ public class ThreadCaptureSource {
                         Map.of(),
                         Map.of(SOURCE, new SourceCaptureState.Unavailable(SourceAbsenceReason.NOT_FOUND)));
             }
+            case WORDS_ERASED -> {
+                return contribution(
+                        Map.of(),
+                        Map.of(),
+                        Map.of(),
+                        Map.of(),
+                        Map.of(),
+                        Map.of(SOURCE, new SourceCaptureState.Unavailable(SourceAbsenceReason.WORDS_ERASED)));
+            }
             case READABLE -> {}
         }
         var payload = projection.threadPayload(row.getWorkspaceId(), row.getSlackChannelId(), row.getSlackThreadTs());

@@ -30,6 +30,8 @@ public interface ThreadProjection {
     enum ThreadReadability {
         READABLE,
         CONSENT_NOT_ACTIVE,
+        /** A turn's earlier words were erased again after a restore, and its current words are not stored yet. */
+        WORDS_ERASED,
         NOT_FOUND,
     }
 

@@ -101,7 +101,8 @@ What each entry does:
   A deleted one is deleted again.
   An edited one has no words until the next history read of its channel.
   That read stores the words that Slack shows then.
-  A history read covers only recent threads, so an older edited message stays without words.
+  Until then, reviews and Hephaestus do not read its thread.
+  A history read covers only recent threads, so the thread of an older edited message stays unread.
 - An entry needs nothing more if the restored database does not have it, or if it is erased already.
 
 If no erasure occurred after the recovery point, declare it:

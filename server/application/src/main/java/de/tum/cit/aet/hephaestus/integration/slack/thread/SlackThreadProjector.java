@@ -241,6 +241,9 @@ public class SlackThreadProjector implements ThreadProjection {
     public ThreadReadability threadReadability(long workspaceId, String channelId, String threadTs) {
         long live = messageRepository.countLiveTurns(workspaceId, channelId, threadTs);
         if (live == 0) return ThreadReadability.NOT_FOUND;
+        // A turn with no words would read as an empty reply: a claim about its author.
+        if (messageRepository.countWordlessTurns(workspaceId, channelId, threadTs) > 0)
+            return ThreadReadability.WORDS_ERASED;
         return messageRepository.countReadableTurns(workspaceId, channelId, threadTs) == live
                 ? ThreadReadability.READABLE
                 : ThreadReadability.CONSENT_NOT_ACTIVE;

@@ -291,7 +291,10 @@ public class SlackIngestService {
         // Stamp edited_at (insertIfAbsent does not): a row born from message_changed genuinely is an edited message,
         // so the projector's `edited` flag reads true. Idempotent second write on the now-present row.
         transactionTemplate.executeWithoutResult(status -> {
-            if (DeliveryInbox.claim(step)) messageRepository.applyEdit(workspaceId, channelId, ts, text, editedAt);
+            // A base insert that won the race stored the old words, which this edit replaces.
+            if (DeliveryInbox.claim(step)
+                    && messageRepository.applyEdit(workspaceId, channelId, ts, text, editedAt) > 0)
+                logChange(workspaceId, channelId, ts, "EDITED");
         });
     }
 

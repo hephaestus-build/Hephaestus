@@ -28,6 +28,11 @@ public enum SourceAbsenceReason {
     CONTENT_EVICTED,
     /** {@code REDACTED}: the people in it have not granted, or have withdrawn, consent to read it. */
     CONSENT_NOT_ACTIVE,
+    /**
+     * {@code UNAVAILABLE}: erasure recovery erased a message's earlier words after a restore, and no history read has
+     * stored its current words yet.
+     */
+    WORDS_ERASED,
     /** {@code COLLECTION_ERROR}: the collector failed; the source's true content is unknown. */
     PROVIDER_FAILURE,
 }

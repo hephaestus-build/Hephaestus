@@ -34,7 +34,7 @@ public interface SlackMessageRepository extends JpaRepository<SlackMessage, Long
             AND active.state=de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState.ACTIVE
             AND active.instanceKey=m.slackTeamId)
           AND c.consentState=de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannel.ConsentState.ACTIVE
-          AND m.deletedAt IS NULL AND NOT EXISTS
+          AND m.deletedAt IS NULL AND m.text IS NOT NULL AND NOT EXISTS
             (SELECT 1 FROM SlackParticipantConsent p WHERE p.workspaceId=:workspaceId
              AND p.slackUserId=m.authorSlackUserId AND p.ingestionOptedOut=TRUE)
           AND NOT EXISTS (
@@ -343,6 +343,17 @@ public interface SlackMessageRepository extends JpaRepository<SlackMessage, Long
           AND (m.slackThreadTs=:threadTs OR m.slackTs=:threadTs)
         """ + MESSAGE_VISIBILITY_GUARD)
     long countHumanStandingReadableTurns(
+            @Param("workspaceId") long workspaceId,
+            @Param("channelId") String channelId,
+            @Param("threadTs") String threadTs);
+
+    /**
+     * Turns of one thread whose earlier words erasure recovery erased ({@link #eraseEditedText}): they have no words
+     * until a history read of the channel stores Slack's.
+     */
+    @Query(
+            "SELECT COUNT(m) FROM SlackMessage m WHERE m.workspaceId = :workspaceId AND m.slackChannelId = :channelId AND (m.slackThreadTs = :threadTs OR m.slackTs = :threadTs) AND m.deletedAt IS NULL AND m.text IS NULL")
+    long countWordlessTurns(
             @Param("workspaceId") long workspaceId,
             @Param("channelId") String channelId,
             @Param("threadTs") String threadTs);
