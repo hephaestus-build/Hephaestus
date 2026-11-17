@@ -2,6 +2,9 @@ package de.tum.cit.aet.hephaestus.integration.slack.events;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import de.tum.cit.aet.hephaestus.core.auth.spi.GitProviderRegistry;
+import de.tum.cit.aet.hephaestus.core.auth.spi.PeopleRegistry;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
 import de.tum.cit.aet.hephaestus.integration.chat.item.ThreadProjection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
@@ -72,6 +75,18 @@ class SlackThreadProjectorIntegrationTest extends BaseIntegrationTest {
 
     private SlackThreadTestSupport support;
 
+    @Autowired
+    private PeopleRegistry people;
+
+    @Autowired
+    private GitProviderRegistry providers;
+
+    /** An account that holds a Slack identity in the workspace's team, as ingest links a human sender. */
+    private long slackMember(long workspaceId, String subject) {
+        long provider = providers.resolveProviderId("SLACK", "https://slack.com");
+        return people.ensureHuman(new PersonIdentity(provider, subject, "T" + workspaceId), subject);
+    }
+
     @BeforeEach
     void setUpSourceFixtures() {
         support = new SlackThreadTestSupport(jdbc);
@@ -105,7 +120,8 @@ class SlackThreadProjectorIntegrationTest extends BaseIntegrationTest {
         long otherWorkspace = newWorkspace();
         seedChannel(workspace, "C1", "ACTIVE");
         seedChannel(otherWorkspace, "C1", "ACTIVE");
-        seedThread(workspace, "C1", "100.0", "100.1", "{100}");
+        long member = slackMember(workspace, "U100");
+        seedThread(workspace, "C1", "100.0", "100.1", "{" + member + "}");
         seedMessage(workspace, "C1", "100.0", null, "suppressed root");
         seedMessage(workspace, "C1", "100.1", "100.0", "other participant reply");
         seedMessage(otherWorkspace, "C1", "200.0", null, "same native user in another team");
@@ -129,7 +145,7 @@ class SlackThreadProjectorIntegrationTest extends BaseIntegrationTest {
                 .satisfies(record -> assertThat(record.path("text").asString()).isEqualTo("other participant reply"));
         assertThat(projector.isMessageReadable(workspace, "C1", "100.0")).isFalse();
         assertThat(projector.isMessageReadable(otherWorkspace, "C1", "200.0")).isTrue();
-        var audience = conversations(projector.buildPayload(workspace, 100L));
+        var audience = conversations(projector.buildPayload(workspace, member));
         assertThat(audience).singleElement().satisfies(thread -> {
             assertThat(thread.path("messageCount").asInt()).isZero();
             assertThat(thread.path("messages")).isEmpty();
@@ -195,22 +211,38 @@ class SlackThreadProjectorIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void shouldSayTheConversationsAreUnknownForAnAccountWithoutASlackIdentityInTheWorkspacesTeam() {
+        long ws = newWorkspace();
+        seedChannel(ws, "C1", "ACTIVE");
+        long elsewhere = slackMember(newWorkspace(), "U100");
+
+        ObjectNode payload = projector.buildPayload(ws, elsewhere);
+
+        assertThat(payload.path("status").asString()).isEqualTo("UNAVAILABLE");
+        assertThat(payload.path("reason").asString()).contains("unknown, not none");
+        assertThat(payload.has("conversations")).isFalse();
+    }
+
+    @Test
     @DisplayName("participant firewall: a non-participant never sees the thread; a participant does")
     void participantFirewall() {
         long ws = newWorkspace();
         seedChannel(ws, "C1", "ACTIVE");
         // Thread's participants are members 100 and 101 only.
-        seedThread(ws, "C1", "100.0", "100.5", "{100,101}");
+        long member = slackMember(ws, "U100");
+        long other = slackMember(ws, "U101");
+        long outsider = slackMember(ws, "U999");
+        seedThread(ws, "C1", "100.0", "100.5", "{" + member + "," + other + "}");
         seedMessage(ws, "C1", "100.0", null, "root");
         seedMessage(ws, "C1", "100.5", "100.0", "reply");
 
         // A participant sees the whole thread…
-        ObjectNode forMember = projector.buildPayload(ws, 100L);
+        ObjectNode forMember = projector.buildPayload(ws, member);
         assertThat(conversations(forMember)).hasSize(1);
         assertThat(conversations(forMember).get(0).get("messages")).hasSize(2);
 
         // …a workspace peer who never took part sees NOTHING.
-        ObjectNode forOutsider = projector.buildPayload(ws, 999L);
+        ObjectNode forOutsider = projector.buildPayload(ws, outsider);
         assertThat(conversations(forOutsider)).isEmpty();
         assertThat(forOutsider.get("totalThreads").asInt()).isZero();
     }
@@ -220,17 +252,19 @@ class SlackThreadProjectorIntegrationTest extends BaseIntegrationTest {
     void consentGateHidesNonActiveChannels() {
         long ws = newWorkspace();
         seedChannel(ws, "C1", "PENDING");
-        seedThread(ws, "C1", "100.0", "100.0", "{100}");
+        long member = slackMember(ws, "U100");
+        seedThread(ws, "C1", "100.0", "100.0", "{" + member + "}");
         seedMessage(ws, "C1", "100.0", null, "root");
 
-        assertThat(conversations(projector.buildPayload(ws, 100L))).isEmpty();
+        assertThat(conversations(projector.buildPayload(ws, member))).isEmpty();
 
         // Revoking a formerly-active channel also drops it out immediately.
         long ws2 = newWorkspace();
         seedChannel(ws2, "C2", "REVOKED");
-        seedThread(ws2, "C2", "200.0", "200.0", "{100}");
+        long member2 = slackMember(ws2, "U100");
+        seedThread(ws2, "C2", "200.0", "200.0", "{" + member2 + "}");
         seedMessage(ws2, "C2", "200.0", null, "root");
-        assertThat(conversations(projector.buildPayload(ws2, 100L))).isEmpty();
+        assertThat(conversations(projector.buildPayload(ws2, member2))).isEmpty();
     }
 
     @Test
@@ -239,13 +273,14 @@ class SlackThreadProjectorIntegrationTest extends BaseIntegrationTest {
         long wsA = newWorkspace();
         long wsB = newWorkspace();
         seedChannel(wsA, "C1", "ACTIVE");
-        seedThread(wsA, "C1", "100.0", "100.0", "{100}");
+        long member = slackMember(wsA, "U100");
+        seedThread(wsA, "C1", "100.0", "100.0", "{" + member + "}");
         seedMessage(wsA, "C1", "100.0", null, "A-only");
         seedChannel(wsB, "C1", "ACTIVE");
-        seedThread(wsB, "C1", "100.0", "100.0", "{100}");
+        seedThread(wsB, "C1", "100.0", "100.0", "{" + member + "}");
         seedMessage(wsB, "C1", "100.0", null, "B-only");
 
-        ObjectNode forA = projector.buildPayload(wsA, 100L);
+        ObjectNode forA = projector.buildPayload(wsA, member);
         assertThat(conversations(forA)).hasSize(1);
         assertThat(conversations(forA).get(0).get("messages").get(0).get("text").asString())
                 .isEqualTo("A-only");
@@ -256,7 +291,8 @@ class SlackThreadProjectorIntegrationTest extends BaseIntegrationTest {
     void tombstoneAndEditProjection() {
         long ws = newWorkspace();
         seedChannel(ws, "C1", "ACTIVE");
-        seedThread(ws, "C1", "100.0", "100.5", "{100}");
+        long member = slackMember(ws, "U100");
+        seedThread(ws, "C1", "100.0", "100.5", "{" + member + "}");
         seedMessage(ws, "C1", "100.0", null, "root will be edited");
         seedMessage(ws, "C1", "100.5", "100.0", "reply will be deleted");
 
@@ -266,7 +302,7 @@ class SlackThreadProjectorIntegrationTest extends BaseIntegrationTest {
         assertThat(messageRepository.tombstone(ws, "T" + ws, "C1", "100.5", Instant.now()))
                 .isEqualTo(1);
 
-        ObjectNode payload = projector.buildPayload(ws, 100L);
+        ObjectNode payload = projector.buildPayload(ws, member);
         ArrayNode messages = (ArrayNode) conversations(payload).get(0).get("messages");
 
         // Only the surviving (edited) root remains; the tombstoned reply is gone.
@@ -334,7 +370,8 @@ class SlackThreadProjectorIntegrationTest extends BaseIntegrationTest {
     void editBeforeInsert_isDurable() {
         long ws = newWorkspace();
         seedChannel(ws, "C1", "ACTIVE");
-        seedThread(ws, "C1", "100.0", "100.9", "{100}");
+        long member = slackMember(ws, "U100");
+        seedThread(ws, "C1", "100.0", "100.9", "{" + member + "}");
 
         // provider inbox reorder: message_changed for ts 100.9 is processed BEFORE its base insert. The scoped UPDATE
         // finds
@@ -358,7 +395,7 @@ class SlackThreadProjectorIntegrationTest extends BaseIntegrationTest {
                 .isZero();
 
         // The projector shows the edited text with the edited flag set — the edit survived the reorder.
-        ObjectNode payload = projector.buildPayload(ws, 100L);
+        ObjectNode payload = projector.buildPayload(ws, member);
         ArrayNode messages = (ArrayNode) conversations(payload).get(0).get("messages");
         assertThat(messages).hasSize(1);
         assertThat(messages.get(0).get("text").asString()).isEqualTo("EDITED body");
