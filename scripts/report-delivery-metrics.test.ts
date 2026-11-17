@@ -12,6 +12,7 @@ import {
 	parseChanges,
 	parseDeployment,
 	parseReleases,
+	PULLS_QUERY,
 	renderDeliveryMetrics,
 	searchCount,
 	versionBranch,
@@ -492,6 +493,14 @@ void test("the searches cover each day of the window once, a week at a time", ()
 		"2026-11-02..2026-11-02",
 	]);
 	assert.deepEqual(mergedDateRanges(until - 3 * DAY, until), ["2026-10-30..2026-11-02"]);
+});
+
+/** The page size that `PULLS_QUERY` asks of one connection. */
+const pageSize = (connection: string) =>
+	Number(new RegExp(String.raw`${connection}\([^)]*\bfirst: (\d+)`, "u").exec(PULLS_QUERY)?.[1]);
+
+void test("a page of pull requests asks for at most 1,250 check suites", () => {
+	assert.ok(pageSize("search") * pageSize("checkSuites") <= 1250);
 });
 
 /** A real failed child process, so these cases read the error that `gh` produces through `output`. */

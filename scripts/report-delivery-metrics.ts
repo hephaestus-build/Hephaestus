@@ -476,8 +476,13 @@ export function parseChanges(pages: unknown, releaseBranch: string): Change[] {
 	);
 }
 
-const PULLS_QUERY = `query($q: String!, $endCursor: String) {
-  search(query: $q, type: ISSUE, first: 100, after: $endCursor) {
+/**
+ * GitHub ends a GraphQL request that runs past its time limit with an empty answer, which `gh`
+ * reports as "unexpected end of JSON input". Each pull request brings up to 50 check suites, so a
+ * page holds 25 pull requests to stay well inside that limit.
+ */
+export const PULLS_QUERY = `query($q: String!, $endCursor: String) {
+  search(query: $q, type: ISSUE, first: 25, after: $endCursor) {
     issueCount
     pageInfo { hasNextPage endCursor }
     nodes { ... on PullRequest {
