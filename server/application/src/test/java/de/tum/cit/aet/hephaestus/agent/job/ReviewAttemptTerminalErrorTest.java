@@ -124,16 +124,17 @@ class ReviewAttemptTerminalErrorTest extends BaseUnitTest {
     @Test
     void shouldNameTheLastAttemptsProgramCrashForAJobWhoseRetriesRanOut() {
         var capture = mapper.createObjectNode();
-        capture.putObject("programFailure").put("attempt", 3).put("failure", "init:TypeError");
+        // Attempt 5 ran after two claims that waited; it spent the third retry.
+        capture.putObject("programFailure").put("attempt", 5).put("spent", 2).put("failure", "init:TypeError");
 
-        assertThat(RunnerEnd.describeProgramFailure(capture, 3))
+        assertThat(RunnerEnd.describeProgramFailure(capture, 2))
                 .isEqualTo("The last attempt's review sandbox stopped on an unexpected error (TypeError) while it"
                         + " prepared the attempt's workspace.");
-        assertThat(RunnerEnd.describeProgramFailure(capture, 4))
+        assertThat(RunnerEnd.describeProgramFailure(capture, 3))
                 .as("an earlier attempt's crash")
                 .isNull();
-        capture.putObject("programFailure").put("attempt", 3).put("failure", "init:<b>text</b>");
-        assertThat(RunnerEnd.describeProgramFailure(capture, 3)).isNull();
-        assertThat(RunnerEnd.describeProgramFailure(null, 3)).isNull();
+        capture.putObject("programFailure").put("attempt", 5).put("spent", 2).put("failure", "init:<b>text</b>");
+        assertThat(RunnerEnd.describeProgramFailure(capture, 2)).isNull();
+        assertThat(RunnerEnd.describeProgramFailure(null, 2)).isNull();
     }
 }

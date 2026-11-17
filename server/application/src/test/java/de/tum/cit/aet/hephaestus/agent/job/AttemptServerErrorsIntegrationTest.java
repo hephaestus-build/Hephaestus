@@ -99,22 +99,21 @@ class AttemptServerErrorsIntegrationTest extends BaseIntegrationTest {
     void shouldKeepAReviewProgramsCrashOnTheRunningAttemptOnly() {
         ReviewJob job = runningJob();
         UUID run = Objects.requireNonNull(job.getRunId());
+        var write = new TransactionTemplate(transactions);
 
-        assertThat(jobs.recordProgramFailure(
-                        job.getId(), job.getWorkspaceId(), job.getAttempt() + 1, run, "{\"failure\":\"init:Error\"}"))
+        assertThat(write.execute(status -> jobs.recordProgramFailure(
+                        job.getId(), job.getWorkspaceId(), job.getAttempt() + 1, run, "{\"failure\":\"init:Error\"}")))
                 .as("another attempt writes nothing")
                 .isZero();
-        assertThat(jobs.recordProgramFailure(
+        assertThat(write.execute(status -> jobs.recordProgramFailure(
                         job.getId(),
                         job.getWorkspaceId(),
                         job.getAttempt(),
                         run,
-                        "{\"attempt\":" + job.getAttempt() + ",\"failure\":\"init:TypeError\"}"))
+                        "{\"spent\":0,\"failure\":\"init:TypeError\"}")))
                 .isOne();
 
-        ReviewJob stored = jobs.findById(job.getId()).orElseThrow();
-        assertThat(RunnerEnd.describeProgramFailure(stored.getCapture(), job.getAttempt()))
-                .contains("(TypeError)");
+        assertThat(capture(job)).contains("init:TypeError");
     }
 
     private ReviewJob runningJob() {

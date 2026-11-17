@@ -262,6 +262,7 @@ public class ReviewSandboxRuns implements SandboxRunKind {
                         objectMapper
                                 .createObjectNode()
                                 .put("attempt", attempt.attempt())
+                                .put("spent", job.spentAttempts())
                                 .put("failure", failure)
                                 .toString());
             });

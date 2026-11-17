@@ -40,6 +40,7 @@ import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.ReviewAttemptCustody;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxRun;
+import de.tum.cit.aet.hephaestus.agent.gateway.SandboxRunKind;
 import de.tum.cit.aet.hephaestus.agent.handler.DefaultReviewExecutionHandler;
 import de.tum.cit.aet.hephaestus.agent.handler.RuntimeReviewTestData;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobPreparationException;
@@ -54,6 +55,7 @@ import de.tum.cit.aet.hephaestus.agent.run.AgentRunFence;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunHold;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunRef;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunStopReason;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.runtime.AgentResult;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
@@ -1193,9 +1195,65 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
         assertThat(jobs.findById(job.getId()).orElseThrow().getStatus()).isEqualTo(ReviewJobStatus.RUNNING);
     }
 
-    /** Leases the job's review run as its review sandbox's pull does; false when the sandbox has nothing to measure. */
-    private boolean claimedBySandbox(ReviewJob job, ReviewJobClaimService claims) {
-        var sandboxRuns = new ReviewSandboxRuns(
+    @Test
+    void shouldNameTheCrashOfTheLastAttemptsReviewProgramsWhenTheNextClaimFindsTheRetriesSpent() {
+        var job = crashedAtTheLastRetry();
+
+        assertThat(claimLeased(job)).isEmpty();
+
+        assertThat(jobs.findById(job.getId()).orElseThrow().getErrorMessage())
+                .isEqualTo(ReviewRunKind.RETRIES_EXHAUSTED + " " + PROGRAM_CRASH);
+    }
+
+    @Test
+    void shouldNameTheCrashOfTheLastAttemptsReviewProgramsWhenTheRunEndsWhileQueued() {
+        var job = crashedAtTheLastRetry();
+
+        transactions.executeWithoutResult(
+                status -> reviewRuns.ended(job.run(), Integer.MAX_VALUE, AgentRunStopReason.ATTEMPTS_EXHAUSTED));
+
+        var failed = jobs.findById(job.getId()).orElseThrow();
+        assertThat(failed.getStatus()).isEqualTo(ReviewJobStatus.FAILED);
+        assertThat(failed.getErrorMessage()).isEqualTo(ReviewRunKind.RETRIES_EXHAUSTED + " " + PROGRAM_CRASH);
+    }
+
+    private static final String PROGRAM_CRASH = "The last attempt's review sandbox stopped on an unexpected error"
+            + " (TypeError) while it prepared the attempt's workspace.";
+
+    /**
+     * A job whose last allowed attempt ended as its review sandbox reports a crash of gateway-init: the cause that the
+     * driver reads from the program's crash record. A claim that then waited raised the lease epoch without an attempt.
+     */
+    private ReviewJob crashedAtTheLastRetry() {
+        var job = queued(binding(DataHandlingTier.IN_HOUSE));
+        UUID runId = Objects.requireNonNull(job.getRunId());
+        jdbc.update("UPDATE agent_run SET attempt=? WHERE id=?", runs().reviewRetries(), runId);
+        var fence = claimLeased(job).orElseThrow().fence();
+        String subject = Objects.requireNonNull(
+                jdbc.queryForObject("SELECT concurrency_key FROM agent_run WHERE id=?", String.class, runId));
+        var run = new SandboxRun(
+                new AgentSandboxes.LiveSandbox(
+                        UUID.randomUUID(), job.getWorkspaceId(), subject, AgentSandboxKind.REVIEW),
+                fence,
+                AgentRunKind.REVIEW,
+                runs().reviewRetries());
+
+        assertThat(transactions.execute(status -> reviewSandboxRuns(claimService(jobs))
+                        .end(run, SandboxRunKind.Outcome.HANDED_ON, "init:TypeError")))
+                .isTrue();
+
+        var requeued = jobs.findById(job.getId()).orElseThrow();
+        assertThat(requeued.getStatus()).isEqualTo(ReviewJobStatus.QUEUED);
+        assertThat(requeued.spentAttempts()).isEqualTo(runs().reviewRetries() + 1);
+        jdbc.update(
+                "UPDATE agent_run SET lease_epoch = lease_epoch + 1, available_at = clock_timestamp() - interval '1"
+                        + " second' WHERE id=?",
+                runId);
+        return requeued;
+    }
+
+    private ReviewSandboxRuns reviewSandboxRuns(ReviewJobClaimService claims) {
+        return new ReviewSandboxRuns(
                 claims,
                 mock(ReviewAttemptPreparation.class),
                 mock(ReviewAttemptCustody.class),
@@ -1210,6 +1268,11 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                 agentRuns,
                 mock(JobEvidenceFiles.class),
                 mock(ClusterLock.class));
+    }
+
+    /** Leases the job's review run as its review sandbox's pull does; false when the sandbox has nothing to measure. */
+    private boolean claimedBySandbox(ReviewJob job, ReviewJobClaimService claims) {
+        var sandboxRuns = reviewSandboxRuns(claims);
         String subject = Objects.requireNonNull(
                 jdbc.queryForObject("SELECT concurrency_key FROM agent_run WHERE id=?", String.class, job.getRunId()));
 

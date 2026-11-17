@@ -83,12 +83,13 @@ final class RunnerEnd {
     }
 
     /**
-     * Why the attempts ended, for a job whose retries ran out; null when the review programs of {@code lastAttempt} did
-     * not record a crash. An attempt that never reached its review programs keeps an earlier attempt's record.
+     * Why the attempts ended, for a job whose retries ran out; null when the review programs of the attempt that spent
+     * the last retry did not record a crash. The record names the retries spent before its attempt ({@code spent}), not
+     * the lease epoch: a claim that waits raises the epoch, but runs no attempt and spends no retry.
      */
-    static @Nullable String describeProgramFailure(@Nullable JsonNode capture, int lastAttempt) {
+    static @Nullable String describeProgramFailure(@Nullable JsonNode capture, int spentBeforeLastAttempt) {
         JsonNode record = capture == null ? null : capture.get("programFailure");
-        if (record == null || record.path("attempt").asInt(-1) != lastAttempt) return null;
+        if (record == null || record.path("spent").asInt(-1) != spentBeforeLastAttempt) return null;
         JsonNode recorded = record.get("failure");
         String failure = programFailure(recorded != null && recorded.isString() ? recorded.asString() : null);
         if (failure == null) return null;
