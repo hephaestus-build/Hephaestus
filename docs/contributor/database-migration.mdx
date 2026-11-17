@@ -329,35 +329,43 @@ After each upgrade, the driver runs the release that the upgrade started from in
    It runs the server and its agent runtime in one process, with its own agent image and a sandbox namespace.
    The e2e profile validates every entity against the schema at start.
    The previous release then passes readiness and the authenticated reads, and creates a workspace.
-   It also binds a review model to a workspace.
+   It also binds a review model to the workspace of a seeded review, through its own API.
+   The model points at an endpoint that nothing answers.
    It runs no review, because a sandbox claims its own run and the upgrade job has no cluster.
-   The upgrade test does not prove that the previous release claims a queued review.
-   The Kubernetes drill is to cover that claim ([#4601](https://github.com/hephaestus-build/Hephaestus/issues/4601)).
+   [Claim of a queued review](#claim-of-a-queued-review) proves that claim.
 2. **Previous server on a partial schema.** An event trigger stops the candidate's migration of a copy at a DDL statement.
    The migration stops after about half of the new change sets.
    The previous release passes the same checks on that copy.
    Then the migration runs again and must complete.
    If no later change set runs DDL, the migration completes.
    The log then says that no partial schema exists.
-Hibernate does not validate native queries, such as the claim queries of the review queue.
-Thus, the driver queues one review the way the candidate's enqueue path writes it.
-The review comes from the candidate's `practice-native/result-parent.sql` fixture.
-The practice pins a review method with every model slot, and the job freezes the bound model with its price.
-The review item points at the job.
-If the fixture does not fit a partial schema, the error says so.
 
-The previous release creates the AI model, its price and the workspace binding through its own API.
-The model points at an endpoint that nothing answers.
-The previous release claims the job, sets itself as its owner and starts it.
-The attempt then fails while it captures the reviewed source, which is the expected end.
-Conversation turns are not claimed.
-
-Only the container of the previous release gets the Docker socket.
-The driver labels each sandbox resource that this container starts, and removes them all at the end.
+The seeded review comes from the candidate's `practice-native/result-parent.sql` fixture.
+If the fixture does not fit a schema, the error says so.
 
 If the candidate adds fewer than two change sets, no partial schema exists, and the log says so.
 If a migration guide entry of the candidate stops every role, the previous release does not start.
 The log names the entry in a warning.
+
+#### Claim of a queued review
+
+Hibernate does not validate native queries, such as the claim queries of the review queue.
+Thus, the chart upgrade drill proves that the previous release claims a queued review on the new schema
+(`chart-upgrade.yml`, `scripts/chart-upgrade-drill.ts`).
+It runs nightly, and on a pull request that changes the drill.
+
+1. After the rolling upgrade, `helm rollback` returns the release to the revision of the previous release.
+   An operator does the same when the new release fails after its migration.
+2. The drill waits until no server of the candidate remains.
+3. It queues one review from the candidate's `practice-native/result-parent.sql` fixture.
+   It writes the review job and its run as the candidate's enqueue path writes them.
+4. A sandbox of the previous release must claim the run within 10 minutes: the run's lease epoch rises.
+   Otherwise the drill fails.
+5. The drill rolls forward to the candidate and checks it again.
+
+The workspace binds no review model, so the previous release ends the job after its claim.
+Thus, the drill proves the claim of the run and of its job, but not the start of the attempt.
+If the candidate's migration guide stops every role, the drill checks no claim.
 
 ## The 1.0 baseline
 

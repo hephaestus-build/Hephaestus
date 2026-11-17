@@ -4,17 +4,23 @@
  * "Stop every role" takes the three phases of docs/admin/upgrade.mdx § Stopped schema upgrades; any other takes one
  * rolling upgrade. Both end with the candidate's readiness and authenticated-read checks. Entry-specific steps of a
  * migration note, such as the conversation-sandbox cutover of an older release, are not part of the drill.
+ *
+ * After a rolling upgrade, the drill returns the server to the previous release on the migrated schema, as an operator
+ * does when the new release fails after its migration (docs/admin/runtime-roles.mdx § Rollouts and rollback). It
+ * queues a review and fails unless the previous release claims its run. Then it rolls forward to the candidate.
  */
+import { randomUUID } from "node:crypto";
 import { cp, mkdir, mkdtemp, readFile, readdir, rm, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { setTimeout as sleep } from "node:timers/promises";
 import { parseArgs } from "node:util";
 
 import { parse } from "yaml";
 
-import { RELEASE } from "./kubernetes-cluster.ts";
+import { psql, RELEASE, revision } from "./kubernetes-cluster.ts";
 import { changedPostgresql } from "./lib/chart-postgresql.ts";
-import { isRecord } from "./lib/json.ts";
+import { asRecord, isRecord, parseJson } from "./lib/json.ts";
 import { stopEveryRoleEntries } from "./lib/migration-guide.ts";
 import { latestReleaseOf } from "./lib/previous-release.ts";
 import { output, run } from "./lib/process.ts";
@@ -98,6 +104,7 @@ try {
 	await cluster(checkout, "gateway", "--work", work);
 	await cluster(checkout, "install", "--work", work, "--profile", profile);
 	await cluster(checkout, "verify");
+	const previousRevision = await revision();
 
 	// The candidate prepares a copy of the work directory: phase 1 still applies the previous release's values.
 	const candidateWork = `${work}-candidate`;
@@ -233,9 +240,123 @@ try {
 	);
 	await cluster(ROOT, "verify");
 	console.log(`The chart of ${previous} upgraded to ${commit}.`);
+
+	if (stops.length > 0) {
+		console.log(`${previous} does not run on the new schema, so the drill checks no claim of it.`);
+	} else {
+		await previousReleaseClaims(previous, previousRevision);
+		console.log(`Rolling forward to ${commit}.`);
+		// The rollback took PostgreSQL back to the previous release's image, so the new chart changes it again.
+		await cluster(ROOT, firstApplyCommand, "--work", candidateWork, "--profile", profile);
+		await cluster(ROOT, "verify");
+	}
 } finally {
 	await run("git", ["worktree", "remove", "--force", checkout], { cwd: ROOT });
 	await rm(checkout, { recursive: true, force: true });
+}
+
+/** The review that `practice-native/result-parent.sql` queues, with its practice and item. */
+const REVIEW = "00000000-0000-0000-0000-000000978011";
+
+/**
+ * Returns the server to the Helm revision of the previous release, queues a review, and waits until a sandbox of the
+ * previous release leases the review's run, which raises its lease epoch. A sandbox claims its own run when it pulls,
+ * so only a cluster with sandboxes proves this claim (docs/contributor/database-migration.mdx § Previous release on the
+ * new schema). Hibernate does not validate the claim's native queries, so only a claim proves them.
+ */
+async function previousReleaseClaims(release: string, previousRevision: number) {
+	console.log(
+		`Returning the server to ${release}, revision ${previousRevision}, on the migrated schema.`,
+	);
+	const listed = await output("kubectl", [
+		"--namespace",
+		NAMESPACE,
+		"get",
+		"pods",
+		"--selector",
+		"app.kubernetes.io/component=server",
+		"--output",
+		"name",
+	]);
+	const candidateServers = listed.split("\n").filter(Boolean);
+	await run("helm", [
+		"rollback",
+		RELEASE,
+		String(previousRevision),
+		"--namespace",
+		NAMESPACE,
+		"--wait=watcher",
+		"--wait-for-jobs",
+		"--timeout",
+		"20m",
+	]);
+	// A draining server claims no run. Once the candidate's servers are gone, only the previous release can claim.
+	if (candidateServers.length > 0) {
+		await run("kubectl", [
+			"--namespace",
+			NAMESPACE,
+			"wait",
+			"--for=delete",
+			...candidateServers,
+			"--timeout=40m",
+		]);
+	}
+
+	// The candidate's own fixture, and the job and run that its enqueue path writes for that review. The workspace binds
+	// no review model, so the previous release refuses the job once it claimed the run: the claim is what the drill
+	// checks, and the seeded upgrade binds a model through the previous release's API.
+	const job = randomUUID();
+	const runId = randomUUID();
+	try {
+		await psql(
+			await readFile(
+				path.join(
+					ROOT,
+					"server/application/src/test/resources/db/practice-native/result-parent.sql",
+				),
+				"utf8",
+			),
+		);
+		await psql(`BEGIN;
+			INSERT INTO agent_run (id, workspace_id, kind, band, concurrency_key)
+			VALUES ('${runId}', 978001, 'REVIEW', 'BATCH', 'review:${REVIEW}');
+			INSERT INTO review_job (id, review_id, workspace_id, run_id, submitted_at, trace_id, input, config_snapshot)
+			VALUES ('${job}', '${REVIEW}', 978001, '${runId}', now(), '${job.replaceAll("-", "")}',
+				'{"itemId":978006,"assignments":[{"reviewId":"${REVIEW}","practiceId":978004,"itemId":978006}]}', '{}');
+			UPDATE review_item SET job_id = '${job}' WHERE review_id = '${REVIEW}';
+			COMMIT;`);
+	} catch (error) {
+		throw new Error(
+			`The queued review does not fit the candidate's schema. Fix the drill's SQL, not the release: ${error instanceof Error ? error.message : String(error)}`,
+			{ cause: error },
+		);
+	}
+
+	const read = async () =>
+		asRecord(
+			parseJson(
+				await psql(
+					`SELECT json_build_object('epoch', r.lease_epoch, 'run', r.state, 'stop', r.stop_reason, 'job', j.status, 'error', j.error_message) FROM agent_run r JOIN review_job j ON j.run_id = r.id WHERE r.id = '${runId}'`,
+				),
+			),
+			"queued review",
+		);
+	const deadline = Date.now() + 10 * 60_000;
+	for (;;) {
+		const state = await read();
+		if (typeof state.epoch === "number" && state.epoch > 0) {
+			console.log(
+				`${release} claimed the queued review on the migrated schema: ${JSON.stringify(state)}.`,
+			);
+			return;
+		}
+		if (Date.now() > deadline) {
+			throw new Error(
+				`${release} did not claim the queued review on the migrated schema in 10 minutes: ${JSON.stringify(state)}`,
+			);
+		}
+		await sleep(5000);
+	}
 }
 
 /** The chart of a checkout rendered offline with a profile, a work directory's values and settings. */
