@@ -1321,6 +1321,56 @@ tests:
         alertname: HephaestusDatabasePoolSlow
         exp_alerts: []
 
+  - name: Metaspace that stays above 80 % of its maximum fires, a lower or shorter use or a missing maximum does not
+    interval: 1m
+    input_series:
+      # Maximum 100 MB. server-a holds 85 % throughout, server-b 79 %, server-c 90 % for minutes 0 to 8 only.
+      - series: 'jvm_memory_used_bytes{job="hephaestus",instance="server-a:9090",runtime_role="server",area="nonheap",id="Metaspace"}'
+        values: "85000000x30"
+      - series: 'jvm_memory_max_bytes{job="hephaestus",instance="server-a:9090",runtime_role="server",area="nonheap",id="Metaspace"}'
+        values: "100000000x30"
+      - series: 'jvm_memory_used_bytes{job="hephaestus",instance="server-b:9090",runtime_role="server",area="nonheap",id="Metaspace"}'
+        values: "79000000x30"
+      - series: 'jvm_memory_max_bytes{job="hephaestus",instance="server-b:9090",runtime_role="server",area="nonheap",id="Metaspace"}'
+        values: "100000000x30"
+      - series: 'jvm_memory_used_bytes{job="hephaestus",instance="server-c:9090",runtime_role="server",area="nonheap",id="Metaspace"}'
+        values: "90000000x8 50000000x21"
+      - series: 'jvm_memory_max_bytes{job="hephaestus",instance="server-c:9090",runtime_role="server",area="nonheap",id="Metaspace"}'
+        values: "100000000x30"
+      # A maximum of 0, a JVM with no maximum (-1), and no maximum series are ignored.
+      - series: 'jvm_memory_used_bytes{job="hephaestus",instance="server-d:9090",runtime_role="server",area="nonheap",id="Metaspace"}'
+        values: "85000000x30"
+      - series: 'jvm_memory_max_bytes{job="hephaestus",instance="server-d:9090",runtime_role="server",area="nonheap",id="Metaspace"}'
+        values: "0x30"
+      - series: 'jvm_memory_used_bytes{job="hephaestus",instance="server-e:9090",runtime_role="server",area="nonheap",id="Metaspace"}'
+        values: "85000000x30"
+      - series: 'jvm_memory_max_bytes{job="hephaestus",instance="server-e:9090",runtime_role="server",area="nonheap",id="Metaspace"}'
+        values: "-1x30"
+      - series: 'jvm_memory_used_bytes{job="hephaestus",instance="server-f:9090",runtime_role="server",area="nonheap",id="Metaspace"}'
+        values: "85000000x30"
+      # The compressed class space is another non-heap pool with its own maximum.
+      - series: 'jvm_memory_used_bytes{job="hephaestus",instance="server-b:9090",runtime_role="server",area="nonheap",id="Compressed Class Space"}'
+        values: "95000000x30"
+      - series: 'jvm_memory_max_bytes{job="hephaestus",instance="server-b:9090",runtime_role="server",area="nonheap",id="Compressed Class Space"}'
+        values: "100000000x30"
+    alert_rule_test:
+      - eval_time: 9m
+        alertname: HephaestusMetaspaceNearLimit
+        exp_alerts: []
+      - eval_time: 20m
+        alertname: HephaestusMetaspaceNearLimit
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: hephaestus
+              instance: server-a:9090
+              runtime_role: server
+              area: nonheap
+              id: Metaspace
+            exp_annotations:
+              summary: A server's Metaspace stayed above 80 % of its maximum for 10 minutes
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+
   # A failed read makes the gauge NaN, and the read-failure counter increases on each read, every 30 seconds.
   - name: a failing archive alert stays firing through a long read outage
     interval: 1m
