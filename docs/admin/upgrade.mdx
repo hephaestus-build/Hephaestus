@@ -31,8 +31,10 @@ During a stopped upgrade, no server receives provider deliveries.
 
 ## Validate the actual production data
 
-Use a restricted staging copy of production with the access and retention rules of the backup.
-Run the target release's [migrate run mode](./runtime-roles#database-migrations) with the production profile against staging.
+Run a restricted copy of production on the production host, so that the production data stays on that host.
+Give the copy the access and retention rules of the backup.
+Plan free disk on the host for the dump and the restored database.
+Run the target release's [migrate run mode](./runtime-roles#database-migrations) with the production profile against the copy.
 The update must use that exact release's changelog, contexts, PostgreSQL image and extensions, secrets, and role configuration.
 
 Do these steps:
@@ -56,7 +58,7 @@ Record these results:
 - The expected target changesets in `databasechangelog`, and a released lock in `databasechangeloglock`.
 
 [CI migration checks](/contributor/database-migration#ci-validation) cover empty and seeded databases,
-not your production data. They do not replace this staging update.
+not your production data. They do not replace this update of the copy.
 
 ## Upgrade the release [#upgrade-the-host]
 
