@@ -19,7 +19,7 @@ Each switch stops one kind of work:
 
 | Switch | What it stops | What continues |
 | --- | --- | --- |
-| Silent mode, in **Instance administration → Instance settings** | New writes to GitHub, GitLab and Slack, and all email. This includes comments, edits, approvals, reactions, Hephaestus replies, digests and their retries. | Reviews, model calls, sync, feedback in the web app, sign-in, webhook registration and GitHub redelivery |
+| Silent mode, in **Instance administration → Instance settings** | New writes to GitHub, GitLab and Slack, and all email. This includes comments, edits, approvals, reactions, Hephaestus replies, digests, their retries and GitLab token rotation. | Reviews, model calls, sync, feedback in the web app, sign-in, webhook registration and GitHub redelivery |
 | A budget of $0, or a connection turned off | Model calls that the budget pays for or that go through the connection, also the calls of running reviews | Sync, provider writes, and other budgets and connections |
 | `sandbox.enabled: false` | Practice reviews and conversation turns. The chart sets `AGENT_ENABLED` from this value. | The API, sync and provider deliveries |
 | `sandbox.conversationTurns: 0` | New conversation turns | Practice reviews |
@@ -28,6 +28,7 @@ Each switch stops one kind of work:
 
 For one workspace, a workspace admin can pause sending or set the feedback mode to **Off**, as [Feedback mode, review scope and delivery](/user/practice-reviews#feedback-mode) describes.
 Silent mode does not stop model calls or spending.
+Silent mode holds back GitLab token rotation and the email that warns of an expiring token. If silent mode stays on until a GitLab token expires, sync of that workspace stops until an admin replaces the token. Replace an expiring token by hand, or turn silent mode off before it expires.
 
 ## Stop external writes
 

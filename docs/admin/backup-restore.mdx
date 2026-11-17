@@ -215,6 +215,9 @@ Its lockdown SQL changes the control settings of the clone.
 8. Upgrade with `migration.enabled=true` and `server.stopped=false`. Verify the migration, readiness and authenticated reads.
 9. To run test reviews on the clone, use only controlled providers.
    Follow [Prove silence](./silent-deployment#prove-silence) before you open any external destination.
+   Before you turn off silent mode, replace the token of each GitLab workspace.
+   Use a token for a GitLab group that you control.
+   Otherwise the clone rotates the tokens of the live installation, and GitLab revokes them.
 
 Rehearse a restore on a copy of the instance before you need one.
 

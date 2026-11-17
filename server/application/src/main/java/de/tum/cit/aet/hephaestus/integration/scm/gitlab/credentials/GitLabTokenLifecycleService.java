@@ -9,6 +9,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig.Gi
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig.GitLabTokenMetadata;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService.CredentialFence;
+import de.tum.cit.aet.hephaestus.integration.core.egress.OutboundEgressGuard;
 import de.tum.cit.aet.hephaestus.integration.core.events.ConnectionCredentialsReplacedEvent;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
@@ -52,6 +53,7 @@ public class GitLabTokenLifecycleService {
     private final WebhookProperties properties;
     private final Clock clock;
     private final ClusterLock locks;
+    private final OutboundEgressGuard egress;
     private final TransactionTemplate reads;
     private final TransactionTemplate writes;
 
@@ -67,6 +69,7 @@ public class GitLabTokenLifecycleService {
             WebhookProperties properties,
             Clock clock,
             ClusterLock locks,
+            OutboundEgressGuard egress,
             PlatformTransactionManager transactions) {
         this.connections = connections;
         this.commands = commands;
@@ -76,6 +79,7 @@ public class GitLabTokenLifecycleService {
         this.properties = properties;
         this.clock = clock;
         this.locks = locks;
+        this.egress = egress;
         this.reads = new TransactionTemplate(transactions);
         this.reads.setReadOnly(true);
         this.reads.setTimeout(30);
@@ -125,7 +129,9 @@ public class GitLabTokenLifecycleService {
             inspected = info;
             expiring = isExpiring(info.expiresAt(), today, threshold);
             RotatedToken rotated = null;
-            if (expiring && threshold > 0) {
+            // A restore clone runs in silent mode with copies of the live tokens. Its rotation would revoke the
+            // live installation's token, so silent mode holds rotation back and the token shows as expiring.
+            if (expiring && threshold > 0 && egress.deliveryAllowed("gitlab.rotate-token")) {
                 // No retry: a lost response may have revoked the old token. Re-rotation revokes its whole family.
                 if (!Boolean.TRUE.equals(
                         reads.execute(status -> current(check, false).isPresent()))) return;
@@ -133,6 +139,10 @@ public class GitLabTokenLifecycleService {
                 rotated = rotationClient.rotateToken(
                         check.credentials(),
                         today.plusDays(properties.tokenRotation().validityDays()));
+            } else if (expiring && threshold > 0) {
+                log.info(
+                        "GitLab token rotation held back, outbound writes are not allowed: workspaceId={}",
+                        workspaceId);
             }
             completed = rotated;
             var result = rotated;
@@ -143,16 +153,19 @@ public class GitLabTokenLifecycleService {
             boolean expiry = expiring;
             var info = inspected;
             var result = completed;
-            Signal signal = failure instanceof WebClientResponseException response
-                            && response.getStatusCode().value() == 401
+            Integer httpStatus = failure instanceof WebClientResponseException response
+                    ? response.getStatusCode().value()
+                    : null;
+            Signal signal = httpStatus != null && httpStatus == 401
                     ? Signal.REFUSED
                     : rotationAttempted || expiry ? Signal.EXPIRING : Signal.NONE;
-            // Provider responses and exception messages can contain a token. Log before the recovery write, which can
-            // itself fail, so an attempted rotation is always visible.
+            // Log only the integer status: provider responses and exception messages can contain a token. Log before
+            // the recovery write, which can itself fail, so an attempted rotation is always visible.
             log.warn(
-                    "GitLab token inspection or rotation failed: workspaceId={}, rotationAttempted={}",
+                    "GitLab token inspection or rotation failed: workspaceId={}, rotationAttempted={}, status={}",
                     workspaceId,
-                    attempted);
+                    attempted,
+                    httpStatus == null ? "-" : httpStatus);
             writes.executeWithoutResult(status -> recordFailure(check, info, result, rotationAttempted, signal));
         }
     }
@@ -184,7 +197,14 @@ public class GitLabTokenLifecycleService {
         var config = (GitLabConfig) connection.getConfig();
         connection.setConfig(config.withTokenMetadata(
                 new GitLabTokenMetadata(rotated == null ? info.expiresAt() : rotated.expiresAt(), clock.instant())));
-        if (rotated == null) health.observe(workspaceId, check.credentials().token(), false);
+        if (rotated == null) {
+            health.observe(workspaceId, check.credentials().token(), false);
+        } else {
+            commands.recordSystemEvent(
+                    connection,
+                    "PAT_ROTATED",
+                    "Rotated the token. The new token expires on " + rotated.expiresAt() + ".");
+        }
         health.expiring(workspaceId, rotated == null && expiring);
     }
 
