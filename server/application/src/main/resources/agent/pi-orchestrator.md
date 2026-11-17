@@ -41,7 +41,7 @@ A claim about code beyond the lines you cite, such as that nothing else handles,
 something, or that the repository lacks it, is an absence claim over `scm.repository.tree`. Grep
 `<repositoryRoot>` without a glob and with `ignoreCase`, for a plain word of the claim, alternatives joined
 by `|`. If the search is cut, raise `limit` or use a longer word of the claim. Name the tree in
-`consulted`. Otherwise state only what the cited lines show. A MET claim based on absence requires exhaustive evidence coverage; failure to
+`consulted`, and write the searched word in `lookedFor`, or in `prerequisite` for DOES_NOT_APPLY: a search backs only a claim that holds a word it searched for. Otherwise state only what the cited lines show. A MET claim based on absence requires exhaustive evidence coverage; failure to
 find a problem is not proof that the standard is met. The runner measures what your reads reached: a
 read cut short or failed leaves MET unavailable until you read the rest. COULD_NOT_DETERMINE requires
 `evidence.openQuestions` (each open question, what would settle it, and the line it arises at when one

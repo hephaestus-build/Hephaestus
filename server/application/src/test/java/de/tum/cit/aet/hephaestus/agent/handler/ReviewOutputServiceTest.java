@@ -807,6 +807,41 @@ class ReviewOutputServiceTest extends BaseUnitTest {
                 NAMED + ", but no search of the whole checkout names what it says is absent");
     }
 
+    /**
+     * The claim that a practice's prepared search asks for names the symbol that the search held. The runner's
+     * directions rest on this: the same claim in other words names nothing that was searched, so it stays withheld.
+     */
+    @ParameterizedTest
+    @CsvSource({"a separate consumer of RetryPolicy, true", "a separate consumer of the changed declarations, false"})
+    void shouldAdmitAPreparedSearchOnlyWhenTheClaimNamesItsSymbol(String prerequisite, boolean admitted) {
+        pr50Capture(SourceCompleteness.COMPLETE);
+        var found = searched(PR50_HEAD, "\\bRetryPolicy\\b", 2);
+
+        prepare(job, pr50ErrorHandling(List.of(found), candidate -> {
+                    candidate = absenceOutcome(candidate, ResultOutcome.DOES_NOT_APPLY)
+                            .put("summary", "RetryPolicy is internal to this change")
+                            .put("explanation", "The change declares RetryPolicy and calls it from the same package.");
+                    ((ObjectNode) candidate.path("evidence").path("inapplicability"))
+                            .put("prerequisite", prerequisite)
+                            .put("ruledOutBy", "The change adds the declaration and its only caller.")
+                            .put("hits", "Both matches are the declaration and its caller in this change.");
+                    return candidate;
+                }))
+                .record(job);
+
+        if (admitted) {
+            assertThat(staged)
+                    .singleElement()
+                    .satisfies(result -> assertThat(result.outcome()).isEqualTo(ResultOutcome.DOES_NOT_APPLY));
+            verify(membership, never()).withhold(anyLong(), any(), any(), any());
+        } else {
+            assertThat(staged).isEmpty();
+            assertWithheld(
+                    CandidateRefusal.ABSENCE_NOT_SEARCHED,
+                    NAMED + ", but no search of the whole checkout names what it says is absent");
+        }
+    }
+
     private ObjectNode testAbsence(ObjectNode candidate, String claim) {
         candidate.put("summary", "Test coverage").put("explanation", claim);
         ((ObjectNode) candidate.path("problems").get(0))
