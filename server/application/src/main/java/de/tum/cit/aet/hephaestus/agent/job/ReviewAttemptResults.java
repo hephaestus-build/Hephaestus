@@ -173,7 +173,8 @@ public class ReviewAttemptResults {
     }
 
     /** Read only for a failed attempt: a completed one reports no error. */
-    private AttemptFacts factsOf(ReviewJob job, AgentResult agentResult) {
+    static AttemptFacts factsOf(ReviewJob job, AgentResult agentResult, LlmUsageEventRepository usageEvents) {
+        // The count of evaluated practices is the sandbox's word; a call that the server's ledger holds is not.
         boolean noneEvaluated = Integer.valueOf(0).equals(agentResult.output().get(PiResultParser.PRACTICES_EVALUATED));
         boolean noCall = noneEvaluated
                 && usageEvents
@@ -424,7 +425,7 @@ public class ReviewAttemptResults {
                                             measured.sandboxResult(),
                                             measured.agentResult(),
                                             status == ReviewJobStatus.FAILED
-                                                    ? factsOf(locked, measured.agentResult())
+                                                    ? factsOf(locked, measured.agentResult(), usageEvents)
                                                     : AttemptFacts.NONE,
                                             storable)));
         locked.setOutput(kept);
@@ -710,7 +711,9 @@ public class ReviewAttemptResults {
                     terminalStatus,
                     sandboxResult,
                     agentResult,
-                    terminalStatus == ReviewJobStatus.FAILED ? factsOf(locked, agentResult) : AttemptFacts.NONE,
+                    terminalStatus == ReviewJobStatus.FAILED
+                            ? factsOf(locked, agentResult, usageEvents)
+                            : AttemptFacts.NONE,
                     storable);
             Instant finishedAt = Instant.now();
             int updated = terminal.transition(jobId, fence, terminalStatus, finishedAt, errorMessage);

@@ -576,7 +576,7 @@ The server does not collect the runner's log, so the job's error carries the rea
 For exits 1 and 2, the runner records its last diagnostic as `end` in `runner-debug.json`, with codes of `pi-diagnostics.json` only.
 The server shows only codes of that vocabulary.
 For exit 77, the server keeps its own error on the attempt: the request that failed, and the cause by type.
-When no practice was evaluated and the usage ledger holds no model call of the attempt, the error says so.
+When the runner reports no evaluated practice and the usage ledger holds no model call of the attempt, the error says so.
 
 A lost server must never exit 1.
 Every call that a sandbox program makes to the gateway waits out a refused connection until its work ends (`untilGatewayTakes` in `agent/gateway-connection.ts`).
