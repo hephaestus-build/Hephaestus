@@ -124,6 +124,18 @@ await test("small: a rolling server can finish its drain and start within the up
 	assert.ok(start >= 10 * 60 + 60, `${start} s of startup probe for a 10-minute schema wait`);
 });
 
+await test("a started server becomes ready within seconds and keeps its 720 s start budget", () => {
+	const server = container(workload(rendered(layersFor("small")), "server"));
+	const startup = get(server, "startupProbe");
+	// The kubelet runs no readiness probe before the startup probe passes, so its period delays every start.
+	assert.equal(get(startup, "periodSeconds"), 2);
+	assert.equal(get(server, "readinessProbe", "periodSeconds"), 5);
+	assert.equal(
+		Number(get(startup, "periodSeconds")) * Number(get(startup, "failureThreshold")),
+		720,
+	);
+});
+
 await test("admin assurance follows the operator's value and defaults to on", () => {
 	assert.equal(
 		envValue(serverOf(layersFor("small")), "HEPHAESTUS_AUTH_ASSURANCE_ENFORCED"),

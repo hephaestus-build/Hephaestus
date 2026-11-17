@@ -123,6 +123,11 @@ They stay in `/actuator/health` and the metrics, which the alerts read.
 One state inside the process breaks liveness: a provider event handler that ran past `hephaestus.integration.consumer.handler-timeout` and did not stop within 30 seconds of its interrupt.
 Kubernetes then restarts the server Pod, so the stuck handler ends before another server handles its event.
 
+With the chart's probes, Kubernetes checks the liveness of a starting server every 2 seconds, for up to 12 minutes.
+This time includes the 10-minute wait for the schema.
+After the server starts, Kubernetes checks its readiness every 5 seconds.
+Thus a started server gets requests within a few seconds.
+
 ## Next steps
 
 - [Set up monitoring](./monitoring) scrapes the metrics, loads the alert rules and collects the logs.

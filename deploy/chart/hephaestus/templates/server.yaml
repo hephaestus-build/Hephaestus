@@ -6,7 +6,7 @@
 {{- $connections := include "hephaestus.databaseConnectionCapacity" . | fromJson }}
 {{- $grace := ternary (add $drain 120) 45 $sandbox.enabled }}
 {{- /* The schema wait (HEPHAESTUS_DATABASE_MIGRATION_WAIT, 10 minutes) plus two minutes to boot and finish starting. */}}
-{{- $startupFailures := 72 }}
+{{- $startupSeconds := 720 }}
 {{- if $sandbox.enabled }}
 {{- include "hephaestus.kubernetesApiCheck" . }}
 {{- end }}
@@ -43,7 +43,7 @@ spec:
   # server.stopped stops the servers; server.replicas keeps sizing PostgreSQL, so PostgreSQL does not restart.
   replicas: {{ include "hephaestus.replicas" (dict "root" . "replicas" (ternary 0 .Values.server.replicas .Values.server.stopped)) }}
   # Allow the old servers to drain and their replacements to start before declaring a stalled rollout.
-  progressDeadlineSeconds: {{ add $grace (mul 10 $startupFailures) }}
+  progressDeadlineSeconds: {{ add $grace $startupSeconds }}
   # The inbox leases order each item across replicas; claim epochs fence sandbox results.
   strategy:
     type: RollingUpdate
@@ -273,7 +273,7 @@ spec:
             {{- end }}
             - name: management
               containerPort: 9090
-          {{- include "hephaestus.probes" (dict "startupFailures" $startupFailures) | nindent 10 }}
+          {{- include "hephaestus.probes" (dict "startupSeconds" $startupSeconds) | nindent 10 }}
           {{- include "hephaestus.preStop" . | nindent 10 }}
           resources:
             {{- toYaml .Values.server.resources | nindent 12 }}
