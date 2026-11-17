@@ -1081,27 +1081,22 @@ async function reconcilerFixture(directory: string, targetRelease = "v1.0.0") {
 	await writeFile(metricsFile, "previous metrics\n");
 	await writeFile(callsFile, "");
 	const realGit = execFileSync("which", ["git"], { encoding: "utf8" }).trim();
-	const recordCall = `import { appendFileSync } from "node:fs";
-const args = process.argv.slice(2);
-appendFileSync(${JSON.stringify(callsFile)}, [NAME, ...args].join(" ") + "\\n");\n`;
-	// Keep subprocess flags separate from Node startup options.
+	// Shell stubs, not Node ones: one tick starts dozens of host commands, and a Node startup for each
+	// is CPU work that a loaded machine multiplies into the test's whole run time.
 	for (const [name, body] of Object.entries({
-		git: `import { spawnSync } from "node:child_process";
-if (process.env.FAIL_WORKTREE_REMOVE === "1" && args[0] === "worktree" && args[1] === "remove") process.exit(1);
-const result = spawnSync(${JSON.stringify(realGit)}, args, { stdio: "inherit" });
-process.exit(result.status ?? 1);`,
-		cosign: 'process.exit(process.env.FAIL_VERIFICATION === "1" ? 1 : 0);',
-		systemctl:
-			'if (args[0] === "show") console.log("yes"); if (args[0] === "daemon-reload" && process.env.FAIL_RELOAD === "1") process.exit(1);',
-		kubectl: `if (args[0] === "api-resources") console.log("sandboxclaims.extensions.agents.x-k8s.io");
-else console.log(process.env.CHART_WORKLOADS ?? JSON.stringify({items: []}));`,
+		git: `if [ "$FAIL_WORKTREE_REMOVE" = 1 ] && [ "$1" = worktree ] && [ "$2" = remove ]; then exit 1; fi
+exec "${realGit}" "$@"`,
+		cosign: 'if [ "$FAIL_VERIFICATION" = 1 ]; then exit 1; fi',
+		systemctl: `if [ "$1" = show ]; then echo yes; fi
+if [ "$1" = daemon-reload ] && [ "$FAIL_RELOAD" = 1 ]; then exit 1; fi`,
+		kubectl: `if [ "$1" = api-resources ]; then echo sandboxclaims.extensions.agents.x-k8s.io
+elif [ -n "\${CHART_WORKLOADS+set}" ]; then printf '%s\\n' "$CHART_WORKLOADS"
+else echo '{"items":[]}'; fi`,
 	})) {
 		await writeFile(
 			path.join(bin, name),
-			`#!/usr/bin/env -S node --\n${recordCall.replace("NAME", JSON.stringify(name))}${body}\n`,
-			{
-				mode: 0o755,
-			},
+			`#!/bin/sh\nprintf '%s\\n' "${name}\${1+ }$*" >> "${callsFile}"\n${body}\n`,
+			{ mode: 0o755 },
 		);
 	}
 	await writeFile(
@@ -1153,12 +1148,13 @@ writeFileSync(path.join(destination, release + ".images.yaml"), JSON.stringify({
 			/** More of the host environment for a failure scenario. */
 			environment?: Record<string, string>;
 		} = {}) =>
+			// No wall-clock cap: every fake host command exits by itself, so the run ends when the tick
+			// does, however loaded the machine is.
 			spawnSync(
 				process.execPath,
 				[path.join(directory, cli ? "tooling/scripts/reconcile-deployment.ts" : "run.mjs")],
 				{
 					encoding: "utf8",
-					timeout: 30_000,
 					env: environmentForGitFixture({
 						PATH: `${bin}${path.delimiter}${process.env.PATH ?? ""}`,
 						STATE_DIRECTORY: directory,
@@ -1409,25 +1405,26 @@ async function fakeHelm(
 	await writeFile(calls, "");
 	await writeFile(
 		helm,
-		`#!/usr/bin/env -S node --
-import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";
-import path from "node:path";
-const args = process.argv.slice(2);
-appendFileSync(${JSON.stringify(calls)}, args.join(" ") + "\\n");
-${combinedLog === undefined ? "" : `appendFileSync(${JSON.stringify(combinedLog)}, "helm " + args.join(" ") + "\\n");`}
-if (args[0] === "upgrade") {
-const cache = process.env.KUBECACHEDIR ?? ".kube/cache";
-mkdirSync(cache, {recursive:true});
-writeFileSync(path.join(cache, "discovery.json"), "API discovery");
-}
-if (args[0] === "status") {
-if (process.env.HELM_STATUS === undefined) process.exit(1);
-console.log(JSON.stringify({ info: { status: process.env.HELM_STATUS } }));
-}
-if (args[0] === "history") console.log(process.env.HELM_HISTORY ?? "[]");
-if (args[0] === "list") console.log(process.env.HELM_RELEASES ?? "[]");
-if (args[0] === "get") console.log(process.env.HELM_VALUES ?? '{"server":{"replicas":0},"sandbox":{"namespace":"sandboxes"}}');
-process.exit(args[0] === "upgrade" && process.env.FAIL_HELM === "1" ? 1 : 0);
+		`#!/bin/sh
+printf '%s\\n' "$*" >> "${calls}"
+${combinedLog === undefined ? "" : `printf '%s\\n' "helm $*" >> "${combinedLog}"`}
+if [ "$1" = upgrade ]; then
+cache="\${KUBECACHEDIR-.kube/cache}"
+mkdir -p "$cache"
+printf 'API discovery' > "$cache/discovery.json"
+[ "$FAIL_HELM" = 1 ] && exit 1
+fi
+if [ "$1" = status ]; then
+[ -n "\${HELM_STATUS+set}" ] || exit 1
+printf '{"info":{"status":"%s"}}\\n' "$HELM_STATUS"
+fi
+if [ "$1" = history ]; then printf '%s\\n' "\${HELM_HISTORY-[]}"; fi
+if [ "$1" = list ]; then printf '%s\\n' "\${HELM_RELEASES-[]}"; fi
+if [ "$1" = get ]; then
+if [ -n "\${HELM_VALUES+set}" ]; then printf '%s\\n' "$HELM_VALUES"
+else echo '{"server":{"replicas":0},"sandbox":{"namespace":"sandboxes"}}'; fi
+fi
+exit 0
 `,
 		{ mode: 0o755 },
 	);
