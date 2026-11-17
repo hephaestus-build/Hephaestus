@@ -5,6 +5,9 @@ One section for each document. Read a whole section, for example
 
 A document with `status: UNAVAILABLE` has no lists or counts: that work is unknown, not none. Say its `reason`.
 
+`⟦U+XXXX⟧` in a document's text stands for a character that does not show in the original, such as a
+zero-width space or a direction control. Quote it as written.
+
 ## inputs/context/user.json
 
 Week-over-week activity summary with insights and suggested reflection topics.

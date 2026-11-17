@@ -59,6 +59,13 @@ class SourceFingerprintTest {
     }
 
     @Test
+    void shouldReadAStoredMarkedCaptureAndACurrentRawReadAsTheSameWork() {
+        String hidden = new String(Character.toChars(0x200B));
+        assertThat(record("{\"body\":\"Looks fine" + hidden + "\"}"))
+                .isEqualTo(record("{\"body\":\"Looks fine⟦U+200B⟧\"}"));
+    }
+
+    @Test
     void shouldLeaveUnavailableSourcesWithoutContentProof() {
         for (var absent : new SourceCaptureState[] {
             new SourceCaptureState.Unavailable(SourceAbsenceReason.NOT_FOUND),

@@ -4,7 +4,9 @@ import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.evidence.CapturedSource;
 import de.tum.cit.aet.hephaestus.evidence.ClasspathSourceCatalogRegistry;
+import de.tum.cit.aet.hephaestus.evidence.HiddenCharacters;
 import de.tum.cit.aet.hephaestus.evidence.SourceCapture;
+import de.tum.cit.aet.hephaestus.evidence.SourceFingerprint;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.evidence.capture.CaptureContribution;
 import de.tum.cit.aet.hephaestus.evidence.capture.CitableText;
@@ -18,6 +20,8 @@ import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.time.Clock;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import org.springframework.stereotype.Component;
@@ -47,7 +51,14 @@ public class JobFolderIndexBuilder {
         var now = clock.instant();
         contributions.forEach((source, contribution) -> {
             var capturedFiles = new ArrayList<CapturedSource>();
-            contribution.files().forEach((path, bytes) -> {
+            // Captured provider text reaches the model with each hidden character marked; a quote of it is checked
+            // against these marked bytes, so its digest is the marked one. Repository content (the diff, the copies
+            // of changed files and the tree) keeps its bytes, so a quote of code matches the checkout.
+            boolean repositoryContent = SourceFingerprint.contentAddressed(source);
+            var markedDigests = new HashMap<String, String>();
+            contribution.files().forEach((path, raw) -> {
+                byte[] bytes = repositoryContent ? raw : HiddenCharacters.markUtf8(raw);
+                if (!Arrays.equals(bytes, raw)) markedDigests.put(path, ProvenanceDigest.sha256Hex(bytes));
                 if (memory.putIfAbsent(path, bytes.clone()) != null || disk.containsKey(path)) throw duplicate(path);
                 capturedFiles.add(
                         new CapturedSource(path, mediaType(path), ProvenanceDigest.sha256Hex(bytes), bytes.length));
@@ -66,7 +77,22 @@ public class JobFolderIndexBuilder {
                     throw new IllegalArgumentException("A capture registered text under another source");
                 if (contribution.files().containsKey(text.stagedPath())
                         || contribution.filesOnDisk().containsKey(text.stagedPath())) {
-                    texts.add(text);
+                    var marked = markedDigests.get(text.stagedPath());
+                    byte[] captured = contribution.files().get(text.stagedPath());
+                    if (marked != null
+                            && captured != null
+                            && !text.sha256().equals(ProvenanceDigest.sha256Hex(captured)))
+                        throw new IllegalArgumentException("A citable text does not match its captured bytes");
+                    texts.add(
+                            marked == null
+                                    ? text
+                                    : new CitableText(
+                                            text.source(),
+                                            text.path(),
+                                            text.side(),
+                                            text.commit(),
+                                            text.stagedPath(),
+                                            marked));
                 } else {
                     var roots = contribution.directories().stream()
                             .filter(directory -> Files.isRegularFile(

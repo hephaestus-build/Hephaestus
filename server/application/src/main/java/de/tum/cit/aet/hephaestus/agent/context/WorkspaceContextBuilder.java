@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.context;
 
 import de.tum.cit.aet.hephaestus.evidence.ClasspathSourceCatalogRegistry;
+import de.tum.cit.aet.hephaestus.evidence.HiddenCharacters;
 import de.tum.cit.aet.hephaestus.evidence.SourceAbsenceReason;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
@@ -23,6 +24,9 @@ import org.slf4j.LoggerFactory;
 import org.springframework.core.annotation.AnnotationAwareOrderComparator;
 import org.springframework.stereotype.Service;
 import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.node.ArrayNode;
+import tools.jackson.databind.node.JsonNodeFactory;
+import tools.jackson.databind.node.ObjectNode;
 
 @Service
 public class WorkspaceContextBuilder {
@@ -51,7 +55,35 @@ public class WorkspaceContextBuilder {
                 .flatMap(Optional::stream)
                 .toList();
         if (values.size() > 1) throw new IllegalStateException("A conversation resource has multiple owners");
-        return values.stream().findFirst();
+        return values.stream().findFirst().map(WorkspaceContextBuilder::marked);
+    }
+
+    /** The resource with each hidden character in its text marked ({@link HiddenCharacters}). */
+    private static JsonNode marked(JsonNode node) {
+        if (node.isString()) return markedString(node);
+        if (!node.isContainer()) return node;
+        JsonNode copy = node.deepCopy();
+        markInPlace(copy);
+        return copy;
+    }
+
+    private static JsonNode markedString(JsonNode node) {
+        String text = node.asString();
+        return HiddenCharacters.hides(text) ? JsonNodeFactory.instance.stringNode(HiddenCharacters.mark(text)) : node;
+    }
+
+    private static void markInPlace(JsonNode node) {
+        if (node instanceof ObjectNode object) {
+            for (Map.Entry<String, JsonNode> property : List.copyOf(object.properties())) {
+                if (property.getValue().isString()) object.set(property.getKey(), markedString(property.getValue()));
+                else markInPlace(property.getValue());
+            }
+        } else if (node instanceof ArrayNode array) {
+            for (int index = 0; index < array.size(); index++) {
+                if (array.get(index).isString()) array.set(index, markedString(array.get(index)));
+                else markInPlace(array.get(index));
+            }
+        }
     }
 
     public Map<String, byte[]> build(ConversationContextRequest request) {
@@ -70,7 +102,10 @@ public class WorkspaceContextBuilder {
                 continue;
             }
             contributed.forEach((path, bytes) -> {
-                if (!source.ownsPath(path) || files.putIfAbsent(path, bytes.clone()) != null) {
+                if (!source.ownsPath(path)
+                        || files.putIfAbsent(
+                                        path, HiddenCharacters.markUtf8(bytes).clone())
+                                != null) {
                     throw new IllegalStateException("A conversation source wrote an undeclared or duplicate path");
                 }
             });
