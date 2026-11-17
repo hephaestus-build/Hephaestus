@@ -1238,9 +1238,9 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                 AgentRunKind.REVIEW,
                 runs().reviewRetries());
 
-        assertThat(transactions.execute(status -> reviewSandboxRuns(claimService(jobs))
-                        .end(run, SandboxRunKind.Outcome.HANDED_ON, "init:TypeError")))
-                .isTrue();
+        Boolean held = transactions.execute(status ->
+                reviewSandboxRuns(claimService(jobs)).end(run, SandboxRunKind.Outcome.HANDED_ON, "init:TypeError"));
+        assertThat(held).isTrue();
 
         var requeued = jobs.findById(job.getId()).orElseThrow();
         assertThat(requeued.getStatus()).isEqualTo(ReviewJobStatus.QUEUED);
