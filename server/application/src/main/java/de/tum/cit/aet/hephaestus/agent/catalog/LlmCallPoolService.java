@@ -169,11 +169,8 @@ public class LlmCallPoolService {
     private LlmCallPool idle(Long id) {
         var admission = pools.lockAdmission(id).orElseThrow(() -> new EntityNotFoundException("LlmCallPool", id));
         permits.prune(id, properties.permitLease().toSeconds());
-        var rates = permits.rates(id);
-        if (permits.countUnclosed(id) > 0
-                || rates.getRequests() > 0
-                || rates.getTokens() > 0
-                || admission.getCooldownMillis() > 0) throw new LlmCallPoolInUseException(id);
+        if (permits.countUnclosed(id) > 0 || permits.debitsLiveRateWindow(id) || admission.getCooldownMillis() > 0)
+            throw new LlmCallPoolInUseException(id);
         return get(id);
     }
 

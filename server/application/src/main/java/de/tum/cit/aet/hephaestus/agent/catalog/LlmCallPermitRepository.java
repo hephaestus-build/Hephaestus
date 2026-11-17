@@ -298,6 +298,19 @@ public interface LlmCallPermitRepository extends JpaRepository<LlmCallPermit, UU
         long getNotInteractiveOutputTokens();
     }
 
+    /**
+     * Whether a call of a live server still debits the pool's rate window: it was granted and closed within the last
+     * minute. A lapsed permit's server died, so the permit still slows admission ({@link #rates}, {@link #lapsedHold}),
+     * but it never keeps an admin from editing or deleting the pool.
+     */
+    @Query(value = """
+                    SELECT EXISTS (SELECT 1 FROM llm_call_permit
+                                    WHERE pool_id = :poolId AND granted_at IS NOT NULL AND NOT lapsed
+                                      AND (closed_at IS NULL OR closed_at > clock_timestamp() - interval '1 minute')
+                                      AND (requests > 0 OR tokens > 0))
+                    """, nativeQuery = true)
+    boolean debitsLiveRateWindow(@Param("poolId") long poolId);
+
     /** Active calls retain their complete rate debit. Closed calls retain it for a full minute after closure. */
     @Query(
             value =
