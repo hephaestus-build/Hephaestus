@@ -88,7 +88,7 @@ public class ConnectionPurgeContributor implements WorkspacePurgeContributor {
                     e.getClass().getSimpleName());
             throw new WorkspacePurgeBlockedException(
                     "Hephaestus could not record the pending " + providerName(connection.getKind())
-                            + " removal, so it deleted no local data. Try again when the database is available.",
+                            + " removal, so it did not remove the workspace. Try again when the database is available.",
                     e);
         }
     }

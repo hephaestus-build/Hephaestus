@@ -17,6 +17,7 @@ import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceLifecycleService;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceProviderRemoval;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
@@ -58,6 +59,9 @@ class WorkspaceRemovalProviderCleanupIntegrationTest extends AbstractWorkspaceIn
 
     @Autowired
     private JdbcTemplate jdbc;
+
+    @Autowired
+    private WorkspaceProviderRemoval providerRemoval;
 
     /** GitLab's hooks by project, each a map from hook id to URL. */
     private final Map<Long, Map<Long, String>> gitlab = new ConcurrentHashMap<>();
@@ -115,6 +119,35 @@ class WorkspaceRemovalProviderCleanupIntegrationTest extends AbstractWorkspaceIn
                         .containsExactly("AWAITING_CONFIRMATION"));
         assertThat(credentialKept(connection)).isFalse();
         assertThat(state(workspace)).isEqualTo("PURGED");
+    }
+
+    @Test
+    void shouldDisconnectAgainAConnectionThatWasReconnectedAfterARemovalThatDidNotFinish() {
+        Workspace workspace = workspace();
+        Connection connection = gitLabConnection(workspace, Map.of(projectId(), 31L));
+        // A removal disconnected the connection, then its purge did not run, and an admin reconnected it.
+        providerRemoval.removeBeforePurge(workspace.getId());
+        new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+            Connection reconnected = connections
+                    .findByIdAndWorkspaceId(Objects.requireNonNull(connection.getId()), workspace.getId())
+                    .orElseThrow();
+            ConnectionFixtures.reachState(reconnected, IntegrationState.ACTIVE);
+            reconnected.setCredentials(new BearerToken("reconnected-token", null), converter);
+            connections.saveAndFlush(reconnected);
+        });
+
+        lifecycle.purgeWorkspace(WorkspaceContext.fromWorkspace(workspace, Set.of(), null));
+
+        assertThat(state(workspace)).isEqualTo("PURGED");
+        assertThat(jdbc.queryForObject(
+                        "SELECT state FROM connection WHERE workspace_id = ? AND id = ?",
+                        String.class,
+                        workspace.getId(),
+                        connection.getId()))
+                .isEqualTo("UNINSTALLED");
+        assertThat(credentialKept(connection))
+                .as("a purged workspace keeps no credential")
+                .isFalse();
     }
 
     private Workspace workspace() {

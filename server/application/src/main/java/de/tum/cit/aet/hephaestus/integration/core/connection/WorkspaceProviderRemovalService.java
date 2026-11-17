@@ -12,6 +12,7 @@ import java.time.Instant;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -61,17 +62,20 @@ class WorkspaceProviderRemovalService implements WorkspaceProviderRemoval {
             if (connection.getState() != IntegrationState.UNINSTALLED) {
                 transactions.executeWithoutResult(status -> connectionService.disconnectForRemoval(
                         connection,
+                        // Its own event, new on each attempt: a purge that fails afterwards leaves the workspace, and a
+                        // reconnected connection must disconnect again on the next attempt.
                         new ConnectionService.TransitionRequest(
                                 IntegrationState.UNINSTALLED,
-                                "WORKSPACE_PURGED",
+                                "WORKSPACE_REMOVAL",
                                 "SYSTEM",
                                 "workspace-purge",
-                                "workspace-" + workspaceId + "-purge-" + connection.getId(),
-                                "Cascade from workspace PURGE"),
+                                "workspace-" + workspaceId + "-removal-" + connection.getId() + "-" + UUID.randomUUID(),
+                                "Disconnect before the workspace removal"),
                         () -> strategy.eraseLocalData(new IntegrationRef(
                                 connection.getKind(), workspaceId, connection.getInstanceKey(), connection.getId()))));
             }
-            // An earlier disconnect whose teardown still waits runs here too, while its credential remains.
+            // An earlier disconnect's removals run here too while their credential remains, unless one waits for
+            // its next attempt: the purge then leaves it waiting for authorization.
             teardown.tearDownNow(workspaceId, connection.getId(), deadline);
         }
     }

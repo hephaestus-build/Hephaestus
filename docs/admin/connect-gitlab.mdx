@@ -138,10 +138,11 @@ Hephaestus manages project webhooks as it manages the group webhook:
 - A deleted project loses its webhook with it.
 - A new routing key replaces every project webhook.
 - Every 6 hours, Hephaestus replaces a project webhook that GitLab deleted or disabled.
-- A disconnect or a workspace removal removes every webhook of the connection.
+- A disconnect or a workspace removal removes the webhooks of the connection.
 
-A workspace removal removes the webhooks before it erases the access token.
-If GitLab does not confirm a removal, for example because GitLab is unreachable, the webhook shows as a block under **Instance administration → Provider removals**.
+A workspace removal sends the webhook removals for up to 30 seconds before it erases the access token.
+GitLab can fail to confirm a removal in that time, for example when it is unreachable or the group has many projects.
+The webhook then shows as a block under **Instance administration → Provider removals**.
 To remove such a webhook:
 
 1. In GitLab, open the group, or each project that the workspace monitored, then **Settings → Webhooks**.
