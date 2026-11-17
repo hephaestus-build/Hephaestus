@@ -12,7 +12,7 @@ import { getResponse } from "msw";
 import type { WorkspaceMembership } from "@/api/types.gen";
 import { THEME_COOKIE } from "@/runtime/theme/theme-cookie";
 
-import { useFixtureApi } from "../config-record.ts";
+import { useFixtureApi } from "./fixture-api.ts";
 import { BASE_URL } from "./server.ts";
 import { asReturningTourReader } from "./tour-offer.ts";
 import { handlers, NOW, WORKSPACE } from "./workspace.ts";

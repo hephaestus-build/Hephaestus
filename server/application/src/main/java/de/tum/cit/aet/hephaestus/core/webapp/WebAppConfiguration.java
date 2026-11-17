@@ -8,9 +8,6 @@ import java.time.Duration;
 import java.util.List;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
-import org.springframework.boot.web.server.MimeMappings;
-import org.springframework.boot.web.server.WebServerFactoryCustomizer;
-import org.springframework.boot.web.server.servlet.ConfigurableServletWebServerFactory;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.CacheControl;
@@ -56,16 +53,6 @@ class WebAppConfiguration implements WebMvcConfigurer {
 
     WebAppConfiguration(WebAppProperties properties) {
         this.properties = properties;
-    }
-
-    /** The legal pages are Markdown, which the servlet container's default types do not name. */
-    @Bean
-    WebServerFactoryCustomizer<ConfigurableServletWebServerFactory> markdownMimeMapping() {
-        return factory -> {
-            MimeMappings mappings = new MimeMappings(MimeMappings.DEFAULT);
-            mappings.add("md", "text/markdown;charset=utf-8");
-            factory.setMimeMappings(mappings);
-        };
     }
 
     @Bean

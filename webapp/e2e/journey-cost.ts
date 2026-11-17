@@ -14,7 +14,7 @@ import { expect, type Page } from "@playwright/test";
 import { getResponse } from "msw";
 import type { WorkspaceMembership } from "@/api/types.gen";
 
-import { useFixtureApi } from "./config-record.ts";
+import { useFixtureApi } from "./screenshots/fixture-api.ts";
 import { asReturningTourReader } from "./screenshots/tour-offer.ts";
 import { handlers, NOW, WORKSPACE } from "./screenshots/workspace.ts";
 import { E2E_BASE_URL } from "./urls.ts";
