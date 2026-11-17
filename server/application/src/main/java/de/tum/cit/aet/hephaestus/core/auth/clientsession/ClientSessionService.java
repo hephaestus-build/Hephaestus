@@ -274,6 +274,10 @@ public class ClientSessionService {
         }
         Instant now = clock.instant();
         if (!now.isBefore(session.getSessionExpiresAt())) {
+            if (mcpSession) {
+                // An MCP grant that went unused until its deadline lapsed; it was not revoked.
+                grantRepository.expireBySession(session.getId(), now);
+            }
             end(session.getId(), IssuedJwt.RevokedReason.LOGOUT, now);
             return Optional.empty();
         }
@@ -301,7 +305,7 @@ public class ClientSessionService {
                 end(session.getId(), IssuedJwt.RevokedReason.LOGOUT, now);
                 return Optional.empty();
             }
-            grant.markUsed(now);
+            grantRepository.markUsed(grant.getWorkspaceId(), grant.getId(), now, now);
             session.extendTo(now.plus(McpClientGrant.IDLE_LAPSE));
         }
         ClientTokens tokens = issue(session, grant, request);

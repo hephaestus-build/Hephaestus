@@ -174,10 +174,6 @@ public class McpClientGrant {
         this.lastUsedAt = now;
     }
 
-    public void markUsed(Instant now) {
-        this.lastUsedAt = now;
-    }
-
     void revoke(Instant now) {
         this.status = Status.REVOKED;
         this.endedAt = now;

@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.HephaestusJwtIssuer;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwtRepository;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.TokenConstraints;
+import de.tum.cit.aet.hephaestus.core.auth.mcp.McpAuthorizationFlow;
 import de.tum.cit.aet.hephaestus.core.exception.ProblemType;
 import de.tum.cit.aet.hephaestus.core.security.UserViewContextHolder;
 import de.tum.cit.aet.hephaestus.testconfig.RealAuthIntegrationTest;
@@ -701,6 +702,59 @@ class PasskeyLifecycleIntegrationTest extends RealAuthIntegrationTest {
                 .expectStatus()
                 .isUnauthorized()
                 .expectBody(Void.class);
+    }
+
+    /**
+     * A passkey change ends every session of the account, and with it every MCP grant, including one whose passkey
+     * proof the change makes stale (ADR 0110 decision 8, update of 2026-11-17).
+     */
+    @Test
+    void shouldEndAPasskeyBackedMcpGrantWhenThePasskeySetupChanges() throws GeneralSecurityException {
+        var account = accounts.save(new Account("MCP passkey admin"));
+        long accountId = Objects.requireNonNull(account.getId());
+        String oauth = token(account, null);
+        String csrf = csrf();
+        var authenticator = new PasskeyTestAuthenticator();
+        enroll(oauth, csrf, authenticator, "Laptop");
+        String verified = verify(oauth, csrf, account, authenticator, 1);
+        String slug = "mcp-passkey-change-" + UUID.randomUUID().toString().substring(0, 8);
+        var workspace = WorkspaceTestFixtures.activeWorkspace(slug);
+        workspace.setAdminPasskeyRequired(true);
+        workspace = workspaces.saveAndFlush(workspace);
+        var membership = new Membership();
+        membership.setWorkspace(workspace);
+        membership.setId(new Membership.Id(workspace.getId(), accountId));
+        membership.setRole(WorkspaceRole.ADMIN);
+        memberships.saveAndFlush(membership);
+        var flow = new McpAuthorizationFlow(client, cookie);
+        McpAuthorizationFlow.Tokens mcp = flow.connect(verified, slug);
+        UUID grant = Objects.requireNonNull(jdbc.queryForObject(
+                "SELECT id FROM mcp_client_grant WHERE client_session_id = ?",
+                UUID.class,
+                UUID.fromString(McpAuthorizationFlow.payload(mcp.accessToken())
+                        .path("sid")
+                        .asString())));
+        assertThat(jdbc.queryForObject(
+                        "SELECT passkey_credential_id FROM mcp_client_grant WHERE id = ?", String.class, grant))
+                .isEqualTo(credentials.findByAccountId(accountId).getFirst().getId());
+
+        patch("/user/passkeys/protection", verified, csrf)
+                .bodyValue(new PasskeyController.PasskeyProtectionRequestDTO(false))
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody(Void.class);
+
+        assertThat(jdbc.queryForObject("SELECT status FROM mcp_client_grant WHERE id = ?", String.class, grant))
+                .isEqualTo("REVOKED");
+        flow.callTool(mcp.accessToken(), slug, """
+                        {"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}}
+                        """)
+                .expectStatus()
+                .isUnauthorized()
+                .expectBody(Void.class);
+        assertThat(flow.tokenError(flow.token(flow.refreshForm(mcp.refreshToken()))))
+                .isEqualTo("invalid_grant");
     }
 
     @Test

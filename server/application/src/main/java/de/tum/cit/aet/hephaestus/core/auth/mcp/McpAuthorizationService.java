@@ -22,6 +22,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.StringJoiner;
@@ -401,12 +402,25 @@ public class McpAuthorizationService implements McpClientGrants {
                 .findSessionIdByRefreshTokenHash(Pkce.hash(refreshToken))
                 .flatMap(grants::findActiveBySession);
         // The grant holds its resource literally, so after a rename the slug no longer leads to its workspace.
-        boolean namesItsWorkspace = grant.flatMap(found -> resources
-                        .slugOf(found.getResource())
-                        .flatMap(workspaces::findActiveBySlug)
-                        .filter(workspace -> workspace.id() == found.getWorkspaceId()))
-                .isPresent();
-        if (!namesItsWorkspace) {
+        Optional<McpWorkspaceDirectory.McpWorkspace> workspace = grant.flatMap(this::workspaceOf);
+        if (workspace.isEmpty()) {
+            return new TokenOutcome.Refused("invalid_grant");
+        }
+        // A refresh moves the grant's idle deadline, so it asks again whether the account may hold the grant: a
+        // removed or demoted admin, a pending recovery, or a policy that now asks for a passkey this grant lacks ends
+        // it.
+        Decision decision = decision(grant.get().getAccountId(), workspace.get());
+        Refusal refusal = decision.refusal();
+        if (refusal != null || (decision.passkeyRequired() && grant.get().getPasskeyVerifiedAt() == null)) {
+            if (sessions.revokeMcpGrant(grant.get().getAccountId(), grant.get().getId())) {
+                String reason =
+                        refusal == null ? "passkey_required" : refusal.name().toLowerCase(Locale.ROOT);
+                audit(
+                        AuthEvent.EventType.MCP_CLIENT_REVOKED,
+                        grant.get(),
+                        grant.get().getAccountId(),
+                        reason);
+            }
             return new TokenOutcome.Refused("invalid_grant");
         }
         // A refresh never widens what the grant holds (RFC 8707 § 2.2).
@@ -512,6 +526,10 @@ public class McpAuthorizationService implements McpClientGrants {
 
     /** Records who decided about which client, for which workspace, with which scopes, and whose grant it is. */
     private void audit(AuthEvent.EventType type, McpClientGrant grant, Long actingAccountId) {
+        audit(type, grant, actingAccountId, null);
+    }
+
+    private void audit(AuthEvent.EventType type, McpClientGrant grant, Long actingAccountId, @Nullable String reason) {
         var details = jsonMapper
                 .createObjectNode()
                 .put("grantId", grant.getId().toString())
@@ -520,6 +538,9 @@ public class McpAuthorizationService implements McpClientGrants {
                 .put("grantAccountId", grant.getAccountId())
                 // The grant row holds the time and the credential; the event says that the approval rested on them.
                 .put("passkey", grant.getPasskeyVerifiedAt() != null);
+        if (reason != null) {
+            details.put("reason", reason);
+        }
         authEvents
                 .event(type, AuthEvent.Result.SUCCESS)
                 .account(actingAccountId)

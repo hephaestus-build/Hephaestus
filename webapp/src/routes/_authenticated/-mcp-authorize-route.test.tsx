@@ -94,7 +94,7 @@ function stubPasskeyPrompt() {
 }
 
 /** The account has one passkey; records the requests in the order the server received them. */
-function servePasskeyStepUp(received: string[]) {
+function servePasskeyStepUp(received: string[], credentials = [{ id: "one", label: "Laptop" }]) {
 	server.use(
 		http.get("*/user/passkeys", () =>
 			HttpResponse.json({
@@ -104,7 +104,7 @@ function servePasskeyStepUp(received: string[]) {
 				instanceAdminRequired: false,
 				workspaceAdminRequired: false,
 				verified: false,
-				credentials: [{ id: "one", label: "Laptop" }],
+				credentials,
 			}),
 		),
 		http.post("*/user/passkeys/verification-options", () => {
@@ -230,5 +230,53 @@ describe("the MCP consent route", () => {
 		await screen.findByText("Your passkey did not confirm", undefined, ROUTE_RENDER_WAIT);
 		expect(received).toStrictEqual(["verification-options"]);
 		expect(assigned).toStrictEqual([]);
+	});
+
+	it("names the server's refusal when the approval fails after the passkey confirmed", async () => {
+		serveRequest(true);
+		const received: string[] = [];
+		servePasskeyStepUp(received);
+		stubPasskeyPrompt();
+		server.use(
+			http.put(`*/mcp/oauth/requests/${REQUEST_ID}/approval`, () =>
+				HttpResponse.json(
+					{
+						status: 409,
+						title: "Conflict",
+						detail: "Confirm with your passkey, then approve the client.",
+					},
+					{ status: 409 },
+				),
+			),
+		);
+		renderRouteAt(`/mcp/authorize?request=${REQUEST_ID}`);
+		const allow = await screen.findByRole(
+			"button",
+			{ name: "Confirm with passkey and allow" },
+			ROUTE_RENDER_WAIT,
+		);
+		const assigned = captureNavigation();
+
+		fireEvent.click(allow);
+
+		await screen.findByText(
+			"Confirm with your passkey, then approve the client.",
+			undefined,
+			ROUTE_RENDER_WAIT,
+		);
+		expect(assigned).toStrictEqual([]);
+	});
+
+	it("asks an account without a passkey to add one before it can allow", async () => {
+		serveRequest(true);
+		const received: string[] = [];
+		servePasskeyStepUp(received, []);
+		stubPasskeyPrompt();
+		renderRouteAt(`/mcp/authorize?request=${REQUEST_ID}`);
+
+		await screen.findByRole("button", { name: "Add a passkey" }, ROUTE_RENDER_WAIT);
+		const allow = screen.getByRole("button", { name: "Confirm with passkey and allow" });
+		expect(allow.hasAttribute("disabled")).toBe(true);
+		expect(received).toStrictEqual([]);
 	});
 });

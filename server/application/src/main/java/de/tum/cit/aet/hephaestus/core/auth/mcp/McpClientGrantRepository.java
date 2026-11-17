@@ -141,7 +141,8 @@ public interface McpClientGrantRepository extends JpaRepository<McpClientGrant, 
 
     /**
      * Grants whose consent request, code or session ran out, so the console and the data map see their real state. A
-     * passkey-backed grant unused for {@link McpClientGrant#IDLE_LAPSE} lapses here.
+     * grant unused for {@link McpClientGrant#IDLE_LAPSE} lapses here. The session pruner may delete the session row
+     * first, so an active grant without a live session expires too.
      */
     @Modifying
     @Query("""
@@ -149,11 +150,21 @@ public interface McpClientGrantRepository extends JpaRepository<McpClientGrant, 
            SET g.status = 'EXPIRED', g.endedAt = :now
          WHERE (g.status = 'PENDING' AND g.expiresAt < :now)
             OR (g.status = 'APPROVED' AND g.approvedAt < :codeCutoff)
-            OR (g.status = 'ACTIVE' AND EXISTS (
-                    SELECT 1 FROM ClientSession s WHERE s.id = g.clientSessionId AND s.sessionExpiresAt < :now))
+            OR (g.status = 'ACTIVE' AND NOT EXISTS (
+                    SELECT 1 FROM ClientSession s WHERE s.id = g.clientSessionId AND s.sessionExpiresAt >= :now))
         """)
     @WorkspaceAgnostic("Retention expires MCP client grant rows across all workspaces")
     int expireStale(@Param("now") Instant now, @Param("codeCutoff") Instant codeCutoff);
+
+    /** A grant whose session reached its deadline lapsed: it ends as expired, not revoked. */
+    @Modifying
+    @Query("""
+        UPDATE McpClientGrant g
+           SET g.status = 'EXPIRED', g.endedAt = :now
+         WHERE g.clientSessionId = :sessionId AND g.status = 'ACTIVE'
+        """)
+    @WorkspaceAgnostic("A lapsed session ends without a workspace context, at its refresh")
+    int expireBySession(@Param("sessionId") UUID sessionId, @Param("now") Instant now);
 
     /** Ended grants keep their row for the retention period, so the config history can still name the client. */
     @Modifying

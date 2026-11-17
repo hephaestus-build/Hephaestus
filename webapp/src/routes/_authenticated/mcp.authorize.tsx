@@ -86,7 +86,7 @@ function McpAuthorizeRoute() {
 	});
 	// Where the workspace's admin passkey policy asks for a passkey, Allow is the passkey step-up that
 	// every admin change uses, and the approval follows once the server accepted it. The grant then
-	// holds that confirmation for one hour.
+	// holds that confirmation until it is revoked or goes unused for 90 days.
 	const router = useRouter();
 	const location = useLocation();
 	const passkeys = usePasskeySettings({

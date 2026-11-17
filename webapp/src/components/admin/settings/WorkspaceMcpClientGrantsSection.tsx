@@ -101,10 +101,9 @@ export function WorkspaceMcpClientGrantsSection({
 									</ItemDescription>
 									{/* Outside the clamped description, so a long name never hides when the access ends. */}
 									<p className="text-sm text-muted-foreground">
-										{grant.lastUsedAt === undefined
-											? "Not used yet."
-											: `Last used ${formatDateTime(grant.lastUsedAt)}.`}{" "}
-										Lapses if unused until {formatDate(grant.expiresAt)}.
+										{grant.lastUsedAt !== undefined &&
+											`Last used ${formatDateTime(grant.lastUsedAt)}. `}
+										Lapses on {formatDate(grant.expiresAt)} if unused.
 										{grant.passkeyBacked && " Confirmed with a passkey."}
 									</p>
 								</ItemContent>

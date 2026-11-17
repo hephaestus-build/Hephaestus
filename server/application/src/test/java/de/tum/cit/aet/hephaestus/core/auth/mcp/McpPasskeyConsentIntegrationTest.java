@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.core.auth.mcp;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import de.tum.cit.aet.hephaestus.core.auth.clientsession.ClientSessionPruner;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.HephaestusJwtIssuer;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.TokenConstraints;
@@ -69,6 +70,9 @@ class McpPasskeyConsentIntegrationTest extends RealAuthIntegrationTest {
 
     @Autowired
     private McpClientGrantCleanupJob cleanupJob;
+
+    @Autowired
+    private ClientSessionPruner sessionPruner;
 
     @Value("${hephaestus.auth.cookie-name:__Host-HEPHAESTUS_AT}")
     private String cookieName;
@@ -205,6 +209,8 @@ class McpPasskeyConsentIntegrationTest extends RealAuthIntegrationTest {
                 Timestamp.from(Instant.now().minusSeconds(60)),
                 grant);
 
+        // The session pruner runs first in the hour and deletes the lapsed session row before the grant cleanup.
+        sessionPruner.prune();
         cleanupJob.cleanup();
 
         assertThat(grantColumn(grant, "status")).isEqualTo("EXPIRED");
@@ -245,6 +251,8 @@ class McpPasskeyConsentIntegrationTest extends RealAuthIntegrationTest {
                         + " mcp_client_grant WHERE id = ?)",
                 Timestamp.from(Instant.now().minusSeconds(60)),
                 grant);
+        // The session pruner runs first in the hour and deletes the lapsed session row before the grant cleanup.
+        sessionPruner.prune();
         cleanupJob.cleanup();
 
         assertThat(grantColumn(grant, "status")).isEqualTo("EXPIRED");
@@ -292,6 +300,38 @@ class McpPasskeyConsentIntegrationTest extends RealAuthIntegrationTest {
         JsonNode refused = call(tokens.accessToken(), GET_REVIEW_SETTINGS);
         assertThat(refused.path("isError").asBoolean()).isTrue();
         assertThat(text(refused)).contains("passkey");
+        JsonNode write = call(
+                tokens.accessToken(),
+                tool("set_feedback_delivery", Map.of("etag", "\"any\"", "deliveryStatus", "PAUSED")));
+        assertThat(write.path("isError").asBoolean()).isTrue();
+
+        // A refresh would move its idle deadline, so it ends the grant instead, with the reason.
+        UUID grant = grantOf(tokens);
+        assertThat(flow.tokenError(flow.token(flow.refreshForm(tokens.refreshToken()))))
+                .isEqualTo("invalid_grant");
+        assertThat(grantColumn(grant, "status")).isEqualTo("REVOKED");
+        assertThat(revokedReasonOf(grant)).isEqualTo("passkey_required");
+    }
+
+    /** A removed or demoted admin's client cannot keep its grant alive by refreshing it. */
+    @Test
+    void shouldEndTheGrantOnRefreshWhenTheAccountIsNoLongerAnAdmin() {
+        McpAuthorizationFlow.Tokens tokens = connect(passkeyCookie(Instant.now()));
+        UUID grant = grantOf(tokens);
+        Membership membership = membershipRepository
+                .findByWorkspace_IdAndId_AccountId(workspace.getId(), accountId)
+                .orElseThrow();
+        membership.setRole(Membership.WorkspaceRole.MEMBER);
+        membershipRepository.save(membership);
+
+        assertThat(flow.tokenError(flow.token(flow.refreshForm(tokens.refreshToken()))))
+                .isEqualTo("invalid_grant");
+        assertThat(grantColumn(grant, "status")).isEqualTo("REVOKED");
+        assertThat(revokedReasonOf(grant)).isEqualTo("not_admin");
+        flow.callTool(tokens.accessToken(), workspace.getWorkspaceSlug(), GET_REVIEW_SETTINGS)
+                .expectStatus()
+                .isUnauthorized()
+                .expectBody(Void.class);
     }
 
     @Test
@@ -423,6 +463,15 @@ class McpPasskeyConsentIntegrationTest extends RealAuthIntegrationTest {
 
     private static String text(JsonNode result) {
         return result.path("content").path(0).path("text").asString("");
+    }
+
+    /** The reason that the grant's revocation event records. */
+    private String revokedReasonOf(UUID grant) {
+        String details = jdbc.queryForObject(
+                "SELECT details FROM auth_event WHERE event_type = 'MCP_CLIENT_REVOKED' AND details LIKE ?",
+                String.class,
+                "%" + grant + "%");
+        return JSON.readTree(Objects.requireNonNull(details)).path("reason").asString();
     }
 
     private Instant sessionDeadline(UUID grant) {

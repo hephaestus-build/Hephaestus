@@ -28,7 +28,7 @@ type Story = StoryObj<typeof meta>;
 export const Connected: Story = {
 	play: async ({ canvas, args, userEvent }) => {
 		await expect(canvas.getByText("Reads the practice configuration")).toBeVisible();
-		await expect(canvas.getByText(/Last used .*Lapses if unused until/u)).toBeVisible();
+		await expect(canvas.getByText(/Last used .*Lapses on .* if unused/u)).toBeVisible();
 		await userEvent.click(canvas.getByRole("button", { name: "Disconnect claude.ai" }));
 		await expect(args.onRevoke).toHaveBeenCalledWith(grant.id);
 	},
@@ -61,11 +61,12 @@ export const ConfirmedWithPasskey: Story = {
 	},
 };
 
-/** Approved, but the client has not signed in with its code yet. */
-export const NotUsedYet: Story = {
+/** A grant from before last use was recorded shows only when it lapses. */
+export const LastUseUnknown: Story = {
 	args: { grants: [{ ...grant, lastUsedAt: undefined }] },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByText(/Not used yet/u)).toBeVisible();
+		await expect(canvas.queryByText(/Last used/u)).toBeNull();
+		await expect(canvas.getByText(/Lapses on .* if unused/u)).toBeVisible();
 	},
 };
 

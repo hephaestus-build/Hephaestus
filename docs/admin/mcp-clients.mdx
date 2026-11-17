@@ -107,9 +107,10 @@ Each of these ends a client's access at once:
 - The person who approved it ends the session in their session list.
 - **Sign out everywhere** ends every client session of the account.
 - Suspending or deleting the account ends them all.
+- A change to the account's passkeys (adding, removing or recovering one, or turning personal protection on or off) ends them all.
 - A refresh token that comes back after the client renewed it ends that client's access, and the audit log records why.
 
-A demotion or removal from the workspace takes effect on the client's next call.
+A demotion or removal from the workspace takes effect on the client's next call, and its next renewal ends its access.
 
 ## Limits
 
