@@ -32,7 +32,6 @@ class FeatureFlagConfigTest extends BaseUnitTest {
             FeatureFlagsDTO response = FeatureFlagsDTO.from(context.getBean(FeatureFlagService.class));
 
             assertThat(response.PAGE_EXPERIENCE_METRICS()).isTrue();
-            assertThat(response.ADMIN()).isFalse();
         });
     }
 

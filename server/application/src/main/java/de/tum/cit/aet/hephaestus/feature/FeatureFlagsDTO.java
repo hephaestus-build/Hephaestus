@@ -22,10 +22,6 @@ import io.swagger.v3.oas.annotations.media.Schema;
  */
 @Schema(description = "Feature flags evaluated for the current user")
 public record FeatureFlagsDTO(
-        @Schema(description = "User has admin privileges", requiredMode = Schema.RequiredMode.REQUIRED)
-        boolean ADMIN,
-
-        // Operational/development flags (Spring Boot config)
         @Schema(
                 description = "The browser measures and reports how page visits feel to the reader",
                 requiredMode = Schema.RequiredMode.REQUIRED)
@@ -37,7 +33,6 @@ public record FeatureFlagsDTO(
      * @return a fully populated DTO
      */
     public static FeatureFlagsDTO from(FeatureFlagService service) {
-        return new FeatureFlagsDTO(
-                service.isEnabled(FeatureFlag.ADMIN), service.isEnabled(FeatureFlag.PAGE_EXPERIENCE_METRICS));
+        return new FeatureFlagsDTO(service.isEnabled(FeatureFlag.PAGE_EXPERIENCE_METRICS));
     }
 }

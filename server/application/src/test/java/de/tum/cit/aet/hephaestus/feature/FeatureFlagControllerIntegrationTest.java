@@ -2,7 +2,6 @@ package de.tum.cit.aet.hephaestus.feature;
 
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
-import de.tum.cit.aet.hephaestus.testconfig.WithAdminUser;
 import de.tum.cit.aet.hephaestus.testconfig.WithUser;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -32,36 +31,6 @@ class FeatureFlagControllerIntegrationTest extends BaseIntegrationTest {
         }
 
         @Test
-        @WithAdminUser
-        void adminUserHasAdminFlags() {
-            webTestClient
-                    .get()
-                    .uri("/user/features")
-                    .headers(TestAuthUtils.withCurrentUser())
-                    .exchange()
-                    .expectStatus()
-                    .isOk()
-                    .expectBody()
-                    .jsonPath("$.ADMIN")
-                    .isEqualTo(true);
-        }
-
-        @Test
-        @WithUser
-        void regularUserHasNoRoleFlags() {
-            webTestClient
-                    .get()
-                    .uri("/user/features")
-                    .headers(TestAuthUtils.withCurrentUser())
-                    .exchange()
-                    .expectStatus()
-                    .isOk()
-                    .expectBody()
-                    .jsonPath("$.ADMIN")
-                    .isEqualTo(false);
-        }
-
-        @Test
         @WithUser
         void responseContainsAllFlags() {
             webTestClient
@@ -74,8 +43,6 @@ class FeatureFlagControllerIntegrationTest extends BaseIntegrationTest {
                     .expectBody()
                     .jsonPath("$.length()")
                     .isEqualTo(FeatureFlag.values().length)
-                    .jsonPath("$.ADMIN")
-                    .exists()
                     .jsonPath("$.PAGE_EXPERIENCE_METRICS")
                     .exists();
         }

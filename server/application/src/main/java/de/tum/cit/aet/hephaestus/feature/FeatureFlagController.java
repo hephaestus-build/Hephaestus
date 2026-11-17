@@ -10,13 +10,11 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Controller for retrieving the current user's feature flags.
+ * Controller for retrieving the operational feature flags.
  * <p>
- * Returns a server-authoritative evaluation of all {@link FeatureFlag} values,
- * combining role checks (from the JWT) and Spring Boot config flags
- * into a single response. The endpoint is extremely cheap: it reads JWT
- * authorities (already parsed) and in-memory config properties — no DB or
- * external calls.
+ * Returns a server-authoritative evaluation of all {@link FeatureFlag} values from the
+ * server configuration. The endpoint is extremely cheap: it reads in-memory config
+ * properties — no DB or external calls.
  *
  * @see FeatureFlagService
  * @see FeatureFlagsDTO
@@ -36,8 +34,7 @@ public class FeatureFlagController {
     @GetMapping("/features")
     @Operation(
             summary = "Get feature flags for the current user",
-            description = "Returns all feature flags evaluated for the authenticated user. "
-                    + "Combines role checks and server-side config toggles.")
+            description = "Returns the operational feature flags from the server configuration.")
     @ApiResponse(responseCode = "200", description = "Feature flags evaluated successfully")
     public ResponseEntity<FeatureFlagsDTO> getUserFeatures() {
         return ResponseEntity.ok(FeatureFlagsDTO.from(featureFlagService));

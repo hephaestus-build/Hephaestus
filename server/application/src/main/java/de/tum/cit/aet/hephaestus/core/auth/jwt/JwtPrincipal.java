@@ -7,8 +7,8 @@ import java.util.Set;
  * {@link JwtPrincipalFactory} from an {@code Account} and its feature flags.
  *
  * @param accountId Hephaestus account id → {@code sub}
- * @param roles     app roles ({@code "app_admin"} when app-admin, plus enabled feature-flag
- *                  keys) → {@code roles}, read by the authority converter and every
+ * @param roles     app roles ({@code "app_admin"} when app-admin, plus the account's enabled
+ *                  {@code account_feature} flags) → {@code roles}, read by the authority converter and every
  *                  {@code @PreAuthorize(hasAuthority(...))}
  */
 public record JwtPrincipal(Long accountId, Set<String> roles) {}

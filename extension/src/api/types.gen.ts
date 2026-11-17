@@ -1967,10 +1967,6 @@ export type ExternalDelivery = {
  */
 export type FeatureFlags = {
 	/**
-	 * User has admin privileges
-	 */
-	ADMIN: boolean;
-	/**
 	 * The browser measures and reports how page visits feel to the reader
 	 */
 	PAGE_EXPERIENCE_METRICS: boolean;

@@ -902,7 +902,6 @@ export const zExternalDelivery = z.object({
  * Feature flags evaluated for the current user
  */
 export const zFeatureFlags = z.object({
-	ADMIN: z.boolean(),
 	PAGE_EXPERIENCE_METRICS: z.boolean(),
 });
 

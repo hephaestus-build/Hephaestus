@@ -3807,16 +3807,12 @@ export const FeatureFlagsSchema = {
 	type: "object",
 	description: "Feature flags evaluated for the current user",
 	properties: {
-		ADMIN: {
-			type: "boolean",
-			description: "User has admin privileges",
-		},
 		PAGE_EXPERIENCE_METRICS: {
 			type: "boolean",
 			description: "The browser measures and reports how page visits feel to the reader",
 		},
 	},
-	required: ["ADMIN", "PAGE_EXPERIENCE_METRICS"],
+	required: ["PAGE_EXPERIENCE_METRICS"],
 } as const;
 
 export const FeedbackAccountRefSchema = {

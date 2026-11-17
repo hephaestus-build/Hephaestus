@@ -8,7 +8,7 @@ import type { GetUserFeaturesData, GetUserFeaturesResponses } from "../types.gen
 /**
  * Get feature flags for the current user
  *
- * Returns all feature flags evaluated for the authenticated user. Combines role checks and server-side config toggles.
+ * Returns the operational feature flags from the server configuration.
  */
 export const getUserFeatures = <ThrowOnError extends boolean = false>(
 	options?: Options<GetUserFeaturesData, ThrowOnError>,

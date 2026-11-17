@@ -8,12 +8,11 @@ type FeatureFlags = Record<FeatureFlagName, boolean>;
  *
  * @example
  * ```ts
- * const flags = mockFeatureFlags({ ADMIN: true });
+ * const flags = mockFeatureFlags({ PAGE_EXPERIENCE_METRICS: true });
  * ```
  */
 export function mockFeatureFlags(overrides?: Partial<FeatureFlags>): FeatureFlags {
 	return {
-		ADMIN: false,
 		PAGE_EXPERIENCE_METRICS: false,
 		...overrides,
 	};

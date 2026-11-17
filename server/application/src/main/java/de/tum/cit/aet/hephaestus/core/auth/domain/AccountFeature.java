@@ -21,8 +21,7 @@ import org.jspecify.annotations.Nullable;
  * realm roles (ADR 0017).
  *
  * <p>Composite PK {@code (account_id, flag)} — natural fit for "is this flag enabled
- * for this account?" lookups. The {@code FeatureFlag} enum remains the canonical
- * registry of valid keys; this table just records which accounts have them enabled.
+ * for this account?" lookups. The table records which flags each account has enabled.
  */
 @Entity
 @Table(name = "account_feature")

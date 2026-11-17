@@ -50,25 +50,12 @@ export const Collapsed: Story = {
 };
 
 /**
- * Mixed flag states — some enabled, some disabled.
- * Demonstrates the green/red badge styling.
- */
-export const MixedFlags: Story = {
-	args: {
-		flags: mockFeatureFlags({
-			ADMIN: true,
-		}),
-		isLoading: false,
-	},
-};
-
-/**
  * All flags enabled — full green badges.
  */
 export const AllEnabled: Story = {
 	args: {
 		flags: mockFeatureFlags({
-			ADMIN: true,
+			PAGE_EXPERIENCE_METRICS: true,
 		}),
 		isLoading: false,
 	},
