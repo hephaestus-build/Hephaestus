@@ -480,6 +480,12 @@ export const adminErasePersonDataResponseTransformer = async (
 
 const feedbackItemSchemaResponseTransformer = (data: any) => {
 	data.createdAt = new Date(data.createdAt);
+	if (data.draftDeadline) {
+		data.draftDeadline = new Date(data.draftDeadline);
+	}
+	if (data.draftingSince) {
+		data.draftingSince = new Date(data.draftingSince);
+	}
 	if (data.resolvedAt) {
 		data.resolvedAt = new Date(data.resolvedAt);
 	}
@@ -717,6 +723,12 @@ export const submitInstanceProductFeedbackResponseTransformer = async (
 
 const myProductFeedbackSchemaResponseTransformer = (data: any) => {
 	data.createdAt = new Date(data.createdAt);
+	if (data.draftDeadline) {
+		data.draftDeadline = new Date(data.draftDeadline);
+	}
+	if (data.draftingSince) {
+		data.draftingSince = new Date(data.draftingSince);
+	}
 	if (data.filedAfter) {
 		data.filedAfter = new Date(data.filedAfter);
 	}

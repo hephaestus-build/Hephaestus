@@ -58,6 +58,10 @@ export const OnItsWay: Story = {
 	args: { state: ready([draftingFeedback], "IN_FLIGHT") },
 	play: async ({ canvas }) => {
 		await expect(canvas.getByText("Drafting")).toBeVisible();
+		await expect(canvas.getByText(/An AI model is drafting the issue\. Started/u)).toBeVisible();
+		await expect(canvas.getByText(/If the draft is not ready by about/u)).toHaveTextContent(
+			/, the report goes on as written and does not become public\.$/u,
+		);
 		await expect(canvas.queryByRole("button", { name: "Mark resolved" })).not.toBeInTheDocument();
 		await expect(canvas.queryByRole("button", { name: "File on GitHub" })).not.toBeInTheDocument();
 	},

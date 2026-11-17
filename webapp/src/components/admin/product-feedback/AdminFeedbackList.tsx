@@ -7,6 +7,7 @@ import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { RelativeTime } from "@/components/common/RelativeTime";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { TablePagination } from "@/components/common/TablePagination";
+import { DraftingProgress } from "@/components/product-feedback/DraftingProgress";
 import { FiledIssue } from "@/components/product-feedback/FiledIssue";
 import { REPORT_STATE_DEFS } from "@/components/product-feedback/report-state-defs";
 import { closedAs, reasonSentence } from "@/components/product-feedback/sharing-copy";
@@ -223,6 +224,15 @@ function FeedbackCard({ item, pending, filing, onTriage, onFile }: FeedbackCardP
 							</span>
 						)}
 					</p>
+				)}
+				{item.state === "DRAFTING" && (
+					<DraftingProgress
+						since={item.draftingSince}
+						deadline={item.draftDeadline}
+						waitingForModel={item.waitingForModel}
+						wantsPublic={item.route === "PUBLIC"}
+						reader="admin"
+					/>
 				)}
 				{hasText(item.reason) && (
 					<p className="text-muted-foreground">{reasonSentence(item.reason)}</p>

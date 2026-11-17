@@ -5,6 +5,8 @@ import { expectSettledVisible } from "@/stories/overlay";
 
 import {
 	closedPublicIssue,
+	draftingReport,
+	filingReport,
 	savedReport,
 	heldReport,
 	myReports,
@@ -12,6 +14,7 @@ import {
 	publicIssue,
 	securityReport,
 	stoppedReport,
+	waitingForModelReport,
 } from "./fixtures";
 import { MyProductFeedbackList } from "./MyProductFeedbackList";
 
@@ -51,15 +54,69 @@ export const LoadError: Story = {
 	},
 };
 
-/** A held report counts down to its filing and offers both reverses. */
+/** A held report is drafted: it names the time it files and offers both reverses until then. */
 export const Held: Story = {
 	args: { state: { status: "ready", reports: [heldReport] } },
 	play: async ({ canvas, args }) => {
-		await expect(canvas.getByText("Waiting")).toBeVisible();
-		await expect(canvas.getByText(/becomes a public issue in about 4 minutes/u)).toBeVisible();
+		await expect(canvas.getByText("Public soon")).toBeVisible();
+		await expect(
+			canvas.getByText(
+				/becomes a public issue at about \d{1,2}:\d{2} [ap]m \(in about 4 minutes\) unless you keep it private or edit it/u,
+			),
+		).toBeVisible();
 		await expect(canvas.getByText("Removed: 1 email address")).toBeVisible();
 		await userEvent.click(canvas.getByRole("button", { name: "Keep private" }));
 		await expect(args.onKeepPrivate).toHaveBeenCalledWith(heldReport);
+	},
+};
+
+/**
+ * A drafting report says since when and the time by which it goes on without a draft, so it never
+ * reads as stuck. A public one also names the end of its hold and offers Keep private meanwhile.
+ */
+export const Drafting: Story = {
+	args: { state: { status: "ready", reports: [draftingReport] } },
+	play: async ({ canvas, args }) => {
+		await expect(canvas.getByText("Drafting")).toBeVisible();
+		await expect(canvas.getByText(/An AI model is drafting the issue\. Started/u)).toBeVisible();
+		await expect(canvas.getByText(/If the draft is not ready by about/u)).toHaveTextContent(
+			/your report goes on as written and does not become public\.$/u,
+		);
+		await expect(
+			canvas.getByText(
+				/^Once drafted, it can become a public issue at about \d{1,2}:\d{2} [ap]m unless you keep it private\.$/u,
+			),
+		).toBeVisible();
+		await expect(canvas.queryByRole("button", { name: "Edit" })).toBeNull();
+		await userEvent.click(canvas.getByRole("button", { name: "Keep private" }));
+		await expect(args.onKeepPrivate).toHaveBeenCalledWith(draftingReport);
+	},
+};
+
+/** The model is busy with other work: the report says so, and still names when it goes on. */
+export const WaitingForModel: Story = {
+	args: { state: { status: "ready", reports: [waitingForModelReport] } },
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText("Drafting")).toBeVisible();
+		await expect(
+			canvas.getByText(
+				/The AI model is busy with other work, so the draft waits for it\. Started/u,
+			),
+		).toBeVisible();
+		await expect(canvas.getByText(/If the draft is not ready by about/u)).toHaveTextContent(
+			/your report goes on as written\.$/u,
+		);
+		await expect(canvas.queryByText(/public/u)).toBeNull();
+	},
+};
+
+/** Filing is out of the person's hands: no change is offered while it reaches GitHub. */
+export const Filing: Story = {
+	args: { state: { status: "ready", reports: [filingReport] } },
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText("Filing")).toBeVisible();
+		await expect(canvas.queryByRole("button", { name: /private|Edit/u })).toBeNull();
+		await expect(canvas.queryByRole("switch")).toBeNull();
 	},
 };
 

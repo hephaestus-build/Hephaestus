@@ -7,6 +7,7 @@ const base = {
 	canEdit: false,
 	canMakePrivate: false,
 	canAllowPublic: false,
+	waitingForModel: false,
 } satisfies Partial<MyProductFeedback>;
 
 /** A public report in its hold, drafted, with both reverses open. */
@@ -34,11 +35,28 @@ export const draftingReport = {
 	id: "b1b1b1b1-0000-0000-0000-000000000002",
 	kind: "FEEDBACK",
 	message: "Let me pin the practices I am working on to the top of my page.",
-	createdAt: minutesBefore(0),
+	createdAt: minutesBefore(2),
 	state: "DRAFTING",
 	route: "PUBLIC",
+	filedAfter: minutesAfter(3),
+	draftingSince: minutesBefore(2),
+	draftDeadline: minutesAfter(10),
 	allowPublic: true,
 	canKeepPrivate: true,
+} satisfies MyProductFeedback;
+
+/** A private report whose draft waits for the model, which is busy with other work. */
+export const waitingForModelReport = {
+	...base,
+	id: "b1b1b1b1-0000-0000-0000-000000000010",
+	kind: "BUG",
+	message: "The weekly digest arrives twice on Mondays.",
+	createdAt: minutesBefore(4),
+	state: "DRAFTING",
+	route: "PRIVATE",
+	draftingSince: minutesBefore(4),
+	draftDeadline: minutesAfter(8),
+	waitingForModel: true,
 } satisfies MyProductFeedback;
 
 export const filingReport = {
@@ -129,6 +147,7 @@ export const stoppedReport = {
 export const myReports: MyProductFeedback[] = [
 	heldReport,
 	draftingReport,
+	waitingForModelReport,
 	filingReport,
 	publicIssue,
 	privateIssue,

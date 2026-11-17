@@ -18,10 +18,11 @@ export const REPORT_STATE_DEFS: StatusDefs<MyProductFeedback["state"]> = {
 		description: "Hephaestus prepares the issue from your report.",
 	},
 	HELD: {
-		label: "Waiting",
+		label: "Public soon",
 		icon: Clock,
 		badgeVariant: "outline",
-		description: "It waits a few minutes before it is filed, so you can still keep it private.",
+		description:
+			"Its issue is drafted. It waits a few minutes before it becomes public, so you can still keep it private or edit it.",
 	},
 	FILING: {
 		label: "Filing",

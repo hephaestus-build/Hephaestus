@@ -182,6 +182,7 @@ describe("product feedback that can become a public GitHub issue", () => {
 			canEdit: true,
 			canMakePrivate: false,
 			canAllowPublic: false,
+			waitingForModel: false,
 			...overrides,
 		} satisfies Wire<MyProductFeedback>;
 	}

@@ -4241,6 +4241,14 @@ export const FeedbackItemSchema = {
 			type: "string",
 			format: "date-time",
 		},
+		draftDeadline: {
+			type: "string",
+			format: "date-time",
+		},
+		draftingSince: {
+			type: "string",
+			format: "date-time",
+		},
 		id: {
 			type: "string",
 			format: "uuid",
@@ -4292,6 +4300,9 @@ export const FeedbackItemSchema = {
 		userAgent: {
 			type: "string",
 		},
+		waitingForModel: {
+			type: "boolean",
+		},
 		workspace: {
 			$ref: "#/components/schemas/FeedbackWorkspaceRef",
 		},
@@ -4306,6 +4317,7 @@ export const FeedbackItemSchema = {
 		"route",
 		"savedBeforeDisclosure",
 		"state",
+		"waitingForModel",
 	],
 } as const;
 
@@ -6779,6 +6791,12 @@ export const MyProductFeedbackSchema = {
 			type: "string",
 			format: "date-time",
 		},
+		draftDeadline: {
+			type: "string",
+			format: "date-time",
+			description:
+				"while a model drafts the report: about when it goes on without a draft, as written",
+		},
 		draftDescription: {
 			type: "string",
 			description: "the drafted main text the person can edit while the report is held",
@@ -6787,9 +6805,16 @@ export const MyProductFeedbackSchema = {
 			type: "string",
 			description: "the drafted title, while the report is held or once it is filed",
 		},
+		draftingSince: {
+			type: "string",
+			format: "date-time",
+			description: "while a model drafts the report: when its drafting started",
+		},
 		filedAfter: {
 			type: "string",
 			format: "date-time",
+			description:
+				"while the report drafts or is held for a public issue: the end of the time to keep it private",
 		},
 		id: {
 			type: "string",
@@ -6835,6 +6860,10 @@ export const MyProductFeedbackSchema = {
 		state: {
 			$ref: "#/components/schemas/FilingReportState",
 		},
+		waitingForModel: {
+			type: "boolean",
+			description: "the model is busy with other work, so the draft waits for it",
+		},
 	},
 	required: [
 		"allowPublic",
@@ -6848,6 +6877,7 @@ export const MyProductFeedbackSchema = {
 		"message",
 		"route",
 		"state",
+		"waitingForModel",
 	],
 } as const;
 
