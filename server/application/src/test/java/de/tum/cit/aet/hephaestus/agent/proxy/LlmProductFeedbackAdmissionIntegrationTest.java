@@ -71,8 +71,10 @@ class LlmProductFeedbackAdmissionIntegrationTest extends BaseIntegrationTest {
     }
 
     @ParameterizedTest
-    @EnumSource(AgentRunBand.class)
-    void shouldGrantAReviewOrTurnOfAnyBandWhenProductFeedbackWasQueuedFirst(AgentRunBand band) throws Exception {
+    @EnumSource(
+            value = AgentRunBand.class,
+            names = {"INTERACTIVE", "BATCH"})
+    void shouldGrantAReviewOrTurnOfAHigherBandWhenProductFeedbackWasQueuedFirst(AgentRunBand band) throws Exception {
         long pool = pool(1);
         var occupied = admit(first, pool, AgentRunBand.BATCH, 1L);
         var feedback = submit(first, pool, AgentRunBand.BACKGROUND, null);
@@ -87,6 +89,24 @@ class LlmProductFeedbackAdmissionIntegrationTest extends BaseIntegrationTest {
         assertThat(feedback.isDone()).isFalse();
         priorityGrant.close();
         assertThat(feedback.get(10, TimeUnit.SECONDS).isRevoked()).isFalse();
+    }
+
+    @Test
+    void shouldGrantProductFeedbackBeforeALaterBackgroundReviewCall() throws Exception {
+        long pool = pool(1);
+        var occupied = admit(first, pool, AgentRunBand.BATCH, 1L);
+        var feedback = submit(first, pool, AgentRunBand.BACKGROUND, null);
+        awaitWaiting(pool, null);
+        var review = submit(second, pool, AgentRunBand.BACKGROUND, 2L);
+        awaitWaiting(pool, 2L);
+
+        occupied.close();
+
+        var feedbackGrant = feedback.get(10, TimeUnit.SECONDS);
+        assertThat(feedbackGrant.isRevoked()).isFalse();
+        assertThat(review.isDone()).isFalse();
+        feedbackGrant.close();
+        assertThat(review.get(10, TimeUnit.SECONDS).isRevoked()).isFalse();
     }
 
     @Test

@@ -664,14 +664,18 @@ class LlmCallPermitsIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    void shouldLeaveNoWaitingRequestWhenABusyPoolDefersADraft() {
+    void shouldLeaveNoWaitingRequestWhenADraftStopsWaitingForABusyPool() {
         long pool = pool(1);
         var draft = new LlmCallPermits.Caller(null, UUID.randomUUID(), 1, null, null);
         try (var active = Objects.requireNonNull(
                 workerA.acquire(pool, AgentRunBand.INTERACTIVE, caller(1), () -> false, laterThanAnyTest()))) {
             assertThat(active.isRevoked()).isFalse();
-            assertThat(workerB.tryAcquireBackground(
-                            pool, draft, () -> false, Instant.now().plusSeconds(30)))
+            assertThat(workerB.acquire(
+                            pool,
+                            AgentRunBand.BACKGROUND,
+                            draft,
+                            () -> false,
+                            Instant.now().plusSeconds(1)))
                     .isNull();
             assertThat(rows.countActive(pool)).isEqualTo(1);
             assertThat(jdbc.queryForObject(
@@ -679,10 +683,6 @@ class LlmCallPermitsIntegrationTest extends BaseIntegrationTest {
                             Long.class,
                             pool))
                     .isZero();
-        }
-        try (var available = workerB.tryAcquireBackground(
-                pool, draft, () -> false, Instant.now().plusSeconds(30))) {
-            assertThat(available).isNotNull();
         }
     }
 
@@ -729,22 +729,57 @@ class LlmCallPermitsIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    void shouldGrantBackfillBeforeProductFeedbackOnRelease() {
+    void shouldGrantTheCallsBehindADraftThatWaitsForTheOneDraftInFlight() {
+        long pool = pool(3);
+        var draft = admit(
+                workerA, pool, AgentRunBand.BACKGROUND, new LlmCallPermits.Caller(null, UUID.randomUUID(), 1, null));
+        var occupied = admit(workerA, pool, AgentRunBand.BATCH, 1);
+        UUID nextDraft = UUID.randomUUID();
+        transactions.executeWithoutResult(status -> rows.enqueue(new LlmCallPermitRepository.Request(
+                nextDraft, pool, "remote-" + nextDraft, AgentRunBand.BACKGROUND, null, UUID.randomUUID(), 0, null)));
+        jdbc.update(
+                "UPDATE llm_call_permit SET acquired_at=clock_timestamp()-make_interval(secs => ?) WHERE id=?",
+                LlmCallPermitsTestFixtures.PERMIT_AGING.toSeconds() + 1,
+                nextDraft);
+        UUID review = waitingCall(pool, AgentRunBand.BACKGROUND, 2, UUID.randomUUID(), Duration.ZERO);
+
+        occupied.close();
+
+        // The aged draft sorts first, but one draft is in flight: the review behind it gets the slot.
+        assertThat(state(review)).isEqualTo("ACTIVE");
+        assertThat(state(nextDraft)).isEqualTo("WAITING");
+        draft.close();
+        assertThat(state(nextDraft)).isEqualTo("ACTIVE");
+    }
+
+    @Test
+    void shouldGrantAWaitingDraftOnceItHasWaitedThePermitAgingWhenReviewCallsKeepArriving() {
         long pool = pool(1);
-        var active = admit(workerA, pool, AgentRunBand.INTERACTIVE, 1);
-        UUID feedback = UUID.randomUUID();
-        UUID review = UUID.randomUUID();
-        transactions.executeWithoutResult(status -> {
-            rows.enqueue(new LlmCallPermitRepository.Request(
-                    feedback, pool, "feedback", AgentRunBand.BACKGROUND, null, UUID.randomUUID(), 0, null));
-            rows.enqueue(new LlmCallPermitRepository.Request(
-                    review, pool, "review", AgentRunBand.BACKGROUND, 2L, UUID.randomUUID(), 0, null));
-        });
+        var occupied = admit(workerA, pool, AgentRunBand.BATCH, 1);
+        UUID draft = UUID.randomUUID();
+        transactions.executeWithoutResult(status -> rows.enqueue(new LlmCallPermitRepository.Request(
+                draft, pool, "remote-" + draft, AgentRunBand.BACKGROUND, null, UUID.randomUUID(), 0, null)));
+        UUID review = waitingCall(pool, AgentRunBand.BATCH, 2, UUID.randomUUID(), Duration.ZERO);
 
-        active.close();
+        occupied.close();
 
-        assertThat(rows.findById(review).orElseThrow().getState()).isEqualTo(LlmCallPermitState.ACTIVE);
-        assertThat(rows.findById(feedback).orElseThrow().getState()).isEqualTo(LlmCallPermitState.WAITING);
+        // While the draft is fresh, review calls go first: they are batch, the draft is background.
+        assertThat(state(review)).isEqualTo("ACTIVE");
+        assertThat(state(draft)).isEqualTo("WAITING");
+        transactions.executeWithoutResult(status -> rows.release(review, "remote-" + review));
+        var next = admit(workerA, pool, AgentRunBand.BATCH, 1);
+        assertThat(state(draft)).isEqualTo("WAITING");
+        jdbc.update(
+                "UPDATE llm_call_permit SET acquired_at=clock_timestamp()-make_interval(secs => ?) WHERE id=?",
+                LlmCallPermitsTestFixtures.PERMIT_AGING.toSeconds() + 1,
+                draft);
+        UUID later = waitingCall(pool, AgentRunBand.BATCH, 2, UUID.randomUUID(), Duration.ZERO);
+
+        next.close();
+
+        // Aged into the batch band, the draft goes before the review call that arrived after it.
+        assertThat(state(draft)).isEqualTo("ACTIVE");
+        assertThat(state(later)).isEqualTo("WAITING");
     }
 
     @Test

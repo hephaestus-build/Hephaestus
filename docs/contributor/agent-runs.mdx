@@ -259,8 +259,8 @@ The refusal reaches the caller as the provider's own answer, with its status, in
 A call that ends while it waits gets a capacity refusal. Hephaestus records this as its own stop, and it says nothing about the reviewed work.
 [Decisions and withholdings](./practice-review-pipeline#decisions-and-withholdings) explains how a stop affects the feedback.
 
-Product feedback is a background call.
-It starts only when no other call waits in that endpoint pool, whatever the band of that call.
+Product feedback is a background call, and it waits in its endpoint pool like any other background call.
+It waits until its call deadline, and it ages like other background calls, so review calls that keep arriving cannot starve it.
 At most one drafting call can be active in each pool, and it cannot use the interactive reserve.
 A later call does not revoke an active draft: it can wait for that draft's transport to close.
 

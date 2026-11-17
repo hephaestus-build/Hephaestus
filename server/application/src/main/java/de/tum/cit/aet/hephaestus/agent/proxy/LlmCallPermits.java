@@ -212,21 +212,6 @@ public class LlmCallPermits {
      */
     public @Nullable Permit acquire(
             long poolId, AgentRunBand band, Caller caller, BooleanSupplier ended, @Nullable Instant deadline) {
-        return acquire(poolId, band, caller, ended, deadline, true);
-    }
-
-    /** One fair admission round for a draft; a busy pool leaves the outbox free to execute other actions. */
-    public @Nullable Permit tryAcquireBackground(long poolId, Caller caller, BooleanSupplier ended, Instant deadline) {
-        return acquire(poolId, AgentRunBand.BACKGROUND, caller, ended, deadline, false);
-    }
-
-    private @Nullable Permit acquire(
-            long poolId,
-            AgentRunBand band,
-            Caller caller,
-            BooleanSupplier ended,
-            @Nullable Instant deadline,
-            boolean wait) {
         if (caller.workspaceId() == null && band != AgentRunBand.BACKGROUND)
             throw new IllegalArgumentException(
                     "A call without a workspace is product feedback, in the background band");
@@ -267,7 +252,7 @@ public class LlmCallPermits {
                 }
                 admit(poolId, arrived);
                 arrived = false;
-                admitted = wait ? waiter.awaitGrant() : waiter.granted.getNow(null);
+                admitted = waiter.awaitGrant();
                 if (admitted != null) {
                     meters.pool(admitted.pool).granted(band);
                     meters.pool(admitted.pool).waited(band, "capacity", System.nanoTime() - began);
@@ -275,7 +260,7 @@ public class LlmCallPermits {
                     handedOff = result != null;
                     return result;
                 }
-                if (!wait || Thread.currentThread().isInterrupted()) return null;
+                if (Thread.currentThread().isInterrupted()) return null;
             }
             return null;
         } finally {
