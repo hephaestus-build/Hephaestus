@@ -238,7 +238,8 @@ public class ResultAdmissionService {
             owned.setAdmissionAttempt(identity.attempt());
             staging.retainSealBasis(identity, owned, digest, staged);
             jobs.saveAndFlush(owned);
-            // Only staged candidates reach the seal, so an admitted result is one an earlier attempt staged. A candidate
+            // Only staged candidates reach the seal, so an admitted result is one an earlier attempt staged. A
+            // candidate
             // can survive the copy check and still be withheld by the seal, for example for its processing policy.
             return new Sealed(owned, !receipt.resultIds().isEmpty());
         }));
