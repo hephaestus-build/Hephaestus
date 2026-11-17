@@ -32,6 +32,7 @@ import de.tum.cit.aet.hephaestus.practices.result.Freshness;
 import de.tum.cit.aet.hephaestus.practices.result.PracticeGroupStandingService;
 import de.tum.cit.aet.hephaestus.practices.result.PracticeStandingService;
 import de.tum.cit.aet.hephaestus.practices.result.ResultRepository;
+import de.tum.cit.aet.hephaestus.practices.result.ResultTestFixtures;
 import de.tum.cit.aet.hephaestus.practices.result.ResultView;
 import de.tum.cit.aet.hephaestus.practices.result.ResultViewQuery;
 import de.tum.cit.aet.hephaestus.practices.result.ResultVisibilityPolicy;
@@ -152,7 +153,7 @@ class PracticesAcrossWorkspaceServiceTest {
                                     && !r.recordedAt().isBefore(since))
                             .toList();
                 });
-        when(views.views(eq(1L), anyCollection())).thenAnswer(i -> {
+        when(views.viewsOnDemand(eq(1L), anyCollection())).thenAnswer(i -> {
             Collection<ResultFacts> rows = i.getArgument(1);
             var ids = rows.stream().map(ResultFacts::id).toList();
             return data.stream().filter(v -> ids.contains(v.result().id())).toList();
@@ -311,7 +312,7 @@ class PracticesAcrossWorkspaceServiceTest {
                 practice.getCurrentVersion(),
                 base.review(),
                 base.item(),
-                Freshness.current(null),
+                ResultTestFixtures.fixedFreshness(Freshness.current(null)),
                 sealedFeedbackMode));
     }
 

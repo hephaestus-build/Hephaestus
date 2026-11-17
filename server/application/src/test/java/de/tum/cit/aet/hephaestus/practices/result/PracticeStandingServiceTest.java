@@ -81,7 +81,7 @@ class PracticeStandingServiceTest {
                         : List.of(data.getFirst().practice()));
         when(results.forDevelopersSince(eq(1L), anyCollection(), any(Instant.class), anyBoolean()))
                 .thenAnswer(i -> data.stream().map(ResultView::result).toList());
-        when(views.views(eq(1L), anyCollection())).thenAnswer(i -> {
+        when(views.viewsOnDemand(eq(1L), anyCollection())).thenAnswer(i -> {
             Collection<ResultFacts> rows = i.getArgument(1);
             var ids = rows.stream().map(ResultFacts::id).toList();
             return data.stream().filter(v -> ids.contains(v.result().id())).toList();
@@ -110,6 +110,43 @@ class PracticeStandingServiceTest {
                     Collection<ResultFacts> rows = i.getArgument(1);
                     return rows.stream().map(ResultFacts::id).collect(Collectors.toSet());
                 });
+    }
+
+    @Test
+    void shouldQuoteTheNextCurrentProblemWhenTheFirstOneReadsStale() {
+        for (long day = 1; day <= 6; day++) add(day, ResultOutcome.NOT_MET);
+        var first = card().toWorkOn().getFirst().resultId();
+        withFreshness(first, Freshness.stale(null));
+
+        var quoted = card().toWorkOn().stream()
+                .map(PracticeStandingResultDTO::resultId)
+                .toList();
+        assertThat(quoted).hasSize(5).doesNotContain(first);
+    }
+
+    @Test
+    void shouldNotQuoteAStrengthWhoseWorkCannotBeRead() {
+        for (long day = 1; day <= 3; day++) add(day, ResultOutcome.MET);
+        var unreadable = data.getFirst().result().id();
+        withFreshness(unreadable, Freshness.recordMissing());
+
+        assertThat(card().strengths())
+                .extracting(PracticeStandingResultDTO::resultId)
+                .hasSize(2)
+                .doesNotContain(unreadable);
+    }
+
+    @Test
+    void shouldLeaveAStaleResultOutOfTheStandingAndTheQuotesOfModelContext() {
+        add(1, ResultOutcome.NOT_MET);
+        add(2, ResultOutcome.MET);
+        var stale = data.getFirst().result().id();
+        withFreshness(stale, Freshness.stale(null));
+
+        var standing = only(
+                service.getProcessingStandingSnapshots(1L, 7L, List.of(now)).getFirst());
+        assertThat(standing.evidence()).extracting(view -> view.result().id()).doesNotContain(stale);
+        assertThat(standing.dto().toWorkOn()).isEmpty();
     }
 
     @Test
@@ -181,7 +218,7 @@ class PracticeStandingServiceTest {
                         latest.version(),
                         latest.review(),
                         prior.item(),
-                        Freshness.current(null),
+                        ResultTestFixtures.fixedFreshness(Freshness.current(null)),
                         latest.sealedFeedbackMode()));
         assertThat(card().toWorkOn()).isEmpty();
         assertThat(card().strengths()).hasSize(1);
@@ -420,7 +457,7 @@ class PracticeStandingServiceTest {
                         null,
                         view.review(),
                         view.item(),
-                        Freshness.current(null),
+                        ResultTestFixtures.fixedFreshness(Freshness.current(null)),
                         view.sealedFeedbackMode()));
 
         assertThat(card().basis()).isEqualTo(StandingBasis.EARLIER_REVIEWS_CRITERIA_UNKNOWN);
@@ -552,13 +589,7 @@ class PracticeStandingServiceTest {
 
     private static ResultView sealedIn(ResultView view, FeedbackMode mode) {
         return new ResultView(
-                view.result(),
-                view.practice(),
-                view.version(),
-                view.review(),
-                view.item(),
-                view.sourceFreshness(),
-                mode);
+                view.result(), view.practice(), view.version(), view.review(), view.item(), view.freshness(), mode);
     }
 
     // A result the cutover carried over from the earlier model: kept as recorded, without current proof.
@@ -572,7 +603,24 @@ class PracticeStandingServiceTest {
                         view.version(),
                         view.review(),
                         view.item(),
-                        Freshness.current(null),
+                        ResultTestFixtures.fixedFreshness(Freshness.current(null)),
+                        view.sealedFeedbackMode()));
+    }
+
+    private void withFreshness(UUID resultId, Freshness freshness) {
+        var view = data.stream()
+                .filter(candidate -> candidate.result().id().equals(resultId))
+                .findFirst()
+                .orElseThrow();
+        data.set(
+                data.indexOf(view),
+                new ResultView(
+                        view.result(),
+                        view.practice(),
+                        view.version(),
+                        view.review(),
+                        view.item(),
+                        ResultTestFixtures.fixedFreshness(freshness),
                         view.sealedFeedbackMode()));
     }
 

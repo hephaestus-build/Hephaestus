@@ -16,7 +16,6 @@ import de.tum.cit.aet.hephaestus.practices.result.trend.PracticeTrendService;
 import de.tum.cit.aet.hephaestus.practices.result.trend.WorkResolution;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewOrder;
 import de.tum.cit.aet.hephaestus.practices.spi.CurrentDeveloperLookup;
-import de.tum.cit.aet.hephaestus.practices.spi.Currentness;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackMode;
 import de.tum.cit.aet.hephaestus.practices.spi.PracticeStanding;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultEndReason;
@@ -157,7 +156,7 @@ public class PracticeStandingService {
         List<ResultFacts> rows = results.forDevelopersSince(workspaceId, List.of(developerId), since, false);
         return new History(
                 since,
-                resultViewQuery.views(workspaceId, rows),
+                resultViewQuery.viewsOnDemand(workspaceId, rows),
                 visibilityPolicy.permitsHistory(workspaceId, rows, purpose));
     }
 
@@ -263,7 +262,7 @@ public class PracticeStandingService {
         // Ended rows load too: the live run a requested review replaced still stands, and verdictless rows
         // distinguish NO_OPPORTUNITY from NOT_OBSERVED.
         return resultViewQuery
-                .views(workspaceId, results.forDevelopersSince(workspaceId, developerIds, since, false))
+                .viewsOnDemand(workspaceId, results.forDevelopersSince(workspaceId, developerIds, since, false))
                 .stream()
                 .filter(view -> !view.result().recordedAt().isAfter(until))
                 .toList();
@@ -299,21 +298,27 @@ public class PracticeStandingService {
 
     /**
      * The rows each use may read: a standing reads {@link ResultVisibilityPolicy#permitsStandingAt}, a quoted
-     * result also needs {@link ResultVisibilityPolicy#permitsAt}, which keeps every delivery control.
+     * result also needs {@link ResultVisibilityPolicy#permitsAt}, which keeps every delivery control, and current
+     * sources, which {@link #feedback} checks only for the results it would quote.
      */
     private record StandingAccess(Set<UUID> quotable, Set<UUID> standing) {}
 
     private StandingAccess readable(
             Long workspaceId, List<ResultView> window, StandingRows rows, Instant edge, SourceReadAudience audience) {
-        Set<UUID> quotable = visibilityPolicy.permitsAt(workspaceId, rowsOf(window), purpose(audience), edge);
-        var currentSources = window.stream()
-                .filter(view -> view.sourceFreshness().currentness() == Currentness.CURRENT)
+        Set<UUID> permitted = visibilityPolicy.permitsAt(workspaceId, rowsOf(window), purpose(audience), edge);
+        if (audience != SourceReadAudience.PROCESSING) {
+            return new StandingAccess(permitted, standingAccess(workspaceId, rows, edge));
+        }
+        // Model context stands only on current proof, so every permitted row's sources are read, in one batch.
+        var permittedViews = window.stream()
+                .filter(view -> permitted.contains(view.result().id()))
+                .toList();
+        SourceFreshness.prefetch(permittedViews);
+        Set<UUID> current = permittedViews.stream()
+                .filter(ResultView::hasCurrentSources)
                 .map(view -> view.result().id())
                 .collect(Collectors.toSet());
-        quotable = quotable.stream().filter(currentSources::contains).collect(Collectors.toSet());
-        return new StandingAccess(
-                quotable,
-                audience == SourceReadAudience.PROCESSING ? quotable : standingAccess(workspaceId, rows, edge));
+        return new StandingAccess(current, current);
     }
 
     private static SourceUsePurpose purpose(SourceReadAudience audience) {
@@ -485,11 +490,24 @@ public class PracticeStandingService {
         Map<String, List<ResultView>> live =
                 byPractice(rows.live().stream().filter(view -> !view.result().migratedHistory()), readable.standing());
         int window = practiceTrendService.standingWindow();
+        Map<String, PracticeEvidence> reviewedBySlug = new LinkedHashMap<>();
+        for (Practice practice : eligibility.practices()) {
+            reviewedBySlug.put(
+                    practice.getSlug(), PracticeEvidence.classify(current.getOrDefault(practice.getSlug(), List.of())));
+        }
+        // Reading whether a result's sources are current reads its work, so only the results a standing could
+        // quote are read, all in one batch. A candidate whose sources changed makes room for the next, read then.
+        SourceFreshness.prefetch(reviewedBySlug.values().stream()
+                .flatMap(evidence -> evidence.quoteCandidates(readable.quotable()))
+                .toList());
+        SourceFreshness.prefetch(reviewedBySlug.values().stream()
+                .flatMap(evidence -> evidence.quoteReserve(readable.quotable()))
+                .toList());
 
         List<StandingSnapshot.PracticeStandingSnapshot> standings = new ArrayList<>();
         for (Practice practice : eligibility.practices()) {
             String slug = practice.getSlug();
-            PracticeEvidence reviewed = PracticeEvidence.classify(current.getOrDefault(slug, List.of()));
+            PracticeEvidence reviewed = Objects.requireNonNull(reviewedBySlug.get(slug));
             PracticeEvidence recorded = PracticeEvidence.classify(earlier.getOrDefault(slug, List.of()));
             List<ResultView> liveRuns = live.getOrDefault(slug, List.of());
             PracticeTrend trend = practiceTrendService.calculateSelectedPractice(liveRuns, since);
@@ -612,6 +630,7 @@ public class PracticeStandingService {
             List<ResultView> practiceResults, int cap, Set<UUID> quotable, Map<UUID, String> deliveredGuidance) {
         return practiceResults.stream()
                 .filter(view -> quotable.contains(view.result().id()))
+                .filter(ResultView::hasCurrentSources)
                 .limit(cap)
                 .map(view -> new PracticeStandingResultDTO(
                         view.result().id(),
@@ -632,6 +651,34 @@ public class PracticeStandingService {
 
     private record PracticeEvidence(
             List<ResultView> problems, List<ResultView> strengths, List<ResultView> withoutVerdict) {
+        /** The first problems and strengths that a standing could quote, before their sources are checked. */
+        Stream<ResultView> quoteCandidates(Set<UUID> quotable) {
+            return Stream.concat(
+                    quotable(problems, quotable).limit(MAX_FEEDBACK_PER_PRACTICE),
+                    quotable(strengths, quotable).limit(MAX_STRENGTHS_PER_PRACTICE));
+        }
+
+        /**
+         * The rest of a list whose first candidates did not all read current, so the next ones are read in a second
+         * batch rather than one at a time. Asked only after {@link #quoteCandidates} was read.
+         */
+        Stream<ResultView> quoteReserve(Set<UUID> quotable) {
+            return Stream.concat(
+                    reserve(quotable(problems, quotable).toList(), MAX_FEEDBACK_PER_PRACTICE),
+                    reserve(quotable(strengths, quotable).toList(), MAX_STRENGTHS_PER_PRACTICE));
+        }
+
+        private static Stream<ResultView> quotable(List<ResultView> views, Set<UUID> quotable) {
+            return views.stream().filter(view -> quotable.contains(view.result().id()));
+        }
+
+        private static Stream<ResultView> reserve(List<ResultView> candidates, int cap) {
+            var first = candidates.subList(0, Math.min(cap, candidates.size()));
+            return first.stream().allMatch(ResultView::hasCurrentSources)
+                    ? Stream.empty()
+                    : candidates.subList(first.size(), candidates.size()).stream();
+        }
+
         static PracticeEvidence classify(List<ResultView> group) {
             Map<ResultOutcome, List<ResultView>> byOutcome = group.stream()
                     .collect(Collectors.groupingBy(view -> view.result().outcome()));

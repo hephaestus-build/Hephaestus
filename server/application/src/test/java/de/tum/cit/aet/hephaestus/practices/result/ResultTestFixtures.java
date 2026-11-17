@@ -5,7 +5,9 @@ import de.tum.cit.aet.hephaestus.practices.model.ResultFacts;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultEndReason;
 import java.time.Instant;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
+import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 
 public final class ResultTestFixtures {
@@ -39,6 +41,15 @@ public final class ResultTestFixtures {
         return rows.stream().map(Result::facts).toList();
     }
 
+    /** A freshness handle that answers {@code freshness} for every result, for a view built without a read. */
+    public static SourceFreshness fixedFreshness(Freshness freshness) {
+        return new SourceFreshness(rows -> {
+            var all = new HashMap<UUID, Freshness>();
+            rows.forEach(row -> all.put(row.id(), freshness));
+            return all;
+        });
+    }
+
     /** {@code view} with its result ended for {@code reason} at {@code at}. */
     public static ResultView ended(ResultView view, ResultEndReason reason, Instant at) {
         var f = view.result();
@@ -48,7 +59,7 @@ public final class ResultTestFixtures {
                 view.version(),
                 view.review(),
                 view.item(),
-                view.sourceFreshness(),
+                view.freshness(),
                 view.sealedFeedbackMode());
     }
 

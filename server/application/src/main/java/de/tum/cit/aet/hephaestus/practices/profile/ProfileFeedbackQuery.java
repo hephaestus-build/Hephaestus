@@ -62,7 +62,8 @@ public class ProfileFeedbackQuery {
         var raw = feedbackEvidence.visibleEvidence(ws, ids);
         var changed = feedbackEvidence.practiceChangedAt(raw);
         var viewById = new HashMap<UUID, ResultView>();
-        views.views(
+        // The changes name the evidence's work and practice; none asks whether its sources are current.
+        views.viewsOnDemand(
                         ws,
                         raw.values().stream()
                                 .flatMap(List::stream)

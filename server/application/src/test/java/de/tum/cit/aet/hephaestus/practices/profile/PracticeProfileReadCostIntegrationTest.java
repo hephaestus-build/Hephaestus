@@ -2,6 +2,8 @@ package de.tum.cit.aet.hephaestus.practices.profile;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.clearInvocations;
+import static org.mockito.Mockito.mockingDetails;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.core.auth.domain.Identity;
@@ -177,6 +179,25 @@ class PracticeProfileReadCostIntegrationTest extends BaseIntegrationTest {
         assertThat(many).isEqualTo(few);
     }
 
+    /**
+     * Reading whether a result's sources are current reads the work behind it from the mirror. A standing quotes at
+     * most five problems and three strengths of a practice, so it reads the work behind those, not behind every result
+     * of its look-back. Each piece of work here holds one result, so a read of every result would ask about all 24.
+     */
+    @Test
+    void shouldReadTheWorkBehindOnlyTheResultsAStandingCouldQuote() {
+        works = IntStream.range(0, 24).mapToObj(index -> onNewWork()).toList();
+        seed(works.size());
+
+        var asked = workReads();
+        // A standing quotes at most eight results of the one practice.
+        assertThat(asked.get("standings")).isPositive().isLessThanOrEqualTo(8);
+        assertThat(asked.get("group standings")).isPositive().isLessThanOrEqualTo(8);
+        // The overview reads two such snapshots. It also asks whether later work resolved each piece of feedback,
+        // which needs current proof of every later result of its practice, once for each edge of the window.
+        assertThat(asked.get("overview")).isPositive().isLessThanOrEqualTo(2L * works.size() + 2 * 8);
+    }
+
     @Test
     void shouldReadTheDevelopersResultHistoryOnceForTheOverview() {
         seed(2 * works.size());
@@ -295,6 +316,31 @@ class PracticeProfileReadCostIntegrationTest extends BaseIntegrationTest {
             jdbc.update("UPDATE feedback SET state='DELIVERED',delivered_at=created_at WHERE id=?", piece);
         }
         return costs;
+    }
+
+    /** How many times each standing read asks the mirror for the current fingerprints of a piece of work. */
+    private Map<String, Long> workReads() {
+        var context = WorkspaceContext.fromWorkspace(scenario.workspace(), Set.of(), null);
+        var shown = groups.findByWorkspaceIdAndShownToDevelopersTrueOrderByPositionAscNameAsc(
+                scenario.workspace().getId());
+        Map<String, Runnable> reads = new LinkedHashMap<>();
+        reads.put("overview", () -> overview.getOverview(context));
+        reads.put("standings", () -> standings.getStandings(scenario.workspace().getId()));
+        reads.put(
+                "group standings",
+                () -> groupStandings.getGroupStandings(scenario.workspace().getId(), shown));
+        Map<String, Long> counts = new LinkedHashMap<>();
+        reads.forEach((name, read) -> {
+            clearInvocations(sourceFingerprints);
+            read.run();
+            counts.put(
+                    name,
+                    mockingDetails(sourceFingerprints).getInvocations().stream()
+                            .filter(invocation ->
+                                    invocation.getMethod().getName().equals("fingerprints"))
+                            .count());
+        });
+        return counts;
     }
 
     private <T> long cost(Supplier<T> read, Consumer<T> check) {

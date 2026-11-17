@@ -40,11 +40,19 @@ public class ResultViewQuery {
 
     public Optional<ResultView> latestForDeveloper(long workspaceId, long developerId) {
         return results.findFirstByWorkspaceIdAndDeveloperIdOrderByRecordedAtDescIdDesc(workspaceId, developerId)
-                .map(result -> views(workspaceId, List.of(result.facts())).getFirst());
+                .map(result -> views(workspaceId, List.of(result.facts()), true).getFirst());
     }
 
-    /** Views with the feedback mode that each observation was sealed in, for standing and every developer read. */
+    /** Views with the feedback mode that each observation was sealed in, for every developer read. */
     public List<ResultView> views(long workspaceId, Collection<ResultFacts> results) {
+        return prefetched(views(workspaceId, results, true));
+    }
+
+    /**
+     * Views whose freshness is read on first use, for a read that asks about few of them or none: a standing asks only
+     * about the results it quotes. A look-back of many results then does not read the work behind each one.
+     */
+    public List<ResultView> viewsOnDemand(long workspaceId, Collection<ResultFacts> results) {
         return views(workspaceId, results, true);
     }
 
@@ -53,7 +61,13 @@ public class ResultViewQuery {
      * never asks whether one counts, so it skips the feedback-mode read: each view's mode is null.
      */
     public List<ResultView> operatorViews(long workspaceId, Collection<ResultFacts> results) {
-        return views(workspaceId, results, false);
+        return prefetched(views(workspaceId, results, false));
+    }
+
+    // A read that shows each view's freshness reads it for all of them at once, not once per view.
+    private static List<ResultView> prefetched(List<ResultView> views) {
+        SourceFreshness.prefetch(views);
+        return views;
     }
 
     private List<ResultView> views(long workspaceId, Collection<ResultFacts> results, boolean sealedFeedbackModes) {
@@ -97,7 +111,7 @@ public class ResultViewQuery {
                 .filter(entry -> entry.getValue().active())
                 .collect(Collectors.toMap(
                         Map.Entry::getKey, entry -> entry.getValue().ref()));
-        var sourceStates = freshness.freshness(workspaceId, results, activeItems);
+        var sourceStates = new SourceFreshness(rows -> freshness.freshness(workspaceId, rows, activeItems));
         var sealedModes = new HashMap<ReviewPractice.Id, FeedbackMode>();
         if (sealedFeedbackModes)
             reviewPractices
@@ -111,7 +125,7 @@ public class ResultViewQuery {
                         versionById.get(result.practiceVersionId()),
                         Objects.requireNonNull(reviewById.get(result.reviewId())),
                         Objects.requireNonNull(itemById.get(result.itemId())).reference(),
-                        Objects.requireNonNull(sourceStates.get(result.id())),
+                        sourceStates,
                         sealedModes.get(new ReviewPractice.Id(result.reviewId(), result.practiceId()))))
                 .toList();
     }

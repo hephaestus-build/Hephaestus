@@ -152,18 +152,23 @@ public class PracticePageFeedbackBasis {
             return Map.of();
         }
         var developers = withEvidence.stream().map(Feedback::getDeveloperId).collect(Collectors.toSet());
-        var later = basis.findLaterResults(workspaceId, developers, oldest.get(), now);
-        var allowed = visibility.permitsAll(
-                workspaceId, later.stream().map(Result::facts).toList(), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY);
         var practiceIds = withEvidence.stream()
                 .map(piece -> Objects.requireNonNull(evidence.get(piece.getId())))
                 .filter(support -> !support.isEmpty())
                 .map(support -> support.getFirst().getPracticeId())
                 .collect(Collectors.toSet());
-        var opportunities = views.views(
+        // Only later results of the feedback's practices can resolve it. Checking a result reads the work behind it,
+        // so results of other practices are left out before the check, not after it.
+        var later = basis.findLaterResults(workspaceId, developers, oldest.get(), now).stream()
+                .filter(row -> practiceIds.contains(row.getPracticeId()))
+                .toList();
+        var allowed = visibility.permitsAll(
+                workspaceId, later.stream().map(Result::facts).toList(), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY);
+        // The check above already required current sources; the resolution reads no freshness of its own.
+        var opportunities = views.viewsOnDemand(
                 workspaceId,
                 later.stream()
-                        .filter(row -> allowed.contains(row.getId()) && practiceIds.contains(row.getPracticeId()))
+                        .filter(row -> allowed.contains(row.getId()))
                         .map(Result::facts)
                         .toList());
         Map<UUID, WorkResolution> resolved = new LinkedHashMap<>();
