@@ -942,10 +942,11 @@ A changed workspace policy cannot approve an older proposal implicitly.
 The send and the feedback gate read the work through its item source before they write.
 The source gives the reason when it cannot read the work, and each reason has its own stop reason.
 Removed work stops as `ITEM_GONE`.
-This covers deleted work, work whose content was erased, and work that this server no longer stores.
-An example is a document in a removed Outline collection.
+Only the provider says that work is removed: deleted GitHub or GitLab work, an Outline tombstone, or a Slack thread with no live message.
 
 Work that this server may no longer read stops as `ITEM_NOT_VISIBLE`.
+This covers work that this server no longer stores or whose stored words were erased.
+An example is a document in a removed Outline collection.
 Work whose consent ended stops as `CONSENT_WITHHELD`.
 A permission that this server lost while it still stores the work is never recorded as removed work.
 

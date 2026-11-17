@@ -146,18 +146,18 @@ public class ThreadItemSource implements ItemSource, ItemSourceAccess {
     }
 
     /**
-     * A thread with no row, no message left or no live message is removed. A paused channel or a participant whose
-     * consent ended withholds it, and a disconnected workspace cannot see it. Revoking a channel's consent deletes its
-     * threads, so such a thread reads as removed.
+     * A thread with no live message is removed. A paused channel or a participant whose consent ended withholds it. A
+     * disconnected workspace cannot see it, and neither can this server once it no longer stores the thread or its
+     * words: revoking a channel's consent, retention and erasure delete them, but the thread may still be in Slack.
      */
     private ItemSnapshot currentSnapshot(ItemRef item) {
         Long sourceId = item.sourceId();
         if (!supports(item) || sourceId == null) throw invisible();
         var stored = threads.findByWorkspaceIdAndId(item.workspaceId(), sourceId)
-                .orElseThrow(() -> new ItemCaptureException(ItemCaptureCode.ITEM_REMOVED, "Thread was removed"));
-        // Erasing the person who wrote every message clears the thread's last message: its content is gone.
+                .orElseThrow(() -> new ItemCaptureException(ItemCaptureCode.ITEM_NOT_VISIBLE, "Thread is no longer stored"));
+        // Erasing the person who wrote every message clears the thread's last message: its stored words are gone.
         if (stored.getLastTs() == null)
-            throw new ItemCaptureException(ItemCaptureCode.ITEM_REMOVED, "Thread has no messages left");
+            throw new ItemCaptureException(ItemCaptureCode.ITEM_NOT_VISIBLE, "Thread has no stored messages left");
         var thread = threads.findConsentedCandidateRow(item.workspaceId(), sourceId)
                 .orElseThrow(() -> new ItemCaptureException(
                         ItemCaptureCode.CONSENT_WITHHELD, "The channel's consent is not active"));
@@ -168,6 +168,9 @@ public class ThreadItemSource implements ItemSource, ItemSourceAccess {
             case CONSENT_NOT_ACTIVE ->
                 throw new ItemCaptureException(
                         ItemCaptureCode.CONSENT_WITHHELD, "A participant's consent is not active");
+            // The turn's current words come back with the next sync. Without them it reads as an empty reply.
+            case WORDS_ERASED ->
+                throw new ItemCaptureException(ItemCaptureCode.SOURCE_NOT_READY, "A turn's words are not stored yet");
             case READABLE -> {}
         }
         long providerId =

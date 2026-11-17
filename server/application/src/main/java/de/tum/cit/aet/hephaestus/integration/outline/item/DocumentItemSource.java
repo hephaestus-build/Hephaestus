@@ -128,15 +128,18 @@ public class DocumentItemSource implements ItemSource, ItemSourceAccess {
     }
 
     /**
-     * A tombstoned or missing document is removed; one this server may not read for its people or connection is not
-     * visible.
+     * Only Outline's tombstone says a document is gone. A document that is not stored at all left with its collection
+     * or connection, and one this server may not read for its people or connection is not visible.
      */
     private ItemSnapshot currentSnapshot(ItemRef item) {
         Long sourceId = item.sourceId();
         if (!supports(item) || sourceId == null)
             throw new ItemCaptureException(ItemCaptureCode.ITEM_NOT_VISIBLE, "Document is not available");
-        if (!documents.existsByWorkspaceIdAndIdAndDeletedAtIsNull(item.workspaceId(), sourceId))
-            throw new ItemCaptureException(ItemCaptureCode.ITEM_REMOVED, "Document was removed");
+        if (!documents.existsByWorkspaceIdAndIdAndDeletedAtIsNull(item.workspaceId(), sourceId)) {
+            if (documents.existsByWorkspaceIdAndIdAndDeletedAtIsNotNull(item.workspaceId(), sourceId))
+                throw new ItemCaptureException(ItemCaptureCode.ITEM_REMOVED, "Document was removed");
+            throw new ItemCaptureException(ItemCaptureCode.ITEM_NOT_VISIBLE, "Document is no longer stored");
+        }
         if (!permission.permits(item.workspaceId(), sourceId))
             throw new ItemCaptureException(ItemCaptureCode.ITEM_NOT_VISIBLE, "Document is not available");
         return documents
@@ -148,8 +151,9 @@ public class DocumentItemSource implements ItemSource, ItemSourceAccess {
 
     private ItemSnapshot snapshot(ItemRef item, OutlineDocument doc) {
         String hash = doc.getContentHash();
-        // A live document loses its content hash only when its person data is erased: its content is gone.
-        if (hash == null) throw new ItemCaptureException(ItemCaptureCode.ITEM_REMOVED, "Document content was erased");
+        // Erasure and a failed export both leave a live document without content: neither says the document is gone.
+        if (hash == null)
+            throw new ItemCaptureException(ItemCaptureCode.SOURCE_NOT_READY, "Document content is unavailable");
         var connection = connections
                 .findInWorkspace(item.workspaceId(), doc.getConnectionId())
                 .filter(row -> row.getKind() == IntegrationKind.OUTLINE && row.getState() == IntegrationState.ACTIVE)
@@ -195,10 +199,6 @@ public class DocumentItemSource implements ItemSource, ItemSourceAccess {
         return pinned;
     }
 
-    /**
-     * Why a document has no snapshot. A tombstone is Outline's answer that the document is gone, so it stops the review
-     * as removed work and never as missing evidence (ADR 0094 rule 9).
-     */
     @Override
     public JsonNode record(ItemSnapshot pinned, Map<String, byte[]> capturedFiles) {
         if (!supports(pinned.item())

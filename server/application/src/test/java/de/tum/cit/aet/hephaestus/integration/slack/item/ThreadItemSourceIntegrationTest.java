@@ -158,7 +158,7 @@ class ThreadItemSourceIntegrationTest extends BaseIntegrationTest {
                         fixture.item().sourceId(),
                         null,
                         null),
-                ItemCaptureCode.ITEM_REMOVED);
+                ItemCaptureCode.ITEM_NOT_VISIBLE);
     }
 
     @Test

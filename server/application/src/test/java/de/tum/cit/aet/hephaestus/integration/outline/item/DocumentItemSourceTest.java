@@ -153,16 +153,24 @@ class DocumentItemSourceTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldSayAnItemOwnedByAnotherWorkspaceIsRemovedThere() {
+    void shouldSayAnItemOwnedByAnotherWorkspaceIsNotVisibleThere() {
         readyDocument();
-        assertCode(new ItemRef(8L, 41L, DocumentEvents.DOCUMENT, 19L, null, null), ItemCaptureCode.ITEM_REMOVED);
+        assertCode(new ItemRef(8L, 41L, DocumentEvents.DOCUMENT, 19L, null, null), ItemCaptureCode.ITEM_NOT_VISIBLE);
     }
 
     @Test
     void shouldSayATombstonedDocumentIsRemovedNotInvisible() {
         readyDocument();
         when(documents.existsByWorkspaceIdAndIdAndDeletedAtIsNull(7L, 19L)).thenReturn(false);
+        when(documents.existsByWorkspaceIdAndIdAndDeletedAtIsNotNull(7L, 19L)).thenReturn(true);
         assertCode(item, ItemCaptureCode.ITEM_REMOVED);
+    }
+
+    @Test
+    void shouldSayADocumentNoLongerStoredIsNotVisibleNotRemoved() {
+        readyDocument();
+        when(documents.existsByWorkspaceIdAndIdAndDeletedAtIsNull(7L, 19L)).thenReturn(false);
+        assertCode(item, ItemCaptureCode.ITEM_NOT_VISIBLE);
     }
 
     @Test
@@ -180,10 +188,10 @@ class DocumentItemSourceTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldSayADocumentWhoseContentWasErasedIsRemoved() {
+    void shouldSayADocumentWithoutContentIsNotReadyNotRemoved() {
         readyDocument();
         document.setContentHash(null);
-        assertCode(item, ItemCaptureCode.ITEM_REMOVED);
+        assertCode(item, ItemCaptureCode.SOURCE_NOT_READY);
     }
 
     private void assertCode(ItemRef ref, ItemCaptureCode code) {

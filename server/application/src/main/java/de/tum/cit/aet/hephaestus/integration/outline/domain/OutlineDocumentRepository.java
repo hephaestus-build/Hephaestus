@@ -61,6 +61,8 @@ public interface OutlineDocumentRepository extends JpaRepository<OutlineDocument
 
     boolean existsByWorkspaceIdAndIdAndDeletedAtIsNull(Long workspaceId, Long id);
 
+    boolean existsByWorkspaceIdAndIdAndDeletedAtIsNotNull(Long workspaceId, Long id);
+
     long deleteByWorkspaceId(Long workspaceId);
 
     /** One collection's live (non-tombstoned) document count — the single-row admin DTO figure. */

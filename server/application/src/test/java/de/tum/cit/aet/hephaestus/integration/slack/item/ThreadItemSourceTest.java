@@ -236,9 +236,9 @@ class ThreadItemSourceTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldSayAThreadFromAnotherWorkspaceIsRemovedThere() {
+    void shouldSayAThreadFromAnotherWorkspaceIsNotVisibleThere() {
         readyThread();
-        assertCode(new ItemRef(8L, 41L, ThreadEvents.THREAD, 19L, null, null), ItemCaptureCode.ITEM_REMOVED);
+        assertCode(new ItemRef(8L, 41L, ThreadEvents.THREAD, 19L, null, null), ItemCaptureCode.ITEM_NOT_VISIBLE);
     }
 
     @Test
@@ -256,6 +256,13 @@ class ThreadItemSourceTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldSayAThreadIsNotReadyWhenATurnsWordsWereErasedAgain() {
+        readyThread();
+        when(messages.countWordlessTurns(7L, "C1", "1700000000.000000")).thenReturn(1L);
+        assertCode(item, ItemCaptureCode.SOURCE_NOT_READY);
+    }
+
+    @Test
     void shouldSayAThreadWithAWithheldParticipantIsWithheld() {
         readyThread();
         when(messages.countReadableTurns(7L, "C1", "1700000000.000000")).thenReturn(1L);
@@ -270,21 +277,21 @@ class ThreadItemSourceTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldSayAThreadWithNoStoredRowIsRemoved() {
+    void shouldSayAThreadNoLongerStoredIsNotVisibleNotRemoved() {
         readyThread();
         when(threads.findByWorkspaceIdAndId(7L, 19L)).thenReturn(Optional.empty());
-        assertCode(item, ItemCaptureCode.ITEM_REMOVED);
+        assertCode(item, ItemCaptureCode.ITEM_NOT_VISIBLE);
     }
 
     @Test
-    void shouldSayAThreadWhoseMessagesWereAllErasedIsRemoved() {
+    void shouldSayAThreadWhoseMessagesWereAllErasedIsNotVisible() {
         readyThread();
         var erased = new SlackThread();
         erased.setWorkspaceId(7L);
         erased.setSlackChannelId("C1");
         erased.setSlackThreadTs("1700000000.000000");
         when(threads.findByWorkspaceIdAndId(7L, 19L)).thenReturn(Optional.of(erased));
-        assertCode(item, ItemCaptureCode.ITEM_REMOVED);
+        assertCode(item, ItemCaptureCode.ITEM_NOT_VISIBLE);
     }
 
     private void assertCode(ItemRef ref, ItemCaptureCode code) {
