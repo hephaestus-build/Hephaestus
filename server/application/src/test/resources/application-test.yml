@@ -52,6 +52,12 @@ spring:
                 jwt:
                     issuer-uri: http://localhost:8081/realms/test
 
+management:
+    metrics:
+        # Spring Boot adds each context's registries to Micrometer's static registry and never removes them. A
+        # registry leads back to its context, so every closed test context stayed in the heap.
+        use-global-registry: false
+
 # Disable workspace bootstrapping during tests to prevent API calls
 hephaestus:
     # The workspace MCP endpoint is on in the shared test context, so its tests reuse the cached context.

@@ -27,6 +27,9 @@ import org.springframework.test.util.AopTestUtils;
  *   <li>Liquibase's history service map, a process-wide singleton keyed by a database that holds a pooled connection.
  * </ul>
  *
+ * <p>Micrometer's static registry would hold each context too. The test profile keeps the registries out of it
+ * ({@code management.metrics.use-global-registry} in {@code application-test.yml}).
+ *
  * <p>A running application holds one context for its whole life and never pauses it, so this class stays in the test
  * tree.
  */
