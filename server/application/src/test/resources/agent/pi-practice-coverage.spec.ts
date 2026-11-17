@@ -6,7 +6,7 @@ import { test } from "node:test";
 
 import { PracticeCoverageLedger } from "../../../main/resources/agent/pi-practice-coverage.ts";
 
-void test("an abort after two practices leaves a complete atomic coverage snapshot", () => {
+void test("an abort after two practices leaves a complete coverage snapshot", () => {
 	const directory = mkdtempSync(nodePath.join(tmpdir(), "pi-practice-coverage-"));
 	try {
 		const eligible = ["a", "b", "c", "d"];
