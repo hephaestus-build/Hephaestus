@@ -193,9 +193,9 @@ class PracticeProfileReadCostIntegrationTest extends BaseIntegrationTest {
         // A standing quotes at most eight results of the one practice.
         assertThat(asked.get("standings")).isPositive().isLessThanOrEqualTo(8);
         assertThat(asked.get("group standings")).isPositive().isLessThanOrEqualTo(8);
-        // The overview also asks whether later work resolved each piece of feedback, which needs current proof of
-        // every later result of its practice, once for each edge of the window: at most twice per piece of work.
-        assertThat(asked.get("overview")).isPositive().isLessThanOrEqualTo(2L * works.size());
+        // The overview reads two such snapshots. It also asks whether later work resolved each piece of feedback,
+        // which needs current proof of every later result of its practice, once for each edge of the window.
+        assertThat(asked.get("overview")).isPositive().isLessThanOrEqualTo(2L * works.size() + 2 * 8);
     }
 
     @Test
