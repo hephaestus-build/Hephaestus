@@ -51,7 +51,6 @@ import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitor;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
-import de.tum.cit.aet.hephaestus.workspace.WorkspaceActorSelector;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Proxy;
 import java.time.Instant;
@@ -138,9 +137,6 @@ class MergeReadinessContentSourceIntegrationTest extends AbstractWorkspaceIntegr
 
     @Autowired
     private ConversationContextQueryRepository queryRepository;
-
-    @Autowired
-    private WorkspaceActorSelector actorSelector;
 
     @Autowired
     private TransactionManager transactionManager;
@@ -463,7 +459,6 @@ class MergeReadinessContentSourceIntegrationTest extends AbstractWorkspaceIntegr
                             }
                         });
         ProxyFactory transactional = new ProxyFactory(new MergeReadinessContentSource(
-                actorSelector,
                 reopenBeforeSecondPage,
                 work,
                 reviewRepository,

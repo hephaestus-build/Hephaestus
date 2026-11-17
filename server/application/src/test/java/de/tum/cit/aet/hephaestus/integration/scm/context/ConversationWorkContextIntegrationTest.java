@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.agent.context.providers.conversation.UserContentSource;
 import de.tum.cit.aet.hephaestus.agent.context.providers.conversation.WorkspaceContentSource;
+import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Identity;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityRepository;
 import de.tum.cit.aet.hephaestus.evidence.capture.ContentSource;
@@ -515,6 +516,28 @@ class ConversationWorkContextIntegrationTest extends AbstractWorkspaceIntegratio
         assertThat(activityPayload.path("status").asString()).isEqualTo("UNAVAILABLE");
         assertThat(authoredPayload.path("status").asString()).isEqualTo("UNAVAILABLE");
         assertThat(authoredPayload.path("pullRequests")).isEmpty();
+    }
+
+    @Test
+    void shouldSayEveryListIsUnknownNotEmptyForAnAccountWithoutALinkedIdentity() {
+        long unlinked = Objects.requireNonNull(accountRepository
+                .saveAndFlush(new Account("No linked identity"))
+                .getId());
+
+        List<JsonNode> payloads = List.of(
+                userContext.buildPayload(workspace.getId(), unlinked),
+                workspaceContext.buildPayload(workspace.getId(), unlinked),
+                activity.buildPayload(workspace.getId(), unlinked),
+                recentAuthoredWork.buildPayload(workspace.getId(), unlinked),
+                mergeReadiness.buildPayload(workspace.getId(), unlinked));
+
+        assertThat(payloads).allSatisfy(payload -> {
+            assertThat(payload.path("status").asString()).isEqualTo("UNAVAILABLE");
+            assertThat(payload.path("reason").asString()).contains("not linked");
+        });
+        assertThat(payloads.getFirst().has("thisWeek"))
+                .as("unknown counts are absent, never zero")
+                .isFalse();
     }
 
     private JsonNode inspect(PullRequest pr) {

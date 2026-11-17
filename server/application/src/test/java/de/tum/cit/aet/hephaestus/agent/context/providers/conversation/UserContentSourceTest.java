@@ -4,7 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
-import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.context.providers.conversation.UserContentSource.ActivityInsights;
@@ -13,8 +14,8 @@ import de.tum.cit.aet.hephaestus.core.auth.spi.AccountSummaryQuery.AccountSummar
 import de.tum.cit.aet.hephaestus.evidence.capture.ConversationContextRequest;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConversationUserCounts;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConversationWorkQuery;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ConversationWorkQuery.Reach;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
-import de.tum.cit.aet.hephaestus.workspace.WorkspaceActorSelector;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
@@ -38,9 +39,6 @@ class UserContentSourceTest extends BaseUnitTest {
     @Mock
     ConversationWorkQuery queryRepository;
 
-    @Mock
-    WorkspaceActorSelector actorSelector;
-
     @Spy
     ObjectMapper objectMapper = new ObjectMapper();
 
@@ -49,20 +47,49 @@ class UserContentSourceTest extends BaseUnitTest {
 
     @BeforeEach
     void connectedInstance() {
-        lenient().when(actorSelector.connectedProviderId(1L)).thenReturn(Optional.of(5L));
+        lenient().when(queryRepository.reach(1L, 2L)).thenReturn(Reach.READABLE);
     }
 
     @Test
     void shouldSayUnavailableAndCountNothingWithoutAConnectedInstance() {
         when(userRepository.findAllByIds(List.of(2L))).thenReturn(Map.of(2L, new AccountSummary(2L, "Octo", null)));
-        when(actorSelector.connectedProviderId(1L)).thenReturn(Optional.empty());
+        when(queryRepository.reach(1L, 2L)).thenReturn(Reach.NO_INSTANCE);
 
         JsonNode root = provider.buildPayload(1L, 2L);
 
         assertThat(root.get("status").asString()).isEqualTo("UNAVAILABLE");
         assertThat(root.at("/user/name").asString()).isEqualTo("Octo");
         assertThat(root.has("thisWeek")).isFalse();
-        verifyNoInteractions(queryRepository);
+        verify(queryRepository, never()).fetchUserCounts(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void shouldSayTheWorkIsUnknownAndCountNothingWhenTheAccountIsNotLinked() {
+        when(userRepository.findAllByIds(List.of(2L))).thenReturn(Map.of(2L, new AccountSummary(2L, "Octo", null)));
+        when(queryRepository.reach(1L, 2L)).thenReturn(Reach.NOT_LINKED);
+
+        JsonNode root = provider.buildPayload(1L, 2L);
+
+        assertThat(root.get("status").asString()).isEqualTo("UNAVAILABLE");
+        assertThat(root.get("reason").asString()).contains("not linked").contains("unknown, not none");
+        assertThat(root.has("thisWeek")).isFalse();
+        assertThat(root.has("lastWeek")).isFalse();
+        assertThat(root.has("insights")).isFalse();
+        verify(queryRepository, never()).fetchUserCounts(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void shouldCountNothingWhenTheLinkGoesBetweenTheReachAndTheCounts() {
+        when(userRepository.findAllByIds(List.of(2L))).thenReturn(Map.of(2L, new AccountSummary(2L, "Octo", null)));
+        when(queryRepository.fetchUserCounts(
+                        eq(1L), eq(2L), any(Instant.class), any(Instant.class), any(Instant.class)))
+                .thenReturn(Optional.empty());
+
+        JsonNode root = provider.buildPayload(1L, 2L);
+
+        assertThat(root.get("status").asString()).isEqualTo("UNAVAILABLE");
+        assertThat(root.get("reason").asString()).contains("not linked");
+        assertThat(root.has("thisWeek")).isFalse();
     }
 
     @Test
@@ -70,7 +97,7 @@ class UserContentSourceTest extends BaseUnitTest {
         when(userRepository.findAllByIds(List.of(2L))).thenReturn(Map.of(2L, new AccountSummary(2L, "Octo", null)));
         when(queryRepository.fetchUserCounts(
                         eq(1L), eq(2L), any(Instant.class), any(Instant.class), any(Instant.class)))
-                .thenReturn(new ConversationUserCounts(
+                .thenReturn(Optional.of(new ConversationUserCounts(
                         /* openPRs */ 2L,
                         /* mergedThisWeek */ 5L,
                         /* mergedLastWeek */ 3L,
@@ -79,7 +106,7 @@ class UserContentSourceTest extends BaseUnitTest {
                         /* reviewsGivenLastWeek */ 4L,
                         /* reviewsReceivedThisWeek */ 7L,
                         /* pendingReviewRequests */ 2L,
-                        /* unresolvedThreads */ 1L));
+                        /* unresolvedThreads */ 1L)));
 
         Map<String, byte[]> files = new HashMap<>();
         provider.contribute(new ConversationContextRequest(1L, 2L, UUID.randomUUID(), null), files);
