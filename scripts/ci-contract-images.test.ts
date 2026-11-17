@@ -377,7 +377,8 @@ void describe("ci-contract: images", () => {
 			await writeFile(path.join(directory, "hephaestus-application-1.0.0.jar"), "");
 			const calls = path.join(directory, "calls");
 			// The summary fails a build whose log names no Liberica JRE of the .java-version line.
-			const javaLine = (await readFile(".java-version", "utf8")).trim();
+			const javaVersion = await readFile(".java-version", "utf8");
+			const javaLine = javaVersion.trim();
 			for (const tool of ["pack", "docker"]) {
 				const stub = path.join(directory, tool);
 				await writeFile(
