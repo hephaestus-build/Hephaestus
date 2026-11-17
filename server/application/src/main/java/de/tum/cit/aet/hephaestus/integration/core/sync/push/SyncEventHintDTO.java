@@ -14,8 +14,11 @@ import org.jspecify.annotations.NonNull;
  */
 @Schema(description = "One event of the sync live stream: which sync state of a connection to read again")
 public record SyncEventHintDTO(
-        @NonNull @Schema(
-                        description = "The sync state that changed",
-                        allowableValues = {"job", "resources", "connection", "activity"})
-                String scope,
-        @NonNull @Schema(description = "The connection whose sync state changed") Long connectionId) {}
+        @NonNull
+        @Schema(
+                description = "The sync state that changed",
+                allowableValues = {"job", "resources", "connection", "activity"})
+        String scope,
+
+        @NonNull @Schema(description = "The connection whose sync state changed")
+        Long connectionId) {}

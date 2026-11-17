@@ -336,6 +336,7 @@ export { setMemberHidden } from "./sdk/setMemberHidden.gen.js";
 export { setPracticeFeedbackMode } from "./sdk/setPracticeFeedbackMode.gen.js";
 export { setReviewScheduleEnabled } from "./sdk/setReviewScheduleEnabled.gen.js";
 export { startScan } from "./sdk/startScan.gen.js";
+export { streamSyncEvents } from "./sdk/streamSyncEvents.gen.js";
 export { submitConversationTurn } from "./sdk/submitConversationTurn.gen.js";
 export { submitInstanceProductFeedback } from "./sdk/submitInstanceProductFeedback.gen.js";
 export { submitWorkspaceProductFeedback } from "./sdk/submitWorkspaceProductFeedback.gen.js";

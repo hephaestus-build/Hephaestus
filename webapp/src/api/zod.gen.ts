@@ -4946,6 +4946,14 @@ export const zStateBasis = zClaimBasis.and(
 );
 
 /**
+ * One event of the sync live stream: which sync state of a connection to read again
+ */
+export const zSyncEventHint = z.object({
+	connectionId: z.int(),
+	scope: z.enum(["job", "resources", "connection", "activity"]),
+});
+
+/**
  * Extensible enum: a client accepts a value that the examples do not name.
  */
 export const zSyncJobStatus = z.string();

@@ -15952,6 +15952,24 @@ export const StateDimensionSchema = {
 	required: ["label", "name", "values"],
 } as const;
 
+export const SyncEventHintSchema = {
+	type: "object",
+	description: "One event of the sync live stream: which sync state of a connection to read again",
+	properties: {
+		connectionId: {
+			type: "integer",
+			format: "int64",
+			description: "The connection whose sync state changed",
+		},
+		scope: {
+			type: "string",
+			description: "The sync state that changed",
+			enum: ["job", "resources", "connection", "activity"],
+		},
+	},
+	required: ["connectionId", "scope"],
+} as const;
+
 export const SyncJobSchema = {
 	type: "object",
 	description: "One sync_job row — a single INITIAL/RECONCILIATION/BACKFILL pass for a connection",

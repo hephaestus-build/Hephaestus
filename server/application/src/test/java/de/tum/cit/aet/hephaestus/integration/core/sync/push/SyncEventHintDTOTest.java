@@ -16,7 +16,10 @@ class SyncEventHintDTOTest extends BaseUnitTest {
      */
     @Test
     void shouldDocumentEveryScopeThatTheStreamSends() throws NoSuchFieldException {
-        var documented = SyncEventHintDTO.class.getDeclaredField("scope").getAnnotation(Schema.class).allowableValues();
+        var documented = SyncEventHintDTO.class
+                .getDeclaredField("scope")
+                .getAnnotation(Schema.class)
+                .allowableValues();
 
         assertThat(documented)
                 .containsExactlyInAnyOrderElementsOf(Arrays.stream(SyncStateChangedEvent.Scope.values())

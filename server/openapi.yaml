@@ -11497,6 +11497,30 @@ paths:
       summary: Update workspace lifecycle status
       tags:
       - workspace
+  /workspaces/{workspaceSlug}/sync/events:
+    get:
+      operationId: streamSyncEvents
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+      responses:
+        "200":
+          content:
+            text/event-stream:
+              schema:
+                $ref: "#/components/schemas/SyncEventHint"
+          description: A server-sent event stream; each `sync` event's data is one
+            hint
+      summary: Live-push stream of sync-state invalidation hints for this workspace
+      tags:
+      - Sync
   /workspaces/{workspaceSlug}/sync/progress:
     get:
       operationId: getWorkspaceSyncProgress
@@ -24892,6 +24916,26 @@ components:
       - label
       - name
       - values
+    SyncEventHint:
+      type: object
+      description: "One event of the sync live stream: which sync state of a connection\
+        \ to read again"
+      properties:
+        connectionId:
+          type: integer
+          format: int64
+          description: The connection whose sync state changed
+        scope:
+          type: string
+          description: The sync state that changed
+          enum:
+          - job
+          - resources
+          - connection
+          - activity
+      required:
+      - connectionId
+      - scope
     SyncJob:
       type: object
       description: One sync_job row — a single INITIAL/RECONCILIATION/BACKFILL pass

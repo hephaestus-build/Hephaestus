@@ -6,6 +6,7 @@ import {
 	type ClientMeta,
 	type Options as Options2,
 	type RequestResult,
+	type ServerSentEventsResult,
 	type TDataShape,
 	urlSearchParamsBodySerializer,
 } from "./client/index.js";
@@ -700,6 +701,9 @@ import type {
 	SetReviewScheduleEnabledResponses,
 	StartScanData,
 	StartScanResponses,
+	StreamSyncEventsData,
+	StreamSyncEventsResponse,
+	StreamSyncEventsResponses,
 	SubmitConversationTurnData,
 	SubmitConversationTurnErrors,
 	SubmitConversationTurnResponses,
@@ -5846,6 +5850,18 @@ export const updateStatus = <ThrowOnError extends boolean = false>(
 			"Content-Type": "application/json",
 			...options.headers,
 		},
+	});
+
+/**
+ * Live-push stream of sync-state invalidation hints for this workspace
+ */
+export const streamSyncEvents = <ThrowOnError extends boolean = false>(
+	options: Options<StreamSyncEventsData, ThrowOnError, StreamSyncEventsResponse>,
+): Promise<ServerSentEventsResult<StreamSyncEventsResponses>> =>
+	(options.client ?? client).sse.get<StreamSyncEventsResponses, unknown, ThrowOnError>({
+		security: [{ scheme: "bearer", type: "http" }],
+		url: "/workspaces/{workspaceSlug}/sync/events",
+		...options,
 	});
 
 /**

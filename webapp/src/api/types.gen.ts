@@ -6817,6 +6817,20 @@ export type StateDimension = {
 };
 
 /**
+ * One event of the sync live stream: which sync state of a connection to read again
+ */
+export type SyncEventHint = {
+	/**
+	 * The connection whose sync state changed
+	 */
+	connectionId: number;
+	/**
+	 * The sync state that changed
+	 */
+	scope: "job" | "resources" | "connection" | "activity";
+};
+
+/**
  * One sync_job row — a single INITIAL/RECONCILIATION/BACKFILL pass for a connection
  */
 export type SyncJob = {
@@ -17358,6 +17372,27 @@ export type UpdateStatusResponses = {
 };
 
 export type UpdateStatusResponse = UpdateStatusResponses[keyof UpdateStatusResponses];
+
+export type StreamSyncEventsData = {
+	body?: never;
+	path: {
+		/**
+		 * Workspace slug
+		 */
+		workspaceSlug: string;
+	};
+	query?: never;
+	url: "/workspaces/{workspaceSlug}/sync/events";
+};
+
+export type StreamSyncEventsResponses = {
+	/**
+	 * A server-sent event stream; each `sync` event's data is one hint
+	 */
+	200: SyncEventHint;
+};
+
+export type StreamSyncEventsResponse = StreamSyncEventsResponses[keyof StreamSyncEventsResponses];
 
 export type GetWorkspaceSyncProgressData = {
 	body?: never;
