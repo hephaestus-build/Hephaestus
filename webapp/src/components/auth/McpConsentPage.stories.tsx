@@ -114,7 +114,7 @@ export const NeedsPasskey: Story = {
 	},
 	play: async ({ canvas, args, userEvent }) => {
 		await expect(canvas.getByText("A passkey is required here")).toBeVisible();
-		await expect(canvas.getByText(/ends at most one hour after you confirm/u)).toBeVisible();
+		await expect(canvas.getByText(/goes unused for 90 days/u)).toBeVisible();
 		await userEvent.click(canvas.getByRole("button", { name: "Confirm with passkey and allow" }));
 		if (args.state.status === "ready") {
 			await expect(args.state.onApprove).toHaveBeenCalledOnce();

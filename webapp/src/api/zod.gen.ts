@@ -2899,8 +2899,10 @@ export const zMcpClientGrant = z.object({
 	approvedBy: zAccountRef,
 	clientHost: z.string(),
 	clientName: z.string(),
+	expiresAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
 	id: z.uuid(),
-	passkeyBackedUntil: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
+	lastUsedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
+	passkeyBacked: z.boolean(),
 	scopes: z.array(z.string()),
 });
 

@@ -43,8 +43,7 @@ class McpPasskeyConsentIntegrationTest extends RealAuthIntegrationTest {
 
     private static final JsonMapper JSON = JsonMapper.builder().build();
     private static final String CREDENTIAL = "credential-of-the-approving-passkey";
-    /** The bound with the default admin proof window of 6 hours. */
-    private static final Duration PASSKEY_BOUND = Duration.ofHours(1);
+    private static final Duration IDLE_LAPSE = McpClientGrant.IDLE_LAPSE;
 
     private static final String GET_REVIEW_SETTINGS = """
             {"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "get_review_settings", "arguments": {}}}
@@ -67,6 +66,9 @@ class McpPasskeyConsentIntegrationTest extends RealAuthIntegrationTest {
 
     @Autowired
     private JdbcTemplate jdbc;
+
+    @Autowired
+    private McpClientGrantCleanupJob cleanupJob;
 
     @Value("${hephaestus.auth.cookie-name:__Host-HEPHAESTUS_AT}")
     private String cookieName;
@@ -122,23 +124,30 @@ class McpPasskeyConsentIntegrationTest extends RealAuthIntegrationTest {
         assertThat(grantColumn(requestId, "passkey_credential_id")).isNull();
     }
 
+    /** A passkey-backed grant outlives the web session that approved it: it lapses only when unused. */
     @Test
-    void shouldRecordThePasskeyOnTheGrantAndAcceptItsWritesWithinTheBound() {
-        Instant proof = Instant.now().truncatedTo(ChronoUnit.SECONDS);
-        McpAuthorizationFlow.Tokens tokens = connect(passkeyCookie(proof));
+    void shouldRecordThePasskeyAndKeepTheGrantBeyondTheApprovingWebSession() {
+        Instant now = Instant.now().truncatedTo(ChronoUnit.SECONDS);
+        String shortSession = jwtIssuer
+                .issue(
+                        accountId,
+                        TokenConstraints.browserSession(now.plus(Duration.ofMinutes(20)), now, now, CREDENTIAL),
+                        null)
+                .value();
+        Instant before = Instant.now();
+        McpAuthorizationFlow.Tokens tokens = connect(shortSession);
+        Instant after = Instant.now();
         UUID grant = grantOf(tokens);
 
         assertThat(grantColumn(grant, "passkey_credential_id")).isEqualTo(CREDENTIAL);
         assertThat(jdbc.queryForObject(
                         "SELECT passkey_verified_at FROM mcp_client_grant WHERE id = ?", Timestamp.class, grant))
-                .isEqualTo(Timestamp.from(proof));
-        // The client session, and with it every refresh, ends at the bound.
-        assertThat(jdbc.queryForObject(
-                        "SELECT s.session_expires_at FROM client_session s JOIN mcp_client_grant g"
-                                + " ON g.client_session_id = s.id WHERE g.id = ?",
-                        Timestamp.class,
-                        grant))
-                .isEqualTo(Timestamp.from(proof.plus(PASSKEY_BOUND)));
+                .isEqualTo(Timestamp.from(now));
+        assertThat(sessionDeadline(grant))
+                .isBetween(
+                        before.plus(IDLE_LAPSE).minusSeconds(1),
+                        after.plus(IDLE_LAPSE).plusSeconds(1));
+        assertThat(grantColumn(grant, "last_used_at")).isNotNull();
 
         JsonNode settings = structured(call(tokens.accessToken(), GET_REVIEW_SETTINGS));
         structured(call(
@@ -161,19 +170,77 @@ class McpPasskeyConsentIntegrationTest extends RealAuthIntegrationTest {
                 .contains("\"passkey\":true");
     }
 
+    /** Each refresh moves the idle deadline; a call records its use at most once an hour. */
     @Test
-    void shouldRefuseACallOnceTheGrantsPasskeyBoundHasPassed() {
+    void shouldMoveTheIdleDeadlineOnRefreshAndRecordTheLastUse() {
         McpAuthorizationFlow.Tokens tokens = connect(passkeyCookie(Instant.now()));
-        structured(call(tokens.accessToken(), GET_REVIEW_SETTINGS));
-
+        UUID grant = grantOf(tokens);
+        Instant longAgo = Instant.now().minus(Duration.ofDays(20)).truncatedTo(ChronoUnit.SECONDS);
         jdbc.update(
-                "UPDATE mcp_client_grant SET passkey_verified_at = ? WHERE id = ?",
-                Timestamp.from(Instant.now().minus(PASSKEY_BOUND).minusSeconds(1)),
-                grantOf(tokens));
+                "UPDATE client_session SET session_expires_at = ? WHERE id = (SELECT client_session_id FROM"
+                        + " mcp_client_grant WHERE id = ?)",
+                Timestamp.from(Instant.now().plus(Duration.ofDays(10))),
+                grant);
+        jdbc.update("UPDATE mcp_client_grant SET last_used_at = ? WHERE id = ?", Timestamp.from(longAgo), grant);
 
-        JsonNode refused = call(tokens.accessToken(), GET_REVIEW_SETTINGS);
-        assertThat(refused.path("isError").asBoolean()).isTrue();
-        assertThat(text(refused)).contains("passkey");
+        structured(call(tokens.accessToken(), GET_REVIEW_SETTINGS));
+        assertThat(jdbc.queryForObject(
+                        "SELECT last_used_at FROM mcp_client_grant WHERE id = ?", Timestamp.class, grant))
+                .isAfter(Timestamp.from(longAgo));
+
+        Instant before = Instant.now();
+        flow.tokens(flow.token(flow.refreshForm(tokens.refreshToken())));
+        assertThat(sessionDeadline(grant))
+                .isAfterOrEqualTo(before.plus(IDLE_LAPSE).minusSeconds(1));
+    }
+
+    /** A grant unused for 90 days lapses: the hourly cleanup ends it, the console drops it, and its tokens stop. */
+    @Test
+    void shouldLapseAGrantThatWentUnusedForNinetyDays() {
+        McpAuthorizationFlow.Tokens tokens = connect(passkeyCookie(Instant.now()));
+        UUID grant = grantOf(tokens);
+        jdbc.update(
+                "UPDATE client_session SET session_expires_at = ? WHERE id = (SELECT client_session_id FROM"
+                        + " mcp_client_grant WHERE id = ?)",
+                Timestamp.from(Instant.now().minusSeconds(60)),
+                grant);
+
+        cleanupJob.cleanup();
+
+        assertThat(grantColumn(grant, "status")).isEqualTo("EXPIRED");
+        flow.callTool(tokens.accessToken(), workspace.getWorkspaceSlug(), GET_REVIEW_SETTINGS)
+                .expectStatus()
+                .isUnauthorized()
+                .expectBody(Void.class);
+        assertThat(flow.tokenError(flow.token(flow.refreshForm(tokens.refreshToken()))))
+                .isEqualTo("invalid_grant");
+    }
+
+    /** A refresh secret presented twice means two holders: the whole grant ends, and the record says why. */
+    @Test
+    void shouldRevokeTheGrantAndRecordWhyWhenARefreshSecretIsReused() {
+        McpAuthorizationFlow.Tokens tokens = connect(passkeyCookie(Instant.now()));
+        UUID grant = grantOf(tokens);
+        McpAuthorizationFlow.Tokens rotated = flow.tokens(flow.token(flow.refreshForm(tokens.refreshToken())));
+
+        assertThat(flow.tokenError(flow.token(flow.refreshForm(tokens.refreshToken()))))
+                .isEqualTo("invalid_grant");
+
+        assertThat(grantColumn(grant, "status")).isEqualTo("REVOKED");
+        assertThat(flow.tokenError(flow.token(flow.refreshForm(rotated.refreshToken()))))
+                .isEqualTo("invalid_grant");
+        flow.callTool(rotated.accessToken(), workspace.getWorkspaceSlug(), GET_REVIEW_SETTINGS)
+                .expectStatus()
+                .isUnauthorized()
+                .expectBody(Void.class);
+        assertThat(jdbc.queryForObject(
+                        "SELECT count(*) FROM auth_event WHERE event_type = 'JWT_REVOKED'"
+                                + " AND failure_reason = 'client_refresh_reuse' AND workspace_id = ?"
+                                + " AND details LIKE ?",
+                        Long.class,
+                        workspace.getId(),
+                        "%" + grant + "%"))
+                .isEqualTo(1);
     }
 
     @Test
@@ -205,7 +272,11 @@ class McpPasskeyConsentIntegrationTest extends RealAuthIntegrationTest {
                 .expectStatus()
                 .isOk()
                 .expectBody()
-                .jsonPath("$[?(@.id == '%s')].passkeyBackedUntil".formatted(grant))
+                .jsonPath("$[?(@.id == '%s')].passkeyBacked".formatted(grant))
+                .isEqualTo(true)
+                .jsonPath("$[?(@.id == '%s')].lastUsedAt".formatted(grant))
+                .isNotEmpty()
+                .jsonPath("$[?(@.id == '%s')].expiresAt".formatted(grant))
                 .isNotEmpty();
         String csrf = TestAuthUtils.fetchCsrfToken(webTestClient);
         webTestClient
@@ -223,38 +294,6 @@ class McpPasskeyConsentIntegrationTest extends RealAuthIntegrationTest {
                 .expectStatus()
                 .isUnauthorized()
                 .expectBody(Void.class);
-    }
-
-    /** The console reports the access end that approval enforced, not a later one. */
-    @Test
-    void shouldReportTheSessionDeadlineWhenTheApprovingSessionEndsBeforeTheBound() {
-        Instant now = Instant.now().truncatedTo(ChronoUnit.SECONDS);
-        Instant sessionEnd = now.plus(Duration.ofMinutes(20));
-        String shortSession = jwtIssuer
-                .issue(accountId, TokenConstraints.browserSession(sessionEnd, now, now, CREDENTIAL), null)
-                .value();
-        UUID grant = grantOf(connect(shortSession));
-
-        String listed = webTestClient
-                .get()
-                .uri("/workspaces/{slug}/mcp-grants", workspace.getWorkspaceSlug())
-                .header(HttpHeaders.COOKIE, cookieName + "=" + passkeyCookie(Instant.now()))
-                .exchange()
-                .expectStatus()
-                .isOk()
-                .expectBody(String.class)
-                .returnResult()
-                .getResponseBody();
-        JsonNode row = null;
-        for (JsonNode candidate : JSON.readTree(Objects.requireNonNull(listed))) {
-            if (candidate.path("id").asString().equals(grant.toString())) {
-                row = candidate;
-            }
-        }
-        assertThat(row).isNotNull();
-        assertThat(Instant.parse(
-                        Objects.requireNonNull(row).path("passkeyBackedUntil").asString()))
-                .isEqualTo(sessionEnd);
     }
 
     @Test
@@ -348,6 +387,15 @@ class McpPasskeyConsentIntegrationTest extends RealAuthIntegrationTest {
 
     private static String text(JsonNode result) {
         return result.path("content").path(0).path("text").asString("");
+    }
+
+    private Instant sessionDeadline(UUID grant) {
+        return Objects.requireNonNull(jdbc.queryForObject(
+                        "SELECT s.session_expires_at FROM client_session s JOIN mcp_client_grant g"
+                                + " ON g.client_session_id = s.id WHERE g.id = ?",
+                        Timestamp.class,
+                        grant))
+                .toInstant();
     }
 
     private UUID grantOf(McpAuthorizationFlow.Tokens tokens) {

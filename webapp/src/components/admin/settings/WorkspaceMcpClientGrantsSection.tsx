@@ -1,7 +1,6 @@
 import { useId } from "react";
 
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
-import { useNow } from "@/components/common/use-now";
 import { Button } from "@/components/ui/button";
 import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from "@/components/ui/item";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -16,8 +15,12 @@ export interface McpClientGrantView {
 	approvedBy: string;
 	scopes: string[];
 	approvedAt?: Date;
-	/** The approval was confirmed with a passkey, and the client's access ends at this time. */
-	passkeyBackedUntil?: Date;
+	/** A passkey confirmed the approval, so the client keeps its access until revoked or unused until `expiresAt`. */
+	passkeyBacked: boolean;
+	/** When the client last signed in, refreshed or called, to within an hour. */
+	lastUsedAt?: Date;
+	/** When the access ends: if a passkey confirmed it, unless the client is used before then. */
+	expiresAt: Date;
 }
 
 export interface WorkspaceMcpClientGrantsSectionProps {
@@ -44,8 +47,6 @@ export function WorkspaceMcpClientGrantsSection({
 	onRevoke,
 }: WorkspaceMcpClientGrantsSectionProps) {
 	const id = useId();
-	// A passkey-confirmed access that already ended reads as ended, not as one that ends.
-	const now = useNow();
 	return (
 		<section aria-labelledby={`${id}-heading`}>
 			<h2 id={`${id}-heading`} className="text-lg font-semibold">
@@ -99,13 +100,14 @@ export function WorkspaceMcpClientGrantsSection({
 										{grant.approvedAt === undefined ? "" : ` on ${formatDate(grant.approvedAt)}`}.
 									</ItemDescription>
 									{/* Outside the clamped description, so a long name never hides when the access ends. */}
-									{grant.passkeyBackedUntil !== undefined && (
-										<p className="text-sm text-muted-foreground">
-											Confirmed with a passkey. Its access{" "}
-											{grant.passkeyBackedUntil.getTime() > now ? "ends" : "ended"}{" "}
-											{formatDateTime(grant.passkeyBackedUntil)}.
-										</p>
-									)}
+									<p className="text-sm text-muted-foreground">
+										{grant.lastUsedAt === undefined
+											? "Not used yet."
+											: `Last used ${formatDateTime(grant.lastUsedAt)}.`}{" "}
+										{grant.passkeyBacked
+											? `Confirmed with a passkey. Lapses if unused until ${formatDate(grant.expiresAt)}.`
+											: `Its access ends ${formatDateTime(grant.expiresAt)}.`}
+									</p>
 								</ItemContent>
 								<ItemActions>
 									<Button

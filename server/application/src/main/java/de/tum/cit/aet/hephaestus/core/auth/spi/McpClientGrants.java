@@ -9,8 +9,9 @@ import org.jspecify.annotations.Nullable;
 public interface McpClientGrants {
 
     /**
-     * One active grant. {@code clientName} is the client's self-declared name: plain text. {@code passkeyBackedUntil}
-     * is when the passkey proof given at consent stops standing for it, or null when it holds none.
+     * One active grant. {@code clientName} is the client's self-declared name: plain text. {@code expiresAt} is when
+     * its client session ends: for a passkey-backed grant, {@code IDLE_LAPSE} after its last refresh, so each use moves
+     * it; otherwise the deadline of the web session that approved it.
      */
     record Grant(
             UUID id,
@@ -19,7 +20,9 @@ public interface McpClientGrants {
             Long accountId,
             List<String> scopes,
             @Nullable Instant approvedAt,
-            @Nullable Instant passkeyBackedUntil) {
+            boolean passkeyBacked,
+            @Nullable Instant lastUsedAt,
+            Instant expiresAt) {
         public Grant {
             scopes = List.copyOf(scopes);
         }

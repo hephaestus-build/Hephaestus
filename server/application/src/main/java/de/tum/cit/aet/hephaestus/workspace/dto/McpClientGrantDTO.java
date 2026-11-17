@@ -24,9 +24,20 @@ public record McpClientGrantDTO(
         @NonNull List<String> scopes,
         @Nullable Instant approvedAt,
 
-        @Schema(description = "The approval was confirmed with a passkey, and the client's access ends at this time")
-        @Nullable
-        Instant passkeyBackedUntil) {
+        @Schema(
+                requiredMode = Schema.RequiredMode.REQUIRED,
+                description = "A passkey confirmed the approval, so the client keeps its access until it is revoked"
+                        + " or goes unused until expiresAt")
+        boolean passkeyBacked,
+
+        @Schema(description = "When the client last signed in, refreshed or called, to within an hour") @Nullable
+        Instant lastUsedAt,
+
+        @NonNull
+        @Schema(
+                description = "When the client's access ends: for a passkey-backed client, 90 days after it was last"
+                        + " used; otherwise the end of the web session that approved it")
+        Instant expiresAt) {
     public McpClientGrantDTO {
         scopes = List.copyOf(scopes);
     }

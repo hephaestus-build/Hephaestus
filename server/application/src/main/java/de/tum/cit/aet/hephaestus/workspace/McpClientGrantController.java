@@ -54,7 +54,9 @@ public class McpClientGrantController {
                         Objects.requireNonNull(approvers.get(grant.accountId())),
                         grant.scopes(),
                         grant.approvedAt(),
-                        grant.passkeyBackedUntil()))
+                        grant.passkeyBacked(),
+                        grant.lastUsedAt(),
+                        grant.expiresAt()))
                 .toList();
     }
 

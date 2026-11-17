@@ -260,8 +260,8 @@ public class McpAuthorizationService implements McpClientGrants {
      * Approves a pending request. It holds the account's issuance lock and checks that the approving token
      * is still active, so an approval that races "sign out everywhere" writes no code (ADR 0110 decision 9).
      * Where the passkey policy asks for a passkey, the approving session must carry a fresh passkey proof. The grant
-     * records when and with which credential, and its client session ends at {@link AdminPasskeyAccess#mcpPasskeyBound}
-     * after that proof (decision 8).
+     * records when and with which credential. Its client session does not end with the approving web session: it lasts
+     * {@link McpClientGrant#IDLE_LAPSE}, and each refresh moves that deadline (decision 8).
      */
     @Transactional
     public Approval approve(UUID id, Long accountId, ApprovingSession session) {
@@ -292,10 +292,7 @@ public class McpAuthorizationService implements McpClientGrants {
             if (passkeyTime == null || passkeyCredential == null || !passkeys.freshPasskeyProof()) {
                 return new Approval.PasskeyRequired();
             }
-            Instant bound = passkeyTime.plus(passkeys.mcpPasskeyBound());
-            if (bound.isBefore(clientSessionExpiresAt)) {
-                clientSessionExpiresAt = bound;
-            }
+            clientSessionExpiresAt = now.plus(McpClientGrant.IDLE_LAPSE);
         }
         InstalledClient client = new InstalledClient(
                 InstalledClientKind.MCP_CLIENT,
@@ -431,7 +428,7 @@ public class McpAuthorizationService implements McpClientGrants {
     @Override
     @Transactional(readOnly = true)
     public List<Grant> activeGrants(Long workspaceId) {
-        return grants.findActiveByWorkspace(workspaceId).stream()
+        return grants.findActiveByWorkspace(workspaceId, clock.instant()).stream()
                 .map(grant -> new Grant(
                         grant.id(),
                         URI.create(grant.clientId()).getHost(),
@@ -441,7 +438,9 @@ public class McpAuthorizationService implements McpClientGrants {
                                 .map(McpScope::value)
                                 .toList(),
                         grant.approvedAt(),
-                        passkeyBackedUntil(grant)))
+                        grant.passkeyVerifiedAt() != null,
+                        grant.lastUsedAt(),
+                        grant.sessionExpiresAt()))
                 .toList();
     }
 
@@ -455,20 +454,6 @@ public class McpAuthorizationService implements McpClientGrants {
         grants.findById(grantId)
                 .ifPresent(grant -> audit(AuthEvent.EventType.MCP_CLIENT_REVOKED, grant, actingAccountId));
         return true;
-    }
-
-    /**
-     * When a passkey-backed grant's access ends: the earlier of its passkey bound and its client session's deadline,
-     * which approval may have set earlier still. Null for a grant without passkey backing.
-     */
-    private @Nullable Instant passkeyBackedUntil(McpClientGrantRepository.ActiveGrant grant) {
-        Instant verifiedAt = grant.passkeyVerifiedAt();
-        if (verifiedAt == null) {
-            return null;
-        }
-        Instant bound = verifiedAt.plus(passkeys.mcpPasskeyBound());
-        Instant session = grant.sessionExpiresAt();
-        return session != null && session.isBefore(bound) ? session : bound;
     }
 
     private boolean isOpenFor(McpClientGrant grant, Long accountId) {

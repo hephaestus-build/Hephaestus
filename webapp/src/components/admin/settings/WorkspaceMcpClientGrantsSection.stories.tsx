@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn } from "storybook/test";
 
-import { daysBefore, minutesAfter, minutesBefore } from "@/stories/story-clock";
+import { daysAfter, daysBefore, hoursBefore } from "@/stories/story-clock";
 
 import { WorkspaceMcpClientGrantsSection } from "./WorkspaceMcpClientGrantsSection";
 
@@ -12,6 +12,9 @@ const grant = {
 	approvedBy: "Octo Cat",
 	scopes: ["practices:read"],
 	approvedAt: daysBefore(3),
+	passkeyBacked: false,
+	lastUsedAt: hoursBefore(2),
+	expiresAt: daysAfter(4),
 };
 
 const meta = {
@@ -38,30 +41,31 @@ export const MayChange: Story = {
 	},
 };
 
-/** Approved in a workspace that requires an admin passkey: the list says when its access ends. */
+/** A passkey confirmed the approval: the client keeps its access until it goes unused, and the list says until when. */
 export const ConfirmedWithPasskey: Story = {
 	args: {
 		grants: [
 			{
 				...grant,
 				scopes: ["practices:read", "practices:write"],
-				approvedAt: minutesBefore(15),
-				passkeyBackedUntil: minutesAfter(45),
+				approvedAt: daysBefore(40),
+				passkeyBacked: true,
+				lastUsedAt: hoursBefore(1),
+				expiresAt: daysAfter(89),
 			},
 		],
 	},
 	play: async ({ canvas }) => {
-		await expect(canvas.getByText(/Confirmed with a passkey. Its access ends/u)).toBeVisible();
+		await expect(canvas.getByText(/Lapses if unused until/u)).toBeVisible();
+		await expect(canvas.getByText(/Last used/u)).toBeVisible();
 	},
 };
 
-/** The hour after the passkey confirmation has passed; the client must be approved again. */
-export const PasskeyAccessEnded: Story = {
-	args: {
-		grants: [{ ...grant, approvedAt: minutesBefore(90), passkeyBackedUntil: minutesBefore(30) }],
-	},
+/** Approved, but the client has not signed in with its code yet. */
+export const NotUsedYet: Story = {
+	args: { grants: [{ ...grant, lastUsedAt: undefined }] },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByText(/Its access ended/u)).toBeVisible();
+		await expect(canvas.getByText(/Not used yet/u)).toBeVisible();
 	},
 };
 

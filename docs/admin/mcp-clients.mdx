@@ -63,16 +63,16 @@ If the [admin passkey policy](./passkeys.mdx) requires a passkey for your admin 
    If your account has no passkey yet, select **Add a passkey** and add one in your settings. Adding a passkey ends your other sessions and pending client requests, so start the client's sign-in again afterwards.
 3. Hephaestus approves the client only after it accepts your passkey.
 
-A client that you approve with a passkey keeps its access for **at most one hour** after your passkey confirmation.
-If `hephaestus.auth.passkeys.admin-max-age` is shorter than one hour, that shorter time applies instead.
-The access also ends when the web session that you approved from ends, if that comes first.
-Then its session ends, and the client asks you to approve it again with your passkey.
+A client that you approve with a passkey keeps its access until an admin disconnects it, or until it goes unused for **90 days**.
+Each time the client renews its sign-in, the 90 days start again, so a client that you use daily never asks again.
+After 90 days without use, the access lapses, and the client asks you to approve it again with your passkey.
 The grant records when you confirmed and which passkey you used.
-**Workspace settings → Connected MCP clients** shows the time at which the access of such a client ends, or ended.
+**Workspace settings → Connected MCP clients** shows when each client was last used and, for a client confirmed with a passkey, until when its access lasts if it stays unused.
 
-The one-hour limit is the risk that the policy accepts.
-If someone steals the client's tokens, they can act for at most the rest of that hour, only with the scopes that you approved, and only in this workspace.
-Every change is in the audit history under your account and names the client, and an admin can revoke the client at any time.
+This lifetime is the risk that the policy accepts.
+If someone steals the client's tokens, they can act until an admin disconnects the client or it goes unused for 90 days, only with the scopes that you approved, and only in this workspace.
+The client and the thief cannot both keep the access: each renewal replaces the client's refresh token, and when a replaced token comes back, Hephaestus ends the client's access at once and records why.
+Every change is in the audit history under your account and names the client, and an admin can disconnect the client at any time.
 
 A client that you approved before the workspace turned on the passkey policy has no passkey confirmation.
 The policy refuses each of its calls, and the client must be approved again.

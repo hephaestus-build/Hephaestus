@@ -78,4 +78,11 @@ public class ClientSession {
         this.sessionExpiresAt = sessionExpiresAt;
         this.authTime = authTime;
     }
+
+    /** Moves the deadline of a session whose grant lapses only when idle; it never moves earlier. */
+    public void extendTo(Instant deadline) {
+        if (deadline.isAfter(sessionExpiresAt)) {
+            this.sessionExpiresAt = deadline;
+        }
+    }
 }

@@ -6540,15 +6540,25 @@ export const McpClientGrantSchema = {
 			type: "string",
 			description: "The client's self-declared name, plain text",
 		},
+		expiresAt: {
+			type: "string",
+			format: "date-time",
+			description:
+				"When the client's access ends: for a passkey-backed client, 90 days after it was last used; otherwise the end of the web session that approved it",
+		},
 		id: {
 			type: "string",
 			format: "uuid",
 		},
-		passkeyBackedUntil: {
+		lastUsedAt: {
 			type: "string",
 			format: "date-time",
+			description: "When the client last signed in, refreshed or called, to within an hour",
+		},
+		passkeyBacked: {
+			type: "boolean",
 			description:
-				"The approval was confirmed with a passkey, and the client's access ends at this time",
+				"A passkey confirmed the approval, so the client keeps its access until it is revoked or goes unused until expiresAt",
 		},
 		scopes: {
 			type: "array",
@@ -6557,7 +6567,15 @@ export const McpClientGrantSchema = {
 			},
 		},
 	},
-	required: ["approvedBy", "clientHost", "clientName", "id", "scopes"],
+	required: [
+		"approvedBy",
+		"clientHost",
+		"clientName",
+		"expiresAt",
+		"id",
+		"passkeyBacked",
+		"scopes",
+	],
 } as const;
 
 export const McpConsentRedirectSchema = {
@@ -6594,7 +6612,7 @@ export const McpConsentRequestSchema = {
 		passkeyRequired: {
 			type: "boolean",
 			description:
-				"The account confirms with a passkey before it approves; the client's access then lasts at most one hour after that confirmation, less if the admin proof window or the approving session ends sooner",
+				"The account confirms with a passkey before it approves; the client then keeps its access until it is revoked or goes unused for 90 days",
 		},
 		redirectHost: {
 			type: "string",

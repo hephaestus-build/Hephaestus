@@ -7,6 +7,7 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.Table;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.Getter;
@@ -33,6 +34,15 @@ public class McpClientGrant {
 
     /** The client's resource URIs are URLs, and URLs on the web are capped near this length in practice. */
     static final int URL_LENGTH = 2048;
+
+    /**
+     * A passkey-backed grant lasts until it is revoked or goes unused this long (ADR 0110 decision 8). Each refresh
+     * moves its client session's deadline this far ahead, so a client in daily use never asks again.
+     */
+    public static final Duration IDLE_LAPSE = Duration.ofDays(90);
+
+    /** A call records its use at most this often, so a busy client does not write the row on every call. */
+    public static final Duration LAST_USED_PRECISION = Duration.ofHours(1);
 
     public enum Status {
         /** Waiting for the account to approve or refuse it on the consent page. */
@@ -112,6 +122,10 @@ public class McpClientGrant {
     @Column(name = "passkey_credential_id", length = 2048)
     private @Nullable String passkeyCredentialId;
 
+    /** When the client last exchanged, refreshed or called, to within {@link #LAST_USED_PRECISION}. */
+    @Column(name = "last_used_at")
+    private @Nullable Instant lastUsedAt;
+
     McpClientGrant(
             UUID id,
             Long workspaceId,
@@ -154,9 +168,19 @@ public class McpClientGrant {
         this.endedAt = now;
     }
 
-    public void activate(UUID sessionId) {
+    public void activate(UUID sessionId, Instant now) {
         this.status = Status.ACTIVE;
         this.clientSessionId = sessionId;
+        this.lastUsedAt = now;
+    }
+
+    public void markUsed(Instant now) {
+        this.lastUsedAt = now;
+    }
+
+    /** Whether a passkey confirmed the approval, so the grant lasts until revoked or idle for {@link #IDLE_LAPSE}. */
+    public boolean isPasskeyBacked() {
+        return passkeyVerifiedAt != null;
     }
 
     void revoke(Instant now) {

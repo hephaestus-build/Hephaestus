@@ -25,13 +25,6 @@ import org.springframework.web.server.ResponseStatusException;
 @Service
 @ConditionalOnServerRole
 public class PasskeyAssurancePolicy implements AdminPasskeyAccess {
-    /**
-     * How long a passkey proof given at MCP consent stands for the grant's calls, unless the admin proof window is
-     * shorter (ADR 0110 decision 8). One hour covers a configuration session with an MCP client; a shorter bound would
-     * interrupt that work for a new approval.
-     */
-    static final Duration MCP_PASSKEY_BOUND = Duration.ofHours(1);
-
     private final PasskeySecurityEvents events;
     private final PasskeyProperties properties;
     private final AccountRepository accounts;
@@ -80,12 +73,6 @@ public class PasskeyAssurancePolicy implements AdminPasskeyAccess {
                 && isFresh(SecurityContextHolder.getContext().getAuthentication());
     }
 
-    @Override
-    public Duration mcpPasskeyBound() {
-        Duration admin = properties.adminMaxAge();
-        return admin.compareTo(MCP_PASSKEY_BOUND) < 0 ? admin : MCP_PASSKEY_BOUND;
-    }
-
     private boolean needsProof(Account account, boolean instanceAdmin, boolean workspace, boolean workspaceRequired) {
         return account.isPasskeyProtectionEnabled()
                 || account.isPasskeyRecoveryRequired()
@@ -99,19 +86,14 @@ public class PasskeyAssurancePolicy implements AdminPasskeyAccess {
     }
 
     /**
-     * Whether this call comes from an MCP client whose grant holds a passkey proof that is still within its bound. The
-     * account confirmed with a passkey when it approved the client (ADR 0110 decision 8), so the proof stands for the
-     * grant's admin work in its one workspace, as a web session's proof stands after a step-up.
+     * Whether this call comes from an MCP client whose grant holds a passkey proof. The account confirmed with a passkey
+     * when it approved the client (ADR 0110 decision 8), so the proof stands for the grant's admin work in its one
+     * workspace while the grant lives, as a trusted device does. The grant ends when it is revoked, when its refresh
+     * secret is reused, or when it goes unused for 90 days.
      */
     private boolean delegatedProofHolds(Jwt jwt) {
-        if (!jwt.hasClaim("sid")) {
-            return false;
-        }
-        Instant now = clock.instant();
-        return McpCallGrant.current()
-                .map(McpCallGrant::passkeyVerifiedAt)
-                .filter(verifiedAt -> now.isBefore(verifiedAt.plus(mcpPasskeyBound())))
-                .isPresent();
+        return jwt.hasClaim("sid")
+                && McpCallGrant.current().map(McpCallGrant::passkeyVerifiedAt).isPresent();
     }
 
     public void requireInstanceAdmin(@Nullable Authentication authentication, boolean sensitive) {

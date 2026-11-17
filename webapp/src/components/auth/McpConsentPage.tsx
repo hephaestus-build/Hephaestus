@@ -239,7 +239,8 @@ function PasskeyStep({ passkey, pending }: { passkey: McpConsentPasskey; pending
 					{passkey.status === "add"
 						? "Add a passkey in your settings first. Then start the client’s sign-in again and confirm with it."
 						: "Admin changes here need your passkey, so confirm with it to allow this client."}{" "}
-					The client’s access ends at most one hour after you confirm. Then it asks you again.
+					The client keeps its access until an admin disconnects it, or until it goes unused for 90
+					days.
 				</AlertDescription>
 			</Alert>
 			{passkey.status === "unsupported" && (
