@@ -31,6 +31,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.repair.ConnectionPr
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ProviderResourceAdapter;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabWebhookClient;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabWebhookClient.WebhookConfig;
@@ -346,20 +347,21 @@ class GitLabWorkspaceCreationIntegrationTest extends AbstractWorkspaceIntegratio
         var caller = gitLabCallerWithMirror("reconnector");
         Workspace workspace =
                 createWorkspace("reconnect-gitlab", "Reconnect GitLab", "my-group", AccountType.ORG, caller.scmUser());
-        Connection previous = new Connection(
-                workspace,
-                IntegrationKind.GITLAB,
-                DEFAULT_INSTANCE,
-                new ConnectionConfig.GitLabConfig(DEFAULT_INSTANCE, 42L, 99L, Set.of(), null));
+        var previousConfig = new ConnectionConfig.GitLabConfig(DEFAULT_INSTANCE, 42L, 99L, Set.of(), null);
+        Connection previous = new Connection(workspace, IntegrationKind.GITLAB, DEFAULT_INSTANCE, previousConfig);
         previous.setCredentials(new BearerToken("previous-test-token", null), credentialConverter);
         ConnectionFixtures.reachState(previous, IntegrationState.ACTIVE);
-        long previousId =
-                persistedId(connectionRepository.saveAndFlush(previous).getId());
+        Connection saved = connectionRepository.saveAndFlush(previous);
+        long previousId = persistedId(saved.getId());
         // A pending removal cannot lend its hook ID to the reconnect. The provider creates a fresh hook.
         var hooks = new ConcurrentHashMap<Long, WebhookInfo>();
         String oldRoute = publicApiUrls
                 .originUri(GitLabConnectionWebhookController.PATH_PREFIX + "{id}/key/route", previousId)
                 .toString();
+        // A 1.0 registration records the fingerprint of the hook URL that GitLab reports as the hook's ownership.
+        String ownership = ProviderResourceAdapter.fingerprint(oldRoute);
+        saved.setConfig(previousConfig.withWebhookOwnership(99L, ownership, null));
+        connectionRepository.saveAndFlush(saved);
         hooks.put(99L, new WebhookInfo(99L, oldRoute));
         var nextHook = new AtomicLong(100);
         doAnswer(call -> List.copyOf(hooks.values())).when(webhookProvider).listGroupWebhooks(workspace.getId(), 42L);
