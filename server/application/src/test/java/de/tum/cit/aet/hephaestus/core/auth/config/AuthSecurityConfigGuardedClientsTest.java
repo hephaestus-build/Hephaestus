@@ -4,12 +4,15 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.core.WorkspaceSubdomainProperties;
 import de.tum.cit.aet.hephaestus.core.auth.provider.LoginProvider;
 import de.tum.cit.aet.hephaestus.core.auth.provider.LoginProviderRepository;
 import de.tum.cit.aet.hephaestus.core.security.ScmEgressProperties;
 import de.tum.cit.aet.hephaestus.core.security.ScmServerEndpointPolicy;
+import de.tum.cit.aet.hephaestus.core.security.SecurityHeaders;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.testconfig.OfflineNetwork;
+import java.net.URI;
 import java.net.UnknownHostException;
 import java.time.Instant;
 import java.util.List;
@@ -47,7 +50,9 @@ class AuthSecurityConfigGuardedClientsTest extends BaseUnitTest {
                 new RestTemplateBuilder(),
                 WebClient.builder(),
                 new ScmServerEndpointPolicy(
-                        new MockEnvironment(), WebClient.builder(), new ScmEgressProperties(List.of())));
+                        new MockEnvironment(), WebClient.builder(), new ScmEgressProperties(List.of())),
+                new SecurityHeaders(
+                        URI.create("https://hephaestus.build"), new WorkspaceSubdomainProperties(false, "")));
     }
 
     private static ClientRegistration registration() {
@@ -107,7 +112,9 @@ class AuthSecurityConfigGuardedClientsTest extends BaseUnitTest {
                 new RestTemplateBuilder(),
                 WebClient.builder(),
                 new ScmServerEndpointPolicy(
-                        new MockEnvironment(), WebClient.builder(), new ScmEgressProperties(List.of())));
+                        new MockEnvironment(), WebClient.builder(), new ScmEgressProperties(List.of())),
+                new SecurityHeaders(
+                        URI.create("https://hephaestus.build"), new WorkspaceSubdomainProperties(false, "")));
         var registration = ClientRegistration.withClientRegistration(registration())
                 .registrationId("github")
                 .userInfoUri("https://api.github.com/user")
@@ -133,7 +140,9 @@ class AuthSecurityConfigGuardedClientsTest extends BaseUnitTest {
                 new RestTemplateBuilder(),
                 WebClient.builder(),
                 new ScmServerEndpointPolicy(
-                        new MockEnvironment(), WebClient.builder(), new ScmEgressProperties(List.of())));
+                        new MockEnvironment(), WebClient.builder(), new ScmEgressProperties(List.of())),
+                new SecurityHeaders(
+                        URI.create("https://hephaestus.build"), new WorkspaceSubdomainProperties(false, "")));
         var registration = ClientRegistration.withClientRegistration(registration())
                 .userInfoUri("https://api.github.com.signin-rebound.corp.example/user")
                 .build();
