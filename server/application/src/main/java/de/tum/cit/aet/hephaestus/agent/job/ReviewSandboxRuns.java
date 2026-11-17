@@ -254,6 +254,10 @@ public class ReviewSandboxRuns implements SandboxRunKind {
         if (failure != null)
             found.ifPresent(job -> {
                 var attempt = identity(run, job);
+                // The order of every writer of a review and its job (ReviewRunKind#requeue): the copy fence, the
+                // parent, then the job. The requeue below takes them again in this transaction.
+                evidenceFiles.holdCopyAdmission();
+                jobs.lockParentOfJob(job.getId());
                 jobs.recordProgramFailure(
                         attempt.jobId(),
                         attempt.workspaceId(),

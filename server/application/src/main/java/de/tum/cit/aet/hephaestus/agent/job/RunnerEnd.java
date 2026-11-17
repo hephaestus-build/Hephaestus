@@ -73,11 +73,19 @@ final class RunnerEnd {
     private static final Pattern PROGRAM_FAILURE = Pattern.compile("(init|run):(.+)");
 
     /**
+     * The review kind's cause for a crash record that was not a small regular file. The sandbox shares the record's
+     * path with model-driven code, so the kind never reads such a record.
+     */
+    static final String UNREADABLE_PROGRAM_FAILURE = "record:unreadable";
+
+    /**
      * The crash of the program that prepares the workspace ({@code init}) or starts the runner ({@code run}), as
-     * {@code <program>:<error kind>}; null for any other cause, or an error kind outside the runner's vocabulary.
+     * {@code <program>:<error kind>}, or {@link #UNREADABLE_PROGRAM_FAILURE}; null for any other cause, or an error
+     * kind outside the runner's vocabulary.
      */
     static @Nullable String programFailure(@Nullable String cause) {
         if (cause == null) return null;
+        if (cause.equals(UNREADABLE_PROGRAM_FAILURE)) return cause;
         var parts = PROGRAM_FAILURE.matcher(cause);
         return parts.matches() && ERRORS.contains(parts.group(2)) ? cause : null;
     }
@@ -93,6 +101,8 @@ final class RunnerEnd {
         JsonNode recorded = record.get("failure");
         String failure = programFailure(recorded != null && recorded.isString() ? recorded.asString() : null);
         if (failure == null) return null;
+        if (failure.equals(UNREADABLE_PROGRAM_FAILURE))
+            return "The last attempt's review sandbox left a crash record that could not be read.";
         var parts = PROGRAM_FAILURE.matcher(failure);
         if (!parts.matches()) return null;
         String step = parts.group(1).equals("init") ? "prepared the attempt's workspace" : "ran the review";

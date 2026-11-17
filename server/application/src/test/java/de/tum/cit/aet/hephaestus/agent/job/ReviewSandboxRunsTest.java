@@ -3,11 +3,16 @@ package de.tum.cit.aet.hephaestus.agent.job;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -388,5 +393,56 @@ class ReviewSandboxRunsTest extends BaseUnitTest {
             if (previous == null) MDC.clear();
             else MDC.setContextMap(previous);
         }
+    }
+
+    @Test
+    void shouldLockTheParentReviewBeforeItRecordsAProgramCrashOnTheJob() {
+        var jobs = mock(ReviewJobRepository.class);
+        var evidenceFiles = mock(JobEvidenceFiles.class);
+        var reviewRuns = mock(ReviewRunKind.class);
+        var runs = mock(AgentRuns.class);
+        var fence = new AgentRunFence(UUID.randomUUID(), 7, 1);
+        UUID jobId = UUID.randomUUID();
+        var job = new ReviewJob();
+        job.setId(jobId);
+        job.setWorkspaceId(7);
+        job.setRunId(fence.runId());
+        job.setReviewId(UUID.randomUUID());
+        job.setStatus(ReviewJobStatus.RUNNING);
+        when(jobs.findByRunIdAndWorkspaceId(fence.runId(), 7)).thenReturn(Optional.of(job));
+        when(reviewRuns.requeue(eq(jobId), eq(fence), eq(AgentRuns.Charge.SPEND), any(), isNull()))
+                .thenReturn(true);
+        var runtime = new ReviewSandboxRuns(
+                mock(ReviewJobClaimService.class),
+                mock(ReviewAttemptPreparation.class),
+                new ReviewAttemptCustody(runs),
+                mock(ReviewJobTerminal.class),
+                jobs,
+                mock(SandboxWorkspaceManager.class),
+                new SandboxGatewaySessions(),
+                mock(TransactionTemplate.class),
+                JsonMapper.builder().build(),
+                mock(ReviewAttemptResults.class),
+                reviewRuns,
+                runs,
+                evidenceFiles,
+                mock(ClusterLock.class));
+        var run = new SandboxRun(
+                new AgentSandboxes.LiveSandbox(
+                        UUID.randomUUID(), 7, "review:" + UUID.randomUUID(), AgentSandboxKind.REVIEW),
+                fence,
+                AgentRunKind.REVIEW,
+                0);
+
+        assertThat(runtime.end(run, SandboxRunKind.Outcome.HANDED_ON, "init:TypeError"))
+                .isTrue();
+
+        // Every writer of a review and its job takes the copy fence, the parent, then the job; another order deadlocks.
+        var order = inOrder(evidenceFiles, jobs, reviewRuns);
+        order.verify(evidenceFiles).holdCopyAdmission();
+        order.verify(jobs).lockParentOfJob(jobId);
+        order.verify(jobs)
+                .recordProgramFailure(eq(jobId), anyLong(), anyInt(), eq(fence.runId()), contains("init:TypeError"));
+        order.verify(reviewRuns).requeue(eq(jobId), eq(fence), eq(AgentRuns.Charge.SPEND), any(), isNull());
     }
 }
