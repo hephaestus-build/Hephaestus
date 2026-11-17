@@ -73,6 +73,15 @@ public class LlmCallPermit {
     @Column(name = "closed_at")
     private Instant closedAt;
 
+    /**
+     * Whether the lease ran out before the server released the permit, as when the server died mid-call. Its call may
+     * still run at the provider, so the slot comes back over the three minutes after a server reclaims it
+     * ({@link LlmCallPermitRepository#lapsedHold}).
+     */
+    @ColumnDefault("false")
+    @Column(name = "lapsed", nullable = false)
+    private boolean lapsed;
+
     @ColumnDefault("0")
     @Column(name = "requests", nullable = false)
     private int requests;

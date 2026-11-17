@@ -197,9 +197,14 @@ No server holds a database connection while its call waits for a grant or for th
 A model server such as vLLM queues calls by default and refuses none, so a limit that learns only from refusals keeps rising.
 The pool measures the time from each streamed call's request to its first content event: text, reasoning, or a tool call.
 A role, an error event, or an SSE comment does not count, as a gateway can send one at once and then serve nothing.
-A window holds at least 4 such samples, and half of the limit when that is more.
+A window holds at least 8 such samples, and half of the limit when that is more.
 The baseline is the fastest first token that the pool knows.
 A queue delays every call behind it, and a long prompt delays only itself, so the pool compares only the fastest call of a window.
+
+A review's prompts are long.
+At a low limit, the fastest of only 4 calls often waits while the model reads its own long prompt, not for a queue.
+So a window has 8 samples at least.
+The baseline can still come from a short prompt, so a window of long prompts can read as a queue: a known limit.
 
 A call without a stream, such as a feedback composition, gives no sample. It cannot raise a limit that first tokens watch.
 A model that only such calls use learns from refusals only.
@@ -328,6 +333,14 @@ This lease is the bound on a provider connection that nobody can see anymore:
 - When a server process ends, its sockets close.
 - A server that loses its database cancels its calls after three quarters of the lease. Their connections close before the grant expires.
 - A server cancels a call within two renewal intervals after its hard end and stops renewing it. Its grant then expires.
+
+A reclaimed grant is marked `lapsed`.
+The slots of lapsed grants come back evenly over the three minutes after a server reclaims them, not all in the next round.
+A single lapsed grant returns at once.
+The cut call may still run at the provider, and a server that dies lapses all its grants at once.
+If every slot came back at once, the waiting calls would reach the provider together, beside the cut ones.
+The first tokens of that burst would then lower the limit.
+Interactive calls keep their reserve meanwhile.
 
 The hard end is the deadline of the work, such as a review attempt's work deadline.
 A conversation call has no such deadline, so its hard end comes 32 minutes after its grant.

@@ -78,14 +78,14 @@ public interface LlmCallPermitRepository extends JpaRepository<LlmCallPermit, UU
      */
     @Query(value = """
             WITH expired AS (
-              UPDATE llm_call_permit SET state='CLOSED',closed_at=renewed_at+make_interval(secs => :staleSeconds)
+              UPDATE llm_call_permit SET state='CLOSED',closed_at=clock_timestamp(),lapsed=TRUE
               WHERE pool_id=:poolId AND state='ACTIVE'
                 AND renewed_at < clock_timestamp()-make_interval(secs => :staleSeconds)
               RETURNING id
             )
             , deleted AS (
               DELETE FROM llm_call_permit WHERE pool_id=:poolId AND
-                ((state='CLOSED' AND closed_at < clock_timestamp()-interval '1 minute') OR
+                ((state='CLOSED' AND closed_at < clock_timestamp()-CASE WHEN lapsed THEN interval '3 minutes' ELSE interval '1 minute' END) OR
                  (state='WAITING' AND renewed_at < clock_timestamp()-make_interval(secs => :staleSeconds)))
             )
             SELECT count(*) FROM expired
@@ -251,6 +251,21 @@ public interface LlmCallPermitRepository extends JpaRepository<LlmCallPermit, UU
             @Param("ids") Collection<UUID> ids,
             @Param("staleSeconds") long staleSeconds);
 
+    /**
+     * The slots that lapsed permits still hold, as a fraction that the caller rounds down. A lapsed permit returns its
+     * slot evenly over the three minutes after a server reclaimed it ({@link #prune}), so one lapsed permit returns at
+     * once and a crash's many return one after another. A server that dies mid-call lapses all its permits at once, and
+     * the provider can answer their cut calls for minutes: granting all their slots again in one round would add a
+     * burst beside them.
+     */
+    @Query(value = """
+                    SELECT COALESCE(sum(1 - EXTRACT(EPOCH FROM (clock_timestamp() - closed_at)) / 180), 0)
+                      FROM llm_call_permit
+                     WHERE pool_id = :poolId AND state = 'CLOSED' AND lapsed
+                       AND closed_at > clock_timestamp() - interval '3 minutes'
+                    """, nativeQuery = true)
+    double lapsedHold(@Param("poolId") long poolId);
+
     /** The UUID fences a release, including closure after lease expiry, from every later grant. */
     @Modifying
     @Query(
@@ -282,6 +297,19 @@ public interface LlmCallPermitRepository extends JpaRepository<LlmCallPermit, UU
 
         long getNotInteractiveOutputTokens();
     }
+
+    /**
+     * Whether a call of a live server still debits the pool's rate window: it was granted and closed within the last
+     * minute. A lapsed permit's server died, so the permit still slows admission ({@link #rates}, {@link #lapsedHold}),
+     * but it never keeps an admin from editing or deleting the pool.
+     */
+    @Query(value = """
+                    SELECT EXISTS (SELECT 1 FROM llm_call_permit
+                                    WHERE pool_id = :poolId AND granted_at IS NOT NULL AND NOT lapsed
+                                      AND (closed_at IS NULL OR closed_at > clock_timestamp() - interval '1 minute')
+                                      AND (requests > 0 OR tokens > 0))
+                    """, nativeQuery = true)
+    boolean debitsLiveRateWindow(@Param("poolId") long poolId);
 
     /** Active calls retain their complete rate debit. Closed calls retain it for a full minute after closure. */
     @Query(

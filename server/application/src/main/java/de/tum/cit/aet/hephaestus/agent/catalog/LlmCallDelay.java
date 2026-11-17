@@ -18,8 +18,12 @@ import org.jspecify.annotations.Nullable;
 public record LlmCallDelay(
         @Nullable Integer baselineMillis, @Nullable Integer windowMillis, int samples) {
 
-    /** Below this, one slow call would decide a window: short prompts and queues show only across several calls. */
-    private static final int SMALLEST_WINDOW = 4;
+    /**
+     * Below this, a few slow calls would decide a window: short prompts and queues show only across several calls. A
+     * review's prompts are long, so at a low limit the fastest of four calls often waits for its own prefill, not for a
+     * queue, and four calls cut the limit again and again.
+     */
+    static final int SMALLEST_WINDOW = 8;
 
     /** What one first token decides. A {@code keep} below 1 is the share of the limit to keep. */
     public record Step(LlmCallDelay delay, double keep) {}
