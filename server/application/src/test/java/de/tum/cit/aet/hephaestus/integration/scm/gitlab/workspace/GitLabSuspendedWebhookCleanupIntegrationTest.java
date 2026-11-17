@@ -21,6 +21,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.repair.ProviderReso
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ProviderResourceAdapter;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabWebhookClient;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabWebhookClient.WebhookConfig;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabWebhookClient.WebhookInfo;
@@ -277,16 +278,17 @@ class GitLabSuspendedWebhookCleanupIntegrationTest extends BaseIntegrationTest {
 
     private Connection connection(IntegrationState state, @Nullable Long hookId) {
         var workspace = workspaces.save(WorkspaceTestFixtures.activeWorkspace("hook-cleanup-" + UUID.randomUUID()));
-        var connection = new Connection(
-                workspace,
-                IntegrationKind.GITLAB,
-                "https://gitlab.example",
-                new GitLabConfig("https://gitlab.example", 42L, hookId, Set.of(), null));
+        var config = new GitLabConfig("https://gitlab.example", 42L, hookId, Set.of(), null);
+        var connection = new Connection(workspace, IntegrationKind.GITLAB, "https://gitlab.example", config);
         ConnectionFixtures.reachState(connection, state);
         connection.setCredentials(new BearerToken("cleanup-test-token", null), converter);
         Connection saved = connections.save(connection);
-        if (hookId != null) upstreamHooks.put(hookId, hookUrl(saved));
-        return saved;
+        if (hookId == null) return saved;
+        // A 1.0 registration records the fingerprint of the hook URL that GitLab reports as the hook's ownership.
+        String url = hookUrl(saved);
+        upstreamHooks.put(hookId, url);
+        saved.setConfig(config.withWebhookOwnership(hookId, ProviderResourceAdapter.fingerprint(url), null));
+        return connections.save(saved);
     }
 
     private void reconcile() {
