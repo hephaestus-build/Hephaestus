@@ -1209,8 +1209,14 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
     void shouldNameTheCrashOfTheLastAttemptsReviewProgramsWhenTheRunEndsWhileQueued() {
         var job = crashedAtTheLastRetry();
 
-        transactions.executeWithoutResult(
-                status -> reviewRuns.ended(job.run(), Integer.MAX_VALUE, AgentRunStopReason.ATTEMPTS_EXHAUSTED));
+        // The reaper ends a queued run past its start window: the handler first, then the run, in one transaction.
+        transactions.executeWithoutResult(status -> {
+            reviewRuns.ended(job.run(), Integer.MAX_VALUE, AgentRunStopReason.DEADLINE);
+            jdbc.update(
+                    "UPDATE agent_run SET state = 'ENDED', leased_until = NULL, hold_reason = NULL, deferred_until ="
+                            + " NULL, stop_reason = 'DEADLINE', ended_at = clock_timestamp() WHERE id = ?",
+                    job.getRunId());
+        });
 
         var failed = jobs.findById(job.getId()).orElseThrow();
         assertThat(failed.getStatus()).isEqualTo(ReviewJobStatus.FAILED);
@@ -1258,7 +1264,10 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
     }
 
     private void makeAvailable(UUID runId) {
-        jdbc.update("UPDATE agent_run SET available_at = clock_timestamp() - interval '1 second' WHERE id=?", runId);
+        jdbc.update(
+                "UPDATE agent_run SET available_at = clock_timestamp() - interval '1 second', deferred_until = NULL"
+                        + " WHERE id=?",
+                runId);
     }
 
     private ReviewSandboxRuns reviewSandboxRuns(ReviewJobClaimService claims) {
