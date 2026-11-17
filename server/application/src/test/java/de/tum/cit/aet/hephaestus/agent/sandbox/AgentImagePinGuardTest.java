@@ -33,9 +33,8 @@ class AgentImagePinGuardTest extends BaseUnitTest {
     /** The reference carries no compiled-in default, so an unresolved one reaches this guard as null. */
     @Test
     void shouldFailFastWhenNoReferenceResolved() throws ReflectiveOperationException {
-        var props = AgentImageProperties.class
-                .getDeclaredConstructor(String.class)
-                .newInstance((Object) null);
+        var props =
+                AgentImageProperties.class.getDeclaredConstructor(String.class).newInstance((Object) null);
         assertThatThrownBy(() -> new AgentImagePinGuard(props))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("<not set>");
