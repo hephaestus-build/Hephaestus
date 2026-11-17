@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.job;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import de.tum.cit.aet.hephaestus.testconfig.ReviewJobFixtures;
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService.AdmissionIdentity;
 import de.tum.cit.aet.hephaestus.agent.job.AttemptServerErrors.Request;
 import de.tum.cit.aet.hephaestus.agent.runtime.AgentResult;
@@ -121,7 +122,7 @@ class AttemptServerErrorsIntegrationTest extends BaseIntegrationTest {
         var work = modelFixtures.work(
                 workspace, name, "chat.thread", Math.floorMod(UUID.randomUUID().getLeastSignificantBits(), 1_000_000L));
         var job = work.job();
-        job.setStatus(ReviewJobStatus.RUNNING);
+        ReviewJobFixtures.withStatus(job, ReviewJobStatus.RUNNING);
         return RuntimeJobTestData.save(new TransactionTemplate(transactions), jdbc, jobs, job);
     }
 
