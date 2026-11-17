@@ -1,12 +1,19 @@
+import { execFileSync } from "node:child_process";
+import { existsSync, lstatSync, readFileSync } from "node:fs";
+import { isDeepStrictEqual } from "node:util";
 /**
  * The JavaScript toolchain has one driver and one package-manager lane (ADR 0040): Vite+ (`vp`)
  * runs every task, pnpm installs behind `vp install`, and Node stays pinned by the repository. This
  * gate fails when a pin, a bundled tool version, a setup step or a command anywhere in the tree
  * drifts from that shape.
  */
-import { execFileSync } from "node:child_process";
-import { existsSync, lstatSync, readFileSync } from "node:fs";
-import { isDeepStrictEqual } from "node:util";
+import {
+	BASE64_MITIGATION,
+	MITIGATED_BELOW,
+	hasBase64Mitigation,
+	serverBuildEnvironment,
+	versionBelow,
+} from "./lib/buildpack-descriptor.ts";
 
 import packageArgument from "npm-package-arg";
 import { parse } from "yaml";
@@ -326,6 +333,18 @@ const jrePin = asRecord(
 if (typeof jrePin.version !== "string" || jrePin.version.split(".")[0] !== javaVersion) {
 	throw new Error(
 		".github/ci-tools/buildpack-liberica-jre.json must pin a JRE of the .java-version line",
+	);
+}
+const descriptorEnvironment = serverBuildEnvironment();
+if (
+	versionBelow(jrePin.version, MITIGATED_BELOW) &&
+	!hasBase64Mitigation(
+		descriptorEnvironment.get("TRAINING_RUN_JAVA_TOOL_OPTIONS") ?? "",
+		descriptorEnvironment.get("BPE_APPEND_JAVA_TOOL_OPTIONS") ?? "",
+	)
+) {
+	throw new Error(
+		`The pinned JRE ${jrePin.version} is below ${MITIGATED_BELOW.join(".")}, the fix of CVE-2026-114938. server/application/project.toml must set ${BASE64_MITIGATION} for the training run and every launch, or pin a fixed JRE.`,
 	);
 }
 for (const file of execFileSync("git", ["ls-files", ".github"], { encoding: "utf8" }).split("\n")) {

@@ -19,7 +19,13 @@ import {
 	step,
 	workflowSources,
 } from "./ci-contract-support.ts";
-import { addedModules, buildEnvironment } from "./lib/buildpack-descriptor.ts";
+import {
+	addedModules,
+	buildEnvironment,
+	hasBase64Mitigation,
+	MITIGATED_BELOW,
+	versionBelow,
+} from "./lib/buildpack-descriptor.ts";
 import { ciToolPin } from "./lib/ci-tool-catalog.ts";
 import { asArray, asRecord, asString } from "./lib/json.ts";
 
@@ -659,4 +665,13 @@ void test("a descriptor's build environment is each table's name and value", () 
 		() => buildEnvironment('[[io.buildpacks.build.env]]\nname = "A"\n'),
 		/no name or value/u,
 	);
+});
+
+void test("a JRE below the CVE-2026-114938 fix runs only with the Base64 decoder intrinsic turned off", () => {
+	assert.equal(versionBelow("25.0.5.0.3_5", MITIGATED_BELOW), true);
+	assert.equal(versionBelow("25.0.5.1_1", MITIGATED_BELOW), false);
+	assert.equal(versionBelow("25.0.6_8", MITIGATED_BELOW), false);
+	assert.equal(versionBelow("25.0.4.1_1", MITIGATED_BELOW), true);
+	assert.equal(hasBase64Mitigation("--add-modules=jdk.jfr -XX:-UseBASE64Intrinsics"), true);
+	assert.equal(hasBase64Mitigation("-XX:-UseBASE64IntrinsicsX", "-XX:-UseBASE64Intrinsics"), false);
 });
