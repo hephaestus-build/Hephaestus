@@ -28,6 +28,7 @@ import de.tum.cit.aet.hephaestus.testconfig.LiveLlmTest;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.URI;
@@ -557,7 +558,7 @@ class PracticeRunnerLiveLlmTest {
                         // Forward the response with chunked transfer encoding.
                         exchange.sendResponseHeaders(response.statusCode(), 0);
                         try (var out = exchange.getResponseBody()) {
-                            upstream.transferTo(out);
+                            stream(upstream, out);
                         }
                     }
                 } catch (InterruptedException e) {
@@ -572,6 +573,20 @@ class PracticeRunnerLiveLlmTest {
                 synchronized (lifecycle) {
                     active.remove(forwarding);
                 }
+            }
+        }
+
+        /**
+         * Passes each upstream read on at once. Since JDK 23 the server buffers the headers of a chunked response
+         * with its body until a flush (JDK-6968351, release note JDK-8331847), and {@code transferTo} never flushes,
+         * so a streamed model answer would reach the runner only when the upstream ends.
+         */
+        private static void stream(InputStream upstream, OutputStream out) throws IOException {
+            out.flush();
+            byte[] buffer = new byte[8192];
+            for (int read = upstream.read(buffer); read != -1; read = upstream.read(buffer)) {
+                out.write(buffer, 0, read);
+                out.flush();
             }
         }
 

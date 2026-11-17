@@ -4,7 +4,7 @@
  * of other languages (ADR 0103 rules 2, 3 and 5). docs/contributor/ci-cd.mdx § API compatibility
  * owns the rules.
  *
- * Needs Docker, and a JDK 21 at `JAVA_HOME` or on `PATH`. Gradle reads `GRADLE_USER_HOME`.
+ * Needs Docker, and the JDK of `.java-version` at `JAVA_HOME` or on `PATH`. Gradle reads `GRADLE_USER_HOME`.
  *
  * Usage: vp run gate:client-generators
  */

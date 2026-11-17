@@ -226,7 +226,9 @@ With no headroom, the garbage collector grows the heap until the container excee
 `HephaestusContainerMemoryHigh` fires before that point ([Alert rules](./alert-rules)).
 Measure the server's total memory use before you lower its memory limit or its headroom.
 
-A socket call that blocks can pin its carrier thread, so the scheduler can add carriers up to its ceiling of gateway connections plus 256.
+A file operation that blocks holds its carrier thread, so the scheduler adds a carrier.
+Its ceiling is the gateway connections plus 256.
+A socket call that blocks does not pin its carrier.
 `jvm_threads_live_threads` shows the count. If it comes near `server.jvm.threadCount`, raise the value.
 
 The 3 GiB default limit also applies to `small.yaml` and the one host.

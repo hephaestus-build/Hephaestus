@@ -8,11 +8,7 @@ import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;
 
-/**
- * Shares one fetch and its availability fact across the sources in this capture. A lock, not a monitor, guards it: on
- * Java 21 a virtual thread that waits on a network fetch inside {@code synchronized} keeps its carrier, and the sandbox
- * gateway's requests prepare captures on such threads.
- */
+/** Shares one fetch and its availability fact across the sources in this capture. */
 public final class ScmCapturePreparation {
     private final ReentrantLock lock = new ReentrantLock();
     private boolean fetched;

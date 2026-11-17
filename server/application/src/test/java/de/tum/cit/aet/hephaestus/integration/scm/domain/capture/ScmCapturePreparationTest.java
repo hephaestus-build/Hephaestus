@@ -2,7 +2,6 @@ package de.tum.cit.aet.hephaestus.integration.scm.domain.capture;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -11,22 +10,14 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.evidence.SourceAbsenceReason;
-import de.tum.cit.aet.hephaestus.integration.core.fabric.EvidenceSpool;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureCode;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureException;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.testconfig.PinnedParks;
 import java.io.IOException;
-import java.lang.reflect.Method;
-import java.lang.reflect.Modifier;
 import java.time.Duration;
-import java.util.Arrays;
-import java.util.List;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.LockSupport;
-import java.util.stream.Stream;
 import org.eclipse.jgit.api.errors.InvalidRemoteException;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.json.JsonMapper;
@@ -42,49 +33,7 @@ class ScmCapturePreparationTest extends BaseUnitTest {
         var pinned = PinnedParks.during(() -> preparation.fetch(
                 () -> LockSupport.parkNanos(Duration.ofMillis(50).toNanos())));
 
-        assertThat(pinned).as("a monitor around the fetch pins the carrier").isEmpty();
-    }
-
-    @Test
-    void shouldLetASecondSourceWaitForTheFetchWithoutHoldingACarrier() throws Exception {
-        var preparation = new ScmCapturePreparation();
-        var fetching = new CountDownLatch(1);
-        var release = new CountDownLatch(1);
-        Thread fetch = Thread.ofVirtual()
-                .start(() -> preparation.fetch(() -> {
-                    fetching.countDown();
-                    awaitQuietly(release);
-                }));
-        assertThat(fetching.await(5, TimeUnit.SECONDS)).isTrue();
-
-        Thread second = Thread.ofVirtual().start(preparation::unavailableReason);
-
-        // A thread that waits on a lock parks (WAITING) and leaves its carrier; one that waits to enter a monitor is
-        // BLOCKED, and on Java 21 it keeps its carrier.
-        await().atMost(Duration.ofSeconds(5)).until(() -> second.getState() == Thread.State.WAITING);
-        release.countDown();
-        fetch.join();
-        second.join();
-    }
-
-    @Test
-    void shouldHoldNoMonitorAnywhereOnTheCapturePath() {
-        for (Class<?> type : List.of(ScmCapturePreparation.class, EvidenceSpool.class))
-            for (Class<?> declared : Stream.concat(Stream.of(type), Arrays.stream(type.getDeclaredClasses()))
-                    .toList())
-                assertThat(Arrays.stream(declared.getDeclaredMethods())
-                                .filter(method -> Modifier.isSynchronized(method.getModifiers()))
-                                .map(Method::toString))
-                        .as("synchronized methods of %s", declared.getName())
-                        .isEmpty();
-    }
-
-    private static void awaitQuietly(CountDownLatch latch) {
-        try {
-            latch.await(10, TimeUnit.SECONDS);
-        } catch (InterruptedException interrupted) {
-            Thread.currentThread().interrupt();
-        }
+        assertThat(pinned).as("the fetch pins no carrier").isEmpty();
     }
 
     @Test

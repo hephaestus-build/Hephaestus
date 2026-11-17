@@ -4,12 +4,14 @@ import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicReference;
+import jdk.jfr.consumer.RecordedStackTrace;
 import jdk.jfr.consumer.RecordingStream;
 import org.jspecify.annotations.Nullable;
 
 /**
- * The parks that pinned a virtual thread to its carrier, as the JDK records them ({@code jdk.VirtualThreadPinned}). On
- * Java 21 a virtual thread that blocks under a monitor keeps its carrier, and enough of them stall every virtual thread.
+ * The parks that pinned a virtual thread to its carrier, as the JDK records them ({@code jdk.VirtualThreadPinned}). Since
+ * JDK 24 a monitor no longer pins (JEP 491), but a park in a native frame or a class initializer still does, and enough
+ * of them stall every virtual thread.
  */
 public final class PinnedParks {
 
@@ -29,7 +31,9 @@ public final class PinnedParks {
             events.enable("jdk.VirtualThreadPinned")
                     .withThreshold(Duration.ZERO)
                     .withStackTrace();
-            events.onEvent("jdk.VirtualThreadPinned", event -> pinned.add(String.valueOf(event.getStackTrace())));
+            events.onEvent("jdk.VirtualThreadPinned", event -> {
+                if (!onJdkSubPoller(event.getStackTrace())) pinned.add(String.valueOf(event.getStackTrace()));
+            });
             events.startAsync();
             Thread.ofVirtual()
                     .start(() -> {
@@ -45,5 +49,17 @@ public final class PinnedParks {
         Exception thrown = failure.get();
         if (thrown != null) throw thrown;
         return List.copyOf(pinned);
+    }
+
+    /**
+     * On Linux, JDK 25 runs its socket sub-pollers as virtual threads, and JFR reports their loop as a pinned park. That
+     * loop belongs to the JDK, not to the work under test. Only that loop is left out: work that parks pinned in a
+     * socket read still counts.
+     */
+    public static boolean onJdkSubPoller(@Nullable RecordedStackTrace stack) {
+        return stack != null
+                && stack.getFrames().stream()
+                        .anyMatch(frame -> frame.getMethod().getType().getName().equals("sun.nio.ch.Poller")
+                                && frame.getMethod().getName().equals("subPollerLoop"));
     }
 }

@@ -38,7 +38,7 @@ final class ProxyTransportClosure {
         synchronized (this) {
             closing.add(connection);
         }
-        connection.channel().closeFuture().addListener(unused -> {
+        connection.channel().closeFuture().addListener(_ -> {
             // A database release must not block Netty's event loop.
             Thread.ofVirtual().name("llm-transport-closed").start(() -> closed(connection));
         });

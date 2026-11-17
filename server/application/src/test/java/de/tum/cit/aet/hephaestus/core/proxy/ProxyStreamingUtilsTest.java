@@ -190,7 +190,7 @@ class ProxyStreamingUtilsTest extends BaseUnitTest {
             var upstream = ClientResponse.create(HttpStatus.OK)
                     .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
                     .body(Flux.<DataBuffer>never()
-                            .doOnSubscribe(unused -> stop.tryEmitEmpty())
+                            .doOnSubscribe(_ -> stop.tryEmitEmpty())
                             .doOnCancel(() -> cancelled.set(true)))
                     .build();
 

@@ -11,6 +11,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryRefState;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.capture.ScmCapturePreparation;
 import de.tum.cit.aet.hephaestus.integration.scm.metrics.ScmMetrics;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import de.tum.cit.aet.hephaestus.testconfig.PinnedParks;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.io.IOException;
 import java.net.InetAddress;
@@ -78,10 +79,15 @@ class GitRepositoryFetchBoundTest extends BaseUnitTest {
         List<ScmCapturePreparation> preparations = new ArrayList<>();
         try (var provider = new SilentProvider();
                 var events = new RecordingStream()) {
+            // The integration tier's bound. A thread's first run links classes and method handles through VM
+            // upcalls, which pins it briefly on JDK 25; a capture parked on the silent provider pins for seconds.
             events.enable("jdk.VirtualThreadPinned")
-                    .withThreshold(Duration.ZERO)
+                    .withThreshold(Duration.ofMillis(20))
                     .withStackTrace();
-            events.onEvent("jdk.VirtualThreadPinned", event -> pinned.add(String.valueOf(event.getStackTrace())));
+            events.onEvent("jdk.VirtualThreadPinned", event -> {
+                if (!PinnedParks.onJdkSubPoller(event.getStackTrace()))
+                    pinned.add(String.valueOf(event.getStackTrace()));
+            });
             events.startAsync();
             var git = manager(provider.port(), 1, Duration.ofSeconds(5));
             List<Thread> requests = new ArrayList<>();

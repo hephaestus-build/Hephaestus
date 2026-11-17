@@ -252,14 +252,47 @@ const javaVersion = readFileSync(".java-version", "utf8").trim();
 const gradleBuild = readFileSync("server/build.gradle.kts", "utf8");
 if (
 	!/^\d+$/u.test(javaVersion) ||
-	!gradleBuild.includes('file("../.java-version").readText().trim().toInt()')
+	!gradleBuild.includes('file("../.java-version").readText().trim().toInt()') ||
+	!gradleBuild.includes("JavaLanguageVersion.of(javaVersion)")
 ) {
 	throw new Error("Gradle must compile with the JDK line from .java-version");
+}
+for (const file of execFileSync("git", ["ls-files", "*.gradle.kts"], { encoding: "utf8" }).split(
+	"\n",
+)) {
+	if (
+		file !== "" &&
+		/JavaLanguageVersion\.of\(\s*\d|jvmToolchain\(\s*\d|release\.set\(\s*\d|JavaVersion\.VERSION_\d/u.test(
+			readFileSync(file, "utf8"),
+		)
+	) {
+		throw new Error(`${file} pins a JDK line; read it from .java-version`);
+	}
 }
 const renovate = asRecord(readJsonFileSync(".github/renovate.json"), ".github/renovate.json");
 if (asRecord(renovate.constraints, "Renovate constraints").java !== javaVersion) {
 	throw new Error(
 		"Renovate constraints.java must restate .java-version for Gradle artifact updates",
+	);
+}
+// The image runs the JDK line it was built and tested with. The JVM buildpack reads it from the JAR
+// manifest's Build-Jdk-Spec, so project.toml must not restate it, and the JRE pin must belong to it.
+if (
+	/^\s*name\s*=\s*["']BP_JVM_VERSION["']/mu.test(
+		readFileSync("server/application/project.toml", "utf8"),
+	)
+) {
+	throw new Error(
+		"server/application/project.toml must not set BP_JVM_VERSION: the buildpack reads Build-Jdk-Spec",
+	);
+}
+const jrePin = asRecord(
+	readJsonFileSync(".github/ci-tools/buildpack-liberica-jre.json"),
+	"buildpack-liberica-jre",
+);
+if (typeof jrePin.version !== "string" || jrePin.version.split(".")[0] !== javaVersion) {
+	throw new Error(
+		".github/ci-tools/buildpack-liberica-jre.json must pin a JRE of the .java-version line",
 	);
 }
 for (const file of execFileSync("git", ["ls-files", ".github"], { encoding: "utf8" }).split("\n")) {
@@ -269,6 +302,9 @@ for (const file of execFileSync("git", ["ls-files", ".github"], { encoding: "utf
 	const source = readFileSync(file, "utf8");
 	if (/^\s*java-version:/mu.test(source)) {
 		throw new Error(`${file} pins a JDK inline; use java-version-file: .java-version`);
+	}
+	if (source.includes("BP_JVM_VERSION")) {
+		throw new Error(`${file} sets BP_JVM_VERSION: the buildpack reads Build-Jdk-Spec`);
 	}
 }
 

@@ -63,8 +63,6 @@ public class EvidenceReconciler {
      * erasure that does not reach this server and a folder that cleanup cannot remove.
      */
     public void reconcile() {
-        // A lock, not a monitor: a pass deletes files and writes rows, and a virtual thread that waits under a monitor
-        // keeps its carrier on Java 21.
         passes.lock();
         try {
             int remaining = step(() -> copies.removeErasedFolders().remaining())

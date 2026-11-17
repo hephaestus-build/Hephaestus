@@ -63,7 +63,6 @@ public class ReleaseCheckService {
     private final Clock clock;
     private final boolean enabled;
     private final AtomicReference<State> state = new AtomicReference<>(State.INITIAL);
-    // A lock rather than a monitor: on Java 21 a monitor pins the virtual thread for the whole request.
     private final ReentrantLock checking = new ReentrantLock();
 
     public ReleaseCheckService(

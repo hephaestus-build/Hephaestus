@@ -71,7 +71,7 @@ class TurnContextControllerTest extends BaseUnitTest {
     void prepareTheLoad() {
         var layout = new FabricLayout(temp.toString());
         source = temp.resolve("unallocated");
-        when(copies.capture()).thenAnswer(unused -> {
+        when(copies.capture()).thenAnswer(_ -> {
             held.set(true);
             return new PersonDataCopyFence.Lease() {
                 @Override

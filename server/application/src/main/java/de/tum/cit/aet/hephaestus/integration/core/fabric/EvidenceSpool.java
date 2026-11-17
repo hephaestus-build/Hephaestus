@@ -34,11 +34,7 @@ public final class EvidenceSpool {
     private static final String LEASE = ".lease";
     private static final Logger log = LoggerFactory.getLogger(EvidenceSpool.class);
     private static final Map<Path, Copy> COPIES = new ConcurrentHashMap<>();
-    /**
-     * Allocation and orphan removal share it, before either opens a lease file. A lock, not a monitor, throughout this
-     * class: these sections do file I/O and SQL, and on Java 21 a virtual thread that blocks or waits to enter under a
-     * monitor keeps its carrier.
-     */
+    /** Allocation and orphan removal share it, before either opens a lease file. */
     private static final ReentrantLock COPIES_LOCK = new ReentrantLock();
 
     private static final Set<Path> HOMES = ConcurrentHashMap.newKeySet();

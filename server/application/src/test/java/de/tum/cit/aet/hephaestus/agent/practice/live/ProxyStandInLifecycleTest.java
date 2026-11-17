@@ -121,6 +121,11 @@ class ProxyStandInLifecycleTest {
             assertThat(response.statusCode()).isEqualTo(201);
             assertThat(response.headers().firstValue("content-type")).contains("text/event-stream");
             try (InputStream body = response.body()) {
+                // The frame arrives while the upstream still stalls: the stand-in streams the answer, not buffers it.
+                assertThat(harness.tasks
+                                .submit(() -> body.readNBytes(SSE.length))
+                                .get(3, TimeUnit.SECONDS))
+                        .isEqualTo(SSE);
                 CountDownLatch reading = new CountDownLatch(1);
                 Future<?> reader = harness.tasks.submit(() -> {
                     reading.countDown();
