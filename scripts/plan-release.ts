@@ -13,7 +13,8 @@
  * The plan is read before the promotion lock, so another run of the same version can write first.
  * Each locked step that writes or publishes the release checks its source again (`--source`).
  */
-import { appendFile, readFile } from "node:fs/promises";
+import { appendFile, readdir, readFile } from "node:fs/promises";
+import path from "node:path";
 
 import { isSet } from "./lib/env.ts";
 import { environmentWithoutGitRepository } from "./lib/git-environment.ts";
@@ -311,11 +312,19 @@ export function releaseOutputs(plan: ReleasePlan, migrations = false): Record<st
  * operators through the next one that does. Only top-level `##` headings bound a section, so a
  * heading inside a fenced example is text. Throws, before any release exists, where the sections
  * from `version` down to `previousVersion` are missing, repeated, out of order or not release versions.
+ *
+ * `releaseVersion` names the stable release that promotes the candidate `version`. When it starts a
+ * new major, the summaries of the consumed `major` changesets (`majorChangesets`) lead the notes as
+ * `### Major Changes`: the new major's promise and its operator action come first, and a bounded
+ * release description keeps them. Released text stays as it is, so each candidate section keeps its
+ * own historical entry.
  */
 export async function renderReleaseNotes(
 	changelog: string,
 	previousVersion: string,
 	version: string,
+	releaseVersion?: string,
+	majorChangesets: readonly string[] = [],
 ): Promise<string> {
 	// Loaded here, not at the top: the planner itself runs where no dependency is installed.
 	const { fromMarkdown } = await import("mdast-util-from-markdown");
@@ -362,12 +371,71 @@ export async function renderReleaseNotes(
 			);
 		}
 		if (compareVersions(section.version, previous) === 0) {
-			return changelog.slice(newest.start, section.start);
+			const notes = changelog.slice(newest.start, section.start);
+			return releaseVersion === undefined || !startsMajor(releaseVersion, current, previous)
+				? notes
+				: majorLead(releaseVersion, majorChangesets) + notes;
 		}
 		newer = section.version;
 	}
 	// Unreachable while the seed heading exists once and every section above it descends.
 	throw new Error(`release notes: no "## ${previousVersion}" section below "## ${version}"`);
+}
+
+/** Whether the stable `releaseVersion` promotes the candidate `candidate` into a new major. */
+function startsMajor(releaseVersion: string, candidate: Version, previous: Version): boolean {
+	const release = parseVersion(releaseVersion);
+	if (!release || release.rc !== undefined) {
+		throw new Error(
+			`release notes: "${releaseVersion}" must be a stable major.minor.patch release`,
+		);
+	}
+	if (candidate.rc === undefined || stableVersion(candidate) !== stableVersion(release)) {
+		throw new Error(
+			`release notes: ${releaseVersion} does not promote the candidate ${formatVersion(candidate)}`,
+		);
+	}
+	return release.major > previous.major;
+}
+
+/** The consumed changesets that versioning keeps in `.changeset/pre/` beside the CHANGELOG. */
+async function consumedChangesets(root: string): Promise<string[]> {
+	const directory = path.join(root, ".changeset", "pre");
+	const entries = await readdir(directory);
+	const names = entries.filter((name) => name.endsWith(".md")).toSorted();
+	return Promise.all(names.map(async (name) => readFile(path.join(directory, name), "utf8")));
+}
+
+/** The `### Major Changes` lead of a new major: each consumed major changeset's summary, as Changesets lists it. */
+function majorLead(releaseVersion: string, summaries: readonly string[]): string {
+	if (summaries.length === 0) {
+		throw new Error(
+			`release notes: ${releaseVersion} starts a major, but .changeset/pre/ has no consumed major changeset`,
+		);
+	}
+	const entries = summaries.map((summary) =>
+		summary
+			.trim()
+			.split("\n")
+			.map((line, index) => {
+				if (index === 0) {
+					return `- ${line}`;
+				}
+				return line === "" ? "" : `  ${line}`;
+			})
+			.join("\n"),
+	);
+	return `### Major Changes\n\n${entries.join("\n\n")}\n\n`;
+}
+
+/** The summary of each consumed changeset that bumps `hephaestus` by a major. */
+export function majorChangesetSummaries(changesets: readonly string[]): string[] {
+	return changesets.flatMap((changeset) => {
+		const parts = /^---\n(?<front>[\s\S]*?)\n---\n(?<summary>[\s\S]*)$/u.exec(changeset)?.groups;
+		return parts !== undefined && /^"hephaestus":\s*major\s*$/mu.test(parts.front ?? "")
+			? [(parts.summary ?? "").trim()]
+			: [];
+	});
 }
 
 /** Refuses a cut whose CHANGELOG.md or MIGRATION.md keeps a burned release section or lacks a published one. */
@@ -584,17 +652,25 @@ if (import.meta.main && process.argv[2] === "--aliases") {
 	}
 } else if (import.meta.main && process.argv[2] === "--notes") {
 	// Appends to a file rather than stdout, so a refusal reaches the log and not the notes.
-	const [, previousVersion, version, changelog, notes] = process.argv.slice(2);
+	const [, previousVersion, version, changelog, notes, releaseVersion] = process.argv.slice(2);
 	if (!isSet(previousVersion) || !isSet(version) || !isSet(changelog) || !isSet(notes)) {
 		console.log(
-			"::error::usage: plan-release.ts --notes <previous-version> <version> <CHANGELOG.md> <notes-file>",
+			"::error::usage: plan-release.ts --notes <previous-version> <version> <CHANGELOG.md> <notes-file> [<release-version>]",
 		);
 		process.exitCode = 1;
 	} else {
 		try {
 			await appendFile(
 				notes,
-				await renderReleaseNotes(await readFile(changelog, "utf8"), previousVersion, version),
+				await renderReleaseNotes(
+					await readFile(changelog, "utf8"),
+					previousVersion,
+					version,
+					releaseVersion === undefined || releaseVersion === version ? undefined : releaseVersion,
+					releaseVersion === undefined || releaseVersion === version
+						? []
+						: majorChangesetSummaries(await consumedChangesets(path.dirname(changelog))),
+				),
 			);
 		} catch (error) {
 			console.log(`::error::${error instanceof Error ? error.message : String(error)}`);

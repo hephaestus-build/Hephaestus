@@ -38,7 +38,11 @@ ${warning}`;
 	if (Buffer.byteLength(body, "utf8") <= MAX_BODY_BYTES) {
 		return body;
 	}
-	return `${prefix}The complete release notes exceed GitHub's description limit. [Download the full notes](https://github.com/${repository}/releases/download/${release}/release-notes.md), or [read the changelog at the released commit](${source}/CHANGELOG.md).
+	// The lead that comes before the first version section (a new major's promise and its operator
+	// action, from renderReleaseNotes) stays in the description, so the limit never drops it.
+	const firstSection = notes.search(/^## /mu);
+	const lead = firstSection > 0 ? notes.slice(0, firstSection) : "";
+	return `${prefix}${lead}The complete release notes exceed GitHub's description limit. [Download the full notes](https://github.com/${repository}/releases/download/${release}/release-notes.md), or [read the changelog at the released commit](${source}/CHANGELOG.md).
 `;
 }
 

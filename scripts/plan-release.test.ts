@@ -14,6 +14,7 @@ import {
 	type ReleaseRef,
 	releaseOutputs,
 	releaseSourceState,
+	majorChangesetSummaries,
 	renderReleaseNotes,
 } from "./plan-release.ts";
 
@@ -267,6 +268,85 @@ void test("release notes carry every section since the published release, as the
 		await renderReleaseNotes(CHANGELOG, "0.87.0", "0.89.1"),
 		/Published already\.\n\n$/u,
 	);
+});
+
+const HISTORICAL =
+	"### Major Changes\n\n- The rc.1 wording.\n\n  **Operators:** The old first step.\n\n";
+const MAJOR_CHANGELOG = [
+	"# hephaestus\n\n",
+	section("1.0.0-rc.3", "Third candidate."),
+	section("1.0.0-rc.2", "Second candidate."),
+	`## 1.0.0-rc.1\n\n${HISTORICAL}### Minor Changes\n\n- First candidate.\n\n`,
+	section("0.95.1", "The last 0.x release."),
+].join("");
+const CHANGESETS = [
+	'---\n"hephaestus": minor\n---\n\nA minor change.\n',
+	'---\n"hephaestus": major\n---\n\nThe 1.0 promise.\n\n**Operators:** Follow the upgrade guide.\n',
+];
+
+void test("a stable major promotion leads with its consumed major changeset", async () => {
+	const notes = await renderReleaseNotes(
+		MAJOR_CHANGELOG,
+		"0.95.1",
+		"1.0.0-rc.3",
+		"1.0.0",
+		majorChangesetSummaries(CHANGESETS),
+	);
+	const lead =
+		"### Major Changes\n\n- The 1.0 promise.\n\n  **Operators:** Follow the upgrade guide.\n\n";
+	assert.equal(
+		notes,
+		lead +
+			MAJOR_CHANGELOG.slice(
+				MAJOR_CHANGELOG.indexOf("## 1.0.0-rc.3"),
+				MAJOR_CHANGELOG.indexOf("## 0.95.1"),
+			),
+	);
+	// Released text stays: the candidate keeps its historical entry in its own section.
+	assert.match(notes, /## 1\.0\.0-rc\.1\n\n### Major Changes\n\n- The rc\.1 wording\./u);
+	assert.doesNotMatch(notes, /A minor change|The last 0\.x release/u);
+	await assert.rejects(
+		renderReleaseNotes(MAJOR_CHANGELOG, "0.95.1", "1.0.0-rc.3", "1.0.0", []),
+		/1\.0\.0 starts a major, but \.changeset\/pre\/ has no consumed major changeset/u,
+	);
+});
+
+void test("candidate cuts and minor promotions keep the source order", async () => {
+	const inOrder = MAJOR_CHANGELOG.slice(
+		MAJOR_CHANGELOG.indexOf("## 1.0.0-rc.3"),
+		MAJOR_CHANGELOG.indexOf("## 0.95.1"),
+	);
+	assert.equal(await renderReleaseNotes(MAJOR_CHANGELOG, "0.95.1", "1.0.0-rc.3"), inOrder);
+	const minor = [
+		"# hephaestus\n\n",
+		section("1.1.0-rc.1", "Next."),
+		section("1.0.0", "Stable."),
+	].join("");
+	assert.equal(
+		await renderReleaseNotes(
+			minor,
+			"1.0.0",
+			"1.1.0-rc.1",
+			"1.1.0",
+			majorChangesetSummaries(CHANGESETS),
+		),
+		section("1.1.0-rc.1", "Next."),
+	);
+	await assert.rejects(
+		renderReleaseNotes(MAJOR_CHANGELOG, "0.95.1", "1.0.0-rc.3", "1.0.1"),
+		/1\.0\.1 does not promote the candidate 1\.0\.0-rc\.3/u,
+	);
+	await assert.rejects(
+		renderReleaseNotes(MAJOR_CHANGELOG, "0.95.1", "1.0.0-rc.3", "1.0.0-rc.4"),
+		/must be a stable major\.minor\.patch release/u,
+	);
+});
+
+void test("only changesets that bump hephaestus by a major count as its promise", () => {
+	assert.deepEqual(majorChangesetSummaries(CHANGESETS), [
+		"The 1.0 promise.\n\n**Operators:** Follow the upgrade guide.",
+	]);
+	assert.deepEqual(majorChangesetSummaries(["---\n---\n\nNo release.\n", "no front matter"]), []);
 });
 
 const refused = async (changelog: string, previous: string, version: string, reason: RegExp) =>
