@@ -27,7 +27,7 @@ import { SOURCE_CATALOGERS } from "./release-source-sbom.ts";
 
 const release = "v0.93.0";
 const commit = "c".repeat(40);
-const repository = "ghcr.io/hephaestus-build/webapp";
+const repository = "ghcr.io/hephaestus-build/server";
 const indexDigest = `sha256:${"a".repeat(64)}`;
 const chart = {
 	repository: "ghcr.io/hephaestus-build/charts/hephaestus",
@@ -38,12 +38,11 @@ const chartPackage = `hephaestus-${chart.version}.tgz`;
 const defaultChart = chart;
 /**
  * The other images that the chart runs, as upstream pins: their evidence needs no attestation and
- * no alias, so webapp stays the one first-party image that this suite promotes.
+ * no alias, so the server, which carries the web app, stays the one first-party image that this suite promotes.
  */
 const upstream = [
 	"agent",
 	"alertmanager",
-	"server",
 	"postgres",
 	"postgres-exporter",
 	"victoria-metrics",
@@ -57,7 +56,7 @@ const upstream = [
 /** When the fixture bundle was generated. Fixed and in the past, as for any bundle that a later run verifies. */
 const generatedAt = "2026-09-01T00:00:00Z";
 /** The release image inventory of the fixture checkout and its evidence. */
-const inventory = { schemaVersion: 1, images: ["webapp"], upstream };
+const inventory = { schemaVersion: 1, images: ["server"], upstream };
 const jointLock = `release-${release}.chart.json`;
 /** The k3s bundle, in the job's workspace as release.yml builds it: the only k3s asset of a release. */
 const k3sBundleFor = (tag: string) => `hephaestus-k3s-${tag.slice(1)}.tar.gz`;
@@ -230,7 +229,7 @@ if (tool === 'git') {
     fs.writeFileSync(option('--bundle'), JSON.stringify({sha256: crypto.createHash('sha256').update(bytes).digest('hex')}));
   } else if (args[0] === 'verify-attestation') {
     const subject = read('manifest.json').subjects.find(subject => args.at(-1).endsWith(subject.digest));
-    const predicate = read('webapp-' + subject.platform.replace('/', '-') + '.spdx.json');
+    const predicate = read('server-' + subject.platform.replace('/', '-') + '.spdx.json');
     console.log(JSON.stringify({payload:Buffer.from(JSON.stringify({predicate})).toString('base64')}));
   } else if (args[0] === 'sign') {
     // The registry keeps a signature beside the chart digest that the release signed.
@@ -292,6 +291,64 @@ if (tool === 'git') {
 } else throw new Error('Unexpected tool');
 `;
 
+/** The packages that every build of the web app bundles, as the server's jar carries them (ADR 0100). */
+const webAppPackages = [
+	{ name: "react", version: "19.2.0" },
+	{ name: "react-dom", version: "19.2.0" },
+];
+
+/** Where the web app keeps the `package.json` of one bundled package. */
+const bundledManifest = (name: string, version: string) =>
+	`.vite/packages/${encodeURIComponent(`${name}@${version}`)}/package.json`;
+
+/** The four web app documents of one server subject, taken from the jar of the same image digest. */
+async function writeWebApp(
+	json: (name: string, value: unknown) => Promise<void>,
+	prefix: string,
+	reference: string,
+): Promise<void> {
+	const artifacts = webAppPackages.map(({ name, version }) => ({
+		name,
+		version,
+		type: "npm",
+		foundBy: "javascript-package-cataloger",
+		purl: `pkg:npm/${name}@${version}`,
+		locations: [{ path: `/${bundledManifest(name, version)}` }],
+		licenses: [{ value: "MIT" }],
+	}));
+	await json(`${prefix}.web-app.syft.json`, {
+		source: { type: "directory", name: "web-app" },
+		artifacts,
+		files: artifacts.map((artifact) => ({ location: artifact.locations[0] })),
+	});
+	await json(`${prefix}.web-app.spdx.json`, {
+		spdxVersion: "SPDX-2.3",
+		dataLicense: "CC0-1.0",
+		documentNamespace: "https://example.invalid/web-app",
+		packages: artifacts.map(({ name, version }) => ({ name, versionInfo: version })),
+	});
+	await json(`${prefix}.web-app.cdx.json`, {
+		bomFormat: "CycloneDX",
+		specVersion: "1.7",
+		components: artifacts.map(({ name, version }) => ({ name, version })),
+	});
+	// Trivy runs against the web app at `<reference>/web-app`, so the report names the image it came from.
+	await json(`${prefix}.web-app.trivy.json`, {
+		ArtifactName: `${reference}/web-app`,
+		Results: [
+			{
+				Type: "node-pkg",
+				Target: "Node.js",
+				Packages: webAppPackages.map(({ name, version }) => ({
+					Name: name,
+					Version: version,
+					FilePath: bundledManifest(name, version),
+				})),
+			},
+		],
+	});
+}
+
 async function fixture(directory: string, source = commit, tag = release) {
 	const fixtureRelease = tag;
 	const fixtureChart = { ...defaultChart, version: tag.slice(1) };
@@ -327,7 +384,7 @@ async function fixture(directory: string, source = commit, tag = release) {
 	};
 	const subjects = [
 		...platforms.map((architecture, index) => ({
-			image: "webapp",
+			image: "server",
 			repository,
 			provenance: "first-party",
 			indexDigest,
@@ -350,7 +407,7 @@ async function fixture(directory: string, source = commit, tag = release) {
 		release: fixtureRelease,
 		commit: source,
 		generatedAt,
-		bundledNpmSbom: 1,
+		bundledNpmSbom: 2,
 		sourceSbom: 1,
 		subjects,
 	};
@@ -424,10 +481,7 @@ async function fixture(directory: string, source = commit, tag = release) {
 	for (const subject of subjects) {
 		const prefix = `${subject.image}-${subject.platform.replace("/", "-")}`;
 		const reference = `${subject.repository}@${subject.digest}`;
-		const packagePath =
-			subject.image === "webapp"
-				? "/usr/share/nginx/html/.vite/packages/example%401.0.0/package.json"
-				: "/app/package.json";
+		const packagePath = "/app/package.json";
 		const artifact = {
 			name: "example",
 			version: "1.0.0",
@@ -480,25 +534,10 @@ async function fixture(directory: string, source = commit, tag = release) {
 			components: [artifact],
 		});
 		for (const kind of ["trivy", "license"]) {
-			await json(`${prefix}.${kind}.json`, {
-				ArtifactName: reference,
-				Results:
-					subject.image === "webapp"
-						? [
-								{
-									Type: "node-pkg",
-									Target: "Node.js",
-									Packages: [
-										{
-											Name: artifact.name,
-											Version: artifact.version,
-											FilePath: packagePath.slice(1),
-										},
-									],
-								},
-							]
-						: [],
-			});
+			await json(`${prefix}.${kind}.json`, { ArtifactName: reference, Results: [] });
+		}
+		if (subject.image === "server") {
+			await writeWebApp(json, prefix, reference);
 		}
 	}
 	const validation = spawnSync(
@@ -687,7 +726,7 @@ async function tamperChartAssets(
 		await json("chart-signatures", []);
 	}
 	if (scenario === "unpinned-chart") {
-		// A signed chart at the locked digest whose values pin another webapp than the joint lock.
+		// A signed chart at the locked digest whose values pin another server than the joint lock.
 		const reference = `${chart.repository}@${chart.digest}`;
 		const registry = asRecord(
 			parseJson(await readFile(path.join(archive, "chart-registry"), "utf8")),
@@ -697,8 +736,8 @@ async function tamperChartAssets(
 		const bytes = Buffer.from(String(entry.bytes), "base64")
 			.toString("utf8")
 			.replace(
-				`webapp: "${repository}@${indexDigest}"`,
-				`webapp: "${repository}@sha256:${"9".repeat(64)}"`,
+				`server: "${repository}@${indexDigest}"`,
+				`server: "${repository}@sha256:${"9".repeat(64)}"`,
 			);
 		await json("chart-registry", {
 			[reference]: { ...entry, bytes: Buffer.from(bytes).toString("base64") },
@@ -781,7 +820,7 @@ for (const scenario of [
 				assert.match(result.calls, /"--destination","[^"]*\/installed-chart\/\.chart-[^"]*"/u);
 				assert.match(
 					await readFile(path.join(directory, "installed-chart", `${release}.images.yaml`), "utf8"),
-					/ghcr\.io\/hephaestus-build\/webapp@sha256:/u,
+					/ghcr\.io\/hephaestus-build\/server@sha256:/u,
 				);
 
 				// Its signature is the registry signature of that digest, by the release workflow.
@@ -834,7 +873,7 @@ for (const scenario of [
 				await json("vulnerability-policy.json", {});
 			}
 			if (scenario === "missing-sbom") {
-				await rm(path.join(archive, "webapp-linux-arm64.spdx.json"));
+				await rm(path.join(archive, "server-linux-arm64.spdx.json"));
 			}
 			await tamperWorkspaceAsset(scenario, archive);
 			if (scenario === "wrong-commit") {
@@ -1435,7 +1474,7 @@ void test(
 			assert.notEqual(result.status, 0);
 			assert.match(result.stderr, pattern);
 		};
-		const scanFile = "webapp-linux-amd64.trivy.json";
+		const scanFile = "server-linux-amd64.web-app.trivy.json";
 		const scan = asRecord(
 			parseJson(await readFile(path.join(archive, scanFile), "utf8")),
 			"Trivy report",
@@ -1444,13 +1483,64 @@ void test(
 		verify(/Trivy omitted bundled npm/u);
 		await json(scanFile, scan);
 
-		const file = "webapp-linux-amd64.syft.json";
+		const file = "server-linux-amd64.web-app.syft.json";
 		const native = asRecord(
 			parseJson(await readFile(path.join(archive, file), "utf8")),
 			"Syft inventory",
 		);
 		await json(file, { ...native, files: [] });
 		verify(/no bundled npm/u);
+	},
+);
+
+void test(
+	"a current bundle without one of the server's web app documents is refused",
+	{ skip: process.platform === "win32" },
+	async (t) => {
+		const directory = await mkdtemp(path.join(tmpdir(), "release-web-app-coverage-"));
+		t.after(async () => rm(directory, { recursive: true, force: true }));
+		const { archive, environment } = await fixture(directory);
+		const verify = (mode: string) =>
+			spawnSync(
+				process.execPath,
+				[path.join(root, "scripts/verify-release-evidence.ts"), archive, mode],
+				{ encoding: "utf8", env: environment },
+			);
+		const sums = await readFile(path.join(archive, "SHA256SUMS"), "utf8");
+		for (const kind of ["syft", "spdx", "cdx", "trivy"]) {
+			const file = `server-linux-arm64.web-app.${kind}.json`;
+			const bytes = await readFile(path.join(archive, file));
+			// A signed archive that neither holds nor covers the document: its checksums still pass.
+			await rm(path.join(archive, file));
+			await writeFile(
+				path.join(archive, "SHA256SUMS"),
+				sums
+					.split("\n")
+					.filter((line) => !line.endsWith(`  ${file}`))
+					.join("\n"),
+			);
+			await sign(path.join(archive, "SHA256SUMS"));
+			const refused = verify("--verify-signatures");
+			assert.notEqual(refused.status, 0, file);
+			assert.match(
+				refused.stderr,
+				new RegExp(`SHA256SUMS does not cover ${file.replaceAll(".", String.raw`\.`)}`, "u"),
+			);
+			await writeFile(path.join(archive, file), bytes);
+		}
+		await writeFile(path.join(archive, "SHA256SUMS"), sums);
+		await sign(path.join(archive, "SHA256SUMS"));
+		assert.equal(verify("--verify-signatures").status, 0);
+		// A capture reads the web app's inventory and scan, so it cannot write a bundle without them.
+		for (const kind of ["syft", "trivy"]) {
+			const file = path.join(archive, `server-linux-amd64.web-app.${kind}.json`);
+			const bytes = await readFile(file);
+			await rm(file);
+			const capture = verify("--write-validation");
+			assert.notEqual(capture.status, 0, kind);
+			assert.match(capture.stderr, /ENOENT/u);
+			await writeFile(file, bytes);
+		}
 	},
 );
 
@@ -1496,7 +1586,7 @@ void test(
 			...policy,
 			exceptions: [
 				{
-					image: "webapp",
+					image: "server",
 					platform: "linux/amd64",
 					vulnerability: "CVE-2026-0001",
 					package: "example",

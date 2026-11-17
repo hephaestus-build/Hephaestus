@@ -29,16 +29,25 @@ export const KNOWN_BUNDLED_PACKAGES = ["react", "react-dom"] as const;
 export const WEB_APP_STEM = "web-app";
 
 /**
- * Extracts the web app of an image into `destination` and returns its directory, or `undefined` when the image
- * carries none, as a server image built before the web app moved into it.
+ * The name under which a scan of the web app reports it: the image reference and the directory in its jar. Scans run in
+ * the scratch directory against this relative path, so Trivy's `ArtifactName` names the image digest that the web app
+ * came from, and the policy evaluator checks it as it checks an image scan.
+ */
+export function webAppArtifact(reference: string): string {
+	return `${reference}/${WEB_APP_STEM}`;
+}
+
+/**
+ * Extracts the web app of an image below `scratch`, at {@link webAppArtifact}, and returns that relative path, or
+ * `undefined` when the image carries none, as a server image built before the web app moved into it.
  */
 export async function extractWebApp(
 	reference: string,
 	platform: string,
-	destination: string,
+	scratch: string,
 ): Promise<string | undefined> {
-	await mkdir(destination, { recursive: true });
-	const jar = path.join(destination, "runner.jar");
+	await mkdir(scratch, { recursive: true });
+	const jar = path.join(scratch, "runner.jar");
 	// `create` pulls the platform's image and runs nothing.
 	const container = (await output("docker", ["create", "--platform", platform, reference])).trim();
 	try {
@@ -46,13 +55,15 @@ export async function extractWebApp(
 	} finally {
 		await run("docker", ["rm", container], { stdout: "ignore" });
 	}
-	const classes = path.join(destination, "classes");
-	await run("unzip", ["-q", "-o", jar, "-d", classes]);
-	const webApp = path.join(classes, "web-app");
-	return existsSync(path.join(webApp, "index.html")) ? webApp : undefined;
+	await run("unzip", ["-q", "-o", jar, "-d", path.join(scratch, reference)]);
+	const artifact = webAppArtifact(reference);
+	return existsSync(path.join(scratch, artifact, "index.html")) ? artifact : undefined;
 }
 
-/** Syft over the extracted web app. The package cataloger reads installed `package.json` files, as in an image. */
+/**
+ * Syft over the extracted web app, run in the scratch directory. The package cataloger reads installed `package.json`
+ * files, as in an image.
+ */
 export function webAppSyftArguments(directory: string, config: string): string[] {
 	return [
 		`dir:${directory}`,
@@ -64,8 +75,8 @@ export function webAppSyftArguments(directory: string, config: string): string[]
 }
 
 /**
- * Trivy over the extracted web app, as a root file system so that it reads installed `package.json` files as it does
- * in an image. `flags` are the caller's, as for its image scan.
+ * Trivy over the extracted web app, run in the scratch directory, as a root file system so that it reads installed
+ * `package.json` files as it does in an image. `flags` are the caller's, as for its image scan.
  */
 export function webAppTrivyArguments(
 	directory: string,

@@ -13,6 +13,7 @@ import {
 import { isSet } from "./lib/env.ts";
 import { asString, isRecord as record, readJsonFileSync } from "./lib/json.ts";
 import { run } from "./lib/process.ts";
+import { webAppArtifact } from "./lib/web-app-scan.ts";
 
 interface Finding {
 	FixedVersion?: string;
@@ -873,7 +874,8 @@ export function renderSummary(
 
 if (import.meta.main) {
 	const { positionals, values } = parseArgs({
-		options: { "no-annotations": { type: "boolean" } },
+		// `--web-app`: the report scans the web app inside the image's jar (lib/web-app-scan.ts), not the image.
+		options: { "no-annotations": { type: "boolean" }, "web-app": { type: "boolean" } },
 		allowPositionals: true,
 	});
 	const [image, platform, digest, repository, reportPath, policyPath, outputPath, syftPath] =
@@ -897,18 +899,21 @@ if (import.meta.main) {
 	if (!/^sha256:[a-f0-9]{64}$/u.test(digest)) {
 		throw new Error("malformed subject digest");
 	}
-	const reference = `${repository}@${digest}`;
+	const imageReference = `${repository}@${digest}`;
+	const webApp = values["web-app"] === true;
+	const reference = webApp ? webAppArtifact(imageReference) : imageReference;
 	const policy = readJsonFileSync(policyPath);
 	// Component identity and the official Go advisories are read only where an exception for this subject
 	// depends on them, and always fresh: an archived advisory is never current. Both are kept beside the
 	// report; a scan or fetch that fails, or reads another subject, grants nothing.
 	const stem = nodePath.join(nodePath.dirname(reportPath), nodePath.basename(reportPath, ".json"));
-	const advisoryIds = componentAdvisories(policy, { image, platform });
+	// Component-bound exceptions name binaries of the image; no web app finding can match one.
+	const advisoryIds = webApp ? [] : componentAdvisories(policy, { image, platform });
 	let identity = syftPath;
-	if (!isSet(identity) && needsComponentEvidence(policy, { image, platform })) {
+	if (!webApp && !isSet(identity) && needsComponentEvidence(policy, { image, platform })) {
 		identity = `${stem}.syft.json`;
 		await run("syft", [
-			...syftImageArguments(reference, platform),
+			...syftImageArguments(imageReference, platform),
 			...SYFT_COMPONENT_CATALOGERS,
 			"-o",
 			`syft-json=${identity}`,

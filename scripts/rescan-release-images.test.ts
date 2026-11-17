@@ -10,14 +10,18 @@ import { isRecord } from "./lib/json.ts";
 const digest = `sha256:${"a".repeat(64)}`;
 const release = "v0.86.1";
 
-async function fixture(tag = release) {
+/**
+ * An archived release by default: its server image predates the web app's move into it, and a webapp image carries
+ * the web app (ADR 0100).
+ */
+async function fixture(tag = release, names = ["server", "webapp"]) {
 	const directory = await mkdtemp(path.join(tmpdir(), "release-rescan-"));
 	const evidence = path.join(directory, "evidence");
 	const reports = path.join(directory, "reports");
 	const bin = path.join(directory, "bin");
 	await mkdir(evidence);
 	await mkdir(bin);
-	const images = ["server", "webapp"].map((image) => ({
+	const images = names.map((image) => ({
 		image,
 		repository: `ghcr.io/hephaestus-build/${image}`,
 		provenance: "first-party",
@@ -68,6 +72,11 @@ if [ "$FAIL_AUTH" = '${command}' ]; then printf '%s\n' '${command} refused' >&2;
 	await writeFile(
 		path.join(bin, "docker"),
 		`#!/bin/sh
+case "$1" in
+ create) printf '%s\n' 'container'; exit 0;;
+ cp) : > "$3"; exit 0;;
+ rm) exit 0;;
+esac
 if [ "$5" = '--raw' ]; then printf '%s' '{"layers":[]}'; else printf '%s' '${digest}'; fi
 `,
 		{ mode: 0o755 },
@@ -80,6 +89,15 @@ printf '%s' '{"Results":[]}' > "$8"
 `,
 		{ mode: 0o755 },
 	);
+	// The server's jar holds the web app only where WEB_APP is set.
+	await writeFile(
+		path.join(bin, "unzip"),
+		`#!/bin/sh
+mkdir -p "$5"
+if [ "$WEB_APP" = 'true' ]; then mkdir -p "$5/web-app"; : > "$5/web-app/index.html"; fi
+`,
+		{ mode: 0o755 },
+	);
 	await writeFile(
 		path.join(bin, "node"),
 		`#!/bin/sh
@@ -88,6 +106,9 @@ case "$1" in *verify-release-evidence.ts)
  if [ -n "$ARCHIVE_FAILURE" ]; then printf '%s\n' "$ARCHIVE_FAILURE" >&2
  else printf '%s\n' 'archived evidence has no SHA256SUMS signature' >&2; fi
  exit 1;; esac
+case "$6" in *.web-app.json) if [ "$FAIL_WEB_APP" = 'true' ]; then
+ printf '%s' '{"status":"fail"}' > "$8"; exit 1
+fi;; esac
 if [ "$2-$3" = 'server-linux/amd64' ] && [ "$PASS_SCAN" != 'true' ]; then
  if [ "$FAIL_SCAN" = 'infra' ]; then printf '%s\n' 'identity acquisition unavailable' >&2; exit 3; fi
  printf '%s' '{"status":"fail"}' > "$8"; exit 1
@@ -234,6 +255,39 @@ void test(
 		await assert.rejects(readFile(path.join(f.directory, "archive-read")), /ENOENT/u);
 		const scans = await readFile(path.join(f.directory, "scans"), "utf8");
 		assert.equal(scans.trim().split("\n").length, 4);
+	},
+);
+
+void test(
+	"a server image that carries the web app has the web app scanned under the same policy",
+	{ skip: process.platform === "win32" },
+	async () => {
+		for (const failWebApp of [false, true]) {
+			const f = await fixture(release, ["server", "agent"]);
+			const child = execute(f, {
+				PASS_SCAN: "true",
+				WEB_APP: "true",
+				FAIL_WEB_APP: String(failWebApp),
+			});
+			assert.equal(child.status === 0, !failWebApp, child.stderr);
+			// The two images and the server's web app, once per platform.
+			const scans = await readFile(path.join(f.directory, "scans"), "utf8");
+			assert.equal(scans.trim().split("\n").length, 6);
+			for (const platform of ["linux-amd64", "linux-arm64"]) {
+				const policy: unknown = JSON.parse(
+					await readFile(path.join(f.reports, `server-${platform}.web-app.policy.json`), "utf8"),
+				);
+				assert.deepEqual(policy, { status: failWebApp ? "fail" : "pass" });
+			}
+			const value = await result(f);
+			assert.deepEqual(value.outcomes, [
+				{ image: "server", passed: !failWebApp, platform: "linux/amd64" },
+				{ image: "agent", passed: true, platform: "linux/amd64" },
+				{ image: "server", passed: !failWebApp, platform: "linux/arm64" },
+				{ image: "agent", passed: true, platform: "linux/arm64" },
+			]);
+			assert.deepEqual(value.currentSecurity, { status: failWebApp ? "fail" : "pass" });
+		}
 	},
 );
 

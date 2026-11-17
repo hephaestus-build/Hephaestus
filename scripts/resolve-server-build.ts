@@ -91,7 +91,6 @@ type Api = (path: string) => Promise<unknown>;
 export const imageManifestJob = "Images / Manifest";
 export const imageAttestations = {
 	server: "Attest the server image",
-	webapp: "Attest the webapp image",
 	agent: "Attest the agent image",
 	postgres: "Attest the postgres image",
 } as const;

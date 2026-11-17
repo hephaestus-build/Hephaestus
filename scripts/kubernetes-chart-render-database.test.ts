@@ -613,8 +613,7 @@ await test("the database admits only the roles that hold its login", () => {
 			get(peer, "podSelector", "matchLabels", "app.kubernetes.io/component"),
 		),
 	);
-	assert.ok(admitted.has("server"));
-	assert.ok(!admitted.has("webapp"));
+	assert.deepEqual(admitted, new Set(["server", "migration"]));
 });
 
 const counts = (resources: Resource[]) => [get(workload(resources, "server"), "spec", "replicas")];
@@ -632,7 +631,7 @@ await test("server.stopped stops the server and restores the release", () => {
 		running.map((resource) => `${String(kindOf(resource))}/${nameOf(resource)}`),
 	);
 	assert.equal(get(workload(stopped, "server"), "spec", "strategy", "type"), "RollingUpdate");
-	for (const component of ["postgresql", "webapp"]) {
+	for (const component of ["postgresql"]) {
 		assert.equal(get(workload(stopped, component), "spec", "replicas"), 1, component);
 	}
 

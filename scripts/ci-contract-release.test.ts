@@ -364,7 +364,7 @@ void describe("ci-contract: release", () => {
 		const policy: unknown = JSON.parse(
 			await readFile("security/vulnerability-policy.json", "utf8"),
 		);
-		assert.deepEqual(evaluateVulnerabilityPolicy("webapp", { Results: [] }, policy).errors, []);
+		assert.deepEqual(evaluateVulnerabilityPolicy("server", { Results: [] }, policy).errors, []);
 	});
 
 	void test("scans every release subject before the release, not only at the release gate", async () => {
@@ -1181,10 +1181,10 @@ void test(
 		const verify = namedStep(workflow, ["jobs", "promote"], "Verify the public webapp version");
 		const directory = await mkdtemp(path.join(tmpdir(), "promote-verify-"));
 		context.after(async () => rm(directory, { recursive: true, force: true }));
-		// The public webapp serves an env-config script that names the version it runs.
+		// The server names the version it runs in the instance metadata. Any other path is not found.
 		await writeFile(
 			path.join(directory, "curl"),
-			`#!/bin/sh\ncase "$*" in\n  */env-config.*) echo 'window.ENV = { APPLICATION_VERSION: "1.0.0-rc.8" };' ;;\n  *) echo '<script src="/env-config.0123abcd.js"></script>' ;;\nesac\n`,
+			`#!/bin/sh\ncase "$*" in\n  */.well-known/hephaestus.json) echo '{"apexOrigin":"https://staging.example.invalid","version":"1.0.0-rc.8"}' ;;\n  *) exit 22 ;;\nesac\n`,
 		);
 		await writeFile(path.join(directory, "sleep"), "#!/bin/sh\nexec /bin/sleep 0.2\n");
 		await chmod(path.join(directory, "curl"), 0o755);
@@ -1283,7 +1283,7 @@ void test("the flattened signer preserves its published digest output contract",
 		root.getIn(["jobs", "Docker", "uses"]),
 		"./.github/workflows/reusable-docker-build.yml",
 	);
-	for (const image of ["server", "webapp", "agent", "postgres"]) {
+	for (const image of ["server", "agent", "postgres"]) {
 		assert.equal(
 			producer.getIn(["on", "workflow_call", "outputs", `${image}-digest`, "value"]),
 			`\${{ jobs.merge.outputs.${image}-digest }}`,
@@ -1391,7 +1391,7 @@ void test("release eviction uses only its drill cluster and captured images and 
 	assert.equal(worker.getIn(["with", "queue"]), true);
 	assert.equal(worker.getIn(["with", "eviction-drill"]), true);
 	assert.equal(worker.getIn(["with", "drills-only"]), true);
-	for (const name of ["server", "webapp", "agent", "postgres"]) {
+	for (const name of ["server", "agent", "postgres"]) {
 		assert.ok(
 			String(worker.getIn(["with", "image-digests"])).includes(
 				`"${name}":"\${{ needs.tag-images.outputs.${name}-digest }}"`,

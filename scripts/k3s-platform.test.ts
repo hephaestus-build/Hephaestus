@@ -104,7 +104,6 @@ function renderOneHost(extra: Record<string, unknown> = {}, siteValues?: unknown
 				"postgres-exporter": `docker.io/prometheuscommunity/postgres-exporter${digest("9")}`,
 				"victoria-metrics": `docker.io/victoriametrics/victoria-metrics${digest("7")}`,
 				vmalert: `docker.io/victoriametrics/vmalert${digest("8")}`,
-				webapp: `ghcr.io/hephaestus-build/webapp${digest("5")}`,
 			},
 		};
 		const site = siteValues ?? {

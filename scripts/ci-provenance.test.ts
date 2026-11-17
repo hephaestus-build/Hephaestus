@@ -44,7 +44,7 @@ void test("image provenance can persist storage records through every reusable-w
 				.filter((step) => String(step.name).startsWith("Attest the "));
 			assert.deepEqual(
 				attestations.map((step) => step.name),
-				["server", "webapp", "agent", "postgres"].map((name) => `Attest the ${name} image`),
+				["server", "agent", "postgres"].map((name) => `Attest the ${name} image`),
 			);
 			for (const attestation of attestations) {
 				assert.match(String(attestation.uses), /^actions\/attest@[a-f0-9]{40}$/u);
@@ -142,7 +142,7 @@ function parseDocument(source: string) {
 const repository = "hephaestus-build/Hephaestus";
 const owner = "hephaestus-build";
 const digest = `sha256:${"a".repeat(64)}`;
-const image = `ghcr.io/${owner}/webapp`;
+const image = `ghcr.io/${owner}/agent`;
 const immutable = `${image}@${digest}`;
 const verificationSites = [
 	{ file: "reusable-docker-build.yml", job: "merge", step: "Verify signatures + attestations" },
@@ -246,17 +246,16 @@ if (tool === 'docker' && args.includes('inspect')) process.stdout.write(process.
 								: JSON.stringify({
 										tags: failure === "emptyTags" ? [] : [`${image}:commit`, `${image}:ci`],
 									}),
-						IMAGES: JSON.stringify(["webapp"]),
-						DIGESTS: JSON.stringify({ webapp: digest }),
+						IMAGES: JSON.stringify(["agent"]),
+						DIGESTS: JSON.stringify({ agent: digest }),
 						INPUTS_REGISTRY: "ghcr.io",
 						REPOSITORY: repository,
 						REPOSITORY_OWNER: owner,
 						ALIAS_BASE: "b".repeat(40),
 						HEAD_SHA: "c".repeat(40),
 						PR_NUMBER: "42",
-						WEBAPP_CHANGED: "false",
 						APPLICATION_SERVER_CHANGED: "true",
-						AGENT_IMAGES_CHANGED: "true",
+						AGENT_IMAGES_CHANGED: "false",
 						POSTGRES_IMAGE_CHANGED: "true",
 					},
 				});
@@ -314,7 +313,7 @@ if (tool === 'docker' && args.includes('inspect')) process.stdout.write(process.
 						"--tag",
 						`${image}:ci`,
 						"--metadata-file",
-						path.join(directory, "published-webapp.json"),
+						path.join(directory, "published-agent.json"),
 						immutable,
 					]);
 				}
@@ -410,8 +409,8 @@ process.exit(calls <= Number(process.env.FAILURES) ? 1 : 0);
 						PATH: `${directory}${path.delimiter}${process.env.PATH ?? ""}`,
 						CALL_LOG: log,
 						FAILURES: String(failures),
-						IMAGES: JSON.stringify(["webapp"]),
-						DIGESTS: JSON.stringify({ webapp: digest }),
+						IMAGES: JSON.stringify(["agent"]),
+						DIGESTS: JSON.stringify({ agent: digest }),
 						INPUTS_REGISTRY: "ghcr.io",
 					},
 				},
@@ -447,20 +446,20 @@ for (const [captured, reused] of [
 		const output = path.join(directory, "output");
 		await writeFile(output, "");
 		const descriptor = { "containerimage.descriptor": { digest: captured } };
-		await writeFile(path.join(directory, "merged-webapp.json"), JSON.stringify(descriptor));
+		await writeFile(path.join(directory, "merged-agent.json"), JSON.stringify(descriptor));
 		const result = spawnSync("bash", ["-e", "-c", String(capture.get("run"))], {
 			encoding: "utf8",
 			env: {
 				...process.env,
 				RUNNER_TEMP: directory,
 				GITHUB_OUTPUT: output,
-				IMAGES: JSON.stringify(["webapp"]),
-				REUSED_DIGESTS: JSON.stringify(reused === "" ? {} : { webapp: reused }),
+				IMAGES: JSON.stringify(["agent"]),
+				REUSED_DIGESTS: JSON.stringify(reused === "" ? {} : { agent: reused }),
 			},
 		});
 		// A reused digest is the subject on its own; a build's merge output cannot replace it.
 		assert.equal(result.status === 0, valid, result.stderr);
-		assert.equal(await readFile(output, "utf8"), valid ? `webapp=${digest}\n` : "");
+		assert.equal(await readFile(output, "utf8"), valid ? `agent=${digest}\n` : "");
 	});
 }
 
@@ -484,7 +483,7 @@ void test("canonical tags are withheld until verification for both image builder
 	// Each bake target names no tag and pushes by digest only when the run publishes.
 	const bake = await readFile("docker/docker-bake.hcl", "utf8");
 	assert.doesNotMatch(bake, /\btags\s*=/u);
-	for (const target of ["webapp", "agent", "postgres"]) {
+	for (const target of ["agent", "postgres"]) {
 		assert.ok(
 			bake.includes(
 				`output     = PUBLISH == "true" ? ["type=image,\\"name=\${repository("${target}")}\\",push-by-digest=true,name-canonical=true,push=true"] : ["type=cacheonly"]`,
@@ -644,7 +643,7 @@ for (const scenario of [
 			t.after(async () => rm(directory, { recursive: true, force: true }));
 			const artifactRoot = path.join(directory, "digests");
 			// One directory per image, holding one directory per platform.
-			const imageRoot = path.join(artifactRoot, "webapp");
+			const imageRoot = path.join(artifactRoot, "agent");
 			await mkdir(imageRoot, { recursive: true });
 			for (const arch of architectures) {
 				const sourceDigest = arch === "arm64" ? armLeaf : buildIndex;
@@ -693,7 +692,7 @@ process.stdout.write(ref.endsWith(process.env.MERGED_DIGEST) ? process.env.FINAL
 					RUNNER_TEMP: directory,
 					INPUTS_REGISTRY: "ghcr.io",
 					IMAGE_NAMES: String(workflow.getIn(["env", "IMAGE_NAMES"])),
-					BUILT: JSON.stringify(["webapp"]),
+					BUILT: JSON.stringify(["agent"]),
 					PLATFORMS: JSON.stringify(platforms),
 					GITHUB_RUN_ID: "77",
 					GITHUB_RUN_ATTEMPT: "1",
@@ -741,7 +740,7 @@ process.stdout.write(ref.endsWith(process.env.MERGED_DIGEST) ? process.env.FINAL
 			assert.ok(
 				steps.items.indexOf(create) <
 					steps.items.findIndex(
-						(step) => isMap(step) && step.get("name") === "Attest the webapp image",
+						(step) => isMap(step) && step.get("name") === "Attest the agent image",
 					),
 			);
 		},
@@ -834,7 +833,7 @@ if (tool === 'docker' && args.includes('--format')) {
 					PATH: `${directory}${path.delimiter}${process.env.PATH ?? ""}`,
 					CALL_LOG: log,
 					GITHUB_OUTPUT: output,
-					REUSED: JSON.stringify(["webapp"]),
+					REUSED: JSON.stringify(["agent"]),
 					REGISTRY: "ghcr.io",
 					COMMIT: pushCommit,
 					QUEUE_RUN: "queue" in scenario ? scenario.queue : queueRun,
@@ -856,10 +855,7 @@ if (tool === 'docker' && args.includes('--format')) {
 			// ships an image the merge group did not test, and does not rebuild it either.
 			const reused = Object.keys(scenario).length === 1;
 			assert.equal(result.status === 0, reused, result.stderr);
-			assert.equal(
-				await readFile(output, "utf8"),
-				reused ? `digests={"webapp":"${digest}"}\n` : "",
-			);
+			assert.equal(await readFile(output, "utf8"), reused ? `digests={"agent":"${digest}"}\n` : "");
 			if (reused) {
 				const recorded = await readFile(log, "utf8");
 				const calls = recorded
@@ -898,7 +894,7 @@ void test("a reused image skips only building, merging and attesting", async () 
 	assert.equal(workflow.hasIn(["jobs", "reuse"]), false);
 	assert.equal(workflow.hasIn(["jobs", "build", "needs"]), false);
 	const buildCondition = String(workflow.getIn(["jobs", "build", "if"]));
-	for (const name of ["server", "webapp", "agent", "postgres"]) {
+	for (const name of ["server", "agent", "postgres"]) {
 		assert.ok(
 			buildCondition.includes(
 				`(inputs.${name} && !contains(fromJSON(inputs.reuse-images), '${name}'))`,
@@ -914,7 +910,7 @@ void test("a reused image skips only building, merging and attesting", async () 
 	assert.deepEqual(dependencies.toJSON(), ["build", "build-arm64"]);
 	assert.equal(
 		workflow.getIn(["jobs", "merge", "if"]),
-		`\${{ (inputs.server || inputs.webapp || inputs.agent || inputs.postgres) && inputs.publish && !cancelled() && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') }}`,
+		`\${{ (inputs.server || inputs.agent || inputs.postgres) && inputs.publish && !cancelled() && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') }}`,
 	);
 	// The queue run already scanned the image it built, in the build this skips, and its verdict
 	// gated the merge.
@@ -941,7 +937,7 @@ void test("a reused image skips only building, merging and attesting", async () 
 	for (const skipped of ["Download digests", "Create manifests and push"]) {
 		assert.equal(conditions[skipped], "steps.prep.outputs.built != '[]'", skipped);
 	}
-	for (const name of ["server", "webapp", "agent", "postgres"]) {
+	for (const name of ["server", "agent", "postgres"]) {
 		assert.equal(
 			conditions[`Attest the ${name} image`],
 			`contains(fromJSON(steps.prep.outputs.built), '${name}')`,
@@ -1005,7 +1001,7 @@ if (tool === 'docker' && args.includes('--format')) {
 				...process.env,
 				PATH: `${directory}${path.delimiter}${process.env.PATH ?? ""}`,
 				GITHUB_OUTPUT: output,
-				REUSED: JSON.stringify(["webapp", "postgres"]),
+				REUSED: JSON.stringify(["agent", "postgres"]),
 				REGISTRY: "ghcr.io",
 				COMMIT: pushCommit,
 				QUEUE_RUN: queueRun,
@@ -1029,7 +1025,7 @@ if (tool === 'docker' && args.includes('--format')) {
 		assert.notEqual(result.status, 0);
 		// The first image verified; the second is the one refused.
 		assert.match(result.stdout, /postgres: the merge-queue image did not verify/u);
-		assert.doesNotMatch(result.stdout, /webapp: the merge-queue image did not verify/u);
+		assert.doesNotMatch(result.stdout, /agent: the merge-queue image did not verify/u);
 		// Nothing reaches the outputs, so no digest of the verified first image is published either.
 		assert.equal(await readFile(output, "utf8"), "");
 	},
@@ -1052,7 +1048,7 @@ void test(
 		const directory = await mkdtemp(path.join(tmpdir(), "branch-tag-"));
 		t.after(async () => rm(directory, { recursive: true, force: true }));
 		const log = path.join(directory, "calls");
-		const webapp = "ghcr.io/hephaestus-build/webapp";
+		const agent = "ghcr.io/hephaestus-build/agent";
 		const published = `sha256:${"a".repeat(64)}`;
 		const commit = "c".repeat(40);
 		const tagged = "d".repeat(40);
@@ -1082,8 +1078,8 @@ fs.writeFileSync(args[index + 1], JSON.stringify({ 'containerimage.descriptor': 
 			);
 			await chmod(path.join(directory, tool), 0o755);
 		}
-		const all = [`${webapp}:main`, `${webapp}:ci-7`, `${webapp}:${commit}`];
-		const withoutBranch = [`${webapp}:ci-7`, `${webapp}:${commit}`];
+		const all = [`${agent}:main`, `${agent}:ci-7`, `${agent}:${commit}`];
+		const withoutBranch = [`${agent}:ci-7`, `${agent}:${commit}`];
 		for (const [event, label, comparison, tags] of [
 			// The tag names an older commit: it moves forward.
 			["push", tagged, "behind", all],
@@ -1093,10 +1089,10 @@ fs.writeFileSync(args[index + 1], JSON.stringify({ 'containerimage.descriptor': 
 			// Nothing tells the order: it moves, so it never stays behind.
 			["push", "none", "behind", all],
 			["push", tagged, "fail", all],
-			["merge_group", tagged, "ahead", [`${webapp}:${commit}`]],
+			["merge_group", tagged, "ahead", [`${agent}:${commit}`]],
 		] as const) {
 			await writeFile(log, "");
-			const metadata = event === "push" ? all : [`${webapp}:${commit}`];
+			const metadata = event === "push" ? all : [`${agent}:${commit}`];
 			const result: SpawnSyncReturns<string> = spawnSync(
 				"bash",
 				["-e", "-c", String(publication.get("run"))],
@@ -1115,8 +1111,8 @@ fs.writeFileSync(args[index + 1], JSON.stringify({ 'containerimage.descriptor': 
 						GITHUB_REF_NAME: "main",
 						GITHUB_SHA: commit,
 						DOCKER_METADATA_OUTPUT_JSON: JSON.stringify({ tags: metadata }),
-						IMAGES: JSON.stringify(["webapp"]),
-						DIGESTS: JSON.stringify({ webapp: published }),
+						IMAGES: JSON.stringify(["agent"]),
+						DIGESTS: JSON.stringify({ agent: published }),
 						INPUTS_REGISTRY: "ghcr.io",
 					},
 				},

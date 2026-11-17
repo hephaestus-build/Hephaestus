@@ -11,7 +11,7 @@
  *   upgrade  install, and check that PostgreSQL kept its Pods
  *   verify   every workload ready, and a sandbox of each SandboxTemplate passed the isolation
  *            gate (scripts/sandbox-isolation.ts)
- *   request  one HTTPS request to the webapp and the API through that Gateway
+ *   request  one HTTPS request to the web app and the API through that Gateway
  *   backup-drill  pgBackRest to a throwaway S3 server, then a point-in-time restore on a fresh node
  *   turn-roll  a TURN run in its conversation sandbox through a server rollout, with the capacity
  *            bench's fake model provider, then a Slack message that gets its answer, with a Slack Web API
@@ -2673,7 +2673,7 @@ async function gatewayAnswer(
 
 /**
  * The routes of docs/admin/helm-chart.mdx § Gateway routes, through Traefik: the redirect to HTTPS,
- * the webapp, the server's `/api` routes, and the webhook path, over TLS that the
+ * the web app, the server's `/api` routes, and the webhook path, over TLS that the
  * certificate of the Gateway's listener carries.
  */
 async function gatewayRequests(
@@ -3402,7 +3402,7 @@ export async function gateway(host: string): Promise<void> {
 	});
 }
 
-/** One HTTPS request to the webapp and one to the API, through the Gateway on 127.0.0.1:443. */
+/** One HTTPS request to the web app and one to the API, through the Gateway on 127.0.0.1:443. */
 export async function request(work: string, host: string): Promise<void> {
 	for (const route of ["/", "/api/identity-providers"]) {
 		await run("curl", [

@@ -130,7 +130,7 @@ export async function resolvePlatformDigest(reference: string, platform: string)
 	return digest;
 }
 
-/** `webapp-linux-amd64`, the stem both report files and the uploaded artifact are named by. */
+/** `server-linux-amd64`, the stem both report files and the uploaded artifact are named by. */
 export function reportStem(image: string, platform: string): string {
 	return `${image}-${platform.replaceAll("/", "-")}`;
 }
@@ -220,10 +220,11 @@ export async function scanWebApp(
 			}
 			return undefined;
 		}
-		const report = `${stem}.${WEB_APP_STEM}.json`;
+		const report = path.resolve(`${stem}.${WEB_APP_STEM}.json`);
 		await run(
 			"trivy",
 			webAppTrivyArguments(webApp, report, ["--skip-db-update", "--scanners", "vuln"]),
+			{ cwd: scratch },
 		);
 		const result = `${stem}.${WEB_APP_STEM}.policy.json`;
 		await rm(result, { force: true });
@@ -237,6 +238,7 @@ export async function scanWebApp(
 				report,
 				"security/vulnerability-policy.json",
 				result,
+				"--web-app",
 			],
 			options.annotate,
 		);

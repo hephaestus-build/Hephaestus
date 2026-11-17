@@ -37,7 +37,6 @@ const values: ChartValues = {
 		"postgres-exporter": image("postgres-exporter", "9"),
 		"victoria-metrics": image("victoria-metrics", "7"),
 		vmalert: image("vmalert", "8"),
-		webapp: image("webapp", "5"),
 	},
 };
 /** The release image inventory of these tests: the images the chart runs, all first-party. */
@@ -260,7 +259,7 @@ await test("publishing refuses a push without a digest, a different pull, foreig
 		["a second images key", `${releaseValuesLines(values)}images: {}\n`],
 		[
 			"a later quoted images key",
-			`${releaseValuesLines(values)}"images": ${JSON.stringify({ ...values.images, webapp: image("other", "d") })}\n`,
+			`${releaseValuesLines(values)}"images": ${JSON.stringify({ ...values.images, agent: image("other", "d") })}\n`,
 		],
 		[
 			"an image more than the release's",
@@ -286,7 +285,7 @@ await test("chart metadata is read as four exact top-level lines, never through 
 	const normalized = [
 		"apiVersion: v2",
 		"appVersion: 0.93.0",
-		"description: Hephaestus server, webhook receiver and webapp on Kubernetes.",
+		"description: Hephaestus server and sandboxes on Kubernetes, from one signed release lock.",
 		"home: https://github.com/hephaestus-build/Hephaestus",
 		"name: hephaestus",
 		"sources:",
@@ -365,7 +364,7 @@ await test("verification pulls the locked digest, checks its registry signature 
 const lockedRegistry = (bytes = chartBytes()) => new Map([[`${repository}@${digest("b")}`, bytes]]);
 const otherImages: ChartValues = {
 	...values,
-	images: { ...values.images, webapp: image("webapp", "9") },
+	images: { ...values.images, agent: image("agent", "9") },
 };
 
 await test("a release candidate verifies its signed chart at the candidate version", async (t) => {

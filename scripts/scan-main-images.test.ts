@@ -14,15 +14,15 @@ const ARM_DIGEST = `sha256:${"b".repeat(64)}`;
 void describe("planSubjects", () => {
 	void test("names every inventory image at the requested registry and tag", () => {
 		const subjects = planSubjects(
-			{ images: ["webapp", "postgres"] },
+			{ images: ["agent", "postgres"] },
 			"ghcr.io/hephaestus-build",
 			"main",
 		);
 		assert.deepEqual(subjects, [
 			{
-				image: "webapp",
-				reference: "ghcr.io/hephaestus-build/webapp:main",
-				repository: "ghcr.io/hephaestus-build/webapp",
+				image: "agent",
+				reference: "ghcr.io/hephaestus-build/agent:main",
+				repository: "ghcr.io/hephaestus-build/agent",
 			},
 			{
 				image: "postgres",
@@ -35,14 +35,13 @@ void describe("planSubjects", () => {
 	void test("covers the committed release image inventory", async () => {
 		const inventory: unknown = JSON.parse(await readFile("security/release-images.json", "utf8"));
 		const subjects = planSubjects(inventory, "ghcr.io/hephaestus-build", "main");
-		// The four first-party images the release promotes. The upstream images in the same file are
+		// The three first-party images the release promotes. The upstream images in the same file are
 		// not built here and have no `:main` tag, so they are scanned by their pinned digest in
 		// scan-upstream-images.ts instead.
 		assert.deepEqual(subjects.map((subject) => subject.image).toSorted(), [
 			"agent",
 			"postgres",
 			"server",
-			"webapp",
 		]);
 	});
 
@@ -134,7 +133,7 @@ void describe("isImageIndex", () => {
 });
 
 void test("reportStem names files after the image and platform", () => {
-	assert.equal(reportStem("webapp", PLATFORM), "webapp-linux-amd64");
+	assert.equal(reportStem("server", PLATFORM), "server-linux-amd64");
 });
 
 void test(

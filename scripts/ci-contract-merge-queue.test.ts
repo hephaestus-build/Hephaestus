@@ -1148,7 +1148,6 @@ void describe("ci-contract: merge-queue", () => {
 			/steps\.alias_base\.outputs\.commit == ''/u,
 		);
 		for (const image of [
-			"webapp_changed",
 			"application_server_changed",
 			"agent_images_changed",
 			"postgres_image_changed",
@@ -1576,12 +1575,7 @@ void describe("ci-contract: merge-queue", () => {
 			assert.doesNotMatch(condition, /github\.event_name/u);
 		}
 		const imageInputs = {
-			Docker: [
-				"webapp_changed",
-				"application_server_changed",
-				"agent_images_changed",
-				"postgres_image_changed",
-			],
+			Docker: ["application_server_changed", "agent_images_changed", "postgres_image_changed"],
 		};
 		for (const [caller, inputs] of Object.entries(imageInputs)) {
 			for (const name of inputs) {
@@ -1607,11 +1601,11 @@ void describe("ci-contract: merge-queue", () => {
 		for (const name of imageInputs.Docker) {
 			assert.match(alias, new RegExp(`inputs\\.${name} != 'true'`, "u"));
 		}
-		for (const image of ["webapp-build", "agent-build", "postgres-build"]) {
+		for (const builder of ["build", "merge"]) {
 			assert.doesNotMatch(
-				String(images.getIn(["jobs", image, "if"])),
+				String(images.getIn(["jobs", builder, "if"])),
 				/github\.event_name/u,
-				`${image} must not re-test the event its caller already decided on`,
+				`${builder} must not re-test the event its caller already decided on`,
 			);
 		}
 

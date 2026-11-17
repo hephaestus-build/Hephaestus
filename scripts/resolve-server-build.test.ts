@@ -270,7 +270,7 @@ await test("a push reuses the images of the successful queue run of its exact co
 	assert.deepEqual(await lookup(gateOnly), { runId: 101, images: [] });
 	// Only the images whose index the run attested are reusable; it did not build the rest.
 	const steps = [
-		{ name: imageAttestations.webapp, conclusion: "success" },
+		{ name: imageAttestations.server, conclusion: "success" },
 		{ name: imageAttestations.postgres, conclusion: "skipped" },
 		{ name: imageAttestations.agent, conclusion: "success" },
 	];
@@ -281,7 +281,7 @@ await test("a push reuses the images of the successful queue run of its exact co
 			run: published.run,
 			jobs: [...others, { name: imageManifestJob, conclusion: "success", steps }],
 		}),
-		{ runId: 101, images: ["webapp", "agent"] },
+		{ runId: 101, images: ["server", "agent"] },
 	);
 	// A manifest job that did not succeed published nothing reusable, whatever its steps did.
 	for (const conclusion of ["failure", "cancelled", "skipped"]) {
@@ -381,21 +381,12 @@ await test("the image builds receive the queue run a default-branch push resolve
 		);
 		assert.equal(attest.get("if"), `contains(fromJSON(steps.prep.outputs.built), '${image}')`);
 	}
-	// The webapp records its branch at build time, and the merge group's build is the one that ships.
-	const buildSteps = build.getIn(["jobs", "build", "steps"]);
-	assert.ok(isSeq(buildSteps));
-	const bake = buildSteps.items.find((item) => isMap(item) && item.get("id") === "bake");
-	assert.ok(isMap(bake));
-	assert.equal(
-		bake.getIn(["env", "SOURCE_BRANCH"]),
-		`\${{ github.head_ref || (github.event_name == 'merge_group' && github.event.repository.default_branch) || github.ref_name }}`,
-	);
 });
 
 await test("reuses the packaged server only from a run that published its App Server image", async () => {
 	// The platform builds also succeed for a run that built only Dockerfile images.
 	for (const job of [
-		manifests([imageAttestations.webapp]),
+		manifests([imageAttestations.agent, imageAttestations.postgres]),
 		manifests([imageAttestations.server], "failure"),
 		manifests([]),
 	]) {

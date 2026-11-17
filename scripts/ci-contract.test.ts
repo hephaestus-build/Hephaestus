@@ -10,7 +10,6 @@ import { isMap, isScalar, isSeq, visit } from "yaml";
 import {
 	assertNeeds,
 	bashRunsRunnerSteps,
-	buildStageCopySources,
 	CI_ONLY_GATES,
 	escapeRegExp,
 	expandExpressions,
@@ -953,20 +952,14 @@ void test("the prose gate ratchets on Linux and Windows with the base history", 
 	]) {
 		assert.ok(asArray(filters.tooling, "tooling paths").includes(file));
 	}
-	const dockerfile = await readFile("webapp/Dockerfile", "utf8");
-	for (const file of [".vale/", "docs/contributor/practice-feedback-language.mdx"]) {
-		assert.ok(
-			buildStageCopySources(dockerfile).includes(file),
-			`Copy ${file} before the webapp lint runs`,
-		);
-	}
+	// The server image packages the web app. The UI text lint of the web app reads these files.
 	for (const file of [
 		".vale/**",
 		"docs/contributor/practice-feedback-language.mdx",
 		"scripts/lib/ste-words.ts",
 		"scripts/lib/json.ts",
 	]) {
-		assert.ok(asArray(filters["webapp-image"], "image paths").includes(file));
+		assert.ok(asArray(filters["server-image"], "image paths").includes(file));
 	}
 	assert.equal(
 		namedStep(workflow, ["jobs", "quality"], "Quality gates").getIn(["env", "PR_BASE_SHA"]),

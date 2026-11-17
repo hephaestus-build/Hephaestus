@@ -20,32 +20,24 @@ export const Default: Story = {
 	},
 };
 
+/** A deployment other than production names the commit it runs. */
 export const Preview: Story = {
 	args: {
-		buildInfo: {
-			branch: "feat/new-footer-design",
-			commit: "a1b2c3d4e5f6g7h8i9j0",
-			deployedAt: "2024-12-14T17:44:00Z",
-		},
+		buildInfo: { commit: "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0" },
 	},
 };
 
-export const PreviewNoTime: Story = {
+/** Production names no commit. */
+export const Production: Story = {
 	args: {
-		buildInfo: {
-			branch: "fix/mobile-layout",
-			commit: "9876543",
-		},
+		isProduction: true,
+		buildInfo: { commit: "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0" },
 	},
 };
 
 export const Mobile: Story = {
 	args: {
-		buildInfo: {
-			branch: "fix/mobile-layout",
-			commit: "9876543",
-			deployedAt: "2024-12-14T10:00:00Z",
-		},
+		buildInfo: { commit: "9876543" },
 	},
 	globals: {
 		viewport: {
