@@ -3,26 +3,80 @@ import { expect, fn, screen, userEvent, within } from "storybook/test";
 
 import { expectSettledVisible } from "@/stories/overlay";
 import { expectNoPageOverflow } from "@/stories/reflow";
+import { Stateful } from "@/stories/stateful";
 
 import { ProductFeedbackDialog } from "./ProductFeedbackDialog";
 
 const meta = {
 	component: ProductFeedbackDialog,
 	args: {
-		open: true,
-		onOpenChange: fn(),
+		view: "open",
+		onViewChange: fn(),
 		reportsLink: <a href="/product-feedback">Your reports</a>,
 		pagePath: "/w/$workspaceSlug/practice-profile",
 		sharing: { status: "off" },
 		isSubmitting: false,
 		onSubmit: fn(async () => true),
 	},
+	render: (args) => (
+		<Stateful initial={args.view}>
+			{(view, setView) => (
+				<ProductFeedbackDialog
+					{...args}
+					view={view}
+					onViewChange={(next) => {
+						args.onViewChange(next);
+						setView(next);
+					}}
+				/>
+			)}
+		</Stateful>
+	),
 	tags: ["autodocs"],
 } satisfies Meta<typeof ProductFeedbackDialog>;
 export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {};
+
+/**
+ * The panel is not modal: the page behind it keeps working and is not blurred, so the person can
+ * look at what they report on. Escape tucks the panel into the corner; the draft stays.
+ */
+export const EscapeMinimizes: Story = {
+	play: async ({ args, canvas }) => {
+		const dialog = within(await screen.findByRole("dialog", { name: "Send feedback" }));
+		await userEvent.type(
+			dialog.getByRole("textbox", { name: "Your feedback" }),
+			"The legend overlaps.",
+		);
+		await userEvent.keyboard("{Escape}");
+		await expect(args.onViewChange).toHaveBeenLastCalledWith("minimized");
+		await userEvent.click(await canvas.findByRole("button", { name: "Feedback draft" }));
+		await expectSettledVisible(await screen.findByRole("textbox", { name: "Your feedback" }));
+		await expect(screen.getByRole("textbox", { name: "Your feedback" })).toHaveValue(
+			"The legend overlaps.",
+		);
+	},
+};
+
+export const Minimized: Story = {
+	args: { view: "minimized" },
+	play: async ({ args, canvas }) => {
+		await expect(screen.queryByRole("dialog")).toBeNull();
+		await userEvent.click(canvas.getByRole("button", { name: "Feedback draft" }));
+		await expect(args.onViewChange).toHaveBeenLastCalledWith("open");
+	},
+};
+
+/** Close hides the panel and the corner bar; the header button or the shortcut opens the kept draft. */
+export const Closes: Story = {
+	play: async ({ args }) => {
+		const dialog = within(await screen.findByRole("dialog", { name: "Send feedback" }));
+		await userEvent.click(dialog.getByRole("button", { name: "Close" }));
+		await expect(args.onViewChange).toHaveBeenLastCalledWith("closed");
+	},
+};
 
 export const SendsFeedbackWithoutContext: Story = {
 	play: async () => {

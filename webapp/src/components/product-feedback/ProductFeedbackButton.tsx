@@ -1,4 +1,5 @@
 import { MessageSquarePlus } from "lucide-react";
+import type { Ref } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/kbd";
@@ -7,20 +8,30 @@ import { FEEDBACK_SHORTCUT_ARIA, FEEDBACK_SHORTCUT_LABEL } from "@/lib/keyboard-
 
 export interface ProductFeedbackButtonProps {
 	onSendFeedback: () => void;
+	/** The person points at or focuses the button: a moment to load the composer before the press. */
+	onPrepare?: () => void;
+	ref?: Ref<HTMLButtonElement>;
 }
 
 /** The same action opens the composer at every viewport width. */
-export function ProductFeedbackButton({ onSendFeedback }: ProductFeedbackButtonProps) {
+export function ProductFeedbackButton({
+	onSendFeedback,
+	onPrepare,
+	ref,
+}: ProductFeedbackButtonProps) {
 	return (
 		<Tooltip>
 			<TooltipTrigger
 				render={
 					<Button
+						ref={ref}
 						variant="ghost"
 						className="w-8 sm:w-auto"
 						aria-label="Send feedback about Hephaestus"
 						aria-keyshortcuts={FEEDBACK_SHORTCUT_ARIA}
 						onClick={onSendFeedback}
+						onPointerEnter={onPrepare}
+						onFocus={onPrepare}
 					/>
 				}
 			>

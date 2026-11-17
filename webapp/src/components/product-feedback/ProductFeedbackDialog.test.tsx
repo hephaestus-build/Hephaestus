@@ -10,8 +10,8 @@ const pagePath = "/w/$workspaceSlug/practice-profile";
 
 function renderDialog(overrides: Partial<React.ComponentProps<typeof ProductFeedbackDialog>> = {}) {
 	const props = {
-		open: true,
-		onOpenChange: vi.fn(),
+		view: "open" as const,
+		onViewChange: vi.fn(),
 		reportsLink: <a href="/product-feedback">Your reports</a>,
 		pagePath,
 		sharing: { status: "off" } as const,
@@ -28,15 +28,71 @@ const send = () => screen.getByRole("button", { name: "Send" });
 const publicBox = () => screen.getByRole("checkbox", { name: "Post as a public GitHub issue" });
 
 describe("product feedback dialog", () => {
+	it("minimizes a draft on Escape and on Minimize, and closes on Close", async () => {
+		const user = userEvent.setup();
+		const { props } = renderDialog();
+		await user.type(message(), "An idea");
+		await user.keyboard("{Escape}");
+		expect(props.onViewChange).toHaveBeenLastCalledWith("minimized");
+		await user.click(screen.getByRole("button", { name: "Minimize" }));
+		expect(props.onViewChange).toHaveBeenLastCalledWith("minimized");
+		await user.click(screen.getByRole("button", { name: "Close" }));
+		expect(props.onViewChange).toHaveBeenLastCalledWith("closed");
+	});
+
+	it("leaves the page behind it reachable and does not close on a press there", async () => {
+		const user = userEvent.setup();
+		const onPageAction = vi.fn();
+		const onViewChange = vi.fn();
+		render(
+			<>
+				<button type="button" onClick={onPageAction}>
+					Page action
+				</button>
+				<ProductFeedbackDialog
+					view="open"
+					onViewChange={onViewChange}
+					sharing={{ status: "off" }}
+					isSubmitting={false}
+					onSubmit={vi.fn(async () => true)}
+					reportsLink={null}
+				/>
+			</>,
+		);
+		await user.click(screen.getByRole("button", { name: "Page action" }));
+		expect(onPageAction).toHaveBeenCalledOnce();
+		await user.keyboard("{Escape}");
+		expect(onViewChange).not.toHaveBeenCalled();
+	});
+
+	it("closes an empty form instead of keeping nothing in the corner", async () => {
+		const user = userEvent.setup();
+		const { props } = renderDialog();
+		await user.click(screen.getByRole("button", { name: "Minimize" }));
+		expect(props.onViewChange).toHaveBeenLastCalledWith("closed");
+	});
+
+	it("keeps the draft while minimized and names it in the corner", async () => {
+		const user = userEvent.setup();
+		const { props, rerender } = renderDialog();
+		await user.type(message(), "An idea");
+		rerender(<ProductFeedbackDialog {...props} view="minimized" />);
+		expect(screen.queryByRole("textbox", { name: "Your feedback" })).toBeNull();
+		await user.click(screen.getByRole("button", { name: "Feedback draft" }));
+		expect(props.onViewChange).toHaveBeenLastCalledWith("open");
+		rerender(<ProductFeedbackDialog {...props} view="open" />);
+		expect(message()).toHaveProperty("value", "An idea");
+	});
+
 	it("keeps a refused draft across close and reopen", async () => {
 		const user = userEvent.setup();
 		const { props, rerender } = renderDialog({ onSubmit: vi.fn(async () => false) });
 		await user.type(message(), "  An idea  ");
 		await user.click(send());
-		expect(props.onOpenChange).not.toHaveBeenCalledWith(false);
+		expect(props.onViewChange).not.toHaveBeenCalled();
 
-		rerender(<ProductFeedbackDialog {...props} open={false} />);
-		rerender(<ProductFeedbackDialog {...props} open />);
+		rerender(<ProductFeedbackDialog {...props} view="closed" />);
+		rerender(<ProductFeedbackDialog {...props} view="open" />);
 		expect(message()).toHaveProperty("value", "  An idea  ");
 	});
 
@@ -47,8 +103,8 @@ describe("product feedback dialog", () => {
 		await user.click(send());
 		await waitFor(() => expect(props.onSubmit).toHaveBeenCalledOnce());
 		await waitFor(() => expect(message()).toHaveProperty("value", ""));
-		rerender(<ProductFeedbackDialog {...props} open={false} />);
-		rerender(<ProductFeedbackDialog {...props} open />);
+		rerender(<ProductFeedbackDialog {...props} view="closed" />);
+		rerender(<ProductFeedbackDialog {...props} view="open" />);
 		expect(message()).toHaveProperty("value", "");
 	});
 
