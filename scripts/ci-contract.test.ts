@@ -1016,6 +1016,16 @@ void test("merged workflow lint retains Zizmor after an Actionlint failure and i
 		namedStep(workflow, worker, "Validate workflows with GitHub's parser").get("if"),
 		"needs.detect-changes.outputs.should_skip != 'true'",
 	);
+	// A regroup deletes a merge group's ref, so a SARIF upload there fails the job after a passing
+	// audit. Without SARIF, Zizmor's exit code is the gate, and the SARIF gate must not run.
+	assert.equal(
+		zizmor.getIn(["with", "advanced-security"]),
+		`\${{ github.event_name != 'merge_group' }}`,
+	);
+	assert.match(
+		asString(namedStep(workflow, worker, "Enforce Zizmor findings").get("if"), "SARIF gate"),
+		/github\.event_name != 'merge_group'/u,
+	);
 });
 
 void test("the focused stable task selects every architecture ratchet and requires an explicit version", async () => {
