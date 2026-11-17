@@ -78,7 +78,13 @@ Only one server at a time checks the token of a workspace, and it holds no datab
 A server that stops responding keeps that lock until its database connection closes, so no other server can rotate the token in the meantime.
 The server stores a rotated token only if nobody paused, resumed or replaced the token during the call.
 It discards a late answer after a token replacement, a pause or a resume.
-The connection audit records an uncertain attempt as `GITLAB_TOKEN_ROTATION_UNCERTAIN`.
+The connection audit records each rotation as `PAT_ROTATED`, and an uncertain attempt as `GITLAB_TOKEN_ROTATION_UNCERTAIN`.
+
+While silent mode is on, the server does not rotate a token. The workspace shows the token as expiring instead.
+Thus, while silent mode is on, a restore clone cannot rotate a token that the live installation still uses.
+Before you turn off silent mode on a clone, replace its GitLab tokens, as the [isolated restore drill](./backup-restore#isolated-restore-drill) describes.
+
+If the check fails, the server log names the HTTP status of the GitLab response, for example `status=401` for a refused token.
 
 ## Check that it worked
 

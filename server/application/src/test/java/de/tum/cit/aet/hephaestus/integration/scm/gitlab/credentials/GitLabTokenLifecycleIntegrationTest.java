@@ -50,6 +50,8 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Pattern;
+import org.jspecify.annotations.Nullable;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -120,6 +122,13 @@ class GitLabTokenLifecycleIntegrationTest extends AbstractWorkspaceIntegrationTe
     @MockitoBean
     private GitLabTokenRotationClient rotation;
 
+    // The base class empties instance_settings, and a missing row reads as silent mode on, which holds rotation back.
+    @BeforeEach
+    void permitRotation() {
+        jdbc.update("INSERT INTO instance_settings (id, silent_mode_engaged, version) VALUES (1, false, 0)"
+                + " ON CONFLICT (id) DO UPDATE SET silent_mode_engaged = false");
+    }
+
     @Test
     @ExtendWith(OutputCaptureExtension.class)
     void shouldPauseEverySyncOfARefusedCredentialUntilItIsReplaced(CapturedOutput output) {
@@ -176,7 +185,7 @@ class GitLabTokenLifecycleIntegrationTest extends AbstractWorkspaceIntegrationTe
         when(rotation.getTokenInfo(forWorkspace(workspace)))
                 .thenReturn(new GitLabTokenRotationClient.TokenInfo(1, "test", expiry));
         when(rotation.rotateToken(forWorkspace(workspace), any()))
-                .thenReturn(new GitLabTokenRotationClient.RotatedToken("rotated", nextExpiry));
+                .thenReturn(new GitLabTokenRotationClient.RotatedToken("rotated-secret", nextExpiry));
         when(rotation.getTokenInfo(forWorkspace(other.getWorkspace().getId())))
                 .thenReturn(new GitLabTokenRotationClient.TokenInfo(2, "other", null));
         new GitLabTokenRotationScheduler(connections, workspaceLookup, webhooks).rotateTokens();
@@ -184,7 +193,7 @@ class GitLabTokenLifecycleIntegrationTest extends AbstractWorkspaceIntegrationTe
                         .findActiveBearerToken(workspace, IntegrationKind.GITLAB)
                         .orElseThrow()
                         .token())
-                .isEqualTo("rotated");
+                .isEqualTo("rotated-secret");
         assertThat(connections.findActiveGitLabConfig(workspace).orElseThrow().tokenMetadata())
                 .isNotNull()
                 .extracting(ConnectionConfig.GitLabTokenMetadata::expiresAt)
@@ -196,6 +205,31 @@ class GitLabTokenLifecycleIntegrationTest extends AbstractWorkspaceIntegrationTe
                 .isEqualTo("other");
         assertThat(current(other).getAttentionProblem()).isNull();
         verify(rotation, never()).rotateToken(forWorkspace(other.getWorkspace().getId()), any());
+        assertThat(audits(connection, "PAT_ROTATED"))
+                .singleElement()
+                .satisfies(detail ->
+                        assertThat(detail).contains(nextExpiry.toString()).doesNotContain("rotated-secret"));
+        assertThat(audits(other, "PAT_ROTATED")).isEmpty();
+    }
+
+    @Test
+    void shouldHoldBackRotationAndShowTheTokenAsExpiringWhenSilentModeIsOn() {
+        var connection = connection("restore-clone");
+        long workspace = connection.getWorkspace().getId();
+        when(rotation.getTokenInfo(forWorkspace(workspace)))
+                .thenReturn(new GitLabTokenRotationClient.TokenInfo(
+                        1, "test", LocalDate.now(ZoneOffset.UTC).plusDays(2)));
+        jdbc.update("UPDATE instance_settings SET silent_mode_engaged = true WHERE id = 1");
+        lifecycle.check(workspace);
+        verify(rotation, never()).rotateToken(any(), any());
+        assertThat(connections
+                        .findActiveBearerToken(workspace, IntegrationKind.GITLAB)
+                        .orElseThrow()
+                        .token())
+                .isEqualTo("restore-clone");
+        assertThat(current(connection).getAttentionProblem()).isEqualTo(Problem.CREDENTIAL_EXPIRING);
+        assertThat(audits(connection, "PAT_ROTATED")).isEmpty();
+        assertThat(audits(connection, "GITLAB_TOKEN_ROTATION_UNCERTAIN")).isEmpty();
     }
 
     @Test
@@ -256,7 +290,8 @@ class GitLabTokenLifecycleIntegrationTest extends AbstractWorkspaceIntegrationTe
     }
 
     @Test
-    void shouldRecordAnInspection401ButNotAMissingProviderResponseAsExpiry() {
+    @ExtendWith(OutputCaptureExtension.class)
+    void shouldRecordAnInspection401ButNotAMissingProviderResponseAsExpiry(CapturedOutput output) {
         var connection = connection("refused");
         long workspace = connection.getWorkspace().getId();
         when(rotation.getTokenInfo(forWorkspace(workspace)))
@@ -273,6 +308,9 @@ class GitLabTokenLifecycleIntegrationTest extends AbstractWorkspaceIntegrationTe
                 .thenThrow(new WebClientResponseException(503, "Unavailable", null, null, null));
         lifecycle.check(other.getWorkspace().getId());
         assertThat(current(other).getAttentionProblem()).isNull();
+        assertThat(output)
+                .contains("workspaceId=" + workspace + ", rotationAttempted=false, status=401")
+                .contains("workspaceId=" + other.getWorkspace().getId() + ", rotationAttempted=false, status=503");
     }
 
     @Test
@@ -298,26 +336,8 @@ class GitLabTokenLifecycleIntegrationTest extends AbstractWorkspaceIntegrationTe
         var connection = connection("graphql");
         long workspace = connection.getWorkspace().getId();
         var body = new AtomicReference<>(
-                "{\"errors\":[{\"message\":\"Invalid token\",\"extensions\":{\"type\":\"UNAUTHORIZED\"}}]}");
-        var http = WebClient.builder()
-                .filter(filter.filter())
-                .exchangeFunction(request -> Mono.just(ClientResponse.create(HttpStatus.OK)
-                        .header("Content-Type", "application/json")
-                        .body(body.get())
-                        .build()))
-                .build();
-        var base = HttpGraphQlClient.builder(http).build();
-        var tokens = mock(GitLabTokenService.class);
-        when(tokens.getAccessToken(workspace)).thenReturn("graphql");
-        when(tokens.resolveServerUrl(workspace)).thenReturn("https://gitlab.com");
-        var factory = new SilentModeGraphQlClientFactory(mock(SilentModeGraphQlInterceptor.class));
-        var provider = new GitLabGraphQlClientProvider(
-                base,
-                tokens,
-                CircuitBreaker.ofDefaults("gitlab-health"),
-                mock(GitLabRateLimitTracker.class),
-                factory,
-                filter);
+                "{\"errors\":[{\"message\":\"Invalid token\",\"extensions\":{\"type\":\"UNAUTHENTICATED\"}}]}");
+        var provider = graphQl(workspace, "graphql", body);
         provider.forScope(workspace)
                 .document("{ currentUser { id } }")
                 .execute()
@@ -338,6 +358,21 @@ class GitLabTokenLifecycleIntegrationTest extends AbstractWorkspaceIntegrationTe
         assertThat(syncState.describe(connection.toRef(), connection.getId()).vendorHealthDegraded())
                 .isFalse();
         assertThat(changes(connection)).hasSize(2);
+    }
+
+    @Test
+    void shouldKeepAValidTokenWhenGraphQlRefusesPermissionOnOneResource() {
+        var connection = connection("permission");
+        long workspace = connection.getWorkspace().getId();
+        var body = new AtomicReference<>(
+                "{\"errors\":[{\"message\":\"Permission denied\",\"extensions\":{\"type\":\"UNAUTHORIZED\"}}]}");
+        graphQl(workspace, "permission", body)
+                .forScope(workspace)
+                .document("{ project(fullPath: \"group/private\") { id } }")
+                .execute()
+                .block();
+        assertThat(current(connection).getAttentionProblem()).isNull();
+        assertThat(changes(connection)).isEmpty();
     }
 
     @Test
@@ -570,7 +605,9 @@ class GitLabTokenLifecycleIntegrationTest extends AbstractWorkspaceIntegrationTe
                 .satisfies(detail -> assertThat(detail)
                         .contains("Verify the token")
                         .doesNotContain("secret-rotation-response", "uncertain-old"));
-        assertThat(output).doesNotContain("secret-rotation-response", "uncertain-old");
+        assertThat(output)
+                .contains("workspaceId=" + workspace + ", rotationAttempted=true, status=-")
+                .doesNotContain("secret-rotation-response", "uncertain-old");
     }
 
     @Test
@@ -589,6 +626,35 @@ class GitLabTokenLifecycleIntegrationTest extends AbstractWorkspaceIntegrationTe
                         .token())
                 .isEqualTo("stale-fence");
         assertThat(current(connection).getVersion()).isEqualTo(stored.getVersion());
+    }
+
+    private GitLabGraphQlClientProvider graphQl(long workspace, String token, AtomicReference<String> body) {
+        var http = WebClient.builder()
+                .filter(filter.filter())
+                .exchangeFunction(request -> Mono.just(ClientResponse.create(HttpStatus.OK)
+                        .header("Content-Type", "application/json")
+                        .body(body.get())
+                        .build()))
+                .build();
+        var tokens = mock(GitLabTokenService.class);
+        when(tokens.getAccessToken(workspace)).thenReturn(token);
+        when(tokens.resolveServerUrl(workspace)).thenReturn("https://gitlab.com");
+        return new GitLabGraphQlClientProvider(
+                HttpGraphQlClient.builder(http).build(),
+                tokens,
+                CircuitBreaker.ofDefaults("gitlab-health"),
+                mock(GitLabRateLimitTracker.class),
+                new SilentModeGraphQlClientFactory(mock(SilentModeGraphQlInterceptor.class)),
+                filter);
+    }
+
+    private List<@Nullable String> audits(Connection connection, String eventType) {
+        return jdbc.queryForList(
+                "select detail from connection_audit where connection_id = ? and workspace_id = ? and event_type = ?",
+                String.class,
+                connection.getId(),
+                connection.getWorkspace().getId(),
+                eventType);
     }
 
     private WebClient client(HttpStatus status) {

@@ -124,10 +124,12 @@ public class GitLabGraphQlClientProvider {
                     @Override
                     public Mono<ClientGraphQlResponse> intercept(ClientGraphQlRequest request, Chain chain) {
                         return chain.next(request).flatMap(response -> {
+                            // UNAUTHORIZED can be a permission refusal that a valid token gets. Only an authentication
+                            // failure marks the token revoked: UNAUTHENTICATED here, HTTP 401 in the filter.
                             boolean refused = response.getErrors().stream().anyMatch(error -> {
                                 Object type = error.getExtensions().get("type");
                                 if (type == null) type = error.getExtensions().get("code");
-                                return "UNAUTHENTICATED".equals(type) || "UNAUTHORIZED".equals(type);
+                                return "UNAUTHENTICATED".equals(type);
                             });
                             if (!refused
                                     && (!response.isValid()
