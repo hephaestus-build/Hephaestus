@@ -172,6 +172,13 @@ Revisit this update when JDK-8375469 ships in the JDK line of `.java-version`, o
 ## Update — 2026-11-17: compact object headers
 
 The image also uses compact object headers ([JEP 519](https://openjdk.org/jeps/519)).
+They make each object header smaller.
+We measured this on 2026-11-17 on the shared validation host, with 40 practice reviews in one JVM and two runs per arm.
+After a full collection, live heap was 7.6% smaller: 242 MiB instead of 262 MiB.
+
 The cache records the object-header layout of its training run, so rule 1 of the update above now covers that layout too.
 `server/application/project.toml` sets `-XX:+UseCompactObjectHeaders` for the training run and for every launch, beside `--add-modules=jdk.jfr`.
 `scripts/ci-contract-images.test.ts` fails when the two settings differ.
+
+Bad, because a run that omits `-XX:+UseCompactObjectHeaders` cannot use the cache.
+With `-XX:AOTMode=on`, that run does not start.
