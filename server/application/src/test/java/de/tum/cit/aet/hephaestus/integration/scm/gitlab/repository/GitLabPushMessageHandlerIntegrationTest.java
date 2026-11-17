@@ -18,7 +18,6 @@ import de.tum.cit.aet.hephaestus.integration.core.consumer.ProviderEventStore;
 import de.tum.cit.aet.hephaestus.integration.core.consumer.StoredEventHandling;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
-import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryRefState;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitFileChange;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.Organization;
@@ -41,8 +40,6 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -159,58 +156,6 @@ class GitLabPushMessageHandlerIntegrationTest extends BaseIntegrationTest {
 
         this.workspace = workspace;
         this.repository = saved;
-    }
-
-    @Autowired
-    RepositoryRefState refs;
-
-    @Autowired
-    GitLabTagPushMessageHandler tags;
-
-    @ParameterizedTest
-    @ValueSource(strings = {"push", "tag_push"})
-    void shouldInvalidateStoredRefsForBranchDeletionAndTagPush(String eventName) {
-        var workspaceId = Objects.requireNonNull(workspace.getId());
-        var repositoryId = Objects.requireNonNull(repository.getId());
-        var read = refs.begin(workspaceId, repositoryId);
-        refs.record(workspaceId, repositoryId, read, "a".repeat(64));
-        var project = new GitLabPushEventDTO.ProjectInfo(
-                repository.getNativeId(),
-                repository.getName(),
-                null,
-                repository.getHtmlUrl(),
-                null,
-                repository.getNameWithOwner(),
-                "main",
-                0);
-        var event = new GitLabPushEventDTO(
-                eventName,
-                eventName.equals("push") ? "refs/heads/removed" : "refs/tags/v1",
-                "a".repeat(40),
-                eventName.equals("push") ? "0".repeat(40) : "b".repeat(40),
-                null,
-                repository.getNativeId(),
-                project,
-                0,
-                null);
-        new GitLabRouteTestFixtures.Deliveries(
-                        connections,
-                        connectionService,
-                        admission,
-                        objectMapper,
-                        transactions,
-                        repository.getProvider().getServerUrl())
-                .handle(
-                        workspace,
-                        repository,
-                        event,
-                        () -> transactions.executeWithoutResult(status -> {
-                            if (eventName.equals("tag_push")) tags.handleEvent(event);
-                            else handler.handleEvent(event);
-                        }));
-        assertThat(refs.current(workspaceId, repositoryId)).isEmpty();
-        refs.record(workspaceId, repositoryId, read, "a".repeat(64));
-        assertThat(refs.current(workspaceId, repositoryId)).isEmpty();
     }
 
     @Test

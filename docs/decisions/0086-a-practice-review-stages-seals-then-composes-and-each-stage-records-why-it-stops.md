@@ -194,7 +194,7 @@ A result's `consulted` sources are refused unless the practice declares them, so
 It holds no branch and no tag.
 The tree fingerprint is therefore the two commits, and the server computes it from the stored version.
 No practice in the default catalog resolves another branch or a tag.
-The stored provider-ref observation (`repository_to_monitor.git_refs_fingerprint`) now has no reader.
+The stored provider-ref observation (`repository_to_monitor.git_refs_fingerprint`) had no reader left, so it is removed.
 
 **Residual risk that this adds.** A session can read an undeclared captured file with `bash`, and nothing records that read.
 A change to such a file no longer ends the result.
@@ -210,7 +210,7 @@ So a result can stay current although a file that influenced its reasoning has c
 Enforced by:
 
 - `DefaultReviewExecutionHandlerTest#shouldRecordForEachPracticeOnlyItsOwnSourcesWithTheItemRecordAndTheCheckout`: a bot's comment changes only the discussion, so it ends only the result of a practice that reads the discussion.
-- `GitRefStateIntegrationTest#shouldKeepAPracticeCurrentWhenAnotherBranchOrATagOfItsRepositoryMoves`: a push to another branch, or a new tag, leaves the tree fingerprint unchanged.
+- `PullRequestTreeFingerprintIntegrationTest#shouldKeepAPracticeCurrentWhenAnotherBranchOrATagOfItsRepositoryMoves`: a push to another branch, or a new tag, leaves the tree fingerprint unchanged.
 - `GitRepositoryManagerTest#shouldCaptureOnlyTheReviewedAndBaseCommitsSoAnotherBranchOrTagChangesNothingItCanRead`: the checkout holds the two commits and no ref.
 
 **Revisit trigger:** the per-process file boundary in the sandbox ([ADR 0079](0079-one-agent-system.md)).

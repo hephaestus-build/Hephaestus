@@ -37,7 +37,6 @@ import de.tum.cit.aet.hephaestus.evidence.capture.EvidenceDirectory;
 import de.tum.cit.aet.hephaestus.integration.core.fabric.FabricLayout;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CheckoutUnverifiedException;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
-import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryRefState;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryLockManager;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryProperties;
@@ -130,7 +129,6 @@ class ReviewPublishedPreparationTest extends BaseUnitTest {
                 new GitRepositoryLockManager(),
                 new FabricLayout(root.resolve("mirror").toString()),
                 GitTransportFixtures.guarded(),
-                mock(RepositoryRefState.class),
                 GitTransportFixtures.copyFence(),
                 new SimpleMeterRegistry());
         git.ensureRepository(KEY, source.toUri().toString(), null);

@@ -170,7 +170,6 @@ public class GitLabPushMessageHandler extends AbstractIntegrationMessageHandler<
             log.debug(
                     "Upserted project from push event: projectPath={}, repoId={}", safeProjectPath, repository.getId());
 
-            gitRepositoryManager.invalidateRefs(repository.getNativeId(), admitted.providerId());
             if (event.isBranchDeletion()) return;
 
             long scopeId = read.connection().workspaceId();

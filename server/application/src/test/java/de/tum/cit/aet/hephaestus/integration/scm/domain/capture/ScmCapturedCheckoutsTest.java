@@ -11,7 +11,6 @@ import static org.mockito.Mockito.when;
 import de.tum.cit.aet.hephaestus.evidence.capture.CheckoutKey;
 import de.tum.cit.aet.hephaestus.integration.core.fabric.FabricLayout;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CheckoutUnverifiedException;
-import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryRefState;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryLockManager;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryProperties;
@@ -78,7 +77,6 @@ class ScmCapturedCheckoutsTest {
                 new GitRepositoryLockManager(),
                 new FabricLayout(temporary.resolve("fabric").toString()),
                 GitTransportFixtures.guarded(),
-                mock(RepositoryRefState.class),
                 GitTransportFixtures.copyFence(),
                 new SimpleMeterRegistry());
         when(preparer.permittedRepositories(WORKSPACE)).thenReturn(List.of());

@@ -27,7 +27,6 @@ import de.tum.cit.aet.hephaestus.integration.core.fabric.FabricLayout;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRegistration;
-import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryRefState;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.capture.GeneralReviewCommentContentSource;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.capture.IssueContentSource;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.capture.LinkedWorkItemContentSource;
@@ -375,7 +374,6 @@ class ScmItemFetchIntegrationTest extends BaseIntegrationTest {
                 new GitRepositoryLockManager(),
                 new FabricLayout(root.resolve("fabric").toString()),
                 GitTransportFixtures.guarded(),
-                mock(RepositoryRefState.class),
                 GitTransportFixtures.copyFence(),
                 new SimpleMeterRegistry());
         var cold = pipeline(noMirror).reader();

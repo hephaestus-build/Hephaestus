@@ -3,11 +3,9 @@ package de.tum.cit.aet.hephaestus.integration.scm.domain.workdir;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
 
 import de.tum.cit.aet.hephaestus.integration.core.fabric.FabricLayout;
-import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryRefState;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitDetails;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitFileChange.ChangeType;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
@@ -86,7 +84,6 @@ class GitRepositoryManagerTest extends BaseUnitTest {
                 new GitRepositoryLockManager(),
                 new FabricLayout(fabric.toString()),
                 GitTransportFixtures.guarded(),
-                mock(RepositoryRefState.class),
                 GitTransportFixtures.copyFence(),
                 new SimpleMeterRegistry());
     }
@@ -471,7 +468,6 @@ class GitRepositoryManagerTest extends BaseUnitTest {
                     new GitRepositoryLockManager(),
                     new FabricLayout(fabric.resolve("other-role").toString()),
                     GitTransportFixtures.guarded(),
-                    mock(RepositoryRefState.class),
                     GitTransportFixtures.copyFence(),
                     new SimpleMeterRegistry());
             other.ensureRepository(KEY, source.toUri().toString(), null);

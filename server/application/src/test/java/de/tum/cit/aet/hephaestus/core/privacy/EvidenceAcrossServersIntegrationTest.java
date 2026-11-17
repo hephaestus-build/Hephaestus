@@ -51,7 +51,6 @@ import de.tum.cit.aet.hephaestus.integration.core.fabric.EvidenceSpool;
 import de.tum.cit.aet.hephaestus.integration.core.fabric.FabricLayout;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CapturedCheckouts;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CheckoutUnverifiedException;
-import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryRefState;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.capture.ReviewRepositoryPreparer;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.capture.ScmCapturedCheckouts;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryLockManager;
@@ -433,7 +432,6 @@ class EvidenceAcrossServersIntegrationTest extends BaseIntegrationTest {
                 locks,
                 new FabricLayout(temporary.resolve("checkout-lock-order").toString()),
                 GitTransportFixtures.guarded(),
-                mock(RepositoryRefState.class),
                 admission,
                 new SimpleMeterRegistry());
         manager.ensureRepository(key, upstream.toUri().toString(), null);
@@ -470,7 +468,6 @@ class EvidenceAcrossServersIntegrationTest extends BaseIntegrationTest {
                 new GitRepositoryLockManager(),
                 new FabricLayout(temporary.resolve("checkout-transaction").toString()),
                 GitTransportFixtures.guarded(),
-                mock(RepositoryRefState.class),
                 new PostgresPersonDataCopyFence(guardedSource, new JdbcTemplate(guardedSource)),
                 new SimpleMeterRegistry());
         manager.ensureRepository(key, upstream.toUri().toString(), null);
@@ -805,7 +802,6 @@ class EvidenceAcrossServersIntegrationTest extends BaseIntegrationTest {
                     new GitRepositoryLockManager(),
                     new FabricLayout(root.toString()),
                     GitTransportFixtures.guarded(),
-                    mock(RepositoryRefState.class),
                     fence,
                     new SimpleMeterRegistry());
             // The server's sync has mirrored the monitored repository.

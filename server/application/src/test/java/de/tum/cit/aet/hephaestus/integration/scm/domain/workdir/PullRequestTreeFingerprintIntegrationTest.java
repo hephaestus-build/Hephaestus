@@ -1,13 +1,11 @@
 package de.tum.cit.aet.hephaestus.integration.scm.domain.workdir;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import de.tum.cit.aet.hephaestus.evidence.SourceFingerprint;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.fabric.FabricLayout;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRef;
-import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryRefState;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.capture.RepositoryTreeContentSource;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
@@ -16,28 +14,23 @@ import de.tum.cit.aet.hephaestus.practices.review.ProductItemQuery;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewIntegrationData;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewLookupData;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
-import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Objects;
 import java.util.Set;
-import java.util.concurrent.CancellationException;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.lib.Constants;
 import org.eclipse.jgit.lib.PersonIdent;
 import org.eclipse.jgit.lib.Ref;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 
-class GitRefStateIntegrationTest extends BaseIntegrationTest {
-    @Autowired
-    RepositoryRefState refs;
+class PullRequestTreeFingerprintIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     ReviewIntegrationData data;
@@ -79,75 +72,6 @@ class GitRefStateIntegrationTest extends BaseIntegrationTest {
                 scenario,
                 item,
                 repositories.findByIdWithOrganization(repository.getId()).orElseThrow());
-    }
-
-    @Test
-    void shouldKeepOnlyTheLatestCompleteReadAndPreserveItWhenAReaderGivesUp() {
-        var scope = scope(IdentityProviderType.GITHUB);
-        var first = refs.begin(scope.key().workspaceId(), scope.key().repositoryId());
-        var second = refs.begin(scope.key().workspaceId(), scope.key().repositoryId());
-        refs.record(scope.key().workspaceId(), scope.key().repositoryId(), first, "a".repeat(64));
-        assertThat(refs.current(scope.key().workspaceId(), scope.key().repositoryId()))
-                .isEmpty();
-        refs.record(scope.key().workspaceId(), scope.key().repositoryId(), second, "b".repeat(64));
-        assertThat(refs.current(scope.key().workspaceId(), scope.key().repositoryId()))
-                .contains("b".repeat(64));
-        var manager = manager("abandoned");
-        assertThatThrownBy(
-                        () -> manager.ensureRepository(scope.key(), root.toUri().toString(), null, () -> true))
-                .isInstanceOf(CancellationException.class);
-        assertThat(refs.current(scope.key().workspaceId(), scope.key().repositoryId()))
-                .contains("b".repeat(64));
-        refs.invalidate(
-                scope.repository().getNativeId(),
-                Objects.requireNonNull(scope.repository().getProvider().getId()));
-        refs.record(scope.key().workspaceId(), scope.key().repositoryId(), second, "b".repeat(64));
-        assertThat(refs.current(scope.key().workspaceId(), scope.key().repositoryId()))
-                .isEmpty();
-    }
-
-    @Test
-    void shouldInvalidateEveryMonitoringWorkspaceOnlyOnTheExactProvider() {
-        var github = scope(IdentityProviderType.GITHUB);
-        var other = scope(IdentityProviderType.GITHUB);
-        monitors.saveAndFlush(WorkspaceTestFixtures.repositoryMonitor(
-                other.scenario().workspace(),
-                github.repository().getNameWithOwner(),
-                github.repository().getNativeId()));
-        var secondKey = new RepositoryKey(
-                other.item().workspaceId(), github.repository().getId());
-        var gitlab = scope(IdentityProviderType.GITLAB);
-        var monitor = monitors.findByWorkspaceIdAndSourceRepositoryId(
-                        gitlab.item().workspaceId(), gitlab.repository().getId())
-                .getFirst();
-        gitlab.repository().setNativeId(github.repository().getNativeId());
-        repositories.saveAndFlush(gitlab.repository());
-        monitor.setNativeId(github.repository().getNativeId());
-        monitors.saveAndFlush(monitor);
-        refs.record(
-                github.key().workspaceId(),
-                github.key().repositoryId(),
-                refs.begin(github.key().workspaceId(), github.key().repositoryId()),
-                "a".repeat(64));
-        refs.record(
-                secondKey.workspaceId(),
-                secondKey.repositoryId(),
-                refs.begin(secondKey.workspaceId(), secondKey.repositoryId()),
-                "b".repeat(64));
-        refs.record(
-                gitlab.key().workspaceId(),
-                gitlab.key().repositoryId(),
-                refs.begin(gitlab.key().workspaceId(), gitlab.key().repositoryId()),
-                "c".repeat(64));
-        refs.invalidate(
-                github.repository().getNativeId(),
-                Objects.requireNonNull(github.repository().getProvider().getId()));
-        assertThat(refs.current(github.key().workspaceId(), github.key().repositoryId()))
-                .isEmpty();
-        assertThat(refs.current(secondKey.workspaceId(), secondKey.repositoryId()))
-                .isEmpty();
-        assertThat(refs.current(gitlab.key().workspaceId(), gitlab.key().repositoryId()))
-                .contains("c".repeat(64));
     }
 
     @ParameterizedTest
@@ -229,7 +153,6 @@ class GitRefStateIntegrationTest extends BaseIntegrationTest {
                 new GitRepositoryLockManager(),
                 new FabricLayout(root.resolve(role).toString()),
                 GitTransportFixtures.guarded(),
-                refs,
                 GitTransportFixtures.copyFence(),
                 new SimpleMeterRegistry());
     }
