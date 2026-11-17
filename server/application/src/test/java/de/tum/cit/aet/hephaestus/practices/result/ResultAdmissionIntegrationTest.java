@@ -43,6 +43,7 @@ import de.tum.cit.aet.hephaestus.practices.review.ReviewItemRepository;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewPracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewRepository;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewRequestRejected;
+import de.tum.cit.aet.hephaestus.practices.review.model.ReviewPractice;
 import de.tum.cit.aet.hephaestus.practices.review.report.TrialReport;
 import de.tum.cit.aet.hephaestus.practices.spi.AdmissionReceipt;
 import de.tum.cit.aet.hephaestus.practices.spi.AdmittedResultQuery;
@@ -91,6 +92,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -1535,6 +1537,106 @@ class ResultAdmissionIntegrationTest extends AbstractResultAdmissionIntegrationT
                 .as("the follow-up reads the review's own occasion, under that occasion's expiry")
                 .isEqualTo(itemEvents.evidence(workspace, item, occasion).record())
                 .contains("the occasion's own record");
+    }
+
+    /** A newer review that did not select the owed practice never measures it, so the follow-up still runs it. */
+    @Test
+    void shouldStillAskForAFollowUpWhenANewerReviewDoesNotMeasureTheOwedPractice() {
+        String version = "item-version-" + UUID.randomUUID();
+        UUID occasion = occasionAt(version);
+        var owing = eventReviewOwing(version, occasion);
+        // A comment at the same version ordered a review of another practice only.
+        admissions.pending(scenario, owing.review().getOrderedAt().plusSeconds(60), scenarioAccountId, version);
+
+        close(owing);
+
+        assertThat(followUps(version)).hasSize(1);
+    }
+
+    @Test
+    void shouldLeaveTheFollowUpToANewerReviewThatMeasuresEveryOwedPractice() {
+        String version = "item-version-" + UUID.randomUUID();
+        UUID occasion = occasionAt(version);
+        var owing = eventReviewOwing(version, occasion);
+        long workspace = scenario.workspace().getId();
+        long owed = Objects.requireNonNull(jdbcTemplate.queryForObject(
+                "SELECT practice_id FROM review_item WHERE workspace_id=? AND review_id=? AND reason='NOT_RUN'",
+                Long.class,
+                workspace,
+                owing.review().getId()));
+        var newer =
+                admissions.pending(scenario, owing.review().getOrderedAt().plusSeconds(60), scenarioAccountId, version);
+        var pinned = pinnedPractices
+                .findByWorkspaceIdAndReviewIdAndPracticeId(
+                        workspace, owing.review().getId(), owed)
+                .orElseThrow();
+        pinnedPractices.saveAndFlush(ReviewPractice.builder()
+                .workspaceId(workspace)
+                .reviewId(newer.review().getId())
+                .practiceId(owed)
+                .practiceVersionId(pinned.getPracticeVersionId())
+                .status(ReviewPracticeStatus.QUEUED)
+                .itemsListed(1)
+                .listingComplete(true)
+                .method(pinned.getMethod())
+                .build());
+
+        close(owing);
+
+        assertThat(followUps(version)).isEmpty();
+    }
+
+    private UUID occasionAt(String version) {
+        doReturn(new ProductItemQuery.CurrentWorkVersion.Known(version))
+                .when(productItems)
+                .currentWorkVersion(
+                        scenario.workspace().getId(), scenario.item().getId());
+        return itemEvents.record(new ItemEventInput(
+                scenario.workspace().getId(),
+                scenario.item().getId(),
+                new ItemEventName(scenario.item().getKind().value() + ".opened"),
+                version,
+                null,
+                Instant.now(),
+                FoundBy.WEBHOOK,
+                null,
+                null,
+                "{\"retained\":\"the occasion's own record\"}",
+                null));
+    }
+
+    /** An event review at {@code version} that owes one practice it never ran. */
+    private ReviewAdmissionData.Pending eventReviewOwing(String version, UUID occasion) {
+        var pending = admissions.pending(scenario, Instant.now(), scenarioAccountId, version);
+        jdbcTemplate.update(
+                "UPDATE review SET origin='EVENT', requested_by_id=NULL, event_id=? WHERE id=?",
+                occasion,
+                pending.review().getId());
+        admissions.withheld(pending, ReviewStopReason.NOT_RUN.name());
+        return pending;
+    }
+
+    private void close(ReviewAdmissionData.Pending pending) {
+        admit(pending, ResultOutcome.MET);
+        settle(pending);
+        service.complete(
+                scenario.workspace().getId(),
+                pending.review().getId(),
+                new ReviewCompletion(
+                        ReviewStatus.COMPLETE,
+                        null,
+                        Instant.now(),
+                        pending.review().getOrderedAt()));
+    }
+
+    private List<@Nullable UUID> followUps(String version) {
+        return jdbcTemplate.queryForList(
+                "SELECT id FROM item_event WHERE workspace_id=? AND item_id=? AND name=? AND item_version=?",
+                UUID.class,
+                scenario.workspace().getId(),
+                scenario.item().getId(),
+                ItemEventName.carried(scenario.item().getKind()).value(),
+                version);
     }
 
     /**

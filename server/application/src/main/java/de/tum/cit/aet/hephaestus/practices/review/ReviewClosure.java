@@ -64,7 +64,8 @@ class ReviewClosure {
      * occasion selects nothing itself, so its readiness edge measures only the carried practices, and it reads its
      * review's own occasion, under that occasion's expiry. An occasion is unique per item, name and version, so a
      * version gets one follow-up: a practice that does not fit again stays carried until a real event. A review with
-     * no occasion of its own, a cancelled one, one whose work moved on, or one that a newer review follows asks for none.
+     * no occasion of its own, a cancelled one, one whose work moved on, or one whose every owed practice a newer review
+     * measures asks for none.
      */
     private void followUp(Review review) {
         var version = review.getItemVersion();
@@ -75,15 +76,21 @@ class ReviewClosure {
                 || version == null
                 || review.getStatus() == ReviewStatus.CANCELLED) return;
         long workspace = review.getWorkspaceId();
-        boolean owes =
+        var owed =
                 memberships
                         .findByWorkspaceIdAndReviewIdOrderByPracticeIdAscItemIdAsc(workspace, review.getId())
                         .stream()
-                        .anyMatch(member -> member.getState() == ReviewItemState.WITHHELD
-                                && ReviewWithholdings.FOLLOW_UP.contains(member.getReason()));
-        // A newer review of the item carries what this one owes at its own edge, under its own occasion's roles.
-        if (!owes
-                || reviews.existsNewerItemReview(workspace, review.getItemId(), review.getId(), review.getOrderedAt())
+                        .filter(member -> member.getState() == ReviewItemState.WITHHELD
+                                && ReviewWithholdings.FOLLOW_UP.contains(member.getReason()))
+                        .map(member -> member.getPracticeId())
+                        .distinct()
+                        .toList();
+        // A newer review measures an owed practice only if it selected it; one that did not leaves it to this
+        // follow-up.
+        if (owed.isEmpty()
+                || owed.stream()
+                        .allMatch(practice -> reviews.existsNewerReviewOfPractice(
+                                workspace, review.getItemId(), practice, review.getId(), review.getOrderedAt()))
                 || !(items.currentWorkVersion(workspace, review.getItemId())
                         instanceof ProductItemQuery.CurrentWorkVersion.Known(String current))
                 || !current.equals(version)) return;
