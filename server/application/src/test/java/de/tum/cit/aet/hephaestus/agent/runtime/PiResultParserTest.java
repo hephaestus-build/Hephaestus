@@ -255,8 +255,9 @@ class PiResultParserTest extends BaseUnitTest {
 
         for (String coverage : invalid) {
             Map<String, Object> output = new HashMap<>();
-            parser.addPracticeCoverage(coverage.getBytes(StandardCharsets.UTF_8));
+            parser.addPracticeCoverage(output, coverage.getBytes(StandardCharsets.UTF_8));
             assertThat(output).doesNotContainKey("practiceCoverage");
+            assertThat(output).doesNotContainKey(PiResultParser.PRACTICES_EVALUATED);
         }
         assertThat(meterRegistry
                         .counter("agent.pi.result.parse.failure", "stage", "practice_coverage")

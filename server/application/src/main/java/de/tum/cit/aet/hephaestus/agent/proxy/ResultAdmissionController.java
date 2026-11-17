@@ -5,6 +5,8 @@ import de.tum.cit.aet.hephaestus.agent.handler.AdmissionConflictException;
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobDeliveryException;
 import de.tum.cit.aet.hephaestus.agent.job.AttemptCaptureFailures;
+import de.tum.cit.aet.hephaestus.agent.job.AttemptServerErrors;
+import de.tum.cit.aet.hephaestus.agent.job.AttemptServerErrors.Request;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewRunKind;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.AdmissionRequestDTO;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.AdmissionResponseDTO;
@@ -31,34 +33,39 @@ import org.springframework.web.server.ResponseStatusException;
 public class ResultAdmissionController {
     private final ResultAdmissionService admission;
     private final AttemptCaptureFailures captureFailures;
+    private final AttemptServerErrors serverErrors;
 
-    public ResultAdmissionController(ResultAdmissionService admission, AttemptCaptureFailures captureFailures) {
+    public ResultAdmissionController(
+            ResultAdmissionService admission,
+            AttemptCaptureFailures captureFailures,
+            AttemptServerErrors serverErrors) {
         this.admission = admission;
         this.captureFailures = captureFailures;
+        this.serverErrors = serverErrors;
     }
 
     @PostMapping("/start-practice")
     public PracticeStartResponseDTO startPractice(
             @Valid @RequestBody PracticeStartRequestDTO request, Authentication authentication) {
         var identity = attemptOf(authentication);
-        return checked(identity, () -> admission.start(identity, request));
+        return checked(identity, Request.START, () -> admission.start(identity, request));
     }
 
     @PostMapping("/admit-results")
     public AdmissionResponseDTO admitResults(
             @Valid @RequestBody SealResultsRequestDTO request, Authentication authentication) {
         var identity = attemptOf(authentication);
-        return checked(identity, () -> admission.admit(identity, request));
+        return checked(identity, Request.ADMIT, () -> admission.admit(identity, request));
     }
 
     @PostMapping("/stage-result")
     public StageResponseDTO stageResult(
             @Valid @RequestBody AdmissionRequestDTO request, Authentication authentication) {
         var identity = attemptOf(authentication);
-        return checked(identity, () -> admission.stage(identity, request));
+        return checked(identity, Request.STAGE, () -> admission.stage(identity, request));
     }
 
-    private <T> T checked(ResultAdmissionService.AdmissionIdentity identity, Supplier<T> operation) {
+    private <T> T checked(ResultAdmissionService.AdmissionIdentity identity, Request kind, Supplier<T> operation) {
         try {
             return operation.get();
         } catch (ResultAdmissionService.StaleAttemptException | AdmissionConflictException conflict) {
@@ -79,6 +86,11 @@ public class ResultAdmissionController {
             captureFailures.fail(identity, unverified);
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT, "The review attempt ended: its captured checkout cannot be built", unverified);
+        } catch (RuntimeException unexpected) {
+            // The sandbox ends the attempt on the server's error and its log is not collected: the attempt keeps
+            // which request failed and why, by type. A later error of the attempt replaces it.
+            serverErrors.record(identity, kind, unexpected);
+            throw unexpected;
         }
     }
 

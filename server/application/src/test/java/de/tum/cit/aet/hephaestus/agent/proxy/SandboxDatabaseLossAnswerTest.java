@@ -11,6 +11,7 @@ import de.tum.cit.aet.hephaestus.agent.attempt.AttemptJwt;
 import de.tum.cit.aet.hephaestus.agent.gateway.AgentGatewayErrors;
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.job.AttemptCaptureFailures;
+import de.tum.cit.aet.hephaestus.agent.job.AttemptServerErrors;
 import de.tum.cit.aet.hephaestus.core.exception.GlobalControllerAdvice;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.sql.SQLException;
@@ -133,7 +134,8 @@ class SandboxDatabaseLossAnswerTest extends BaseUnitTest {
                 now,
                 now.plusSeconds(60),
                 now.plusSeconds(30));
-        return MockMvcBuilders.standaloneSetup(new ResultAdmissionController(admission, failures))
+        return MockMvcBuilders.standaloneSetup(
+                        new ResultAdmissionController(admission, failures, mock(AttemptServerErrors.class)))
                 .setControllerAdvice(new AgentGatewayErrors(), new GlobalControllerAdvice())
                 .build()
                 .perform(post("/internal/llm/admit-results")

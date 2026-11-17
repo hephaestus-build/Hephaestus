@@ -561,8 +561,8 @@ Examples are a cut download, a signal, and a report that does not arrive.
 | Exit | The runner | `ReviewAttemptResults` |
 | --- | --- | --- |
 | 0 | Admitted its results | Ends the attempt, or hands an admitted review on to its composition |
-| 1 | Measured no practice, although its calls were answered | Ends the job failed |
-| 2 | Stopped on an error that it has no class for | Ends the job failed |
+| 1 | Measured no practice, although its calls were answered, or ran out of time before the review started | Ends the job failed |
+| 2 | Stopped on an error that it has no class for, also before the review started | Ends the job failed |
 | 42 | Could not use `task.json` | Ends the job failed |
 | 43 | The upload was not acknowledged before its deadline | The run hands on |
 | 44 | The workspace initializer could not prepare the workspace for a cause that every attempt meets | Ends the attempt with what it staged and records the rest as `PREPARATION_FAILED`, with no retry |
@@ -571,6 +571,12 @@ Examples are a cut download, a signal, and a report that does not arrive.
 | 77 | The server answered staging or admission with its own error | Ends the attempt with what it staged |
 | 78 | Staged what it could and left a practice without a result | Decides from what is staged |
 | 124, 137 | Stopped at the work deadline, or killed | Ends the attempt by its deadline or as interrupted |
+
+The server does not collect the runner's log, so the job's error carries the reason of a failed attempt.
+For exits 1 and 2, the runner records its last diagnostic as `end` in `runner-debug.json`, with codes of `pi-diagnostics.json` only.
+The server shows only codes of that vocabulary.
+For exit 77, the server keeps its own error on the attempt: the request that failed, and the cause by type.
+When the runner reports no evaluated practice and the usage ledger holds no model call of the attempt, the error says so.
 
 A lost server must never exit 1.
 Every call that a sandbox program makes to the gateway waits out a refused connection until its work ends (`untilGatewayTakes` in `agent/gateway-connection.ts`).

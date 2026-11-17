@@ -65,6 +65,7 @@ import de.tum.cit.aet.hephaestus.agent.usage.LlmAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetBlockReason;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetDecision;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetService;
+import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageEventRepository;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRecorder;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurn;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AiChoice;
@@ -108,6 +109,10 @@ import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.ObjectMapper;
 
 class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
+
+    @Autowired
+    private LlmUsageEventRepository usageEvents;
+
     @Autowired
     private JdbcTemplate jdbc;
 
@@ -861,7 +866,8 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                 transactions,
                 mapper,
                 metrics,
-                new ReviewJobTelemetry(metrics, Tracer.NOOP));
+                new ReviewJobTelemetry(metrics, Tracer.NOOP),
+                usageEvents);
     }
 
     private ReviewJobClaimService claimService(ReviewJobRepository repository) {

@@ -13,10 +13,12 @@ import de.tum.cit.aet.hephaestus.agent.proxy.ProviderOutage;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunFence;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.runtime.AgentResult;
+import de.tum.cit.aet.hephaestus.agent.runtime.PiResultParser;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.agent.runtime.StorableText;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxInfrastructureException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxResult;
+import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageEventRepository;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
 import de.tum.cit.aet.hephaestus.integration.core.metrics.ReviewRefusalRecorder;
@@ -82,6 +84,7 @@ public class ReviewAttemptResults {
     private final ObjectMapper objectMapper;
     private final MeterRegistry meterRegistry;
     private final ReviewJobTelemetry jobTelemetry;
+    private final LlmUsageEventRepository usageEvents;
     private final RetryTemplate terminalPersistRetries = retryTemplate(TERMINAL_PERSIST_POLICY);
     private final Map<RequeueCause, Counter> infraRetryRequeued = new EnumMap<>(RequeueCause.class);
     private final Counter serverErrors;
@@ -98,7 +101,8 @@ public class ReviewAttemptResults {
             TransactionTemplate transactionTemplate,
             ObjectMapper objectMapper,
             MeterRegistry meterRegistry,
-            ReviewJobTelemetry jobTelemetry) {
+            ReviewJobTelemetry jobTelemetry,
+            LlmUsageEventRepository usageEvents) {
         this.jobRepository = jobRepository;
         this.handler = handler;
         this.practiceAgent = practiceAgent;
@@ -111,6 +115,7 @@ public class ReviewAttemptResults {
         this.objectMapper = objectMapper;
         this.meterRegistry = meterRegistry;
         this.jobTelemetry = jobTelemetry;
+        this.usageEvents = usageEvents;
         serverErrors = Counter.builder(AgentMetrics.AGENT_JOB_SERVER_ERROR)
                 .description("Attempts that ended because this server answered their results with its own error")
                 .register(meterRegistry);
@@ -127,23 +132,56 @@ public class ReviewAttemptResults {
                 .register(meterRegistry);
     }
 
+    /**
+     * What the server knows of an attempt beside the sandbox's own files.
+     *
+     * @param serverError how this server failed the attempt's results; null when it did not
+     * @param nothingRan no practice was evaluated, and the server's usage ledger holds no model call of the attempt
+     */
+    record AttemptFacts(@Nullable String serverError, boolean nothingRan) {
+        static final AttemptFacts NONE = new AttemptFacts(null, false);
+    }
+
     /** What a measuring attempt that ended with {@code status} reports as its error; null for a completed one. */
-    private static @Nullable String terminalError(
-            ReviewJobStatus status, SandboxResult sandboxResult, boolean storable) {
+    static @Nullable String terminalError(
+            ReviewJobStatus status,
+            SandboxResult sandboxResult,
+            AgentResult agentResult,
+            AttemptFacts facts,
+            boolean storable) {
         return switch (status) {
             case TIMED_OUT -> "The container timed out.";
             case FAILED ->
-                !storable
-                        ? UNSTORABLE_RESULT_MESSAGE
-                        : sandboxResult.exitCode() == 0
-                                ? "The runner did not return a valid result."
-                                : sandboxResult.exitCode() == SandboxLayout.EXIT_SERVER_ERROR
-                                        ? "The server answered the review's results with its own error."
-                                        : sandboxResult.exitCode() == SandboxLayout.EXIT_WORKSPACE_UNPREPARED
-                                                ? "The sandbox could not prepare the attempt's workspace."
-                                                : "The container exited with code " + sandboxResult.exitCode() + ".";
+                !storable ? UNSTORABLE_RESULT_MESSAGE : failure(sandboxResult.exitCode(), agentResult, facts);
             default -> null;
         };
+    }
+
+    private static String failure(int exitCode, AgentResult agentResult, AttemptFacts facts) {
+        String failure;
+        if (exitCode == 0) failure = "The runner did not return a valid result.";
+        else if (exitCode == SandboxLayout.EXIT_WORKSPACE_UNPREPARED)
+            failure = "The sandbox could not prepare the attempt's workspace.";
+        else if (exitCode == SandboxLayout.EXIT_SERVER_ERROR)
+            failure = Objects.requireNonNullElse(
+                    facts.serverError(), "The server answered the review's results with its own error.");
+        else {
+            String why = RunnerEnd.describe(exitCode, agentResult.output());
+            failure = "The container exited with code " + exitCode + "." + (why == null ? "" : " " + why);
+        }
+        return facts.nothingRan() ? failure + " No practice was evaluated, and no model was called." : failure;
+    }
+
+    /** Read only for a failed attempt: a completed one reports no error. */
+    static AttemptFacts factsOf(ReviewJob job, AgentResult agentResult, LlmUsageEventRepository usageEvents) {
+        // The count of evaluated practices is the sandbox's word; a call that the server's ledger holds is not.
+        boolean noneEvaluated = Integer.valueOf(0).equals(agentResult.output().get(PiResultParser.PRACTICES_EVALUATED));
+        boolean noCall = noneEvaluated
+                && usageEvents
+                                .countReviewCalls(job.getWorkspaceId(), job.getId(), job.getAttempt())
+                                .getCalls()
+                        == 0;
+        return new AttemptFacts(AttemptServerErrors.describe(job.getCapture(), job.getAttempt()), noCall);
     }
 
     static final String UNSTORABLE_RESULT_MESSAGE =
@@ -380,7 +418,16 @@ public class ReviewAttemptResults {
                     objectMapper
                             .createObjectNode()
                             .put("status", status.name())
-                            .put("error", terminalError(status, measured.sandboxResult(), storable)));
+                            .put(
+                                    "error",
+                                    terminalError(
+                                            status,
+                                            measured.sandboxResult(),
+                                            measured.agentResult(),
+                                            status == ReviewJobStatus.FAILED
+                                                    ? factsOf(locked, measured.agentResult(), usageEvents)
+                                                    : AttemptFacts.NONE,
+                                            storable)));
         locked.setOutput(kept);
         locked.setExitCode(measured.sandboxResult().exitCode());
         jobRepository.saveAndFlush(locked);
@@ -660,7 +707,14 @@ public class ReviewAttemptResults {
             ReviewJobStatus determined = determineTerminalStatus(sandboxResult, agentResult, locked);
             ReviewJobStatus terminalStatus =
                     !storable && determined == ReviewJobStatus.COMPLETED ? ReviewJobStatus.FAILED : determined;
-            String errorMessage = terminalError(terminalStatus, sandboxResult, storable);
+            String errorMessage = terminalError(
+                    terminalStatus,
+                    sandboxResult,
+                    agentResult,
+                    terminalStatus == ReviewJobStatus.FAILED
+                            ? factsOf(locked, agentResult, usageEvents)
+                            : AttemptFacts.NONE,
+                    storable);
             Instant finishedAt = Instant.now();
             int updated = terminal.transition(jobId, fence, terminalStatus, finishedAt, errorMessage);
             if (updated == 0) {

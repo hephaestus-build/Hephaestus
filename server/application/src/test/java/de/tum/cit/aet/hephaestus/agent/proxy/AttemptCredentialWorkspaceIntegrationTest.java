@@ -29,6 +29,7 @@ import de.tum.cit.aet.hephaestus.agent.gateway.SandboxRunArgumentResolver;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxRunKind;
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.job.AttemptCaptureFailures;
+import de.tum.cit.aet.hephaestus.agent.job.AttemptServerErrors;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunBand;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
@@ -178,7 +179,9 @@ class AttemptCredentialWorkspaceIntegrationTest extends AbstractResultAdmissionI
         sandboxes = SandboxOwnerFixtures.owner(beans, issuer, runs);
         var controller = new LlmProxyController(provider, transcript, mock(ProxyAccounting.class), json);
         var results = new ResultAdmissionController(
-                beans.getBean(ResultAdmissionService.class), mock(AttemptCaptureFailures.class));
+                beans.getBean(ResultAdmissionService.class),
+                mock(AttemptCaptureFailures.class),
+                mock(AttemptServerErrors.class));
         var application = new SpringApplication(GatewayApplication.class, LlmProxySecurityConfig.class);
         application.addInitializers(context -> {
             var factory = context.getBeanFactory();

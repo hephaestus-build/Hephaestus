@@ -29,6 +29,7 @@ import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxWorkspaceManager;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxKind;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxes;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxResult;
+import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageEventRepository;
 import de.tum.cit.aet.hephaestus.core.lock.ClusterLock;
 import de.tum.cit.aet.hephaestus.integration.core.fabric.FabricLayout;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
@@ -69,6 +70,10 @@ import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.json.JsonMapper;
 
 class ReviewPreparationRecoveryIntegrationTest extends BaseIntegrationTest {
+
+    @Autowired
+    private LlmUsageEventRepository usageEvents;
+
     @Autowired
     private SqlStatementCounter statements;
 
@@ -388,7 +393,8 @@ class ReviewPreparationRecoveryIntegrationTest extends BaseIntegrationTest {
                 transactions,
                 mapper,
                 new SimpleMeterRegistry(),
-                telemetry);
+                telemetry,
+                usageEvents);
         return new ReviewSandboxRuns(
                 mock(ReviewJobClaimService.class),
                 preparation,
