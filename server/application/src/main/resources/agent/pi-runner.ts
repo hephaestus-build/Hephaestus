@@ -770,6 +770,8 @@ export async function runReviewJob(): Promise<void> {
 		sessionsAtOnce?: number;
 		/** Each practice's required brief sources: sizes and read state only, never their text. */
 		practiceSources: Record<string, RequiredSourceTrace[]>;
+		/** The diagnostic the runner ended on, so the server can name why without the sandbox log: closed codes only. */
+		end?: { event: string; reason?: string; error?: string };
 	} = {
 		practiceSources: {},
 		attempts: [],
@@ -880,6 +882,12 @@ export async function runReviewJob(): Promise<void> {
 			stagingFailure ??= { error };
 			diagnose("practice.staging_failed", { practice: practiceAt(practiceSlug) });
 		}
+	}
+
+	/** Emits the runner's last diagnostic and keeps it for runner-debug.json. */
+	function ended(event: string, fields: { reason?: string; error?: string } = {}) {
+		diagnose(event, fields);
+		runnerDebug.end = { event, ...fields };
 	}
 
 	function persistUsage() {
@@ -2545,7 +2553,7 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 		const startMs = Date.now();
 		const tooLate = Date.now() >= measureEnd;
 		if (tooLate) {
-			diagnose("review.failed", { reason: "ceiling_before_start" });
+			ended("review.failed", { reason: "ceiling_before_start" });
 		}
 
 		if (tooLate) {
@@ -2950,10 +2958,11 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 		if (!maybeWriteResultFile()) {
 			if ((providerFailures > 0 || measurementReply.asked) && !measurementReply.received) {
 				diagnose("review.unreachable", { unanswered_calls: providerFailures });
+				runnerDebug.end = { event: "review.unreachable" };
 				finalizeOutput();
 				process.exit(PROVIDER_UNREACHABLE_EXIT);
 			}
-			diagnose("review.failed", { reason: "no_practice" });
+			ended("review.failed", { reason: "no_practice" });
 			finalizeOutput();
 			process.exit(1);
 		}
@@ -3011,13 +3020,13 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 	}
 
 	process.on("uncaughtException", (err) => {
-		diagnose("review.fatal", { error: errorKind(err) });
+		ended("review.fatal", { error: errorKind(err) });
 		finalizeOutputQuietly();
 		process.exit(2);
 	});
 
 	process.on("unhandledRejection", (reason) => {
-		diagnose("review.unhandled_rejection", { error: errorKind(reason) });
+		ended("review.unhandled_rejection", { error: errorKind(reason) });
 		finalizeOutputQuietly();
 		process.exit(2);
 	});
@@ -3034,7 +3043,7 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 		try {
 			await main();
 		} catch (error) {
-			diagnose("review.fatal", { error: errorKind(error) });
+			ended("review.fatal", { error: errorKind(error) });
 			unreachedReason = "error";
 			finalizeOutputQuietly();
 			process.exit(exitCodeOf(error));

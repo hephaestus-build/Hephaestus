@@ -13,6 +13,7 @@ import de.tum.cit.aet.hephaestus.agent.proxy.ProviderOutage;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunFence;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.runtime.AgentResult;
+import de.tum.cit.aet.hephaestus.agent.runtime.PiResultParser;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.agent.runtime.StorableText;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxInfrastructureException;
@@ -37,6 +38,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.function.Supplier;
+import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -128,20 +130,50 @@ public class ReviewAttemptResults {
     }
 
     /** What a measuring attempt that ended with {@code status} reports as its error; null for a completed one. */
-    private static @Nullable String terminalError(
-            ReviewJobStatus status, SandboxResult sandboxResult, boolean storable) {
+    static @Nullable String terminalError(
+            ReviewJobStatus status, SandboxResult sandboxResult, AgentResult agentResult, boolean storable) {
         return switch (status) {
             case TIMED_OUT -> "The container timed out.";
-            case FAILED ->
-                !storable
-                        ? UNSTORABLE_RESULT_MESSAGE
-                        : sandboxResult.exitCode() == 0
-                                ? "The runner did not return a valid result."
-                                : sandboxResult.exitCode() == SandboxLayout.EXIT_SERVER_ERROR
-                                        ? "The server answered the review's results with its own error."
-                                        : sandboxResult.exitCode() == SandboxLayout.EXIT_WORKSPACE_UNPREPARED
-                                                ? "The sandbox could not prepare the attempt's workspace."
-                                                : "The container exited with code " + sandboxResult.exitCode() + ".";
+            case FAILED -> !storable ? UNSTORABLE_RESULT_MESSAGE : failure(sandboxResult.exitCode(), agentResult);
+            default -> null;
+        };
+    }
+
+    private static String failure(int exitCode, AgentResult agentResult) {
+        if (exitCode == 0) return "The runner did not return a valid result.";
+        if (exitCode == SandboxLayout.EXIT_WORKSPACE_UNPREPARED)
+            return "The sandbox could not prepare the attempt's workspace.";
+        if (exitCode == SandboxLayout.EXIT_SERVER_ERROR)
+            // Only the runner's own counts say that nothing ran; a missing file says nothing.
+            return Integer.valueOf(0).equals(agentResult.output().get(PiResultParser.MODEL_CALLS))
+                            && Integer.valueOf(0).equals(agentResult.output().get(PiResultParser.PRACTICES_EVALUATED))
+                    ? "The server answered the review's results with its own error before any practice was evaluated"
+                            + " or any model was called."
+                    : "The server answered the review's results with its own error.";
+        String why = runnerEnd(agentResult.output());
+        return "The container exited with code " + exitCode + "." + (why == null ? "" : " " + why);
+    }
+
+    /** A closed error code from runner-debug.json: the sandbox wrote it, so nothing else is shown. */
+    private static final Pattern ERROR_KIND = Pattern.compile("[A-Za-z][A-Za-z.-]{0,63}");
+
+    /** Why the runner says it stopped, from the closed codes it records in runner-debug.json; null when it did not say. */
+    private static @Nullable String runnerEnd(Map<String, Object> output) {
+        if (!(output.get("runnerDebug") instanceof Map<?, ?> debug) || !(debug.get("end") instanceof Map<?, ?> end))
+            return null;
+        Object error = end.get("error");
+        return switch (String.valueOf(end.get("event"))) {
+            case "review.failed" ->
+                switch (String.valueOf(end.get("reason"))) {
+                    case "no_practice" -> "No practice produced a result.";
+                    case "ceiling_before_start" -> "The attempt's time ran out before the review started.";
+                    default -> null;
+                };
+            case "review.fatal", "review.unhandled_rejection" ->
+                error instanceof String kind && ERROR_KIND.matcher(kind).matches()
+                        ? "The runner stopped on an unexpected error (" + kind + ")."
+                        : "The runner stopped on an unexpected error.";
+            case "review.unreachable" -> "No model call was answered.";
             default -> null;
         };
     }
@@ -380,7 +412,9 @@ public class ReviewAttemptResults {
                     objectMapper
                             .createObjectNode()
                             .put("status", status.name())
-                            .put("error", terminalError(status, measured.sandboxResult(), storable)));
+                            .put(
+                                    "error",
+                                    terminalError(status, measured.sandboxResult(), measured.agentResult(), storable)));
         locked.setOutput(kept);
         locked.setExitCode(measured.sandboxResult().exitCode());
         jobRepository.saveAndFlush(locked);
@@ -660,7 +694,7 @@ public class ReviewAttemptResults {
             ReviewJobStatus determined = determineTerminalStatus(sandboxResult, agentResult, locked);
             ReviewJobStatus terminalStatus =
                     !storable && determined == ReviewJobStatus.COMPLETED ? ReviewJobStatus.FAILED : determined;
-            String errorMessage = terminalError(terminalStatus, sandboxResult, storable);
+            String errorMessage = terminalError(terminalStatus, sandboxResult, agentResult, storable);
             Instant finishedAt = Instant.now();
             int updated = terminal.transition(jobId, fence, terminalStatus, finishedAt, errorMessage);
             if (updated == 0) {

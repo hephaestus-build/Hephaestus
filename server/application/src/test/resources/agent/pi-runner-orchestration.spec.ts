@@ -2563,6 +2563,10 @@ if (scenario !== undefined && scenario !== "") {
 								outcome,
 							})),
 						});
+					// What the server names in the job error when the runner exits without a result.
+					const runnerEnd = () =>
+						recordOf(JSON.parse(readFileSync(nodePath.join(cwd, "out/runner-debug.json"), "utf8")))
+							.end;
 					const slugs = index.map(({ slug }) => slug).toSorted();
 					const reportPath = nodePath.join(cwd, "out/practice-scripts.json");
 					assert.ok(existsSync(reportPath), child.stderr);
@@ -2969,6 +2973,7 @@ if (scenario !== undefined && scenario !== "") {
 						}
 						case "context-unfit": {
 							assert.equal(child.status, 1, child.stderr);
+							assert.deepEqual(runnerEnd(), { event: "review.failed", reason: "no_practice" });
 							assert.equal(events.filter((event) => event === "compact").length, 0);
 							assert.ok(!events.some((event) => event.startsWith("prompt:")));
 							assert.ok(!existsSync(nodePath.join(cwd, "out/result.json")));
@@ -3016,6 +3021,10 @@ if (scenario !== undefined && scenario !== "") {
 						}
 						case "setup": {
 							assert.equal(child.status, 1, child.stderr);
+							assert.deepEqual(runnerEnd(), {
+								event: "review.failed",
+								reason: "ceiling_before_start",
+							});
 							assert.deepEqual(events, []);
 							reached({ "test-practice": "NOT_REACHED" });
 							ran({ "test-practice": "not-reached (deadline)" });

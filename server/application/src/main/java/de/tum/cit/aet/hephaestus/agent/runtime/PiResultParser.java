@@ -68,9 +68,10 @@ public class PiResultParser {
         output.put("exitCode", sandboxResult.exitCode());
         output.put("timedOut", sandboxResult.timedOut());
         addWatchdogState(output, sandboxResult.outputFiles().get("watchdog-killed.json"));
-        AgentResult.LlmUsage usage = parseUsage(sandboxResult.outputFiles().get("usage.json"));
+        AgentResult.LlmUsage usage =
+                parseUsage(output, sandboxResult.outputFiles().get("usage.json"));
         addRunnerDebug(output, sandboxResult.outputFiles().get("runner-debug.json"));
-        addPracticeCoverage(sandboxResult.outputFiles().get("practice-coverage.json"));
+        addPracticeCoverage(output, sandboxResult.outputFiles().get("practice-coverage.json"));
         // A malformed primary result is the run's answer; the review-state backup stands in only for a missing one.
         byte[] resultFile = sandboxResult.outputFiles().get("result.json");
         if (resultFile == null) {
@@ -106,7 +107,13 @@ public class PiResultParser {
         return null;
     }
 
-    void addPracticeCoverage(byte @Nullable [] coverageFile) {
+    /** The output key of how many practices the runner evaluated, when its coverage file says. */
+    public static final String PRACTICES_EVALUATED = "practicesEvaluated";
+
+    /** The output key of how many model calls the runner made, when its usage file says. */
+    public static final String MODEL_CALLS = "modelCalls";
+
+    void addPracticeCoverage(Map<String, Object> output, byte @Nullable [] coverageFile) {
         if (coverageFile == null || coverageFile.length == 0) return;
         try {
             JsonNode coverage = objectMapper.readTree(coverageFile);
@@ -116,6 +123,7 @@ public class PiResultParser {
             if (!validCoverage(eligible, evaluated, outcomes)) {
                 throw new IllegalArgumentException("invalid practice coverage");
             }
+            output.put(PRACTICES_EVALUATED, evaluated);
             eligiblePractices.record(eligible);
             evaluatedPractices.record(evaluated);
             if (eligible > 0) practiceCoverageRatio.record((double) evaluated / eligible);
@@ -149,7 +157,8 @@ public class PiResultParser {
         return evaluatedOutcomes == evaluated;
     }
 
-    AgentResult.@Nullable LlmUsage parseUsage(byte @Nullable [] usageFile) {
+    /** @param output gets {@link #MODEL_CALLS} when the file is readable, also for none */
+    AgentResult.@Nullable LlmUsage parseUsage(Map<String, Object> output, byte @Nullable [] usageFile) {
         if (usageFile == null || usageFile.length == 0) {
             return null;
         }
@@ -160,6 +169,7 @@ public class PiResultParser {
                     .with(DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES)
                     .with(DeserializationFeature.FAIL_ON_TRAILING_TOKENS)
                     .readValue(usageFile);
+            output.put(MODEL_CALLS, usage.totalCalls());
             if (usage.totalCalls() <= 0) return null;
             return new AgentResult.LlmUsage(
                     usage.model(),

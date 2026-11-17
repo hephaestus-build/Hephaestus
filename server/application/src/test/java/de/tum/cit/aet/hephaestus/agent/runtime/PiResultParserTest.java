@@ -40,7 +40,7 @@ class PiResultParserTest extends BaseUnitTest {
     @DisplayName("emits agent.pi.result.parse.failure{stage=usage} when usage.json is invalid")
     void emitsParseFailureMetric() {
         var bad = "not-json".getBytes(StandardCharsets.UTF_8);
-        parser.parseUsage(bad);
+        parser.parseUsage(new HashMap<>(), bad);
         assertThat(meterRegistry
                         .counter("agent.pi.result.parse.failure", "stage", "usage")
                         .count())
@@ -255,8 +255,9 @@ class PiResultParserTest extends BaseUnitTest {
 
         for (String coverage : invalid) {
             Map<String, Object> output = new HashMap<>();
-            parser.addPracticeCoverage(coverage.getBytes(StandardCharsets.UTF_8));
+            parser.addPracticeCoverage(output, coverage.getBytes(StandardCharsets.UTF_8));
             assertThat(output).doesNotContainKey("practiceCoverage");
+            assertThat(output).doesNotContainKey(PiResultParser.PRACTICES_EVALUATED);
         }
         assertThat(meterRegistry
                         .counter("agent.pi.result.parse.failure", "stage", "practice_coverage")
@@ -269,7 +270,7 @@ class PiResultParserTest extends BaseUnitTest {
     void populatesReasoningTokensWhenPresent() {
         String usage = "{\"model\":\"gpt-5.4\",\"inputTokens\":100,\"outputTokens\":50,\"reasoningTokens\":30,"
                 + "\"totalCalls\":1}";
-        var result = parser.parseUsage(usage.getBytes(StandardCharsets.UTF_8));
+        var result = parser.parseUsage(new HashMap<>(), usage.getBytes(StandardCharsets.UTF_8));
 
         assertThat(result).isNotNull();
         assertThat(result.reasoningTokens()).isEqualTo(30);
@@ -281,7 +282,7 @@ class PiResultParserTest extends BaseUnitTest {
     @DisplayName("reasoningTokens stays null for a model that never reports it (chat/completions-only)")
     void reasoningTokensNullWhenAbsent() {
         String usage = "{\"model\":\"gpt-oss-120b\",\"inputTokens\":100,\"outputTokens\":50,\"totalCalls\":1}";
-        var result = parser.parseUsage(usage.getBytes(StandardCharsets.UTF_8));
+        var result = parser.parseUsage(new HashMap<>(), usage.getBytes(StandardCharsets.UTF_8));
 
         assertThat(result).isNotNull();
         assertThat(result.reasoningTokens()).isNull();
