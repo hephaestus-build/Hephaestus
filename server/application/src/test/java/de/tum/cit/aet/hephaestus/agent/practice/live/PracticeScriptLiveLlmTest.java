@@ -190,8 +190,6 @@ class PracticeScriptLiveLlmTest extends AbstractWorkspaceIntegrationTest {
         registry.add("hephaestus.sandbox.kubernetes.namespace", () -> "practice-script-live");
         registry.add("hephaestus.fabric.root", FABRIC_ROOT::toString);
         registry.add("hephaestus.agent.image.reference", LiveRunnerWorkspace::image);
-        // The harness uses the selected prebuilt image and never pulls another build.
-        registry.add("hephaestus.agent.image.pull-policy", () -> "NEVER");
     }
 
     // The real runner runs in its agent container; this suite exercises the proxy without Kubernetes.

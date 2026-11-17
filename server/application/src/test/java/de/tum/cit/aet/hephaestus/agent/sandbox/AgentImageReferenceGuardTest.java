@@ -30,7 +30,7 @@ class AgentImageReferenceGuardTest extends BaseUnitTest {
     }
 
     private static AgentImageReferenceGuard guardFor(String reference) {
-        return new AgentImageReferenceGuard(new AgentImageProperties(reference, ImagePullPolicy.IF_NOT_PRESENT));
+        return new AgentImageReferenceGuard(new AgentImageProperties(reference));
     }
 
     @ParameterizedTest

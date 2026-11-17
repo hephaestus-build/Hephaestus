@@ -1,9 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.runtime;
 
 import de.tum.cit.aet.hephaestus.agent.sandbox.AgentImageReferenceGuard;
-import de.tum.cit.aet.hephaestus.agent.sandbox.ImagePullPolicy;
 import org.springframework.boot.context.properties.ConfigurationProperties;
-import org.springframework.boot.context.properties.bind.DefaultValue;
 
 /**
  * The agent image this server runs its runners in.
@@ -16,5 +14,4 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  * cannot name a matched build. See ADR 0031.
  */
 @ConfigurationProperties(prefix = "hephaestus.agent.image")
-public record AgentImageProperties(
-        String reference, @DefaultValue("IF_NOT_PRESENT") ImagePullPolicy pullPolicy) {}
+public record AgentImageProperties(String reference) {}

@@ -83,11 +83,6 @@
       "description": "Image reference used by Pi practice sandboxes and the Hephaestus container. Production must be digest-pinned (registry/path@sha256:<64 lowercase hex>)."
     },
     {
-      "name": "hephaestus.agent.image.pull-policy",
-      "type": "de.tum.cit.aet.hephaestus.agent.sandbox.ImagePullPolicy",
-      "description": "Startup pull behaviour."
-    },
-    {
       "name": "hephaestus.agent.image.require-digest",
       "type": "java.lang.Boolean",
       "description": "Refuses startup unless the agent image reference is pinned by digest."
