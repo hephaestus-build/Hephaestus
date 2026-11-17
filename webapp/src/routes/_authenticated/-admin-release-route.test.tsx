@@ -19,7 +19,7 @@ const status = {
 		channel: "RELEASE",
 		environment: "production",
 		commit: "a".repeat(40),
-		image: `ghcr.io/hephaestus-build/application-server@sha256:${"b".repeat(64)}`,
+		image: `ghcr.io/hephaestus-build/server@sha256:${"b".repeat(64)}`,
 		roles: ["SERVER"],
 	},
 	status: "NEVER_CHECKED",

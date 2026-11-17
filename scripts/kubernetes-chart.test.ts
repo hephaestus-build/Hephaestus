@@ -211,9 +211,9 @@ await test("a commit lock names the chart images by digest, its upstream images 
 		return `${entry.repository}@${entry.digest}`;
 	};
 	const images = {
-		HEPHAESTUS_IMAGE_AGENT_PI: `ghcr.io/hephaestus-build/agent-pi@${digest("1")}`,
+		HEPHAESTUS_IMAGE_AGENT: `ghcr.io/hephaestus-build/agent@${digest("1")}`,
 		HEPHAESTUS_IMAGE_ALERTMANAGER: pin("alertmanager"),
-		HEPHAESTUS_IMAGE_APPLICATION_SERVER: `ghcr.io/hephaestus-build/application-server@${digest("2")}`,
+		HEPHAESTUS_IMAGE_SERVER: `ghcr.io/hephaestus-build/server@${digest("2")}`,
 		HEPHAESTUS_IMAGE_VICTORIA_METRICS: pin("victoria-metrics"),
 		HEPHAESTUS_IMAGE_VMALERT: pin("vmalert"),
 		HEPHAESTUS_IMAGE_POSTGRES: `ghcr.io/hephaestus-build/postgres@${digest("4")}`,
@@ -466,7 +466,7 @@ await test("no template grants host or Docker access, or adds a migration owner"
 			name,
 		);
 	}
-	assert.doesNotMatch(source("postgresql-backup.yaml"), /application-server|SPRING_/u);
+	assert.doesNotMatch(source("postgresql-backup.yaml"), /"name" "server"|SPRING_/u);
 	// The server is the only role that runs Liquibase.
 	assert.doesNotMatch(source("server.yaml"), /SPRING_LIQUIBASE_ENABLED/u);
 	assert.match(source("server.yaml"), /SPRING_PROFILES_ACTIVE\n\s*value: prod\n/u);

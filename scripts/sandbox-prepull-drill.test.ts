@@ -8,7 +8,7 @@ const event = (name: string, reason: string, message: string) => ({
 	reason,
 	message,
 });
-const image = '"ghcr.io/hephaestus-build/agent-pi@sha256:aaaa"';
+const image = '"ghcr.io/hephaestus-build/agent@sha256:aaaa"';
 
 await test("a sandbox counts as pre-pulled only when the kubelet found its image on the node", () => {
 	const events = {

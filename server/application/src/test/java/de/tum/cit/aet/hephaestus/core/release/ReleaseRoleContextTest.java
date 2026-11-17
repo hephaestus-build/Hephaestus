@@ -55,12 +55,11 @@ class ReleaseRoleContextTest {
     void shouldAcceptAnyRegistryButRefuseAMalformedLockIdentity() {
         context.withPropertyValues(
                         "hephaestus.release.commit=" + ReleaseFixtures.COMMIT,
-                        "hephaestus.release.image=registry.internal:5000/hephaestus/application-server@sha256:"
-                                + "c".repeat(64))
+                        "hephaestus.release.image=registry.internal:5000/hephaestus/server@sha256:" + "c".repeat(64))
                 .run(application -> assertThat(application).hasNotFailed());
         context.withPropertyValues("hephaestus.release.commit=abc")
                 .run(application -> assertThat(application).hasFailed());
-        context.withPropertyValues("hephaestus.release.image=ghcr.io/hephaestus-build/application-server:1.2.3")
+        context.withPropertyValues("hephaestus.release.image=ghcr.io/hephaestus-build/server:1.2.3")
                 .run(application -> assertThat(application).hasFailed());
     }
 }

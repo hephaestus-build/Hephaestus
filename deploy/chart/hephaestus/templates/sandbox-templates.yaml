@@ -67,7 +67,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: agent
-          image: {{ include "hephaestus.image" (dict "root" $ "name" "agent-pi") | quote }}
+          image: {{ include "hephaestus.image" (dict "root" $ "name" "agent") | quote }}
           imagePullPolicy: IfNotPresent
           env:
             # The image's home is read-only. A process that writes below HOME writes to /tmp.
@@ -149,7 +149,7 @@ spec:
         {{- include "hephaestus.podSecurityContext" (dict "user" 1000 "group" 1000) | nindent 8 }}
       containers:
         - name: hold
-          image: {{ include "hephaestus.image" (dict "root" . "name" "agent-pi") | quote }}
+          image: {{ include "hephaestus.image" (dict "root" . "name" "agent") | quote }}
           imagePullPolicy: IfNotPresent
           command: ["sleep", "infinity"]
           resources:

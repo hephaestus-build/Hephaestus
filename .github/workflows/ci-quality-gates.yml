@@ -24,7 +24,7 @@ on:
         type: string
         default: "true"
       application_server_changed:
-        description: "Whether application-server files changed (or should run for other reasons)"
+        description: "Whether server files changed (or should run for other reasons)"
         required: false
         type: string
         default: "true"
@@ -112,7 +112,7 @@ jobs:
           restore-keys: |
             vite-task-${{ runner.os }}-${{ runner.arch }}-${{ env.NODE_TEST_SHARD != '' && 'tests-' || '' }}${{ env.QUALITY_LEG }}-
 
-      - name: Setup application-server caches
+      - name: Setup server caches
         if: env.QUALITY_LEG == 'server'
         uses: ./.github/actions/setup-caches
 

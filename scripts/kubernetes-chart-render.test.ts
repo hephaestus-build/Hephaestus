@@ -86,7 +86,7 @@ await test("a release package runs the release's images with the operator's valu
 		}
 	}
 	const server = workload(resources, "server");
-	assert.equal(envValue(server, "HEPHAESTUS_AGENT_IMAGE_REFERENCE"), prepared.images["agent-pi"]);
+	assert.equal(envValue(server, "HEPHAESTUS_AGENT_IMAGE_REFERENCE"), prepared.images.agent);
 	assert.equal(envValue(server, "HEPHAESTUS_RELEASE_COMMIT"), prepared.release.commit);
 	assert.equal(envValue(server, "APP_VERSION"), "1.2.3");
 	// The chart source alone still refuses to render without a run's images.
@@ -1073,11 +1073,8 @@ for (const name of profiles) {
 		assert.equal(get(server, "spec", "strategy", "type"), "RollingUpdate");
 		assert.equal(envValue(server, "AGENT_ENABLED"), String(runsReviews(name)));
 		for (const role of [server]) {
-			assert.equal(envValue(role, "HEPHAESTUS_AGENT_IMAGE_REFERENCE"), prepared.images["agent-pi"]);
-			assert.equal(
-				envValue(role, "HEPHAESTUS_IMAGE_APPLICATION_SERVER"),
-				prepared.images["application-server"],
-			);
+			assert.equal(envValue(role, "HEPHAESTUS_AGENT_IMAGE_REFERENCE"), prepared.images.agent);
+			assert.equal(envValue(role, "HEPHAESTUS_IMAGE_SERVER"), prepared.images.server);
 			assert.equal(envValue(role, "HEPHAESTUS_RELEASE_COMMIT"), prepared.release.commit);
 			assert.equal(envValue(role, "APP_VERSION"), "1.2.3");
 		}

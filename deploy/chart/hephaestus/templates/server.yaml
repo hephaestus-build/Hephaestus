@@ -82,7 +82,7 @@ spec:
       {{- end }}
       containers:
         - name: server
-          image: {{ include "hephaestus.image" (dict "root" . "name" "application-server") | quote }}
+          image: {{ include "hephaestus.image" (dict "root" . "name" "server") | quote }}
           imagePullPolicy: IfNotPresent
           env:
             - name: HEPHAESTUS_WORKSPACE_SUBDOMAINS_ENABLED

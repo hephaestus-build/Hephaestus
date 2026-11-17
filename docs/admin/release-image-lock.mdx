@@ -106,7 +106,7 @@ set -euo pipefail
 VERSION=X.Y.Z
 gh release download "v$VERSION" --repo hephaestus-build/Hephaestus \
   --pattern SHA256SUMS --pattern SHA256SUMS.sigstore.json \
-  --pattern manifest.json --pattern 'application-server-linux-amd64.*'
+  --pattern manifest.json --pattern 'server-linux-amd64.*'
 cosign verify-blob \
   --bundle SHA256SUMS.sigstore.json \
   --certificate-identity \
@@ -151,7 +151,7 @@ Do not reconstruct an old lock or resolve image tags.
 
 ## Runtime identity handoff
 
-The chart gives the server Pods `APP_VERSION`, `HEPHAESTUS_RELEASE_COMMIT` and `HEPHAESTUS_IMAGE_APPLICATION_SERVER` from the verified release metadata.
+The chart gives the server Pods `APP_VERSION`, `HEPHAESTUS_RELEASE_COMMIT` and `HEPHAESTUS_IMAGE_SERVER` from the verified release metadata.
 Each process reports these values, with its runtime roles, under `release` in `/actuator/info`.
 The chart's `deploymentEnvironment` value identifies the environment.
 This is deployment metadata from the verified lock, not a second signature verification or an observation of the container.

@@ -9,7 +9,7 @@ on:
         type: string
         default: "false"
       application_server_changed:
-        description: "Whether application-server files changed"
+        description: "Whether server files changed"
         required: false
         type: string
         default: "true"

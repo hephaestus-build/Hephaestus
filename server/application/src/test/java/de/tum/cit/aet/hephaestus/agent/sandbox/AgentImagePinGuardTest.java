@@ -11,7 +11,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 class AgentImagePinGuardTest extends BaseUnitTest {
 
-    private static final String PINNED_AGENT = "ghcr.io/x/agent-pi@sha256:" + "a".repeat(64);
+    private static final String PINNED_AGENT = "ghcr.io/x/agent@sha256:" + "a".repeat(64);
 
     @Test
     void shouldAllowStartupWhenReferenceIsDigestPinned() {
@@ -20,7 +20,7 @@ class AgentImagePinGuardTest extends BaseUnitTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"ghcr.io/x/agent-pi:0.73.2", "ghcr.io/x/agent-pi@sha256:abc123"})
+    @ValueSource(strings = {"ghcr.io/x/agent:0.73.2", "ghcr.io/x/agent@sha256:abc123"})
     void shouldFailFastWhenReferenceIsNotDigestPinned(String reference) {
         var props = new AgentImageProperties(reference, ImagePullPolicy.ALWAYS);
         assertThatThrownBy(() -> new AgentImagePinGuard(props))

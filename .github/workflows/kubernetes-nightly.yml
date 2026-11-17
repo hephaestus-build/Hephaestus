@@ -124,8 +124,8 @@ jobs:
         run: |
           set -euo pipefail
           node scripts/resolve-release-images.ts "$COMMIT" release-images.tsv
-          reference=$(awk -F '\t' '$1 == "agent-pi" { print $2 "@" $3 }' release-images.tsv)
-          [ -n "$reference" ] || { echo "::error::No agent-pi image for $COMMIT"; exit 1; }
+          reference=$(awk -F '\t' '$1 == "agent" { print $2 "@" $3 }' release-images.tsv)
+          [ -n "$reference" ] || { echo "::error::No agent image for $COMMIT"; exit 1; }
           echo "reference=$reference" >> "$GITHUB_OUTPUT"
       - name: Stage a review of the large fixture
         if: steps.queue.outputs.run == 'true'

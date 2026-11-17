@@ -138,7 +138,7 @@ class KubernetesSandboxClaimsTest {
                         .withNewSpec()
                         .addNewContainer()
                         .withName("agent")
-                        .withImage("agent-pi")
+                        .withImage("agent")
                         .addNewEnv()
                         .withName("HEPHAESTUS_SANDBOX_TOKEN")
                         .withValue("token")

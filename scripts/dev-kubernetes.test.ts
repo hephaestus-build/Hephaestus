@@ -45,7 +45,7 @@ await test("five host edit loops have distinct namespaces derived from their por
 	assert.throws(() => hostPorts({ MANAGEMENT_PORT: "8081" }), /must differ/u);
 });
 
-const IMAGE = `ghcr.io/hephaestus-build/agent-pi@sha256:${"1".repeat(64)}`;
+const IMAGE = `ghcr.io/hephaestus-build/agent@sha256:${"1".repeat(64)}`;
 
 await test("host development applies sandbox templates and pools without an application loop", async () => {
 	const work = await mkdtemp(path.join(tmpdir(), "heph-dev-test-"));

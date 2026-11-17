@@ -60,7 +60,7 @@ function evaluates(
 void test("one advisory snapshot is selected for every image-policy consumer, not unpublished fork builds", () => {
 	for (const flag of [
 		"all-images",
-		"application-server-image",
+		"server-image",
 		"kubernetes",
 		"webapp-image",
 		"agent-images",
@@ -120,9 +120,9 @@ void test("one advisory snapshot is selected for every image-policy consumer, no
 	);
 	// A pull request that needs no head images builds none; the merge group builds them.
 	assert.ok(!runs("Docker", { "any-code": "true", "all-images": "true", images: "false" }));
-	// The application-server image needs this run's packaged JAR. The other images do not, so the
+	// The server image needs this run's packaged JAR. The other images do not, so the
 	// job still builds them when packaging failed or did not run.
-	const serverImage = ["jobs", "Docker", "with", "application-server"];
+	const serverImage = ["jobs", "Docker", "with", "server"];
 	const dockerfileImages = ["jobs", "Docker", "with", "dockerfile_images"];
 	assert.equal(evaluates(serverImage, fork), "true");
 	for (const result of ["failure", "skipped"]) {
@@ -130,8 +130,8 @@ void test("one advisory snapshot is selected for every image-policy consumer, no
 		assert.equal(evaluates(serverImage, fork, { "server-package": result }), "false", result);
 		assert.equal(evaluates(dockerfileImages, fork, { "server-package": result }), "true", result);
 	}
-	// The application-server image alone, for a change no Dockerfile image reads.
-	const serverOnly = { images: "true", "application-server-image": "true" };
+	// The server image alone, for a change no Dockerfile image reads.
+	const serverOnly = { images: "true", "server-image": "true" };
 	assert.ok(runs("Docker", serverOnly));
 	assert.equal(evaluates(serverImage, serverOnly), "true");
 	assert.equal(evaluates(dockerfileImages, serverOnly), "false");

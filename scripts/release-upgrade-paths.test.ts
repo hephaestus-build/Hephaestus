@@ -71,9 +71,32 @@ const resolutions = [
 		previous: "1.0.0-rc.1",
 		latest: "",
 	},
+	{
+		source: "dispatch",
+		version: "1.0.0",
+		tags: "v1.0.0-rc.9 v1.0.0",
+		previous: "1.0.0",
+		latest: "",
+	},
 ] as const;
+
+// In these rows, the candidates and the releases before them publish the server and agent images under their former
+// names, and 1.0.0 under the new ones. The resolver reads the names from each tag's inventory, not from its version.
+const imagesOf = (version: string) =>
+	version.startsWith("1.0.0-") || version.startsWith("0.")
+		? { server: "application-server", agent: "agent-pi" }
+		: { server: "server", agent: "agent" };
 for (const { source, version, tags, previous, latest } of resolutions) {
 	await test(`${source}: ${version} resolves its immutable image, and ${latest || "no"} latest release`, () => {
+		const inventories = Object.fromEntries(
+			tags.split(" ").map((tag) => {
+				const names = imagesOf(tag.slice(1));
+				return [
+					tag,
+					JSON.stringify({ images: [names.server, names.agent, "postgres"], upstream: [] }),
+				];
+			}),
+		);
 		const directory = mkdtempSync(path.join(tmpdir(), "upgrade-images-"));
 		try {
 			const preload = path.join(directory, "process.mjs");
@@ -87,6 +110,11 @@ import * as childProcess from "node:child_process";
 mock.module("node:child_process", { exports: {
   ...childProcess,
   execFileSync(executable, args) {
+    if (executable === "git" && args[0] === "show") {
+      const inventory = ${JSON.stringify(inventories)}[args[1].split(":")[0]];
+      if (inventory === undefined) throw new Error("Unexpected revision: " + args[1]);
+      return inventory;
+    }
     if (executable !== "git" || args[0] !== "tag") throw new Error("Unexpected command: " + executable);
     return args.includes("--points-at") ? "" : ${JSON.stringify(tags.split(" ").join("\n"))};
   },
@@ -112,8 +140,7 @@ mock.module("node:child_process", { exports: {
 					env: {
 						...process.env,
 						INPUT_PREVIOUS_VERSION: source === "release" ? version : "",
-						INPUT_CANDIDATE_APP:
-							source === "release" ? `${namespace}/application-server:candidate` : "",
+						INPUT_CANDIDATE_APP: source === "release" ? `${namespace}/server:candidate` : "",
 						INPUT_POSTGRES: source === "release" ? `${namespace}/postgres:candidate` : "",
 						REQUESTED_PREVIOUS: `v${version}`,
 						GITHUB_REPOSITORY: "hephaestus-build/Hephaestus",
@@ -124,9 +151,10 @@ mock.module("node:child_process", { exports: {
 			);
 			assert.equal(result.status, 0, result.stdout + result.stderr);
 			const historicalNamespace = releaseIdentityFor(previous).namespace;
+			const released = imagesOf(previous);
 			assert.ok(
 				readFileSync(invocations, "utf8").includes(
-					`${historicalNamespace}/application-server:${previous} `,
+					`${historicalNamespace}/${released.server}:${previous} `,
 				),
 			);
 			assert.match(readFileSync(output, "utf8"), /^previous-app=.*@sha256:[a-f0-9]{64}$/mu);
@@ -136,7 +164,7 @@ mock.module("node:child_process", { exports: {
 			);
 			assert.match(
 				readFileSync(output, "utf8"),
-				/^previous-agent=.*\/agent-pi@sha256:[a-f0-9]{64}$/mu,
+				new RegExp(`^previous-agent=.*/${released.agent}@sha256:[a-f0-9]{64}$`, "mu"),
 			);
 			assert.match(readFileSync(output, "utf8"), /^candidate-app=.*@sha256:[a-f0-9]{64}$/mu);
 			assert.match(readFileSync(output, "utf8"), new RegExp(`^latest-version=${latest}$`, "mu"));
@@ -144,6 +172,13 @@ mock.module("node:child_process", { exports: {
 				readFileSync(output, "utf8"),
 				latest === "" ? /^latest-app=$/mu : /^latest-app=.*@sha256:[a-f0-9]{64}$/mu,
 			);
+			if (latest !== "") {
+				assert.ok(
+					readFileSync(invocations, "utf8").includes(
+						`${releaseIdentityFor(latest).namespace}/${imagesOf(latest).agent}:${latest} `,
+					),
+				);
+			}
 		} finally {
 			rmSync(directory, { recursive: true, force: true });
 		}

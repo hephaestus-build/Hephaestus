@@ -17,11 +17,11 @@ import type { ReleaseImageLock } from "./release-image-lock.ts";
  * second. deploy/chart/hephaestus/values.schema.json requires exactly these keys.
  */
 export const chartImages = [
-	"agent-pi",
+	"agent",
 	"alertmanager",
-	"application-server",
 	"postgres",
 	"postgres-exporter",
+	"server",
 	"victoria-metrics",
 	"vmalert",
 	"webapp",

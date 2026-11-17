@@ -230,29 +230,29 @@
 			"type": "object",
 			"additionalProperties": false,
 			"required": [
-				"agent-pi",
+				"agent",
 				"alertmanager",
-				"application-server",
 				"postgres",
 				"postgres-exporter",
+				"server",
 				"victoria-metrics",
 				"vmalert",
 				"webapp"
 			],
 			"properties": {
-				"agent-pi": {
+				"agent": {
 					"$ref": "#/definitions/image"
 				},
 				"alertmanager": {
-					"$ref": "#/definitions/image"
-				},
-				"application-server": {
 					"$ref": "#/definitions/image"
 				},
 				"postgres": {
 					"$ref": "#/definitions/image"
 				},
 				"postgres-exporter": {
+					"$ref": "#/definitions/image"
+				},
+				"server": {
 					"$ref": "#/definitions/image"
 				},
 				"victoria-metrics": {

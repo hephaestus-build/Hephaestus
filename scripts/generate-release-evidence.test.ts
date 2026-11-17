@@ -61,11 +61,11 @@ void describe("the release evidence generator", () => {
 	void test("evidences both platforms of every image, first-party and upstream alike", async () => {
 		const images = await evidenceImages();
 		assert.deepEqual(images.map(({ image }) => image).toSorted(), [
-			"agent-pi",
+			"agent",
 			"alertmanager",
-			"application-server",
 			"postgres",
 			"postgres-exporter",
+			"server",
 			"victoria-metrics",
 			"vmalert",
 			"webapp",

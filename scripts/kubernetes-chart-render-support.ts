@@ -351,7 +351,7 @@ export const sandboxOwned = (resource: Resource) => componentOf(resource) === "s
 export const controllerOwned = (resource: Resource) =>
 	componentOf(resource) === "agent-sandbox-controller";
 export const imageOf = {
-	server: "application-server",
+	server: "server",
 	webapp: "webapp",
 	postgresql: "postgres",
 } as const;

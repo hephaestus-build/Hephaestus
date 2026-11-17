@@ -1,4 +1,4 @@
-# Buildpacks recipe for the application-server image, applied by pack to the packaged executable
+# Buildpacks recipe for the server image, applied by pack to the packaged executable
 # JAR; docs/decisions/0067-the-server-image-builds-with-buildpacks-and-cds.md has the rationale. The descriptor schema has no
 # run-image key, so ci-build.yml pins the run image beside the build.
 [_]

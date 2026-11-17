@@ -890,7 +890,7 @@ The table lists eligible jobs. Path filters and event guards still select which 
 | Queue (merge group, push, dispatch) | Numbered integration shards, Webapp and Extension browser suites, Database migrations, PostgreSQL drills ([migration exception](#migration-checks-on-prs)) |
 
 [Path filters](#path-filters) and the main-push rules still select within each tier.
-For PRs and merge groups, the application-server or test-config filter must match for `server-tests` to select server suites.
+For PRs and merge groups, the server or test-config filter must match for `server-tests` to select server suites.
 The light tier skips those suites. Thus, a docs-only diff that matches neither filter runs no `review` or numbered integration shard.
 Database tests, drills and browser suites have their own path conditions.
 

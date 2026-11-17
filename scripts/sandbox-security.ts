@@ -361,11 +361,11 @@ if (import.meta.main) {
 	});
 	assert.ok(
 		values.image !== undefined && values.image !== "",
-		"--image is required; use the release candidate's agent-pi digest",
+		"--image is required; use the release candidate's agent digest",
 	);
 	assert.ok(
 		values["application-image"] !== undefined && values["application-image"] !== "",
-		"--application-image is required; use the matching application-server digest",
+		"--application-image is required; use the matching server digest",
 	);
 	await qualify(values.image, values["application-image"], values.report);
 }

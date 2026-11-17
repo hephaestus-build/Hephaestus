@@ -18,9 +18,9 @@ A signature, checksum, SBOM, or release attestation alone does not establish a S
 
 | Artifact | Build assessment | Evidence and limit |
 | --- | --- | --- |
-| `application-server` image index | Build L2 | The reusable image workflow runs on GitHub-hosted runners and publishes native GitHub build provenance for the index digest. The release gate verifies that provenance. |
+| `server` image index | Build L2 | The reusable image workflow runs on GitHub-hosted runners and publishes native GitHub build provenance for the index digest. The release gate verifies that provenance. |
 | `webapp` image index | Build L2 | The same workflow and verification apply to this image's own index digest. |
-| `agent-pi` image index | Build L2 | The same workflow and verification apply to this image's own index digest. |
+| `agent` image index | Build L2 | The same workflow and verification apply to this image's own index digest. |
 | `postgres` image index | Build L2 | The same workflow and verification apply to this image's own index digest. |
 | First-party platform manifests | No separate Build claim | The image index binds the child manifest digests. Each platform has its own signed SBOM and scan evidence. The native build attestation names the index. |
 | Upstream image indexes and platform manifests | No Hephaestus Build claim | The release pins upstream digests and captures platform membership, inventories, licenses, and scans. It does not require upstream build provenance. |

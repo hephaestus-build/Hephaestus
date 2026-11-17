@@ -37,14 +37,13 @@ class AgentImageDefaultResolutionTest extends BaseUnitTest {
     @Test
     void shouldFollowTheImageTagTheDeploymentIsRunning() throws IOException {
         assertThat(bindWith(Map.of("APP_VERSION", "1.2.3")).reference())
-                .isEqualTo("ghcr.io/hephaestus-build/agent-pi:1.2.3");
+                .isEqualTo("ghcr.io/hephaestus-build/agent:1.2.3");
     }
 
     @Test
     void shouldFollowACommitShaDeploy() throws IOException {
         String sha = "9a1f0c2e1b7d4a6f8c3e5b2d9a7f4c1e0b8d6a35";
-        assertThat(bindWith(Map.of("APP_VERSION", sha)).reference())
-                .isEqualTo("ghcr.io/hephaestus-build/agent-pi:" + sha);
+        assertThat(bindWith(Map.of("APP_VERSION", sha)).reference()).isEqualTo("ghcr.io/hephaestus-build/agent:" + sha);
     }
 
     @Test
@@ -61,6 +60,6 @@ class AgentImageDefaultResolutionTest extends BaseUnitTest {
      */
     @Test
     void shouldNotRecoverFromAnEmptyImageTag() throws IOException {
-        assertThat(bindWith(Map.of("APP_VERSION", "")).reference()).isEqualTo("ghcr.io/hephaestus-build/agent-pi:");
+        assertThat(bindWith(Map.of("APP_VERSION", "")).reference()).isEqualTo("ghcr.io/hephaestus-build/agent:");
     }
 }

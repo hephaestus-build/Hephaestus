@@ -9,7 +9,7 @@ import { probeVerifier } from "./previous-verifier-probe.ts";
 const release = "v1.1.0";
 const commit = "c".repeat(40);
 const digest = (seed: number) => `sha256:${seed.toString(16).padStart(64, "0")}`;
-const firstParty = ["agent-pi", "application-server", "postgres", "webapp"];
+const firstParty = ["agent", "server", "postgres", "webapp"];
 const upstream = [{ name: "vmalert", repository: "docker.io/victoriametrics/vmalert" }];
 
 /** A schema 1 lock and an inventory that this tree accepts, for these first-party images. */

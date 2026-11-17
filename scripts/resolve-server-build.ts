@@ -90,9 +90,9 @@ type Api = (path: string) => Promise<unknown>;
  */
 export const imageManifestJob = "Images / Manifest";
 export const imageAttestations = {
-	"application-server": "Attest the application-server image",
+	server: "Attest the server image",
 	webapp: "Attest the webapp image",
-	"agent-pi": "Attest the agent-pi image",
+	agent: "Attest the agent image",
 	postgres: "Attest the postgres image",
 } as const;
 
@@ -205,7 +205,7 @@ export async function resolveServerBuild(
 	)) {
 		// The platform builds also succeed when a run built only Dockerfile images, so the run must
 		// have published an App Server image from this JAR.
-		if (!publishedImages(jobs).includes("application-server")) {
+		if (!publishedImages(jobs).includes("server")) {
 			continue;
 		}
 		const artifactPages = asArray(

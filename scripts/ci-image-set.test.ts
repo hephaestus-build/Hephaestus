@@ -59,9 +59,9 @@ function evaluate(source: unknown, names: string[], context: data.Dictionary): s
 }
 
 const IMAGES = {
-	"application-server": "application_server_changed",
+	server: "application_server_changed",
 	webapp: "webapp_changed",
-	"agent-pi": "agent_images_changed",
+	agent: "agent_images_changed",
 	postgres: "postgres_image_changed",
 } as const;
 
@@ -224,8 +224,8 @@ const SETTINGS: Settings[] = [
 		releaseCandidate: ["false"],
 		queue: [
 			NO_QUEUE,
-			{ queueImages: JSON.stringify(["application-server"]), versionBump: "false" },
-			{ queueImages: JSON.stringify(["webapp", "agent-pi", "postgres"]), versionBump: "false" },
+			{ queueImages: JSON.stringify(["server"]), versionBump: "false" },
+			{ queueImages: JSON.stringify(["webapp", "agent", "postgres"]), versionBump: "false" },
 			{ queueImages: ALL_IMAGES, versionBump: "false" },
 			{ queueImages: ALL_IMAGES, versionBump: "true" },
 		],
@@ -531,7 +531,7 @@ void test("a job that installs every image runs exactly when its event needs it 
 			);
 		}
 		assert.ok(
-			built["application-server"] !== true || packaged,
+			built.server !== true || packaged,
 			`the App Server image is built without a packaged server on ${describeCase(entry)}`,
 		);
 		// A version bump runs the release checks on the push, and they need the packaged server.

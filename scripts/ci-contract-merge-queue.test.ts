@@ -140,14 +140,14 @@ void describe("ci-contract: merge-queue", () => {
 		assert.equal(
 			evaluateTierOutput(tests, "pull_request", {
 				light: "true",
-				filter: { "application-server": "true" },
+				filter: { server: "true" },
 			}),
 			"false",
 		);
 		assert.equal(
 			evaluateTierOutput(tests, "pull_request", {
 				light: "false",
-				filter: { "application-server": "true" },
+				filter: { server: "true" },
 			}),
 			"true",
 		);
@@ -155,7 +155,7 @@ void describe("ci-contract: merge-queue", () => {
 			orchestrator.getIn(["jobs", "detect-changes", "outputs", "server-changed"]),
 		);
 		for (const [filter, expected] of [
-			[{ "application-server": "true" }, "true"],
+			[{ server: "true" }, "true"],
 			[{ "test-config": "true" }, "true"],
 			[{ docs: "true" }, "false"],
 		] as const) {
@@ -1540,7 +1540,7 @@ void describe("ci-contract: merge-queue", () => {
 		// re-tests the event on its own. The package and server image selectors read it directly.
 		for (const at of [
 			["jobs", "server-package", "if"],
-			["jobs", "Docker", "with", "application-server"],
+			["jobs", "Docker", "with", "server"],
 		]) {
 			const condition = String(workflow.getIn(at));
 			assert.match(condition, /needs\.detect-changes\.outputs\.all-images == 'true'/u);
@@ -1578,7 +1578,7 @@ void describe("ci-contract: merge-queue", () => {
 		for (const name of imageInputs.Docker) {
 			assert.match(alias, new RegExp(`inputs\\.${name} != 'true'`, "u"));
 		}
-		for (const image of ["webapp-build", "agent-pi-build", "postgres-build"]) {
+		for (const image of ["webapp-build", "agent-build", "postgres-build"]) {
 			assert.doesNotMatch(
 				String(images.getIn(["jobs", image, "if"])),
 				/github\.event_name/u,
@@ -2321,7 +2321,7 @@ void test("manifest publication waits for both platform verdicts and still signs
 	assert.deepEqual(needsOf(workflow, "merge"), ["build", "build-arm64"]);
 	const inputs = {
 		publish: true,
-		"application-server": true,
+		server: true,
 		platforms: '["linux/amd64","linux/arm64"]',
 		"reuse-images": "[]",
 	};
@@ -2341,7 +2341,7 @@ void test("manifest publication waits for both platform verdicts and still signs
 		}
 	}
 	for (const reused of [false, true]) {
-		const selected = { ...inputs, "reuse-images": reused ? '["application-server"]' : "[]" };
+		const selected = { ...inputs, "reuse-images": reused ? '["server"]' : "[]" };
 		for (const key of ["build", "build-arm64"]) {
 			assert.equal(jobRuns(workflow, key, "push", {}, false, selected), !reused);
 		}

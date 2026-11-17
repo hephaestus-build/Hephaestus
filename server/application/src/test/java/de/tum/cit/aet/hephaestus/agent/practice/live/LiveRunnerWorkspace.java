@@ -87,7 +87,7 @@ final class LiveRunnerWorkspace {
     static String image() {
         String reference = System.getProperty(
                 "hephaestus.live.agent-image",
-                System.getenv().getOrDefault("HEPHAESTUS_LIVE_AGENT_IMAGE", "hephaestus/agent-pi:live"));
+                System.getenv().getOrDefault("HEPHAESTUS_LIVE_AGENT_IMAGE", "hephaestus/agent:live"));
         if (reference.isBlank()) throw new IllegalArgumentException("The live agent image reference is empty");
         return reference;
     }

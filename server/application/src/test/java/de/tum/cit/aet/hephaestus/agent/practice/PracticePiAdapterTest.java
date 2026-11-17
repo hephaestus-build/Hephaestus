@@ -21,7 +21,7 @@ import tools.jackson.databind.ObjectMapper;
 
 class PracticePiAdapterTest extends BaseUnitTest {
 
-    private static final String IMAGE = "ghcr.io/hephaestus-build/agent-pi:0.73.2";
+    private static final String IMAGE = "ghcr.io/hephaestus-build/agent:0.73.2";
     private PracticePiAdapter adapter;
 
     @BeforeEach

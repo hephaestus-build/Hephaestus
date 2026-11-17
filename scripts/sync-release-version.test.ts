@@ -166,7 +166,7 @@ void test("refreshes an empty history without inventing a release, including on 
 
 void test("preserves heading-shaped code and historical identities literally", () => {
 	const history =
-		"### Next release\n\n### v0.74.0\n\n```md\n### Next release\n## Automatic vs Manual Migrations\n```\n\nghcr.io/ls1intum/hephaestus/agent-pi:0.74.0\nhttps://github.com/ls1intum/Hephaestus/.github/workflows/release.yml@refs/heads/main\n";
+		"### Next release\n\n### v0.74.0\n\n```md\n### Next release\n## Automatic vs Manual Migrations\n```\n\nghcr.io/ls1intum/hephaestus/agent:0.74.0\nhttps://github.com/ls1intum/Hephaestus/.github/workflows/release.yml@refs/heads/main\n";
 	assert.equal(renderMigrationGuide(guide(history)), guide(history));
 });
 

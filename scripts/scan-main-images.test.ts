@@ -39,9 +39,9 @@ void describe("planSubjects", () => {
 		// not built here and have no `:main` tag, so they are scanned by their pinned digest in
 		// scan-upstream-images.ts instead.
 		assert.deepEqual(subjects.map((subject) => subject.image).toSorted(), [
-			"agent-pi",
-			"application-server",
+			"agent",
 			"postgres",
+			"server",
 			"webapp",
 		]);
 	});

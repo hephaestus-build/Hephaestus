@@ -42,7 +42,7 @@ Two path groups need attention:
 - `package.json` or `pnpm-lock.yaml` select every source quality leg.
 
 A PR outside the [light tier](../../../docs/contributor/ci-cd.mdx#light-tier-for-stacked-layers) uses the fast tier.
-For PRs and merge groups, `application-server` or `test-config` must match to select server suites.
+For PRs and merge groups, `server` or `test-config` must match to select server suites.
 A selected PR runs `review`. A selected merge group also runs the numbered integration shards.
 Database tests, drills and browser suites have their own path conditions.
 Migration changes also select database tests and drills on PRs outside the light tier.

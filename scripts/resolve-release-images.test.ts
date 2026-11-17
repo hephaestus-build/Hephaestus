@@ -123,7 +123,7 @@ void test("the captured-image CLI writes only complete producer digests without 
 	const directory = await mkdtemp(path.join(tmpdir(), "captured-release-images-"));
 	context.after(async () => rm(directory, { recursive: true, force: true }));
 	const output = path.join(directory, "images.tsv");
-	const images = ["application-server", "webapp", "agent-pi", "postgres"];
+	const images = ["server", "webapp", "agent", "postgres"];
 	const digests = Object.fromEntries(images.map((image) => [image, DIGEST]));
 	const run = (input: string) =>
 		spawnSync(process.execPath, ["scripts/resolve-captured-release-images.ts", output], {

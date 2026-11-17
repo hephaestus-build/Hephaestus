@@ -45,7 +45,7 @@ public class AgentImageReferenceGuard {
 
     /**
      * A channel tag spelled in digits: a version that stops short of a patch component — {@code 0},
-     * {@code 0.73}, {@code v1.2}. The release workflow retags {@code agent-pi:<major>.<minor>} onto
+     * {@code 0.73}, {@code v1.2}. The release workflow retags {@code agent:<major>.<minor>} onto
      * every release in that line, so such a tag moves on the next patch release exactly as
      * {@code latest} moves on the next release. A tag naming all three components, or carrying a
      * pre-release or build suffix, names one release and is left alone — as is anything not

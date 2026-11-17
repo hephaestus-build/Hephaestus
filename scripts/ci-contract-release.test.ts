@@ -465,7 +465,7 @@ void describe("ci-contract: release", () => {
 		assert.match(preflight, /id: release-evidence/u);
 		assert.match(
 			preflight,
-			/IMAGE: ghcr\.io\/hephaestus-build\/agent-pi@\$\{\{ steps\.release-evidence\.outputs\.agent-pi-digest \}\}/u,
+			/IMAGE: ghcr\.io\/hephaestus-build\/agent@\$\{\{ steps\.release-evidence\.outputs\.agent-digest \}\}/u,
 		);
 		for (const source of [job(release, "tag-images"), preflight]) {
 			assert.match(source, /node scripts\/resolve-release-images\.ts /u);
@@ -476,7 +476,7 @@ void describe("ci-contract: release", () => {
 			assert.match(source, /docker pull "\$APPLICATION_IMAGE"/u);
 			assert.match(
 				source,
-				/APPLICATION_IMAGE: ghcr\.io\/hephaestus-build\/application-server@\$\{\{ steps\.(?:retag|release-evidence)\.outputs\.application-server-digest \}\}/u,
+				/APPLICATION_IMAGE: ghcr\.io\/hephaestus-build\/server@\$\{\{ steps\.(?:retag|release-evidence)\.outputs\.server-digest \}\}/u,
 			);
 			assert.match(source, /node scripts\/generate-release-evidence\.ts evidence \\/u);
 			assert.match(
@@ -1283,7 +1283,7 @@ void test("the flattened signer preserves its published digest output contract",
 		root.getIn(["jobs", "Docker", "uses"]),
 		"./.github/workflows/reusable-docker-build.yml",
 	);
-	for (const image of ["application-server", "webapp", "agent-pi", "postgres"]) {
+	for (const image of ["server", "webapp", "agent", "postgres"]) {
 		assert.equal(
 			producer.getIn(["on", "workflow_call", "outputs", `${image}-digest`, "value"]),
 			`\${{ jobs.merge.outputs.${image}-digest }}`,
@@ -1391,7 +1391,7 @@ void test("release eviction uses only its drill cluster and captured images and 
 	assert.equal(worker.getIn(["with", "queue"]), true);
 	assert.equal(worker.getIn(["with", "eviction-drill"]), true);
 	assert.equal(worker.getIn(["with", "drills-only"]), true);
-	for (const name of ["application-server", "webapp", "agent-pi", "postgres"]) {
+	for (const name of ["server", "webapp", "agent", "postgres"]) {
 		assert.ok(
 			String(worker.getIn(["with", "image-digests"])).includes(
 				`"${name}":"\${{ needs.tag-images.outputs.${name}-digest }}"`,

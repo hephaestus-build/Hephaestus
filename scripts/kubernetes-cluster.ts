@@ -132,11 +132,11 @@ export function chartImagesFrom(
 /** One reference for each chart image. */
 export function mapImages(reference: (name: ChartImage) => string): ChartImages {
 	return {
-		"agent-pi": reference("agent-pi"),
+		agent: reference("agent"),
 		alertmanager: reference("alertmanager"),
-		"application-server": reference("application-server"),
 		postgres: reference("postgres"),
 		"postgres-exporter": reference("postgres-exporter"),
+		server: reference("server"),
 		"victoria-metrics": reference("victoria-metrics"),
 		vmalert: reference("vmalert"),
 		webapp: reference("webapp"),
@@ -3083,7 +3083,7 @@ async function buildLocal(registry: string): Promise<ChartImages> {
 		);
 	};
 	await build("webapp", ".", "webapp/Dockerfile");
-	await build("agent-pi", "docker/agents", "docker/agents/pi/Dockerfile", [
+	await build("agent", "docker/agents", "docker/agents/pi/Dockerfile", [
 		"agent-runtime=server/application/src/main/resources/agent",
 	]);
 	await build("postgres", "docker/postgres");
@@ -3117,7 +3117,7 @@ async function buildLocal(registry: string): Promise<ChartImages> {
 		"pack",
 		[
 			"build",
-			`hephaestus-local/application-server:${tag}`,
+			`hephaestus-local/server:${tag}`,
 			"--path",
 			jar,
 			"--descriptor",
@@ -3132,7 +3132,7 @@ async function buildLocal(registry: string): Promise<ChartImages> {
 	);
 	const inventory = await readInventory(path.join(ROOT, "security", "release-images.json"));
 	const resolved = [];
-	for (const image of ["webapp", "agent-pi", "postgres", "application-server"]) {
+	for (const image of ["webapp", "agent", "postgres", "server"]) {
 		resolved.push(await push(image, tag));
 	}
 	return chartImagesFrom(resolved, inventory.upstream);

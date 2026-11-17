@@ -44,7 +44,7 @@ void describe("ci-contract: images", () => {
 			.filter(({ name }) => name !== "image");
 		assert.deepEqual(
 			targets.map(({ name }) => name),
-			["webapp", "agent-pi", "postgres"],
+			["webapp", "agent", "postgres"],
 		);
 		const dockerfiles = new Set(await posixGlob("{docker,webapp}/**/Dockerfile"));
 		assert.ok(dockerfiles.size > 0);
@@ -167,7 +167,7 @@ void describe("ci-contract: images", () => {
 		const filter = step(workflow, ["jobs", "detect-changes"], "dorny/paths-filter");
 		const filters = asRecord(parseDocument(String(filter.get("filters"))).toJSON(), "CI filters");
 		assert.ok(
-			asArray(filters["application-server-image"], "image paths").includes(
+			asArray(filters["server-image"], "image paths").includes(
 				"scripts/summarize-buildpack-log.ts",
 			),
 		);
@@ -199,7 +199,7 @@ void describe("ci-contract: images", () => {
 		assert.equal(exported.hasIn(["env", "BAKE_METADATA"]), false);
 		for (const [variable, target] of [
 			["WEBAPP_DIGEST", ".webapp"],
-			["AGENT_PI_DIGEST", "['agent-pi']"],
+			["AGENT_DIGEST", "['agent']"],
 			["POSTGRES_DIGEST", ".postgres"],
 		] as const) {
 			assert.equal(
@@ -392,7 +392,7 @@ void describe("ci-contract: images", () => {
 				BUILDPACK_DEPENDENCIES: path.join(directory, "buildpack-dependencies"),
 				RUNNER_TEMP: directory,
 				GITHUB_RUN_ID: "1",
-				INPUT_IMAGE_NAME: "hephaestus-build/application-server",
+				INPUT_IMAGE_NAME: "hephaestus-build/server",
 				INPUT_REGISTRY: "ghcr.io",
 				MATRIX_PLATFORM: "linux/amd64",
 				PATH: `${directory}${path.delimiter}${process.env.PATH ?? ""}`,

@@ -58,7 +58,7 @@ function fixture() {
 				name,
 				conclusion: "success",
 			})),
-			manifests([imageAttestations["application-server"]]),
+			manifests([imageAttestations.server]),
 		],
 		artifact: {
 			id: 202,
@@ -263,7 +263,7 @@ await test("a push reuses the images of the successful queue run of its exact co
 			}
 			return [{ jobs: data.jobs }];
 		});
-	assert.deepEqual(await lookup(), { runId: 101, images: ["application-server"] });
+	assert.deepEqual(await lookup(), { runId: 101, images: ["server"] });
 	// Its verdict covers every image job and scan, so the final gate is all it needs.
 	const gateOnly = fixture();
 	gateOnly.jobs = [{ name: "CI Status Gate", conclusion: "success" }];
@@ -272,7 +272,7 @@ await test("a push reuses the images of the successful queue run of its exact co
 	const steps = [
 		{ name: imageAttestations.webapp, conclusion: "success" },
 		{ name: imageAttestations.postgres, conclusion: "skipped" },
-		{ name: imageAttestations["agent-pi"], conclusion: "success" },
+		{ name: imageAttestations.agent, conclusion: "success" },
 	];
 	const published = fixture();
 	const others = published.jobs.filter((job) => job.name !== imageManifestJob);
@@ -281,7 +281,7 @@ await test("a push reuses the images of the successful queue run of its exact co
 			run: published.run,
 			jobs: [...others, { name: imageManifestJob, conclusion: "success", steps }],
 		}),
-		{ runId: 101, images: ["webapp", "agent-pi"] },
+		{ runId: 101, images: ["webapp", "agent"] },
 	);
 	// A manifest job that did not succeed published nothing reusable, whatever its steps did.
 	for (const conclusion of ["failure", "cancelled", "skipped"]) {
@@ -396,7 +396,7 @@ await test("reuses the packaged server only from a run that published its App Se
 	// The platform builds also succeed for a run that built only Dockerfile images.
 	for (const job of [
 		manifests([imageAttestations.webapp]),
-		manifests([imageAttestations["application-server"]], "failure"),
+		manifests([imageAttestations.server], "failure"),
 		manifests([]),
 	]) {
 		const data = fixture();

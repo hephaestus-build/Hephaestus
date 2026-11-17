@@ -333,11 +333,8 @@ const chartChannelImages = (omit?: string): Record<string, string> =>
 	Object.fromEntries(
 		(
 			[
-				["HEPHAESTUS_IMAGE_AGENT_PI", `ghcr.io/hephaestus-build/agent-pi@sha256:${"1".repeat(64)}`],
-				[
-					"HEPHAESTUS_IMAGE_APPLICATION_SERVER",
-					`ghcr.io/hephaestus-build/application-server@sha256:${"2".repeat(64)}`,
-				],
+				["HEPHAESTUS_IMAGE_AGENT", `ghcr.io/hephaestus-build/agent@sha256:${"1".repeat(64)}`],
+				["HEPHAESTUS_IMAGE_SERVER", `ghcr.io/hephaestus-build/server@sha256:${"2".repeat(64)}`],
 				[
 					"HEPHAESTUS_IMAGE_VICTORIA_METRICS",
 					`docker.io/victoriametrics/victoria-metrics@sha256:${"6".repeat(64)}`,
@@ -985,7 +982,7 @@ async function reconcilerFixture(directory: string, targetRelease = "v1.0.0") {
 	await writeFile(
 		path.join(checkout, "security/release-images.json"),
 		JSON.stringify({
-			images: ["webapp", "application-server", "agent-pi", "postgres"],
+			images: ["webapp", "server", "agent", "postgres"],
 			upstream: [
 				{
 					name: "victoria-metrics",
@@ -1341,8 +1338,8 @@ await test(
 				"older values",
 			);
 			assert.equal(
-				asRecord(older.images, "older images")["application-server"],
-				chartChannelImages().HEPHAESTUS_IMAGE_APPLICATION_SERVER,
+				asRecord(older.images, "older images").server,
+				chartChannelImages().HEPHAESTUS_IMAGE_SERVER,
 			);
 			const rollbackRecord = await readApplied(path.join(directory, "applied.json"));
 			assert.equal(rollbackRecord?.commit, fixture.releaseCommit);
@@ -1528,8 +1525,8 @@ await test(
 				commit: release,
 			});
 			assert.equal(
-				at(values, ["images", "application-server"], "images values"),
-				`ghcr.io/hephaestus-build/application-server@sha256:${"2".repeat(64)}`,
+				at(values, ["images", "server"], "images values"),
+				`ghcr.io/hephaestus-build/server@sha256:${"2".repeat(64)}`,
 			);
 			const record = await readApplied(path.join(directory, "applied.json"));
 			assert.equal(record?.release, release);
