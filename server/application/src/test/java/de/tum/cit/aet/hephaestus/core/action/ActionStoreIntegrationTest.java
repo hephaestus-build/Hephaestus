@@ -32,6 +32,7 @@ import tools.jackson.databind.node.JsonNodeFactory;
 class ActionStoreIntegrationTest extends BaseIntegrationTest {
     private static final Duration LEASE = Duration.ofMinutes(2);
     private static final Duration MARGIN = Duration.ofSeconds(60);
+    private static final long LOST_LEASE_WORKSPACE = 997_960L;
 
     @Autowired
     private ActionStore store;
@@ -264,6 +265,76 @@ class ActionStoreIntegrationTest extends BaseIntegrationTest {
                 });
         assertThat(claimOwn(List.of(id))).isEmpty();
         assertThat(row(id)).containsEntry("state", "CANCELLED").containsEntry("payload", null);
+    }
+
+    /**
+     * A lost lease before any write is taken again only while the action has not expired; once it has, the reaper
+     * ends it, since nothing reached the provider. The claim and the reaper decide this by kind only through {@link
+     * ActionKind#atMostOnce()}, so each kind runs it.
+     */
+    @ParameterizedTest
+    @EnumSource(ActionKind.class)
+    void shouldRetryALostLeaseBeforeItExpiresAndEndItOnceExpired(ActionKind kind) {
+        UUID expired = lostLease(kind, Instant.now().minusSeconds(1), false, 3);
+        UUID current = lostLease(kind, Instant.now().plusSeconds(3600), false, 3);
+
+        var claimed = claimOwn(List.of(expired, current));
+
+        assertThat(claimed).extracting(ActionStore.Claim::id).as("%s", kind).containsExactly(current);
+        assertThat(claimed.getFirst().attempts()).isEqualTo(2);
+        assertThat(endStale(ActionStoreIntegrationTest::ignore))
+                .filteredOn(settled -> settled.id().equals(expired))
+                .singleElement()
+                .satisfies(settled -> {
+                    assertThat(settled.state()).isEqualTo(ActionState.CANCELLED);
+                    assertThat(settled.reason()).isEqualTo(ActionStopReason.EXPIRED);
+                });
+        assertThat(row(expired)).containsEntry("state", "CANCELLED").containsEntry("payload", null);
+        store.settle(
+                current, claimed.getFirst().epoch(), new ActionResult.Done(null), ActionStoreIntegrationTest::ignore);
+    }
+
+    /** An expired action whose write may have started still reads back, or ends uncertain when it cannot. */
+    @ParameterizedTest
+    @EnumSource(ActionKind.class)
+    void shouldReadBackAnExpiredLostLeaseWhoseWriteMayHaveStarted(ActionKind kind) {
+        UUID id = lostLease(kind, Instant.now().minusSeconds(1), true, 3);
+
+        if (kind.atMostOnce()) {
+            assertThat(claimOwn(List.of(id))).isEmpty();
+            assertThat(endStale(ActionStoreIntegrationTest::ignore))
+                    .filteredOn(settled -> settled.id().equals(id))
+                    .singleElement()
+                    .satisfies(settled -> {
+                        assertThat(settled.state()).isEqualTo(ActionState.UNCERTAIN);
+                        assertThat(settled.reason()).isEqualTo(ActionStopReason.LEASE_LOST_AFTER_WRITE);
+                    });
+            return;
+        }
+        assertThat(endStale(ActionStoreIntegrationTest::ignore))
+                .extracting(ActionStore.Settled::id)
+                .doesNotContain(id);
+        var claimed = claimOwn(List.of(id));
+        assertThat(claimed)
+                .singleElement()
+                .satisfies(claim -> assertThat(claim.writeStarted())
+                        .as("%s reads back first", kind)
+                        .isTrue());
+        store.settle(id, claimed.getFirst().epoch(), new ActionResult.Done(null), ActionStoreIntegrationTest::ignore);
+    }
+
+    /** At its last attempt, an expired lost lease that wrote nothing ends EXPIRED, not ATTEMPTS_EXHAUSTED. */
+    @Test
+    void shouldEndAnExpiredLostLeaseAsExpiredEvenAtItsLastAttempt() {
+        UUID id = lostLease(ActionKind.EMAIL, Instant.now().minusSeconds(1), false, 1);
+
+        assertThat(endStale(ActionStoreIntegrationTest::ignore))
+                .filteredOn(settled -> settled.id().equals(id))
+                .singleElement()
+                .satisfies(settled -> {
+                    assertThat(settled.state()).isEqualTo(ActionState.CANCELLED);
+                    assertThat(settled.reason()).isEqualTo(ActionStopReason.EXPIRED);
+                });
     }
 
     @Test
@@ -564,6 +635,45 @@ class ActionStoreIntegrationTest extends BaseIntegrationTest {
         for (UUID id : store.findStale(1000, admission()))
             store.endStale(id, admission(), onEnd).ifPresent(ended::add);
         return ended;
+    }
+
+    /** An action of the kind whose first attempt lost its lease, in its own lane, with or without a started write. */
+    private UUID lostLease(ActionKind kind, Instant expires, boolean writeStarted, int maxAttempts) {
+        String key = "lost:" + UUID.randomUUID();
+        var claim = store.start(
+                        new ActionRequest(
+                                kind,
+                                kind.instanceLevel() ? null : workspace(),
+                                key,
+                                key,
+                                JsonNodeFactory.instance.objectNode().put("n", 1),
+                                null,
+                                maxAttempts,
+                                expires,
+                                null),
+                        LEASE)
+                .orElseThrow();
+        if (writeStarted)
+            assertThat(store.beginWrite(claim.id(), claim.epoch(), MARGIN)).isTrue();
+        expireLease(claim.id());
+        return claim.id();
+    }
+
+    /** A workspace for the kinds that belong to one. */
+    private long workspace() {
+        // Its slug is reserved on insert, so the row is added once rather than upserted.
+        Long existing =
+                jdbc.queryForObject("SELECT count(*) FROM workspace WHERE id = ?", Long.class, LOST_LEASE_WORKSPACE);
+        if (existing == null || existing == 0)
+            jdbc.update(
+                    """
+                    INSERT INTO workspace (id, slug, display_name, account_login, account_type, status)
+                    VALUES (?, ?, 'Lost leases', ?, 'ORG', 'ACTIVE')
+                    """,
+                    LOST_LEASE_WORKSPACE,
+                    "lost-leases-" + LOST_LEASE_WORKSPACE,
+                    "lost-leases-" + LOST_LEASE_WORKSPACE);
+        return LOST_LEASE_WORKSPACE;
     }
 
     private void expireLease(UUID id) {

@@ -15,7 +15,7 @@ import tools.jackson.databind.JsonNode;
  *     any other personal data in it belongs to {@code subjectAccountId} or {@code nativeRecipient}
  * @param subjectAccountId the account the effect addresses, so its erasure cancels the action
  * @param maxAttempts the attempts before the action ends {@link ActionStopReason#ATTEMPTS_EXHAUSTED}
- * @param expiresAt when an action that has not started is no longer worth sending
+ * @param expiresAt when an action is no longer worth sending, if it has not started or a lost lease wrote nothing
  * @param nativeRecipient the addressed provider identity, retained for native-identity erasure
  */
 public record ActionRequest(

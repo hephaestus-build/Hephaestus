@@ -119,8 +119,8 @@ class CleanupService {
                         row.getCreatedAt()))
                 .orElse(null));
         if (job == null) return new ActionResult.Cancelled(ActionStopReason.WITHDRAWN);
-        // An attempt after a failed write keeps rereading, and expiry ends only an action that waits: the deadline
-        // holds here too, so the record goes to a maintainer in time.
+        // An attempt after a failed write keeps rereading, and expiry does not end an action whose write may have
+        // started: the deadline holds here too, so the record goes to a maintainer in time.
         if (!job.createdAt().plus(MANUAL_AFTER).isAfter(clock.instant()))
             return new ActionResult.Cancelled(ActionStopReason.EXPIRED);
         boolean fenced = false;

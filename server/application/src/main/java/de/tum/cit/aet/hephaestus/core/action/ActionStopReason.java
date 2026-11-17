@@ -19,7 +19,7 @@ public enum ActionStopReason {
     SILENCED,
     /** Every attempt failed before a write could start. */
     ATTEMPTS_EXHAUSTED,
-    /** It was no longer timely before an attempt started. */
+    /** It was no longer timely before an attempt started, or before an attempt that lost its lease wrote anything. */
     EXPIRED,
     /** A readback proved that the effect does not exist, and nothing should create it now. */
     ABSENT,

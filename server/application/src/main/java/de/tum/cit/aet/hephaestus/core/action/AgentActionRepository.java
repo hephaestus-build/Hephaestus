@@ -276,7 +276,8 @@ interface AgentActionRepository extends Repository<AgentAction, UUID> {
      * waits for an earlier one that has not started. A reclaim never waits, or a lane whose holder crashed would stall.
      * The unique index {@code ux_agent_action_lane_executing} refuses a second claim that another replica made at
      * the same moment. An at-most-once kind whose write may have started is never taken again; {@link #endLost}
-     * ends it. An expired action is not taken; {@link #endExpired} ends it.
+     * ends it. An expired action is not taken, nor an expired one that lost its lease before any write; {@link
+     * #endExpired} ends both. A lost lease whose write may have started is taken again to read back, expired or not.
      */
     @WorkspaceAgnostic("One executor claims the due lane heads of every workspace and of the instance")
     @Query(value = """
@@ -287,7 +288,9 @@ interface AgentActionRepository extends Repository<AgentAction, UUID> {
                        AND (d.expires_at IS NULL OR d.expires_at > clock_timestamp()))
                    OR (d.state = 'EXECUTING' AND d.leased_until <= clock_timestamp()
                        AND d.attempts < d.max_attempts
-                       AND (d.write_started_at IS NULL OR d.kind NOT IN (:atMostOnce))))
+                       AND (d.write_started_at IS NULL OR d.kind NOT IN (:atMostOnce))
+                       AND (d.write_started_at IS NOT NULL OR d.expires_at IS NULL
+                         OR d.expires_at > clock_timestamp())))
                  AND NOT EXISTS (
                    SELECT 1 FROM agent_action b
                     WHERE b.lane_key = d.lane_key AND b.id <> d.id
@@ -393,13 +396,18 @@ interface AgentActionRepository extends Repository<AgentAction, UUID> {
             """ + ENDED, nativeQuery = true)
     Optional<SettledRow> defer(@Param("id") UUID id, @Param("epoch") long epoch, @Param("after") long afterSeconds);
 
-    /** Cancels what expired before it started. */
+    /**
+     * Cancels what expired before it started, or expired after it lost its lease before any write: nothing reached the
+     * provider, so no attempt may follow.
+     */
     @WorkspaceAgnostic("The reaper ends expired actions of every workspace")
     @Query(value = """
             WITH ended AS (
-              UPDATE agent_action SET state = 'CANCELLED', stop_reason = 'EXPIRED', payload = NULL,
+              UPDATE agent_action SET state = 'CANCELLED', stop_reason = 'EXPIRED', payload = NULL, leased_until = NULL,
                      ended_at = clock_timestamp(), updated_at = clock_timestamp()
-               WHERE id = :id AND state IN ('PROPOSED', 'ADMITTED') AND\s""" + DECODABLE + """
+               WHERE id = :id AND\s""" + DECODABLE + """
+                 AND (state IN ('PROPOSED', 'ADMITTED')
+                   OR (state = 'EXECUTING' AND leased_until <= clock_timestamp() AND write_started_at IS NULL))
                  AND expires_at <= clock_timestamp()
               RETURNING id, workspace_id, kind, idempotency_key, state, stop_reason, readback_ref)
             """ + ENDED, nativeQuery = true)
@@ -428,8 +436,9 @@ interface AgentActionRepository extends Repository<AgentAction, UUID> {
             @Param("decodable") String decodable);
 
     /**
-     * Up to {@code limit} actions that can no longer run: expired before they started, or lost their lease when no
-     * other attempt may follow. {@link #endExpired} and {@link #endLost} end each one in its own transaction.
+     * Up to {@code limit} actions that can no longer run: expired before they started or before a lost lease wrote
+     * anything, or lost their lease when no other attempt may follow. {@link #endExpired} and {@link #endLost} end each
+     * one in its own transaction.
      */
     @WorkspaceAgnostic("The reaper finds stale actions of every workspace")
     @Query(value = """
@@ -437,7 +446,8 @@ interface AgentActionRepository extends Repository<AgentAction, UUID> {
              WHERE\s""" + DECODABLE + """
                AND ((state IN ('PROPOSED', 'ADMITTED') AND expires_at <= clock_timestamp())
                  OR (state = 'EXECUTING' AND leased_until <= clock_timestamp()
-                     AND (attempts >= max_attempts OR (write_started_at IS NOT NULL AND kind IN (:atMostOnce)))))
+                     AND (attempts >= max_attempts OR (write_started_at IS NOT NULL AND kind IN (:atMostOnce))
+                       OR (write_started_at IS NULL AND expires_at <= clock_timestamp()))))
              ORDER BY id LIMIT :limit
             """, nativeQuery = true)
     List<UUID> findStale(
