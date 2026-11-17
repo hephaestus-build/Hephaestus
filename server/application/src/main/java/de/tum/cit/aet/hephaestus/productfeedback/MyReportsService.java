@@ -328,6 +328,9 @@ class MyReportsService {
                     null,
                     null,
                     null,
+                    false,
+                    null,
+                    null,
                     null,
                     null,
                     null,
@@ -349,6 +352,7 @@ class MyReportsService {
         boolean showsIssue = isPublicIssue || (instanceAdmin && filing.getState() == FilingState.FILED);
         FilingReason reason = filing.getReason();
         boolean held = filing.getState() == FilingState.HELD;
+        boolean drafting = state == ReportState.DRAFTING;
         boolean filed = filing.getState() == FilingState.FILED;
         return new MyProductFeedbackDTO(
                 report.getId(),
@@ -358,7 +362,10 @@ class MyReportsService {
                 state,
                 shown,
                 reason == null || reason == FilingReason.NONE ? null : reason.words(),
-                held || state == ReportState.DRAFTING ? filing.getFiledAfter() : null,
+                held || drafting ? filing.getFiledAfter() : null,
+                drafting ? filing.getDraftingStartedAt() : null,
+                drafting ? DraftingService.deadline(filing) : null,
+                filing.getState() == FilingState.DRAFT_WAITING,
                 showsIssue ? filing.getIssueUrl() : null,
                 showsIssue ? filing.getIssueNumber() : null,
                 Boolean.FALSE.equals(filing.getIssueOpen()) ? filing.getIssueStateReason() : null,

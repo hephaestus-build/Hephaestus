@@ -2695,6 +2695,8 @@ export const zFeedbackItem = z.object({
 	canFile: z.boolean(),
 	canTriage: z.boolean(),
 	createdAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
+	draftDeadline: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
+	draftingSince: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
 	id: z.uuid(),
 	issueClosedAs: z.string().optional(),
 	issueNumber: z.int().optional(),
@@ -2711,6 +2713,7 @@ export const zFeedbackItem = z.object({
 	savedBeforeDisclosure: z.boolean(),
 	state: zFilingReportState,
 	userAgent: z.string().optional(),
+	waitingForModel: z.boolean(),
 	workspace: zFeedbackWorkspaceRef.optional(),
 });
 
@@ -2742,8 +2745,10 @@ export const zMyProductFeedback = z.object({
 	canKeepPrivate: z.boolean(),
 	canMakePrivate: z.boolean(),
 	createdAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
+	draftDeadline: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
 	draftDescription: z.string().optional(),
 	draftTitle: z.string().optional(),
+	draftingSince: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
 	filedAfter: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
 	id: z.uuid(),
 	issueClosedAs: z.string().optional(),
@@ -2757,6 +2762,7 @@ export const zMyProductFeedback = z.object({
 	removed: z.string().optional(),
 	route: zFilingReportRoute,
 	state: zFilingReportState,
+	waitingForModel: z.boolean(),
 });
 
 /**

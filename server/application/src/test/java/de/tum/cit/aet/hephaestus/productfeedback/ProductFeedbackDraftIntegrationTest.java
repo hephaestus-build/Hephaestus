@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.productfeedback;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.within;
 
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmConnectionRepository;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModel;
@@ -89,6 +90,12 @@ class ProductFeedbackDraftIntegrationTest extends BaseIntegrationTest {
     @Autowired
     private ObjectMapper mapper;
 
+    @Autowired
+    private MyReportsService reports;
+
+    @Autowired
+    private ProductFeedbackRepository feedbackRows;
+
     private LlmModel model;
     private @Nullable String previousPublic;
     private @Nullable String previousPrivate;
@@ -145,6 +152,57 @@ class ProductFeedbackDraftIntegrationTest extends BaseIntegrationTest {
                 .isBetween(
                         Instant.now().plus(DraftingService.EXPIRY).minus(Duration.ofMinutes(1)),
                         Instant.now().plus(DraftingService.EXPIRY));
+    }
+
+    @Test
+    void shouldTellTheReporterSinceWhenItDraftsAndWhenItGoesOnWithoutADraft() {
+        UUID id = report();
+        Instant expires = ((Timestamp) Objects.requireNonNull(action(id, 1).get("expires_at"))).toInstant();
+
+        Instant started =
+                Objects.requireNonNull(filings.findById(id).orElseThrow().getDraftingStartedAt());
+        // The action and the row store the same instant; each write may round its last microsecond.
+        assertThat(started.plus(DraftingService.EXPIRY)).isCloseTo(expires, within(1, ChronoUnit.MILLIS));
+        var drafting = mine(id);
+        assertThat(drafting.state()).isEqualTo(FilingDTOs.ReportState.DRAFTING);
+        assertThat(drafting.draftingSince()).isEqualTo(started);
+        assertThat(drafting.draftDeadline())
+                .isEqualTo(started.plus(DraftingService.EXPIRY).plus(ActionExecutor.LEASE));
+        assertThat(drafting.waitingForModel()).isFalse();
+
+        ActionAttempt attempt = claim(id);
+        assertThat(drafts.claimed(attempt, id, 1)).isTrue();
+        assertThat(drafts.deferred(attempt, id, 1)).isTrue();
+        ActionTestSupport.record(context, attempt, new ActionResult.Defer(Duration.ofSeconds(30)));
+        var waiting = mine(id);
+        assertThat(waiting.waitingForModel()).isTrue();
+        assertThat(waiting.draftDeadline()).isEqualTo(drafting.draftDeadline());
+
+        ActionAttempt next = claim(id);
+        assertThat(drafts.claimed(next, id, 1)).isTrue();
+        ActionTestSupport.record(context, next, new ActionResult.Done(null));
+        // Routing has not taken it yet, and no model drafts it any more.
+        assertThat(filings.findById(id).orElseThrow().getState()).isEqualTo(FilingState.ANSWERED);
+        assertThat(filings.findById(id).orElseThrow().getDraftingStartedAt()).isNull();
+        var ended = mine(id);
+        assertThat(ended.state()).isEqualTo(FilingDTOs.ReportState.DRAFTING);
+        assertThat(ended.draftingSince()).isNull();
+        assertThat(ended.draftDeadline()).isNull();
+    }
+
+    @Test
+    void shouldNameNoDraftingTimeWhenNoModelDraftsTheReport() {
+        var destination = destination();
+        destination.setLlmModelId(null);
+        destinationRows.saveAndFlush(destination);
+
+        UUID id = report();
+
+        assertThat(filings.findById(id).orElseThrow().getDraftingStartedAt()).isNull();
+        var shown = mine(id);
+        assertThat(shown.draftingSince()).isNull();
+        assertThat(shown.draftDeadline()).isNull();
+        assertThat(shown.waitingForModel()).isFalse();
     }
 
     @Test
@@ -340,6 +398,16 @@ class ProductFeedbackDraftIntegrationTest extends BaseIntegrationTest {
                 "SELECT id, kind, lane_key, workspace_id, max_attempts, attempts, state, stop_reason, expires_at"
                         + " FROM agent_action WHERE idempotency_key = ?",
                 "draft:" + id + ":" + generation);
+    }
+
+    /** The report as its reporter reads it in Your reports. */
+    private FilingDTOs.MyProductFeedbackDTO mine(UUID id) {
+        long account =
+                Objects.requireNonNull(feedbackRows.findById(id).orElseThrow().getAccountId());
+        return reports.mine(account, false).stream()
+                .filter(report -> report.id().equals(id))
+                .findFirst()
+                .orElseThrow();
     }
 
     private ProductFeedbackDestination destination() {

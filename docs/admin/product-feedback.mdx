@@ -87,6 +87,10 @@ ORDER BY 1 DESC;
 
 ## Route reports
 
+While the model drafts a report, the console shows **Drafting**, when drafting started, and about when the report goes on without a draft.
+**The AI model is busy with other work** means that the draft waits for room in the model's pool.
+If no draft finishes by that time, the report goes on as written and stays private.
+
 Code selects the route after the model drafts the issue:
 
 | Route | Conditions |

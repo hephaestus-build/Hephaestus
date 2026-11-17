@@ -32,8 +32,10 @@ import {
 import { Field, FieldContent, FieldDescription, FieldLabel } from "@/components/ui/field";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
+import { formatTime } from "@/lib/dates";
 import { hasText } from "@/lib/text";
 
+import { DraftingProgress } from "./DraftingProgress";
 import { FiledIssue } from "./FiledIssue";
 import { ProductFeedbackDraftForm } from "./ProductFeedbackDraftForm";
 import { REPORT_STATE_DEFS } from "./report-state-defs";
@@ -176,10 +178,29 @@ function MyProductFeedbackRow({
 				{hasText(report.issueTitle) && hasText(report.issueText) && (
 					<FiledIssue title={report.issueTitle} text={report.issueText} />
 				)}
+				{report.state === "DRAFTING" && (
+					<DraftingProgress
+						since={report.draftingSince}
+						deadline={report.draftDeadline}
+						waitingForModel={report.waitingForModel}
+						wantsPublic={report.allowPublic}
+						reader="reporter"
+					/>
+				)}
+				{report.state === "DRAFTING" &&
+					report.canKeepPrivate &&
+					report.filedAfter !== undefined && (
+						<p className="text-muted-foreground">
+							{report.filedAfter.getTime() > now
+								? `Once drafted, it can become a public issue at about ${formatTime(report.filedAfter)} unless you keep it private.`
+								: "Once drafted, it can become a public issue right away unless you keep it private."}
+						</p>
+					)}
 				{report.state === "HELD" && report.filedAfter !== undefined && (
 					<p className="text-muted-foreground">
-						Unless a check keeps it private, it becomes a public issue{" "}
-						{holdCountdown(report.filedAfter, now)} or a little later.
+						It becomes a public issue at about {formatTime(report.filedAfter)} (
+						{holdCountdown(report.filedAfter, now)}) unless you keep it private or edit it. A last
+						check can still keep it private.
 					</p>
 				)}
 				{hasText(report.reason) && (

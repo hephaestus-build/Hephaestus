@@ -1,7 +1,7 @@
-import { screen, waitFor, within } from "@testing-library/react";
+import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
-import { beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { MyProductFeedback } from "@/api/types.gen";
 import type { Wire } from "@/lib/dates";
@@ -29,6 +29,7 @@ const publicIssue = {
 	canEdit: false,
 	canMakePrivate: true,
 	canAllowPublic: false,
+	waitingForModel: false,
 } satisfies Wire<MyProductFeedback>;
 
 describe("your reports route", () => {
@@ -62,5 +63,45 @@ describe("your reports route", () => {
 		await waitFor(() => expect(madePrivate).toStrictEqual([publicIssue.id]));
 		await screen.findByText("The Hephaestus maintainers have it as a private GitHub issue.");
 		expect(screen.queryByRole("link", { name: /Public issue #1234/u })).toBeNull();
+	});
+
+	// A report that moved on must never keep showing Drafting: the list reads again until it settles.
+	it("shows a drafting report on GitHub once it is filed, and then stops reading", async () => {
+		const drafting = {
+			...publicIssue,
+			state: "DRAFTING",
+			issueUrl: undefined,
+			issueNumber: undefined,
+			canMakePrivate: false,
+			canKeepPrivate: true,
+			draftingSince: "2026-09-11T09:00:00.000Z",
+			draftDeadline: "2026-09-11T09:10:00.000Z",
+		} satisfies Wire<MyProductFeedback>;
+		let listed: Wire<MyProductFeedback> = drafting;
+		let reads = 0;
+		server.use(
+			http.get("*/product-feedback/mine", () => {
+				reads += 1;
+				return HttpResponse.json([listed]);
+			}),
+		);
+		vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
+		const queryClient = renderRouteAt("/product-feedback");
+		try {
+			await screen.findByText("Drafting", undefined, ROUTE_RENDER_WAIT);
+			await waitFor(() => expect(queryClient.isFetching()).toBe(0));
+			const initialReads = reads;
+			listed = publicIssue;
+			await act(async () => vi.advanceTimersByTimeAsync(10_000));
+
+			await screen.findByRole("link", { name: /Public issue #1234/u });
+			expect(screen.queryByText("Drafting")).toBeNull();
+			expect(reads).toBe(initialReads + 1);
+			await act(async () => vi.advanceTimersByTimeAsync(30_000));
+			expect(reads).toBe(initialReads + 1);
+		} finally {
+			queryClient.clear();
+			vi.useRealTimers();
+		}
 	});
 });

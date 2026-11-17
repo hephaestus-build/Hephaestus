@@ -1,5 +1,5 @@
 import type { FeedbackItem } from "@/api/types.gen";
-import { daysBefore, hoursBefore, minutesBefore } from "@/stories/story-clock";
+import { daysBefore, hoursBefore, minutesAfter, minutesBefore } from "@/stories/story-clock";
 
 export const bugReport = {
 	id: "f1f1f1f1-0000-0000-0000-000000000001",
@@ -17,6 +17,7 @@ export const bugReport = {
 	route: "ADMINS",
 	canFile: false,
 	savedBeforeDisclosure: false,
+	waitingForModel: false,
 } satisfies FeedbackItem;
 
 export const idea = {
@@ -32,6 +33,7 @@ export const idea = {
 	route: "ADMINS",
 	canFile: false,
 	savedBeforeDisclosure: false,
+	waitingForModel: false,
 } satisfies FeedbackItem;
 
 export const praise = {
@@ -46,6 +48,7 @@ export const praise = {
 	route: "ADMINS",
 	canFile: false,
 	savedBeforeDisclosure: false,
+	waitingForModel: false,
 } satisfies FeedbackItem;
 
 /** Sent by an account that has since been erased. */
@@ -62,6 +65,7 @@ export const orphanedFeedback = {
 	route: "ADMINS",
 	canFile: false,
 	savedBeforeDisclosure: false,
+	waitingForModel: false,
 } satisfies FeedbackItem;
 
 export const resolvedBugReport = {
@@ -82,6 +86,7 @@ export const resolvedBugReport = {
 	route: "ADMINS",
 	canFile: false,
 	savedBeforeDisclosure: false,
+	waitingForModel: false,
 } satisfies FeedbackItem;
 
 export const draftingFeedback = {
@@ -90,6 +95,8 @@ export const draftingFeedback = {
 	state: "DRAFTING",
 	route: "PUBLIC",
 	canTriage: false,
+	draftingSince: minutesBefore(2),
+	draftDeadline: minutesAfter(10),
 } satisfies FeedbackItem;
 
 export const filedPublicFeedback = {

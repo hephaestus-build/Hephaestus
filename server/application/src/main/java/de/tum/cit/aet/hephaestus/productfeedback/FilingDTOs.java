@@ -80,6 +80,10 @@ final class FilingDTOs {
      * @param draftTitle the drafted title, while the report is held or once it is filed
      * @param draftDescription the drafted main text the person can edit while the report is held
      * @param issueClosedAs {@code completed}, {@code not_planned} or {@code duplicate} once the issue is closed
+     * @param filedAfter while the report drafts or is held for a public issue: the end of the time to keep it private
+     * @param draftingSince while a model drafts the report: when its drafting started
+     * @param draftDeadline while a model drafts the report: about when it goes on without a draft, as written
+     * @param waitingForModel the model is busy with other work, so the draft waits for it
      */
     record MyProductFeedbackDTO(
             @NonNull UUID id,
@@ -90,6 +94,9 @@ final class FilingDTOs {
             @NonNull ReportRoute route,
             @Nullable String reason,
             @Nullable Instant filedAfter,
+            @Nullable Instant draftingSince,
+            @Nullable Instant draftDeadline,
+            @Schema(requiredMode = RequiredMode.REQUIRED) boolean waitingForModel,
             @Nullable String issueUrl,
             @Nullable Long issueNumber,
             @Nullable String issueClosedAs,

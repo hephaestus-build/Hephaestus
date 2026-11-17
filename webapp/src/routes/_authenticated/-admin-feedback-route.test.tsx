@@ -34,6 +34,7 @@ const bugReport = {
 	route: "ADMINS",
 	canFile: false,
 	savedBeforeDisclosure: false,
+	waitingForModel: false,
 } satisfies Wire<FeedbackItem>;
 
 const resolvedNote = {
@@ -49,6 +50,7 @@ const resolvedNote = {
 	route: "ADMINS",
 	canFile: false,
 	savedBeforeDisclosure: false,
+	waitingForModel: false,
 } satisfies Wire<FeedbackItem>;
 
 /** What each status filter lists; a request without one, or with any other, sees the open items. */

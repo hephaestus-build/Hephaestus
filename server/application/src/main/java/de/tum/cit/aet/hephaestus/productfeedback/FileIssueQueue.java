@@ -38,6 +38,7 @@ class FileIssueQueue {
             return;
         }
         filing.setAttempt(filing.getAttempt() + 1);
+        filing.setDraftingStartedAt(now);
         filing.setUpdatedAt(now);
         actions.enqueue(DraftingService.request(
                 mapper, filing.getFeedbackId(), filing.getAttempt(), report.getAccountId(), now));

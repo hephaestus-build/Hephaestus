@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.productfeedback;
 
 import de.tum.cit.aet.hephaestus.core.action.ActionAttempt;
 import de.tum.cit.aet.hephaestus.core.action.ActionEnded;
+import de.tum.cit.aet.hephaestus.core.action.ActionExecutor;
 import de.tum.cit.aet.hephaestus.core.action.ActionKind;
 import de.tum.cit.aet.hephaestus.core.action.ActionRequest;
 import de.tum.cit.aet.hephaestus.core.action.ActionState;
@@ -211,6 +212,16 @@ class DraftingService implements ProductFeedbackDrafts, ProductFeedbackDraftCall
         }
     }
 
+    /**
+     * About when the report leaves drafting without a draft: its action expires after {@link #EXPIRY}, and an
+     * attempt that started just before that ends within one lease. A crashed attempt is retried only after its lease,
+     * so it can end later. Null while no model drafts it.
+     */
+    static @Nullable Instant deadline(ProductFeedbackFiling filing) {
+        Instant started = filing.getDraftingStartedAt();
+        return started == null ? null : started.plus(EXPIRY).plus(ActionExecutor.LEASE);
+    }
+
     private static boolean waits(ProductFeedbackFiling filing, int generation) {
         return (filing.getState() == FilingState.DRAFT_QUEUED
                         || filing.getState() == FilingState.DRAFTING
@@ -221,6 +232,7 @@ class DraftingService implements ProductFeedbackDrafts, ProductFeedbackDraftCall
     /** Hands the report to routing, with the model's answer or without one. */
     static void answered(ProductFeedbackFiling filing, @Nullable String answer, Instant now) {
         filing.setAnswer(answer);
+        filing.setDraftingStartedAt(null);
         filing.apply(FilingLifecycle.Event.DRAFT_ENDED);
         filing.setNextAttemptAt(now);
         filing.setUpdatedAt(now);

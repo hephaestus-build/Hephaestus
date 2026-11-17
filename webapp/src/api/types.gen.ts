@@ -2113,6 +2113,8 @@ export type FeedbackItem = {
 	canFile: boolean;
 	canTriage: boolean;
 	createdAt: Date;
+	draftDeadline?: Date;
+	draftingSince?: Date;
 	id: string;
 	issueClosedAs?: string;
 	issueNumber?: number;
@@ -2129,6 +2131,7 @@ export type FeedbackItem = {
 	savedBeforeDisclosure: boolean;
 	state: FilingReportState;
 	userAgent?: string;
+	waitingForModel: boolean;
 	workspace?: FeedbackWorkspaceRef;
 };
 
@@ -3523,6 +3526,10 @@ export type MyProductFeedback = {
 	canMakePrivate: boolean;
 	createdAt: Date;
 	/**
+	 * while a model drafts the report: about when it goes on without a draft, as written
+	 */
+	draftDeadline?: Date;
+	/**
 	 * the drafted main text the person can edit while the report is held
 	 */
 	draftDescription?: string;
@@ -3530,6 +3537,13 @@ export type MyProductFeedback = {
 	 * the drafted title, while the report is held or once it is filed
 	 */
 	draftTitle?: string;
+	/**
+	 * while a model drafts the report: when its drafting started
+	 */
+	draftingSince?: Date;
+	/**
+	 * while the report drafts or is held for a public issue: the end of the time to keep it private
+	 */
 	filedAfter?: Date;
 	id: string;
 	/**
@@ -3555,6 +3569,10 @@ export type MyProductFeedback = {
 	removed?: string;
 	route: FilingReportRoute;
 	state: FilingReportState;
+	/**
+	 * the model is busy with other work, so the draft waits for it
+	 */
+	waitingForModel: boolean;
 };
 
 export type NotReviewedScanReportItem = {
