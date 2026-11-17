@@ -765,9 +765,11 @@ The alert `HephaestusAgentSandboxUnisolated` fires on each such sandbox.
 - Its shutdown time passed.
 - It did not call the gateway within `hephaestus.agent.capacity.sandbox-start` (2 minutes) of its request.
 - Its subject has no queued or leased run, and it leased no run for `hephaestus.agent.capacity.sandbox-idle` (1 minute). For a conversation, the limit is `conversation-sandbox-idle` (15 minutes).
-- It is a review sandbox, and every open run of its subject has a [hold](#holds). A held run waits for its cause, such as a spent budget, and not for this sandbox, so the sandbox goes at the next tick.
+- It is a review sandbox, every open run of its subject has a [hold](#holds) in force, and it leased no run for 10 seconds. A held run waits for its cause, such as a spent budget, and not for this sandbox, so the sandbox goes at the next tick.
+  A hold is in force until its `available_at`. A hold that ran out keeps its `hold_reason` until a claim clears it, so the rule reads `available_at`.
+  The 10 seconds keep a sandbox whose lease commits while the reaper reads.
   The claim holds a run before its attempt starts, so the sandbox has nothing of that attempt.
-  When the hold lifts, the run is due again, and the dispatch starts a new sandbox for it.
+  When the hold lifts or runs out, the run is due again, and the dispatch starts a new sandbox for it.
 
 Then the reaper deletes the claims of the `DELETING` rows, and the rows after them. A claim that the API refuses stays for the next pass.
 Each claim deletion records how its sandbox ended (`AgentSandboxes.deleteClaim`). It reads the Pod's status before the claim deletion. It records the end only when its own statement deletes the row. A refused deletion therefore records nothing. Two replicas that delete the same row, or a later tick that repeats a deletion, record one end. `SandboxEnd` classifies the end. A sandbox that the reaper took back as lost ended as `deleted`, and its Pod is not read. A failed read records `unread` and never stops the deletion.

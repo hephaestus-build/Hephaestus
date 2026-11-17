@@ -17,6 +17,7 @@ import de.tum.cit.aet.hephaestus.agent.run.AgentRunBand;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunHold;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunLease;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunRef;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunStopReason;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.observability.StructuredLogKeys;
@@ -380,25 +381,24 @@ class AgentSandboxesIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    void shouldTakeBackAHeldReviewsSandboxAtTheNextTickAndStartANewOneWhenTheHoldLifts() {
+    void shouldTakeBackAHeldReviewsSandboxAtTheNextTickAndKeepTheNewOneWhenTheHoldLifts() {
         String held = "review:" + UUID.randomUUID();
         String waiting = "review:" + UUID.randomUUID();
-        var heldRun = Objects.requireNonNull(transactions.execute(
-                status -> runs.enqueue(workspace, AgentRunKind.REVIEW, AgentRunBand.BATCH, held, null)));
+        var heldRun = queueReview(held);
         queueRun(waiting);
         var heldSandbox = ensure(held, AgentSandboxKind.REVIEW);
         var waitingSandbox = ensure(waiting, AgentSandboxKind.REVIEW);
         sandboxes.authenticate(token(heldSandbox));
         sandboxes.authenticate(token(waitingSandbox));
         // The claim found the workspace's budget spent and held the run for an hour.
-        transactions.executeWithoutResult(
-                status -> assertThat(runs.hold(heldRun, AgentRunHold.BUDGET, Duration.ofHours(1)))
-                        .isTrue());
+        hold(heldRun, Duration.ofHours(1));
+        leasedNothingFor(heldSandbox, Duration.ofMinutes(1));
+        leasedNothingFor(waitingSandbox, Duration.ofMinutes(1));
 
         reaper(Duration.ofHours(1)).reap();
 
         assertThat(repository.findLive(workspace, held))
-                .as("a held review frees its sandbox within one tick, before any idle limit")
+                .as("a held review frees its sandbox at the next tick, before its idle limit")
                 .isEmpty();
         assertThat(meters.counter(AgentMetrics.AGENT_SANDBOX_REAPED, "reason", "held")
                         .count())
@@ -409,8 +409,59 @@ class AgentSandboxesIntegrationTest extends BaseIntegrationTest {
 
         transactions.executeWithoutResult(status -> runs.releaseHolds(workspace, AgentRunHold.BUDGET));
         var fresh = ensure(held, AgentSandboxKind.REVIEW);
+        reaper(Duration.ofHours(1)).reap();
 
-        assertThat(fresh.id()).isNotEqualTo(heldSandbox.id());
+        assertThat(repository.findLive(workspace, held))
+                .as("the review's new sandbox stays once its hold is lifted")
+                .hasValueSatisfying(row -> assertThat(row.getId()).isEqualTo(fresh.id()));
+    }
+
+    @Test
+    void shouldKeepTheSandboxOfAReviewWhoseHoldRanOut() {
+        String subject = "review:" + UUID.randomUUID();
+        var run = queueReview(subject);
+        hold(run, Duration.ofHours(1));
+        // The hold ran out on its own: the run is due again, and its hold reason stays until a claim clears it.
+        jdbc.update(
+                "UPDATE agent_run SET available_at = clock_timestamp() - interval '1 second' WHERE id = ?", run.id());
+        var sandbox = ensure(subject, AgentSandboxKind.REVIEW);
+        leasedNothingFor(sandbox, Duration.ofMinutes(1));
+
+        reaper(Duration.ofHours(1)).reap();
+
+        assertThat(repository.findLive(workspace, subject)).isPresent();
+    }
+
+    @Test
+    void shouldKeepAHeldReviewsSandboxThatLeasedARunJustNow() {
+        String subject = "review:" + UUID.randomUUID();
+        var run = queueReview(subject);
+        var sandbox = ensure(subject, AgentSandboxKind.REVIEW);
+        sandboxes.authenticate(token(sandbox));
+        hold(run, Duration.ofHours(1));
+
+        reaper(Duration.ofHours(1)).reap();
+
+        assertThat(repository.findLive(workspace, subject))
+                .as("a lease that commits while the reaper reads must not lose its sandbox")
+                .isPresent();
+    }
+
+    private AgentRunRef queueReview(String subject) {
+        return Objects.requireNonNull(transactions.execute(
+                status -> runs.enqueue(workspace, AgentRunKind.REVIEW, AgentRunBand.BATCH, subject, null)));
+    }
+
+    private void hold(AgentRunRef run, Duration delay) {
+        transactions.executeWithoutResult(
+                status -> assertThat(runs.hold(run, AgentRunHold.BUDGET, delay)).isTrue());
+    }
+
+    private void leasedNothingFor(AgentSandboxes.LiveSandbox sandbox, Duration idle) {
+        jdbc.update(
+                "UPDATE agent_sandbox SET last_used_at = clock_timestamp() - make_interval(secs => ?) WHERE id = ?",
+                idle.toSeconds(),
+                sandbox.id());
     }
 
     @Test

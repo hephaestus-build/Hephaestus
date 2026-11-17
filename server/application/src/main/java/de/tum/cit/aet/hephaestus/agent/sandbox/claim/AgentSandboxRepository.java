@@ -36,17 +36,29 @@ interface AgentSandboxRepository extends JpaRepository<AgentSandbox, UUID> {
     }
 
     /**
-     * The subject of sandbox {@code x} has a held run, and no other run that is open and not held. A held run waits
-     * for its cause to be lifted, not for this sandbox.
+     * The subject of sandbox {@code x} has a run whose hold is in force, and no other open run. A held run waits for its
+     * cause to be lifted or for its hold to run out, not for this sandbox. A hold that ran out leaves {@code
+     * hold_reason} set until a claim clears it, so only {@code available_at} tells whether it is still in force.
+     *
+     * <p>The sandbox must also have leased nothing for {@link #HELD_GRACE_SECONDS}. The reaper's row lock re-checks
+     * only the sandbox's own row against a lease that commits during its statement, and a lease sets {@code
+     * last_used_at}; the runs in this subquery keep the statement's older snapshot.
      */
     String HELD = """
             SELECT 1 FROM agent_run h
              WHERE h.workspace_id = x.workspace_id AND h.concurrency_key = x.subject_key
-               AND h.state = 'QUEUED' AND h.hold_reason IS NOT NULL
+               AND h.state = 'QUEUED' AND h.hold_reason IS NOT NULL AND h.available_at > clock_timestamp()
+               AND x.last_used_at <= clock_timestamp() - make_interval(secs => """ + HELD_GRACE_SECONDS + """
+            )
                AND NOT EXISTS (SELECT 1 FROM agent_run o
                                 WHERE o.workspace_id = x.workspace_id AND o.concurrency_key = x.subject_key
-                                  AND o.state <> 'ENDED' AND (o.state <> 'QUEUED' OR o.hold_reason IS NULL))
+                                  AND o.state <> 'ENDED'
+                                  AND NOT (o.state = 'QUEUED' AND o.hold_reason IS NOT NULL
+                                           AND o.available_at > clock_timestamp()))
             """;
+
+    /** How long a sandbox that just leased a run is safe from the held rule. */
+    int HELD_GRACE_SECONDS = 10;
 
     /** A sandbox that the reaper took back, and why. */
     interface RetiredRow extends SandboxRow {
