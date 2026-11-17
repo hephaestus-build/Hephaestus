@@ -96,7 +96,7 @@ export interface ReviewSettingsProblem {
 
 /**
  * The first reason Review on or the reads cannot be saved for this item type. Reads are checked only
- * while Hephaestus reviews the practice: any other choice saves none.
+ * while Hephaestus reviews the practice: any other reviewer keeps them unused.
  */
 export function reviewSettingsProblem(
 	reviewOn: ReviewOn,

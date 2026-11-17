@@ -202,7 +202,8 @@ describe("editing a workspace practice", () => {
 				humanReason: { code: "SERVER_REASON", description: "Discussed off the work." },
 				limits: [],
 			},
-			reads: { contract: currentDefinition(practice).reads.contract, sources: [] },
+			// People reviewing the practice keeps its read sources, unused.
+			reads: currentDefinition(practice).reads,
 		});
 		const saved = wirePractice({
 			slug: practice.slug,

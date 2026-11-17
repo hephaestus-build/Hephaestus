@@ -62,9 +62,9 @@ class UpdatePracticeTool implements McpTool {
                         "Change a practice",
                         "Changes the named top-level fields of a practice's definition and saves it as a new version. Name"
                                 + " the expectedVersionId from get_practice; if the practice changed since, nothing is saved."
-                                + " Set reviewedBy to {\"by\": \"NOBODY\", \"humanReason\": null, \"limits\": []} to stop"
-                                + " reviewing a practice. Undo it with update_practice and the earlier values, or with"
-                                + " reset_practice for a catalog practice."),
+                                + " Set reviewedBy.by to NOBODY, with humanReason null and the current limits, to stop"
+                                + " reviewing a practice: it keeps its reads, script, scan and limits unused. Undo it by"
+                                + " setting reviewedBy.by to HEPHAESTUS again, or with reset_practice for a catalog practice."),
                 INPUT_SCHEMA,
                 McpProjections.PRACTICE_SCHEMA,
                 McpTools.Effect.CHANGES);

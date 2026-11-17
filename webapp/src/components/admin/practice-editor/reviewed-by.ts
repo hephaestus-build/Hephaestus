@@ -24,7 +24,7 @@ export const REVIEWED_BY_DESCRIPTIONS: Record<ReviewedByKind, string> = {
 
 export const MAX_REASON_LENGTH = 500;
 
-/** Keep reasons and limits across draft choices; discard incompatible fields only on save. */
+/** Keep the reason and limits across draft choices. A save drops the reason unless people review the practice. */
 export interface ReviewedByDraft {
 	by: ReviewedByKind;
 	humanReason: ReviewLimitInput;
@@ -43,7 +43,7 @@ export function reviewedByOf(draft: ReviewedByDraft): ReviewedByInput {
 	return {
 		by: draft.by,
 		humanReason: draft.by === "PEOPLE" ? trimmed(draft.humanReason) : null,
-		limits: draft.by === "HEPHAESTUS" ? draft.limits.map(trimmed) : [],
+		limits: draft.limits.map(trimmed),
 	};
 }
 
@@ -73,19 +73,30 @@ export function reviewedByProblem(draft: ReviewedByDraft): ReviewedByProblem | u
 			};
 		}
 	}
-	if (draft.by !== "HEPHAESTUS") {
-		return undefined;
-	}
+	// The limits are kept under every reviewer, so they are checked under every reviewer. Only Hephaestus shows
+	// their editor; under another reviewer the problem points at the choice that shows it again.
+	const kept = draft.by !== "HEPHAESTUS";
 	const invalid = draft.limits.findIndex(
 		(limit) => !hasText(limit.description.trim()) || limit.description.length > MAX_REASON_LENGTH,
 	);
 	if (invalid !== -1) {
-		return {
-			message: "Each limit needs a description of 1–500 characters.",
-			focusId: limitFieldId(invalid),
-		};
+		return kept
+			? {
+					message:
+						"A kept review limit needs a description. Choose Hephaestus to edit or remove it.",
+					focusId: REVIEWED_BY_FIELD_ID,
+				}
+			: {
+					message: "Each limit needs a description of 1–500 characters.",
+					focusId: limitFieldId(invalid),
+				};
 	}
 	return new Set(draft.limits.map((limit) => limit.description.trim())).size === draft.limits.length
 		? undefined
-		: { message: "Describe each limit once.", focusId: REVIEWED_BY_FIELD_ID };
+		: {
+				message: kept
+					? "Two kept review limits say the same. Choose Hephaestus to edit them."
+					: "Describe each limit once.",
+				focusId: REVIEWED_BY_FIELD_ID,
+			};
 }

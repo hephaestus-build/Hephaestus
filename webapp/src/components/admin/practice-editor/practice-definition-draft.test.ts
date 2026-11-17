@@ -9,7 +9,7 @@ import {
 } from "./fixtures";
 import {
 	blankDraft,
-	clearedBySave,
+	keptUnused,
 	definitionOfDraft,
 	draftErrors,
 	draftOf,
@@ -42,7 +42,7 @@ describe("definitionOfDraft", () => {
 		);
 	});
 
-	it("keeps no reads, script, scan or limits when people review the practice", () => {
+	it("keeps the reads, script, scan and limits when people review the practice", () => {
 		const value = saved(
 			draft({
 				script: "export default 1;",
@@ -55,13 +55,13 @@ describe("definitionOfDraft", () => {
 			}),
 		).definition;
 
-		expect(value.reads.sources).toStrictEqual([]);
-		expect(value.script).toBeNull();
-		expect(value.scan).toBeNull();
+		expect(value.reads.sources).not.toStrictEqual([]);
+		expect(value.script).toBe("export default 1;");
+		expect(value.scan).toStrictEqual(mockScan);
 		expect(value.reviewedBy).toStrictEqual({
 			by: "PEOPLE",
 			humanReason: { code: "MEETING_NOT_CAPTURED", description: "Decided in a meeting." },
-			limits: [],
+			limits: [{ code: "RUNTIME_NOT_OBSERVED", description: "Runtime not observed." }],
 		});
 	});
 
@@ -113,18 +113,18 @@ describe("definitionOfDraft", () => {
 	});
 });
 
-describe("clearedBySave", () => {
+describe("keptUnused", () => {
 	it("names nothing while Hephaestus reviews the practice", () => {
-		expect(clearedBySave(draft({ script: "export default 1;" }))).toStrictEqual([]);
+		expect(keptUnused(draft({ script: "export default 1;" }))).toStrictEqual([]);
 	});
 
-	it("names what a save with Nobody removes", () => {
+	it("names what the practice keeps, unused, while Nobody reviews it", () => {
 		const value = draft({
 			script: "export default 1;",
 			scan: mockScan,
 		});
 		expect(
-			clearedBySave({ ...value, reviewedBy: { ...value.reviewedBy, by: "NOBODY" } }),
+			keptUnused({ ...value, reviewedBy: { ...value.reviewedBy, by: "NOBODY" } }),
 		).toStrictEqual(["the read sources", "the practice script", "the scan settings"]);
 	});
 });

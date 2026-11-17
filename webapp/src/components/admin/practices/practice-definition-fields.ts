@@ -85,7 +85,8 @@ export function reviewedByLines(reviewedBy: ReviewedBy): string[] {
 		REVIEWED_BY_LABELS[reviewedBy.by],
 		...(reviewedBy.by === "NOBODY" ? [NOBODY_SENTENCE] : []),
 		...(reason === null ? [] : [reason.description]),
-		...reviewedBy.limits.map((limit) => limit.description),
+		// A practice keeps its limits under every reviewer, but they describe what Hephaestus cannot judge.
+		...(reviewedBy.by === "HEPHAESTUS" ? reviewedBy.limits.map((limit) => limit.description) : []),
 	];
 }
 

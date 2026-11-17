@@ -28,6 +28,9 @@ describe("reviewedByProblem", () => {
 		);
 		expect(
 			reviewedByProblem({ ...draft, by: "NOBODY", limits: [{ description: " " }] }),
-		).toBeUndefined();
+		).toStrictEqual({
+			message: "A kept review limit needs a description. Choose Hephaestus to edit or remove it.",
+			focusId: "practice-reviewed-by",
+		});
 	});
 });

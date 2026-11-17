@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.practices;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatNoException;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
@@ -189,7 +190,7 @@ class PracticeDefinitionValidatorTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldRefuseAScriptWhenPeopleReviewThePractice() {
+    void shouldKeepTheScriptAndReadsWhenPeopleReviewThePractice() {
         var original = DefinitionTestFixtures.definition();
         var people = new PracticeDefinition(
                 original.name(),
@@ -206,8 +207,8 @@ class PracticeDefinitionValidatorTest extends BaseUnitTest {
                 null,
                 false,
                 original.guidance());
-        assertThatThrownBy(() -> validator.validate(new ItemKind("scm.pull_request"), people))
-                .isInstanceOf(IllegalArgumentException.class);
+        // Every reviewer keeps the script and reads, so choosing Hephaestus again restores them.
+        assertThatNoException().isThrownBy(() -> validator.validate(new ItemKind("scm.pull_request"), people));
     }
 
     @Test

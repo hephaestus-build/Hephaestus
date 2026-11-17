@@ -53,9 +53,8 @@ public class PracticeDefinitionValidator {
                 throw new InvalidInputException("Choose values offered for this review state dimension.");
             }
         });
-        if (definition.reviewedBy().by() != ReviewedByKind.HEPHAESTUS && definition.script() != null) {
-            throw new InvalidInputException("A practice script needs Hephaestus as the reviewer.");
-        }
+        // Every reviewer keeps the reads, script and scan, so a reviewer change can be undone; only Hephaestus uses
+        // them.
         boolean automated = definition.reviewedBy().by() == ReviewedByKind.HEPHAESTUS;
         validateReads(kind, definition.reads(), automated);
         var scan = definition.scan();

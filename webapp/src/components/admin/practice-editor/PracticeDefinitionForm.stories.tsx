@@ -120,15 +120,15 @@ export const ReviewedByNobody: Story = {
 		await userEvent.click(canvas.getByRole("radio", { name: /^Nobody/u }));
 		await expect(
 			canvas.getByText(
-				"Saving with Nobody clears the read sources, the practice script and the scan settings. Choose Hephaestus again before you save to keep them.",
+				"Hephaestus keeps the read sources, the practice script and the scan settings unused while it does not review this practice. Choose Hephaestus again to use them.",
 			),
 		).toBeVisible();
 		await userEvent.click(canvas.getByRole("button", { name: "Save changes" }));
 		await waitFor(async () => expect(submit).toHaveBeenCalledOnce());
 		const definition = lastSaved()?.definition;
 		await expect(definition?.reviewedBy).toEqual({ by: "NOBODY", humanReason: null, limits: [] });
-		await expect(definition?.script).toBeNull();
-		await expect(definition?.scan).toBeNull();
+		await expect(definition?.script).toBe("export default 1;");
+		await expect(definition?.scan).toEqual(mockScan);
 	},
 };
 
