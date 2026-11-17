@@ -352,24 +352,30 @@ The log names the entry in a warning.
 Hibernate does not validate native queries, such as the claim queries of the review queue.
 Thus, the chart upgrade drill proves that the previous release claims a queued review on the new schema
 (`chart-upgrade.yml`, `scripts/chart-upgrade-drill.ts`).
-It runs nightly, and on a pull request that changes the drill.
+It runs nightly, and on a pull request that changes the drill, its workflow or `scripts/kubernetes-cluster.ts`.
 It does not gate a release.
 
 1. After the rolling upgrade, `helm rollback` returns every role to the revision of the previous release.
    An operator does the same when the new release fails after its migration.
    The migration Job of the previous release runs again and applies nothing.
 2. The drill waits until no server of the candidate remains.
-3. It queues one review from the candidate's `practice-native/result-parent.sql` fixture.
-   It writes the run, the job and the job of the review item as the candidate's enqueue path writes them.
-   The job has no frozen model, so its config snapshot is empty.
-4. Within 10 minutes, a sandbox of the previous release must claim the run.
-   The lease epoch of the run rises, and the claim takes the job out of `QUEUED`.
+3. It seeds one review from the candidate's `practice-native/result-parent.sql` fixture, with the developer of the reviewed work.
+4. A one-shot Pod of the previous release signs in an instance administrator.
+   It uses the API of the previous release to bind a review model to the workspace of the review.
+   The model has a NO_CHARGE price.
+   The model points at an endpoint that nothing answers.
+5. The drill pins the review method.
+   It queues the job and its run as the enqueue path of the candidate writes them.
+6. Within 10 minutes, the previous release must start the job.
    Otherwise the drill fails.
-5. The drill rolls forward to the candidate and checks it again.
+   It shows the state of the job and its run, and the diagnosis of a failed preparation.
+7. The drill rolls forward to the candidate and checks it again.
 
-The workspace binds no review model, and no provider holds the reviewed work.
-Thus, the previous release ends the job after its claim.
-Thus, the drill proves the claim of the run and of its job, but not the start of the attempt.
+The start of the job is the last write of the claim.
+Before it, in one transaction, a sandbox of the previous release leases the run, and the claim locks the job and the review.
+The claim also reads the member's AI choice and the model routing, the budget and the model admission, and starts the review.
+After the start, the attempt fails because no provider holds the reviewed work.
+The drill does not check that end.
 If the candidate's migration guide stops every role, the drill checks no claim.
 
 ## The 1.0 baseline

@@ -18,16 +18,30 @@ import { parseArgs } from "node:util";
 
 import { parse } from "yaml";
 
-import { NAMESPACE, psql, RELEASE, revision, SANDBOXES } from "./kubernetes-cluster.ts";
+import {
+	NAMESPACE,
+	portForward,
+	psql,
+	RELEASE,
+	revision,
+	SANDBOXES,
+	signInPod,
+} from "./kubernetes-cluster.ts";
+import { syntheticApi, syntheticSession } from "./lib/capacity-seed.ts";
 import { changedPostgresql } from "./lib/chart-postgresql.ts";
-import { asRecord, isRecord, parseJson } from "./lib/json.ts";
+import { asArray, asRecord, asString, isRecord, parseJson } from "./lib/json.ts";
 import { stopEveryRoleEntries } from "./lib/migration-guide.ts";
 import { latestReleaseOf } from "./lib/previous-release.ts";
 import { output, run } from "./lib/process.ts";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
-/** The review that `practice-native/result-parent.sql` seeds, with its practice and item. */
+/** The candidate's review fixture, and the review it seeds with its practice and item. */
+const FIXTURE = "server/application/src/test/resources/db/practice-native/result-parent.sql";
 const REVIEW = "00000000-0000-0000-0000-000000978011";
+/** The review model's endpoint, which nothing answers: the attempt ends before it calls a model. */
+const MODEL_URL = "http://127.0.0.1:9/v1";
+const PROTOCOL = "openai-completions";
+const SIGN_IN = `${RELEASE}-claim-sign-in`;
 
 const { values } = parseArgs({
 	options: {
@@ -256,28 +270,17 @@ try {
 }
 
 /**
- * Returns the release to the Helm revision of the previous release, queues a review, and waits until a sandbox of the
- * previous release leases the review's run, which raises its lease epoch, and the claim takes the job out of the queue.
- * A sandbox claims its own run when it pulls, so only a cluster with sandboxes proves this claim
- * (docs/contributor/database-migration.mdx § Claim of a queued review). Hibernate does not validate the claim's native
- * queries, so only a claim proves them. The rollback applies the whole previous revision: its migration Job runs again
- * and applies nothing, and a changed PostgreSQL template restarts PostgreSQL.
+ * Returns the release to the Helm revision of the previous release, queues a review, and waits until the previous
+ * release claims it: a sandbox leases the review's run, and the claim starts the job. A sandbox claims its own run when
+ * it pulls, so only a cluster with sandboxes proves this claim (docs/contributor/database-migration.mdx § Claim of a
+ * queued review). Hibernate does not validate the claim's native queries, so only a claim proves them. The rollback
+ * applies the whole previous revision: its migration Job runs again and applies nothing, and a changed PostgreSQL
+ * template restarts PostgreSQL.
  */
 async function previousReleaseClaims(release: string, previousRevision: number) {
 	console.log(
-		`Returning the server to ${release}, revision ${previousRevision}, on the migrated schema.`,
+		`Returning the release to ${release}, revision ${previousRevision}, on the migrated schema.`,
 	);
-	const listed = await output("kubectl", [
-		"--namespace",
-		NAMESPACE,
-		"get",
-		"pods",
-		"--selector",
-		"app.kubernetes.io/component=server",
-		"--output",
-		"name",
-	]);
-	const candidateServers = listed.split("\n").filter(Boolean);
 	await run("helm", [
 		"rollback",
 		RELEASE,
@@ -289,7 +292,44 @@ async function previousReleaseClaims(release: string, previousRevision: number) 
 		"--timeout",
 		"20m",
 	]);
-	// A draining server claims no run. Once the candidate's servers are gone, only the previous release can claim.
+	const deployment = parseJson(
+		await output("kubectl", [
+			"--namespace",
+			NAMESPACE,
+			"get",
+			"deployment",
+			`${RELEASE}-server`,
+			"--output",
+			"json",
+		]),
+	);
+	// A server that does not run the restored image is the candidate's, and it drains: a draining server claims no run.
+	// Once those servers are gone, only the previous release can claim.
+	const image = serverImage(deployment);
+	const servers = asArray(
+		asRecord(
+			parseJson(
+				await output("kubectl", [
+					"--namespace",
+					NAMESPACE,
+					"get",
+					"pods",
+					"--selector",
+					"app.kubernetes.io/component=server",
+					"--output",
+					"json",
+				]),
+			),
+			"server Pods",
+		).items,
+		"server Pods",
+	);
+	const candidateServers = servers
+		.filter((pod) => serverImage(pod) !== image)
+		.map(
+			(pod) =>
+				`pod/${asString(asRecord(asRecord(pod, "Pod").metadata, "Pod metadata").name, "Pod name")}`,
+		);
 	if (candidateServers.length > 0) {
 		await run("kubectl", [
 			"--namespace",
@@ -301,54 +341,82 @@ async function previousReleaseClaims(release: string, previousRevision: number) 
 		]);
 	}
 
-	// The candidate's own fixture, and the run, the job and the item's job as its enqueue path writes them, but with no
-	// frozen model: the workspace binds none, so the config snapshot stays empty. No provider holds the reviewed work, so
-	// the previous release ends the job after it claimed it. The seeded upgrade binds a model through its API.
-	const job = randomUUID();
-	const runId = randomUUID();
 	try {
+		await psql(await readFile(path.join(ROOT, FIXTURE), "utf8"));
+		// The developer whose work the review is about, as the candidate's request path records it.
 		await psql(
-			await readFile(
-				path.join(
-					ROOT,
-					"server/application/src/test/resources/db/practice-native/result-parent.sql",
-				),
-				"utf8",
-			),
+			`UPDATE review_item SET detail = jsonb_build_object('developerId', 978003) WHERE review_id = '${REVIEW}'`,
 		);
-		await psql(`BEGIN;
-			INSERT INTO agent_run (id, workspace_id, kind, band, concurrency_key)
-			VALUES ('${runId}', 978001, 'REVIEW', 'BATCH', 'review:${REVIEW}');
-			INSERT INTO review_job (id, review_id, workspace_id, run_id, submitted_at, trace_id, input, config_snapshot)
-			VALUES ('${job}', '${REVIEW}', 978001, '${runId}', now(), '${job.replaceAll("-", "")}',
-				'{"itemId":978006,"assignments":[{"reviewId":"${REVIEW}","practiceId":978004,"itemId":978006}]}', '{}');
-			UPDATE review_item SET job_id = '${job}' WHERE review_id = '${REVIEW}';
-			COMMIT;`);
 	} catch (error) {
 		throw new Error(
-			`The queued review does not fit the candidate's schema. Fix the drill's SQL, not the release: ${error instanceof Error ? error.message : String(error)}`,
+			`The candidate's fixture ${FIXTURE} does not fit the migrated schema: ${error instanceof Error ? error.message : String(error)}`,
 			{ cause: error },
 		);
 	}
+	const modelId = await bindReviewModel(deployment);
 
-	const read = async () =>
-		asRecord(
-			parseJson(
-				await psql(
-					`SELECT json_build_object('epoch', r.lease_epoch, 'run', r.state, 'stop', r.stop_reason, 'job', j.status, 'reason', j.cancellation_reason, 'error', j.error_message) FROM agent_run r JOIN review_job j ON j.run_id = r.id WHERE r.id = '${runId}'`,
-				),
-			),
-			"queued review",
+	// The method, the job and its run as the candidate's enqueue path writes them (ReviewServiceImpl pins the method,
+	// ReviewJobService.enqueue freezes the snapshot): the one review slot holds the bound model with the default judgment
+	// options, and the job freezes the model with its NO_CHARGE price.
+	const job = randomUUID();
+	const runId = randomUUID();
+	const bound = `FROM llm_model m
+		JOIN llm_model_price p ON p.model_id = m.id AND p.effective_to IS NULL
+		JOIN workspace_model_assignment b ON b.instance_model_id = m.id AND b.workspace_id = 978001
+			AND b.purpose = 'PRACTICE_REVIEW'
+		WHERE m.id = ${modelId}`;
+	await psql(`BEGIN;
+		WITH slots AS (SELECT jsonb_build_array(jsonb_build_object('slot', 'review', 'kind', 'CHAT', 'model',
+				jsonb_build_object('modelId', 'instance:' || m.id, 'providerProtocol', '${PROTOCOL}',
+					'providerModelId', m.upstream_model_id, 'reasoningEffort', lower(m.reasoning_effort),
+					'options', jsonb_build_object('practiceModelCalls', 36, 'practiceOutputTokens', 48000)))) AS models
+			${bound})
+		UPDATE review_practice SET method = jsonb_build_object('epoch', 1, 'modelDigest', review_model_digest(slots.models),
+			'models', slots.models)
+		FROM slots WHERE review_id = '${REVIEW}';
+		INSERT INTO agent_run (id, workspace_id, kind, band, concurrency_key)
+		VALUES ('${runId}', 978001, 'REVIEW', 'BATCH', 'review:${REVIEW}');
+		INSERT INTO review_job (id, review_id, workspace_id, run_id, submitted_at, trace_id, input, config_snapshot)
+		SELECT '${job}', '${REVIEW}', 978001, '${runId}', now(), '${job.replaceAll("-", "")}',
+			'{"itemId":978006,"assignments":[{"reviewId":"${REVIEW}","practiceId":978004,"itemId":978006}]}',
+			jsonb_build_object('schemaVersion', 10, 'contextWindow', null, 'maxOutputTokens', null,
+				'timeoutSeconds', b.timeout_seconds, 'model', jsonb_build_object('apiProtocol', '${PROTOCOL}',
+					'baseUrl', '${MODEL_URL}', 'upstreamModelId', m.upstream_model_id, 'connectionScope', 'INSTANCE',
+					'connectionId', m.connection_id, 'modelId', m.id, 'workspaceId', 978001,
+					'dataHandlingTier', b.data_handling_tier, 'reasoningEffort', m.reasoning_effort,
+					'forcedToolChoice', COALESCE(m.forced_tool_choice, false),
+					'priceSnapshot', jsonb_build_object('fundingSource', 'INSTANCE', 'pricingState', 'NO_CHARGE',
+						'appliedPriceId', p.id, 'appliedWorkspaceModelId', null,
+						'per1mInputUsd', p.per_1m_input_usd, 'per1mOutputUsd', p.per_1m_output_usd,
+						'per1mCacheReadUsd', p.per_1m_cache_read_usd, 'per1mCacheWriteUsd', p.per_1m_cache_write_usd)))
+		${bound};
+		UPDATE review_item SET job_id = '${job}' WHERE review_id = '${REVIEW}';
+		COMMIT;`);
+
+	// The job's start is the claim's last write: the lease, the job locks, the member and model checks, the budget,
+	// the admission and the review's start all ran before it, in one transaction.
+	const read = async () => {
+		const row = await psql(
+			`SELECT json_build_object('job', j.status, 'started', j.started_at, 'epoch', r.lease_epoch, 'run', r.state,
+				'stop', r.stop_reason, 'reason', j.cancellation_reason, 'error', j.error_message,
+				'preparation', j.capture -> 'preparationFailure')
+			FROM review_job j LEFT JOIN agent_run r ON r.id = j.run_id WHERE j.id = '${job}'`,
 		);
+		return asRecord(parseJson(row === "" ? "null" : row), `review job ${job}`);
+	};
 	const deadline = Date.now() + 10 * 60_000;
 	for (;;) {
 		const state = await read();
-		// A claim that cannot lock the queued job defers the run with a raised epoch, so the job must leave the queue too.
-		if (typeof state.epoch === "number" && state.epoch > 0 && state.job !== "QUEUED") {
+		if (state.started !== null) {
 			console.log(
 				`${release} claimed the queued review on the migrated schema: ${JSON.stringify(state)}.`,
 			);
 			return;
+		}
+		if (state.job !== "QUEUED") {
+			throw new Error(
+				`${release} ended the queued review without starting it: ${JSON.stringify(state)}`,
+			);
 		}
 		if (Date.now() > deadline) {
 			throw new Error(
@@ -356,6 +424,108 @@ async function previousReleaseClaims(release: string, previousRevision: number) 
 			);
 		}
 		await sleep(5000);
+	}
+}
+
+/** The image of the server container in a Deployment or a Pod. */
+function serverImage(workload: unknown): string {
+	const root = asRecord(workload, "server workload");
+	const spec = asRecord(root.spec, "server spec");
+	const podSpec =
+		"template" in spec
+			? asRecord(asRecord(spec.template, "server template").spec, "server Pod spec")
+			: spec;
+	const containers = asArray(podSpec.containers, "server containers").map((container) =>
+		asRecord(container, "server container"),
+	);
+	const server = containers.find((container) => container.name === "server") ?? containers[0];
+	return asString(server?.image, "server image");
+}
+
+/**
+ * Binds a review model to the fixture's workspace through the previous release's own API, as the seeded upgrade does:
+ * an instance connection on an endpoint that nothing answers, with a NO_CHARGE price. The release's servers refuse the
+ * e2e sign-in, so a one-shot Pod of the previous release's server template signs the instance administrator in.
+ */
+async function bindReviewModel(deployment: unknown): Promise<number> {
+	await run("kubectl", [
+		"--namespace",
+		NAMESPACE,
+		"delete",
+		"pod",
+		SIGN_IN,
+		"--ignore-not-found",
+		"--wait=true",
+	]);
+	await output("kubectl", ["apply", "--filename", "-"], {
+		input: JSON.stringify(signInPod(deployment, SIGN_IN)),
+	});
+	let forward: { port: number; stop: () => void } | undefined;
+	try {
+		await run("kubectl", [
+			"--namespace",
+			NAMESPACE,
+			"wait",
+			"--for=jsonpath={.status.containerStatuses[0].ready}=true",
+			`pod/${SIGN_IN}`,
+			"--timeout=10m",
+		]);
+		forward = await portForward(SIGN_IN, 8080);
+		const base = `http://127.0.0.1:${forward.port}/api`;
+		const token = await syntheticSession(base, "root", true);
+		await psql(`INSERT INTO membership (workspace_id, account_id, role)
+			SELECT 978001, id, 'ADMIN' FROM account WHERE primary_email = 'root@dev.invalid' ON CONFLICT DO NOTHING`);
+		const api = syntheticApi(base, token);
+		const connection = asRecord(
+			await api("POST", "/admin/llm/connections", {
+				displayName: "Claim drill",
+				baseUrl: MODEL_URL,
+				apiProtocol: PROTOCOL,
+				apiKey: "claim-drill-key",
+				enabled: true,
+			}),
+			"connection",
+		);
+		const model = asRecord(
+			await api("POST", `/admin/llm/connections/${String(connection.id)}/models`, {
+				displayName: "Claim drill model",
+				upstreamModelId: "claim-drill-model",
+			}),
+			"model",
+		);
+		const modelId = Number(model.id);
+		await api("PUT", `/admin/llm/models/${modelId}/price`, {
+			pricingMode: "NO_CHARGE",
+			note: "Drill model",
+		});
+		await api("PATCH", `/admin/llm/models/${modelId}`, { enabled: true });
+		await api("PUT", `/admin/llm/models/${modelId}/sharing`, { visibility: "PUBLIC" });
+		await api("PUT", "/workspaces/native-results/model-assignments/PRACTICE_REVIEW", {
+			instanceModelId: modelId,
+			enabled: true,
+		});
+		return modelId;
+	} catch (error) {
+		const logs = await output("kubectl", [
+			"--namespace",
+			NAMESPACE,
+			"logs",
+			SIGN_IN,
+			"--tail=200",
+		]).catch(String);
+		console.log(`The sign-in Pod's log:\n${logs}`);
+		throw error;
+	} finally {
+		forward?.stop();
+		await run("kubectl", [
+			"--namespace",
+			NAMESPACE,
+			"delete",
+			"pod",
+			SIGN_IN,
+			"--ignore-not-found",
+			"--wait=false",
+		]);
 	}
 }
 

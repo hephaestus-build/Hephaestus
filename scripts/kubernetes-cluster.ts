@@ -1791,7 +1791,10 @@ export function forwardedPort(text: string): number | undefined {
 }
 
 /** A local port to `port` of the Pod, until `stop`. */
-async function portForward(pod: string, port: number): Promise<{ port: number; stop: () => void }> {
+export async function portForward(
+	pod: string,
+	port: number,
+): Promise<{ port: number; stop: () => void }> {
 	const child = spawn(
 		"kubectl",
 		["-n", NAMESPACE, "port-forward", "--address", "127.0.0.1", `pod/${pod}`, `:${port}`],
