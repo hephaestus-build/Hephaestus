@@ -166,6 +166,8 @@ export const FirstVisit: Story = {
 	},
 };
 
+const reopenDraft = fn();
+
 /**
  * A feedback draft waits in the corner above the pill. The card opens above that button, so the
  * button that brings the draft back stays reachable while the list is open.
@@ -177,7 +179,7 @@ export const BesideAFeedbackDraft: Story = {
 			<GetStarted {...args} />
 			<ProductFeedbackDialog
 				view="minimized"
-				onViewChange={fn()}
+				onViewChange={reopenDraft}
 				sharing={{ status: "off" }}
 				isSubmitting={false}
 				onSubmit={fn(async () => true)}
@@ -185,7 +187,7 @@ export const BesideAFeedbackDraft: Story = {
 			/>
 		</div>
 	),
-	play: async () => {
+	play: async ({ userEvent }) => {
 		const opened = await card();
 		await expectSettledVisible(opened.getByText("Set up"));
 		const draft = screen.getByRole("button", { name: "Feedback draft" });
@@ -197,6 +199,8 @@ export const BesideAFeedbackDraft: Story = {
 		await expect(under === draft || draft.contains(under)).toBe(true);
 		const panel = screen.getByRole("dialog", { name: "Get started" }).getBoundingClientRect();
 		await expect(panel.bottom).toBeLessThanOrEqual(button.top);
+		await userEvent.click(draft);
+		await expect(reopenDraft).toHaveBeenCalledWith("open");
 	},
 };
 

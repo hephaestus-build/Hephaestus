@@ -164,8 +164,9 @@ export function ProductFeedbackDialog({
 			{view === "minimized" && (
 				// Above the corner's Get started pill, not over it: a tucked-away draft must not hide another
 				// control. The open panel may cover the pill, because the reader is writing in it. The Get
-				// started card reads the marker and opens above this button.
-				<div className="fixed right-4 bottom-20 z-50" data-feedback-draft="">
+				// started card reads the marker and opens above this button; the button sits one layer above
+				// the card's positioner, whose empty box would otherwise still take the press.
+				<div className="fixed right-4 bottom-20 z-[60]" data-feedback-draft="">
 					<Button
 						ref={draftButton}
 						variant="outline"
