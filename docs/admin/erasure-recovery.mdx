@@ -104,7 +104,8 @@ What each entry does:
 - A purge deletes the data of the workspace, as the original purge did.
 - A collection erasure deletes the collection's mirrored documents and its registration, as the admin's erase did. No sync mirrors it again.
 - A message deletion erases the message's words and every summary that read them, as the developer's delete did.
-- A Slack channel erasure revokes the channel's consent and deletes its messages, threads and stored events, as the erasure did.
+- A Slack channel erasure revokes the channel's consent, as the erasure did.
+  It deletes the channel's messages, threads and stored events, and the conversation feedback that came from them.
 - A changed Slack message loses the words that the restore brought back.
   A deleted one is deleted again.
   An edited one has no words until the next history read of its channel.

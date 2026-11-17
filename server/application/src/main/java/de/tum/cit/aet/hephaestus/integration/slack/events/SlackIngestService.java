@@ -3,13 +3,11 @@ package de.tum.cit.aet.hephaestus.integration.slack.events;
 import de.tum.cit.aet.hephaestus.core.TransactionCallbacks;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.consumer.DeliveryInbox;
-import de.tum.cit.aet.hephaestus.integration.core.consumer.ProviderEventStore;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMessageRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannelRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackThreadRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackTs;
 import de.tum.cit.aet.hephaestus.integration.slack.identity.SlackRosterIdentityResolver;
-import de.tum.cit.aet.hephaestus.practices.spi.ConversationFeedbackErasure;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.Optional;
@@ -57,8 +55,7 @@ public class SlackIngestService {
             SlackMessageRepository messageRepository,
             SlackThreadRepository threadRepository,
             SlackRosterIdentityResolver identityResolver,
-            ConversationFeedbackErasure conversationFeedbackErasure,
-            ProviderEventStore providerEvents,
+            SlackChannelErasure channelErasure,
             @Value("${hephaestus.integration.slack.conversation-ingest.enabled:true}")
                     boolean conversationIngestEnabled,
             TransactionTemplate transactionTemplate) {
@@ -69,13 +66,7 @@ public class SlackIngestService {
         this.messageRepository = messageRepository;
         this.threadRepository = threadRepository;
         this.identityResolver = identityResolver;
-        // Its own instance runs in this service's transaction; erasure recovery uses the bean.
-        this.channelErasure = new SlackChannelErasure(
-                providerEvents,
-                threadRepository,
-                monitoredChannelRepository,
-                conversationFeedbackErasure,
-                messageRepository);
+        this.channelErasure = channelErasure;
         this.conversationIngestEnabled = conversationIngestEnabled;
         this.transactionTemplate = transactionTemplate;
     }

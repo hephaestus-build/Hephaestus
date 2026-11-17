@@ -18,6 +18,7 @@ import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannelR
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackParticipantConsentRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackThreadRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackChannelConsentGate;
+import de.tum.cit.aet.hephaestus.integration.slack.events.SlackChannelErasure;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackIngestService;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackParticipantConsentGate;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackWorkspaceResolver;
@@ -137,8 +138,8 @@ class SlackIngestOutsideTransactionsIntegrationTest extends BaseIntegrationTest 
                 messages,
                 threads,
                 new SlackRosterIdentityResolver(providers, people, memberships, slack, suppression),
-                conversationFeedbackErasure,
-                mock(ProviderEventStore.class),
+                new SlackChannelErasure(
+                        mock(ProviderEventStore.class), threads, channels, conversationFeedbackErasure, messages),
                 true,
                 new TransactionTemplate(transactionManager));
         return new SlackChannelMessageHandler(

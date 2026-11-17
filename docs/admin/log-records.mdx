@@ -190,7 +190,7 @@ Each record names what was erased by its ids alone.
 | `connection.erased` | A disconnect commits and erases the connection's local data. A provider can cause it, for example by a Slack app uninstall. | `connection.id`, `workspace.id` |
 | `outline.collection_erased` | An admin's erase of an Outline collection from the mirror commits. | `workspace.id`, `connection.id`, `outline.collection.id` |
 | `conversation.message_deleted` | A developer's delete of their own conversation message commits, in the app or in Slack. The record never carries the words. | `workspace.id`, `conversation.entry.id` |
-| `slack.channel_erased` | An admin's revoke of a Slack channel, or Slack's deletion of it, erases the channel's stored content. | `workspace.id`, `slack.channel.id` |
+| `slack.channel_erased` | The erasure of a Slack channel's stored content commits, after an admin's revoke or Slack's deletion of the channel. Erasure recovery writes it again. | `workspace.id`, `slack.channel.id` |
 | `slack.message_changed` | An edit or a deletion of a stored Slack message in Slack commits, also when a history read finds it. The record never carries the words. | `workspace.id`, `slack.message.id`, `slack.message.change` (`EDITED` or `DELETED`) |
 
 A database restore brings the erased data back.

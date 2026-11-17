@@ -34,6 +34,7 @@ import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineCollection;
 import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineCollectionRepository;
 import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineDocument;
 import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineDocumentRepository;
+import de.tum.cit.aet.hephaestus.integration.slack.SlackThreadTestSupport;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackChannelErasure;
 import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
@@ -329,6 +330,8 @@ class ErasureRecoveryRestoreIntegrationTest extends AbstractWorkspaceIntegration
                 workspace.getId());
         long kept = slackMessage("1700000003.000300", "Words in a channel that is later erased");
         jdbc.update("UPDATE slack_message SET slack_channel_id = 'C-erased' WHERE id = ?", kept);
+        new SlackThreadTestSupport(jdbc)
+                .seedThread(workspace.getId(), "C-erased", "1700000003.000300", "1700000003.000300", 1, "{}");
         var backup = Backup.of(jdbc, workspace.getId());
         // The admin's revoke: the same erasure that Slack's channel_deleted runs.
         channelErasure.erase(workspace.getId(), "C-erased");
@@ -338,6 +341,8 @@ class ErasureRecoveryRestoreIntegrationTest extends AbstractWorkspaceIntegration
         assertThat(slackRows("C-erased"))
                 .as("the restore brought the channel's messages back")
                 .isOne();
+        assertThat(slackThreads("C-erased")).isOne();
+        assertThat(consent("C-erased")).isEqualTo("ACTIVE");
 
         String manifest = """
                 {"version":4,"restorePoint":"2026-01-01T00:00:00Z","noLaterErasures":false,"people":[],
@@ -348,15 +353,27 @@ class ErasureRecoveryRestoreIntegrationTest extends AbstractWorkspaceIntegration
         recover(manifest);
 
         assertThat(slackRows("C-erased")).isZero();
-        assertThat(jdbc.queryForObject(
-                        "SELECT consent_state FROM slack_monitored_channel WHERE workspace_id = ? AND slack_channel_id = ?",
-                        String.class,
-                        workspace.getId(),
-                        "C-erased"))
-                .isEqualTo("REVOKED");
+        assertThat(slackThreads("C-erased")).isZero();
+        assertThat(consent("C-erased")).isEqualTo("REVOKED");
         // The same manifest is safe after a restart.
         recover(manifest);
         assertThat(slackRows("C-erased")).isZero();
+    }
+
+    private long slackThreads(String channelId) {
+        return Objects.requireNonNull(jdbc.queryForObject(
+                "SELECT count(*) FROM slack_thread WHERE workspace_id = ? AND slack_channel_id = ?",
+                Long.class,
+                workspace.getId(),
+                channelId));
+    }
+
+    private @Nullable String consent(String channelId) {
+        return jdbc.queryForObject(
+                "SELECT consent_state FROM slack_monitored_channel WHERE workspace_id = ? AND slack_channel_id = ?",
+                String.class,
+                workspace.getId(),
+                channelId);
     }
 
     private long slackRows(String channelId) {

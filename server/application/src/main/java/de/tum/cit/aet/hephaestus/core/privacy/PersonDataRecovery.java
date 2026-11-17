@@ -31,11 +31,10 @@ import tools.jackson.databind.ObjectMapper;
 
 /**
  * Reapplies the erasures that a database restore undid, from the operator-held manifest: disconnects, then workspace
- * purges, then erased documentation collections, deleted conversation messages, erased Slack channels and Slack messages changed in Slack,
- * then people. It runs only in a
- * server with background work off, so no scheduled task, claimer or inbox subscriber writes while it skips the purge's
- * quiescence guards; the {@code erasure-recovery} profile turns background work off, and startup stops if anything
- * turns it on again.
+ * purges, then erased documentation collections, deleted conversation messages, erased Slack channels and Slack
+ * messages changed in Slack, then people. It runs only in a server with background work off, so no scheduled task,
+ * claimer or inbox subscriber writes while it skips the purge's quiescence guards; the {@code erasure-recovery} profile
+ * turns background work off, and startup stops if anything turns it on again.
  */
 @Component
 @Profile("erasure-recovery")
