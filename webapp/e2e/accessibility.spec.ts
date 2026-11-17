@@ -439,13 +439,16 @@ base.describe("keyboard", () => {
 	});
 });
 
-/** Presses Tab until the control has focus, the way a person without a pointer reaches it. */
+/**
+ * Presses Tab until the control has focus, the way a person without a pointer reaches it. A control that already has
+ * focus, such as the field a panel opens on, needs no press: without a focus trap, a press would leave it for the page.
+ */
 async function tabTo(page: Page, target: Locator) {
 	for (let step = 0; step < 40; step += 1) {
-		await page.keyboard.press("Tab");
 		if (await target.evaluate((element) => element === document.activeElement)) {
 			return;
 		}
+		await page.keyboard.press("Tab");
 	}
 	throw new Error("Tab never reached the control");
 }
