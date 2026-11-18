@@ -27,7 +27,7 @@ public class AgentSandboxReaper {
     /** The most sandboxes one tick takes back or deletes, so a backlog cannot hold the scheduler thread for long. */
     static final int BATCH = 100;
 
-    static final List<String> REASONS = List.of("expired", "start_limit", "idle", "lost", "orphan");
+    static final List<String> REASONS = List.of("expired", "start_limit", "held", "idle", "lost", "orphan");
 
     private final AgentSandboxRepository sandboxes;
     private final AgentSandboxes owner;

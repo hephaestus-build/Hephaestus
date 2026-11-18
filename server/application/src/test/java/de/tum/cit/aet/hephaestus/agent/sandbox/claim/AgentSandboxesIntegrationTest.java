@@ -14,8 +14,10 @@ import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenVerifier;
 import de.tum.cit.aet.hephaestus.agent.attempt.SandboxJwt;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunBand;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunHold;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunLease;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunRef;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunStopReason;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.observability.StructuredLogKeys;
@@ -379,6 +381,77 @@ class AgentSandboxesIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void shouldTakeBackOnlyTheSandboxOfAReviewWhoseHoldIsInForceAndKeepItsNewOneWhenTheHoldLifts() {
+        String held = "review:" + UUID.randomUUID();
+        String waiting = "review:" + UUID.randomUUID();
+        String ranOut = "review:" + UUID.randomUUID();
+        var heldRun = queueReview(held);
+        queueRun(waiting);
+        var ranOutRun = queueReview(ranOut);
+        // The claim found the workspace's budget spent and held the run for an hour.
+        hold(heldRun, Duration.ofHours(1));
+        // This hold ran out on its own: the run is due again, and its hold reason stays until a claim clears it.
+        hold(ranOutRun, Duration.ofHours(1));
+        jdbc.update(
+                "UPDATE agent_run SET available_at = clock_timestamp() - interval '1 second' WHERE id = ?",
+                ranOutRun.id());
+        var heldSandbox = ensure(held, AgentSandboxKind.REVIEW);
+        var waitingSandbox = ensure(waiting, AgentSandboxKind.REVIEW);
+        var ranOutSandbox = ensure(ranOut, AgentSandboxKind.REVIEW);
+        for (var sandbox : List.of(heldSandbox, waitingSandbox, ranOutSandbox)) sandboxes.authenticate(token(sandbox));
+        waitPast(Duration.ofSeconds(AgentSandboxRepository.HELD_GRACE_SECONDS));
+
+        var takenBack = takenBack(() -> reaper(Duration.ofHours(1)).reap(), claimName(heldSandbox));
+
+        assertThat(repository.findLive(workspace, held))
+                .as("a held review frees its sandbox at the next tick, while it is not idle")
+                .isEmpty();
+        assertThat(takenBack)
+                .singleElement()
+                .satisfies(event -> assertThat(event).containsEntry("sandbox.reason", "held"));
+        assertThat(repository.findLive(workspace, waiting))
+                .as("a review that is due keeps its sandbox")
+                .isPresent();
+        assertThat(repository.findLive(workspace, ranOut))
+                .as("a review whose hold ran out is due, so it keeps its sandbox")
+                .isPresent();
+
+        transactions.executeWithoutResult(status -> runs.releaseHolds(workspace, AgentRunHold.BUDGET));
+        var fresh = ensure(held, AgentSandboxKind.REVIEW);
+        sandboxes.authenticate(token(fresh));
+        reaper(Duration.ofHours(1)).reap();
+
+        assertThat(repository.findLive(workspace, held))
+                .as("the review's new sandbox stays once its hold is lifted")
+                .hasValueSatisfying(row -> assertThat(row.getId()).isEqualTo(fresh.id()));
+    }
+
+    @Test
+    void shouldKeepAHeldReviewsSandboxThatLeasedARunJustNow() {
+        String subject = "review:" + UUID.randomUUID();
+        var run = queueReview(subject);
+        var sandbox = ensure(subject, AgentSandboxKind.REVIEW);
+        sandboxes.authenticate(token(sandbox));
+        hold(run, Duration.ofHours(1));
+
+        reaper(Duration.ofHours(1)).reap();
+
+        assertThat(repository.findLive(workspace, subject))
+                .as("a lease that commits while the reaper reads must not lose its sandbox")
+                .isPresent();
+    }
+
+    private AgentRunRef queueReview(String subject) {
+        return Objects.requireNonNull(transactions.execute(
+                status -> runs.enqueue(workspace, AgentRunKind.REVIEW, AgentRunBand.BATCH, subject, null)));
+    }
+
+    private void hold(AgentRunRef run, Duration delay) {
+        transactions.executeWithoutResult(
+                status -> assertThat(runs.hold(run, AgentRunHold.BUDGET, delay)).isTrue());
+    }
+
+    @Test
     void shouldKeepAConversationsSandboxWarmUntilItsOwnIdleLimit() {
         var conversation = ensure("conversation:" + UUID.randomUUID(), AgentSandboxKind.CONVERSATION);
         sandboxes.authenticate(token(conversation));
@@ -695,7 +768,16 @@ class AgentSandboxesIntegrationTest extends BaseIntegrationTest {
 
     /** The fields of each {@code agent.sandbox.ended} record of the named sandbox that the action wrote. */
     private static List<Map<String, Object>> ended(Runnable action, String sandboxName) {
-        var logger = (Logger) LoggerFactory.getLogger(AgentSandboxes.class);
+        return events(action, AgentSandboxes.class, "agent.sandbox.ended", sandboxName);
+    }
+
+    private static List<Map<String, Object>> takenBack(Runnable action, String sandboxName) {
+        return events(action, AgentSandboxReaper.class, "agent.sandbox.taken_back", sandboxName);
+    }
+
+    private static List<Map<String, Object>> events(
+            Runnable action, Class<?> source, String eventName, String sandboxName) {
+        var logger = (Logger) LoggerFactory.getLogger(source);
         var appender = new ListAppender<ILoggingEvent>();
         appender.start();
         logger.addAppender(appender);
@@ -710,7 +792,7 @@ class AgentSandboxesIntegrationTest extends BaseIntegrationTest {
             if (event.getKeyValuePairs() == null) continue;
             var fields = new HashMap<String, Object>();
             event.getKeyValuePairs().forEach(pair -> fields.put(pair.key, pair.value));
-            if ("agent.sandbox.ended".equals(fields.get("event.name"))
+            if (eventName.equals(fields.get("event.name"))
                     && sandboxName.equals(fields.get(StructuredLogKeys.SANDBOX_NAME))) records.add(fields);
         }
         return records;
