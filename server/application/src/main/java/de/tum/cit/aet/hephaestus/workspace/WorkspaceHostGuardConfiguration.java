@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.workspace;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceSubdomainProperties;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.core.security.SecurityHeaders;
 import de.tum.cit.aet.hephaestus.workspace.validation.WorkspaceSlugValidator;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -21,7 +22,8 @@ import org.springframework.web.util.UrlPathHelper;
 
 /**
  * The host rules of workspace subdomains (ADR 0053), decided before any other filter and without a lookup of a
- * workspace or its membership:
+ * workspace or its membership. A response that the rules give themselves carries the header set of every other
+ * response ({@link SecurityHeaders}):
  *
  * <ul>
  *   <li>A host under the base domain whose label no workspace can have is not found.</li>
@@ -41,8 +43,10 @@ class WorkspaceHostGuardConfiguration {
     private static final Pattern WORKSPACE_PATH = Pattern.compile("/w/([^/]+)(/.*)?");
 
     @Bean
-    FilterRegistrationBean<OncePerRequestFilter> workspaceHostGuardFilter(WorkspaceSubdomainProperties properties) {
-        var registration = new FilterRegistrationBean<OncePerRequestFilter>(new Filter(properties.baseDomain()));
+    FilterRegistrationBean<OncePerRequestFilter> workspaceHostGuardFilter(
+            WorkspaceSubdomainProperties properties, SecurityHeaders securityHeaders) {
+        var registration =
+                new FilterRegistrationBean<OncePerRequestFilter>(new Filter(properties.baseDomain(), securityHeaders));
         registration.setOrder(Ordered.HIGHEST_PRECEDENCE);
         return registration;
     }
@@ -50,9 +54,11 @@ class WorkspaceHostGuardConfiguration {
     static final class Filter extends OncePerRequestFilter {
 
         private final String baseDomain;
+        private final SecurityHeaders securityHeaders;
 
-        Filter(String baseDomain) {
+        Filter(String baseDomain, SecurityHeaders securityHeaders) {
             this.baseDomain = baseDomain;
+            this.securityHeaders = securityHeaders;
         }
 
         @Override
@@ -67,6 +73,7 @@ class WorkspaceHostGuardConfiguration {
                 String label = host.substring(0, host.length() - baseDomain.length() - 1);
                 if (!WorkspaceSlugValidator.isAssignable(label)
                         || APEX_ONLY.matcher(decoded).matches()) {
+                    securityHeaders.write(request, response);
                     response.sendError(HttpServletResponse.SC_NOT_FOUND);
                     return;
                 }
@@ -76,6 +83,7 @@ class WorkspaceHostGuardConfiguration {
                 if (workspacePath.matches() && WorkspaceSlugValidator.isAssignable(workspacePath.group(1))) {
                     String tail = workspacePath.group(2) == null ? "/" : workspacePath.group(2);
                     String query = request.getQueryString() == null ? "" : "?" + request.getQueryString();
+                    securityHeaders.write(request, response);
                     response.setStatus(HttpServletResponse.SC_PERMANENT_REDIRECT);
                     response.setHeader(HttpHeaders.CACHE_CONTROL, "no-store");
                     response.setHeader(
