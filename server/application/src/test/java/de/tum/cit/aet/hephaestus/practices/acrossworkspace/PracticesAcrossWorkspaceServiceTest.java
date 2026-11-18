@@ -269,11 +269,15 @@ class PracticesAcrossWorkspaceServiceTest {
     @Test
     void shouldNotCountADeveloperWhoseOnlyObservationsWereSealedInFeedbackModeOff() {
         result(reviewed, READER, 1, 5, ResultOutcome.MET);
+        // Two more counted developers keep the count at 3 or more, which the page shows (ADR 0112).
+        result(reviewed, QUIET, 2, 5, ResultOutcome.MET);
+        result(reviewed, STEADY, 3, 5, ResultOutcome.MET);
+        when(memberships.isActiveVisibleMember(1L, STEADY)).thenReturn(true);
         result(reviewed, PROLIFIC, 10, 5, ResultOutcome.MET, FeedbackMode.OFF);
 
         var tiles = service.readTiles(context, PracticesAcrossWorkspaceWindow.DAYS_30);
 
-        assertThat(tiles.developersWithAStandingInWindow()).isEqualTo(1);
+        assertThat(tiles.developersWithAStandingInWindow()).isEqualTo(3);
         var prolific =
                 standings.getStandingSnapshots(1L, PROLIFIC, List.of(now)).getFirst();
         assertThat(Objects.requireNonNull(prolific.practices().get(reviewed.getSlug()))
