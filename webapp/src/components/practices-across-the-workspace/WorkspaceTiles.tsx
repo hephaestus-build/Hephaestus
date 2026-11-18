@@ -27,7 +27,6 @@ export interface WorkspaceTilesProps {
 interface TileRead {
 	figure: WorkspaceTileFigure;
 	qualifier: string;
-	noneSentence?: string;
 }
 
 interface TileDef {
@@ -97,7 +96,6 @@ const TILE_DEFS: readonly TileDef[] = [
 		read: ({ openFeedback }) =>
 			openFeedback && {
 				figure: openFeedback,
-				noneSentence: "Most developers here have no open feedback.",
 				qualifier: `${openFeedback.yours === 1 ? "piece" : "pieces"} open now`,
 			},
 	},

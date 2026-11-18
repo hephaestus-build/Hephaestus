@@ -54,7 +54,7 @@ export const Dark: Story = { globals: { theme: "dark" } };
 
 /**
  * A part would hold 1 or 2, or everyone sits in one part: the server sends the total only, and the
- * bar is one hatched track that says why without saying which.
+ * bar is one dotted track that says why without saying which.
  */
 export const SpreadHidden: Story = {
 	args: { split: totalOnly(28), yourStanding: "STRENGTH" },

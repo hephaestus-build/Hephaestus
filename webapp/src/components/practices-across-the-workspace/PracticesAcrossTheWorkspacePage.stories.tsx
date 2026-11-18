@@ -23,7 +23,7 @@ import {
 } from "@/components/practice-focus/PracticeFocusFooter";
 import { EARLIER_REVIEWS_COUNTED } from "@/components/practice-vocabulary/standing-basis-defs";
 
-import { FIGURES_LOAD_ERROR, GROUPS_LOAD_ERROR } from "./across-workspace-copy";
+import { FIGURES_LOAD_ERROR, GROUPS_LOAD_ERROR, NO_TYPICAL_RANGE } from "./across-workspace-copy";
 import {
 	PracticesAcrossTheWorkspacePage,
 	type PracticesAcrossTheWorkspacePageProps,
@@ -83,7 +83,7 @@ export const Default: Story = {
 		const about = within(await openTip(canvas, "About this page"));
 		await expect(about.getByText(/can be wrong/u)).toBeVisible();
 		await closeTip();
-		// The legend's (i) says each developer counts once, and what a hatched bar means.
+		// The legend's (i) says each developer counts once, and what a dotted bar means.
 		const bars = within(await openTip(canvas, "About the bars"));
 		await expect(bars.getByText(/each once\./u)).toBeVisible();
 		await expect(bars.getByText(/split hidden, so no part shows fewer than 3\./u)).toBeVisible();
@@ -214,13 +214,8 @@ export const NobodyYet: Story = {
 	},
 	play: async ({ canvas }) => {
 		await expect(canvas.getByText(/0 developers with a standing/u)).toBeVisible();
-		await expect(
-			canvas.getAllByText(
-				"Fewer than 3 developers are counted here, so there is no typical range.",
-			),
-		).toHaveLength(3);
-		// Nobody has open feedback, so that tile says so in place of a band at nought.
-		await expect(canvas.getByText("Most developers here have no open feedback.")).toBeVisible();
+		// Every tile, open feedback too: the server sends no range, and the tile does not say why.
+		await expect(canvas.getAllByText(NO_TYPICAL_RANGE)).toHaveLength(4);
 		// Once for the whole table, not once per group.
 		await expect(canvas.getAllByText("No developer has a standing yet.")).toHaveLength(1);
 	},

@@ -95,6 +95,12 @@ const developers = (n: number | null) =>
 export const tileCohortText = (tiles: PracticesAcrossWorkspaceTiles) =>
 	`${developers(tiles.developersWithAStandingInWindow)} with a standing`;
 
+/**
+ * Under a tile with no typical range. The server withholds a range for more than one reason (ADR
+ * 0112): naming the reason would tell members about the developers it protects.
+ */
+export const NO_TYPICAL_RANGE = "No typical range is shown here.";
+
 /** The answer the figures' (i) leads with; {@link FIGURES_PLAIN} adds how to read a tile. */
 export const FIGURES_LEAD =
 	"The gray band is the typical range, the middle half of developers, and blue is you.";
@@ -104,7 +110,7 @@ export const FIGURES_PLAIN: readonly InfoLine[] = [
 	{ term: "Left:", text: "lower than most.", second: { term: "Right:", text: "higher." } },
 	{ term: "Better:", text: "fewer needing attention, more going well." },
 	{ term: "Open feedback:", text: "open now, not in the period." },
-	{ term: "No band:", text: "fewer than 3 developers have a standing." },
+	{ term: "No band:", text: "no typical range is shown." },
 ];
 
 /**
@@ -146,7 +152,7 @@ export const BARS_LINES: readonly InfoLine[] = [
 		second: { term: "Gray:", text: "no standing, not okay." },
 	},
 	{ term: "You:", text: "somewhere in your part." },
-	{ term: "Hatched:", text: "split hidden, so no part shows fewer than 3." },
+	{ term: "Dotted:", text: "split hidden, so no part shows fewer than 3." },
 ];
 
 /** Under the empty track of a split that counts nobody: no developer has a standing yet. */

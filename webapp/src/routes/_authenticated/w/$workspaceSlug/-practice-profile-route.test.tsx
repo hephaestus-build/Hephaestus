@@ -421,7 +421,7 @@ describe("practice profile route", () => {
 		);
 		await renderProfile();
 
-		await userEvent.click(screen.getByRole("button", { name: "How to read this page" }));
+		await userEvent.click(screen.getByRole("button", { name: "Who can see this page" }));
 		await screen.findByText(
 			/admins see practice results with no name and cannot filter them by person/u,
 		);

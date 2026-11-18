@@ -4,6 +4,7 @@ import { cn } from "cn";
 import type { WorkspaceRange, WorkspaceTile as WorkspaceTileFigure } from "@/api/types.gen";
 import { StatTile } from "@/components/common/StatTile";
 import { NEUTRAL_GREY } from "@/components/practice-vocabulary/standing-counts";
+import { NO_TYPICAL_RANGE } from "@/components/practices-across-the-workspace/across-workspace-copy";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export interface WorkspaceTileProps {
@@ -13,8 +14,6 @@ export interface WorkspaceTileProps {
 	figure: WorkspaceTileFigure;
 	/** What the value counts: "so far", "of your 18 practices". */
 	qualifier: string;
-	/** Said in place of the band and pin when the whole middle half is at nought. */
-	noneSentence?: string;
 }
 
 /**
@@ -28,16 +27,10 @@ const TITLE_BOX = "flex min-h-5 items-center @max-[16rem]:min-h-10";
  * One figure, the reader's own first and the workspace's middle half after, as Apple Health's
  * highlights set a value against "your typical range": the range in words, then as a band on a
  * track from nought with the reader's value pinned on it. The track shows no minimum and no
- * maximum, so no end of it points at one developer. Fewer than 3 developers get no band: the
- * server sends none, since a range of one or two gives their values away.
+ * maximum, so no end of it points at one developer. The server sends no range where it would give
+ * values away (ADR 0112); the tile then draws no band and does not say why.
  */
-export function WorkspaceTile({
-	title,
-	icon,
-	figure,
-	qualifier,
-	noneSentence,
-}: WorkspaceTileProps) {
+export function WorkspaceTile({ title, icon, figure, qualifier }: WorkspaceTileProps) {
 	const { yours } = figure;
 	const middle = figure.middle ?? undefined;
 	return (
@@ -48,26 +41,20 @@ export function WorkspaceTile({
 			qualifier={qualifier}
 		>
 			<div className="mt-auto flex flex-col gap-1.5">
-				{middle !== undefined && middle.high === 0 && noneSentence !== undefined ? (
-					<p className="text-sm text-muted-foreground">{noneSentence}</p>
-				) : (
-					<>
-						<p className="text-sm text-muted-foreground">
-							{middle === undefined ? (
-								"Fewer than 3 developers are counted here, so there is no typical range."
-							) : (
-								<>
-									Typical range:{" "}
-									<span className="font-semibold text-foreground tabular-nums">
-										{rangeText(middle)}
-									</span>
-								</>
-							)}
-						</p>
-						{/* The axis is always there, so the reader's value reads against it; the band once anybody is counted. */}
-						<RangeBar yours={yours} middle={middle} />
-					</>
-				)}
+				<p className="text-sm text-muted-foreground">
+					{middle === undefined ? (
+						NO_TYPICAL_RANGE
+					) : (
+						<>
+							Typical range:{" "}
+							<span className="font-semibold text-foreground tabular-nums">
+								{rangeText(middle)}
+							</span>
+						</>
+					)}
+				</p>
+				{/* The axis is always there, so the reader's value reads against it; the band once anybody is counted. */}
+				<RangeBar yours={yours} middle={middle} />
 			</div>
 		</StatTile>
 	);

@@ -59,7 +59,8 @@ Hephaestus gives feedback on every piece of work it can assess, so experienced p
   The catalog covers scoping, issues, reviews, testing, security, version control, and recorded decisions.
 - **Feedback on the Work**: A comment on the pull request, merge request, or issue.
 - **Practice Page**: Each developer's private view of feedback and progress per practice.
-  Workspace admins see the observations and delivery status behind it, with names only if a workspace owner turns on **Per-person results for admins**.
+  Workspace admins see the observations and delivery status behind it.
+  They see names only with **Per-person results for admins** on.
 - **Ask Hephaestus**: A weekly digest you can turn on arrives in the conversation.
   Developers ask why, ask for an example, or disagree.
   Conversations run in the web app and, if Slack is connected, in a direct message.
