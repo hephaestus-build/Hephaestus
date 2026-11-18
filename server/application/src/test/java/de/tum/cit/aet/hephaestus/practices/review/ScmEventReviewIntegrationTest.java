@@ -642,7 +642,7 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
                 .resultIds()
                 .getFirst();
         jdbc.update("UPDATE issue SET base_ref_oid=NULL WHERE id=?", pull.getId());
-        assertThatThrownBy(() -> source.current(item)).isInstanceOf(ItemCaptureException.class);
+        assertThatThrownBy(() -> source.pin(item, null)).isInstanceOf(ItemCaptureException.class);
         running(older);
 
         var historical = resultStore

@@ -99,17 +99,6 @@ public class ScmItemService implements ItemSource {
         return items.labels(workspaceId, refs.stream().map(ItemRef::itemId).toList());
     }
 
-    @Override
-    public Optional<ItemSnapshot> current(ItemRef item) {
-        try {
-            return Optional.of(pin(item, null));
-        } catch (ItemCaptureException e) {
-            if (e.code() == ItemCaptureCode.ITEM_REMOVED || e.code() == ItemCaptureCode.ITEM_NOT_VISIBLE)
-                return Optional.empty();
-            throw e;
-        }
-    }
-
     /** Syncs the mirror that a repository or a file reads with no transaction, then pins in a short one. */
     @Override
     public ItemSnapshot pin(ItemRef item, @Nullable ItemVersion requested) {

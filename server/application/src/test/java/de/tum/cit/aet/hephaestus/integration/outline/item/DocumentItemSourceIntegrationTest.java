@@ -271,14 +271,15 @@ class DocumentItemSourceIntegrationTest extends BaseIntegrationTest {
         long foreignWorkspace = workspaces
                 .save(WorkspaceTestFixtures.activeWorkspace("doc-foreign-" + UUID.randomUUID()))
                 .getId();
-        assertThat(resolver.current(new ItemRef(
+        assertUnavailable(
+                new ItemRef(
                         foreignWorkspace,
                         fixture.item().itemId(),
                         DocumentEvents.DOCUMENT,
                         fixture.item().sourceId(),
                         null,
-                        null)))
-                .isEmpty();
+                        null),
+                ItemCaptureCode.ITEM_NOT_VISIBLE);
     }
 
     private ReadableDocument readableDocument(String serverUrl) {
@@ -357,7 +358,7 @@ class DocumentItemSourceIntegrationTest extends BaseIntegrationTest {
 
         assertThat(resolver.permits(fixture.item(), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
                 .isFalse();
-        assertThat(resolver.current(fixture.item())).isEmpty();
+        assertUnavailable(fixture.item(), ItemCaptureCode.ITEM_NOT_VISIBLE);
         var capture = resolver.capture(pinned, request());
         assertThat(capture.files()).isEmpty();
         assertThat(capture.citableTexts()).isEmpty();
@@ -387,7 +388,7 @@ class DocumentItemSourceIntegrationTest extends BaseIntegrationTest {
             providers.saveAndFlush(new IdentityProvider(IdentityProviderType.OUTLINE, "https://wiki.example.com"));
         }
 
-        assertThat(resolver.current(fixture.item())).isEmpty();
+        assertUnavailable(fixture.item(), ItemCaptureCode.ITEM_NOT_VISIBLE);
         assertThat(resolver.permits(fixture.item(), SourceUsePurpose.CONVERSATIONAL_MENTORING))
                 .isFalse();
     }
@@ -456,5 +457,12 @@ class DocumentItemSourceIntegrationTest extends BaseIntegrationTest {
         doc.setSlug(documentId);
         doc.setTitle(title);
         return documents.save(doc);
+    }
+
+    private void assertUnavailable(ItemRef item, ItemCaptureCode code) {
+        assertThatThrownBy(() -> resolver.pin(item, null))
+                .isInstanceOfSatisfying(
+                        ItemCaptureException.class,
+                        failure -> assertThat(failure.code()).isEqualTo(code));
     }
 }

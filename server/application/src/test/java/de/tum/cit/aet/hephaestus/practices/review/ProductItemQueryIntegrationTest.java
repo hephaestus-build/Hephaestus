@@ -133,7 +133,7 @@ class ProductItemQueryIntegrationTest extends BaseIntegrationTest {
     void shouldKnowTheStoredRevisionWhenOnlyFieldsOutsideItAreMissing(IdentityProviderType provider) {
         var target = lookup.work(data.scenario().workspace(), provider, true);
         long source = Objects.requireNonNull(target.sourceId());
-        String recorded = items.current(target).orElseThrow().version().value();
+        String recorded = items.pin(target, null).version().value();
         assertThat(recorded)
                 .isEqualTo(ScmVersion.pullRequest("a".repeat(40), "b".repeat(40), "Reviewed work", "Description")
                         .value());

@@ -1058,8 +1058,7 @@ class ReviewEndToEndIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 .filter(source -> source.supports(work.item()))
                 .findFirst()
                 .orElseThrow()
-                .current(work.item())
-                .orElseThrow();
+                .pin(work.item(), null);
         return reviews.request(new ReviewRequest(
                 work.workspace().getId(),
                 work.item().itemId(),

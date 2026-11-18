@@ -15,6 +15,8 @@ import de.tum.cit.aet.hephaestus.integration.core.api.ItemIndexService;
 import de.tum.cit.aet.hephaestus.integration.core.spi.FoundBy;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureCode;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureException;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemEventInput;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemSnapshot;
@@ -29,7 +31,6 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
@@ -85,7 +86,7 @@ class SlackThreadEventSchedulerTest extends BaseUnitTest {
                 .thenReturn(4L);
         when(manager.getTransaction(any())).thenReturn(mock(TransactionStatus.class));
         when(items.upsert(any())).thenReturn(item);
-        when(source.current(item)).thenReturn(Optional.of(snapshot(version)));
+        when(source.pin(item, null)).thenReturn(snapshot(version));
         assertThat(scheduler().sweepNow()).isEqualTo(1);
         var captured = ArgumentCaptor.forClass(ItemEventInput.class);
         verify(items).record(captured.capture());
@@ -110,7 +111,7 @@ class SlackThreadEventSchedulerTest extends BaseUnitTest {
         when(candidates.liveTurnCountSince(7L, "C1", healthy.threadTs(), null)).thenReturn(4L);
         when(manager.getTransaction(any())).thenReturn(mock(TransactionStatus.class));
         when(items.upsert(any())).thenReturn(item);
-        when(source.current(item)).thenReturn(Optional.of(snapshot(version)));
+        when(source.pin(item, null)).thenReturn(snapshot(version));
 
         assertThat(scheduler().sweepNow()).isEqualTo(1);
 
@@ -132,6 +133,23 @@ class SlackThreadEventSchedulerTest extends BaseUnitTest {
         assertThatThrownBy(() -> scheduler().sweepNow()).isInstanceOf(DataAccessResourceFailureException.class);
 
         verify(candidates, never()).liveTurnCount(7L, "C1", second.threadTs());
+    }
+
+    @Test
+    void aThreadWhoseConsentEndedRecordsNoEvent() {
+        String last = (NOW.getEpochSecond() - 1200) + ".000000";
+        var candidate =
+                new ThreadCandidate(7L, 19L, "C1", "Channel", "1690000000.000000", last, null, List.of(55L, 56L));
+        when(candidates.settledCandidates(4)).thenReturn(List.of(candidate));
+        when(candidates.liveTurnCount(7L, "C1", candidate.threadTs())).thenReturn(4L);
+        when(candidates.liveTurnCountSince(7L, "C1", candidate.threadTs(), null))
+                .thenReturn(4L);
+        when(manager.getTransaction(any())).thenReturn(mock(TransactionStatus.class));
+        when(items.upsert(any())).thenReturn(item);
+        when(source.pin(item, null))
+                .thenThrow(new ItemCaptureException(ItemCaptureCode.CONSENT_WITHHELD, "Consent ended"));
+        assertThat(scheduler().sweepNow()).isZero();
+        verify(items, never()).record(any());
     }
 
     @Test

@@ -50,15 +50,14 @@ public class FeedbackTargetResolver {
         var version = new ItemVersion(Objects.requireNonNull(review.getItemVersion()), review.getBaseVersion());
         try {
             var source = sources.sourceFor(item);
-            var snapshot = existing
-                    ? source.current(item).orElseThrow(() -> new TargetUnavailable(FeedbackStopReason.ITEM_GONE))
-                    : source.pin(item, version);
+            // An edit, a retraction or a readback acts on the copy already on the work, whatever its version is now.
+            var snapshot = source.pin(item, existing ? null : version);
             return new FeedbackTarget(item, snapshot.integration(), version);
         } catch (ItemCaptureException failure) {
             switch (failure.code()) {
                 case ITEM_REMOVED -> throw new TargetUnavailable(FeedbackStopReason.ITEM_GONE, failure);
-                case ITEM_NOT_VISIBLE, CONSENT_WITHHELD ->
-                    throw new TargetUnavailable(FeedbackStopReason.APPROVAL_NO_LONGER_ELIGIBLE, failure);
+                case ITEM_NOT_VISIBLE -> throw new TargetUnavailable(FeedbackStopReason.ITEM_NOT_VISIBLE, failure);
+                case CONSENT_WITHHELD -> throw new TargetUnavailable(FeedbackStopReason.CONSENT_WITHHELD, failure);
                 case VERSION_UNAVAILABLE ->
                     throw new TargetUnavailable(FeedbackStopReason.REVIEWED_VERSION_CHANGED, failure);
                 default -> throw failure;

@@ -42,7 +42,7 @@ class ProductItemQueryTest extends BaseUnitTest {
 
         assertThat(query.currentWorkVersion(1, 2))
                 .isEqualTo(new ProductItemQuery.CurrentWorkVersion.Known("opaque-stored-version"));
-        verify(source, never()).current(any());
+        verify(source, never()).pin(any(), any());
     }
 
     @ParameterizedTest

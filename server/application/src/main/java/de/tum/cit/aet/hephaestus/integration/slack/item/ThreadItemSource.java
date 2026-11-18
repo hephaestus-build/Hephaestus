@@ -145,65 +145,71 @@ public class ThreadItemSource implements ItemSource, ItemSourceAccess {
         return Map.copyOf(labels);
     }
 
-    @Override
-    @Transactional(readOnly = true)
-    public Optional<ItemSnapshot> current(ItemRef item) {
-        return currentSnapshot(item);
+    /**
+     * A thread with no live message is removed. A paused channel or a participant whose consent ended withholds it. A
+     * disconnected workspace cannot see it, and neither can this server once it no longer stores the thread or its
+     * words: revoking a channel's consent, retention and erasure delete them, but the thread may still be in Slack.
+     */
+    private ItemSnapshot currentSnapshot(ItemRef item) {
+        Long sourceId = item.sourceId();
+        if (!supports(item) || sourceId == null) throw invisible();
+        var stored = threads.findByWorkspaceIdAndId(item.workspaceId(), sourceId)
+                .orElseThrow(
+                        () -> new ItemCaptureException(ItemCaptureCode.ITEM_NOT_VISIBLE, "Thread is no longer stored"));
+        // Erasing the person who wrote every message clears the thread's last message: its stored words are gone.
+        if (stored.getLastTs() == null)
+            throw new ItemCaptureException(ItemCaptureCode.ITEM_NOT_VISIBLE, "Thread has no stored messages left");
+        var thread = threads.findConsentedCandidateRow(item.workspaceId(), sourceId)
+                .orElseThrow(() -> new ItemCaptureException(
+                        ItemCaptureCode.CONSENT_WITHHELD, "The channel's consent is not active"));
+        var active = connectionFor(item.workspaceId(), thread).orElseThrow(ThreadItemSource::invisible);
+        switch (projection.threadReadability(
+                item.workspaceId(), thread.getSlackChannelId(), thread.getSlackThreadTs())) {
+            case NOT_FOUND -> throw new ItemCaptureException(ItemCaptureCode.ITEM_REMOVED, "Thread was removed");
+            case CONSENT_NOT_ACTIVE ->
+                throw new ItemCaptureException(
+                        ItemCaptureCode.CONSENT_WITHHELD, "A participant's consent is not active");
+            // The turn's current words come back with the next sync. Without them it reads as an empty reply.
+            case WORDS_ERASED ->
+                throw new ItemCaptureException(ItemCaptureCode.SOURCE_NOT_READY, "A turn's words are not stored yet");
+            case READABLE -> {}
+        }
+        long providerId =
+                providers.findProviderId("SLACK", "https://slack.com").orElseThrow(ThreadItemSource::invisible);
+        var payload =
+                projection.threadPayload(item.workspaceId(), thread.getSlackChannelId(), thread.getSlackThreadTs());
+        var roles = messages
+                .findThreadMessages(
+                        item.workspaceId(), thread.getSlackChannelId(), thread.getSlackThreadTs(), Pageable.unpaged())
+                .stream()
+                .filter(row -> row.authorAccountId() != null && row.authorSlackUserId() != null)
+                .map(row -> new RoleHolder(
+                        AboutRole.AUTHOR,
+                        new PersonIdentity(
+                                providerId, Objects.requireNonNull(row.authorSlackUserId()), row.slackTeamId()),
+                        true,
+                        false))
+                .distinct()
+                .toList();
+        return new ItemSnapshot(
+                item,
+                ThreadEvents.version(mapper.writeValueAsBytes(payload), thread.getLastTs()),
+                new IntegrationRef(IntegrationKind.SLACK, item.workspaceId(), active.getInstanceKey(), active.getId()),
+                Map.of(),
+                roles,
+                new ItemLabel(
+                        item.itemId(),
+                        "Conversation thread",
+                        "Conversation thread",
+                        "thread",
+                        null,
+                        thread.getSlackChannelName(),
+                        null,
+                        IntegrationKind.SLACK));
     }
 
-    private Optional<ItemSnapshot> currentSnapshot(ItemRef item) {
-        if (!supports(item)) return Optional.empty();
-        Long sourceId = item.sourceId();
-        if (sourceId == null) return Optional.empty();
-        return threads.findConsentedCandidateRow(item.workspaceId(), sourceId)
-                .flatMap(thread -> connectionFor(item.workspaceId(), thread)
-                        .filter(active -> projection.threadReadability(
-                                        item.workspaceId(), thread.getSlackChannelId(), thread.getSlackThreadTs())
-                                == ThreadProjection.ThreadReadability.READABLE)
-                        .flatMap(active -> providers
-                                .findProviderId("SLACK", "https://slack.com")
-                                .map(providerId -> {
-                                    var payload = projection.threadPayload(
-                                            item.workspaceId(), thread.getSlackChannelId(), thread.getSlackThreadTs());
-                                    var roles = messages
-                                            .findThreadMessages(
-                                                    item.workspaceId(),
-                                                    thread.getSlackChannelId(),
-                                                    thread.getSlackThreadTs(),
-                                                    Pageable.unpaged())
-                                            .stream()
-                                            .filter(row ->
-                                                    row.authorAccountId() != null && row.authorSlackUserId() != null)
-                                            .map(row -> new RoleHolder(
-                                                    AboutRole.AUTHOR,
-                                                    new PersonIdentity(
-                                                            providerId,
-                                                            Objects.requireNonNull(row.authorSlackUserId()),
-                                                            row.slackTeamId()),
-                                                    true,
-                                                    false))
-                                            .distinct()
-                                            .toList();
-                                    return new ItemSnapshot(
-                                            item,
-                                            ThreadEvents.version(mapper.writeValueAsBytes(payload), thread.getLastTs()),
-                                            new IntegrationRef(
-                                                    IntegrationKind.SLACK,
-                                                    item.workspaceId(),
-                                                    active.getInstanceKey(),
-                                                    active.getId()),
-                                            Map.of(),
-                                            roles,
-                                            new ItemLabel(
-                                                    item.itemId(),
-                                                    "Conversation thread",
-                                                    "Conversation thread",
-                                                    "thread",
-                                                    null,
-                                                    thread.getSlackChannelName(),
-                                                    null,
-                                                    IntegrationKind.SLACK));
-                                })));
+    private static ItemCaptureException invisible() {
+        return new ItemCaptureException(ItemCaptureCode.ITEM_NOT_VISIBLE, "Thread is not available");
     }
 
     private Optional<Connection> connectionFor(long workspaceId, SlackThreadRepository.SettledCandidateRow thread) {
@@ -213,11 +219,9 @@ public class ThreadItemSource implements ItemSource, ItemSourceAccess {
     }
 
     @Override
-    @Transactional(readOnly = true)
+    @Transactional(readOnly = true, noRollbackFor = ItemCaptureException.class)
     public ItemSnapshot pin(ItemRef item, @Nullable ItemVersion requested) {
-        ItemSnapshot snapshot = currentSnapshot(item)
-                .orElseThrow(
-                        () -> new ItemCaptureException(ItemCaptureCode.ITEM_NOT_VISIBLE, "Thread is not available"));
+        ItemSnapshot snapshot = currentSnapshot(item);
         if (requested != null && !requested.equals(snapshot.version()))
             throw new ItemCaptureException(ItemCaptureCode.VERSION_UNAVAILABLE, "Thread version changed");
         return snapshot;

@@ -21,8 +21,6 @@ public interface ItemSource {
 
     Map<Long, ItemLabel> labels(long workspaceId, Collection<ItemRef> items);
 
-    Optional<ItemSnapshot> current(ItemRef item);
-
     /**
      * The version {@link #pin} would pin now, read from the stored work alone, without a snapshot, a capture or a
      * provider call. Empty where the source states no such version; unavailable work fails as {@link #pin} does.
@@ -31,6 +29,13 @@ public interface ItemSource {
         return Optional.empty();
     }
 
+    /**
+     * The work as it is now, or at {@code requested}. A source says why it has no snapshot with the
+     * {@link ItemCaptureException} code: {@link ItemCaptureCode#ITEM_REMOVED} when the work was deleted,
+     * {@link ItemCaptureCode#ITEM_NOT_VISIBLE} when this server may no longer read it, and
+     * {@link ItemCaptureCode#CONSENT_WITHHELD} when consent to read it ended. A caller maps each code to its own reason,
+     * because a lost permission is not removed work.
+     */
     ItemSnapshot pin(ItemRef item, @Nullable ItemVersion requested);
 
     /**

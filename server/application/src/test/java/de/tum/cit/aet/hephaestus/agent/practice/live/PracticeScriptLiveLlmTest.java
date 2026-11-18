@@ -646,7 +646,7 @@ class PracticeScriptLiveLlmTest extends AbstractWorkspaceIntegrationTest {
                 .filter(candidate -> candidate.supports(item))
                 .findFirst()
                 .orElseThrow();
-        var pinned = source.current(item).orElseThrow();
+        var pinned = source.pin(item, null);
         long actor = accountId(developer);
         var reviewId = reviews.request(new ReviewRequest(
                 job.getWorkspaceId(),

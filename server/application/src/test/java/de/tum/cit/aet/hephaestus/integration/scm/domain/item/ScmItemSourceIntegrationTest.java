@@ -381,7 +381,7 @@ class ScmItemSourceIntegrationTest extends BaseIntegrationTest {
         assertThat(pullSnapshot.state()).containsEntry("state", "OPEN").containsEntry("draftStatus", "NOT_DRAFT");
         assertPublishesDeclaredState(issueSnapshot);
         assertPublishesDeclaredState(pullSnapshot);
-        assertPublishesDeclaredState(sources.current(pullRef).orElseThrow());
+        assertPublishesDeclaredState(sources.pin(pullRef, null));
         assertThat(pullSnapshot.label().noun())
                 .isEqualTo(type == IdentityProviderType.GITLAB ? "merge request" : "pull request");
         assertThat(pullSnapshot.roles()).anySatisfy(role -> {
@@ -615,15 +615,15 @@ class ScmItemSourceIntegrationTest extends BaseIntegrationTest {
         var foreign = workspaces.saveAndFlush(WorkspaceTestFixtures.activeWorkspace("foreign-" + UUID.randomUUID()));
         var spoof = new ItemRef(
                 foreign.getId(), issueRef.itemId(), issueRef.kind(), issueRef.sourceId(), issueRef.parentId(), null);
-        assertThat(sources.current(spoof)).isEmpty();
+        assertUnavailable(spoof, ItemCaptureCode.ITEM_NOT_VISIBLE);
         writer.remove(holder.workspaceId(), issueRef.itemId(), Instant.now());
         var removedLabel = Objects.requireNonNull(
                 sources.labels(holder.workspaceId(), List.of(issueRef)).get(issueRef.itemId()));
         assertThat(removedLabel.title()).isEqualTo("An issue");
         assertThat(removedLabel.url()).isNull();
-        assertThat(sources.current(issueRef)).isEmpty();
+        assertUnavailable(issueRef, ItemCaptureCode.ITEM_REMOVED);
         writer.restore(holder.workspaceId(), issueRef.itemId());
-        assertThat(sources.current(issueRef)).isPresent();
+        assertThat(sources.pin(issueRef, null).item()).isEqualTo(issueRef);
 
         // It follows the pinned version through a base change, a closing-issue edit and a description-only edit.
         var rebased = sources.pin(pullRef, null).version();
@@ -1179,7 +1179,7 @@ class ScmItemSourceIntegrationTest extends BaseIntegrationTest {
                 .orElseThrow();
         monitor.setNativeId(fixture.repository().getNativeId() == 13L ? 14L : 13L);
         monitors.saveAndFlush(monitor);
-        assertThat(sources.current(item)).isEmpty();
+        assertUnavailable(item, ItemCaptureCode.ITEM_NOT_VISIBLE);
 
         transactions.executeWithoutResult(
                 ignored -> publisher.publishEvent(new ItemSourceObserved(item.workspaceId(), item.itemId())));
@@ -1230,8 +1230,7 @@ class ScmItemSourceIntegrationTest extends BaseIntegrationTest {
         assertThatThrownBy(() -> targets.resolve(pending))
                 .isInstanceOfSatisfying(
                         FeedbackTargetResolver.TargetUnavailable.class,
-                        refused ->
-                                assertThat(refused.reason()).isEqualTo(FeedbackStopReason.APPROVAL_NO_LONGER_ELIGIBLE));
+                        refused -> assertThat(refused.reason()).isEqualTo(FeedbackStopReason.ITEM_NOT_VISIBLE));
         assertThat(itemRows.findByIdAndWorkspaceId(holder.itemId(), workspaceId))
                 .hasValueSatisfying(kept -> assertThat(kept.getRemovedAt()).isNull());
 
@@ -1856,5 +1855,12 @@ class ScmItemSourceIntegrationTest extends BaseIntegrationTest {
                 .allSatisfy(dimension -> assertThat(dimension.values())
                         .extracting(ReviewStateValue::value)
                         .contains(snapshot.state().get(dimension.key())));
+    }
+
+    private void assertUnavailable(ItemRef item, ItemCaptureCode code) {
+        assertThatThrownBy(() -> sources.pin(item, null))
+                .isInstanceOfSatisfying(
+                        ItemCaptureException.class,
+                        failure -> assertThat(failure.code()).isEqualTo(code));
     }
 }

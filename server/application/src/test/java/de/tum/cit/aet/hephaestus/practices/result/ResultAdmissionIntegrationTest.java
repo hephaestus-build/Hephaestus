@@ -245,7 +245,7 @@ class ResultAdmissionIntegrationTest extends AbstractResultAdmissionIntegrationT
                 null));
         doThrow(new AssertionError("Current source materialization is outside this work contract"))
                 .when(productItems)
-                .current(item);
+                .pin(item, null);
         new TransactionTemplate(transactions)
                 .executeWithoutResult(ignored -> assertThat(currentness.prepareClaim(
                                 item.workspaceId(),
@@ -996,7 +996,6 @@ class ResultAdmissionIntegrationTest extends AbstractResultAdmissionIntegrationT
         doReturn(snapshot).when(productItems).pin(eq(ref), eq(version));
         // Event admission pins the occasion; this stub stands for a source that retained it.
         doReturn(snapshot).when(productItems).pinOccasion(eq(ref), eq(version), any(UUID.class));
-        doReturn(Optional.of(snapshot)).when(productItems).current(ref);
         doReturn(new ProductItemQuery.CurrentWorkVersion.Known(version.value()))
                 .when(productItems)
                 .currentWorkVersion(workspace, ref.itemId());

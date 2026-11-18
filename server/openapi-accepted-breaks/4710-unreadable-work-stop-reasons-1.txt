@@ -1,0 +1,3 @@
+# #4710: feedback on unreadable work names why it was withheld; APPROVAL_NO_LONGER_ELIGIBLE is removed, and stored rows read ITEM_NOT_VISIBLE.
+# A client filters by ITEM_NOT_VISIBLE or CONSENT_WITHHELD instead. .changeset/unreadable-work-stop-reasons.md tells API clients.
+in API GET /workspaces/{workspaceSlug}/practices/reviews/feedback removed the enum value `APPROVAL_NO_LONGER_ELIGIBLE` from the property `items/` of the `query` request parameter `stopReason`

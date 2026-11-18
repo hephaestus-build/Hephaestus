@@ -33,7 +33,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.Set;
 import org.jspecify.annotations.Nullable;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -128,24 +127,31 @@ public class DocumentItemSource implements ItemSource, ItemSourceAccess {
         return Map.copyOf(labels);
     }
 
-    @Override
-    @Transactional(readOnly = true)
-    public Optional<ItemSnapshot> current(ItemRef item) {
-        return currentSnapshot(item);
-    }
-
-    private Optional<ItemSnapshot> currentSnapshot(ItemRef item) {
-        if (!supports(item)) return Optional.empty();
+    /**
+     * Only Outline's tombstone says a document is gone. A document that is not stored at all left with its collection
+     * or connection, and one this server may not read for its people or connection is not visible.
+     */
+    private ItemSnapshot currentSnapshot(ItemRef item) {
         Long sourceId = item.sourceId();
-        if (sourceId == null || !permission.permits(item.workspaceId(), sourceId)) return Optional.empty();
+        if (!supports(item) || sourceId == null)
+            throw new ItemCaptureException(ItemCaptureCode.ITEM_NOT_VISIBLE, "Document is not available");
+        if (!documents.existsByWorkspaceIdAndIdAndDeletedAtIsNull(item.workspaceId(), sourceId)) {
+            if (documents.existsByWorkspaceIdAndIdAndDeletedAtIsNotNull(item.workspaceId(), sourceId))
+                throw new ItemCaptureException(ItemCaptureCode.ITEM_REMOVED, "Document was removed");
+            throw new ItemCaptureException(ItemCaptureCode.ITEM_NOT_VISIBLE, "Document is no longer stored");
+        }
+        if (!permission.permits(item.workspaceId(), sourceId))
+            throw new ItemCaptureException(ItemCaptureCode.ITEM_NOT_VISIBLE, "Document is not available");
         return documents
                 .findByWorkspaceIdAndIdForProjection(item.workspaceId(), sourceId)
-                .filter(doc -> !doc.isDeleted() && doc.getContentHash() != null)
-                .map(doc -> snapshot(item, doc));
+                .map(doc -> snapshot(item, doc))
+                .orElseThrow(
+                        () -> new ItemCaptureException(ItemCaptureCode.ITEM_NOT_VISIBLE, "Document is not available"));
     }
 
     private ItemSnapshot snapshot(ItemRef item, OutlineDocument doc) {
         String hash = doc.getContentHash();
+        // Erasure and a failed export both leave a live document without content: neither says the document is gone.
         if (hash == null)
             throw new ItemCaptureException(ItemCaptureCode.SOURCE_NOT_READY, "Document content is unavailable");
         var connection = connections
@@ -185,29 +191,12 @@ public class DocumentItemSource implements ItemSource, ItemSourceAccess {
     }
 
     @Override
-    @Transactional(readOnly = true)
+    @Transactional(readOnly = true, noRollbackFor = ItemCaptureException.class)
     public ItemSnapshot pin(ItemRef item, @Nullable ItemVersion requested) {
-        ItemSnapshot pinned = currentSnapshot(item).orElseThrow(() -> unavailable(item));
+        ItemSnapshot pinned = currentSnapshot(item);
         if (requested != null && !requested.equals(pinned.version()))
             throw new ItemCaptureException(ItemCaptureCode.VERSION_UNAVAILABLE, "Document version changed");
         return pinned;
-    }
-
-    /**
-     * Why a document has no snapshot. A tombstone is Outline's answer that the document is gone, so it stops the review
-     * as removed work and never as missing evidence (ADR 0094 rule 9).
-     */
-    private ItemCaptureException unavailable(ItemRef item) {
-        Long sourceId = item.sourceId();
-        boolean removed = supports(item)
-                && sourceId != null
-                && documents
-                        .findByWorkspaceIdAndIdForProjection(item.workspaceId(), sourceId)
-                        .filter(OutlineDocument::isDeleted)
-                        .isPresent();
-        return removed
-                ? new ItemCaptureException(ItemCaptureCode.ITEM_REMOVED, "Document has been removed")
-                : new ItemCaptureException(ItemCaptureCode.ITEM_NOT_VISIBLE, "Document is not available");
     }
 
     @Override

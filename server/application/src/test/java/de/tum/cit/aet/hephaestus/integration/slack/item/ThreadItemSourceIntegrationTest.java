@@ -24,6 +24,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRep
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureCode;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureException;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRegistration;
@@ -149,14 +150,15 @@ class ThreadItemSourceIntegrationTest extends BaseIntegrationTest {
         long foreignWorkspace = workspaces
                 .save(WorkspaceTestFixtures.activeWorkspace("thread-foreign-" + UUID.randomUUID()))
                 .getId();
-        assertThat(source.current(new ItemRef(
+        assertUnavailable(
+                new ItemRef(
                         foreignWorkspace,
                         fixture.item().itemId(),
                         ThreadEvents.THREAD,
                         fixture.item().sourceId(),
                         null,
-                        null)))
-                .isEmpty();
+                        null),
+                ItemCaptureCode.ITEM_NOT_VISIBLE);
     }
 
     @Test
@@ -213,7 +215,7 @@ class ThreadItemSourceIntegrationTest extends BaseIntegrationTest {
         }
         assertThat(source.permits(fixture.item(), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY, human))
                 .isTrue();
-        assertThat(source.current(fixture.item())).isEmpty();
+        assertUnavailable(fixture.item(), ItemCaptureCode.CONSENT_WITHHELD);
 
         consent.decide(fixture.item().workspaceId(), "U2", true, Instant.now());
         assertThat(source.permits(fixture.item(), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY, human))
@@ -278,7 +280,7 @@ class ThreadItemSourceIntegrationTest extends BaseIntegrationTest {
 
         assertThat(source.permits(fixture.item(), SourceUsePurpose.CONVERSATIONAL_MENTORING))
                 .isFalse();
-        assertThat(source.current(fixture.item())).isEmpty();
+        assertUnavailable(fixture.item(), ItemCaptureCode.ITEM_NOT_VISIBLE);
         assertThat(source.capture(pinned, request()).files()).doesNotContainKey(ThreadCaptureSource.OUTPUT_KEY);
     }
 
@@ -408,4 +410,11 @@ class ThreadItemSourceIntegrationTest extends BaseIntegrationTest {
     }
 
     private record Fixture(ItemRef item, long secondAccountId, long providerId, String teamId) {}
+
+    private void assertUnavailable(ItemRef item, ItemCaptureCode code) {
+        assertThatThrownBy(() -> source.pin(item, null))
+                .isInstanceOfSatisfying(
+                        ItemCaptureException.class,
+                        failure -> assertThat(failure.code()).isEqualTo(code));
+    }
 }
