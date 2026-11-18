@@ -3,7 +3,7 @@
 import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
-import type { SetPracticeRepositoryData, SetPracticeRepositoryResponses } from "../types.gen.js";
+import type { SetPracticeRepositoryData, SetPracticeRepositoryErrors } from "../types.gen.js";
 
 /**
  * Set the practice repository
@@ -12,8 +12,8 @@ import type { SetPracticeRepositoryData, SetPracticeRepositoryResponses } from "
  */
 export const setPracticeRepository = <ThrowOnError extends boolean = false>(
 	options: Options<SetPracticeRepositoryData, ThrowOnError>,
-): RequestResult<SetPracticeRepositoryResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).put<SetPracticeRepositoryResponses, unknown, ThrowOnError>({
+): RequestResult<unknown, SetPracticeRepositoryErrors, ThrowOnError> =>
+	(options.client ?? client).put<unknown, SetPracticeRepositoryErrors, ThrowOnError>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practice-repository",
 		...options,

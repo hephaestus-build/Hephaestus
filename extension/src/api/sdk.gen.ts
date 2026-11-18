@@ -221,6 +221,7 @@ import type {
 	CancelReviewErrors,
 	CancelReviewResponses,
 	ChangePracticeEditedInData,
+	ChangePracticeEditedInErrors,
 	ChangePracticeEditedInResponses,
 	CheckPracticeFilesData,
 	CheckPracticeFilesErrors,
@@ -972,7 +973,7 @@ import type {
 	SetPracticeFeedbackModeErrors,
 	SetPracticeFeedbackModeResponses,
 	SetPracticeRepositoryData,
-	SetPracticeRepositoryResponses,
+	SetPracticeRepositoryErrors,
 	SetReviewScheduleEnabledData,
 	SetReviewScheduleEnabledErrors,
 	SetReviewScheduleEnabledResponses,
@@ -998,6 +999,7 @@ import type {
 	UnlinkIdentityErrors,
 	UnlinkIdentityResponses,
 	UnsetPracticeRepositoryData,
+	UnsetPracticeRepositoryErrors,
 	UnsetPracticeRepositoryResponses,
 	UnsubscribeEmailData,
 	UnsubscribeEmailErrors,
@@ -5838,8 +5840,12 @@ export const getOwnReview = <ThrowOnError extends boolean = false>(
  */
 export const unsetPracticeRepository = <ThrowOnError extends boolean = false>(
 	options: Options<UnsetPracticeRepositoryData, ThrowOnError>,
-): RequestResult<UnsetPracticeRepositoryResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).delete<UnsetPracticeRepositoryResponses, unknown, ThrowOnError>({
+): RequestResult<UnsetPracticeRepositoryResponses, UnsetPracticeRepositoryErrors, ThrowOnError> =>
+	(options.client ?? client).delete<
+		UnsetPracticeRepositoryResponses,
+		UnsetPracticeRepositoryErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practice-repository",
 		...options,
@@ -5864,8 +5870,8 @@ export const getPracticeRepository = <ThrowOnError extends boolean = false>(
  */
 export const setPracticeRepository = <ThrowOnError extends boolean = false>(
 	options: Options<SetPracticeRepositoryData, ThrowOnError>,
-): RequestResult<SetPracticeRepositoryResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).put<SetPracticeRepositoryResponses, unknown, ThrowOnError>({
+): RequestResult<unknown, SetPracticeRepositoryErrors, ThrowOnError> =>
+	(options.client ?? client).put<unknown, SetPracticeRepositoryErrors, ThrowOnError>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practice-repository",
 		...options,
@@ -5882,8 +5888,12 @@ export const setPracticeRepository = <ThrowOnError extends boolean = false>(
  */
 export const changePracticeEditedIn = <ThrowOnError extends boolean = false>(
 	options: Options<ChangePracticeEditedInData, ThrowOnError>,
-): RequestResult<ChangePracticeEditedInResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).put<ChangePracticeEditedInResponses, unknown, ThrowOnError>({
+): RequestResult<ChangePracticeEditedInResponses, ChangePracticeEditedInErrors, ThrowOnError> =>
+	(options.client ?? client).put<
+		ChangePracticeEditedInResponses,
+		ChangePracticeEditedInErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practice-repository/practices/{practiceSlug}/edited-in",
 		...options,

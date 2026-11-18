@@ -2698,6 +2698,7 @@ export const zProblemDetail = z.object({
 	instance: z.string().optional(),
 	jobId: z.int().optional(),
 	maxAgeSeconds: z.int().optional(),
+	problems: z.array(zPracticeFileProblem).optional(),
 	requestId: z
 		.string()
 		.regex(/^[0-9a-f]{32}$/)
