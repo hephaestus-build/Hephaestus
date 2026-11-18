@@ -28,7 +28,11 @@ export const REVIEWED_BY_DESCRIPTIONS: Record<ReviewedByKind, string> = {
 	NOBODY: "This practice offers guidance without automated review.",
 };
 
-export const REVIEWED_BY_ORDER = ["HEPHAESTUS", "PEOPLE", "NOBODY"] as const satisfies readonly ReviewedByKind[];
+export const REVIEWED_BY_ORDER = [
+	"HEPHAESTUS",
+	"PEOPLE",
+	"NOBODY",
+] as const satisfies readonly ReviewedByKind[];
 
 export const MAX_REASON_LENGTH = 500;
 

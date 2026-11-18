@@ -7,7 +7,6 @@ import type {
 	PracticeGroup,
 	PracticeReviewSettings,
 } from "@/api/types.gen";
-import { WorkspacePracticeDetailHoverCard } from "@/components/admin/practice-editor/WorkspacePracticeDetailHoverCard";
 import {
 	type BulkReviewer,
 	MAX_REASON_LENGTH,
@@ -15,6 +14,7 @@ import {
 	REVIEWED_BY_LABELS,
 	REVIEWED_BY_ORDER,
 } from "@/components/admin/practice-editor/reviewed-by";
+import { WorkspacePracticeDetailHoverCard } from "@/components/admin/practice-editor/WorkspacePracticeDetailHoverCard";
 import { currentDefinition } from "@/components/admin/practices/practice-definition-fields";
 import { practiceSetupLevel } from "@/components/admin/practices/practice-search";
 import { PracticeTreeSkeleton } from "@/components/admin/practices/PracticeSkeletons";
@@ -145,7 +145,6 @@ export interface PracticeFeedbackModePageProps {
 	onBulkSetReviewer: (practiceSlugs: string[], reviewer: BulkReviewer) => void;
 }
 
-
 export function PracticeFeedbackModePage({
 	workspaceSlug,
 	settings,
@@ -165,7 +164,9 @@ export function PracticeFeedbackModePage({
 	onBulkSetReviewer,
 }: PracticeFeedbackModePageProps) {
 	const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
-	const [peopleReason, setPeopleReason] = useState<{ slugs: string[]; reason: string } | null>(null);
+	const [peopleReason, setPeopleReason] = useState<{ slugs: string[]; reason: string } | null>(
+		null,
+	);
 	const [openGroups, setOpenGroups] = useState<string[]>([]);
 	const [automaticPromotion, setAutomaticPromotion] = useState<AutomaticPromotion | null>(null);
 
@@ -218,37 +219,40 @@ export function PracticeFeedbackModePage({
 						onSubmit={(event) => {
 							event.preventDefault();
 							if (peopleReason !== null && peopleReason.reason.trim() !== "") {
-								onBulkSetReviewer(peopleReason.slugs, { by: "PEOPLE", reason: peopleReason.reason });
+								onBulkSetReviewer(peopleReason.slugs, {
+									by: "PEOPLE",
+									reason: peopleReason.reason,
+								});
 								setPeopleReason(null);
 							}
 						}}
 					>
-					<Field>
-						<FieldLabel htmlFor="bulk-people-reason">Why do people review them? *</FieldLabel>
-						<Input
-							id="bulk-people-reason"
-							required
-							value={peopleReason?.reason ?? ""}
-							maxLength={MAX_REASON_LENGTH}
-							onChange={(event) =>
-								setPeopleReason((current) =>
-									current === null ? current : { ...current, reason: event.target.value },
-								)
-							}
-						/>
-						<FieldDescription>
-							{PEOPLE_REASON_HINT} Every selected practice records this reason.
-						</FieldDescription>
-					</Field>
-					<AlertDialogFooter>
-						<AlertDialogCancel>Cancel</AlertDialogCancel>
-						<AlertDialogAction
-							type="submit"
-							disabled={peopleReason === null || peopleReason.reason.trim() === ""}
-						>
-							Let people review them
-						</AlertDialogAction>
-					</AlertDialogFooter>
+						<Field>
+							<FieldLabel htmlFor="bulk-people-reason">Why do people review them? *</FieldLabel>
+							<Input
+								id="bulk-people-reason"
+								required
+								value={peopleReason?.reason ?? ""}
+								maxLength={MAX_REASON_LENGTH}
+								onChange={(event) =>
+									setPeopleReason((current) =>
+										current === null ? current : { ...current, reason: event.target.value },
+									)
+								}
+							/>
+							<FieldDescription>
+								{PEOPLE_REASON_HINT} Every selected practice records this reason.
+							</FieldDescription>
+						</Field>
+						<AlertDialogFooter>
+							<AlertDialogCancel>Cancel</AlertDialogCancel>
+							<AlertDialogAction
+								type="submit"
+								disabled={peopleReason === null || peopleReason.reason.trim() === ""}
+							>
+								Let people review them
+							</AlertDialogAction>
+						</AlertDialogFooter>
 					</form>
 				</AlertDialogContent>
 			</AlertDialog>

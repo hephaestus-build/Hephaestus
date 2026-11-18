@@ -4,7 +4,7 @@ import { http, HttpResponse } from "msw";
 import type { ReactNode } from "react";
 import { describe, expect, it } from "vitest";
 
-import type { Practice, ReviewedBy, UpdatePracticeRequest } from "@/api/types.gen";
+import type { Practice, ReviewedBy } from "@/api/types.gen";
 import { definitionOf } from "@/components/admin/practice-editor/fixtures";
 import { mockPracticeOf } from "@/components/admin/practices/fixtures";
 import { Toaster } from "@/components/ui/sonner";
@@ -12,7 +12,7 @@ import { mockPracticeDefinitionOptions } from "@/mocks/fixtures/practice";
 import { server } from "@/mocks/server";
 import { useBulkReviewerChange } from "./use-bulk-reviewer-change";
 
-const LIMIT = { title: "Only the diff", description: "It reads only the diff." };
+const LIMIT = { code: "diff-only", description: "It reads only the diff." };
 
 function practice(slug: string, reviewedBy: Partial<ReviewedBy> = {}): Practice {
 	return mockPracticeOf({
@@ -20,20 +20,30 @@ function practice(slug: string, reviewedBy: Partial<ReviewedBy> = {}): Practice 
 		slug,
 		definition: definitionOf({
 			name: slug,
-			reads: { contract: "2.0.0", sources: [{ source: "scm.pull-request.core", need: "REQUIRED" }] },
+			reads: {
+				contract: "2.0.0",
+				sources: [{ source: "scm.pull-request.core", need: "REQUIRED" }],
+			},
 			reviewedBy: { by: "HEPHAESTUS", humanReason: null, limits: [LIMIT], ...reviewedBy },
 		}),
 	});
 }
 
+function people(reason: string): Partial<ReviewedBy> {
+	return { by: "PEOPLE", humanReason: { code: "people", description: reason } };
+}
+
 /** Answers each save with the practice it received, and keeps every body it saw. */
 function serve(refuse: Record<string, { status: number; detail: string }> = {}) {
-	const saved = new Map<string, UpdatePracticeRequest>();
+	const saved = new Map<string, unknown>();
 	server.use(
 		http.get("*/workspaces/acme/practices/definition-options", () =>
 			HttpResponse.json(mockPracticeDefinitionOptions),
 		),
-		http.get("*/workspaces/acme/practices/:practiceSlug/guidance", () => new HttpResponse(null, { status: 404 })),
+		http.get(
+			"*/workspaces/acme/practices/:practiceSlug/guidance",
+			() => new HttpResponse(null, { status: 404 }),
+		),
 		http.get("*/workspaces/acme/practices", () => HttpResponse.json([])),
 		http.patch("*/workspaces/acme/practices/:practiceSlug", async ({ params, request }) => {
 			const slug = String(params.practiceSlug);
@@ -41,13 +51,8 @@ function serve(refuse: Record<string, { status: number; detail: string }> = {}) 
 			if (refusal) {
 				return HttpResponse.json(refusal, { status: refusal.status });
 			}
-			const body = (await request.json()) as UpdatePracticeRequest;
-			saved.set(slug, body);
-			const changed = practice(slug);
-			return HttpResponse.json({
-				...changed,
-				currentVersion: { ...changed.currentVersion, definition: body.definition },
-			});
+			saved.set(slug, await request.json());
+			return HttpResponse.json(practice(slug));
 		}),
 	);
 	return saved;
@@ -109,26 +114,29 @@ describe("useBulkReviewerChange", () => {
 			});
 		});
 
-		expect([...saved.keys()]).toEqual(["two"]);
+		expect([...saved.keys()]).toStrictEqual(["two"]);
 		await screen.findByText("Changed 1 practice. 1 practice already had this reviewer.");
 	});
 
 	it("rewrites a People reason that differs and leaves one that matches", async () => {
 		const saved = serve();
 		const { result } = renderChange();
-		const people = (reason: string) => ({ by: "PEOPLE" as const, humanReason: { description: reason }, limits: [] });
 
 		await act(async () => {
 			await result.current.setManyReviewers(
-				[practice("same", people("Tone needs a person.")), practice("other", people("Something else."))],
+				[
+					practice("same", people("Tone needs a person.")),
+					practice("other", people("Something else.")),
+				],
 				{ by: "PEOPLE", reason: "  Tone needs a person. " },
 			);
 		});
 
-		expect([...saved.keys()]).toEqual(["other"]);
-		expect(saved.get("other")?.definition.reviewedBy).toMatchObject({
-			by: "PEOPLE",
-			humanReason: { description: "Tone needs a person." },
+		expect([...saved.keys()]).toStrictEqual(["other"]);
+		expect(saved.get("other")).toMatchObject({
+			definition: {
+				reviewedBy: { by: "PEOPLE", humanReason: { description: "Tone needs a person." } },
+			},
 		});
 	});
 

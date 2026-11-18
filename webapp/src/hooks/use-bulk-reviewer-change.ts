@@ -51,12 +51,12 @@ export function useBulkReviewerChange(workspaceSlug: string) {
 			return;
 		}
 		setBulk({ done: 0, total: changing.length });
-		const { sourceContract } = await queryClient.fetchQuery(
+		const { sourceContract } = await queryClient.query(
 			getPracticeDefinitionOptionsOptions({ path: { workspaceSlug } }),
 		);
 		const failed: { name: string; reason: string; stale: boolean }[] = [];
 		for (const [index, practice] of changing.entries()) {
-			const definition = practice.currentVersion.definition;
+			const { definition } = practice.currentVersion;
 			const name = definition?.name ?? practice.slug;
 			if (definition === null) {
 				failed.push({ name, reason: "Its definition cannot be read.", stale: false });
@@ -78,7 +78,11 @@ export function useBulkReviewerChange(workspaceSlug: string) {
 					);
 					await refreshPracticeGuidance(queryClient, workspaceSlug, practice.slug);
 				} catch (error) {
-					failed.push({ name, reason: problemDetailOf(error), stale: problemStatusOf(error) === 409 });
+					failed.push({
+						name,
+						reason: problemDetailOf(error),
+						stale: problemStatusOf(error) === 409,
+					});
 				}
 			}
 			setBulk({ done: index + 1, total: changing.length });
@@ -103,9 +107,12 @@ export function useBulkReviewerChange(workspaceSlug: string) {
 		if (changed === 0) {
 			toast.error(`We could not change ${practices(failed.length)}.${already}`, { description });
 		} else {
-			toast.warning(`Changed ${changed} of ${changing.length}. ${practices(failed.length)} kept their reviewer.${already}`, {
-				description,
-			});
+			toast.warning(
+				`Changed ${changed} of ${changing.length}. ${practices(failed.length)} kept their reviewer.${already}`,
+				{
+					description,
+				},
+			);
 		}
 	};
 
