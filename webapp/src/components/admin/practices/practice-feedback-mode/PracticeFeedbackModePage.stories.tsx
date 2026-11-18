@@ -4,6 +4,7 @@ import { withWidePage } from "@/stories/decorators";
 import { expectSettledVisible } from "@/stories/overlay";
 import { expectNoPageOverflow } from "@/stories/reflow";
 import { Stateful } from "@/stories/stateful";
+import { expectGenuinelyDisabled } from "@/test/controls";
 import { buildFeedbackModeFixture, type FeedbackModeFixture, scaleFixture } from "./fixtures";
 import { PracticeFeedbackModePage } from "./PracticeFeedbackModePage";
 
@@ -430,8 +431,12 @@ export const BulkReviewedByPeopleAsksForAReason: Story = {
 
 		const dialog = within(await screen.findByRole("alertdialog"));
 		const confirm = dialog.getByRole("button", { name: "Let people review them" });
-		await expect(confirm).toBeDisabled();
-		await userEvent.type(dialog.getByLabelText("Why do people review them?"), "Mentors review these in class.");
+		await expectGenuinelyDisabled(confirm);
+		const reason = dialog.getByLabelText(/Why do people review them\?/u);
+		await userEvent.type(reason, "   ");
+		await expectGenuinelyDisabled(confirm);
+		await userEvent.clear(reason);
+		await userEvent.type(reason, "Mentors review these in class.");
 		await userEvent.click(confirm);
 		await expect(args.onBulkSetReviewer).toHaveBeenCalledWith(SELECTED_HYGIENE, {
 			by: "PEOPLE",

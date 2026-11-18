@@ -9,9 +9,13 @@ import type {
 } from "@/api/types.gen";
 import { WorkspacePracticeDetailHoverCard } from "@/components/admin/practice-editor/WorkspacePracticeDetailHoverCard";
 import {
-	currentDefinition,
+	type BulkReviewer,
+	MAX_REASON_LENGTH,
+	PEOPLE_REASON_HINT,
 	REVIEWED_BY_LABELS,
-} from "@/components/admin/practices/practice-definition-fields";
+	REVIEWED_BY_ORDER,
+} from "@/components/admin/practice-editor/reviewed-by";
+import { currentDefinition } from "@/components/admin/practices/practice-definition-fields";
 import { practiceSetupLevel } from "@/components/admin/practices/practice-search";
 import { PracticeTreeSkeleton } from "@/components/admin/practices/PracticeSkeletons";
 import {
@@ -76,8 +80,6 @@ import {
 	feedbackModeSourceSentence,
 	WORKSPACE_DEFAULT_SOURCE,
 } from "@/lib/practice-feedback-mode";
-import type { BulkReviewer } from "@/hooks/use-practice-feedback-mode-mutations";
-
 import { FeedbackModeLadder } from "./FeedbackModeLadder";
 import {
 	countOverrides,
@@ -143,8 +145,6 @@ export interface PracticeFeedbackModePageProps {
 	onBulkSetReviewer: (practiceSlugs: string[], reviewer: BulkReviewer) => void;
 }
 
-const REVIEWER_ORDER = ["HEPHAESTUS", "PEOPLE", "NOBODY"] as const satisfies readonly BulkReviewer["by"][];
-const MAX_REASON_LENGTH = 500;
 
 export function PracticeFeedbackModePage({
 	workspaceSlug,
@@ -165,7 +165,6 @@ export function PracticeFeedbackModePage({
 	onBulkSetReviewer,
 }: PracticeFeedbackModePageProps) {
 	const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
-	// People need a reason, which every selected practice records; the dialog asks for it before the change.
 	const [peopleReason, setPeopleReason] = useState<{ slugs: string[]; reason: string } | null>(null);
 	const [openGroups, setOpenGroups] = useState<string[]>([]);
 	const [automaticPromotion, setAutomaticPromotion] = useState<AutomaticPromotion | null>(null);
@@ -214,10 +213,21 @@ export function PracticeFeedbackModePage({
 							sources and practice script, unused, so Hephaestus can review it again later.
 						</AlertDialogDescription>
 					</AlertDialogHeader>
+					<form
+						className="grid gap-4"
+						onSubmit={(event) => {
+							event.preventDefault();
+							if (peopleReason !== null && peopleReason.reason.trim() !== "") {
+								onBulkSetReviewer(peopleReason.slugs, { by: "PEOPLE", reason: peopleReason.reason });
+								setPeopleReason(null);
+							}
+						}}
+					>
 					<Field>
-						<FieldLabel htmlFor="bulk-people-reason">Why do people review them?</FieldLabel>
+						<FieldLabel htmlFor="bulk-people-reason">Why do people review them? *</FieldLabel>
 						<Input
 							id="bulk-people-reason"
+							required
 							value={peopleReason?.reason ?? ""}
 							maxLength={MAX_REASON_LENGTH}
 							onChange={(event) =>
@@ -226,25 +236,20 @@ export function PracticeFeedbackModePage({
 								)
 							}
 						/>
-						<FieldDescription>Every selected practice records this reason.</FieldDescription>
+						<FieldDescription>
+							{PEOPLE_REASON_HINT} Every selected practice records this reason.
+						</FieldDescription>
 					</Field>
 					<AlertDialogFooter>
 						<AlertDialogCancel>Cancel</AlertDialogCancel>
 						<AlertDialogAction
+							type="submit"
 							disabled={peopleReason === null || peopleReason.reason.trim() === ""}
-							onClick={() => {
-								if (peopleReason !== null) {
-									onBulkSetReviewer(peopleReason.slugs, {
-										by: "PEOPLE",
-										reason: peopleReason.reason,
-									});
-								}
-								setPeopleReason(null);
-							}}
 						>
 							Let people review them
 						</AlertDialogAction>
 					</AlertDialogFooter>
+					</form>
 				</AlertDialogContent>
 			</AlertDialog>
 			<AlertDialog
@@ -576,7 +581,7 @@ function BulkActionBar({
 						/>
 						<DropdownMenuContent align="end">
 							<DropdownMenuGroup>
-								<DropdownMenuLabel>Set every selected practice to</DropdownMenuLabel>
+								<DropdownMenuLabel>Feedback mode</DropdownMenuLabel>
 								{FEEDBACK_MODE_ORDER.map((feedbackMode) => {
 									const { icon: Icon, label } = FEEDBACK_MODE_DEFS[feedbackMode];
 									return (
@@ -594,7 +599,7 @@ function BulkActionBar({
 							<DropdownMenuSeparator />
 							<DropdownMenuGroup>
 								<DropdownMenuLabel>Reviewed by</DropdownMenuLabel>
-								{REVIEWER_ORDER.map((by) => (
+								{REVIEWED_BY_ORDER.map((by) => (
 									<DropdownMenuItem key={by} onClick={() => onSetReviewer(by)}>
 										{REVIEWED_BY_LABELS[by]}
 									</DropdownMenuItem>
