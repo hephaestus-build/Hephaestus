@@ -53,6 +53,7 @@ import { isDeepStrictEqual, parseArgs, parseEnv } from "node:util";
 
 import { readInventory } from "./commit-image-lock.ts";
 import type { ChartImage } from "./kubernetes-chart.ts";
+import { serverDescriptor } from "./lib/buildpack-descriptor.ts";
 import { submitTurn } from "./lib/capacity-chat.ts";
 import { rollOutput } from "./lib/capacity-replay.ts";
 import {
@@ -3116,6 +3117,12 @@ async function buildLocal(registry: string): Promise<ChartImages> {
 	if (runImage === undefined) {
 		throw new Error("cicd.yml pins no run image");
 	}
+	// The JRE pin names the JVM buildpack, so the build reads the descriptor that adds it.
+	const descriptor = path.join(
+		await mkdtemp(path.join(tmpdir(), "server-descriptor-")),
+		"project.toml",
+	);
+	await writeFile(descriptor, serverDescriptor());
 	await run(
 		"pack",
 		[
@@ -3124,7 +3131,7 @@ async function buildLocal(registry: string): Promise<ChartImages> {
 			"--path",
 			jar,
 			"--descriptor",
-			path.join(ROOT, "server", "application", "project.toml"),
+			descriptor,
 			"--run-image",
 			runImage,
 			"--trust-builder",

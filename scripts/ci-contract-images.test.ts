@@ -384,7 +384,7 @@ void describe("ci-contract: images", () => {
 			const directory = await mkdtemp(path.join(tmpdir(), "buildpacks-"));
 			await writeFile(path.join(directory, "hephaestus-application-1.0.0.jar"), "");
 			const calls = path.join(directory, "calls");
-			// The summary fails a build whose log names no Liberica JRE of the .java-version line.
+			// The summary fails a build whose log names no JRE of the .java-version line.
 			const javaVersion = await readFile(".java-version", "utf8");
 			const javaLine = javaVersion.trim();
 			for (const tool of ["pack", "docker"]) {
@@ -405,7 +405,7 @@ void describe("ci-contract: images", () => {
 				MATRIX_PLATFORM: "linux/amd64",
 				PATH: `${directory}${path.delimiter}${process.env.PATH ?? ""}`,
 				PLATFORM_PAIR: "linux-amd64",
-				PROJECT_DESCRIPTOR: "project.toml",
+				PROJECT_DESCRIPTOR: "server/application/project.toml",
 				RUN_IMAGE: "paketobuildpacks/run",
 			};
 
@@ -417,6 +417,8 @@ void describe("ci-contract: images", () => {
 			assert.doesNotMatch(invoked, /--publish/u);
 			assert.doesNotMatch(invoked, /^docker /mu);
 			assert.match(invoked, /^pack build .*--trust-builder/mu);
+			// The build reads the descriptor that adds the JRE pin's JVM buildpack, not project.toml itself.
+			assert.ok(invoked.includes(`--descriptor ${path.join(directory, "project.toml")} `), invoked);
 			assert.match(
 				invoked,
 				/--volume \S+\/buildpack-dependencies\/bindings:\/platform\/bindings:ro/u,
@@ -603,7 +605,7 @@ void test("the App Server image build reads every buildpack dependency from a pi
 		.filter((name) => name.startsWith("buildpack-"))
 		.map((name) => name.slice(0, -".json".length));
 	assert.deepEqual(ids.toSorted(), [
-		"buildpack-liberica-jre",
+		"buildpack-jre",
 		"buildpack-spring-cloud-bindings",
 		"buildpack-syft",
 		"buildpack-tiny-health-checker",

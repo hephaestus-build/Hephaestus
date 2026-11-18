@@ -12,6 +12,7 @@ import {
 	MITIGATED_BELOW,
 	hasBase64Mitigation,
 	serverBuildEnvironment,
+	serverDescriptor,
 	versionBelow,
 } from "./lib/buildpack-descriptor.ts";
 
@@ -326,15 +327,12 @@ if (
 		"server/application/project.toml must not set BP_JVM_VERSION: the buildpack reads Build-Jdk-Spec",
 	);
 }
-const jrePin = asRecord(
-	readJsonFileSync(".github/ci-tools/buildpack-liberica-jre.json"),
-	"buildpack-liberica-jre",
-);
+const jrePin = asRecord(readJsonFileSync(".github/ci-tools/buildpack-jre.json"), "buildpack-jre");
 if (typeof jrePin.version !== "string" || jrePin.version.split(".")[0] !== javaVersion) {
-	throw new Error(
-		".github/ci-tools/buildpack-liberica-jre.json must pin a JRE of the .java-version line",
-	);
+	throw new Error(".github/ci-tools/buildpack-jre.json must pin a JRE of the .java-version line");
 }
+// A JVM buildpack that the pin names must be pinned by digest and fit before paketo-buildpacks/java.
+serverDescriptor();
 const descriptorEnvironment = serverBuildEnvironment();
 if (
 	versionBelow(jrePin.version, MITIGATED_BELOW) &&
