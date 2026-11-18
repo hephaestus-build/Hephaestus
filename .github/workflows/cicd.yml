@@ -1315,7 +1315,7 @@ jobs:
 
   # The image's JVM settings rest on facts that a code or JDK change can break unseen: the AOT cache
   # loads under the chart's options, the memory calculator's class count covers a run without the
-  # cache, and startup stays within its budget (ADR 0067, update of 2026-11-17).
+  # cache, and startup is no slower than main's image (ADR 0067, update of 2026-11-17).
   Server-image:
     name: "Server image startup"
     needs: [detect-changes, Docker]
@@ -1349,7 +1349,9 @@ jobs:
         env:
           SERVER_IMAGE: ghcr.io/${{ github.repository_owner }}/server@${{ needs.Docker.outputs.server-digest }}
           POSTGRES_IMAGE: ghcr.io/${{ github.repository_owner }}/postgres@${{ needs.Docker.outputs.postgres-digest }}
-        run: node scripts/server-image-startup.ts "$SERVER_IMAGE" "$POSTGRES_IMAGE"
+          # The startup time is a ratio against the last image that main published, started on this runner.
+          BASE_SERVER_IMAGE: ghcr.io/${{ github.repository_owner }}/server:main
+        run: node scripts/server-image-startup.ts "$SERVER_IMAGE" "$POSTGRES_IMAGE" "$BASE_SERVER_IMAGE"
 
   # Validate the built images before release; signatures and attestations are added at publication.
   # Every release candidate needs evidence for its own tree, including a merge group's aggregate.
