@@ -30,7 +30,10 @@ public record McpClientGrantDTO(
                         + " asked")
         boolean passkeyBacked,
 
-        @Schema(description = "When the client last signed in, refreshed or called, to within an hour") @Nullable
+        @Schema(
+                description =
+                        "When the client last signed in, refreshed, or made a call that succeeded, to within an hour")
+        @Nullable
         Instant lastUsedAt,
 
         @NonNull

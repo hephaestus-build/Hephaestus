@@ -29,6 +29,12 @@ public interface McpClientGrants {
 
     List<Grant> activeGrants(Long workspaceId);
 
+    /**
+     * Records that a client's tool call succeeded, at most once in each {@code LAST_USED_PRECISION}. A call that the
+     * policy or the tool refused is not a use, so it never keeps a refused client looking busy.
+     */
+    void recordUse(long workspaceId, UUID grantId);
+
     /** Revokes a grant of this workspace and ends its session; false when the workspace has no such open grant. */
     boolean revoke(Long workspaceId, UUID grantId, Long actingAccountId);
 }

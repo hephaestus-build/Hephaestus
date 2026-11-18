@@ -30,6 +30,7 @@ import tools.jackson.databind.json.JsonMapper;
 class McpToolInvocationTest {
 
     private final AtomicInteger calls = new AtomicInteger();
+    private final AtomicInteger uses = new AtomicInteger();
     private final McpTool write = new McpTool() {
         @Override
         public McpSchema.Tool definition() {
@@ -60,12 +61,13 @@ class McpToolInvocationTest {
 
     @Test
     void shouldRefuseAWriteToolWithoutRunningItWhenTheGrantOnlyReads() {
-        onRequest(new McpCallGrant(UUID.randomUUID(), false, null));
+        onRequest(new McpCallGrant(1L, UUID.randomUUID(), false, null));
 
         var result = invoke();
 
         assertThat(result.isError()).isTrue();
         assertThat(calls).hasValue(0);
+        assertThat(uses).as("a refused call is not a use").hasValue(0);
     }
 
     @Test
@@ -80,18 +82,19 @@ class McpToolInvocationTest {
 
     @Test
     void shouldRunAWriteToolWhenTheGrantMayWrite() {
-        onRequest(new McpCallGrant(UUID.randomUUID(), true, null));
+        onRequest(new McpCallGrant(1L, UUID.randomUUID(), true, null));
 
         var result = invoke();
 
         assertThat(result.isError()).isNotEqualTo(true);
         assertThat(calls).hasValue(1);
+        assertThat(uses).as("a call that succeeds records the grant's use").hasValue(1);
     }
 
     /** Spring matches an advice handler by an exception's cause, so the handler must get the cause. */
     @Test
     void shouldAnswerWithTheReasonOfTheHandlerThatMatchesTheCause() {
-        onRequest(new McpCallGrant(UUID.randomUUID(), true, null));
+        onRequest(new McpCallGrant(1L, UUID.randomUUID(), true, null));
         McpTool wrapping = new McpTool() {
             @Override
             public McpSchema.Tool definition() {
@@ -111,10 +114,12 @@ class McpToolInvocationTest {
                 wrapping,
                 new McpSchema.CallToolRequest("change_something", Map.of(), Map.of()),
                 new McpRefusals(context),
-                new McpToolMetrics(new SimpleMeterRegistry(), List.of(wrapping)));
+                new McpToolMetrics(new SimpleMeterRegistry(), List.of(wrapping)),
+                uses::incrementAndGet);
 
         assertThat(result.isError()).isTrue();
         assertThat(((McpSchema.TextContent) result.content().getFirst()).text()).isEqualTo("Someone changed it first.");
+        assertThat(uses).as("a call that its handler refuses is not a use").hasValue(0);
     }
 
     static final class ConflictingChange extends RuntimeException {
@@ -136,7 +141,8 @@ class McpToolInvocationTest {
                 write,
                 new McpSchema.CallToolRequest("change_something", Map.of(), Map.of()),
                 new McpRefusals(context),
-                new McpToolMetrics(new SimpleMeterRegistry(), List.of(write)));
+                new McpToolMetrics(new SimpleMeterRegistry(), List.of(write)),
+                uses::incrementAndGet);
     }
 
     private static void onRequest(McpCallGrant grant) {
