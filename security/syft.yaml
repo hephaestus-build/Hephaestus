@@ -1,4 +1,4 @@
-# Owner: scripts/check-release-sbom.ts (SYFT_CONFIG).
+# Owner: scripts/lib/syft.ts (SYFT_CONFIG).
 check-for-app-update: false
 file:
   metadata:

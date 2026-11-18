@@ -304,7 +304,7 @@
 		{
 			"description": "Track CI tool release tags and asset checksums together",
 			"customType": "regex",
-			"managerFilePatterns": ["/^\\.github/ci-tools/(cosign|pack|syft|trivy)\\.json$/"],
+			"managerFilePatterns": ["/^\\.github/ci-tools/(cosign|grype|pack|syft|trivy)\\.json$/"],
 			"matchStrings": [
 				"\"githubRelease\":\\s*\"(?<depName>[\\w.-]+/[\\w.-]+)\"[\\s\\S]*",
 				"\"(?<depType>[\\w-]+)\":\\s*\\{\\s*\"version\":\\s*\"(?<currentValue>v[^\"]+)\",\\s*\"sha256\":\\s*\"(?<currentDigest>[a-f0-9]{64})\""

@@ -49,7 +49,7 @@ void test("CI tool updates pair every release tag with its asset digest and deri
 		);
 	}
 
-	for (const id of ["cosign", "pack", "syft", "trivy"]) {
+	for (const id of ["cosign", "grype", "pack", "syft", "trivy"]) {
 		const content = await readFile(`.github/ci-tools/${id}.json`, "utf8");
 		let matches: { content: string; groups: Record<string, string> }[] = [{ content, groups: {} }];
 		for (const pattern of patterns) {
@@ -427,6 +427,7 @@ void test("every custom manager reads every file it claims to read", async () =>
 			"Track CI tool release tags and asset checksums together",
 			[
 				".github/ci-tools/cosign.json",
+				".github/ci-tools/grype.json",
 				".github/ci-tools/pack.json",
 				".github/ci-tools/syft.json",
 				".github/ci-tools/trivy.json",

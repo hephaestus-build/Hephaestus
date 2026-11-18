@@ -188,6 +188,7 @@ await captureSubject(${JSON.stringify(subject)}, ${JSON.stringify(directory)});
 		assert.deepEqual(await readTimings(), [
 			{ tool: "syft", success: true },
 			{ tool: "trivy", success: true },
+			{ tool: "jvm-runtime", success: true },
 		]);
 		assert.equal(
 			await readFile(`${prefix}.license.json`, "utf8"),

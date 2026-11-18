@@ -2,10 +2,11 @@ import { copyFile, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { assertSbomFormatsCover, SYFT_CONFIG } from "./check-release-sbom.ts";
+import { assertSbomFormatsCover } from "./check-release-sbom.ts";
 import { asArray, asRecord, asString, readJsonFile } from "./lib/json.ts";
 import { output, run } from "./lib/process.ts";
 import { releaseRepository } from "./lib/release-identities.ts";
+import { SYFT_CONFIG } from "./lib/syft.ts";
 import { addOwnedComponents } from "./owned-code-sbom.ts";
 import { scanOwnedSource } from "./owned-source-sbom.ts";
 

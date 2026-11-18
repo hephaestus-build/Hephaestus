@@ -5,11 +5,7 @@
 import { copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-import {
-	assertBundledNpmInventory,
-	assertBundledNpmScan,
-	syftImageArguments,
-} from "./check-release-sbom.ts";
+import { assertBundledNpmInventory, assertBundledNpmScan } from "./check-release-sbom.ts";
 import {
 	advisoryFile,
 	componentAdvisories,
@@ -18,7 +14,9 @@ import {
 import { isSet } from "./lib/env.ts";
 import { isImageIndex, selectPlatformDigest } from "./lib/image-scan.ts";
 import { asRecord, asString, readJsonFile } from "./lib/json.ts";
+import { scanJvmRuntime } from "./lib/jvm-runtime.ts";
 import { output, run } from "./lib/process.ts";
+import { syftImageArguments } from "./lib/syft.ts";
 import { captureReleaseSourceSbom } from "./release-source-sbom.ts";
 import { parseResolvedImages, type ResolvedImage } from "./resolve-release-images.ts";
 import { planUpstreamSubjects } from "./scan-upstream-images.ts";
@@ -175,11 +173,11 @@ export async function captureSubject(subject: Subject, directory: string): Promi
 	const reference = `${subject.repository}@${subject.digest}`;
 	const stem = path.join(directory, evidenceStem(subject));
 	const timings: { tool: string; durationSeconds: number; success: boolean }[] = [];
-	const scan = async (tool: string, args: string[]): Promise<void> => {
+	const timed = async (tool: string, work: () => Promise<unknown>): Promise<void> => {
 		const startedAt = performance.now();
 		let success = false;
 		try {
-			await run(tool, args);
+			await work();
 			success = true;
 		} finally {
 			const durationSeconds = Math.round((performance.now() - startedAt) / 10) / 100;
@@ -189,6 +187,8 @@ export async function captureSubject(subject: Subject, directory: string): Promi
 			);
 		}
 	};
+	const scan = async (tool: string, args: string[]): Promise<void> =>
+		timed(tool, async () => run(tool, args));
 	try {
 		// Every default package cataloguer, plus the file digests component-bound exceptions read.
 		await scan("syft", [
@@ -218,6 +218,16 @@ export async function captureSubject(subject: Subject, directory: string): Promi
 			`${stem}.trivy.json`,
 			reference,
 		]);
+		// The same JVM findings the build gate added, so the archived report is what the policy judged.
+		await timed("jvm-runtime", async () =>
+			scanJvmRuntime({
+				image: subject.image,
+				platform: subject.platform,
+				reference,
+				report: `${stem}.trivy.json`,
+				pinned: subject.provenance === "first-party",
+			}),
+		);
 		if (subject.image === "webapp") {
 			assertBundledNpmScan(
 				await readJsonFile(`${stem}.syft.json`),

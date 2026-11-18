@@ -1,0 +1,15 @@
+{
+	"githubRelease": "anchore/grype",
+	"assets": {
+		"linux-x64": {
+			"version": "v0.121.3",
+			"sha256": "e9da18cc1429e786722e32161288103600efffd8e483c90761f90485bd1bec85",
+			"name": "grype_{version}_linux_amd64.tar.gz"
+		},
+		"linux-arm64": {
+			"version": "v0.121.3",
+			"sha256": "b7815598d48da78bfd16f5b98ef28e1bb09c03d34fc8c3e350f99b6ccb3c7cba",
+			"name": "grype_{version}_linux_arm64.tar.gz"
+		}
+	}
+}
