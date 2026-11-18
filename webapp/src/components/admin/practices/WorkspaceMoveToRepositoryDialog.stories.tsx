@@ -111,7 +111,7 @@ export const RefusedWithProblems: Story = {
 					{ file: "practice.md", line: 3, column: 7, message: "Name a kind of work." },
 					{ file: "practice.md", line: 9, message: "Remove the key `owner`." },
 					{ file: "notes.txt", message: "Remove this file." },
-					{ file: "", message: "The folder is larger than 256 KiB." },
+					{ message: "The folder is larger than 256 KiB." },
 				],
 			},
 		},

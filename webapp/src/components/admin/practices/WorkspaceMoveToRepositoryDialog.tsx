@@ -1,7 +1,7 @@
 import { CircleAlert } from "lucide-react";
 import type { ComponentProps } from "react";
 
-import type { PracticeRepository } from "@/api/types.gen";
+import type { PracticeFileProblem, PracticeRepository } from "@/api/types.gen";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
 	AlertDialog,
@@ -13,14 +13,13 @@ import {
 	AlertDialogHeader,
 	AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import type { PracticeFolderProblem } from "@/lib/practice-repository";
 import { hasText } from "@/lib/text";
 
 /** A Move to repository that the reader asked for and has not cancelled. */
 export type MoveToRepositoryRequest =
 	| { phase: "confirming" }
 	| { phase: "pending" }
-	| { phase: "refused"; reason: string; problems: PracticeFolderProblem[] };
+	| { phase: "refused"; reason: string; problems: PracticeFileProblem[] };
 
 /** Move to repository for one practice, as the route runs it. */
 export interface MoveToRepositoryControl {
@@ -45,13 +44,15 @@ export interface WorkspaceMoveToRepositoryDialogProps {
 	finalFocus: ComponentProps<typeof AlertDialogContent>["finalFocus"];
 }
 
-function problemPlace({ file, line, column }: PracticeFolderProblem) {
-	if (line === undefined) {
+/** Where in the folder a problem is: its file and, where known, its line and column. */
+function problemPlace({ file = "", line, column }: PracticeFileProblem) {
+	// `typeof`, because a problem the server places in no line can carry `null` there on the wire.
+	if (typeof line !== "number") {
 		return file;
 	}
-	return column === undefined
-		? `${file}, line ${line}`
-		: `${file}, line ${line}, column ${column}`;
+	return typeof column === "number"
+		? `${file}, line ${line}, column ${column}`
+		: `${file}, line ${line}`;
 }
 
 /**
