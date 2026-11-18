@@ -5,6 +5,7 @@ import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import type {
 	UnsetPracticeRepositoryData,
+	UnsetPracticeRepositoryErrors,
 	UnsetPracticeRepositoryResponses,
 } from "../types.gen.js";
 
@@ -15,8 +16,12 @@ import type {
  */
 export const unsetPracticeRepository = <ThrowOnError extends boolean = false>(
 	options: Options<UnsetPracticeRepositoryData, ThrowOnError>,
-): RequestResult<UnsetPracticeRepositoryResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).delete<UnsetPracticeRepositoryResponses, unknown, ThrowOnError>({
+): RequestResult<UnsetPracticeRepositoryResponses, UnsetPracticeRepositoryErrors, ThrowOnError> =>
+	(options.client ?? client).delete<
+		UnsetPracticeRepositoryResponses,
+		UnsetPracticeRepositoryErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practice-repository",
 		...options,

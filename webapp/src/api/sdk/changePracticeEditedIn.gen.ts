@@ -3,7 +3,11 @@
 import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
-import type { ChangePracticeEditedInData, ChangePracticeEditedInResponses } from "../types.gen.js";
+import type {
+	ChangePracticeEditedInData,
+	ChangePracticeEditedInErrors,
+	ChangePracticeEditedInResponses,
+} from "../types.gen.js";
 
 /**
  * Move a practice to the practice repository, or edit it in Hephaestus
@@ -12,8 +16,12 @@ import type { ChangePracticeEditedInData, ChangePracticeEditedInResponses } from
  */
 export const changePracticeEditedIn = <ThrowOnError extends boolean = false>(
 	options: Options<ChangePracticeEditedInData, ThrowOnError>,
-): RequestResult<ChangePracticeEditedInResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).put<ChangePracticeEditedInResponses, unknown, ThrowOnError>({
+): RequestResult<ChangePracticeEditedInResponses, ChangePracticeEditedInErrors, ThrowOnError> =>
+	(options.client ?? client).put<
+		ChangePracticeEditedInResponses,
+		ChangePracticeEditedInErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practice-repository/practices/{practiceSlug}/edited-in",
 		...options,

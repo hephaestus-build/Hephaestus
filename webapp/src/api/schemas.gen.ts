@@ -10005,6 +10005,14 @@ export const ProblemDetailSchema = {
 			type: "integer",
 			format: "int64",
 		},
+		problems: {
+			type: "array",
+			description:
+				"Why a practice folder cannot become a practice: each problem with its file and, where known, its line and column",
+			items: {
+				$ref: "#/components/schemas/PracticeFileProblem",
+			},
+		},
 		requestId: {
 			type: "string",
 			description: "The request's trace id, the same as the X-Request-Id header",

@@ -11308,6 +11308,12 @@ paths:
       responses:
         "204":
           description: The workspace has no practice repository
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: The workspace has no practice repository to unset
       summary: Unset the practice repository
       tags:
       - practice-repository
@@ -11360,12 +11366,13 @@ paths:
               $ref: "#/components/schemas/SetPracticeRepositoryRequest"
         required: true
       responses:
-        "200":
+        "400":
           content:
-            application/json:
+            application/problem+json:
               schema:
-                $ref: "#/components/schemas/PracticeRepository"
-          description: OK
+                $ref: "#/components/schemas/ProblemDetail"
+          description: "The repository is not one that the workspace monitors, or\
+            \ the directory is not a relative path"
       summary: Set the practice repository
       tags:
       - practice-repository
@@ -11399,6 +11406,19 @@ paths:
       responses:
         "204":
           description: The practice is edited where the request named
+        "409":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: "No practice repository, it cannot be read now, its default\
+            \ branch has no folder for this practice, or the setting changed meanwhile"
+        "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: "The practice folder is not valid: problems lists each problem"
       summary: "Move a practice to the practice repository, or edit it in Hephaestus"
       tags:
       - practice-repository
@@ -25248,6 +25268,12 @@ components:
         maxAgeSeconds:
           type: integer
           format: int64
+        problems:
+          type: array
+          description: "Why a practice folder cannot become a practice: each problem\
+            \ with its file and, where known, its line and column"
+          items:
+            $ref: "#/components/schemas/PracticeFileProblem"
         requestId:
           type: string
           description: "The request's trace id, the same as the X-Request-Id header"
