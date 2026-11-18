@@ -626,8 +626,9 @@ The server shows only codes of that vocabulary.
 The watchdog stops the runner 30 seconds after its budget.
 Each session stops its turn at the budget, and measuring waits for the sessions to stop until 10 seconds before the watchdog.
 A session that has not stopped by then is left behind (`measurement.left_at_deadline`), and its practice ends with `DEADLINE`.
-The runner then exits 78 with the practices that have results, or 1 when none has one.
+The runner then exits as it does after any measurement: 78 with the practices that have results, or 1 or 76 when none has one.
 Thus, a session that does not stop ends its review in the runner, and not at the watchdog.
+
 For exit 77, the server keeps its own error on the attempt: the request that failed, and the cause by type.
 When the runner reports no evaluated practice and the usage ledger holds no model call of the attempt, the error says so.
 A review program that crashes, the workspace initializer or the run program, records its error kind in the sandbox.

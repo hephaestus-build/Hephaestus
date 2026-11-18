@@ -2917,12 +2917,12 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 			},
 		};
 
+		// Set when measuring returned without a session: that session's later failure changes nothing of the run.
+		let measurementLeft = false;
 		/**
 		 * The sessions' outcomes, or only the ones that settled by `closeBy`. Whatever still runs then is left behind,
 		 * so the runner keeps the watchdog's reserve to record and stage what it measured.
 		 */
-		// Set when measuring returned without a session: that session's later failure changes nothing of the run.
-		let measurementLeft = false;
 		async function settledBy<T>(
 			running: readonly Promise<T>[],
 			closeBy: number,
