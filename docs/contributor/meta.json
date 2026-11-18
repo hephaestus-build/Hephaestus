@@ -74,6 +74,7 @@
 		"recover-the-chromatic-baseline",
 		"release-management",
 		"recover-a-published-release",
+		"ship-an-urgent-security-fix",
 		"release-artifact-provenance",
 		"delivery-metrics",
 		"vulnerability-remediation"
