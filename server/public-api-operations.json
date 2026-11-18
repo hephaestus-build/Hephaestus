@@ -53,5 +53,7 @@
   "PUT /admin/settings/public-activity",
   "PUT /user/consent/research",
   "PUT /user/public-activity",
-  "PUT /workspaces/{workspaceSlug}/llm/models/{id}/capabilities"
+  "PUT /workspaces/{workspaceSlug}/llm/models/{id}/capabilities",
+  "PUT /workspaces/{workspaceSlug}/practice-repository",
+  "PUT /workspaces/{workspaceSlug}/practice-repository/practices/{practiceSlug}/edited-in"
 ]
