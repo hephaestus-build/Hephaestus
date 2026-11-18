@@ -488,6 +488,7 @@ export const zConfigAuditEntityType = z.enum([
 	"PRACTICE_USAGE",
 	"PRACTICE_DEFINITION",
 	"PRACTICE_GROUP",
+	"PRACTICE_REPOSITORY",
 	"CATALOG_PRACTICE",
 	"CATALOG_GROUP",
 	"WORKSPACE_INSTANCE_LLM_BUDGET",
@@ -2396,6 +2397,15 @@ export const zCatalogOrigin = z.object({
 
 export const zPracticeDeliveryStatus = z.enum(["ACTIVE", "PAUSED"]);
 
+export const zPracticeEditedIn = z.enum(["HEPHAESTUS", "REPOSITORY"]);
+
+/**
+ * Where the practice is edited from now on: Move to repository, or Edit in Hephaestus.
+ */
+export const zChangePracticeEditedInRequest = z.object({
+	editedIn: zPracticeEditedIn,
+});
+
 /**
  * The files of one practice folder, by path relative to the folder
  */
@@ -2511,6 +2521,16 @@ export const zPracticeReleaseField = z.object({
 	conflict: z.boolean(),
 	field: zPracticeDefinitionField,
 	offeredChanged: z.boolean(),
+});
+
+/**
+ * The workspace's practice repository (ADR 0118).
+ */
+export const zPracticeRepository = z.object({
+	defaultBranch: z.string().optional(),
+	directory: z.string(),
+	nameWithOwner: z.string().optional(),
+	repositoryItemId: z.string(),
 });
 
 export const zPracticeReviewField = z.enum([
@@ -4518,6 +4538,7 @@ export const zPractice = z.object({
 	catalogOrigin: zCatalogOrigin,
 	createdAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
 	currentVersion: zPracticeVersion,
+	editedIn: zPracticeEditedIn,
 	feedbackMode: zFeedbackModeAssignment,
 	groupSlug: z.string().nullable(),
 	id: z.string().regex(/^[1-9][0-9]*$/),
@@ -4848,6 +4869,19 @@ export const zSetFeedbackModeRequest = z.object({
 
 export const zSetMemberHiddenRequest = z.object({
 	hidden: z.boolean(),
+});
+
+/**
+ * The monitored repository that holds the workspace's practices, and the directory of their folders in it.
+ */
+export const zSetPracticeRepositoryRequest = z.object({
+	directory: z
+		.string()
+		.min(0)
+		.max(255)
+		.regex(/^(?!\/)(?!.*(^|\/)\.\.?(\/|$))[A-Za-z0-9._-]+(\/[A-Za-z0-9._-]+)*$/)
+		.optional(),
+	repositoryItemId: z.string().regex(/^[1-9][0-9]*$/),
 });
 
 export const zSetReviewScheduleEnabledRequest = z.object({

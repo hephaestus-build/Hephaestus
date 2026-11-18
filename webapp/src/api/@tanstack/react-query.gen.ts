@@ -217,6 +217,7 @@ export { bindPracticeGroupMutation } from "./react-query/bindPracticeGroup.gen.j
 export { callbackGetOptions, callbackGetQueryKey } from "./react-query/callbackGet.gen.js";
 export { callbackPostMutation } from "./react-query/callbackPost.gen.js";
 export { cancelReviewMutation } from "./react-query/cancelReview.gen.js";
+export { changePracticeEditedInMutation } from "./react-query/changePracticeEditedIn.gen.js";
 export { checkPracticeFilesMutation } from "./react-query/checkPracticeFiles.gen.js";
 export { checkResearchRemovalsMutation } from "./react-query/checkResearchRemovals.gen.js";
 export { claimGitHubInstallationMutation } from "./react-query/claimGitHubInstallation.gen.js";
@@ -469,6 +470,10 @@ export {
 	getPracticeReleaseOptions,
 	getPracticeReleaseQueryKey,
 } from "./react-query/getPracticeRelease.gen.js";
+export {
+	getPracticeRepositoryOptions,
+	getPracticeRepositoryQueryKey,
+} from "./react-query/getPracticeRepository.gen.js";
 export {
 	getPracticeReviewSettingsOptions,
 	getPracticeReviewSettingsQueryKey,
@@ -907,6 +912,7 @@ export { setConversationVoteMutation } from "./react-query/setConversationVote.g
 export { setGroupFeedbackModeMutation } from "./react-query/setGroupFeedbackMode.gen.js";
 export { setMemberHiddenMutation } from "./react-query/setMemberHidden.gen.js";
 export { setPracticeFeedbackModeMutation } from "./react-query/setPracticeFeedbackMode.gen.js";
+export { setPracticeRepositoryMutation } from "./react-query/setPracticeRepository.gen.js";
 export { setReviewScheduleEnabledMutation } from "./react-query/setReviewScheduleEnabled.gen.js";
 export { startPracticeTrialMutation } from "./react-query/startPracticeTrial.gen.js";
 export { startScanMutation } from "./react-query/startScan.gen.js";
@@ -915,6 +921,7 @@ export { submitInstanceProductFeedbackMutation } from "./react-query/submitInsta
 export { submitWorkspaceProductFeedbackMutation } from "./react-query/submitWorkspaceProductFeedback.gen.js";
 export { triggerSyncJobMutation } from "./react-query/triggerSyncJob.gen.js";
 export { unlinkIdentityMutation } from "./react-query/unlinkIdentity.gen.js";
+export { unsetPracticeRepositoryMutation } from "./react-query/unsetPracticeRepository.gen.js";
 export { unsubscribeEmailMutation } from "./react-query/unsubscribeEmail.gen.js";
 export { updateAccountAiChoiceMutation } from "./react-query/updateAccountAiChoice.gen.js";
 export { updateActivityAutomationMutation } from "./react-query/updateActivityAutomation.gen.js";
