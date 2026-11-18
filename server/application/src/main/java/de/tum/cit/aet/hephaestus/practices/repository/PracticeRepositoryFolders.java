@@ -72,7 +72,8 @@ public class PracticeRepositoryFolders {
             var root = checkout.directory().toRealPath();
             var folder = root.resolve(setting.getDirectory()).resolve(slug).normalize();
             if (!folder.startsWith(root)) return Optional.empty();
-            // A link anywhere on the path makes the folder unreadable, never absent: a sync must not take it for removed.
+            // A link anywhere on the path makes the folder unreadable, never absent: a sync must not take it for
+            // removed.
             for (Path path = folder; path != null && !path.equals(root); path = path.getParent())
                 if (Files.isSymbolicLink(path))
                     throw invalid(PracticeFileProblemDTO.FILE_INVALID, slug, "The folder or its directory is a link.");
@@ -84,7 +85,8 @@ public class PracticeRepositoryFolders {
                     setting.getDirectory(),
                     setting.getRevision()));
         } catch (RepositoryCheckoutException unavailable) {
-            log.warn("Could not read the practice repository: workspaceId={}, code={}", workspaceId, unavailable.code());
+            log.warn(
+                    "Could not read the practice repository: workspaceId={}, code={}", workspaceId, unavailable.code());
             throw new ResponseStatusException(HttpStatus.CONFLICT, reason(unavailable), unavailable);
         } catch (IOException failed) {
             throw new UncheckedIOException(failed);
