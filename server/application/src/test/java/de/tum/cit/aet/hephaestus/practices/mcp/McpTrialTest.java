@@ -29,7 +29,7 @@ class McpTrialTest extends BaseUnitTest {
     private static TrialDTO trial(@Nullable TrialOutcomeDTO outcome, @Nullable String withheldReason) {
         return new TrialDTO(
                 UUID.randomUUID(),
-                ReviewStatus.COMPLETED,
+                ReviewStatus.COMPLETE,
                 null,
                 "explain-the-change",
                 "41",
