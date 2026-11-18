@@ -152,6 +152,8 @@ public class PracticeGroupService {
                 .findByWorkspaceIdAndSlug(ctx.id(), practiceSlug)
                 .orElseThrow(() -> new EntityNotFoundException("Practice", practiceSlug));
         var before = PracticeDefinitionSnapshot.of(practice, mapper);
+        var current = practice.getGroup() == null ? null : practice.getGroup().getSlug();
+        if (!Objects.equals(current, groupSlug)) PracticeEditing.requireEditedInHephaestus(practice);
         if (changeBinding(ctx, practice, groupSlug)) {
             practices.save(practice);
             audit.record(ConfigAuditEntry.updated(

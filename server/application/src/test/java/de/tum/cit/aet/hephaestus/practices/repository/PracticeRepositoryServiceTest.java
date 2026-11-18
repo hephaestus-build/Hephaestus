@@ -18,6 +18,7 @@ import de.tum.cit.aet.hephaestus.practices.catalog.CatalogPracticeDocument;
 import de.tum.cit.aet.hephaestus.practices.dto.PracticeFileProblemDTO;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceQueries;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -30,16 +31,21 @@ class PracticeRepositoryServiceTest extends BaseUnitTest {
     private static final String COMMIT = "0123456789abcdef0123456789abcdef01234567";
     private static final WorkspaceContext CONTEXT = new WorkspaceContext(7L, "acme", "Acme", null, null, Set.of());
     private static final Map<String, String> FILES = Map.of("practice.md", "---\n---\n");
+    private static final PracticeRepositoryFolders.Folder FOLDER =
+            new PracticeRepositoryFolders.Folder(COMMIT, FILES, 42, ".hephaestus/practices", 0);
 
     private final PracticeRepositoryFolders folders = mock(PracticeRepositoryFolders.class);
     private final PracticeFiles files = mock(PracticeFiles.class);
     private final PracticeService practices = mock(PracticeService.class);
+    private final PracticeRepositoryMove move = mock(PracticeRepositoryMove.class);
     private final PracticeRepositoryService service = new PracticeRepositoryService(
             mock(PracticeRepositorySettingRepository.class),
             mock(MonitoredRepositoryQuery.class),
             folders,
             files,
             practices,
+            move,
+            mock(WorkspaceQueries.class),
             mock(ConfigAuditPort.class));
 
     /** Without this guard, the first sync would find no folder and set the practice to Reviewed by Nobody. */
@@ -49,12 +55,12 @@ class PracticeRepositoryServiceTest extends BaseUnitTest {
 
         assertThatThrownBy(() -> service.moveToRepository(CONTEXT, "explain"))
                 .isInstanceOf(ResponseStatusException.class);
-        verify(practices, never()).moveToRepository(any(), any(), any(), any());
+        verify(move, never()).apply(any(), any(), any(), any());
     }
 
     @Test
     void shouldNotMoveAPracticeWhoseFolderIsInvalid() {
-        when(folders.read(7, "explain")).thenReturn(Optional.of(new PracticeRepositoryFolders.Folder(COMMIT, FILES)));
+        when(folders.read(7, "explain")).thenReturn(Optional.of(FOLDER));
         when(files.read("explain", FILES))
                 .thenReturn(new PracticeFiles.Read(
                         null,
@@ -63,18 +69,18 @@ class PracticeRepositoryServiceTest extends BaseUnitTest {
 
         assertThatThrownBy(() -> service.moveToRepository(CONTEXT, "explain"))
                 .isInstanceOf(PracticeFolderInvalidException.class);
-        verify(practices, never()).moveToRepository(any(), any(), any(), any());
+        verify(move, never()).apply(any(), any(), any(), any());
     }
 
     @Test
-    void shouldMoveAPracticeWithTheCommitItsFolderWasReadAt() {
+    void shouldMoveAPracticeWithTheFolderAndTheSettingItWasReadUnder() {
         var document = new CatalogPracticeDocument(
                 new ItemKind("scm.pull_request"), null, DefinitionTestFixtures.definition());
-        when(folders.read(7, "explain")).thenReturn(Optional.of(new PracticeRepositoryFolders.Folder(COMMIT, FILES)));
+        when(folders.read(7, "explain")).thenReturn(Optional.of(FOLDER));
         when(files.read("explain", FILES)).thenReturn(new PracticeFiles.Read(document, List.of()));
 
         service.moveToRepository(CONTEXT, "explain");
 
-        verify(practices).moveToRepository(CONTEXT, "explain", document, COMMIT);
+        verify(move).apply(CONTEXT, "explain", document, FOLDER);
     }
 }

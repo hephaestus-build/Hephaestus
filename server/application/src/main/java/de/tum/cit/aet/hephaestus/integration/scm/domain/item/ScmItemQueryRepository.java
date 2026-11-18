@@ -257,9 +257,6 @@ public interface ScmItemQueryRepository extends Repository<Item, Long> {
 
         String getNameWithOwner();
 
-        @Nullable
-        String getDefaultBranch();
-
         String getServerUrl();
     }
 

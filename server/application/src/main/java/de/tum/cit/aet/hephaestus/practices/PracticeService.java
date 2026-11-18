@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.core.exception.InvalidInputException;
 import de.tum.cit.aet.hephaestus.core.security.SecurityUtils;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
 import de.tum.cit.aet.hephaestus.practices.catalog.CatalogPracticeDocument;
+import de.tum.cit.aet.hephaestus.practices.dto.PracticeFileProblemDTO;
 import de.tum.cit.aet.hephaestus.practices.dto.CreatePracticeRequestDTO;
 import de.tum.cit.aet.hephaestus.practices.dto.UpdatePracticeRequestDTO;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
@@ -313,10 +314,17 @@ public class PracticeService {
                     document.definition(),
                     SecurityUtils.getCurrentAccountId().orElse(null),
                     commit);
-        var group = document.groupSlug() == null
+        var groupSlug = document.groupSlug();
+        var group = groupSlug == null
                 ? null
-                : groups.findByWorkspaceIdAndSlug(ctx.id(), document.groupSlug())
-                        .orElse(null);
+                : groups.findByWorkspaceIdAndSlug(ctx.id(), groupSlug)
+                        .orElseThrow(() -> new PracticeFolderInvalidException(List.of(new PracticeFileProblemDTO(
+                                PracticeFiles.PRACTICE,
+                                null,
+                                null,
+                                "UNKNOWN_GROUP",
+                                "This workspace has no group " + groupSlug + ". Create it, or remove it from the"
+                                        + " folder."))));
         if (!Objects.equals(
                 practice.getGroup() == null ? null : practice.getGroup().getId(),
                 group == null ? null : group.getId())) {

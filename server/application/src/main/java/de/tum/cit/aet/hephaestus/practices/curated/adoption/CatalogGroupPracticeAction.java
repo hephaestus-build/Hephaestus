@@ -12,6 +12,9 @@ public enum CatalogGroupPracticeAction {
     MOVE_TO_GROUP,
     /** Already here in this group: adoption leaves it exactly as it is. */
     KEEP,
-    /** Cannot be added — see {@link CatalogAdoptionAvailability#SLUG_CONFLICT}. */
+    /**
+     * Cannot be added or moved: a slug conflict ({@link CatalogAdoptionAvailability#SLUG_CONFLICT}), or a practice
+     * whose folder in the practice repository owns its group.
+     */
     BLOCKED,
 }
