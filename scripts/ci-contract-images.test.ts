@@ -24,6 +24,7 @@ import {
 	buildEnvironment,
 	hasBase64Mitigation,
 	MITIGATED_BELOW,
+	objectHeaders,
 	versionBelow,
 } from "./lib/buildpack-descriptor.ts";
 import { ciToolPin } from "./lib/ci-tool-catalog.ts";
@@ -635,12 +636,17 @@ void test("the App Server image build reads every buildpack dependency from a pi
 	);
 });
 
-void test("the AOT cache's training run and every launch of the server image add the same modules", async () => {
+void test("the AOT cache's training run and every launch of the server image share modules and object headers", async () => {
 	const environment = buildEnvironment(await readFile("server/application/project.toml", "utf8"));
-	const training = addedModules(environment.get("TRAINING_RUN_JAVA_TOOL_OPTIONS") ?? "");
+	const trainingOptions = environment.get("TRAINING_RUN_JAVA_TOOL_OPTIONS") ?? "";
+	const launchOptions = environment.get("BPE_APPEND_JAVA_TOOL_OPTIONS") ?? "";
+	const training = addedModules(trainingOptions);
 	// The chart's flight recording adds jdk.jfr, and the cache loads only with the training run's modules.
 	assert.ok(training.includes("jdk.jfr"), "the training run adds jdk.jfr");
-	assert.deepEqual(addedModules(environment.get("BPE_APPEND_JAVA_TOOL_OPTIONS") ?? ""), training);
+	assert.deepEqual(addedModules(launchOptions), training);
+	// The cache records the object-header layout, so every launch must use the training run's layout.
+	assert.equal(objectHeaders(trainingOptions), "compact");
+	assert.equal(objectHeaders(launchOptions), objectHeaders(trainingOptions));
 	assert.equal(environment.get("BPE_DELIM_JAVA_TOOL_OPTIONS"), " ");
 	// The buildpack starts the training run with only TRAINING_RUN_JAVA_TOOL_OPTIONS as its environment.
 	assert.match(
@@ -661,6 +667,12 @@ void test("a descriptor's build environment is each table's name and value", () 
 		],
 	);
 	assert.deepEqual(addedModules(environment.get("A") ?? ""), ["jdk.jfr", "jdk.net"]);
+	assert.equal(objectHeaders("-XX:+UseCompactObjectHeaders"), "compact");
+	assert.equal(
+		objectHeaders("-XX:+UseCompactObjectHeaders -XX:-UseCompactObjectHeaders"),
+		"legacy",
+	);
+	assert.equal(objectHeaders("-XX:+UseCompactObjectHeadersX"), undefined);
 	assert.throws(
 		() => buildEnvironment('[[io.buildpacks.build.env]]\nname = "A"\n'),
 		/no name or value/u,

@@ -105,7 +105,7 @@ spec:
             # restart, the previous process's pinned virtual threads and monitor waits are on disk.
             # docs/admin/production-operations-runbook.mdx, HephaestusServerRestarting.
             # The image's AOT cache loads only with the module set that the image gives every launch, so these options
-            # add no module, agent or object-layout option (ADR 0067, update of 2026-11-17).
+            # add no module, agent or object-layout option (ADR 0067, update "the image ships an AOT cache that every run mode loads").
             {{- $recording := "-XX:FlightRecorderOptions=repository=/tmp/jfr -XX:StartFlightRecording=settings=default,disk=true,maxage=6h,maxsize=256m,dumponexit=true,filename=/tmp/jfr/exit-%t.jfr" }}
             - name: JAVA_TOOL_OPTIONS
               value: -XX:MaxDirectMemorySize=128M {{ $recording }}

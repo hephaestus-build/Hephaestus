@@ -55,3 +55,15 @@ export function versionBelow(version: string, fixed: readonly number[]): boolean
 export function hasBase64Mitigation(...options: readonly string[]): boolean {
 	return options.every((value) => value.split(/\s+/u).includes(BASE64_MITIGATION));
 }
+
+/** The object-header layout that a `JAVA_TOOL_OPTIONS` value selects, or `undefined` for the JVM's default. */
+export function objectHeaders(options: string): "compact" | "legacy" | undefined {
+	const settings = [
+		...options.matchAll(/(?:^|\s)-XX:(?<sign>[+-])UseCompactObjectHeaders(?=\s|$)/gu),
+	];
+	const last = settings.at(-1)?.groups?.sign;
+	if (last === undefined) {
+		return undefined;
+	}
+	return last === "+" ? "compact" : "legacy";
+}
