@@ -73,7 +73,8 @@ It also applies to a workspace membership change that grants the owner role, or 
 An owner who lowers their own role is not asked.
 Changes between member and admin are not asked.
 
-It also applies to every change of where a workspace's practices are edited: setting or unsetting the practice repository, and moving a practice to it or back.
+It also applies to every change of where a workspace's practices are edited.
+Such a change sets or unsets the practice repository, or moves a practice to it or back.
 Otherwise a stale session could point the workspace at a repository that its holder can merge into.
 The criteria and scripts of reviews would then come from that repository.
 
