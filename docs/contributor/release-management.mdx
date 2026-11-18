@@ -55,6 +55,20 @@ sequenceDiagram
    [The Version PR trigger contract](./ci-cd.mdx#merge-policy) owns approval, reruns and manual recovery.
    [Merge policy](./ci-cd.mdx#merge-policy) owns which commit it versions and how a failed run is reported.
 
+   A maintainer queues an approved Version PR with `node scripts/queue-version-pr.ts`, not with the merge button.
+   It is not a workflow step: the maintainer account may jump the queue, and no run has shown that a workflow's `GITHUB_TOKEN` may.
+   If GitHub refuses the jump or queues the Version PR behind another entry, the script dequeues it and fails.
+
+   The script puts the Version PR at the front of the merge queue (`jump`).
+   Thus, no pull request ahead of it can merge a changeset that it did not consume.
+   The script refuses while `main` has a changeset newer than the commit that the Version PR versions.
+   Then wait until maintenance versions it again.
+   Pull requests that join its merge group behind it are fine, because the release follows the commit that set the version.
+
+   A merge group that changes the version also checks its version commit (`plan-release.ts --consumed`).
+   If a changeset that merged ahead of the Version PR stays unconsumed there, the group fails and names it.
+   The Version PR then leaves the queue, maintenance versions it again, and it is queued again.
+
    Every CI/CD run on that branch includes the **release evidence preflight** below, regardless of its start event.
    `CI Status Gate` fails unless the same run's preflight succeeds.
    More than one run can report the gate for a Version PR head, and either satisfies the ruleset.
@@ -102,6 +116,28 @@ Recovery uses a forward fix.
 A shipped fix carries a changeset and waits for the Version PR to consume it.
 This keeps the fix's release note and version together.
 A fix with no pending changesets can recut the same unpublished version from its validated commit.
+
+The release follows the commit that set the version, not the tip of `main`.
+The merge queue can merge the Version PR in one group with later pull requests.
+`main` then receives one push, for the group's tip, and no push run starts at the Version PR's commit.
+The tip carries the later pull requests' changesets, so it cannot cut the version itself.
+
+The planner then cuts the unpublished version at the newest first-parent commit that set it.
+The release uses that commit's images, as for any other cut.
+The planner does so only when three conditions are true:
+
+- A successful CI/CD push or merge-group run validated that exact commit.
+- That commit has no pending changesets.
+- The commits after it change no release history: `CHANGELOG.md`, `MIGRATION.md`, `.changeset/pre*`, or a changeset or migration fragment that existed at that commit.
+  New changesets and fragments for the next Version PR may follow it.
+
+Only the first push that brings that commit to `main` cuts it.
+A later push skips, so one release run owns the version, and a forward fix after it plans itself.
+Otherwise the planner skips or refuses with the reason, and the next Version PR carries the version forward.
+
+No release carries `1.0.0-rc.11`.
+Its Version PR merged after six pull requests that the queue put ahead of it, and their changesets stayed unconsumed.
+`1.0.0-rc.12` carries its `CHANGELOG.md` section and those six changes.
 
 Alternatively, merge the next Version PR.
 A release follows the latest *published* release, not the version its parent commit carried.

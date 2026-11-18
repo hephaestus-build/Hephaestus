@@ -8,13 +8,19 @@ import { after, test } from "node:test";
 import { environmentForGitFixture } from "./lib/git-environment.ts";
 import {
 	assertCurrentStableRelease,
+	findVersionSource,
 	hasPendingChangesets,
+	isHistoryChange,
+	nameStatusLines,
 	hasSchemaMigrations,
 	planRelease,
+	pendingChangesetFiles,
+	planVersionRelease,
 	type ReleaseRef,
 	releaseOutputs,
 	releaseSourceState,
 	majorChangesetSummaries,
+	staleVersionPullRequest,
 	renderReleaseNotes,
 } from "./plan-release.ts";
 
@@ -496,4 +502,214 @@ void test("a 1.0 candidate upgrades from the release of the baseline, not from 0
 	const later = planRelease(SHA, "1.0.1", [published("v0.95.1"), rc1, published("v1.0.0")], false);
 	assert.equal(later.kind, "cut");
 	assert.equal(later.previousVersion, "1.0.0");
+});
+
+/** Tonight's shape (2026-11-18): rc.10 published, the Version PR set rc.11, later merges added changesets. */
+const CANDIDATES = [
+	published("v0.95.1"),
+	{ ...published("v1.0.0-rc.1"), isPrerelease: true },
+	{ ...published("v1.0.0-rc.10"), isPrerelease: true },
+];
+const VERSION_COMMIT = "3333333333333333333333333333333333333333";
+const source = (overrides: Partial<Parameters<typeof planVersionRelease>[4] & object> = {}) => ({
+	sha: VERSION_COMMIT,
+	pendingChangesets: false,
+	validated: true,
+	historyChanges: [],
+	plannedBefore: false,
+	...overrides,
+});
+
+void test("a Version PR folded into a merge group cuts its unpublished version at the commit that set it", () => {
+	// main's tip carries newer changesets, so the tip itself is not a release source.
+	const plan = planVersionRelease(SHA, "1.0.0-rc.11", CANDIDATES, true, source());
+	assert.equal(plan.kind, "cut");
+	assert.equal(plan.sha, VERSION_COMMIT);
+	assert.equal(plan.tag, "v1.0.0-rc.11");
+	assert.deepEqual(releaseOutputs(plan).sha, VERSION_COMMIT);
+});
+
+void test("a tip without pending changesets still plans itself, so a forward fix can recut", () => {
+	const plan = planVersionRelease(SHA, "1.0.0-rc.11", CANDIDATES, false, source());
+	assert.equal(plan.kind, "cut");
+	assert.equal(plan.sha, SHA);
+});
+
+void test("the version commit cuts nothing once its version is published or still has changesets", () => {
+	const released = [...CANDIDATES, { ...published("v1.0.0-rc.11"), isPrerelease: true }];
+	assert.equal(planVersionRelease(SHA, "1.0.0-rc.11", released, true, source()).kind, "skip");
+	const unversioned = planVersionRelease(
+		SHA,
+		"1.0.0-rc.11",
+		CANDIDATES,
+		true,
+		source({ pendingChangesets: true }),
+	);
+	assert.equal(unversioned.kind, "skip");
+	assert.match(unversioned.reason, /pending changesets remain at 3{40}/u);
+	// Without a version commit the tip's own plan stands: it waits for the Version PR.
+	assert.equal(planVersionRelease(SHA, "1.0.0-rc.11", CANDIDATES, true, undefined).kind, "skip");
+});
+
+void test("the version commit is refused unless CI/CD validated it and only changesets followed it", () => {
+	const unvalidated = planVersionRelease(
+		SHA,
+		"1.0.0-rc.11",
+		CANDIDATES,
+		true,
+		source({ validated: false }),
+	);
+	assert.equal(unvalidated.kind, "refuse");
+	assert.match(unvalidated.reason, /no successful CI\/CD/u);
+	const rewritten = planVersionRelease(
+		SHA,
+		"1.0.0-rc.11",
+		CANDIDATES,
+		true,
+		source({ historyChanges: ["M\tCHANGELOG.md"] }),
+	);
+	assert.equal(rewritten.kind, "refuse");
+	assert.match(rewritten.reason, /M\tCHANGELOG\.md.*only new changesets/u);
+	// A draft of the version at another commit belongs to that commit's images.
+	const drafted = planVersionRelease(
+		SHA,
+		"1.0.0-rc.11",
+		[...CANDIDATES, draft("v1.0.0-rc.11", OTHER_SHA)],
+		true,
+		source(),
+	);
+	assert.equal(drafted.kind, "refuse");
+});
+
+void test("only the first push that brings the version commit to main cuts it", () => {
+	// A later push, or a forward fix after it, had its own push run: that run planned the version.
+	const later = planVersionRelease(
+		SHA,
+		"1.0.0-rc.11",
+		CANDIDATES,
+		true,
+		source({ plannedBefore: true }),
+	);
+	assert.equal(later.kind, "skip");
+	assert.match(later.reason, /pending changesets remain at 1{40}/u);
+});
+
+void test("reads name-status output with any path unquoted", () => {
+	assert.deepEqual(nameStatusLines("A\0.changeset/a b.md\0M\0CHANGELOG.md\0"), [
+		"A\t.changeset/a b.md",
+		"M\tCHANGELOG.md",
+	]);
+	assert.deepEqual(nameStatusLines(""), []);
+});
+
+void test("only a new changeset or migration fragment may follow the version commit", () => {
+	assert.equal(isHistoryChange("M\t.migration/README.md"), false);
+	assert.equal(isHistoryChange("A\t.changeset/next-fix.md"), false);
+	assert.equal(isHistoryChange("A\t.migration/next-step.md"), false);
+	assert.equal(isHistoryChange("M\t.changeset/README.md"), false);
+	assert.equal(isHistoryChange("M\tCHANGELOG.md"), true);
+	assert.equal(isHistoryChange("M\tMIGRATION.md"), true);
+	assert.equal(isHistoryChange("D\t.changeset/consumed.md"), true);
+	assert.equal(isHistoryChange("M\t.changeset/edited.md"), true);
+	assert.equal(isHistoryChange("D\t.migration/consumed.md"), true);
+	assert.equal(isHistoryChange("A\t.changeset/pre/new.md"), true);
+	assert.equal(isHistoryChange("M\t.changeset/pre.json"), true);
+});
+
+void test("finds the commit that set the version through a tip with newer changesets", async () => {
+	const repo = mkdtempSync(path.join(tmpdir(), "plan-release-source-"));
+	repositories.push(repo);
+	const git = (...args: string[]): string =>
+		execFileSync("git", args, {
+			cwd: repo,
+			encoding: "utf8",
+			env: environmentForGitFixture(),
+			stdio: ["ignore", "pipe", "pipe"],
+		}).trim();
+	const write = (file: string, content: string) => {
+		mkdirSync(path.dirname(path.join(repo, file)), { recursive: true });
+		writeFileSync(path.join(repo, file), content);
+	};
+	const commit = (message: string) => {
+		git("add", "-A");
+		git("commit", "--quiet", "-m", message);
+		return git("rev-parse", "HEAD");
+	};
+	git("init", "--quiet", "--initial-branch=main");
+	git("config", "user.email", "test@example.invalid");
+	git("config", "user.name", "Test");
+	write("package.json", '{ "version": "1.0.0-rc.10" }\n');
+	write("CHANGELOG.md", "## 1.0.0-rc.10\n");
+	write(".changeset/README.md", "# Changesets\n");
+	write(".changeset/mitigation.md", '---\n"hephaestus": patch\n---\n\nA fix.\n');
+	commit("fix: the mitigation, with its changeset");
+	// The Version PR consumes the changeset and sets rc.11.
+	write("package.json", '{ "version": "1.0.0-rc.11" }\n');
+	write("CHANGELOG.md", "## 1.0.0-rc.11\n\n- A fix.\n\n## 1.0.0-rc.10\n");
+	rmSync(path.join(repo, ".changeset/mitigation.md"));
+	const versioned = commit("chore(release): version packages (rc)");
+	// The same merge group's later pull requests: code, and changesets for the next Version PR.
+	write("server.txt", "later code\n");
+	write(".changeset/later-fix.md", '---\n"hephaestus": patch\n---\n\nLater.\n');
+	commit("fix: a later pull request in the same group");
+	write(".migration/later-step.md", "#### Later\n");
+	const tip = commit("fix: another later pull request");
+
+	const found = await findVersionSource(tip, repo);
+	assert.deepEqual(found, {
+		sha: versioned,
+		pendingChangesets: false,
+		historyChanges: [],
+		earlier: [git("rev-parse", "HEAD~1"), versioned],
+	});
+	assert.equal(await hasPendingChangesets(tip, repo), true);
+	// The version commit itself is its own source.
+	const own = await findVersionSource(versioned, repo);
+	assert.equal(own?.sha, versioned);
+
+	// A later commit that rewrites released history is reported, so the planner refuses it.
+	write("CHANGELOG.md", "## 1.0.0-rc.11\n\n- A rewritten fix.\n\n## 1.0.0-rc.10\n");
+	const rewritten = commit("docs: rewrite a released entry");
+	const history = await findVersionSource(rewritten, repo);
+	assert.deepEqual(history?.historyChanges, ["M\tCHANGELOG.md"]);
+	// A history shorter than the walk never reaches another version, so it names no source.
+	assert.equal(await findVersionSource(tip, repo, 2), undefined);
+});
+
+void test("a merge group refuses a Version PR that left changesets unconsumed ahead of it", async () => {
+	assert.equal(staleVersionPullRequest({ sha: VERSION_COMMIT }, []), undefined);
+	// Tonight's commit: six pull requests merged ahead of the Version PR after it was versioned.
+	const reason = staleVersionPullRequest({ sha: VERSION_COMMIT }, [
+		".changeset/delete-agent-image-pull-policy.md",
+		".changeset/probes-notice-readiness-sooner.md",
+	]);
+	assert.match(
+		reason ?? "",
+		/at 3{40} leaves 2 changesets unconsumed .*delete-agent-image-pull-policy\.md.*queue it again/u,
+	);
+});
+
+void test("lists the pending changesets of the exact commit", async () => {
+	const repo = mkdtempSync(path.join(tmpdir(), "plan-release-list-"));
+	repositories.push(repo);
+	const git = (...args: string[]): string =>
+		execFileSync("git", args, {
+			cwd: repo,
+			encoding: "utf8",
+			env: environmentForGitFixture(),
+			stdio: ["ignore", "pipe", "pipe"],
+		}).trim();
+	git("init", "--quiet", "--initial-branch=main");
+	git("config", "user.email", "test@example.invalid");
+	git("config", "user.name", "Test");
+	mkdirSync(path.join(repo, ".changeset/pre"), { recursive: true });
+	writeFileSync(path.join(repo, ".changeset/README.md"), "# Changesets\n");
+	writeFileSync(path.join(repo, ".changeset/pre/consumed.md"), "Consumed.\n");
+	writeFileSync(
+		path.join(repo, ".changeset/later.md"),
+		'---\n"hephaestus": patch\n---\n\nLater.\n',
+	);
+	git("add", "-A");
+	git("commit", "--quiet", "-m", "a later changeset");
+	assert.deepEqual(await pendingChangesetFiles("HEAD", repo), [".changeset/later.md"]);
 });
