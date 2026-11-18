@@ -34,6 +34,7 @@ class PracticeVersionRuntimeRoleContextTest extends BaseUnitTest {
             .withBean(WorkspaceReviewDefaultsProvider.class, () -> mock(WorkspaceReviewDefaultsProvider.class))
             .withBean(EntityManagerFactory.class, () -> mock(EntityManagerFactory.class))
             .withBean(PracticeRepository.class, () -> mock(PracticeRepository.class))
+            .withBean(PracticeDrafts.class, () -> mock(PracticeDrafts.class))
             .withBean(PracticeVersionRepository.class, () -> mock(PracticeVersionRepository.class))
             .withBean(PracticeDefinitionValidator.class, () -> mock(PracticeDefinitionValidator.class))
             .withBean(JsonMapper.class, () -> mapper)
