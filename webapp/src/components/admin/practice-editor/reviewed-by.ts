@@ -1,4 +1,10 @@
-import type { ReviewedBy, ReviewedByInput, ReviewLimitInput } from "@/api/types.gen";
+import type {
+	PracticeDefinition,
+	PracticeDefinitionInput,
+	ReviewedBy,
+	ReviewedByInput,
+	ReviewLimitInput,
+} from "@/api/types.gen";
 import { hasText } from "@/lib/text";
 
 import type { ReviewedByKind } from "./review-settings";
@@ -22,7 +28,38 @@ export const REVIEWED_BY_DESCRIPTIONS: Record<ReviewedByKind, string> = {
 	NOBODY: "This practice offers guidance without automated review.",
 };
 
+export const REVIEWED_BY_ORDER = [
+	"HEPHAESTUS",
+	"PEOPLE",
+	"NOBODY",
+] as const satisfies readonly ReviewedByKind[];
+
 export const MAX_REASON_LENGTH = 500;
+
+export const PEOPLE_REASON_HINT = "Name what a person can see that the captured work cannot show.";
+
+/** Who reviews every practice of a bulk change. People need one reason, which every practice records. */
+export type BulkReviewer = { by: "HEPHAESTUS" | "NOBODY" } | { by: "PEOPLE"; reason: string };
+
+/**
+ * The definition with only its reviewer changed, read under the current source contract, as the editor saves it. It
+ * keeps the review limits, reads, script and scan, so choosing Hephaestus again restores how it was reviewed.
+ */
+export function withReviewer(
+	definition: PracticeDefinition,
+	reviewer: BulkReviewer,
+	sourceContract: string,
+): PracticeDefinitionInput {
+	return {
+		...definition,
+		reads: { ...definition.reads, contract: sourceContract },
+		reviewedBy: reviewedByOf({
+			by: reviewer.by,
+			humanReason: { description: reviewer.by === "PEOPLE" ? reviewer.reason : "" },
+			limits: definition.reviewedBy.limits,
+		}),
+	};
+}
 
 /** Keep the reason and limits across draft choices. A save drops the reason unless people review the practice. */
 export interface ReviewedByDraft {

@@ -60,6 +60,7 @@ import {
 	type PracticeReviewWorkspaceUpdate,
 } from "@/components/admin/practices/WorkspacePracticeReviewSettings";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
+import { useBulkReviewerChange } from "@/hooks/use-bulk-reviewer-change";
 import { usePracticeFeedbackModeMutations } from "@/hooks/use-practice-feedback-mode-mutations";
 import { usePracticeReviewSettingsMutation } from "@/hooks/use-practice-review-settings";
 import { reviewModelOf, useReviewReadiness } from "@/hooks/use-review-readiness";
@@ -167,6 +168,7 @@ function FeedbackModeSection({
 	const practicesQuery = useQuery(listPracticesOptions({ path: { workspaceSlug } }));
 
 	const feedbackModes = usePracticeFeedbackModeMutations(workspaceSlug);
+	const reviewers = useBulkReviewerChange(workspaceSlug);
 	const updateSettings = usePracticeReviewSettingsMutation(workspaceSlug, {
 		success: "Review settings updated",
 		error: "We could not update review settings",
@@ -219,7 +221,7 @@ function FeedbackModeSection({
 				workspace: updateSettings.isPending,
 				groupSlugs: feedbackModes.pendingGroupSlugs,
 				practiceSlugs: feedbackModes.pendingPracticeSlugs,
-				bulk: feedbackModes.bulk,
+				bulk: feedbackModes.bulk ?? reviewers.bulk,
 			}}
 			overridesOnly={overridesOnly}
 			onOverridesOnlyChange={onOverridesOnlyChange}
@@ -265,6 +267,13 @@ function FeedbackModeSection({
 			}
 			onBulkSetFeedbackMode={(practiceSlugs, feedbackMode) => {
 				void feedbackModes.setManyPracticeFeedbackModes(practiceSlugs, feedbackMode);
+			}}
+			onBulkSetReviewer={(practiceSlugs, reviewer) => {
+				const chosen = new Set(practiceSlugs);
+				void reviewers.setManyReviewers(
+					(practicesQuery.data ?? []).filter((practice) => chosen.has(practice.slug)),
+					reviewer,
+				);
 			}}
 		/>
 	);

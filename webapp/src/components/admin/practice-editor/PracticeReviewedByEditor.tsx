@@ -14,18 +14,17 @@ import { Input } from "@/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { hasText } from "@/lib/text";
 
-import type { ReviewedByKind } from "./review-settings";
 import {
 	HUMAN_REASON_FIELD_ID,
 	limitFieldId,
 	MAX_REASON_LENGTH,
+	PEOPLE_REASON_HINT,
 	REVIEWED_BY_DESCRIPTIONS,
 	REVIEWED_BY_FIELD_ID,
 	REVIEWED_BY_LABELS,
+	REVIEWED_BY_ORDER,
 	type ReviewedByDraft,
 } from "./reviewed-by";
-
-const REVIEWED_BY_ORDER: ReviewedByKind[] = ["HEPHAESTUS", "PEOPLE", "NOBODY"];
 
 export interface PracticeReviewedByEditorProps {
 	value: ReviewedByDraft;
@@ -134,7 +133,7 @@ export function PracticeReviewedByEditor({
 						}`}
 					/>
 					<FieldDescription id={`${HUMAN_REASON_FIELD_ID}-description`}>
-						Name what a person can see that the captured work cannot show.
+						{PEOPLE_REASON_HINT}
 					</FieldDescription>
 				</Field>
 			)}
