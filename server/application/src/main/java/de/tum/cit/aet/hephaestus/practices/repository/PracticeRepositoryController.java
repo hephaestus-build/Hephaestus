@@ -13,6 +13,10 @@ import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceScopedController;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import org.springframework.http.ProblemDetail;
+import org.springframework.http.MediaType;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.media.Content;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -50,6 +54,12 @@ public class PracticeRepositoryController {
     @PutMapping
     @RequiresRecentSignIn(refusal = "PRACTICE_REPOSITORY_CHANGE")
     @Audited(ledger = AuditLedger.CONFIG_AUDIT, type = "PRACTICE_REPOSITORY")
+    @ApiResponse(
+            responseCode = "400",
+            description = "The repository is not one that the workspace monitors, or the directory is not a relative path",
+            content = @Content(
+                    mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE,
+                    schema = @Schema(implementation = ProblemDetail.class)))
     @Operation(
             operationId = "setPracticeRepository",
             summary = "Set the practice repository",
@@ -63,6 +73,12 @@ public class PracticeRepositoryController {
     @DeleteMapping
     @RequiresRecentSignIn(refusal = "PRACTICE_REPOSITORY_CHANGE")
     @Audited(ledger = AuditLedger.CONFIG_AUDIT, type = "PRACTICE_REPOSITORY")
+    @ApiResponse(
+            responseCode = "404",
+            description = "The workspace has no practice repository to unset",
+            content = @Content(
+                    mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE,
+                    schema = @Schema(implementation = ProblemDetail.class)))
     @Operation(
             operationId = "unsetPracticeRepository",
             summary = "Unset the practice repository",
@@ -76,6 +92,18 @@ public class PracticeRepositoryController {
     @PutMapping("/practices/{practiceSlug}/edited-in")
     @RequiresRecentSignIn(refusal = "PRACTICE_REPOSITORY_CHANGE")
     @Audited(ledger = AuditLedger.CONFIG_AUDIT, type = "PRACTICE_DEFINITION")
+    @ApiResponse(
+            responseCode = "409",
+            description = "No practice repository, it cannot be read now, its default branch has no folder for this practice, or the setting changed meanwhile",
+            content = @Content(
+                    mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE,
+                    schema = @Schema(implementation = ProblemDetail.class)))
+    @ApiResponse(
+            responseCode = "422",
+            description = "The practice folder is not valid: problems lists each problem",
+            content = @Content(
+                    mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE,
+                    schema = @Schema(implementation = ProblemDetail.class)))
     @Operation(
             operationId = "changePracticeEditedIn",
             summary = "Move a practice to the practice repository, or edit it in Hephaestus",
