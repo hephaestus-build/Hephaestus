@@ -44,16 +44,15 @@ class RequestLimitsIntegrationTest {
     }
 
     @Test
-    void shouldLeaveAFormBodyOverTheLimitUnparsedWhenAClientPostsOne() throws IOException {
+    void shouldRefuseAFormBodyOverTheLimitWhenAClientPostsOne() throws IOException {
         try (var context = start()) {
             int port = port(context);
             String body = "payload=" + "a".repeat(FORM_LIMIT - 1024);
             assertThat(exchange(port, form(body.length()) + body))
                     .startsWith("HTTP/1.1 200")
                     .endsWith(Integer.toString(FORM_LIMIT - 1024));
-            // Tomcat decides from Content-Length, before it reads the body, and leaves the required parameter
-            // missing. So the answer comes although the body is never sent.
-            assertThat(statusLine(port, form(FORM_LIMIT + 1024))).startsWith("HTTP/1.1 400");
+            // Tomcat refuses it from Content-Length alone, so the answer comes although the body is never sent.
+            assertThat(statusLine(port, form(FORM_LIMIT + 1024))).startsWith("HTTP/1.1 413");
         }
     }
 
