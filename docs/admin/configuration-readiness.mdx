@@ -113,7 +113,9 @@ The access cookie lasts 24 hours.
 While a tab is active, the browser renews it about every hour. After the cookie expires, the user must sign in.
 A session ends after 7 days, whatever the activity.
 Renewal never moves a session past that deadline.
-An [MCP client](./mcp-clients.mdx) session is the exception: it lapses 90 days after its last renewal, so each use moves its deadline. Revocation and account suspension deny access before either deadline.
+Revocation and account suspension deny access before either deadline.
+
+An [MCP client](./mcp-clients.mdx) session is the exception: it lapses 90 days after its last renewal, so each use moves its deadline.
 
 Tokens stay in HttpOnly, Secure, host-only, SameSite=Lax cookies, never in local storage.
 An account can hold parallel sessions, one for each browser or installed client.
