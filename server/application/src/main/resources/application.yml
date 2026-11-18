@@ -188,6 +188,14 @@ spring:
 server:
     port: ${SERVER_PORT:8080}
     shutdown: graceful
+    # Tomcat refuses these before any filter, controller or decoder runs, so a pre-auth request cannot make the
+    # server parse more than this. A header block over the limit gets 400, and a form body over the form limit
+    # gets 413. Tomcat reads at most the swallow limit of a body that it does not read. JSON bodies have their
+    # own limits per surface (PayloadSizeFilter). RequestLimitsIntegrationTest holds these values.
+    max-http-request-header-size: 8KB
+    tomcat:
+        max-http-form-post-size: 2MB
+        max-swallow-size: 2MB
 
 # Actuator on the management port; health probes for Kubernetes liveness/readiness.
 management:
