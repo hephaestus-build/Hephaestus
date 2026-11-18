@@ -15,7 +15,12 @@ import {
 	type EditInHephaestusControl,
 	WorkspaceEditInHephaestusDialog,
 } from "@/components/admin/practices/WorkspaceEditInHephaestusDialog";
+import {
+	type MoveToRepositoryControl,
+	WorkspaceMoveToRepositoryDialog,
+} from "@/components/admin/practices/WorkspaceMoveToRepositoryDialog";
 import { WorkspacePracticeDefinition } from "@/components/admin/practices/WorkspacePracticeDefinition";
+import { WorkspacePracticeEditedInHephaestusNote } from "@/components/admin/practices/WorkspacePracticeEditedInHephaestusNote";
 import { WorkspacePracticeEditedInNote } from "@/components/admin/practices/WorkspacePracticeEditedInNote";
 import type { PanelState } from "@/components/common/panel-state";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
@@ -43,6 +48,8 @@ export interface WorkspacePracticePanelProps {
 	onResetToCatalog: () => void;
 	/** Edit in Hephaestus, for a practice edited in the practice repository. */
 	editInHephaestus: EditInHephaestusControl;
+	/** Move to repository, for a practice edited in Hephaestus. */
+	moveToRepository: MoveToRepositoryControl;
 }
 
 export function WorkspacePracticePanel({
@@ -52,8 +59,11 @@ export function WorkspacePracticePanel({
 	path,
 	onResetToCatalog,
 	editInHephaestus,
+	moveToRepository,
 }: WorkspacePracticePanelProps) {
 	const editLinkId = useId();
+	const moveId = useId();
+	const editInHephaestusId = useId();
 
 	if (state.status !== "ready") {
 		return (
@@ -102,6 +112,8 @@ export function WorkspacePracticePanel({
 				<div className="space-y-6">
 					{editedInRepository && (
 						<WorkspacePracticeEditedInNote
+							workspaceSlug={workspaceSlug}
+							editInHephaestusId={editInHephaestusId}
 							repositoryName={editInHephaestus.repositoryName}
 							sourceCommit={practice.currentVersion.sourceCommit}
 							onEditInHephaestus={() => editInHephaestus.onConfirmingChange(true)}
@@ -138,6 +150,15 @@ export function WorkspacePracticePanel({
 							)
 						}
 					/>
+					{/* Absent while the practice repository is unknown: it offers nothing that may not be. */}
+					{!editedInRepository && moveToRepository.repository !== undefined && (
+						<WorkspacePracticeEditedInHephaestusNote
+							workspaceSlug={workspaceSlug}
+							repository={moveToRepository.repository}
+							moveId={moveId}
+							onMoveToRepository={moveToRepository.onOpen}
+						/>
+					)}
 				</div>
 			</DrawerBody>
 
@@ -172,6 +193,19 @@ export function WorkspacePracticePanel({
 					confirming: editInHephaestus.confirming && editedInRepository,
 				}}
 				finalFocus={() => document.getElementById(editLinkId) ?? true}
+			/>
+			{/* Outside the notes for the same reason: the move ends in the render that shows the practice
+			    read-only, so focus lands on Edit in Hephaestus, and a cancel on Move to repository. */}
+			<WorkspaceMoveToRepositoryDialog
+				practiceName={definition.name}
+				practiceSlug={practice.slug}
+				// A practice edited in the repository never asks to move there.
+				control={
+					editedInRepository ? { ...moveToRepository, request: undefined } : moveToRepository
+				}
+				finalFocus={() =>
+					document.getElementById(editInHephaestusId) ?? document.getElementById(moveId) ?? true
+				}
 			/>
 		</>
 	);

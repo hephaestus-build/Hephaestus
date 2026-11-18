@@ -68,6 +68,7 @@ export const EditedInRepository: Story = {
 		editInHephaestus: { practiceName: "Explain the change", control },
 		children: (
 			<WorkspacePracticeEditedInNote
+				workspaceSlug="acme"
 				repositoryName="acme/practices"
 				sourceCommit={null}
 				onEditInHephaestus={fn()}
@@ -139,6 +140,7 @@ export const EditInHephaestusFocusesTheEditor: Story = {
 							) : (
 								<DrawerBody>
 									<WorkspacePracticeEditedInNote
+										workspaceSlug="acme"
 										repositoryName="acme/practices"
 										sourceCommit={null}
 										onEditInHephaestus={() => setView({ ...view, confirming: true })}

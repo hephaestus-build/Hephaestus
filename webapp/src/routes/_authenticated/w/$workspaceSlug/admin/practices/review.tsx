@@ -6,7 +6,7 @@ import {
 	useQueryClient,
 } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import {
 	createReviewBatchMutation,
 	createReviewScheduleMutation,
@@ -74,6 +74,7 @@ import { hasText } from "@/lib/text";
 import { toast } from "@/lib/toast";
 import { pagedListState } from "@/runtime/tanstack-query/infinite-list";
 import { loadedPages, offsetPageParams } from "@/runtime/tanstack-query/list-pages";
+import { useEveryPage } from "@/runtime/tanstack-query/use-every-page";
 import { useQueryReadRefusal } from "@/runtime/tanstack-query/use-query-read-refusal";
 
 export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/admin/practices/review")({
@@ -329,6 +330,7 @@ function AutomatedReviewSection({ workspaceSlug }: { workspaceSlug: string }) {
 		repositoriesQuery.isError,
 		repositoriesQuery.error,
 	);
+	// A count of the chosen people needs all of a workspace's members.
 	const membersQuery = useInfiniteQuery({
 		...listMembershipsInfiniteOptions({
 			path: { workspaceSlug },
@@ -557,24 +559,6 @@ function AutomatedReviewSection({ workspaceSlug }: { workspaceSlug: string }) {
 }
 
 const ACTIVE_BATCH_POLL_MS = 15_000;
-
-/**
- * A count of the chosen people needs all of a workspace's members, so this list reads to the end by itself.
- * It waits for any fetch, not only a next page: a next-page fetch during a refetch cancels the refetch.
- */
-function useEveryPage(query: {
-	hasNextPage: boolean;
-	isFetching: boolean;
-	isError: boolean;
-	fetchNextPage: () => unknown;
-}) {
-	const { hasNextPage, isFetching, isError, fetchNextPage } = query;
-	useEffect(() => {
-		if (hasNextPage && !isFetching && !isError) {
-			void fetchNextPage();
-		}
-	}, [hasNextPage, isFetching, isError, fetchNextPage]);
-}
 
 function PastWorkSection({ workspaceSlug }: { workspaceSlug: string }) {
 	const queryClient = useQueryClient();

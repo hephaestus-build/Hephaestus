@@ -53,6 +53,18 @@ const editInHephaestus = {
 	onConfirm: fn(),
 };
 
+const moveToRepository = {
+	repository: {
+		repositoryItemId: "7",
+		nameWithOwner: "acme/practices",
+		defaultBranch: "main",
+		directory: ".hephaestus/practices",
+	},
+	onOpen: fn(),
+	onCancel: fn(),
+	onConfirm: fn(),
+};
+
 const meta = {
 	component: WorkspacePracticePanel,
 	parameters: { layout: "fullscreen" },
@@ -63,11 +75,13 @@ const meta = {
 		path: { behind: [{ label: "Practice setup", depth: 0 }], onClose: fn() },
 		onResetToCatalog: fn(),
 		editInHephaestus,
+		moveToRepository,
 	},
 	argTypes: {
 		state: { control: false },
 		path: { control: false },
 		editInHephaestus: { control: false },
+		moveToRepository: { control: false },
 	},
 	render: (args) => (
 		<InLevelStack entry={{ kind: "practice", id: practice.slug }} path={args.path}>
@@ -212,6 +226,75 @@ export const EditableNeverConfirms: Story = {
 	args: { editInHephaestus: { ...editInHephaestus, confirming: true } },
 	play: async () => {
 		await expectSettledVisible(await screen.findByRole("link", { name: "Edit practice" }));
+		await expect(screen.queryByRole("alertdialog")).toBeNull();
+	},
+};
+
+/** A practice edited in Hephaestus offers the reverse: Move to repository asks first, in a dialog. */
+export const OffersMoveToRepository: Story = {
+	play: async ({ args }) => {
+		await expectSettledVisible(await screen.findByText("Edited in Hephaestus"));
+		await expect(
+			screen.getByText(/Move it to acme\/practices to change its definition/u),
+		).toBeVisible();
+		await userEvent.click(screen.getByRole("button", { name: "Move to repository" }));
+		await expect(args.moveToRepository.onOpen).toHaveBeenCalledTimes(1);
+		await expect(screen.queryByRole("alertdialog")).toBeNull();
+	},
+};
+
+/**
+ * Without a practice repository the action stays on screen, unavailable, because an admin can set
+ * one: the reason links to the setting.
+ */
+export const NoPracticeRepository: Story = {
+	args: { moveToRepository: { ...moveToRepository, repository: null } },
+	play: async () => {
+		const move = await screen.findByRole("button", { name: "Move to repository" });
+		await expectSettledVisible(move);
+		await expect(move).toHaveAttribute("aria-disabled", "true");
+		await expect(move).toHaveAccessibleDescription(
+			"To change it in a repository instead, first set the practice repository.",
+		);
+		await expect(screen.getByRole("link", { name: "practice repository" })).toHaveAttribute(
+			"href",
+			"/w/demo/admin/practices#practice-repository",
+		);
+	},
+};
+
+/** While the setting loads, the panel offers nothing that may not be there. */
+export const PracticeRepositoryUnknown: Story = {
+	args: { moveToRepository: { ...moveToRepository, repository: undefined } },
+	play: async () => {
+		await expectSettledVisible(await screen.findByRole("link", { name: "Edit practice" }));
+		await expect(screen.queryByText("Edited in Hephaestus")).toBeNull();
+		await expect(screen.queryByRole("button", { name: "Move to repository" })).toBeNull();
+	},
+};
+
+export const ConfirmingMoveToRepository: Story = {
+	args: { moveToRepository: { ...moveToRepository, request: { phase: "confirming" } } },
+	play: async ({ args }) => {
+		const dialog = await screen.findByRole("alertdialog", {
+			name: `Move “${name}” to the practice repository?`,
+		});
+		await expectSettledVisible(dialog);
+		await expect(within(dialog).getByText(`.hephaestus/practices/${practice.slug}/`)).toBeVisible();
+		await userEvent.click(within(dialog).getByRole("button", { name: "Move to repository" }));
+		await expect(args.moveToRepository.onConfirm).toHaveBeenCalledTimes(1);
+	},
+};
+
+/** A practice edited in the repository already never shows Move to repository or its dialog. */
+export const EditedInRepositoryNeverMoves: Story = {
+	args: {
+		state: inRepository,
+		moveToRepository: { ...moveToRepository, request: { phase: "confirming" } },
+	},
+	play: async () => {
+		await expectSettledVisible(await screen.findByText("Edited in acme/practices"));
+		await expect(screen.queryByRole("button", { name: "Move to repository" })).toBeNull();
 		await expect(screen.queryByRole("alertdialog")).toBeNull();
 	},
 };

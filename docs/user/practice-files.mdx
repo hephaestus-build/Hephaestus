@@ -42,13 +42,19 @@ It gives each problem and the cited lines only if every person whose work it rea
 A workspace can keep its practices as folders in one monitored repository, its **practice repository**.
 The folders live on the default branch, under `.hephaestus/practices/` unless you name another directory.
 
-1. Set the practice repository with `PUT /api/workspaces/<slug>/practice-repository`.
-   The repository must be one that the workspace monitors.
+1. Open **Practice setup**. In **Practice repository**, choose **Set practice repository**.
+   Choose a repository that the workspace monitors.
+   Optionally, name the directory of the practice folders, as a path from the repository root.
 2. Commit the folder of a practice on the default branch. **Download as files** gives it.
-3. Move the practice there with `PUT /api/workspaces/<slug>/practice-repository/practices/<practice>/edited-in` and `{"editedIn": "REPOSITORY"}`.
+3. Open the practice in **Practice setup**, choose **Move to repository**, and confirm.
    Hephaestus reads the folder at the head of the default branch.
-   It refuses the move when the folder is missing or not valid, and lists each problem.
+   When it refuses the move, it shows the reason.
+   For a folder that is not valid, it also lists each problem with its file and, where known, its line and column.
    When the folder's definition differs from the current version, it becomes the next version.
+
+**Change** and **Unset** in **Practice repository** first ask you to confirm.
+Changing the repository or the directory makes every practice edited in the old one editable in Hephaestus again.
+Automation can do the same through the API, under `/api/workspaces/<slug>/practice-repository`.
 
 A practice edited in the repository is read-only in Hephaestus, except for its feedback mode and position.
 In **Practice setup**, it shows **Edited in the practice repository**.

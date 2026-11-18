@@ -76,6 +76,7 @@ import {
 	WorkspacePracticePanel,
 	type WorkspacePracticeState,
 } from "@/components/admin/practices/WorkspacePracticePanel";
+import { WorkspacePracticeRepositoryCard } from "@/components/admin/practices/WorkspacePracticeRepositoryCard";
 import { WorkspaceResetToCatalogDialog } from "@/components/admin/practices/WorkspaceResetToCatalogDialog";
 import { ConfirmAccessDialog } from "@/components/auth/ConfirmAccessDialog";
 import { QueryErrorAlert, queryErrorIsRetryable } from "@/components/common/QueryErrorAlert";
@@ -112,6 +113,7 @@ import { useEditInHephaestus } from "@/hooks/use-edit-in-hephaestus";
 import { usePracticeCatalogMutations } from "@/hooks/use-practice-catalog-mutations";
 import { usePracticeCatalogReset } from "@/hooks/use-practice-catalog-reset";
 import { usePracticeEditor } from "@/hooks/use-practice-editor";
+import { usePracticeRepository } from "@/hooks/use-practice-repository";
 import { isRecord } from "@/lib/is-record";
 import { workspaceAdminHead } from "@/lib/page-title";
 import { problemStatusOf } from "@/lib/problem-detail";
@@ -346,6 +348,11 @@ function PracticeCatalogRoute() {
 		workspaceSlug,
 		practices?.some((practice) => practice.editedIn === "REPOSITORY") === true ||
 			levelQueries.some((query) => workspacePracticeAt(query)?.editedIn === "REPOSITORY"),
+	);
+	// The setting itself, and Move to repository in each level of a practice edited here.
+	const repositorySetting = usePracticeRepository(
+		workspaceSlug,
+		detailStack.map((entry) => detailStackKey(entry)),
 	);
 	/** The groups the editor offers. A hidden group still holds practices but is not a destination. */
 	const editableGroups = groupsQuery.data?.filter((group) => group.shownToDevelopers);
@@ -635,6 +642,7 @@ function PracticeCatalogRoute() {
 			body = (
 				<DrawerBody>
 					<WorkspacePracticeEditedInNote
+						workspaceSlug={workspaceSlug}
 						repositoryName={editInHephaestus.repositoryName}
 						sourceCommit={editing.currentVersion.sourceCommit}
 						onEditInHephaestus={() => editInHephaestus.onConfirmingChange(true)}
@@ -812,6 +820,7 @@ function PracticeCatalogRoute() {
 					state={state}
 					onResetToCatalog={() => catalogReset.open({ kind: "practice", slug: entry.id })}
 					editInHephaestus={practiceRepository.control(detailStackKey(entry), entry.id)}
+					moveToRepository={repositorySetting.move(detailStackKey(entry), entry.id)}
 				/>
 			);
 		}
@@ -875,6 +884,7 @@ function PracticeCatalogRoute() {
 					</>
 				}
 			/>
+			<WorkspacePracticeRepositoryCard workspaceSlug={workspaceSlug} {...repositorySetting.card} />
 			{catalogTree}
 
 			<DetailDrawerStack
@@ -983,6 +993,7 @@ function PracticeCatalogRoute() {
 				onConfirm={catalogReset.confirm}
 			/>
 			<ConfirmAccessDialog {...practiceRepository.confirmation} />
+			<ConfirmAccessDialog {...repositorySetting.confirmation} />
 		</PageLayout>
 	);
 }
