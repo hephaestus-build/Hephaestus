@@ -1,0 +1,10 @@
+{
+	"accepted": [
+		{
+			"load": "src/routes/_authenticated/w/$workspaceSlug/admin/members.tsx?tsr-split=loader",
+			"gzipBytes": 1525,
+			"acceptedBy": "branch perf/webapp-pages-read-before-they-open",
+			"reason": "Members reads its rows and teams when a link to it is pointed at. This new loader chunk loads only on that hover and holds the two reads that the page then opens with: the member rows, the teams, and the shared prefetch step. The page's own chunk reuses the same chunks, and the entry stays within its budget."
+		}
+	]
+}

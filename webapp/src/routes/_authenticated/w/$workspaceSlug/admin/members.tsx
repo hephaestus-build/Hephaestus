@@ -10,7 +10,6 @@ import {
 	getAllTeamsOptions,
 	getOwnMembershipQueryKey,
 	getUsersWithTeamsQueryKey,
-	listMembershipsOptions,
 	listMembershipsQueryKey,
 	removeMemberMutation,
 	setMemberHiddenMutation,
@@ -41,10 +40,14 @@ import type { WorkspaceRole } from "@/lib/workspace-roles";
 import { NoWorkspaceContainer } from "@/routes/-NoWorkspaceContainer";
 import { useAuth } from "@/runtime/auth/AuthContext";
 import { keepSameSubject } from "@/runtime/tanstack-query/keep-same-subject";
+import { prefetchPageRead } from "@/runtime/tanstack-query/prefetch-page-read";
 import { useQueryReadRefusal } from "@/runtime/tanstack-query/use-query-read-refusal";
+
+import { membersRead, viewOf } from "./-members-read";
 
 export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/admin/members")({
 	head: workspaceAdminHead("Members"),
+	codeSplitGroupings: [["loader"], ["component"], ["errorComponent"], ["notFoundComponent"]],
 	validateSearch: z.object({
 		q: z.coerce.string().max(200).optional().catch(undefined),
 		team: z.coerce.string().optional().catch(undefined),
@@ -60,6 +63,22 @@ export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/admin/mem
 			.optional()
 			.catch(undefined),
 	}),
+	// The loader reads the validated search from here: parsing the address in the split loader would
+	// pull the search schema out of the entry chunk into a chunk of its own.
+	beforeLoad: ({ search }) => ({ membersSearch: search }),
+	// No loader deps: a search, sort or page change is a search change on this page, which reads the
+	// new rows itself and keeps the current ones on screen meanwhile.
+	loader: ({ context, params }) => {
+		if (!context.workspace && !context.administrationWorkspace) {
+			return;
+		}
+		const view = viewOf(context.membersSearch);
+		prefetchPageRead(context.queryClient, membersRead(params.workspaceSlug, view));
+		prefetchPageRead(
+			context.queryClient,
+			getAllTeamsOptions({ path: { workspaceSlug: params.workspaceSlug } }),
+		);
+	},
 	component: AdminMembersContainer,
 });
 
@@ -105,25 +124,9 @@ function AdminMembersContainer() {
 	// The Actions menu the removal came from, for the same reason as `roleChangeTrigger`.
 	const removalTrigger = useRef<HTMLElement>(null);
 
-	const view: WorkspaceMembersTableView = {
-		q: search.q ?? "",
-		team: search.team ?? "all",
-		sort: search.sort ?? "name",
-		desc: search.desc ?? false,
-		page: search.page ?? 0,
-		size: search.size ?? 10,
-	};
+	const view = viewOf(search);
 	const team = view.team === "all" ? undefined : view.team;
-	const membersQueryOptions = listMembershipsOptions({
-		path: { workspaceSlug: workspaceSlug ?? "" },
-		query: {
-			q: hasText(view.q.trim()) ? view.q.trim() : undefined,
-			team,
-			page: view.page,
-			size: view.size,
-			sort: [`${view.sort},${view.desc ? "desc" : "asc"}`],
-		},
-	});
+	const membersQueryOptions = membersRead(workspaceSlug ?? "", view);
 	const membersQuery = useQuery({
 		...membersQueryOptions,
 		enabled: hasText(workspaceSlug),

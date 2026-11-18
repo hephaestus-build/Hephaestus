@@ -79,9 +79,6 @@ export const PAGE_INTRO: readonly InfoLine[] = [
 	{ term: "Your next step:", text: "it is in your Practice profile." },
 ];
 
-/** Keep completed queries fresh across window changes and brief focus changes. */
-export const ACROSS_WORKSPACE_STALE_MS = 5 * 60 * 1000;
-
 /** The overview failed: the bars and the practice groups' levels have nothing to show. */
 export const GROUPS_LOAD_ERROR = "We could not load the practice groups";
 

@@ -2,10 +2,6 @@ import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Navigate, stripSearchParams } from "@tanstack/react-router";
 import { z } from "zod";
 
-import {
-	getPracticeWorkspaceOverviewOptions,
-	getPracticeWorkspaceTilesOptions,
-} from "@/api/@tanstack/react-query.gen";
 import type {
 	PracticesAcrossWorkspace,
 	PracticesAcrossWorkspaceTiles,
@@ -28,7 +24,6 @@ import {
 import { usePracticeFocusSwitch } from "@/components/practice-focus/use-practice-focus-switch";
 import {
 	ACROSS_THE_WORKSPACE,
-	ACROSS_WORKSPACE_STALE_MS,
 	DEFAULT_WINDOW,
 	WINDOW_VALUES,
 } from "@/components/practices-across-the-workspace/across-workspace-copy";
@@ -40,6 +35,9 @@ import {
 import { useWorkspaceFeatures } from "@/hooks/use-workspace-features";
 import { pageHead } from "@/lib/page-title";
 import { keepSameSubject } from "@/runtime/tanstack-query/keep-same-subject";
+import { prefetchPageRead } from "@/runtime/tanstack-query/prefetch-page-read";
+
+import { overviewRead, tilesRead } from "./-practices-across-the-workspace-reads";
 
 /** The reader's own group and practice levels live in their Practice profile, which this level links to. */
 const LEVEL_KINDS = ["practice-group"] as const;
@@ -57,9 +55,22 @@ export const Route = createFileRoute(
 )({
 	component: PracticesAcrossTheWorkspace,
 	head: pageHead("Practices across the workspace"),
+	codeSplitGroupings: [["loader"], ["component"], ["errorComponent"], ["notFoundComponent"]],
 	validateSearch: searchSchema,
 	search: {
 		middlewares: [stripSearchParams({ window: DEFAULT_WINDOW })],
+	},
+	// The loader reads the validated window from here: parsing the address in the split loader would
+	// pull the search schema and the page's copy out of the entry chunk into chunks of their own.
+	beforeLoad: ({ search }) => ({ figuresWindow: search.window }),
+	// No loader deps: a window change is a search change on this page, which reads the other window
+	// itself and shows the current figures marked stale meanwhile.
+	loader: ({ context, params }) => {
+		if (context.workspace?.practicesEnabled !== true) {
+			return;
+		}
+		prefetchPageRead(context.queryClient, overviewRead(params.workspaceSlug));
+		prefetchPageRead(context.queryClient, tilesRead(params.workspaceSlug, context.figuresWindow));
 	},
 });
 
@@ -69,18 +80,13 @@ function PracticesAcrossTheWorkspace() {
 	const featureState = useWorkspaceFeatures(workspaceSlug);
 	const enabled = featureState.practicesEnabled === true;
 	// The splits and the open feedback read no window, so a window change never reads them again.
-	const query = useQuery({
-		...getPracticeWorkspaceOverviewOptions({ path: { workspaceSlug } }),
-		enabled,
-		staleTime: ACROSS_WORKSPACE_STALE_MS,
-	});
+	const query = useQuery({ ...overviewRead(workspaceSlug), enabled });
 	// One request per window. Another window of this workspace stands in, marked stale; another
 	// workspace's never does.
 	const tilesQuery = useQuery({
-		...getPracticeWorkspaceTilesOptions({ path: { workspaceSlug }, query: { window } }),
+		...tilesRead(workspaceSlug, window),
 		enabled,
 		placeholderData: keepSameSubject({ workspaceSlug }),
-		staleTime: ACROSS_WORKSPACE_STALE_MS,
 	});
 	const stack = parseDetailStack(detail, LEVEL_KINDS);
 	// The marked practice belongs to the group level and leaves the address with it.
