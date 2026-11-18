@@ -11424,10 +11424,6 @@ paths:
                 $ref: "#/components/schemas/PracticeRepository"
           description: The practice repository
         "204":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/PracticeRepository"
           description: The workspace has no practice repository
       summary: Read the practice repository
       tags:
