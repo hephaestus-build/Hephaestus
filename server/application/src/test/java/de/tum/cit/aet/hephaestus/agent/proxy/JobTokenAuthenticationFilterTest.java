@@ -20,6 +20,7 @@ import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurnRepository;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import de.tum.cit.aet.hephaestus.testconfig.ReviewJobFixtures;
 import jakarta.servlet.ServletException;
 import java.time.Instant;
 import java.util.Map;
@@ -262,7 +263,7 @@ class JobTokenAuthenticationFilterTest extends BaseUnitTest {
         var job = new ReviewJob();
         job.setId(UUID.randomUUID());
         RuntimeJobTestData.initialize(job, 7L);
-        job.setStatus(ReviewJobStatus.RUNNING);
+        ReviewJobFixtures.withStatus(job, ReviewJobStatus.RUNNING);
         RuntimeJobTestData.attempt(job, 3);
         return job;
     }

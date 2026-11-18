@@ -12,6 +12,7 @@ import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import java.io.Serializable;
 import java.util.UUID;
+import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Builder.Default;
@@ -55,6 +56,7 @@ public class ReviewPractice {
     private @Nullable Long practiceVersionId;
 
     @Default
+    @Setter(AccessLevel.NONE)
     @Enumerated(EnumType.STRING)
     @ColumnDefault("'QUEUED'")
     @Column(name = "status", nullable = false, length = 16)
@@ -85,6 +87,39 @@ public class ReviewPractice {
     @Enumerated(EnumType.STRING)
     @Column(name = "sealed_feedback_mode", length = 16)
     private @Nullable FeedbackMode sealedFeedbackMode;
+
+    /** Capture decided the practice: Ready to run, or Withheld or Failed with its reason. */
+    public void decideCapture(ReviewPracticeStatus decision, @Nullable String decisionReason) {
+        if (status == decision) return;
+        move(decision);
+        reason = decisionReason;
+    }
+
+    public void start() {
+        move(ReviewPracticeStatus.RUNNING);
+    }
+
+    public void finish() {
+        move(ReviewPracticeStatus.DONE);
+    }
+
+    /** Withholds the practice. One that is withheld already keeps the reason it was withheld for first. */
+    public void withhold(String withheldReason) {
+        if (status == ReviewPracticeStatus.WITHHELD) return;
+        move(ReviewPracticeStatus.WITHHELD);
+        reason = withheldReason;
+    }
+
+    /**
+     * A move to the state the practice is in changes nothing and keeps its first reason: closure and capture may both
+     * reach a practice that an earlier stage already decided. A review job's move refuses that instead.
+     */
+    private void move(ReviewPracticeStatus next) {
+        if (status == next) return;
+        if (!status.canTransitionTo(next))
+            throw new IllegalStateException("A " + status + " practice cannot become " + next + ".");
+        status = next;
+    }
 
     public record Id(UUID reviewId, long practiceId) implements Serializable {}
 }

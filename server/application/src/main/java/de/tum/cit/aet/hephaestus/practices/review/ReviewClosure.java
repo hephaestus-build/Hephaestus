@@ -72,11 +72,10 @@ class ReviewClosure {
         for (var assignment : assignments.lockAssignments(workspaceId, review.getId())) {
             if (assignment.getStatus() == ReviewPracticeStatus.QUEUED
                     || unmeasured.contains(assignment.getPracticeId())) {
-                assignment.setStatus(ReviewPracticeStatus.WITHHELD);
-                assignment.setReason(reason);
+                assignment.withhold(reason);
             } else if (assignment.getStatus() != ReviewPracticeStatus.WITHHELD
                     && assignment.getStatus() != ReviewPracticeStatus.FAILED) {
-                assignment.setStatus(ReviewPracticeStatus.DONE);
+                assignment.finish();
             }
         }
     }

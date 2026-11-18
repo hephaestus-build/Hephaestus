@@ -61,6 +61,7 @@ import de.tum.cit.aet.hephaestus.integration.core.fabric.FabricLayout;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
+import de.tum.cit.aet.hephaestus.testconfig.ReviewJobFixtures;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -180,7 +181,7 @@ class ReviewGatewayReplicasIntegrationTest extends BaseIntegrationTest {
         job = Objects.requireNonNull(transactions.execute(status -> {
             var created = new ReviewJob();
             RuntimeJobTestData.initialize(created, workspace.getId());
-            created.setStatus(ReviewJobStatus.QUEUED);
+            ReviewJobFixtures.withStatus(created, ReviewJobStatus.QUEUED);
             created.setConfigSnapshot(configuration());
             created.prePersist();
             var saved = jobs.saveAndFlush(RuntimeJobTestData.persistParent(jdbc, created));
@@ -194,7 +195,7 @@ class ReviewGatewayReplicasIntegrationTest extends BaseIntegrationTest {
                             Set.of(AgentRunKind.REVIEW)))
                     .isPresent();
             RuntimeJobTestData.leaseUntil(jdbc, saved, Instant.now().plus(RuntimeJobTestData.LEASE));
-            saved.setStatus(ReviewJobStatus.RUNNING);
+            ReviewJobFixtures.withStatus(saved, ReviewJobStatus.RUNNING);
             saved.setStartedAt(Instant.now());
             return jobs.saveAndFlush(saved);
         }));
@@ -299,7 +300,7 @@ class ReviewGatewayReplicasIntegrationTest extends BaseIntegrationTest {
         transactions.executeWithoutResult(status -> {
             var current = jobs.findById(job.getId()).orElseThrow();
             if (current.getStatus() == ReviewJobStatus.RUNNING || current.getStatus() == ReviewJobStatus.QUEUED) {
-                current.setStatus(ReviewJobStatus.CANCELLED);
+                ReviewJobFixtures.withStatus(current, ReviewJobStatus.CANCELLED);
                 current.setCompletedAt(Instant.now());
                 jobs.saveAndFlush(current);
                 RuntimeJobTestData.agree(jdbc, current.getId());

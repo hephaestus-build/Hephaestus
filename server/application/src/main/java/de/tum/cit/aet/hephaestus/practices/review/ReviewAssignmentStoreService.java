@@ -136,12 +136,11 @@ public class ReviewAssignmentStoreService implements ReviewAssignmentStore {
                 throw new IllegalStateException("Capture cannot rewrite terminal membership.");
             if (review.getKind() == ReviewKind.ITEM) {
                 assignment.setCaptureDecision(decision.facts());
-                assignment.setStatus(decision.status());
-                assignment.setReason(decision.reason());
+                assignment.decideCapture(decision.status(), decision.reason());
             } else if (assignment.getStatus() == ReviewPracticeStatus.QUEUED
                     || assignment.getStatus() == ReviewPracticeStatus.READY) {
                 // A scan records capture per file; its practice runs from the first file a server captures.
-                assignment.setStatus(ReviewPracticeStatus.RUNNING);
+                assignment.start();
             }
             boolean refused = decision.status() == ReviewPracticeStatus.WITHHELD
                     || decision.status() == ReviewPracticeStatus.FAILED;
@@ -160,7 +159,7 @@ public class ReviewAssignmentStoreService implements ReviewAssignmentStore {
                     detail.set(
                             "custody", json.valueToTree(reusable.orElseThrow().custody()));
                     locked.reuse(reusable.orElseThrow().result().getId());
-                    assignment.setStatus(ReviewPracticeStatus.DONE);
+                    assignment.finish();
                     reused.add(decision.practiceId());
                 }
                 locked.setDetail(detail);
@@ -239,9 +238,6 @@ public class ReviewAssignmentStoreService implements ReviewAssignmentStore {
             member.setStagedAttempt(null);
             payloads.write(workspaceId, id.reviewId(), id.practiceId(), id.itemId(), null);
         }
-        if (review.getKind() == ReviewKind.ITEM) {
-            assignment.setStatus(ReviewPracticeStatus.WITHHELD);
-            assignment.setReason(reason);
-        }
+        if (review.getKind() == ReviewKind.ITEM) assignment.withhold(reason);
     }
 }

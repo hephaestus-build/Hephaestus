@@ -21,6 +21,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.CheckoutUnverifiedExceptio
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import de.tum.cit.aet.hephaestus.testconfig.ReviewJobFixtures;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -51,7 +52,7 @@ class ReviewPreparationCheckpointTest extends BaseUnitTest {
     private ReviewJob job() {
         var job = RuntimeReviewTestData.job();
         job.setRunId(UUID.randomUUID());
-        job.setStatus(ReviewJobStatus.RUNNING);
+        ReviewJobFixtures.withStatus(job, ReviewJobStatus.RUNNING);
         when(jobs.findByIdAndWorkspaceId(job.getId(), job.getWorkspaceId())).thenReturn(Optional.of(job));
         return job;
     }
@@ -205,7 +206,7 @@ class ReviewPreparationCheckpointTest extends BaseUnitTest {
         var files = files();
         try (var restored = files.resume(job)) {
             Path index = Objects.requireNonNull(restored.filesOnDisk().get("INDEX.json"));
-            job.setStatus(ReviewJobStatus.FAILED);
+            ReviewJobFixtures.withStatus(job, ReviewJobStatus.FAILED);
 
             assertThat(files.cleanEndedAttempts()).isZero();
 

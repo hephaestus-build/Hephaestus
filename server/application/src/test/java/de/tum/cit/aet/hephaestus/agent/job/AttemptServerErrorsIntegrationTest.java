@@ -9,6 +9,7 @@ import de.tum.cit.aet.hephaestus.agent.runtime.PiResultParser;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageEventRepository;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
+import de.tum.cit.aet.hephaestus.testconfig.ReviewJobFixtures;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.PracticeModelTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
@@ -121,7 +122,7 @@ class AttemptServerErrorsIntegrationTest extends BaseIntegrationTest {
         var work = modelFixtures.work(
                 workspace, name, "chat.thread", Math.floorMod(UUID.randomUUID().getLeastSignificantBits(), 1_000_000L));
         var job = work.job();
-        job.setStatus(ReviewJobStatus.RUNNING);
+        ReviewJobFixtures.withStatus(job, ReviewJobStatus.RUNNING);
         return RuntimeJobTestData.save(new TransactionTemplate(transactions), jdbc, jobs, job);
     }
 

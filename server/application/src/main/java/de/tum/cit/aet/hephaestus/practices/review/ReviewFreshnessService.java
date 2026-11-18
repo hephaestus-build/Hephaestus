@@ -11,7 +11,6 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewCaptureDecision;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewFreshness;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewItemState;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewKind;
-import de.tum.cit.aet.hephaestus.practices.spi.ReviewPracticeStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewSnapshot;
 import java.time.Clock;
 import java.util.Collection;
@@ -98,7 +97,7 @@ public class ReviewFreshnessService implements ReviewFreshness {
         if (review.getKind() == ReviewKind.SCAN) return true;
         var state = checked.currentness();
         if (state == Currentness.CURRENT) {
-            assignment.setStatus(ReviewPracticeStatus.RUNNING);
+            assignment.start();
             return true;
         }
         var reason = state == Currentness.STALE ? "REPLACED" : "READINESS_REFUSED";
@@ -109,8 +108,7 @@ public class ReviewFreshnessService implements ReviewFreshness {
                         : "The current sources could not be verified before this practice started: "
                                 + checked.unreadReason() + ".",
                 clock.instant());
-        assignment.setStatus(ReviewPracticeStatus.WITHHELD);
-        assignment.setReason(reason);
+        assignment.withhold(reason);
         return false;
     }
 

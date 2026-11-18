@@ -40,6 +40,7 @@ import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxSpec;
 import de.tum.cit.aet.hephaestus.core.lock.ClusterLock;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import de.tum.cit.aet.hephaestus.testconfig.ReviewJobFixtures;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -100,7 +101,7 @@ class ReviewSandboxRunsTest extends BaseUnitTest {
         job.setWorkspaceId(7);
         job.setRunId(fence.runId());
         job.setReviewId(UUID.randomUUID());
-        job.setStatus(ReviewJobStatus.RUNNING);
+        ReviewJobFixtures.withStatus(job, ReviewJobStatus.RUNNING);
         var snapshot = new ConfigSnapshot(
                 ConfigSnapshot.SCHEMA_VERSION,
                 new FrozenModel(
@@ -189,7 +190,7 @@ class ReviewSandboxRunsTest extends BaseUnitTest {
         job.setWorkspaceId(7);
         job.setRunId(UUID.randomUUID());
         job.setReviewId(UUID.randomUUID());
-        job.setStatus(ReviewJobStatus.RUNNING);
+        ReviewJobFixtures.withStatus(job, ReviewJobStatus.RUNNING);
         job.setConfigSnapshot(new ConfigSnapshot(
                         ConfigSnapshot.SCHEMA_VERSION,
                         new FrozenModel(
@@ -237,7 +238,7 @@ class ReviewSandboxRunsTest extends BaseUnitTest {
                 UUID.randomUUID(), 7, ReviewRunKind.subject(job.getReviewId()), AgentSandboxKind.REVIEW);
         var run = new SandboxRun(sandbox, fence, AgentRunKind.REVIEW, 0);
         when(preparation.prepare(any(), any(), any(), any(), any())).thenAnswer(invocation -> {
-            if (!unreadable) job.setStatus(ReviewJobStatus.CANCELLED);
+            if (!unreadable) ReviewJobFixtures.withStatus(job, ReviewJobStatus.CANCELLED);
             throw new JobPreparationException("The review inputs could not be captured");
         });
         if (unreadable) {
@@ -394,7 +395,7 @@ class ReviewSandboxRunsTest extends BaseUnitTest {
         job.setWorkspaceId(7);
         job.setRunId(fence.runId());
         job.setReviewId(UUID.randomUUID());
-        job.setStatus(ReviewJobStatus.RUNNING);
+        ReviewJobFixtures.withStatus(job, ReviewJobStatus.RUNNING);
         when(jobs.findByRunIdAndWorkspaceId(fence.runId(), 7)).thenReturn(Optional.of(job));
         when(reviewRuns.requeue(eq(jobId), eq(fence), eq(AgentRuns.Charge.SPEND), any(), isNull()))
                 .thenReturn(true);

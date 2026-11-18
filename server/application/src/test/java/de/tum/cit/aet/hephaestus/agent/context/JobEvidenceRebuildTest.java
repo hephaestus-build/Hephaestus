@@ -20,6 +20,7 @@ import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
 import de.tum.cit.aet.hephaestus.integration.core.fabric.FabricLayout;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CheckoutUnverifiedException;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
+import de.tum.cit.aet.hephaestus.testconfig.ReviewJobFixtures;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -191,7 +192,7 @@ class JobEvidenceRebuildTest {
         assertThat(files().readText(erased, "context/item.json", SHA)).isEmpty();
 
         var ended = runningJob();
-        ended.setStatus(ReviewJobStatus.FAILED);
+        ReviewJobFixtures.withStatus(ended, ReviewJobStatus.FAILED);
         recorded(ended);
         files().ensureAttemptFolder(ended);
         assertThat(files().readText(ended, "context/item.json", SHA)).isEmpty();
@@ -268,7 +269,7 @@ class JobEvidenceRebuildTest {
         job.setId(UUID.randomUUID());
         RuntimeJobTestData.initialize(job, 1L);
         job.setRunId(UUID.randomUUID());
-        job.setStatus(ReviewJobStatus.RUNNING);
+        ReviewJobFixtures.withStatus(job, ReviewJobStatus.RUNNING);
         var capture = JsonMapper.builder().build().createObjectNode();
         capture.putArray("directories");
         job.setCapture(capture);

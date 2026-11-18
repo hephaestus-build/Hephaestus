@@ -30,6 +30,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ProcessingStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.LlmCatalogTestFixtures;
+import de.tum.cit.aet.hephaestus.testconfig.ReviewJobFixtures;
 import de.tum.cit.aet.hephaestus.testconfig.TestEntities;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceLifecycleService;
@@ -131,7 +132,7 @@ class AgentWorkspacePurgeIntegrationTest extends BaseIntegrationTest {
         ReviewJob job = new ReviewJob();
         RuntimeJobTestData.initialize(job, workspace.getId());
 
-        job.setStatus(ReviewJobStatus.COMPLETED);
+        ReviewJobFixtures.withStatus(job, ReviewJobStatus.COMPLETED);
         job.setCompletedAt(Instant.now());
         job.setProcessingStatus(ProcessingStatus.PENDING);
         job.setConfigSnapshot(objectMapper.createObjectNode());
@@ -178,7 +179,7 @@ class AgentWorkspacePurgeIntegrationTest extends BaseIntegrationTest {
         ReviewJob job = new ReviewJob();
         RuntimeJobTestData.initialize(job, workspace.getId());
 
-        job.setStatus(ReviewJobStatus.COMPLETED);
+        ReviewJobFixtures.withStatus(job, ReviewJobStatus.COMPLETED);
         job.setCompletedAt(Instant.now());
         job.setProcessingStatus(ProcessingStatus.DONE);
         job.setCapture(objectMapper.createObjectNode().put("private", "content-" + suffix));

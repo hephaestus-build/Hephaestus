@@ -45,6 +45,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.RepositoryKey;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.testconfig.GitTestFixtures;
+import de.tum.cit.aet.hephaestus.testconfig.ReviewJobFixtures;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -103,7 +104,7 @@ class ReviewPublishedPreparationTest extends BaseUnitTest {
     @BeforeEach
     void prepareFrozenSnapshot() throws Exception {
         job.setWorkspaceId(KEY.workspaceId());
-        job.setStatus(ReviewJobStatus.RUNNING);
+        ReviewJobFixtures.withStatus(job, ReviewJobStatus.RUNNING);
         job.setRunId(UUID.randomUUID());
         fence = new AgentRunFence(job.getRunId(), job.getWorkspaceId(), 1);
         var source = Files.createDirectories(root.resolve("source"));

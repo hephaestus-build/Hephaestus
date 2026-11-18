@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.agent.job.RuntimeJobTestData;
 import de.tum.cit.aet.hephaestus.practices.spi.ProcessingStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
+import de.tum.cit.aet.hephaestus.testconfig.ReviewJobFixtures;
 import de.tum.cit.aet.hephaestus.testconfig.TestEntities;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
@@ -51,7 +52,7 @@ class ScanCallLeasesIntegrationTest extends BaseIntegrationTest {
                 "scan-lease-" + UUID.randomUUID().toString().substring(0, 8)));
         job = new ReviewJob();
         RuntimeJobTestData.initialize(job, workspace.getId());
-        job.setStatus(ReviewJobStatus.RUNNING);
+        ReviewJobFixtures.withStatus(job, ReviewJobStatus.RUNNING);
         job.setProcessingStatus(ProcessingStatus.PENDING);
         job.setConfigSnapshot(mapper.createObjectNode());
         job = jobs.save(RuntimeJobTestData.persistParent(jdbc, job));

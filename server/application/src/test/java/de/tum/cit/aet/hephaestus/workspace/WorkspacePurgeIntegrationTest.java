@@ -50,6 +50,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.FeedbackDestination;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackIds;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackState;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
+import de.tum.cit.aet.hephaestus.testconfig.ReviewJobFixtures;
 import de.tum.cit.aet.hephaestus.testconfig.SharedTestDoubles.LateFailingWorkspacePurgeContributor;
 import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
 import de.tum.cit.aet.hephaestus.testconfig.WithAdminUser;
@@ -401,7 +402,7 @@ class WorkspacePurgeIntegrationTest extends AbstractWorkspaceIntegrationTest {
             Workspace workspace = createGitLabWorkspaceWithData("queued-agent");
             var work = modelFixtures.work(workspace, "queued-work-" + workspace.getId(), "scm.pull_request", 1L);
             var job = work.job();
-            job.setStatus(ReviewJobStatus.QUEUED);
+            ReviewJobFixtures.withStatus(job, ReviewJobStatus.QUEUED);
             agentJobRepository.saveAndFlush(job);
 
             assertThatThrownBy(() -> workspaceLifecycleService.purgeWorkspace(workspace.getWorkspaceSlug()))

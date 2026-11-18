@@ -33,6 +33,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewMethod;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewOrigin;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewPracticeStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStatus;
+import de.tum.cit.aet.hephaestus.testconfig.ReviewJobFixtures;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import java.sql.Timestamp;
@@ -276,8 +277,8 @@ public class PracticeModelTestFixtures {
         }
         frozen.judge(result.getId());
         frozen.setAttemptedAt(Instant.now());
-        assignment.setStatus(ReviewPracticeStatus.DONE);
-        work.job().setStatus(ReviewJobStatus.COMPLETED);
+        assignment.finish();
+        ReviewJobFixtures.withStatus(work.job(), ReviewJobStatus.COMPLETED);
         work.job().setProcessingStatus(ProcessingStatus.DONE);
         work.job().setCompletedAt(Instant.now());
         manager.merge(work.job());

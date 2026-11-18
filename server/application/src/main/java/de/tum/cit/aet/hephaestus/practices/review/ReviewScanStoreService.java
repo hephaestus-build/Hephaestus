@@ -12,7 +12,6 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentSnapshot;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewItemState;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewKind;
-import de.tum.cit.aet.hephaestus.practices.spi.ReviewPracticeStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewRuntimeQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewScanStore;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewSnapshotQuery;
@@ -214,8 +213,7 @@ public class ReviewScanStoreService implements ReviewScanStore {
         practice.setItemsListed(
                 Math.toIntExact(items.countByWorkspaceIdAndReviewIdAndPracticeId(workspaceId, reviewId, practiceId)));
         practice.setListingComplete(complete);
-        if (complete && Integer.valueOf(0).equals(practice.getItemsListed()))
-            practice.setStatus(ReviewPracticeStatus.DONE);
+        if (complete && Integer.valueOf(0).equals(practice.getItemsListed())) practice.finish();
     }
 
     @Override

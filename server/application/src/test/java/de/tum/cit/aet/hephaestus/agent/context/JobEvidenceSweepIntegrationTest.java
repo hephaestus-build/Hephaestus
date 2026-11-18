@@ -9,6 +9,7 @@ import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
 import de.tum.cit.aet.hephaestus.integration.core.fabric.FabricLayout;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
+import de.tum.cit.aet.hephaestus.testconfig.ReviewJobFixtures;
 import de.tum.cit.aet.hephaestus.testconfig.TestEntities;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
@@ -183,7 +184,7 @@ class JobEvidenceSweepIntegrationTest extends BaseIntegrationTest {
     private ReviewJob job(ReviewJobStatus status) {
         var job = new ReviewJob();
         RuntimeJobTestData.initialize(job, workspace.getId());
-        job.setStatus(status);
+        ReviewJobFixtures.withStatus(job, status);
         job.setConfigSnapshot(mapper.createObjectNode());
         job.setStartedAt(Instant.now());
         if (status != ReviewJobStatus.RUNNING) job.setCompletedAt(Instant.now());

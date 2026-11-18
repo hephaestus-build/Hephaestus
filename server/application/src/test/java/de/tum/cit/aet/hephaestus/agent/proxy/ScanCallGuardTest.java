@@ -39,6 +39,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewOrigin;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewSnapshot;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewSnapshotQuery;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import de.tum.cit.aet.hephaestus.testconfig.ReviewJobFixtures;
 import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
@@ -186,7 +187,7 @@ class ScanCallGuardTest extends BaseUnitTest {
                 .when(leases)
                 .release(any(UUID.class), anyLong(), any(UUID.class));
         lenient().when(budget.callCap(ArgumentMatchers.anyInt())).thenReturn(36L);
-        job.setStatus(ReviewJobStatus.RUNNING);
+        ReviewJobFixtures.withStatus(job, ReviewJobStatus.RUNNING);
         job.setRunId(LEASE);
         var price = new LlmPriceSnapshot(
                 UsageFundingSource.INSTANCE,

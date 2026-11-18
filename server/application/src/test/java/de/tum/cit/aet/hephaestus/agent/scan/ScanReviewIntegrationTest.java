@@ -41,6 +41,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewTimingFacts;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewTimingFactsQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.ScanExecutionSnapshot;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
+import de.tum.cit.aet.hephaestus.testconfig.ReviewJobFixtures;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.math.BigDecimal;
@@ -125,7 +126,7 @@ class ScanReviewIntegrationTest extends BaseIntegrationTest {
         transactions.executeWithoutResult(status -> {
             var stored = jobs.findByIdAndWorkspaceIdForUpdate(first.getId(), workspace.getId())
                     .orElseThrow();
-            stored.setStatus(ReviewJobStatus.COMPLETED);
+            ReviewJobFixtures.withStatus(stored, ReviewJobStatus.COMPLETED);
             stored.setCompletedAt(Instant.now());
             stored.setProcessingStatus(ProcessingStatus.PENDING);
             jobs.saveAndFlush(stored);
@@ -165,7 +166,7 @@ class ScanReviewIntegrationTest extends BaseIntegrationTest {
     void shouldEndAScanForCapacityInsteadOfQueueingItsNextFileOnceCapacityCancelledAJob() {
         var workspace = workspaces.saveAndFlush(WorkspaceTestFixtures.activeWorkspace("scan-no-sandbox-room"));
         var cancelled = job(workspace.getId(), UUID.randomUUID());
-        cancelled.setStatus(ReviewJobStatus.CANCELLED);
+        ReviewJobFixtures.withStatus(cancelled, ReviewJobStatus.CANCELLED);
         cancelled.setCancellationReason(ReviewJobCancellationReason.NO_SANDBOX_ROOM);
         cancelled.setCompletedAt(Instant.now());
         cancelled.setProcessingStatus(ProcessingStatus.FAILED);
@@ -237,7 +238,7 @@ class ScanReviewIntegrationTest extends BaseIntegrationTest {
         var modernAt = historyAt.plusSeconds(60);
         var historical = job(firstWorkspace.getId(), UUID.randomUUID());
         historical.setId(historical.getReviewId());
-        historical.setStatus(ReviewJobStatus.COMPLETED);
+        ReviewJobFixtures.withStatus(historical, ReviewJobStatus.COMPLETED);
         historical.setCompletedAt(historyAt);
         historical.setProcessingStatus(ProcessingStatus.DONE);
         RuntimeJobTestData.persistParent(jdbc, historical);
@@ -250,12 +251,12 @@ class ScanReviewIntegrationTest extends BaseIntegrationTest {
 
         var nativeNone = job(firstWorkspace.getId(), historical.getReviewId());
         nativeNone.setInput(historical.getInput());
-        nativeNone.setStatus(ReviewJobStatus.FAILED);
+        ReviewJobFixtures.withStatus(nativeNone, ReviewJobStatus.FAILED);
         nativeNone.setCompletedAt(modernAt);
         RuntimeJobTestData.persistParent(jdbc, nativeNone);
         jobs.saveAndFlush(nativeNone);
         var nativePending = job(secondWorkspace.getId(), UUID.randomUUID());
-        nativePending.setStatus(ReviewJobStatus.COMPLETED);
+        ReviewJobFixtures.withStatus(nativePending, ReviewJobStatus.COMPLETED);
         nativePending.setCompletedAt(modernAt.plusSeconds(1));
         nativePending.setProcessingStatus(ProcessingStatus.PENDING);
         RuntimeJobTestData.persistParent(jdbc, nativePending);
@@ -287,7 +288,7 @@ class ScanReviewIntegrationTest extends BaseIntegrationTest {
         first.setStartedAt(at.plusSeconds(10));
         first.setExecutionStartedAt(at.plusSeconds(20));
         first.setCompletedAt(at.plusSeconds(100));
-        first.setStatus(ReviewJobStatus.COMPLETED);
+        ReviewJobFixtures.withStatus(first, ReviewJobStatus.COMPLETED);
         first.setProcessingStatus(ProcessingStatus.DONE);
         first = RuntimeJobTestData.save(transactions, jdbc, jobs, first);
         var held = job(workspace.getId(), first.getReviewId());

@@ -148,6 +148,7 @@ import de.tum.cit.aet.hephaestus.testconfig.AfterCommitCheckpoint;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.LlmCatalogTestFixtures;
 import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer;
+import de.tum.cit.aet.hephaestus.testconfig.ReviewJobFixtures;
 import de.tum.cit.aet.hephaestus.testconfig.ScriptedGitHub;
 import de.tum.cit.aet.hephaestus.testconfig.TestUserFactory;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
@@ -1063,7 +1064,7 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
     private ReviewJob claimAgain(ReviewJob job) {
         var queued = jobs.findById(job.getId()).orElseThrow();
         assertThat(queued.getStatus()).isEqualTo(ReviewJobStatus.QUEUED);
-        queued.setStatus(ReviewJobStatus.RUNNING);
+        ReviewJobFixtures.withStatus(queued, ReviewJobStatus.RUNNING);
         return RuntimeJobTestData.save(transactions, jdbc, jobs, queued);
     }
 

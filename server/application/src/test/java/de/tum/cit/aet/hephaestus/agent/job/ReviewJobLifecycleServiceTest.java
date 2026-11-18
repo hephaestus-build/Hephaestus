@@ -19,6 +19,7 @@ import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.integration.core.spi.UsagePricingState;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import de.tum.cit.aet.hephaestus.testconfig.ReviewJobFixtures;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import io.micrometer.tracing.Tracer;
@@ -81,7 +82,7 @@ class ReviewJobLifecycleServiceTest extends BaseUnitTest {
     private ReviewJob createJobWithStatus(ReviewJobStatus status) {
         ReviewJob job = new ReviewJob();
         RuntimeJobTestData.initialize(job, workspace.getId());
-        job.setStatus(status);
+        ReviewJobFixtures.withStatus(job, status);
 
         ConfigSnapshot snapshot = new ConfigSnapshot(
                         ConfigSnapshot.SCHEMA_VERSION,

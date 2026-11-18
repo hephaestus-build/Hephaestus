@@ -27,6 +27,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStopReason;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import de.tum.cit.aet.hephaestus.testconfig.ReviewJobFixtures;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.Collection;
@@ -135,7 +136,7 @@ class ReviewAttemptsContentSourceTest extends BaseUnitTest {
             names = {"QUEUED", "RUNNING", "FAILED"})
     void shouldShowAnUnfinishedOrFailedInvocationWithoutInventingAResult(ReviewJobStatus status) {
         var job = RuntimeReviewTestData.job();
-        job.setStatus(status);
+        ReviewJobFixtures.withStatus(job, status);
         listed(job);
         attributed(job, List.of(about(5L)));
         when(labels.labels(eq(1L), any()))
@@ -173,7 +174,8 @@ class ReviewAttemptsContentSourceTest extends BaseUnitTest {
     @EnumSource(ReviewStatus.class)
     void shouldStateThePersistedReviewStatusBesideTheRetainedJobStatus(ReviewStatus status) {
         var waiting = RuntimeReviewTestData.job();
-        waiting.setStatus(
+        ReviewJobFixtures.withStatus(
+                waiting,
                 switch (status) {
                     case QUEUED -> ReviewJobStatus.QUEUED;
                     case RUNNING -> ReviewJobStatus.RUNNING;
@@ -201,7 +203,7 @@ class ReviewAttemptsContentSourceTest extends BaseUnitTest {
         var unreadable = RuntimeReviewTestData.job();
         unreadable.setReviewId(UUID.randomUUID());
         for (var job : List.of(first, retry, unreadable)) {
-            job.setStatus(ReviewJobStatus.COMPLETED);
+            ReviewJobFixtures.withStatus(job, ReviewJobStatus.COMPLETED);
             attributed(job, List.of(about(5L)));
         }
         listed(first, retry, unreadable);
@@ -266,7 +268,7 @@ class ReviewAttemptsContentSourceTest extends BaseUnitTest {
     @Test
     void shouldNotShowOrCountRunsAttributedToAnotherDeveloperOrToNobody() {
         var foreign = RuntimeReviewTestData.job();
-        foreign.setStatus(ReviewJobStatus.FAILED);
+        ReviewJobFixtures.withStatus(foreign, ReviewJobStatus.FAILED);
         var nobody = RuntimeReviewTestData.job();
         listed(foreign, nobody);
         attributed(foreign, List.of(about(6L)));

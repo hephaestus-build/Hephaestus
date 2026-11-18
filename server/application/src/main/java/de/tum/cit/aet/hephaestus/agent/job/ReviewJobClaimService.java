@@ -167,8 +167,7 @@ public class ReviewJobClaimService {
     /** Fails a job whose inputs could not be prepared, and ends its run, in the caller's transaction. */
     private TerminalClaim failPreparation(ReviewJob job, AgentRunFence fence, JobPreparationException failure) {
         PreparationFailure preparation = PreparationFailure.of(PreparationFailure.Stage.INPUTS, failure);
-        job.setStatus(ReviewJobStatus.FAILED);
-        job.setCompletedAt(Instant.now());
+        job.fail(Instant.now());
         job.setErrorMessage(preparation.message());
         jobRepository.save(job);
         ReviewJobTerminal.endRun(runs, fence, ReviewJobStatus.FAILED);
@@ -186,10 +185,10 @@ public class ReviewJobClaimService {
         int maxRetries = runs.capacity().reviewRetries();
 
         if (memberAiPolicy.isProcessingSuppressed(job)) {
-            job.setStatus(ReviewJobStatus.CANCELLED);
-            job.setCompletedAt(Instant.now());
-            job.setErrorMessage("A personal-data erasure request blocks this job.");
-            job.setCancellationReason(ReviewJobCancellationReason.PERSON_DATA_ERASED);
+            job.cancel(
+                    ReviewJobCancellationReason.PERSON_DATA_ERASED,
+                    "A personal-data erasure request blocks this job.",
+                    Instant.now());
             jobRepository.save(job);
             jobTelemetry.claimRefused("person_data_erased");
             return new TerminalClaim(job, ReviewJobStatus.CANCELLED);
@@ -203,8 +202,7 @@ public class ReviewJobClaimService {
         // without a reason. An erasure above cancels it: an erased person gets no new rows.
         boolean composing = ResultAdmissionService.isContinuation(job);
         if (ResultAdmissionService.isAdmitted(job) && !composing) {
-            job.setStatus(ReviewJobStatus.FAILED);
-            job.setCompletedAt(Instant.now());
+            job.fail(Instant.now());
             job.setErrorMessage(ResultAdmissionService.INTERRUPTED_AFTER_ADMISSION);
             jobRepository.save(job);
             return new TerminalClaim(job, ReviewJobStatus.FAILED);
@@ -212,20 +210,20 @@ public class ReviewJobClaimService {
 
         if (!memberAiPolicy.permitsReview(job)) {
             if (composing) return claimToWithhold(job, fence, CompositionStop.NO_AI);
-            job.setStatus(ReviewJobStatus.CANCELLED);
-            job.setCompletedAt(Instant.now());
-            job.setErrorMessage("The developer has not enabled AI practice reviews in this workspace.");
-            job.setCancellationReason(ReviewJobCancellationReason.MEMBER_AI_DECLINED);
+            job.cancel(
+                    ReviewJobCancellationReason.MEMBER_AI_DECLINED,
+                    "The developer has not enabled AI practice reviews in this workspace.",
+                    Instant.now());
             jobRepository.save(job);
             jobTelemetry.claimRefused("member_ai_declined");
             return new TerminalClaim(job, ReviewJobStatus.CANCELLED);
         }
 
         if (reviewStart.replaceByNewerOccasion(job.getWorkspaceId(), job.getReviewId())) {
-            job.setStatus(ReviewJobStatus.CANCELLED);
-            job.setCompletedAt(Instant.now());
-            job.setErrorMessage("A newer update of the work replaced this review before it started.");
-            job.setCancellationReason(ReviewJobCancellationReason.REPLACED);
+            job.cancel(
+                    ReviewJobCancellationReason.REPLACED,
+                    "A newer update of the work replaced this review before it started.",
+                    Instant.now());
             jobRepository.save(job);
             jobTelemetry.claimRefused("replaced");
             return new TerminalClaim(job, ReviewJobStatus.CANCELLED);
@@ -235,8 +233,7 @@ public class ReviewJobClaimService {
         // Past the retry limit, the run still offers a lost attempt a few times, so that a review with staged results
         // can withhold what it has open. Anything else past the limit ends here.
         if (reviewRuns.retriesExhausted(job, retained)) {
-            job.setStatus(ReviewJobStatus.FAILED);
-            job.setCompletedAt(Instant.now());
+            job.fail(Instant.now());
             if (ResultAdmissionService.isAdmitted(job))
                 // Its results stay. Settlement closes the review as partial: nothing confirms each destination.
                 job.setOutput(
@@ -280,10 +277,7 @@ public class ReviewJobClaimService {
         if (!(ResultAdmissionService.isContinuation(job)
                 ? reviewStart.compose(job.getWorkspaceId(), job.getReviewId())
                 : reviewStart.start(job.getWorkspaceId(), job.getReviewId()))) return cancelWithParent(job);
-        Instant claimedAt = Instant.now();
-        job.setStatus(ReviewJobStatus.RUNNING);
-        job.setStartedAt(claimedAt);
-        job.setExecutionStartedAt(null);
+        job.start(Instant.now());
         job.setConfigSnapshot(snapshot.toJson(objectMapper));
         jobRepository.save(job);
 
@@ -295,10 +289,10 @@ public class ReviewJobClaimService {
      * restart. Left queued, the job would come first in every poll and never run.
      */
     private TerminalClaim cancelWithParent(ReviewJob job) {
-        job.setStatus(ReviewJobStatus.CANCELLED);
-        job.setCompletedAt(Instant.now());
-        job.setErrorMessage("Its review was cancelled or has ended.");
-        job.setCancellationReason(ReviewJobCancellationReason.CANCELLED_BY_REQUESTER);
+        job.cancel(
+                ReviewJobCancellationReason.CANCELLED_BY_REQUESTER,
+                "Its review was cancelled or has ended.",
+                Instant.now());
         jobRepository.save(job);
         return new TerminalClaim(job, ReviewJobStatus.CANCELLED);
     }
@@ -309,9 +303,7 @@ public class ReviewJobClaimService {
         if (!(ResultAdmissionService.isContinuation(job)
                 ? reviewStart.compose(job.getWorkspaceId(), job.getReviewId())
                 : reviewStart.start(job.getWorkspaceId(), job.getReviewId()))) return cancelWithParent(job);
-        job.setStatus(ReviewJobStatus.RUNNING);
-        job.setStartedAt(Instant.now());
-        job.setExecutionStartedAt(null);
+        job.start(Instant.now());
         jobRepository.save(job);
         return new ClaimResult(
                 job, fence, ConfigSnapshot.fromJson(job.getConfigSnapshot(), objectMapper), itemKind, cause);
@@ -354,12 +346,12 @@ public class ReviewJobClaimService {
         boolean tooOldToHold = job.getSubmittedAt() != null
                 && Duration.between(job.getSubmittedAt(), now).compareTo(BUDGET_HOLD_MAX_JOB_AGE) > 0;
         if (tooOldToHold) {
-            job.setStatus(ReviewJobStatus.CANCELLED);
-            job.setCompletedAt(now);
-            job.setErrorMessage("Cancelled. The monthly AI budget is exceeded, and this job is more than "
-                    + BUDGET_HOLD_MAX_JOB_AGE.toDays()
-                    + " days old.");
-            job.setCancellationReason(ReviewJobCancellationReason.BUDGET_EXHAUSTED);
+            job.cancel(
+                    ReviewJobCancellationReason.BUDGET_EXHAUSTED,
+                    "Cancelled. The monthly AI budget is exceeded, and this job is more than "
+                            + BUDGET_HOLD_MAX_JOB_AGE.toDays()
+                            + " days old.",
+                    now);
             jobRepository.save(job);
             log.info(
                     "Cancelling claim — over budget and older than {} days: jobId={}, workspaceId={}, blockReason={}",
@@ -383,10 +375,7 @@ public class ReviewJobClaimService {
 
     private ClaimAttempt refuseUnavailableModel(ReviewJob job) {
         String message = "The configured model is not available.";
-        job.setStatus(ReviewJobStatus.CANCELLED);
-        job.setCompletedAt(Instant.now());
-        job.setErrorMessage(message);
-        job.setCancellationReason(ReviewJobCancellationReason.MODEL_UNAVAILABLE);
+        job.cancel(ReviewJobCancellationReason.MODEL_UNAVAILABLE, message, Instant.now());
         jobRepository.save(job);
         jobTelemetry.modelRefused();
         jobTelemetry.claimRefused("model_unavailable");

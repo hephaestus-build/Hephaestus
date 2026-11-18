@@ -70,6 +70,8 @@ public class ReviewJob {
     @Column(name = "workspace_id", nullable = false)
     private long workspaceId;
 
+    /** Changed only by the named transitions below and by the guarded updates of {@link ReviewJobRepository}. */
+    @Setter(AccessLevel.NONE)
     @Enumerated(EnumType.STRING)
     @ColumnDefault("'QUEUED'")
     @Column(name = "status", nullable = false, length = 20)
@@ -225,5 +227,31 @@ public class ReviewJob {
 
     public AgentRunRef run() {
         return new AgentRunRef(runId, workspaceId);
+    }
+
+    /** A claim starts the attempt. */
+    public void start(Instant at) {
+        move(ReviewJobStatus.RUNNING);
+        startedAt = at;
+        executionStartedAt = null;
+    }
+
+    /** The attempt ended without running: the caller records why, as a message or an output. */
+    public void fail(Instant at) {
+        move(ReviewJobStatus.FAILED);
+        completedAt = at;
+    }
+
+    public void cancel(ReviewJobCancellationReason reason, String message, Instant at) {
+        move(ReviewJobStatus.CANCELLED);
+        cancellationReason = reason;
+        errorMessage = message;
+        completedAt = at;
+    }
+
+    private void move(ReviewJobStatus next) {
+        if (!status.canTransitionTo(next))
+            throw new IllegalStateException("A " + status + " review job cannot become " + next + ".");
+        status = next;
     }
 }

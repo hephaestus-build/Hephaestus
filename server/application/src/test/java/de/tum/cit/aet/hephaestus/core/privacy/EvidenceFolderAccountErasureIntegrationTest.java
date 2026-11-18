@@ -47,6 +47,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
+import de.tum.cit.aet.hephaestus.testconfig.ReviewJobFixtures;
 import de.tum.cit.aet.hephaestus.testconfig.SchemaRowSeeder;
 import de.tum.cit.aet.hephaestus.testconfig.TestUserFactory;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
@@ -873,7 +874,7 @@ class EvidenceFolderAccountErasureIntegrationTest extends BaseIntegrationTest {
                 "chat.thread",
                 sourceIds.incrementAndGet());
         var job = work.job();
-        job.setStatus(ReviewJobStatus.RUNNING);
+        ReviewJobFixtures.withStatus(job, ReviewJobStatus.RUNNING);
         return RuntimeJobTestData.save(new TransactionTemplate(transactions), jdbc, jobs, job);
     }
 
@@ -1305,7 +1306,7 @@ class EvidenceFolderAccountErasureIntegrationTest extends BaseIntegrationTest {
                 "expired-file-" + UUID.randomUUID().toString().substring(0, 8)));
         var work = modelFixtures.work(
                 workspace, "file-proof-" + UUID.randomUUID().toString().substring(0, 8), "scm.file", 1L);
-        work.job().setStatus(ReviewJobStatus.RUNNING);
+        ReviewJobFixtures.withStatus(work.job(), ReviewJobStatus.RUNNING);
         var job = RuntimeJobTestData.save(new TransactionTemplate(transactions), jdbc, jobs, work.job());
         var recorder = new ExactPersonDataCopyRecorder();
         var owner = catalog(root, recorder);

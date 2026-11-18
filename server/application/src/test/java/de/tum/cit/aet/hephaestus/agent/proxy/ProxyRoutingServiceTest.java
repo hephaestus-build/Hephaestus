@@ -32,6 +32,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewSnapshotQuery;
 import de.tum.cit.aet.hephaestus.productfeedback.drafting.ProductFeedbackDraftCalls;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import de.tum.cit.aet.hephaestus.testconfig.ReviewJobFixtures;
 import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -64,7 +65,7 @@ class ProxyRoutingServiceTest extends BaseUnitTest {
     void setup() {
         job.setId(UUID.randomUUID());
         RuntimeJobTestData.initialize(job, 7L);
-        job.setStatus(ReviewJobStatus.RUNNING);
+        ReviewJobFixtures.withStatus(job, ReviewJobStatus.RUNNING);
         RuntimeJobTestData.attempt(job, 2);
         job.setRunId(LEASE);
         var snapshot = new ConfigSnapshot(

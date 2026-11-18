@@ -77,6 +77,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewStart;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStopReason;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.LlmCatalogTestFixtures;
+import de.tum.cit.aet.hephaestus.testconfig.ReviewJobFixtures;
 import de.tum.cit.aet.hephaestus.testconfig.TestEntities;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspacePortFixtures;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
@@ -913,7 +914,7 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
         var busyWorkspace = workspaces.saveAndFlush(TestEntities.activeWorkspace("busy-pool-" + UUID.randomUUID()));
         var runningReview = new ReviewJob();
         RuntimeJobTestData.initialize(runningReview, busyWorkspace.getId());
-        runningReview.setStatus(ReviewJobStatus.RUNNING);
+        ReviewJobFixtures.withStatus(runningReview, ReviewJobStatus.RUNNING);
         runningReview.setConfigSnapshot(job.getConfigSnapshot());
         runningReview.setStartedAt(Instant.now());
         runningReview = jobs.saveAndFlush(RuntimeJobTestData.persistParent(jdbc, runningReview));
