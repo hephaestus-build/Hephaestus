@@ -15131,8 +15131,8 @@ paths:
       - Practice Standings
   /workspaces/{workspaceSlug}/practices/tiles:
     get:
-      description: A middle half shows whenever one or more developers are counted
-        in the window.
+      description: A middle half shows when at least 3 developers besides the reader
+        are counted in the window and its ends do not meet.
       operationId: getPracticeWorkspaceTiles
       parameters:
       - description: Workspace slug
@@ -32587,11 +32587,11 @@ components:
         middle:
           anyOf:
           - $ref: "#/components/schemas/WorkspaceRange"
-            description: The workspace's middle half; absent while fewer than 3 developers
-              are counted
+            description: "The workspace's middle half; absent while fewer than 3 other\
+              \ developers are counted, or when its ends meet"
           - type: "null"
-          description: The workspace's middle half; absent while fewer than 3 developers
-            are counted
+          description: "The workspace's middle half; absent while fewer than 3 other\
+            \ developers are counted, or when its ends meet"
         yours:
           type: integer
           format: int32
