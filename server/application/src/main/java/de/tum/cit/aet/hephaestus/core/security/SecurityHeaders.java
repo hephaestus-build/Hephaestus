@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.core.security;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceSubdomainProperties;
+import de.tum.cit.aet.hephaestus.core.webapp.WebAppRequests;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
@@ -12,8 +13,11 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.web.header.writers.CrossOriginOpenerPolicyHeaderWriter.CrossOriginOpenerPolicy;
+import org.springframework.security.web.header.writers.DelegatingRequestMatcherHeaderWriter;
+import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter;
 import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter.ReferrerPolicy;
 import org.springframework.security.web.header.writers.StaticHeadersWriter;
+import org.springframework.security.web.util.matcher.NegatedRequestMatcher;
 import org.springframework.stereotype.Component;
 
 /**
@@ -24,8 +28,8 @@ import org.springframework.stereotype.Component;
  *   <li>{@code Strict-Transport-Security}: 30 days, includeSubDomains. See {@link #HSTS_MAX_AGE_SECONDS}.</li>
  *   <li>{@code X-Frame-Options: DENY} and {@code X-Content-Type-Options: nosniff}.</li>
  *   <li>{@code Content-Security-Policy}, enforced. See {@link #contentSecurityPolicy}.</li>
- *   <li>{@code Referrer-Policy: strict-origin-when-cross-origin}. The web app's {@code index.html} narrows its own
- *       pages to {@code no-referrer}.</li>
+ *   <li>{@code Referrer-Policy}: {@code no-referrer} on the web app's page and files, as its {@code index.html}
+ *       also says; {@code strict-origin-when-cross-origin} on every other response.</li>
  *   <li>{@code Cross-Origin-Opener-Policy: same-origin}.</li>
  *   <li>{@code Cross-Origin-Embedder-Policy: credentialless}: Spring Security's enum models only
  *       {@code unsafe-none} and {@code require-corp}, so a static writer sends it.</li>
@@ -106,7 +110,13 @@ public final class SecurityHeaders {
                 .httpStrictTransportSecurity(
                         hsts -> hsts.includeSubDomains(true).maxAgeInSeconds(HSTS_MAX_AGE_SECONDS))
                 .contentSecurityPolicy(csp -> csp.policyDirectives(contentSecurityPolicy))
-                .referrerPolicy(referrer -> referrer.policy(ReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN))
+                // The web app sends no referrer at all, so a file such as a stylesheet or worker does not send the
+                // origin to another site either; its page also says so in a meta tag.
+                .addHeaderWriter(new DelegatingRequestMatcherHeaderWriter(
+                        WebAppRequests.MATCHER, new ReferrerPolicyHeaderWriter(ReferrerPolicy.NO_REFERRER)))
+                .addHeaderWriter(new DelegatingRequestMatcherHeaderWriter(
+                        new NegatedRequestMatcher(WebAppRequests.MATCHER),
+                        new ReferrerPolicyHeaderWriter(ReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN)))
                 .crossOriginOpenerPolicy(coop -> coop.policy(CrossOriginOpenerPolicy.SAME_ORIGIN))
                 .addHeaderWriter(new StaticHeadersWriter("Cross-Origin-Embedder-Policy", "credentialless"))
                 .addHeaderWriter(new StaticHeadersWriter(
