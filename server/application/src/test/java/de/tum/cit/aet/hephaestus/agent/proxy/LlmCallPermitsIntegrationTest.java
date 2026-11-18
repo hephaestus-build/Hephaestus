@@ -247,6 +247,36 @@ class LlmCallPermitsIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void shouldLetAnAgedLaterSessionPassAnEarlierSessionForAtMostOneAgingPeriodInABackgroundReview() {
+        long pool = pool(3);
+        var first = admit(workerA, pool, AgentRunBand.BATCH, 3);
+        var second = admit(workerA, pool, AgentRunBand.BATCH, 3);
+        UUID job = UUID.randomUUID();
+        Duration aged = LlmCallPermitsTestFixtures.PERMIT_AGING.plusSeconds(1);
+        UUID agedLater = waitingCall(pool, AgentRunBand.BACKGROUND, 1, job, 7, aged);
+        UUID earlier = waitingCall(pool, AgentRunBand.BACKGROUND, 1, job, 1, Duration.ZERO);
+
+        first.close();
+
+        assertThat(state(agedLater))
+                .as("the aged call is a band higher than the earlier session's fresh call")
+                .isEqualTo("ACTIVE");
+        assertThat(state(earlier)).isEqualTo("WAITING");
+
+        // One aging period later, the earlier session's call shares the band of every aged call, so the session order
+        // decides again.
+        UUID nextAgedLater = waitingCall(pool, AgentRunBand.BACKGROUND, 1, job, 8, aged.plusSeconds(1));
+        jdbc.update(
+                "UPDATE llm_call_permit SET acquired_at=clock_timestamp()-make_interval(secs => ?) WHERE id=?",
+                aged.toSeconds(),
+                earlier);
+        second.close();
+
+        assertThat(state(earlier)).isEqualTo("ACTIVE");
+        assertThat(state(nextAgedLater)).isEqualTo("WAITING");
+    }
+
+    @Test
     void shouldGrantACallOfAPracticeSessionBeforeAnOlderCallOfNoSessionInTheSameJob() {
         long pool = pool(2);
         UUID job = UUID.randomUUID();

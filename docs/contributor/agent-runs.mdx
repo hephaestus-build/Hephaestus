@@ -285,9 +285,15 @@ A review's composition does not wait behind the measurements of a wider review.
 If two workspaces have the same number of granted calls, the workspace whose last grant in that band is older goes first.
 Every physical call joins this queue, including composition.
 
-A batch or background call that waits rises one band for each `hephaestus.agent.capacity.permit-aging`, 30 seconds by default.
+A background call that waits rises one band for each `hephaestus.agent.capacity.permit-aging`, 30 seconds by default.
 It never rises into the interactive band.
 Thus, the call of a scheduled review waits behind a steady stream of other reviews' calls for a limited time only.
+A batch call is already in its lowest non-interactive band, so it never rises.
+
+The band comes before the session order.
+Thus, inside a scheduled or backfill review, a later session's call that has aged can go before an earlier session's fresh call.
+This lasts at most one `permit-aging`: then both calls share a band, and the session order decides again.
+A review of a pull request is a batch review, so its session order always holds.
 
 Each server runs one admission round per pool for each 250 milliseconds while calls wait, and a new call starts one at once.
 A round can grant any server's call, in queue order, up to the limit. The call's own server finds the grant in its next round.
