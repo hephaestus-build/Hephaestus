@@ -774,11 +774,13 @@ jobs:
             docker-config:
               - '.github/workflows/reusable-docker-build.yml'
               - 'docker/docker-bake.hcl'
-            # The scan's runner preparation changes no image, so it builds and scans the App Server
-            # image, the largest scan, without marking the other images changed.
+            # The scan's runner preparation and the server's own scans change no image, so they build
+            # and scan the App Server image, the largest scan, without marking the other images changed.
             image-scan:
               - 'scripts/prepare-image-scan-runner.ts'
               - 'scripts/lib/runner-disk.ts'
+              - 'scripts/scan-jvm-runtime.ts'
+              - 'scripts/scan-web-app.ts'
             pmd-canary:
               - 'scripts/check-pmd-canary.ts'
               - 'scripts/check-pmd-canary.test.ts'

@@ -1307,7 +1307,6 @@ Thus, it holds few of the runners that a waiting merge group needs.
 A merge group adds one arm64 build job, which builds and scans that platform for every image that it rebuilds.
 The push reuses those images and no longer builds or scans them on either architecture.
 It still builds and scans both platforms of each image that the merge group did not rebuild, as before.
-The webapp records its branch at build time, so a merge group builds it with the default branch's name.
 Merge groups also write the Dockerfile layer cache, because the push no longer refreshes it for reused images.
 
 An unchanged pull-request image is not rebuilt.
