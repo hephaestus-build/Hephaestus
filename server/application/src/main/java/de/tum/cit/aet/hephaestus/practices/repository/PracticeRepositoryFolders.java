@@ -73,7 +73,7 @@ public class PracticeRepositoryFolders {
             var folder = root.resolve(setting.getDirectory()).resolve(slug).normalize();
             if (!folder.startsWith(root)) return Optional.empty();
             // A link anywhere on the path makes the folder unreadable, never absent: a sync must not take it for removed.
-            for (var path = folder; !path.equals(root); path = path.getParent())
+            for (Path path = folder; path != null && !path.equals(root); path = path.getParent())
                 if (Files.isSymbolicLink(path))
                     throw invalid(PracticeFileProblemDTO.FILE_INVALID, slug, "The folder or its directory is a link.");
             if (!Files.isDirectory(folder, LinkOption.NOFOLLOW_LINKS)) return Optional.empty();
