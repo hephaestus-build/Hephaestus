@@ -3426,7 +3426,7 @@ export type McpClientGrant = {
 	expiresAt: string;
 	id: string;
 	/**
-	 * When the client last signed in, refreshed or called, to within an hour
+	 * When the client last signed in, refreshed, or made a call that succeeded, to within an hour
 	 */
 	lastUsedAt?: string;
 	/**
