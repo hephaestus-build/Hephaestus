@@ -4228,6 +4228,9 @@ export const FeedbackItemSchema = {
 		account: {
 			$ref: "#/components/schemas/FeedbackAccountRef",
 		},
+		allowPublic: {
+			type: "boolean",
+		},
 		appVersion: {
 			type: "string",
 		},
@@ -4245,7 +4248,17 @@ export const FeedbackItemSchema = {
 			type: "string",
 			format: "date-time",
 		},
+		draftDescription: {
+			type: "string",
+		},
+		draftTitle: {
+			type: "string",
+		},
 		draftingSince: {
+			type: "string",
+			format: "date-time",
+		},
+		filedAfter: {
 			type: "string",
 			format: "date-time",
 		},
@@ -4308,6 +4321,7 @@ export const FeedbackItemSchema = {
 		},
 	},
 	required: [
+		"allowPublic",
 		"canFile",
 		"canTriage",
 		"createdAt",

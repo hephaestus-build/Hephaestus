@@ -1,4 +1,14 @@
-import { CircleAlert, CircleCheck, Clock, Inbox, PenLine, Send } from "lucide-react";
+import {
+	CircleAlert,
+	CircleCheck,
+	Clock,
+	Globe,
+	Inbox,
+	Lock,
+	LockOpen,
+	PenLine,
+	Send,
+} from "lucide-react";
 
 import type { MyProductFeedback } from "@/api/types.gen";
 import type { StatusDefs } from "@/components/common/status-def";
@@ -44,3 +54,37 @@ export const REPORT_STATE_DEFS: StatusDefs<MyProductFeedback["state"]> = {
 			"We could not confirm that it reached GitHub. It is saved for the admins of this instance, who can try again.",
 	},
 };
+
+/** Who can read a report on GitHub: now, or once it files. */
+export type ReportVisibility = "PUBLIC" | "CAN_BECOME_PUBLIC" | "PRIVATE";
+
+export const REPORT_VISIBILITY_DEFS: StatusDefs<ReportVisibility> = {
+	PUBLIC: {
+		label: "Public",
+		icon: Globe,
+		badgeVariant: "outline",
+		description: "It is a public issue on GitHub. Anyone can read it.",
+	},
+	CAN_BECOME_PUBLIC: {
+		label: "Can become public",
+		icon: LockOpen,
+		badgeVariant: "outline",
+		description: "It can become a public issue on GitHub. A check can still keep it private.",
+	},
+	PRIVATE: {
+		label: "Private",
+		icon: Lock,
+		badgeVariant: "secondary",
+		description: "It is not public.",
+	},
+};
+
+/** A report heads for a public issue only on the public route, and it is public once it is filed there. */
+export function reportVisibility(
+	report: Pick<MyProductFeedback, "state" | "route">,
+): ReportVisibility {
+	if (report.route !== "PUBLIC") {
+		return "PRIVATE";
+	}
+	return report.state === "FILED" ? "PUBLIC" : "CAN_BECOME_PUBLIC";
+}

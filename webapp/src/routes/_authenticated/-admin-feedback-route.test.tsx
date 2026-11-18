@@ -35,6 +35,7 @@ const bugReport = {
 	canFile: false,
 	savedBeforeDisclosure: false,
 	waitingForModel: false,
+	allowPublic: false,
 } satisfies Wire<FeedbackItem>;
 
 const resolvedNote = {
@@ -51,6 +52,7 @@ const resolvedNote = {
 	canFile: false,
 	savedBeforeDisclosure: false,
 	waitingForModel: false,
+	allowPublic: false,
 } satisfies Wire<FeedbackItem>;
 
 /** What each status filter lists; a request without one, or with any other, sees the open items. */
@@ -352,6 +354,37 @@ describe("instance product feedback route", () => {
 		await screen.findByText(bugReport.message);
 		expect(requested.at(-1)).toBe("ALL");
 		expect(screen.getByText("2 pieces of feedback.")).not.toBeNull();
+	});
+
+	it("shows when a held report becomes public and what the model drafted", async () => {
+		const held = {
+			...bugReport,
+			state: "HELD",
+			route: "PUBLIC",
+			canTriage: false,
+			allowPublic: true,
+			// oxlint-disable-next-line no-restricted-properties -- the page counts the hold down against the wall clock.
+			filedAfter: new Date(Date.now() + 5 * 60_000).toISOString(),
+			draftTitle: "Practice page scrolls to the top when the filter changes",
+			draftDescription: "Changing the team filter resets the scroll position.",
+		} satisfies Wire<FeedbackItem>;
+		server.use(
+			http.get("*/admin/product-feedback", () =>
+				HttpResponse.json({ content: [held], page: 0, size: 20, totalElements: 1, totalPages: 1 }),
+			),
+		);
+		const queryClient = renderRouteAt("/admin/feedback?status=IN_FLIGHT");
+		try {
+			await screen.findByText(held.draftTitle, undefined, ROUTE_RENDER_WAIT);
+			expect(screen.getByText("Can become public")).not.toBeNull();
+			expect(
+				screen.getByText(/unless the reporter keeps it private or edits it\./u).textContent,
+			).toMatch(
+				/^It becomes a public issue at about \d{1,2}:\d{2} [ap]m \(in about [45] minutes\)/u,
+			);
+		} finally {
+			queryClient.clear();
+		}
 	});
 
 	it("marks feedback resolved and refreshes the reports", async () => {

@@ -77,6 +77,13 @@ final class FeedbackDTOs {
             FilingDTOs.@NonNull ReportState state,
             FilingDTOs.@NonNull ReportRoute route,
             @Nullable String reason,
+
+            /* The reporter's choice: may this report become a public issue? A check can still keep it private. */
+            @Schema(requiredMode = RequiredMode.REQUIRED) boolean allowPublic,
+
+            @Nullable Instant filedAfter,
+            @Nullable String draftTitle,
+            @Nullable String draftDescription,
             @Nullable Instant draftingSince,
             @Nullable Instant draftDeadline,
             @Schema(requiredMode = RequiredMode.REQUIRED) boolean waitingForModel,

@@ -1,16 +1,21 @@
-import { Inbox } from "lucide-react";
+import { ChevronDown, Inbox } from "lucide-react";
 import { definitionFor } from "@/components/common/status-def";
 
 import type { FeedbackItem } from "@/api/types.gen";
-import { InlineLink } from "@/components/common/InlineLink";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { RelativeTime } from "@/components/common/RelativeTime";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { TablePagination } from "@/components/common/TablePagination";
 import { DraftingProgress } from "@/components/product-feedback/DraftingProgress";
 import { FiledIssue } from "@/components/product-feedback/FiledIssue";
-import { REPORT_STATE_DEFS } from "@/components/product-feedback/report-state-defs";
-import { closedAs, reasonSentence } from "@/components/product-feedback/sharing-copy";
+import { PublicHoldNotice } from "@/components/product-feedback/PublicHoldNotice";
+import {
+	REPORT_STATE_DEFS,
+	REPORT_VISIBILITY_DEFS,
+	reportVisibility,
+} from "@/components/product-feedback/report-state-defs";
+import { ReportStatusLine } from "@/components/product-feedback/ReportStatusLine";
+import { reasonSentence } from "@/components/product-feedback/sharing-copy";
 import {
 	AlertDialog,
 	AlertDialogAction,
@@ -24,6 +29,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
 	Empty,
 	EmptyDescription,
@@ -171,60 +177,37 @@ interface FeedbackCardProps {
 
 function FeedbackCard({ item, pending, filing, onTriage, onFile }: FeedbackCardProps) {
 	const resolved = item.resolvedAt !== undefined;
+	const visibility = definitionFor(REPORT_VISIBILITY_DEFS, reportVisibility(item));
 	let triageLabel = resolved ? "Reopen" : "Mark resolved";
 	if (pending) {
 		triageLabel = "Saving…";
 	}
-	const context = [
-		hasText(item.pagePath) && (
-			<code key="page" className="break-all">
-				{item.pagePath}
-			</code>
-		),
-		hasText(item.userAgent) && (
-			<span key="agent" className="break-words">
-				{item.userAgent}
-			</span>
-		),
-		hasText(item.appVersion) && <span key="version">Hephaestus {item.appVersion}</span>,
-	].filter(Boolean);
 	return (
 		<Card>
-			<CardHeader className="flex flex-wrap items-center gap-x-3 gap-y-1">
-				<StatusBadge def={definitionFor(FEEDBACK_KIND_DEFS, item.kind)} />
-				<StatusBadge def={definitionFor(REPORT_STATE_DEFS, item.state)} />
-				<span className="font-medium">{item.account?.displayName ?? "Deleted account"}</span>
-				{hasText(item.account?.email) && (
-					<a
-						href={`mailto:${item.account.email}`}
-						className="break-all underline underline-offset-4"
-					>
-						{item.account.email}
-					</a>
-				)}
-				<span className="text-muted-foreground">
-					{item.workspace?.displayName ?? "No workspace"}
-				</span>
-				<RelativeTime value={item.createdAt} className="text-muted-foreground" />
+			<CardHeader className="flex flex-col gap-2">
+				<div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+					<span className="font-medium">{item.account?.displayName ?? "Deleted account"}</span>
+					{hasText(item.account?.email) && (
+						<a
+							href={`mailto:${item.account.email}`}
+							className="break-all underline underline-offset-4"
+						>
+							{item.account.email}
+						</a>
+					)}
+					<span className="text-muted-foreground">
+						{item.workspace?.displayName ?? "No workspace"}
+					</span>
+				</div>
+				<div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+					<StatusBadge def={definitionFor(FEEDBACK_KIND_DEFS, item.kind)} />
+					<StatusBadge def={definitionFor(REPORT_STATE_DEFS, item.state)} />
+					<StatusBadge def={visibility} />
+					<ReportStatusLine report={item} />
+				</div>
 			</CardHeader>
 			<CardContent className="flex flex-col gap-3">
 				<p className="break-words whitespace-pre-wrap">{item.message}</p>
-				{context.length > 0 && (
-					<p className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">{context}</p>
-				)}
-				{hasText(item.issueUrl) && (
-					<p>
-						<InlineLink href={item.issueUrl} external className="underline">
-							{item.route === "PUBLIC" ? "Public" : "Private"} issue #{item.issueNumber}
-						</InlineLink>
-						{hasText(item.issueClosedAs) && (
-							<span className="text-muted-foreground">
-								{" "}
-								· Closed as {closedAs(item.issueClosedAs)}
-							</span>
-						)}
-					</p>
-				)}
 				{item.state === "DRAFTING" && (
 					<DraftingProgress
 						since={item.draftingSince}
@@ -234,12 +217,25 @@ function FeedbackCard({ item, pending, filing, onTriage, onFile }: FeedbackCardP
 						reader="admin"
 					/>
 				)}
+				<PublicHoldNotice
+					state={item.state}
+					filedAfter={item.filedAfter}
+					wantsPublic={item.route === "PUBLIC"}
+					reader="admin"
+				/>
+				{item.state === "HELD" && hasText(item.draftTitle) && (
+					<HeldDraft title={item.draftTitle} description={item.draftDescription} />
+				)}
+				{item.route === "PRIVATE" && item.allowPublic && (
+					<p className="text-muted-foreground">The reporter allows a public issue.</p>
+				)}
 				{hasText(item.reason) && (
-					<p className="text-muted-foreground">{reasonSentence(item.reason)}</p>
+					<p className="text-muted-foreground">{reasonSentence(item.reason, item.allowPublic)}</p>
 				)}
 				{hasText(item.issueTitle) && hasText(item.issueText) && (
 					<FiledIssue title={item.issueTitle} text={item.issueText} />
 				)}
+				<ReportDetails item={item} />
 			</CardContent>
 			{/* A filed report has nothing to press, so it shows no empty footer. */}
 			{(resolved || item.canFile || item.canTriage) && (
@@ -304,5 +300,67 @@ function FeedbackCard({ item, pending, filing, onTriage, onFile }: FeedbackCardP
 				</CardFooter>
 			)}
 		</Card>
+	);
+}
+
+/**
+ * The model's draft while the report waits to become public: the title in view, the text on request.
+ * `FiledIssue` puts the title inside its disclosure too, so it does not fit here.
+ */
+function HeldDraft({ title, description }: { title: string; description?: string }) {
+	return (
+		<div className="flex flex-col gap-1 rounded-lg border p-3">
+			<p className="text-sm text-muted-foreground">The drafted issue</p>
+			<p className="font-medium break-words">{title}</p>
+			{hasText(description) && (
+				<Collapsible>
+					<CollapsibleTrigger
+						aria-label={`The drafted text: ${title}`}
+						render={<Button variant="ghost" size="sm" className="group" />}
+					>
+						The drafted text
+						<ChevronDown
+							data-icon="inline-end"
+							aria-hidden
+							className="transition-transform group-data-[panel-open]:rotate-180"
+						/>
+					</CollapsibleTrigger>
+					<CollapsibleContent>
+						<p className="mt-1 text-sm break-words whitespace-pre-wrap">{description}</p>
+					</CollapsibleContent>
+				</Collapsible>
+			)}
+		</div>
+	);
+}
+
+/** Where the report was sent from. The browser string is long and has few spaces, so it wraps anywhere. */
+function ReportDetails({ item }: { item: FeedbackItem }) {
+	if (!hasText(item.pagePath) && !hasText(item.userAgent) && !hasText(item.appVersion)) {
+		return null;
+	}
+	return (
+		<dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 text-xs text-muted-foreground">
+			{hasText(item.pagePath) && (
+				<>
+					<dt>Page</dt>
+					<dd className="min-w-0">
+						<code className="break-all">{item.pagePath}</code>
+					</dd>
+				</>
+			)}
+			{hasText(item.appVersion) && (
+				<>
+					<dt>Version</dt>
+					<dd className="min-w-0">Hephaestus {item.appVersion}</dd>
+				</>
+			)}
+			{hasText(item.userAgent) && (
+				<>
+					<dt>Browser</dt>
+					<dd className="min-w-0 break-all">{item.userAgent}</dd>
+				</>
+			)}
+		</dl>
 	);
 }
