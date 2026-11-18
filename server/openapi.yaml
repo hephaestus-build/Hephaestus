@@ -17449,9 +17449,23 @@ components:
         clientName:
           type: string
           description: "The client's self-declared name, plain text"
+        expiresAt:
+          type: string
+          format: date-time
+          description: "When the client's access lapses unless the client renews it\
+            \ first: 90 days after its last renewal, so each use moves it"
         id:
           type: string
           format: uuid
+        lastUsedAt:
+          type: string
+          format: date-time
+          description: "When the client last signed in, refreshed or called, to within\
+            \ an hour"
+        passkeyBacked:
+          type: boolean
+          description: "The approving admin confirmed with a passkey, as the workspace's\
+            \ admin passkey policy asked"
         scopes:
           type: array
           items:
@@ -17460,7 +17474,9 @@ components:
       - approvedBy
       - clientHost
       - clientName
+      - expiresAt
       - id
+      - passkeyBacked
       - scopes
     McpConsentRedirect:
       type: object
@@ -17489,6 +17505,10 @@ components:
         loopbackRedirect:
           type: boolean
           description: The code goes to this machine only
+        passkeyRequired:
+          type: boolean
+          description: The workspace's admin passkey policy asks the account to confirm
+            with a passkey before it approves
         redirectHost:
           type: string
         refusal:
@@ -17508,6 +17528,7 @@ components:
       - clientName
       - id
       - loopbackRedirect
+      - passkeyRequired
       - redirectHost
       - scopes
       - workspaceName
@@ -17516,7 +17537,8 @@ components:
       type: string
       enum:
       - NOT_ADMIN
-      - PASSKEY_REQUIRED
+      - PASSKEY_RECOVERY_PENDING
+      - INSTANCE_ADMIN_PASSKEY_REQUIRED
     MemberReviewReadiness:
       type: object
       description: "Whether and how the workspace reviews one member's work, from\

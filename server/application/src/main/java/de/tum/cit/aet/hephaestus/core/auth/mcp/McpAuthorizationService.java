@@ -22,6 +22,8 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.StringJoiner;
 import java.util.UUID;
@@ -80,7 +82,10 @@ public class McpAuthorizationService implements McpClientGrants {
     /** Why consent cannot be given, shown on the consent page. */
     public enum Refusal {
         NOT_ADMIN,
-        PASSKEY_REQUIRED,
+        /** The account's passkey recovery is pending; it finishes recovery in the web app first. */
+        PASSKEY_RECOVERY_PENDING,
+        /** The instance requires a passkey of its instance admins, and that proof is never handed to a client. */
+        INSTANCE_ADMIN_PASSKEY_REQUIRED,
     }
 
     /** What the consent page shows. */
@@ -93,7 +98,8 @@ public class McpAuthorizationService implements McpClientGrants {
             String workspaceSlug,
             String workspaceName,
             List<String> scopes,
-            @Nullable Refusal refusal) {
+            @Nullable Refusal refusal,
+            boolean passkeyRequired) {
         public ConsentRequest {
             scopes = List.copyOf(scopes);
         }
@@ -206,20 +212,34 @@ public class McpAuthorizationService implements McpClientGrants {
     public Optional<ConsentRequest> consentRequest(UUID id, Long accountId) {
         return grants.findById(id)
                 .filter(grant -> isOpenFor(grant, accountId))
-                .flatMap(grant -> workspaceOf(grant)
-                        .map(workspace -> new ConsentRequest(
-                                grant.getId(),
-                                URI.create(grant.getClientId()).getHost(),
-                                grant.getClientName(),
-                                hostOf(grant.getRedirectUri()),
-                                isLoopback(grant.getRedirectUri()),
-                                workspace.slug(),
-                                workspace.displayName(),
-                                McpScope.parse(grant.getScopes()).stream()
-                                        .map(McpScope::value)
-                                        .toList(),
-                                refusal(accountId, workspace))));
+                .flatMap(grant -> workspaceOf(grant).map(workspace -> {
+                    Decision decision = decision(accountId, workspace);
+                    return new ConsentRequest(
+                            grant.getId(),
+                            URI.create(grant.getClientId()).getHost(),
+                            grant.getClientName(),
+                            hostOf(grant.getRedirectUri()),
+                            isLoopback(grant.getRedirectUri()),
+                            workspace.slug(),
+                            workspace.displayName(),
+                            McpScope.parse(grant.getScopes()).stream()
+                                    .map(McpScope::value)
+                                    .toList(),
+                            decision.refusal(),
+                            decision.passkeyRequired());
+                }));
     }
+
+    /**
+     * The browser session that approves: its token, its sign-in time, and the passkey proof it carries, if any.
+     *
+     * @param passkeyCredential the credential that the session's passkey proof names
+     */
+    public record ApprovingSession(
+            UUID jti,
+            Instant authTime,
+            @Nullable Instant passkeyTime,
+            @Nullable String passkeyCredential) {}
 
     /** The answer to an approval. */
     public sealed interface Approval {
@@ -229,6 +249,9 @@ public class McpAuthorizationService implements McpClientGrants {
         /** The account cannot approve; the page shows why, and the account can refuse instead. */
         record NotAllowed(Refusal refusal) implements Approval {}
 
+        /** The policy asks for a passkey, and the approving session carries no fresh passkey proof. */
+        record PasskeyRequired() implements Approval {}
+
         /** The request is answered, expired, or not this account's. */
         record Gone() implements Approval {}
     }
@@ -236,9 +259,16 @@ public class McpAuthorizationService implements McpClientGrants {
     /**
      * Approves a pending request. It holds the account's issuance lock and checks that the approving token
      * is still active, so an approval that races "sign out everywhere" writes no code (ADR 0110 decision 9).
+     * Where the passkey policy asks for a passkey, the approving session must carry a fresh passkey proof. The grant
+     * records when and with which credential. Any grant's client session lasts {@link McpClientGrant#IDLE_LAPSE}, and each
+     * refresh moves that deadline (decision 8).
      */
     @Transactional
-    public Approval approve(UUID id, Long accountId, UUID approvingJti, Instant sessionExpiresAt, Instant authTime) {
+    public Approval approve(UUID id, Long accountId, ApprovingSession session) {
+        UUID approvingJti = session.jti();
+        Instant authTime = session.authTime();
+        Instant passkeyTime = session.passkeyTime();
+        String passkeyCredential = session.passkeyCredential();
         Instant now = clock.instant();
         if (!accounts.lockForIssuance(accountId)
                 || issuedJwts.findActive(approvingJti, now).isEmpty()) {
@@ -252,21 +282,33 @@ public class McpAuthorizationService implements McpClientGrants {
         if (workspace.isEmpty()) {
             return new Approval.Gone();
         }
-        Refusal refusal = refusal(accountId, workspace.get());
-        if (refusal != null) {
-            return new Approval.NotAllowed(refusal);
+        Decision decision = decision(accountId, workspace.get());
+        if (decision.refusal() != null) {
+            return new Approval.NotAllowed(decision.refusal());
         }
+        if (decision.passkeyRequired()
+                && (passkeyTime == null || passkeyCredential == null || !passkeys.freshPasskeyProof())) {
+            return new Approval.PasskeyRequired();
+        }
+        // The grant does not end with the web session that approved it: it lapses after IDLE_LAPSE without a
+        // refresh, and each refresh moves that deadline (decision 8, update of 2026-11-17).
+        Instant clientSessionExpiresAt = now.plus(McpClientGrant.IDLE_LAPSE);
         InstalledClient client = new InstalledClient(
                 InstalledClientKind.MCP_CLIENT,
                 grant.getClientId(),
                 grant.getRedirectUri(),
                 originOf(grant.getClientId()));
         Optional<String> code = sessions.createHandoff(
-                accountId, client, grant.getCodeChallenge(), sessionExpiresAt, authTime, grant.getId());
+                accountId, client, grant.getCodeChallenge(), clientSessionExpiresAt, authTime, grant.getId());
         if (code.isEmpty()) {
             return new Approval.Gone();
         }
-        grant.approve(now);
+        if (decision.passkeyRequired()) {
+            grant.approveWithPasskey(
+                    now, Objects.requireNonNull(passkeyTime), Objects.requireNonNull(passkeyCredential));
+        } else {
+            grant.approve(now);
+        }
         audit(AuthEvent.EventType.MCP_CLIENT_APPROVED, grant, accountId);
         return new Approval.Approved(clientRedirect(grant.getRedirectUri(), code.get(), null, grant.getState()));
     }
@@ -360,12 +402,25 @@ public class McpAuthorizationService implements McpClientGrants {
                 .findSessionIdByRefreshTokenHash(Pkce.hash(refreshToken))
                 .flatMap(grants::findActiveBySession);
         // The grant holds its resource literally, so after a rename the slug no longer leads to its workspace.
-        boolean namesItsWorkspace = grant.flatMap(found -> resources
-                        .slugOf(found.getResource())
-                        .flatMap(workspaces::findActiveBySlug)
-                        .filter(workspace -> workspace.id() == found.getWorkspaceId()))
-                .isPresent();
-        if (!namesItsWorkspace) {
+        Optional<McpWorkspaceDirectory.McpWorkspace> workspace = grant.flatMap(this::workspaceOf);
+        if (workspace.isEmpty()) {
+            return new TokenOutcome.Refused("invalid_grant");
+        }
+        // A refresh moves the grant's idle deadline, so it asks again whether the account may hold the grant: a
+        // removed or demoted admin, a pending recovery, or a policy that now asks for a passkey this grant lacks ends
+        // it.
+        Decision decision = decision(grant.get().getAccountId(), workspace.get());
+        Refusal refusal = decision.refusal();
+        if (refusal != null || (decision.passkeyRequired() && grant.get().getPasskeyVerifiedAt() == null)) {
+            if (sessions.revokeMcpGrant(grant.get().getAccountId(), grant.get().getId())) {
+                String reason =
+                        refusal == null ? "passkey_required" : refusal.name().toLowerCase(Locale.ROOT);
+                audit(
+                        AuthEvent.EventType.MCP_CLIENT_REVOKED,
+                        grant.get(),
+                        grant.get().getAccountId(),
+                        reason);
+            }
             return new TokenOutcome.Refused("invalid_grant");
         }
         // A refresh never widens what the grant holds (RFC 8707 § 2.2).
@@ -385,16 +440,19 @@ public class McpAuthorizationService implements McpClientGrants {
     @Override
     @Transactional(readOnly = true)
     public List<Grant> activeGrants(Long workspaceId) {
-        return grants.findActiveByWorkspace(workspaceId).stream()
+        return grants.findActiveByWorkspace(workspaceId, clock.instant()).stream()
                 .map(grant -> new Grant(
-                        grant.getId(),
-                        URI.create(grant.getClientId()).getHost(),
-                        grant.getClientName(),
-                        grant.getAccountId(),
-                        McpScope.parse(grant.getScopes()).stream()
+                        grant.id(),
+                        URI.create(grant.clientId()).getHost(),
+                        grant.clientName(),
+                        grant.accountId(),
+                        McpScope.parse(grant.scopes()).stream()
                                 .map(McpScope::value)
                                 .toList(),
-                        grant.getApprovedAt()))
+                        grant.approvedAt(),
+                        grant.passkeyVerifiedAt() != null,
+                        grant.lastUsedAt(),
+                        grant.sessionExpiresAt()))
                 .toList();
     }
 
@@ -423,14 +481,19 @@ public class McpAuthorizationService implements McpClientGrants {
                 .filter(workspace -> workspace.id() == grant.getWorkspaceId());
     }
 
-    private @Nullable Refusal refusal(Long accountId, McpWorkspaceDirectory.McpWorkspace workspace) {
+    /** Whether this account can approve a client for this workspace, and whether it confirms with a passkey first. */
+    private record Decision(@Nullable Refusal refusal, boolean passkeyRequired) {}
+
+    private Decision decision(Long accountId, McpWorkspaceDirectory.McpWorkspace workspace) {
         if (!workspaces.hasAdminMembership(accountId, workspace.id())) {
-            return Refusal.NOT_ADMIN;
+            return new Decision(Refusal.NOT_ADMIN, false);
         }
-        if (passkeys.workspaceAdminNeedsProof(accountId, workspace.adminPasskeyRequired())) {
-            return Refusal.PASSKEY_REQUIRED;
-        }
-        return null;
+        return switch (passkeys.mcpConsentProof(accountId, workspace.adminPasskeyRequired())) {
+            case NONE -> new Decision(null, false);
+            case PASSKEY -> new Decision(null, true);
+            case REFUSED_RECOVERY_PENDING -> new Decision(Refusal.PASSKEY_RECOVERY_PENDING, false);
+            case REFUSED_INSTANCE_ADMIN -> new Decision(Refusal.INSTANCE_ADMIN_PASSKEY_REQUIRED, false);
+        };
     }
 
     private Outcome redirectError(String redirectUri, String error, @Nullable String state) {
@@ -463,12 +526,21 @@ public class McpAuthorizationService implements McpClientGrants {
 
     /** Records who decided about which client, for which workspace, with which scopes, and whose grant it is. */
     private void audit(AuthEvent.EventType type, McpClientGrant grant, Long actingAccountId) {
+        audit(type, grant, actingAccountId, null);
+    }
+
+    private void audit(AuthEvent.EventType type, McpClientGrant grant, Long actingAccountId, @Nullable String reason) {
         var details = jsonMapper
                 .createObjectNode()
                 .put("grantId", grant.getId().toString())
                 .put("clientId", grant.getClientId())
                 .put("scopes", grant.getScopes())
-                .put("grantAccountId", grant.getAccountId());
+                .put("grantAccountId", grant.getAccountId())
+                // The grant row holds the time and the credential; the event says that the approval rested on them.
+                .put("passkey", grant.getPasskeyVerifiedAt() != null);
+        if (reason != null) {
+            details.put("reason", reason);
+        }
         authEvents
                 .event(type, AuthEvent.Result.SUCCESS)
                 .account(actingAccountId)

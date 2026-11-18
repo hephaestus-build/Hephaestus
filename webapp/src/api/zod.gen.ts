@@ -2008,7 +2008,11 @@ export const zMcpConsentRedirect = z.object({
 	redirectUri: z.string(),
 });
 
-export const zMcpConsentRequestMcpConsentRefusal = z.enum(["NOT_ADMIN", "PASSKEY_REQUIRED"]);
+export const zMcpConsentRequestMcpConsentRefusal = z.enum([
+	"NOT_ADMIN",
+	"PASSKEY_RECOVERY_PENDING",
+	"INSTANCE_ADMIN_PASSKEY_REQUIRED",
+]);
 
 /**
  * A pending MCP client consent request, as the consent page shows it.
@@ -2018,6 +2022,7 @@ export const zMcpConsentRequest = z.object({
 	clientName: z.string(),
 	id: z.uuid(),
 	loopbackRedirect: z.boolean(),
+	passkeyRequired: z.boolean(),
 	redirectHost: z.string(),
 	refusal: zMcpConsentRequestMcpConsentRefusal.optional(),
 	scopes: z.array(z.string()),
@@ -2894,7 +2899,10 @@ export const zMcpClientGrant = z.object({
 	approvedBy: zAccountRef,
 	clientHost: z.string(),
 	clientName: z.string(),
+	expiresAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
 	id: z.uuid(),
+	lastUsedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
+	passkeyBacked: z.boolean(),
 	scopes: z.array(z.string()),
 });
 

@@ -46,8 +46,17 @@ A passkey policy applies only when an account uses an admin capability.
 Member access never needs a passkey.
 The browser extension and other installed clients cannot verify a passkey, so protected administration needs the web app.
 
+The one exception is an [MCP client](./mcp-clients.mdx#connect-in-a-workspace-that-requires-a-passkey).
+The admin confirms with a passkey on the client's consent page.
+That confirmation then covers the client's workspace admin work, reads and writes, without a new verification.
+It ends when an admin disconnects the client or when the client's refresh token is reused.
+It also ends when the account's passkeys or sessions change, or when the client goes unused for 90 days.
+A refresh ends it when the account is no longer an admin of the workspace.
+
+It never covers instance administration, and an account in passkey recovery cannot approve a client.
+
 After `adminMaxAge`, the admin verifies a passkey again, and the session continues.
-High-risk admin operations need a verification within the last five minutes.
+High-risk admin operations need a verification within the last five minutes, except under an MCP client grant as described above.
 The chart has no value that changes these five minutes.
 
 ## Test instances without additional confirmation

@@ -1,7 +1,9 @@
 package de.tum.cit.aet.hephaestus.core.auth.mcp;
 
+import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.web.context.request.RequestAttributes;
 import org.springframework.web.context.request.RequestContextHolder;
 
@@ -11,8 +13,11 @@ import org.springframework.web.context.request.RequestContextHolder;
  *
  * @param grantId the grant's id, which the config audit trail records as the client that made a change
  * @param writes whether the grant holds {@link McpScope#WRITE}
+ * @param passkeyVerifiedAt when the approving account confirmed with a passkey at consent, or null when the grant holds
+ *     no passkey proof
  */
-public record McpCallGrant(UUID grantId, boolean writes) {
+public record McpCallGrant(
+        UUID grantId, boolean writes, @Nullable Instant passkeyVerifiedAt) {
 
     /** The request attribute that holds the checked grant. */
     public static final String ATTRIBUTE = McpCallGrant.class.getName();

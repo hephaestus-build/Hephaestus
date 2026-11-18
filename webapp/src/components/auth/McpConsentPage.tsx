@@ -19,9 +19,24 @@ export interface McpConsentRequestView {
 	workspaceName: string;
 	scopes: string[];
 	refusal?: McpConsentRefusal;
+	/** The workspace's admin passkey policy asks the account to confirm with a passkey before it allows. */
+	passkeyRequired: boolean;
 }
 
-export type McpConsentRefusal = "NOT_ADMIN" | "PASSKEY_REQUIRED";
+export type McpConsentRefusal =
+	| "NOT_ADMIN"
+	| "PASSKEY_RECOVERY_PENDING"
+	| "INSTANCE_ADMIN_PASSKEY_REQUIRED";
+
+/**
+ * The passkey confirmation that Allow runs first when the request needs one: `confirm` asks for the
+ * account's passkey and names why the last attempt failed, `add` means the account has none yet, and
+ * `unsupported` means this browser cannot use one.
+ */
+export type McpConsentPasskey =
+	| { status: "confirm"; error?: string }
+	| { status: "add"; onAdd: () => void }
+	| { status: "unsupported" };
 
 export type McpAuthorizationError =
 	| "INVALID_CLIENT"
@@ -36,7 +51,9 @@ export type McpConsentState =
 	| {
 			status: "ready";
 			request: McpConsentRequestView;
-			pending?: "approve" | "refuse";
+			/** Present when the request needs a passkey and the account can allow it. */
+			passkey?: McpConsentPasskey;
+			pending?: "passkey" | "approve" | "refuse";
 			onApprove: () => void;
 			onRefuse: () => void;
 	  };
@@ -56,8 +73,10 @@ const SCOPE_WORDS: Record<string, string> = {
 
 const REFUSALS: Record<McpConsentRefusal, string> = {
 	NOT_ADMIN: "You are not an admin of this workspace. Only an admin or owner can connect a client.",
-	PASSKEY_REQUIRED:
-		"This workspace requires a passkey for admin changes. An MCP client cannot hold a passkey proof, so use the web app for this workspace.",
+	PASSKEY_RECOVERY_PENDING:
+		"Your passkey recovery is not finished. Finish it in your passkey settings, then connect the client again.",
+	INSTANCE_ADMIN_PASSKEY_REQUIRED:
+		"This instance requires a passkey from its instance admins, and an instance admin’s passkey is never lent to a client. Connect the client with an account that is not an instance admin.",
 };
 
 const INVALID: Record<McpAuthorizationError, string> = {
@@ -136,11 +155,13 @@ function Body({ state }: Pick<McpConsentPageProps, "state">) {
 
 function Request({
 	request,
+	passkey,
 	pending,
 	onApprove,
 	onRefuse,
 }: Extract<McpConsentState, { status: "ready" }>) {
 	const { refusal } = request;
+	const canAllow = refusal === undefined && (passkey === undefined || passkey.status === "confirm");
 	return (
 		<div className="space-y-4">
 			<div>
@@ -162,6 +183,9 @@ function Request({
 				It can never read source code, observations, feedback, conversations or secrets.
 			</p>
 			<p className="text-sm text-muted-foreground">
+				It keeps this access until an admin disconnects it, or until it goes unused for 90 days.
+			</p>
+			<p className="text-sm text-muted-foreground">
 				After you answer, your browser goes to{" "}
 				<span className="font-medium">{request.redirectHost}</span>.
 			</p>
@@ -180,13 +204,21 @@ function Request({
 					<AlertDescription>{REFUSALS[refusal]}</AlertDescription>
 				</Alert>
 			)}
-			<div className="flex gap-2">
+			{refusal === undefined && passkey !== undefined && (
+				<PasskeyStep passkey={passkey} pending={pending === "passkey"} />
+			)}
+			<div className="flex flex-wrap gap-2">
+				{passkey?.status === "add" && (
+					<Button onClick={passkey.onAdd} disabled={pending !== undefined}>
+						Add a passkey
+					</Button>
+				)}
 				<Button
 					onClick={onApprove}
-					pending={pending === "approve"}
-					disabled={pending !== undefined || refusal !== undefined}
+					pending={pending === "passkey" || pending === "approve"}
+					disabled={pending !== undefined || !canAllow}
 				>
-					Allow
+					{passkey === undefined ? "Allow" : "Confirm with passkey and allow"}
 				</Button>
 				<Button
 					variant="outline"
@@ -196,6 +228,39 @@ function Request({
 				>
 					Deny
 				</Button>
+			</div>
+		</div>
+	);
+}
+
+function PasskeyStep({ passkey, pending }: { passkey: McpConsentPasskey; pending: boolean }) {
+	return (
+		<div className="space-y-2">
+			<Alert>
+				<AlertTitle>A passkey is required here</AlertTitle>
+				<AlertDescription>
+					{passkey.status === "add"
+						? "Add a passkey in your settings first. Then start the client’s sign-in again and confirm with it."
+						: "Admin changes here need your passkey, so confirm with it to allow this client."}
+				</AlertDescription>
+			</Alert>
+			{passkey.status === "unsupported" && (
+				<Alert variant="destructive">
+					<AlertTitle>This browser cannot use passkeys</AlertTitle>
+					<AlertDescription>
+						Open this page in a current browser on a device that holds one of your passkeys.
+					</AlertDescription>
+				</Alert>
+			)}
+			{/* The one announcer of the confirmation: it exists before a message lands in it. */}
+			<div aria-live="polite" aria-atomic="true">
+				{pending && <p className="text-sm text-muted-foreground">Waiting for your passkey…</p>}
+				{!pending && passkey.status === "confirm" && passkey.error !== undefined && (
+					<Alert role="none" variant="destructive">
+						<AlertTitle>Your passkey did not confirm</AlertTitle>
+						<AlertDescription>{passkey.error}</AlertDescription>
+					</Alert>
+				)}
 			</div>
 		</div>
 	);

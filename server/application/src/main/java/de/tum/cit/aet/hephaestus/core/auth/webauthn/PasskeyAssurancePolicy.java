@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.core.auth.webauthn;
 import de.tum.cit.aet.hephaestus.core.auth.AuthProperties;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
+import de.tum.cit.aet.hephaestus.core.auth.mcp.McpCallGrant;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AdminPasskeyAccess;
 import de.tum.cit.aet.hephaestus.core.auth.stepup.StepUpRequiredException;
 import de.tum.cit.aet.hephaestus.core.auth.web.CurrentAccount;
@@ -49,21 +50,50 @@ public class PasskeyAssurancePolicy implements AdminPasskeyAccess {
     }
 
     @Override
-    public boolean workspaceAdminNeedsProof(long accountId, boolean workspaceRequired) {
+    public McpConsentProof mcpConsentProof(long accountId, boolean workspaceRequired) {
         if (!auth.assuranceEnforced()) {
-            return false;
+            return McpConsentProof.NONE;
         }
-        return accounts.findById(accountId)
-                .map(account -> needsProof(account, false, true, workspaceRequired))
-                .orElse(true);
+        Account account = accounts.findById(accountId).orElse(null);
+        if (account == null) {
+            return McpConsentProof.PASSKEY;
+        }
+        if (account.isPasskeyRecoveryRequired()) {
+            return McpConsentProof.REFUSED_RECOVERY_PENDING;
+        }
+        if (instanceAdminNeedsProof(account, false)) {
+            return McpConsentProof.REFUSED_INSTANCE_ADMIN;
+        }
+        return needsProof(account, false, true, workspaceRequired) ? McpConsentProof.PASSKEY : McpConsentProof.NONE;
+    }
+
+    @Override
+    public boolean freshPasskeyProof() {
+        return UserViewContextHolder.get() == null
+                && isFresh(SecurityContextHolder.getContext().getAuthentication());
     }
 
     private boolean needsProof(Account account, boolean instanceAdmin, boolean workspace, boolean workspaceRequired) {
         return account.isPasskeyProtectionEnabled()
                 || account.isPasskeyRecoveryRequired()
-                || ((instanceAdmin || account.getAppRole() == Account.AppRole.APP_ADMIN)
-                        && properties.instanceAdminRequired())
+                || instanceAdminNeedsProof(account, instanceAdmin)
                 || (workspace && (workspaceRequired || properties.workspaceAdminRequired()));
+    }
+
+    private boolean instanceAdminNeedsProof(Account account, boolean instanceAdmin) {
+        return (instanceAdmin || account.getAppRole() == Account.AppRole.APP_ADMIN)
+                && properties.instanceAdminRequired();
+    }
+
+    /**
+     * Whether this call comes from an MCP client whose grant holds a passkey proof. The account confirmed with a passkey
+     * when it approved the client (ADR 0110 decision 8), so the proof stands for the grant's admin work in its one
+     * workspace while the grant lives, as a trusted device does. The grant ends when it is revoked, when its refresh
+     * secret is reused, or when it goes unused for 90 days.
+     */
+    private boolean delegatedProofHolds(Jwt jwt) {
+        return jwt.hasClaim("sid")
+                && McpCallGrant.current().map(McpCallGrant::passkeyVerifiedAt).isPresent();
     }
 
     public void requireInstanceAdmin(@Nullable Authentication authentication, boolean sensitive) {
@@ -96,8 +126,9 @@ public class PasskeyAssurancePolicy implements AdminPasskeyAccess {
         if (!needsProof(account, instanceAdmin, workspace, workspaceRequired)) {
             return;
         }
-        if (account.isPasskeyRecoveryRequired()
-                || !verified(authentication, sensitive ? auth.stepUpMaxAge() : properties.adminMaxAge())) {
+        boolean proven = verified(authentication, sensitive ? auth.stepUpMaxAge() : properties.adminMaxAge())
+                || (workspace && !instanceAdminNeedsProof(account, instanceAdmin) && delegatedProofHolds(jwt));
+        if (account.isPasskeyRecoveryRequired() || !proven) {
             events.required(Objects.requireNonNull(account.getId()));
             throw new PasskeyRequiredException();
         }

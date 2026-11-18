@@ -4,7 +4,7 @@ import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { Button } from "@/components/ui/button";
 import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from "@/components/ui/item";
 import { Skeleton } from "@/components/ui/skeleton";
-import { formatDate } from "@/lib/dates";
+import { formatDate, formatDateTime } from "@/lib/dates";
 
 /** One connected MCP client, as the workspace's admins see it. */
 export interface McpClientGrantView {
@@ -15,6 +15,12 @@ export interface McpClientGrantView {
 	approvedBy: string;
 	scopes: string[];
 	approvedAt?: Date;
+	/** The approving admin confirmed with a passkey, as the workspace's admin passkey policy asked. */
+	passkeyBacked: boolean;
+	/** When the client last signed in, refreshed or called, to within an hour. */
+	lastUsedAt?: Date;
+	/** When the access lapses unless the client is used before then; each use moves it. */
+	expiresAt: Date;
 }
 
 export interface WorkspaceMcpClientGrantsSectionProps {
@@ -93,6 +99,13 @@ export function WorkspaceMcpClientGrantsSection({
 										Calls itself {grant.clientName}. Allowed by {grant.approvedBy}
 										{grant.approvedAt === undefined ? "" : ` on ${formatDate(grant.approvedAt)}`}.
 									</ItemDescription>
+									{/* Outside the clamped description, so a long name never hides when the access ends. */}
+									<p className="text-sm text-muted-foreground">
+										{grant.lastUsedAt !== undefined &&
+											`Last used ${formatDateTime(grant.lastUsedAt)}. `}
+										Lapses on {formatDate(grant.expiresAt)} if unused.
+										{grant.passkeyBacked && " Confirmed with a passkey."}
+									</p>
 								</ItemContent>
 								<ItemActions>
 									<Button

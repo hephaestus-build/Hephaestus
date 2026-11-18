@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1794937339053-1" author="hephaestus">
+        <addColumn tableName="mcp_client_grant">
+            <column name="passkey_credential_id" type="VARCHAR(2048)"/>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1794937339053-2" author="hephaestus">
+        <addColumn tableName="mcp_client_grant">
+            <column name="passkey_verified_at" type="TIMESTAMP(6) WITH TIME ZONE"/>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1794937339053-3" author="hephaestus">
+        <addColumn tableName="mcp_client_grant">
+            <column name="last_used_at" type="TIMESTAMP(6) WITH TIME ZONE"/>
+        </addColumn>
+    </changeSet>
+</databaseChangeLog>

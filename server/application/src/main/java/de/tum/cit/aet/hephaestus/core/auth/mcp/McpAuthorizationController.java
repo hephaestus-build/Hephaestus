@@ -122,7 +122,8 @@ public class McpAuthorizationController {
                                 found.refusal() == null
                                         ? null
                                         : McpConsentRequestDTO.McpConsentRefusal.valueOf(
-                                                found.refusal().name()))))
+                                                found.refusal().name()),
+                                found.passkeyRequired())))
                 .orElseThrow(McpAuthorizationController::gone);
     }
 
@@ -133,15 +134,19 @@ public class McpAuthorizationController {
     @Operation(summary = "Approve an MCP client for a workspace", operationId = "approveMcpConsentRequest")
     public ResponseEntity<McpConsentRedirectDTO> approve(@PathVariable UUID requestId) {
         Long accountId = browserAccount();
-        Instant sessionExpiresAt = CurrentAccount.sessionExpiresAt();
         Instant authTime = CurrentAccount.authTime();
-        if (sessionExpiresAt == null || authTime == null) {
-            // The client's session inherits this sign-in's deadline and auth_time; without them it would
-            // outlive the browser session that approved it.
+        if (authTime == null) {
+            // The client's session records the sign-in that approved it.
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Sign in again to approve the client.");
         }
         return switch (authorization.approve(
-                requestId, accountId, CurrentAccount.requireJti(), sessionExpiresAt, authTime)) {
+                requestId,
+                accountId,
+                new McpAuthorizationService.ApprovingSession(
+                        CurrentAccount.requireJti(),
+                        authTime,
+                        CurrentAccount.passkeyTime(),
+                        CurrentAccount.passkeyCredential()))) {
             case McpAuthorizationService.Approval.Approved approved ->
                 ResponseEntity.ok()
                         .cacheControl(CacheControl.noStore())
@@ -151,6 +156,9 @@ public class McpAuthorizationController {
                         HttpStatus.CONFLICT,
                         "This account cannot approve the client: "
                                 + notAllowed.refusal().name());
+            case McpAuthorizationService.Approval.PasskeyRequired ignored ->
+                throw new ResponseStatusException(
+                        HttpStatus.CONFLICT, "Confirm with your passkey, then approve the client.");
             case McpAuthorizationService.Approval.Gone ignored -> throw gone();
         };
     }

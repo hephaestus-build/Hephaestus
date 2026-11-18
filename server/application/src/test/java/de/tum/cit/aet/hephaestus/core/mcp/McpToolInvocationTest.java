@@ -60,7 +60,7 @@ class McpToolInvocationTest {
 
     @Test
     void shouldRefuseAWriteToolWithoutRunningItWhenTheGrantOnlyReads() {
-        onRequest(new McpCallGrant(UUID.randomUUID(), false));
+        onRequest(new McpCallGrant(UUID.randomUUID(), false, null));
 
         var result = invoke();
 
@@ -80,7 +80,7 @@ class McpToolInvocationTest {
 
     @Test
     void shouldRunAWriteToolWhenTheGrantMayWrite() {
-        onRequest(new McpCallGrant(UUID.randomUUID(), true));
+        onRequest(new McpCallGrant(UUID.randomUUID(), true, null));
 
         var result = invoke();
 
@@ -91,7 +91,7 @@ class McpToolInvocationTest {
     /** Spring matches an advice handler by an exception's cause, so the handler must get the cause. */
     @Test
     void shouldAnswerWithTheReasonOfTheHandlerThatMatchesTheCause() {
-        onRequest(new McpCallGrant(UUID.randomUUID(), true));
+        onRequest(new McpCallGrant(UUID.randomUUID(), true, null));
         McpTool wrapping = new McpTool() {
             @Override
             public McpSchema.Tool definition() {

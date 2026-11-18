@@ -1465,6 +1465,9 @@ describe("the connected MCP clients", () => {
 				},
 				scopes: ["practices:read"],
 				approvedAt: "2026-11-15T09:30:00Z",
+				passkeyBacked: true,
+				lastUsedAt: "2026-11-16T10:00:00Z",
+				expiresAt: "2027-02-14T10:00:00Z",
 			},
 		];
 		server.use(

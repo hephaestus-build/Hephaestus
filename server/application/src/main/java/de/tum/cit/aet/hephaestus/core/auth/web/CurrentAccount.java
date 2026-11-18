@@ -159,6 +159,13 @@ public final class CurrentAccount {
         return time instanceof Number seconds ? Instant.ofEpochSecond(seconds.longValue()) : null;
     }
 
+    /** The passkey credential whose assertion set {@link #passkeyTime()}, or {@code null} when the token names none. */
+    @Nullable
+    public static String passkeyCredential() {
+        Jwt jwt = jwtOrNull();
+        return jwt == null || passkeyTime() == null ? null : jwt.getClaimAsString("passkey_credential");
+    }
+
     private static Jwt requireJwt() {
         Jwt jwt = jwtOrNull();
         if (jwt == null) {

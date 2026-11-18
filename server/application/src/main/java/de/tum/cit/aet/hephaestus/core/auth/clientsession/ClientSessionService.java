@@ -228,7 +228,7 @@ public class ClientSessionService {
                 handoff.getSessionExpiresAt(),
                 handoff.getAuthTime()));
         if (grant != null) {
-            grant.activate(session.getId());
+            grant.activate(session.getId(), now);
         }
         return Optional.of(issue(session, grant, request));
     }
@@ -274,16 +274,27 @@ public class ClientSessionService {
         }
         Instant now = clock.instant();
         if (!now.isBefore(session.getSessionExpiresAt())) {
+            if (mcpSession) {
+                // An MCP grant that went unused until its deadline lapsed; it was not revoked.
+                grantRepository.findActiveBySession(session.getId()).ifPresent(grant -> grant.expire(now));
+            }
             end(session.getId(), IssuedJwt.RevokedReason.LOGOUT, now);
             return Optional.empty();
         }
         if (issuedJwtRepository.rotate(presentedHash, session.getId(), now) != 1) {
+            // Two holders have the family: the session ends, and with it the MCP grant that it holds.
+            McpClientGrant reused = mcpSession
+                    ? grantRepository.findActiveBySession(session.getId()).orElse(null)
+                    : null;
             end(session.getId(), IssuedJwt.RevokedReason.REFRESH_REUSE, now);
-            authEventLogger
+            var reuse = authEventLogger
                     .event(AuthEvent.EventType.JWT_REVOKED, AuthEvent.Result.FAILURE)
                     .account(session.getAccountId())
-                    .failureReason("client_refresh_reuse")
-                    .record();
+                    .failureReason("client_refresh_reuse");
+            if (reused != null) {
+                reuse.workspace(reused.getWorkspaceId()).details("{\"mcpClientGrantId\":\"" + reused.getId() + "\"}");
+            }
+            reuse.record();
             log.warn("auth.client: rotated refresh secret presented again; session ended");
             return Optional.empty();
         }
@@ -294,6 +305,8 @@ public class ClientSessionService {
                 end(session.getId(), IssuedJwt.RevokedReason.LOGOUT, now);
                 return Optional.empty();
             }
+            grantRepository.markUsed(grant.getWorkspaceId(), grant.getId(), now, now);
+            session.extendTo(now.plus(McpClientGrant.IDLE_LAPSE));
         }
         ClientTokens tokens = issue(session, grant, request);
         authEventLogger

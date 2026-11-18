@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from "@storybook/react";
 import { expect, fn, within } from "storybook/test";
 
 import { withStandardPage } from "@/stories/decorators";
-import { daysBefore } from "@/stories/story-clock";
+import { daysAfter, daysBefore } from "@/stories/story-clock";
 
 import { WorkspaceMcpClientGrantsSection } from "./WorkspaceMcpClientGrantsSection";
 
@@ -120,6 +120,9 @@ export const WithConnectedMcpClients: Story = {
 						approvedBy: "Ada Lovelace",
 						scopes: ["practices:read"],
 						approvedAt: daysBefore(3),
+						passkeyBacked: false,
+						lastUsedAt: daysBefore(1),
+						expiresAt: daysAfter(4),
 					},
 				]}
 				onRetry={fn()}

@@ -6,12 +6,14 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 @Repository
 public interface McpClientGrantRepository extends JpaRepository<McpClientGrant, UUID> {
@@ -28,12 +30,43 @@ public interface McpClientGrantRepository extends JpaRepository<McpClientGrant, 
     @WorkspaceAgnostic("A token names its session, and the grant behind it decides the workspace")
     Optional<McpClientGrant> findActiveBySession(@Param("sessionId") UUID sessionId);
 
+    /** An active grant as the workspace console lists it, with the deadline of the client session it holds. */
+    record ActiveGrant(
+            UUID id,
+            String clientId,
+            String clientName,
+            Long accountId,
+            String scopes,
+            @Nullable Instant approvedAt,
+            @Nullable Instant passkeyVerifiedAt,
+            @Nullable Instant lastUsedAt,
+            Instant sessionExpiresAt) {}
+
+    /** The live grants of a workspace: a grant whose session reached its deadline has lapsed and is not listed. */
     @Query("""
-        SELECT g FROM McpClientGrant g
-         WHERE g.workspaceId = :workspaceId AND g.status = 'ACTIVE'
+        SELECT new de.tum.cit.aet.hephaestus.core.auth.mcp.McpClientGrantRepository$ActiveGrant(
+               g.id, g.clientId, g.clientName, g.accountId, g.scopes, g.approvedAt, g.passkeyVerifiedAt,
+               g.lastUsedAt, s.sessionExpiresAt)
+          FROM McpClientGrant g JOIN ClientSession s ON s.id = g.clientSessionId
+         WHERE g.workspaceId = :workspaceId AND g.status = 'ACTIVE' AND s.sessionExpiresAt > :now
          ORDER BY g.approvedAt DESC
         """)
-    List<McpClientGrant> findActiveByWorkspace(@Param("workspaceId") Long workspaceId);
+    List<ActiveGrant> findActiveByWorkspace(@Param("workspaceId") Long workspaceId, @Param("now") Instant now);
+
+    /** Records a call of an active grant, at most once in each {@link McpClientGrant#LAST_USED_PRECISION}. */
+    @Modifying
+    @Transactional
+    @Query("""
+        UPDATE McpClientGrant g
+           SET g.lastUsedAt = :now
+         WHERE g.id = :id AND g.workspaceId = :workspaceId AND g.status = 'ACTIVE'
+           AND (g.lastUsedAt IS NULL OR g.lastUsedAt < :since)
+        """)
+    int markUsed(
+            @Param("workspaceId") Long workspaceId,
+            @Param("id") UUID id,
+            @Param("now") Instant now,
+            @Param("since") Instant since);
 
     @Query("SELECT g FROM McpClientGrant g WHERE g.workspaceId = :workspaceId AND g.id = :id")
     Optional<McpClientGrant> findInWorkspace(@Param("workspaceId") Long workspaceId, @Param("id") UUID id);
@@ -106,13 +139,19 @@ public interface McpClientGrantRepository extends JpaRepository<McpClientGrant, 
     @WorkspaceAgnostic("A session ends without a workspace context, from the session list or a refresh")
     int revokeBySession(@Param("sessionId") UUID sessionId, @Param("now") Instant now);
 
-    /** Grants whose consent request or code ran out, so the console and the data map see their real state. */
+    /**
+     * Grants whose consent request, code or session ran out, so the console and the data map see their real state. A
+     * grant unused for {@link McpClientGrant#IDLE_LAPSE} lapses here. The session pruner may delete the session row
+     * first, so an active grant without a live session expires too.
+     */
     @Modifying
     @Query("""
         UPDATE McpClientGrant g
            SET g.status = 'EXPIRED', g.endedAt = :now
          WHERE (g.status = 'PENDING' AND g.expiresAt < :now)
             OR (g.status = 'APPROVED' AND g.approvedAt < :codeCutoff)
+            OR (g.status = 'ACTIVE' AND NOT EXISTS (
+                    SELECT 1 FROM ClientSession s WHERE s.id = g.clientSessionId AND s.sessionExpiresAt >= :now))
         """)
     @WorkspaceAgnostic("Retention expires MCP client grant rows across all workspaces")
     int expireStale(@Param("now") Instant now, @Param("codeCutoff") Instant codeCutoff);

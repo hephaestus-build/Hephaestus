@@ -24,9 +24,12 @@ export function passkeyLeaveTo(returnTo: string | undefined): string {
 	return workspaceSlug === undefined ? "/" : `/w/${workspaceSlug}`;
 }
 
-// Settings manages passkeys in place, and the challenge page is where the refusal would lead.
+// Settings and the MCP consent page confirm passkeys in place, and the challenge page is where the
+// refusal would lead.
 function handlesItsOwnRefusals(pathname: string): boolean {
-	return pathname === "/settings" || pathname === PASSKEY_CHALLENGE_PATH;
+	return (
+		pathname === "/settings" || pathname === "/mcp/authorize" || pathname === PASSKEY_CHALLENGE_PATH
+	);
 }
 
 /**

@@ -8,6 +8,8 @@ import static org.mockito.Mockito.when;
 import de.tum.cit.aet.hephaestus.core.auth.AuthPropertiesFixture;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
+import de.tum.cit.aet.hephaestus.core.auth.mcp.McpCallGrant;
+import de.tum.cit.aet.hephaestus.core.auth.spi.AdminPasskeyAccess;
 import de.tum.cit.aet.hephaestus.core.security.UserViewContextHolder;
 import java.time.Clock;
 import java.time.Duration;
@@ -15,15 +17,19 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
+import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.FactorGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 import org.springframework.web.server.ResponseStatusException;
 
 @Tag("unit")
@@ -265,5 +271,93 @@ class PasskeyAssurancePolicyTest {
                 .isInstanceOfSatisfying(
                         ResponseStatusException.class,
                         error -> assertThat(error.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED));
+    }
+
+    private static Authentication mcpClient() {
+        return new JwtAuthenticationToken(Jwt.withTokenValue("mcp")
+                .header("alg", "ES256")
+                .subject("42")
+                .claim("sid", UUID.randomUUID().toString())
+                .build());
+    }
+
+    private static void onMcpCall(McpCallGrant grant) {
+        var request = new MockHttpServletRequest();
+        request.setAttribute(McpCallGrant.ATTRIBUTE, grant);
+        RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(request));
+    }
+
+    @AfterEach
+    void clearRequest() {
+        RequestContextHolder.resetRequestAttributes();
+    }
+
+    /** A grant's proof is not a session's: it stands for writes and reads alike, months after the approval. */
+    @Test
+    void shouldAcceptAnMcpCallWhoseGrantHoldsAPasskeyProof() {
+        SecurityContextHolder.getContext().setAuthentication(mcpClient());
+        onMcpCall(new McpCallGrant(UUID.randomUUID(), true, NOW.minus(Duration.ofDays(90))));
+
+        policy(false, false).requireWorkspaceAdmin(true, false, true);
+        policy(false, true).requireWorkspaceAdmin(true, false, false);
+    }
+
+    /** Only an MCP client's token lets a grant's proof count; any other token proves nothing through it. */
+    @Test
+    void shouldIgnoreAGrantsPasskeyProofForATokenWithoutASession() {
+        SecurityContextHolder.getContext()
+                .setAuthentication(new JwtAuthenticationToken(Jwt.withTokenValue("browser")
+                        .header("alg", "ES256")
+                        .subject("42")
+                        .build()));
+        onMcpCall(new McpCallGrant(UUID.randomUUID(), true, NOW));
+
+        assertThatThrownBy(() -> policy(false, false).requireWorkspaceAdmin(true, false, false))
+                .isInstanceOf(PasskeyRequiredException.class);
+        assertThatThrownBy(() -> policy(false, false).requireFresh()).isInstanceOf(PasskeyRequiredException.class);
+    }
+
+    @Test
+    void shouldRefuseAnMcpCallWhoseGrantHoldsNoPasskeyProof() {
+        SecurityContextHolder.getContext().setAuthentication(mcpClient());
+        onMcpCall(new McpCallGrant(UUID.randomUUID(), true, null));
+
+        assertThatThrownBy(() -> policy(false, false).requireWorkspaceAdmin(true, false, false))
+                .isInstanceOf(PasskeyRequiredException.class);
+    }
+
+    @Test
+    void shouldNeverLetAGrantsPasskeyProofStandForAnInstanceAdminOrARecovery() {
+        SecurityContextHolder.getContext().setAuthentication(mcpClient());
+        onMcpCall(new McpCallGrant(UUID.randomUUID(), true, NOW));
+        PasskeyAssurancePolicy instance = policy(true, false);
+        account.setAppRole(Account.AppRole.APP_ADMIN);
+        assertThatThrownBy(() -> instance.requireWorkspaceAdmin(true, false, false))
+                .isInstanceOf(PasskeyRequiredException.class);
+
+        account.setAppRole(Account.AppRole.USER);
+        account.setPasskeyRecoveryRequired(true);
+        assertThatThrownBy(() -> policy(false, false).requireWorkspaceAdmin(true, false, false))
+                .isInstanceOf(PasskeyRequiredException.class);
+    }
+
+    @Test
+    void shouldNameWhatConsentToAnMcpClientNeeds() {
+        assertThat(policy(false, false).mcpConsentProof(42L, false)).isEqualTo(AdminPasskeyAccess.McpConsentProof.NONE);
+        assertThat(policy(false, false).mcpConsentProof(42L, true))
+                .isEqualTo(AdminPasskeyAccess.McpConsentProof.PASSKEY);
+        assertThat(policy(false, true).mcpConsentProof(42L, false))
+                .isEqualTo(AdminPasskeyAccess.McpConsentProof.PASSKEY);
+        assertThat(policy(false, true, false).mcpConsentProof(42L, true))
+                .isEqualTo(AdminPasskeyAccess.McpConsentProof.NONE);
+
+        PasskeyAssurancePolicy instance = policy(true, false);
+        account.setAppRole(Account.AppRole.APP_ADMIN);
+        assertThat(instance.mcpConsentProof(42L, true))
+                .isEqualTo(AdminPasskeyAccess.McpConsentProof.REFUSED_INSTANCE_ADMIN);
+
+        account.setPasskeyRecoveryRequired(true);
+        assertThat(instance.mcpConsentProof(42L, true))
+                .isEqualTo(AdminPasskeyAccess.McpConsentProof.REFUSED_RECOVERY_PENDING);
     }
 }

@@ -1591,6 +1591,10 @@ const mcpClientGrantSchemaResponseTransformer = (data: any) => {
 	if (data.approvedAt) {
 		data.approvedAt = new Date(data.approvedAt);
 	}
+	data.expiresAt = new Date(data.expiresAt);
+	if (data.lastUsedAt) {
+		data.lastUsedAt = new Date(data.lastUsedAt);
+	}
 	return data;
 };
 

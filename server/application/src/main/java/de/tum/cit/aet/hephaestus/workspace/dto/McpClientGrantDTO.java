@@ -22,7 +22,22 @@ public record McpClientGrantDTO(
         AccountRefDTO approvedBy,
 
         @NonNull List<String> scopes,
-        @Nullable Instant approvedAt) {
+        @Nullable Instant approvedAt,
+
+        @Schema(
+                requiredMode = Schema.RequiredMode.REQUIRED,
+                description = "The approving admin confirmed with a passkey, as the workspace's admin passkey policy"
+                        + " asked")
+        boolean passkeyBacked,
+
+        @Schema(description = "When the client last signed in, refreshed or called, to within an hour") @Nullable
+        Instant lastUsedAt,
+
+        @NonNull
+        @Schema(
+                description = "When the client's access lapses unless the client renews it first: 90 days after its"
+                        + " last renewal, so each use moves it")
+        Instant expiresAt) {
     public McpClientGrantDTO {
         scopes = List.copyOf(scopes);
     }

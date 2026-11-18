@@ -3400,7 +3400,19 @@ export type McpClientGrant = {
 	 * The client's self-declared name, plain text
 	 */
 	clientName: string;
+	/**
+	 * When the client's access lapses unless the client renews it first: 90 days after its last renewal, so each use moves it
+	 */
+	expiresAt: Date;
 	id: string;
+	/**
+	 * When the client last signed in, refreshed or called, to within an hour
+	 */
+	lastUsedAt?: Date;
+	/**
+	 * The approving admin confirmed with a passkey, as the workspace's admin passkey policy asked
+	 */
+	passkeyBacked: boolean;
 	scopes: Array<string>;
 };
 
@@ -3428,6 +3440,10 @@ export type McpConsentRequest = {
 	 * The code goes to this machine only
 	 */
 	loopbackRedirect: boolean;
+	/**
+	 * The workspace's admin passkey policy asks the account to confirm with a passkey before it approves
+	 */
+	passkeyRequired: boolean;
 	redirectHost: string;
 	/**
 	 * Why this account cannot approve the request; absent when it can
@@ -3438,7 +3454,10 @@ export type McpConsentRequest = {
 	workspaceSlug: string;
 };
 
-export type McpConsentRequestMcpConsentRefusal = "NOT_ADMIN" | "PASSKEY_REQUIRED";
+export type McpConsentRequestMcpConsentRefusal =
+	| "NOT_ADMIN"
+	| "PASSKEY_RECOVERY_PENDING"
+	| "INSTANCE_ADMIN_PASSKEY_REQUIRED";
 
 /**
  * Whether and how the workspace reviews one member's work, from the rules that start and admit a review.

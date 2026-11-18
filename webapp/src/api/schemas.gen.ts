@@ -6540,9 +6540,25 @@ export const McpClientGrantSchema = {
 			type: "string",
 			description: "The client's self-declared name, plain text",
 		},
+		expiresAt: {
+			type: "string",
+			format: "date-time",
+			description:
+				"When the client's access lapses unless the client renews it first: 90 days after its last renewal, so each use moves it",
+		},
 		id: {
 			type: "string",
 			format: "uuid",
+		},
+		lastUsedAt: {
+			type: "string",
+			format: "date-time",
+			description: "When the client last signed in, refreshed or called, to within an hour",
+		},
+		passkeyBacked: {
+			type: "boolean",
+			description:
+				"The approving admin confirmed with a passkey, as the workspace's admin passkey policy asked",
 		},
 		scopes: {
 			type: "array",
@@ -6551,7 +6567,15 @@ export const McpClientGrantSchema = {
 			},
 		},
 	},
-	required: ["approvedBy", "clientHost", "clientName", "id", "scopes"],
+	required: [
+		"approvedBy",
+		"clientHost",
+		"clientName",
+		"expiresAt",
+		"id",
+		"passkeyBacked",
+		"scopes",
+	],
 } as const;
 
 export const McpConsentRedirectSchema = {
@@ -6585,6 +6609,11 @@ export const McpConsentRequestSchema = {
 			type: "boolean",
 			description: "The code goes to this machine only",
 		},
+		passkeyRequired: {
+			type: "boolean",
+			description:
+				"The workspace's admin passkey policy asks the account to confirm with a passkey before it approves",
+		},
 		redirectHost: {
 			type: "string",
 		},
@@ -6610,6 +6639,7 @@ export const McpConsentRequestSchema = {
 		"clientName",
 		"id",
 		"loopbackRedirect",
+		"passkeyRequired",
 		"redirectHost",
 		"scopes",
 		"workspaceName",
@@ -6619,7 +6649,7 @@ export const McpConsentRequestSchema = {
 
 export const McpConsentRequestMcpConsentRefusalSchema = {
 	type: "string",
-	enum: ["NOT_ADMIN", "PASSKEY_REQUIRED"],
+	enum: ["NOT_ADMIN", "PASSKEY_RECOVERY_PENDING", "INSTANCE_ADMIN_PASSKEY_REQUIRED"],
 } as const;
 
 export const MemberReviewReadinessSchema = {
