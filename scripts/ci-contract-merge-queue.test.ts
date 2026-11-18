@@ -1387,6 +1387,7 @@ void describe("ci-contract: merge-queue", () => {
 			summary?: string,
 			queueUpgrade = false,
 			queueServerImage = false,
+			renameOnly = false,
 		) => {
 			const run = await runStep(
 				render(
@@ -1396,6 +1397,7 @@ void describe("ci-contract: merge-queue", () => {
 						"release-candidate": String(onVersionBranch),
 						"queue-upgrade": String(queueUpgrade),
 						"queue-server-image": String(queueServerImage),
+						"rename-only": String(renameOnly),
 					},
 				),
 				{
@@ -1426,6 +1428,19 @@ void describe("ci-contract: merge-queue", () => {
 		assert.deepEqual(await imageCheck("skipped", true), fails);
 		assert.deepEqual(await imageCheck("success", true), passes);
 		assert.deepEqual(await imageCheck("skipped", false), passes);
+
+		// A rename-only head skips the other legs, so the gate requires the three it still runs.
+		const renamed = async (results: Record<string, string>) =>
+			verdict(results, false, undefined, undefined, false, false, true);
+		assert.deepEqual(await renamed({}), passes);
+		for (const leg of ["Security", "server-package", "Build"]) {
+			assert.deepEqual(await renamed({ [leg]: "skipped" }), fails, leg);
+			assert.deepEqual(
+				await verdict({ [leg]: "skipped" }, false),
+				passes,
+				`${leg} may skip on another head`,
+			);
+		}
 
 		// A job abandoned before it concluded is neither a failure nor a cancellation, and it is not a
 		// success or a skip either.

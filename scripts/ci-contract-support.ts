@@ -877,6 +877,8 @@ export function simulateRun(
 	assert.ok(isMap(declared));
 	const off: Record<string, string> = {
 		should_skip: "false",
+		duplicate: "false",
+		"rename-only": "false",
 		draft: "false",
 		"queue-images-complete": "false",
 		"light-tier": "false",

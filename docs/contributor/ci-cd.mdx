@@ -1026,6 +1026,28 @@ A migration with a Java, build or configuration change keeps Unit and Architectu
 The migration-specific integration classes remain in the numbered shards. They first run in the merge group, where a failure removes the group from the queue.
 The Database tier and `review` do not replace those classes. An explicit full run checks them on the PR too.
 
+### Rename-only heads
+
+`vp run db:reorder` moves a branch's migrations after the newest file on `main` and in the merge queue ([Changelog immutability policy](./database-migration.mdx#changelog-immutability-policy)).
+Such a push changes no content, so the pull request does not run its whole fast tier again.
+
+`Changes` runs `scripts/detect-rename-only.ts` on each push to a same-repository pull request.
+The script finds the newest other head of the pull request whose CI/CD run succeeded.
+It compares each head's own diff, from its merge base with the pull request's base, as paths and blob ids.
+The head is rename-only only if both of these are true:
+
+- Each changed `next/` file moved to a later name with the same slug and identical bytes.
+- Any other changed file differs only by the renamed filenames. The script derives that change from both blobs.
+
+Any other difference, or a failure to read the evidence, runs the whole fast tier.
+`ci:full`, `ci:images`, a release candidate and a re-run also run the whole fast tier.
+
+A rename-only head runs `Security`, which holds the order guard, `Server package` and `Generated API`.
+`Generated API` replays the migration chain in its new order and checks the ERD.
+Database tests and drills wait for the merge group. Every other leg skips, as it does for a duplicate.
+`CI Status Gate` fails a rename-only head unless those three legs passed.
+The merge group still runs every selected check.
+
 ### Reproduce a queue-tier failure
 
 Use `ci:full` to reproduce a queue-tier failure on the pull request.
