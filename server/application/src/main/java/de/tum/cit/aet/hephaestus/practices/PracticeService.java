@@ -261,7 +261,7 @@ public class PracticeService {
         lock(ctx);
         Practice practice = draft(ctx, slug);
         var before = PracticeDefinitionSnapshot.of(practice, mapper);
-        practice.setState(PracticeState.ACTIVE);
+        practice.activate();
         practice.setFeedbackMode(FeedbackMode.OFF);
         var group = practice.getGroup();
         practice.setPosition(practices.findMaxPosition(ctx.id(), group == null ? null : group.getId()) + 1);

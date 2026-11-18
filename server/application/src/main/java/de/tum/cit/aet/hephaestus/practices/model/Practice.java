@@ -20,6 +20,7 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import java.time.Instant;
+import lombok.AccessLevel;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -101,6 +102,7 @@ public class Practice {
     @Enumerated(EnumType.STRING)
     @ColumnDefault("'ACTIVE'")
     @Column(name = "state", nullable = false, length = 8)
+    @Setter(AccessLevel.NONE)
     private PracticeState state = PracticeState.ACTIVE;
 
     @Column(name = "catalog_slug", length = 64)
@@ -119,4 +121,11 @@ public class Practice {
     @CurrentTimestamp(event = EventType.UPDATE, source = SourceType.VM)
     @Column(name = "updated_at")
     private @Nullable Instant updatedAt;
+
+    /** Puts a draft practice in use. A practice in use never becomes a draft again (ADR 0118 decision 7). */
+    public void activate() {
+        if (!state.canTransitionTo(PracticeState.ACTIVE))
+            throw new IllegalStateException("Only a draft practice can be put in use.");
+        state = PracticeState.ACTIVE;
+    }
 }
