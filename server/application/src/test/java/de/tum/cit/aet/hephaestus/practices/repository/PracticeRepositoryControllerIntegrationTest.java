@@ -88,9 +88,7 @@ class PracticeRepositoryControllerIntegrationTest extends BaseIntegrationTest {
 
         assertThat(editedIn()).isEqualTo(PracticeEditedIn.REPOSITORY);
         assertThat(jdbc.queryForObject(
-                        "SELECT source_commit FROM practice_version WHERE id = ?",
-                        String.class,
-                        currentVersionId()))
+                        "SELECT source_commit FROM practice_version WHERE id = ?", String.class, currentVersionId()))
                 .isEqualTo(COMMIT);
         // The consoles and the MCP write tools cannot change a practice that the repository edits.
         http.delete()
@@ -208,7 +206,8 @@ class PracticeRepositoryControllerIntegrationTest extends BaseIntegrationTest {
     }
 
     private void commit(String slug, Map<String, String> folder) throws IOException {
-        Path directory = tree.resolve(PracticeRepositorySetting.DEFAULT_DIRECTORY).resolve(slug);
+        Path directory =
+                tree.resolve(PracticeRepositorySetting.DEFAULT_DIRECTORY).resolve(slug);
         for (var file : folder.entrySet()) {
             Path path = directory.resolve(file.getKey());
             Files.createDirectories(Objects.requireNonNull(path.getParent()));
@@ -264,18 +263,21 @@ class PracticeRepositoryControllerIntegrationTest extends BaseIntegrationTest {
     }
 
     private PracticeDefinition currentDefinition() {
-        return versions.definitionOf(
-                versionRows.findById(currentVersionId()).orElseThrow());
+        return versions.definitionOf(versionRows.findById(currentVersionId()).orElseThrow());
     }
 
     private long currentVersionId() {
         return Objects.requireNonNull(jdbc.queryForObject(
-                "SELECT current_version_id FROM practice WHERE id = ?", Long.class, scenario.practice().getId()));
+                "SELECT current_version_id FROM practice WHERE id = ?",
+                Long.class,
+                scenario.practice().getId()));
     }
 
     private PracticeEditedIn editedIn() {
         return PracticeEditedIn.valueOf(Objects.requireNonNull(jdbc.queryForObject(
-                "SELECT edited_in FROM practice WHERE id = ?", String.class, scenario.practice().getId())));
+                "SELECT edited_in FROM practice WHERE id = ?",
+                String.class,
+                scenario.practice().getId())));
     }
 
     private ItemKind kind() {
