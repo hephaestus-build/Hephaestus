@@ -71,6 +71,7 @@ public class ReviewSummaryQueryService {
     private final ItemTraceRepository events;
     private final JsonMapper json;
     private final ReviewProgressService progressService;
+    private final PerPersonResults perPerson;
 
     public Review require(long ws, UUID id) {
         return reviews.findByIdAndWorkspaceId(id, ws)
@@ -125,6 +126,8 @@ public class ReviewSummaryQueryService {
     public Map<UUID, ReviewSummaryDTO> summaries(long ws, List<Review> page) {
         if (page.isEmpty()) return Map.of();
         var reads = new SummaryReads(ws, page);
+        // Who requested a review is usually whose work it is, so the name follows the per-person results setting.
+        boolean named = perPerson.shown(ws);
         Map<UUID, ReviewSummaryDTO> summaries = new LinkedHashMap<>();
         for (var review : page) {
             var jobs = reads.jobCounts.getOrDefault(review.getId(), Map.of());
@@ -152,7 +155,7 @@ public class ReviewSummaryQueryService {
                             review.getCreatedAt(),
                             review.getCompletedAt(),
                             event,
-                            requester == null ? null : reads.requesters.get(requester),
+                            requester == null || !named ? null : reads.requesters.get(requester),
                             review.getBatchId(),
                             review.getOrderedAt(),
                             review.getStopReason(),

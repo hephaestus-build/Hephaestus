@@ -153,7 +153,7 @@ function ScopeFacetControls({
 		: inGroups.filter((option) => option.turnedOff !== true || chosen.includes(option.value));
 	return (
 		<>
-			{applies.includes("developer") && (
+			{applies.includes("developer") && people.named && (
 				<ReviewPersonFacet
 					title={DEVELOPER_TITLE}
 					people={people}

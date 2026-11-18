@@ -21,7 +21,7 @@ import { RecordRowActions, ROW_OPEN_COLUMN, rowActionsColumn } from "./RecordRow
 import { citationLocation, citationSide } from "./ResultEvidence";
 import { ResultExceptions } from "./ResultRows";
 import { problemLevel } from "./review-levels";
-import { ReviewPerson } from "./ReviewPerson";
+import { DEVELOPER_COLUMN, ReviewPerson, withoutDeveloper } from "./ReviewPerson";
 import { ReviewPracticeName } from "./ReviewPracticeLink";
 import { useTracked } from "./use-tracked";
 
@@ -38,7 +38,7 @@ export const PROBLEM_COLUMNS: readonly RecordTableColumn[] = [
 	{ label: "Recorded", className: "w-24 whitespace-nowrap" },
 	{ label: "Problem" },
 	{ label: "Work" },
-	{ label: "Developer", className: "w-44" },
+	DEVELOPER_COLUMN,
 	rowActionsColumn(),
 	ROW_OPEN_COLUMN,
 ];
@@ -57,25 +57,23 @@ export interface ProblemRowsProps {
 	state: ProblemRowsState;
 	/** Placeholder rows after the problems while the next page loads. */
 	loadingMore?: number;
+	/** `false` while the workspace shows admins results without names: the Developer column goes. */
+	named?: boolean;
 }
 
-export function ProblemRows({ state, loadingMore }: ProblemRowsProps) {
+export function ProblemRows({ state, loadingMore, named = true }: ProblemRowsProps) {
 	const rows = state.status === "ready" ? state.problems : [];
+	const columns = named ? PROBLEM_COLUMNS : withoutDeveloper(PROBLEM_COLUMNS);
 	return (
-		<RecordResults
-			state={state}
-			aria-label={LIST_LABEL}
-			columns={PROBLEM_COLUMNS}
-			words={PROBLEM_WORDS}
-		>
+		<RecordResults state={state} aria-label={LIST_LABEL} columns={columns} words={PROBLEM_WORDS}>
 			{(empty) => (
 				<RecordDayTable
 					aria-label={LIST_LABEL}
-					columns={PROBLEM_COLUMNS}
+					columns={columns}
 					rows={rows}
 					dateOf={(problem) => problem.recordedAt}
 					rowKey={(problem) => problem.id}
-					renderRow={(problem) => <ProblemRow problem={problem} />}
+					renderRow={(problem) => <ProblemRow problem={problem} named={named} />}
 					empty={empty}
 					loadingMore={loadingMore}
 				/>
@@ -99,9 +97,10 @@ function placeOf(problem: ReviewProblem) {
 
 export interface ProblemRowProps {
 	problem: ReviewProblem;
+	named?: boolean;
 }
 
-export function ProblemRow({ problem }: ProblemRowProps) {
+export function ProblemRow({ problem, named = true }: ProblemRowProps) {
 	const today = new Date(useNow());
 	const tracked = useTracked({ kind: "result", id: problem.resultId });
 	const summary = problem.evidenceHidden ? HIDDEN_SUMMARY : problem.summary;
@@ -152,9 +151,11 @@ export function ProblemRow({ problem }: ProblemRowProps) {
 				</span>
 			</TableCell>
 			<ReviewItemCell item={problem.item} linked={false} />
-			<TableCell className="align-top whitespace-normal">
-				<ReviewPerson person={problem.developer} />
-			</TableCell>
+			{named && (
+				<TableCell className="align-top whitespace-normal">
+					<ReviewPerson person={problem.developer} />
+				</TableCell>
+			)}
 		</PracticeTableRow>
 	);
 }

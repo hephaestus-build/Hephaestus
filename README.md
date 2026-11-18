@@ -30,6 +30,10 @@ Work drafted with a coding agent gets the same feedback.
 
 In a conversation, anyone can ask Hephaestus why, ask for an example, or disagree.
 
+Hephaestus gives formative, self-directed feedback on the work.
+It is not designed to grade, appraise, rank, or set allocation or pay for people.
+See [Intended purpose](./docs/admin/intended-purpose.mdx).
+
 <div align="center">
   <img alt="An illustration of one change through a project. Issue #412 has no acceptance criteria. The pull request grows to 34 files. A reviewer raises a vague concern about large exports. The pull request merges with that thread unresolved. Hephaestus points back to the issue." src="./docs/images/readme/landing-hero-dark.png#gh-dark-mode-only" width="1280">
   <img alt="An illustration of one change through a project. Issue #412 has no acceptance criteria. The pull request grows to 34 files. A reviewer raises a vague concern about large exports. The pull request merges with that thread unresolved. Hephaestus points back to the issue." src="./docs/images/readme/landing-hero-light.png#gh-light-mode-only" width="1280">
@@ -55,7 +59,7 @@ Hephaestus gives feedback on every piece of work it can assess, so experienced p
   The catalog covers scoping, issues, reviews, testing, security, version control, and recorded decisions.
 - **Feedback on the Work**: A comment on the pull request, merge request, or issue.
 - **Practice Page**: Each developer's private view of feedback and progress per practice.
-  Workspace admins see the observations and delivery status behind it.
+  Workspace admins see the observations and delivery status behind it, with names only if a workspace owner turns on **Per-person results for admins**.
 - **Ask Hephaestus**: A weekly digest you can turn on arrives in the conversation.
   Developers ask why, ask for an example, or disagree.
   Conversations run in the web app and, if Slack is connected, in a direct message.

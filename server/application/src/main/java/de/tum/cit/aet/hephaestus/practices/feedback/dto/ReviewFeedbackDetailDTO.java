@@ -22,7 +22,13 @@ public record ReviewFeedbackDetailDTO(
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) @Nullable
         ItemRefDTO item,
 
-        @Schema(requiredMode = Schema.RequiredMode.REQUIRED) ReviewDeveloperDTO developer,
+        @Schema(
+                requiredMode = Schema.RequiredMode.REQUIRED,
+                description = "Null for feedback on a practice page or in a conversation while the workspace"
+                        + " has per-person results for admins off")
+        @Nullable
+        ReviewDeveloperDTO developer,
+
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) FeedbackDestination destination,
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) FeedbackState state,
 

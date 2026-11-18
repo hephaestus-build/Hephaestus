@@ -16,6 +16,7 @@ import de.tum.cit.aet.hephaestus.practices.result.ResultRepository;
 import de.tum.cit.aet.hephaestus.practices.result.ResultView;
 import de.tum.cit.aet.hephaestus.practices.result.ResultViewQuery;
 import de.tum.cit.aet.hephaestus.practices.result.dto.ProblemSummaryDTO;
+import de.tum.cit.aet.hephaestus.practices.review.PerPersonResults;
 import de.tum.cit.aet.hephaestus.practices.review.ProductReferenceQuery;
 import de.tum.cit.aet.hephaestus.practices.review.dto.ReviewDeveloperDTO;
 import de.tum.cit.aet.hephaestus.practices.reviewoutput.dto.ReviewBoundResultDTO;
@@ -55,6 +56,7 @@ public class ReviewResultQueryService {
     private final EvidenceAuthorization authorization;
     private final ResultMarkService marks;
     private final ReviewResultListRepository listRows;
+    private final PerPersonResults perPerson;
 
     public Page<ReviewResultDTO> list(long workspaceId, ResultQueryFilter filter, ResultSort sort, Pageable page) {
         var rows = results.list(workspaceId, filter, sort, false, page);
@@ -83,13 +85,15 @@ public class ReviewResultQueryService {
                                         Collectors.toList())));
         var feedback = listRows.feedbackCounts(workspaceId, ids).stream()
                 .collect(Collectors.groupingBy(ReviewResultListRepository.FeedbackCount::resultId));
-        var developers = references.developers(
-                workspaceId,
-                rows.getContent().stream()
-                        .map(Result::getDeveloperId)
-                        .filter(Objects::nonNull)
-                        .distinct()
-                        .toList());
+        var developers = perPerson.shown(workspaceId)
+                ? references.developers(
+                        workspaceId,
+                        rows.getContent().stream()
+                                .map(Result::getDeveloperId)
+                                .filter(Objects::nonNull)
+                                .distinct()
+                                .toList())
+                : Map.<Long, ReviewDeveloperDTO>of();
         return new PageImpl<>(
                 views.operatorViews(workspaceId, facts).stream()
                         .map(v -> {
@@ -276,7 +280,7 @@ public class ReviewResultQueryService {
 
     private @Nullable ReviewDeveloperDTO developer(ResultView v) {
         var r = v.result();
-        return r.developerId() == null
+        return r.developerId() == null || !perPerson.shown(r.workspaceId())
                 ? null
                 : references
                         .developers(r.workspaceId(), List.of(r.developerId()))

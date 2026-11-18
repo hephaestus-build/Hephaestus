@@ -83,10 +83,10 @@ export const Default: Story = {
 		const about = within(await openTip(canvas, "About this page"));
 		await expect(about.getByText(/can be wrong/u)).toBeVisible();
 		await closeTip();
-		// The legend's (i) says each developer counts once, and that small counts show too.
+		// The legend's (i) says each developer counts once, and what a hatched bar means.
 		const bars = within(await openTip(canvas, "About the bars"));
 		await expect(bars.getByText(/each once\./u)).toBeVisible();
-		await expect(bars.getByText(/others may tell where you are/u)).toBeVisible();
+		await expect(bars.getByText(/split hidden, so no part shows fewer than 3\./u)).toBeVisible();
 		await closeTip();
 		const table = groupsTable(canvas);
 		await expect(
@@ -94,10 +94,10 @@ export const Default: Story = {
 				name: "28 developers in this workspace: 7 Needs attention, 6 Mixed feedback, 8 Going well, 7 none yet. You are in the Needs attention part.",
 			}),
 		).toBeVisible();
-		// A group with parts of one, two and none draws like any other.
+		// A group with a part under 3 shows its total only.
 		await expect(
 			table.getByRole("img", {
-				name: "28 developers in this workspace: 1 Needs attention, 0 Mixed feedback, 2 Going well, 25 none yet. You are in the part with no standing yet.",
+				name: "28 developers in this workspace. Their split stays hidden to protect small counts.",
 			}),
 		).toBeVisible();
 		// Only the tiles read the window: the toggle sits in their section, and the bars name none.
@@ -135,32 +135,33 @@ export const GroupOpen: Story = {
 	},
 };
 
-/** The reader is the only developer: the bar and the band still show, with the reader in them. */
+/** The reader is the only developer: fewer than 3, so the split, the count and the band stay hidden. */
 export const OneDeveloper: Story = {
 	args: {
 		state: { status: "ready", overview: ONE_DEVELOPER_WORKSPACE },
 		tiles: { status: "ready", tiles: ONE_DEVELOPER_TILES },
 	},
 	play: async ({ canvas }) => {
+		await expect(groupsTable(canvas).queryByRole("img")).toBeNull();
 		await expect(
-			groupsTable(canvas).getByRole("img", {
-				name: "1 developer in this workspace: 0 Needs attention, 1 Mixed feedback, 0 Going well, 0 none yet. You are in the Mixed feedback part.",
-			}),
+			groupsTable(canvas).getByText(
+				"Fewer than 3 developers have a standing here, so the split stays hidden.",
+			),
 		).toBeVisible();
-		await expect(canvas.getByText(/1 developer with a standing/u)).toBeVisible();
-		await expect(canvas.getAllByText("Typical range:", { exact: false }).length).toBeGreaterThan(0);
-		await expect(canvas.queryByText("No developer is counted here yet.")).toBeNull();
+		await expect(canvas.getByText(/Fewer than 3 developers with a standing/u)).toBeVisible();
+		await expect(canvas.queryByText(/Typical range:/u)).toBeNull();
 	},
 };
 
-/** Two developers, the reader one of them: every count shows, however small. */
+/** Two developers, the reader one of them: still fewer than 3, so the split stays hidden. */
 export const TwoDevelopers: Story = {
 	args: { state: { status: "ready", overview: TWO_DEVELOPERS_WORKSPACE } },
 	play: async ({ canvas }) => {
+		await expect(groupsTable(canvas).queryByRole("img")).toBeNull();
 		await expect(
-			groupsTable(canvas).getByRole("img", {
-				name: "2 developers in this workspace: 1 Needs attention, 0 Mixed feedback, 1 Going well, 0 none yet. You are in the Going well part.",
-			}),
+			groupsTable(canvas).getByText(
+				"Fewer than 3 developers have a standing here, so the split stays hidden.",
+			),
 		).toBeVisible();
 	},
 };
@@ -172,7 +173,7 @@ export const ReaderNotCounted: Story = {
 		const table = groupsTable(canvas);
 		await expect(
 			table.getByRole("img", {
-				name: "2 developers in this workspace: 1 Needs attention, 0 Mixed feedback, 1 Going well, 0 none yet.",
+				name: "28 developers in this workspace: 7 Needs attention, 6 Mixed feedback, 8 Going well, 7 none yet.",
 			}),
 		).toBeVisible();
 		await expect(table.queryByText("You")).toBeNull();
@@ -213,7 +214,11 @@ export const NobodyYet: Story = {
 	},
 	play: async ({ canvas }) => {
 		await expect(canvas.getByText(/0 developers with a standing/u)).toBeVisible();
-		await expect(canvas.getAllByText("No developer is counted here yet.")).toHaveLength(3);
+		await expect(
+			canvas.getAllByText(
+				"Fewer than 3 developers are counted here, so there is no typical range.",
+			),
+		).toHaveLength(3);
 		// Nobody has open feedback, so that tile says so in place of a band at nought.
 		await expect(canvas.getByText("Most developers here have no open feedback.")).toBeVisible();
 		// Once for the whole table, not once per group.

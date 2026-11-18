@@ -94,9 +94,9 @@ public class PracticesAcrossWorkspaceService {
                         Objects.requireNonNull(practice.getCurrentVersion().getName()),
                         current.readerCounted() ? standingIn(yours, practice.getSlug()) : null,
                         current.readerCounted() ? basisIn(yours, practice.getSlug()) : null,
-                        WorkspaceSplits.split(current.withAStanding().stream()
+                        SmallCounts.shown(WorkspaceSplits.split(current.withAStanding().stream()
                                 .map(developer -> standingIn(current.snapshotOf(developer), practice.getSlug()))
-                                .toList())));
+                                .toList()))));
             }
             PracticeGroupStandingDTO yourGroup = current.groupStandingOf(members.reader(), group.getSlug());
             rows.add(new WorkspaceGroupSplitDTO(
@@ -106,9 +106,9 @@ public class PracticesAcrossWorkspaceService {
                     group.getColor(),
                     current.readerCounted() && yourGroup != null ? yourGroup.standing() : null,
                     current.readerCounted() && yourGroup != null ? yourGroup.basis() : null,
-                    WorkspaceSplits.split(current.withAStanding().stream()
+                    SmallCounts.shown(WorkspaceSplits.split(current.withAStanding().stream()
                             .map(developer -> groupStanding(current.groupStandingOf(developer, group.getSlug())))
-                            .toList()),
+                            .toList())),
                     practiceSplits));
         }
 
@@ -119,6 +119,7 @@ public class PracticesAcrossWorkspaceService {
                 new WorkspaceTileDTO(
                         reader == null ? 0 : openFeedback.getOrDefault(reader, 0),
                         WorkspaceSplits.middleHalf(members.counted().stream()
+                                .filter(developer -> !developer.equals(reader))
                                 .map(developer -> openFeedback.getOrDefault(developer, 0))
                                 .toList())),
                 current.includesEarlierReviews(),
@@ -143,16 +144,18 @@ public class PracticesAcrossWorkspaceService {
                         .getWorkspaceStandings(workspaceId, members.read(), since)
                         .byDeveloper());
         StandingSnapshot yours = inWindow.snapshotOf(members.reader());
-        List<StandingSnapshot> withAStanding =
-                inWindow.withAStanding().stream().map(inWindow::snapshotOf).toList();
+        List<StandingSnapshot> others = inWindow.withAStanding().stream()
+                .filter(developer -> !developer.equals(members.reader()))
+                .map(inWindow::snapshotOf)
+                .toList();
         return new PracticesAcrossWorkspaceTilesDTO(
                 window,
-                withAStanding.size(),
+                SmallCounts.shown(inWindow.withAStanding().size()),
                 yours.practices().size(),
                 inWindow.includesEarlierReviews(),
-                tile(yours, withAStanding, PracticesAcrossWorkspaceService::reviewedWork),
-                tile(yours, withAStanding, snapshot -> practicesAt(snapshot, PracticeStanding.STRENGTH)),
-                tile(yours, withAStanding, snapshot -> practicesAt(snapshot, PracticeStanding.DEVELOPING)));
+                tile(yours, others, PracticesAcrossWorkspaceService::reviewedWork),
+                tile(yours, others, snapshot -> practicesAt(snapshot, PracticeStanding.STRENGTH)),
+                tile(yours, others, snapshot -> practicesAt(snapshot, PracticeStanding.DEVELOPING)));
     }
 
     /**
@@ -251,11 +254,11 @@ public class PracticesAcrossWorkspaceService {
     }
 
     private static WorkspaceTileDTO tile(
-            StandingSnapshot yours, List<StandingSnapshot> withAStanding, ToIntFunction<StandingSnapshot> figure) {
+            StandingSnapshot yours, List<StandingSnapshot> others, ToIntFunction<StandingSnapshot> figure) {
         return new WorkspaceTileDTO(
                 figure.applyAsInt(yours),
                 WorkspaceSplits.middleHalf(
-                        withAStanding.stream().map(figure::applyAsInt).toList()));
+                        others.stream().map(figure::applyAsInt).toList()));
     }
 
     /** Distinct pieces of work any practice's standing was read from, verdict or not: the work that was reviewed. */

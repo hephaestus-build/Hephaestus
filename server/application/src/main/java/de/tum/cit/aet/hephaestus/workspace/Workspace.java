@@ -113,6 +113,15 @@ public class Workspace {
     private boolean publicActivityContributorsWithoutAccount;
 
     /**
+     * Whether workspace admins see practice results per person: named results and problems, private feedback with
+     * its developer, and filters by person. Off by default, so admins see results without names. Only an owner turns
+     * it on.
+     */
+    @Column(name = "per_person_results_for_admins", nullable = false)
+    @ColumnDefault("false")
+    private boolean perPersonResultsForAdmins;
+
+    /**
      * Current lifecycle state of the workspace.
      *
      * @see WorkspaceStatus for valid states and transitions

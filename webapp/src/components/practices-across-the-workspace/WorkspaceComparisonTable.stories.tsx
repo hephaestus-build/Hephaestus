@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn } from "storybook/test";
 
-import { split } from "@/stories/practices-across-the-workspace-story-data";
+import { split, totalOnly } from "@/stories/practices-across-the-workspace-story-data";
 
 import { PracticePill } from "@/components/practice-vocabulary/PracticePill";
 
@@ -24,7 +24,7 @@ const row = (
 
 const ROWS: ComparisonRow[] = [
 	row("explain", "Explain the change", split(6, 7, 9, 6), "STRENGTH", "CURRENT_REVIEWS"),
-	row("scope", "Scope the change", split(1, 0, 2, 25), "NOT_OBSERVED"),
+	row("scope", "Scope the change", totalOnly(28), "NOT_OBSERVED"),
 	row("history", "Keep the history readable", split(4, 5, 12, 7), "MIXED", "EARLIER_REVIEWS"),
 ];
 

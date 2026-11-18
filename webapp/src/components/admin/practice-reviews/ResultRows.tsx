@@ -27,7 +27,7 @@ import { RecordResults, type RecordResultsWords } from "./RecordResults";
 import { RecordRowActions, ROW_OPEN_COLUMN, rowActionsColumn } from "./RecordRowActions";
 import { resultLevel } from "./review-levels";
 import { ResultOriginNote, resultOutcomeDef } from "./ReviewBadges";
-import { ReviewPerson } from "./ReviewPerson";
+import { DEVELOPER_COLUMN, ReviewPerson, withoutDeveloper } from "./ReviewPerson";
 import { ReviewPracticeName } from "./ReviewPracticeLink";
 import { useTracked } from "./use-tracked";
 
@@ -49,6 +49,8 @@ export interface ResultRowsProps {
 	byDay?: boolean;
 	/** Placeholder rows after the results while the next page loads. */
 	loadingMore?: number;
+	/** `false` while the workspace shows admins results without names: the Developer column goes. */
+	named?: boolean;
 }
 
 const LIST_LABEL = "Observations";
@@ -57,7 +59,7 @@ export const RESULT_COLUMNS: readonly RecordTableColumn[] = [
 	{ label: "Recorded", className: "w-24 whitespace-nowrap" },
 	{ label: "Observation" },
 	{ label: "Work" },
-	{ label: "Developer", className: "w-44" },
+	DEVELOPER_COLUMN,
 	rowActionsColumn(),
 	ROW_OPEN_COLUMN,
 ];
@@ -70,34 +72,30 @@ const RESULT_WORDS: RecordResultsWords = {
 	emptyDescription: "Observations appear after a practice review completes.",
 };
 
-export function ResultRows({ state, byDay = true, loadingMore }: ResultRowsProps) {
+export function ResultRows({ state, byDay = true, loadingMore, named = true }: ResultRowsProps) {
 	const rows = state.status === "ready" ? state.results : [];
+	const columns = named ? RESULT_COLUMNS : withoutDeveloper(RESULT_COLUMNS);
 	return (
-		<RecordResults
-			state={state}
-			aria-label={LIST_LABEL}
-			columns={RESULT_COLUMNS}
-			words={RESULT_WORDS}
-		>
+		<RecordResults state={state} aria-label={LIST_LABEL} columns={columns} words={RESULT_WORDS}>
 			{(empty) =>
 				byDay ? (
 					<RecordDayTable
 						aria-label={LIST_LABEL}
-						columns={RESULT_COLUMNS}
+						columns={columns}
 						rows={rows}
 						dateOf={(result) => result.recordedAt}
 						rowKey={(result) => result.id}
-						renderRow={(result) => <ResultRow result={result} />}
+						renderRow={(result) => <ResultRow result={result} named={named} />}
 						empty={empty}
 						loadingMore={loadingMore}
 					/>
 				) : (
 					<RecordGroupedTable
 						aria-label={LIST_LABEL}
-						columns={RESULT_COLUMNS}
+						columns={columns}
 						groups={byActionability(rows)}
 						rowKey={(result) => result.id}
-						renderRow={(result) => <ResultRow result={result} withDay />}
+						renderRow={(result) => <ResultRow result={result} withDay named={named} />}
 						empty={empty}
 						loadingMore={loadingMore}
 					/>
@@ -158,6 +156,7 @@ export function ResultExceptions({ result }: ResultExceptionsProps) {
 export interface ResultRowProps {
 	result: ReviewResult;
 	withDay?: boolean;
+	named?: boolean;
 }
 
 // Reserve row severity labels for costly problems; ordinary severities remain in the detail sheet.
@@ -168,7 +167,7 @@ function costlySeverity(result: ReviewResult) {
 		: undefined;
 }
 
-export function ResultRow({ result, withDay = false }: ResultRowProps) {
+export function ResultRow({ result, withDay = false, named = true }: ResultRowProps) {
 	const today = new Date(useNow());
 	const tracked = useTracked({ kind: "result", id: result.id });
 	const severity = costlySeverity(result);
@@ -210,9 +209,11 @@ export function ResultRow({ result, withDay = false }: ResultRowProps) {
 				</span>
 			</TableCell>
 			<ReviewItemCell item={result.item} linked={false} />
-			<TableCell className="align-top whitespace-normal">
-				<ReviewPerson person={result.developer} />
-			</TableCell>
+			{named && (
+				<TableCell className="align-top whitespace-normal">
+					<ReviewPerson person={result.developer} />
+				</TableCell>
+			)}
 		</PracticeTableRow>
 	);
 }

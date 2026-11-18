@@ -413,6 +413,20 @@ describe("practice profile route", () => {
 		await waitFor(() => expect(document.activeElement).toBe(start));
 	});
 
+	it("tells the reader whether admins of this workspace see their results with their name", async () => {
+		server.use(
+			http.get("*/workspaces/:workspaceSlug/per-person-results", () =>
+				HttpResponse.json({ enabled: false, canTurnOn: false }),
+			),
+		);
+		await renderProfile();
+
+		await userEvent.click(screen.getByRole("button", { name: "How to read this page" }));
+		await screen.findByText(
+			/admins see practice results with no name and cannot filter them by person/u,
+		);
+	});
+
 	it("does not offer the guided tour until the page has loaded", async () => {
 		server.use(
 			http.get("*/workspaces/:workspaceSlug/practice-profile/overview", async () => pending()),

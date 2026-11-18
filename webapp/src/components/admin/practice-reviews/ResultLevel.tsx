@@ -165,9 +165,11 @@ export function ResultLevel({
 							<ReviewFact label="Practice">
 								<span className="break-words">{record.practiceName}</span>
 							</ReviewFact>
-							<ReviewFact label="Developer">
-								<ReviewPerson person={record.developer} />
-							</ReviewFact>
+							{record.developer !== null && (
+								<ReviewFact label="Developer">
+									<ReviewPerson person={record.developer} />
+								</ReviewFact>
+							)}
 							{hasText(record.item.title) && (
 								<ReviewFact label="Reviewed work">
 									<span className="break-words">{record.item.title}</span>

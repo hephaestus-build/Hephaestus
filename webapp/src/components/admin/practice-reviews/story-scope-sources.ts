@@ -12,6 +12,7 @@ export const STORY_PEOPLE: ReviewPeople = {
 		secondary: member.account.identities[0]?.login ?? undefined,
 	})),
 	capped: false,
+	named: true,
 	isLoading: false,
 	isError: false,
 };

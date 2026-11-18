@@ -179,7 +179,8 @@ class ReviewResultListVisibilityIntegrationTest extends BaseIntegrationTest {
         assertThat(larger.cost().statements())
                 .as("small=%s, larger=%s", small.cost(), larger.cost())
                 .isEqualTo(small.cost().statements())
-                .isLessThanOrEqualTo(15);
+                // One of them reads whether the workspace shows admins results per person.
+                .isLessThanOrEqualTo(16);
         assertThat(plans.fullScans(small.sql())).isEmpty();
         assertThat(plans.fullScans(larger.sql())).isEmpty();
     }

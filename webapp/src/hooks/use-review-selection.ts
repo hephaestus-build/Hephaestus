@@ -145,7 +145,7 @@ function useRecordRead(
 				picked,
 				name: panelState(feedbackQuery, (feedback) => ({
 					status: "ready" as const,
-					name: `Feedback for ${developerLabel(feedback.developer)} · ${formatDayTime(feedback.createdAt, new Date(nowMs))}`,
+					name: `${feedback.developer === null ? "Feedback" : `Feedback for ${developerLabel(feedback.developer)}`} · ${formatDayTime(feedback.createdAt, new Date(nowMs))}`,
 				})),
 				trace,
 			};

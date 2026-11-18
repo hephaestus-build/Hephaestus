@@ -12,6 +12,6 @@ public record WorkspaceTileDTO(
 
         @Schema(
                 requiredMode = Schema.RequiredMode.REQUIRED,
-                description = "The workspace's middle half; absent while no developer is counted")
+                description = "The workspace's middle half; absent while fewer than 3 developers are counted")
         @Nullable
         WorkspaceRangeDTO middle) {}

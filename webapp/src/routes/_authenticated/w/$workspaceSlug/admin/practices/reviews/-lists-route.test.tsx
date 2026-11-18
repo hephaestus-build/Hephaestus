@@ -431,6 +431,47 @@ describe("practice review list routes", () => {
 		expect(screen.queryByRole("link", { name: `All feedback for ${name}` })).toBeNull();
 	});
 
+	it("offers no filter by person and no Developer column while per-person results are off", async () => {
+		const { resultUrls } = recordRequests();
+		const [result] = reviewResults;
+		assert(result);
+		server.use(
+			http.get("*/workspaces/:workspaceSlug/per-person-results", () =>
+				HttpResponse.json({ enabled: false, canTurnOn: false }),
+			),
+			http.get("*/workspaces/:workspaceSlug/practices/reviews/results", ({ request }) => {
+				resultUrls.push(new URL(request.url));
+				return HttpResponse.json(pageOf([{ ...result, developer: null }]));
+			}),
+		);
+
+		renderRouteAtWithRouter("/w/acme/admin/practices/reviews/results");
+		await screen.findByRole("combobox", { name: "Group" }, ROUTE_RENDER_WAIT);
+		await waitFor(() => expect(resultUrls.length).toBeGreaterThan(0));
+
+		expect(screen.queryByRole("combobox", { name: "Developer" })).toBeNull();
+		expect(screen.queryAllByRole("columnheader", { name: "Developer" })).toHaveLength(0);
+		expect(resultUrls.flatMap((url) => values(url, "developerId"))).toStrictEqual([]);
+	});
+
+	it("drops the person from an old address while per-person results are off", async () => {
+		const { resultUrls } = recordRequests();
+		server.use(
+			http.get("*/workspaces/:workspaceSlug/per-person-results", () =>
+				HttpResponse.json({ enabled: false, canTurnOn: false }),
+			),
+		);
+
+		const { router } = renderRouteAtWithRouter(
+			"/w/acme/admin/practices/reviews/results?developerId=7",
+		);
+		await screen.findByRole("combobox", { name: "Group" }, ROUTE_RENDER_WAIT);
+		await waitFor(() => expect(resultUrls.length).toBeGreaterThan(0));
+
+		expect(router.state.location.search).not.toHaveProperty("developerId");
+		expect(resultUrls.flatMap((url) => values(url, "developerId"))).toStrictEqual([]);
+	});
+
 	/**
 	 * A running review changes after the list loaded, also under a status filter: the list follows
 	 * the active reviews it shows until they stop, reads itself again, and then stops asking.
