@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.practices.repository;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditEntityType;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditEntry;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditPort;
+import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.core.exception.InvalidInputException;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.spi.MonitoredRepositoryQuery;
@@ -13,6 +14,7 @@ import de.tum.cit.aet.hephaestus.practices.dto.PracticeRepositoryDTO;
 import de.tum.cit.aet.hephaestus.practices.dto.SetPracticeRepositoryRequestDTO;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceQueries;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import java.util.Objects;
@@ -37,6 +39,8 @@ public class PracticeRepositoryService {
     private final PracticeRepositoryFolders folders;
     private final PracticeFiles files;
     private final PracticeService practices;
+    private final PracticeRepositoryMove move;
+    private final WorkspaceQueries workspaces;
     private final ConfigAuditPort audit;
 
     @PersistenceContext
@@ -53,6 +57,7 @@ public class PracticeRepositoryService {
      */
     @Transactional
     public PracticeRepositoryDTO set(WorkspaceContext ctx, SetPracticeRepositoryRequestDTO request) {
+        lock(ctx);
         long repositoryItemId = Long.parseLong(request.repositoryItemId());
         if (!monitored.repositories(ctx.id()).containsKey(repositoryItemId))
             throw new InvalidInputException("Choose a repository that this workspace monitors.");
@@ -87,6 +92,7 @@ public class PracticeRepositoryService {
     /** Unsets the practice repository. Every practice edited there is edited in Hephaestus again, with its versions. */
     @Transactional
     public void unset(WorkspaceContext ctx) {
+        lock(ctx);
         var setting = settings.findById(ctx.id())
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND, "This workspace has no practice repository."));
@@ -102,6 +108,8 @@ public class PracticeRepositoryService {
      * removed. It runs with no transaction, because the checkout fetches from the provider.
      */
     public void moveToRepository(WorkspaceContext ctx, String slug) {
+        // An unknown practice is refused before the checkout fetches anything.
+        practices.getPractice(ctx, slug);
         var folder = folders.read(ctx.id(), slug)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.CONFLICT,
@@ -110,12 +118,18 @@ public class PracticeRepositoryService {
         var read = files.read(slug, folder.files());
         var document = read.document();
         if (document == null) throw new PracticeFolderInvalidException(read.problems());
-        practices.moveToRepository(ctx, slug, document, folder.commit());
+        move.apply(ctx, slug, document, folder);
     }
 
     /** Edit in Hephaestus: reverses {@link #moveToRepository}. The practice keeps its current version. */
     public void moveToHephaestus(WorkspaceContext ctx, String slug) {
         practices.moveToHephaestus(ctx, slug);
+    }
+
+    /** Set, unset and a move each lock the workspace row first, so they run one after another. */
+    private void lock(WorkspaceContext ctx) {
+        if (workspaces.findByIdForUpdate(ctx.id()).isEmpty())
+            throw new EntityNotFoundException("Workspace", ctx.slug());
     }
 
     private PracticeRepositoryDTO view(long workspaceId, PracticeRepositorySetting setting) {

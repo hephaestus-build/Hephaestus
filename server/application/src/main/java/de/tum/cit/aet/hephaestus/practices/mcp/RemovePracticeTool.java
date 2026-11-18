@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.core.mcp.McpToolFor;
 import de.tum.cit.aet.hephaestus.core.mcp.McpTools;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.practices.PracticeCatalogController;
+import de.tum.cit.aet.hephaestus.practices.PracticeEditedInRepositoryException;
 import de.tum.cit.aet.hephaestus.practices.PracticeService;
 import de.tum.cit.aet.hephaestus.workspace.authorization.RequireAtLeastWorkspaceAdmin;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContextHolder;
@@ -71,6 +72,8 @@ class RemovePracticeTool implements McpTool {
         String slug = McpTools.requiredString(arguments, "slug");
         try {
             practices.deletePractice(WorkspaceContextHolder.getContext(), slug);
+        } catch (PracticeEditedInRepositoryException refused) {
+            throw refused;
         } catch (ResponseStatusException refused) {
             if (refused.getStatusCode().isSameCodeAs(HttpStatus.CONFLICT)) {
                 throw new ResponseStatusException(

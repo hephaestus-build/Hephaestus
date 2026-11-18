@@ -72,6 +72,16 @@ class PracticeRepositoryFoldersTest extends BaseUnitTest {
                 .isInstanceOf(PracticeFolderInvalidException.class);
     }
 
+    /** A linked folder is unreadable, not absent, so a sync can never take it for a removed practice. */
+    @Test
+    void shouldRefuseALinkedFolderInsteadOfFindingNoFolder() throws IOException {
+        write("elsewhere/practice.md", "---\nname: x\n---\n");
+        Files.createSymbolicLink(base().resolve("explain-the-change"), base().resolve("elsewhere"));
+
+        assertThatThrownBy(() -> folders.read(WORKSPACE, "explain-the-change"))
+                .isInstanceOf(PracticeFolderInvalidException.class);
+    }
+
     @Test
     void shouldRefuseWhenTheRepositoryIsNotMonitoredOrCannotBeRead() {
         when(checkouts.checkout(WORKSPACE, "acme/practices", "main", null))

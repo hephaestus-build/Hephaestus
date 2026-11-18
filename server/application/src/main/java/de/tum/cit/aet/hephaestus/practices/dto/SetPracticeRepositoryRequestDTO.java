@@ -16,7 +16,7 @@ public record SetPracticeRepositoryRequestDTO(
         @Schema(description = "A path relative to the repository root; .hephaestus/practices when absent")
         @Size(max = 255)
         @Pattern(
-                regexp = "^(?!/)(?!.*(^|/)\\.\\.?(/|$))[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*$",
-                message = "is a path relative to the repository root, without . or .. segments")
+                regexp = "^(?!/)(?!.*(^|/)(\\.\\.?|\\.git)(/|$))[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*$",
+                message = "is a path relative to the repository root, without ., .. or .git segments")
         @Nullable
         String directory) {}
