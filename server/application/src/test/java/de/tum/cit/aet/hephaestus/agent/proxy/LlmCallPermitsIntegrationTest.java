@@ -260,6 +260,33 @@ class LlmCallPermitsIntegrationTest extends BaseIntegrationTest {
         assertThat(state(unranked)).isEqualTo("WAITING");
     }
 
+    /** Both rules at once: an aged draft goes before a review's calls, which keep their session order. */
+    @Test
+    void shouldGrantAnAgedDraftFirstAndThenAReviewsOldestSessionWhenBothWait() {
+        long pool = pool(3);
+        var first = admit(workerA, pool, AgentRunBand.BATCH, 1);
+        var second = admit(workerA, pool, AgentRunBand.BATCH, 1);
+        UUID job = UUID.randomUUID();
+        UUID laterSession = waitingCall(pool, AgentRunBand.BATCH, 2, job, 5, Duration.ofSeconds(2));
+        UUID olderSession = waitingCall(pool, AgentRunBand.BATCH, 2, job, 1, Duration.ZERO);
+        UUID draft = UUID.randomUUID();
+        transactions.executeWithoutResult(status -> rows.enqueue(new LlmCallPermitRepository.Request(
+                draft, pool, "remote-" + draft, AgentRunBand.BACKGROUND, null, UUID.randomUUID(), 0, null)));
+        jdbc.update(
+                "UPDATE llm_call_permit SET acquired_at=clock_timestamp()-make_interval(secs => ?) WHERE id=?",
+                LlmCallPermitsTestFixtures.PERMIT_AGING.toSeconds() + 1,
+                draft);
+
+        first.close();
+
+        assertThat(state(draft)).isEqualTo("ACTIVE");
+        assertThat(state(olderSession)).isEqualTo("WAITING");
+        assertThat(state(laterSession)).isEqualTo("WAITING");
+        second.close();
+        assertThat(state(olderSession)).isEqualTo("ACTIVE");
+        assertThat(state(laterSession)).isEqualTo("WAITING");
+    }
+
     @Test
     void shouldKeepTheTurnsOfJobsWhateverTheRankOfTheirSessions() {
         long pool = pool(2);
