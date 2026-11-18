@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.practices.repository;
 
 import de.tum.cit.aet.hephaestus.core.AuditLedger;
 import de.tum.cit.aet.hephaestus.core.Audited;
+import de.tum.cit.aet.hephaestus.core.RecentSignInExempt;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.practices.dto.ChangePracticeEditedInRequestDTO;
 import de.tum.cit.aet.hephaestus.practices.dto.PracticeRepositoryDTO;
@@ -54,6 +55,7 @@ public class PracticeRepositoryController {
         return repositories.set(ctx, request);
     }
 
+    @RecentSignInExempt(reason = "unsetting deletes nothing: every practice keeps its versions, and setting it again restores it")
     @DeleteMapping
     @Audited(ledger = AuditLedger.CONFIG_AUDIT, type = "PRACTICE_REPOSITORY")
     @Operation(
