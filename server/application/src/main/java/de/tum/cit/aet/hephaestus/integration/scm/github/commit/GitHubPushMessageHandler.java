@@ -132,8 +132,6 @@ public class GitHubPushMessageHandler extends AbstractIntegrationMessageHandler<
             return;
         }
 
-        gitRepositoryManager.invalidateRefs(nativeId, providerId.orElseThrow());
-
         if (event.deleted()) {
             log.debug("Skipped push event: reason=branchDeleted, ref={}, repoName={}", event.ref(), repoName);
             return;

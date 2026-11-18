@@ -25,11 +25,9 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderTyp
 import de.tum.cit.aet.hephaestus.integration.core.item.ItemRepository;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRegistration;
-import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryRefState;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.item.ScmItemService;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.RepositoryKey;
 import de.tum.cit.aet.hephaestus.practices.DefinitionTestFixtures;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinition;
 import de.tum.cit.aet.hephaestus.practices.PracticeVersionRepository;
@@ -681,58 +679,7 @@ class ResultHistoryIntegrationTest extends BaseIntegrationTest {
     ResultPresentation presentation;
 
     @Autowired
-    RepositoryRefState gitRefs;
-
-    @Autowired
     RepositoryRepository repositoryRows;
-
-    @ParameterizedTest
-    @EnumSource(
-            value = IdentityProviderType.class,
-            names = {"GITHUB", "GITLAB"})
-    void shouldKeepAResultCurrentWhileOtherBranchesAndTagsOfItsRepositoryMove(IdentityProviderType provider) {
-        var ref = lookup.work(scenario.workspace(), provider, true);
-        var pull = issues.findById(Objects.requireNonNull(ref.sourceId())).orElseThrow();
-        var repository = repositoryRows
-                .findByIdWithOrganization(
-                        Objects.requireNonNull(pull.getRepository()).getId())
-                .orElseThrow();
-        var key = new RepositoryKey(ref.workspaceId(), repository.getId());
-        gitRefs.record(
-                key.workspaceId(),
-                key.repositoryId(),
-                gitRefs.begin(key.workspaceId(), key.repositoryId()),
-                "a".repeat(64));
-        var work = new ReviewIntegrationData.Scenario(
-                scenario.workspace(),
-                scenario.account(),
-                scenario.practice(),
-                itemRows.findById(ref.itemId()).orElseThrow());
-        var recorded = data.result(work, ResultOutcome.NOT_MET, Instant.now(), Instant.now(), storedVersion(work));
-        assertThat(presentation.currentness(resultViews
-                        .views(ref.workspaceId(), facts(List.of(recorded)))
-                        .getFirst()))
-                .isEqualTo(Currentness.CURRENT);
-
-        // A branch or tag event of the repository, then a fetch that observes other refs: the pull request is the same.
-        gitRefs.invalidate(
-                repository.getNativeId(),
-                Objects.requireNonNull(repository.getProvider().getId()));
-        assertThat(presentation.currentness(resultViews
-                        .views(ref.workspaceId(), facts(List.of(recorded)))
-                        .getFirst()))
-                .isEqualTo(Currentness.CURRENT);
-        gitRefs.record(
-                key.workspaceId(),
-                key.repositoryId(),
-                gitRefs.begin(key.workspaceId(), key.repositoryId()),
-                "b".repeat(64));
-        assertThat(presentation.currentness(resultViews
-                        .views(ref.workspaceId(), facts(List.of(recorded)))
-                        .getFirst()))
-                .isEqualTo(Currentness.CURRENT);
-        assertThat(read.findById(recorded.getId()).orElseThrow().getEndedAt()).isNull();
-    }
 
     @ParameterizedTest
     @EnumSource(

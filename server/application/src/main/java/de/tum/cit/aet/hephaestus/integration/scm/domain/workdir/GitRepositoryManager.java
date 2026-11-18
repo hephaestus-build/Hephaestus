@@ -3,10 +3,8 @@ package de.tum.cit.aet.hephaestus.integration.scm.domain.workdir;
 import static java.nio.file.LinkOption.NOFOLLOW_LINKS;
 
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyFence;
-import de.tum.cit.aet.hephaestus.evidence.SourceFingerprint;
 import de.tum.cit.aet.hephaestus.integration.core.fabric.EvidenceSpool;
 import de.tum.cit.aet.hephaestus.integration.core.fabric.FabricLayout;
-import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryRefState;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitDetails;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitDetails.FileChange;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitFileChange.ChangeType;
@@ -40,9 +38,7 @@ import java.util.HexFormat;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.Set;
-import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.Semaphore;
@@ -128,7 +124,6 @@ public class GitRepositoryManager {
     private final Semaphore ingestionPermits;
 
     private final GuardedGitTransport transports;
-    private final RepositoryRefState refs;
     private final PersonDataCopyFence copyFence;
     private final int transportTimeoutSeconds;
     private final Duration captureMirrorWait;
@@ -141,19 +136,9 @@ public class GitRepositoryManager {
             GitRepositoryLockManager locks,
             FabricLayout layout,
             GuardedGitTransport transports,
-            RepositoryRefState refs,
             PersonDataCopyFence copyFence,
             MeterRegistry meters) {
-        this(
-                properties,
-                locks,
-                layout,
-                transports,
-                refs,
-                copyFence,
-                meters,
-                TRANSPORT_TIMEOUT_SECONDS,
-                CAPTURE_MIRROR_WAIT);
+        this(properties, locks, layout, transports, copyFence, meters, TRANSPORT_TIMEOUT_SECONDS, CAPTURE_MIRROR_WAIT);
     }
 
     /**
@@ -165,13 +150,11 @@ public class GitRepositoryManager {
             GitRepositoryLockManager locks,
             FabricLayout layout,
             GuardedGitTransport transports,
-            RepositoryRefState refs,
             PersonDataCopyFence copyFence,
             MeterRegistry meters,
             int transportTimeoutSeconds,
             Duration captureMirrorWait) {
         this.copyFence = copyFence;
-        this.refs = refs;
         this.transports = transports;
         this.properties = properties;
         this.locks = locks;
@@ -188,10 +171,6 @@ public class GitRepositoryManager {
                 .description("Fetches that stopped because the provider went silent or the mirror stayed busy")
                 .tag("cause", cause)
                 .register(meters);
-    }
-
-    public void invalidateRefs(long nativeId, long providerId) {
-        refs.invalidate(nativeId, providerId);
     }
 
     public boolean isEnabled() {
@@ -373,7 +352,6 @@ public class GitRepositoryManager {
         requireEnabled();
         locks.withWriteLock(repository, abandoned, () -> {
             if (abandoned.getAsBoolean()) throw new CancellationException("The reader stopped waiting for the mirror");
-            var readId = refs.begin(repository.workspaceId(), repository.repositoryId());
             Path mirror = mirror(repository);
             try {
                 if (!isRepositoryCloned(repository) || !hasOrigin(mirror, cloneUrl)) {
@@ -407,11 +385,6 @@ public class GitRepositoryManager {
                             .setTransportConfigCallback(transports.callback(cloneUrl))
                             .setTimeout(timeoutSeconds)
                             .call();
-                    refs.record(
-                            repository.workspaceId(),
-                            repository.repositoryId(),
-                            readId,
-                            SourceFingerprint.refs(readableRefs(git.getRepository())));
                 }
                 // A fetch that brings nothing new changes no file, and eviction reads the last use from here.
                 Files.setLastModifiedTime(mirror, FileTime.from(Instant.now()));
@@ -1037,20 +1010,6 @@ public class GitRepositoryManager {
      */
     public static String treeIdentity(String head, String base) {
         return head + ":" + base;
-    }
-
-    /** The mirror's branches, as remote branches, and its tags: what a complete fetch observed of the provider. */
-    private static Map<String, String> readableRefs(Repository repo) throws IOException {
-        var refs = new TreeMap<String, String>();
-        for (var ref : repo.getRefDatabase().getRefsByPrefix(Constants.R_REFS)) {
-            String name = ref.getName();
-            if (name.startsWith(Constants.R_HEADS))
-                name = Constants.R_REMOTES + "origin/" + name.substring(Constants.R_HEADS.length());
-            else if (!name.startsWith(Constants.R_TAGS)) continue;
-            var id = ref.getObjectId();
-            if (id != null) refs.put(name, id.name());
-        }
-        return refs;
     }
 
     /** Tags are peeled and every line carries its type, so a tag on a tree or blob is witnessed, not walked. */

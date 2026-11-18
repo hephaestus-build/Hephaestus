@@ -3,11 +3,9 @@ package de.tum.cit.aet.hephaestus.integration.scm.domain.workdir;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.awaitility.Awaitility.await;
-import static org.mockito.Mockito.mock;
 
 import de.tum.cit.aet.hephaestus.evidence.SourceAbsenceReason;
 import de.tum.cit.aet.hephaestus.integration.core.fabric.FabricLayout;
-import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryRefState;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.capture.ScmCapturePreparation;
 import de.tum.cit.aet.hephaestus.integration.scm.metrics.ScmMetrics;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
@@ -157,7 +155,6 @@ class GitRepositoryFetchBoundTest extends BaseUnitTest {
                 locks,
                 new FabricLayout(temporary.resolve("fabric").toString()),
                 simulatorPort == 0 ? GitTransportFixtures.guarded() : GitTransportFixtures.simulator(simulatorPort),
-                mock(RepositoryRefState.class),
                 GitTransportFixtures.copyFence(),
                 meters,
                 transportTimeoutSeconds,

@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1794938253002-1" author="hephaestus">
+        <comment>No freshness read uses the last provider-ref observation any more: a pull request's tree fingerprint is its commit pair.</comment>
+        <dropColumn columnName="git_refs_fingerprint" tableName="repository_to_monitor"/>
+        <rollback>
+            <addColumn tableName="repository_to_monitor">
+                <column name="git_refs_fingerprint" type="VARCHAR(64)"/>
+            </addColumn>
+        </rollback>
+    </changeSet>
+    <changeSet id="1794938253002-2" author="hephaestus">
+        <dropColumn columnName="git_refs_read_id" tableName="repository_to_monitor"/>
+        <rollback>
+            <addColumn tableName="repository_to_monitor">
+                <column name="git_refs_read_id" type="UUID"/>
+            </addColumn>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>
