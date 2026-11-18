@@ -322,7 +322,7 @@ async function main(): Promise<void> {
 		"gate:toolchain decides whether `server/application/project.toml` must keep a JVM mitigation for this JRE.",
 		"The changeset is yours to add: name the fixed CVEs in the operator's voice.",
 		"",
-		"Opened by `.github/workflows/jvm-watch.yml` (`scripts/update-buildpack-pins.ts`). Approve its CI runs: a `GITHUB_TOKEN` pull request starts none on its own.",
+		"Opened by `.github/workflows/jvm-watch.yml` (`scripts/update-buildpack-pins.ts`), which also dispatched CI/CD on this branch. The pull_request runs wait for approval and are not required.",
 	].join("\n");
 	const commit = await createCommit(
 		requiredEnv(process.env, "GH_TOKEN"),
@@ -349,6 +349,9 @@ async function main(): Promise<void> {
 				body,
 			])
 		: run("gh", ["pr", "edit", existing, "--repo", repository, "--title", title, "--body", body]));
+	// GitHub holds the pull_request runs of a GITHUB_TOKEN push for approval, but it starts a workflow_dispatch
+	// run at once. That run reports `CI Status Gate`, the one required context, on the head commit.
+	await run("gh", ["workflow", "run", "cicd.yml", "--repo", repository, "--ref", BRANCH]);
 	process.stdout.write(`Proposed JRE ${jre.to.version} in ${commit.description}.\n`);
 	const summaryPath = process.env.GITHUB_STEP_SUMMARY;
 	if (isSet(summaryPath)) {

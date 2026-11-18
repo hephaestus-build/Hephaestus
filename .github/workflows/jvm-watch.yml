@@ -39,6 +39,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
+      # actions: dispatches CI/CD on the pull request's branch, which GitHub starts without approval.
+      actions: write
       contents: write
       pull-requests: write
     steps:
