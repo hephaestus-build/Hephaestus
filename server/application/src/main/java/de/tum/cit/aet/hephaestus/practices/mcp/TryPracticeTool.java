@@ -69,7 +69,7 @@ class TryPracticeTool implements McpTool {
                         "Runs one version of a practice on one pull request, merge request or issue, as a review"
                                 + " does, and returns the trial. Save the version first with save_practice_draft."
                                 + " The trial counts against the workspace's AI budget, and a workspace runs only a"
-                                + " few trials at once. It needs no undo: it changes no configuration, and its findings"
+                                + " few trials at once. It needs no undo: it changes no configuration, and its trial output"
                                 + " expire. If the trial is still running after waitSeconds, read it later with"
                                 + " get_practice_trial." + McpTrial.DESCRIPTION),
                 INPUT_SCHEMA,
@@ -101,7 +101,7 @@ class TryPracticeTool implements McpTool {
         UUID id = trials.start(workspaceId, start, account);
         TrialDTO trial = awaitEnd(workspaceId, id, Instant.now().plusSeconds(waitSeconds));
         return McpTools.result(jsonMapper.convertValue(
-                McpTrial.of(trial, trials.mayReadFindings(workspaceId, id, account)), Map.class));
+                McpTrial.of(trial, trials.mayReadDetail(workspaceId, id, account)), Map.class));
     }
 
     private TrialDTO awaitEnd(long workspaceId, UUID id, Instant deadline) {

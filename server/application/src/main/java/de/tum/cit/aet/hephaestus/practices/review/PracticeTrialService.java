@@ -146,7 +146,7 @@ public class PracticeTrialService {
      * reads them. Work attributed to nobody, or to an account that is gone, has no one who chose Cloud. It runs with no
      * transaction: a preference read that finds no account must not mark a surrounding one rollback-only.
      */
-    public boolean mayReadFindings(long workspaceId, UUID trialId, long accountId) {
+    public boolean mayReadDetail(long workspaceId, UUID trialId, long accountId) {
         var review = reviewRows
                 .findByIdAndWorkspaceId(trialId, workspaceId)
                 .filter(found -> found.getOrigin() == ReviewOrigin.TRIAL)

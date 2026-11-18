@@ -211,11 +211,11 @@ class PracticeTrialControllerIntegrationTest extends BaseIntegrationTest {
     }
 
     /**
-     * ADR 0110, update of 2026-11-16: an admin's MCP client reads the findings only of a trial that the admin started,
+     * ADR 0110, update of 2026-11-16: an admin's MCP client reads the trial output only of a trial that the admin started,
      * and only of work whose people chose Cloud.
      */
     @Test
-    void shouldLetAnMcpClientReadTheFindingsOnlyOfItsOwnTrialOfWorkWhosePeopleChoseCloud() {
+    void shouldLetAnMcpClientReadTheDetailOnlyOfItsOwnTrialOfWorkWhosePeopleChoseCloud() {
         long developer = Objects.requireNonNull(scenario.account().getId());
         long requester = developer;
         var unattributed = admissions.pending(
@@ -226,18 +226,18 @@ class PracticeTrialControllerIntegrationTest extends BaseIntegrationTest {
         UUID trial = attributed.review().getId();
 
         choose(developer, AiChoice.IN_HOUSE_ONLY);
-        assertThat(trials.mayReadFindings(workspaceId, trial, requester)).isFalse();
+        assertThat(trials.mayReadDetail(workspaceId, trial, requester)).isFalse();
 
         choose(developer, AiChoice.CLOUD);
-        assertThat(trials.mayReadFindings(workspaceId, trial, requester)).isTrue();
+        assertThat(trials.mayReadDetail(workspaceId, trial, requester)).isTrue();
         // Another admin did not start this trial.
-        assertThat(trials.mayReadFindings(workspaceId, trial, requester + 1)).isFalse();
+        assertThat(trials.mayReadDetail(workspaceId, trial, requester + 1)).isFalse();
         // Work that the review attributes to nobody has no one who chose Cloud.
-        assertThat(trials.mayReadFindings(workspaceId, unattributed.review().getId(), requester))
+        assertThat(trials.mayReadDetail(workspaceId, unattributed.review().getId(), requester))
                 .isFalse();
         // A review of another origin is no trial.
         var request = admissions.pending(scenario, Instant.now(), developer);
-        assertThat(trials.mayReadFindings(workspaceId, request.review().getId(), requester))
+        assertThat(trials.mayReadDetail(workspaceId, request.review().getId(), requester))
                 .isFalse();
     }
 

@@ -60,7 +60,7 @@ class McpTrialTest extends BaseUnitTest {
         var output = McpTrial.of(trial(notMet(), null), true);
 
         assertThat(output.outcome()).isEqualTo("NOT_MET");
-        assertThat(output.findingsWithheld()).isFalse();
+        assertThat(output.detailWithheld()).isFalse();
         assertThat(output.problems()).singleElement().satisfies(problem -> {
             assertThat(problem.severity()).isEqualTo("MAJOR");
             assertThat(problem.claim()).isEqualTo("No reason for the change");
@@ -71,11 +71,11 @@ class McpTrialTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldWithholdTheFindingsButNotTheOutcomeWhenSomeoneDidNotChooseCloud() {
+    void shouldWithholdTheDetailButNotTheOutcomeWhenSomeoneDidNotChooseCloud() {
         var output = McpTrial.of(trial(notMet(), null), false);
 
         assertThat(output.outcome()).isEqualTo("NOT_MET");
-        assertThat(output.findingsWithheld()).isTrue();
+        assertThat(output.detailWithheld()).isTrue();
         assertThat(output.problems()).isNull();
         assertThat(output.citations()).isNull();
     }
@@ -85,7 +85,7 @@ class McpTrialTest extends BaseUnitTest {
         var output = McpTrial.of(trial(null, "free text that is no code"), true);
 
         assertThat(output.outcome()).isNull();
-        assertThat(output.findingsWithheld()).isFalse();
+        assertThat(output.detailWithheld()).isFalse();
         assertThat(output.problems()).isNull();
         assertThat(output.withheldReason()).isEqualTo("UNKNOWN");
     }
