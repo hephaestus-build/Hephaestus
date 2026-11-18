@@ -735,7 +735,7 @@ class LlmCallPermitsIntegrationTest extends BaseIntegrationTest {
         try (var inFlight = Objects.requireNonNull(workerB.acquire(
                 pool,
                 AgentRunBand.BACKGROUND,
-                new LlmCallPermits.Caller(null, UUID.randomUUID(), 1, null),
+                new LlmCallPermits.Caller(null, UUID.randomUUID(), 1, null, null),
                 () -> false,
                 laterThanAnyTest()))) {
             assertThat(inFlight.isRevoked()).isFalse();
@@ -743,7 +743,7 @@ class LlmCallPermitsIntegrationTest extends BaseIntegrationTest {
             assertThat(workerA.acquire(
                             pool,
                             AgentRunBand.BACKGROUND,
-                            new LlmCallPermits.Caller(null, UUID.randomUUID(), 1, null),
+                            new LlmCallPermits.Caller(null, UUID.randomUUID(), 1, null, null),
                             () -> false,
                             laterThanAnyTest()))
                     .isNull();
@@ -767,7 +767,10 @@ class LlmCallPermitsIntegrationTest extends BaseIntegrationTest {
     void shouldGrantTheCallsBehindADraftThatWaitsForTheOneDraftInFlight() {
         long pool = pool(3);
         var draft = admit(
-                workerA, pool, AgentRunBand.BACKGROUND, new LlmCallPermits.Caller(null, UUID.randomUUID(), 1, null));
+                workerA,
+                pool,
+                AgentRunBand.BACKGROUND,
+                new LlmCallPermits.Caller(null, UUID.randomUUID(), 1, null, null));
         var occupied = admit(workerA, pool, AgentRunBand.BATCH, 1);
         UUID nextDraft = UUID.randomUUID();
         transactions.executeWithoutResult(status -> rows.enqueue(new LlmCallPermitRepository.Request(

@@ -306,7 +306,7 @@ class LlmProductFeedbackAdmissionIntegrationTest extends BaseIntegrationTest {
         var permit = worker.acquire(
                 pool,
                 kind,
-                new LlmCallPermits.Caller(workspace, UUID.randomUUID(), 0, null),
+                new LlmCallPermits.Caller(workspace, UUID.randomUUID(), 0, null, null),
                 ended::get,
                 Instant.now().plusSeconds(30));
         if (permit != null) granted.add(permit);
