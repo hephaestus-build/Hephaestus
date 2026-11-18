@@ -786,6 +786,10 @@ process.stdout.write(JSON.stringify(validateToolArguments(tool, { name: tool.nam
 						if (sessionSlug === process.env.PI_HOST_STOP_FAILURE) {
 							throw new Error("session stop failed");
 						}
+						// A session whose stop never settles, as a native call that ignores its abort.
+						if (sessionSlug === process.env.PI_HOST_UNSETTLED_STOP) {
+							await Promise.withResolvers<never>().promise;
+						}
 					},
 					dispose: () => undefined,
 					steer: async () => undefined,

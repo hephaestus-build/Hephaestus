@@ -1,5 +1,12 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, realpathSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+	existsSync,
+	mkdtempSync,
+	realpathSync,
+	readFileSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import nodePath from "node:path";
 import { test } from "node:test";
@@ -245,6 +252,45 @@ void test("the deadline retains finished work and ends running and queued practi
 			evaluated: 1,
 			eligible: 4,
 		});
+	} finally {
+		rmSync(cwd, { recursive: true, force: true });
+	}
+});
+
+void test("a session that never settles after the budget end is left behind, and the runner still ends its review", async () => {
+	const cwd = realpathSync(mkdtempSync(nodePath.join(tmpdir(), "pi-parallel-unsettled-")));
+	try {
+		stagePractices(
+			cwd,
+			["a-finished", "z-unsettled"].map((slug) => ({ slug })),
+		);
+		const exit = await runRunner(
+			cwd,
+			{ "z-unsettled": "hang" },
+			{
+				AGENT_BUDGET_MS: "6500",
+				PI_HOST_COLD_LEADER: "z-unsettled",
+				PI_HOST_UNSETTLED_STOP: "z-unsettled",
+			},
+		);
+		assert.equal(exit.status, 78, exit.stderr);
+		assert.ok(
+			!existsSync(nodePath.join(cwd, "out/watchdog-killed.json")),
+			"the watchdog did not end it",
+		);
+		assert.deepEqual(
+			resultsOf(cwd).results.map((result: unknown) => field(result, "practiceSlug")),
+			["a-finished"],
+		);
+		// The deadline, not a failure: the server carries the practice to its next occasion.
+		assert.deepEqual(field(readJsonFile(cwd, "out/result.json"), "nonResults"), [
+			{ practiceSlug: "z-unsettled", reason: "DEADLINE" },
+		]);
+		// Measuring ends at least 10 s before the watchdog (budget + 30 s), which leaves the runner time to finish.
+		const measured = /measurement\.finished duration_ms=(?<ms>\d+)/u.exec(exit.stderr)?.groups?.ms;
+		assert.ok(measured !== undefined, exit.stderr);
+		assert.ok(Number(measured) <= 6500 + 20_000, `measuring took ${measured} ms`);
+		assert.match(exit.stderr, /measurement\.left_at_deadline sessions_left=1/u);
 	} finally {
 		rmSync(cwd, { recursive: true, force: true });
 	}

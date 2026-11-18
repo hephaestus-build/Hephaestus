@@ -620,6 +620,10 @@ The server does not collect the runner's log, so the job's error carries the rea
 For exits 1 and 2, the runner records its last diagnostic as `end` in `runner-debug.json`, with codes of `pi-diagnostics.json` only.
 The same file lists the sessions that are still open as `open`: the practice, the turn, how long a model call has waited for its first byte, and the time since the last event.
 The runner writes the file whenever a turn opens and whenever a model call starts or is served, and once more before its watchdog exits.
+The watchdog stops the runner 30 seconds after its budget.
+Measuring ends at the budget, and no wait after that runs past 10 seconds before the watchdog.
+A session that has not stopped by then is left behind (`measurement.left_at_deadline`). Its practice ends with `DEADLINE`, and the runner exits 78 with what it staged.
+Thus, a stop that does not settle ends the review cleanly, and not at the watchdog.
 It replaces the file in one step, so a stopped sandbox uploads a whole file.
 The server shows only codes of that vocabulary.
 For exit 77, the server keeps its own error on the attempt: the request that failed, and the cause by type.

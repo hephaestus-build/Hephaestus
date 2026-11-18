@@ -13,6 +13,7 @@
 		"gateway.waiting",
 		"measurement.ended",
 		"measurement.finished",
+		"measurement.left_at_deadline",
 		"measurement.stopped",
 		"notes.failed",
 		"output.failed",
@@ -44,6 +45,7 @@
 		"review.unreachable",
 		"session.abort_failed",
 		"session.idle_wait",
+		"session.left_at_deadline",
 		"session.steer_failed",
 		"task.invalid",
 		"task.loaded",
@@ -174,6 +176,7 @@
 		"retries": "count",
 		"side": ["programs", "tools"],
 		"sessions_at_once": "count",
+		"sessions_left": "count",
 		"skipped": "flag",
 		"status": ["failed", "not-finished", "not-reached", "ok", "withheld"],
 		"stop_reason": [
