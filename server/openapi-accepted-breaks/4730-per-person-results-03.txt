@@ -1,0 +1,3 @@
+# #4730: per-person results for admins: names are withheld when the setting is off, so `developer`
+# is null on practice-page and conversation feedback.
+in API GET /workspaces/{workspaceSlug}/practices/reviews/feedback removed the required property `content/items/developer/accountId` from the response with the `200` status
