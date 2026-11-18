@@ -219,13 +219,16 @@ const groupSentences = (group: ChangesInGroup) =>
 	);
 const practiceSentences = (group: ChangesInGroup) =>
 	composeGroupOverview(overview({ changes: inGroup(group) }), group.groupSlug).practiceSentences;
-const resolvedGroup = (resolvedBy: ProfileChange["resolvedBy"]): ChangesInGroup => ({
+const resolvedGroup = (
+	resolvedBy: ProfileChange["resolvedBy"],
+	evidence = [pullRequest(428), pullRequest(427), pullRequest(425)],
+): ChangesInGroup => ({
 	groupSlug: "review-ready-work",
 	groupName: "Packaging work for review",
 	changes: [
 		change("FEEDBACK_RESOLVED", "describe", "Describe what changed and why", {
 			resolvedBy,
-			evidence: [pullRequest(428), pullRequest(427), pullRequest(425)],
+			evidence,
 		}),
 	],
 });
@@ -257,6 +260,19 @@ describe("group sentences", () => {
 		expect(plainBullets(practiceSentences(resolvedGroup("DEVELOPER")).describe)).toBe(
 			"Feedback marked as addressed on 9 September.",
 		);
+	});
+
+	it("end a resolution by the work at the period when the wire names no work", () => {
+		const unnamed = resolvedGroup("WORK", []);
+		expect(groupSentences(unnamed)).toStrictEqual([
+			"Describe what changed and why resolved by the work.",
+		]);
+		expect(plainBullets(practiceSentences(unnamed).describe)).toBe(
+			"Feedback resolved by the work.",
+		);
+		expect(composeChangeSentences(inGroup(unnamed)).map(plain)).toStrictEqual([
+			"Describe what changed and why resolved by the work.",
+		]);
 	});
 
 	it("join the practices that made the same move into one bullet, and agree with them", () => {

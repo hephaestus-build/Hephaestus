@@ -262,11 +262,12 @@ const backToClean = (event: ProfileEvent): string =>
 		: `back to none of ${event.cleanNeeded} clean in a row`;
 
 /**
- * "after !425, !427 and !428 came back clean": the work that resolved a piece of feedback, linked.
+ * " after !425, !427 and !428 came back clean": the work that resolved a piece of feedback, linked,
+ * with the space that leads into it, so a change that names no work leaves no space behind.
  */
 const cameBackClean = (event: ProfileEvent): FeedbackTextSegment[] =>
 	event.evidence.length > 0
-		? fold([text("after "), ...refs(event.evidence), text(" came back clean")])
+		? fold([text(" after "), ...refs(event.evidence), text(" came back clean")])
 		: [];
 
 /**
@@ -274,7 +275,7 @@ const cameBackClean = (event: ProfileEvent): FeedbackTextSegment[] =>
  */
 function resolvedPredicate(event: ProfileEvent): FeedbackTextSegment[] {
 	if (event.resolvedBy === "WORK") {
-		return fold([text("resolved by the work "), ...cameBackClean(event)]);
+		return fold([text("resolved by the work"), ...cameBackClean(event)]);
 	}
 	if (event.resolvedBy === "DEVELOPER") {
 		return [
