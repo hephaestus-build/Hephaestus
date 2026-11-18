@@ -156,8 +156,10 @@ tags:
 - name: practice-group-detail
 - name: practice-page-feedback
 - name: practice-profile-review
-- description: "The workspace's practice repository, and where each practice is edited:\
-    \ workspace admins only (ADR 0118)."
+- description: |-
+    The workspace's practice repository, and where each practice is edited: workspace admins only (ADR 0118). Each change
+     needs a recent sign-in. A stale session could otherwise point the workspace at a repository its holder can merge
+     into and move practices there, so that the criteria and scripts of reviews come from that repository.
   name: practice-repository
 - name: practice-review-output
 - description: |-
@@ -17679,6 +17681,7 @@ components:
       - WORKSPACE_OWNER_CHANGE
       - WORKSPACE_DELETION
       - PROVIDER_RESOURCE_RELEASE
+      - PRACTICE_REPOSITORY_CHANGE
       - LLM_CONNECTION_CREATED
       - LLM_CONNECTION_UPDATED
       - LLM_CONNECTION_DELETED
