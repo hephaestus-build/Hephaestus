@@ -29,6 +29,13 @@ import { isSet } from "./lib/env.ts";
 import { environmentWithoutGitRepository } from "./lib/git-environment.ts";
 import { asArray, asRecord, asString } from "./lib/json.ts";
 
+/** A settings file's pluginManagement block without comments. */
+const pluginRepositories = async (file: string) => {
+	const block = /pluginManagement \{[\s\S]*?\n\}/u.exec(await readFile(file, "utf8"))?.[0];
+	assert.ok(block !== undefined, `${file} declares pluginManagement`);
+	return block.replaceAll(/\s*\/\/.*$/gmu, "");
+};
+
 void describe("ci-contract: server", () => {
 	void test("server CI uses native Gradle caching and verifies JUnit selection", async () => {
 		const action = await readFile(".github/actions/setup-caches/action.yml", "utf8");
@@ -337,12 +344,30 @@ void describe("ci-contract: server", () => {
 			".github/actions/setup-toolchain/action.yml",
 			".github/actions/setup-caches/action.yml",
 			".github/workflows/cache-gradle.yml",
+			"scripts/client-generators/kotlin/build.gradle.kts",
+			"scripts/client-generators/kotlin/settings.gradle.kts",
+			"scripts/client-generators/kotlin/gradle/verification-metadata.xml",
 		]) {
 			assert.ok(
 				paths.items.some((pattern) => minimatch(file, String(pattern), { dot: true })),
 				`${file} must refresh the Gradle cache`,
 			);
 		}
+		// gate:client-generators builds the Kotlin client online from a temporary directory, so the
+		// producer resolves that build's plugins and dependencies too.
+		assert.match(
+			runScript(
+				producer,
+				["jobs", "gradle"],
+				"Resolve the Kotlin client's plugins and dependencies",
+			),
+			/--project-dir \.\.\/scripts\/client-generators\/kotlin resolveDependencies$/u,
+		);
+		assert.equal(
+			await pluginRepositories("scripts/client-generators/kotlin/settings.gradle.kts"),
+			await pluginRepositories("server/settings.gradle.kts"),
+			"the Kotlin client resolves plugins from the server's repositories",
+		);
 		// The producer runs what consumers resolve: packaging, test runtime and the server gates.
 		const build = runScript(producer, ["jobs", "gradle"], "Build what the server jobs restore");
 		for (const task of [

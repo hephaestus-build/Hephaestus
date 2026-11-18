@@ -21,6 +21,13 @@ dependencies {
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
+// cache-gradle.yml runs it, so the jobs that run this build restore its plugins and dependencies.
+tasks.register("resolveDependencies") {
+    description = "Resolves every resolvable configuration."
+    inputs.files(configurations.matching { it.isCanBeResolved })
+    doLast {}
+}
+
 tasks.test {
     useJUnitPlatform()
     testLogging {

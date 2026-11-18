@@ -12,6 +12,8 @@ on:
       - "server/gradle.properties"
       - "server/gradle/**"
       - "server/generated-clients/**"
+      - "scripts/client-generators/kotlin/*.gradle.kts"
+      - "scripts/client-generators/kotlin/gradle/**"
       - ".java-version"
       - "package.json"
       - "pnpm-lock.yaml"
@@ -51,3 +53,7 @@ jobs:
       - name: Build what the server jobs restore
         working-directory: server
         run: ./gradlew resolveDependencies :application:bootJar :application:testClasses :application:testInventory :spotlessCheck :application:spotlessCheck :application:pmdMain :application:pmdTest
+      # The Kotlin client of gate:client-generators builds with the server's Gradle and home.
+      - name: Resolve the Kotlin client's plugins and dependencies
+        working-directory: server
+        run: ./gradlew --project-dir ../scripts/client-generators/kotlin resolveDependencies
