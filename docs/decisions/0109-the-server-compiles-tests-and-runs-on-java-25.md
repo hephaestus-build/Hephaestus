@@ -106,5 +106,6 @@ With the chart's ceiling of 4,352, the server ran on 4 carrier threads, and a re
 Without the ceiling, the server also ran on 4 carrier threads, and the request answered in 3 to 17 ms. Each arm ran once.
 A gateway socket wait needs no carrier.
 On JDK 25, an ordinary file read or write holds its carrier and adds no carrier.
-A synchronous, direct or `force` file operation makes the scheduler add a carrier.
+A synchronous, direct or `force` file operation lets the scheduler compensate. It can reactivate an idle carrier or add a carrier.
 The JVM's default ceiling allows 256 carriers in total, or one for each CPU if the CPUs are more.
+At that limit, such an operation holds its carrier and gets no replacement.
