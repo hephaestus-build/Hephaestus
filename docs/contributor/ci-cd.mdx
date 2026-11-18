@@ -670,7 +670,13 @@ A workflow passes them to the live tests as the three `HEPHAESTUS_LIVE_LLM_*` va
 A job condition cannot read a secret, so a workflow checks the settings in a step.
 Without all three, that step names the missing settings in a notice and in its summary, and the workflow composes nothing and ends without failure.
 
-Today the [feedback eval panel](./feedback-quality-evals.mdx#model-panel) is the only such workflow.
+With all three, the same job sends one request to the endpoint's models list before any job composes.
+The connection has 5 seconds and the answer 30 seconds, and a failed request is sent once more.
+Any HTTP answer passes, because the request checks the connection and not the model.
+Without an answer, the job fails with "The model endpoint is unreachable" and the error code, and nothing is composed.
+The message never names the URL or the key.
+
+The [feedback eval panel](./feedback-quality-evals.mdx#model-panel) and the [composer decision](./feedback-quality-evals.mdx#decision-on-the-composition-set) use it.
 One panel run sends at most 240 model calls.
 
 ## The `ci:images` label [#the-preview-label]

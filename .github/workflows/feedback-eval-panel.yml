@@ -27,9 +27,11 @@ jobs:
         github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-slim
     timeout-minutes: 15
-    permissions: {}
+    permissions:
+      contents: read # the probe script
     outputs:
       configured: ${{ steps.check.outputs.configured }}
+      reachable: ${{ steps.probe.outputs.reachable }}
     steps:
       # Each expression is only whether a setting is set; no value reaches the step.
       - name: Check the model connection
@@ -56,6 +58,29 @@ jobs:
             echo "The deterministic feedback eval gate still covers every pull request."
             echo "docs/contributor/ci-cd.mdx § CI model connection lists the settings."
           } >> "$GITHUB_STEP_SUMMARY"
+
+      # A configured endpoint that is down would fail every composition only after a Gradle start and a connect timeout
+      # each, for hours, while the run holds the shared endpoint lock. One bounded request finds it in seconds.
+      - if: steps.check.outputs.configured == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          sparse-checkout: |
+            .github/actions
+            scripts/feedback-eval
+          persist-credentials: false
+
+      - if: steps.check.outputs.configured == 'true'
+        uses: ./.github/actions/setup-toolchain
+        with:
+          install: "none"
+
+      - name: Check that the model endpoint answers
+        id: probe
+        if: steps.check.outputs.configured == 'true'
+        env:
+          HEPHAESTUS_LIVE_LLM_BASE_URL: ${{ secrets.CI_LLM_BASE_URL }}
+          HEPHAESTUS_LIVE_LLM_API_KEY: ${{ secrets.CI_LLM_API_KEY }}
+        run: node scripts/feedback-eval/endpoint-probe.ts --title "Feedback eval panel"
 
   panel:
     name: Model panel

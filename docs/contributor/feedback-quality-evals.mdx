@@ -349,7 +349,8 @@ The panel runs only with the [CI model connection](./ci-cd.mdx#ci-model-connecti
 
 ### A skipped panel
 
-With the connection, the panel is skipped when the endpoint gives no composition for a panel case.
+A panel starts only when the endpoint answers the [connection check](./ci-cd.mdx#ci-model-connection).
+After that, the panel is skipped when the endpoint gives no composition for a panel case.
 An endpoint failure is never retried.
 A skip is not a pass: the panel job fails and names the reason.
 The run reports in its job summary, which the person who started it reads.
@@ -399,7 +400,7 @@ The decision runs only with the [CI model connection](./ci-cd.mdx#ci-model-conne
 - In each replicate, the two arms compose case by case in turn, so both arms meet the same endpoint conditions. A seeded coin decides for each case and replicate which arm composes first. The second arm starts only after the first arm ends.
 - Each case is one `CompositionEvalLiveTest` invocation, with the panel's settings in `gate.json`. A case that sends more than 12 model calls stops the job. The worst case of a run is 4,152 model calls, which is the suite's budget.
 - Each arm reads `gate.json` from its own commit. It composes with those settings and records them in its configuration. A commit without `gate.json` stops the job before the first model call.
-- A case whose request fails at the endpoint (`PROVIDER`, `CAPACITY`), or that writes no result, runs again, and every attempt is kept. Such a case is missing, not failed, when it fails every attempt. A case that the composer got wrong never runs again.
+- A case whose request fails at the endpoint (`PROVIDER`, `CAPACITY`), or that writes no result, runs again, and every attempt is kept. Such a case is missing, not failed, when it fails every attempt. A case that the composer got wrong never runs again. An arm that composes none of its trials fails its replicate.
 
 ### Measures
 

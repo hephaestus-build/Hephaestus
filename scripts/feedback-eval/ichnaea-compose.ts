@@ -8,7 +8,7 @@
  * endpoint, or for which the live test wrote nothing, measures the endpoint and not the composer: it runs again, up to
  * ATTEMPTS times in all, and `attempts-r<k>.jsonl` keeps every attempt. The decision imports only the last one. A case
  * that the composer itself got wrong is never run again. A case that sends more model calls than its bound stops the
- * run before the next request.
+ * run before the next request. An arm that composed none of its trials fails the replicate.
  * Usage: node scripts/feedback-eval/ichnaea-compose.ts --replicate <k> --base <checkout> --candidate <checkout> --out <dir>
  * Needs HEPHAESTUS_LIVE_LLM_BASE_URL, HEPHAESTUS_LIVE_LLM_API_KEY and HEPHAESTUS_LIVE_LLM_MODEL.
  */
@@ -279,7 +279,8 @@ if (import.meta.main) {
 	const attempts = path.join(out, `attempts-r${k}.jsonl`);
 	const seed = runSeed();
 	rmSync(attempts, { force: true });
-	for (const caseId of casesInReplicate(k)) {
+	const cases = casesInReplicate(k);
+	for (const caseId of cases) {
 		const ordered = armsInOrder(arms, caseId, k, seed);
 		for (const [position, arm] of ordered.entries()) {
 			composeTrial({
@@ -297,6 +298,12 @@ if (import.meta.main) {
 		if (!existsSync(arm.file)) {
 			throw new Error(
 				`no result file for ${arm.name}, replicate ${k}: the live test wrote nothing`,
+			);
+		}
+		// An arm without one composed trial measures nothing, and the decision would read the replicate as missing.
+		if (cases.every((caseId) => endpointFailure(arm.file, caseId) !== null)) {
+			throw new Error(
+				`${arm.name} composed 0 of ${String(cases.length)} trials in replicate ${k}: every trial failed at the model endpoint`,
 			);
 		}
 	}
