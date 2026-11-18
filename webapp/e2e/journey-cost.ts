@@ -61,13 +61,18 @@ export interface JourneyCost {
 	rounds: number;
 	/**
 	 * The landmarks that layout shifts moved without the reader's input. Chrome may report one shift as
-	 * one entry or as several, depending on frame timing, so neither a count nor a score repeats.
+	 * one entry or as several, depending on frame timing, so neither a count nor a score repeats. In a
+	 * step that the reader starts, the shifts before its destination shows are the answer to their
+	 * input and do not count: Chrome's own window for that is 500 ms, which a busy machine outlasts.
 	 */
 	moved: string[];
 }
 
-/** Waits until `content`, text that only the step's destination has, shows. */
-export type Step = (content: string) => Promise<void>;
+/**
+ * Waits until `content`, text that only the step's destination has, shows. `byReader` says that the
+ * reader's own input, such as a click, started the step.
+ */
+export type Step = (content: string, options?: { byReader?: boolean }) => Promise<void>;
 
 type Answer = "in-rounds" | "after-latency";
 
@@ -94,16 +99,22 @@ export async function journeyCost(
 	const counted: JourneyCost[] = [];
 	try {
 		const instrumented = await instrument(inRounds, role, "in-rounds");
-		await journey(inRounds, async (content) => {
-			counted.push(await instrumented.settle(content));
+		await journey(inRounds, async (content, options) => {
+			counted.push(await instrumented.settle(content, options?.byReader ?? false));
 		});
 	} finally {
 		await inRounds.context().close();
 	}
 	const timed: JourneyCost[] = [];
 	const instrumented = await instrument(page, role, "after-latency");
-	await journey(page, async (content) => {
-		timed.push(await instrumented.settle(content, required(counted[timed.length]).reads));
+	await journey(page, async (content, options) => {
+		timed.push(
+			await instrumented.settle(
+				content,
+				options?.byReader ?? false,
+				required(counted[timed.length]).reads,
+			),
+		);
 	});
 	const last = required(counted.at(-1));
 	return { reads: last.reads, rounds: last.rounds, moved: required(timed.at(-1)).moved };
@@ -371,12 +382,25 @@ async function instrument(page: Page, role: WorkspaceMembership["role"], answer:
 		 * measured alone. In rounds, the rounds are those that answered before the first quiet moment that
 		 * showed the content, and the step ends once the page is quiet with no read waiting. With the
 		 * fixed latency, it ends once it has answered `expected`, the reads the step made in rounds. Two
-		 * frames then let the last layout shifts be reported.
+		 * frames then let the last layout shifts be reported. In a step `byReader`, the page forgets the
+		 * shifts before the frame that showed the content.
 		 */
-		settle: async (content: string, expected?: string[]): Promise<JourneyCost> => {
-			await page.waitForFunction((text) => document.body.textContent.includes(text), content, {
-				polling: "raf",
-			});
+		settle: async (
+			content: string,
+			byReader = false,
+			expected?: string[],
+		): Promise<JourneyCost> => {
+			await page.waitForFunction(
+				({ text, reader }) => {
+					const shown = document.body.textContent.includes(text);
+					if (shown && reader) {
+						window.journeyShifts = [];
+					}
+					return shown;
+				},
+				{ text: content, reader: byReader },
+				{ polling: "raf" },
+			);
 			await expect(page.getByText(content).first()).toBeVisible();
 			let shown = rounds;
 			if (answer === "in-rounds") {
