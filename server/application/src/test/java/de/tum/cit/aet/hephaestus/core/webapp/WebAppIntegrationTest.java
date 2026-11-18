@@ -61,6 +61,10 @@ class WebAppIntegrationTest extends RealAuthIntegrationTest {
                     .andExpect(header().string("Content-Type", startsWith("text/html")))
                     .andExpect(header().string("Cache-Control", "no-store"))
                     .andExpect(header().string("Content-Security-Policy", containsString("script-src 'self';")))
+                    .andExpect(header().string("Referrer-Policy", "no-referrer"))
+                    .andExpect(header().string("X-Frame-Options", "DENY"))
+                    .andExpect(header().string("X-Content-Type-Options", "nosniff"))
+                    .andExpect(header().string("Permissions-Policy", containsString("camera=()")))
                     .andExpect(header().doesNotExist("Set-Cookie"))
                     .andExpect(content()
                             .string(allOf(
@@ -79,6 +83,8 @@ class WebAppIntegrationTest extends RealAuthIntegrationTest {
         mvc().perform(get("/assets/index-abc123.js").header("Accept-Encoding", "br, gzip"))
                 .andExpect(status().isOk())
                 .andExpect(header().string("Content-Encoding", "br"))
+                .andExpect(header().string("Vary", containsString("Accept-Encoding")))
+                .andExpect(header().string("Referrer-Policy", "no-referrer"))
                 .andExpect(header().string("Cache-Control", "max-age=31536000, public, immutable"))
                 .andExpect(content().string("brotli bytes of the asset\n"));
         mvc().perform(get("/assets/index-abc123.js"))
