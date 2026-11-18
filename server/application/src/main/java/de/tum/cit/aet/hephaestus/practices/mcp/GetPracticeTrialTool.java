@@ -67,7 +67,8 @@ class GetPracticeTrialTool implements McpTool {
         try {
             id = UUID.fromString(McpTools.requiredString(arguments, "trialId"));
         } catch (IllegalArgumentException unreadable) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "The argument trialId is not a trial id.");
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST, "The argument trialId is not a trial id.", unreadable);
         }
         long workspaceId = WorkspaceContextHolder.getContext().id();
         long account = SecurityUtils.getCurrentAccountId()
