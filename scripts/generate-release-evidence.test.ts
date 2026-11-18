@@ -13,7 +13,7 @@ import {
 	planEvidenceImages,
 	planEvidenceSubjects,
 } from "./generate-release-evidence.ts";
-import { asRecord, readJsonFile } from "./lib/json.ts";
+import { asArray, asRecord, asString, readJsonFile } from "./lib/json.ts";
 import { planSubjects } from "./scan-main-images.ts";
 import { validateManifest } from "./verify-release-evidence.ts";
 
@@ -122,6 +122,31 @@ for argument in "$@"; do
 done
 `;
 		await writeFile(path.join(directory, "syft"), syftScript, { mode: 0o755 });
+		// The server image runs the pinned JRE; Grype matches nothing against it.
+		await writeFile(path.join(directory, "grype"), `#!/bin/sh\nprintf '{"matches":[]}'\n`, {
+			mode: 0o755,
+		});
+		const pin = asRecord(
+			await readJsonFile(".github/ci-tools/buildpack-liberica-jre.json"),
+			"JRE pin",
+		);
+		const pinnedJre = asString(pin.version, "JRE pin version").replace("_", "+");
+		const imageInventory = {
+			files: [],
+			artifacts: [
+				{
+					name: "openjdk",
+					version: `${pinnedJre}-LTS`,
+					foundBy: "java-jvm-cataloger",
+					locations: [{ path: "/layers/paketo-buildpacks_bellsoft-liberica/jre/release" }],
+					cpes: [
+						{
+							cpe: `cpe:2.3:a:oracle:openjdk:${pinnedJre.slice(0, pinnedJre.indexOf("+"))}:*:*:*:*:*:*:*`,
+						},
+					],
+				},
+			],
+		};
 		await writeFile(
 			path.join(directory, "trivy"),
 			`#!/bin/sh
@@ -192,7 +217,7 @@ await captureSubject(${JSON.stringify(subject)}, ${JSON.stringify(directory)});
 						PATH: `${directory}${path.delimiter}${process.env.PATH ?? ""}`,
 						SCAN_LOG: scanLog,
 						SCAN_EXIT: exit,
-						SYFT_JSON: JSON.stringify({ files: [], artifacts: [] }),
+						SYFT_JSON: JSON.stringify(imageInventory),
 						WEB_APP_JSON: JSON.stringify(webApp),
 						...environment,
 					},
@@ -234,6 +259,13 @@ await captureSubject(${JSON.stringify(subject)}, ${JSON.stringify(directory)});
 			webAppInventory(["react", "react-dom"]),
 		);
 		assert.match(await readFile(`${prefix}.web-app.trivy.json`, "utf8"), /react-dom/u);
+		// The server's evidence names both: its Java runtime in the image's report, and its web app beside it.
+		const imageReport = asRecord(await readJsonFile(`${prefix}.trivy.json`), "Trivy report");
+		assert.ok(
+			asArray(imageReport.Results, "Trivy results").some(
+				(result) => asRecord(result, "Trivy result").Type === "jvm",
+			),
+		);
 		// A web app inventory without the bundle, or without a package that every build bundles, fails before its scan.
 		for (const [webApp, reason] of [
 			[{ files: [], artifacts: [] }, /no bundled npm/u],
