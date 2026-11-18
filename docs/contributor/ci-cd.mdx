@@ -504,6 +504,8 @@ Thus, only a validated commit changes the Version PR, and maintenance does not w
 The run makes no change when the Version PR already versions that commit.
 It also makes no change when `main` released a newer version after that commit, because the release consumed its changesets.
 It makes no change when the Version PR already versions a newer validated commit.
+It makes no change while the Version PR is in the merge queue, because GitHub refuses any update of a queued branch.
+The changesets merged after it go into the next Version PR.
 It checks the release and the branch again just before it moves the branch.
 
 `scripts/maintain-version-pr.ts` runs from the tip of `main` and versions the selected commit in a separate worktree, without a token.
