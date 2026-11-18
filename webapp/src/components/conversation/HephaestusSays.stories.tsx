@@ -8,7 +8,7 @@ const meta = {
 	parameters: { layout: "padded" },
 	args: {
 		intro:
-			"I am Hephaestus. I read the work you’re already doing, give you feedback on the practices your workspace adopts, and talk it through whenever you ask.",
+			"I am Hephaestus. I review your work as it happens and give you feedback on the engineering practices of this workspace. Ask me about any of it.",
 		narration: "Two things first.",
 	},
 } satisfies Meta<typeof HephaestusSays>;

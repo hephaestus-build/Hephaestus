@@ -202,7 +202,7 @@ public class SlackAppHomeService {
         if (state.refusal().isPresent()) {
             return state.refusal().get().userMessage();
         }
-        return "*Open-source practice feedback for software teams.* In the Messages tab, ask about PRs, reviews, issues, tests, or team ways of working. The replies stay in DMs.";
+        return "*Put good practice to work.* In the Messages tab, ask about your feedback, PRs, reviews, issues, or team ways of working. The replies stay in DMs.";
     }
 
     private static String stateIcon(boolean ok) {

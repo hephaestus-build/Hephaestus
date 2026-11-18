@@ -229,14 +229,15 @@ export function LandingHeroSection({ onSignIn }: LandingHeroSectionProps) {
 						id="landing-hero-heading"
 						className="relative z-10 mt-5 max-w-3xl text-4xl font-bold tracking-display text-balance sm:text-5xl md:text-6xl"
 					>
-						Learn from the work you’re{" "}
+						Put{" "}
 						<span className="relative inline-block whitespace-nowrap">
-							already doing
+							good practice
 							<span
 								className={cn(styles.headlineMark, "absolute -right-1 -bottom-1 -left-1 -z-10")}
 								aria-hidden="true"
 							/>
-						</span>
+						</span>{" "}
+						to work.
 					</motion.h1>
 
 					<motion.p
@@ -244,11 +245,12 @@ export function LandingHeroSection({ onSignIn }: LandingHeroSectionProps) {
 						className="relative z-10 mt-6 max-w-2xl text-lg leading-relaxed text-pretty sm:text-xl"
 					>
 						<span className="font-semibold text-foreground">
-							Hephaestus reviews the pull requests, issues, and code reviews your team already
-							writes against the engineering practices you choose.
+							Hephaestus helps software teams put good engineering practices into their everyday
+							work.
 						</span>{" "}
 						<span className="text-muted-foreground">
-							It gives each developer feedback that cites their work and names a next step.
+							It reviews pull requests, issues, code reviews and team discussions as the work
+							happens. Each person gets feedback that cites their work and names a next step.
 						</span>
 					</motion.p>
 

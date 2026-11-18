@@ -1,7 +1,7 @@
 {
 	"short_name": "Hephaestus",
 	"name": "Hephaestus",
-	"description": "Hephaestus reviews the pull requests, issues, and code reviews your team already writes against the engineering practices you choose. It gives each developer feedback that cites their work and names a next step.",
+	"description": "Hephaestus helps software teams put good engineering practices into their everyday work, with feedback as the work happens, in a weekly digest and over time.",
 	"icons": [
 		{
 			"src": "icon-192.png",

@@ -3,9 +3,11 @@ message: If you use Hephaestus in your research, please cite it as below.
 type: software
 title: Hephaestus
 abstract: >-
-  Hephaestus reviews the pull requests, issues, and code reviews your team already writes against
-  the engineering practices you choose. It gives each developer feedback that cites their work and
-  names a next step.
+  Hephaestus helps software teams put good engineering practices into their everyday work. It
+  reviews pull requests, issues, code reviews and team discussions as the work happens, and gives
+  each person feedback that cites their work and names a next step. Feedback appears on the work
+  while it is still open, in a weekly digest, and on each person's Practice profile, which shows how
+  each practice develops over time. Work drafted with a coding agent gets the same feedback.
 authors:
   - name: TUM Applied Education Technologies
     website: https://aet.cit.tum.de/

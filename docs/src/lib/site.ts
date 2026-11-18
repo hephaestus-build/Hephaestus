@@ -4,7 +4,7 @@ export const PRODUCT_URL = "https://hephaestus.build";
 export const SITE_TITLE = "Hephaestus documentation";
 
 export const DESCRIPTION =
-	"Hephaestus reviews the pull requests, issues, and code reviews your team already writes against the engineering practices you choose. It gives each developer feedback that cites their work and names a next step.";
+	"Hephaestus helps software teams put good engineering practices into their everyday work, with feedback as the work happens, in a weekly digest and over time.";
 
 export const GUIDES = [
 	{
