@@ -52,8 +52,8 @@ class RequestLimitsIntegrationTest {
                     .startsWith("HTTP/1.1 200")
                     .endsWith(Integer.toString(FORM_LIMIT - 1024));
             // Tomcat decides from Content-Length, before it reads the body, and leaves the required parameter
-            // missing. The body is never sent: it is larger than the swallow limit, so Tomcat closes the connection.
-            assertThat(exchange(port, form(FORM_LIMIT + 1024))).startsWith("HTTP/1.1 400");
+            // missing. So the answer comes although the body is never sent.
+            assertThat(statusLine(port, form(FORM_LIMIT + 1024))).startsWith("HTTP/1.1 400");
         }
     }
 
@@ -75,6 +75,21 @@ class RequestLimitsIntegrationTest {
     private static String form(int length) {
         return "POST /limits HTTP/1.1\r\nHost: localhost\r\nContent-Type: application/x-www-form-urlencoded\r\n"
                 + "Content-Length: " + length + "\r\nConnection: close\r\n\r\n";
+    }
+
+    /** The status line alone, read without waiting for the connection to end. */
+    private static String statusLine(int port, String request) throws IOException {
+        try (var socket = new Socket(InetAddress.getLoopbackAddress(), port)) {
+            socket.setSoTimeout(30_000);
+            socket.getOutputStream().write(request.getBytes(StandardCharsets.US_ASCII));
+            socket.getOutputStream().flush();
+            var line = new StringBuilder();
+            var in = socket.getInputStream();
+            for (int next = in.read(); next != -1 && next != '\r'; next = in.read()) {
+                line.append((char) next);
+            }
+            return line.toString();
+        }
     }
 
     /** The whole response: the status line first, the body last. */
