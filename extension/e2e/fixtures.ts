@@ -371,31 +371,41 @@ export async function watchServer(
 }
 
 /**
- * Stops the extension's service worker the way Chrome does when it goes idle, and returns once Chrome no longer
- * lists it. The CDP session is left to end with its page: detaching it after the worker's target closed can wait
- * forever, and Playwright does not report the worker's end.
+ * Stops the extension's service worker the way Chrome does when it goes idle, and returns once Chrome reports it
+ * stopped. It waits on the worker's state, not on its target: Chrome keeps the target id when the worker starts
+ * again, and a `Target.getTargets` call while the worker's target closes can wait forever. The CDP session is left
+ * to end with its page for the same reason.
  */
 export async function stopWorker(context: BrowserContext, page: Page): Promise<void> {
 	const session = await context.newCDPSession(page);
-	const workerTarget = async () => {
-		const { targetInfos } = await session.send("Target.getTargets");
-		return targetInfos.find(
-			(target) =>
-				target.type === "service_worker" &&
-				target.url.startsWith(`chrome-extension://${EXTENSION_ID}/`),
-		);
-	};
-	const worker = await workerTarget();
-	if (worker === undefined) {
-		throw new Error("The extension's service worker is not running");
-	}
-	await session.send("Target.closeTarget", { targetId: worker.targetId });
+	let running: string | undefined;
+	let stopRequested = false;
+	let stopped = false;
+	session.on("ServiceWorker.workerVersionUpdated", ({ versions }) => {
+		for (const version of versions) {
+			if (!version.scriptURL.startsWith(`chrome-extension://${EXTENSION_ID}/`)) {
+				continue;
+			}
+			if (version.runningStatus === "running") {
+				running = version.versionId;
+			}
+			// Latched: the next page that needs the worker can start it again before the poll reads this.
+			if (stopRequested && version.versionId === running && version.runningStatus === "stopped") {
+				stopped = true;
+			}
+		}
+	});
+	// Enabling reports each version's current state.
+	await session.send("ServiceWorker.enable");
 	await expect
-		.poll(async () => {
-			const running = await workerTarget();
-			return running?.targetId;
-		})
-		.not.toBe(worker.targetId);
+		.poll(() => running, { message: "The extension's service worker is running" })
+		.toBeDefined();
+	const versionId = required(running, "the running service worker version");
+	stopRequested = true;
+	await session.send("ServiceWorker.stopWorker", { versionId });
+	await expect
+		.poll(() => stopped, { message: "The extension's service worker stopped" })
+		.toBe(true);
 }
 
 export async function serverAvailable(): Promise<boolean> {
