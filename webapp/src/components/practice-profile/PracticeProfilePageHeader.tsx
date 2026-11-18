@@ -68,10 +68,10 @@ export const PRACTICE_PROFILE_INTRO =
  */
 export function profileAudience(perPersonResults?: boolean): string {
 	let admins =
-		"Workspace admins see practice reviews, with your name only if a workspace owner turned on per-person results.";
+		"Workspace admins see practice reviews, with your name only where per-person results are on for the workspace.";
 	if (perPersonResults === true) {
 		admins =
-			"In this workspace, admins see your practice results with your name, earlier ones too, because an owner turned on per-person results.";
+			"In this workspace, admins see your practice results with your name, earlier ones too, because per-person results are on.";
 	} else if (perPersonResults === false) {
 		admins =
 			"In this workspace, admins see practice results with no name and cannot filter them by person. Each result still shows the work it is about.";

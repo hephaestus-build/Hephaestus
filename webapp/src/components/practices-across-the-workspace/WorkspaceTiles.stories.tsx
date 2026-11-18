@@ -8,6 +8,7 @@ import {
 	TILES_BY_WINDOW,
 } from "@/stories/practices-across-the-workspace-story-data";
 
+import { NO_TYPICAL_RANGE } from "./across-workspace-copy";
 import { WorkspaceTiles } from "./WorkspaceTiles";
 
 /**
@@ -60,11 +61,7 @@ export const OneDeveloper: Story = {
 export const NobodyYet: Story = {
 	args: { tiles: NOBODY_TILES },
 	play: async ({ canvas }) => {
-		await expect(
-			canvas.getAllByText(
-				"Fewer than 3 developers are counted here, so there is no typical range.",
-			),
-		).toHaveLength(3);
+		await expect(canvas.getAllByText(NO_TYPICAL_RANGE)).toHaveLength(3);
 		await expect(canvas.getAllByRole("img", { name: "Your value: 0." })).toHaveLength(3);
 	},
 };
