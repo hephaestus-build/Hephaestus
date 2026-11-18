@@ -4880,7 +4880,7 @@ export const zSetPracticeRepositoryRequest = z.object({
 		.string()
 		.min(0)
 		.max(255)
-		.regex(/^(?!\/)(?!.*(^|\/)\.\.?(\/|$))[A-Za-z0-9._-]+(\/[A-Za-z0-9._-]+)*$/)
+		.regex(/^(?!\/)(?!.*(^|\/)(\.\.?|\.git)(\/|$))[A-Za-z0-9._-]+(\/[A-Za-z0-9._-]+)*$/)
 		.optional(),
 	repositoryItemId: z.string().regex(/^[1-9][0-9]*$/),
 });
