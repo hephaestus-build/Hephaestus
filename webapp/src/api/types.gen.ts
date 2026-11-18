@@ -18624,7 +18624,7 @@ export type GetPracticeRepositoryResponses = {
 	/**
 	 * The workspace has no practice repository
 	 */
-	204: PracticeRepository;
+	204: void;
 };
 
 export type GetPracticeRepositoryResponse =
