@@ -37,7 +37,7 @@ export function LandingCtaSection({ onSignIn }: LandingCtaSectionProps) {
 						Start with the work in front of you
 					</h2>
 					<p className="mx-auto mt-4 max-w-2xl text-lg leading-relaxed text-muted-foreground lg:mx-0">
-						Sign in to see feedback on the work you’re already doing, and ask Hephaestus about it.
+						Sign in to see the feedback on your work, and ask Hephaestus about it.
 					</p>
 					<div className="mt-6 flex w-full flex-col justify-center gap-3 sm:flex-row lg:justify-start">
 						<LandingSignInCta onSignIn={onSignIn} size="lg" className="w-full sm:w-auto" />

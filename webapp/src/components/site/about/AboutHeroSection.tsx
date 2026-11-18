@@ -9,14 +9,15 @@ export function AboutHeroSection() {
 				About <HephaestusWordmark />
 			</h1>
 			<p className="mx-auto max-w-2xl text-xl leading-relaxed text-pretty text-muted-foreground">
-				Hephaestus reviews the pull requests, issues, and code reviews your team already writes
-				against the engineering practices you choose. It gives each developer feedback that cites
-				their work and names a next step.
+				Hephaestus helps software teams put good engineering practices into their everyday work. It
+				reviews pull requests, issues, code reviews and team discussions as the work happens. Each
+				person gets feedback that cites their work and names a next step. Feedback appears on the
+				work while it is still open, in a weekly digest, and on each person’s Practice profile. The
+				profile shows how each practice develops over time. Work drafted with a coding agent gets
+				the same feedback.
 			</p>
 			<p className="mx-auto max-w-2xl text-lg leading-relaxed text-pretty text-muted-foreground">
-				Feedback appears on the work itself, on each developer’s private practice page, and in a
-				conversation. There, developers can ask why, ask for an example, or disagree. Workspace
-				admins can approve feedback before it appears on the work.
+				In a conversation, anyone can ask Hephaestus why, ask for an example, or disagree.
 			</p>
 		</section>
 	);

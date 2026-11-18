@@ -158,7 +158,7 @@ export function ConsentPage({ state, onSignOut, onReload }: ConsentPageProps) {
 					<header className="space-y-4">
 						<h1 className="text-2xl font-semibold tracking-tight break-words">Get set up</h1>
 						<HephaestusSays
-							intro="I am Hephaestus. I read the work you’re already doing, give you feedback on the practices your workspace adopts, and talk it through whenever you ask."
+							intro="I am Hephaestus. I review your work as it happens and give you feedback on the engineering practices of this workspace. Ask me about any of it."
 							narration={narration}
 						/>
 					</header>

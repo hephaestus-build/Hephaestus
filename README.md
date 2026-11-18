@@ -3,10 +3,8 @@
     <img alt="Hephaestus" width="484" src="./docs/public/img/brand/hephaestus-lockup-dark.png#gh-dark-mode-only">
     <img alt="Hephaestus" width="484" src="./docs/public/img/brand/hephaestus-lockup-light.png#gh-light-mode-only">
   </h1>
-  <!-- The product tagline, quoted verbatim. -->
-  <!-- vale STE.Contractions = NO -->
-  <p><strong>Learn from the work you’re already doing</strong></p>
-  <!-- vale STE.Contractions = YES -->
+  <!-- The tagline, the category line and the lead paragraph: docs/contributor/practice-feedback-language.mdx § Tagline and lead. -->
+  <p><strong>Put good practice to work.</strong></p>
   <p>Open-source practice feedback for software teams</p>
 
   <p>
@@ -23,12 +21,14 @@
   </p>
 </div>
 
-Hephaestus reviews the pull requests, issues, and code reviews your team already writes against the engineering practices you choose.
-It gives each developer feedback that cites their work and names a next step.
+Hephaestus helps software teams put good engineering practices into their everyday work.
+It reviews pull requests, issues, code reviews and team discussions as the work happens.
+Each person gets feedback that cites their work and names a next step.
+Feedback appears on the work while it is still open, in a weekly digest, and on each person's Practice profile.
+The profile shows how each practice develops over time.
+Work drafted with a coding agent gets the same feedback.
 
-Feedback appears on the work itself, on each developer's private practice page, and in a conversation.
-There, developers can ask why, ask for an example, or disagree.
-Workspace admins can approve feedback before it appears on the work.
+In a conversation, anyone can ask Hephaestus why, ask for an example, or disagree.
 
 <div align="center">
   <img alt="An illustration of one change through a project. Issue #412 has no acceptance criteria. The pull request grows to 34 files. A reviewer raises a vague concern about large exports. The pull request merges with that thread unresolved. Hephaestus points back to the issue." src="./docs/images/readme/landing-hero-dark.png#gh-dark-mode-only" width="1280">
