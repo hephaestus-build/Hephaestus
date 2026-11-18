@@ -156,6 +156,9 @@ tags:
 - name: practice-group-detail
 - name: practice-page-feedback
 - name: practice-profile-review
+- description: "The workspace's practice repository, and where each practice is edited:\
+    \ workspace admins only (ADR 0118)."
+  name: practice-repository
 - name: practice-review-output
 - description: |-
     Practices across the workspace, read by the calling developer: everyone, the caller included, inside a count, and
@@ -11372,6 +11375,118 @@ paths:
       summary: Get your results from a review
       tags:
       - practice-profile-review
+  /workspaces/{workspaceSlug}/practice-repository:
+    delete:
+      description: Every practice edited there is edited in Hephaestus again. Nothing
+        is deleted.
+      operationId: unsetPracticeRepository
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+      responses:
+        "204":
+          description: The workspace has no practice repository
+      summary: Unset the practice repository
+      tags:
+      - practice-repository
+    get:
+      operationId: getPracticeRepository
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PracticeRepository"
+          description: The practice repository
+        "204":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PracticeRepository"
+          description: The workspace has no practice repository
+      summary: Read the practice repository
+      tags:
+      - practice-repository
+    put:
+      description: Choosing another repository or directory moves every practice edited
+        in the old one back to Hephaestus.
+      operationId: setPracticeRepository
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetPracticeRepositoryRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PracticeRepository"
+          description: OK
+      summary: Set the practice repository
+      tags:
+      - practice-repository
+  /workspaces/{workspaceSlug}/practice-repository/practices/{practiceSlug}/edited-in:
+    put:
+      description: "Moving to the repository reads the practice's folder at the head\
+        \ of the default branch, and refuses when the folder is missing or invalid.\
+        \ Editing in Hephaestus keeps the current version."
+      operationId: changePracticeEditedIn
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+      - in: path
+        name: practiceSlug
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChangePracticeEditedInRequest"
+        required: true
+      responses:
+        "204":
+          description: The practice is edited where the request named
+      summary: "Move a practice to the practice repository, or edit it in Hephaestus"
+      tags:
+      - practice-repository
   /workspaces/{workspaceSlug}/practice-trials:
     post:
       description: "Runs the practice on the item as a review does, but records no\
@@ -18207,6 +18322,15 @@ components:
       - groupSlug
       - kind
       - position
+    ChangePracticeEditedInRequest:
+      type: object
+      description: "Where the practice is edited from now on: Move to repository,\
+        \ or Edit in Hephaestus."
+      properties:
+        editedIn:
+          $ref: "#/components/schemas/PracticeEditedIn"
+      required:
+      - editedIn
     ChangePracticeStateRequest:
       type: object
       description: The state to move a draft practice to. Only <code>ACTIVE</code>
@@ -18390,6 +18514,7 @@ components:
       - PRACTICE_USAGE
       - PRACTICE_DEFINITION
       - PRACTICE_GROUP
+      - PRACTICE_REPOSITORY
       - CATALOG_PRACTICE
       - CATALOG_GROUP
       - WORKSPACE_INSTANCE_LLM_BUDGET
@@ -23794,6 +23919,10 @@ components:
           format: date-time
         currentVersion:
           $ref: "#/components/schemas/PracticeVersion"
+        editedIn:
+          $ref: "#/components/schemas/PracticeEditedIn"
+          description: "Where the practice is edited. A practice edited in the practice\
+            \ repository is read-only here, except for its feedback mode and position"
         feedbackMode:
           $ref: "#/components/schemas/FeedbackModeAssignment"
         groupSlug:
@@ -23819,6 +23948,7 @@ components:
       - catalogOrigin
       - createdAt
       - currentVersion
+      - editedIn
       - feedbackMode
       - groupSlug
       - id
@@ -23991,6 +24121,11 @@ components:
       - versionId
       - versionNumber
       - warnings
+    PracticeEditedIn:
+      type: string
+      enum:
+      - HEPHAESTUS
+      - REPOSITORY
     PracticeFileCheck:
       type: object
       description: "The result of checking a practice folder. Nothing was saved, and\
@@ -24577,6 +24712,24 @@ components:
       - offered
       - offeredDigest
       - practiceSlug
+    PracticeRepository:
+      type: object
+      description: The workspace's practice repository (ADR 0118).
+      properties:
+        defaultBranch:
+          type: string
+          description: the branch whose head holds the practices; null until the provider
+            has named it
+        directory:
+          type: string
+        nameWithOwner:
+          type: string
+          description: the repository's provider path; null when it is no longer monitored
+        repositoryItemId:
+          type: string
+      required:
+      - directory
+      - repositoryItemId
     PracticeReviewField:
       type: string
       enum:
@@ -29874,6 +30027,23 @@ components:
           type: boolean
       required:
       - hidden
+    SetPracticeRepositoryRequest:
+      type: object
+      description: "The monitored repository that holds the workspace's practices,\
+        \ and the directory of their folders in it."
+      properties:
+        directory:
+          type: string
+          description: A path relative to the repository root; .hephaestus/practices
+            when absent
+          maxLength: 255
+          minLength: 0
+          pattern: "^(?!/)(?!.*(^|/)\\.\\.?(/|$))[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*$"
+        repositoryItemId:
+          type: string
+          pattern: "^[1-9][0-9]*$"
+      required:
+      - repositoryItemId
     SetReviewScheduleEnabledRequest:
       type: object
       properties:
