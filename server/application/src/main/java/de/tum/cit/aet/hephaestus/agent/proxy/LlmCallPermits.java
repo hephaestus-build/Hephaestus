@@ -205,40 +205,35 @@ public class LlmCallPermits {
     /**
      * No provider call starts without a committed grant, or for a caller that has ended.
      *
-     * @param band the call's grant priority: its run's band. Product feedback, the only call without a workspace, is
-     *     {@link AgentRunBand#BACKGROUND}
+     * @param band the call's grant priority: its run's band. A call without a workspace (a product feedback draft or
+     *     an instance model probe) is {@link AgentRunBand#BACKGROUND}
      * @param deadline when the caller stops waiting, and when the call must have ended; {@code null} for a call that
      *     its own ceiling ends
      */
     public @Nullable Permit acquire(
             long poolId, AgentRunBand band, Caller caller, BooleanSupplier ended, @Nullable Instant deadline) {
-        return acquire(poolId, band, caller, ended, deadline, true);
-    }
-
-    /** One fair admission round for a draft; a busy pool leaves the outbox free to execute other actions. */
-    public @Nullable Permit tryAcquireBackground(long poolId, Caller caller, BooleanSupplier ended, Instant deadline) {
-        return acquire(poolId, AgentRunBand.BACKGROUND, caller, ended, deadline, false);
-    }
-
-    private @Nullable Permit acquire(
-            long poolId,
-            AgentRunBand band,
-            Caller caller,
-            BooleanSupplier ended,
-            @Nullable Instant deadline,
-            boolean wait) {
         if (caller.workspaceId() == null && band != AgentRunBand.BACKGROUND)
             throw new IllegalArgumentException(
                     "A call without a workspace is product feedback, in the background band");
         if (TransactionSynchronizationManager.isActualTransactionActive())
             throw new IllegalStateException("Model calls must acquire capacity outside a database transaction");
         if (ended.getAsBoolean() || expired(deadline)) return null;
+        // A pool runs one call without a workspace at a time. Another one does not wait for it: it gets no permit at
+        // once, so its caller is free while the first runs.
+        boolean instanceCall = caller.workspaceId() == null;
         UUID id = UUID.randomUUID();
-        String poolSlug = Objects.requireNonNull(transactions.execute(status -> {
+        Enqueued enqueued = Objects.requireNonNull(transactions.execute(status -> {
             var admission = pools.lockAdmission(poolId)
                     .orElseThrow(() -> new IllegalStateException("Configured call pool is unavailable"));
             if (!samePool(poolId, caller))
                 throw new IllegalStateException("The configured model call pool changed before admission");
+            long expired = 0;
+            if (instanceCall) {
+                // Under the pool lock and after a prune, so a lapsed call cannot hold the pool for good.
+                expired = rows.prune(poolId, properties.permitLease().toSeconds());
+                if (rows.countActiveProductFeedback(poolId) > 0)
+                    return new Enqueued(admission.getSlug(), false, expired);
+            }
             rows.enqueue(new LlmCallPermitRepository.Request(
                     id,
                     poolId,
@@ -248,13 +243,20 @@ public class LlmCallPermits {
                     caller.sourceId(),
                     caller.attempt(),
                     caller.sessionRank()));
-            return admission.getSlug();
+            return new Enqueued(admission.getSlug(), true, expired);
         }));
+        String poolSlug = enqueued.poolSlug();
+        if (enqueued.expired() > 0) meters.pool(poolSlug).expired(enqueued.expired());
+        if (!enqueued.queued()) {
+            meters.pool(poolSlug).abandoned(band, LlmPoolMeters.INSTANCE_CALL_IN_FLIGHT);
+            return null;
+        }
         Waiter waiter = new Waiter(poolId, poolSlug, band, deadline);
         waiting.put(id, waiter);
         long began = System.nanoTime();
         boolean handedOff = false;
         Permit admitted = null;
+        String stopped = "capacity";
         try {
             // A new request has its round at once, so an idle pool adds no wait to a call.
             boolean arrived = true;
@@ -267,7 +269,7 @@ public class LlmCallPermits {
                 }
                 admit(poolId, arrived);
                 arrived = false;
-                admitted = wait ? waiter.awaitGrant() : waiter.granted.getNow(null);
+                admitted = waiter.awaitGrant();
                 if (admitted != null) {
                     meters.pool(admitted.pool).granted(band);
                     meters.pool(admitted.pool).waited(band, "capacity", System.nanoTime() - began);
@@ -275,7 +277,12 @@ public class LlmCallPermits {
                     handedOff = result != null;
                     return result;
                 }
-                if (!wait || Thread.currentThread().isInterrupted()) return null;
+                if (Thread.currentThread().isInterrupted()) return null;
+                // Its own grant counts as in flight before this waiter sees it, so only a call that still waits yields.
+                if (instanceCall && instanceCallInFlight(poolId) && stillWaiting(id)) {
+                    stopped = LlmPoolMeters.INSTANCE_CALL_IN_FLIGHT;
+                    return null;
+                }
             }
             return null;
         } finally {
@@ -284,8 +291,8 @@ public class LlmCallPermits {
             if (admitted == null && !waiter.granted.isCompletedExceptionally()) admitted = waiter.granted.getNow(null);
             if (!handedOff && admitted != null) admitted.close();
             if (!handedOff && admitted == null) {
-                meters.pool(poolSlug).abandoned(band, "capacity");
-                meters.pool(poolSlug).waited(band, "capacity", System.nanoTime() - began);
+                meters.pool(poolSlug).abandoned(band, stopped);
+                meters.pool(poolSlug).waited(band, stopped, System.nanoTime() - began);
                 try {
                     // No transport can have opened before handoff, including an uncertain grant commit.
                     pendingRelease.put(id, poolId);
@@ -331,6 +338,19 @@ public class LlmCallPermits {
     private boolean samePool(long poolId, Caller caller) {
         var model = caller.model();
         return model == null || poolFor(model) == poolId;
+    }
+
+    private boolean instanceCallInFlight(long poolId) {
+        return rows.countActiveProductFeedback(poolId) > 0;
+    }
+
+    /** What admission found: the pool's slug, whether the request was queued, and the lapsed permits it pruned. */
+    private record Enqueued(String poolSlug, boolean queued, long expired) {}
+
+    private boolean stillWaiting(UUID request) {
+        return rows.findById(request)
+                .filter(row -> row.getState() == LlmCallPermitState.WAITING)
+                .isPresent();
     }
 
     /** Whether a review's call waits for the pool: a point-in-time observation that creates no request or grant. */

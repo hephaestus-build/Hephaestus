@@ -507,15 +507,8 @@ class LlmProxyService {
                         routing.connectionScope(), routing.connectionId(), routing.modelId(), routing.workspaceId()),
                 row.sessionRank());
         BooleanSupplier attemptEnded = () -> !routingService.ownsAttempt(routing);
-        LlmCallPermits.Permit poolPermit = attempt.sourceType() == UsageSourceType.PRODUCT_FEEDBACK_DRAFT
-                ? callPermits.tryAcquireBackground(
-                        credential.callPoolId(), caller, attemptEnded, Objects.requireNonNull(routing.workDeadline()))
-                : callPermits.acquire(
-                        credential.callPoolId(),
-                        routingService.band(routing),
-                        caller,
-                        attemptEnded,
-                        routing.workDeadline());
+        LlmCallPermits.Permit poolPermit = callPermits.acquire(
+                credential.callPoolId(), routingService.band(routing), caller, attemptEnded, routing.workDeadline());
         if (poolPermit == null) {
             return refusal(
                     HttpStatus.SERVICE_UNAVAILABLE,

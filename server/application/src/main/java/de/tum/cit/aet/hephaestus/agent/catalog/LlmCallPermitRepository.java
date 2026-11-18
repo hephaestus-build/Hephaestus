@@ -40,7 +40,7 @@ public interface LlmCallPermitRepository extends JpaRepository<LlmCallPermit, UU
             int attempt,
             @Nullable Integer sessionRank) {}
 
-    /** Product feedback is the only call without a workspace. */
+    /** The calls without a workspace in flight: product feedback drafts and instance model probes. */
     @Query(
             value =
                     "SELECT count(*) FROM llm_call_permit WHERE pool_id=:poolId AND state='ACTIVE' AND workspace_id IS NULL",
@@ -122,10 +122,13 @@ public interface LlmCallPermitRepository extends JpaRepository<LlmCallPermit, UU
      * the fewest granted calls, then age. Inside one source, the calls of its oldest practice session go first, so a
      * review with more sessions than grants finishes its practices oldest first instead of all of them at its deadline. A
      * call that is not interactive rises one band for each {@code :agingSeconds} that it waits, but never into the
-     * interactive band, as the agent run claim does. Product feedback comes after all other calls. A round can grant several calls, so each call counts the calls ahead of it in its own workspace and
-     * source as granted: apart from ties, the order is the one that one grant at a time would give. A tie goes to the
-     * workspace whose last grant in the call's band was the oldest before the round, and then to the source whose last
-     * grant was; a grant earlier in the same round does not move that time. The rows are locked in id order, as
+     * interactive band, as the agent run claim does. Product feedback is a background call and ages like the others, so
+     * review calls that keep arriving cannot starve a draft. A draft beyond the product feedback room is no candidate,
+     * so it never holds back the calls behind it. A round can grant several calls, so each call counts the calls ahead
+     * of it in its own workspace and source as granted: apart from ties, the order is the one that one grant at a time
+     * would give. A tie goes to the workspace whose last grant in the call's band was the oldest before the round, and
+     * then to the source whose last grant was; a grant earlier in the same round does not move that time. The rows are
+     * locked in id order, as
      * {@link #renew} locks them, so a round and a renewal cannot deadlock. Each group is
      * read once: this runs under the pool row lock, and a wide review can leave hundreds of requests waiting.
      *
@@ -152,22 +155,26 @@ public interface LlmCallPermitRepository extends JpaRepository<LlmCallPermit, UU
               FROM llm_call_permit WHERE pool_id=:poolId AND state='WAITING'
             ), by_source AS (
               SELECT w.*,s.last AS source_last,COALESCE(s.active,0) + row_number() OVER (PARTITION BY w.source_id
-                  ORDER BY w.feedback,w.effective_band,w.session_rank NULLS LAST,w.acquired_at,w.id) AS source_turn
+                  ORDER BY w.effective_band,w.session_rank NULLS LAST,w.acquired_at,w.id) AS source_turn
               FROM waiting w LEFT JOIN sources s ON s.source_id=w.source_id
             ), turns AS (
               SELECT b.*,r.last AS workspace_last,COALESCE(ws.active,0) + row_number() OVER (PARTITION BY b.workspace_id
-                  ORDER BY b.feedback,b.effective_band,b.source_turn,b.source_last NULLS FIRST,b.acquired_at,b.id)
+                  ORDER BY b.effective_band,b.source_turn,b.source_last NULLS FIRST,b.acquired_at,b.id)
                   AS workspace_turn
               FROM by_source b
               LEFT JOIN workspaces ws ON ws.workspace_id IS NOT DISTINCT FROM b.workspace_id
               LEFT JOIN recent r ON r.workspace_id IS NOT DISTINCT FROM b.workspace_id AND r.band=b.band
+            ), capped AS (
+              SELECT * FROM (SELECT t.*,row_number() OVER (PARTITION BY feedback ORDER BY effective_band,workspace_turn,
+                  workspace_last NULLS FIRST,source_turn,source_last NULLS FIRST,acquired_at,id) AS feedback_turn
+                FROM turns t) r
+              WHERE NOT feedback OR feedback_turn<=:#{#room.productFeedback()}
             ), ordered AS (
-              SELECT id,band,feedback,row_number() OVER grant_order AS n,
+              SELECT id,band,row_number() OVER grant_order AS n,
                 count(*) FILTER (WHERE band='INTERACTIVE') OVER grant_order AS interactive,
-                count(*) FILTER (WHERE band<>'INTERACTIVE') OVER grant_order AS not_interactive,
-                count(*) FILTER (WHERE feedback) OVER grant_order AS feedback_calls
-              FROM turns
-              WINDOW grant_order AS (ORDER BY feedback,effective_band,workspace_turn,workspace_last NULLS FIRST,
+                count(*) FILTER (WHERE band<>'INTERACTIVE') OVER grant_order AS not_interactive
+              FROM capped
+              WINDOW grant_order AS (ORDER BY effective_band,workspace_turn,workspace_last NULLS FIRST,
                 source_turn,source_last NULLS FIRST,acquired_at,id ROWS UNBOUNDED PRECEDING)
             ), fitting AS (
               SELECT id,bool_and(fits) OVER (ORDER BY n ROWS UNBOUNDED PRECEDING) AS prefix_fits
@@ -176,7 +183,6 @@ public interface LlmCallPermitRepository extends JpaRepository<LlmCallPermit, UU
                        ELSE interactive+not_interactive<=:#{#room.limit()}
                          AND not_interactive<=:#{#room.notInteractive()}
                          AND not_interactive<=:#{#room.notInteractiveRate()}
-                         AND feedback_calls<=:#{#room.productFeedback()}
                      END AS fits
                     FROM ordered) candidates
             ), locked AS (

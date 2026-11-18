@@ -1655,9 +1655,6 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
         var permit = mock(LlmCallPermits.Permit.class);
         when(permit.revoked()).thenReturn(Mono.never());
         when(permits.acquire(anyLong(), any(), any(), any(), any())).thenReturn(permit);
-        Mockito.lenient()
-                .when(permits.tryAcquireBackground(anyLong(), any(), any(), any()))
-                .thenReturn(permit);
         return permits;
     }
 
