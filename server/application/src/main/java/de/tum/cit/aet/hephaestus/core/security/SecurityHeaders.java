@@ -2,6 +2,8 @@ package de.tum.cit.aet.hephaestus.core.security;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceSubdomainProperties;
 import de.tum.cit.aet.hephaestus.core.webapp.WebAppRequests;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
@@ -12,17 +14,25 @@ import java.util.List;
 import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.web.header.HeaderWriter;
+import org.springframework.security.web.header.writers.ContentSecurityPolicyHeaderWriter;
+import org.springframework.security.web.header.writers.CrossOriginOpenerPolicyHeaderWriter;
 import org.springframework.security.web.header.writers.CrossOriginOpenerPolicyHeaderWriter.CrossOriginOpenerPolicy;
 import org.springframework.security.web.header.writers.DelegatingRequestMatcherHeaderWriter;
+import org.springframework.security.web.header.writers.HstsHeaderWriter;
 import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter;
 import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter.ReferrerPolicy;
 import org.springframework.security.web.header.writers.StaticHeadersWriter;
+import org.springframework.security.web.header.writers.XContentTypeOptionsHeaderWriter;
+import org.springframework.security.web.header.writers.frameoptions.XFrameOptionsHeaderWriter;
+import org.springframework.security.web.header.writers.frameoptions.XFrameOptionsHeaderWriter.XFrameOptionsMode;
 import org.springframework.security.web.util.matcher.NegatedRequestMatcher;
 import org.springframework.stereotype.Component;
 
 /**
  * The one header policy of every response, the web app's included (ADR 0100). Every user-facing filter chain
- * applies it, so a change here reaches all of them. The Gateway adds no header.
+ * applies it, and the workspace host rules write it on their own answers, so a change here reaches all of them. The
+ * Gateway adds no header.
  *
  * <ul>
  *   <li>{@code Strict-Transport-Security}: 30 days, includeSubDomains. See {@link #HSTS_MAX_AGE_SECONDS}.</li>
@@ -45,13 +55,13 @@ public final class SecurityHeaders {
      */
     private static final long HSTS_MAX_AGE_SECONDS = 2_592_000;
 
-    private final String contentSecurityPolicy;
+    private final List<HeaderWriter> writers;
 
     public SecurityHeaders(
             @Value("${hephaestus.auth.issuer}") URI issuer, WorkspaceSubdomainProperties workspaceSubdomains) {
-        this.contentSecurityPolicy = contentSecurityPolicy(
+        this.writers = writers(contentSecurityPolicy(
                 "https".equals(issuer.getScheme()),
-                workspaceSubdomains.enabled() ? "https://" + workspaceSubdomains.baseDomain() : null);
+                workspaceSubdomains.enabled() ? "https://" + workspaceSubdomains.baseDomain() : null));
     }
 
     /**
@@ -105,21 +115,41 @@ public final class SecurityHeaders {
 
     /** Applies the full header set to the given {@link HttpSecurity}. */
     public void apply(HttpSecurity http) throws Exception {
-        http.headers(headers -> headers.frameOptions(frameOptions -> frameOptions.deny())
-                .contentTypeOptions(contentType -> {})
-                .httpStrictTransportSecurity(
-                        hsts -> hsts.includeSubDomains(true).maxAgeInSeconds(HSTS_MAX_AGE_SECONDS))
-                .contentSecurityPolicy(csp -> csp.policyDirectives(contentSecurityPolicy))
+        // The defaults that the set replaces are turned off, so each header has one writer; the others stay.
+        http.headers(headers -> {
+            headers.frameOptions(frameOptions -> frameOptions.disable())
+                    .contentTypeOptions(contentType -> contentType.disable())
+                    .httpStrictTransportSecurity(hsts -> hsts.disable());
+            writers.forEach(headers::addHeaderWriter);
+        });
+    }
+
+    /**
+     * Writes the full header set on a response that no filter chain answers, such as a refusal by the workspace host
+     * rules, which decide before Spring Security does.
+     */
+    public void write(HttpServletRequest request, HttpServletResponse response) {
+        writers.forEach(writer -> writer.writeHeaders(request, response));
+    }
+
+    private static List<HeaderWriter> writers(String contentSecurityPolicy) {
+        var crossOriginOpener = new CrossOriginOpenerPolicyHeaderWriter();
+        crossOriginOpener.setPolicy(CrossOriginOpenerPolicy.SAME_ORIGIN);
+        return List.of(
+                new XFrameOptionsHeaderWriter(XFrameOptionsMode.DENY),
+                new XContentTypeOptionsHeaderWriter(),
+                // On a secure request only, as the writer decides.
+                new HstsHeaderWriter(HSTS_MAX_AGE_SECONDS, true),
+                new ContentSecurityPolicyHeaderWriter(contentSecurityPolicy),
                 // The web app sends no referrer at all, so a file such as a stylesheet or worker does not send the
                 // origin to another site either; its page also says so in a meta tag.
-                .addHeaderWriter(new DelegatingRequestMatcherHeaderWriter(
-                        WebAppRequests.MATCHER, new ReferrerPolicyHeaderWriter(ReferrerPolicy.NO_REFERRER)))
-                .addHeaderWriter(new DelegatingRequestMatcherHeaderWriter(
+                new DelegatingRequestMatcherHeaderWriter(
+                        WebAppRequests.MATCHER, new ReferrerPolicyHeaderWriter(ReferrerPolicy.NO_REFERRER)),
+                new DelegatingRequestMatcherHeaderWriter(
                         new NegatedRequestMatcher(WebAppRequests.MATCHER),
-                        new ReferrerPolicyHeaderWriter(ReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN)))
-                .crossOriginOpenerPolicy(coop -> coop.policy(CrossOriginOpenerPolicy.SAME_ORIGIN))
-                .addHeaderWriter(new StaticHeadersWriter("Cross-Origin-Embedder-Policy", "credentialless"))
-                .addHeaderWriter(new StaticHeadersWriter(
-                        "Permissions-Policy", "geolocation=(), camera=(), microphone=(), payment=()")));
+                        new ReferrerPolicyHeaderWriter(ReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN)),
+                crossOriginOpener,
+                new StaticHeadersWriter("Cross-Origin-Embedder-Policy", "credentialless"),
+                new StaticHeadersWriter("Permissions-Policy", "geolocation=(), camera=(), microphone=(), payment=()"));
     }
 }
