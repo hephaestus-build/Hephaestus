@@ -11,6 +11,7 @@ import {
 	buildpackDependencies,
 	derivePin,
 	pullRequestTitle,
+	vendorBuildpack,
 } from "./update-buildpack-pins.ts";
 
 // Trimmed from paketo-buildpacks/bellsoft-liberica v11.10.5 buildpack.toml, plus a later build of line 25.
@@ -101,7 +102,36 @@ void test("the builder metadata names each buildpack's version", () => {
 	assert.equal(versions.get("paketo-buildpacks/bellsoft-liberica"), "11.10.5");
 	assert.equal(
 		pullRequestTitle("25.0.5.1_1"),
-		"fix(deps): the server image runs the Liberica JRE 25.0.5.1_1",
+		"fix(deps): the server image runs the JRE 25.0.5.1_1",
+	);
+});
+
+void test("a Temurin pin keeps the build of its release directory, and its buildpack names its repository", () => {
+	// From paketo-buildpacks/adoptium v12.7.4 buildpack.toml.
+	const adoptium = `[[metadata.dependencies]]
+    id = "jre"
+    purl = "pkg:generic/adoptium-jre@25.0.5?arch=amd64"
+    sha256 = "6fac98f0c8202efc3135a9e9e42aa61963ec42d1c5cbb40caf231e7b14a24ef6"
+    uri = "https://github.com/adoptium/temurin25-binaries/releases/download/jdk-25.0.5%2B8/OpenJDK25U-jre_x64_linux_hotspot_25.0.5_8.tar.gz"
+    version = "25.0.5"
+`;
+	assert.deepEqual(derivePin(buildpackDependencies(adoptium), "jre", "25"), {
+		version: "25.0.5_8",
+		url: "https://github.com/adoptium/temurin25-binaries/releases/download/jdk-25.0.5%2B8/",
+		assets: {
+			"linux-x64": {
+				name: "OpenJDK25U-jre_x64_linux_hotspot_25.0.5_8.tar.gz",
+				sha256: "6fac98f0c8202efc3135a9e9e42aa61963ec42d1c5cbb40caf231e7b14a24ef6",
+			},
+		},
+	});
+	assert.deepEqual(vendorBuildpack(`docker://paketobuildpacks/adoptium@sha256:${"a".repeat(64)}`), {
+		image: "paketobuildpacks/adoptium",
+		repository: "paketo-buildpacks/adoptium",
+	});
+	assert.throws(
+		() => vendorBuildpack("docker://example.com/jvm@sha256:1"),
+		/outside paketobuildpacks/u,
 	);
 });
 

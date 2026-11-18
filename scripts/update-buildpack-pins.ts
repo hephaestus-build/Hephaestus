@@ -72,6 +72,8 @@ function newer(left: string, right: string): number {
 }
 
 export interface Pin {
+	/** The JVM buildpack that is not the builder's own, for the JRE pin only (`buildpack-descriptor.ts`). */
+	readonly buildpack?: string;
 	readonly version: string;
 	readonly url: string;
 	readonly assets: Readonly<Record<string, { readonly name: string; readonly sha256: string }>>;
@@ -117,13 +119,15 @@ export function derivePin(
 		}
 		assets[key] = { name: entry.uri.slice(url.length), sha256: entry.sha256 };
 	}
-	return { version: release.replace(/^v/u, "").replaceAll("+", "_"), url, assets };
+	// `v1.54.1`, `25.0.5.0.3+5` (Liberica), `jdk-25.0.5%2B8` (Temurin).
+	const version = decodeURIComponent(release).replace(/^\D+/u, "").replaceAll("+", "_");
+	return { version, url, assets };
 }
 
 /** The pins this workflow keeps in step with the builder, and the buildpack that declares each. */
 export const PINS = [
 	{
-		pin: "buildpack-liberica-jre",
+		pin: "buildpack-jre",
 		buildpack: "paketo-buildpacks/bellsoft-liberica",
 		dependency: "jre",
 	},
@@ -151,7 +155,20 @@ export function builderBuildpacks(metadata: unknown): Map<string, string> {
 }
 
 export function pullRequestTitle(jre: string): string {
-	return `fix(deps): the server image runs the Liberica JRE ${jre}`;
+	return `fix(deps): the server image runs the JRE ${jre}`;
+}
+
+/**
+ * The GitHub repository and image of a JVM buildpack that the JRE pin names, such as
+ * `docker://paketobuildpacks/adoptium@sha256:…` → `paketo-buildpacks/adoptium`.
+ */
+export function vendorBuildpack(uri: string): { image: string; repository: string } {
+	const image = /^docker:\/\/(?<image>paketobuildpacks\/[a-z0-9-]+)@sha256:[a-f0-9]{64}$/u.exec(uri)
+		?.groups?.image;
+	if (image === undefined) {
+		throw new Error(`the JRE pin names a JVM buildpack outside paketobuildpacks/: ${uri}`);
+	}
+	return { image, repository: image.replace("paketobuildpacks/", "paketo-buildpacks/") };
 }
 
 async function fetchText(url: string): Promise<string> {
@@ -176,6 +193,9 @@ const pinFile = (id: string): string => `.github/ci-tools/${id}.json`;
 async function readPin(id: string): Promise<Pin> {
 	const pin = asRecord(parseJson(await readFile(pinFile(id), "utf8")), id);
 	return {
+		...(pin.buildpack === undefined
+			? {}
+			: { buildpack: asString(pin.buildpack, `${id} buildpack`) }),
 		version: asString(pin.version, `${id} version`),
 		url: asString(pin.url, `${id} url`),
 		assets: Object.fromEntries(
@@ -208,6 +228,78 @@ async function verifyDownloads(pin: Pin): Promise<void> {
 	}
 }
 
+/** The digest of an image's `latest` tag, and the labels of its `linux/amd64` configuration. */
+async function latestImage(
+	image: string,
+): Promise<{ digest: string; labels: Record<string, unknown> }> {
+	const inspected = await output("docker", [
+		"buildx",
+		"imagetools",
+		"inspect",
+		`${image}:latest`,
+		"--format",
+		"{{.Manifest.Digest}}",
+	]);
+	const digest = inspected.trim();
+	if (!/^sha256:[a-f0-9]{64}$/u.test(digest)) {
+		throw new Error(`no digest for ${image}:latest (got ${digest})`);
+	}
+	const config = asRecord(
+		parseJson(
+			await output("docker", [
+				"buildx",
+				"imagetools",
+				"inspect",
+				`${image}@${digest}`,
+				"--format",
+				"{{json .Image}}",
+			]),
+		),
+		`${image} image`,
+	);
+	const labels = asRecord(
+		asRecord(asRecord(config["linux/amd64"], "linux/amd64 image").config, "image config").Labels,
+		`${image} labels`,
+	);
+	return { digest, labels };
+}
+
+/**
+ * The pin that the newest source declares: the builder's buildpack, or, for a JRE pin that names its own
+ * JVM buildpack, that buildpack's newest release.
+ */
+async function nextPin(
+	entry: (typeof PINS)[number],
+	current: Pin,
+	builderVersions: ReadonlyMap<string, string>,
+	line: string,
+): Promise<Pin> {
+	if (current.buildpack === undefined) {
+		const version = builderVersions.get(entry.buildpack);
+		if (version === undefined) {
+			throw new Error(`the newest builder carries no ${entry.buildpack}`);
+		}
+		const toml = await fetchText(
+			`https://raw.githubusercontent.com/${entry.buildpack}/v${version}/buildpack.toml`,
+		);
+		return derivePin(buildpackDependencies(toml), entry.dependency, line);
+	}
+	const vendor = vendorBuildpack(current.buildpack);
+	const { digest, labels } = await latestImage(vendor.image);
+	const metadata = asRecord(
+		parseJson(asString(labels["io.buildpacks.buildpackage.metadata"], "buildpackage label")),
+		"buildpackage metadata",
+	);
+	const version = asString(metadata.version, "buildpack version");
+	const toml = await fetchText(
+		`https://raw.githubusercontent.com/${vendor.repository}/v${version}/buildpack.toml`,
+	);
+	return {
+		buildpack: `docker://${vendor.image}@${digest}`,
+		...derivePin(buildpackDependencies(toml), entry.dependency, line),
+	};
+}
+
 async function main(): Promise<void> {
 	const descriptor = await readFile(DESCRIPTOR, "utf8");
 	const pinned = /^builder = "(?<repository>[^"@]+)@(?<digest>sha256:[a-f0-9]{64})"$/mu.exec(
@@ -216,58 +308,23 @@ async function main(): Promise<void> {
 	if (pinned?.repository === undefined || pinned.digest === undefined) {
 		throw new Error(`${DESCRIPTOR} pins no builder by digest`);
 	}
-	const inspected = await output("docker", [
-		"buildx",
-		"imagetools",
-		"inspect",
-		`${pinned.repository}:latest`,
-		"--format",
-		"{{.Manifest.Digest}}",
-	]);
-	const latest = inspected.trim();
-	if (!/^sha256:[a-f0-9]{64}$/u.test(latest)) {
-		throw new Error(`no digest for ${pinned.repository}:latest (got ${latest})`);
-	}
-	const image = asRecord(
-		parseJson(
-			await output("docker", [
-				"buildx",
-				"imagetools",
-				"inspect",
-				`${pinned.repository}@${latest}`,
-				"--format",
-				"{{json .Image}}",
-			]),
-		),
-		"builder image",
-	);
-	const labels = asRecord(
-		asRecord(asRecord(image["linux/amd64"], "linux/amd64 image").config, "image config").Labels,
-		"image labels",
-	);
+	const builder = await latestImage(pinned.repository);
+	const latest = builder.digest;
 	const buildpacks = builderBuildpacks(
-		parseJson(asString(labels["io.buildpacks.builder.metadata"], "builder metadata label")),
+		parseJson(asString(builder.labels["io.buildpacks.builder.metadata"], "builder metadata label")),
 	);
 	const javaVersion = await readFile(".java-version", "utf8");
 	const javaLine = javaVersion.trim();
 	const changes: { id: string; from: Pin; to: Pin }[] = [];
-	for (const { pin, buildpack, dependency } of PINS) {
-		const version = buildpacks.get(buildpack);
-		if (version === undefined) {
-			throw new Error(`the builder ${latest} carries no ${buildpack}`);
-		}
-		const current = await readPin(pin);
-		const line =
-			pin === "buildpack-liberica-jre" ? javaLine : (current.version.split(".")[0] ?? "");
-		const toml = await fetchText(
-			`https://raw.githubusercontent.com/${buildpack}/v${version}/buildpack.toml`,
-		);
-		const next = derivePin(buildpackDependencies(toml), dependency, line);
+	for (const entry of PINS) {
+		const current = await readPin(entry.pin);
+		const line = entry.pin === "buildpack-jre" ? javaLine : (current.version.split(".")[0] ?? "");
+		const next = await nextPin(entry, current, buildpacks, line);
 		if (JSON.stringify(next) !== JSON.stringify(current)) {
-			changes.push({ id: pin, from: current, to: next });
+			changes.push({ id: entry.pin, from: current, to: next });
 		}
 	}
-	const jre = changes.find((change) => change.id === "buildpack-liberica-jre");
+	const jre = changes.find((change) => change.id === "buildpack-jre");
 	if (jre === undefined || newer(jre.to.version, jre.from.version) <= 0) {
 		process.stdout.write(
 			`The newest builder carries no JRE newer than the pin; Renovate proposes routine builder updates.\n`,
@@ -310,7 +367,7 @@ async function main(): Promise<void> {
 	const base = head.trim();
 	await pointBranch(repository, BRANCH, base);
 	const body = [
-		`The newest \`${pinned.repository}\` (\`${latest}\`) carries the Liberica JRE ${jre.to.version}; the image pins ${jre.from.version}.`,
+		`The JVM buildpack now ships the JRE ${jre.to.version}; the image pins ${jre.from.version}. The newest builder is \`${pinned.repository}@${latest}\`.`,
 		"",
 		"| Pin | From | To |",
 		"| --- | --- | --- |",

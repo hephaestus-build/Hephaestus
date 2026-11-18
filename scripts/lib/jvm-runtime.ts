@@ -9,7 +9,7 @@
  * verification re-derives them from the same archived report.
  *
  * The server image must contain a JVM. For an image built from this checkout (`pinned`), it must also be
- * the JRE that `.github/ci-tools/buildpack-liberica-jre.json` pins.
+ * the JRE that `.github/ci-tools/buildpack-jre.json` pins.
  */
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -24,7 +24,7 @@ export const JVM_RESULT_TYPE = "jvm";
 
 /** Images that are Java services, and the pin that names the JRE each is built with. */
 export const JAVA_IMAGES: Readonly<Record<string, string>> = {
-	server: ".github/ci-tools/buildpack-liberica-jre.json",
+	server: ".github/ci-tools/buildpack-jre.json",
 };
 
 /** A Grype database older than this fails the scan instead of judging against stale advisories. */
