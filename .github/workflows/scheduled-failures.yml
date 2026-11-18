@@ -6,6 +6,7 @@ on:
       - "Cache / Mirror pinned CI tools"
       - "CI / Kubernetes nightly"
       - "Security / Rescan images"
+      - "Security / Java runtime watch"
       - "CI / Extension provider slots"
       - "CI / Duplicated code report"
       - "CI / Flaky test report"
