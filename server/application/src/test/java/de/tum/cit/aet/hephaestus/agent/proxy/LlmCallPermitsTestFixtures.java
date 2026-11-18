@@ -1,5 +1,10 @@
 package de.tum.cit.aet.hephaestus.agent.proxy;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallPermitRepository;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallPoolProperties;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallPoolRepository;
@@ -30,6 +35,15 @@ public final class LlmCallPermitsTestFixtures {
     static Instant databaseNow(JdbcTemplate jdbc) {
         return Objects.requireNonNull(jdbc.queryForObject("SELECT clock_timestamp()", Timestamp.class))
                 .toInstant();
+    }
+
+    /** A model pool with room and no one waiting, for a claim whose test is about something else. */
+    public static LlmCallPermits idle() {
+        var permits = mock(LlmCallPermits.class);
+        when(permits.poolFor(any())).thenReturn(1L);
+        when(permits.poolLabel(anyLong())).thenReturn("test-pool");
+        when(permits.admissionSpacing()).thenReturn(PERMIT_AGING);
+        return permits;
     }
 
     public static LlmCallPermits worker(ApplicationContext context, String workerId) {

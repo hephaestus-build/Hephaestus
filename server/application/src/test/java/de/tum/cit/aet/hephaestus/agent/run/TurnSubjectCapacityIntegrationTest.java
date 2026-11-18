@@ -148,7 +148,7 @@ class TurnSubjectCapacityIntegrationTest extends BaseIntegrationTest {
         var question = Objects.requireNonNull(transactions.execute(status ->
                 runs.enqueue(workspace, AgentRunKind.TURN, AgentRunBand.INTERACTIVE, subject, Duration.ofMinutes(3))));
         var offered = Set.of(AgentRunKind.TURN, AgentRunKind.DIGEST);
-        assertThat(capped.due(offered, Integer.MAX_VALUE))
+        assertThat(capped.due(offered, 0, Integer.MAX_VALUE))
                 .filteredOn(run -> run.run().workspaceId() == workspace)
                 .extracting(AgentRuns.DueRun::run)
                 .contains(question)

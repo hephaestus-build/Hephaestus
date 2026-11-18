@@ -12,6 +12,7 @@ import io.micrometer.core.instrument.MeterRegistry;
 import java.net.URI;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
@@ -20,6 +21,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.function.Predicate;
 import java.util.function.UnaryOperator;
+import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -177,6 +179,20 @@ public class AgentSandboxes {
     /** Whether the subject has a live sandbox. */
     public boolean hasLive(long workspaceId, String subjectKey) {
         return sandboxes.findLive(workspaceId, subjectKey).isPresent();
+    }
+
+    /** The runs among {@code due} whose subject has a live sandbox, read in one statement. */
+    public Set<AgentRuns.DueRun> withLive(List<AgentRuns.DueRun> due) {
+        if (due.isEmpty()) return Set.of();
+        var live = sandboxes
+                .findLiveSubjects(
+                        due.stream().map(AgentRuns.DueRun::concurrencyKey).toList())
+                .stream()
+                .map(row -> row.getWorkspaceId() + ":" + row.getSubjectKey())
+                .collect(Collectors.toSet());
+        return due.stream()
+                .filter(run -> live.contains(run.run().workspaceId() + ":" + run.concurrencyKey()))
+                .collect(Collectors.toSet());
     }
 
     /**

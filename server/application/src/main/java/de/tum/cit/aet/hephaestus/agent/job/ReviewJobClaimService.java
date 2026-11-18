@@ -14,6 +14,7 @@ import de.tum.cit.aet.hephaestus.agent.usage.LlmAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetBlockReason;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetService;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
+import de.tum.cit.aet.hephaestus.core.TransactionCallbacks;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
@@ -85,9 +86,20 @@ public class ReviewJobClaimService {
         this.jobTelemetry = jobTelemetry;
     }
 
+    /** Records the pool that the job's measurement now counts in, and how long it waited for its first admission. */
+    private void admitToPool(ReviewJob job, long poolId) {
+        job.setCallPoolId(poolId);
+        if (job.getAdmittedAt() != null) return;
+        Instant admitted = Instant.now();
+        job.setAdmittedAt(admitted);
+        String pool = callPermits.poolLabel(poolId);
+        Duration waited = Duration.between(job.getSubmittedAt(), admitted);
+        TransactionCallbacks.afterCommit(() -> jobTelemetry.poolAdmitted(pool, waited));
+    }
+
     sealed interface ClaimAttempt {}
 
-    /** The run's model pool has background callers waiting, so the run waits for its next pull. */
+    /** The run's model pool takes no other measuring review now, so the run waits for its next pull. */
     record PoolWait(UUID runId, long poolId) implements ClaimAttempt {}
 
     enum ClaimOutcome implements ClaimAttempt {
@@ -269,14 +281,20 @@ public class ReviewJobClaimService {
                     ? claimToWithhold(job, fence, CompositionStop.MODEL_UNAVAILABLE)
                     : refuseUnavailableModel(job);
         String itemKind = assigned.getFirst().item().kind().value();
+        @Nullable Long poolId = null;
         if (!composing) {
-            long poolId = callPermits.poolFor(snapshot.model().connectionRef());
-            if (callPermits.hasReviewCallsWaiting(poolId)) return new PoolWait(fence.runId(), poolId);
+            // The dispatch already held this review until its pool had room (ReviewPoolAdmission); the pool's lock
+            // makes the check exact when two servers dispatched reviews of one pool at once.
+            poolId = callPermits.poolFor(snapshot.model().connectionRef());
+            callPermits.lockAdmission(poolId);
+            if (!ReviewPoolAdmission.admits(jobRepository.poolLoad(poolId), callPermits, poolId))
+                return new PoolWait(fence.runId(), poolId);
         }
 
         if (!(ResultAdmissionService.isContinuation(job)
                 ? reviewStart.compose(job.getWorkspaceId(), job.getReviewId())
                 : reviewStart.start(job.getWorkspaceId(), job.getReviewId()))) return cancelWithParent(job);
+        if (poolId != null) admitToPool(job, poolId);
         job.start(Instant.now());
         job.setConfigSnapshot(snapshot.toJson(objectMapper));
         jobRepository.save(job);
@@ -304,6 +322,8 @@ public class ReviewJobClaimService {
                 ? reviewStart.compose(job.getWorkspaceId(), job.getReviewId())
                 : reviewStart.start(job.getWorkspaceId(), job.getReviewId()))) return cancelWithParent(job);
         job.start(Instant.now());
+        // An attempt that only withholds makes no model call, so it holds no place in its pool.
+        job.setCallPoolId(null);
         jobRepository.save(job);
         return new ClaimResult(
                 job, fence, ConfigSnapshot.fromJson(job.getConfigSnapshot(), objectMapper), itemKind, cause);

@@ -116,7 +116,7 @@ final class LlmPoolMeters {
         return pools.computeIfAbsent(label(slug), this::register);
     }
 
-    private static String label(String slug) {
+    static String label(String slug) {
         return slug.startsWith(WORKSPACE_MODEL_POOL) ? WORKSPACE_MODELS_LABEL : slug;
     }
 

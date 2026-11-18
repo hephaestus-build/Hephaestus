@@ -114,6 +114,20 @@ interface AgentSandboxRepository extends JpaRepository<AgentSandbox, UUID> {
             """, nativeQuery = true)
     Optional<SandboxRow> findLive(@Param("workspaceId") long workspaceId, @Param("subjectKey") String subjectKey);
 
+    /** A subject that has a live sandbox. */
+    interface LiveSubject {
+        long getWorkspaceId();
+
+        String getSubjectKey();
+    }
+
+    @WorkspaceAgnostic("The dispatch reads a page of due runs of every workspace; each row carries its workspace")
+    @Query(value = """
+            SELECT workspace_id AS "workspaceId", subject_key AS "subjectKey" FROM agent_sandbox
+             WHERE subject_key IN (:subjectKeys) AND state IN ('REQUESTED', 'READY')
+            """, nativeQuery = true)
+    List<LiveSubject> findLiveSubjects(@Param("subjectKeys") Collection<String> subjectKeys);
+
     /** A sandbox's first call to the gateway: it becomes {@code READY}, while it is live and before its shutdown. */
     @Query(value = """
             UPDATE agent_sandbox SET state = 'READY', last_used_at = clock_timestamp()

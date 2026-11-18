@@ -91,6 +91,7 @@ import io.micrometer.tracing.Tracer;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -98,9 +99,9 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
-import org.awaitility.Awaitility;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -169,9 +170,7 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
 
     /** A pool with no one waiting. */
     private static LlmCallPermits idleCalls() {
-        var capacity = mock(LlmCallPermits.class);
-        when(capacity.poolFor(any())).thenReturn(1L);
-        return capacity;
+        return LlmCallPermitsTestFixtures.idle();
     }
 
     @BeforeEach
@@ -411,7 +410,8 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
         var job = queued(binding(DataHandlingTier.IN_HOUSE));
         var fence = claimLeased(job).orElseThrow().fence();
         jdbc.update(
-                "UPDATE review_job SET submitted_at = clock_timestamp() - make_interval(secs => ?) WHERE id=?",
+                "UPDATE review_job SET (submitted_at, admitted_at) = (SELECT t, t FROM (SELECT clock_timestamp()"
+                        + " - make_interval(secs => ?) AS t) since) WHERE id=?",
                 runs().modelOutageWindow().plusMinutes(1).toSeconds(),
                 job.getId());
         var metrics = new SimpleMeterRegistry();
@@ -430,6 +430,24 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
         assertThat(metrics.counter(AgentMetrics.AGENT_JOB_INFRA_RETRY_REQUEUED, "cause", "provider_unreachable")
                         .count())
                 .isZero();
+    }
+
+    @Test
+    void shouldCountTheOutageWindowFromTheReviewsAdmissionNotFromItsSubmission() {
+        var job = queued(binding(DataHandlingTier.IN_HOUSE));
+        var fence = claimLeased(job).orElseThrow().fence();
+        // The review waited for its pool longer than the window, but its pool admitted it just now.
+        jdbc.update(
+                "UPDATE review_job SET submitted_at=clock_timestamp() - make_interval(secs => ?) WHERE id=?",
+                runs().modelOutageWindow().plusMinutes(1).toSeconds(),
+                job.getId());
+        var unanswered = results(new SimpleMeterRegistry(), new ModelCallFailure("upstream_stalled", null));
+
+        measure(unanswered, job, fence, SandboxLayout.EXIT_PROVIDER_UNREACHABLE);
+
+        var waiting = jobs.findById(job.getId()).orElseThrow();
+        assertThat(waiting.getStatus()).isEqualTo(ReviewJobStatus.QUEUED);
+        assertThat(waiting.spentAttempts()).as("an outage spends no retry").isEqualTo(job.spentAttempts());
     }
 
     @Test
@@ -457,7 +475,8 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
         jdbc.update("UPDATE agent_run SET available_at=clock_timestamp() WHERE id=?", waiting.getRunId());
         var again = claimLeased(waiting).orElseThrow().fence();
         jdbc.update(
-                "UPDATE review_job SET submitted_at = clock_timestamp() - make_interval(secs => ?) WHERE id=?",
+                "UPDATE review_job SET (submitted_at, admitted_at) = (SELECT t, t FROM (SELECT clock_timestamp()"
+                        + " - make_interval(secs => ?) AS t) since) WHERE id=?",
                 runs().modelOutageWindow().plusMinutes(1).toSeconds(),
                 job.getId());
         measure(
@@ -586,7 +605,8 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
     void shouldEndACompositionThatTheProviderLeftUnansweredPastItsOutageWindowAsProviderUnavailable() {
         var claim = composing();
         jdbc.update(
-                "UPDATE review_job SET submitted_at = clock_timestamp() - make_interval(secs => ?) WHERE id=?",
+                "UPDATE review_job SET (submitted_at, admitted_at) = (SELECT t, t FROM (SELECT clock_timestamp()"
+                        + " - make_interval(secs => ?) AS t) since) WHERE id=?",
                 runs().modelOutageWindow().plusMinutes(1).toSeconds(),
                 claim.job().getId());
         var metrics = new SimpleMeterRegistry();
@@ -899,38 +919,28 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
         assertThat(queued.getExecutionStartedAt()).isNull();
     }
 
-    @Test
-    void shouldWaitForBackgroundDemandWithoutReservingAProviderSlot() throws Exception {
+    /** A model pool, the binding's model in it, and a claim service that admits to it with a real permit worker. */
+    private record PoolScenario(
+            long poolId,
+            String slug,
+            WorkspaceModelAssignment selected,
+            ReviewJobClaimService claims,
+            LlmCallPermits permits) {}
+
+    private PoolScenario poolScenario() {
         var selected = binding(DataHandlingTier.IN_HOUSE);
         var pool = new LlmCallPool();
         pool.setSlug("queued-claim-" + UUID.randomUUID());
         pool.setDisplayName("Queued claims");
-        pool.setMaxConcurrentCalls(1);
+        pool.setMaxConcurrentCalls(2);
         pool = context.getBean(LlmCallPoolRepository.class).saveAndFlush(pool);
         var selectedModel = Objects.requireNonNull(selected.getInstanceModel());
         jdbc.update("UPDATE llm_model SET call_pool_id=? WHERE id=?", pool.getId(), selectedModel.getId());
-        var job = queued(selected);
-        var capacity = LlmCallPermitsTestFixtures.worker(context, "test-worker");
-        var busyWorkspace = workspaces.saveAndFlush(TestEntities.activeWorkspace("busy-pool-" + UUID.randomUUID()));
-        var runningReview = new ReviewJob();
-        RuntimeJobTestData.initialize(runningReview, busyWorkspace.getId());
-        ReviewJobFixtures.withStatus(runningReview, ReviewJobStatus.RUNNING);
-        runningReview.setConfigSnapshot(job.getConfigSnapshot());
-        runningReview.setStartedAt(Instant.now());
-        runningReview = jobs.saveAndFlush(RuntimeJobTestData.persistParent(jdbc, runningReview));
-        var busyCaller = new LlmCallPermits.Caller(busyWorkspace.getId(), runningReview.getId(), 0, null, null);
-        long poolId = pool.getId();
-        var busy = Objects.requireNonNull(capacity.acquire(
-                poolId,
-                AgentRunBand.BATCH,
-                busyCaller,
-                () -> false,
-                Instant.now().plusSeconds(5)));
         var budgets = mock(LlmBudgetService.class);
         when(budgets.decide(anyLong())).thenReturn(LlmBudgetDecision.ALLOWED);
         var assignments = mock(ReviewJobAssignments.class);
         when(assignments.load(any())).thenReturn(List.of(RuntimeReviewTestData.assignment(null, null)));
-        var metrics = new SimpleMeterRegistry();
+        var permits = LlmCallPermitsTestFixtures.worker(context, "test-worker");
         var claims = new ReviewJobClaimService(
                 jobs,
                 policy,
@@ -940,44 +950,266 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                 context.getBean(ReviewStart.class),
                 budgets,
                 admission,
-                new ReviewJobTelemetry(metrics, Tracer.NOOP),
-                capacity,
+                new ReviewJobTelemetry(new SimpleMeterRegistry(), Tracer.NOOP),
+                permits,
                 agentRuns,
                 reviewRuns);
-        try (var requests = Executors.newVirtualThreadPerTaskExecutor()) {
-            var repeated = requests.submit(() -> capacity.acquire(
-                    poolId,
-                    AgentRunBand.BATCH,
-                    busyCaller,
-                    () -> false,
-                    Instant.now().plusSeconds(10)));
-            Awaitility.await()
-                    .atMost(Duration.ofSeconds(5))
-                    .untilAsserted(() -> assertThat(jdbc.queryForObject(
-                                    "SELECT count(*) FROM llm_call_permit WHERE pool_id=? AND state='WAITING'",
-                                    Long.class,
-                                    poolId))
-                            .isEqualTo(1L));
+        return new PoolScenario(pool.getId(), pool.getSlug(), selected, claims, permits);
+    }
+
+    /** A measurement of another workspace that the pool admitted and that runs since {@code started}. */
+    private ReviewJob runningMeasurement(PoolScenario pool, ReviewJob like, Instant started) {
+        var busyWorkspace = workspaces.saveAndFlush(TestEntities.activeWorkspace("busy-pool-" + UUID.randomUUID()));
+        var running = new ReviewJob();
+        RuntimeJobTestData.initialize(running, busyWorkspace.getId());
+        ReviewJobFixtures.withStatus(running, ReviewJobStatus.RUNNING);
+        running.setConfigSnapshot(like.getConfigSnapshot());
+        running.setStartedAt(started);
+        running.setCallPoolId(pool.poolId());
+        return jobs.saveAndFlush(RuntimeJobTestData.persistParent(jdbc, running));
+    }
+
+    /** A batch call of {@code job} that waits for the pool since {@code waited} ago. */
+    private void waitingCall(PoolScenario pool, ReviewJob job, Duration waited) {
+        waitingCall(pool, job, waited, AgentRunBand.BATCH);
+    }
+
+    private void waitingCall(PoolScenario pool, ReviewJob job, Duration waited, AgentRunBand band) {
+        var rows = context.getBean(LlmCallPermitRepository.class);
+        UUID id = UUID.randomUUID();
+        transactions.executeWithoutResult(status -> rows.enqueue(new LlmCallPermitRepository.Request(
+                id, pool.poolId(), "remote-" + id, band, job.getWorkspaceId(), job.getId(), 0, null)));
+        jdbc.update(
+                "UPDATE llm_call_permit SET acquired_at=clock_timestamp()-make_interval(secs => ?) WHERE id=?",
+                waited.toSeconds(),
+                id);
+    }
+
+    @Test
+    void shouldStartAReviewOnlyWhenItsPoolHasRoomForItWhateverWorkspaceFillsIt() {
+        var pool = poolScenario();
+        var job = queued(pool.selected());
+        // Another workspace's review has just started on the pool; no call waits yet.
+        var runningReview = runningMeasurement(pool, job, Instant.now());
+
+        assertThat(claimLeased(job, pool.claims())).isEmpty();
+        var waiting = jobs.findById(job.getId()).orElseThrow();
+        assertThat(waiting.getStatus()).isEqualTo(ReviewJobStatus.QUEUED);
+        assertThat(waiting.getStartedAt())
+                .as("a waiting review has started no budget")
+                .isNull();
+        assertThat(waiting.spentAttempts()).as("a wait spends no retry").isEqualTo(job.spentAttempts());
+        assertThat(RuntimeJobTestData.runState(jdbc, waiting)).isEqualTo("QUEUED");
+        Instant waited = Instant.now();
+
+        // The other review ends: its run and its job end together, as the holder ends them.
+        transactions.executeWithoutResult(status -> {
+            jdbc.update(
+                    "UPDATE agent_run SET state='ENDED', ended_at=now(), leased_until=NULL, stop_reason='COMPLETED'"
+                            + " WHERE id=?",
+                    runningReview.getRunId());
+            jdbc.update(
+                    "UPDATE review_job SET status='COMPLETED', completed_at=now() WHERE id=?", runningReview.getId());
+        });
+        // The wait deferred the run for a later pull; the next pull is now.
+        jdbc.update("UPDATE agent_run SET deferred_until=clock_timestamp() WHERE id=?", job.getRunId());
+
+        assertThat(claimLeased(job, pool.claims())).isPresent();
+        var admitted = jobs.findById(job.getId()).orElseThrow();
+        assertThat(admitted.getCallPoolId()).isEqualTo(pool.poolId());
+        assertThat(admitted.getAdmittedAt()).isNotNull();
+        assertThat(admitted.getStartedAt())
+                .as("its budget counts from its admission, not from its wait")
+                .isAfterOrEqualTo(waited);
+    }
+
+    @Test
+    void shouldAdmitAnotherReviewOnceTheNewestHasRunAWhileWithoutCongestion() {
+        var pool = poolScenario();
+        var job = queued(pool.selected());
+        runningMeasurement(pool, job, Instant.now().minus(Duration.ofMinutes(2)));
+
+        assertThat(claimLeased(job, pool.claims())).isPresent();
+    }
+
+    @Test
+    void shouldHoldAReviewWhileAMeasuringCallWaitsLongerThanThePermitAging() {
+        var pool = poolScenario();
+        var job = queued(pool.selected());
+        var running = runningMeasurement(pool, job, Instant.now().minus(Duration.ofMinutes(2)));
+        waitingCall(pool, running, Duration.ofMinutes(2));
+
+        assertThat(claimLeased(job, pool.claims())).isEmpty();
+        assertThat(jobs.findById(job.getId()).orElseThrow().getStatus()).isEqualTo(ReviewJobStatus.QUEUED);
+    }
+
+    @Test
+    void shouldNotHoldAReviewForAWaitingCallOfAComposition() {
+        var pool = poolScenario();
+        var job = queued(pool.selected());
+        runningMeasurement(pool, job, Instant.now().minus(Duration.ofMinutes(2)));
+        var composed = queued(pool.selected());
+        var measured = claimLeased(composed, pool.claims()).orElseThrow();
+        var composition = Objects.requireNonNull(transactions.execute(
+                        status -> reviewRuns.continueToCompose(composed.getId(), measured.fence())))
+                .orElseThrow();
+        assertThat(jobs.findById(composed.getId()).orElseThrow().getRunId())
+                .as("the composition took over the job")
+                .isEqualTo(composition.id());
+        waitingCall(pool, jobs.findById(composed.getId()).orElseThrow(), Duration.ofMinutes(2));
+
+        assertThat(claimLeased(job, pool.claims())).isPresent();
+    }
+
+    @Test
+    void shouldNotHoldAReviewForAWaitingInteractiveCall() {
+        var pool = poolScenario();
+        var job = queued(pool.selected());
+        var running = runningMeasurement(pool, job, Instant.now().minus(Duration.ofMinutes(2)));
+        waitingCall(pool, running, Duration.ofMinutes(2), AgentRunBand.INTERACTIVE);
+
+        assertThat(claimLeased(job, pool.claims())).isPresent();
+    }
+
+    @Test
+    void shouldAdmitOneReviewForEachPoolInADispatchPassAndCountTheRestAsHeld() {
+        var pool = poolScenario();
+        var first = queued(pool.selected());
+        var second = queued(pool.selected());
+        var third = queued(pool.selected());
+        var meters = new SimpleMeterRegistry();
+        var admission = new ReviewPoolAdmission(jobs, pool.permits(), meters);
+        var reviews = EnumSet.of(AgentRunKind.REVIEW);
+
+        var pass = admission.pass(reviews);
+        assertThat(pass.admits(due(first))).as("an idle pool takes one").isTrue();
+        assertThat(pass.admits(due(second)))
+                .as("the next waits for the first to show its load")
+                .isFalse();
+        pass.ended();
+        assertThat(held(meters, pool)).isEqualTo(1);
+
+        // The first review's sandbox starts but has not claimed its run yet: it still holds the pool's place.
+        startSandbox(first);
+        var next = admission.pass(reviews);
+        assertThat(next.admits(due(second))).isFalse();
+        assertThat(next.admits(due(third))).isFalse();
+        next.ended();
+        assertThat(held(meters, pool)).isEqualTo(2);
+
+        var empty = admission.pass(reviews);
+        empty.ended();
+        assertThat(held(meters, pool))
+                .as("a pass that holds nothing resets the count")
+                .isZero();
+    }
+
+    @Test
+    void shouldGiveNoPlaceToAStartedReviewThatAHoldPutBackToALaterTime() {
+        var pool = poolScenario();
+        var budgetHeld = queued(pool.selected());
+        var next = queued(pool.selected());
+        // Its sandbox started, then its claim found the budget spent and put the run back for an hour.
+        startSandbox(budgetHeld);
+        jdbc.update(
+                "UPDATE agent_run SET available_at=clock_timestamp() + interval '1 hour' WHERE id=?",
+                budgetHeld.getRunId());
+        var pass = new ReviewPoolAdmission(jobs, pool.permits(), new SimpleMeterRegistry())
+                .pass(EnumSet.of(AgentRunKind.REVIEW));
+
+        assertThat(pass.admits(due(next)))
+                .as("an idle sandbox of a run that is not due holds no place in the pool")
+                .isTrue();
+    }
+
+    @Test
+    void shouldAdmitAReviewWhoseSnapshotNamesNoPoolAndLeaveItToTheClaim() {
+        var pool = poolScenario();
+        var job = queued(pool.selected());
+        // A snapshot of the current version that names no model: it fails past the version check.
+        jdbc.update(
+                "UPDATE review_job SET config_snapshot=jsonb_build_object('schemaVersion', ?) WHERE id=?",
+                ConfigSnapshot.SCHEMA_VERSION,
+                job.getId());
+        var pass = new ReviewPoolAdmission(jobs, pool.permits(), new SimpleMeterRegistry())
+                .pass(EnumSet.of(AgentRunKind.REVIEW));
+
+        assertThat(pass.admits(due(job))).isTrue();
+    }
+
+    /** Waits until PostgreSQL reports {@code waiters} backends blocked on a lock. */
+    private void awaitLockWaiters(int waiters) throws InterruptedException {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(20);
+        while (System.nanoTime() < deadline) {
+            Long waiting = jdbc.queryForObject(
+                    "SELECT count(*) FROM pg_stat_activity WHERE wait_event_type = 'Lock' AND datname = current_database()",
+                    Long.class);
+            if (waiting != null && waiting >= waiters) return;
+            Thread.sleep(20); // NOPMD - poll interval of a bounded wait
+        }
+        throw new AssertionError("the claims never waited for the pool's lock");
+    }
+
+    private static void awaitRelease(CountDownLatch release) {
+        try {
+            if (!release.await(30, TimeUnit.SECONDS)) throw new IllegalStateException("release latch timed out");
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException(e);
+        }
+    }
+
+    /** A sandbox that has started for the job's run and has not claimed it yet. */
+    private void startSandbox(ReviewJob job) {
+        jdbc.update(
+                "INSERT INTO agent_sandbox(id,workspace_id,subject_key,kind,claim_name,state,shutdown_at)"
+                        + " SELECT ?, r.workspace_id, r.concurrency_key, 'REVIEW', ?, 'REQUESTED', now()+interval '1 hour'"
+                        + " FROM agent_run r WHERE r.id=?",
+                UUID.randomUUID(),
+                "review-" + UUID.randomUUID(),
+                job.getRunId());
+    }
+
+    private static AgentRuns.DueRun due(ReviewJob job) {
+        return new AgentRuns.DueRun(
+                new AgentRunRef(Objects.requireNonNull(job.getRunId()), job.getWorkspaceId()),
+                AgentRunKind.REVIEW,
+                "review:" + job.getId());
+    }
+
+    private static double held(SimpleMeterRegistry meters, PoolScenario pool) {
+        var gauge = meters.find(AgentMetrics.AGENT_REVIEW_POOL_HELD)
+                .tag("pool", pool.slug())
+                .gauge();
+        return gauge == null ? 0 : gauge.value();
+    }
+
+    @Test
+    void shouldAdmitOnlyOneOfTwoReviewsThatTwoServersClaimAtOnceOnAnIdlePool() throws Exception {
+        var pool = poolScenario();
+        var first = queued(pool.selected());
+        var second = queued(pool.selected());
+
+        var locked = new CountDownLatch(1);
+        var release = new CountDownLatch(1);
+        try (var servers = Executors.newVirtualThreadPerTaskExecutor()) {
+            // A third transaction holds the pool's lock, so both claims read the pool only after both reached it.
+            var holder = servers.submit(() -> transactions.executeWithoutResult(status -> {
+                jdbc.queryForList("SELECT id FROM llm_call_pool WHERE id=? FOR UPDATE", pool.poolId());
+                locked.countDown();
+                awaitRelease(release);
+            }));
+            assertThat(locked.await(30, TimeUnit.SECONDS)).isTrue();
+            var a = servers.submit(() -> claimLeased(first, pool.claims()).isPresent());
+            var b = servers.submit(() -> claimLeased(second, pool.claims()).isPresent());
             try {
-                assertThat(claimLeased(job, claims)).isEmpty();
-                assertThat(jobs.findById(job.getId()).orElseThrow().getStatus()).isEqualTo(ReviewJobStatus.QUEUED);
-                assertThat(RuntimeJobTestData.runState(jdbc, job)).isEqualTo("QUEUED");
-                busy.close();
-                var granted = Objects.requireNonNull(repeated.get(12, TimeUnit.SECONDS));
-                assertThat(granted.isRevoked()).isFalse();
-                // The wait deferred the run for a later pull; the next pull is now.
-                jdbc.update("UPDATE agent_run SET deferred_until=clock_timestamp() WHERE id=?", job.getRunId());
-                assertThat(claimLeased(job, claims)).isPresent();
-                assertThat(context.getBean(LlmCallPermitRepository.class).countActive(poolId))
-                        .isEqualTo(1);
-                assertThat(jdbc.queryForObject(
-                                "SELECT count(*) FROM llm_call_permit WHERE source_id=?", Long.class, job.getId()))
-                        .isZero();
+                awaitLockWaiters(2);
             } finally {
-                busy.close();
-                var repeat = repeated.get(12, TimeUnit.SECONDS);
-                if (repeat != null) repeat.close();
+                release.countDown();
             }
+            holder.get(30, TimeUnit.SECONDS);
+            assertThat(List.of(a.get(30, TimeUnit.SECONDS), b.get(30, TimeUnit.SECONDS)))
+                    .containsExactlyInAnyOrder(true, false);
         }
     }
 
@@ -1082,48 +1314,6 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
         assertThat(claim.fence())
                 .as("the claim hands its holder the fence of the lease that the run holds")
                 .isEqualTo(RuntimeJobTestData.fence(jdbc, claimed));
-    }
-
-    @Test
-    void shouldLeaveTheReviewQueuedWhileItsEndpointHasBackgroundWaiters() {
-        var job = queued(binding(DataHandlingTier.IN_HOUSE));
-        var budgets = mock(LlmBudgetService.class);
-        when(budgets.decide(anyLong())).thenReturn(LlmBudgetDecision.ALLOWED);
-        var assignmentSnapshots = mock(ReviewJobAssignments.class);
-        when(assignmentSnapshots.load(any())).thenReturn(List.of(RuntimeReviewTestData.assignment(null, null)));
-        var metrics = new SimpleMeterRegistry();
-        var capacity = mock(LlmCallPermits.class);
-        when(capacity.poolFor(any())).thenReturn(42L);
-        when(capacity.hasReviewCallsWaiting(anyLong())).thenReturn(true);
-        var claims = new ReviewJobClaimService(
-                jobs,
-                policy,
-                methods,
-                assignmentSnapshots,
-                mapper,
-                context.getBean(ReviewStart.class),
-                budgets,
-                admission,
-                new ReviewJobTelemetry(metrics, Tracer.NOOP),
-                capacity,
-                agentRuns,
-                reviewRuns);
-
-        assertThat(claimLeased(job, claims)).isEmpty();
-
-        var queued = jobs.findById(job.getId()).orElseThrow();
-        assertThat(queued.getStatus()).isEqualTo(ReviewJobStatus.QUEUED);
-        assertThat(queued.spentAttempts()).as("a wait spends no retry").isEqualTo(job.spentAttempts());
-        assertThat(RuntimeJobTestData.runState(jdbc, queued))
-                .as("the wait requeued the run")
-                .isEqualTo("QUEUED");
-        assertThat(jdbc.queryForObject(
-                        "SELECT deferred_until > clock_timestamp() FROM agent_run WHERE id = ?",
-                        Boolean.class,
-                        queued.getRunId()))
-                .as("the claim deferred the run, which keeps its place")
-                .isTrue();
-        assertThat(queued.getExecutionStartedAt()).isNull();
     }
 
     @Test

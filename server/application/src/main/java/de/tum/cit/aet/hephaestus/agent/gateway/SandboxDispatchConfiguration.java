@@ -41,6 +41,7 @@ class SandboxDispatchConfiguration {
             SandboxProperties sandbox,
             AgentCapacityProperties capacity,
             ReviewAttemptCustody custody,
+            RunAdmission admission,
             MeterRegistry meters) {
         return new SandboxDispatcher(
                 sandboxes,
@@ -52,6 +53,7 @@ class SandboxDispatchConfiguration {
                         AgentSandboxKind.CONVERSATION,
                         capacity.turns() == null ? Integer.MAX_VALUE : capacity.turns()),
                 custody,
+                admission,
                 meters);
     }
 

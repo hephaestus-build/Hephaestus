@@ -290,15 +290,17 @@ public class AgentRuns {
     public record DueRun(AgentRunRef run, AgentRunKind kind, String concurrencyKey) {}
 
     /**
-     * The queued runs of these kinds that a claim would offer next, at most {@code limit}, in the claim's order. It
-     * leases nothing: the dispatch starts their sandboxes, and each sandbox claims its own run.
+     * The queued runs of these kinds that a claim would offer next, in the claim's order: at most {@code limit}, after
+     * the first {@code offset}. It leases nothing: the dispatch starts their sandboxes, and each sandbox claims its own
+     * run.
      */
     @Transactional(readOnly = true)
-    public List<DueRun> due(Set<AgentRunKind> kinds, int limit) {
+    public List<DueRun> due(Set<AgentRunKind> kinds, int offset, int limit) {
         if (kinds.isEmpty() || limit <= 0) return List.of();
         return runs
                 .findDue(
                         kinds.stream().map(AgentRunKind::name).toList(),
+                        offset,
                         limit,
                         capacity.bandAging().toSeconds())
                 .stream()
@@ -355,7 +357,7 @@ public class AgentRuns {
     public enum Deferral {
         /** A lifecycle write holds the run's domain row. */
         LOCKED,
-        /** The run's model pool has review calls waiting. */
+        /** The run's model pool takes no other measuring review now. */
         MODEL_POOL
     }
 

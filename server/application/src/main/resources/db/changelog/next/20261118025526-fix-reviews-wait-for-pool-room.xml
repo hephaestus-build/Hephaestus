@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1794964352754-1" author="hephaestus">
+        <addColumn tableName="review_job">
+            <column name="admitted_at" type="TIMESTAMP(6) WITH TIME ZONE"/>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1794964352754-2" author="hephaestus">
+        <addColumn tableName="review_job">
+            <column name="call_pool_id" type="BIGINT"/>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1794964352754-3" author="hephaestus">
+        <createIndex indexName="idx_review_job_call_pool_status" tableName="review_job">
+            <column name="call_pool_id"/>
+            <column name="status"/>
+        </createIndex>
+    </changeSet>
+</databaseChangeLog>

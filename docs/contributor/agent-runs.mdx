@@ -96,7 +96,7 @@ A run of a workspace that is not active is not offered.
 
 A queued run sends a PostgreSQL notification on the channel `agent_run`, which wakes an idle claimer.
 
-A claim that cannot start its run now defers it (`AgentRuns.defer`), as while the run's review is locked or its model pool has review calls waiting.
+A claim that cannot start its run now defers it (`AgentRuns.defer`), as while the run's review is locked or its model pool takes no further review now.
 A deferral spends no attempt and keeps the run's `available_at`, so the run gauges count its wait and its start window keeps counting.
 No claim takes it before `deferred_until`, 5 seconds later.
 
@@ -296,16 +296,29 @@ One database statement grants all the calls of a round. Interactive calls are gr
 
 Before a review starts capture or creates a Pod, its claim checks the review quota and its model's endpoint pool.
 The parent review and its job start in one transaction after those checks pass.
-The claim defers the run while the quota has no room or the pool has a live review call waiting ([Claim](#claim)).
-A review call is a batch or background call that has a workspace.
-It is a call of a requested, event, scheduled or backfill review, or of a composition.
-Conversation and product feedback waiters do not block a review claim.
+A model pool takes another measuring review only when it can serve it:
+
+- A pool with no running measurement always takes one, so a review can always start.
+- Otherwise it takes the next one only while no measuring call of the pool has waited longer than `hephaestus.agent.capacity.permit-aging`, and only once its newest measurement has run that long.
+  Thus, a pool that has just admitted a review shows its load before it admits another.
+
+The sandbox dispatch applies this rule as it walks the due runs in the claim order, and it admits at most one review for each pool in a pass.
+A held review gets no sandbox and keeps its place, so the workspace with the fewest leased runs still goes first.
+A due review whose sandbox has started, but has not claimed its run yet, holds its pool's place in the pass.
+A review that a hold or a backoff put back to a later time is not due, so its idle sandbox holds no place.
+The pass reads the due runs a page at a time until its room is used or the queue ends, so the reviews that a full pool holds do not hide the runs behind them.
+The claim applies the rule again while it holds the pool's row lock, so two servers that dispatched reviews of one pool at once admit only one.
+It records the pool on the job, and it defers a run that the rule holds ([Claim](#claim)).
+A composition, a conversation and product feedback do not count and are not held.
+A held review starts no clock: its deadline, lease and work deadline start at its claim, and a review run has no start window.
+Its provider outage window counts from its first admission, not from its submission.
+`agent_review_pool_held` shows the reviews that the last dispatch pass with room held for each pool, and `agent_review_pool_admission_wait_seconds` how long reviews waited for their first admission.
 
 An unavailable observation leaves the review queued.
 The Kubernetes readiness check also fails while a namespace informer cannot list or watch its resources.
 
 This check takes no provider grant and adds no pool waiter.
-A pool whose calls are all active can admit a review when it has no review call waiting.
+A pool whose calls are all active can still admit a review, because the rule reads the waits of its measuring calls, not its free calls.
 The review's actual calls join the pool queue when they run.
 A new waiter or another server can use room after the observation.
 The Kubernetes quota and the pool enforce capacity when the Pod and call start.
