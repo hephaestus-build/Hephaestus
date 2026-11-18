@@ -2,6 +2,8 @@ package de.tum.cit.aet.hephaestus.practices.review;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
+import de.tum.cit.aet.hephaestus.core.auth.domain.AiChoice;
 import de.tum.cit.aet.hephaestus.practices.profile.ProfileOverviewRepository;
 import de.tum.cit.aet.hephaestus.practices.result.ResultRetentionService;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewIntegrationData.Scenario;
@@ -40,6 +42,12 @@ class PracticeTrialControllerIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     JdbcTemplate jdbc;
+
+    @Autowired
+    PracticeTrialService trials;
+
+    @Autowired
+    AccountRepository accounts;
 
     Scenario scenario;
 
@@ -204,5 +212,33 @@ class PracticeTrialControllerIntegrationTest extends BaseIntegrationTest {
                 .expectStatus()
                 .isNotFound()
                 .expectBody(Void.class);
+    }
+
+    /** ADR 0110, update of 2026-11-16: an admin's MCP client reads the findings only of work whose people chose Cloud. */
+    @Test
+    void shouldLetAnMcpClientReadTheFindingsOnlyOfWorkWhosePeopleChoseCloud() {
+        var developer = scenario.account();
+        var unattributed = admissions.pending(
+                scenario, Instant.now(), null, "item-version-" + UUID.randomUUID(), ReviewOrigin.TRIAL);
+        var attributed = admissions.pending(
+                scenario,
+                Instant.now(),
+                developer.getId(),
+                "item-version-" + UUID.randomUUID(),
+                ReviewOrigin.TRIAL);
+        long workspaceId = scenario.workspace().getId();
+
+        developer.setAiChoice(AiChoice.IN_HOUSE_ONLY);
+        accounts.saveAndFlush(developer);
+        assertThat(trials.readsOnlyCloudWork(workspaceId, attributed.review().getId()))
+                .isFalse();
+
+        developer.setAiChoice(AiChoice.CLOUD);
+        accounts.saveAndFlush(developer);
+        assertThat(trials.readsOnlyCloudWork(workspaceId, attributed.review().getId()))
+                .isTrue();
+        // Work that the review attributes to nobody has no one who chose Cloud.
+        assertThat(trials.readsOnlyCloudWork(workspaceId, unattributed.review().getId()))
+                .isFalse();
     }
 }

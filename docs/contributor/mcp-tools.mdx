@@ -27,6 +27,8 @@ The tool runs on the request thread, so the workspace context and the authentica
 4. **Write the input and output JSON Schemas by hand** as text blocks, and build the definition with `McpTools.readTool`.
    A write tool uses `McpTools.writeTool` with the `Effect` that names what it does, and overrides `writes()` to return `true`.
    A call of a write tool then needs `practices:write`: `McpWriteScopeFilter` answers 403 `insufficient_scope` before the tool runs.
+   A read whose result only `practices:write` may read, such as trial output, declares `needsWriteScope = true` and overrides `writes()` to return `true`.
+   It uses `McpTools.readTool` and carries no audit annotation.
    A field whose null value has a meaning, such as "inherit", stays in the schema's `required` list with `null` among its values.
    The server's mapper writes null values (`McpTools.withNulls`), so the SDK checks the arguments with them.
    Every object in the output schema has `"additionalProperties": false` and requires every property.

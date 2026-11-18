@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.practices.review;
 
+import de.tum.cit.aet.hephaestus.core.auth.domain.AiChoice;
 import de.tum.cit.aet.hephaestus.core.auth.spi.WorkspaceAdminAssurance;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
@@ -20,6 +21,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewOrigin;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewRequest;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewService;
+import de.tum.cit.aet.hephaestus.workspace.spi.MemberAiPreferences;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
@@ -45,6 +47,7 @@ public class PracticeTrialService {
     private final ReviewItemRepository memberships;
     private final WorkspaceAdminAssurance adminAssurance;
     private final ItemDescriptorRegistry descriptors;
+    private final MemberAiPreferences preferences;
     private final JsonMapper json;
 
     /**
@@ -132,6 +135,27 @@ public class PracticeTrialService {
                 member == null ? null : member.getReason(),
                 candidate == null ? null : outcome(candidate),
                 outcomeRemoved);
+    }
+
+    /**
+     * Whether every person whose work the trial read chose Cloud. Only then may an admin's MCP client, which sends what
+     * it reads to the admin's own model, read what the trial found (ADR 0110, update of 2026-11-16). Work that the
+     * review attributes to nobody has no one who chose, so it does not qualify.
+     */
+    @Transactional(readOnly = true)
+    public boolean readsOnlyCloudWork(long workspaceId, UUID trialId) {
+        var members = memberships.findByWorkspaceIdAndReviewIdOrderByPracticeIdAscItemIdAsc(workspaceId, trialId);
+        return !members.isEmpty()
+                && members.stream().allMatch(member -> {
+                    var developer =
+                            member.getDetail() == null ? null : member.getDetail().get("developerId");
+                    return developer != null
+                            && developer.isIntegralNumber()
+                            && preferences
+                                            .forDeveloper(workspaceId, developer.longValue())
+                                            .choice()
+                                    == AiChoice.CLOUD;
+                });
     }
 
     private static TrialOutcomeDTO outcome(ResultCandidate candidate) {

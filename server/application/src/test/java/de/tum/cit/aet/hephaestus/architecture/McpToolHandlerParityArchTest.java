@@ -92,6 +92,8 @@ class McpToolHandlerParityArchTest extends HephaestusArchitectureTest {
      * a tool that stands for a read carries neither (ADR 0110 decision 16, the {@code AuditByDefaultArchTest} rule for tools).
      * A POST handler that only takes a body and saves nothing is a read when its tool says so with {@code savesNothing};
      * the handler is then {@code @AuditExempt}, and the tool repeats that annotation.
+     * A read whose result only {@code practices:write} may read says so with {@code needsWriteScope}, and declares that
+     * it writes.
      */
     @Test
     void everyWriteToolCarriesTheAuditDecisionOfTheHandlerItStandsFor() throws Exception {
@@ -122,10 +124,13 @@ class McpToolHandlerParityArchTest extends HephaestusArchitectureTest {
                                     .anyMatch(mapping -> AnnotatedElementUtils.hasAnnotation(handler, mapping)));
             boolean writes = Arrays.stream(type.getDeclaredMethods())
                     .anyMatch(method -> method.getName().equals("writes"));
-            if (mutation != writes) {
+            if (target.needsWriteScope() && mutation) {
+                problems.add(type.getSimpleName() + " stands for a mutation, which needs the write scope anyway");
+            }
+            if ((mutation || target.needsWriteScope()) != writes) {
                 problems.add(type.getSimpleName()
-                        + (mutation
-                                ? " stands for a mutation but does not declare that it writes"
+                        + (mutation || target.needsWriteScope()
+                                ? " needs the write scope but does not declare that it writes"
                                 : " declares that it writes but stands for a read"));
             }
             if (!Objects.equals(handler.getAnnotation(Audited.class), call.getAnnotation(Audited.class))
