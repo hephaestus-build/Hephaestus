@@ -9,14 +9,18 @@ import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.practices.PracticeDraftController;
 import de.tum.cit.aet.hephaestus.practices.PracticeDraftService;
 import de.tum.cit.aet.hephaestus.practices.PracticeFolderInvalidException;
+import de.tum.cit.aet.hephaestus.practices.dto.PracticeDraftDTO;
+import de.tum.cit.aet.hephaestus.practices.dto.PracticeFileCheckRequestDTO;
 import de.tum.cit.aet.hephaestus.practices.dto.PracticeFileProblemDTO;
 import de.tum.cit.aet.hephaestus.workspace.authorization.RequireAtLeastWorkspaceAdmin;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContextHolder;
 import io.modelcontextprotocol.spec.McpSchema;
-import java.util.LinkedHashMap;
+import jakarta.validation.Validator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import org.jspecify.annotations.Nullable;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
@@ -60,10 +64,12 @@ class SavePracticeDraftTool implements McpTool {
 
     private final PracticeDraftService drafts;
     private final JsonMapper jsonMapper;
+    private final Validator validator;
     private final McpSchema.Tool definition;
 
-    SavePracticeDraftTool(PracticeDraftService drafts, JsonMapper jsonMapper) {
+    SavePracticeDraftTool(PracticeDraftService drafts, JsonMapper jsonMapper, Validator validator) {
         this.drafts = drafts;
+        this.validator = validator;
         this.jsonMapper = McpTools.withNulls(jsonMapper);
         this.definition = McpTools.writeTool(
                 jsonMapper,
@@ -98,22 +104,47 @@ class SavePracticeDraftTool implements McpTool {
     @Audited(ledger = AuditLedger.CONFIG_AUDIT, type = "PRACTICE_DEFINITION")
     public McpSchema.CallToolResult call(Map<String, Object> arguments) {
         var slug = McpTools.requiredString(arguments, "slug");
-        if (!(arguments.get("files") instanceof Map<?, ?> given) || given.isEmpty() || given.size() > 16)
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "The argument files needs 1 to 16 files.");
-        var folder = new LinkedHashMap<String, String>();
-        for (var entry : given.entrySet()) {
-            if (!(entry.getKey() instanceof String path) || !(entry.getValue() instanceof String content))
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Each file needs a path and text content.");
-            folder.put(path, content);
-        }
+        var body = new HashMap<String, Object>();
+        body.put("files", arguments.get("files"));
+        var request = McpTools.input(jsonMapper, validator, body, PracticeFileCheckRequestDTO.class);
         try {
-            return McpTools.result(
-                    jsonMapper.convertValue(drafts.save(WorkspaceContextHolder.getContext(), slug, folder), Map.class));
+            var saved = drafts.save(WorkspaceContextHolder.getContext(), slug, request.files());
+            return McpTools.result(jsonMapper.convertValue(SavedDraft.of(saved), Map.class));
         } catch (PracticeFolderInvalidException invalid) {
             throw new ResponseStatusException(
                     HttpStatus.UNPROCESSABLE_CONTENT,
                     "The practice folder is not valid. Nothing was saved. " + problems(invalid),
                     invalid);
+        }
+    }
+
+    /** What the save reports: the practice's configuration fields and codes, and the version to try. */
+    record SavedDraft(
+            String slug,
+            String name,
+            String kind,
+            @Nullable String groupSlug,
+            String state,
+            String versionId,
+            int versionNumber,
+            boolean current,
+            List<Warning> warnings) {
+        record Warning(String file, @Nullable Integer line, @Nullable Integer column, String code, String message) {}
+
+        static SavedDraft of(PracticeDraftDTO saved) {
+            return new SavedDraft(
+                    saved.slug(),
+                    saved.name(),
+                    saved.kind(),
+                    saved.groupSlug(),
+                    saved.state().name(),
+                    saved.versionId(),
+                    saved.versionNumber(),
+                    saved.current(),
+                    saved.warnings().stream()
+                            .map(problem -> new Warning(
+                                    problem.file(), problem.line(), problem.column(), problem.code(), problem.message()))
+                            .toList());
         }
     }
 

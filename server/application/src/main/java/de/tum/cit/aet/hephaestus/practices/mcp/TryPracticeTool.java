@@ -96,14 +96,12 @@ class TryPracticeTool implements McpTool {
         request.remove("waitSeconds");
         var start = McpTools.input(jsonMapper, validator, request, StartTrialRequestDTO.class);
         long workspaceId = WorkspaceContextHolder.getContext().id();
-        UUID id = trials.start(
-                workspaceId,
-                start,
-                SecurityUtils.getCurrentAccountId()
-                        .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED)));
+        long account = SecurityUtils.getCurrentAccountId()
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED));
+        UUID id = trials.start(workspaceId, start, account);
         TrialDTO trial = awaitEnd(workspaceId, id, Instant.now().plusSeconds(waitSeconds));
         return McpTools.result(
-                jsonMapper.convertValue(McpTrial.of(trial, trials.readsOnlyCloudWork(workspaceId, id)), Map.class));
+                jsonMapper.convertValue(McpTrial.of(trial, trials.mayReadFindings(workspaceId, id, account)), Map.class));
     }
 
     private TrialDTO awaitEnd(long workspaceId, UUID id, Instant deadline) {

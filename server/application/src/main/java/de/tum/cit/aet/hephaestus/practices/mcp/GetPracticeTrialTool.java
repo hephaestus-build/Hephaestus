@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.core.mcp.McpTool;
 import de.tum.cit.aet.hephaestus.core.mcp.McpToolFor;
 import de.tum.cit.aet.hephaestus.core.mcp.McpTools;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.core.security.SecurityUtils;
 import de.tum.cit.aet.hephaestus.practices.review.PracticeTrialController;
 import de.tum.cit.aet.hephaestus.practices.review.PracticeTrialService;
 import de.tum.cit.aet.hephaestus.workspace.authorization.RequireAtLeastWorkspaceAdmin;
@@ -69,8 +70,10 @@ class GetPracticeTrialTool implements McpTool {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "The argument trialId is not a trial id.");
         }
         long workspaceId = WorkspaceContextHolder.getContext().id();
+        long account = SecurityUtils.getCurrentAccountId()
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED));
         var trial = trials.get(workspaceId, id);
         return McpTools.result(
-                jsonMapper.convertValue(McpTrial.of(trial, trials.readsOnlyCloudWork(workspaceId, id)), Map.class));
+                jsonMapper.convertValue(McpTrial.of(trial, trials.mayReadFindings(workspaceId, id, account)), Map.class));
     }
 }

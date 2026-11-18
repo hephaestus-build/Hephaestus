@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.practices.mcp;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import de.tum.cit.aet.hephaestus.core.mcp.McpTools;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeState;
 import de.tum.cit.aet.hephaestus.practices.review.dto.TrialCitationDTO;
 import de.tum.cit.aet.hephaestus.practices.review.dto.TrialDTO;
@@ -13,9 +14,12 @@ import de.tum.cit.aet.hephaestus.practices.spi.Severity;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
 
 class McpTrialTest extends BaseUnitTest {
 
@@ -84,5 +88,29 @@ class McpTrialTest extends BaseUnitTest {
         assertThat(output.findingsWithheld()).isFalse();
         assertThat(output.problems()).isNull();
         assertThat(output.withheldReason()).isEqualTo("UNKNOWN");
+    }
+
+    /** The SDK validates each result against the closed output schema, so a field outside it fails the call. */
+    @Test
+    void shouldWriteExactlyTheFieldsThatTheOutputSchemaRequires() {
+        var mapper = McpTools.withNulls(JsonMapper.builder().build());
+        JsonNode schema = mapper.readTree(McpTrial.SCHEMA);
+        JsonNode written = mapper.valueToTree(McpTrial.of(trial(notMet(), null), true));
+
+        assertThat(names(written)).containsExactlyInAnyOrderElementsOf(strings(schema.path("required")));
+        assertThat(names(written.path("problems").path(0)))
+                .containsExactlyInAnyOrderElementsOf(strings(
+                        schema.path("properties").path("problems").path("items").path("required")));
+        assertThat(names(written.path("citations").path(0)))
+                .containsExactlyInAnyOrderElementsOf(strings(
+                        schema.path("properties").path("citations").path("items").path("required")));
+    }
+
+    private static List<String> names(JsonNode node) {
+        return node.properties().stream().map(Map.Entry::getKey).toList();
+    }
+
+    private static List<String> strings(JsonNode array) {
+        return array.valueStream().map(JsonNode::asString).toList();
     }
 }

@@ -2,7 +2,6 @@ package de.tum.cit.aet.hephaestus.practices.review;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AiChoice;
 import de.tum.cit.aet.hephaestus.practices.profile.ProfileOverviewRepository;
 import de.tum.cit.aet.hephaestus.practices.result.ResultRetentionService;
@@ -45,9 +44,6 @@ class PracticeTrialControllerIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     PracticeTrialService trials;
-
-    @Autowired
-    AccountRepository accounts;
 
     Scenario scenario;
 
@@ -214,27 +210,39 @@ class PracticeTrialControllerIntegrationTest extends BaseIntegrationTest {
                 .expectBody(Void.class);
     }
 
-    /** ADR 0110, update of 2026-11-16: an admin's MCP client reads the findings only of work whose people chose Cloud. */
+    /**
+     * ADR 0110, update of 2026-11-16: an admin's MCP client reads the findings only of a trial that the admin started,
+     * and only of work whose people chose Cloud.
+     */
     @Test
-    void shouldLetAnMcpClientReadTheFindingsOnlyOfWorkWhosePeopleChoseCloud() {
-        var developer = scenario.account();
+    void shouldLetAnMcpClientReadTheFindingsOnlyOfItsOwnTrialOfWorkWhosePeopleChoseCloud() {
+        long developer = Objects.requireNonNull(scenario.account().getId());
+        long requester = developer;
         var unattributed = admissions.pending(
                 scenario, Instant.now(), null, "item-version-" + UUID.randomUUID(), ReviewOrigin.TRIAL);
         var attributed = admissions.pending(
-                scenario, Instant.now(), developer.getId(), "item-version-" + UUID.randomUUID(), ReviewOrigin.TRIAL);
+                scenario, Instant.now(), developer, "item-version-" + UUID.randomUUID(), ReviewOrigin.TRIAL);
         long workspaceId = scenario.workspace().getId();
+        UUID trial = attributed.review().getId();
 
-        developer.setAiChoice(AiChoice.IN_HOUSE_ONLY);
-        accounts.saveAndFlush(developer);
-        assertThat(trials.readsOnlyCloudWork(workspaceId, attributed.review().getId()))
-                .isFalse();
+        choose(developer, AiChoice.IN_HOUSE_ONLY);
+        assertThat(trials.mayReadFindings(workspaceId, trial, requester)).isFalse();
 
-        developer.setAiChoice(AiChoice.CLOUD);
-        accounts.saveAndFlush(developer);
-        assertThat(trials.readsOnlyCloudWork(workspaceId, attributed.review().getId()))
-                .isTrue();
+        choose(developer, AiChoice.CLOUD);
+        assertThat(trials.mayReadFindings(workspaceId, trial, requester)).isTrue();
+        // Another admin did not start this trial.
+        assertThat(trials.mayReadFindings(workspaceId, trial, requester + 1)).isFalse();
         // Work that the review attributes to nobody has no one who chose Cloud.
-        assertThat(trials.readsOnlyCloudWork(workspaceId, unattributed.review().getId()))
+        assertThat(trials.mayReadFindings(workspaceId, unattributed.review().getId(), requester))
                 .isFalse();
+        // A review of another origin is no trial.
+        var request = admissions.pending(scenario, Instant.now(), developer);
+        assertThat(trials.mayReadFindings(workspaceId, request.review().getId(), requester))
+                .isFalse();
+    }
+
+    private void choose(long accountId, AiChoice choice) {
+        jdbc.update(
+                "UPDATE account SET ai_choice = ?, ai_choice_at = now() WHERE id = ?", choice.name(), accountId);
     }
 }

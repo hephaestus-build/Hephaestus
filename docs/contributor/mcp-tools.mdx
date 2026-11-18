@@ -65,5 +65,6 @@ From `server/`, run the tests that guard every tool:
 
 The architecture test fails when the tool lacks the admin role or stands for a handler that needs more.
 It also fails when a tool for a mutation does not declare that it writes, or does not carry its handler's audit annotation.
+It also fails when a tool with `needsWriteScope` does not declare that it writes, or stands for a mutation.
 The integration test fails when an output schema leaves an object open or a property optional.
 Your own integration test shows that a client finds the tool when it lists the tools, and that a call returns only contract fields.

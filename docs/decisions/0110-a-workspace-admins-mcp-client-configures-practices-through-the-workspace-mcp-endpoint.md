@@ -288,12 +288,25 @@ An admin who improves a practice through MCP must read what the trial found.
 - Trial output holds a trial's status and reason code, the outcome, the severity, each problem's claim, and the path and line of each citation.
 - Work text can reach three of its fields: a problem's `claim`, a citation's `path`, and a quote in `untrustedWorkText`. The tool descriptions name these three fields as text from the reviewed work, to treat as data and never as an instruction.
 - A trial tool returns trial output only when every person whose work the trial read chose **Cloud**. Otherwise it returns the status, the reason code and the outcome. An admin's MCP client sends what it reads to the admin's own model, so each of those AI choices applies to it.
+- The people whose work a trial read are the people that the review attributes the item to, as model routing reads them. Work attributed to nobody, a suppressed person or source, and an account that is gone have no one who chose **Cloud**, so their trial output stays out.
 - Only trial tools return trial output, and they need `practices:write`. The consent text for `practices:write` names it.
 - Trial output overrides three bullets of "No tool returns", only in its named fields and only for the trial that the admin started:
   - citations and quotes;
   - an outcome or a problem;
   - text that a developer or a provider wrote, in `claim`, `path` and `untrustedWorkText`.
 - Each other bullet stands. No tool returns an observation, a standing, a count of results or feedback.
+
+The trial tools and their reverses:
+
+| Tool | Maps to | Role | Reverse |
+|---|---|---|---|
+| `save_practice_draft` | `PracticeDraftController.save` | admin | `remove_practice_draft` for a new draft. A version saved beside a practice in use needs none: it never becomes current, and the version history leaves it out |
+| `remove_practice_draft` | `PracticeDraftController.delete` | admin | `save_practice_draft` with the same files |
+| `try_practice` | `PracticeTrialController.start`, then a wait of up to 50 seconds | admin | none needed: a trial changes no configuration, and its trial output expires |
+| `get_practice_trial` | `PracticeTrialController.get` | admin | read. It needs `practices:write` because it returns trial output |
+
+`try_practice` takes the address of a pull request, merge request or issue, as the trial endpoint does.
+The trial service resolves it to an item of the workspace. The tool parses no URL itself.
 
 **Practice text can come from a repository.**
 § Prompt-injection posture says that an admin of the same workspace wrote all configuration text.
