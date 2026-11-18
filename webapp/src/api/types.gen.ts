@@ -4942,6 +4942,10 @@ export type ProblemDetail = {
 	jobId?: number;
 	maxAgeSeconds?: number;
 	/**
+	 * Why a practice folder cannot become a practice: each problem with its file and, where known, its line and column
+	 */
+	problems?: Array<PracticeFileProblem>;
+	/**
 	 * The request's trace id, the same as the X-Request-Id header
 	 */
 	requestId?: string;
@@ -18680,6 +18684,16 @@ export type UnsetPracticeRepositoryData = {
 	url: "/workspaces/{workspaceSlug}/practice-repository";
 };
 
+export type UnsetPracticeRepositoryErrors = {
+	/**
+	 * The workspace has no practice repository to unset
+	 */
+	404: ProblemDetail;
+};
+
+export type UnsetPracticeRepositoryError =
+	UnsetPracticeRepositoryErrors[keyof UnsetPracticeRepositoryErrors];
+
 export type UnsetPracticeRepositoryResponses = {
 	/**
 	 * The workspace has no practice repository
@@ -18728,15 +18742,15 @@ export type SetPracticeRepositoryData = {
 	url: "/workspaces/{workspaceSlug}/practice-repository";
 };
 
-export type SetPracticeRepositoryResponses = {
+export type SetPracticeRepositoryErrors = {
 	/**
-	 * OK
+	 * The repository is not one that the workspace monitors, or the directory is not a relative path
 	 */
-	200: PracticeRepository;
+	400: ProblemDetail;
 };
 
-export type SetPracticeRepositoryResponse =
-	SetPracticeRepositoryResponses[keyof SetPracticeRepositoryResponses];
+export type SetPracticeRepositoryError =
+	SetPracticeRepositoryErrors[keyof SetPracticeRepositoryErrors];
 
 export type ChangePracticeEditedInData = {
 	body: ChangePracticeEditedInRequest;
@@ -18750,6 +18764,20 @@ export type ChangePracticeEditedInData = {
 	query?: never;
 	url: "/workspaces/{workspaceSlug}/practice-repository/practices/{practiceSlug}/edited-in";
 };
+
+export type ChangePracticeEditedInErrors = {
+	/**
+	 * No practice repository, it cannot be read now, its default branch has no folder for this practice, or the setting changed meanwhile
+	 */
+	409: ProblemDetail;
+	/**
+	 * The practice folder is not valid: problems lists each problem
+	 */
+	422: ProblemDetail;
+};
+
+export type ChangePracticeEditedInError =
+	ChangePracticeEditedInErrors[keyof ChangePracticeEditedInErrors];
 
 export type ChangePracticeEditedInResponses = {
 	/**
