@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.core.webapp;
 
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.allOf;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.not;
@@ -20,6 +21,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
 import org.springframework.test.json.JsonCompareMode;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import org.springframework.test.web.servlet.MockMvc;
@@ -214,5 +216,75 @@ class WebAppIntegrationTest extends RealAuthIntegrationTest {
                 .andExpect(header().string("Cache-Control", "no-store"));
         mvc().perform(onHost(get("/w/acme"), "hephaestus.build"))
                 .andExpect(header().string("Location", "https://acme.hephaestus.build/"));
+    }
+
+    @Test
+    void shouldSendTheHeaderSetWhenTheHostRulesAnswerThemselves() throws Exception {
+        // A real server, so the 404 also passes the container's error dispatch. The referrer policy follows the
+        // request: `/` is the web app's, and the API's path is not.
+        for (String[] request : new String[][] {
+            {"acme.hephaestus.build", "/api/identity-providers", "strict-origin-when-cross-origin"},
+            {"www.hephaestus.build", "/", "no-referrer"}
+        }) {
+            assertHeaderSet(rootRequest(HttpMethod.GET, request[0], request[1])
+                            .exchange()
+                            .expectStatus()
+                            .isNotFound())
+                    .expectHeader()
+                    .valueEquals("Referrer-Policy", request[2])
+                    .expectBody(Void.class);
+        }
+        assertHeaderSet(rootRequest(HttpMethod.GET, "hephaestus.build", "/w/acme/practices")
+                        .exchange()
+                        .expectStatus()
+                        .isPermanentRedirect())
+                .expectHeader()
+                .valueEquals("Referrer-Policy", "no-referrer")
+                .expectHeader()
+                .valueEquals("Location", "https://acme.hephaestus.build/practices")
+                .expectBody(Void.class);
+        // HSTS goes only on a secure request, as on every other response.
+        mvc().perform(onHost(get("/api/identity-providers").secure(true), "acme.hephaestus.build"))
+                .andExpect(status().isNotFound())
+                .andExpect(header().string("Strict-Transport-Security", containsString("max-age=2592000")));
+    }
+
+    @Test
+    void shouldMoveAWorkspacePathOnHeadAndNeverMoveAWrite() {
+        rootRequest(HttpMethod.HEAD, "hephaestus.build", "/w/acme/practices")
+                .exchange()
+                .expectStatus()
+                .isPermanentRedirect()
+                .expectHeader()
+                .valueEquals("Location", "https://acme.hephaestus.build/practices")
+                .expectBody(Void.class);
+        // A 308 keeps the method and body, so a moved POST would replay a write on another origin.
+        rootRequest(HttpMethod.POST, "hephaestus.build", "/w/acme/practices")
+                .exchange()
+                .expectStatus()
+                .is4xxClientError()
+                .expectHeader()
+                .doesNotExist("Location")
+                .expectBody(Void.class);
+    }
+
+    private WebTestClient.RequestHeadersSpec<?> rootRequest(HttpMethod method, String host, String path) {
+        return webTestClient
+                .method(method)
+                .uri(ApiWebTestClient.root(application, path))
+                .header(HttpHeaders.HOST, host);
+    }
+
+    private static WebTestClient.ResponseSpec assertHeaderSet(WebTestClient.ResponseSpec response) {
+        return response.expectHeader()
+                .value("Content-Security-Policy", value -> assertThat(value, containsString("script-src 'self';")))
+                .expectHeader()
+                .valueEquals("X-Frame-Options", "DENY")
+                .expectHeader()
+                .valueEquals("X-Content-Type-Options", "nosniff")
+                .expectHeader()
+                .valueEquals("Cross-Origin-Opener-Policy", "same-origin")
+                .expectHeader()
+                .value("Permissions-Policy", value -> assertThat(value, containsString("camera=()")));
     }
 }
