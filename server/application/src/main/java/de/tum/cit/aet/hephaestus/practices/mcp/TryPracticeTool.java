@@ -100,8 +100,8 @@ class TryPracticeTool implements McpTool {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED));
         UUID id = trials.start(workspaceId, start, account);
         TrialDTO trial = awaitEnd(workspaceId, id, Instant.now().plusSeconds(waitSeconds));
-        return McpTools.result(jsonMapper.convertValue(
-                McpTrial.of(trial, trials.mayReadDetail(workspaceId, id, account)), Map.class));
+        return McpTools.result(
+                jsonMapper.convertValue(McpTrial.of(trial, trials.mayReadDetail(workspaceId, id, account)), Map.class));
     }
 
     private TrialDTO awaitEnd(long workspaceId, UUID id, Instant deadline) {
