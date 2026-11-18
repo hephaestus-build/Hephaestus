@@ -9,6 +9,13 @@ function requestUrl(input: string | URL | Request): string {
 	return input instanceof URL ? input.href : input.url;
 }
 
+/** Answers each URL with a response of its own, such as one whose body records that it was cancelled. */
+function mockAnswers(answers: Record<string, () => Response>) {
+	vi.mocked(globalThis.fetch).mockImplementation(async (input) =>
+		(answers[requestUrl(input)] ?? (() => new Response(null, { status: 404 })))(),
+	);
+}
+
 describe("resolveLegalContent", () => {
 	let requestedUrls: string[] = [];
 
@@ -55,6 +62,26 @@ describe("resolveLegalContent", () => {
 			"/legal-overrides/imprint.md",
 			"/legal/_disclaimer/imprint.md",
 		]);
+	});
+
+	it("cancels the body of a candidate it does not read, so its request ends", async () => {
+		let cancelled = false;
+		const answers: Record<string, () => Response> = {
+			"/legal-overrides/imprint.md": () =>
+				new Response(
+					new ReadableStream({
+						cancel: () => {
+							cancelled = true;
+						},
+					}),
+					{ status: 404 },
+				),
+			"/legal/_disclaimer/imprint.md": () => new Response("# fallback", { status: 200 }),
+		};
+		mockAnswers(answers);
+		const resolved = await resolveLegalContent("imprint");
+		expect(resolved.source).toBe("disclaimer");
+		expect(cancelled).toBe(true);
 	});
 
 	it("rejects SPA-fallback HTML responses so the cascade continues", async () => {
