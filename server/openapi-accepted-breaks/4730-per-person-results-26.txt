@@ -1,0 +1,3 @@
+# #4730: Practices across the workspace hides counts of fewer than 3 people (ADR 0112), so a hidden
+# count is null.
+in API GET /workspaces/{workspaceSlug}/practices/workspace-overview the response property `groups/items/practices/items/split/developers` became nullable for the status `200` (shared schema: `WorkspaceSplit`, also at `groups/items/split/developers`)
