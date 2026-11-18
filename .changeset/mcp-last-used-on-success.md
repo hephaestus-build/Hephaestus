@@ -1,4 +1,5 @@
 ---
+"hephaestus": patch
 ---
 
-No release note of its own: this refines the MCP client's "last used" time that `mcp-consent-with-passkey.md` introduces in the same release, and that note already describes the refined rule.
+An MCP client's "last used" time in workspace settings now changes only when the client signs in, refreshes its access, or makes a call that succeeds. A call that the passkey policy, the client's role, or the tool refuses no longer counts as use, so it no longer keeps an unused client's access alive.
