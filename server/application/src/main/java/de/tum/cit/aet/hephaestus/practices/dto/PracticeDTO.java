@@ -1,7 +1,7 @@
 package de.tum.cit.aet.hephaestus.practices.dto;
 
-import de.tum.cit.aet.hephaestus.practices.model.PracticeEditedIn;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import de.tum.cit.aet.hephaestus.practices.model.PracticeEditedIn;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
 import org.jspecify.annotations.Nullable;

@@ -11,8 +11,8 @@ import de.tum.cit.aet.hephaestus.practices.catalog.CatalogPracticeDocument;
 import de.tum.cit.aet.hephaestus.practices.dto.CreatePracticeRequestDTO;
 import de.tum.cit.aet.hephaestus.practices.dto.UpdatePracticeRequestDTO;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
-import de.tum.cit.aet.hephaestus.practices.model.PracticeGroup;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeEditedIn;
+import de.tum.cit.aet.hephaestus.practices.model.PracticeGroup;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeState;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeVersion;
 import de.tum.cit.aet.hephaestus.practices.review.WorkspaceReviewDefaultsProvider;
@@ -309,10 +309,14 @@ public class PracticeService {
         var before = PracticeDefinitionSnapshot.of(practice, mapper);
         if (!practice.getCurrentVersion().getDefinition().equals(mapper.valueToTree(document.definition())))
             versions.append(
-                    practice, document.definition(), SecurityUtils.getCurrentAccountId().orElse(null), commit);
+                    practice,
+                    document.definition(),
+                    SecurityUtils.getCurrentAccountId().orElse(null),
+                    commit);
         var group = document.groupSlug() == null
                 ? null
-                : groups.findByWorkspaceIdAndSlug(ctx.id(), document.groupSlug()).orElse(null);
+                : groups.findByWorkspaceIdAndSlug(ctx.id(), document.groupSlug())
+                        .orElse(null);
         if (!Objects.equals(
                 practice.getGroup() == null ? null : practice.getGroup().getId(),
                 group == null ? null : group.getId())) {

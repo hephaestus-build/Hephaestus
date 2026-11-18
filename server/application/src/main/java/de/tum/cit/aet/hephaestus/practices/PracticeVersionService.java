@@ -63,9 +63,8 @@ public class PracticeVersionService {
         int number = versions.findFirstByPracticeIdOrderByNumberDesc(locked.getId())
                 .map(version -> version.getNumber() + 1)
                 .orElse(1);
-        PracticeVersion version = versions.saveAndFlush(
-                new PracticeVersion(
-                        locked, number, mapper.valueToTree(definition), createdByAccountId, false, sourceCommit));
+        PracticeVersion version = versions.saveAndFlush(new PracticeVersion(
+                locked, number, mapper.valueToTree(definition), createdByAccountId, false, sourceCommit));
         locked.setCurrentVersion(version);
         practice.setCurrentVersion(version);
         practices.save(locked);

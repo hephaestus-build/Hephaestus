@@ -10,7 +10,9 @@ import org.jspecify.annotations.Nullable;
  * @param defaultBranch the branch whose head holds the practices; null until the provider has named it
  */
 public record PracticeRepositoryDTO(
-        @Schema(requiredMode = Schema.RequiredMode.REQUIRED, type = "string") String repositoryItemId,
+        @Schema(requiredMode = Schema.RequiredMode.REQUIRED, type = "string")
+        String repositoryItemId,
+
         @Nullable String nameWithOwner,
         @Nullable String defaultBranch,
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) String directory) {}
