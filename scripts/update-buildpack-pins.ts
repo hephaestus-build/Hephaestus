@@ -349,9 +349,12 @@ async function main(): Promise<void> {
 				body,
 			])
 		: run("gh", ["pr", "edit", existing, "--repo", repository, "--title", title, "--body", body]));
-	// GitHub holds the pull_request runs of a GITHUB_TOKEN push for approval, but it starts a workflow_dispatch
-	// run at once. That run reports `CI Status Gate`, the one required context, on the head commit.
-	await run("gh", ["workflow", "run", "cicd.yml", "--repo", repository, "--ref", BRANCH]);
+	// The workflow's dispatch-ci job starts CI/CD on the branch: GitHub holds the pull_request runs of a
+	// GITHUB_TOKEN push for approval. That job, not this one, holds actions: write.
+	const githubOutput = process.env.GITHUB_OUTPUT;
+	if (isSet(githubOutput)) {
+		await writeFile(githubOutput, "proposed=true\n", { flag: "a" });
+	}
 	process.stdout.write(`Proposed JRE ${jre.to.version} in ${commit.description}.\n`);
 	const summaryPath = process.env.GITHUB_STEP_SUMMARY;
 	if (isSet(summaryPath)) {
