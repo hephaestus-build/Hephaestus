@@ -170,7 +170,8 @@ class WebAppIntegrationTest extends RealAuthIntegrationTest {
                 .andExpect(jsonPath("$.apexOrigin").value("https://hephaestus.build"))
                 .andExpect(jsonPath("$.baseDomain").value("hephaestus.build"))
                 .andExpect(jsonPath("$.workspaceSubdomainsEnabled").value(true))
-                .andExpect(jsonPath("$.version").value("0.0.0-development"));
+                // A build from source is no release, so the document names none.
+                .andExpect(jsonPath("$.version").value(""));
     }
 
     @Test

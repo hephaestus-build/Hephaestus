@@ -25,6 +25,9 @@ import org.springframework.web.bind.annotation.RestController;
 @ConditionalOnServerRole
 class WebAppDiscoveryController {
 
+    /** The version of a build from source ({@code server/build.gradle.kts}), which is no release. */
+    private static final String DEVELOPMENT_VERSION = "0.0.0-development";
+
     /** A single https origin, the only kind of host that a {@code Canonical} line may name (RFC 9116 § 2.5.2). */
     private static final Pattern SINGLE_HTTPS_ORIGIN = Pattern.compile("https://[^\\s/]+/?");
 
@@ -42,7 +45,9 @@ class WebAppDiscoveryController {
             Clock clock) {
         this.properties = properties;
         this.workspaceSubdomains = workspaceSubdomains;
-        this.version = version;
+        // The document names the release that this server runs, and none for a build from source. The browser extension
+        // refuses a server whose release is older than it supports, and 0.0.0 would read as one.
+        this.version = DEVELOPMENT_VERSION.equals(version) ? "" : version;
         this.clientUrl = clientUrl;
         this.clock = clock;
     }
