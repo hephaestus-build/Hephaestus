@@ -1,4 +1,4 @@
-import type { ReactElement, ReactNode } from "react";
+import type { ReactElement, ReactNode, Ref } from "react";
 
 import { cn } from "cn";
 import { DrawerDescription, DrawerTitle } from "@/components/ui/drawer";
@@ -43,6 +43,11 @@ export interface LevelHeaderProps {
 	aside?: ReactElement;
 	/** The record is on its way: its name's shape stands in, and the drawer is named by what loads. */
 	loading?: boolean;
+	/**
+	 * For a level that moves focus to its title when its content is replaced under the reader. The
+	 * title then takes focus from code without joining the Tab order.
+	 */
+	titleRef?: Ref<HTMLHeadingElement>;
 }
 
 /**
@@ -61,6 +66,7 @@ export function LevelHeader({
 	info,
 	aside,
 	loading = false,
+	titleRef,
 }: LevelHeaderProps) {
 	return (
 		// The dismiss sits at the start of the path's row, so the title and its standing line up with
@@ -75,6 +81,9 @@ export function LevelHeader({
 					{/* A long name wraps to three lines at most and ends in an ellipsis there; the whole
 					    name is its tooltip. */}
 					<DrawerTitle
+						ref={titleRef}
+						// Out of the Tab order: only code moves focus here, after Edit in Hephaestus opens the editor.
+						tabIndex={titleRef === undefined ? undefined : -1}
 						title={!loading && typeof title === "string" ? title : undefined}
 						className={cn(
 							"line-clamp-3 min-w-0 text-2xl font-semibold tracking-tight break-words",

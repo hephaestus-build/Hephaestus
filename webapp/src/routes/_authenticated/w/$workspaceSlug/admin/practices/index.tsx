@@ -69,6 +69,7 @@ import {
 	type LibraryState,
 	WorkspacePracticeCatalog,
 } from "@/components/admin/practices/WorkspacePracticeCatalog";
+import { WorkspacePracticeEditedInNote } from "@/components/admin/practices/WorkspacePracticeEditedInNote";
 import { WorkspacePracticeForm } from "@/components/admin/practices/WorkspacePracticeForm";
 import { WorkspacePracticeFormLevel } from "@/components/admin/practices/WorkspacePracticeFormLevel";
 import {
@@ -76,6 +77,7 @@ import {
 	type WorkspacePracticeState,
 } from "@/components/admin/practices/WorkspacePracticePanel";
 import { WorkspaceResetToCatalogDialog } from "@/components/admin/practices/WorkspaceResetToCatalogDialog";
+import { ConfirmAccessDialog } from "@/components/auth/ConfirmAccessDialog";
 import { QueryErrorAlert, queryErrorIsRetryable } from "@/components/common/QueryErrorAlert";
 import {
 	type DetailStackEntry,
@@ -106,6 +108,7 @@ import { Button } from "@/components/ui/button";
 import { DrawerBody } from "@/components/ui/drawer";
 import { practiceCatalogStructureScope } from "@/hooks/practice-catalog-cache";
 import { refreshPracticeGuidance } from "@/hooks/practice-guidance-cache";
+import { useEditInHephaestus } from "@/hooks/use-edit-in-hephaestus";
 import { usePracticeCatalogMutations } from "@/hooks/use-practice-catalog-mutations";
 import { usePracticeCatalogReset } from "@/hooks/use-practice-catalog-reset";
 import { usePracticeEditor } from "@/hooks/use-practice-editor";
@@ -338,6 +341,12 @@ function PracticeCatalogRoute() {
 	const groups = groupsQuery.data;
 	const practices = practicesQuery.data;
 	const definitionOptions = definitionOptionsQuery.data;
+	// Ask for the practice repository only where a practice edited there can be on screen.
+	const practiceRepository = useEditInHephaestus(
+		workspaceSlug,
+		practices?.some((practice) => practice.editedIn === "REPOSITORY") === true ||
+			levelQueries.some((query) => workspacePracticeAt(query)?.editedIn === "REPOSITORY"),
+	);
 	/** The groups the editor offers. A hidden group still holds practices but is not a destination. */
 	const editableGroups = groupsQuery.data?.filter((group) => group.shownToDevelopers);
 
@@ -557,6 +566,160 @@ function PracticeCatalogRoute() {
 		);
 	}
 
+	/** The editor level: it creates or edits a practice, or says why a practice edited in the practice repository is read-only. */
+	const renderEditorLevel = (
+		entry: LevelEntry,
+		level: DetailDrawerLevel,
+		query: (typeof levelQueries)[number] | undefined,
+	): ReactNode => {
+		const creating = entry.kind === "practice-new";
+		const editing = creating ? undefined : workspacePracticeAt(query);
+		// The form saves and then leaves. It must reject on failure, or the unsaved-changes
+		// guard lifts and the draft goes with the level.
+		const saved = async (work: Promise<unknown>) => {
+			await work;
+			stackControls.close(level.depth);
+		};
+		const conflict =
+			!creating && conflictSlug === entry.id && editing !== undefined ? (
+				<Alert variant="warning" role="alert">
+					<AlertTitle>Someone saved a newer version</AlertTitle>
+					<AlertDescription>
+						<p>
+							Nothing was saved. Your changes are still here, so copy what you want to keep. Loading
+							version {editing.currentVersion.number} replaces them.
+						</p>
+						<Button
+							size="sm"
+							variant="outline"
+							className="mt-2"
+							onClick={() => {
+								setConflictSlug(null);
+								setEditorGeneration((generation) => generation + 1);
+							}}
+						>
+							Load version {editing.currentVersion.number}
+						</Button>
+					</AlertDescription>
+				</Alert>
+			) : undefined;
+		const update = async (
+			practice: Practice,
+			request: UpdatePracticeRequest,
+			groupSlug: string | null,
+		) => {
+			try {
+				await editor.update(practice, request, groupSlug);
+			} catch (error) {
+				if (problemStatusOf(error) === 409) {
+					setConflictSlug(practice.slug);
+					void query?.refetch();
+				}
+				throw error;
+			}
+		};
+		// A refusal hides the form even over cached data. Any other failure leaves a loaded draft
+		// open beside the retry.
+		const failure = readFailure([groupsQuery, definitionOptionsQuery, query]);
+		const editInHephaestus = creating
+			? undefined
+			: practiceRepository.control(detailStackKey(entry), entry.id);
+		let body: ReactNode;
+		if (
+			failure?.refused !== true &&
+			editing?.editedIn === "REPOSITORY" &&
+			editInHephaestus !== undefined
+		) {
+			// A link or an old address can open the editor for a practice that its folder in the
+			// practice repository holds. The server refuses every save, so the level says why instead.
+			body = (
+				<DrawerBody>
+					<WorkspacePracticeEditedInNote
+						repositoryName={editInHephaestus.repositoryName}
+						sourceCommit={editing.currentVersion.sourceCommit}
+						onEditInHephaestus={() => editInHephaestus.onConfirmingChange(true)}
+					/>
+				</DrawerBody>
+			);
+		} else if (
+			failure?.refused !== true &&
+			editableGroups !== undefined &&
+			definitionOptions !== undefined &&
+			(creating || editing !== undefined)
+		) {
+			body = (
+				// Split on the loaded practice rather than on `creating`: the guard above has already
+				// sent every other way of having none elsewhere, so no practice here means this level is
+				// writing a new one.
+				<WorkspacePracticeForm
+					key={`${entry.id}:${editorGeneration}`}
+					{...(editing === undefined
+						? {
+								mode: "create" as const,
+								onSubmit: async (request) => saved(editor.create(request)),
+							}
+						: {
+								mode: "edit" as const,
+								initialData: editing,
+								notice: conflict,
+								onSubmit: async (request, groupSlug) => saved(update(editing, request, groupSlug)),
+							})}
+					workspaceSlug={workspaceSlug}
+					groups={editableGroups}
+					definitionOptions={definitionOptions}
+					isPending={editor.isPending}
+					cancel={<LevelCancel />}
+					refreshAlert={
+						failure === undefined ? undefined : (
+							<QueryErrorAlert
+								error={failure.error}
+								title="We could not refresh the practice editor"
+								pending={failure.pending}
+								onRetry={failure.retry}
+							/>
+						)
+					}
+				/>
+			);
+		} else if (failure === undefined) {
+			body = (
+				<DrawerBody>
+					<PracticeDefinitionSkeleton />
+				</DrawerBody>
+			);
+		} else {
+			body = (
+				<DrawerBody>
+					<QueryErrorAlert
+						error={failure.error}
+						title="We could not load the practice editor"
+						pending={failure.pending}
+						onRetry={failure.retry}
+					/>
+				</DrawerBody>
+			);
+		}
+		return (
+			<WorkspacePracticeFormLevel
+				nested={level.nested}
+				path={pathAt(level.depth)}
+				creating={creating}
+				editedInRepositoryName={
+					failure?.refused !== true && editing?.editedIn === "REPOSITORY"
+						? currentDefinition(editing).name
+						: undefined
+				}
+				editInHephaestus={
+					editInHephaestus && editing
+						? { practiceName: currentDefinition(editing).name, control: editInHephaestus }
+						: undefined
+				}
+			>
+				{body}
+			</WorkspacePracticeFormLevel>
+		);
+	};
+
 	const renderLevel = (entry: LevelEntry, level: DetailDrawerLevel): ReactNode => {
 		// `levelQueries` is derived from the same stack this callback walks, so index and depth
 		// agree. A level read before its query exists is a frame between two states rather than a
@@ -648,128 +811,12 @@ function PracticeCatalogRoute() {
 					path={pathAt(level.depth)}
 					state={state}
 					onResetToCatalog={() => catalogReset.open({ kind: "practice", slug: entry.id })}
+					editInHephaestus={practiceRepository.control(detailStackKey(entry), entry.id)}
 				/>
 			);
 		}
 		if (entry.kind === "practice-edit" || entry.kind === "practice-new") {
-			const creating = entry.kind === "practice-new";
-			const editing = creating ? undefined : workspacePracticeAt(query);
-			// The form saves and then leaves. It must reject on failure, or the unsaved-changes
-			// guard lifts and the draft goes with the level.
-			const saved = async (work: Promise<unknown>) => {
-				await work;
-				stackControls.close(level.depth);
-			};
-			const conflict =
-				!creating && conflictSlug === entry.id && editing !== undefined ? (
-					<Alert variant="warning" role="alert">
-						<AlertTitle>Someone saved a newer version</AlertTitle>
-						<AlertDescription>
-							<p>
-								Nothing was saved. Your changes are still here, so copy what you want to keep.
-								Loading version {editing.currentVersion.number} replaces them.
-							</p>
-							<Button
-								size="sm"
-								variant="outline"
-								className="mt-2"
-								onClick={() => {
-									setConflictSlug(null);
-									setEditorGeneration((generation) => generation + 1);
-								}}
-							>
-								Load version {editing.currentVersion.number}
-							</Button>
-						</AlertDescription>
-					</Alert>
-				) : undefined;
-			const update = async (
-				practice: Practice,
-				request: UpdatePracticeRequest,
-				groupSlug: string | null,
-			) => {
-				try {
-					await editor.update(practice, request, groupSlug);
-				} catch (error) {
-					if (problemStatusOf(error) === 409) {
-						setConflictSlug(practice.slug);
-						void query?.refetch();
-					}
-					throw error;
-				}
-			};
-			// A refusal hides the form even over cached data. Any other failure leaves a loaded draft
-			// open beside the retry.
-			const failure = readFailure([groupsQuery, definitionOptionsQuery, query]);
-			let body: ReactNode;
-			if (
-				failure?.refused !== true &&
-				editableGroups !== undefined &&
-				definitionOptions !== undefined &&
-				(creating || editing !== undefined)
-			) {
-				body = (
-					// Split on the loaded practice rather than on `creating`: the guard above has already
-					// sent every other way of having none elsewhere, so no practice here means this level is
-					// writing a new one.
-					<WorkspacePracticeForm
-						key={`${entry.id}:${editorGeneration}`}
-						{...(editing === undefined
-							? {
-									mode: "create" as const,
-									onSubmit: async (request) => saved(editor.create(request)),
-								}
-							: {
-									mode: "edit" as const,
-									initialData: editing,
-									notice: conflict,
-									onSubmit: async (request, groupSlug) =>
-										saved(update(editing, request, groupSlug)),
-								})}
-						workspaceSlug={workspaceSlug}
-						groups={editableGroups}
-						definitionOptions={definitionOptions}
-						isPending={editor.isPending}
-						cancel={<LevelCancel />}
-						refreshAlert={
-							failure === undefined ? undefined : (
-								<QueryErrorAlert
-									error={failure.error}
-									title="We could not refresh the practice editor"
-									pending={failure.pending}
-									onRetry={failure.retry}
-								/>
-							)
-						}
-					/>
-				);
-			} else if (failure === undefined) {
-				body = (
-					<DrawerBody>
-						<PracticeDefinitionSkeleton />
-					</DrawerBody>
-				);
-			} else {
-				body = (
-					<DrawerBody>
-						<QueryErrorAlert
-							error={failure.error}
-							title="We could not load the practice editor"
-							pending={failure.pending}
-							onRetry={failure.retry}
-						/>
-					</DrawerBody>
-				);
-			}
-			return (
-				<WorkspacePracticeFormLevel
-					nested={level.nested}
-					path={pathAt(level.depth)}
-					creating={creating}
-				>
-					{body}
-				</WorkspacePracticeFormLevel>
-			);
+			return renderEditorLevel(entry, level, query);
 		}
 		const catalogPreview = practiceAdoptionAt(query);
 		const failure = readFailure([query, definitionOptionsQuery]);
@@ -935,6 +982,7 @@ function PracticeCatalogRoute() {
 				stale={catalogReset.stale}
 				onConfirm={catalogReset.confirm}
 			/>
+			<ConfirmAccessDialog {...practiceRepository.confirmation} />
 		</PageLayout>
 	);
 }

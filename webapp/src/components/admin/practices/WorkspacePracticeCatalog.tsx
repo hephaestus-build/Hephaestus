@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { GripVertical, Library, ListChecks, MoreHorizontal, Plus } from "lucide-react";
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useId, useState } from "react";
 
 import { cn } from "cn";
 import type { Practice, PracticeGroup } from "@/api/types.gen";
@@ -34,6 +34,7 @@ import { DetailStackLink } from "@/components/layout/detail-drawer/DetailStackLi
 import { Section } from "@/components/layout/Section";
 import { FeedbackModeBadge } from "@/components/practice-vocabulary/FeedbackModeBadge";
 import { FeedbackModeSourceNote } from "@/components/practice-vocabulary/FeedbackModeSourceNote";
+import { PRACTICE_EDITED_IN_DEFS } from "@/components/practice-vocabulary/practice-edited-in-defs";
 import { PROFILE_VISIBILITY_DEFS } from "@/components/practice-vocabulary/profile-visibility-defs";
 import { WorkTypeLabel } from "@/components/practice-vocabulary/WorkTypeLabel";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -73,6 +74,7 @@ interface PracticeRow {
 	position: number;
 	name: string;
 	practice: Practice;
+	groupLocked: boolean;
 }
 
 export interface PracticeCatalogPendingState {
@@ -139,6 +141,8 @@ export function WorkspacePracticeCatalog({
 		position: practice.position,
 		name: currentDefinition(practice).name,
 		practice,
+		// Its folder in the practice repository holds its group; its position stays the workspace's.
+		groupLocked: practice.editedIn === "REPOSITORY",
 	}));
 	const visiblePracticeSlugs = new Set(
 		practices
@@ -508,6 +512,13 @@ function PracticeActions({
 	onDelete: (practice: Practice) => void;
 	onDownload: (practice: Practice) => void;
 }) {
+	// The server refuses to change the definition, group or existence of a practice edited in the
+	// practice repository. Edit, Move to another group and Delete stay in the menu, unavailable, and
+	// each names the label at the top of the menu as its description, so a screen reader announces
+	// the reason on the item itself. The tree locks the group, which is what disables Move to.
+	const editedInRepository = practice.editedIn === "REPOSITORY";
+	const reasonId = useId();
+	const unavailableReason = editedInRepository ? reasonId : undefined;
 	return (
 		<DropdownMenu>
 			<DropdownMenuTrigger
@@ -523,9 +534,18 @@ function PracticeActions({
 				}
 			/>
 			<DropdownMenuContent align="end">
-				<DropdownMenuItem render={<DetailStackLink entry={practiceFormLevel(practice.slug)} />}>
-					Edit practice
-				</DropdownMenuItem>
+				{editedInRepository ? (
+					<DropdownMenuGroup>
+						<DropdownMenuLabel id={reasonId}>Edited in the practice repository</DropdownMenuLabel>
+						<DropdownMenuItem disabled aria-describedby={unavailableReason}>
+							Edit practice
+						</DropdownMenuItem>
+					</DropdownMenuGroup>
+				) : (
+					<DropdownMenuItem render={<DetailStackLink entry={practiceFormLevel(practice.slug)} />}>
+						Edit practice
+					</DropdownMenuItem>
+				)}
 				<DropdownMenuItem onClick={() => onDownload(practice)}>Download as files</DropdownMenuItem>
 				<DropdownMenuSeparator />
 				<DropdownMenuItem
@@ -561,6 +581,7 @@ function PracticeActions({
 						<DropdownMenuRadioItem
 							value={UNASSIGNED_CATALOG_BUCKET}
 							disabled={move.currentGroupSlug !== null && !move.canMoveTo(null)}
+							aria-describedby={move.currentGroupSlug === null ? undefined : unavailableReason}
 							closeOnClick
 						>
 							Unassigned
@@ -570,6 +591,9 @@ function PracticeActions({
 								key={group.slug}
 								value={group.slug}
 								disabled={move.currentGroupSlug !== group.slug && !move.canMoveTo(group.slug)}
+								aria-describedby={
+									move.currentGroupSlug === group.slug ? undefined : unavailableReason
+								}
 								closeOnClick
 							>
 								{group.name}
@@ -580,7 +604,8 @@ function PracticeActions({
 				<DropdownMenuSeparator />
 				<DropdownMenuItem
 					variant="destructive"
-					disabled={pending}
+					disabled={pending || editedInRepository}
+					aria-describedby={unavailableReason}
 					onClick={() => onDelete(practice)}
 				>
 					Delete practice
@@ -621,6 +646,9 @@ function PracticeRowDetails({
 						<>
 							<FeedbackModeBadge feedbackMode={practice.feedbackMode.effective} />
 							<WorkspaceCatalogOriginBadge origin={practice.catalogOrigin} kind="practice" />
+							{practice.editedIn === "REPOSITORY" && (
+								<StatusBadge def={PRACTICE_EDITED_IN_DEFS.REPOSITORY} />
+							)}
 						</>
 					}
 				/>

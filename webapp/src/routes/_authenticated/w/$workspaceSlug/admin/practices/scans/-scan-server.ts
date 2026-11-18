@@ -165,6 +165,7 @@ export function wirePractice(
 			createdBy: toWire(ADA),
 			changed: [],
 			reviewChanged: false,
+			sourceCommit: null,
 		},
 		feedbackMode: { effective: "OFF", override: "OFF", source: "WORKSPACE" },
 		catalogOrigin: { catalogSlug: null, localEdits: [], offeredDigest: null, state: "YOURS" },
