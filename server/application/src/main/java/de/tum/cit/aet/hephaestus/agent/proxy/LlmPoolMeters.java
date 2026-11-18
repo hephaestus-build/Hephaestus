@@ -176,6 +176,7 @@ final class LlmPoolMeters {
             }
         }
         abandonedCounter(slug, AgentRunBand.BACKGROUND, INSTANCE_CALL_IN_FLIGHT);
+        waitTimer(slug, AgentRunBand.BACKGROUND, INSTANCE_CALL_IN_FLIGHT);
         for (String reason : CANCEL_REASONS) cancelledCounter(slug, reason);
         AtomicLong coolingUntil = new AtomicLong(System.nanoTime());
         Gauge.builder(

@@ -728,6 +728,41 @@ class LlmCallPermitsIntegrationTest extends BaseIntegrationTest {
         assertThat(rows.countActive(pool)).isEqualTo(1);
     }
 
+    /** Operators alert on this reason, so a call without a workspace that finds another one in flight counts it. */
+    @Test
+    void shouldCountACallWithoutAWorkspaceThatFindsAnotherInFlight() {
+        long pool = pool(3);
+        try (var inFlight = Objects.requireNonNull(workerB.acquire(
+                pool,
+                AgentRunBand.BACKGROUND,
+                new LlmCallPermits.Caller(null, UUID.randomUUID(), 1, null),
+                () -> false,
+                laterThanAnyTest()))) {
+            assertThat(inFlight.isRevoked()).isFalse();
+
+            assertThat(workerA.acquire(
+                            pool,
+                            AgentRunBand.BACKGROUND,
+                            new LlmCallPermits.Caller(null, UUID.randomUUID(), 1, null),
+                            () -> false,
+                            laterThanAnyTest()))
+                    .isNull();
+
+            assertThat(workerAMeters
+                            .get(AgentMetrics.LLM_POOL_PERMIT_ABANDONED)
+                            .tags(
+                                    "pool",
+                                    pools.findById(pool).orElseThrow().getSlug(),
+                                    "band",
+                                    LlmPoolMeters.tag(AgentRunBand.BACKGROUND),
+                                    "reason",
+                                    LlmPoolMeters.INSTANCE_CALL_IN_FLIGHT)
+                            .counter()
+                            .count())
+                    .isEqualTo(1);
+        }
+    }
+
     @Test
     void shouldGrantTheCallsBehindADraftThatWaitsForTheOneDraftInFlight() {
         long pool = pool(3);

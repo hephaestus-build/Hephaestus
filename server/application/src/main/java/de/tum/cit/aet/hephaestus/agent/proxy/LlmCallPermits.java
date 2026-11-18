@@ -292,7 +292,7 @@ public class LlmCallPermits {
             if (!handedOff && admitted != null) admitted.close();
             if (!handedOff && admitted == null) {
                 meters.pool(poolSlug).abandoned(band, stopped);
-                meters.pool(poolSlug).waited(band, "capacity", System.nanoTime() - began);
+                meters.pool(poolSlug).waited(band, stopped, System.nanoTime() - began);
                 try {
                     // No transport can have opened before handoff, including an uncertain grant commit.
                     pendingRelease.put(id, poolId);
