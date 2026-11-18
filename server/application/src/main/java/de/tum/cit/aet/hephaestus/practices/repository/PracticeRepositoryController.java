@@ -43,7 +43,7 @@ public class PracticeRepositoryController {
     @GetMapping
     @Operation(operationId = "getPracticeRepository", summary = "Read the practice repository")
     @ApiResponse(responseCode = "200", description = "The practice repository")
-    @ApiResponse(responseCode = "204", description = "The workspace has no practice repository")
+    @ApiResponse(responseCode = "204", description = "The workspace has no practice repository", content = @Content)
     public ResponseEntity<PracticeRepositoryDTO> get(WorkspaceContext ctx) {
         return repositories
                 .get(ctx)
