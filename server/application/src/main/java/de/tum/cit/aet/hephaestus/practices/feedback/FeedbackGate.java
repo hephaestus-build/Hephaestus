@@ -249,6 +249,7 @@ public class FeedbackGate {
                 hasWriteFence);
         var workState = workStateRefusal(
                 feedback, support, reads, policy.map(this::deliversAfterMerge).orElse(false));
+        var unreadableWork = unreadableWork(feedback, reads);
         FeedbackStopReason refusal = null;
         if (review.isEmpty() || review.get().getStatus() == ReviewStatus.CANCELLED)
             refusal = FeedbackStopReason.REVIEW_CANCELLED;
@@ -267,6 +268,8 @@ public class FeedbackGate {
         else if (!deliveryEnabled) refusal = FeedbackStopReason.DELIVERY_OFF;
         else if (reads.modes(support).contains(FeedbackMode.OFF)) refusal = FeedbackStopReason.FEEDBACK_OFF;
         else if (incorrect) refusal = FeedbackStopReason.RESULT_MARKED_INCORRECT;
+        // Work that cannot be read cannot prove its sources either: say why, never that it changed or lacks evidence.
+        else if (unreadableWork != null) refusal = unreadableWork;
         else if (!current)
             refusal = support.stream()
                             .anyMatch(result ->
@@ -341,7 +344,10 @@ public class FeedbackGate {
         } catch (ItemCaptureException unavailable) {
             return switch (unavailable.code()) {
                 case ITEM_REMOVED -> new CurrentWork.Unavailable(FeedbackStopReason.ITEM_GONE);
-                case ITEM_NOT_VISIBLE -> new CurrentWork.Unavailable(FeedbackStopReason.ITEM_NOT_VISIBLE);
+                // Work whose source is not ready, such as a Slack thread whose words are not stored yet, cannot be
+                // seen now. Only this piece is held, so the other pieces of a batch still get their checks.
+                case ITEM_NOT_VISIBLE, SOURCE_NOT_READY ->
+                    new CurrentWork.Unavailable(FeedbackStopReason.ITEM_NOT_VISIBLE);
                 case CONSENT_WITHHELD -> new CurrentWork.Unavailable(FeedbackStopReason.CONSENT_WITHHELD);
                 default -> throw unavailable;
             };
@@ -357,6 +363,13 @@ public class FeedbackGate {
     private boolean deliversAfterMerge(FeedbackBasisRepository.PolicyRow policy) {
         var workspaceChoice = policy.getDeliverToMerged();
         return workspaceChoice != null ? workspaceChoice : reviewProperties.deliverToMerged();
+    }
+
+    /** Why the work that feedback on the work names cannot be read now, or null when it can be or is not named. */
+    private static @Nullable FeedbackStopReason unreadableWork(Feedback feedback, GateReads reads) {
+        Long itemId = feedback.getItemId();
+        if (feedback.getDestination() != FeedbackDestination.ON_WORK || itemId == null) return null;
+        return reads.work(itemId) instanceof CurrentWork.Unavailable(FeedbackStopReason reason) ? reason : null;
     }
 
     /**

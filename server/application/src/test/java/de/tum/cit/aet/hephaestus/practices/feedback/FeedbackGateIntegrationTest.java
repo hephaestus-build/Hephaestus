@@ -240,11 +240,27 @@ class FeedbackGateIntegrationTest extends AbstractFeedbackIntegrationTest {
     }
 
     @ParameterizedTest
-    @CsvSource({"ITEM_REMOVED,ITEM_GONE", "ITEM_NOT_VISIBLE,ITEM_NOT_VISIBLE", "CONSENT_WITHHELD,CONSENT_WITHHELD"})
+    @CsvSource({
+        "ITEM_REMOVED,ITEM_GONE",
+        "ITEM_NOT_VISIBLE,ITEM_NOT_VISIBLE",
+        "CONSENT_WITHHELD,CONSENT_WITHHELD",
+        "SOURCE_NOT_READY,ITEM_NOT_VISIBLE"
+    })
     void shouldWithholdUnreadableWorkWithItsOwnReason(ItemCaptureCode code, FeedbackStopReason reason) {
         supportOnWorkFeedback(result());
         when(source.pin(supportedItem, null)).thenThrow(new ItemCaptureException(code, "Unavailable"));
         assertThat(check().reason()).isEqualTo(reason);
+    }
+
+    @Test
+    void shouldNameUnreadableWorkInsteadOfItsUnverifiableSources() {
+        supportOnWorkFeedback(resultWithStateFilter("state", "open"));
+        doReturn(new ProductItemQuery.FingerprintRead(Map.of(), "ITEM_NOT_VISIBLE"))
+                .when(productItems)
+                .read(eq(supportedItem), any(), any());
+        when(source.pin(supportedItem, null))
+                .thenThrow(new ItemCaptureException(ItemCaptureCode.ITEM_NOT_VISIBLE, "Unavailable"));
+        assertThat(check().reason()).isEqualTo(FeedbackStopReason.ITEM_NOT_VISIBLE);
     }
 
     @Test
