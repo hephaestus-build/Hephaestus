@@ -109,7 +109,7 @@ class ReviewJobCompletionServiceTest extends BaseUnitTest {
     @Test
     void shouldCarryEveryPracticeOfARunThatTimedOutBeforeItMeasuredOne() {
         var job = RuntimeReviewTestData.job();
-        job.setStatus(ReviewJobStatus.TIMED_OUT);
+        ReviewJobFixtures.withStatus(job, ReviewJobStatus.TIMED_OUT);
         job.setStartedAt(Instant.now());
         job.setExecutionStartedAt(Instant.now());
         var assignment = RuntimeReviewTestData.assignment(null, null);
