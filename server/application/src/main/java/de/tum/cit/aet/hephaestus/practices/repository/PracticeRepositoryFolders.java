@@ -7,8 +7,8 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryCheckouts;
 import de.tum.cit.aet.hephaestus.practices.PracticeFolderInvalidException;
 import de.tum.cit.aet.hephaestus.practices.dto.PracticeFileProblemDTO;
 import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.io.UncheckedIOException;
+import java.nio.ByteBuffer;
 import java.nio.charset.CharacterCodingException;
 import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
@@ -52,26 +52,25 @@ public class PracticeRepositoryFolders {
      */
     public Optional<Folder> read(long workspaceId, String slug) {
         var setting = settings.findById(workspaceId)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.CONFLICT, "This workspace has no practice repository."));
+                .orElseThrow(() ->
+                        new ResponseStatusException(HttpStatus.CONFLICT, "This workspace has no practice repository."));
         var repository = monitored.repositories(workspaceId).get(setting.getRepositoryItemId());
         if (repository == null || repository.defaultBranch() == null)
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
                     "The practice repository is not monitored, or its default branch is not known yet.");
-        try (var checkout = checkouts.checkout(
-                workspaceId, repository.nameWithOwner(), repository.defaultBranch(), null)) {
+        try (var checkout =
+                checkouts.checkout(workspaceId, repository.nameWithOwner(), repository.defaultBranch(), null)) {
             var root = checkout.directory().toRealPath();
             var folder = root.resolve(setting.getDirectory()).resolve(slug).normalize();
             if (!folder.startsWith(root) || !Files.isDirectory(folder, LinkOption.NOFOLLOW_LINKS))
                 return Optional.empty();
-            if (!folder.toRealPath().equals(folder)) throw invalid(PracticeFileProblemDTO.FILE_INVALID, slug, "The folder is a link.");
+            if (!folder.toRealPath().equals(folder))
+                throw invalid(PracticeFileProblemDTO.FILE_INVALID, slug, "The folder is a link.");
             return Optional.of(new Folder(checkout.head(), files(folder)));
         } catch (RepositoryCheckoutException unavailable) {
             throw new ResponseStatusException(
-                    HttpStatus.CONFLICT,
-                    "The practice repository cannot be read now. Try again later.",
-                    unavailable);
+                    HttpStatus.CONFLICT, "The practice repository cannot be read now. Try again later.", unavailable);
         } catch (IOException failed) {
             throw new UncheckedIOException(failed);
         }
@@ -86,7 +85,8 @@ public class PracticeRepositoryFolders {
                 if (Files.isSymbolicLink(path) || !Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS))
                     throw invalid(PracticeFileProblemDTO.FILE_INVALID, name, "A practice folder holds no links.");
                 if (files.size() >= MAX_FILES)
-                    throw invalid(PracticeFileProblemDTO.FOLDER_TOO_LARGE, name, "A practice folder holds a few files.");
+                    throw invalid(
+                            PracticeFileProblemDTO.FOLDER_TOO_LARGE, name, "A practice folder holds a few files.");
                 if (Files.size(path) > MAX_FILE_BYTES)
                     throw invalid(PracticeFileProblemDTO.FILE_TOO_LARGE, name, "Keep each file under 128 KiB.");
                 files.put(name, text(path, name));

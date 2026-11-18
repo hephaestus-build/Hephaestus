@@ -36,7 +36,10 @@ public class PracticeRepositoryController {
     @ApiResponse(responseCode = "200", description = "The practice repository")
     @ApiResponse(responseCode = "204", description = "The workspace has no practice repository")
     public ResponseEntity<PracticeRepositoryDTO> get(WorkspaceContext ctx) {
-        return repositories.get(ctx).map(ResponseEntity::ok).orElseGet(() -> ResponseEntity.noContent().build());
+        return repositories
+                .get(ctx)
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.noContent().build());
     }
 
     @PutMapping
@@ -46,7 +49,8 @@ public class PracticeRepositoryController {
             summary = "Set the practice repository",
             description = "Choosing another repository or directory moves every practice edited in the old one back"
                     + " to Hephaestus.")
-    public PracticeRepositoryDTO set(WorkspaceContext ctx, @RequestBody @Valid SetPracticeRepositoryRequestDTO request) {
+    public PracticeRepositoryDTO set(
+            WorkspaceContext ctx, @RequestBody @Valid SetPracticeRepositoryRequestDTO request) {
         return repositories.set(ctx, request);
     }
 
@@ -67,8 +71,9 @@ public class PracticeRepositoryController {
     @Operation(
             operationId = "changePracticeEditedIn",
             summary = "Move a practice to the practice repository, or edit it in Hephaestus",
-            description = "Moving to the repository reads the practice's folder at the head of the default branch, and"
-                    + " refuses when the folder is missing or invalid. Editing in Hephaestus keeps the current version.")
+            description =
+                    "Moving to the repository reads the practice's folder at the head of the default branch, and"
+                            + " refuses when the folder is missing or invalid. Editing in Hephaestus keeps the current version.")
     @ApiResponse(responseCode = "204", description = "The practice is edited where the request named")
     public ResponseEntity<Void> changeEditedIn(
             WorkspaceContext ctx,
