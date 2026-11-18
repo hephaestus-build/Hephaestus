@@ -1,0 +1,79 @@
+---
+title: Ship an urgent security fix
+description: Take a mitigation or a fixed dependency from a merged pull request to Production in hours, with every release gate intact.
+page_type: how-to
+---
+
+Use this procedure when a vulnerability affects the shipped server or its runtime, and the fix or mitigation must reach Production in hours.
+Examples are a JVM flaw that a JVM option mitigates, or a fixed JRE that a builder update brings.
+[Recover from a bad published release](./recover-a-published-release) owns the case where a published release itself is defective.
+
+There is no emergency branch, signing identity or gate bypass.
+The time comes from doing each step at once, not from skipping one.
+
+:::note[Rehearsal owed]
+No end-to-end rehearsal of this procedure is recorded.
+REL-RC10 owes one after rc.11 is deployed. Record its stage times in the table below.
+:::
+
+## Time budget
+
+The budget is the time that the pipeline takes when each human step starts at once.
+The durations are from the GitHub Actions API, 2026-11-16 to 2026-11-18.
+
+| Stage | Median | p90 | Source |
+| --- | --- | --- | --- |
+| Pull request CI/CD | 15 min | 23 min | 100 successful `pull_request` runs of `cicd.yml` |
+| Merge queue | 21 min | 28 min | 58 successful `merge_group` runs |
+| Version PR update | 1 min | 3 min | 95 runs of `version-pr.yml` |
+| Version PR CI/CD | 18 min | 21 min | 15 successful dispatches on `changeset-release/main` |
+| Version PR merge queue | 21 min | 28 min | as for the merge queue |
+| Version commit to published release | 32 min | 32 min | rc.9 and rc.10: `main` CI/CD, then **Release / Publish** |
+| Promotion | 2 min | 3 min | 87 successful `promote.yml` runs |
+| Host applies the channel | 1 min | 1 min | the reconcile timer polls every minute, then the rollout |
+
+The total is about 2 hours at the median and 2.6 hours at p90, for Staging and Production together.
+Reviews, run approvals, the staging check and the Production approval come on top.
+Plan for 4 hours from a merged fix to Production.
+
+## Before you start
+
+1. Name an incident owner and a release maintainer.
+2. Confirm the affected version and the deployed digests.
+   The `deployed` job of **Security / Rescan images** and the signed channels on `deploy-state` name them.
+3. Keep unannounced details out of public text.
+   [Security policy](https://github.com/hephaestus-build/Hephaestus/blob/main/SECURITY.md) owns disclosure.
+
+## Mitigate first
+
+If the advisory or the vendor names a mitigation, ship it before the fix.
+A mitigation needs no upstream release, so it is the fastest change.
+For a JVM option, set it in `server/application/project.toml` for the training run and every launch.
+Then make gate:toolchain refuse a JRE pin below the fixed build without it, as `MITIGATED_BELOW` in `scripts/lib/buildpack-descriptor.ts` does for CVE-2026-114938.
+
+## Ship the change
+
+1. Open the pull request with a focused test and an operator-voice changeset.
+   For a JRE, the **Security / Java runtime watch** opens the builder and pin update. Add the changeset to it.
+2. Get the review at once. Approve the CI/CD runs if GitHub asks for approval.
+3. Enqueue the pull request when its checks pass.
+4. When `main` CI/CD finishes, the Version PR updates. Dispatch its CI/CD at once:
+   `gh workflow run cicd.yml --ref changeset-release/main -f release-preflight=true`.
+5. Review the Version PR's version and release notes. Enqueue it when its checks pass.
+6. Wait for **Release / Publish**. It runs all release gates and publishes the release.
+7. If the release is a candidate, follow [Promote the qualified candidate](./release-management#promote-the-qualified-candidate).
+
+## Deploy
+
+1. Run **Release / Promote** for Staging and the new release.
+2. Confirm the version on Staging and the security setting in the server log.
+   The `jvm.base64_intrinsics.configured` event shows an example ([Log records](../admin/log-records)).
+3. Run **Release / Promote** for Production. Its required reviewer approves it.
+4. Confirm the version on Production.
+
+## Check that it worked
+
+1. The next `deployed` job of **Security / Rescan images** no longer lists the finding.
+   Run the workflow by hand to check at once.
+2. Close the advisory issue and the exposure issue with the release and the deployed digests.
+3. Record the stage times. Update the time budget if a stage took longer than its p90.
