@@ -87,7 +87,10 @@ public class AgentAction {
     @Column(name = "next_attempt_at", nullable = false)
     private Instant nextAttemptAt;
 
-    /** An action that has not started by then ends {@link ActionStopReason#EXPIRED}. */
+    /**
+     * An action that has not started by then, or whose attempt lost its lease before any write, ends {@link
+     * ActionStopReason#EXPIRED}.
+     */
     @Column(name = "expires_at")
     private @Nullable Instant expiresAt;
 

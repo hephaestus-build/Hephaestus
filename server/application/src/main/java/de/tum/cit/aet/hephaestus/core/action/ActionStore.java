@@ -228,8 +228,9 @@ class ActionStore {
     }
 
     /**
-     * Ends one action that can no longer run: it expired before it started, or lost its lease for good. {@code onEnd}
-     * runs in this transaction, so a failing domain row holds back only its own action.
+     * Ends one action that can no longer run: it expired before it started or before a lost lease wrote anything, or
+     * lost its lease for good. Expiry goes first, so an expired action that wrote nothing ends EXPIRED even at its last
+     * attempt. {@code onEnd} runs in this transaction, so a failing domain row holds back only its own action.
      */
     @Transactional
     public Optional<Settled> endStale(UUID id, ActionAdmission admission, Consumer<ActionEnded> onEnd) {

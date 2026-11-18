@@ -46,7 +46,7 @@ Then the action exists exactly when the change commits.
 | `subjectAccountId` | The account that the effect addresses. The erasure of that account deletes the action. |
 | `nativeRecipient` | The verified `PersonIdentity` that the effect addresses. Set it for a provider recipient who can have no Hephaestus account. Erasure matches its exact provider, team and subject, including after the payload is cleared. |
 | `maxAttempts` | The attempts before the action ends `FAILED` with `ATTEMPTS_EXHAUSTED`. |
-| `expiresAt` | When an action that has not started is no longer worth carrying out. |
+| `expiresAt` | When an action is no longer worth carrying out, if it has not started or if a lost lease wrote nothing. |
 
 Do not call a provider for an effect yourself.
 `OutboundEgressArchitectureTest` refuses a call to `ActionAdapter.execute` from any class except `ActionExecutor`.
@@ -62,9 +62,9 @@ The trigger `guard_agent_action` refuses every transition that `ActionState` doe
 | `PROPOSED` | `ADMITTED`, `CANCELLED` | The server admits or refuses an agent's proposal. |
 | `ADMITTED` | `EXECUTING` | A claim takes the action. The epoch and the attempt rise by one. |
 | `ADMITTED` | `CANCELLED` | The action expired before it started. |
-| `EXECUTING` | `EXECUTING` | A claim takes the action again after its lease expired. The epoch and the attempt rise by one. |
+| `EXECUTING` | `EXECUTING` | A claim takes the action again after its lease expired, before the action expires or to read back a write that may have started. The epoch and the attempt rise by one. |
 | `EXECUTING` | `ADMITTED` | A proven retry or a deferral. |
-| `EXECUTING` | `DONE`, `UNCERTAIN`, `FAILED`, `CANCELLED` | The attempt ended the action. |
+| `EXECUTING` | `DONE`, `UNCERTAIN`, `FAILED`, `CANCELLED` | The attempt ended the action, or the reaper ended it. An action that expired after it lost its lease, before any write, ends `CANCELLED` with `EXPIRED`. |
 
 An ended action never changes, and it keeps no payload.
 Every ended action has a `stop_reason`.

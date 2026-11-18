@@ -6,7 +6,8 @@ package de.tum.cit.aet.hephaestus.core.action;
  *
  * <p>An adapter whose provider can read back finds an earlier attempt's effect by its marker when
  * {@link ActionAttempt#writeStarted()} is set, before it writes again. An {@link ActionKind#atMostOnce()} kind never
- * sees a started write: the executor ends such an action {@link ActionState#UNCERTAIN} instead.
+ * sees a started write: the executor ends such an action {@link ActionState#UNCERTAIN} instead. An action past its
+ * expiry is taken again only when its write may have started, so such an attempt reads back and does not write again.
  */
 public interface ActionAdapter {
     ActionKind kind();
