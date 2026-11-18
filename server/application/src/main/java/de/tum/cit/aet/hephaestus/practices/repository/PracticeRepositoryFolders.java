@@ -131,7 +131,14 @@ public class PracticeRepositoryFolders {
                     .decode(ByteBuffer.wrap(Files.readAllBytes(path)))
                     .toString();
         } catch (CharacterCodingException binary) {
-            throw invalid(PracticeFileProblemDTO.FILE_INVALID, name, "Each file of a practice folder is UTF-8 text.");
+            throw new PracticeFolderInvalidException(
+                    List.of(new PracticeFileProblemDTO(
+                            name,
+                            null,
+                            null,
+                            PracticeFileProblemDTO.FILE_INVALID,
+                            "Each file of a practice folder is UTF-8 text.")),
+                    binary);
         }
     }
 
