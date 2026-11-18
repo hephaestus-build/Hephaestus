@@ -922,6 +922,8 @@ export const ACTIONS_WRITE_GRANTS: Record<string, string> = {
 		"It re-runs a retargeted pull request's CI/CD run, so the layer leaves the light tier.",
 	".github/workflows/continuous-staging.yml#follow-main":
 		"It dispatches the promotion workflow for the build that passed CI on main.",
+	".github/workflows/jvm-watch.yml#dispatch-ci":
+		"It dispatches CI/CD on the JRE pull request, whose GITHUB_TOKEN pull_request runs wait for approval. It checks out nothing and runs one gh command.",
 };
 
 export const writesActions = (permissions: unknown) =>

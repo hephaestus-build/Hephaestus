@@ -41,6 +41,8 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+    outputs:
+      proposed: ${{ steps.propose.outputs.proposed }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -49,6 +51,25 @@ jobs:
         with:
           install: "none"
       - name: Open or update the JRE pull request
+        id: propose
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: node scripts/update-buildpack-pins.ts
+
+  # GitHub holds the pull_request runs of a GITHUB_TOKEN push for approval, but it starts a workflow_dispatch
+  # run at once, and that run reports CI Status Gate on the head commit. actions: write stays in this job,
+  # which checks out nothing and runs no action or repository code.
+  dispatch-ci:
+    name: Start CI/CD on the JRE pull request
+    needs: jre-update
+    if: ${{ needs.jre-update.outputs.proposed == 'true' }}
+    runs-on: ubuntu-slim
+    timeout-minutes: 15
+    permissions:
+      actions: write
+    steps:
+      - name: Dispatch CI/CD on the pull request's branch
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: gh workflow run cicd.yml --ref automation/jre-update

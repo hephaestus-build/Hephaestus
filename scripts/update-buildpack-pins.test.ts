@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
+import { parse } from "yaml";
+
+import { asArray, asRecord } from "./lib/json.ts";
 import {
+	BRANCH,
 	builderBuildpacks,
 	buildpackDependencies,
 	derivePin,
@@ -98,4 +103,21 @@ void test("the builder metadata names each buildpack's version", () => {
 		pullRequestTitle("25.0.5.1_1"),
 		"fix(deps): the server image runs the Liberica JRE 25.0.5.1_1",
 	);
+});
+
+void test("only a checkout-free job that runs one gh command may dispatch CI/CD on the JRE pull request", () => {
+	const jobs = asRecord(
+		asRecord(parse(readFileSync(".github/workflows/jvm-watch.yml", "utf8")), "jvm-watch").jobs,
+		"jobs",
+	);
+	const update = asRecord(jobs["jre-update"], "jre-update");
+	assert.equal(asRecord(update.permissions, "jre-update permissions").actions, undefined);
+	const dispatch = asRecord(jobs["dispatch-ci"], "dispatch-ci");
+	assert.equal(dispatch.needs, "jre-update");
+	assert.equal(dispatch["runs-on"], "ubuntu-slim");
+	assert.deepEqual(dispatch.permissions, { actions: "write" });
+	const steps = asArray(dispatch.steps, "dispatch-ci steps").map((step) => asRecord(step, "step"));
+	assert.equal(steps.length, 1);
+	assert.equal(steps[0]?.uses, undefined);
+	assert.equal(steps[0]?.run, `gh workflow run cicd.yml --ref ${BRANCH}`);
 });
