@@ -55,7 +55,8 @@ public class PracticeRepositoryController {
         return repositories.set(ctx, request);
     }
 
-    @RecentSignInExempt(reason = "unsetting deletes nothing: every practice keeps its versions, and setting it again restores it")
+    @RecentSignInExempt(
+            reason = "unsetting deletes nothing: every practice keeps its versions, and setting it again restores it")
     @DeleteMapping
     @Audited(ledger = AuditLedger.CONFIG_AUDIT, type = "PRACTICE_REPOSITORY")
     @Operation(

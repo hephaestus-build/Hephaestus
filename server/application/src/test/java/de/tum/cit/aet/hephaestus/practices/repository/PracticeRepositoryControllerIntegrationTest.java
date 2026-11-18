@@ -181,12 +181,16 @@ class PracticeRepositoryControllerIntegrationTest extends BaseIntegrationTest {
 
     private long currentVersionId() {
         return Objects.requireNonNull(jdbc.queryForObject(
-                "SELECT current_version_id FROM practice WHERE id = ?", Long.class, scenario.practice().getId()));
+                "SELECT current_version_id FROM practice WHERE id = ?",
+                Long.class,
+                scenario.practice().getId()));
     }
 
     private PracticeEditedIn editedIn() {
         return PracticeEditedIn.valueOf(Objects.requireNonNull(jdbc.queryForObject(
-                "SELECT edited_in FROM practice WHERE id = ?", String.class, scenario.practice().getId())));
+                "SELECT edited_in FROM practice WHERE id = ?",
+                String.class,
+                scenario.practice().getId())));
     }
 
     private ItemKind kind() {
