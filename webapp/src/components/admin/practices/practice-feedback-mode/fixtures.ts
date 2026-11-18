@@ -87,6 +87,7 @@ function practiceOf(spec: PracticeSpec, slug: string, groupSlug: string | null, 
 		groupSlug,
 		position,
 		catalogOrigin: CATALOG_ORIGIN,
+		editedIn: "HEPHAESTUS",
 		createdAt: new Date("2026-01-01T00:00:00Z"),
 		updatedAt: new Date("2026-01-02T00:00:00Z"),
 		currentVersion: {
