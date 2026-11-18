@@ -1395,7 +1395,9 @@ class ResultAdmissionIntegrationTest extends AbstractResultAdmissionIntegrationT
         facts.putObject("sourceFingerprints").put(kind.value(), "a".repeat(64));
         capture.setCaptureDecision(facts);
         pinnedPractices.saveAndFlush(capture);
-        doReturn(Map.of(kind, "b".repeat(64))).when(productItems).fingerprints(eq(ref), anySet(), any());
+        doReturn(new ProductItemQuery.FingerprintRead(Map.of(kind, "b".repeat(64)), null))
+                .when(productItems)
+                .read(eq(ref), anySet(), any());
         // A push ordered a newer review of the same work.
         admissions.pending(scenario, pending.review().getOrderedAt().plusSeconds(60), scenarioAccountId);
         var id = new ReviewAssignmentId(
@@ -1434,7 +1436,9 @@ class ResultAdmissionIntegrationTest extends AbstractResultAdmissionIntegrationT
         facts.putObject("sourceFingerprints").put(kind.value(), "a".repeat(64));
         capture.setCaptureDecision(facts);
         pinnedPractices.saveAndFlush(capture);
-        doReturn(Map.of(kind, "b".repeat(64))).when(productItems).fingerprints(eq(ref), anySet(), any());
+        doReturn(new ProductItemQuery.FingerprintRead(Map.of(kind, "b".repeat(64)), null))
+                .when(productItems)
+                .read(eq(ref), anySet(), any());
         // A newer review of the same work was ordered, then cancelled: it measures nothing.
         var newer = admissions.pending(scenario, pending.review().getOrderedAt().plusSeconds(60), scenarioAccountId);
         jdbcTemplate.update(

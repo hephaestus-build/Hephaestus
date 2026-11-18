@@ -329,7 +329,6 @@ A missing capture record makes the result unverifiable with `RECORD_MISSING` ([C
 Neither reason establishes a change to the work.
 The practice-start gateway records `REPLACED` for changed sources when a newer review measures the practice, `SOURCES_MOVED` when none does, and `READINESS_REFUSED` for sources it cannot verify.
 
-
 A start that cannot verify its sources always names why, on its `Practice start` log line as `unreadReason` and in the withheld membership's message.
 The reason is the capture code of the read that failed, such as `OCCASION_EVIDENCE_UNAVAILABLE`.
 It is `RECORD_MISSING` for a capture that recorded no fingerprint, and `SOURCE_UNREAD` for sources that read nothing although the read ran.
