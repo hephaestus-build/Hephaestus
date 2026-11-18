@@ -31,3 +31,29 @@ void test("a secret reaches a step only through its environment", async () => {
 		assert.match(reference, /^\$\{\{ secrets\.CI_LLM_\w+(?: != '')? \}\}$/u, reference);
 	}
 });
+
+void test("a configured endpoint is probed before any job composes, in the panel and in the decision", async () => {
+	for (const file of [
+		".github/workflows/feedback-eval-panel.yml",
+		".github/workflows/feedback-eval-decision.yml",
+	]) {
+		const jobs = asRecord(asRecord(parse(await readFile(file, "utf8")), file).jobs, `${file} jobs`);
+		const provider = asRecord(jobs.provider, `${file} provider`);
+		const probe = asArray(provider.steps, `${file} provider steps`)
+			.map((step) => asRecord(step, `${file} step`))
+			.find((step) => step.id === "probe");
+		assert.ok(probe !== undefined, `${file} has no probe step`);
+		assert.match(String(probe.run), /^node scripts\/feedback-eval\/endpoint-probe\.ts /u);
+		assert.match(
+			String(asRecord(provider.outputs, `${file} outputs`).reachable),
+			/steps\.probe\.outputs\.reachable/u,
+		);
+		// Every job that calls the endpoint needs the provider job, so a failed probe skips it.
+		for (const [name, job] of Object.entries(jobs)) {
+			const record = asRecord(job, name);
+			if (asRecord(record.concurrency ?? {}, `${name} concurrency`).group === "ci-model-endpoint") {
+				assert.ok(asArray(record.needs, `${name} needs`).includes("provider"), `${file} ${name}`);
+			}
+		}
+	}
+});

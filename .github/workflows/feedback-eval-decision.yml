@@ -42,9 +42,11 @@ jobs:
         github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-slim
     timeout-minutes: 15
-    permissions: {}
+    permissions:
+      contents: read # the probe script
     outputs:
       configured: ${{ steps.check.outputs.configured }}
+      reachable: ${{ steps.probe.outputs.reachable }}
     steps:
       # Each expression is only whether a setting is set; no value reaches the step.
       - name: Check the model connection
@@ -70,6 +72,29 @@ jobs:
             echo "The CI model connection is not configured, so nothing was composed. Missing: ${missing[*]}."
             echo "docs/contributor/ci-cd.mdx § CI model connection lists the settings."
           } >> "$GITHUB_STEP_SUMMARY"
+
+      # A configured endpoint that is down would fail every composition only after a Gradle start and a connect timeout
+      # each, for hours, while the run holds the shared endpoint lock. One bounded request finds it in seconds.
+      - if: steps.check.outputs.configured == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          sparse-checkout: |
+            .github/actions
+            scripts/feedback-eval
+          persist-credentials: false
+
+      - if: steps.check.outputs.configured == 'true'
+        uses: ./.github/actions/setup-toolchain
+        with:
+          install: "none"
+
+      - name: Check that the model endpoint answers
+        id: probe
+        if: steps.check.outputs.configured == 'true'
+        env:
+          HEPHAESTUS_LIVE_LLM_BASE_URL: ${{ secrets.CI_LLM_BASE_URL }}
+          HEPHAESTUS_LIVE_LLM_API_KEY: ${{ secrets.CI_LLM_API_KEY }}
+        run: node scripts/feedback-eval/endpoint-probe.ts --title "Feedback eval decision"
 
   # The two commits that every later job uses: the head that a person asked about, never the pull request's merge
   # commit, and its merge base with the base ref. A manual run's base input is a branch or a commit, fetched here.
@@ -292,6 +317,7 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha || needs.commits.outputs.head }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           CONFIGURED: ${{ needs.provider.outputs.configured }}
+          REACHABLE: ${{ needs.provider.outputs.reachable }}
           CASES: ${{ needs.commits.outputs.cases }}
           RESULTS: ${{ join(needs.*.result, ' ') }}
           VERDICT: ${{ needs.decide.outputs.verdict }}
@@ -322,6 +348,9 @@ jobs:
               if [ "$CONFIGURED" != true ]; then
                 title='Decision not evaluated: the CI model connection is not configured'
                 detail='The run composed nothing. docs/contributor/ci-cd.mdx § CI model connection lists the settings.'
+              elif [ "$REACHABLE" = false ]; then
+                title='Decision not evaluated: the model endpoint is unreachable'
+                detail='The run composed nothing. The Model connection job names the cause.'
               elif [ "$CASES" = changed ]; then
                 title='Decision not evaluated: this change edits the composition cases'
                 detail='Each arm reads the cases from its own commit, so the arms would compose different cases. The run composed nothing. docs/contributor/feedback-quality-evals.mdx § When the decision runs says how to change the cases.'

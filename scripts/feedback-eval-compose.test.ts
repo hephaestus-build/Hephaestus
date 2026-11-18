@@ -45,10 +45,10 @@ void test("a seeded coin per case and replicate picks the first arm, and either 
 
 /**
  * An arm checkout whose Gradle wrapper stands in for the live test: it records the requested case, completed with one
- * request, in the result file that the compose script names. `gradlew.bat` runs the same script, so Windows takes the
+ * request or failed with `failure`, in the result file that the compose script names. `gradlew.bat` runs the same script, so Windows takes the
  * path that it takes with a real checkout.
  */
-function stubArm(parent: string, name: string): string {
+function stubArm(parent: string, name: string, failure: string | null = null): string {
 	const root = path.join(parent, name);
 	mkdirSync(path.join(root, "server"), { recursive: true });
 	mkdirSync(path.join(root, "scripts", "feedback-eval"), { recursive: true });
@@ -62,7 +62,7 @@ function stubArm(parent: string, name: string): string {
 			"const file = process.env.COMPOSITION_EVAL_CHECKED;",
 			"const id = process.env.COMPOSITION_EVAL_CASES;",
 			'const run = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, "utf8")) : { version: 1, cases: [] };',
-			"run.cases.push({ id, failure: null, requests: 1 });",
+			`run.cases.push({ id, failure: ${JSON.stringify(failure)}, requests: 1 });`,
 			"fs.writeFileSync(file, JSON.stringify(run));",
 			"",
 		].join("\n"),
@@ -156,4 +156,44 @@ void test("a run's registered seed orders its arms, and every attempt line recor
 	assert.ok(
 		casesInReplicate(2).some((id) => firstArm(id, 2, "composition-set-coin-2") !== firstArm(id, 2)),
 	);
+});
+
+/** Composes replicate 2 of two stub arms into `out`. */
+function composeReplicate(base: string, candidate: string, out: string) {
+	return spawnSync(
+		process.execPath,
+		[COMPOSE, "--replicate", "2", "--base", base, "--candidate", candidate, "--out", out],
+		{ encoding: "utf8" },
+	);
+}
+
+void test("an arm that composed none of its trials fails the replicate, so a dead endpoint never reports success", () => {
+	const dir = mkdtempSync(path.join(tmpdir(), "compose-none-"));
+	const cases = casesInReplicate(2).length;
+	const dead = composeReplicate(
+		stubArm(dir, "dead-base", "PROVIDER"),
+		stubArm(dir, "dead-candidate", "PROVIDER"),
+		path.join(dir, "dead"),
+	);
+	assert.notEqual(dead.status, 0);
+	assert.match(
+		dead.stderr,
+		new RegExp(
+			`base composed 0 of ${String(cases)} trials in replicate 2: every trial failed at the model endpoint`,
+			"u",
+		),
+	);
+	// Every attempt stays in the log for the run's record.
+	const attempts = readFileSync(path.join(dir, "dead", "attempts-r2.jsonl"), "utf8")
+		.trim()
+		.split("\n");
+	assert.equal(attempts.length, 2 * cases * 3);
+	// One arm without a composed trial is enough: the decision cannot compare the arms.
+	const half = composeReplicate(
+		stubArm(dir, "live-base"),
+		stubArm(dir, "dead-only-candidate", "PROVIDER"),
+		path.join(dir, "half"),
+	);
+	assert.notEqual(half.status, 0);
+	assert.match(half.stderr, /candidate composed 0 of/u);
 });

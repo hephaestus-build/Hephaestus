@@ -203,6 +203,14 @@ void test(
 		}
 		const unconfigured = await post({ VERDICT: "", CONFIGURED: "false" });
 		assert.match(unconfigured.title ?? "", /not configured/u);
+		// A configured endpoint that does not answer composes nothing, and the title names that cause.
+		const unreachable = await post({
+			VERDICT: "",
+			REACHABLE: "false",
+			RESULTS: "failure skipped skipped skipped",
+		});
+		assert.equal(unreachable.conclusion, "neutral");
+		assert.match(unreachable.title ?? "", /model endpoint is unreachable/u);
 		const errored = await post({ VERDICT: "", RESULTS: "success failure skipped" });
 		assert.match(errored.title ?? "", /errored/u);
 		// A change to the cases composes nothing, so its skipped jobs read as that cause, never as an unfinished run.
