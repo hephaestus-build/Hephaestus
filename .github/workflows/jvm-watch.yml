@@ -1,0 +1,54 @@
+name: Security / Java runtime watch
+
+# The OpenJDK advisory names the affected builds before NVD lets a scanner match them, and before a
+# vendor build exists. scripts/watch-jvm-advisories.ts opens one issue per advisory that affects the pin.
+# scripts/update-buildpack-pins.ts opens the pull request for a newer JRE once a Paketo builder ships it.
+on:
+  schedule:
+    - cron: "23 * * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  advisories:
+    name: OpenJDK advisories against the pinned JRE
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-toolchain
+        with:
+          install: "none"
+      - name: Open an issue for each new advisory that affects the pinned JRE
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/watch-jvm-advisories.ts
+
+  jre-update:
+    name: Propose the newer JRE that the newest builder ships
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-toolchain
+        with:
+          install: "none"
+      - name: Open or update the JRE pull request
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/update-buildpack-pins.ts
