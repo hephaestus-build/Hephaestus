@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="20261118033626-1" author="hephaestus">
+        <comment>A workspace keeps its practices in at most one monitored repository, its practice repository (ADR 0118).</comment>
+        <createTable tableName="workspace_practice_repository">
+            <column name="workspace_id" type="BIGINT">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="workspace_practice_repositoryPK"/>
+            </column>
+            <column defaultValue=".hephaestus/practices" name="directory" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="repository_item_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column defaultValueNumeric="0" name="revision" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="TIMESTAMP(6) WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <addForeignKeyConstraint baseColumnNames="workspace_id" baseTableName="workspace_practice_repository" constraintName="fk_practice_repository_workspace" deferrable="false" initiallyDeferred="false" referencedColumnNames="id" referencedTableName="workspace" validate="true"/>
+    </changeSet>
+    <changeSet id="20261118033626-2" author="hephaestus">
+        <comment>A practice is edited in Hephaestus or in the practice repository; the repository then owns its definition and group (ADR 0118).</comment>
+        <addColumn tableName="practice">
+            <column defaultValue="HEPHAESTUS" name="edited_in" type="VARCHAR(16)">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+        <sql>ALTER TABLE practice ADD CONSTRAINT ck_practice_edited_in CHECK (edited_in IN ('HEPHAESTUS','REPOSITORY'));</sql>
+        <rollback>
+            <sql>ALTER TABLE practice DROP CONSTRAINT ck_practice_edited_in;</sql>
+            <dropColumn tableName="practice" columnName="edited_in"/>
+        </rollback>
+    </changeSet>
+    <changeSet id="20261118033626-3" author="hephaestus">
+        <comment>The commit of the practice repository that a version's definition was read at; null for a version edited in Hephaestus.</comment>
+        <addColumn tableName="practice_version">
+            <column name="source_commit" type="VARCHAR(64)"/>
+        </addColumn>
+    </changeSet>
+    <changeSet id="20261118033626-4" author="hephaestus">
+        <comment>The configuration audit records changes to the practice repository.</comment>
+        <sql>ALTER TABLE config_audit_event DROP CONSTRAINT ck_config_audit_event_entity_type;
+ALTER TABLE config_audit_event ADD CONSTRAINT ck_config_audit_event_entity_type CHECK (entity_type IN ('PROVIDER_RESOURCE_RELEASE', 'PRACTICE_REVIEW_SETTINGS', 'MODEL_ASSIGNMENT', 'AGENT_BINDING', 'AGENT_CONFIG', 'AI_CONFIG_BINDING', 'WORKSPACE_ROLE', 'ACTIVITY_AUTOMATION', 'WORKSPACE_FEATURES', 'WORKSPACE_STATUS', 'WORKSPACE_TOKEN', 'WORKSPACE_VISIBILITY', 'PRACTICE_ACTIVE', 'PRACTICE_USAGE', 'PRACTICE_DEFINITION', 'PRACTICE_GROUP', 'PRACTICE_REPOSITORY', 'CATALOG_PRACTICE', 'CATALOG_GROUP', 'WORKSPACE_INSTANCE_LLM_BUDGET', 'WORKSPACE_OWN_PROVIDER_LLM_BUDGET', 'WORKSPACE_LLM_BUDGET', 'WORKSPACE_BYO_LLM_BUDGET', 'REVIEW_BATCH', 'REVIEW_SCHEDULE', 'FEEDBACK_DELIVERY_RECHECK', 'WORKSPACE_LLM_CONNECTION', 'WORKSPACE_LLM_MODEL'));</sql>
+        <rollback>
+            <sql>DELETE FROM config_audit_event WHERE entity_type = 'PRACTICE_REPOSITORY';
+ALTER TABLE config_audit_event DROP CONSTRAINT ck_config_audit_event_entity_type;
+ALTER TABLE config_audit_event ADD CONSTRAINT ck_config_audit_event_entity_type CHECK (entity_type IN ('PROVIDER_RESOURCE_RELEASE', 'PRACTICE_REVIEW_SETTINGS', 'MODEL_ASSIGNMENT', 'AGENT_BINDING', 'AGENT_CONFIG', 'AI_CONFIG_BINDING', 'WORKSPACE_ROLE', 'ACTIVITY_AUTOMATION', 'WORKSPACE_FEATURES', 'WORKSPACE_STATUS', 'WORKSPACE_TOKEN', 'WORKSPACE_VISIBILITY', 'PRACTICE_ACTIVE', 'PRACTICE_USAGE', 'PRACTICE_DEFINITION', 'PRACTICE_GROUP', 'CATALOG_PRACTICE', 'CATALOG_GROUP', 'WORKSPACE_INSTANCE_LLM_BUDGET', 'WORKSPACE_OWN_PROVIDER_LLM_BUDGET', 'WORKSPACE_LLM_BUDGET', 'WORKSPACE_BYO_LLM_BUDGET', 'REVIEW_BATCH', 'REVIEW_SCHEDULE', 'FEEDBACK_DELIVERY_RECHECK', 'WORKSPACE_LLM_CONNECTION', 'WORKSPACE_LLM_MODEL'));</sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

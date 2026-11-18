@@ -15,6 +15,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 @WorkspaceAgnostic("Reads carry workspaceId; primary-key locks and writes run after tenant validation")
 public interface PracticeRepository extends JpaRepository<Practice, Long> {
@@ -55,7 +56,9 @@ public interface PracticeRepository extends JpaRepository<Practice, Long> {
     @EntityGraph(attributePaths = {"group", "currentVersion"})
     List<Practice> findByWorkspaceIdAndStateOrderBySlugAsc(Long workspaceId, PracticeState state);
 
-    List<Practice> findByWorkspaceIdAndEditedIn(Long workspaceId, PracticeEditedIn editedIn);
+    /** The practices of a workspace that one source edits. Spring Data would read {@code EditedIn} as an IN clause. */
+    @Query("SELECT p FROM Practice p WHERE p.workspace.id = :workspaceId AND p.editedIn = :editedIn")
+    List<Practice> findEditedIn(@Param("workspaceId") Long workspaceId, @Param("editedIn") PracticeEditedIn editedIn);
 
     /** Deletes the trials of a practice, so that a draft practice can go: trials are all that refer to a draft. */
     @Modifying
