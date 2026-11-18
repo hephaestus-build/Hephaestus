@@ -19123,13 +19123,14 @@ export const WorkspaceTileSchema = {
 				{
 					$ref: "#/components/schemas/WorkspaceRange",
 					description:
-						"The workspace's middle half; absent while fewer than 3 developers are counted",
+						"The workspace's middle half; absent while fewer than 3 other developers are counted, or when its ends meet",
 				},
 				{
 					type: "null",
 				},
 			],
-			description: "The workspace's middle half; absent while fewer than 3 developers are counted",
+			description:
+				"The workspace's middle half; absent while fewer than 3 other developers are counted, or when its ends meet",
 		},
 		yours: {
 			type: "integer",
