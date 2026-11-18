@@ -6823,6 +6823,18 @@ export type StartScanRequest = {
 	reuse: boolean | null;
 };
 
+/**
+ * A request to try one practice on one item: name the item by its id or by its address, not both.
+ */
+export type StartTrialRequest = {
+	itemId?: string;
+	/**
+	 * The address of a GitHub pull request or issue, or a GitLab merge request or issue
+	 */
+	itemUrl?: string;
+	practiceSlug: string;
+};
+
 export type StateBasis = Omit<ClaimBasis, "type"> & {
 	explanation?: string;
 	type: "StateBasis";
@@ -7138,6 +7150,64 @@ export type TrendSupport = {
 	reviewedWorkKind: string | null;
 	ropeHalfWidth: number;
 	standingWork: number;
+};
+
+/**
+ * A trial of one practice version on one item (ADR 0118 decision 8).
+ */
+export type Trial = {
+	completedAt?: Date;
+	createdAt: Date;
+	id: string;
+	itemId: string;
+	itemVersion?: string;
+	/**
+	 * what the practice found, once admission accepted it
+	 */
+	outcome?: TrialOutcome;
+	/**
+	 * whether the trial's report was cleared, after its retention or by person erasure
+	 */
+	outcomeRemoved: boolean;
+	practiceSlug: string;
+	practiceVersionId: string;
+	practiceVersionNumber: number;
+	status: ReviewStatus;
+	stopReason?: ReviewStopReason;
+	/**
+	 * why the practice ended without an outcome, when it did
+	 */
+	withheldReason?: string;
+};
+
+/**
+ * Where a trial's candidate cites the work, and the quoted text: text from the reviewed work.
+ */
+export type TrialCitation = {
+	endLine: number;
+	path: string;
+	quote: string;
+	source: string;
+	startLine: number;
+};
+
+/**
+ * What a trial's practice found, as admission accepted it. No observation records it.
+ */
+export type TrialOutcome = {
+	citations: Array<TrialCitation>;
+	explanation: string;
+	outcome: ResultOutcome;
+	problems: Array<TrialProblem>;
+	summary: string;
+};
+
+export type TrialProblem = {
+	citations: Array<TrialCitation>;
+	explanation: string;
+	nextStep?: string;
+	severity: Severity;
+	summary: string;
 };
 
 /**
@@ -14905,6 +14975,50 @@ export type GetOwnReviewResponses = {
 };
 
 export type GetOwnReviewResponse = GetOwnReviewResponses[keyof GetOwnReviewResponses];
+
+export type StartPracticeTrialData = {
+	body: StartTrialRequest;
+	path: {
+		/**
+		 * Workspace slug
+		 */
+		workspaceSlug: string;
+	};
+	query?: never;
+	url: "/workspaces/{workspaceSlug}/practice-trials";
+};
+
+export type StartPracticeTrialResponses = {
+	/**
+	 * OK
+	 */
+	200: Trial;
+};
+
+export type StartPracticeTrialResponse =
+	StartPracticeTrialResponses[keyof StartPracticeTrialResponses];
+
+export type GetPracticeTrialData = {
+	body?: never;
+	path: {
+		/**
+		 * Workspace slug
+		 */
+		workspaceSlug: string;
+		trialId: string;
+	};
+	query?: never;
+	url: "/workspaces/{workspaceSlug}/practice-trials/{trialId}";
+};
+
+export type GetPracticeTrialResponses = {
+	/**
+	 * OK
+	 */
+	200: Trial;
+};
+
+export type GetPracticeTrialResponse = GetPracticeTrialResponses[keyof GetPracticeTrialResponses];
 
 export type ListPracticesData = {
 	body?: never;

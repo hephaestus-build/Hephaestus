@@ -267,6 +267,7 @@ public class ReviewAssignmentQueryService implements ReviewAssignmentQuery {
                 case REUSED -> reused++;
                 case WITHHELD -> withheld++;
                 case LISTED, STAGED -> pending++;
+                case TRIED -> {}
             }
         }
         long total = judged + reused + withheld + pending;

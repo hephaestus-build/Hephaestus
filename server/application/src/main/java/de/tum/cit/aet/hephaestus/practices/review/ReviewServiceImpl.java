@@ -110,6 +110,7 @@ public class ReviewServiceImpl implements ReviewService {
     private final ReviewClosure closure;
     private final ReviewRequestTransactions transactions;
     private final ReviewRequestPolicy policy;
+    private final PracticeTrialProperties trials;
 
     /**
      * Admits the request without a lock. Then it pins the item, judges the item's results and reads the sources that
@@ -197,6 +198,15 @@ public class ReviewServiceImpl implements ReviewService {
             throw new ReviewRequestRejected(
                     ReviewRequestRejected.Reason.ITEM_INELIGIBLE, skip.reason(), skip.eventReason());
         });
+        if (request.origin() == ReviewOrigin.TRIAL
+                && reviews.countByWorkspaceIdAndOriginAndStatusIn(
+                                request.workspaceId(),
+                                ReviewOrigin.TRIAL,
+                                List.of(ReviewStatus.QUEUED, ReviewStatus.RUNNING))
+                        >= trials.maxActive())
+            throw new ReviewRequestRejected(
+                    ReviewRequestRejected.Reason.TRIAL_ACTIVE,
+                    "Another trial is still running in this workspace. Try again when it ends.");
         if (request.kind() == ReviewKind.SCAN) {
             var active = reviews.findFirstByWorkspaceIdAndKindAndStatusInOrderByCreatedAtAsc(
                     request.workspaceId(), ReviewKind.SCAN, List.of(ReviewStatus.QUEUED, ReviewStatus.RUNNING));
@@ -368,6 +378,14 @@ public class ReviewServiceImpl implements ReviewService {
                 .map(p -> selection(p, request.kind(), pinned, itemCoverage, checksSource, headChecks))
                 .toList();
         refuseWorkThatNoPracticeReviews(planned);
+        // A trial with nothing to try would end at once; it is refused instead, with the reason it could not run.
+        if (request.origin() == ReviewOrigin.TRIAL && planned.getFirst().reason() != null) {
+            var refusal = new ReviewRequestRejected(
+                    ReviewRequestRejected.Reason.ITEM_INELIGIBLE,
+                    "Hephaestus cannot try this practice on this work now.");
+            refusal.getBody().setProperty("withheldReason", planned.getFirst().reason());
+            throw refusal;
+        }
         var developers = new ArrayList<@Nullable Long>();
         for (var plan : planned) {
             if (plan.reason() == null)
@@ -828,7 +846,13 @@ public class ReviewServiceImpl implements ReviewService {
                         != r.practiceIds().size())
             throw new InvalidInputException("Use positive item ids and distinct practices.");
         if ((r.origin() == ReviewOrigin.EVENT && r.eventId() == null)
-                || (r.origin() == ReviewOrigin.REQUEST && r.requestedById() == null)
+                || ((r.origin() == ReviewOrigin.REQUEST || r.origin() == ReviewOrigin.TRIAL)
+                        && r.requestedById() == null)
+                || (r.origin() == ReviewOrigin.TRIAL
+                        && (r.kind() != ReviewKind.ITEM
+                                || r.practiceIds().size() != 1
+                                || r.requestKey() != null
+                                || r.commentAnswer() != null))
                 || ((r.origin() == ReviewOrigin.SCHEDULE || r.origin() == ReviewOrigin.BACKFILL)
                         && r.batchId() == null))
             throw new IllegalArgumentException("The review origin requires its recorded link.");

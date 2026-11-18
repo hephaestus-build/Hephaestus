@@ -62,6 +62,7 @@ public class ReviewBatchSubmitter {
                 case SCAN_ACTIVE, VERSION_CHANGED, PRACTICES_CHANGED -> new SubmissionOutcome.Deferred();
                 case SOURCE_UNAVAILABLE, ITEM_INELIGIBLE, REQUEST_CONFLICT, REF_UNSUPPORTED ->
                     new SubmissionOutcome.Skipped();
+                case TRIAL_ACTIVE -> throw new IllegalStateException("Only a trial counts the active trials", refusal);
             };
         }
         return new SubmissionOutcome.Submitted();

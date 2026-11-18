@@ -13122,7 +13122,7 @@ export const ReviewOnSchema = {
 export const ReviewOriginSchema = {
 	type: "string",
 	description: "Extensible enum: a client accepts a value that the examples do not name.",
-	examples: ["EVENT", "REQUEST", "SCHEDULE", "BACKFILL"],
+	examples: ["EVENT", "REQUEST", "SCHEDULE", "BACKFILL", "TRIAL"],
 } as const;
 
 export const ReviewOverviewSchema = {
@@ -15948,6 +15948,30 @@ export const StartScanRequestSchema = {
 	required: ["budgetUsd", "expectedVersion", "practiceSlugs", "ref", "repositoryItemId", "reuse"],
 } as const;
 
+export const StartTrialRequestSchema = {
+	type: "object",
+	description:
+		"A request to try one practice on one item: name the item by its id or by its address, not both.",
+	properties: {
+		itemId: {
+			type: "string",
+			pattern: "^[1-9][0-9]*$",
+		},
+		itemUrl: {
+			type: "string",
+			description:
+				"The address of a GitHub pull request or issue, or a GitLab merge request or issue",
+			maxLength: 2048,
+			minLength: 0,
+		},
+		practiceSlug: {
+			type: "string",
+			pattern: "^[a-z0-9][a-z0-9-]{0,63}$",
+		},
+	},
+	required: ["practiceSlug"],
+} as const;
+
 export const StateBasisSchema = {
 	allOf: [
 		{
@@ -16434,6 +16458,151 @@ export const TrendSupportSchema = {
 		"ropeHalfWidth",
 		"standingWork",
 	],
+} as const;
+
+export const TrialSchema = {
+	type: "object",
+	description: "A trial of one practice version on one item (ADR 0118 decision 8).",
+	properties: {
+		completedAt: {
+			type: "string",
+			format: "date-time",
+		},
+		createdAt: {
+			type: "string",
+			format: "date-time",
+		},
+		id: {
+			type: "string",
+			format: "uuid",
+		},
+		itemId: {
+			type: "string",
+		},
+		itemVersion: {
+			type: "string",
+		},
+		outcome: {
+			$ref: "#/components/schemas/TrialOutcome",
+			description: "what the practice found, once admission accepted it",
+		},
+		outcomeRemoved: {
+			type: "boolean",
+			description:
+				"whether the trial's report was cleared, after its retention or by person erasure",
+		},
+		practiceSlug: {
+			type: "string",
+		},
+		practiceVersionId: {
+			type: "string",
+		},
+		practiceVersionNumber: {
+			type: "integer",
+			format: "int32",
+		},
+		status: {
+			$ref: "#/components/schemas/ReviewStatus",
+		},
+		stopReason: {
+			$ref: "#/components/schemas/ReviewStopReason",
+		},
+		withheldReason: {
+			type: "string",
+			description: "why the practice ended without an outcome, when it did",
+		},
+	},
+	required: [
+		"createdAt",
+		"id",
+		"itemId",
+		"outcomeRemoved",
+		"practiceSlug",
+		"practiceVersionId",
+		"practiceVersionNumber",
+		"status",
+	],
+} as const;
+
+export const TrialCitationSchema = {
+	type: "object",
+	description:
+		"Where a trial's candidate cites the work, and the quoted text: text from the reviewed work.",
+	properties: {
+		endLine: {
+			type: "integer",
+			format: "int32",
+		},
+		path: {
+			type: "string",
+		},
+		quote: {
+			type: "string",
+		},
+		source: {
+			type: "string",
+		},
+		startLine: {
+			type: "integer",
+			format: "int32",
+		},
+	},
+	required: ["endLine", "path", "quote", "source", "startLine"],
+} as const;
+
+export const TrialOutcomeSchema = {
+	type: "object",
+	description:
+		"What a trial's practice found, as admission accepted it. No observation records it.",
+	properties: {
+		citations: {
+			type: "array",
+			items: {
+				$ref: "#/components/schemas/TrialCitation",
+			},
+		},
+		explanation: {
+			type: "string",
+		},
+		outcome: {
+			$ref: "#/components/schemas/ResultOutcome",
+		},
+		problems: {
+			type: "array",
+			items: {
+				$ref: "#/components/schemas/TrialProblem",
+			},
+		},
+		summary: {
+			type: "string",
+		},
+	},
+	required: ["citations", "explanation", "outcome", "problems", "summary"],
+} as const;
+
+export const TrialProblemSchema = {
+	type: "object",
+	properties: {
+		citations: {
+			type: "array",
+			items: {
+				$ref: "#/components/schemas/TrialCitation",
+			},
+		},
+		explanation: {
+			type: "string",
+		},
+		nextStep: {
+			type: "string",
+		},
+		severity: {
+			$ref: "#/components/schemas/Severity",
+		},
+		summary: {
+			type: "string",
+		},
+	},
+	required: ["citations", "explanation", "severity", "summary"],
 } as const;
 
 export const TriggerSyncJobRequestSchema = {

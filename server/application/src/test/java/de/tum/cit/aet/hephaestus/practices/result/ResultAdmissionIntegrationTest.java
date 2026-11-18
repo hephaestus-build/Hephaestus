@@ -43,6 +43,7 @@ import de.tum.cit.aet.hephaestus.practices.review.ReviewItemRepository;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewPracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewRepository;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewRequestRejected;
+import de.tum.cit.aet.hephaestus.practices.review.report.TrialReport;
 import de.tum.cit.aet.hephaestus.practices.spi.AdmissionReceipt;
 import de.tum.cit.aet.hephaestus.practices.spi.AdmittedResultQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.AdmittedResultSnapshot;
@@ -353,6 +354,87 @@ class ResultAdmissionIntegrationTest extends AbstractResultAdmissionIntegrationT
         assertThat(results.findById(saved)).isPresent();
         assertThat(reviews.findById(pending.review().getId()).orElseThrow().getStatus())
                 .isEqualTo(ReviewStatus.RUNNING);
+    }
+
+    @Test
+    void shouldKeepATrialCandidateInItsReportAndWriteNoResult() {
+        var pending = admissions.pending(
+                scenario, Instant.now(), scenarioAccountId, "item-version-" + UUID.randomUUID(), ReviewOrigin.TRIAL);
+        var receipt = admit(pending, ResultOutcome.NOT_MET);
+        assertThat(receipt.resultIds()).isEmpty();
+        assertThat(receipt.withheldItems()).isEmpty();
+        // The same attempt can send its candidate again; the report keeps it once.
+        store.admit(
+                pending.review().getWorkspaceId(),
+                pending.review().getId(),
+                pending.jobId(),
+                1,
+                List.of(admissions.candidate(pending, ResultOutcome.NOT_MET)));
+        assertThat(jdbc.sql("SELECT COUNT(*) FROM result WHERE workspace_id=:ws AND review_id=:review")
+                        .param("ws", scenario.workspace().getId())
+                        .param("review", pending.review().getId())
+                        .query(Integer.class)
+                        .single())
+                .isZero();
+        assertThat(memberRows
+                        .findByWorkspaceIdAndReviewIdOrderByPracticeIdAscItemIdAsc(
+                                scenario.workspace().getId(), pending.review().getId())
+                        .getFirst()
+                        .getState())
+                .isEqualTo(ReviewItemState.TRIED);
+        var report = json.treeToValue(
+                Objects.requireNonNull(
+                        reviews.findById(pending.review().getId()).orElseThrow().getReport()),
+                TrialReport.class);
+        assertThat(report.candidates())
+                .singleElement()
+                .satisfies(candidate -> assertThat(candidate.outcome()).isEqualTo(ResultOutcome.NOT_MET));
+
+        // The trial ends complete, and nothing reaches a destination: no completion event, feedback, copy or outbox
+        // action.
+        settle(pending);
+        service.complete(
+                scenario.workspace().getId(),
+                pending.review().getId(),
+                new ReviewCompletion(
+                        ReviewStatus.COMPLETE,
+                        null,
+                        Instant.now(),
+                        pending.review().getOrderedAt()));
+        assertThat(reviews.findById(pending.review().getId()).orElseThrow().getStatus())
+                .isEqualTo(ReviewStatus.COMPLETE);
+        assertThat(applicationEvents.stream(ReviewCompleted.class)).isEmpty();
+        assertThat(jdbc.sql("""
+                        SELECT (SELECT COUNT(*) FROM feedback f WHERE f.workspace_id=:ws AND f.review_id=:review)
+                          + (SELECT COUNT(*) FROM feedback_copy c JOIN feedback f
+                               ON f.id=c.feedback_id AND f.workspace_id=c.workspace_id
+                             WHERE f.workspace_id=:ws AND f.review_id=:review)
+                          + (SELECT COUNT(*) FROM agent_action a
+                             WHERE a.workspace_id=:ws AND a.payload::text LIKE '%' || CAST(:review AS text) || '%')
+                        """)
+                        .param("ws", scenario.workspace().getId())
+                        .param("review", pending.review().getId())
+                        .query(Long.class)
+                        .single())
+                .isZero();
+    }
+
+    @Test
+    void shouldRefuseInTheDatabaseAResultForATrial() {
+        var request = admissions.pending(scenario, Instant.now(), scenarioAccountId);
+        var saved = admit(request, ResultOutcome.NOT_MET).resultIds().getFirst();
+        var trial = admissions.pending(
+                scenario, Instant.now(), scenarioAccountId, "item-version-" + UUID.randomUUID(), ReviewOrigin.TRIAL);
+        // A copy of a real result row that names the trial: only the trial guard can refuse it.
+        assertThatThrownBy(() -> jdbc.sql("INSERT INTO result SELECT (jsonb_populate_record(NULL::result, to_jsonb(r)"
+                                + " || jsonb_build_object('id', CAST(:id AS text), 'review_id', CAST(:trial AS text),"
+                                + " 'item_version', CAST(:version AS text)))).* FROM result r WHERE r.id=:saved")
+                        .param("id", UUID.randomUUID().toString())
+                        .param("trial", trial.review().getId().toString())
+                        .param("version", trial.review().getItemVersion())
+                        .param("saved", saved)
+                        .update())
+                .hasMessageContaining("a trial review has no results");
     }
 
     @ParameterizedTest

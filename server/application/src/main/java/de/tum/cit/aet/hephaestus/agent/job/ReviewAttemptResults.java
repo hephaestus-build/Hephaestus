@@ -324,7 +324,7 @@ public class ReviewAttemptResults {
         } catch (ResultAdmissionService.StaleAttemptException lost) {
             return null;
         }
-        if (ResultAdmissionService.isAdmitted(measured)) {
+        if (ResultAdmissionService.isAdmitted(measured) && reviewRuns.composes(measured)) {
             boolean handedOn = handOnToCompose(jobId, fence, new Measured(agentResult, result));
             if (unprepared) workspaceUnprepared(job, handedOn ? "STAGED_KEPT" : "OWNERSHIP_LOST");
             return null;
@@ -362,7 +362,7 @@ public class ReviewAttemptResults {
         } catch (ResultAdmissionService.StaleAttemptException lost) {
             return false;
         }
-        return handler.admittedResults(sealed) && handOnToCompose(jobId, fence, null);
+        return handler.admittedResults(sealed) && reviewRuns.composes(sealed) && handOnToCompose(jobId, fence, null);
     }
 
     /** Its feedback is decided: no attempt reads the retained inputs again. The retention sweep removes what this leaves. */

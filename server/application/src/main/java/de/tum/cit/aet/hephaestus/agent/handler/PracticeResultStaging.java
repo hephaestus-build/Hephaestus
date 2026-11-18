@@ -20,6 +20,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.PracticeStagingStore.StagedPracti
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentStore;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewFreshness;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewKind;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewOrigin;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStopReason;
 import java.time.Instant;
 import java.util.Base64;
@@ -197,7 +198,8 @@ public class PracticeResultStaging {
 
     private void retainCompositionInputs(AdmissionIdentity identity, ReviewJob job) {
         var review = assignments.review(job);
-        if (review.kind() != ReviewKind.ITEM) return;
+        // A trial never composes, so it keeps no work text for composition.
+        if (review.kind() != ReviewKind.ITEM || review.origin() == ReviewOrigin.TRIAL) return;
         Instant now = Instant.now();
         Instant expiresAt = now.plus(ReviewCompositionBasis.RETENTION);
         var occasionExpiry = review.evidenceExpiresAt();

@@ -9,6 +9,7 @@ public final class PracticeMetrics {
     public static final String REVIEW_FIRST_DELIVERY = "practice.review.first.delivery";
     public static final String REVIEW_ENDED = "practice.review.ended";
     public static final String REVIEW_ITEMS_ENDED = "practice.review.items.ended";
+    public static final String TRIAL_ENDED = "practice.trial.ended";
     public static final String FEEDBACK_READBACK = "practice.feedback.readback";
     public static final String FEEDBACK_RESPONSE = "practice.feedback.response";
     public static final String RESULT_RECORDED = "practice.result.recorded";

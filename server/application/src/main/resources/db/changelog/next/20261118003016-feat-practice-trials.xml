@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1794912010300-1" author="hephaestus">
+        <comment>A trial is an item review with origin TRIAL that a workspace admin requests. It keeps its outcome in its report and never writes a result (ADR 0118 decision 8).</comment>
+        <sql>ALTER TABLE review DROP CONSTRAINT ck_review_origin;
+ALTER TABLE review ADD CONSTRAINT ck_review_origin CHECK (origin IN ('EVENT','REQUEST','BACKFILL','SCHEDULE','TRIAL'));
+ALTER TABLE review DROP CONSTRAINT ck_review_origin_links;
+ALTER TABLE review ADD CONSTRAINT ck_review_origin_links CHECK ((event_id IS NULL OR origin='EVENT') AND (batch_id IS NULL OR origin IN ('BACKFILL','SCHEDULE')) AND (requested_by_id IS NULL OR origin IN ('REQUEST','TRIAL')));
+ALTER TABLE review ADD CONSTRAINT ck_review_trial_kind CHECK (origin&lt;&gt;'TRIAL' OR kind='ITEM');
+ALTER TABLE review DROP CONSTRAINT ck_review_report;
+ALTER TABLE review ADD CONSTRAINT ck_review_report CHECK (report IS NULL OR ((kind='SCAN' OR origin='TRIAL') AND jsonb_typeof(report)='object'));
+ALTER TABLE review_item DROP CONSTRAINT ck_review_item_state;
+ALTER TABLE review_item ADD CONSTRAINT ck_review_item_state CHECK (state IN ('LISTED','STAGED','JUDGED','REUSED','WITHHELD','TRIED'));</sql>
+        <rollback>
+            <sql>DELETE FROM review WHERE origin='TRIAL';
+ALTER TABLE review_item DROP CONSTRAINT ck_review_item_state;
+ALTER TABLE review_item ADD CONSTRAINT ck_review_item_state CHECK (state IN ('LISTED','STAGED','JUDGED','REUSED','WITHHELD'));
+ALTER TABLE review DROP CONSTRAINT ck_review_report;
+ALTER TABLE review ADD CONSTRAINT ck_review_report CHECK (report IS NULL OR (kind='SCAN' AND jsonb_typeof(report)='object'));
+ALTER TABLE review DROP CONSTRAINT ck_review_trial_kind;
+ALTER TABLE review DROP CONSTRAINT ck_review_origin_links;
+ALTER TABLE review ADD CONSTRAINT ck_review_origin_links CHECK ((event_id IS NULL OR origin='EVENT') AND (batch_id IS NULL OR origin IN ('BACKFILL','SCHEDULE')) AND (requested_by_id IS NULL OR origin='REQUEST'));
+ALTER TABLE review DROP CONSTRAINT ck_review_origin;
+ALTER TABLE review ADD CONSTRAINT ck_review_origin CHECK (origin IN ('EVENT','REQUEST','BACKFILL','SCHEDULE'));</sql>
+        </rollback>
+    </changeSet>
+    <changeSet id="1794912010300-2" author="hephaestus">
+        <comment>The database refuses a result for a trial review (ADR 0118 decision 8).</comment>
+        <sql splitStatements="false">CREATE OR REPLACE FUNCTION public.guard_result_insert() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+DECLARE v review%ROWTYPE;
+BEGIN
+ IF NEW.evidence_version&lt;&gt;1 THEN RAISE EXCEPTION 'new results require evidence version 1' USING ERRCODE='23514'; END IF;
+ SELECT * INTO v FROM review WHERE id=NEW.review_id AND workspace_id=NEW.workspace_id;
+ IF NOT FOUND THEN RAISE EXCEPTION 'result review is outside workspace' USING ERRCODE='23503'; END IF;
+ IF v.origin='TRIAL' THEN RAISE EXCEPTION 'a trial review has no results' USING ERRCODE='23514'; END IF;
+ IF NOT EXISTS(SELECT 1 FROM review_practice p WHERE p.review_id=NEW.review_id
+      AND p.practice_id=NEW.practice_id AND p.workspace_id=NEW.workspace_id
+      AND p.practice_version_id=NEW.practice_version_id) THEN
+  RAISE EXCEPTION 'result does not match pinned practice version' USING ERRCODE='23514'; END IF;
+ IF NOT EXISTS(SELECT 1 FROM review_item a WHERE a.review_id=NEW.review_id AND a.practice_id=NEW.practice_id
+  AND a.item_id=NEW.item_id AND a.workspace_id=NEW.workspace_id AND a.item_version=NEW.item_version) THEN
+  RAISE EXCEPTION 'result has no frozen review assignment' USING ERRCODE='23514'; END IF;
+ IF v.kind='ITEM' AND (NEW.item_id&lt;&gt;v.item_id OR NEW.item_version IS DISTINCT FROM v.item_version) THEN
+  RAISE EXCEPTION 'item result differs from review scope/version' USING ERRCODE='23514'; END IF;
+ IF v.kind='SCAN' AND NOT EXISTS(SELECT 1 FROM item i WHERE i.id=NEW.item_id
+   AND i.workspace_id=NEW.workspace_id AND i.parent_id=v.item_id AND EXISTS(SELECT 1 FROM review_practice rp JOIN practice_version pv ON pv.id=rp.practice_version_id AND pv.practice_id=rp.practice_id AND pv.workspace_id=rp.workspace_id WHERE rp.review_id=NEW.review_id AND rp.practice_id=NEW.practice_id AND rp.workspace_id=NEW.workspace_id AND i.kind=pv.definition-&gt;'scan'-&gt;&gt;'itemKind')) THEN
+  RAISE EXCEPTION 'scan result is outside pinned item scope' USING ERRCODE='23514'; END IF;
+ RETURN NEW;
+END $$;</sql>
+        <rollback>
+            <sql splitStatements="false">CREATE OR REPLACE FUNCTION public.guard_result_insert() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+DECLARE v review%ROWTYPE;
+BEGIN
+ IF NEW.evidence_version&lt;&gt;1 THEN RAISE EXCEPTION 'new results require evidence version 1' USING ERRCODE='23514'; END IF;
+ SELECT * INTO v FROM review WHERE id=NEW.review_id AND workspace_id=NEW.workspace_id;
+ IF NOT FOUND THEN RAISE EXCEPTION 'result review is outside workspace' USING ERRCODE='23503'; END IF;
+ IF NOT EXISTS(SELECT 1 FROM review_practice p WHERE p.review_id=NEW.review_id
+      AND p.practice_id=NEW.practice_id AND p.workspace_id=NEW.workspace_id
+      AND p.practice_version_id=NEW.practice_version_id) THEN
+  RAISE EXCEPTION 'result does not match pinned practice version' USING ERRCODE='23514'; END IF;
+ IF NOT EXISTS(SELECT 1 FROM review_item a WHERE a.review_id=NEW.review_id AND a.practice_id=NEW.practice_id
+  AND a.item_id=NEW.item_id AND a.workspace_id=NEW.workspace_id AND a.item_version=NEW.item_version) THEN
+  RAISE EXCEPTION 'result has no frozen review assignment' USING ERRCODE='23514'; END IF;
+ IF v.kind='ITEM' AND (NEW.item_id&lt;&gt;v.item_id OR NEW.item_version IS DISTINCT FROM v.item_version) THEN
+  RAISE EXCEPTION 'item result differs from review scope/version' USING ERRCODE='23514'; END IF;
+ IF v.kind='SCAN' AND NOT EXISTS(SELECT 1 FROM item i WHERE i.id=NEW.item_id
+   AND i.workspace_id=NEW.workspace_id AND i.parent_id=v.item_id AND EXISTS(SELECT 1 FROM review_practice rp JOIN practice_version pv ON pv.id=rp.practice_version_id AND pv.practice_id=rp.practice_id AND pv.workspace_id=rp.workspace_id WHERE rp.review_id=NEW.review_id AND rp.practice_id=NEW.practice_id AND rp.workspace_id=NEW.workspace_id AND i.kind=pv.definition-&gt;'scan'-&gt;&gt;'itemKind')) THEN
+  RAISE EXCEPTION 'scan result is outside pinned item scope' USING ERRCODE='23514'; END IF;
+ RETURN NEW;
+END $$;</sql>
+        </rollback>
+    </changeSet>
+    <changeSet id="1794912010300-3" author="hephaestus" runInTransaction="false">
+        <comment>Trial retention finds the reports to clear without scanning every review.</comment>
+        <sql>DROP INDEX CONCURRENTLY IF EXISTS idx_review_trial_report; CREATE INDEX CONCURRENTLY idx_review_trial_report ON review (completed_at) WHERE origin='TRIAL' AND report IS NOT NULL</sql>
+        <rollback>
+            <sql>DROP INDEX CONCURRENTLY IF EXISTS idx_review_trial_report</sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

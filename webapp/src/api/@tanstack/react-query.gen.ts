@@ -471,6 +471,10 @@ export {
 	getPracticeReviewSettingsQueryKey,
 } from "./react-query/getPracticeReviewSettings.gen.js";
 export {
+	getPracticeTrialOptions,
+	getPracticeTrialQueryKey,
+} from "./react-query/getPracticeTrial.gen.js";
+export {
 	getPracticeWorkspaceOverviewOptions,
 	getPracticeWorkspaceOverviewQueryKey,
 } from "./react-query/getPracticeWorkspaceOverview.gen.js";
@@ -897,6 +901,7 @@ export { setGroupFeedbackModeMutation } from "./react-query/setGroupFeedbackMode
 export { setMemberHiddenMutation } from "./react-query/setMemberHidden.gen.js";
 export { setPracticeFeedbackModeMutation } from "./react-query/setPracticeFeedbackMode.gen.js";
 export { setReviewScheduleEnabledMutation } from "./react-query/setReviewScheduleEnabled.gen.js";
+export { startPracticeTrialMutation } from "./react-query/startPracticeTrial.gen.js";
 export { startScanMutation } from "./react-query/startScan.gen.js";
 export { submitConversationTurnMutation } from "./react-query/submitConversationTurn.gen.js";
 export { submitInstanceProductFeedbackMutation } from "./react-query/submitInstanceProductFeedback.gen.js";

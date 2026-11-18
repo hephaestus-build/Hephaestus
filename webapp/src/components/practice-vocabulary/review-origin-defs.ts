@@ -1,4 +1,4 @@
-import { CalendarClockIcon, HandIcon, HistoryIcon, ZapIcon } from "lucide-react";
+import { CalendarClockIcon, FlaskConicalIcon, HandIcon, HistoryIcon, ZapIcon } from "lucide-react";
 
 import type { ReviewRef } from "@/api/types.gen";
 
@@ -30,5 +30,12 @@ export const REVIEW_ORIGIN_DEFS = {
 		icon: HistoryIcon,
 		badgeVariant: "outline",
 		description: "Reviewed while catching up on work that predates the connection.",
+	},
+	TRIAL: {
+		label: "Trial",
+		icon: FlaskConicalIcon,
+		badgeVariant: "outline",
+		description:
+			"A workspace admin tried a practice on this work. A trial records no observation and sends no feedback.",
 	},
 } satisfies StatusDefs<string>;

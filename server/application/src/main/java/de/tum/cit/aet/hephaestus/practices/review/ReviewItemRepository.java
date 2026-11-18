@@ -158,7 +158,8 @@ public interface ReviewItemRepository extends JpaRepository<ReviewItem, ReviewIt
         SELECT m.practice_id AS practiceId, r.id AS reviewId, r.status AS status,
         CAST(r.checks->>'startedAt' AS timestamptz) AS startedAt FROM review_item m
         JOIN review r ON r.id=m.review_id AND r.workspace_id=m.workspace_id WHERE m.workspace_id=:workspaceId
-        AND m.item_id=:itemId AND m.state IN ('LISTED','STAGED') AND r.kind='ITEM' AND r.status IN ('QUEUED','RUNNING')
+        AND m.item_id=:itemId AND m.state IN ('LISTED','STAGED') AND r.kind='ITEM' AND r.origin<>'TRIAL'
+        AND r.status IN ('QUEUED','RUNNING')
         """, nativeQuery = true)
     List<ListedPractice> listedPractices(long workspaceId, long itemId);
 
@@ -179,7 +180,7 @@ public interface ReviewItemRepository extends JpaRepository<ReviewItem, ReviewIt
         SELECT latest.practice_id FROM (
           SELECT DISTINCT ON (m.practice_id) m.practice_id, m.state, m.reason FROM review_item m
           JOIN review r ON r.id=m.review_id AND r.workspace_id=m.workspace_id
-          WHERE m.workspace_id=:workspaceId AND m.item_id=:itemId AND r.kind='ITEM'
+          WHERE m.workspace_id=:workspaceId AND m.item_id=:itemId AND r.kind='ITEM' AND r.origin<>'TRIAL'
           ORDER BY m.practice_id, r.created_at DESC, r.id DESC
         ) latest WHERE latest.state='WITHHELD' AND latest.reason IN (:reasons)
         """, nativeQuery = true)

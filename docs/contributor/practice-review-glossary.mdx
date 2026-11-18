@@ -57,7 +57,7 @@ The product calls a `Result` an observation, and the `Membership` that it concer
 | **Review**              | One operation that checks practices against an item at a version and can record observations.                                                                 | review                                              |
 | **Scan**                | A review of the items held by another item at a version. The holder is a repository on its monitored default branch.                                          | review.kind = SCAN                                  |
 | **Scan exclusion**      | A listed file that cannot supply scan text. It stays in the inventory and has no eligible practice/file pairs.                                                | inventory_receipt.exclusions                        |
-| **Origin**              | How a review started: an event, a request, a schedule or a backfill.                                                                                          | review.origin                                       |
+| **Origin**              | How a review started: an event, a request, a schedule, a backfill or a trial.                                                                                 | review.origin                                       |
 | **Review status**       | Where a review stands, as stored and as the API reports it. A review is Queued while it waits and nothing of it runs. It waits for capacity, for room for its sandbox, for the workspace's AI budget, or for a retry. It is Running while a claimed invocation runs or a scan prepares its inventory. Terminal states do not reopen. | ReviewStatus                                        |
 | **Continuing** | A Queued review whose earlier attempts ended some of its practices. On a slow provider a review can take many attempts, and each ends some practices. The ended practices keep their results private until the last attempt admits them ([ADR 0063](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0063-each-practice-is-staged-when-it-ends.md)), so a person sees a count, not observations. | ReviewProgressDTO |
 | **Practice status**     | Where one practice stands in its review. Queued until capture decides it is Ready or Withheld. A scan's practice is Running from the first file that a server captures for it. A practice that nothing measured ends Withheld with its review's stop reason, and never Done.           | review_practice.status                              |
@@ -100,10 +100,12 @@ Work is a plain word with no identifier or separate taxonomy.
 | REQUEST  | A request       | An authorized person requested a review or scan.                      |
 | SCHEDULE | A schedule      | A workspace schedule selected a review.                               |
 | BACKFILL | A backfill      | An authorized batch reviews earlier work without delivering feedback. |
+| TRIAL    | A trial         | A workspace admin tries one practice on one item. No observation records what it found. |
 
 Origin and review kind are independent.
 A requested repository review is a scan with REQUEST origin.
 A backfill is not another observation outcome or another current-observation namespace.
+A **trial** keeps what its practice found in its review's report. Its membership ends `TRIED`, never judged, and the database refuses a result for it ([ADR 0118](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0118-a-workspace-keeps-its-practices-in-one-repository-and-a-trial-reviews-a-draft-practice-without-an-observation.md) decision 8).
 The [pipeline](./practice-review-pipeline.mdx) owns ordering, eligibility and feedback restrictions.
 
 ### Review definition and feedback mode

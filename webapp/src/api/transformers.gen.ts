@@ -82,6 +82,7 @@ import type {
 	GetPasskeyStatusResponse,
 	GetPracticeGroupResponse,
 	GetPracticeResponse,
+	GetPracticeTrialResponse,
 	GetProductFeedbackDestinationsResponse,
 	GetProductFeedbackSharingResponse,
 	GetPublicActivityPersonResponse,
@@ -167,6 +168,7 @@ import type {
 	SetMemberHiddenResponse,
 	SetPracticeFeedbackModeResponse,
 	SetReviewScheduleEnabledResponse,
+	StartPracticeTrialResponse,
 	StartScanResponse,
 	SubmitConversationTurnResponse,
 	SubmitInstanceProductFeedbackResponse,
@@ -1932,6 +1934,28 @@ const profileReviewDetailSchemaResponseTransformer = (data: any) => {
 
 export const getOwnReviewResponseTransformer = async (data: any): Promise<GetOwnReviewResponse> => {
 	data = profileReviewDetailSchemaResponseTransformer(data);
+	return data;
+};
+
+const trialSchemaResponseTransformer = (data: any) => {
+	if (data.completedAt) {
+		data.completedAt = new Date(data.completedAt);
+	}
+	data.createdAt = new Date(data.createdAt);
+	return data;
+};
+
+export const startPracticeTrialResponseTransformer = async (
+	data: any,
+): Promise<StartPracticeTrialResponse> => {
+	data = trialSchemaResponseTransformer(data);
+	return data;
+};
+
+export const getPracticeTrialResponseTransformer = async (
+	data: any,
+): Promise<GetPracticeTrialResponse> => {
+	data = trialSchemaResponseTransformer(data);
 	return data;
 };
 

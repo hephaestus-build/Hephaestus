@@ -4944,6 +4944,18 @@ export const zStartScanRequest = z.object({
 	reuse: z.boolean().nullable(),
 });
 
+/**
+ * A request to try one practice on one item: name the item by its id or by its address, not both.
+ */
+export const zStartTrialRequest = z.object({
+	itemId: z
+		.string()
+		.regex(/^[1-9][0-9]*$/)
+		.optional(),
+	itemUrl: z.string().min(0).max(2048).optional(),
+	practiceSlug: z.string().regex(/^[a-z0-9][a-z0-9-]{0,63}$/),
+});
+
 export const zStateBasis = zClaimBasis.and(
 	z.object({
 		explanation: z.string().optional(),
@@ -5219,6 +5231,64 @@ export const zPracticeStanding = z.object({
 	trendSupport: zTrendSupport.nullable(),
 	whatGoodLooksLike: z.string().nullable(),
 	whyItMatters: z.string().nullable(),
+});
+
+/**
+ * Where a trial's candidate cites the work, and the quoted text: text from the reviewed work.
+ */
+export const zTrialCitation = z.object({
+	endLine: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	path: z.string(),
+	quote: z.string(),
+	source: z.string(),
+	startLine: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+});
+
+export const zTrialProblem = z.object({
+	citations: z.array(zTrialCitation),
+	explanation: z.string(),
+	nextStep: z.string().optional(),
+	severity: zSeverity,
+	summary: z.string(),
+});
+
+/**
+ * What a trial's practice found, as admission accepted it. No observation records it.
+ */
+export const zTrialOutcome = z.object({
+	citations: z.array(zTrialCitation),
+	explanation: z.string(),
+	outcome: zResultOutcome,
+	problems: z.array(zTrialProblem),
+	summary: z.string(),
+});
+
+/**
+ * A trial of one practice version on one item (ADR 0118 decision 8).
+ */
+export const zTrial = z.object({
+	completedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
+	createdAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
+	id: z.uuid(),
+	itemId: z.string(),
+	itemVersion: z.string().optional(),
+	outcome: zTrialOutcome.optional(),
+	outcomeRemoved: z.boolean(),
+	practiceSlug: z.string(),
+	practiceVersionId: z.string(),
+	practiceVersionNumber: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	status: zReviewStatus,
+	stopReason: zReviewStopReason.optional(),
+	withheldReason: z.string().optional(),
 });
 
 /**

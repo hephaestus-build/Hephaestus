@@ -21,14 +21,17 @@ public final class ReviewRequestRejected extends ErrorResponseException {
         MODEL_UNAVAILABLE,
         SOURCE_UNAVAILABLE,
         /** A practice came to read another source while the review was requested; the same request can pass now. */
-        PRACTICES_CHANGED;
+        PRACTICES_CHANGED,
+        /** The workspace already has as many trials queued or running as it may have. */
+        TRIAL_ACTIVE;
 
         public boolean transientReason() {
             return this == BUDGET_UNAVAILABLE
                     || this == MODEL_UNAVAILABLE
                     || this == SOURCE_UNAVAILABLE
                     || this == SCAN_ACTIVE
-                    || this == PRACTICES_CHANGED;
+                    || this == PRACTICES_CHANGED
+                    || this == TRIAL_ACTIVE;
         }
     }
 
@@ -64,7 +67,7 @@ public final class ReviewRequestRejected extends ErrorResponseException {
 
     private static HttpStatus status(Reason reason) {
         return switch (reason) {
-            case REQUEST_CONFLICT, VERSION_CHANGED, WORKSPACE_INACTIVE, SCAN_ACTIVE, PRACTICES_CHANGED ->
+            case REQUEST_CONFLICT, VERSION_CHANGED, WORKSPACE_INACTIVE, SCAN_ACTIVE, PRACTICES_CHANGED, TRIAL_ACTIVE ->
                 HttpStatus.CONFLICT;
             case BUDGET_UNAVAILABLE -> HttpStatus.TOO_MANY_REQUESTS;
             case ITEM_INELIGIBLE, REF_UNSUPPORTED -> HttpStatus.UNPROCESSABLE_CONTENT;

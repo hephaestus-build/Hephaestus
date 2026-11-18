@@ -6,6 +6,7 @@ import de.tum.cit.aet.hephaestus.practices.review.report.ScanReportService;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewCompleted;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewItemState;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewKind;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewOrigin;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewPracticeStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStopReason;
@@ -35,7 +36,9 @@ class ReviewClosure {
         long workspace = review.getWorkspaceId();
         var id = review.getId();
         if (review.getKind() == ReviewKind.SCAN) reports.freeze(workspace, id);
-        outcomes.ended(review);
+        // A trial is no production review: it has its own signal and stays out of the review outcome meters.
+        if (review.getOrigin() == ReviewOrigin.TRIAL) outcomes.trialEnded(review);
+        else outcomes.ended(review);
         if ((status == ReviewStatus.COMPLETE || status == ReviewStatus.PARTIAL)
                 && memberships.existsByWorkspaceIdAndReviewIdAndStateInAndResultIdIsNotNull(
                         workspace, id, List.of(ReviewItemState.JUDGED, ReviewItemState.REUSED)))

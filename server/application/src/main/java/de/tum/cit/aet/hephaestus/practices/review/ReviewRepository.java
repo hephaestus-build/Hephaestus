@@ -19,6 +19,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -90,15 +91,27 @@ public interface ReviewRepository extends JpaRepository<Review, UUID>, ReviewQue
     @Query(value = """
         SELECT DISTINCT workspace_id FROM review WHERE kind='SCAN' AND completed_at<=:cutoff AND
         COALESCE((report->>'expired')::boolean,false)=false UNION SELECT DISTINCT workspace_id
-        FROM result WHERE recorded_at<=:cutoff ORDER BY workspace_id
+        FROM result WHERE recorded_at<=:cutoff UNION SELECT DISTINCT workspace_id FROM review
+        WHERE origin='TRIAL' AND report IS NOT NULL AND completed_at<=:trialCutoff ORDER BY workspace_id
         """, nativeQuery = true)
-    List<Long> workspacesWithExpiredProof(Instant cutoff);
+    List<Long> workspacesWithExpiredProof(Instant cutoff, Instant trialCutoff);
 
     @Query(value = """
         SELECT id FROM review WHERE workspace_id=:workspaceId AND kind='SCAN' AND completed_at<=:cutoff
         AND COALESCE((report->>'expired')::boolean,false)=false ORDER BY id::text
         """, nativeQuery = true)
     List<UUID> expiredScanIds(long workspaceId, Instant cutoff);
+
+    /**
+     * Clears the report of each trial that ended at or before the cutoff: the report is what cites someone's work. The
+     * trial's row stays, as every review's does, and job retention removes its jobs and runs.
+     */
+    @Modifying
+    @Query(
+            value = "UPDATE review SET report=NULL WHERE workspace_id=:workspaceId AND origin='TRIAL'"
+                    + " AND report IS NOT NULL AND completed_at<=:cutoff",
+            nativeQuery = true)
+    int clearExpiredTrialReports(long workspaceId, Instant cutoff);
 
     // A call counts its measured cost, or its upper bound while it has no price (agent.usage
     // LlmUsageEventRepository.SPEND); a review with a call of neither has no known cost.
@@ -124,7 +137,11 @@ public interface ReviewRepository extends JpaRepository<Review, UUID>, ReviewQue
     boolean existsByWorkspaceIdAndItemIdAndOriginAndCreatedAtGreaterThanEqual(
             long workspaceId, long itemId, ReviewOrigin origin, Instant since);
 
-    boolean existsByWorkspaceIdAndItemIdAndStatusIn(long workspaceId, long itemId, Collection<ReviewStatus> statuses);
+    boolean existsByWorkspaceIdAndItemIdAndStatusInAndOriginNot(
+            long workspaceId, long itemId, Collection<ReviewStatus> statuses, ReviewOrigin origin);
+
+    long countByWorkspaceIdAndOriginAndStatusIn(
+            long workspaceId, ReviewOrigin origin, Collection<ReviewStatus> statuses);
 
     @WorkspaceAgnostic("Hashes the supplied model snapshot without reading tenant rows")
     @Query(value = "SELECT review_model_digest(CAST(:models AS jsonb))", nativeQuery = true)

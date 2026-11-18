@@ -7,7 +7,9 @@ import java.util.Set;
 
 /**
  * One practice's membership of one item in a review. A listed membership is staged while its attempt runs, then
- * judged, reused from an earlier result, or withheld for a recorded reason; those three have no exit. A membership
+ * judged, reused from an earlier result, or withheld for a recorded reason; those three have no exit. A trial's
+ * membership is tried instead of judged: admission keeps its candidate in the trial's report and writes no result.
+ * A membership
  * whose plan refuses it starts withheld. {@code ReviewItem} changes its state only through its transition methods,
  * and the one native writer, {@code ReviewStagedPayloadRepository.discardUnusable}, moves only a staged membership.
  */
@@ -16,14 +18,16 @@ public enum ReviewItemState implements Lifecycle<ReviewItemState> {
     STAGED,
     JUDGED,
     REUSED,
-    WITHHELD;
+    WITHHELD,
+    TRIED;
 
     private static final Map<ReviewItemState, Set<ReviewItemState>> LEGAL = Map.of(
-            LISTED, Set.of(STAGED, JUDGED, REUSED, WITHHELD),
-            STAGED, Set.of(JUDGED, WITHHELD),
+            LISTED, Set.of(STAGED, JUDGED, REUSED, WITHHELD, TRIED),
+            STAGED, Set.of(JUDGED, WITHHELD, TRIED),
             JUDGED, Set.of(),
             REUSED, Set.of(),
-            WITHHELD, Set.of());
+            WITHHELD, Set.of(),
+            TRIED, Set.of());
 
     @Override
     public boolean canTransitionTo(ReviewItemState next) {

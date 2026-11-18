@@ -162,6 +162,7 @@ public class ItemEventReviewListener {
             case PRACTICES_CHANGED -> throw refusal;
             case SCAN_ACTIVE, REF_UNSUPPORTED, VERSION_CHANGED ->
                 throw new IllegalStateException("An item review cannot compete with a scan", refusal);
+            case TRIAL_ACTIVE -> throw new IllegalStateException("Only a trial counts the active trials", refusal);
         };
         // A refusal that can pass keeps the whole window waiting, so its occasions still select when it is retried.
         if (refusal.reason().transientReason())
