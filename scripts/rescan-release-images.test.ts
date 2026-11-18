@@ -14,7 +14,11 @@ const release = "v0.86.1";
  * An archived release by default: its server image predates the web app's move into it, and a webapp image carries
  * the web app (ADR 0100).
  */
-async function fixture(tag = release, names = ["server", "webapp"]) {
+async function fixture(
+	tag = release,
+	names = ["server", "webapp"],
+	fields: Record<string, unknown> = {},
+) {
 	const directory = await mkdtemp(path.join(tmpdir(), "release-rescan-"));
 	const evidence = path.join(directory, "evidence");
 	const reports = path.join(directory, "reports");
@@ -38,7 +42,7 @@ async function fixture(tag = release, names = ["server", "webapp"]) {
 			digest,
 		})),
 	);
-	const manifest = { schemaVersion: 1, release: tag, commit: "b".repeat(40), subjects };
+	const manifest = { schemaVersion: 1, release: tag, commit: "b".repeat(40), subjects, ...fields };
 	await writeFile(
 		path.join(evidence, `release-${tag}.chart.json`),
 		JSON.stringify({
@@ -310,6 +314,20 @@ void test(
 				{ image: "agent", passed: true, platform: "linux/arm64" },
 			]);
 			assert.deepEqual(value.currentSecurity, { status: failWebApp ? "fail" : "pass" });
+		}
+	},
+);
+
+void test(
+	"a release that evidences the web app in the server image fails a rescan that cannot find it",
+	{ skip: process.platform === "win32" },
+	async () => {
+		for (const bundledNpmSbom of [1, 2]) {
+			const f = await fixture(release, ["server", "agent"], { bundledNpmSbom });
+			const child = execute(f, { PASS_SCAN: "true" });
+			assert.equal(child.status === 0, bundledNpmSbom === 1, child.stderr);
+			const value = await result(f);
+			assert.deepEqual(value.currentSecurity, { status: bundledNpmSbom === 1 ? "pass" : "fail" });
 		}
 	},
 );
