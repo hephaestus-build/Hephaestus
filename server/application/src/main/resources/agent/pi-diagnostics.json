@@ -45,7 +45,6 @@
 		"review.unreachable",
 		"session.abort_failed",
 		"session.idle_wait",
-		"session.left_at_deadline",
 		"session.steer_failed",
 		"task.invalid",
 		"task.loaded",

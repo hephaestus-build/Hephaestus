@@ -2787,24 +2787,14 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 			return { session: fresh, unsubscribe: subscribeSession(fresh) };
 		}
 
-		// Keep settlement handlers subscribed until the native session stops. Past the budget end, a stop waits only
-		// until CLOSE_BY: a session that has not settled by then is left behind, and its practice ends at the deadline.
+		// Keep settlement handlers subscribed until the native session stops.
 		async function stopBeforeSwitching(session: AgentSession): Promise<void> {
-			const deadline = scheduleDeadline(
-				Math.max(0, Math.min(ABORT_SETTLE_MS, CLOSE_BY - Date.now())),
-				() => undefined,
-			);
+			const deadline = scheduleDeadline(ABORT_SETTLE_MS, () => undefined);
 			try {
 				const stopped = await Promise.race([
 					stopSession(session).then(() => true),
 					deadline.elapsed.then(() => false),
 				]);
-				if (!stopped && Date.now() >= measureEnd) {
-					measurementClosed = true;
-					const turn = sessionState().currentTurn;
-					diagnose("session.left_at_deadline", turn === null ? {} : placeOf(turn.label));
-					return;
-				}
 				if (!stopped) {
 					throw new SessionUnsettledError(
 						"Native session did not settle; no later session may start",
@@ -2931,6 +2921,8 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 		 * The sessions' outcomes, or only the ones that settled by `closeBy`. Whatever still runs then is left behind,
 		 * so the runner keeps the watchdog's reserve to record and stage what it measured.
 		 */
+		// Set when measuring returned without a session: that session's later failure changes nothing of the run.
+		let measurementLeft = false;
 		async function settledBy<T>(
 			running: readonly Promise<T>[],
 			closeBy: number,
@@ -2954,6 +2946,7 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 			const left = outcomes.filter((outcome) => outcome === undefined).length;
 			if (left > 0) {
 				measurementClosed = true;
+				measurementLeft = true;
 				diagnose("measurement.left_at_deadline", { sessions_left: left });
 				persistRunnerDebug();
 			}
@@ -3025,6 +3018,9 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 							stalledStarts.abort();
 						}
 					} catch (error) {
+						if (measurementLeft) {
+							throw error;
+						}
 						// The first failure in time is the cause; the abort below can fail the other sessions after it.
 						sessionFailure ??= { error };
 						measurementClosed = true;
