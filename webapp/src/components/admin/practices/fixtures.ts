@@ -104,6 +104,7 @@ export function mockPracticeOf({
 		currentVersion: practiceVersion(definition, { id: `${id}01`, ...version }),
 		feedbackMode,
 		catalogOrigin: origin,
+		editedIn: "HEPHAESTUS",
 		createdAt: new Date("2025-06-01"),
 		updatedAt: new Date("2025-06-15"),
 	};
