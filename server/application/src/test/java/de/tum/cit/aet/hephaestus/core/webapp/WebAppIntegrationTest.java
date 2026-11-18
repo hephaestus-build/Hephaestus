@@ -11,6 +11,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import de.tum.cit.aet.hephaestus.testconfig.ApiWebTestClient;
 import de.tum.cit.aet.hephaestus.testconfig.RealAuthIntegrationTest;
 import jakarta.servlet.Filter;
 import java.net.URI;
@@ -18,6 +19,9 @@ import java.util.Objects;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
+import org.springframework.http.HttpHeaders;
+import org.springframework.test.json.JsonCompareMode;
+import org.springframework.test.web.reactive.server.WebTestClient;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -34,6 +38,9 @@ class WebAppIntegrationTest extends RealAuthIntegrationTest {
 
     @Autowired
     private WebApplicationContext application;
+
+    @Autowired
+    private WebTestClient webTestClient;
 
     /** MockMvc runs only the filters it is given: the host rules, then Spring Security. */
     @Autowired
@@ -76,6 +83,23 @@ class WebAppIntegrationTest extends RealAuthIntegrationTest {
                                     containsString("\"xsrfCookieName\":\"__Host-XSRF-TOKEN\""))));
         }
         mvc().perform(head("/w/acme")).andExpect(status().isOk());
+    }
+
+    @Test
+    void shouldAnswerAnAnonymousProbeWithItsStatusOnlyOnAWorkspaceHost() {
+        // Every path reaches the server, so the probes answer on every host. A caller without authority sees no
+        // component and no detail.
+        for (String path : new String[] {"/livez", "/readyz"}) {
+            webTestClient
+                    .get()
+                    .uri(ApiWebTestClient.root(application, path))
+                    .header(HttpHeaders.HOST, "acme.hephaestus.build")
+                    .exchange()
+                    .expectStatus()
+                    .isOk()
+                    .expectBody()
+                    .json("{\"status\":\"UP\"}", JsonCompareMode.STRICT);
+        }
     }
 
     @Test
