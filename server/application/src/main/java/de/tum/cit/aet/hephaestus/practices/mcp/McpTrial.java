@@ -44,7 +44,17 @@ record McpTrial(
 
     static McpTrial of(TrialDTO trial, boolean mayReadFindings) {
         var found = trial.outcome();
-        boolean findings = found != null && mayReadFindings;
+        List<Problem> problems = null;
+        List<Citation> citations = null;
+        if (found != null && mayReadFindings) {
+            problems = found.problems().stream()
+                    .map(problem -> new Problem(
+                            problem.severity().name(),
+                            problem.summary(),
+                            problem.citations().stream().map(Citation::of).toList()))
+                    .toList();
+            citations = found.citations().stream().map(Citation::of).toList();
+        }
         return new McpTrial(
                 trial.id().toString(),
                 trial.status().name(),
@@ -61,17 +71,8 @@ record McpTrial(
                 found == null ? null : found.outcome().name(),
                 trial.outcomeRemoved(),
                 found != null && !mayReadFindings,
-                findings
-                        ? found.problems().stream()
-                                .map(problem -> new Problem(
-                                        problem.severity().name(),
-                                        problem.summary(),
-                                        problem.citations().stream()
-                                                .map(Citation::of)
-                                                .toList()))
-                                .toList()
-                        : null,
-                findings ? found.citations().stream().map(Citation::of).toList() : null);
+                problems,
+                citations);
     }
 
     private static final String CITATION = """
