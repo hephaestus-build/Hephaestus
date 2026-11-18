@@ -28,7 +28,10 @@ class PracticeRepositoryMove {
 
     @Transactional
     public void apply(
-            WorkspaceContext ctx, String slug, CatalogPracticeDocument document, PracticeRepositoryFolders.Folder folder) {
+            WorkspaceContext ctx,
+            String slug,
+            CatalogPracticeDocument document,
+            PracticeRepositoryFolders.Folder folder) {
         if (workspaces.findByIdForUpdate(ctx.id()).isEmpty())
             throw new EntityNotFoundException("Workspace", ctx.slug());
         var setting = settings.findById(ctx.id()).orElse(null);
