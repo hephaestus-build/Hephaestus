@@ -23,6 +23,12 @@ public final class SandboxGatewayConnector {
     /** How long a caller may stay silent, on a new connection, between reads, or while it reads a response. */
     private static final int SILENCE_MILLIS = 30_000;
 
+    /**
+     * The largest request header block, as {@code server.max-http-request-header-size} sets it for the application
+     * connector. Tomcat answers a larger one with 400 before the gateway's filters read the caller's token.
+     */
+    static final int MAX_REQUEST_HEADER_BYTES = 8 * 1024;
+
     private final Connector connector;
     private final AbstractHttp11Protocol<?> protocol;
     private final int configuredPort;
@@ -38,6 +44,7 @@ public final class SandboxGatewayConnector {
         protocol.setExecutor(new VirtualThreadExecutor("sandbox-gateway-"));
         protocol.setMaxConnections(maxConnections);
         protocol.setConnectionTimeout(SILENCE_MILLIS);
+        protocol.setMaxHttpRequestHeaderSize(MAX_REQUEST_HEADER_BYTES);
     }
 
     Connector connector() {

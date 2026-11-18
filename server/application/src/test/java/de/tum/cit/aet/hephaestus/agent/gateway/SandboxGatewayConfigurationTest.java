@@ -173,4 +173,48 @@ class SandboxGatewayConfigurationTest extends BaseUnitTest {
             server.stop();
         }
     }
+
+    /** Boot's header limit does not reach this connector, so the connector states its own. */
+    @Test
+    void shouldRefuseAHeaderBlockOverTheLimitBeforeAServletRunsWhenACallerSendsOne() throws Exception {
+        var factory = new TomcatServletWebServerFactory(0);
+        factory.setAddress(InetAddress.getLoopbackAddress());
+        var configuration = new SandboxGatewayConfiguration();
+        var gateway = configuration.sandboxGatewayConnector(new SandboxGatewayProperties(0, 1024, 60, 1000, 4096));
+        configuration.sandboxGatewayConnectorCustomizer(gateway).customize(factory);
+        var served = new AtomicInteger();
+        HttpServlet counted = new HttpServlet() {
+            @Override
+            protected void doGet(HttpServletRequest request, HttpServletResponse response) {
+                served.incrementAndGet();
+            }
+        };
+        var server =
+                factory.getWebServer(context -> context.addServlet("counted", counted).addMapping("/*"));
+        server.start();
+        try {
+            int limit = SandboxGatewayConnector.MAX_REQUEST_HEADER_BYTES;
+            assertThat(statusLine(gateway.port(), limit - 1024)).startsWith("HTTP/1.1 200");
+            assertThat(statusLine(gateway.port(), limit + 1024)).startsWith("HTTP/1.1 400");
+            assertThat(served).hasValue(1);
+        } finally {
+            server.stop();
+        }
+    }
+
+    private static String statusLine(int port, int padding) throws IOException {
+        try (var socket = new Socket(InetAddress.getLoopbackAddress(), port)) {
+            socket.setSoTimeout(30_000);
+            socket.getOutputStream()
+                    .write(("GET / HTTP/1.1\r\nHost: gateway\r\nX-Padding: " + "a".repeat(padding)
+                                    + "\r\nConnection: close\r\n\r\n")
+                            .getBytes(StandardCharsets.US_ASCII));
+            var line = new StringBuilder();
+            var in = socket.getInputStream();
+            for (int next = in.read(); next != -1 && next != '\r'; next = in.read()) {
+                line.append((char) next);
+            }
+            return line.toString();
+        }
+    }
 }
