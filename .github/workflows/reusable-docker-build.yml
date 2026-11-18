@@ -694,8 +694,13 @@ jobs:
 
       # A reused image keeps the provenance of the queue run that built it. The action pushes one
       # registry attestation per call, so each image has its own step.
+      # Each attestation is retried once, 30 seconds later: its registry client retries 408, 429 and
+      # 5xx but not a transient 403 from GHCR. A failed retry fails the job. A step that succeeds on
+      # retry still reports `success`, which is what resolve-server-build.ts reads.
       - name: Attest the server image
+        id: attest-server
         if: contains(fromJSON(steps.prep.outputs.built), 'server')
+        continue-on-error: true
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         env:
           NODE_OPTIONS: "--max-http-header-size=32768"
@@ -705,7 +710,9 @@ jobs:
           push-to-registry: true
 
       - name: Attest the webapp image
+        id: attest-webapp
         if: contains(fromJSON(steps.prep.outputs.built), 'webapp')
+        continue-on-error: true
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         env:
           NODE_OPTIONS: "--max-http-header-size=32768"
@@ -715,7 +722,9 @@ jobs:
           push-to-registry: true
 
       - name: Attest the agent image
+        id: attest-agent
         if: contains(fromJSON(steps.prep.outputs.built), 'agent')
+        continue-on-error: true
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         env:
           NODE_OPTIONS: "--max-http-header-size=32768"
@@ -725,7 +734,53 @@ jobs:
           push-to-registry: true
 
       - name: Attest the postgres image
+        id: attest-postgres
         if: contains(fromJSON(steps.prep.outputs.built), 'postgres')
+        continue-on-error: true
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        env:
+          NODE_OPTIONS: "--max-http-header-size=32768"
+        with:
+          subject-name: ${{ inputs.registry }}/hephaestus-build/postgres
+          subject-digest: ${{ steps.digest.outputs.postgres }}
+          push-to-registry: true
+
+      - name: Wait before retrying a failed attestation
+        if: steps.attest-server.outcome == 'failure' || steps.attest-webapp.outcome == 'failure' || steps.attest-agent.outcome == 'failure' || steps.attest-postgres.outcome == 'failure'
+        run: sleep 30
+
+      - name: Retry the server attestation
+        if: steps.attest-server.outcome == 'failure'
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        env:
+          NODE_OPTIONS: "--max-http-header-size=32768"
+        with:
+          subject-name: ${{ inputs.registry }}/hephaestus-build/server
+          subject-digest: ${{ steps.digest.outputs.server }}
+          push-to-registry: true
+
+      - name: Retry the webapp attestation
+        if: steps.attest-webapp.outcome == 'failure'
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        env:
+          NODE_OPTIONS: "--max-http-header-size=32768"
+        with:
+          subject-name: ${{ inputs.registry }}/hephaestus-build/webapp
+          subject-digest: ${{ steps.digest.outputs.webapp }}
+          push-to-registry: true
+
+      - name: Retry the agent attestation
+        if: steps.attest-agent.outcome == 'failure'
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        env:
+          NODE_OPTIONS: "--max-http-header-size=32768"
+        with:
+          subject-name: ${{ inputs.registry }}/hephaestus-build/agent
+          subject-digest: ${{ steps.digest.outputs.agent }}
+          push-to-registry: true
+
+      - name: Retry the postgres attestation
+        if: steps.attest-postgres.outcome == 'failure'
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         env:
           NODE_OPTIONS: "--max-http-header-size=32768"
