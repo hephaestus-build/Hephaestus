@@ -189,8 +189,8 @@ class SandboxGatewayConfigurationTest extends BaseUnitTest {
                 served.incrementAndGet();
             }
         };
-        var server =
-                factory.getWebServer(context -> context.addServlet("counted", counted).addMapping("/*"));
+        var server = factory.getWebServer(
+                context -> context.addServlet("counted", counted).addMapping("/*"));
         server.start();
         try {
             int limit = SandboxGatewayConnector.MAX_REQUEST_HEADER_BYTES;

@@ -36,7 +36,9 @@ class RequestLimitsIntegrationTest {
     void shouldRefuseAHeaderBlockOverTheLimitWhenAClientSendsOne() throws IOException {
         try (var context = start()) {
             int port = port(context);
-            assertThat(exchange(port, get(HEADER_LIMIT - 1024))).startsWith("HTTP/1.1 200").endsWith("ok");
+            assertThat(exchange(port, get(HEADER_LIMIT - 1024)))
+                    .startsWith("HTTP/1.1 200")
+                    .endsWith("ok");
             assertThat(exchange(port, get(HEADER_LIMIT + 1024))).startsWith("HTTP/1.1 400");
         }
     }
