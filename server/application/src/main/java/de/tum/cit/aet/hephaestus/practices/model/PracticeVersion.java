@@ -110,6 +110,10 @@ public class PracticeVersion {
     @Column(name = "tried", nullable = false, updatable = false)
     private boolean tried;
 
+    /** The commit of the practice repository that the definition was read at; null for a version edited in Hephaestus. */
+    @Column(name = "source_commit", length = 64, updatable = false)
+    private @Nullable String sourceCommit;
+
     public String getReviewDigest() {
         return Objects.requireNonNull(
                 reviewDigest, "Persist the practice version before reading its generated digest.");
@@ -125,7 +129,18 @@ public class PracticeVersion {
 
     public PracticeVersion(
             Practice practice, int number, JsonNode definition, @Nullable Long createdByAccountId, boolean tried) {
+        this(practice, number, definition, createdByAccountId, tried, null);
+    }
+
+    public PracticeVersion(
+            Practice practice,
+            int number,
+            JsonNode definition,
+            @Nullable Long createdByAccountId,
+            boolean tried,
+            @Nullable String sourceCommit) {
         this.tried = tried;
+        this.sourceCommit = sourceCommit;
         this.practice = Objects.requireNonNull(practice);
         this.workspaceId = Objects.requireNonNull(practice.getWorkspace().getId());
         if (number < 1 || !definition.isObject()) {

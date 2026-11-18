@@ -80,8 +80,8 @@ class PracticeReviewCoverageServiceTest extends BaseUnitTest {
     void generatedPathsHaveAReset() {
         var monitor = new RepositoryToMonitor();
         monitor.setId(8L);
-        monitor.setNameWithOwner("owner/repo");
-        when(indexed.repositories(1)).thenReturn(Map.of(2L, new MonitoredRepositoryRef(2, 8, "owner/repo")));
+        monitor.setNameWithOwner("owner/repo", "main");
+        when(indexed.repositories(1)).thenReturn(Map.of(2L, new MonitoredRepositoryRef(2, 8, "owner/repo", "main")));
         monitor.setGeneratedPaths(List.of("dist/**"));
         when(monitors.findByWorkspaceId(1L)).thenReturn(List.of(monitor));
         service.patchGeneratedPaths(WorkspacePortFixtures.reviewWorkspace(workspace), Map.of("2", List.of()));
@@ -93,8 +93,8 @@ class PracticeReviewCoverageServiceTest extends BaseUnitTest {
         var monitor = new RepositoryToMonitor();
         monitor.setNativeId(1L);
         monitor.setId(8L);
-        monitor.setNameWithOwner("owner/repo");
-        when(indexed.repositories(1)).thenReturn(Map.of(2L, new MonitoredRepositoryRef(2, 8, "owner/repo")));
+        monitor.setNameWithOwner("owner/repo", "main");
+        when(indexed.repositories(1)).thenReturn(Map.of(2L, new MonitoredRepositoryRef(2, 8, "owner/repo", "main")));
         when(monitors.findByWorkspaceId(1L)).thenReturn(List.of(monitor));
         service.patchGeneratedPaths(
                 WorkspacePortFixtures.reviewWorkspace(workspace), Map.of("2", List.of("dist/**", "dist/**")));
@@ -106,9 +106,9 @@ class PracticeReviewCoverageServiceTest extends BaseUnitTest {
         when(indexed.repositories(1))
                 .thenReturn(Map.of(
                         2L,
-                        new MonitoredRepositoryRef(2, 8, "owner/repo"),
+                        new MonitoredRepositoryRef(2, 8, "owner/repo", "main"),
                         3L,
-                        new MonitoredRepositoryRef(3, 9, "owner/repo")));
+                        new MonitoredRepositoryRef(3, 9, "owner/repo", "main")));
         var selection = service.fromWire(
                 1,
                 new WorkspaceReviewScopeDTO(

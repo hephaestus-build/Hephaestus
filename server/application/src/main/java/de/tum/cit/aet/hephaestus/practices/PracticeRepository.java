@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.practices;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
+import de.tum.cit.aet.hephaestus.practices.model.PracticeEditedIn;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeState;
 import jakarta.persistence.LockModeType;
 import java.util.Collection;
@@ -53,6 +54,8 @@ public interface PracticeRepository extends JpaRepository<Practice, Long> {
 
     @EntityGraph(attributePaths = {"group", "currentVersion"})
     List<Practice> findByWorkspaceIdAndStateOrderBySlugAsc(Long workspaceId, PracticeState state);
+
+    List<Practice> findByWorkspaceIdAndEditedIn(Long workspaceId, PracticeEditedIn editedIn);
 
     /** Deletes the trials of a practice, so that a draft practice can go: trials are all that refer to a draft. */
     @Modifying

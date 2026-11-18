@@ -105,6 +105,12 @@ public class Practice {
     @Setter(AccessLevel.NONE)
     private PracticeState state = PracticeState.ACTIVE;
 
+    /** Where the practice is edited. Catalog provenance ({@code catalogSlug}) is orthogonal to it. */
+    @Enumerated(EnumType.STRING)
+    @ColumnDefault("'HEPHAESTUS'")
+    @Column(name = "edited_in", nullable = false, length = 16)
+    private PracticeEditedIn editedIn = PracticeEditedIn.HEPHAESTUS;
+
     @Column(name = "catalog_slug", length = 64)
     private @Nullable String catalogSlug;
 

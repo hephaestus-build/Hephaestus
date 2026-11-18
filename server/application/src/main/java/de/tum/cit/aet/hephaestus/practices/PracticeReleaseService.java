@@ -96,6 +96,7 @@ public class PracticeReleaseService {
             Map<PracticeDefinitionField, PracticeReleaseChoice> choices) {
         lock(ctx);
         Practice practice = practice(ctx, slug);
+        PracticeEditing.requireEditedInHephaestus(practice);
         var proposal = proposal(practice);
         EntityTagPrecondition.requireExact(precondition, proposal.etag());
         var before = PracticeDefinitionSnapshot.of(practice, mapper);
@@ -124,6 +125,7 @@ public class PracticeReleaseService {
     public Practice reset(WorkspaceContext ctx, String slug, @Nullable EntityTagPrecondition precondition) {
         lock(ctx);
         Practice practice = practice(ctx, slug);
+        PracticeEditing.requireEditedInHephaestus(practice);
         var proposal = proposal(practice);
         EntityTagPrecondition.requireExact(precondition, proposal.etag());
         var before = PracticeDefinitionSnapshot.of(practice, mapper);
