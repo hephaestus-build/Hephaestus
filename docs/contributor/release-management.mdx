@@ -55,15 +55,32 @@ sequenceDiagram
    [The Version PR trigger contract](./ci-cd.mdx#merge-policy) owns approval, reruns and manual recovery.
    [Merge policy](./ci-cd.mdx#merge-policy) owns which commit it versions and how a failed run is reported.
 
-   A maintainer queues an approved Version PR with `node scripts/queue-version-pr.ts`, not with the merge button.
+   A maintainer queues an approved Version PR with `node scripts/queue-version-pr.ts --hold`, not with the merge button.
    It is not a workflow step: the maintainer account may jump the queue, and no run has shown that a workflow's `GITHUB_TOKEN` may.
-   If GitHub refuses the jump or queues the Version PR behind another entry, the script dequeues it and fails.
 
-   The script puts the Version PR at the front of the merge queue (`jump`).
-   Thus, no pull request ahead of it can merge a changeset that it did not consume.
-   The script refuses while `main` has a changeset newer than the commit that the Version PR versions.
-   Then wait until maintenance versions it again.
-   Pull requests that join its merge group behind it are fine, because the release follows the commit that set the version.
+   The Version PR must version the `main` commit that it merges onto, with no newer changeset.
+   Changesets merge every few minutes, and the Version PR's own checks take longer.
+   Thus, `--hold` first takes every queued pull request out of the merge queue, so `main` goes quiet.
+   Before it changes the queue, it writes their list to a file and prints the command that queues them again.
+   It waits until maintenance versions the quiet `main`.
+   When the checks of that head pass, it puts the Version PR at the front of the queue (`jump`).
+
+   Each new head dismisses the earlier approval, and nothing else approves the release bot's pull request.
+   Thus, the script approves the head's waiting runs and then the head itself, as the maintainer who runs it.
+   It approves a head only when GitHub committed it for `github-actions[bot]` (`web-flow`, signature `valid`) as one commit on a commit of `main`.
+   The head may change only the version, the changelogs, and the notes they consumed.
+   In `package.json` only `version` may change, and in `docs/admin/k3s.mdx` only the `VERSION=` line.
+   Any other head stops the run before anything is approved.
+
+   The script then queues the held pull requests behind the Version PR, in their old order.
+   They are fine there, because the release follows the commit that set the version.
+   A failure, an interrupt, or the timeout also queues them again: 60 minutes, or `--timeout-minutes <n>`.
+   If a run is killed, `node scripts/queue-version-pr.ts --resume <file>` queues the held list again.
+
+   If GitHub refuses the jump, the script fails.
+   If GitHub queues the Version PR behind another entry, the script dequeues it and fails.
+   The script refuses to start while a queued pull request changes the version.
+   Without `--hold`, it makes one attempt, and also approves the head and its waiting runs.
 
    A merge group that changes the version also checks its version commit (`plan-release.ts --consumed`).
    If a changeset that merged ahead of the Version PR stays unconsumed there, the group fails and names it.
