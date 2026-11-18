@@ -257,6 +257,13 @@ jobs:
         with:
           install: "none"
 
+      # Changesets that merged ahead of the Version PR in the queue stay unconsumed at its commit, and a
+      # release there would ship changes without their notes. The group fails and names them, so the
+      # Version PR leaves the queue and maintenance versions it again (release-management.mdx).
+      - name: Refuse a stale Version PR
+        if: github.event_name == 'merge_group' && steps.release_candidate.outputs.release-candidate == 'true'
+        run: node scripts/plan-release.ts --consumed HEAD
+
       # An unresolved run only means every image is built, so a failed lookup takes that answer.
       - name: Find the exact-commit merge-queue run
         id: queue_run

@@ -5,6 +5,8 @@
  * pending changesets: the Version PR owns their consumption, version bump and release notes.
  * Without pending changesets, the version can cut from a later forward fix or resume a draft at
  * the same commit. A draft at another commit is refused because its images belong to that commit.
+ * A commit with pending changesets cuts the unpublished version from the commit that set it, when
+ * CI/CD validated that commit and only new changesets followed it (`planVersionRelease`).
  *
  * The upgrade seed is the latest published stable release, not the parent commit's version.
  * The new version must be newer than that release before image aliases can move forward.
@@ -18,7 +20,7 @@ import path from "node:path";
 
 import { isSet } from "./lib/env.ts";
 import { environmentWithoutGitRepository } from "./lib/git-environment.ts";
-import { asRecord, asString, parseJson } from "./lib/json.ts";
+import { asRecord, asString, isRecord, parseJson } from "./lib/json.ts";
 import { BASELINE_RELEASE } from "./lib/previous-release.ts";
 import { output } from "./lib/process.ts";
 import { releaseHistoryProblems } from "./lib/release-headings.ts";
@@ -219,6 +221,213 @@ export function planRelease(
 		sha,
 		tag,
 		version,
+	};
+}
+
+/** The commit that set the version a later commit carries, and what changed after it. */
+export interface VersionSource {
+	readonly sha: string;
+	/** The source still has changesets, so no Version PR versioned it. */
+	readonly pendingChangesets: boolean;
+	/** A successful CI/CD push or merge-group run validated this exact commit. */
+	readonly validated: boolean;
+	/** Release history that the commits after the source changed, as `git diff --name-status` lines. */
+	readonly historyChanges: readonly string[];
+	/**
+	 * A successful CI/CD push run started at the source or a later commit before this one. Its
+	 * release run planned the version first, so this push keeps the old answer: it skips.
+	 */
+	readonly plannedBefore: boolean;
+}
+
+/**
+ * Plans the release of the version that `sha` carries. A commit without pending changesets plans
+ * itself, so a forward fix can still recut an unpublished version. A commit with pending changesets
+ * merged after the Version PR. When the merge queue folds the Version PR into a group with later
+ * pull requests, `main` receives one push, for the group's tip, and no push run starts at the
+ * commit that changed the version. The first push that brings that commit to `main` then cuts it,
+ * but only if CI/CD validated it and the commits after it changed no release history: they may add
+ * changesets for the next Version PR, and nothing else that a release reads. A later push skips:
+ * one release run per version, and a forward fix after it plans itself.
+ */
+export function planVersionRelease(
+	sha: string,
+	version: string,
+	releases: readonly ReleaseRef[],
+	pendingChangesets: boolean,
+	source: VersionSource | undefined,
+): ReleasePlan {
+	if (!pendingChangesets || source === undefined || source.sha === sha || source.plannedBefore) {
+		return planRelease(sha, version, releases, pendingChangesets);
+	}
+	const plan = planRelease(source.sha, version, releases, source.pendingChangesets);
+	if (plan.kind !== "cut") {
+		return plan;
+	}
+	if (!source.validated) {
+		return {
+			kind: "refuse",
+			reason: `${plan.tag} would cut at its version commit ${source.sha}, but no successful CI/CD push or merge-group run validated that commit`,
+		};
+	}
+	if (source.historyChanges.length > 0) {
+		return {
+			kind: "refuse",
+			reason: `${plan.tag} would cut at its version commit ${source.sha}, but the commits after it changed release history (${source.historyChanges.join("; ")}); only new changesets may follow it`,
+		};
+	}
+	return plan;
+}
+
+const RELEASE_HISTORY = ["CHANGELOG.md", "MIGRATION.md", ".changeset", ".migration"];
+
+/** `git diff --name-status -z` output as `status<TAB>path` lines, so no path is quoted. */
+export function nameStatusLines(text: string): string[] {
+	const fields = text.split("\0").filter((field) => field !== "");
+	const lines: string[] = [];
+	for (let index = 0; index + 1 < fields.length; index += 2) {
+		lines.push(`${fields[index] ?? ""}\t${fields[index + 1] ?? ""}`);
+	}
+	return lines;
+}
+
+/** A change after the version commit that a release reads: anything but a new changeset or fragment. */
+export function isHistoryChange(line: string): boolean {
+	const [status = "", file = ""] = line.split("\t");
+	if (file === "CHANGELOG.md" || file === "MIGRATION.md") {
+		return true;
+	}
+	if (file === ".changeset/pre.json" || file.startsWith(".changeset/pre/")) {
+		return true;
+	}
+	const note = /^\.changeset\/[^/]+\.md$/u.test(file) && file !== ".changeset/README.md";
+	const fragment = /^\.migration\/[^/]+\.md$/u.test(file) && file !== ".migration/README.md";
+	// A new note waits for the next Version PR; a consumed or edited one was released or rewritten.
+	return (note || fragment) && status !== "A";
+}
+
+/**
+ * The newest first-parent commit at or before `sha` whose `package.json` version differs from its
+ * first parent's, with its pending changesets, the release history changed after it, and the
+ * first-parent commits from it up to `sha` (`sha` excluded). `undefined` when the history within
+ * `limit` commits does not reach it.
+ */
+export async function findVersionSource(
+	sha: string,
+	cwd?: string,
+	limit = 1000,
+): Promise<
+	| (Omit<VersionSource, "validated" | "plannedBefore"> & { readonly earlier: readonly string[] })
+	| undefined
+> {
+	const env = environmentWithoutGitRepository();
+	const git = async (args: string[]) => output("git", args, { cwd, env });
+	const versionAt = async (revision: string): Promise<string | undefined> => {
+		let manifest: string;
+		try {
+			manifest = await git(["show", `${revision}:package.json`]);
+		} catch {
+			return undefined;
+		}
+		return asString(
+			asRecord(parseJson(manifest), `${revision}:package.json`).version,
+			`${revision}:package.json version`,
+		);
+	};
+	const version = await versionAt(sha);
+	const listed = await git(["rev-list", "--first-parent", `--max-count=${limit}`, sha]);
+	const commits = listed.split("\n").filter((line) => line !== "");
+	let source: string | undefined;
+	for (const commit of commits) {
+		if ((await versionAt(commit)) !== version) {
+			break;
+		}
+		source = commit;
+	}
+	// The walk must end at a commit with another version; a history cut off by `limit` names none.
+	if (source === undefined || source === commits.at(-1)) {
+		return undefined;
+	}
+	const changed = await git([
+		"diff",
+		"--name-status",
+		"--no-renames",
+		"-z",
+		source,
+		sha,
+		"--",
+		...RELEASE_HISTORY,
+	]);
+	return {
+		sha: source,
+		pendingChangesets: await hasPendingChangesets(source, cwd),
+		historyChanges: nameStatusLines(changed).filter(isHistoryChange),
+		earlier: commits.slice(1, commits.indexOf(source) + 1),
+	};
+}
+
+/** Whether a successful CI/CD push or merge-group run of this repository validated `sha`. */
+async function validatedByCi(repository: string, sha: string): Promise<boolean> {
+	const response = asRecord(
+		parseJson(
+			await output("gh", [
+				"api",
+				`repos/${repository}/actions/workflows/cicd.yml/runs?head_sha=${sha}&status=success&per_page=50`,
+			]),
+		),
+		"workflow runs",
+	);
+	const runs = response.workflow_runs;
+	if (!Array.isArray(runs)) {
+		throw new Error("gh api workflow runs must list workflow_runs");
+	}
+	return runs.some((value) => {
+		const run = asRecord(value, "workflow run");
+		return (
+			(run.event === "push" || run.event === "merge_group") &&
+			run.head_sha === sha &&
+			isRecord(run.head_repository) &&
+			run.head_repository.full_name === repository
+		);
+	});
+}
+
+/** The commits on `main` whose CI/CD push run succeeded: each started a release run. */
+async function pushedCommits(repository: string): Promise<Set<string>> {
+	const response = asRecord(
+		parseJson(
+			await output("gh", [
+				"api",
+				`repos/${repository}/actions/workflows/cicd.yml/runs?branch=main&event=push&status=success&per_page=100`,
+			]),
+		),
+		"workflow runs",
+	);
+	const runs = response.workflow_runs;
+	if (!Array.isArray(runs)) {
+		throw new Error("gh api workflow runs must list workflow_runs");
+	}
+	return new Set(
+		runs
+			.map((value) => asRecord(value, "workflow run"))
+			.filter(
+				(run) => isRecord(run.head_repository) && run.head_repository.full_name === repository,
+			)
+			.map((run) => asString(run.head_sha, "head sha")),
+	);
+}
+
+/** The commit that set the version `sha` carries, when it is another commit; `undefined` otherwise. */
+async function versionSource(repository: string, sha: string): Promise<VersionSource | undefined> {
+	const found = await findVersionSource(sha);
+	if (found === undefined || found.sha === sha) {
+		return undefined;
+	}
+	const pushed = await pushedCommits(repository);
+	return {
+		...found,
+		plannedBefore: found.earlier.some((commit) => pushed.has(commit)),
+		validated: await validatedByCi(repository, found.sha),
 	};
 }
 
@@ -513,8 +722,8 @@ export async function hasSchemaMigrations(
 	return changed.trim() !== "";
 }
 
-/** Pending release notes belong to the validated source commit, not the current checkout. */
-export async function hasPendingChangesets(sha: string, cwd?: string): Promise<boolean> {
+/** The changesets at `sha` that no Version PR consumed yet. */
+export async function pendingChangesetFiles(sha: string, cwd?: string): Promise<string[]> {
 	const files = await output(
 		"git",
 		["ls-tree", "-r", "--name-only", "-z", sha, "--", ".changeset"],
@@ -525,7 +734,28 @@ export async function hasPendingChangesets(sha: string, cwd?: string): Promise<b
 	);
 	return files
 		.split("\0")
-		.some((file) => /^\.changeset\/[^/]+\.md$/u.test(file) && file !== ".changeset/README.md");
+		.filter((file) => /^\.changeset\/[^/]+\.md$/u.test(file) && file !== ".changeset/README.md");
+}
+
+/** Pending release notes belong to the validated source commit, not the current checkout. */
+export async function hasPendingChangesets(sha: string, cwd?: string): Promise<boolean> {
+	const files = await pendingChangesetFiles(sha, cwd);
+	return files.length > 0;
+}
+
+/**
+ * Why a merge group must not merge its Version PR, or `undefined` when it may. A Version PR
+ * versions the changesets of the commit it was made from. Changesets that merged ahead of it in the
+ * queue stay unconsumed at its commit, so a release cut there would ship changes without their
+ * notes. The group fails, the Version PR leaves the queue, and maintenance versions it again.
+ */
+export function staleVersionPullRequest(
+	source: Pick<VersionSource, "sha">,
+	pending: readonly string[],
+): string | undefined {
+	return pending.length === 0
+		? undefined
+		: `the Version PR at ${source.sha} leaves ${pending.length} changesets unconsumed that merged after it was versioned (${pending.join(", ")}); maintenance versions it again on main, then queue it again`;
 }
 
 /** The release with `tag`, drafts included. Only gh's own not-found answer means there is none. */
@@ -677,6 +907,30 @@ if (import.meta.main && process.argv[2] === "--aliases") {
 			process.exitCode = 1;
 		}
 	}
+} else if (import.meta.main && process.argv[2] === "--consumed") {
+	// A merge group that changes the version: its version commit must consume every changeset.
+	const [, sha] = process.argv.slice(2);
+	if (isSet(sha)) {
+		try {
+			const source = await findVersionSource(sha);
+			const reason =
+				source === undefined
+					? `no first-parent commit of ${sha} sets its version`
+					: staleVersionPullRequest(source, await pendingChangesetFiles(source.sha));
+			if (reason === undefined) {
+				console.log(`The version commit ${source?.sha ?? sha} consumes every changeset.`);
+			} else {
+				console.log(`::error::${reason}`);
+				process.exitCode = 1;
+			}
+		} catch (error) {
+			console.log(`::error::${error instanceof Error ? error.message : String(error)}`);
+			process.exitCode = 1;
+		}
+	} else {
+		console.log("::error::usage: plan-release.ts --consumed <sha>");
+		process.exitCode = 1;
+	}
 } else if (import.meta.main && process.argv[2] === "--source") {
 	// Prints the state for the step to branch on, and refuses a state the step does not accept.
 	const [, tag, sha, ...accepted] = process.argv.slice(2);
@@ -740,7 +994,18 @@ if (import.meta.main && process.argv[2] === "--aliases") {
 			);
 		} else {
 			const releases = await listReleases(repository);
-			plan = planRelease(sha, version, releases, pending);
+			const published = releases.some(
+				(release) => release.tag === `v${version}` && !release.isDraft,
+			);
+			try {
+				const source = pending && !published ? await versionSource(repository, sha) : undefined;
+				plan = planVersionRelease(sha, version, releases, pending, source);
+			} catch (error) {
+				plan = {
+					kind: "refuse",
+					reason: `could not read the commit that set ${version}: ${error instanceof Error ? error.message : String(error)}`,
+				};
+			}
 			plan = await withReleaseHistory(plan, releases);
 		}
 		if (plan.kind === "refuse") {
@@ -748,10 +1013,10 @@ if (import.meta.main && process.argv[2] === "--aliases") {
 			process.exitCode = 1;
 		} else {
 			const migrations =
-				plan.kind === "cut" && (await hasSchemaMigrations(`v${plan.previousVersion}`, sha));
+				plan.kind === "cut" && (await hasSchemaMigrations(`v${plan.previousVersion}`, plan.sha));
 			console.log(
 				plan.kind === "cut"
-					? `Cutting ${plan.tag} at ${sha} after v${plan.previousVersion}${plan.resumesDraft ? ", resuming its draft" : ""}`
+					? `Cutting ${plan.tag} at ${plan.sha}${plan.sha === sha ? "" : ` (the commit that set its version; ${sha} added changesets after it)`} after v${plan.previousVersion}${plan.resumesDraft ? ", resuming its draft" : ""}`
 					: `${plan.reason} — no release to cut.`,
 			);
 			const outputs = Object.entries(releaseOutputs(plan, migrations))
