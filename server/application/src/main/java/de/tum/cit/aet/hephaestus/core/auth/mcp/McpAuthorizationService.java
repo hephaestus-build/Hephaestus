@@ -458,6 +458,13 @@ public class McpAuthorizationService implements McpClientGrants {
 
     @Override
     @Transactional
+    public void recordUse(long workspaceId, UUID grantId) {
+        Instant now = clock.instant();
+        grants.markUsed(workspaceId, grantId, now, now.minus(McpClientGrant.LAST_USED_PRECISION));
+    }
+
+    @Override
+    @Transactional
     public boolean revoke(Long workspaceId, UUID grantId, Long actingAccountId) {
         Long owner = grants.findAccountIdInWorkspace(workspaceId, grantId).orElse(null);
         if (owner == null || !sessions.revokeMcpGrant(owner, grantId)) {
