@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.practices;
 
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditSnapshot;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
+import de.tum.cit.aet.hephaestus.practices.model.PracticeEditedIn;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeState;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackMode;
 import java.util.Objects;
@@ -11,6 +12,7 @@ import tools.jackson.databind.json.JsonMapper;
 record PracticeDefinitionSnapshot(
         String slug,
         PracticeState state,
+        PracticeEditedIn editedIn,
         String kind,
         Long versionId,
         String reviewDigest,
@@ -24,6 +26,7 @@ record PracticeDefinitionSnapshot(
         return new PracticeDefinitionSnapshot(
                 practice.getSlug(),
                 practice.getState(),
+                practice.getEditedIn(),
                 practice.getKind().value(),
                 Objects.requireNonNull(practice.getCurrentVersion().getId()),
                 practice.getCurrentVersion().getReviewDigest(),

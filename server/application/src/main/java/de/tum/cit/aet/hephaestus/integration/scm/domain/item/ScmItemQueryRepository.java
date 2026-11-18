@@ -99,7 +99,7 @@ public interface ScmItemQueryRepository extends Repository<Item, Long> {
             @Param("pullKind") String pullKind);
 
     @Query(value = """
-                SELECT i.id AS item_id, m.id AS monitor_id, r.name_with_owner, p.server_url
+                SELECT i.id AS item_id, m.id AS monitor_id, r.name_with_owner, r.default_branch, p.server_url
                 FROM item i JOIN repository r ON r.id=i.source_id
                 JOIN identity_provider p ON p.id=r.provider_id
                 JOIN repository_to_monitor m ON m.workspace_id=i.workspace_id
@@ -242,6 +242,9 @@ public interface ScmItemQueryRepository extends Repository<Item, Long> {
 
         String getNameWithOwner();
 
+        @Nullable
+        String getDefaultBranch();
+
         String getServerUrl();
     }
 
@@ -253,6 +256,9 @@ public interface ScmItemQueryRepository extends Repository<Item, Long> {
         long getNativeId();
 
         String getNameWithOwner();
+
+        @Nullable
+        String getDefaultBranch();
 
         String getServerUrl();
     }
