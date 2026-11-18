@@ -242,7 +242,6 @@ class PracticeTrialControllerIntegrationTest extends BaseIntegrationTest {
     }
 
     private void choose(long accountId, AiChoice choice) {
-        jdbc.update(
-                "UPDATE account SET ai_choice = ?, ai_choice_at = now() WHERE id = ?", choice.name(), accountId);
+        jdbc.update("UPDATE account SET ai_choice = ?, ai_choice_at = now() WHERE id = ?", choice.name(), accountId);
     }
 }

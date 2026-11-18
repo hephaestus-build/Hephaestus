@@ -73,7 +73,7 @@ class GetPracticeTrialTool implements McpTool {
         long account = SecurityUtils.getCurrentAccountId()
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED));
         var trial = trials.get(workspaceId, id);
-        return McpTools.result(
-                jsonMapper.convertValue(McpTrial.of(trial, trials.mayReadFindings(workspaceId, id, account)), Map.class));
+        return McpTools.result(jsonMapper.convertValue(
+                McpTrial.of(trial, trials.mayReadFindings(workspaceId, id, account)), Map.class));
     }
 }

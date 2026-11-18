@@ -129,7 +129,12 @@ class SavePracticeDraftTool implements McpTool {
             int versionNumber,
             boolean current,
             List<Warning> warnings) {
-        record Warning(String file, @Nullable Integer line, @Nullable Integer column, String code, String message) {}
+        record Warning(
+                String file,
+                @Nullable Integer line,
+                @Nullable Integer column,
+                String code,
+                String message) {}
 
         static SavedDraft of(PracticeDraftDTO saved) {
             return new SavedDraft(
@@ -143,7 +148,11 @@ class SavePracticeDraftTool implements McpTool {
                     saved.current(),
                     saved.warnings().stream()
                             .map(problem -> new Warning(
-                                    problem.file(), problem.line(), problem.column(), problem.code(), problem.message()))
+                                    problem.file(),
+                                    problem.line(),
+                                    problem.column(),
+                                    problem.code(),
+                                    problem.message()))
                             .toList());
         }
     }

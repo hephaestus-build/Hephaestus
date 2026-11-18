@@ -102,8 +102,10 @@ class McpTrialTest extends BaseUnitTest {
                 .containsExactlyInAnyOrderElementsOf(strings(
                         schema.path("properties").path("problems").path("items").path("required")));
         assertThat(names(written.path("citations").path(0)))
-                .containsExactlyInAnyOrderElementsOf(strings(
-                        schema.path("properties").path("citations").path("items").path("required")));
+                .containsExactlyInAnyOrderElementsOf(strings(schema.path("properties")
+                        .path("citations")
+                        .path("items")
+                        .path("required")));
     }
 
     private static List<String> names(JsonNode node) {

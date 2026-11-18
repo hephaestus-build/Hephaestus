@@ -160,8 +160,9 @@ public class PracticeTrialService {
         var members = memberships.findByWorkspaceIdAndReviewIdOrderByPracticeIdAscItemIdAsc(workspaceId, trialId);
         return !members.isEmpty()
                 && members.stream().allMatch(member -> {
-                    var developer =
-                            member.getDetail() == null ? null : member.getDetail().get("developerId");
+                    var developer = member.getDetail() == null
+                            ? null
+                            : member.getDetail().get("developerId");
                     return developer != null
                             && developer.isIntegralNumber()
                             && chosenCloud(workspaceId, developer.longValue());
