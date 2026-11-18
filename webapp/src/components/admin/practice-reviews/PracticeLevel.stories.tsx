@@ -114,6 +114,41 @@ export const Versions: Story = {
 	},
 };
 
+/**
+ * A practice edited in the practice repository: each version read from it names the commit, and the
+ * link to Practice setup opens the practice, which says why it has no editor there.
+ */
+export const EditedInRepository: Story = {
+	args: {
+		practice: {
+			status: "ready",
+			practice: practice && { ...practice, editedIn: "REPOSITORY" },
+			definitionOptions: mockPracticeDefinitionOptions,
+			groupName: "Review-ready work",
+		},
+		versions: {
+			status: "ready",
+			versions: practiceVersions.map((version) =>
+				version.number === 3
+					? { ...version, sourceCommit: "4f2a9c1e8b7d6a5f4e3d2c1b0a9f8e7d6c5b4a39" }
+					: version,
+			),
+		},
+	},
+	play: async () => {
+		const panel = within(await settledDrawerPanel());
+		const history = within(panel.getByRole("list", { name: "History" }));
+		await expect(history.getByText("4f2a9c1")).toBeVisible();
+		// Only the version read from the repository names a commit.
+		await expect(history.getAllByText(/Read from the practice repository at commit/u)).toHaveLength(
+			1,
+		);
+		const open = panel.getByRole("link", { name: "Open in Practice setup" });
+		await expect(open.getAttribute("href")).not.toContain("practice-edit");
+		await expect(panel.queryByRole("link", { name: "Edit in Practice setup" })).toBeNull();
+	},
+};
+
 /** The versions could not be read: the definition still stands. */
 export const VersionsFailed: Story = {
 	args: { versions: { status: "error", error: new Error("Network down"), onRetry: fn() } },

@@ -707,6 +707,97 @@ export const BlockedDestinationDrag: Story = {
 	},
 };
 
+/**
+ * A practice edited in the practice repository takes its definition and group from its folder there.
+ * Its menu keeps those actions in view but unavailable, under the label that says why; its order
+ * inside the group stays the workspace's.
+ */
+export const EditedInRepository: Story = {
+	args: {
+		practices: practices.map((practice) =>
+			practice.slug === longTextPractice.slug
+				? { ...practice, editedIn: "REPOSITORY" as const }
+				: practice,
+		),
+	},
+	parameters: { chromatic: { disableSnapshot: true } },
+	play: async ({ args, canvas, userEvent }) => {
+		// Only the practice edited there carries the badge.
+		await expect(canvas.getAllByText("Edited in the practice repository")).toHaveLength(1);
+		await userEvent.click(
+			canvas.getByRole("button", { name: `More actions for ${nameOf(mockPracticeLongText)}` }),
+		);
+		const menu = within(await screen.findByRole("menu"));
+		await expect(menu.getByText("Edited in the practice repository")).toBeVisible();
+		await expect(menu.getByRole("menuitem", { name: "Edit practice" })).toHaveAttribute(
+			"aria-disabled",
+			"true",
+		);
+		// Each unavailable item says why on itself: the label sits far from Move to and Delete.
+		for (const item of [
+			menu.getByRole("menuitem", { name: "Edit practice" }),
+			menu.getByRole("menuitem", { name: "Delete practice" }),
+			menu.getByRole("menuitemradio", { name: issueAuthoringGroup.name }),
+			menu.getByRole("menuitemradio", { name: "Unassigned" }),
+		]) {
+			await expect(item).toHaveAttribute("aria-disabled", "true");
+			await expect(item).toHaveAccessibleDescription("Edited in the practice repository");
+		}
+		// Download reads the practice and changes nothing, so it stays.
+		await expect(menu.getByRole("menuitem", { name: "Download as files" })).not.toHaveAttribute(
+			"aria-disabled",
+			"true",
+		);
+
+		await userEvent.click(menu.getByRole("menuitem", { name: "Move down" }));
+		await expect(args.onMovePractice).toHaveBeenCalledTimes(1);
+		await expect(args.onMovePractice).toHaveBeenCalledWith(
+			mockPracticeLongText.slug,
+			longNamedGroup.slug,
+			1,
+		);
+	},
+};
+
+export const RepositoryPracticeDragStaysInItsGroup: Story = {
+	args: {
+		groups: mockGroups,
+		practices: [{ ...prDescriptionPractice, groupSlug: null, editedIn: "REPOSITORY" }],
+	},
+	parameters: { chromatic: { disableSnapshot: true } },
+	play: async ({ args, canvas, userEvent }) => {
+		const handle = canvas.getByRole("button", { name: `Reorder ${nameOf(prDescriptionPractice)}` });
+		const destinationGroup = canvas
+			.getByText(issueAuthoringGroup.name)
+			.closest<HTMLElement>('[data-slot="accordion-item"]');
+		if (!destinationGroup) {
+			throw new Error("Destination group not rendered");
+		}
+		const destination = within(destinationGroup).getByText("No practices here");
+		const start = handle.getBoundingClientRect();
+		const end = destination.getBoundingClientRect();
+
+		await userEvent.pointer([
+			{
+				target: handle,
+				coords: { x: start.left + start.width / 2, y: start.top + start.height / 2 },
+				keys: "[MouseLeft>]",
+			},
+			{
+				target: handle,
+				coords: { x: start.left + start.width / 2, y: start.top + start.height / 2 + 10 },
+			},
+			{
+				target: destination,
+				coords: { x: end.left + end.width / 2, y: end.top + end.height / 2 },
+			},
+			{ target: destination, keys: "[/MouseLeft]" },
+		]);
+
+		await expect(args.onMovePractice).not.toHaveBeenCalled();
+	},
+};
+
 export const FeedbackModeLevels: Story = {
 	args: {
 		groups: mockGroups,

@@ -58,6 +58,8 @@ interface HarnessProps {
 	disabledGroups?: readonly string[];
 	/** Rows that may not move at all — not up, not down, and not into another group. */
 	disabledEntries?: readonly string[];
+	/** Rows that may move up and down inside their group, but not into another one. */
+	groupLockedEntries?: readonly string[];
 	/** When set, only these rows are listed — the shape a search box produces. */
 	visible?: readonly string[];
 	onPlaceEntry: (entrySlug: string, groupSlug: string | null, position: number) => void;
@@ -78,6 +80,7 @@ function CatalogTreeHarness({
 	blockedDestinations = NONE,
 	disabledGroups = NONE,
 	disabledEntries = NONE,
+	groupLockedEntries = NONE,
 	visible,
 	onPlaceEntry,
 	onReorderGroups,
@@ -107,7 +110,9 @@ function CatalogTreeHarness({
 	return (
 		<SortableCatalogTree
 			groups={groups}
-			entries={rows}
+			entries={rows.map((row) =>
+				groupLockedEntries.includes(row.slug) ? { ...row, groupLocked: true } : row,
+			)}
 			visibleEntrySlugs={visible ? new Set(visible) : undefined}
 			groupReorderDisabled={false}
 			disabledGroupSlugs={new Set(disabledGroups)}
@@ -368,6 +373,29 @@ export const ARowWithItsOwnMoveInFlightCannotLeaveEither: Story = {
 			"aria-disabled",
 			"false",
 		);
+	},
+};
+
+/** A row whose group is fixed elsewhere, such as a practice edited in the practice repository. */
+export const ARowWithAFixedGroupStillReorders: Story = {
+	args: { groupLockedEntries: ["explain-why"] },
+	play: async ({ args, canvas }) => {
+		const locked = await openActions(canvas, "Explain what changed and why");
+
+		for (const name of ["Move to Quality", "Move to Unassigned"]) {
+			await expect(locked.getByRole("menuitem", { name })).toHaveAttribute("aria-disabled", "true");
+		}
+		await userEvent.click(locked.getByRole("menuitem", { name: "Move to Quality" }));
+		await expect(args.onPlaceEntry).not.toHaveBeenCalled();
+		// Its position is still the workspace's to change.
+		await expect(
+			canvas.getByRole("button", { name: "Reorder Explain what changed and why" }),
+		).toBeEnabled();
+
+		const again = await openActions(canvas, "Explain what changed and why");
+		await userEvent.click(again.getByRole("menuitem", { name: "Move down" }));
+		await expect(args.onPlaceEntry).toHaveBeenCalledTimes(1);
+		await expect(args.onPlaceEntry).toHaveBeenCalledWith("explain-why", "delivery", 2);
 	},
 };
 

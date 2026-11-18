@@ -29,7 +29,15 @@ public record PracticeVersionDTO(
         AccountRefDTO createdBy,
 
         List<PracticeDefinitionField> changed,
-        boolean reviewChanged) {
+        boolean reviewChanged,
+
+        @Schema(
+                requiredMode = Schema.RequiredMode.REQUIRED,
+                nullable = true,
+                description = "The commit of the practice repository that this version was read at; null for a"
+                        + " version edited in Hephaestus")
+        @Nullable
+        String sourceCommit) {
     public PracticeVersionDTO {
         changed = List.copyOf(changed);
     }

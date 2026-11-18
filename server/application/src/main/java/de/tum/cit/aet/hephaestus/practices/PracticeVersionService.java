@@ -192,7 +192,8 @@ public class PracticeVersionService {
                 version.getCreatedAt(),
                 createdBy,
                 changed,
-                previous != null && !previous.reviewDigest().equals(version.getReviewDigest()));
+                previous != null && !previous.reviewDigest().equals(version.getReviewDigest()),
+                version.getSourceCommit());
     }
 
     public static String key(PracticeDefinitionField field) {

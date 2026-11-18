@@ -100,6 +100,7 @@ function practiceOf(spec: PracticeSpec, slug: string, groupSlug: string | null, 
 			createdBy: null,
 			changed: [],
 			reviewChanged: false,
+			sourceCommit: null,
 		},
 	};
 }
