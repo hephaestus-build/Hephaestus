@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 
-import type { ItemRef, PracticeRepository } from "@/api/types.gen";
+import type { ItemRef, PracticeRepository, ProblemDetail } from "@/api/types.gen";
 import { definitionOf } from "@/components/admin/practice-editor/fixtures";
 import { detailSearch } from "@/components/layout/detail-drawer/detail-stack";
 import type { Wire } from "@/lib/dates";
@@ -67,7 +67,7 @@ const stepUpRequired = () =>
 			detail: "This action requires a recent sign-in. Sign in again to confirm access.",
 			type: problemType("step-up-required"),
 			maxAgeSeconds: 300,
-		},
+		} satisfies ProblemDetail,
 		{ status: 403 },
 	);
 
@@ -75,7 +75,7 @@ const VALIDATION_FAILED = {
 	title: "Validation failed",
 	status: 400,
 	detail: "Some fields need changes. Check your entries and try again.",
-};
+} satisfies ProblemDetail;
 
 const definition = definitionOf({ name: "Explain the change" });
 const editable = wirePractice({ slug: "explain-the-change", definition });
@@ -205,7 +205,7 @@ describe("the practice repository card", () => {
 						title: "Invalid request",
 						status: 400,
 						detail: "Choose a repository that this workspace monitors.",
-					},
+					} satisfies ProblemDetail,
 					{ status: 400 },
 				),
 			),
@@ -234,7 +234,7 @@ describe("the practice repository card", () => {
 								"is a path relative to the repository root, without ., .. or .git segments",
 							],
 						},
-					},
+					} satisfies ProblemDetail,
 					{ status: 400 },
 				),
 			),
@@ -340,7 +340,9 @@ describe("the practice repository card", () => {
 				// The read after the write fails, so only the write's answer can show the card unset.
 				server.use(
 					http.get(SETTING_URL, () =>
-						HttpResponse.json({ title: "Bad Gateway", status: 502 }, { status: 502 }),
+						HttpResponse.json({ title: "Bad Gateway", status: 502 } satisfies ProblemDetail, {
+							status: 502,
+						}),
 					),
 				);
 				return new HttpResponse(null, { status: 204 });
@@ -376,7 +378,11 @@ describe("the practice repository card", () => {
 			http.delete(SETTING_URL, () => {
 				server.use(servedRepository(null));
 				return HttpResponse.json(
-					{ title: "Not Found", status: 404, detail: "This workspace has no practice repository." },
+					{
+						title: "Not Found",
+						status: 404,
+						detail: "This workspace has no practice repository.",
+					} satisfies ProblemDetail,
 					{ status: 404 },
 				);
 			}),
@@ -525,17 +531,9 @@ describe("moving a practice to the practice repository", () => {
 								code: "MISSING_KEY",
 								message: "Name a kind of work.",
 							},
-							// An entry this build cannot read does not hide the others.
-							{ file: "guide.md", line: 2 },
-							{
-								file: "notes.txt",
-								line: null,
-								column: null,
-								code: "UNKNOWN_FILE",
-								message: "Remove this file.",
-							},
+							{ file: "notes.txt", code: "UNKNOWN_FILE", message: "Remove this file." },
 						],
-					},
+					} satisfies ProblemDetail,
 					{ status: 422 },
 				),
 			),
@@ -567,7 +565,7 @@ describe("moving a practice to the practice repository", () => {
 						title: "Conflict",
 						status: 409,
 						detail: "The default branch has no folder for this practice.",
-					},
+					} satisfies ProblemDetail,
 					{ status: 409 },
 				),
 			),

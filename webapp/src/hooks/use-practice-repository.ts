@@ -12,14 +12,19 @@ import {
 	setPracticeRepositoryMutation,
 	unsetPracticeRepositoryMutation,
 } from "@/api/@tanstack/react-query.gen";
-import type { PracticeRepository, SetPracticeRepositoryRequest } from "@/api/types.gen";
+import type {
+	PracticeFileProblem,
+	PracticeRepository,
+	SetPracticeRepositoryError,
+	SetPracticeRepositoryRequest,
+	UnsetPracticeRepositoryError,
+} from "@/api/types.gen";
 import type {
 	MoveToRepositoryControl,
 	MoveToRepositoryRequest,
 } from "@/components/admin/practices/WorkspaceMoveToRepositoryDialog";
 import type {
 	MonitoredRepositoryOptions,
-	PracticeRepositoryAction,
 	PracticeRepositoryCardState,
 	PracticeRepositoryRequest,
 	PracticeRepositorySettingControl,
@@ -28,11 +33,6 @@ import type { ConfirmAccessDialogProps } from "@/components/auth/ConfirmAccessDi
 import { useConfirmAccess } from "@/hooks/use-confirm-access";
 import { isRecord } from "@/lib/is-record";
 import { ITEM_KIND } from "@/lib/item-kinds";
-import {
-	directoryErrorOf,
-	isPracticeRepository,
-	practiceFolderProblemsOf,
-} from "@/lib/practice-repository";
 import {
 	problemDetailOf,
 	type StepUpChallenge,
@@ -54,12 +54,6 @@ type OpenRequest =
 	| ({ kind: "setting" } & PracticeRepositoryRequest)
 	| ({ kind: "move"; level: string; practiceSlug: string } & MoveToRepositoryRequest);
 
-const SAVED: Record<PracticeRepositoryAction, string> = {
-	set: "Practice repository set",
-	change: "Practice repository changed",
-	unset: "Practice repository unset",
-};
-
 /**
  * The practice repository of a workspace (ADR 0118) on Practice setup: its card, which sets,
  * changes and unsets it, and Move to repository in each practice's level. Every write asks for a
@@ -80,11 +74,14 @@ export function usePracticeRepository(workspaceSlug: string, openLevels: readonl
 	}
 
 	const repositoryQuery = useQuery(getPracticeRepositoryOptions({ path: { workspaceSlug } }));
-	// Known once a read has answered: a later read that fails keeps the last answer on screen.
+	// Known once a read has answered: a later read that fails keeps the last answer on screen. A 204,
+	// typed `void`, reaches here as `null` at runtime: the client hands over its empty body that way.
 	const { data } = repositoryQuery;
 	let repository: PracticeRepository | null | undefined;
-	if (data !== undefined) {
-		repository = isPracticeRepository(data) ? data : null;
+	if (data) {
+		repository = data;
+	} else if (data !== undefined) {
+		repository = null;
 	}
 
 	const choosing = request?.kind === "setting" && request.action !== "unset";
@@ -99,10 +96,7 @@ export function usePracticeRepository(workspaceSlug: string, openLevels: readonl
 	// One repository is chosen from all of them, so the list reads to its end.
 	useEveryPage(repositoriesQuery);
 
-	const set = useMutation(setPracticeRepositoryMutation());
-	const unset = useMutation(unsetPracticeRepositoryMutation());
-	const move = useMutation(changePracticeEditedInMutation());
-
+	// A changed or unset setting moves every practice edited in the old repository back here.
 	const isWorkspacePractice = (queryKey: readonly unknown[]) => {
 		if (queryOperationId(queryKey) !== "getPractice") {
 			return false;
@@ -110,7 +104,6 @@ export function usePracticeRepository(workspaceSlug: string, openLevels: readonl
 		const [key] = queryKey;
 		return isRecord(key) && isRecord(key.path) && key.path.workspaceSlug === workspaceSlug;
 	};
-	// A changed or unset setting moves every practice edited in the old repository back here.
 	const refreshSetting = async () =>
 		Promise.all([
 			queryClient.invalidateQueries({
@@ -133,120 +126,121 @@ export function usePracticeRepository(workspaceSlug: string, openLevels: readonl
 			}),
 		]);
 
-	/**
-	 * Ends `from` with `next`, unless the request changed meanwhile: a level that closed while its
-	 * move ran has already ended it.
-	 */
-	const settle = (from: OpenRequest, next: OpenRequest | undefined) =>
-		setRequest((current) => (current === from ? next : current));
-
-	/** Ends the request and asks for a recent sign-in, when that is what the refusal asks for. */
-	const askedToConfirmAccess = (from: OpenRequest, error: unknown) => {
-		const stepUp = stepUpChallengeOf(error);
-		if (stepUp === undefined) {
-			return false;
-		}
-		settle(from, undefined);
-		setChallenge(stepUp);
-		return true;
-	};
-
-	// Each write keeps its dialog open and busy until the page shows the result, then closes it: a
-	// dialog closed earlier would hand focus to a control that the reload is about to replace.
-	const changeSetting = async (
-		action: PracticeRepositoryAction,
-		send: () => Promise<PracticeRepository | null>,
-	) => {
-		const pending: OpenRequest = { kind: "setting", action, phase: "pending" };
-		setRequest(pending);
-		let saved: PracticeRepository | null;
-		try {
-			saved = await send();
-		} catch (error) {
-			if (askedToConfirmAccess(pending, error)) {
-				return;
+	// Each write keeps its dialog open and busy until the page shows the result, then ends the
+	// request: a dialog closed earlier would hand focus to a control that the reload replaces. Only a
+	// pending request ends, so a level that closed meanwhile, which ended its own, stays closed.
+	const endSetting = (refusal?: { reason: string; directoryError?: string }) =>
+		setRequest((current) => {
+			if (current?.kind !== "setting" || current.phase !== "pending") {
+				return current;
 			}
-			// A refusal can mean the setting changed meanwhile, such as an Unset that another admin got
-			// to first: show it as it now is, beside the reason.
-			await refreshSetting();
-			settle(pending, {
-				kind: "setting",
-				action,
-				phase: "refused",
-				reason: problemDetailOf(error),
-				directoryError: directoryErrorOf(error),
-			});
-			return;
-		}
-		// The answer is the setting now, so the card shows it even if the read after it fails. The read
-		// of "none" is `null`, as the client hands over a 204.
+			return refusal === undefined
+				? undefined
+				: { kind: "setting", action: current.action, phase: "refused", ...refusal };
+		});
+	const endMove = (
+		practiceSlug: string,
+		refusal?: { reason: string; problems: PracticeFileProblem[] },
+	) =>
+		setRequest((current) => {
+			if (
+				current?.kind !== "move" ||
+				current.practiceSlug !== practiceSlug ||
+				current.phase !== "pending"
+			) {
+				return current;
+			}
+			return refusal === undefined
+				? undefined
+				: { kind: "move", level: current.level, practiceSlug, phase: "refused", ...refusal };
+		});
+
+	const settingSaved = async (saved: PracticeRepository | null, toastText: string) => {
+		// The answer is the setting now, so the card shows it even if the read after it fails. "None"
+		// is `null`, the value the client hands over for the read's empty 204.
 		queryClient.setQueryData<PracticeRepository | null>(
 			getPracticeRepositoryQueryKey({ path: { workspaceSlug } }),
 			saved,
 		);
 		await refreshSetting();
-		settle(pending, undefined);
-		toast.success(SAVED[action]);
+		endSetting();
+		toast.success(toastText);
+	};
+	const settingRefused = async (error: SetPracticeRepositoryError | UnsetPracticeRepositoryError) => {
+		const stepUp = stepUpChallengeOf(error);
+		if (stepUp !== undefined) {
+			endSetting();
+			setChallenge(stepUp);
+			return;
+		}
+		// A refusal can mean the setting changed meanwhile, such as an Unset that another admin got
+		// to first: show it as it now is, beside the reason.
+		await refreshSetting();
+		const [directoryMessage] = error.errors?.directory ?? [];
+		endSetting({
+			reason: problemDetailOf(error),
+			directoryError:
+				directoryMessage === undefined ? undefined : `The directory ${directoryMessage}.`,
+		});
 	};
 
-	const moveToRepository = async (level: string, practiceSlug: string) => {
-		const pending: OpenRequest = { kind: "move", level, practiceSlug, phase: "pending" };
-		setRequest(pending);
-		try {
-			await move.mutateAsync({
-				path: { workspaceSlug, practiceSlug },
-				body: { editedIn: "REPOSITORY" },
-			});
-		} catch (error) {
-			if (askedToConfirmAccess(pending, error)) {
+	const set = useMutation({
+		...setPracticeRepositoryMutation(),
+		onSuccess: async (saved) => settingSaved(saved, "Practice repository saved"),
+		onError: settingRefused,
+	});
+	const unset = useMutation({
+		...unsetPracticeRepositoryMutation(),
+		onSuccess: async () => settingSaved(null, "Practice repository unset"),
+		onError: settingRefused,
+	});
+	const move = useMutation({
+		...changePracticeEditedInMutation(),
+		onSuccess: async (_data, variables) => {
+			const { practiceSlug } = variables.path;
+			await refreshPractice(practiceSlug);
+			// A failed reload leaves a practice that still reads as editable here, so the dialog keeps
+			// it as a refusal, and trying again reloads.
+			const reload = queryClient.getQueryState(
+				getPracticeQueryKey({ path: { workspaceSlug, practiceSlug } }),
+			);
+			if (reload?.status === "error") {
+				endMove(practiceSlug, {
+					reason: problemDetailOf(
+						reload.error,
+						"The practice moved, but it did not reload. Try again to reload it.",
+					),
+					problems: [],
+				});
+				return;
+			}
+			// The reload is in the cache, so the render this schedules shows the practice read-only:
+			// the dialog closes in the same render that shows Edit in Hephaestus, and focus finds it.
+			endMove(practiceSlug);
+			toast.success("This practice is now edited in the practice repository");
+		},
+		onError: async (error, variables) => {
+			const { practiceSlug } = variables.path;
+			const stepUp = stepUpChallengeOf(error);
+			if (stepUp !== undefined) {
+				endMove(practiceSlug);
+				setChallenge(stepUp);
 				return;
 			}
 			// A refusal can mean that the practice or the setting changed meanwhile: show them as they
-			// now are. When the practice is edited in the repository already, the move has nothing left
-			// to do, and the dialog closes onto Edit in Hephaestus.
+			// now are. When the practice is edited in the repository already, the move has nothing
+			// left to do, and the dialog closes onto Edit in Hephaestus.
 			await Promise.all([refreshPractice(practiceSlug), refreshSetting()]);
 			const now = queryClient.getQueryData(
 				getPracticeOptions({ path: { workspaceSlug, practiceSlug } }).queryKey,
 			);
 			if (now?.editedIn === "REPOSITORY") {
-				settle(pending, undefined);
+				endMove(practiceSlug);
 				return;
 			}
-			settle(pending, {
-				kind: "move",
-				level,
-				practiceSlug,
-				phase: "refused",
-				reason: problemDetailOf(error),
-				problems: practiceFolderProblemsOf(error),
-			});
-			return;
-		}
-		await refreshPractice(practiceSlug);
-		// A failed reload leaves a practice that still reads as editable here, so the dialog keeps it
-		// as a refusal, and trying again reloads.
-		const reload = queryClient.getQueryState(
-			getPracticeQueryKey({ path: { workspaceSlug, practiceSlug } }),
-		);
-		if (reload?.status === "error") {
-			settle(pending, {
-				kind: "move",
-				level,
-				practiceSlug,
-				phase: "refused",
-				reason: problemDetailOf(
-					reload.error,
-					"The practice moved, but it did not reload. Try again to reload it.",
-				),
-				problems: [],
-			});
-			return;
-		}
-		// The reload is in the cache, so the render this schedules shows the practice read-only: the
-		// dialog closes in the same render that shows Edit in Hephaestus, and its final focus finds it.
-		settle(pending, undefined);
-		toast.success("This practice is now edited in the practice repository");
-	};
+			endMove(practiceSlug, { reason: problemDetailOf(error), problems: error.problems ?? [] });
+		},
+	});
 
 	// A dialog asks to close on Cancel, Escape or a press outside. While its request runs, it stays.
 	const cancel = () => setRequest((open) => (open?.phase === "pending" ? open : undefined));
@@ -305,13 +299,12 @@ export function usePracticeRepository(workspaceSlug: string, openLevels: readonl
 		onSave: (body: SetPracticeRepositoryRequest) => {
 			const action =
 				request?.kind === "setting" && request.action === "change" ? "change" : "set";
-			void changeSetting(action, async () => set.mutateAsync({ path: { workspaceSlug }, body }));
+			setRequest({ kind: "setting", action, phase: "pending" });
+			set.mutate({ path: { workspaceSlug }, body });
 		},
 		onUnset: () => {
-			void changeSetting("unset", async () => {
-				await unset.mutateAsync({ path: { workspaceSlug } });
-				return null;
-			});
+			setRequest({ kind: "setting", action: "unset", phase: "pending" });
+			unset.mutate({ path: { workspaceSlug } });
 		},
 	};
 
@@ -327,7 +320,8 @@ export function usePracticeRepository(workspaceSlug: string, openLevels: readonl
 			onOpen: () => setRequest({ kind: "move", level, practiceSlug, phase: "confirming" }),
 			onCancel: cancel,
 			onConfirm: () => {
-				void moveToRepository(level, practiceSlug);
+				setRequest({ kind: "move", level, practiceSlug, phase: "pending" });
+				move.mutate({ path: { workspaceSlug, practiceSlug }, body: { editedIn: "REPOSITORY" } });
 			},
 		}),
 		confirmation: {
