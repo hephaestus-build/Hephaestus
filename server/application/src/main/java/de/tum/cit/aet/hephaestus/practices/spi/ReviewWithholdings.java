@@ -37,16 +37,18 @@ public final class ReviewWithholdings {
 
     /**
      * Reasons of a practice that was never measured and is still owed: it waits for the item's checks, a newer
-     * occasion replaced its review, or it was not ready. Not ready covers sources that could not be verified at
-     * practice start or seal, too little captured evidence and a spent workspace budget; none of them says that the
-     * practice does not apply. The item's next readiness edge selects it again, whatever that edge's occasions select.
+     * occasion replaced its review, it was not ready, or the work's evidence was larger than a sandbox holds. Not ready
+     * covers sources that could not be verified at practice start or seal and too little captured evidence. None of
+     * them says that the practice does not apply. The item's next readiness edge selects it again, whatever that edge's
+     * occasions select.
      */
     public static final List<String> CARRIED = List.of(
             CHECKS_PENDING,
             NO_CHECKS_REPORTED,
             CHECKS_AWAITING_APPROVAL,
             ReviewStopReason.REPLACED.name(),
-            ReviewStopReason.READINESS_REFUSED.name());
+            ReviewStopReason.READINESS_REFUSED.name(),
+            ReviewStopReason.EVIDENCE_TOO_LARGE.name());
 
     /** Every reason for which Hephaestus withholds a practice on purpose, by a policy decision, not a failure. */
     public static final Set<String> DELIBERATE = Set.copyOf(Stream.concat(

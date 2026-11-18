@@ -154,8 +154,9 @@ An item event that waits has one of these reasons:
 A practice with the withheld membership reason `REPLACED` was in a queued review that a newer event stopped at claim. The next readiness edge of the item selects it again.
 
 A practice with the withheld membership reason `READINESS_REFUSED` was not ready.
-Its sources could not be verified at practice start or seal, its evidence was too little, or the workspace budget was spent.
-The next readiness edge of the item selects it again, also an edge whose events do not select it.
+Its sources could not be verified at practice start or seal, or its evidence was too little.
+A practice with the withheld membership reason `EVIDENCE_TOO_LARGE` was not measured because the work's captured evidence was larger than a review's sandbox holds.
+The next readiness edge of the item selects both again, also an edge whose events do not select them.
 
 `ALREADY_CURRENT` marks a withheld item event whose selected practices all have a current result.
 Only a continuing occasion can end with it. A milestone measures its practices again.
@@ -265,6 +266,7 @@ The same name is the source capture code that causes it.
 | **No sandbox room**            | History only: the stop reason of a review that an earlier version ended for lack of sandbox room. No code gives it now, and old reviews keep it. It describes capacity, never the work. "Hephaestus had no room to run this review in time." | NO_SANDBOX_ROOM |
 | **Composition unconfirmed** | The stop reason of an admitted review whose attempts all ended before they confirmed a decision for each destination. The results stay, and the review closes as Partial. It describes the attempts, not the work. | COMPOSITION_UNCONFIRMED |
 | **Provider unavailable** | The stop reason of a review whose model provider answered none of its calls, or limited their rate, for too long. The outage window from the review's submission sets that bound. Admitted results stay, and the review closes as Partial. It describes the provider, not the work. | PROVIDER_UNAVAILABLE |
+| **Evidence too large** | The stop reason of a review whose captured evidence was larger than its sandbox holds, so no practice was measured. The review closes as Partial. It describes the size of the evidence, not the work. | EVIDENCE_TOO_LARGE |
 | **Composition**                | The preparation of feedback from admitted and eligible observations, by the review's sandbox in its `REVIEW_COMPOSE` run. | feedback composition           |
 | **Feedback composer**          | The model with tools that composes, posts and corrects the feedback of one review at one destination. It holds no provider token. | `CompositionSessions`          |
 | **Not composed**               | A withholding for a destination that no composed decision reached, when no more specific reason applies.  | NOT_COMPOSED                   |

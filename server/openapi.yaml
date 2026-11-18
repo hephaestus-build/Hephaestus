@@ -23650,6 +23650,7 @@ components:
       - NO_SANDBOX_ROOM
       - COMPOSITION_UNCONFIRMED
       - PROVIDER_UNAVAILABLE
+      - EVIDENCE_TOO_LARGE
     ReviewSummary:
       type: object
       properties:

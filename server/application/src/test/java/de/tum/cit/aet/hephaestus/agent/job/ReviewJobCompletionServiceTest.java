@@ -26,6 +26,8 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatchers;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -236,15 +238,16 @@ class ReviewJobCompletionServiceTest extends BaseUnitTest {
         assertThat(completion.getValue().reason()).isEqualTo(ReviewStopReason.EXECUTION_INCOMPLETE);
     }
 
-    @Test
-    void capturedRefusalClosesAsNotReviewedWithItsReadinessReason() {
+    @ParameterizedTest
+    @CsvSource({"INSUFFICIENT_EVIDENCE,READINESS_REFUSED", "WORKSPACE_REFUSED,EVIDENCE_TOO_LARGE"})
+    void capturedRefusalClosesAsNotReviewedWithItsOwnReason(String outcome, ReviewStopReason reason) {
         var job = RuntimeReviewTestData.job();
         job.setStatus(ReviewJobStatus.COMPLETED);
-        job.setOutput(new JsonMapper().createObjectNode().put("outcome", "INSUFFICIENT_EVIDENCE"));
+        job.setOutput(new JsonMapper().createObjectNode().put("outcome", outcome));
         service(job, ReviewKind.ITEM).tick();
         var completion = ArgumentCaptor.forClass(ReviewCompletion.class);
         verify(reviews).complete(ArgumentMatchers.eq(1L), ArgumentMatchers.eq(job.getReviewId()), completion.capture());
         assertThat(completion.getValue().status()).isEqualTo(ReviewStatus.PARTIAL);
-        assertThat(completion.getValue().reason()).isEqualTo(ReviewStopReason.READINESS_REFUSED);
+        assertThat(completion.getValue().reason()).isEqualTo(reason);
     }
 }

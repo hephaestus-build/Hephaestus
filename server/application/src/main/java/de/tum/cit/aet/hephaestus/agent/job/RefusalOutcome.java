@@ -1,6 +1,10 @@
 package de.tum.cit.aet.hephaestus.agent.job;
 
 enum RefusalOutcome {
+    /**
+     * The captured evidence exceeded the sandbox's byte budget. "Workspace" here is the sandbox's working directory,
+     * not the tenant.
+     */
     WORKSPACE_REFUSED,
     /** No attempt writes it any more. Rows that an earlier release refused keep it, and settlement still reads it. */
     INSUFFICIENT_EVIDENCE,
