@@ -805,6 +805,10 @@ need no checkout or repository toolchain just to verify registry evidence.
 Provenance verification reads attestation bundles from the image registry and keeps the existing
 identity and predicate policy.
 
+The merge job attests each image once more, 30 seconds after a failed attempt.
+The attestation client retries 408, 429 and 5xx responses, but GHCR can also refuse an upload with a transient 403.
+A failed second attempt fails the job.
+
 `scripts/ci-provenance.test.ts` executes all three shell paths and pins
 the same repository/workflow signature identity, GitHub OIDC issuer and owner-constrained
 attestation verification, including rejection before alias publication. Signing remains in

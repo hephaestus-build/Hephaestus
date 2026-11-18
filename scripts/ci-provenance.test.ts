@@ -39,9 +39,9 @@ void test("image provenance can persist storage records through every reusable-w
 			const steps = workflow.getIn(["jobs", job, "steps"]);
 			assert.ok(isSeq(steps));
 			// One attestation per image: the action pushes one registry attestation per call.
-			const attestations = asArray(steps.toJSON(), "steps")
-				.map((step) => asRecord(step, "step"))
-				.filter((step) => String(step.name).startsWith("Attest the "));
+			const all = asArray(steps.toJSON(), "steps").map((step) => asRecord(step, "step"));
+			const order = all.map((step) => String(step.name));
+			const attestations = all.filter((step) => String(step.name).startsWith("Attest the "));
 			assert.deepEqual(
 				attestations.map((step) => step.name),
 				["server", "webapp", "agent", "postgres"].map((name) => `Attest the ${name} image`),
@@ -54,6 +54,24 @@ void test("image provenance can persist storage records through every reusable-w
 				const name = String(attestation.name).slice("Attest the ".length, -" image".length);
 				assert.equal(inputs["subject-name"], `\${{ inputs.registry }}/hephaestus-build/${name}`);
 				assert.equal(inputs["subject-digest"], `\${{ steps.digest.outputs.${name} }}`);
+				// GHCR can refuse one upload with a transient 403, which the action's client does not
+				// retry. One retry, after the shared wait, attests the same subject the same way.
+				assert.equal(attestation.id, `attest-${name}`);
+				assert.equal(attestation["continue-on-error"], true);
+				const retry = all.find((step) => step.name === `Retry the ${name} attestation`);
+				assert.ok(retry, name);
+				assert.equal(retry.if, `steps.attest-${name}.outcome == 'failure'`);
+				assert.equal(retry["continue-on-error"], undefined);
+				assert.equal(retry.uses, attestation.uses);
+				assert.deepEqual(retry.with, attestation.with);
+				const waitName = "Wait before retrying a failed attestation";
+				assert.ok(order.indexOf(String(attestation.name)) < order.indexOf(waitName), name);
+				assert.ok(order.indexOf(waitName) < order.indexOf(String(retry.name)), name);
+				const wait = asRecord(
+					all.find((step) => step.name === waitName),
+					"wait step",
+				);
+				assert.ok(String(wait.if).includes(`steps.attest-${name}.outcome == 'failure'`), name);
 			}
 		}
 	}
