@@ -7,13 +7,13 @@ import java.util.stream.Stream;
 /**
  * The membership reasons for which Hephaestus withholds a practice on purpose, by a policy decision, not a failure.
  * Selection writes the role, bot, scope and checks reasons. Capture writes the readiness and fit reasons. Practice
- * start writes {@code REPLACED} when a newer review of the item already measured the practice, {@code SOURCES_MOVED}
- * when its own sources moved and none does, and {@code READINESS_REFUSED} when they cannot be verified. A replaced
- * review writes {@code REPLACED}, or {@code SOURCES_MOVED} for a practice in feedback mode Off that the newer push
- * leaves out. An attempt that ended writes {@code NOT_RUN} for each practice it never measured. Staging and admission
- * write {@code ROLE_UNAVAILABLE} when the developer is no longer eligible, {@code WORKSPACE_INACTIVE} when the
- * workspace is not active, and {@code STALE_ROLLOUT_REVISION} when the workspace's review settings changed while the
- * review waited.
+ * start writes {@code REPLACED} when a newer review of the item measured the practice or can still measure it,
+ * {@code SOURCES_MOVED} when its own sources moved and none does, and {@code READINESS_REFUSED} when they cannot be
+ * verified. A replaced review writes {@code REPLACED}, or {@code SOURCES_MOVED} for a practice in feedback mode Off
+ * that the newer push leaves out. An attempt that ended writes {@code NOT_RUN} for each practice it never measured.
+ * Staging and admission write {@code ROLE_UNAVAILABLE} when the developer is no longer eligible,
+ * {@code WORKSPACE_INACTIVE} when the workspace is not active, and {@code STALE_ROLLOUT_REVISION} when the workspace's
+ * review settings changed while the review waited.
  *
  * <p>Every other membership reason is a failure of a run or of admission: a {@link ReviewStopReason} of an attempt
  * that failed or stopped, a candidate refusal, {@code COPY_AUTHORITY_UNAVAILABLE}, or a reason that only history
@@ -56,9 +56,12 @@ public final class ReviewWithholdings {
             ReviewStopReason.NOT_RUN.name(),
             ReviewStopReason.EVIDENCE_TOO_LARGE.name());
 
-    /** Carried reasons after which the review asks for its own follow-up occasion, as no newer event may come. */
-    public static final Set<String> FOLLOW_UP =
-            Set.of(ReviewStopReason.SOURCES_MOVED.name(), ReviewStopReason.NOT_RUN.name());
+    /**
+     * Carried reasons that ask for a follow-up occasion at the same version, as no newer event may come: the sources
+     * moved, the practice never ran, or a newer review took it over and then ended without measuring it.
+     */
+    public static final Set<String> FOLLOW_UP = Set.of(
+            ReviewStopReason.SOURCES_MOVED.name(), ReviewStopReason.NOT_RUN.name(), ReviewStopReason.REPLACED.name());
 
     /**
      * The reason a practice that the run left unmeasured keeps: a run that ran out of time or ended early leaves it owed

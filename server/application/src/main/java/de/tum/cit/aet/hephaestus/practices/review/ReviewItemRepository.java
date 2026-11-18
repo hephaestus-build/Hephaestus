@@ -175,12 +175,16 @@ public interface ReviewItemRepository extends JpaRepository<ReviewItem, ReviewIt
         Instant getStartedAt();
     }
 
-    /** Practices whose newest review of the item withheld them for one of {@code reasons}. */
+    /**
+     * Practices whose newest review of the item withheld them for one of {@code reasons}. A cancellation, for whatever
+     * reason, decides nothing about a practice, so the review before it does.
+     */
     @Query(value = """
         SELECT latest.practice_id FROM (
           SELECT DISTINCT ON (m.practice_id) m.practice_id, m.state, m.reason FROM review_item m
           JOIN review r ON r.id=m.review_id AND r.workspace_id=m.workspace_id
           WHERE m.workspace_id=:workspaceId AND m.item_id=:itemId AND r.kind='ITEM' AND r.origin<>'TRIAL'
+            AND m.reason IS DISTINCT FROM 'CANCELLED'
           ORDER BY m.practice_id, r.created_at DESC, r.id DESC
         ) latest WHERE latest.state='WITHHELD' AND latest.reason IN (:reasons)
         """, nativeQuery = true)

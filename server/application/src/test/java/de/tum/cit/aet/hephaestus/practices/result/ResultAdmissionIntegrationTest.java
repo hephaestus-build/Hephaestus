@@ -80,6 +80,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewService;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewSnapshotQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStopReason;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewWithholdings;
 import de.tum.cit.aet.hephaestus.practices.spi.Severity;
 import de.tum.cit.aet.hephaestus.practices.spi.WithheldItem;
 import de.tum.cit.aet.hephaestus.testconfig.ItemFixtures;
@@ -1412,13 +1413,14 @@ class ResultAdmissionIntegrationTest extends AbstractResultAdmissionIntegrationT
     }
 
     @Test
-    void shouldCallAStalePracticeSourcesMovedWhileTheNewerReviewHasNotMeasuredIt() {
+    void shouldCallAStalePracticeReplacedWhileANewerOpenReviewCanStillMeasureIt() {
         var pending = admissions.pending(scenario, Instant.now(), scenarioAccountId);
         running(pending, 0);
-        // A push ordered a newer review of the same work, which selected the practice and can still withhold it.
+        // A push ordered a newer review of the same work, which selected the practice and is still queued. If it ends
+        // without measuring the practice, the last review of the version asks for its follow-up.
         admissions.pending(scenario, pending.review().getOrderedAt().plusSeconds(60), scenarioAccountId);
 
-        assertThat(staleStartReason(pending)).isEqualTo("SOURCES_MOVED");
+        assertThat(staleStartReason(pending)).isEqualTo("REPLACED");
     }
 
     @Test
@@ -1516,6 +1518,7 @@ class ResultAdmissionIntegrationTest extends AbstractResultAdmissionIntegrationT
                 null,
                 "{\"retained\":\"the occasion's own record\"}",
                 null));
+        started(occasion);
         String carried = ItemEventName.carried(scenario.item().getKind()).value();
         // A person's requested review has no occasion of its own: what it owes waits for the next event.
         var requested = admissions.pending(scenario, Instant.now(), scenarioAccountId, version);
@@ -1571,16 +1574,24 @@ class ResultAdmissionIntegrationTest extends AbstractResultAdmissionIntegrationT
                 .contains("the occasion's own record");
     }
 
-    /** A newer review that did not select the owed practice never measures it, so the follow-up still runs it. */
+    /**
+     * A newer review that did not select the owed practice never measures it, so the follow-up still runs it. The last
+     * review of the version to end asks for it.
+     */
     @Test
     void shouldStillAskForAFollowUpWhenANewerReviewDoesNotMeasureTheOwedPractice() {
         String version = "item-version-" + UUID.randomUUID();
         UUID occasion = occasionAt(version);
         var owing = eventReviewOwing(version, occasion);
         // A comment at the same version ordered a review of another practice only.
-        admissions.pending(scenario, owing.review().getOrderedAt().plusSeconds(60), scenarioAccountId, version);
+        var newer =
+                admissions.pending(scenario, owing.review().getOrderedAt().plusSeconds(60), scenarioAccountId, version);
 
         close(owing);
+        assertThat(followUps(version))
+                .as("a review of the version is still open")
+                .isEmpty();
+        close(newer);
 
         assertThat(followUps(version)).hasSize(1);
     }
@@ -1615,6 +1626,10 @@ class ResultAdmissionIntegrationTest extends AbstractResultAdmissionIntegrationT
                 .build());
 
         close(owing);
+        assertThat(followUps(version))
+                .as("the newer review can still measure it")
+                .isEmpty();
+        endUnmeasured(newer);
 
         assertThat(followUps(version)).hasSize(1);
     }
@@ -1653,6 +1668,16 @@ class ResultAdmissionIntegrationTest extends AbstractResultAdmissionIntegrationT
                         null,
                         Instant.now(),
                         owing.review().getOrderedAt()));
+
+        settle(newer);
+        service.complete(
+                workspace,
+                newer.review().getId(),
+                new ReviewCompletion(
+                        ReviewStatus.COMPLETE,
+                        null,
+                        Instant.now(),
+                        newer.review().getOrderedAt()));
 
         assertThat(jdbcTemplate.queryForObject(
                         "SELECT count(*) FROM review_item WHERE workspace_id=? AND review_id=? AND state='JUDGED'",
@@ -1711,12 +1736,191 @@ class ResultAdmissionIntegrationTest extends AbstractResultAdmissionIntegrationT
         assertThat(followUps(version)).hasSize(1);
     }
 
+    /** A newer review that ended without measuring the practice takes nothing over, so the stale start owes it. */
+    @Test
+    void shouldCallAStalePracticeSourcesMovedWhenTheNewerReviewEndedWithoutMeasuringIt() {
+        var pending = admissions.pending(scenario, Instant.now(), scenarioAccountId);
+        running(pending, 0);
+        var ref = productItems.require(
+                pending.review().getWorkspaceId(), scenario.item().getId());
+        var kind = new SourceKind("scm.pull-request.core");
+        var capture = pinnedPractices
+                .findByWorkspaceIdAndReviewIdAndPracticeId(
+                        pending.review().getWorkspaceId(),
+                        pending.review().getId(),
+                        scenario.practice().getId())
+                .orElseThrow();
+        var facts = json.createObjectNode();
+        facts.putObject("sourceFingerprints").put(kind.value(), "a".repeat(64));
+        capture.setCaptureDecision(facts);
+        pinnedPractices.saveAndFlush(capture);
+        doReturn(new ProductItemQuery.FingerprintRead(Map.of(kind, "b".repeat(64)), null))
+                .when(productItems)
+                .read(eq(ref), anySet(), any());
+        // A newer review of the same work reached its deadline before it ran the practice.
+        var newer = admissions.pending(scenario, pending.review().getOrderedAt().plusSeconds(60), scenarioAccountId);
+        withholdEveryPractice(newer, "NOT_RUN");
+        jdbcTemplate.update(
+                "UPDATE review SET status='PARTIAL', stop_reason='DEADLINE', completed_at=now() WHERE id=?",
+                newer.review().getId());
+        var id = new ReviewAssignmentId(
+                pending.review().getId(), scenario.practice().getId(), ref.itemId());
+
+        assertThat(reviewFreshness.start(
+                        ref.workspaceId(),
+                        id,
+                        pending.jobId(),
+                        0,
+                        reviewFreshness.startCurrentness(ref.workspaceId(), id)))
+                .isFalse();
+
+        assertThat(memberRows
+                        .findByWorkspaceIdAndReviewIdAndPracticeIdAndItemId(
+                                ref.workspaceId(), id.reviewId(), id.practiceId(), id.itemId())
+                        .orElseThrow()
+                        .getReason())
+                .isEqualTo("SOURCES_MOVED");
+    }
+
+    /**
+     * An event review left its practice to a newer requested review as {@code REPLACED}. When the requested review ends
+     * without measuring it, the practice is owed the follow-up that the event review would have asked for.
+     */
+    @ParameterizedTest
+    @CsvSource({"WITHHELD, 1", "CANCELLED, 1", "JUDGED, 0"})
+    void shouldOweAReplacedPracticeItsFollowUpWhenTheRequestedReviewThatTookItOverDoesNotMeasureIt(
+            String ending, int expectedFollowUps) {
+        String version = "item-version-" + UUID.randomUUID();
+        UUID occasion = occasionAt(version);
+        long workspace = scenario.workspace().getId();
+        long practice = scenario.practice().getId();
+        var replaced = admissions.pending(scenario, Instant.now(), scenarioAccountId, version);
+        jdbcTemplate.update(
+                "UPDATE review SET origin='EVENT', requested_by_id=NULL, event_id=? WHERE id=?",
+                occasion,
+                replaced.review().getId());
+        withholdEveryPractice(replaced, "REPLACED");
+        jdbcTemplate.update(
+                "UPDATE review SET status='PARTIAL', stop_reason='REPLACED', completed_at=now() WHERE id=?",
+                replaced.review().getId());
+        var requested = admissions.pending(
+                scenario, replaced.review().getOrderedAt().plusSeconds(60), scenarioAccountId, version);
+
+        switch (ending) {
+            case "WITHHELD" -> endUnmeasured(requested);
+            case "CANCELLED" -> {
+                settle(requested);
+                assertThat(service.cancel(workspace, requested.review().getId()))
+                        .isTrue();
+            }
+            default -> close(requested);
+        }
+
+        var followUps = followUps(version);
+        assertThat(followUps).hasSize(expectedFollowUps);
+        var carried =
+                memberRows.lastWithheldPracticeIds(workspace, scenario.item().getId(), ReviewWithholdings.CARRIED);
+        if (expectedFollowUps == 0) {
+            assertThat(carried).doesNotContain(practice);
+            return;
+        }
+        assertThat(carried).as("the follow-up selects the practice again").contains(practice);
+        assertThat(itemEvents
+                        .evidence(workspace, scenario.item().getId(), Objects.requireNonNull(followUps.getFirst()))
+                        .record())
+                .as("the follow-up reads the replaced review's occasion")
+                .isEqualTo(itemEvents
+                        .evidence(workspace, scenario.item().getId(), occasion)
+                        .record());
+    }
+
+    /** A third review that still selects the practice can measure it, so only the last review to end asks. */
+    @Test
+    void shouldAskForTheFollowUpOnlyWhenTheLastOpenReviewThatSelectsThePracticeEnds() {
+        String version = "item-version-" + UUID.randomUUID();
+        UUID occasion = occasionAt(version);
+        var replaced = admissions.pending(scenario, Instant.now(), scenarioAccountId, version);
+        jdbcTemplate.update(
+                "UPDATE review SET origin='EVENT', requested_by_id=NULL, event_id=? WHERE id=?",
+                occasion,
+                replaced.review().getId());
+        withholdEveryPractice(replaced, "REPLACED");
+        jdbcTemplate.update(
+                "UPDATE review SET status='PARTIAL', stop_reason='REPLACED', completed_at=now() WHERE id=?",
+                replaced.review().getId());
+        var first = admissions.pending(
+                scenario, replaced.review().getOrderedAt().plusSeconds(60), scenarioAccountId, version);
+        var second = admissions.pending(
+                scenario, replaced.review().getOrderedAt().plusSeconds(120), scenarioAccountId, version);
+
+        endUnmeasured(first);
+        assertThat(followUps(version))
+                .as("the second review can still measure it")
+                .isEmpty();
+        endUnmeasured(second);
+
+        assertThat(followUps(version)).hasSize(1);
+    }
+
+    /** An occasion of the version that still waits starts a review that ends later, so that review decides. */
+    @Test
+    void shouldLeaveTheFollowUpToTheReviewOfAnOccasionOfTheVersionThatStillWaits() {
+        String version = "item-version-" + UUID.randomUUID();
+        UUID occasion = occasionAt(version);
+        var owing = eventReviewOwing(version, occasion);
+        // A new comment changed a source but not the version, so its occasion waits in the item's window.
+        itemEvents.record(new ItemEventInput(
+                scenario.workspace().getId(),
+                scenario.item().getId(),
+                new ItemEventName(scenario.item().getKind().value() + ".commented"),
+                version,
+                null,
+                Instant.now(),
+                FoundBy.WEBHOOK,
+                null,
+                null,
+                "{\"retained\":\"the comment's record\"}",
+                null));
+
+        close(owing);
+
+        assertThat(followUps(version)).isEmpty();
+    }
+
+    /** Ends the review at its deadline, so that every practice it did not measure is withheld as {@code NOT_RUN}. */
+    private void endUnmeasured(ReviewAdmissionData.Pending pending) {
+        settle(pending);
+        service.complete(
+                scenario.workspace().getId(),
+                pending.review().getId(),
+                new ReviewCompletion(
+                        ReviewStatus.PARTIAL,
+                        ReviewStopReason.DEADLINE,
+                        Instant.now(),
+                        pending.review().getOrderedAt()));
+    }
+
+    private void withholdEveryPractice(ReviewAdmissionData.Pending pending, String reason) {
+        long workspace = scenario.workspace().getId();
+        jdbcTemplate.update(
+                "UPDATE review_practice SET status='WITHHELD', reason=? WHERE workspace_id=? AND review_id=?",
+                reason,
+                workspace,
+                pending.review().getId());
+        jdbcTemplate.update(
+                "UPDATE review_item SET state='WITHHELD', reason=?, job_id=NULL WHERE workspace_id=? AND review_id=?",
+                reason,
+                workspace,
+                pending.review().getId());
+    }
+
+    /** An occasion at {@code version} whose review started, so it no longer waits. */
     private UUID occasionAt(String version) {
         doReturn(new ProductItemQuery.CurrentWorkVersion.Known(version))
                 .when(productItems)
                 .currentWorkVersion(
                         scenario.workspace().getId(), scenario.item().getId());
-        return itemEvents.record(new ItemEventInput(
+        return started(itemEvents.record(new ItemEventInput(
                 scenario.workspace().getId(),
                 scenario.item().getId(),
                 new ItemEventName(scenario.item().getKind().value() + ".opened"),
@@ -1727,7 +1931,15 @@ class ResultAdmissionIntegrationTest extends AbstractResultAdmissionIntegrationT
                 null,
                 null,
                 "{\"retained\":\"the occasion's own record\"}",
-                null));
+                null)));
+    }
+
+    private UUID started(UUID occasion) {
+        jdbcTemplate.update(
+                "UPDATE item_event SET state='STARTED', decided_at=now() WHERE workspace_id=? AND id=?",
+                scenario.workspace().getId(),
+                occasion);
+        return occasion;
     }
 
     /** An event review at {@code version} that owes one practice it never ran. */

@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.practices.review;
 
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemEventService;
+import de.tum.cit.aet.hephaestus.integration.core.api.ItemIndexService;
 import de.tum.cit.aet.hephaestus.integration.core.spi.FoundBy;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemEventInput;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemEventName;
@@ -44,6 +45,7 @@ class ReviewClosure {
     private final ReviewRepository reviews;
     private final PracticeRepository practices;
     private final OffPracticeMilestones offMilestones;
+    private final ItemIndexService itemLocks;
     private final Clock clock;
 
     void close(Review review, ReviewStatus status, @Nullable ReviewStopReason reason, Instant at) {
@@ -105,42 +107,37 @@ class ReviewClosure {
     }
 
     /**
-     * A review that ends owing practices asks for one follow-up occasion of its item at the same version: a moved source
-     * or a spent deadline is no provider event, so nothing else would measure them before the work changes. The
-     * occasion selects nothing itself, so its readiness edge measures only the carried practices, and it reads its
-     * review's own occasion, under that occasion's expiry. An occasion is unique per item, name and version, so a
-     * version gets one follow-up: a practice that does not fit again stays carried until a real event. A review with
-     * no occasion of its own, a cancelled one, one whose work moved on, or one whose every owed practice a newer review
-     * already measured asks for none.
+     * The last review of a version to end, with no occasion of that version still waiting, asks for one follow-up
+     * occasion of its item at that version when the version still owes practices: their newest review withheld them
+     * because the sources moved, they never ran, or a newer review took them over and ended without measuring them. No
+     * provider event would measure them before the work changes. A cancellation decides nothing about a practice, so
+     * the review before it does. The occasion selects nothing itself, so its readiness edge measures only the carried
+     * practices, and it reads the newest event occasion of the version, under that occasion's expiry. An occasion is
+     * unique per item, name and version, so a version gets one follow-up: a practice that does not fit again stays
+     * carried until a real event. A version with no event review, or whose work moved on, asks for none.
      */
     private void followUp(Review review) {
         var version = review.getItemVersion();
-        var occasion = review.getEventId();
-        if (review.getKind() != ReviewKind.ITEM
-                || review.getOrigin() != ReviewOrigin.EVENT
-                || occasion == null
-                || version == null
-                || review.getStatus() == ReviewStatus.CANCELLED) return;
+        // A trial measures nothing for the work, so it owes nothing and decides no follow-up.
+        if (review.getKind() != ReviewKind.ITEM || review.getOrigin() == ReviewOrigin.TRIAL || version == null) return;
         long workspace = review.getWorkspaceId();
-        var owed =
-                memberships
-                        .findByWorkspaceIdAndReviewIdOrderByPracticeIdAscItemIdAsc(workspace, review.getId())
-                        .stream()
-                        .filter(member -> member.getState() == ReviewItemState.WITHHELD
-                                && ReviewWithholdings.FOLLOW_UP.contains(member.getReason()))
-                        .map(member -> member.getPracticeId())
-                        .distinct()
-                        .toList();
-        // Only a newer review that already measured an owed practice takes it over. One still running may yet withhold
-        // it, and a requested review asks for no follow-up of its own.
-        if (owed.isEmpty()
-                || owed.stream()
-                        .allMatch(practice -> reviews.existsNewerMeasurementOfPractice(
-                                workspace, review.getItemId(), practice, review.getId(), review.getOrderedAt()))
-                || !(items.currentWorkVersion(workspace, review.getItemId())
+        long itemId = review.getItemId();
+        // The item lock orders the ends of the version's reviews, so exactly the last one sees that none is open.
+        itemLocks.lock(workspace, itemId);
+        reviews.flush();
+        // A review still open, or an occasion still waiting, at this version ends later and decides then.
+        if (reviews.existsOtherOpenReviewAtVersion(workspace, itemId, version, review.getId())
+                || itemEvents.open(workspace, itemId).stream().anyMatch(open -> version.equals(open.itemVersion()))
+                || memberships
+                        .owedAtVersion(workspace, itemId, version, ReviewWithholdings.FOLLOW_UP)
+                        .isEmpty()) return;
+        var occasion =
+                reviews.newestEventOccasionAtVersion(workspace, itemId, version).orElse(null);
+        if (occasion == null
+                || !(items.currentWorkVersion(workspace, itemId)
                         instanceof ProductItemQuery.CurrentWorkVersion.Known(String current))
                 || !current.equals(version)) return;
-        var item = items.find(workspace, review.getItemId()).orElse(null);
+        var item = items.find(workspace, itemId).orElse(null);
         if (item == null) return;
         itemEvents.record(new ItemEventInput(
                 workspace,

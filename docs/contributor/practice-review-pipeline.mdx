@@ -194,20 +194,29 @@ A retry that seals at a moved version writes `NOT_RUN` for what it did not measu
 A refusal that can pass, such as an exhausted budget, keeps every event of the window waiting, so that the retry still selects their union.
 
 A practice that starts after its own sources changed is withheld.
-Its reason is `REPLACED` when a newer review of the item already measured it, and `SOURCES_MOVED` otherwise.
+Its reason is `REPLACED` when a newer review of the item measured it or can still measure it, and `SOURCES_MOVED` otherwise.
+A newer review that ended without measuring it takes nothing over.
 A practice that no attempt measured before the run ended, by its deadline, a time-out, a watchdog or a lost sandbox, is withheld with `NOT_RUN`.
 All three reasons are carried: the next readiness edge selects the practice again.
 A run that withheld every practice at its start ends with an empty result, not as a failed run.
 
-An event review of an issue or a pull request can end with a `SOURCES_MOVED` or `NOT_RUN` practice while its work is still at its version.
-It then records one follow-up occasion of the item (`<item kind>.carried`) at that version.
-The follow-up reads the record that the review's own occasion retained, under that occasion's expiry.
+A version of an issue or a pull request can still owe practices when its last review ends.
+A practice is owed when its newest review withheld it with `SOURCES_MOVED` or `NOT_RUN`, or with `REPLACED` after the newer review ended without measuring it.
+A cancellation decides nothing about a practice, so the review before it decides.
+The last review of the version to end then records one follow-up occasion of the item (`<item kind>.carried`) at that version.
+The follow-up reads the record that the newest event occasion of the version retained, under that occasion's expiry.
 No provider event would measure such practices before the work changes.
+
+An occasion of the version that still waits starts a review that ends later, so the follow-up waits for that review.
+The end of each review of an item takes the item lock.
+So exactly one end sees that no other review of the version is open.
+A requested review counts as any other review.
+A practice that it took over from an event review and did not measure is owed that follow-up.
 
 The occasion selects no practice itself and joins the quiet window, so its readiness edge measures only the carried practices.
 An occasion is unique per item, name and version, so a version gets one follow-up.
 A practice that does not fit again stays carried until a real event.
-A requested review, a cancelled one, or one of another item kind also waits for the next event.
+A version with no event review, or a review of another item kind, also waits for the next event.
 
 A review whose run ended without a reason of its own takes its reason from its withheld practices.
 When Hephaestus withheld each of them on purpose, the review was not ready.
@@ -333,7 +342,8 @@ A capture whose fetch failed records no linked-work fingerprint, so a later read
 
 A missing capture record makes the result unverifiable with `RECORD_MISSING` ([Currentness](./practice-review-glossary.mdx#currentness)).
 Neither reason establishes a change to the work.
-The practice-start gateway records `REPLACED` for changed sources when a newer review already measured the practice, `SOURCES_MOVED` when none does, and `READINESS_REFUSED` for sources it cannot verify.
+For changed sources, the practice-start gateway records `REPLACED` when a newer review measured the practice or can still measure it.
+It records `SOURCES_MOVED` when none does, and `READINESS_REFUSED` for sources it cannot verify.
 
 A start that cannot verify its sources always names why, on its `Practice start` log line as `unreadReason` and in the withheld membership's message.
 The reason is the capture code of the read that failed, such as `OCCASION_EVIDENCE_UNAVAILABLE`.
