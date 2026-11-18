@@ -68,8 +68,8 @@ class PracticeRepositoryServiceTest extends BaseUnitTest {
 
     @Test
     void shouldMoveAPracticeWithTheCommitItsFolderWasReadAt() {
-        var document =
-                new CatalogPracticeDocument(new ItemKind("scm.pull_request"), null, DefinitionTestFixtures.definition());
+        var document = new CatalogPracticeDocument(
+                new ItemKind("scm.pull_request"), null, DefinitionTestFixtures.definition());
         when(folders.read(7, "explain")).thenReturn(Optional.of(new PracticeRepositoryFolders.Folder(COMMIT, FILES)));
         when(files.read("explain", FILES)).thenReturn(new PracticeFiles.Read(document, List.of()));
 
