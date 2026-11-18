@@ -4247,6 +4247,17 @@ export type PasskeyStatus = {
 	workspaceAdminRequired: boolean;
 };
 
+export type PerPersonResults = {
+	/**
+	 * Whether the caller may turn it on: only a workspace owner may
+	 */
+	canTurnOn: boolean;
+	/**
+	 * Whether workspace admins see practice results per person
+	 */
+	enabled: boolean;
+};
+
 export type PersonDataProvider = {
 	id: number;
 	serverUrl: string;
@@ -4800,9 +4811,9 @@ export type PracticesAcrossWorkspace = {
  */
 export type PracticesAcrossWorkspaceTiles = {
 	/**
-	 * Developers with a standing in a practice group shown in the window, the developers the tiles compare
+	 * Developers with a standing in a practice group shown in the window, the developers the tiles compare. Null for fewer than 3
 	 */
-	developersWithAStandingInWindow: number;
+	developersWithAStandingInWindow: null | number;
 	/**
 	 * Whether a counted standing in the window was read only from earlier reviews
 	 */
@@ -5882,7 +5893,10 @@ export type ReviewFeedback = {
 	createdAt: Date;
 	deliveredAt: Date | null;
 	destination: FeedbackDestination;
-	developer: ReviewDeveloper;
+	/**
+	 * Null for feedback on a practice page or in a conversation while the workspace has per-person results for admins off
+	 */
+	developer: ReviewDeveloper | null;
 	disagreedAt: Date | null;
 	id: string;
 	item: ItemRef | null;
@@ -5925,7 +5939,10 @@ export type ReviewFeedbackDetail = {
 	decisions: Array<FeedbackDecision>;
 	deliveredAt: Date | null;
 	destination: FeedbackDestination;
-	developer: ReviewDeveloper;
+	/**
+	 * Null for feedback on a practice page or in a conversation while the workspace has per-person results for admins off
+	 */
+	developer: ReviewDeveloper | null;
 	disagreedAt: Date | null;
 	id: string;
 	item: ItemRef | null;
@@ -7543,6 +7560,10 @@ export type UpdateOutlineCollectionStateRequest = {
 	state: OutlineCollectionMirrorState;
 };
 
+export type UpdatePerPersonResults = {
+	enabled: boolean;
+};
+
 export type UpdatePracticeGroupRequest = {
 	color: string | null;
 	description: string | null;
@@ -8696,17 +8717,17 @@ export type WorkspaceReviewScope = {
 };
 
 /**
- * How the developers with a standing split across one practice group or one practice, counted in developers: a part per verdict, none yet, and their total
+ * How the developers with a standing split across one practice group or one practice, counted in developers: a part per verdict, none yet, and their total. A split with a part of 1 or 2, or with every developer in one part, shows only its total
  */
 export type WorkspaceSplit = {
 	/**
-	 * Every developer the split counts, the parts and none yet together, the reader included when counted
+	 * Every developer the split counts, the parts and none yet together, the reader included when counted. Null for fewer than 3
 	 */
-	developers: number;
+	developers: null | number;
 	/**
-	 * Developers with a standing in a group shown but none here
+	 * Developers with a standing in a group shown but none here. Null when the split shows only its total
 	 */
-	noneYet: number;
+	noneYet: null | number;
 	/**
 	 * Developers at each verdict, Needs attention, Mixed feedback and Going well in that order
 	 */
@@ -8718,9 +8739,9 @@ export type WorkspaceSplit = {
  */
 export type WorkspaceSplitPart = {
 	/**
-	 * Developers at the verdict, the reader included when counted
+	 * Developers at the verdict, the reader included when counted. Null when the split shows only its total
 	 */
-	developers: number;
+	developers: null | number;
 	/**
 	 * The verdict the part counts
 	 */
@@ -8749,7 +8770,7 @@ export type WorkspaceSyncProgress = {
  */
 export type WorkspaceTile = {
 	/**
-	 * The workspace's middle half; absent while no developer is counted
+	 * The workspace's middle half; absent while fewer than 3 developers are counted
 	 */
 	middle: WorkspaceRange | null;
 	/**
@@ -17674,6 +17695,60 @@ export type UpdateWorkspacePasskeyPolicyResponses = {
 
 export type UpdateWorkspacePasskeyPolicyResponse =
 	UpdateWorkspacePasskeyPolicyResponses[keyof UpdateWorkspacePasskeyPolicyResponses];
+
+export type GetPerPersonResultsData = {
+	body?: never;
+	path: {
+		/**
+		 * Workspace slug
+		 */
+		workspaceSlug: string;
+	};
+	query?: never;
+	url: "/workspaces/{workspaceSlug}/per-person-results";
+};
+
+export type GetPerPersonResultsResponses = {
+	/**
+	 * OK
+	 */
+	200: PerPersonResults;
+};
+
+export type GetPerPersonResultsResponse =
+	GetPerPersonResultsResponses[keyof GetPerPersonResultsResponses];
+
+export type UpdatePerPersonResultsData = {
+	body: UpdatePerPersonResults;
+	path: {
+		/**
+		 * Workspace slug
+		 */
+		workspaceSlug: string;
+	};
+	query?: never;
+	url: "/workspaces/{workspaceSlug}/per-person-results";
+};
+
+export type UpdatePerPersonResultsErrors = {
+	/**
+	 * The caller is not an owner and asked to turn it on
+	 */
+	403: ProblemDetail;
+};
+
+export type UpdatePerPersonResultsError =
+	UpdatePerPersonResultsErrors[keyof UpdatePerPersonResultsErrors];
+
+export type UpdatePerPersonResultsResponses = {
+	/**
+	 * The setting after the change
+	 */
+	200: PerPersonResults;
+};
+
+export type UpdatePerPersonResultsResponse =
+	UpdatePerPersonResultsResponses[keyof UpdatePerPersonResultsResponses];
 
 export type ListAdoptablePracticesData = {
 	body?: never;

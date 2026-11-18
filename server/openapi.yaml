@@ -175,6 +175,10 @@ tags:
 - name: workspace
 - name: workspace-onboarding
 - name: workspace-passkey-policy
+- description: |-
+    Whether workspace admins see practice results per person. Every member may read it, because it decides who sees
+     their results.
+  name: workspace-per-person-results
 - name: workspace-registry
 paths:
   /.well-known/hephaestus-provenance-keys.json:
@@ -10265,6 +10269,65 @@ paths:
       summary: Update workspace admin passkey policy
       tags:
       - workspace-passkey-policy
+  /workspaces/{workspaceSlug}/per-person-results:
+    get:
+      operationId: getPerPersonResults
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PerPersonResults"
+          description: OK
+      summary: Whether workspace admins see practice results per person
+      tags:
+      - workspace-per-person-results
+    patch:
+      description: Only a workspace owner turns it on. Any workspace admin turns it
+        off.
+      operationId: updatePerPersonResults
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdatePerPersonResults"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PerPersonResults"
+          description: The setting after the change
+        "403":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: The caller is not an owner and asked to turn it on
+      summary: Turn per-person results for admins on or off
+      tags:
+      - workspace-per-person-results
   /workspaces/{workspaceSlug}/practice-catalog/adoption:
     get:
       operationId: listAdoptablePractices
@@ -23614,6 +23677,19 @@ components:
       - recoveryRequired
       - verified
       - workspaceAdminRequired
+    PerPersonResults:
+      type: object
+      properties:
+        canTurnOn:
+          type: boolean
+          description: "Whether the caller may turn it on: only a workspace owner\
+            \ may"
+        enabled:
+          type: boolean
+          description: Whether workspace admins see practice results per person
+      required:
+      - canTurnOn
+      - enabled
     PersonDataProvider:
       type: object
       properties:
@@ -24899,10 +24975,12 @@ components:
         the developers with a standing in it
       properties:
         developersWithAStandingInWindow:
-          type: integer
+          type:
+          - "null"
+          - integer
           format: int32
           description: "Developers with a standing in a practice group shown in the\
-            \ window, the developers the tiles compare"
+            \ window, the developers the tiles compare. Null for fewer than 3"
         includesEarlierReviews:
           type: boolean
           description: Whether a counted standing in the window was read only from
@@ -27302,7 +27380,13 @@ components:
         destination:
           $ref: "#/components/schemas/FeedbackDestination"
         developer:
-          $ref: "#/components/schemas/ReviewDeveloper"
+          anyOf:
+          - $ref: "#/components/schemas/ReviewDeveloper"
+            description: Null for feedback on a practice page or in a conversation
+              while the workspace has per-person results for admins off
+          - type: "null"
+          description: Null for feedback on a practice page or in a conversation while
+            the workspace has per-person results for admins off
         disagreedAt:
           type:
           - string
@@ -27450,7 +27534,13 @@ components:
         destination:
           $ref: "#/components/schemas/FeedbackDestination"
         developer:
-          $ref: "#/components/schemas/ReviewDeveloper"
+          anyOf:
+          - $ref: "#/components/schemas/ReviewDeveloper"
+            description: Null for feedback on a practice page or in a conversation
+              while the workspace has per-person results for admins off
+          - type: "null"
+          description: Null for feedback on a practice page or in a conversation while
+            the workspace has per-person results for admins off
         disagreedAt:
           type:
           - string
@@ -30843,6 +30933,13 @@ components:
           description: Target mirror state
       required:
       - state
+    UpdatePerPersonResults:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+      required:
+      - enabled
     UpdatePracticeGroupRequest:
       type: object
       properties:
@@ -32415,17 +32512,23 @@ components:
       type: object
       description: "How the developers with a standing split across one practice group\
         \ or one practice, counted in developers: a part per verdict, none yet, and\
-        \ their total"
+        \ their total. A split with a part of 1 or 2, or with every developer in one\
+        \ part, shows only its total"
       properties:
         developers:
-          type: integer
+          type:
+          - "null"
+          - integer
           format: int32
           description: "Every developer the split counts, the parts and none yet together,\
-            \ the reader included when counted"
+            \ the reader included when counted. Null for fewer than 3"
         noneYet:
-          type: integer
+          type:
+          - "null"
+          - integer
           format: int32
-          description: Developers with a standing in a group shown but none here
+          description: Developers with a standing in a group shown but none here.
+            Null when the split shows only its total
         parts:
           type: array
           description: "Developers at each verdict, Needs attention, Mixed feedback\
@@ -32441,9 +32544,12 @@ components:
       description: The developers at one verdict in a split
       properties:
         developers:
-          type: integer
+          type:
+          - "null"
+          - integer
           format: int32
-          description: "Developers at the verdict, the reader included when counted"
+          description: "Developers at the verdict, the reader included when counted.\
+            \ Null when the split shows only its total"
         standing:
           $ref: "#/components/schemas/WorkspaceSplitsVerdict"
           description: The verdict the part counts
@@ -32481,10 +32587,11 @@ components:
         middle:
           anyOf:
           - $ref: "#/components/schemas/WorkspaceRange"
-            description: The workspace's middle half; absent while no developer is
-              counted
+            description: The workspace's middle half; absent while fewer than 3 developers
+              are counted
           - type: "null"
-          description: The workspace's middle half; absent while no developer is counted
+          description: The workspace's middle half; absent while fewer than 3 developers
+            are counted
         yours:
           type: integer
           format: int32
