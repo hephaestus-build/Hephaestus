@@ -221,11 +221,7 @@ class PracticeTrialControllerIntegrationTest extends BaseIntegrationTest {
         var unattributed = admissions.pending(
                 scenario, Instant.now(), null, "item-version-" + UUID.randomUUID(), ReviewOrigin.TRIAL);
         var attributed = admissions.pending(
-                scenario,
-                Instant.now(),
-                developer.getId(),
-                "item-version-" + UUID.randomUUID(),
-                ReviewOrigin.TRIAL);
+                scenario, Instant.now(), developer.getId(), "item-version-" + UUID.randomUUID(), ReviewOrigin.TRIAL);
         long workspaceId = scenario.workspace().getId();
 
         developer.setAiChoice(AiChoice.IN_HOUSE_ONLY);

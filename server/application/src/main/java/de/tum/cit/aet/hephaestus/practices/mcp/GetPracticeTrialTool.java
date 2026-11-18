@@ -70,7 +70,7 @@ class GetPracticeTrialTool implements McpTool {
         }
         long workspaceId = WorkspaceContextHolder.getContext().id();
         var trial = trials.get(workspaceId, id);
-        return McpTools.result(jsonMapper.convertValue(
-                McpTrial.of(trial, trials.readsOnlyCloudWork(workspaceId, id)), Map.class));
+        return McpTools.result(
+                jsonMapper.convertValue(McpTrial.of(trial, trials.readsOnlyCloudWork(workspaceId, id)), Map.class));
     }
 }

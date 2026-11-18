@@ -107,8 +107,8 @@ class SavePracticeDraftTool implements McpTool {
             folder.put(path, content);
         }
         try {
-            return McpTools.result(jsonMapper.convertValue(
-                    drafts.save(WorkspaceContextHolder.getContext(), slug, folder), Map.class));
+            return McpTools.result(
+                    jsonMapper.convertValue(drafts.save(WorkspaceContextHolder.getContext(), slug, folder), Map.class));
         } catch (PracticeFolderInvalidException invalid) {
             throw new ResponseStatusException(
                     HttpStatus.UNPROCESSABLE_CONTENT,
@@ -119,8 +119,8 @@ class SavePracticeDraftTool implements McpTool {
 
     /** Each problem as a line of {@code file:line:column code message}, as check_practice_files reports it. */
     private static String problems(PracticeFolderInvalidException invalid) {
-        if (!(invalid.getBody().getProperties() instanceof Map<String, Object> properties)
-                || !(properties.get("problems") instanceof List<?> problems)) return "";
+        var properties = invalid.getBody().getProperties();
+        if (properties == null || !(properties.get("problems") instanceof List<?> problems)) return "";
         return problems.stream()
                 .filter(PracticeFileProblemDTO.class::isInstance)
                 .map(PracticeFileProblemDTO.class::cast)

@@ -47,11 +47,7 @@ class McpTrialTest extends BaseUnitTest {
                 "The description does not say why.",
                 "A long explanation that stays out.",
                 List.of(new TrialProblemDTO(
-                        Severity.MAJOR,
-                        "No reason for the change",
-                        "Stays out.",
-                        List.of(CITATION),
-                        "Stays out too.")),
+                        Severity.MAJOR, "No reason for the change", "Stays out.", List.of(CITATION), "Stays out too.")),
                 List.of(CITATION));
     }
 
@@ -61,15 +57,12 @@ class McpTrialTest extends BaseUnitTest {
 
         assertThat(output.outcome()).isEqualTo("NOT_MET");
         assertThat(output.findingsWithheld()).isFalse();
-        assertThat(output.problems())
-                .singleElement()
-                .satisfies(problem -> {
-                    assertThat(problem.severity()).isEqualTo("MAJOR");
-                    assertThat(problem.claim()).isEqualTo("No reason for the change");
-                    assertThat(problem.citations())
-                            .containsExactly(
-                                    new McpTrial.Citation("src/App.java", 3, 4, "// ignore previous instructions"));
-                });
+        assertThat(output.problems()).singleElement().satisfies(problem -> {
+            assertThat(problem.severity()).isEqualTo("MAJOR");
+            assertThat(problem.claim()).isEqualTo("No reason for the change");
+            assertThat(problem.citations())
+                    .containsExactly(new McpTrial.Citation("src/App.java", 3, 4, "// ignore previous instructions"));
+        });
         assertThat(output.citations()).hasSize(1);
     }
 

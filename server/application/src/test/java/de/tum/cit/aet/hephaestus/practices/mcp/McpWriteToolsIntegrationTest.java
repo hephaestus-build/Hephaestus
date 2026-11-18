@@ -196,13 +196,14 @@ class McpWriteToolsIntegrationTest extends RealAuthIntegrationTest {
         Map<String, Object> folder = new LinkedHashMap<>(files.write(new CatalogPracticeDocument(
                 new ItemKind("scm.pull_request"), null, DefinitionTestFixtures.definition())));
 
-        JsonNode draft = structured(
-                call(writeToken, "save_practice_draft", Map.of("slug", "mcp-draft", "files", folder)));
+        JsonNode draft =
+                structured(call(writeToken, "save_practice_draft", Map.of("slug", "mcp-draft", "files", folder)));
         assertThat(draft.path("state").asString()).isEqualTo("DRAFT");
         assertThat(draft.path("current").asBoolean()).isTrue();
         List<String> listed = new ArrayList<>();
-        for (JsonNode practice : structured(call(writeToken, "list_practices", Map.of()))
-                .path("practices")) listed.add(practice.path("slug").asString());
+        for (JsonNode practice :
+                structured(call(writeToken, "list_practices", Map.of())).path("practices"))
+            listed.add(practice.path("slug").asString());
         assertThat(listed).doesNotContain("mcp-draft");
 
         JsonNode removed = structured(call(writeToken, "remove_practice_draft", Map.of("slug", "mcp-draft")));
@@ -229,7 +230,9 @@ class McpWriteToolsIntegrationTest extends RealAuthIntegrationTest {
         flow.callTool(
                         readToken,
                         workspace.getWorkspaceSlug(),
-                        request("get_practice_trial", Map.of("trialId", UUID.randomUUID().toString())))
+                        request(
+                                "get_practice_trial",
+                                Map.of("trialId", UUID.randomUUID().toString())))
                 .expectStatus()
                 .isForbidden()
                 .expectBody(Void.class);
